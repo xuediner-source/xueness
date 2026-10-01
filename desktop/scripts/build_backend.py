@@ -25,7 +25,8 @@ def main():
     command = [args.python, '-m', 'PyInstaller', '--noconfirm', '--clean', '--onedir',
                '--name', 'xueness-backend', '--python-option', 'X utf8', '--distpath', str(work/'dist'),
                '--workpath', str(work/'work'), '--specpath', str(work),
-               '--paths', str(ROOT), '--collect-submodules', 'xueness', '--collect-data', 'xueness']
+               '--paths', str(ROOT), '--collect-submodules', 'xueness', '--collect-data', 'xueness',
+               '--collect-all', 'tzdata']
     if os.name == 'nt':
         command.extend(['--collect-all', 'winpty'])
     command.append(str(DESKTOP/'entrypoint.py'))
@@ -42,13 +43,13 @@ def main():
         raise SystemExit('Python license text is required for runtime distribution.')
     shutil.copy2(license_source, target/'PYTHON-LICENSE.txt')
     import importlib.metadata
-    for package in ('pyinstaller', 'pyinstaller-hooks-contrib', 'pywinpty'):
+    for package in ('pyinstaller', 'pyinstaller-hooks-contrib', 'pywinpty', 'tzdata'):
         try:
             distribution = importlib.metadata.distribution(package)
         except importlib.metadata.PackageNotFoundError:
             continue
         for item in distribution.files or ():
-            if ('license' in item.name.lower() or item.name.upper().startswith('COPYING')) and item.name.endswith(('.txt', '.rst', '.md')):
+            if ('license' in item.name.lower() or item.name.upper().startswith('COPYING')):
                 destination = target/'licenses'/package/Path(str(item)).name
                 destination.parent.mkdir(parents=True, exist_ok=True)
                 shutil.copy2(distribution.locate_file(item), destination)

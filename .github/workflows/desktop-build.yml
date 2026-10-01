@@ -15,6 +15,9 @@ jobs:
           - runner: macos-15-intel
             arch: x64
             target: macos-x64
+          - runner: macos-15
+            arch: arm64
+            target: macos-arm64
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 30
     defaults:
@@ -56,9 +59,9 @@ jobs:
       - name: Build Windows installer and portable ZIP
         if: runner.os == 'Windows'
         run: npm --prefix desktop run dist:win -- --x64
-      - name: Build Intel Mac disk image and ZIP
+      - name: Build native Mac disk image and ZIP
         if: runner.os == 'macOS'
-        run: npm --prefix desktop run dist:mac -- --x64
+        run: npm --prefix desktop run dist:mac -- --${{ matrix.arch }}
       - name: Verify packaged Electron workbench
         run: python desktop/scripts/check_app.py
       - name: Generate installer checksums

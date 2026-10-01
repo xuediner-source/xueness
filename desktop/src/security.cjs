@@ -14,4 +14,21 @@ function readyOrigin(value) {
       || url.pathname !== '/' || url.search || url.hash) throw new Error('Invalid backend address');
   return url.origin;
 }
-module.exports = { isOwnedUrl, isExternalUrl, readyOrigin };
+
+function canWriteClipboard({ webContents, ownerContents, permission, origin, requestingUrl, isMainFrame }) {
+  return webContents === ownerContents && permission === 'clipboard-sanitized-write'
+    && isMainFrame === true && isOwnedUrl(requestingUrl, origin);
+}
+
+function installPermissionPolicy(session, ownerContents, origin) {
+  session.setPermissionRequestHandler((webContents, permission, callback, details = {}) => {
+    callback(canWriteClipboard({ webContents, ownerContents, permission, origin,
+      requestingUrl: details?.requestingUrl, isMainFrame: details?.isMainFrame }));
+  });
+  session.setPermissionCheckHandler((webContents, permission, requestingOrigin, details = {}) => {
+    return canWriteClipboard({ webContents, ownerContents, permission, origin,
+      requestingUrl: details?.requestingUrl || requestingOrigin, isMainFrame: details?.isMainFrame });
+  });
+}
+
+module.exports = { isOwnedUrl, isExternalUrl, readyOrigin, canWriteClipboard, installPermissionPolicy };

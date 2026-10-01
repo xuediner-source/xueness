@@ -28,6 +28,7 @@ with tempfile.TemporaryDirectory(prefix='xueness-app-check-') as temporary:
     state = json.loads(report.read_text())
     assert state.get('plugins') == 27 and state.get('features') == 88, state
     assert state.get('installedCards') == 27 and state.get('desktopSettingsReady') is True, state
+    assert state.get('clipWriteGranted') is True and state.get('clipReadDenied') is True, state
     assert state.get('title') == 'Xueness' and state.get('nodeAccess') is False and state.get('workbenchReady') is True and state.get('body', 0) > 100, state
     print('PASS: packaged Electron workbench renders, 27 plugins/88 features, isolated renderer and clean exit')
     resources = executable.parent/'resources' if os.name == 'nt' else executable.parents[1]/'Resources'

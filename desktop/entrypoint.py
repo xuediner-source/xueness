@@ -9,6 +9,9 @@ def main():
         from pathlib import Path
         sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
     if len(sys.argv) > 2 and sys.argv[1] == '--worker':
+        if os.environ.get('XUENESS_DESKTOP_SMOKE_TRACE') == '1':
+            import faulthandler
+            faulthandler.dump_traceback_later(3, repeat=True)
         module = {'workflow': 'xueness.bundled_plugins.workflows.workflow_worker',
                   'terminal': 'xueness.bundled_plugins.terminal.terminal_worker'}.get(sys.argv[2])
         if module is None:

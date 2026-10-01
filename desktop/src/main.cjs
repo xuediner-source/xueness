@@ -2,7 +2,7 @@ const { app, BrowserWindow, Menu, dialog, shell } = require('electron');
 const { join, resolve } = require('node:path');
 const { existsSync, mkdirSync, writeFileSync } = require('node:fs');
 const { Backend } = require('./backend.cjs');
-const { isOwnedUrl, isExternalUrl } = require('./security.cjs');
+const { isOwnedUrl, isExternalUrl, installPermissionPolicy } = require('./security.cjs');
 
 let window, backend, quitting = false;
 app.setName('Xueness');
@@ -46,8 +46,7 @@ async function start() {
   await window.loadFile(join(__dirname, 'loading.html'));
   const origin = await backend.start();
   const session = window.webContents.session;
-  session.setPermissionRequestHandler((_contents, _permission, callback) => callback(false));
-  session.setPermissionCheckHandler(() => false);
+  installPermissionPolicy(session, window.webContents, origin);
   session.webRequest.onBeforeSendHeaders((details, callback) => {
     const headers = { ...details.requestHeaders };
     if (isOwnedUrl(details.url, origin)) headers['X-Xueness-Desktop-Token'] = backend.token;
@@ -105,10 +104,13 @@ async function start() {
       document.querySelector('.xn-settings-view__extensions > summary').click();
       (await waitFor('[data-testid=xn-settings-nav-desktop]')).click();
       await waitFor('[data-testid=desktop-settings] dl');
+      const clipWrite = await navigator.permissions.query({ name: 'clipboard-write' });
+      const clipRead = await navigator.permissions.query({ name: 'clipboard-read' });
       return { title: document.title, plugins: catalog.plugins.length,
         features: catalog.plugins.reduce((n,p) => n+p.features.length,0),
         installedCards, desktopSettingsReady: !!document.querySelector('[data-testid=desktop-settings] dl'),
-        nodeAccess: typeof window.require !== 'undefined', workbenchReady, body: document.body.textContent.length };
+        nodeAccess: typeof window.require !== 'undefined', workbenchReady, body: document.body.textContent.length,
+        clipWriteGranted: clipWrite.state === 'granted', clipReadDenied: clipRead.state === 'denied' };
     })()`);
     writeFileSync(process.env.XUENESS_DESKTOP_SMOKE_FILE, JSON.stringify(result));
     app.quit();

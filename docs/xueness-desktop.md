@@ -51,9 +51,9 @@ python desktop/scripts/check_app.py
 python desktop/scripts/checksums.py
 ```
 
-本机开发建议使用独立 Python 虚拟环境。构建产物在 `desktop/release/`，原生后端载荷在 `desktop/runtime/backend/`，均不提交到源码。后端分发包含 Python 许可证、PyInstaller bootloader 分发例外及适用依赖声明。
+本机开发建议使用独立 Python 虚拟环境。构建产物在 `desktop/release/`，原生后端载荷在 `desktop/runtime/backend/`，均不提交到源码。后端分发包含 Python 许可证、PyInstaller bootloader 分发例外及适用依赖声明。安装包内置 IANA 时区数据，自动化计划不依赖 Windows 系统提供时区数据库；打包检查在关闭系统时区搜索路径后验证上海时区的定时计划。
 
-`.github/workflows/desktop-build.yml` 提供手动触发的 Windows x64 与 Intel Mac 构建、冻结后端真实检查、打包应用检查和校验和产物。源码上传和 CI 构建不自动创建 GitHub Release 或部署服务。
+`.github/workflows/desktop-build.yml` 提供手动触发的 Windows x64、Intel Mac x64 与 Apple Silicon arm64 构建、冻结后端真实检查、打包应用检查和校验和产物。源码上传和 CI 构建不自动创建 GitHub Release 或部署服务。
 
 打包应用检查会使用隔离数据打开完整工作台，并启动真实的浏览器 worker 验证驱动与内置 Node；构建机器需要预装 Chrome/Edge。不会发送模型请求。
 

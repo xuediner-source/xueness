@@ -15,7 +15,8 @@ const driver = process.env.XUENESS_DESKTOP_PLAYWRIGHT
   : new URL('../../../webapp/node_modules/playwright/index.mjs', import.meta.url);
 const { chromium } = await import(driver);
 await mkdir(profile, { recursive: true, mode: 0o700 });
-const candidates = process.platform === 'darwin' ? ['/Applications/Google Chrome.app/Contents/MacOS/Google Chrome']
+const candidates = process.platform === 'darwin' ? ['/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
+    '/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge']
   : process.platform === 'win32' ? [process.env.PROGRAMFILES, process.env['PROGRAMFILES(X86)'], process.env.LOCALAPPDATA]
       .filter(Boolean).flatMap(root => [resolve(root, 'Google/Chrome/Application/chrome.exe'), resolve(root, 'Microsoft/Edge/Application/msedge.exe')]) : [];
 const executablePath = process.env.XUENESS_BROWSER_EXECUTABLE || candidates.find(path => existsSync(path));

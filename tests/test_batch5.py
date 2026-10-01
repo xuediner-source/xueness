@@ -11,6 +11,7 @@ import json
 import os
 import tempfile
 import unittest
+from unittest.mock import patch
 from pathlib import Path
 
 from xueness.core import Gate, Store, _run_subagent, compact, run
@@ -211,7 +212,10 @@ class StopTests(unittest.TestCase):
     def test_wall_clock_budget_stops_at_boundary_and_can_resume(self):
         session = self.store.new("bounded run", self.root)
         # The first tool completes; the clock expires before the next provider
-        # step, leaving its result and journal pair intact.
+        # step, leaving its result and journal pair intact. Advance a controlled
+        # clock inside the provider; cold imports and filesystem startup must
+        # not race this five-millisecond boundary on slower build machines.
+        clock = [0.0]
         class TimedProvider:
             def __init__(self):
                 self.calls = 0
@@ -219,15 +223,15 @@ class StopTests(unittest.TestCase):
             def complete(self, messages, tools):
                 self.calls += 1
                 if self.calls == 1:
-                    import time
-                    time.sleep(0.02)
+                    clock[0] = 0.02
                     return {"content": "", "tool_calls": [{"id": "wall-read", "type": "function",
                         "function": {"name": "list", "arguments": '{"path":"."}'}}]}
                 return {"content": '{"summary":"done","evidence":[]}' }
 
         provider = TimedProvider()
-        out = run(session, self.store, provider, Gate(self.root), max_steps=8,
-                  max_wall_seconds=0.005)
+        with patch('xueness.core.time.monotonic', side_effect=lambda: clock[0]):
+            out = run(session, self.store, provider, Gate(self.root), max_steps=8,
+                      max_wall_seconds=0.005)
         self.assertEqual(out["status"], "stopped")
         self.assertEqual(provider.calls, 1)
         self.assertEqual(out["steps"], 1)

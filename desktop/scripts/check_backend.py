@@ -14,6 +14,231 @@ import urllib.error
 import urllib.request
 
 ROOT = Path(__file__).resolve().parents[2]
+DIAGNOSTIC_TAIL_CHARS = 8000
+
+
+def _text(value):
+    if value is None:
+        return ''
+    if isinstance(value, bytes):
+        return value.decode('utf-8', 'replace')
+    return str(value)
+
+
+def _print_tail(label, value, limit=DIAGNOSTIC_TAIL_CHARS):
+    rendered = _text(value)
+    print(f'[{label}] tail ({min(len(rendered), limit)} chars):', flush=True)
+    print(rendered[-limit:] if rendered else '<empty>', flush=True)
+
+
+def _workflow_log_tail(data, wid):
+    path = data/'state/workflows'/f'{wid}.native.log'
+    try:
+        with path.open('rb') as stream:
+            stream.seek(0, os.SEEK_END)
+            size = stream.tell()
+            stream.seek(max(0, size - DIAGNOSTIC_TAIL_CHARS * 4))
+            raw = stream.read()
+    except FileNotFoundError:
+        return f'<no workflow log at {path}>'
+    except OSError as exc:
+        return f'<could not read workflow log at {path}: {type(exc).__name__}: {exc}>'
+    return raw.decode('utf-8', 'replace')[-DIAGNOSTIC_TAIL_CHARS:]
+
+
+def _process_alive(pid):
+    if type(pid) is not int or pid <= 0:
+        return None
+    if os.name == 'nt':
+        try:
+            import ctypes
+            from ctypes import wintypes
+            kernel = ctypes.WinDLL('kernel32', use_last_error=True)
+            kernel.OpenProcess.argtypes = [wintypes.DWORD, wintypes.BOOL, wintypes.DWORD]
+            kernel.OpenProcess.restype = wintypes.HANDLE
+            kernel.CloseHandle.argtypes = [wintypes.HANDLE]
+            kernel.CloseHandle.restype = wintypes.BOOL
+            handle = kernel.OpenProcess(0x1000, False, pid)  # PROCESS_QUERY_LIMITED_INFORMATION
+            if not handle:
+                return False if ctypes.get_last_error() == 87 else None
+            try:
+                code = wintypes.DWORD()
+                kernel.GetExitCodeProcess.argtypes = [wintypes.HANDLE, ctypes.POINTER(wintypes.DWORD)]
+                kernel.GetExitCodeProcess.restype = wintypes.BOOL
+                if not kernel.GetExitCodeProcess(handle, ctypes.byref(code)):
+                    return None
+                return code.value == 259  # STILL_ACTIVE
+            finally:
+                kernel.CloseHandle(handle)
+        except Exception:
+            return None
+    try:
+        os.kill(pid, 0)
+        return True
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return True
+    except OSError:
+        return None
+
+
+def _taskkill_tree(pid):
+    if os.name != 'nt' or type(pid) is not int or pid <= 0:
+        return 'tree kill is only available on Windows'
+    try:
+        result = subprocess.run(
+            ['taskkill', '/PID', str(pid), '/T', '/F'],
+            stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+            text=True, encoding='utf-8', errors='replace', timeout=10,
+            creationflags=getattr(subprocess, 'CREATE_NO_WINDOW', 0))
+        output = '\n'.join(part.strip() for part in (result.stdout, result.stderr) if part.strip())
+        return f'exit={result.returncode}; {output or "no taskkill output"}'
+    except subprocess.TimeoutExpired as exc:
+        return 'taskkill timed out; ' + _text(exc.stderr)[-1000:]
+    except OSError as exc:
+        return f'taskkill failed: {type(exc).__name__}: {exc}'
+
+
+def _stop_process_tree(proc, child_pids=()):
+    """Kill and reap a timed-out process tree, then verify known child PIDs."""
+    messages = []
+    pids = []
+    for pid in (proc.pid, *child_pids):
+        if type(pid) is int and pid > 0 and pid not in pids:
+            pids.append(pid)
+    if os.name == 'nt':
+        for pid in pids:
+            if _process_alive(pid) is not False:
+                messages.append(f'taskkill PID {pid}: {_taskkill_tree(pid)}')
+    elif proc.poll() is None:
+        try:
+            proc.terminate()
+        except OSError as exc:
+            messages.append(f'terminate failed: {type(exc).__name__}: {exc}')
+    try:
+        proc.wait(timeout=8)
+    except subprocess.TimeoutExpired:
+        messages.append('parent still alive after tree kill; forced parent kill')
+        try:
+            proc.kill()
+        except OSError as exc:
+            messages.append(f'parent kill failed: {type(exc).__name__}: {exc}')
+        try:
+            proc.wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            messages.append('parent did not exit after forced kill')
+    if os.name != 'nt':
+        for pid in pids[1:]:
+            if _process_alive(pid):
+                try:
+                    os.kill(pid, 9)
+                except OSError as exc:
+                    messages.append(f'child PID {pid} kill failed: {type(exc).__name__}: {exc}')
+    alive = {pid: _process_alive(pid) for pid in pids}
+    messages.append(f'known PID liveness after cleanup: {alive}')
+    return '; '.join(messages) or f'known PID liveness after cleanup: {alive}'
+
+
+def _run_command_probe(label, argv):
+    """Run a bounded comparison command from the independent Python parent."""
+    print(f'[command probe] {label}: argv={json.dumps(argv, ensure_ascii=False)}', flush=True)
+    kwargs = dict(cwd=ROOT, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
+                  stderr=subprocess.PIPE, text=True, encoding='utf-8', errors='replace',
+                  env=os.environ.copy())
+    if os.name == 'nt':
+        kwargs['creationflags'] = getattr(subprocess, 'CREATE_NO_WINDOW', 0)
+    try:
+        child = subprocess.Popen(argv, **kwargs)
+    except Exception as exc:
+        print(f'[command probe] {label}: spawn failed: {type(exc).__name__}: {exc}', flush=True)
+        return
+    timed_out = False
+    try:
+        stdout, stderr = child.communicate(timeout=5)
+    except subprocess.TimeoutExpired as exc:
+        timed_out = True
+        stdout, stderr = exc.output, exc.stderr
+        before = _process_alive(child.pid)
+        cleanup = _stop_process_tree(child)
+        try:
+            stdout, stderr = child.communicate(timeout=8)
+        except subprocess.TimeoutExpired as second:
+            stdout = second.output if second.output is not None else stdout
+            stderr = second.stderr if second.stderr is not None else stderr
+            cleanup += '; ' + _stop_process_tree(child)
+            try:
+                stdout, stderr = child.communicate(timeout=5)
+            except subprocess.TimeoutExpired as final:
+                stdout = final.output if final.output is not None else stdout
+                stderr = final.stderr if final.stderr is not None else stderr
+        print(f'[command probe] {label}: timed_out=True pid={child.pid} alive_before_kill={before}; {cleanup}', flush=True)
+    except Exception as exc:
+        stdout, stderr = '', f'{type(exc).__name__}: {exc}'
+        cleanup = _stop_process_tree(child)
+        print(f'[command probe] {label}: communicate failed; {cleanup}', flush=True)
+    else:
+        print(f'[command probe] {label}: timed_out=False pid={child.pid} exit={child.returncode}', flush=True)
+    if not timed_out and child.poll() is None:
+        cleanup = _stop_process_tree(child)
+        print(f'[command probe] {label}: unexpected live parent after communicate; {cleanup}', flush=True)
+    _print_tail(f'command probe {label} stdout', stdout)
+    _print_tail(f'command probe {label} stderr', stderr)
+    print(f'[command probe] {label}: final_pid_alive={_process_alive(child.pid)}', flush=True)
+
+
+def _run_foreground_worker(executable, state, wid):
+    """Run one fixture-owned frozen worker and capture its diagnostic trace."""
+    argv = [str(executable), '--worker', 'workflow', str(state), wid]
+    env = {**os.environ, 'XUENESS_DESKTOP_SMOKE_TRACE': '1'}
+    kwargs = dict(cwd=ROOT, env=env, stdin=subprocess.DEVNULL,
+                  stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                  text=True, encoding='utf-8', errors='replace')
+    if os.name == 'nt':
+        kwargs['creationflags'] = getattr(subprocess, 'CREATE_NO_WINDOW', 0)
+    print(f'[foreground worker] argv={json.dumps(argv, ensure_ascii=False)}', flush=True)
+    child = subprocess.Popen(argv, **kwargs)
+    try:
+        stdout, stderr = child.communicate(timeout=5)
+        print(f'[foreground worker] pid={child.pid} timed_out=False exit={child.returncode}', flush=True)
+    except subprocess.TimeoutExpired as exc:
+        stdout, stderr = exc.output, exc.stderr
+        before = _process_alive(child.pid)
+        row = None
+        try:
+            row = json.loads((Path(state)/'workflows'/f'{wid}.json').read_text(encoding='utf-8'))
+        except (OSError, ValueError):
+            pass
+        node_pid = row.get('nodes', {}).get('native', {}).get('pid') if isinstance(row, dict) else None
+        cleanup = _stop_process_tree(child, (node_pid,))
+        try:
+            stdout, stderr = child.communicate(timeout=8)
+        except subprocess.TimeoutExpired as second:
+            stdout = second.output if second.output is not None else stdout
+            stderr = second.stderr if second.stderr is not None else stderr
+            cleanup += '; ' + _stop_process_tree(child, (node_pid,))
+            try:
+                stdout, stderr = child.communicate(timeout=5)
+            except subprocess.TimeoutExpired as final:
+                stdout = final.output if final.output is not None else stdout
+                stderr = final.stderr if final.stderr is not None else stderr
+        print(f'[foreground worker] timed_out=True pid={child.pid} alive_before_kill={before} node_pid={node_pid}; {cleanup}', flush=True)
+    _print_tail('foreground worker stdout', stdout)
+    _print_tail('foreground worker stderr', stderr)
+    print(f'[foreground worker] final worker_alive={_process_alive(child.pid)}', flush=True)
+    return row if 'row' in locals() else None
+
+
+def _print_workflow_snapshot(data, label, state):
+    wid = state.get('id') if isinstance(state, dict) else None
+    node = state.get('nodes', {}).get('native', {}) if isinstance(state, dict) else {}
+    pid = node.get('pid') if isinstance(node, dict) else None
+    alive = _process_alive(pid)
+    print(f'[{label}] workflow_id={wid} status={state.get("status") if isinstance(state, dict) else None} '
+          f'node_status={node.get("status") if isinstance(node, dict) else None} '
+          f'child_pid={pid} child_alive={alive}', flush=True)
+    if wid:
+        _print_tail(f'{label} isolated workflow log', _workflow_log_tail(data, wid))
 
 
 def main():
@@ -22,12 +247,15 @@ def main():
     parser.add_argument('--force-exit', action='store_true', help='verify owned task cleanup after abrupt host loss')
     args = parser.parse_args()
     executable = args.executable or ROOT/'desktop/runtime/backend'/('xueness-backend.exe' if os.name == 'nt' else 'xueness-backend')
-    with tempfile.TemporaryDirectory(prefix='xueness-frozen-check-') as temporary:
+    with tempfile.TemporaryDirectory(prefix='xueness-frozen-check-', ignore_cleanup_errors=True) as temporary:
         data = Path(temporary)/'data'
         token = secrets.token_hex(32)
+        host_env = {key: value for key, value in os.environ.items()
+                    if key != 'XUENESS_DESKTOP_SMOKE_TRACE'}
+        host_env.update({'XUENESS_DESKTOP_TOKEN': token, 'XUENESS_ALLOW_REAL': '0', 'PYTHONTZPATH': ''})
         proc = subprocess.Popen([str(executable), '--data', str(data), '--assets', str(ROOT/'webapp/dist')],
                                 stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-                                text=True, encoding='utf-8', env={**os.environ, 'XUENESS_DESKTOP_TOKEN': token, 'XUENESS_ALLOW_REAL': '0'})
+                                text=True, encoding='utf-8', env=host_env)
         output = queue.Queue()
         threading.Thread(target=lambda: [output.put(line) for line in proc.stdout], daemon=True).start()
         errors = []
@@ -74,24 +302,59 @@ def main():
                 raise AssertionError('packaged interactive terminal did not respond')
             request(f"/api/terminals/{term['id']}/close", {})
             argv = ['powershell.exe', '-NoProfile', '-Command', "[Console]::OutputEncoding=[Text.UTF8Encoding]::new(); Write-Output '工作流_OK'"] if os.name == 'nt' else ['/bin/sh', '-c', "printf '工作流_OK\\n'"]
+            automation_response = json.loads(request('/api/automations', {
+                'enabled': False,
+                'timezone': 'Asia/Shanghai',
+                'schedule': '0 9 * * *',
+                'workflow': {'root': str(workspace), 'nodes': [{'id': 'timezone', 'argv': argv}]},
+            }))
+            automation = automation_response['automation']
+            assert automation.get('enabled') is False, automation
+            assert automation.get('timezone') == 'Asia/Shanghai', automation
+            assert isinstance(automation.get('nextRunAt'), (int, float)), automation
+            print(f"PASS: packaged timezone data ({automation['timezone']}, nextRunAt={automation['nextRunAt']})", flush=True)
             workflow = json.loads(request('/api/workflows', {'root': str(workspace), 'plan': {'nodes': [{'id': 'native', 'argv': argv}]}}))
             def workflow_failure(state):
-                # Diagnostics contain only this script's isolated fixture. A
-                # foreground worker reveals startup failures hidden by the
-                # detached production worker's intentionally silent stderr.
-                diagnostic_root = data/'runs/diagnostic'
-                diagnostic_root.mkdir(parents=True, exist_ok=True)
-                diagnostic = json.loads(request('/api/workflows', {'root': str(diagnostic_root), 'plan': {'nodes': [{'id': 'native', 'argv': argv}]}}))
-                diagnostic['status'] = 'queued'
-                path = data/'state/workflows'/f"{diagnostic['id']}.json"
-                path.write_text(json.dumps(diagnostic, ensure_ascii=False), encoding='utf-8')
+                # All records, logs and command roots in this diagnostic belong
+                # to this script's temporary fixture.
+                _print_workflow_snapshot(data, 'primary workflow at failure', state)
+                if state.get('status') in ('queued', 'running', 'stopping', 'pausing'):
+                    try:
+                        request(f"/api/workflows/{state['id']}/cancel", {})
+                        cancel_deadline = time.monotonic() + 5
+                        while time.monotonic() < cancel_deadline:
+                            stopped_state = json.loads(request(f"/api/workflows/{state['id']}"))
+                            if stopped_state.get('status') not in ('queued', 'running', 'stopping', 'pausing'):
+                                break
+                            time.sleep(.1)
+                        _print_workflow_snapshot(data, 'primary workflow after cancel attempt', stopped_state)
+                    except Exception as exc:
+                        print(f'[primary workflow cleanup] cancel/status failed: {type(exc).__name__}: {exc}', flush=True)
+
                 try:
-                    direct = subprocess.run([str(executable), '--worker', 'workflow', str(data/'state'), diagnostic['id']],
-                                            capture_output=True, text=True, encoding='utf-8', timeout=5)
-                    detail = direct.stderr[-2500:]
-                except subprocess.TimeoutExpired:
-                    detail = 'foreground worker also timed out'
-                raise AssertionError(('packaged workflow failed', state, detail))
+                    if os.name == 'nt':
+                        _run_command_probe('cmd.exe ASCII', ['cmd.exe', '/d', '/c', 'echo XUENESS_ASCII_OK'])
+                        _run_command_probe('PowerShell ASCII', [
+                            'powershell.exe', '-NoProfile', '-Command', "Write-Output 'XUENESS_ASCII_OK'"])
+                        _run_command_probe('PowerShell original Unicode workflow argv', argv)
+                    else:
+                        _run_command_probe('POSIX original workflow argv', argv)
+                except Exception as exc:
+                    print(f'[command probes] diagnostic error: {type(exc).__name__}: {exc}', flush=True)
+                try:
+                    diagnostic_root = data/'runs/diagnostic'
+                    diagnostic_root.mkdir(parents=True, exist_ok=True)
+                    diagnostic = json.loads(request('/api/workflows', {
+                        'root': str(diagnostic_root), 'plan': {'nodes': [{'id': 'native', 'argv': argv}]}}))
+                    diagnostic['status'] = 'queued'
+                    path = data/'state/workflows'/f"{diagnostic['id']}.json"
+                    path.write_text(json.dumps(diagnostic, ensure_ascii=False), encoding='utf-8')
+                    _run_foreground_worker(executable, data/'state', diagnostic['id'])
+                    final_diagnostic = json.loads(path.read_text(encoding='utf-8'))
+                    _print_workflow_snapshot(data, 'foreground diagnostic fixture', final_diagnostic)
+                except Exception as exc:
+                    print(f'[foreground diagnostic fixture] diagnostic error: {type(exc).__name__}: {exc}', flush=True)
+                raise AssertionError(('packaged workflow failed; see bounded process and fixture diagnostics above', state))
             request(f"/api/workflows/{workflow['id']}/start", {'approve': True})
             deadline = time.monotonic()+15
             while time.monotonic() < deadline:
@@ -136,8 +399,17 @@ def main():
             raise
         finally:
             if proc.poll() is None:
-                proc.kill(); proc.wait(timeout=5)
-            proc.stdin.close(); proc.stdout.close(); proc.stderr.close()
+                try:
+                    print(f'[backend cleanup] {_stop_process_tree(proc)}', flush=True)
+                except Exception as exc:
+                    print(f'[backend cleanup] tree termination failed: {type(exc).__name__}: {exc}', flush=True)
+            for name in ('stdin', 'stdout', 'stderr'):
+                stream = getattr(proc, name, None)
+                if stream is not None:
+                    try:
+                        stream.close()
+                    except (OSError, ValueError) as exc:
+                        print(f'[backend cleanup] close {name} failed: {type(exc).__name__}: {exc}', flush=True)
 
 
 if __name__ == '__main__':
