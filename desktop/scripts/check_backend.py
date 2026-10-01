@@ -7,9 +7,11 @@ from pathlib import Path
 import queue
 import secrets
 import subprocess
+import sys
 import tempfile
 import threading
 import time
+import traceback
 import urllib.error
 import urllib.request
 
@@ -83,6 +85,81 @@ def _process_alive(pid):
         return None
 
 
+def _process_image(pid):
+    """Query one fixture PID without enumerating unrelated processes."""
+    if os.name != 'nt' or type(pid) is not int or pid <= 0:
+        return None
+    try:
+        import ctypes
+        from ctypes import wintypes
+        kernel = ctypes.WinDLL('kernel32', use_last_error=True)
+        kernel.OpenProcess.argtypes = [wintypes.DWORD, wintypes.BOOL, wintypes.DWORD]
+        kernel.OpenProcess.restype = wintypes.HANDLE
+        kernel.CloseHandle.argtypes = [wintypes.HANDLE]
+        kernel.CloseHandle.restype = wintypes.BOOL
+        kernel.QueryFullProcessImageNameW.argtypes = [
+            wintypes.HANDLE, wintypes.DWORD, wintypes.LPWSTR, ctypes.POINTER(wintypes.DWORD)]
+        kernel.QueryFullProcessImageNameW.restype = wintypes.BOOL
+        handle = kernel.OpenProcess(0x1000, False, pid)  # PROCESS_QUERY_LIMITED_INFORMATION
+        if not handle:
+            return f'<OpenProcess error {ctypes.get_last_error()}>'
+        try:
+            buffer = ctypes.create_unicode_buffer(32768)
+            size = wintypes.DWORD(len(buffer))
+            if not kernel.QueryFullProcessImageNameW(handle, 0, buffer, ctypes.byref(size)):
+                return f'<QueryFullProcessImageNameW error {ctypes.get_last_error()}>'
+            return buffer.value
+        finally:
+            kernel.CloseHandle(handle)
+    except Exception as exc:
+        return f'<{type(exc).__name__}: {exc}>'
+
+
+def _filtered_workflow_env():
+    """Mirror the exact environment passed by workflows._execute/windows.py."""
+    env = {k: v for k, v in os.environ.items()
+           if k in ('PATH', 'HOME', 'TMPDIR', 'LANG', 'LC_ALL', 'SYSTEMROOT')}
+    env.update({k: v for k, v in os.environ.items()
+                if k.upper() in ('SYSTEMROOT', 'WINDIR', 'TEMP', 'TMP', 'COMSPEC', 'PATHEXT',
+                                 'USERPROFILE', 'APPDATA', 'LOCALAPPDATA')})
+    return env
+
+
+def _query_fixture_processes(pid, label):
+    """Ask CIM only for the supplied fixture PID and its direct children."""
+    if os.name != 'nt' or type(pid) is not int or pid <= 0:
+        return
+    script = (f"$root={pid}; $rows=@(Get-CimInstance Win32_Process "
+              f"-Filter \"ProcessId = $root OR ParentProcessId = $root\" | "
+              "Select-Object ProcessId,ParentProcessId,Name,ExecutablePath,CommandLine); "
+              "if($rows.Count -eq 0){'[]'}else{ConvertTo-Json -InputObject $rows -Compress}")
+    argv = ['powershell.exe', '-NoProfile', '-Command', script]
+    kwargs = dict(cwd=ROOT, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
+                  stderr=subprocess.PIPE, text=True, encoding='utf-8', errors='replace')
+    kwargs['creationflags'] = getattr(subprocess, 'CREATE_NO_WINDOW', 0)
+    print(f'[process identity] {label}: root_pid={pid} image={_process_image(pid)}', flush=True)
+    try:
+        probe = subprocess.Popen(argv, **kwargs)
+    except Exception as exc:
+        print(f'[process identity] {label}: CIM probe spawn failed: {type(exc).__name__}: {exc}', flush=True)
+        return
+    try:
+        stdout, stderr = probe.communicate(timeout=8)
+        print(f'[process identity] {label}: CIM exit={probe.returncode}', flush=True)
+    except subprocess.TimeoutExpired as exc:
+        stdout, stderr = exc.output, exc.stderr
+        before = _process_alive(probe.pid)
+        cleanup = _stop_process_tree(probe)
+        try:
+            stdout, stderr = probe.communicate(timeout=5)
+        except subprocess.TimeoutExpired as final:
+            stdout = final.output if final.output is not None else stdout
+            stderr = final.stderr if final.stderr is not None else stderr
+        print(f'[process identity] {label}: CIM timed_out=True pid={probe.pid} alive_before_kill={before}; {cleanup}', flush=True)
+    _print_tail(f'{label} CIM fixture process records', stdout)
+    _print_tail(f'{label} CIM stderr', stderr)
+
+
 def _taskkill_tree(pid):
     if os.name != 'nt' or type(pid) is not int or pid <= 0:
         return 'tree kill is only available on Windows'
@@ -140,12 +217,15 @@ def _stop_process_tree(proc, child_pids=()):
     return '; '.join(messages) or f'known PID liveness after cleanup: {alive}'
 
 
-def _run_command_probe(label, argv):
+def _run_command_probe(label, argv, cwd=None, env=None):
     """Run a bounded comparison command from the independent Python parent."""
-    print(f'[command probe] {label}: argv={json.dumps(argv, ensure_ascii=False)}', flush=True)
-    kwargs = dict(cwd=ROOT, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
+    cwd = Path(cwd or ROOT)
+    env = os.environ.copy() if env is None else env
+    print(f'[command probe] {label}: cwd={cwd} env_keys={sorted(env)} '
+          f'argv={json.dumps(argv, ensure_ascii=False)}', flush=True)
+    kwargs = dict(cwd=cwd, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
                   stderr=subprocess.PIPE, text=True, encoding='utf-8', errors='replace',
-                  env=os.environ.copy())
+                  env=env)
     if os.name == 'nt':
         kwargs['creationflags'] = getattr(subprocess, 'CREATE_NO_WINDOW', 0)
     try:
@@ -160,6 +240,8 @@ def _run_command_probe(label, argv):
         timed_out = True
         stdout, stderr = exc.output, exc.stderr
         before = _process_alive(child.pid)
+        print(f'[command probe] {label}: process_image={_process_image(child.pid)}', flush=True)
+        _query_fixture_processes(child.pid, f'command probe {label}')
         cleanup = _stop_process_tree(child)
         try:
             stdout, stderr = child.communicate(timeout=8)
@@ -210,6 +292,11 @@ def _run_foreground_worker(executable, state, wid):
         except (OSError, ValueError):
             pass
         node_pid = row.get('nodes', {}).get('native', {}).get('pid') if isinstance(row, dict) else None
+        print(f'[foreground worker] process_image={_process_image(child.pid)} '
+              f'node_image={_process_image(node_pid)}', flush=True)
+        _query_fixture_processes(child.pid, 'foreground frozen worker')
+        if type(node_pid) is int and node_pid > 0:
+            _query_fixture_processes(node_pid, 'foreground frozen workflow command')
         cleanup = _stop_process_tree(child, (node_pid,))
         try:
             stdout, stderr = child.communicate(timeout=8)
@@ -236,7 +323,9 @@ def _print_workflow_snapshot(data, label, state):
     alive = _process_alive(pid)
     print(f'[{label}] workflow_id={wid} status={state.get("status") if isinstance(state, dict) else None} '
           f'node_status={node.get("status") if isinstance(node, dict) else None} '
-          f'child_pid={pid} child_alive={alive}', flush=True)
+          f'child_pid={pid} child_alive={alive} child_image={_process_image(pid)}', flush=True)
+    if type(pid) is int and pid > 0:
+        _query_fixture_processes(pid, label)
     if wid:
         _print_tail(f'{label} isolated workflow log', _workflow_log_tail(data, wid))
 
@@ -337,6 +426,8 @@ def main():
                         _run_command_probe('PowerShell ASCII', [
                             'powershell.exe', '-NoProfile', '-Command', "Write-Output 'XUENESS_ASCII_OK'"])
                         _run_command_probe('PowerShell original Unicode workflow argv', argv)
+                        _run_command_probe('PowerShell original Unicode workflow argv (filtered workflow env)',
+                                           argv, cwd=workspace, env=_filtered_workflow_env())
                     else:
                         _run_command_probe('POSIX original workflow argv', argv)
                 except Exception as exc:
