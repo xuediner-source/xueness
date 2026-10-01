@@ -1,0 +1,8 @@
+{
+  "package": "react-remove-scroll-bar",
+  "installedVersion": "2.3.8",
+  "license": "MIT",
+  "commit": "7301c160fda44cb8cf2b9fdfde61efad35736196",
+  "url": "https://raw.githubusercontent.com/theKashey/react-remove-scroll-bar/7301c160fda44cb8cf2b9fdfde61efad35736196/LICENSE",
+  "note": "The installed 2.3.8 npm package declares MIT but omits its license file; this is the same project official upstream license text. It is not represented as a file shipped in that npm version."
+}

@@ -1,0 +1,492 @@
+/**
+ * Xueness 前端 API 客户端（Stage 2 契约）。
+ *
+ * 与 `xuenessBridge.ts` 保持同一风格：
+ * - `credentials: "same-origin"`，GET 带 `cache: "no-store"`
+ * - 写操作先取 `/api/csrf`，再带 `X-CSRF-Token` 头
+ * - 非 2xx → `throw new Error(payload.error || \`HTTP ${status}\`)`
+ *
+ * 不引入任何新依赖；不对响应体做猜测式解构，形状由契约保证。
+ */
+
+/* ------------------------------------------------------------------ */
+/* 类型                                                                */
+/* ------------------------------------------------------------------ */
+
+/** 资源条目（skills / commands / hooks / mcp / subagents / plugins 通用）。 */
+export type ResourceItem = {
+  id: string;
+  createdAt: string;
+  updatedAt: string;
+  [k: string]: unknown;
+};
+
+/** 供应商摘要——**刻意不含 apiKey**，密钥永不回显。 */
+export type ProviderSummary = {
+  id: string;
+  name: string;
+  baseUrl: string;
+  model: string;
+  hasKey: boolean;
+  protocol?: "openai" | "anthropic";
+  capabilities?: string[];
+  reasoningLevels?: string[];
+  runtimeProfile?: "standard" | "lightweight";
+  contextWindow?: number;
+  maxOutputTokens?: number;
+  toolCalling?: "native" | "json";
+  lightweightOptions?: ProviderLightweightOptions;
+  compatibility?: {
+    streamUsage?: boolean;
+    parallelToolCalls?: boolean;
+    maxTokensField?: "max_tokens" | "max_completion_tokens";
+    [key: string]: unknown;
+  };
+};
+
+export type ProviderLightweightOptions = {
+  reserveTokens?: number;
+  optionalContextChars?: number;
+  toolResultChars?: number;
+  initialTools?: "auto" | "minimal" | "core";
+  maxDiscoveredTools?: number;
+  toolSearchResults?: number;
+  resultPageChars?: number;
+  fileReadChars?: number;
+  overflowRetry?: boolean;
+  overflowRetryRatio?: number;
+  jsonRepairAttempts?: number;
+  stepLimit?: number;
+  wallTimeSeconds?: number;
+  requestTimeoutSeconds?: number;
+  transportRetries?: number;
+  temperature?: number;
+  topP?: number;
+  seed?: number;
+};
+
+/** 用量汇总。/api/usage?range=... */
+export type UsageSummary = {
+  range: string;
+  totals: { sessions: number; steps: number; completed: number };
+  series: { date: string; sessions: number; steps: number }[];
+  updatedAt: string;
+  tokens?: { input: number; output: number; total?: number; reportedRequests: number; unknownRequests: number };
+  costs?: Record<string, number>;
+  costSource?: string;
+  dailyUsage?: UsageDailySummary[];
+  models?: UsageModelSummary[];
+  tokenActivity?: {
+    activeDays: number;
+    peakDayTokens: number;
+    currentStreakDays: number;
+    longestStreakDays: number;
+  };
+};
+
+export type UsageModelSummary = {
+  model: string | null;
+  protocol: "openai" | "anthropic" | null;
+  inputTokens: number;
+  outputTokens: number;
+  totalTokens: number;
+  requestCount: number;
+  unknownRequests: number;
+  costs: Record<string, number>;
+};
+
+export type UsageDailySummary = {
+  date: string;
+  inputTokens: number;
+  outputTokens: number;
+  totalTokens: number;
+  requestCount: number;
+  unknownRequests: number;
+  costs: Record<string, number>;
+  models: UsageModelSummary[];
+};
+
+/** 记忆文件轨道。 */
+export type MemoryTrack = {
+  name: "memory" | "user" | "key";
+  path: string;
+  bytes: number;
+  present: boolean;
+};
+
+export type SettingsMap = Record<string, Record<string, unknown>>;
+export type SettingsSection = { section: string; values: Record<string, unknown> };
+export type ResourceList = {
+  items: ResourceItem[];
+  capability: { userScopeAvailable: boolean; userScopeReason?: string };
+};
+export type MemoryTracks = { tracks: MemoryTrack[] };
+
+export type XuenessPluginFeature = {
+  id: string;
+  name: string;
+  nameEn?: string;
+};
+
+/** Host plugin catalog. These records describe locally installed modules; they
+ * never contain executable frontend code. The UI maps IDs through its own
+ * allowlisted registry before exposing panels. */
+export type XuenessPlugin = {
+  id: string;
+  name: string;
+  description: string;
+  version: string;
+  apiVersion: string;
+  enabled: boolean;
+  effective: boolean;
+  dependencies: string[];
+  blockedBy: string[];
+  tools: string[];
+  commands: string[];
+  panels: string[];
+  resources: string[];
+  capabilities: string[];
+  /** Feature descriptions are metadata only; the host catalog never supplies executable code. */
+  features?: XuenessPluginFeature[];
+};
+export type XuenessPluginCatalog = { plugins: XuenessPlugin[] };
+export type MarketplaceItem = {
+  id: string; name: string; description: string; version: string; sha256: string;
+  installedVersion: string | null; manifest: Record<string, unknown>; source: string;
+};
+export type AutomationRecord = {
+  id: string; name: string; schedule: string; timezone: string; enabled: boolean;
+  workflow: { root: string; name: string; nodes: unknown[]; concurrency?: number };
+  approvalRequired: true; approved?: boolean; allowReal?: boolean; nextRunAt: number;
+  history: { id: string; at: number; status: string; workflowId?: string; error?: string }[];
+};
+
+/* ------------------------------------------------------------------ */
+/* 传输层（复用 xuenessBridge.ts 的 get/post 风格）                     */
+/* ------------------------------------------------------------------ */
+
+export async function get<T>(path: string): Promise<T> {
+  const response = await fetch(path, { credentials: "same-origin", cache: "no-store" });
+  const payload = await response.json();
+  if (!response.ok) throw new Error(payload.error || `HTTP ${response.status}`);
+  return payload as T;
+}
+
+/** 写操作统一取 CSRF token 后再发送（GET 因契约不同分开处理）。 */
+async function send<T>(method: "POST" | "PUT" | "PATCH" | "DELETE", path: string, body?: object): Promise<T> {
+  const token = await get<{ csrfToken: string }>("/api/csrf");
+  const response = await fetch(path, {
+    method,
+    credentials: "same-origin",
+    headers: { "Content-Type": "application/json", "X-CSRF-Token": token.csrfToken },
+    body: body === undefined ? undefined : JSON.stringify(body),
+  });
+  const payload = await response.json();
+  if (!response.ok) throw new Error(payload.error || `HTTP ${response.status}`);
+  return payload as T;
+}
+
+export async function post<T>(path: string, body: object): Promise<T> {
+  return send<T>("POST", path, body);
+}
+
+async function patch<T>(path: string, body: object): Promise<T> {
+  return send<T>("PATCH", path, body);
+}
+
+async function put<T>(path: string, body: object): Promise<T> {
+  return send<T>("PUT", path, body);
+}
+
+async function del<T>(path: string): Promise<T> {
+  return send<T>("DELETE", path);
+}
+
+/* ------------------------------------------------------------------ */
+/* 1. 设置                                                            */
+/* ------------------------------------------------------------------ */
+
+/** GET /api/settings → 全部 section 的键值。 */
+export async function getSettings(): Promise<SettingsMap> {
+  const payload = await get<{ settings: SettingsMap }>("/api/settings");
+  return payload.settings ?? {};
+}
+
+/** GET /api/settings/<section> */
+export async function getSettingsSection(section: string): Promise<SettingsSection> {
+  return get<SettingsSection>(`/api/settings/${encodeURIComponent(section)}`);
+}
+
+/** POST /api/settings/<section> */
+export async function saveSettingsSection(
+  section: string,
+  values: Record<string, unknown>,
+): Promise<SettingsSection> {
+  return post<SettingsSection>(`/api/settings/${encodeURIComponent(section)}`, { values });
+}
+
+/* ------------------------------------------------------------------ */
+/* 2. 资源                                                            */
+/* ------------------------------------------------------------------ */
+
+/** GET /api/resources/<kind> → 按 id 升序的条目 + 用户级作用域能力。 */
+export async function listResources(kind: string): Promise<ResourceList> {
+  const payload = await get<ResourceList>(`/api/resources/${encodeURIComponent(kind)}`);
+  return {
+    items: payload.items ?? [],
+    capability: payload.capability ?? { userScopeAvailable: true },
+  };
+}
+
+/** POST /api/resources/<kind>，body 至少含 `id`。 */
+export type ResourceCreateBody = Record<string, unknown> & {
+  /** Reject an existing id atomically instead of applying the legacy upsert. */
+  createOnly?: boolean;
+};
+
+export async function createResource(
+  kind: string,
+  body: ResourceCreateBody,
+): Promise<{ item: ResourceItem }> {
+  return post<{ item: ResourceItem }>(`/api/resources/${encodeURIComponent(kind)}`, body);
+}
+
+/**
+ * PATCH /api/resources/<kind>/<id>
+ *
+ * 与已有条目**合并**（只覆盖 body 里出现的键），所以「切换 enabled」不会
+ * 抹掉 name / description / body 等既有字段。body 直传。
+ */
+export async function patchResource(
+  kind: string,
+  id: string,
+  body: Record<string, unknown>,
+): Promise<{ item: ResourceItem }> {
+  return patch<{ item: ResourceItem }>(
+    `/api/resources/${encodeURIComponent(kind)}/${encodeURIComponent(id)}`,
+    body,
+  );
+}
+
+/** DELETE /api/resources/<kind>/<id> */
+export async function deleteResource(kind: string, id: string): Promise<{ ok: boolean; id: string }> {
+  return del<{ ok: boolean; id: string }>(
+    `/api/resources/${encodeURIComponent(kind)}/${encodeURIComponent(id)}`,
+  );
+}
+
+/**
+ * PUT /api/resources/<kind> —— **整体替换**语义（Stage 4 契约）。
+ *
+ * 请求体 `{ items: [...] }`；列表里不存在的旧条目会被后端删除。任一项 id 非法时
+ * 后端返回 400 且**不做任何改动**（先全量校验再落盘），这里按统一风格抛错。
+ */
+export async function putResource(
+  kind: string,
+  body: { items: unknown[] },
+): Promise<{ items: ResourceItem[] }> {
+  const payload = await put<{ items: ResourceItem[] }>(
+    `/api/resources/${encodeURIComponent(kind)}`,
+    body,
+  );
+  return { items: Array.isArray(payload.items) ? payload.items : [] };
+}
+
+/* ------------------------------------------------------------------ */
+/* 3. 供应商                                                          */
+/* ------------------------------------------------------------------ */
+
+/** GET /api/providers —— 只返回 hasKey，绝不含 apiKey。 */
+export async function listProviders(): Promise<{ providers: ProviderSummary[] }> {
+  const payload = await get<{ providers: ProviderSummary[] }>("/api/providers");
+  return { providers: payload.providers ?? [] };
+}
+
+/** POST /api/providers；body 可含 apiKey（只上行，永不回读）。 */
+export async function saveProvider(
+  body: Record<string, unknown>,
+): Promise<{ provider: ProviderSummary }> {
+  return post<{ provider: ProviderSummary }>("/api/providers", body);
+}
+
+export type ProviderConnectionTest = {
+  ok: true;
+  provider: { id: string; name: string; model: string; protocol: "openai" | "anthropic" };
+  latencyMs: number;
+};
+
+export type ProviderDiscoveredModel = {
+  id: string;
+  created?: number;
+  ownedBy?: string;
+};
+
+export type ProviderModelDiscovery = {
+  ok: true;
+  provider: { id: string; name: string; model: string; protocol: "openai" };
+  models: ProviderDiscoveredModel[];
+};
+
+/** POST /api/providers/test; the server reads credentials only from its saved profile. */
+export async function testProviderConnection(id: string): Promise<ProviderConnectionTest> {
+  return post<ProviderConnectionTest>("/api/providers/test", { id });
+}
+
+/** POST /api/providers/discover; reads the saved OpenAI profile without sending a chat request. */
+export async function discoverProviderModels(id: string): Promise<ProviderModelDiscovery> {
+  const payload = await post<unknown>("/api/providers/discover", { id });
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) throw new Error("invalid model discovery response");
+  const response = payload as Record<string, unknown>;
+  const provider = response.provider;
+  if (response.ok !== true || !provider || typeof provider !== "object" || Array.isArray(provider) || !Array.isArray(response.models)) {
+    throw new Error("invalid model discovery response");
+  }
+  const providerRecord = provider as Record<string, unknown>;
+  if (typeof providerRecord.id !== "string" || typeof providerRecord.name !== "string"
+    || typeof providerRecord.model !== "string" || providerRecord.protocol !== "openai") {
+    throw new Error("invalid model discovery response");
+  }
+  const models = response.models.map((item): ProviderDiscoveredModel => {
+    if (!item || typeof item !== "object" || Array.isArray(item)) throw new Error("invalid model discovery response");
+    const record = item as Record<string, unknown>;
+    if (typeof record.id !== "string" || !record.id.trim()
+      || (record.created !== undefined && (typeof record.created !== "number" || !Number.isFinite(record.created)))
+      || (record.ownedBy !== undefined && typeof record.ownedBy !== "string")) {
+      throw new Error("invalid model discovery response");
+    }
+    return {
+      id: record.id,
+      ...(record.created !== undefined ? { created: record.created } : {}),
+      ...(record.ownedBy !== undefined ? { ownedBy: record.ownedBy } : {}),
+    };
+  });
+  return {
+    ok: true,
+    provider: { id: providerRecord.id, name: providerRecord.name, model: providerRecord.model, protocol: "openai" },
+    models,
+  };
+}
+
+/** DELETE /api/providers/<id> */
+export async function deleteProvider(id: string): Promise<{ ok: boolean; id: string }> {
+  return del<{ ok: boolean; id: string }>(`/api/providers/${encodeURIComponent(id)}`);
+}
+
+/* ------------------------------------------------------------------ */
+/* 4. 用量                                                            */
+/* ------------------------------------------------------------------ */
+
+const DEFAULT_USAGE_RANGE = "7d";
+
+/** GET /api/usage?range=7d|30d|all（默认 7d）。 */
+export async function getUsage(range: string = DEFAULT_USAGE_RANGE): Promise<UsageSummary> {
+  return get<UsageSummary>(`/api/usage?range=${encodeURIComponent(range)}`);
+}
+
+/* ------------------------------------------------------------------ */
+/* 5. 记忆                                                            */
+/* ------------------------------------------------------------------ */
+
+/** GET /api/memory/tracks —— 只读，未设置 XUENESS_MEMORY_ROOT 时为空数组。 */
+export async function getMemoryTracks(): Promise<{ tracks: MemoryTrack[] }> {
+  const payload = await get<{ tracks: MemoryTrack[] }>("/api/memory/tracks");
+  return { tracks: payload.tracks ?? [] };
+}
+
+/** GET /api/plugins: locally installed plugin metadata and effective state. */
+export async function listPlugins(): Promise<XuenessPluginCatalog> {
+  const payload = await get<XuenessPluginCatalog>("/api/plugins");
+  if (!Array.isArray(payload.plugins)) throw new Error("Invalid plugin catalog response");
+  return { plugins: payload.plugins };
+}
+
+/** POST /api/plugins/<id>: enable or disable a plugin; host enforces CSRF. */
+export async function setPluginEnabled(id: string, enabled: boolean): Promise<XuenessPluginCatalog> {
+  const payload = await post<XuenessPluginCatalog>(`/api/plugins/${encodeURIComponent(id)}`, { enabled });
+  if (!Array.isArray(payload.plugins)) throw new Error("Invalid plugin catalog response");
+  return { plugins: payload.plugins };
+}
+
+export async function listMarketplace(): Promise<{ marketplace: MarketplaceItem[] }> {
+  const payload = await get<{ marketplace: MarketplaceItem[] }>("/api/plugins/marketplace");
+  if (!Array.isArray(payload.marketplace)) throw new Error("Invalid marketplace response");
+  return { marketplace: payload.marketplace };
+}
+export async function installMarketplaceItem(id: string, sha256: string, update = false): Promise<{ marketplace: MarketplaceItem[] }> {
+  const payload = await post<{ marketplace: MarketplaceItem[] }>(`/api/plugins/marketplace/${encodeURIComponent(id)}/${update ? "update" : "install"}`, { sha256 });
+  if (!Array.isArray(payload.marketplace)) throw new Error("Invalid marketplace response");
+  return { marketplace: payload.marketplace };
+}
+
+export async function listAutomations(): Promise<{ automations: AutomationRecord[] }> {
+  const payload = await get<{ automations: AutomationRecord[] }>("/api/automations");
+  if (!Array.isArray(payload.automations)) throw new Error("Invalid automations response");
+  return { automations: payload.automations };
+}
+export async function createAutomation(data: Omit<AutomationRecord, "id" | "approvalRequired" | "nextRunAt" | "history">): Promise<{ automation: AutomationRecord }> {
+  return post<{ automation: AutomationRecord }>("/api/automations", data);
+}
+export async function updateAutomation(id: string, data: Partial<AutomationRecord>): Promise<{ automation: AutomationRecord }> {
+  return post<{ automation: AutomationRecord }>(`/api/automations/${encodeURIComponent(id)}`, data);
+}
+export async function deleteAutomation(id: string): Promise<{ deleted: string }> {
+  return del<{ deleted: string }>(`/api/automations/${encodeURIComponent(id)}`);
+}
+export async function runAutomation(id: string): Promise<{ run: AutomationRecord["history"][number] & { workflowId: string } }> {
+  return post<{ run: AutomationRecord["history"][number] & { workflowId: string } }>(`/api/automations/${encodeURIComponent(id)}/run`, {});
+}
+export async function approveAutomation(id: string, allowReal: boolean): Promise<{ automation: AutomationRecord }> {
+  return post<{ automation: AutomationRecord }>(`/api/automations/${encodeURIComponent(id)}/approve`, { confirmed: true, allowReal });
+}
+
+/* ------------------------------------------------------------------ */
+/* 6. 目录浏览（DSH browse 能力的客户端侧）                             */
+/* ------------------------------------------------------------------ */
+
+/** 目录条目：宿主给出绝对路径，客户端不自己拼接路径段。 */
+export type DirectoryEntry = {
+  name: string;
+  path: string;
+  /** "directory" | "file"；选择器默认只收到目录，文件树会收到两者。 */
+  type?: "directory" | "file";
+  hidden: boolean;
+  isSymbolicLink?: boolean;
+};
+
+/** 一个目录层级 + 祖先链。 */
+export type DirectoryListing = {
+  path: string;
+  home: string;
+  crumbs: DirectoryEntry[];
+  entries: DirectoryEntry[];
+  truncated: boolean;
+};
+
+/** GET /api/system —— 宿主账号的 home，作为选择器的起始锚点。 */
+export async function getSystemHome(): Promise<{ homedir: string }> {
+  return get<{ homedir: string }>("/api/system");
+}
+
+/**
+ * GET /api/directory —— 列出目录层级。
+ *
+ * `includeFiles` 默认关：目录选择器只走目录（对齐 DSH 的 browse 语义）。
+ * 工作区文件树需要文件和目录并列，显式打开。
+ */
+export async function listDirectory(
+  path?: string,
+  includeHidden = false,
+  includeFiles = false,
+): Promise<DirectoryListing> {
+  const query = new URLSearchParams();
+  if (path) query.set("path", path);
+  if (includeHidden) query.set("includeHidden", "1");
+  if (includeFiles) query.set("includeFiles", "1");
+  const suffix = query.toString() ? `?${query.toString()}` : "";
+  return get<DirectoryListing>(`/api/directory${suffix}`);
+}
+
+/** POST /api/directory —— 在已有父目录下建一个子目录（非递归）。 */
+export async function createDirectory(path: string, name: string): Promise<{ path: string }> {
+  return post<{ path: string }>("/api/directory", { path, name });
+}

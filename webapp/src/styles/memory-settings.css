@@ -1,0 +1,23 @@
+.xn-memory-settings { display:flex; flex-direction:column; gap:24px; }
+.xn-memory-settings .xn-setting-row { min-height:76px; padding:16px; }
+.xn-memory-settings__viewer { display:flex; flex-direction:column; gap:16px; }
+.xn-memory-settings__toolbar { display:flex; align-items:center; gap:12px; min-width:0; flex-wrap:wrap; }
+.xn-memory-settings__toolbar>.xn-select { background:transparent; border:0; padding-left:0; max-width:240px; }
+.xn-memory-settings__count { font-size:12px; color:var(--fg-muted); border-left:1px solid var(--border); padding-left:12px; white-space:nowrap; }
+.xn-memory-settings__search { display:flex; align-items:center; gap:8px; height:32px; width:256px; max-width:100%; margin-left:auto; padding:0 10px; border:1px solid var(--border); border-radius:6px; color:var(--fg-muted); }
+.xn-memory-settings__search input { border:0; outline:0; background:transparent; color:var(--fg); width:100%; min-width:0; font:14px var(--font-sans); }
+.xn-memory-settings__search input::-webkit-search-cancel-button { display:none; }
+.xn-memory-settings__heading { display:flex; align-items:center; justify-content:space-between; min-height:28px; }
+.xn-memory-settings__heading h3 { margin:0; font-size:14px; font-weight:500; }
+.xn-memory-settings button:not(.xn-switch) { display:inline-flex; align-items:center; justify-content:center; border:0; border-radius:6px; padding:6px; background:transparent; color:var(--fg-muted); cursor:pointer; }
+.xn-memory-settings button:not(.xn-switch):hover { background:var(--bg-hover); color:var(--fg); }
+.xn-memory-settings__files { overflow:hidden; border-radius:12px; background:var(--bg-card); }
+.xn-memory-settings__file { display:flex; align-items:center; gap:12px; padding:12px 16px; }
+.xn-memory-settings__file+.xn-memory-settings__file { border-top:1px solid var(--border); }
+.xn-memory-settings__file>div { flex:1; min-width:0; }
+.xn-memory-settings__file strong { display:block; font-size:14px; font-weight:500; }
+.xn-memory-settings__file small { display:block; font-size:12px; margin-top:2px; color:var(--fg-muted); }
+.xn-memory-settings__icon { display:flex; width:36px; height:36px; border-radius:12px; background:var(--bg); align-items:center; justify-content:center; }
+.xn-memory-settings__empty { padding:32px 16px; border:1px dashed var(--border); border-radius:12px; text-align:center; font-size:14px; color:var(--fg-muted); }
+.xn-memory-settings__editor { border:1px solid var(--border); border-radius:12px; padding:12px; }
+@media(max-width:600px) { .xn-memory-settings__search { width:100%; } }

@@ -1,0 +1,1044 @@
+/* Conversation-start composer actions and toolbar. All colours inherit app theme tokens. */
+.xn-composer {
+  overflow: visible;
+}
+
+.xn-composer__actions {
+  position: relative;
+}
+
+.xn-composer__plus-wrap {
+  position: relative;
+}
+
+.xn-composer__plus {
+  font-size: 20px;
+  line-height: 1;
+}
+
+.xn-composer__symbol {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.xn-composer__plus-menu {
+  position: absolute;
+  left: 0;
+  bottom: calc(100% + 8px);
+  z-index: 45;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: min(320px, calc(100vw - 28px));
+  max-height: min(420px, 65vh);
+  overflow: auto;
+  padding: 6px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-md);
+  background: var(--bg-card);
+  box-shadow: var(--shadow-md);
+}
+
+.xn-composer__plus-menu > button,
+.xn-composer__plus-group > button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 31px;
+  padding: 6px 8px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--fg);
+  text-align: left;
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.xn-composer__plus-menu > button:hover:not(:disabled),
+.xn-composer__plus-group > button:hover:not(:disabled),
+.xn-composer__plus-menu > button:focus-visible,
+.xn-composer__plus-group > button:focus-visible {
+  outline: none;
+  background: var(--bg-hover);
+}
+
+.xn-composer__plus-menu > button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.xn-composer__plus-group {
+  padding-top: 4px;
+  border-top: 1px solid var(--border);
+}
+
+.xn-composer__plus-heading {
+  padding: 5px 8px 2px;
+  color: var(--fg-subtle);
+  font-size: 10px;
+  font-weight: 600;
+}
+
+.xn-composer__plus-empty,
+.xn-composer__plus-help {
+  padding: 7px 8px;
+  color: var(--fg-subtle);
+  font-size: 10px;
+}
+
+.xn-composer__plus-help {
+  border-top: 1px solid var(--border);
+}
+
+.xn-composer__chips {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 5px;
+  padding: 7px 12px 2px;
+}
+
+.xn-composer__context-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  max-width: min(280px, 80vw);
+  min-height: 24px;
+  padding: 2px 5px 2px 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-full);
+  background: var(--bg-subtle);
+  color: var(--fg-muted);
+  font-size: 11px;
+}
+
+.xn-composer__context-chip > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.xn-composer__context-chip > button {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--fg-subtle);
+  cursor: pointer;
+}
+
+.xn-composer__context-chip > button:hover {
+  background: var(--bg-hover);
+  color: var(--fg);
+}
+
+.xn-composer__status,
+.xn-composer__error {
+  padding: 4px 12px;
+  color: var(--fg-muted);
+  font-size: 11px;
+}
+
+.xn-composer__error {
+  color: var(--danger, var(--fg));
+  overflow-wrap: anywhere;
+}
+
+.xn-composer__settings {
+  flex: 1 1 100%;
+  min-width: 0;
+}
+
+@media (min-width: 681px) {
+  /* conversation-refresh.css styles the shared row after this component's
+     base rule. Keep the toolbar in the space between the action chips and
+     Send so its model controls can align against the right edge. */
+  .xn-shell-layout .xn-composer__tools > .xn-composer__settings {
+    flex: 1 1 0;
+  }
+
+  /* The input already references this hint with aria-describedby. Keep it
+     available to assistive technology without consuming toolbar width. */
+  .xn-shell-layout .xn-composer__tools > .xn-composer__keyboard-help {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+  }
+}
+
+.xn-composer__stop {
+  background: var(--bg-active);
+  color: var(--fg);
+}
+
+.xn-composer__stop:hover:not(:disabled) {
+  background: var(--bg-hover);
+}
+
+.xn-composer-toolbar {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 7px 12px;
+  width: 100%;
+  min-width: 0;
+  color: var(--fg);
+  font-size: 11px;
+}
+
+.xn-composer-toolbar__left,
+.xn-composer-toolbar__right {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 5px;
+  min-width: 0;
+}
+
+.xn-composer-toolbar__right {
+  justify-content: flex-end;
+}
+
+@media (max-width: 680px) {
+  .xn-composer-toolbar {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .xn-composer-toolbar__right {
+    justify-content: flex-start;
+  }
+}
+
+.xn-composer-toolbar__mode-control {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  min-width: 0;
+}
+
+.xn-composer-toolbar__mode,
+.xn-composer-toolbar__model {
+  position: relative;
+  min-width: 0;
+}
+
+.xn-composer-toolbar__mode > summary,
+.xn-composer-toolbar__model > summary {
+  list-style: none;
+}
+
+.xn-composer-toolbar__mode > summary::-webkit-details-marker,
+.xn-composer-toolbar__model > summary::-webkit-details-marker {
+  display: none;
+}
+
+.xn-composer-toolbar__mode-trigger,
+.xn-composer-toolbar__model-trigger,
+.xn-composer-toolbar__tool,
+.xn-composer-toolbar__clear-plan,
+.xn-composer-toolbar__usage {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 28px;
+  padding: 4px 7px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg-card);
+  color: var(--fg-muted);
+  font: inherit;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.xn-composer-toolbar__mode-trigger {
+  justify-content: space-between;
+  color: var(--fg);
+}
+
+.xn-composer-toolbar__mode-trigger[aria-disabled="true"],
+.xn-composer-toolbar__model-trigger[aria-disabled="true"] {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.xn-composer-toolbar__plan-badge {
+  padding: 2px 5px;
+  border-radius: var(--radius-full);
+  background: var(--bg-active);
+  color: var(--fg);
+  font-size: 10px;
+}
+
+.xn-composer-toolbar__clear-plan {
+  width: 22px;
+  min-height: 22px;
+  padding: 2px;
+  border-color: transparent;
+  background: transparent;
+}
+
+.xn-composer-toolbar__popover {
+  display: none;
+  position: absolute;
+  left: 0;
+  bottom: calc(100% + 7px);
+  z-index: 50;
+  width: min(320px, calc(100vw - 28px));
+  max-height: min(360px, 60vh);
+  overflow-y: auto;
+  padding: 6px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-md);
+  background: var(--bg-card);
+  box-shadow: var(--shadow-md);
+}
+
+.xn-composer-toolbar__model[open] > .xn-composer-toolbar__popover,
+.xn-composer-toolbar__mode[open] > .xn-composer-toolbar__popover {
+  display: grid;
+  gap: 3px;
+}
+
+.xn-composer-toolbar__popover-heading,
+.xn-composer-toolbar__permission-heading {
+  padding: 5px 7px 7px;
+  color: var(--fg-subtle);
+  font-size: 10px;
+  font-weight: 600;
+}
+
+.xn-composer-toolbar__plan-toggle,
+.xn-composer-toolbar__permission-option,
+.xn-composer-toolbar__model-option,
+.xn-composer-toolbar__manage,
+.xn-composer-toolbar__error button {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+  min-height: 31px;
+  padding: 5px 7px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--fg);
+  text-align: left;
+  font: inherit;
+  cursor: pointer;
+}
+
+.xn-composer-toolbar__plan-toggle > span:nth-child(2) {
+  display: grid;
+  gap: 2px;
+  flex: 1;
+}
+
+.xn-composer-toolbar__plan-toggle small,
+.xn-composer-toolbar__permission-option small {
+  color: var(--fg-subtle);
+  font-size: 10px;
+}
+
+.xn-composer-toolbar__check {
+  display: inline-flex;
+  width: 16px;
+  height: 16px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--border-strong);
+  border-radius: 4px;
+  color: var(--fg);
+}
+
+.xn-composer-toolbar__permission-options {
+  display: grid;
+  gap: 2px;
+}
+
+.xn-composer-toolbar__permission-option {
+  justify-content: flex-start;
+}
+
+.xn-composer-toolbar__permission-option small {
+  margin-left: auto;
+}
+
+.xn-composer-toolbar__radio {
+  width: 13px;
+  height: 13px;
+  flex: 0 0 auto;
+  border: 1px solid var(--border-strong);
+  border-radius: 50%;
+}
+
+.xn-composer-toolbar__permission-option[aria-checked="true"] .xn-composer-toolbar__radio {
+  border: 4px solid var(--primary);
+}
+
+.xn-composer-toolbar__plan-toggle:hover:not(:disabled),
+.xn-composer-toolbar__permission-option:hover:not(:disabled),
+.xn-composer-toolbar__model-option:hover:not(:disabled),
+.xn-composer-toolbar__model-option[aria-pressed="true"],
+.xn-composer-toolbar__manage:hover:not(:disabled),
+.xn-composer-toolbar__error button:hover:not(:disabled) {
+  background: var(--bg-hover);
+}
+
+.xn-composer-toolbar__permission-option[aria-checked="true"] {
+  background: var(--bg-active);
+}
+
+.xn-composer-toolbar__tool {
+  min-height: 27px;
+  padding: 4px 7px;
+}
+
+.xn-composer-toolbar__tool[aria-pressed="true"] {
+  color: var(--fg);
+  background: var(--bg-active);
+}
+
+.xn-composer-toolbar__count {
+  display: inline-flex;
+  min-width: 16px;
+  height: 16px;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-full);
+  background: var(--bg-active);
+  color: var(--fg);
+  font-size: 10px;
+}
+
+.xn-composer-toolbar__model-trigger {
+  justify-content: space-between;
+  max-width: 180px;
+  color: var(--fg);
+}
+
+.xn-composer-toolbar__model .xn-composer-toolbar__popover {
+  right: 0;
+  left: auto;
+}
+
+.xn-composer-toolbar__model-trigger > span:first-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.xn-composer-toolbar__model-search {
+  width: 100%;
+  min-height: 30px;
+  padding: 5px 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg-subtle);
+  color: var(--fg);
+  font: inherit;
+}
+
+.xn-composer-toolbar__model-search:focus-visible {
+  outline: 2px solid var(--border-focus);
+  outline-offset: 1px;
+}
+
+.xn-composer-toolbar__message {
+  padding: 8px;
+  color: var(--fg-muted);
+}
+
+.xn-composer-toolbar__error {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 7px;
+  color: var(--danger, var(--fg));
+  overflow-wrap: anywhere;
+}
+
+.xn-composer-toolbar__error button {
+  width: auto;
+  flex: 0 0 auto;
+  color: inherit;
+}
+
+.xn-composer-toolbar__model-option small {
+  color: var(--fg-subtle);
+  font-size: 10px;
+}
+
+.xn-composer-toolbar__runtime-profile {
+  display: grid;
+  gap: 2px;
+  padding: 4px 0;
+  border-top: 1px solid var(--border);
+}
+
+.xn-composer-toolbar__profile-option {
+  display: flex;
+  width: 100%;
+  min-height: 31px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 5px 7px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--fg);
+  text-align: left;
+  font: inherit;
+  cursor: pointer;
+}
+
+.xn-composer-toolbar__profile-option:hover:not(:disabled),
+.xn-composer-toolbar__profile-option[aria-checked="true"] {
+  background: var(--bg-hover);
+}
+
+.xn-composer-toolbar__profile-option:disabled {
+  opacity: .55;
+  cursor: not-allowed;
+}
+
+.xn-composer-toolbar__profile-note,
+.xn-composer-toolbar__budget-hint {
+  margin: 0;
+  color: var(--fg-subtle);
+  font-size: 10px;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.xn-composer-toolbar__profile-note {
+  padding: 3px 7px;
+}
+
+.xn-composer-toolbar__budget-hint {
+  display: grid;
+  gap: 3px;
+  margin-top: 4px;
+  padding: 7px 7px 4px;
+  border-top: 1px solid var(--border);
+}
+
+.xn-composer-toolbar__budget-hint small {
+  color: var(--fg-muted);
+  font-size: 9px;
+}
+
+.xn-composer-toolbar__pause-reason {
+  color: var(--error-fg);
+}
+
+.xn-composer-toolbar__manage {
+  margin-top: 4px;
+  border-top: 1px solid var(--border);
+  border-radius: 0;
+  color: var(--fg-muted);
+}
+
+.xn-composer-toolbar__reasoning {
+  display: inline-flex;
+  align-items: center;
+  color: var(--fg-muted);
+  white-space: nowrap;
+}
+
+.xn-composer-toolbar__reasoning select {
+  max-width: 120px;
+  min-height: 27px;
+  padding: 4px 7px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg-card);
+  color: var(--fg);
+  font: inherit;
+}
+
+.xn-composer-toolbar__usage {
+  gap: 6px;
+  font-variant-numeric: tabular-nums;
+}
+
+.xn-composer-toolbar__usage-track {
+  width: 34px;
+  height: 4px;
+  overflow: hidden;
+  border-radius: var(--radius-full);
+  background: var(--bg-active);
+}
+
+.xn-composer-toolbar__usage-track > span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--fg-muted);
+}
+
+.xn-composer-toolbar__sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.xn-composer__plus-menu button:focus-visible,
+.xn-composer__context-chip button:focus-visible,
+.xn-composer-toolbar button:focus-visible,
+.xn-composer-toolbar select:focus-visible,
+.xn-composer-toolbar input:focus-visible,
+.xn-composer-toolbar summary:focus-visible {
+  outline: 2px solid var(--border-focus);
+  outline-offset: 2px;
+}
+
+.xn-composer-toolbar button:disabled,
+.xn-composer-toolbar select:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.xn-run-controls__provider {
+  display: grid;
+  gap: 4px;
+  color: var(--fg-muted);
+  font-size: 12px;
+}
+
+.xn-run-controls__provider strong {
+  color: var(--fg);
+  font-weight: 500;
+}
+
+@media (max-width: 680px) {
+  .xn-composer-toolbar {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 6px;
+  }
+
+  .xn-composer-toolbar__right {
+    justify-content: flex-start;
+  }
+
+  .xn-composer-toolbar__model-trigger {
+    max-width: min(180px, 42vw);
+  }
+
+  .xn-composer__plus-menu {
+    width: min(320px, calc(100vw - 22px));
+  }
+}
+
+/* Source-aligned composer controls: compact ghost triggers and small top-side menus. */
+.xn-shell-layout .xn-composer-toolbar__mode-control,
+.xn-shell-layout .xn-composer-toolbar__model {
+  position: relative;
+}
+
+.xn-shell-layout .xn-composer-toolbar__mode-trigger,
+.xn-shell-layout .xn-composer-toolbar__model-trigger {
+  display: inline-flex;
+  height: 28px;
+  min-height: 28px;
+  max-width: min(220px, 46vw);
+  align-items: center;
+  justify-content: flex-start;
+  gap: 4px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--fg);
+  font: inherit;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.xn-shell-layout .xn-composer-toolbar__mode-trigger:hover:not(:disabled),
+.xn-shell-layout .xn-composer-toolbar__model-trigger:hover:not(:disabled),
+.xn-shell-layout .xn-composer-toolbar__plan-marker-button:hover:not(:disabled) {
+  background: var(--bg-hover);
+}
+
+.xn-shell-layout .xn-composer-toolbar__mode-trigger > svg:first-child,
+.xn-shell-layout .xn-composer-toolbar__model-trigger > svg:first-child {
+  width: 16px;
+  height: 16px;
+  flex: 0 0 auto;
+}
+
+.xn-shell-layout .xn-composer-toolbar__mode-trigger > svg:last-child,
+.xn-shell-layout .xn-composer-toolbar__model-trigger > svg:last-child {
+  width: 14px;
+  height: 14px;
+  flex: 0 0 auto;
+  color: var(--fg-subtle);
+}
+
+.xn-shell-layout .xn-composer-toolbar__mode-trigger.is-warning {
+  color: var(--warning, var(--fg));
+}
+
+.xn-shell-layout .xn-composer-toolbar__model-trigger > span:first-child {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.xn-shell-layout .xn-composer-toolbar__popover {
+  display: grid;
+  gap: 2px;
+  position: absolute;
+  bottom: calc(100% + 4px);
+  z-index: 100;
+  width: min(256px, calc(100vw - 32px));
+  max-height: min(288px, 60vh);
+  overflow-y: auto;
+  padding: 4px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--bg-popover, var(--bg-card));
+  color: var(--fg);
+  box-shadow: var(--shadow-md);
+}
+
+.xn-shell-layout .xn-composer-toolbar__mode-popover {
+  left: 0;
+  width: min(256px, calc(100vw - 32px));
+}
+
+.xn-shell-layout .xn-composer-toolbar__model-popover {
+  right: 0;
+  width: min(192px, calc(100vw - 32px));
+}
+
+.xn-shell-layout .xn-composer-toolbar__menu-row {
+  display: flex;
+  width: 100%;
+  min-height: 52px;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 8px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--fg);
+  text-align: left;
+  font: inherit;
+  cursor: pointer;
+}
+
+.xn-shell-layout .xn-composer-toolbar__menu-row:hover:not(:disabled),
+.xn-shell-layout .xn-composer-toolbar__model-option:hover:not(:disabled),
+.xn-shell-layout .xn-composer-toolbar__manage:hover:not(:disabled),
+.xn-shell-layout .xn-composer-toolbar__error button:hover:not(:disabled) {
+  background: var(--bg-hover);
+}
+
+.xn-shell-layout .xn-composer-toolbar__menu-row > svg:first-child {
+  width: 18px;
+  height: 18px;
+  flex: 0 0 auto;
+  margin-top: 2px;
+  color: var(--fg-muted);
+}
+
+.xn-shell-layout .xn-composer-toolbar__menu-copy {
+  display: flex;
+  min-width: 0;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.xn-shell-layout .xn-composer-toolbar__menu-copy strong {
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.35;
+}
+
+.xn-shell-layout .xn-composer-toolbar__menu-copy small {
+  color: var(--fg-subtle);
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.xn-shell-layout .xn-composer-toolbar__menu-indicator {
+  display: inline-flex;
+  width: 16px;
+  height: 18px;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  margin-top: 1px;
+  color: var(--fg-muted);
+}
+
+.xn-shell-layout .xn-composer-toolbar__menu-indicator svg {
+  width: 16px;
+  height: 16px;
+}
+
+.xn-shell-layout .xn-composer-toolbar__separator {
+  height: 1px;
+  margin: 3px 4px;
+  background: var(--border);
+}
+
+.xn-shell-layout .xn-composer-toolbar__permission-options {
+  display: grid;
+  gap: 1px;
+}
+
+.xn-shell-layout .xn-composer-toolbar__permission-option[aria-checked="true"],
+.xn-shell-layout .xn-composer-toolbar__model-option[aria-checked="true"] {
+  background: transparent;
+}
+
+.xn-shell-layout .xn-composer-toolbar__permission-option small {
+  margin: 0;
+}
+
+.xn-shell-layout .xn-composer-toolbar__plan-marker {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.xn-shell-layout .xn-composer-toolbar__vertical-separator {
+  width: 1px;
+  height: 12px;
+  flex: 0 0 auto;
+  background: var(--border);
+}
+
+.xn-shell-layout .xn-composer-toolbar__plan-marker-button {
+  position: relative;
+  display: inline-flex;
+  height: 28px;
+  min-height: 28px;
+  align-items: center;
+  gap: 5px;
+  padding: 0 7px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--fg-muted);
+  font: inherit;
+  cursor: pointer;
+}
+
+.xn-shell-layout .xn-composer-toolbar__plan-marker-close {
+  display: none;
+  width: 16px;
+  height: 16px;
+}
+
+.xn-shell-layout .xn-composer-toolbar__plan-marker-button:hover .xn-composer-toolbar__plan-marker-bulb,
+.xn-shell-layout .xn-composer-toolbar__plan-marker-button:focus-visible .xn-composer-toolbar__plan-marker-bulb {
+  display: none;
+}
+
+.xn-shell-layout .xn-composer-toolbar__plan-marker-button:hover .xn-composer-toolbar__plan-marker-close,
+.xn-shell-layout .xn-composer-toolbar__plan-marker-button:focus-visible .xn-composer-toolbar__plan-marker-close {
+  display: block;
+}
+
+.xn-shell-layout .xn-composer-toolbar__model-options {
+  display: grid;
+  gap: 1px;
+  max-height: 232px;
+  overflow-y: auto;
+}
+
+.xn-shell-layout .xn-composer-toolbar__model-option {
+  display: flex;
+  width: 100%;
+  min-height: 32px;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 8px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--fg);
+  text-align: left;
+  font: inherit;
+  cursor: pointer;
+}
+
+.xn-shell-layout .xn-composer-toolbar__model-name {
+  min-width: 0;
+  flex: 1 1 auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.xn-shell-layout .xn-composer-toolbar__model-option small {
+  flex: 0 0 auto;
+  color: var(--fg-subtle);
+  font-size: 10px;
+}
+
+.xn-shell-layout .xn-composer-toolbar__model-footer {
+  position: sticky;
+  bottom: -4px;
+  margin: 4px -4px -4px;
+  padding: 4px;
+  border-top: 1px solid var(--border);
+  background: var(--bg-popover, var(--bg-card));
+}
+
+.xn-shell-layout .xn-composer-toolbar__manage {
+  display: flex;
+  width: 100%;
+  min-height: 32px;
+  align-items: center;
+  padding: 5px 8px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--fg-muted);
+  text-align: left;
+  font: inherit;
+  cursor: pointer;
+}
+
+.xn-shell-layout .xn-composer-toolbar__message {
+  padding: 8px;
+  color: var(--fg-muted);
+  font-size: 12px;
+}
+
+.xn-shell-layout .xn-composer-toolbar__error {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px;
+  color: var(--danger, var(--fg));
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
+.xn-shell-layout .xn-composer-toolbar__error > span {
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.xn-shell-layout .xn-composer-toolbar__error button {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 4px;
+  padding: 5px 6px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+.xn-shell-layout .xn-composer-toolbar__tool {
+  min-height: 28px;
+  padding: 4px 7px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--fg-muted);
+  font: inherit;
+}
+
+.xn-shell-layout .xn-composer-toolbar__tool:hover:not(:disabled),
+.xn-shell-layout .xn-composer-toolbar__tool[aria-pressed="true"] {
+  background: var(--bg-hover);
+  color: var(--fg);
+}
+
+.xn-shell-layout .xn-composer-toolbar__count {
+  min-width: 16px;
+  height: 16px;
+  border-radius: 999px;
+  background: var(--bg-active);
+  color: var(--fg);
+  font-size: 10px;
+}
+
+.xn-shell-layout .xn-composer-toolbar__reasoning-select.xn-select {
+  width: 94px;
+  min-width: 72px;
+  height: 28px;
+  padding: 0 6px 0 8px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--fg-muted);
+  font-size: 12px;
+}
+
+.xn-shell-layout .xn-composer-toolbar__reasoning-select.xn-select:hover,
+.xn-shell-layout .xn-composer-toolbar__reasoning-select.xn-select:focus-visible {
+  background: var(--bg-hover);
+}
+
+.xn-shell-layout .xn-composer-toolbar__usage {
+  height: 28px;
+  min-height: 28px;
+  padding: 4px 6px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+}
+
+.xn-shell-layout .xn-composer-toolbar__mode-trigger:focus-visible,
+.xn-shell-layout .xn-composer-toolbar__model-trigger:focus-visible,
+.xn-shell-layout .xn-composer-toolbar__popover button:focus-visible,
+.xn-shell-layout .xn-composer-toolbar__tool:focus-visible,
+.xn-shell-layout .xn-composer-toolbar__plan-marker-button:focus-visible,
+.xn-shell-layout .xn-composer-toolbar__reasoning-select.xn-select:focus-visible {
+  outline: 2px solid var(--border-focus);
+  outline-offset: 1px;
+}
+
+.xn-shell-layout .xn-composer-toolbar__mode-trigger:disabled,
+.xn-shell-layout .xn-composer-toolbar__model-trigger:disabled,
+.xn-shell-layout .xn-composer-toolbar__popover button:disabled,
+.xn-shell-layout .xn-composer-toolbar__reasoning-select.xn-select:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+@media (max-width: 680px) {
+  .xn-shell-layout .xn-composer-toolbar__model-popover {
+    right: auto;
+    left: 0;
+  }
+
+  .xn-shell-layout .xn-composer-toolbar__model-trigger {
+    max-width: min(180px, 42vw);
+  }
+}

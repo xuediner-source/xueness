@@ -1,0 +1,45 @@
+{
+  "id": "automation",
+  "name": "Local automation",
+  "description": "Timezone cron with immutable plan approval and local history.",
+  "apiVersion": 1,
+  "version": "1.0.0",
+  "defaultEnabled": true,
+  "dependencies": [
+    "workflows"
+  ],
+  "tools": [],
+  "commands": [
+    "automation"
+  ],
+  "panels": [
+    "automations"
+  ],
+  "resources": [],
+  "capabilities": [],
+  "modules": [
+    "scheduler"
+  ],
+  "features": [
+    {
+      "id": "automation.schedules",
+      "name": "五字段 cron、时区与下次执行",
+      "nameEn": "Five-field cron, time zones and next run"
+    },
+    {
+      "id": "automation.approval",
+      "name": "计划审批与无人值守触发",
+      "nameEn": "Schedule approval and unattended triggers"
+    },
+    {
+      "id": "automation.history",
+      "name": "持久认领、运行历史与暂停",
+      "nameEn": "Persistent claims, run history and pause"
+    }
+  ],
+  "frontendModules": [
+    "XuenessAutomationsPanel.tsx",
+    "plugins/automation/automationModel.ts",
+    "plugins/automation/index.tsx"
+  ]
+}

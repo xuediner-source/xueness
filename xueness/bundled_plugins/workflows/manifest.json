@@ -1,0 +1,73 @@
+{
+  "id": "workflows",
+  "name": "工作流与后台任务",
+  "description": "持久化 DAG、恢复复用、并发控制和后台命令。",
+  "version": "1.0.0",
+  "apiVersion": 1,
+  "defaultEnabled": true,
+  "dependencies": [
+    "sessions",
+    "files",
+    "shell"
+  ],
+  "tools": [
+    "workflow_create",
+    "workflow_amend",
+    "workflow_run",
+    "workflow_status",
+    "background_exec",
+    "background_status",
+    "background_cancel",
+    "background_logs",
+    "workflow_answer_actor"
+  ],
+  "commands": [
+    "workflow",
+    "jobs"
+  ],
+  "panels": [
+    "workflows"
+  ],
+  "resources": [],
+  "capabilities": [
+    "command"
+  ],
+  "modules": [
+    "dsl",
+    "operations_api",
+    "tools",
+    "workflow_cli",
+    "workflow_worker",
+    "workflows"
+  ],
+  "features": [
+    {
+      "id": "workflows.engine",
+      "name": "DAG、声明式 DSL 与模型编排",
+      "nameEn": "DAG, declarative DSL and model orchestration"
+    },
+    {
+      "id": "workflows.actors",
+      "name": "只读及已批准可写 actor 与问答",
+      "nameEn": "Read-only and approved writable actors and questions"
+    },
+    {
+      "id": "workflows.resume",
+      "name": "持久恢复、结果复用与文件校验",
+      "nameEn": "Persistent resume, result reuse and file checks"
+    },
+    {
+      "id": "workflows.concurrency",
+      "name": "动态并发、限流退避与跨运行调度",
+      "nameEn": "Adaptive concurrency, rate backoff and scheduling"
+    },
+    {
+      "id": "workflows.background",
+      "name": "后台命令、日志、状态与取消",
+      "nameEn": "Background commands, logs, status and cancellation"
+    }
+  ],
+  "frontendModules": [
+    "plugins/workflows/index.tsx"
+  ]
+}

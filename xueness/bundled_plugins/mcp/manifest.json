@@ -1,0 +1,61 @@
+{
+  "id": "mcp",
+  "name": "MCP 连接",
+  "description": "stdio/HTTP MCP 工具、服务器配置与连接诊断。",
+  "version": "1.0.0",
+  "apiVersion": 1,
+  "defaultEnabled": true,
+  "dependencies": [],
+  "tools": [
+    "mcp__*"
+  ],
+  "commands": [
+    "mcp-check"
+  ],
+  "panels": [
+    "capabilities"
+  ],
+  "resources": [
+    "mcp"
+  ],
+  "capabilities": [
+    "command",
+    "network"
+  ],
+  "modules": [
+    "diagnostics",
+    "lifecycle",
+    "mcp",
+    "mcp_http",
+    "oauth",
+    "operator_cli",
+    "sse"
+  ],
+  "features": [
+    {
+      "id": "mcp.transports",
+      "name": "stdio、HTTP 与旧 SSE 连接",
+      "nameEn": "stdio, HTTP and legacy SSE connections"
+    },
+    {
+      "id": "mcp.oauth",
+      "name": "OAuth PKCE、凭据刷新与隔离",
+      "nameEn": "OAuth PKCE, refresh and credential isolation"
+    },
+    {
+      "id": "mcp.tools",
+      "name": "外部工具、资源与提示词",
+      "nameEn": "External tools, resources and prompts"
+    },
+    {
+      "id": "mcp.recovery",
+      "name": "连接诊断、失效恢复与设置",
+      "nameEn": "Connection diagnostics, recovery and settings"
+    }
+  ],
+  "frontendModules": [
+    "XuenessMcpTools.tsx",
+    "XuenessOperations.tsx#McpDiagnostics",
+    "plugins/mcp/index.tsx"
+  ]
+}

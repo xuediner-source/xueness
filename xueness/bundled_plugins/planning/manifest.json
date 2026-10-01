@@ -1,0 +1,34 @@
+{
+  "id": "planning",
+  "name": "计划与问答",
+  "description": "会话 TODO 和等待用户回答工具。",
+  "version": "1.0.0",
+  "apiVersion": 1,
+  "defaultEnabled": true,
+  "dependencies": [],
+  "tools": [
+    "todo_read",
+    "todo_write",
+    "ask_user"
+  ],
+  "commands": [],
+  "panels": [],
+  "resources": [],
+  "capabilities": [],
+  "modules": [
+    "tooling"
+  ],
+  "features": [
+    {
+      "id": "planning.todos",
+      "name": "待办计划读取与更新",
+      "nameEn": "Read and update task plans"
+    },
+    {
+      "id": "planning.questions",
+      "name": "提问、用户回答与继续",
+      "nameEn": "Questions, user answers and continuation"
+    }
+  ],
+  "frontendModules": []
+}

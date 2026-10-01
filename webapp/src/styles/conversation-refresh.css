@@ -1,0 +1,891 @@
+/* Conversation, timeline and composer geometry mirrored from ZCode v4. */
+
+.xn-shell-layout .xn-conversation {
+  position: relative;
+}
+
+/* Session title is an accessible projection; conversation chrome floats over
+   the transcript instead of taking a title/status summary row out of it. */
+.xn-shell-layout .xn-conversation > .xn-conv-header {
+  position: absolute;
+  z-index: 30;
+  inset: 4px 12px auto auto;
+  display: block;
+  width: max-content;
+  max-width: calc(100% - 24px);
+  height: 0;
+  padding: 0;
+  overflow: visible;
+  border: 0;
+  background: transparent;
+  pointer-events: none;
+}
+
+.xn-shell-layout .xn-conv-header__title {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  clip-path: inset(50%);
+}
+
+.xn-shell-layout .xn-conv-header__main {
+  min-width: 0;
+  justify-content: flex-end;
+  pointer-events: none;
+}
+
+.xn-shell-layout .xn-conv-header__spacer { display: none; }
+
+.xn-shell-layout .xn-conv-header__tools {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+  pointer-events: auto;
+}
+
+.xn-shell-layout .xn-conv-header__meta { display: none; }
+
+.xn-shell-layout .xn-conversation__stream {
+  scroll-padding-block: 24px;
+  scrollbar-gutter: stable;
+}
+
+.xn-shell-layout .xn-conversation > .xn-runtime-monitor {
+  box-sizing: border-box;
+  flex: 0 0 auto;
+  margin: 48px 12px 8px;
+  min-height: 0;
+  max-height: min(40vh, 360px);
+  overflow: auto;
+}
+
+.xn-shell-layout .xn-timeline-stream {
+  box-sizing: border-box;
+  width: min(100%, 896px);
+  max-width: 896px;
+  gap: 20px;
+  padding: 20px 24px 20px;
+}
+
+.xn-shell-layout .xn-timeline-item {
+  min-width: 0;
+}
+
+/* ConversationTurnGroup uses pt-14 at each new user turn and a 20px row gap. */
+.xn-shell-layout .xn-timeline-item--user {
+  align-items: flex-end;
+  padding-top: 36px;
+}
+
+.xn-shell-layout .xn-timeline-item--user:first-child {
+  padding-top: 36px;
+}
+
+.xn-shell-layout .xn-msg--user {
+  display: flex;
+  align-items: flex-start;
+  justify-content: flex-end;
+  gap: 0;
+  max-width: 100%;
+}
+
+.xn-shell-layout .xn-msg__bubble {
+  box-sizing: border-box;
+  max-width: min(100%, 576px);
+  padding: 12px 16px;
+  border: 1px solid var(--border);
+  border-radius: 12px 2px 12px 12px;
+  background: var(--bg-card);
+  color: var(--fg);
+  font-size: 14px;
+  line-height: 20px;
+}
+
+.xn-shell-layout .xn-msg__avatar {
+  display: none;
+}
+
+.xn-shell-layout .xn-msg--assistant {
+  display: flex;
+  width: 100%;
+  flex-direction: column;
+  gap: 8px;
+  padding: 0;
+  color: var(--fg);
+  font-size: 14px;
+  line-height: 20px;
+}
+
+.xn-shell-layout .xn-msg--assistant > .xn-msg__actions { margin-top: 0; }
+
+.xn-shell-layout .xn-msg__prose,
+.xn-shell-layout .xn-md {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.xn-shell-layout .xn-md__paragraph {
+  margin: 0 0 0.85em;
+}
+
+.xn-shell-layout .xn-md__paragraph:last-child,
+.xn-shell-layout .xn-md__list:last-child,
+.xn-shell-layout .xn-md__code-block:last-child {
+  margin-bottom: 0;
+}
+
+.xn-shell-layout .xn-md__list {
+  margin: 0 0 0.9em;
+  padding-left: 1.4em;
+}
+
+.xn-shell-layout .xn-md__list-item {
+  padding-left: 0.15em;
+}
+
+.xn-shell-layout .xn-md__inline-code {
+  padding: 0.1em 0.32em;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--bg-subtle);
+  font-size: 0.9em;
+}
+
+.xn-shell-layout .xn-md__code-block {
+  box-sizing: border-box;
+  max-width: 100%;
+  margin: 0 0 0.9em;
+  padding: 12px;
+  overflow: auto;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--bg-subtle);
+  color: var(--fg);
+  font-size: 12px;
+  line-height: 20px;
+  tab-size: 2;
+}
+
+.xn-shell-layout .xn-md__heading {
+  margin: 1.25em 0 0.55em;
+  color: var(--fg);
+  font-weight: 650;
+  line-height: 1.35;
+}
+
+.xn-shell-layout .xn-md__heading:first-child { margin-top: 0; }
+.xn-shell-layout .xn-md__heading--1 { font-size: 1.55em; }
+.xn-shell-layout .xn-md__heading--2 { font-size: 1.35em; }
+.xn-shell-layout .xn-md__heading--3 { font-size: 1.15em; }
+.xn-shell-layout .xn-md__heading--4,
+.xn-shell-layout .xn-md__heading--5,
+.xn-shell-layout .xn-md__heading--6 { font-size: 1em; }
+
+.xn-shell-layout .xn-md__list--ordered { list-style: decimal; }
+.xn-shell-layout .xn-md__list--unordered { list-style: disc; }
+.xn-shell-layout .xn-md__list-item { margin: 0.15em 0; }
+.xn-shell-layout .xn-md__list-item.task-list-item { list-style: none; margin-left: -1.15em; }
+.xn-shell-layout .xn-md__list-item input[type="checkbox"] { margin: 0 0.45em 0 0; accent-color: var(--fg-subtle); vertical-align: -1px; }
+.xn-shell-layout .xn-md__blockquote {
+  margin: 0.8em 0;
+  padding: 0.15em 0 0.15em 0.9em;
+  border-left: 2px solid var(--border-strong);
+  color: var(--fg-subtle);
+}
+.xn-shell-layout .xn-md__blockquote > :first-child { margin-top: 0; }
+.xn-shell-layout .xn-md__blockquote > :last-child { margin-bottom: 0; }
+.xn-shell-layout .xn-md__table-wrap { max-width: 100%; margin: 0.9em 0; overflow-x: auto; border: 1px solid var(--border); border-radius: 8px; }
+.xn-shell-layout .xn-md__table { width: 100%; border-collapse: collapse; font-size: 0.92em; }
+.xn-shell-layout .xn-md__table-cell { padding: 6px 10px; border: 1px solid var(--border); text-align: left; vertical-align: top; }
+.xn-shell-layout .xn-md__table-cell--head { background: var(--bg-subtle); font-weight: 600; }
+.xn-shell-layout .xn-md__image { display: block; max-width: 100%; max-height: 480px; object-fit: contain; border-radius: 8px; }
+.xn-shell-layout .xn-md__italic { font-style: italic; }
+.xn-shell-layout .xn-md__strike { text-decoration: line-through; }
+.xn-shell-layout .xn-md a { color: var(--fg); text-decoration: underline; text-decoration-color: var(--fg-muted); text-underline-offset: 2px; }
+.xn-shell-layout .xn-md a:hover { text-decoration-color: currentColor; }
+
+.xn-shell-layout .xn-md__code-fence {
+  min-width: 0;
+  max-width: 100%;
+  margin: 0 0 0.9em;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--bg-card);
+}
+.xn-shell-layout .xn-md__code-header {
+  display: flex;
+  min-height: 32px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 2px 8px 2px 12px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-subtle);
+  color: var(--fg-muted);
+  font: 11px/1.4 var(--font-mono);
+}
+.xn-shell-layout .xn-md__code-fence .xn-code-content { border: 0; border-radius: 0; }
+.xn-shell-layout .xn-md__code-fence .xn-code-content pre { padding: 12px; font-family: var(--font-mono); line-height: 1.55; }
+
+.xn-shell-layout .xn-msg__body { display: flex; min-width: 0; max-width: 100%; flex-direction: column; align-items: flex-end; }
+.xn-shell-layout .xn-msg__actions { display: flex; min-height: 28px; align-items: center; gap: 4px; margin-top: 4px; opacity: 0; transition: opacity 120ms ease; }
+.xn-shell-layout .xn-timeline-item--user:hover .xn-msg__actions,
+.xn-shell-layout .xn-timeline-item--assistant:hover .xn-msg__actions,
+.xn-shell-layout .xn-timeline-item--user:focus-within .xn-msg__actions,
+.xn-shell-layout .xn-timeline-item--assistant:focus-within .xn-msg__actions { opacity: 1; }
+.xn-shell-layout .xn-msg__copy-action { display: inline-flex; min-height: 24px; align-items: center; gap: 5px; }
+.xn-shell-layout .xn-msg__copy-button {
+  display: inline-flex;
+  width: 28px;
+  height: 28px;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--fg-muted);
+  cursor: pointer;
+}
+.xn-shell-layout .xn-msg__copy-button:hover:not(:disabled) { background: var(--bg-hover); color: var(--fg); }
+.xn-shell-layout .xn-msg__copy-button:disabled { opacity: 0.4; cursor: default; }
+.xn-shell-layout .xn-msg__copy-feedback { color: var(--fg-muted); font-size: 11px; line-height: 1.3; }
+.xn-shell-layout .xn-msg__copy-feedback--error { color: var(--error-fg); }
+.xn-shell-layout .xn-msg__copy-button:focus-visible { outline: 2px solid var(--border-focus); outline-offset: 2px; }
+
+.xn-shell-layout .xn-conv-header__more { position: relative; pointer-events: auto; }
+.xn-shell-layout .xn-conv-header__more > summary {
+  display: inline-flex;
+  width: 30px;
+  height: 30px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 7px;
+  color: var(--fg-muted);
+  font-size: 23px;
+  line-height: 1;
+  list-style: none;
+  cursor: pointer;
+}
+.xn-shell-layout .xn-conv-header__more > summary::-webkit-details-marker { display: none; }
+.xn-shell-layout .xn-conv-header__more[open] > summary,
+.xn-shell-layout .xn-conv-header__more > summary:hover { background: var(--bg-hover); color: var(--fg); }
+.xn-shell-layout .xn-conv-header__menu {
+  position: absolute;
+  z-index: 31;
+  top: 34px;
+  right: 0;
+  display: flex;
+  min-width: 168px;
+  flex-direction: column;
+  padding: 5px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--bg-card);
+  box-shadow: var(--shadow-lg);
+}
+.xn-shell-layout .xn-conv-header__menu .xn-conv-header__action {
+  display: flex;
+  min-height: 30px;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 8px;
+  padding: 6px 8px;
+  color: var(--fg);
+  font-size: 12px;
+  text-align: left;
+  white-space: nowrap;
+}
+.xn-shell-layout .xn-conv-header__menu .xn-conv-header__action--danger { color: var(--error-fg); }
+.xn-shell-layout .xn-conv-header__menu .xn-conv-header__action--danger:hover { background: var(--error-bg); }
+
+@media (hover: none) {
+  .xn-shell-layout .xn-timeline-item--user .xn-msg__actions,
+  .xn-shell-layout .xn-timeline-item--assistant .xn-msg__actions { opacity: 1; }
+}
+
+.xn-shell-layout .xn-timeline-item--tool {
+  width: 100%;
+  align-self: stretch;
+}
+
+/* ZCode ToolLayout is a quiet summary row; details stay inside the same turn. */
+.xn-shell-layout .xn-msg--tool,
+.xn-shell-layout .xn-toolcall {
+  min-width: 0;
+  overflow: visible;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.xn-shell-layout .xn-msg__tool-line,
+.xn-shell-layout .xn-toolcall__summary {
+  display: flex;
+  min-height: 24px;
+  min-width: 0;
+  align-items: center;
+  gap: 8px;
+  padding: 0;
+  color: var(--fg-subtle);
+  font-size: 14px;
+  line-height: 20px;
+}
+
+.xn-shell-layout .xn-msg__tool-icon,
+.xn-shell-layout .xn-toolcall__kind-icon {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  border-radius: 0;
+  background: transparent;
+  color: var(--fg-subtle);
+  font-size: 12px;
+}
+
+.xn-shell-layout .xn-msg__tool-name,
+.xn-shell-layout .xn-toolcall__kind {
+  flex: 0 0 auto;
+  width: auto;
+  color: var(--fg-muted);
+  font-size: 12px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.xn-shell-layout .xn-msg__tool-subject,
+.xn-shell-layout .xn-toolcall__primary {
+  min-width: 0;
+  padding: 0;
+  overflow: hidden;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--fg-subtle);
+  font: inherit;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.xn-shell-layout .xn-toolcall__primary--mono {
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+
+.xn-shell-layout .xn-msg__tool-trailing,
+.xn-shell-layout .xn-toolcall__trailing {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+}
+
+.xn-shell-layout .xn-toolcall__status {
+  color: var(--fg-muted);
+  font-size: 11px;
+  line-height: 16px;
+}
+
+.xn-shell-layout .xn-toolcall__details {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.xn-shell-layout .xn-toolcall__details > summary {
+  display: flex;
+  min-height: 24px;
+  align-items: center;
+  gap: 8px;
+  list-style: none;
+  cursor: pointer;
+}
+
+.xn-shell-layout .xn-toolcall__details > summary::-webkit-details-marker,
+.xn-shell-layout .xn-msg__tool-details > summary::-webkit-details-marker,
+.xn-shell-layout .xn-msg__tool-error-details > summary::-webkit-details-marker {
+  display: none;
+}
+
+.xn-shell-layout .xn-toolcall__chevron {
+  flex: 0 0 auto;
+  color: var(--fg-muted);
+  transition: transform 120ms ease;
+}
+
+.xn-shell-layout .xn-toolcall__details[open] .xn-toolcall__chevron {
+  transform: rotate(90deg);
+}
+
+.xn-shell-layout .xn-toolcall__content {
+  display: grid;
+  gap: 8px;
+  margin: 4px 0 0 24px;
+  padding: 8px 0 4px;
+  border-top: 1px solid var(--border);
+}
+
+.xn-shell-layout .xn-toolcall__section {
+  display: grid;
+  min-width: 0;
+  gap: 4px;
+}
+
+.xn-shell-layout .xn-toolcall__section-label {
+  color: var(--fg-muted);
+  font-size: 11px;
+  line-height: 16px;
+}
+
+.xn-shell-layout .xn-toolcall__body,
+.xn-shell-layout .xn-msg__tool-detail-body {
+  box-sizing: border-box;
+  max-width: 100%;
+  max-height: 5lh;
+  margin: 0;
+  padding: 0;
+  overflow: auto;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--fg-subtle);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 20px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.xn-shell-layout .xn-msg__tool-details {
+  display: flex;
+  flex: 1 1 120px;
+  flex-direction: column;
+  min-width: 0;
+  align-items: stretch;
+  align-self: stretch;
+}
+
+.xn-shell-layout .xn-msg__tool-details > summary {
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+  list-style: none;
+  cursor: pointer;
+}
+
+.xn-shell-layout .xn-msg__tool-details > summary::before,
+.xn-shell-layout .xn-msg__tool-error-details > summary::before {
+  content: "›";
+  display: inline-block;
+  margin-right: 6px;
+  color: var(--fg-muted);
+  transition: transform 120ms ease;
+}
+
+.xn-shell-layout .xn-msg__tool-details[open] > summary::before,
+.xn-shell-layout .xn-msg__tool-error-details[open] > summary::before {
+  transform: rotate(90deg);
+}
+
+.xn-shell-layout .xn-msg__tool-detail-body {
+  margin: 4px 0 8px 24px;
+  padding: 0;
+}
+
+.xn-shell-layout .xn-msg__tool-detail-body--error {
+  color: var(--error-fg);
+}
+
+.xn-shell-layout .xn-msg__tool-error-details > summary {
+  display: block;
+  max-height: 5lh;
+  overflow: hidden;
+  cursor: pointer;
+}
+
+.xn-shell-layout .xn-msg__tool-error-details[open] > summary {
+  border-bottom: 1px solid var(--error-border);
+}
+
+.xn-shell-layout .xn-msg__tool-error {
+  border-top-color: var(--error-border);
+  background: color-mix(in srgb, var(--error-bg) 70%, transparent);
+  font-size: 12px;
+  line-height: 20px;
+}
+
+.xn-shell-layout .xn-tool-group {
+  min-width: 0;
+}
+
+.xn-shell-layout .xn-tool-group > summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--fg-subtle);
+  font-size: 12px;
+  line-height: 20px;
+  list-style: none;
+  cursor: pointer;
+}
+
+.xn-shell-layout .xn-tool-group > summary::-webkit-details-marker {
+  display: none;
+}
+
+.xn-shell-layout .xn-tool-group > summary::before {
+  content: "›";
+  color: var(--fg-muted);
+  transition: transform 120ms ease;
+}
+
+.xn-shell-layout .xn-tool-group[open] > summary::before {
+  transform: rotate(90deg);
+}
+
+.xn-shell-layout .xn-tool-group > .xn-timeline-stream {
+  width: 100%;
+  max-width: none;
+  gap: 12px;
+  padding: 8px 0 0 24px;
+}
+
+.xn-shell-layout .xn-msg--completion,
+.xn-shell-layout .xn-msg--question {
+  border: 1px solid var(--border);
+  border-left: 2px solid var(--border);
+  border-radius: 9px;
+  background: var(--bg-card);
+  box-shadow: none;
+}
+
+.xn-shell-layout .xn-msg--completion {
+  border-left-color: var(--ok-border);
+}
+
+.xn-shell-layout .xn-msg--question {
+  border-left-color: var(--warn-border);
+}
+
+.xn-shell-layout .xn-msg--completion .xn-msg__prose,
+.xn-shell-layout .xn-msg--question .xn-msg__prose {
+  padding: 8px 12px 10px;
+  font-size: 14px;
+  line-height: 20px;
+}
+
+.xn-shell-layout .xn-composer {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  box-sizing: border-box;
+  overflow: visible;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  background: var(--bg-input, var(--bg-card));
+  box-shadow: none;
+  transition: border-color 120ms ease, background-color 120ms ease;
+}
+
+.xn-shell-layout .xn-composer:hover {
+  border-color: var(--border-strong);
+}
+
+.xn-shell-layout .xn-composer:focus-within {
+  border-color: var(--border-strong);
+  background: var(--bg-input, var(--bg-card));
+  box-shadow: none;
+}
+
+.xn-shell-layout .xn-composer-region {
+  position: relative;
+  min-width: 0;
+  width: 100%;
+}
+
+.xn-shell-layout .xn-composer-region--hero {
+  max-width: 672px;
+  margin: 0 auto;
+}
+
+.xn-shell-layout .xn-composer__top-content {
+  display: flex;
+  min-height: 40px;
+  box-sizing: border-box;
+  align-items: center;
+  padding: 6px 12px;
+}
+
+.xn-shell-layout .xn-composer__top-content .xn-composer-workspace {
+  gap: 8px;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+}
+
+.xn-shell-layout .xn-composer__top-content .xn-composer-workspace select {
+  min-height: 28px;
+  padding: 4px 8px;
+  border-radius: 7px;
+  background: transparent;
+  font: 12px/18px var(--font-sans);
+}
+
+.xn-shell-layout .xn-composer__top-content .xn-composer-workspace > span {
+  color: var(--fg-muted);
+}
+
+.xn-shell-layout .xn-composer--hero {
+  width: 100%;
+  max-width: 672px;
+  margin: 0;
+}
+
+/* The workspace chooser and prompt share one surface in the reference UI.
+   The 40px header plus the 106px input area makes a 146px hero composer. */
+.xn-shell-layout .xn-composer--with-top-content {
+  gap: 0;
+  padding: 0;
+}
+
+.xn-shell-layout .xn-composer--with-top-content .xn-composer__input {
+  width: calc(100% - 24px);
+  margin: 12px 12px 0;
+}
+
+.xn-shell-layout .xn-composer--with-top-content .xn-composer__row {
+  margin: 12px;
+}
+
+.xn-shell-layout .xn-composer-region--docked {
+  flex: 0 0 auto;
+  width: min(896px, calc(100% - 48px));
+  max-width: 896px;
+  margin: 0 auto 14px;
+}
+
+.xn-shell-layout .xn-composer--docked {
+  flex: 0 0 auto;
+  width: 100%;
+  max-width: none;
+  margin: 0;
+}
+
+.xn-shell-layout .xn-composer__input {
+  display: block;
+  width: 100%;
+  min-height: 40px;
+  max-height: 160px;
+  box-sizing: border-box;
+  resize: none;
+  padding: 0;
+  overflow-y: hidden;
+  border: 0;
+  border-radius: 0;
+  outline: none;
+  background: transparent;
+  color: var(--fg);
+  font: 14px/20px var(--font-sans);
+}
+
+.xn-shell-layout .xn-composer__input::placeholder {
+  color: var(--fg-muted);
+  opacity: 1;
+}
+
+.xn-shell-layout .xn-composer__input:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.xn-shell-layout .xn-composer__row {
+  display: flex;
+  align-items: flex-end;
+  gap: 12px;
+  padding: 0;
+  border: 0;
+}
+
+.xn-shell-layout .xn-composer__tools {
+  display: flex;
+  flex: 1 1 auto;
+  min-width: 0;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.xn-shell-layout .xn-composer__actions {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 4px;
+  padding: 0;
+  border: 0;
+}
+
+.xn-shell-layout .xn-composer__chip {
+  display: inline-flex;
+  width: 28px;
+  height: 28px;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--fg-muted);
+  cursor: pointer;
+}
+
+.xn-shell-layout .xn-composer__chip:hover:not(:disabled),
+.xn-shell-layout .xn-composer__plus[aria-expanded="true"] {
+  background: var(--bg-hover);
+  color: var(--fg);
+}
+
+.xn-shell-layout .xn-composer__plus {
+  line-height: 1;
+}
+
+.xn-shell-layout .xn-composer__settings {
+  display: contents;
+  flex: none;
+  min-width: 0;
+}
+
+.xn-shell-layout .xn-composer-toolbar {
+  display: contents;
+}
+
+.xn-shell-layout .xn-composer-toolbar__left,
+.xn-shell-layout .xn-composer-toolbar__right {
+  gap: 4px;
+}
+
+.xn-shell-layout .xn-composer-toolbar__right {
+  margin-left: auto;
+}
+
+.xn-shell-layout .xn-composer__keyboard-help {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.xn-shell-layout .xn-composer__send {
+  display: inline-flex;
+  flex: 0 0 auto;
+  width: 28px;
+  height: 28px;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: 8px;
+  background: var(--primary);
+  color: var(--primary-fg);
+  cursor: pointer;
+}
+
+.xn-shell-layout .xn-composer__send:hover:not(:disabled) {
+  background: var(--primary-hover);
+}
+
+.xn-shell-layout .xn-composer__send:disabled {
+  background: var(--bg-active);
+  color: var(--fg-muted);
+  opacity: 1;
+  cursor: not-allowed;
+}
+
+.xn-shell-layout .xn-composer__stop {
+  background: var(--bg-active);
+  color: var(--fg);
+}
+
+.xn-shell-layout .xn-composer__suggest-item:focus-visible,
+.xn-shell-layout .xn-composer__chip:focus-visible,
+.xn-shell-layout .xn-composer__send:focus-visible,
+.xn-shell-layout .xn-msg details > summary:focus-visible {
+  outline: 2px solid var(--border-focus);
+  outline-offset: 2px;
+}
+
+@media (max-width: 680px) {
+  .xn-shell-layout .xn-timeline-stream {
+    width: 100%;
+    gap: 20px;
+    padding: 16px 16px 20px;
+  }
+
+  .xn-shell-layout .xn-timeline-item--user {
+    padding-top: 36px;
+  }
+
+  .xn-shell-layout .xn-msg__bubble {
+    max-width: min(100%, 576px);
+  }
+
+  .xn-shell-layout .xn-composer-region--docked {
+    width: calc(100% - 24px);
+    margin: 0 auto 10px;
+  }
+
+  .xn-shell-layout .xn-composer--docked {
+    width: 100%;
+    margin: 0;
+  }
+
+  .xn-shell-layout .xn-composer__row {
+    align-items: center;
+    flex-wrap: wrap;
+  }
+
+  .xn-shell-layout .xn-composer__tools {
+    flex-basis: calc(100% - 44px);
+    gap: 8px;
+  }
+
+  .xn-shell-layout .xn-composer__settings {
+    flex-basis: auto;
+  }
+
+  .xn-shell-layout .xn-composer-toolbar__left,
+  .xn-shell-layout .xn-composer-toolbar__right {
+    flex-basis: 100%;
+    margin-left: 0;
+  }
+
+  .xn-shell-layout .xn-composer-toolbar {
+    width: 100%;
+  }
+
+  .xn-shell-layout .xn-conversation > .xn-conv-header { inset-inline-end: 8px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .xn-shell-layout .xn-composer,
+  .xn-shell-layout .xn-toolcall__chevron,
+  .xn-shell-layout .xn-msg__tool-details > summary::before,
+  .xn-shell-layout .xn-msg__tool-error-details > summary::before {
+    transition: none;
+  }
+}

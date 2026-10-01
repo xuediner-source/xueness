@@ -1,0 +1,35 @@
+{
+  "id": "extensions",
+  "name": "Extension marketplace",
+  "description": "Browse, install and upgrade data-only capability packages.",
+  "apiVersion": 1,
+  "version": "1.0.0",
+  "defaultEnabled": true,
+  "dependencies": [],
+  "tools": [],
+  "commands": [],
+  "panels": [
+    "marketplace"
+  ],
+  "resources": [],
+  "capabilities": [],
+  "modules": [
+    "marketplace"
+  ],
+  "features": [
+    {
+      "id": "extensions.marketplace",
+      "name": "可信资源清单市场浏览",
+      "nameEn": "Trusted resource manifest marketplace"
+    },
+    {
+      "id": "extensions.management",
+      "name": "数据 manifest 安装、升级与移除",
+      "nameEn": "Data manifest install, upgrade and removal"
+    }
+  ],
+  "frontendModules": [
+    "XuenessMarketplace.tsx",
+    "plugins/extensions/index.tsx"
+  ]
+}

@@ -1,0 +1,95 @@
+{
+  "id": "sessions",
+  "name": "会话与聊天",
+  "description": "CLI/Web 会话选择、管理、输入及聊天入口。",
+  "version": "1.0.0",
+  "apiVersion": 1,
+  "defaultEnabled": true,
+  "dependencies": [],
+  "tools": [
+    "read_session_context"
+  ],
+  "commands": [
+    "new",
+    "run",
+    "chat",
+    "list",
+    "show",
+    "journal",
+    "answer",
+    "sessions"
+  ],
+  "panels": [
+    "chat"
+  ],
+  "resources": [],
+  "capabilities": [],
+  "modules": [
+    "cli",
+    "cli_input",
+    "cli_interrupt",
+    "cli_tui",
+    "composer_api",
+    "deltas",
+    "forking",
+    "http_routes",
+    "operator_cli",
+    "session_management",
+    "sessions_api",
+    "tooling"
+  ],
+  "features": [
+    {
+      "id": "sessions.conversation",
+      "name": "会话创建与 Agent 对话",
+      "nameEn": "Sessions and agent conversations"
+    },
+    {
+      "id": "sessions.management",
+      "name": "选择、搜索、重命名、固定与归档",
+      "nameEn": "Select, search, rename, pin and archive"
+    },
+    {
+      "id": "sessions.history",
+      "name": "历史导航与跨会话上下文检索",
+      "nameEn": "History navigation and session context search"
+    },
+    {
+      "id": "sessions.fork",
+      "name": "闭合历史轮次分叉与来源链接",
+      "nameEn": "Safe history forks and parent links"
+    },
+    {
+      "id": "sessions.portable",
+      "name": "脱敏导出、导入与恢复",
+      "nameEn": "Redacted export, import and resume"
+    },
+    {
+      "id": "sessions.streaming",
+      "name": "文本、思考与工具调用增量流",
+      "nameEn": "Text, reasoning and tool streams"
+    },
+    {
+      "id": "sessions.composer",
+      "name": "附件、上下文引用与会话输入",
+      "nameEn": "Attachments, context mentions and input"
+    },
+    {
+      "id": "sessions.tui",
+      "name": "多行 CLI、全屏 TUI 与中断恢复",
+      "nameEn": "Multiline CLI, fullscreen TUI and interruption"
+    }
+  ],
+  "frontendModules": [
+    "XuenessComposerToolbar.tsx",
+    "XuenessConversationHistoryRail.tsx",
+    "XuenessRenameDialog.tsx",
+    "XuenessTaskList.tsx",
+    "XuenessTimeline.tsx",
+    "XuenessWorkbenchView.tsx",
+    "xuenessComposer.ts",
+    "xuenessWorkbench.ts",
+    "plugins/sessions/ForkSessionDialog.tsx",
+    "plugins/sessions/index.ts"
+  ]
+}

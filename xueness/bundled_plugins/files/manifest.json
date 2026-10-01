@@ -1,0 +1,71 @@
+{
+  "id": "files",
+  "name": "工作区文件",
+  "description": "文件工具、目录浏览、文件预览与改动视图。",
+  "version": "1.0.0",
+  "apiVersion": 1,
+  "defaultEnabled": true,
+  "dependencies": [],
+  "tools": [
+    "read",
+    "list",
+    "glob",
+    "grep",
+    "write",
+    "edit"
+  ],
+  "commands": [],
+  "panels": [
+    "files",
+    "changes",
+    "directory"
+  ],
+  "resources": [],
+  "capabilities": [
+    "filesystem-write"
+  ],
+  "modules": [
+    "builtin_tools",
+    "directory_api",
+    "http_routes",
+    "instructions",
+    "preview"
+  ],
+  "features": [
+    {
+      "id": "files.read",
+      "name": "文件列表、搜索与分页读取",
+      "nameEn": "File listing, search and paged reading"
+    },
+    {
+      "id": "files.mutations",
+      "name": "批准后的文件写入与编辑",
+      "nameEn": "Approved file writes and edits"
+    },
+    {
+      "id": "files.directory",
+      "name": "目录浏览、新建与本机目录选择",
+      "nameEn": "Directory browsing, creation and host folder selection"
+    },
+    {
+      "id": "files.preview",
+      "name": "文本、图像、PDF 与媒体预览",
+      "nameEn": "Text, image, PDF and media previews"
+    },
+    {
+      "id": "files.changes",
+      "name": "会话文件改动视图",
+      "nameEn": "Session file change view"
+    },
+    {
+      "id": "files.instructions",
+      "name": "工作区 AGENTS 指导文件加载",
+      "nameEn": "Workspace AGENTS instruction loading"
+    }
+  ],
+  "frontendModules": [
+    "XuenessPanels.tsx#DirectoryBrowser",
+    "XuenessWorkbenchView2.tsx#FileBrowser",
+    "XuenessWorkbenchView2.tsx#DiffView"
+  ]
+}

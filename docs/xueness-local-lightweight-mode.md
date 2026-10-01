@@ -1,0 +1,108 @@
+# Xueness 本地小模型轻量模式
+
+本轮参考源码固定在 2026-10-01 的 DeepSeek Harness `639ed015397290b3745d163aafe02ffee4aa3f84` 和 Pi Agent `8ce69e9d2b171d173fe4b6b2b6256f1f4411e69d`。功能取舍见 [Harness 对照审查](xueness-harness-feature-audit-2026-10-01.md)。
+
+## 启用
+
+Web：设置 → 模型设置 → 添加或编辑配置 → 运行配置选择「本地轻量」。选择 Ollama、LM Studio、llama.cpp 或 vLLM 地址模板，填写实际已部署的模型 ID。上下文窗口必须与服务启动配置一致；这里不会下载模型、调整显存分配或改变模型权重。
+
+会话输入框的模型菜单也可切换「标准 / 本地轻量」，重新打开会话恢复上次档位。预算提示是输入估算，真实服务返回的 usage 独立显示。
+
+编辑配置中的「轻量配置高级选项」可调整下表参数。留空使用宿主默认值；显式保存才生效，改变模型目录中的选择只更新编辑草稿。可恢复默认设置并保存。标准档位不使用这些轻量参数。
+
+CLI 示例，把 `YOUR_INSTALLED_MODEL` 换成实际已安装的模型名：
+
+```sh
+python3 -m xueness providers save local --name 'Ollama 本地模型' \
+  --base-url http://127.0.0.1:11434/v1 --model YOUR_INSTALLED_MODEL \
+  --runtime-profile lightweight --context-window 8192 --max-output-tokens 1024
+python3 -m xueness run --provider-id local --lightweight \
+  --prompt '先查看 README，说明项目如何运行' --root /path/to/project
+python3 -m xueness chat --provider-id local --lightweight --root /path/to/project
+python3 -m xueness providers discover local
+```
+
+`--runtime-profile standard` 明确恢复标准档位；`--lightweight` 是 `--runtime-profile lightweight` 的简写。写入、编辑、命令仍需现有授权参数或逐次审批。
+
+对 OpenAI-compatible 配置，明确选择轻量配置或现有 loopback opt-in 后，`127.0.0.1` / `::1` 字面 IP 服务可留空 API key，不发送空 Bearer 头。Anthropic Messages 仍要求 API key。HTTP 不接受任意远端地址或可变 DNS 别名。远程部署使用 HTTPS 和相应凭据。仅 loopback 请求绕过环境代理，其他请求保留原有代理行为；重定向仍被拒绝。
+
+「发现模型」仅在显式点击时，对已保存的 OpenAI-compatible 配置发 `GET /models`；不调用聊天生成。它受服务真实请求开关、8 秒预算、512 KiB 响应和 500 个 ID 上限限制，不从模型名称猜测上下文长度或硬件能力。Anthropic Messages 配置没有这个入口。
+
+## 详细参数
+
+配置 API 的 `lightweightOptions` 使用完整对象替换：省略该字段保留已有选项，传 `{}` 恢复默认值。不能包含未知键；布尔值不能充当整数，非有限数值和超范围值会被拒绝。
+
+| 参数 | 范围 / 默认值 | 实际用途 |
+|---|---|---|
+| `reserveTokens` | 0–8192；自动为 512，窗口小于 4096 时为 128 | 输入额外安全预留；窗口减输出和预留必须至少剩 256 tokens |
+| `optionalContextChars` | 0–6000 / 1800 | 可选记忆、技能和工作区指导总字符预算；0 跳过这些可选上下文，仍保留用户任务 |
+| `toolResultChars` | 400–12000 / 1400 | 大工具结果进入模型请求时的简短视图；完整 journal 不变 |
+| `initialTools` | `auto` / `minimal` / `core`；默认 `auto` | 自动按窗口选择初始工具集，或明确选择最小/核心集；不会扩大权限 |
+| `maxDiscoveredTools` | 0–12 / 6 | 请求内保留的按需工具上限；0 隐藏并拒绝工具发现 |
+| `toolSearchResults` | 1–6 / 3 | 每次发现工具的数量，还受发现总上限约束 |
+| `resultPageChars` | 128–4000 / 1200 | 完整工具结果分页的默认页长度 |
+| `fileReadChars` | 128–12000 / 4000 | 文件工具默认页长度；显式 `offset/limit` 仍受工具上限约束 |
+| `overflowRetry` | 布尔 / `true` | 已确认上下文溢出、且未输出时，最多重试一次 |
+| `overflowRetryRatio` | 0.25–0.85 / 0.6 | 溢出重试时的输入预算比例 |
+| `jsonRepairAttempts` | 0–2 / 1 | JSON 协议错误后的额外修复请求数；0 立即暂停，默认最多一次修复 |
+| `stepLimit` | 1–64 / 64 | 限制调用方已有步骤预算，不能提高 CLI/Web 的步骤上限 |
+| `wallTimeSeconds` | 1–3600 / 沿用调用方预算 | 总运行预算；模型 HTTP 请求使用剩余期限，工具在边界协作式检查，不强杀已开始的工具 |
+| `requestTimeoutSeconds` | 1–300 / 120 | 每次模型请求的总网络预算，覆盖响应头、响应体和重试等待；更短的运行预算优先 |
+| `transportRetries` | 0–2 / 0 | 网络/限流等可重试失败的额外尝试数；文本或思考增量已输出后不重放 |
+| `temperature` | 0–2 / 省略 | OpenAI-compatible 的温度参数；省略沿用模型服务默认值 |
+| `topP` | 大于 0 且不大于 1 / 省略 | OpenAI-compatible 的核采样参数 |
+| `seed` | 0–2147483647 / 省略 | OpenAI-compatible 的采样种子；服务未必支持，不能保证可复现 |
+
+采样参数只用于实际轻量推理，不发给连接测试；Anthropic 配置拒绝这些采样选项。HTTP 网络预算由共享单调时钟期限和 socket watchdog 执行；远程域名的操作系统 DNS 解析仍受系统解析器控制，字面 loopback IP 不经过域名解析。超时和重试不下载模型或改变服务的线程、KV cache、量化、显存层数等启动参数。
+
+CLI 可一次保存完整轻量选项对象：
+
+```sh
+python3 -m xueness providers save local --name '本地轻量' \
+  --base-url http://127.0.0.1:11434/v1 --model YOUR_INSTALLED_MODEL \
+  --runtime-profile lightweight --context-window 8192 --max-output-tokens 1024 \
+  --lightweight-options '{"initialTools":"minimal","fileReadChars":2400,"requestTimeoutSeconds":120,"transportRetries":0,"temperature":0.2}'
+```
+
+## 实际变化
+
+- 初始工具为 `read`、`write`、`edit`、`exec`、`ask_user`、`tool_search`、`tool_result_read`；小于 4096 tokens 时先展示 `read`、`exec`、`ask_user`、`tool_search`。远程会话保留远程工具边界。
+- `tool_search` 查找当前启用且符合工具范围的能力，每次最多三个匹配项，下一次请求带上相应 schema；最多保留最近六个发现的工具。发现不启用插件或授予权限。
+- `read` 支持字符 `offset` / `limit`，轻量默认 4000、最多 12000 字符，分块扫描降低宿主内存分配。`tool_result_read` 分页读取当前会话的完整结果，默认 1200、每页最多 4000 字符，不跨会话。
+- 预算计入提示、消息、可选记忆/技能/仓库指导及工具 schema。默认窗口 8192、输出 1024；较小窗口默认输出为 `min(1024, window / 4)`。另预留 512 tokens；小于 4096 时预留 128。输出上限通过真实 API 参数发送。
+- 输入估算是保守的 UTF-8 字节数 / 2 启发式，不是 tokenizer 或实际 usage。最初任务与最新用户输入保留，旧交换按完整调用/结果单元移出请求；原 journal 保留。大结果显示简短视图与完整结果 ID。
+- 必需输入本身过大时暂停并说明原因。确认的上下文超限最多缩小请求重试一次；已输出的流式文本不重放，执行过的工具不重做。
+- 工具串行执行，保留单点精确 `edit`、重复调用停止、墙钟预算和停止/恢复。轻量子代理沿用预算及只读边界，并保留角色指令。
+- 根与成功触及文件的子目录 `AGENTS.md` 按根到深目录读取；不越过工作区或跟随符号链接，整体有上限。指导是低优先级上下文，不能覆盖用户/宿主权限规则，正文不自动写入会话。
+
+## API 兼容和完成状态
+
+原生 function calling 可用时选择 `native`。兼容配置支持 `streamUsage`、`parallelToolCalls`、`maxTokensField`（`max_tokens` / `max_completion_tokens`）。轻量默认省略 `stream_options`，发送 `parallel_tool_calls=false`。
+
+不支持原生工具时，OpenAI-compatible 轻量配置可以选择 `json`：
+
+```json
+{"tool":"read","arguments":{"path":"README.md","offset":0,"limit":1200}}
+```
+
+宿主只解析整个明确对象，不从任意段落提取 JSON 执行。调用仍经 journal 意图、参数、插件范围与 Gate 审批，结果用普通文本角色回传。格式默认额外修正一次，可配置为 0–2 次。这不是训练或解码 grammar，模型仍可能无法遵循协议。
+
+普通文字可以结束回答，但不能自动标成“已验证”。验证仍需引用实际成功结果；失败、拒绝或虚构 ID 不算证据。
+
+## 本机资源与模型输出可视化
+
+轻量配置的高级设置区，以及轻量会话，显示本机资源面板：逻辑 CPU 核心、系统 1/5/15 分钟负载、Xueness 进程 CPU、物理内存总量/可用估算、进程常驻内存，以及状态目录所在文件系统的磁盘空间。数据来自运行 Xueness 后端的设备；远程模型服务器的资源不在这份数据中。进程 CPU 的 100% 表示一个核心，首次采样尚无增量基线时显示不可用。
+
+资源大约每 2 秒刷新，支持暂停/恢复和手动刷新。页面隐藏、退出轻量模式或卸载面板时停止轮询。后端按服务上下文锁定并缓存 2 秒，macOS 使用固定绝对路径的 `sysctl`、`vm_stat`、本进程 `ps`（单条命令最多 0.5 秒）；Linux 读取有界 `/proc` 数据。失败的字段为 `null`，不伪装成 0。macOS 可用内存包括可回收页估算，Linux 优先使用内核 `MemAvailable`。没有 GPU/模型显存探针时明确显示不可用；统一内存总量不等于模型显存占用。
+
+`GET /api/diagnostics/runtime` 属于 diagnostics 插件，遵守宿主 HTTP 与插件开关边界；只返回 `xueness.runtime-metrics.v1` 的数值和采样时间，不返回用户名、目录、进程列表或凭据。诊断采样不会连接模型服务。
+
+模型面板展示等待模型、思考、生成、工具调用、修复与最终状态。它记录实际流式回调的首个文本/思考延迟、字符数、请求耗时、平均字符速率、服务实际报告的输出 Token 数与平均 Token 速率，最多保留 24 次请求的字符速率趋势。速率的分母为整个请求耗时，包含等待时间，**不是解码阶段吞吐基准**。没有流式首片段、未观察到思考增量或没有服务 usage 时，相应指标显示不可用，不把字符折算为真实 Token。输入预算条仍使用明确标注的 UTF-8 估算，完成状态继续区分“需要审核”和“已验证”。
+
+## 验证和边界
+
+测试覆盖本地请求/流式兼容、空 key/代理/重定向、CLI/Web 档位与高级选项保存恢复、工具范围、JSON 审批、分页、中文预算、历史配对、溢出重试、未验证回答、请求期限和资源探针失败。第二十八批后端全套 1181 项（1159 通过、22 跳过），前端 367 项通过，类型与生产构建通过；最后补充的缺失思考统计与流式/轻量回归 18 项通过。
+
+上一轮检查本机 Ollama 时只有 `nomic-embed-text:latest` 嵌入模型，没有 Agent 对话生成模型。接口用临时 loopback 服务验收，测试 fixture 没有成为产品模型；没有下载模型或调用收费服务。本轮不能据此报告真实小模型的任务成功率、速度或显存改善。
+
+Pi 的 [核心工具](https://github.com/earendil-works/pi/blob/8ce69e9d2b171d173fe4b6b2b6256f1f4411e69d/packages/coding-agent/src/core/tools/index.ts) 和 [请求预算](https://github.com/earendil-works/pi/blob/8ce69e9d2b171d173fe4b6b2b6256f1f4411e69d/packages/ai/src/api/simple-options.ts) 支持少工具与明确预算的设计；没有证据显示 Pi 会自动提升小模型能力。另参考 DeepSeek Harness 的 [模型预算](https://github.com/deepseek-ai/deepseek-harness/blob/639ed015397290b3745d163aafe02ffee4aa3f84/packages/compaction/compaction-basic/src/config.ts) 和 [指令发现](https://github.com/deepseek-ai/deepseek-harness/blob/639ed015397290b3745d163aafe02ffee4aa3f84/packages/context/agent-instructions/src/files.ts)。Xueness 保持自己的 Python 运行时及可信插件边界。

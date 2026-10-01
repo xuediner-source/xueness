@@ -1,0 +1,59 @@
+{
+  "id": "settings",
+  "name": "配置设置",
+  "description": "设置存储、偏好与能力选项界面。",
+  "version": "1.0.0",
+  "apiVersion": 1,
+  "defaultEnabled": true,
+  "dependencies": [],
+  "tools": [],
+  "commands": [
+    "settings",
+    "settings-set"
+  ],
+  "panels": [
+    "settings"
+  ],
+  "resources": [],
+  "capabilities": [],
+  "modules": [
+    "operator_cli",
+    "preferences",
+    "settings_store",
+    "workspaces_api"
+  ],
+  "features": [
+    {
+      "id": "settings.workspace",
+      "name": "工作区登记、项目选择与默认目录",
+      "nameEn": "Workspace registration, project selection and default folder"
+    },
+    {
+      "id": "settings.appearance",
+      "name": "主题、语言、字体与代码显示",
+      "nameEn": "Theme, language, fonts and code appearance"
+    },
+    {
+      "id": "settings.shortcuts",
+      "name": "快捷键配置、验证与冲突检测",
+      "nameEn": "Shortcut configuration, validation and conflicts"
+    },
+    {
+      "id": "settings.agent",
+      "name": "Agent 运行与能力偏好",
+      "nameEn": "Agent runtime and capability preferences"
+    }
+  ],
+  "frontendModules": [
+    "XuenessPanels.tsx#SettingsSections",
+    "XuenessWorkbenchView2.tsx#SettingsPanel",
+    "XuenessSettingsView.tsx",
+    "XuenessShortcutsPanel.tsx",
+    "XuenessWorkspacePickerDialog.tsx",
+    "XuenessWorkspaceSettings.tsx",
+    "xuenessSettings.ts",
+    "xuenessSettingsNavigation.ts",
+    "xuenessShortcutCommands.ts",
+    "xuenessWorkspaces.ts"
+  ]
+}

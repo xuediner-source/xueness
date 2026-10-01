@@ -1,0 +1,86 @@
+{
+  "id": "providers",
+  "name": "模型供应商",
+  "description": "保存模型配置，发现 OpenAI 兼容服务模型，并配置轻量运行参数。",
+  "version": "1.0.0",
+  "apiVersion": 1,
+  "defaultEnabled": true,
+  "dependencies": [],
+  "tools": [
+    "tool_search",
+    "tool_result_read"
+  ],
+  "commands": [
+    "providers"
+  ],
+  "panels": [
+    "providers"
+  ],
+  "resources": [],
+  "capabilities": [
+    "network"
+  ],
+  "modules": [
+    "activity",
+    "lightweight",
+    "lightweight_config",
+    "operator_cli",
+    "provider",
+    "provider_config",
+    "providers_api",
+    "runtime_options",
+    "tooling"
+  ],
+  "features": [
+    {
+      "id": "providers.profiles",
+      "name": "模型配置保存、选择与切换",
+      "nameEn": "Save, select and switch model profiles"
+    },
+    {
+      "id": "providers.protocols",
+      "name": "OpenAI 兼容与 Anthropic 协议",
+      "nameEn": "OpenAI-compatible and Anthropic protocols"
+    },
+    {
+      "id": "providers.discovery",
+      "name": "显式模型发现",
+      "nameEn": "Explicit model discovery"
+    },
+    {
+      "id": "providers.lightweight",
+      "name": "本地小模型轻量档位",
+      "nameEn": "Lightweight profile for local small models"
+    },
+    {
+      "id": "providers.budgets",
+      "name": "上下文、输出与安全预算",
+      "nameEn": "Context, output and safety budgets"
+    },
+    {
+      "id": "providers.tools",
+      "name": "精简工具、按需发现与结果分页",
+      "nameEn": "Minimal tools, discovery and result paging"
+    },
+    {
+      "id": "providers.json",
+      "name": "JSON 工具协议与有限修复",
+      "nameEn": "JSON tool protocol and bounded repair"
+    },
+    {
+      "id": "providers.transport",
+      "name": "兼容参数、超时与有限重试",
+      "nameEn": "Compatibility, deadlines and bounded retries"
+    },
+    {
+      "id": "providers.activity",
+      "name": "输出阶段、延迟、计数与速率趋势",
+      "nameEn": "Output phase, latency, counts and rate trends"
+    }
+  ],
+  "frontendModules": [
+    "XuenessPanels.tsx#ProvidersPanel",
+    "plugins/providers/LocalRuntimeMonitor.tsx",
+    "plugins/providers/index.tsx"
+  ]
+}

@@ -1,0 +1,47 @@
+{
+  "id": "memory",
+  "name": "记忆",
+  "description": "有界、只读记忆注入与轨道信息。",
+  "version": "1.0.0",
+  "apiVersion": 1,
+  "defaultEnabled": true,
+  "dependencies": [],
+  "tools": [],
+  "commands": [
+    "memory-tracks"
+  ],
+  "panels": [
+    "memory"
+  ],
+  "resources": [],
+  "capabilities": [],
+  "modules": [
+    "catalog",
+    "editor",
+    "memory",
+    "memory_api",
+    "operator_cli"
+  ],
+  "features": [
+    {
+      "id": "memory.injection",
+      "name": "只读记忆轨道与上下文注入",
+      "nameEn": "Read-only memory tracks and context injection"
+    },
+    {
+      "id": "memory.editor",
+      "name": "手动编辑与版本冲突检测",
+      "nameEn": "Manual editing and version conflict checks"
+    },
+    {
+      "id": "memory.settings",
+      "name": "记忆能力与工作区配置",
+      "nameEn": "Memory capability and workspace settings"
+    }
+  ],
+  "frontendModules": [
+    "XuenessPanels.tsx#MemoryPanel",
+    "plugins/memory/MemorySettings.tsx",
+    "plugins/memory/index.tsx"
+  ]
+}

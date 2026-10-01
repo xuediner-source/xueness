@@ -1,0 +1,33 @@
+{
+  "id": "network",
+  "name": "Web tools",
+  "description": "Bounded public WebFetch and configurable WebSearch, gated per run.",
+  "apiVersion": 1,
+  "version": "1.0.0",
+  "defaultEnabled": true,
+  "dependencies": [],
+  "tools": [
+    "web_fetch",
+    "web_search"
+  ],
+  "commands": [],
+  "panels": [],
+  "resources": [],
+  "capabilities": [],
+  "modules": [
+    "tooling"
+  ],
+  "features": [
+    {
+      "id": "network.fetch",
+      "name": "受限公网 HTTPS 页面读取",
+      "nameEn": "Restricted public HTTPS fetching"
+    },
+    {
+      "id": "network.search",
+      "name": "显式配置的网页搜索",
+      "nameEn": "Explicitly configured web search"
+    }
+  ],
+  "frontendModules": []
+}

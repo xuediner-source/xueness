@@ -1,0 +1,43 @@
+{
+  "id": "usage",
+  "name": "用量统计",
+  "description": "从本地会话记录统计步骤和运行。",
+  "version": "1.0.0",
+  "apiVersion": 1,
+  "defaultEnabled": true,
+  "dependencies": [],
+  "tools": [],
+  "commands": [
+    "usage"
+  ],
+  "panels": [
+    "usage"
+  ],
+  "resources": [],
+  "capabilities": [],
+  "modules": [
+    "operator_cli",
+    "usage_api"
+  ],
+  "features": [
+    {
+      "id": "usage.usage",
+      "name": "会话、步骤与日期统计",
+      "nameEn": "Session, step and daily statistics"
+    },
+    {
+      "id": "usage.tokens",
+      "name": "供应商实际报告的 Token 统计",
+      "nameEn": "Provider-reported token statistics"
+    },
+    {
+      "id": "usage.costs",
+      "name": "实际报告成本与模型维度统计",
+      "nameEn": "Reported costs and per-model statistics"
+    }
+  ],
+  "frontendModules": [
+    "XuenessPanels.tsx#UsagePanel",
+    "XuenessUsageSettings.tsx"
+  ]
+}

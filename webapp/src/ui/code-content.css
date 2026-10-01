@@ -1,0 +1,8 @@
+.xn-code-content { width:100%; min-width:0; overflow:auto; border:1px solid var(--border); border-radius:8px; background:var(--bg-card); }
+.xn-code-content pre { margin:0; padding:16px; font:inherit; font-family:var(--font-mono); line-height:1.6; white-space:pre; tab-size:2; }
+.xn-code-content code { font:inherit; counter-reset:line-number; }
+.xn-code-content .line { display:inline-block; min-height:1.6em; }
+.xn-code-content.has-line-numbers .line::before { counter-increment:line-number; content:counter(line-number); display:inline-block; width:3em; padding-right:1.5em; text-align:right; color:var(--fg-muted); user-select:none; }
+.xn-code-content.wraps-lines pre { white-space:pre-wrap; overflow-wrap:anywhere; }
+.xn-code-content[data-tone=add] { border-color:var(--ok-border); }.xn-code-content[data-tone=add] pre { background:var(--ok-bg)!important; }
+.xn-code-content[data-tone=remove] { border-color:var(--error-border); }.xn-code-content[data-tone=remove] pre { background:var(--error-bg)!important; }

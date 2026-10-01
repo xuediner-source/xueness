@@ -1,0 +1,139 @@
+"""Structural ownership gates and persisted policy at public tool boundaries."""
+import argparse
+import importlib.util
+import json
+from pathlib import Path
+import shutil
+import tempfile
+import unittest
+
+from xueness import plugin_runtime
+from xueness.core import Gate, Store, execute
+from xueness.tool_contract import bind_execution
+from xueness.tool_registry import dispatch, REGISTRY
+
+ROOT = Path(__file__).resolve().parents[1]
+spec = importlib.util.spec_from_file_location('plugin_architecture_guard', ROOT / 'tools/check_plugin_architecture.py')
+guard = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(guard)
+
+
+class ArchitectureTests(unittest.TestCase):
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temp.cleanup)
+        self.base = Path(self.temp.name)
+
+    def fixture(self):
+        root = self.base / 'source'
+        shutil.copytree(ROOT / 'xueness', root / 'xueness', ignore=shutil.ignore_patterns('__pycache__'))
+        shutil.copytree(ROOT / 'webapp/src', root / 'webapp/src')
+        return root
+
+    def rewrite(self, root, pid, change):
+        path = root / 'xueness/bundled_plugins' / pid / 'manifest.json'
+        item = json.loads(path.read_text())
+        change(item)
+        path.write_text(json.dumps(item))
+
+    def test_current_tree_has_complete_ownership(self):
+        self.assertEqual(guard.audit(ROOT), [])
+
+    def test_orphan_backend_module_and_unregistered_package_fail(self):
+        root = self.fixture()
+        (root / 'xueness/bundled_plugins/providers/new_feature.py').write_text('')
+        (root / 'xueness/bundled_plugins/future').mkdir()
+        errors = guard.audit(root)
+        self.assertTrue(any('providers: module ownership mismatch: new_feature' in e for e in errors), errors)
+        self.assertTrue(any('package/allowlist mismatch: future' in e for e in errors), errors)
+
+    def test_missing_ui_registry_entry_and_orphan_ui_module_fail(self):
+        root = self.fixture()
+        path = root / 'webapp/src/xuenessPluginRegistry.ts'
+        path.write_text(path.read_text().replace('  providers: { name:', '  omitted: { name:'))
+        (root / 'webapp/src/plugins/providers/NewFeature.tsx').write_text('export function NewFeature() {}')
+        errors = guard.audit(root)
+        self.assertTrue(any('frontend registry/allowlist mismatch' in e for e in errors), errors)
+        self.assertTrue(any('unowned frontend feature module' in e for e in errors), errors)
+
+    def test_static_frontend_metadata_can_use_multiline_formatting(self):
+        root = self.fixture()
+        path = root / 'webapp/src/xuenessPluginRegistry.ts'
+        path.write_text(path.read_text().replace('  providers: { name:', '  providers: {\n    name:'))
+        self.assertEqual(guard.audit(root), [])
+
+    def test_stale_frontend_export_and_duplicate_contributions_fail(self):
+        root = self.fixture()
+        self.rewrite(root, 'providers', lambda m: m['frontendModules'].append('XuenessPanels.tsx#NoSuchPanel'))
+        self.rewrite(root, 'shell', lambda m: m['tools'].append('read'))
+        errors = guard.audit(root)
+        self.assertTrue(any('missing frontend export' in e for e in errors), errors)
+        self.assertIn('tools: multiple owners for read', errors)
+
+    def test_empty_features_panel_drift_and_dependency_cycle_fail(self):
+        root = self.fixture()
+        self.rewrite(root, 'providers', lambda m: m.update(features=[], panels=[], dependencies=['onboarding']))
+        errors = guard.audit(root)
+        for part in ['features must describe', 'frontend/backend panel mismatch', 'cyclic plugin dependency']:
+            self.assertTrue(any(part in e for e in errors), errors)
+
+    def test_business_module_cannot_be_added_to_host(self):
+        root = self.fixture()
+        (root / 'xueness/new_feature.py').write_text('def run_feature(): pass\n')
+        self.assertIn('business code outside plugin package: xueness/new_feature.py', guard.audit(root))
+
+    def test_cli_host_cannot_take_back_feature_implementation(self):
+        root = self.fixture()
+        path = root / 'xueness/cli.py'
+        path.write_text(path.read_text() + '\ndef _register_git_cli(commands):\n    commands.add_parser("new-product")\n')
+        self.assertIn('CLI parser must be owned by its plugin: _register_git_cli', guard.audit(root))
+
+    def test_registered_cli_commands_and_manifest_owners_agree(self):
+        parser = argparse.ArgumentParser()
+        commands = parser.add_subparsers(dest='cmd')
+        plugin_runtime.register_cli_parsers(commands)
+        manifests = plugin_runtime._manifests()
+        declared = {command for row in manifests.values() for command in row['commands']}
+        self.assertEqual(set(commands.choices), declared)
+        for command in commands.choices:
+            owner = plugin_runtime.cli_owner(command)
+            self.assertIn(owner, manifests)
+            self.assertTrue(callable(getattr(plugin_runtime.entrypoint(owner), 'execute_cli', None)), command)
+        names = [tool.name for tool in REGISTRY]
+        self.assertEqual(len(names), len(set(names)))
+        declared_tools = {name for row in manifests.values() for name in row['tools']}
+        self.assertEqual(set(names), declared_tools - {'mcp__*', 'skill_read', 'task'})
+
+    def test_resource_owner_and_runtime_manager_are_distinct(self):
+        self.assertEqual(plugin_runtime.cli_owner('resources', argparse.Namespace(kind='plugins')), 'extensions')
+        self.assertEqual(plugin_runtime.route_owner(['api', 'resources', 'plugins']), 'extensions')
+        with tempfile.TemporaryDirectory() as state:
+            plugin_runtime.set_enabled(state, 'extensions', False)
+            ctx = {'state_dir': Path(state)}
+            code, body = plugin_runtime.dispatch_http('GET', ['api', 'resources', 'plugins'], {}, {}, ctx)
+            self.assertEqual(code, 403)
+            code, body = plugin_runtime.dispatch_http('GET', ['api', 'plugins'], {}, {}, ctx)
+            self.assertEqual(code, 200)
+            self.assertEqual({p['id'] for p in body['plugins']}, set(plugin_runtime.PLUGIN_IDS))
+
+    def test_direct_bound_tool_dispatch_cannot_resurrect_disabled_plugin(self):
+        root = self.base / 'workspace'; root.mkdir()
+        store = Store(self.base / 'state')
+        plugin_runtime.set_enabled(store.directory, 'files', False)
+        gate = Gate(root, allow_write=True)
+        args = {'path': 'blocked.txt', 'content': 'must not write'}
+        with bind_execution(store=store, state_dir=store.directory):
+            self.assertEqual(dispatch(root, gate, 'write', args), {'ok': False, 'error': 'plugin disabled'})
+            self.assertEqual(execute(root, gate, 'write', args), {'ok': False, 'error': 'plugin disabled'})
+        self.assertEqual(execute(root, gate, 'write', args, state_dir=store.directory), {'ok': False, 'error': 'plugin disabled'})
+        self.assertFalse((root / 'blocked.txt').exists())
+
+    def test_declared_execution_context_without_policy_fails_closed(self):
+        root = self.base / 'workspace'; root.mkdir()
+        with bind_execution(store=None):
+            self.assertEqual(dispatch(root, Gate(root), 'list', {'path': '.'}),
+                             {'ok': False, 'error': 'plugin policy unavailable'})
+
+
+if __name__ == '__main__':
+    unittest.main()

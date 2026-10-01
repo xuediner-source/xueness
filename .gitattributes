@@ -1,0 +1,2 @@
+# Ship generated workbench assets without noisy code diffs.
+webapp/dist/** linguist-generated=true -diff

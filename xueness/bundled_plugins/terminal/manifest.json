@@ -1,0 +1,47 @@
+{
+  "id": "terminal",
+  "name": "交互式终端",
+  "description": "显式打开的真实 PTY，输入、调整、重连与关闭。",
+  "version": "1.0.0",
+  "apiVersion": 1,
+  "defaultEnabled": true,
+  "dependencies": [
+    "sessions",
+    "shell"
+  ],
+  "tools": [],
+  "commands": [],
+  "panels": [
+    "terminal"
+  ],
+  "resources": [],
+  "capabilities": [
+    "command"
+  ],
+  "modules": [
+    "shells",
+    "terminal_worker",
+    "terminals"
+  ],
+  "features": [
+    {
+      "id": "terminal.pty",
+      "name": "工作区交互式 POSIX PTY",
+      "nameEn": "Interactive workspace POSIX PTY"
+    },
+    {
+      "id": "terminal.lifecycle",
+      "name": "终端尺寸、日志、关闭与服务清理",
+      "nameEn": "Terminal sizing, logs, closing and cleanup"
+    },
+    {
+      "id": "terminal.preferences",
+      "name": "默认 Shell 与终端偏好",
+      "nameEn": "Default shell and terminal preferences"
+    }
+  ],
+  "frontendModules": [
+    "XuenessTerminalPreferences.tsx",
+    "plugins/terminal/index.tsx"
+  ]
+}

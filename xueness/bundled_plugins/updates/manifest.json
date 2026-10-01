@@ -1,0 +1,30 @@
+{
+  "id": "updates",
+  "name": "CLI source updates",
+  "description": "CLI source updates",
+  "apiVersion": 1,
+  "version": "1.0.0",
+  "defaultEnabled": true,
+  "dependencies": [],
+  "tools": [],
+  "commands": [
+    "update"
+  ],
+  "panels": [],
+  "resources": [],
+  "capabilities": [],
+  "modules": [],
+  "features": [
+    {
+      "id": "updates.check",
+      "name": "源仓库版本与更新检查",
+      "nameEn": "Source repository version and update checks"
+    },
+    {
+      "id": "updates.apply",
+      "name": "明确批准的干净仓库快进更新",
+      "nameEn": "Approved clean-repository fast-forward update"
+    }
+  ],
+  "frontendModules": []
+}

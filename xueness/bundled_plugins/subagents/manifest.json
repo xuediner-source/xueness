@@ -1,0 +1,50 @@
+{
+  "id": "subagents",
+  "name": "子代理",
+  "description": "只读子任务、进度与协作取消。",
+  "version": "1.0.0",
+  "apiVersion": 1,
+  "defaultEnabled": true,
+  "dependencies": [
+    "sessions",
+    "files"
+  ],
+  "tools": [
+    "task"
+  ],
+  "commands": [],
+  "panels": [
+    "capabilities"
+  ],
+  "resources": [
+    "subagents"
+  ],
+  "capabilities": [
+    "network"
+  ],
+  "modules": [
+    "runner",
+    "subagents",
+    "task_registry"
+  ],
+  "features": [
+    {
+      "id": "subagents.tasks",
+      "name": "只读子任务与嵌套代理",
+      "nameEn": "Read-only subtasks and nested agents"
+    },
+    {
+      "id": "subagents.progress",
+      "name": "子任务进度、结果与取消",
+      "nameEn": "Subtask progress, results and cancellation"
+    },
+    {
+      "id": "subagents.settings",
+      "name": "子代理资源与能力配置",
+      "nameEn": "Subagent resources and capability settings"
+    }
+  ],
+  "frontendModules": [
+    "plugins/subagents/SubagentSettings.tsx"
+  ]
+}

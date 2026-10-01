@@ -1,0 +1,215 @@
+/* ---------------------------------------------------------------------------
+ * Batch 10 parent-lane styles: composer suggestions, sidebar group pills.
+ * Kept out of styles.css so parallel lanes appending there cannot collide.
+ * ------------------------------------------------------------------------- */
+
+/* -- composer suggestion dropdown (opens upward from the docked composer) -- */
+
+.xn-composer {
+  position: relative;
+}
+
+.xn-composer__suggest {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: calc(100% + 6px);
+  z-index: 20;
+  list-style: none;
+  margin: 0;
+  padding: 4px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-md);
+  background: var(--bg-card);
+  box-shadow: var(--shadow-md);
+  max-height: 240px;
+  overflow-y: auto;
+}
+
+.xn-composer__suggest-item {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  width: 100%;
+  text-align: left;
+  border: none;
+  background: transparent;
+  color: var(--fg);
+  font-size: 12px;
+  font-family: inherit;
+  padding: 6px 8px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+
+.xn-composer__suggest-item:hover,
+.xn-composer__suggest-item--active {
+  background: var(--bg-hover);
+}
+
+.xn-composer__suggest-item code {
+  font-family: var(--font-mono);
+  color: var(--primary);
+  flex-shrink: 0;
+}
+
+.xn-composer__suggest-item span {
+  color: var(--fg-subtle);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* -- sidebar grouping pills ------------------------------------------------ */
+
+.xn-sidebar-group-pills {
+  display: flex;
+  gap: 4px;
+  padding: 0 10px 8px;
+}
+
+.xn-sidebar-pill {
+  flex: 1;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-full);
+  background: transparent;
+  color: var(--fg-muted);
+  font-size: 11px;
+  font-family: inherit;
+  padding: 3px 0;
+  cursor: pointer;
+}
+
+.xn-sidebar-pill:hover {
+  color: var(--fg);
+  background: var(--bg-hover);
+}
+
+.xn-sidebar-pill--active {
+  background: var(--bg-active);
+  color: var(--fg);
+  font-weight: 600;
+  border-color: var(--border-strong);
+}
+
+/* ---------------------------------------------------------------------------
+ * Batch 11: visual polish — status dots, avatars, chips, spin, icon sizing.
+ * ------------------------------------------------------------------------- */
+
+.xn-spin {
+  animation: xn-rotate 0.9s linear infinite;
+}
+
+@keyframes xn-rotate {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* status markers: 14px icon slot; warn/neutral render as small dots */
+.xn-sidebar-status {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+  font-size: 11px;
+  color: var(--fg-subtle);
+}
+
+.xn-sidebar-status--busy {
+  color: var(--primary);
+  animation: xn-pulse 1.2s ease-in-out infinite;
+}
+
+.xn-sidebar-status--ok { color: var(--ok); }
+.xn-sidebar-status--error { color: var(--error); }
+
+.xn-sidebar-status--warn::before,
+.xn-sidebar-status:not([data-status]):not(.xn-sidebar-status--busy):not(.xn-sidebar-status--ok):not(.xn-sidebar-status--error)::before {
+  content: "";
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.xn-sidebar-status--warn {
+  color: var(--warn);
+}
+
+/* user message avatar */
+.xn-msg--user {
+  display: flex;
+  align-items: flex-start;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.xn-msg__avatar {
+  flex-shrink: 0;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: var(--bg-active);
+  color: var(--fg);
+  font-size: 11px;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin-top: 2px;
+}
+
+/* composer chips + helper buttons */
+.xn-composer__chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border-radius: var(--radius-full);
+  border: none;
+  background: transparent;
+  color: var(--fg-muted);
+  cursor: pointer;
+}
+
+.xn-composer__chip:hover:not(:disabled) {
+  color: var(--fg);
+  background: var(--bg-hover);
+}
+
+.xn-composer__chip:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.xn-composer__select {
+  appearance: none;
+  border-radius: var(--radius-full);
+  border: 1px solid var(--border);
+  background: var(--bg-subtle);
+  color: var(--fg-muted);
+  font-size: 12px;
+  padding: 4px 10px;
+  cursor: pointer;
+}
+
+.xn-composer__select:hover {
+  color: var(--fg);
+  border-color: var(--border-strong);
+}
+
+/* pinned header action highlight */
+.xn-conv-header__action--pinned {
+  color: var(--primary);
+}
+
+/* secondary view back icon alignment */
+.xn-secondary-view__back {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}

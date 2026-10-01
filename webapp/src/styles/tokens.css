@@ -1,0 +1,167 @@
+/**
+ * Xueness theme parameters derived from the Apache-2.0 upstream UI (v3.14.3).
+ * See NOTICE.md; product identity belongs to Xueness.
+ * Supports both light mode and dark mode via CSS custom properties.
+ * index.html declares <html class="dark">, so .dark tokens apply by default,
+ * while :root provides the light-mode tokens.
+ */
+
+:root {
+  --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", "Noto Sans", Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+
+  --workbench-content-width: 672px;
+  --workbench-page-width: 896px;
+  --sidebar-width: 270px;
+
+  /* Color tokens - Light */
+  --bg: #f8f8f8;
+  --bg-subtle: #f0f0f0;
+  --bg-card: #ffffff;
+  --bg-hover: rgba(13, 13, 13, 0.05);
+  --bg-active: rgba(13, 13, 13, 0.05);
+
+  --fg: #262626;
+  --fg-subtle: rgba(38, 38, 38, 0.6);
+  --fg-muted: rgba(38, 38, 38, 0.4);
+  --fg-inverted: #ffffff;
+
+  --border: color-mix(in oklab, #0a0a0a 10%, transparent);
+  --border-strong: color-mix(in oklab, #0a0a0a 20%, transparent);
+  --border-focus: rgba(13, 13, 13, 0.15);
+
+  --primary: #262626;
+  --primary-hover: #333333;
+  --primary-active: #000000;
+  --primary-fg: #ffffff;
+  --primary-light: rgba(13, 13, 13, 0.05);
+
+  --ok: #16a34a;
+  --ok-bg: #f0fdf4;
+  --ok-border: #86efac;
+  --ok-fg: #15803d;
+
+  --warn: #ca8a04;
+  --warn-bg: #fefce8;
+  --warn-border: #fde047;
+  --warn-fg: #854d0e;
+
+  --error: #dc2626;
+  --error-bg: #fef2f2;
+  --error-border: #fca5a5;
+  --error-fg: #991b1b;
+
+  --info: #0284c7;
+  --info-bg: #f0f9ff;
+  --info-border: #7dd3fc;
+  --info-fg: #0369a1;
+
+  /* Shadows */
+  --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+  --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+  --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
+
+  /* Radius */
+  --radius-sm: 6px;
+  --radius-md: 9px;
+  --radius-lg: 12px;
+  --radius-full: 9999px;
+
+  /* Aliases matching existing inline variables */
+  --background: var(--bg);
+  --foreground: var(--fg);
+  --muted-foreground: var(--fg-muted);
+  --active-bg: var(--primary-light);
+  --active-fg: var(--primary);
+  --card-bg: var(--bg-card);
+  --sidebar-bg: var(--bg-subtle);
+  --tool-accent: #d97706;
+  --tool-result-accent: #0284c7;
+  --assistant-accent: var(--fg-subtle);
+  --header-bg: var(--bg);
+  --user-msg-bg: var(--bg-subtle);
+  --assistant-msg-bg: var(--bg-hover);
+  --assistant-msg-fg: var(--fg);
+}
+
+.dark {
+  --primary-fg: #000000;
+  /* Quiet neutral surfaces for the native workbench. Semantic status colors
+   * are independent of the monochrome navigation and primary actions. */
+  /* Color tokens - Dark */
+  --bg: #161616;
+  --bg-subtle: #161616;
+  --bg-card: #2b2b2b;
+  --bg-hover: color-mix(in oklab, white 10%, transparent);
+  --bg-active: #404040;
+
+  --fg: #d4d4d4;
+  --fg-subtle: rgba(212, 212, 212, 0.6);
+  --fg-muted: rgba(212, 212, 212, 0.3);
+  --fg-inverted: #0a0a0a;
+
+  --border: color-mix(in oklab, #fafafa 10%, transparent);
+  --border-strong: color-mix(in oklab, #fafafa 30%, transparent);
+  --border-focus: rgba(255, 255, 255, 0.15);
+
+  --primary: #d4d4d4;
+  --primary-hover: #eeeeee;
+  --primary-active: #ffffff;
+  --primary-light: rgba(255, 255, 255, 0.1);
+
+  --ok: #22c55e;
+  --ok-bg: #052e16;
+  --ok-border: #14532d;
+  --ok-fg: #4ade80;
+
+  --warn: #eab308;
+  --warn-bg: #422006;
+  --warn-border: #713f12;
+  --warn-fg: #facc15;
+
+  --error: #ef4444;
+  --error-bg: #450a0a;
+  --error-border: #7f1d1d;
+  --error-fg: #f87171;
+
+  --info: #38bdf8;
+  --info-bg: #082f49;
+  --info-border: #075985;
+  --info-fg: #7dd3fc;
+
+  /* Shadows */
+  --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.5);
+  --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.5), 0 2px 4px -2px rgb(0 0 0 / 0.5);
+  --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.6), 0 4px 6px -4px rgb(0 0 0 / 0.5);
+
+  /* Aliases matching existing inline variables */
+  --background: var(--bg);
+  --foreground: var(--fg);
+  --muted-foreground: var(--fg-muted);
+  --active-bg: var(--primary-light);
+  --active-fg: var(--fg);
+  --card-bg: var(--bg-card);
+  --header-bg: var(--bg);
+  --sidebar-bg: #161616;
+  --tool-accent: #f59e0b;
+  --tool-result-accent: #38bdf8;
+  --assistant-accent: var(--fg-subtle);
+  --user-msg-bg: var(--bg-subtle);
+  --assistant-msg-bg: var(--bg-card);
+  --assistant-msg-fg: var(--fg);
+}
+
+
+/* Correspond to the upstream UI surface roles, including window chrome. */
+:root {
+  --bg-window: #ececee; --bg-sidebar: #f0f0f0; --bg-surface: rgba(13,13,13,.03);
+  --bg-panel: #ffffff; --bg-input: #ffffff; --bg-popover: #ffffff;
+  --header-bg: #ffffff; --primary: #000000; --primary-fg: #ffffff;
+}
+.dark {
+  --bg-window: #2b2b2b; --bg-sidebar: #161616; --bg-surface: rgba(255,255,255,.05);
+  --bg-panel: #202020; --bg-input: #2b2b2b; --bg-popover: #2b2b2b;
+  --bg-hover: rgba(255,255,255,.05); --bg-active: rgba(255,255,255,.1);
+  --border-strong: rgba(255,255,255,.15); --header-bg: #202020;
+  --primary: #ffffff; --primary-fg: #000000;
+}

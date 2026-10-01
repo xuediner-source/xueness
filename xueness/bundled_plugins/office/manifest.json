@@ -1,0 +1,37 @@
+{
+  "id": "office",
+  "name": "Office 内容预览",
+  "description": "DOCX/XLSX/PPTX 有界只读内容预览。",
+  "version": "1.0.0",
+  "apiVersion": 1,
+  "defaultEnabled": true,
+  "dependencies": [
+    "files"
+  ],
+  "tools": [],
+  "commands": [],
+  "panels": [],
+  "resources": [],
+  "capabilities": [],
+  "modules": [
+    "office_preview"
+  ],
+  "features": [
+    {
+      "id": "office.docx",
+      "name": "DOCX 页面与嵌入图片预览",
+      "nameEn": "DOCX pages and embedded images"
+    },
+    {
+      "id": "office.pptx",
+      "name": "PPTX 幻灯片、图片与缓存图表",
+      "nameEn": "PPTX slides, images and cached charts"
+    },
+    {
+      "id": "office.xlsx",
+      "name": "XLSX 工作表与缓存单元格值",
+      "nameEn": "XLSX worksheets and cached cell values"
+    }
+  ],
+  "frontendModules": []
+}

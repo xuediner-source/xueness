@@ -1,0 +1,206 @@
+{
+  "schema": "xueness.golden.v1",
+  "note": "冻结的 v1 协议黄金样例。后端 Python 派生与前端 TS 校验都必须逐字复现 expected。改动本文件等于改协议。",
+  "session": {
+    "id": "80a6e495ec6243cc88b503521e93ff6e",
+    "task": "创建 hello.txt 并确认内容",
+    "status": "completed",
+    "steps": 4,
+    "mode": "build",
+    "messages": [
+      { "role": "system", "content": "SYSTEM" },
+      { "role": "user", "content": "创建 hello.txt 并确认内容" },
+      {
+        "role": "assistant",
+        "content": "",
+        "tool_calls": [
+          { "id": "demo-write", "function": { "name": "write", "arguments": "{\"path\":\"hello.txt\",\"content\":\"hi\"}" } }
+        ]
+      },
+      { "role": "tool", "tool_call_id": "demo-write", "content": "written" },
+      {
+        "role": "assistant",
+        "content": "{\"summary\": \"Demo write needs explicit approval; see pending\", \"evidence\": []}"
+      },
+      { "role": "user", "content": "再读一次" },
+      {
+        "role": "assistant",
+        "content": "",
+        "tool_calls": [
+          { "id": "demo-read", "function": { "name": "read", "arguments": "{\"path\":\"hello.txt\"}" } }
+        ]
+      },
+      { "role": "tool", "tool_call_id": "demo-read", "content": "hi" },
+      {
+        "role": "assistant",
+        "content": "{\"summary\": \"Created and read hello.txt\", \"evidence\": [{\"tool_call_id\": \"demo-read\", \"observation\": \"read back\"}]}"
+      }
+    ],
+    "results": {
+      "demo-write": { "ok": true, "error": "" },
+      "demo-read": { "ok": false, "error": "denied" }
+    },
+    "completion": {
+      "verified": true,
+      "summary": "Created and read hello.txt",
+      "evidence": [
+        { "tool_call_id": "demo-write", "observation": "write acknowledged" },
+        { "tool_call_id": "demo-read", "observation": "read back" }
+      ]
+    },
+    "pending_question": null
+  },
+  "expected": {
+    "head": 9,
+    "events": [
+      {
+        "schema": "xueness.event.v1",
+        "seq": 1,
+        "sessionId": "80a6e495ec6243cc88b503521e93ff6e",
+        "type": "session.status",
+        "status": "completed",
+        "steps": 4,
+        "mode": "build"
+      },
+      {
+        "schema": "xueness.event.v1",
+        "seq": 2,
+        "sessionId": "80a6e495ec6243cc88b503521e93ff6e",
+        "type": "tool.call",
+        "turnId": "turn-1",
+        "toolCallId": "demo-write",
+        "name": "write",
+        "subject": "hello.txt"
+      },
+      {
+        "schema": "xueness.event.v1",
+        "seq": 3,
+        "sessionId": "80a6e495ec6243cc88b503521e93ff6e",
+        "type": "tool.result",
+        "turnId": "turn-1",
+        "toolCallId": "demo-write",
+        "name": "write",
+        "subject": "hello.txt",
+        "ok": true,
+        "errorCode": "",
+        "error": ""
+      },
+      {
+        "schema": "xueness.event.v1",
+        "seq": 4,
+        "sessionId": "80a6e495ec6243cc88b503521e93ff6e",
+        "type": "assistant.text",
+        "turnId": "turn-1",
+        "preview": "{\"summary\": \"Demo write needs explicit approval; see pending\", \"evidence\": []}"
+      },
+      {
+        "schema": "xueness.event.v1",
+        "seq": 5,
+        "sessionId": "80a6e495ec6243cc88b503521e93ff6e",
+        "type": "turn.user",
+        "turnId": "turn-2",
+        "preview": "再读一次"
+      },
+      {
+        "schema": "xueness.event.v1",
+        "seq": 6,
+        "sessionId": "80a6e495ec6243cc88b503521e93ff6e",
+        "type": "tool.call",
+        "turnId": "turn-2",
+        "toolCallId": "demo-read",
+        "name": "read",
+        "subject": "hello.txt"
+      },
+      {
+        "schema": "xueness.event.v1",
+        "seq": 7,
+        "sessionId": "80a6e495ec6243cc88b503521e93ff6e",
+        "type": "tool.result",
+        "turnId": "turn-2",
+        "toolCallId": "demo-read",
+        "name": "read",
+        "subject": "hello.txt",
+        "ok": false,
+        "errorCode": "xueness.error.denied",
+        "error": "denied"
+      },
+      {
+        "schema": "xueness.event.v1",
+        "seq": 8,
+        "sessionId": "80a6e495ec6243cc88b503521e93ff6e",
+        "type": "assistant.text",
+        "turnId": "turn-2",
+        "preview": "{\"summary\": \"Created and read hello.txt\", \"evidence\": [{\"tool_call_id\": \"demo-read\", \"observation\": \"read back\"}]}"
+      },
+      {
+        "schema": "xueness.event.v1",
+        "seq": 9,
+        "sessionId": "80a6e495ec6243cc88b503521e93ff6e",
+        "type": "session.completion",
+        "verified": true,
+        "summary": "Created and read hello.txt",
+        "evidenceCount": 2
+      }
+    ],
+    "envelopes": [
+      {
+        "request": { "cursor": 0, "limit": 200 },
+        "expect": {
+          "schema": "xueness.events.v1",
+          "protocolVersion": 1,
+          "sessionId": "80a6e495ec6243cc88b503521e93ff6e",
+          "status": "completed",
+          "steps": 4,
+          "mode": "build",
+          "cursor": 0,
+          "nextCursor": 9,
+          "head": 9,
+          "hasMore": false,
+          "eventSeqs": [1, 2, 3, 4, 5, 6, 7, 8, 9]
+        }
+      },
+      {
+        "request": { "cursor": 4, "limit": 2 },
+        "expect": {
+          "cursor": 4,
+          "nextCursor": 6,
+          "head": 9,
+          "hasMore": true,
+          "eventSeqs": [5, 6]
+        }
+      },
+      {
+        "request": { "cursor": 9, "limit": 200 },
+        "expect": {
+          "cursor": 9,
+          "nextCursor": 9,
+          "head": 9,
+          "hasMore": false,
+          "eventSeqs": []
+        }
+      },
+      {
+        "request": { "cursor": 0, "limit": 3 },
+        "expect": {
+          "cursor": 0,
+          "nextCursor": 3,
+          "head": 9,
+          "hasMore": true,
+          "eventSeqs": [1, 2, 3]
+        }
+      }
+    ]
+  },
+  "errorCodes": [
+    { "ok": true, "error": "", "expect": "" },
+    { "ok": false, "error": "denied", "expect": "xueness.error.denied" },
+    { "ok": false, "error": "Denied by policy", "expect": "xueness.error.denied" },
+    { "ok": false, "error": "cancelled", "expect": "xueness.error.cancelled" },
+    { "ok": false, "error": "file not found: a.txt", "expect": "xueness.error.not_found" },
+    { "ok": false, "error": "no such remote", "expect": "xueness.error.not_found" },
+    { "ok": false, "error": "invalid path argument", "expect": "xueness.error.invalid_argument" },
+    { "ok": false, "error": "path is required", "expect": "xueness.error.invalid_argument" },
+    { "ok": false, "error": "boom", "expect": "xueness.error.tool_failed" },
+    { "ok": false, "error": "", "expect": "xueness.error.tool_failed" }
+  ]
+}

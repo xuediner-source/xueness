@@ -1,0 +1,85 @@
+.xn-code-preview-card {
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--bg-card);
+}
+
+.xn-code-preview-card__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 64px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border);
+}
+
+.xn-code-preview-card__title { min-width: 0; }
+.xn-code-preview-card__title h3 { margin: 0; color: var(--fg); font-size: 13px; font-weight: 500; }
+.xn-code-preview-card__title > span { display: block; margin-top: 4px; color: var(--fg-subtle); font-size: 13px; }
+
+.xn-code-preview-card__badge {
+  flex: 0 0 auto;
+  padding: 4px 10px;
+  border-radius: 7px;
+  color: var(--fg-subtle);
+  background: var(--bg-surface, var(--bg-hover));
+  font-size: 11px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.xn-code-preview-card__badge.is-active {
+  color: var(--fg);
+  background: var(--bg-active, var(--bg-hover));
+}
+
+.xn-code-preview-card__body { min-width: 0; padding: 8px; }
+
+.xn-code-preview-card__code { min-width: 0; overflow: hidden; }
+.xn-code-preview-card__code pre.shiki {
+  max-width: 100%;
+  margin: 0;
+  padding: 12px;
+  overflow: auto;
+  border-radius: 9px;
+  font-family: var(--font-mono);
+  line-height: 1.55;
+  tab-size: 2;
+}
+
+.xn-code-preview-card__code pre.shiki code { display: block; min-width: max-content; }
+.xn-code-preview-card__code .line { display: block; min-height: 1.55em; }
+.xn-code-preview-card__code.wraps-lines pre.shiki code { min-width: 0; }
+.xn-code-preview-card__code.wraps-lines .line { white-space: pre-wrap; overflow-wrap: anywhere; }
+
+.xn-code-preview-card__code.has-line-numbers pre.shiki code { counter-reset: xn-preview-line; }
+.xn-code-preview-card__code.has-line-numbers .line::before {
+  display: inline-block;
+  width: 2.4em;
+  margin-right: 1.4em;
+  color: color-mix(in oklab, currentColor 38%, transparent);
+  content: counter(xn-preview-line);
+  counter-increment: xn-preview-line;
+  text-align: right;
+  user-select: none;
+}
+
+.xn-code-preview-card__loading,
+.xn-code-preview-card__error {
+  min-height: 104px;
+  padding: 12px;
+  color: var(--fg-subtle);
+  font: 12px/1.6 var(--font-mono);
+  overflow-wrap: anywhere;
+}
+
+.xn-code-preview-card__error { color: var(--error-fg); }
+
+@media (max-width: 700px) {
+  .xn-code-preview-card__header { min-height: 56px; padding: 10px 12px; }
+  .xn-code-preview-card__body { padding: 6px; }
+  .xn-code-preview-card__code pre.shiki { padding: 10px; }
+}

@@ -1,0 +1,36 @@
+{
+  "id": "remote",
+  "name": "Remote",
+  "description": "Explicitly approved remote operations.",
+  "apiVersion": 1,
+  "version": "1.0.0",
+  "defaultEnabled": false,
+  "dependencies": [],
+  "tools": [
+    "remote_exec"
+  ],
+  "commands": [
+    "remote"
+  ],
+  "panels": [
+    "remote"
+  ],
+  "resources": [],
+  "capabilities": [],
+  "modules": [],
+  "features": [
+    {
+      "id": "remote.connections",
+      "name": "命名 SSH 主机连接配置",
+      "nameEn": "Named SSH host connection settings"
+    },
+    {
+      "id": "remote.exec",
+      "name": "明确批准的远程 argv 执行",
+      "nameEn": "Explicitly approved remote argv execution"
+    }
+  ],
+  "frontendModules": [
+    "plugins/remote/index.tsx"
+  ]
+}

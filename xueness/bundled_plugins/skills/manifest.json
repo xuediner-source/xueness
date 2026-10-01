@@ -1,0 +1,36 @@
+{
+  "id": "skills",
+  "name": "技能",
+  "description": "技能资源、目录摘要与按需正文读取。",
+  "version": "1.0.0",
+  "apiVersion": 1,
+  "defaultEnabled": true,
+  "dependencies": [],
+  "tools": [
+    "skill_read"
+  ],
+  "commands": [],
+  "panels": [
+    "capabilities"
+  ],
+  "resources": [
+    "skills"
+  ],
+  "capabilities": [],
+  "modules": [
+    "skills"
+  ],
+  "features": [
+    {
+      "id": "skills.catalog",
+      "name": "技能资源与按需目录摘要",
+      "nameEn": "Skill resources and on-demand catalog"
+    },
+    {
+      "id": "skills.read",
+      "name": "有界技能正文读取",
+      "nameEn": "Bounded skill body reading"
+    }
+  ],
+  "frontendModules": []
+}

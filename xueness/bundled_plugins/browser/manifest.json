@@ -1,0 +1,45 @@
+{
+  "id": "browser",
+  "name": "Browser",
+  "description": "Explicitly approved browser operations.",
+  "apiVersion": 1,
+  "version": "1.0.0",
+  "defaultEnabled": false,
+  "dependencies": [
+    "files"
+  ],
+  "tools": [
+    "browser_navigate",
+    "browser_inspect",
+    "browser_click",
+    "browser_fill",
+    "browser_screenshot"
+  ],
+  "commands": [],
+  "panels": [],
+  "resources": [],
+  "capabilities": [],
+  "modules": [
+    "settings_api"
+  ],
+  "features": [
+    {
+      "id": "browser.pages",
+      "name": "受审批约束的页面导航与检查",
+      "nameEn": "Approved page navigation and inspection"
+    },
+    {
+      "id": "browser.actions",
+      "name": "精确点击、输入与内存截图",
+      "nameEn": "Exact click, fill and in-memory screenshots"
+    },
+    {
+      "id": "browser.settings",
+      "name": "浏览器控制配置与生命周期清理",
+      "nameEn": "Browser control settings and lifecycle cleanup"
+    }
+  ],
+  "frontendModules": [
+    "plugins/browser/BrowserSettings.tsx"
+  ]
+}

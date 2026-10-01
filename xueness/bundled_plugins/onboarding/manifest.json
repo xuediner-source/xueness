@@ -1,0 +1,32 @@
+{
+  "id": "onboarding",
+  "name": "Configuration wizard",
+  "description": "Configuration wizard",
+  "apiVersion": 1,
+  "version": "1.0.0",
+  "defaultEnabled": true,
+  "dependencies": [
+    "providers"
+  ],
+  "tools": [],
+  "commands": [
+    "onboarding"
+  ],
+  "panels": [],
+  "resources": [],
+  "capabilities": [],
+  "modules": [],
+  "features": [
+    {
+      "id": "onboarding.wizard",
+      "name": "模型与工作区初次配置向导",
+      "nameEn": "Initial model and workspace setup wizard"
+    },
+    {
+      "id": "onboarding.credentials",
+      "name": "隐藏密钥输入与配置保存",
+      "nameEn": "Hidden key input and configuration saving"
+    }
+  ],
+  "frontendModules": []
+}

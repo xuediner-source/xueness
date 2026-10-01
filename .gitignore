@@ -1,0 +1,54 @@
+node_modules/
+.venv/
+venv/
+dist/
+build/
+.vite/
+__pycache__/
+*.pyc
+*.sqlite
+*.sqlite-journal
+*.log
+.DS_Store
+
+# 各自是独立 git 仓库的实验/集成项目，不纳入本仓库跟踪
+integration-lab/
+
+# 真浏览器验证留下的 Chrome profile / 截图产物（含会话数据，不入库）
+.web-runs/
+
+# 运行时状态与临时复现产物
+.state/
+.tmp-repro/
+
+# Local release archives and private operator state
+release/
+.xueness-data/
+
+# Private configuration, credentials and local QA/backups
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+credentials.json
+secrets.json
+.demo/
+.host-workspace/
+.backups/
+.brand-backup/
+docs/screenshots/
+.cache/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+coverage/
+playwright-report/
+test-results/
+tools/.validate-events-v1.mjs
+
+# Prebuilt workbench is shipped so a checkout runs without Node.js
+!webapp/dist/
+!webapp/dist/**

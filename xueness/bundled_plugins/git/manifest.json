@@ -1,0 +1,46 @@
+{
+  "id": "git",
+  "name": "Git 审查",
+  "description": "只读仓库状态、工作树 diff 与提交记录。",
+  "version": "1.0.0",
+  "apiVersion": 1,
+  "defaultEnabled": true,
+  "dependencies": [],
+  "tools": [],
+  "commands": [
+    "git"
+  ],
+  "panels": [
+    "git"
+  ],
+  "resources": [],
+  "capabilities": [
+    "command"
+  ],
+  "modules": [
+    "actions",
+    "git_api",
+    "operator_cli"
+  ],
+  "features": [
+    {
+      "id": "git.inspect",
+      "name": "状态、差异、日志与分支查看",
+      "nameEn": "Status, diffs, logs and branches"
+    },
+    {
+      "id": "git.actions",
+      "name": "批准后的暂存、提交、分支与 stash",
+      "nameEn": "Approved stage, commit, branch and stash"
+    },
+    {
+      "id": "git.checkpoint",
+      "name": "检查点、恢复预览与恢复前备份",
+      "nameEn": "Checkpoints, restore review and recovery backups"
+    }
+  ],
+  "frontendModules": [
+    "XuenessGitView.tsx",
+    "xuenessGit.ts"
+  ]
+}
