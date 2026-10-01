@@ -184,12 +184,12 @@ Package blobs: gateway `890747f2f36495690cdb6d572d1a2a91877dfd4a`, subs-hub `205
 - [ ] G4 Later candidates: separate read-only pass (package + lib + client + docs + tests) before any install ordering decision.
 - [ ] G5 Xueness-side: define per-plugin `memoryRoot`/`DSH_HOME` isolation + backup/restore runbook for `.agent-presets/*.bak-autocompact` before any live install.
 
-Report path: `/Users/xuediner/.openclaw/workspace/xueness/reviews/plugin-audit.md`
+Report path: `/path/to/xueness/reviews/plugin-audit.md`
 No runtime or repo modifications made.
 
 ---
 
-## 8. Xueness local interface map (this turn, read from `/Users/xuediner/.openclaw/workspace/xueness/`)
+## 8. Xueness local interface map (this turn, read from `/path/to/xueness/`)
 
 Local Xueness is a Python stdlib-only harness (no JS runtime, no Cordis host):
 

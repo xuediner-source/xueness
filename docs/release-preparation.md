@@ -16,6 +16,6 @@ The allowlist excludes Git metadata, vendored and legacy trees, local state (`.s
 
 The backend requires Python 3.10 or newer and uses the Python standard library. Node.js is optional at runtime; it is needed to rebuild or run browser-interface checks. The prebuilt interface is included in the archive. Docker Compose is optional.
 
-Model credentials and other online-service configuration are supplied by the operator at runtime and are not included. Review `LICENSE` and `NOTICE.md` before redistribution; source attribution and required notices remain part of the prepared archive. The release platform has not been selected, so a prepared archive is not a published release.
+Model credentials and other online-service configuration are supplied by the operator at runtime and are not included. Review `LICENSE` and `NOTICE.md` before redistribution; source attribution and required notices remain part of the prepared archive. Desktop releases are distributed through [GitHub Releases](https://github.com/xuediner-source/xueness/releases) following the owner's explicit authorization. Running this preparation tool still only creates local files; it does not publish them.
 
 Before collecting a package, the plugin architecture gate checks the trusted package allowlist, complete backend/frontend ownership, bilingual feature inventory, contributions, dependencies and UI catalog metadata. A missing declaration stops preparation. The archive includes `AGENTS.md`, `CONTRIBUTING.md` and the check tool so future changes retain the same plugin requirement.

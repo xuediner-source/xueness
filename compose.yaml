@@ -17,7 +17,7 @@ services:
       # 默认挂一个空的 ./.host-workspace（存在即可用，没有敏感内容），
       # 在浏览器里能对着它建文件夹。
       # 要浏览你 Mac 上的真实项目，把 XUENESS_HOST_WORKSPACE 指向该目录，例如：
-      #   XUENESS_HOST_WORKSPACE=/Users/xuediner/code docker compose up -d --build
+      #   XUENESS_HOST_WORKSPACE=/path/to/projects docker compose up -d --build
       # 注意：容器以 appuser(uid 10001) 运行，宿主目录若是 755，可浏览可选取，
       # 但「新建文件夹」需要写权限（否则会如实报 directory-create-failed）。
       - ${XUENESS_HOST_WORKSPACE:-./.host-workspace}:/host-workspace

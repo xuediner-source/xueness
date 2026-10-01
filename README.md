@@ -1,120 +1,121 @@
 # Xueness
 
-自用的 Agent CLI 与本地 Web 工作台，面向本地小模型提供详细的轻量化配置、机器资源监测和模型输出状态展示。
+<div align="center">
+  <img src="docs/images/xueness-banner.svg" alt="Xueness — 本地 Agent 工作台" width="100%">
+  <p>Agent CLI、本地 Web 工作台与自包含桌面应用，共用一套可开关的功能插件。</p>
+  <p>
+    <a href="README.en.md">English</a> ·
+    <a href="https://github.com/xuediner-source/xueness/releases/latest">下载桌面版</a> ·
+    <a href="docs/xueness-desktop.md">桌面文档</a> ·
+    <a href="docs/xueness-local-lightweight-mode.md">本地轻量模式</a> ·
+    <a href="docs/xueness-plugin-architecture.md">插件目录</a>
+  </p>
+  <p>
+    <a href="https://github.com/xuediner-source/xueness/actions/workflows/desktop-build.yml"><img src="https://github.com/xuediner-source/xueness/actions/workflows/desktop-build.yml/badge.svg?branch=main" alt="Desktop build"></a>
+    <a href="https://github.com/xuediner-source/xueness/blob/main/LICENSE"><img src="https://img.shields.io/github/license/xuediner-source/xueness?label=license" alt="Apache 2.0 license"></a>
+    <a href="https://github.com/xuediner-source/xueness/releases/latest"><img src="https://img.shields.io/github/v/release/xuediner-source/xueness?label=release" alt="Latest release"></a>
+    <img src="https://img.shields.io/badge/plugins-27%20%7C%2088-4263eb" alt="27 plugins and 88 features">
+  </p>
+</div>
 
-功能设计参考开源 [ZCode](https://github.com/zai-org/ZCode)，采用 Xueness 自有运行时、协议和界面。现有产品能力由 **27 个可信功能插件、88 项子功能**提供，CLI、模型工具和 Web 共用插件开关与依赖检查。轻量模式参考 [Pi](https://github.com/badlogic/pi-mono) 的按需工具和预算思路；插件组织参考 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness)，不承诺上游插件 ABI 兼容。
+<p align="center">
+  <img src="docs/images/workbench.png" alt="Xueness 对话与本地工作台" width="100%">
+</p>
+<p align="center">
+  <img src="docs/images/lightweight-settings.png" alt="本地轻量高级配置：预算、工具与恢复" width="49%">
+  <img src="docs/images/plugins.png" alt="完整功能插件目录" width="49%">
+</p>
+<p align="center"><sub>实际构建界面，使用隔离工作区与示例配置；不含用户会话或模型性能结果。</sub></p>
 
-## 获取项目
+Xueness 面向个人本地开发，提供可从终端、浏览器或 Windows/macOS 桌面使用的 Agent 工作区。重点放在本地模型的细粒度运行配置、可见的主机与请求状态，以及能按领域启用或停用的产品功能。
 
-仓库：[xuediner-source/xueness](https://github.com/xuediner-source/xueness)。当前默认按私有仓库上传，需要仓库访问权限。
+## 下载
 
-```sh
-gh repo clone xuediner-source/xueness
-cd xueness
-```
+[打开 GitHub Releases](https://github.com/xuediner-source/xueness/releases/latest)，选择与系统和处理器架构匹配的安装包。版本页面会列出桌面产物及 `SHA256SUMS.txt` 校验文件。
 
-仓库包含 Python 后端、全部功能插件、React 前端源码、预构建的 `webapp/dist`、测试、文档、安装入口和第三方声明。无需 Node.js 即可运行已构建界面；首次使用需配置自己的真实模型。
+| 系统 | 安装程序 / 磁盘映像 | 便携版 / 应用 ZIP |
+| --- | --- | --- |
+| Windows 10/11 · x64 | [安装程序 `.exe`](https://github.com/xuediner-source/xueness/releases/download/v0.1.0/Xueness-0.1.0-windows-x64-setup.exe) | [便携版 `.zip`](https://github.com/xuediner-source/xueness/releases/download/v0.1.0/Xueness-0.1.0-windows-x64-portable.zip) |
+| macOS · Apple Silicon | [arm64 `.dmg`](https://github.com/xuediner-source/xueness/releases/download/v0.1.0/Xueness-0.1.0-macos-arm64.dmg) | [arm64 应用 `.zip`](https://github.com/xuediner-source/xueness/releases/download/v0.1.0/Xueness-0.1.0-macos-arm64.zip) |
+| macOS · Intel | [x64 `.dmg`](https://github.com/xuediner-source/xueness/releases/download/v0.1.0/Xueness-0.1.0-macos-x64.dmg) | [x64 应用 `.zip`](https://github.com/xuediner-source/xueness/releases/download/v0.1.0/Xueness-0.1.0-macos-x64.zip) |
 
-## 桌面端
+此版本所有平台的 SHA-256 校验值见 [`SHA256SUMS.txt`](https://github.com/xuediner-source/xueness/releases/download/v0.1.0/SHA256SUMS.txt)。桌面包内含 Electron 外壳、冻结 Python 后端、预构建工作台和浏览器驱动；不要求另外安装 Python 或 Node.js。Git、SSH、ffmpeg 等外部程序仍由使用到它们的插件按需调用；浏览器自动化需要本机 Chrome 或 Edge。当前产物未进行代码签名或 macOS 公证，首次启动可能出现系统信任提示，详情见[桌面端说明](docs/xueness-desktop.md)。
 
-Windows x64 提供安装程序与便携 ZIP；macOS 提供 Apple Silicon 和 Intel 两种独立安装包。Electron 外壳内置 Python 后端和已构建工作台，安装后的电脑不需要另装 Python 或 Node.js。首次运行需要配置自己的模型。
+## 功能概览
 
-构建、数据位置、平台边界和验收见 [桌面端说明](docs/xueness-desktop.md)。桌面能力属于 `desktop` 插件；文件锁、终端、工作流及机器指标的系统适配保留在各自所属模块。
+- **本地小模型配置。** 选择「本地轻量」运行档，细调提示、工具集合、上下文与输出预算、采样和协议选项。资源面板报告运行 Xueness 的机器 CPU、内存及进程状态；模型输出面板展示请求阶段、工具调用和服务实际返回的用量。缺少的 Token 或显存数据会标为不可用，不会估算成真实测量值。
+- **27 个可信插件，88 项登记功能。** 会话、工作区文件、模型、Shell、Git、终端、工作流、记忆、Hooks、MCP、浏览器、远程连接、渠道、自动化、诊断、Office 预览等能力都有明确归属。插件管理页显示完整目录与依赖状态，CLI 也可查看和更改插件开关。
+- **三种入口，共用运行时。** 使用 Agent CLI 运行会话，通过 loopback Web 工作台查看和管理任务，或安装 Windows/macOS 桌面应用。桌面包自带运行时，跨平台差异留在对应插件适配中。
+
+轻量设置用于控制运行行为，不会下载模型、调整模型权重或自动改变推理服务的显存分配。Office 预览支持部分文档页面、图像、图表和缓存单元格数据；它不是 Microsoft Office 的完整排版或兼容实现。
 
 ## 快速开始
 
-需要 Python 3.10+，后端仅使用标准库。可选工具（Git、SSH、ffmpeg、浏览器等）按对应插件的实际使用需求安装。
+### Web 工作台与 CLI
+
+源码运行需要 Python 3.10+；后端仅依赖 Python 标准库，仓库附有预构建的 Web 界面，日常运行不需要 Node.js。
 
 ```sh
-# Web 工作台
+git clone https://github.com/xuediner-source/xueness.git
+cd xueness
+
+# 启动仅监听本机的 Web 工作台
 python3 -m xueness.web --port 8138
-# 访问 http://127.0.0.1:8138
+# 浏览器打开 http://127.0.0.1:8138
 
-# Agent CLI
-./bin/xueness
-# 为指定工作区开始对话
+# 通过 Agent CLI 开始会话
 ./bin/xueness chat --root /absolute/path/to/project
-# 恢复最近会话
+# 继续该工作区最近一次会话
 ./bin/xueness chat --continue --root /absolute/path/to/project
+# 指定独立私有状态目录（全局参数放在子命令之前）
+./bin/xueness --state /absolute/path/to/private-state chat --root /absolute/path/to/project
+./bin/xueness --help
 ```
 
-在 Web「设置 → 模型配置」添加模型端点、模型 ID 和密钥；也可设置 `XUENESS_API_BASE`、`XUENESS_MODEL`、`XUENESS_API_KEY`。密钥保存在运行主机，不能提交到仓库。正式入口仅使用真实模型，不提供离线演示回答。
+首次使用时，在「设置 → 模型配置」填写自己已运行的模型服务地址、模型 ID 和密钥。也可以将 `XUENESS_API_BASE`、`XUENESS_MODEL`、`XUENESS_API_KEY` 配置在本机环境中。Xueness 不提供伪造的离线对话入口。
 
-在「设置 → 工作区」选择项目目录；macOS 本机连接支持系统文件夹选择框。也可在启动时重复传入 `--workspace-root /absolute/path/to/project` 声明目录范围。端口已被本项目占用时直接打开现有页面，或选择其它端口。
+Web 设置可以选择和授权工作区。CLI 默认在项目的 `.state/` 保存会话与配置；使用 `--state /absolute/path/to/private-state` 指定独立状态目录。状态中可能包含任务文本、工具输出和模型凭据，应留在私有目录，不要提交到公共仓库。桌面数据路径和桌面与 CLI 的共享方式见[桌面文档](docs/xueness-desktop.md)。
 
-CLI 支持会话选择、归档、恢复、模型切换、多行输入、附件、任务进度与中断恢复。使用 `./bin/xueness --help` 和聊天中的 `/help` 查看命令。默认状态在项目 `.state` 中，可在入口前通过 `--state DIR` 指定私有状态目录。
+### 本机一键运行
 
-## 轻量模式
-
-在模型配置中选择「本地轻量」档位，再按本机和模型情况调整提示、工具、上下文、输出预算、采样和协议兼容选项。监测界面显示实时 CPU、内存、可用的设备信息以及请求阶段、文本/思考输出和工具状态；缺失的 Token 或显存数据不会伪造。
-
-完整配置与数据边界见 [轻量模式说明](docs/xueness-local-lightweight-mode.md)；功能取舍见 [DeepSeek Harness / Pi 源码对照](docs/xueness-harness-feature-audit-2026-10-01.md)。
-
-## 功能插件
-
-包括会话、文件、Shell、规划、模型、记忆、设置、用量、Git、工作流、终端、Office、命令、技能、Hooks、MCP、子代理、网络、自动化、扩展、诊断、浏览器、远程、渠道、引导和更新。
-
-Web「设置 → 插件」显示全部 27 个插件及子功能，包含禁用和依赖阻塞状态。即使其它功能全关，也可通过账户菜单的「插件管理」恢复。CLI 使用：
-
-```sh
-python3 -m xueness plugins list
-python3 -m xueness plugins disable browser
-python3 -m xueness plugins enable browser
-```
-
-启用插件不代表批准文件修改、命令执行或外部操作。插件实现、依赖与实际范围见 [插件架构说明](docs/xueness-plugin-architecture.md)。
-
-**今后每一项新增产品功能都必须由插件提供，并能在插件面板中找到。** 开发遵循 [AGENTS.md](AGENTS.md) 和 [CONTRIBUTING.md](CONTRIBUTING.md)，不能将业务直接堆进宿主 CLI、Web 服务器、Agent 内核或工作台容器。
-
-## 开发与验证
-
-修改前端需要 Node.js 20.19+ 或 22.12+：
-
-```sh
-npm --prefix webapp ci
-npm --prefix webapp test
-npm --prefix webapp run typecheck
-npm --prefix webapp run build
-
-python3 tools/check_plugin_architecture.py
-python3 -m unittest tests.test_plugin_architecture -q
-python3 -m unittest discover -s tests -q
-node webapp/run-validate-events.mjs
-node tools/check-parity-hygiene.mjs
-python3 tools/generate_web_notices.py --check
-```
-
-部分真实 MCP 互操作测试需要额外的官方 SDK 或测试服务器；缺少相应环境时明确跳过。测试 fixture 不会作为正式对话入口。前端构建和源码打包均执行插件结构门禁。
-
-源码归属：`xueness/bundled_plugins/<id>/` 为后端功能插件，`webapp/src/plugins/<id>/` 为前端功能实现，`manifest.json` 声明模块、依赖、工具、命令、面板和双语子功能。
-
-## One-command local deploy
+在已克隆的仓库根目录执行：
 
 ```sh
 ./install.sh
-# 默认访问 http://127.0.0.1:8137
-# 自定义端口和私有状态目录
-PORT=9000 DATA_DIR=/absolute/path/to/private-data ./install.sh
+# 默认地址：http://127.0.0.1:8137
 
-# 可选：Docker Compose
-# 需要能够拉取 Python 基础镜像
-docker compose up --build -d
+# 可指定端口和独立的数据目录
+PORT=9000 DATA_DIR=/absolute/path/to/private-data ./install.sh
 ```
 
-本地安装入口不会进行系统级安装。Compose 将主机端口绑定到 `127.0.0.1:8137`，持久数据保存在 `xueness-data` 卷。详见 [部署说明](docs/deploy.md)。
+此入口不做系统级安装，Web 默认只绑定 loopback。Docker Compose 也是可选的本地运行方式，详见[部署说明](docs/deploy.md)。
 
-这是单人本地工具，Web 没有多用户认证、TLS 或操作系统沙箱。保留默认 loopback 绑定；文件写入、命令执行等受权限、批准、插件开关及工作区检查约束。公开暴露服务需要单独设计认证与 TLS。
+## 插件与安全边界
 
-源码上传不等于版本发布：尚未建立发行标签、签名或容器镜像。需要稳定版本时，选择并记录经验证的提交 SHA，不将开发分支宣称为不可变发行版。源码打包见 [发布准备说明](docs/release-preparation.md)，GitHub 上传范围见 [仓库上传说明](docs/github-publishing.md)。
+每项产品功能由可信内置插件提供。Web「设置 → 插件」列出完整的后端 catalog、依赖和子功能；禁用项也保留在目录中。所有者要求今后的功能继续遵守这条插件归属规则，实施步骤见 [AGENTS.md](AGENTS.md) 与 [CONTRIBUTING.md](CONTRIBUTING.md)。插件注册表由构建时 allowlist 决定；扩展市场的清单是数据，不会在运行时加载任意代码。
 
-## 文档与归属
+启用插件不等于批准执行。文件修改和命令仍受 Gate、逐项审批、工作区范围与宿主请求边界控制。Web 面向单人本地使用，默认仅监听 loopback；它没有多用户认证、TLS 或操作系统级沙箱，不要直接暴露到局域网或公网。模型密钥由本机后端持有，不应写入工作区或提交到 Git。
 
-- [设置和工作区](docs/xueness-settings-workspaces.md)
-- [对话开始界面](docs/xueness-start-interface.md)
-- [CLI、工具、工作流和 Web 使用说明](docs/xueness-four-workstreams.md)
-- [项目选择与会话历史](docs/xueness-project-history-2026-10-01.md)
-- [插件贡献流程](CONTRIBUTING.md)
+## 开发
 
-历史审查位于 `docs/` 和 `reviews/`，其中阶段记录描述当时版本，当前范围以插件架构说明为准。历史验收截图属于本机 QA 产物，不随源码上传。
+后端开发使用 Python 3.10+；编辑和构建前端需要 Node.js 20.19+ 或 22.12+。功能实现和开关行为必须遵守插件归属、权限及生命周期约束。最短结构验证入口：
 
-许可证与上游归属见 [LICENSE](LICENSE)、[NOTICE.md](NOTICE.md) 和随界面分发的第三方声明。原版机壳及 vendor 源码已移除，Xueness 不是官方 ZCode 产品。
+```sh
+python3 tools/check_plugin_architecture.py
+python3 -m unittest tests.test_plugin_architecture -q
+```
+
+更完整的测试命令、依赖和贡献流程见 [CONTRIBUTING.md](CONTRIBUTING.md)。桌面构建需要目标平台原生环境、Node.js 24 和 Python 3.12+；PyInstaller 后端需在目标 OS 和架构上构建，细节见[桌面构建说明](docs/xueness-desktop.md)。
+
+## 文档
+
+- [桌面版、数据位置与平台支持](docs/xueness-desktop.md)
+- [本地小模型轻量模式](docs/xueness-local-lightweight-mode.md)
+- [插件架构与逐项归属清单](docs/xueness-plugin-architecture.md)
+- [CLI、工作流和工作台使用说明](docs/xueness-four-workstreams.md)
+- [部署与网络边界](docs/deploy.md)
+- [贡献指南](CONTRIBUTING.md)
+
+## 许可与来源
+
+本仓库使用 [Apache License 2.0](LICENSE)。Web 界面包含经适配的 [ZCode](https://github.com/zai-org/ZCode) 界面素材，相关版权和改动说明见 [NOTICE.md](NOTICE.md)；Xueness 使用自己的 Agent 运行时、插件接口和 Electron 桌面外壳，并非 Z.AI、ZCode 或 DeepSeek 的官方产品。插件接口是 Xueness 自有实现；本项目不宣称与上游插件 ABI 兼容，也不声称完整复刻上游功能。[DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) 仅作为架构与桌面设计参考，没有随本项目分发其桌面代码、商标或图标。Web 及桌面依赖的许可说明随源代码和产物提供，另见 [第三方声明](webapp/public/third-party-notices.txt)。

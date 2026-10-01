@@ -3,7 +3,7 @@
 Date: 2026-09-24
 Upstream pin: `zai-org/ZCode@328c1a0c0ffaa5a4f65e8fa199af5e4c20706e5f` (v3.14.3, 2026-09-23)
 Method: GitHub read-only (`github__get_file_contents` / `github__list_commits`) + local Xueness source read. No clone, no run, no publish, no credentials.
-Xueness scope: `/Users/xuediner/.openclaw/workspace/xueness` README + `xueness/{core,cli,provider,web,memory}.py` + `xueness/static/index.html` + `tests/` + `reviews/*.md`.
+Xueness scope: `/path/to/xueness` README + `xueness/{core,cli,provider,web,memory}.py` + `xueness/static/index.html` + `tests/` + `reviews/*.md`.
 Rules honored: no upstream code/assets copied, no Xueness implementation modified, product patterns/contracts only, independent implementation. No claim of full parity.
 
 ## 1. Upstream snapshot (pinned)

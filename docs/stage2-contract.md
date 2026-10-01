@@ -120,7 +120,7 @@ getMemoryTracks(): Promise<{tracks: MemoryTrack[]}>
 ## 验收（每个子模块自证）
 
 ```sh
-cd /Users/xuediner/.openclaw/workspace/xueness
+cd /path/to/xueness
 python3 -m unittest tests.test_<module> -v
 ```
 

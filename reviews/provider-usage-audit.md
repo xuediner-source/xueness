@@ -2,7 +2,7 @@
 
 > Status: COMPLETE (read-only, no credentials, no login)
 > Date: 2026-09-23
-> Scope: xuediner-source/dsh-xuediner-gateway (main), dsh-subs-hub (main), dsh-usage-board (main), scoped to integrating with `/Users/xuediner/.openclaw/workspace/xueness`
+> Scope: xuediner-source/dsh-xuediner-gateway (main), dsh-subs-hub (main), dsh-usage-board (main), scoped to integrating with `/path/to/xueness`
 > Method: GitHub file tools only, exact paths + blob SHAs + commit SHAs. No runtime, no integration, no publish.
 > Constraint honored: only this file changed.
 
@@ -80,4 +80,4 @@ Enumerated: `lib/ docs/ test/`, v0.3.0, package sha `1885e67c82c6770292af1a99ba7
 5. **P4 — Telemetry sidecar (A5).** Copy `docs/xuedinerapi-provider.js` to the board providers dir only after P1 key rotation; confirm pool + Codex rows render without touching Xueness creds.
 6. **Deferred (U1, U2, A4).** Full `lib/index.js` (subs-hub) + `handler.go` (gateway) line audit and any CommandCode/Codex/Qoder shim are separate future passes with their own reports. No publish, no code changes, no credential access in this pass — honored.
 
-Report path: `/Users/xuediner/.openclaw/workspace/xueness/reviews/provider-usage-audit.md`
+Report path: `/path/to/xueness/reviews/provider-usage-audit.md`

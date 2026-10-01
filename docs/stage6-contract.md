@@ -93,7 +93,7 @@ export function normalizeResourceId(raw: unknown): string | null
 
 ### A
 ```sh
-cd /Users/xuediner/.openclaw/workspace/xueness/webapp
+cd /path/to/xueness/webapp
 npx tsc --noEmit --strict --target ESNext --lib DOM,DOM.Iterable,ESNext --module ESNext --moduleResolution Node --skipLibCheck src/main.tsx src/xuenessServices.ts 2>&1 | tail -20
 ```
 应 exit=0。
@@ -103,7 +103,7 @@ npx tsc --noEmit --strict --target ESNext --lib DOM,DOM.Iterable,ESNext --module
 （注意该文件用 `@/` 别名与 `.js` 后缀导入，单文件 tsc 会报大量解析错误——**这不算失败**。
 以 `vite build` 成功为准）：
 ```sh
-cd /Users/xuediner/.openclaw/workspace/xueness/webapp && NODE_OPTIONS=--max-old-space-size=8192 npx vite build 2>&1 | tail -5
+cd /path/to/xueness/webapp && NODE_OPTIONS=--max-old-space-size=8192 npx vite build 2>&1 | tail -5
 ```
 应 `built in`。
 

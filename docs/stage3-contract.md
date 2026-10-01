@@ -68,7 +68,7 @@ def load(state_dir, *, budgets=None, total_max_chars=TOTAL_MAX_CHARS) -> str
 
 ### 子代理 A
 ```sh
-cd /Users/xuediner/.openclaw/workspace/xueness
+cd /path/to/xueness
 python3 -m unittest tests.test_skills -v
 ```
 必须全绿并贴原始 `Ran N tests` / `OK`。测试至少要覆盖：

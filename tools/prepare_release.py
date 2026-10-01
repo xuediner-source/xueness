@@ -323,6 +323,7 @@ def _collect_files(root: Path, version: str) -> list[SourceFile]:
         "docs/xueness-harness-feature-audit-2026-10-01.md",
         "docs/xueness-plugin-architecture.md",
         "docs/release-preparation.md",
+        "docs/github-publishing.md",
         "docs/xueness-desktop.md",
     )
     for path_text in explicit_paths:
@@ -363,8 +364,12 @@ def _collect_files(root: Path, version: str) -> list[SourceFile]:
 def _minimal_readme(version: str) -> str:
     return f"""# Xueness {version} source archive
 
-This is a locally prepared source archive. It has not been published, signed,
-or assigned a release tag.
+This source archive is prepared from an explicit allowlist. The preparation
+tool does not publish files, create tags, or sign artifacts. Release downloads
+and the complete repository are available at:
+
+- https://github.com/xuediner-source/xueness
+- https://github.com/xuediner-source/xueness/releases
 
 The backend uses Python 3.10 or newer and the Python standard library. The
 prebuilt browser interface is included under `webapp/dist/`; Node.js is only
@@ -388,10 +393,15 @@ listed in Settings > Plugins, including each new feature. See `AGENTS.md`,
 `CONTRIBUTING.md` and `docs/xueness-plugin-architecture.md`. Run
 `python3 tools/check_plugin_architecture.py` before handing off a change.
 
-## Fresh machine one-liner (BLOCKED until publication)
+## Get the complete checkout
 
-No public clone/install one-liner is available. `<OWNER>/<REPO>` and
-`<PINNED_TAG>` are unresolved release placeholders; do NOT publish without owner coordination.
+```sh
+git clone https://github.com/xuediner-source/xueness.git
+cd xueness
+```
+
+Use the desktop installer for your operating system and architecture if you
+prefer an application with its Python and Node.js runtimes already bundled.
 
 Model credentials and other online-service configuration must be supplied by
 the operator at runtime. This archive contains no runtime state or credentials.

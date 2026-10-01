@@ -184,11 +184,11 @@ getTakeNumberAvailability/CRUD）与 `clientScenesService.list()`，并补
   `sendConversationCommandV4` 作为会话 root 下发。
 - `compose.yaml`：挂载 `${XUENESS_HOST_WORKSPACE:-./.host-workspace}:/host-workspace`
   并声明 `XUENESS_WORKSPACE_ROOTS=/host-workspace`。默认挂空目录，指向自己项目用：
-  `XUENESS_HOST_WORKSPACE=/Users/xuediner/code docker compose up -d --build`。
+  `XUENESS_HOST_WORKSPACE=/path/to/projects docker compose up -d --build`。
 
 **验证**：535 项测试 OK（新增 9 项覆盖列表/隐藏/截断/段校验/围栏/CSRF/面包屑/声明根）；
 线上浏览器点「打开文件夹」→ 出现「浏览文件夹」对话框、列出挂载目录真实内容、无报错；
-`/host-workspace/live-demo` 作为 root 建任务成功，未声明的 `/Users/xuediner` 被 400 拒绝。
+`/host-workspace/live-demo` 作为 root 建任务成功，未声明的 `/path/to/home` 被 400 拒绝。
 
 ## 十二、文件树与图标资源（2026-09-27 续修）
 

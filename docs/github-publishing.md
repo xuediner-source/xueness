@@ -1,12 +1,12 @@
 # GitHub 仓库上传说明
 
-2026-10-01，项目所有者明确授权新建 GitHub 仓库并上传完整项目。仓库为 [xuediner-source/xueness](https://github.com/xuediner-source/xueness)，未指定公开访问，因此默认使用私有仓库。
+2026-10-01，项目所有者先授权新建 GitHub 仓库并上传完整项目，随后明确授权公开仓库，以及将 Windows、macOS 安装包和源码一起上传 GitHub。仓库为 [xuediner-source/xueness](https://github.com/xuediner-source/xueness)，桌面版统一从 [Releases](https://github.com/xuediner-source/xueness/releases) 获取。
 
 ## 上传范围
 
-上传当前 Python 后端、全部 26 个可信功能插件、React 前端源码与预构建资产、测试及 MCP 测试服务器、开发工具、项目文档与文字审查记录、安装脚本、容器配置、许可证和第三方声明。`webapp/dist` 随仓库保存，克隆后可直接使用 Python 运行界面。
+上传当前 Python 后端、全部 27 个可信功能插件和 88 项子功能、React 前端源码与预构建资产、桌面宿主及三平台构建脚本、测试及 MCP 测试服务器、开发工具、项目文档与文字审查记录、安装脚本、容器配置、许可证和第三方声明。`webapp/dist` 随仓库保存，克隆后可直接使用 Python 运行界面。
 
-不上传本机 `.state`、`.xueness-data`、`.web-runs`、模型配置与密钥、环境文件、依赖安装、缓存、日志、备份、集成实验独立仓库及历史验收截图。阶段文档中的截图链接指向本机 QA 记录，不是运行或构建依赖。
+不上传本机 `.state`、`.xueness-data`、`.web-runs`、模型配置与密钥、环境文件、依赖安装、缓存、日志、备份、集成实验独立仓库及历史验收截图。首页的 `docs/images/` 仅包含品牌图及新建隔离状态目录所截取的真实界面，不包含用户会话或配置。阶段文档中的其它截图链接指向本机 QA 记录，不是运行或构建依赖。
 
 ## 历史与验证
 
@@ -14,4 +14,6 @@
 
 上传前对文件名和内容扫描凭据、私钥及运行状态，保留第三方声明；检查插件归属、安装和打包约束。上传后核对远端提交及 Git 树，确保源码、插件、规则和预构建资产完整。
 
-本次授权为创建仓库和上传源码，没有创建发行标签、GitHub Release、容器镜像或部署服务器。后续新功能继续遵循 `AGENTS.md` 与 `CONTRIBUTING.md`，必须属于插件并显示在功能插件面板。
+桌面二进制使用原生 Windows x64、macOS Intel x64 和 Apple Silicon arm64 runner 构建，完成冻结后端及打包界面验收后作为 Release 资产上传。每版提供 SHA-256 校验和与构建来源；文档改动与安装包的实际构建提交分别记录，不以更新首页替代重新验证程序。安装包未签名或公证的限制会在下载页说明。
+
+源码上传、手动 CI 构建与 `tools/prepare_release.py` 均不会自动发布；本次 Release 和公开可见性由项目所有者的明确授权单独执行。没有发布容器镜像或部署公网服务。后续新功能继续遵循 `AGENTS.md` 与 `CONTRIBUTING.md`，必须属于插件并显示在功能插件面板。

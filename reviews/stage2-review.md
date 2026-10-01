@@ -36,7 +36,7 @@ xuenessServices.ts 2cfe4749ce212fdd6afdbea726faac75   21:21:15
 后端测试（冻结版本）：
 
 ```
-$ cd /Users/xuediner/.openclaw/workspace/xueness
+$ cd /path/to/xueness
 $ python3 -m unittest discover -s tests
 Ran 191 tests in 27.975s
 

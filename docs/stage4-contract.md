@@ -118,7 +118,7 @@ class HookRunner:
 
 ### 子代理 A
 ```sh
-cd /Users/xuediner/.openclaw/workspace/xueness
+cd /path/to/xueness
 python3 -m unittest tests.test_hooks -v
 ```
 全绿并贴原始 `Ran N tests` / `OK`。必须覆盖：
