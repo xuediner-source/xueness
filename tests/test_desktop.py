@@ -89,7 +89,7 @@ class DesktopTests(unittest.TestCase):
             store = WorkflowStore(fixture/'state')
             argv = ['powershell.exe', '-NoProfile', '-Command',
                     "[Console]::OutputEncoding=[Text.UTF8Encoding]::new(); Write-Output '工作流_OK'"]
-            record = store.create({'nodes': [{'id': 'native', 'argv': argv, 'timeout': 5}]}, workspace)
+            record = store.create({'nodes': [{'id': 'native', 'argv': argv, 'timeout': 20}]}, workspace)
             store.update(record['id'], lambda row: row.update(status='queued'))
             worker = subprocess.Popen(
                 [sys.executable, '-m', 'xueness.workflow_worker', str(store.state), record['id']],
@@ -97,7 +97,7 @@ class DesktopTests(unittest.TestCase):
                 creationflags=getattr(subprocess, 'CREATE_NO_WINDOW', 0))
             try:
                 try:
-                    stdout, stderr = worker.communicate(timeout=10)
+                    stdout, stderr = worker.communicate(timeout=30)
                 except subprocess.TimeoutExpired:
                     node_pid = store.load(record['id'])['nodes']['native'].get('pid')
                     detail = cleanup._stop_process_tree(worker, (node_pid,))

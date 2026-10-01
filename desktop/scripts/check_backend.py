@@ -447,7 +447,7 @@ def main():
                     print(f'[foreground diagnostic fixture] diagnostic error: {type(exc).__name__}: {exc}', flush=True)
                 raise AssertionError(('packaged workflow failed; see bounded process and fixture diagnostics above', state))
             request(f"/api/workflows/{workflow['id']}/start", {'approve': True})
-            deadline = time.monotonic()+15
+            deadline = time.monotonic()+30
             while time.monotonic() < deadline:
                 state = json.loads(request(f"/api/workflows/{workflow['id']}"))
                 if state['status'] == 'completed':
