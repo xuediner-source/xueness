@@ -10,7 +10,7 @@
 
 打开 DMG 后将 Xueness 拖到 Applications。当前构建没有开发者证书签名或 Apple 公证，首次运行需按系统安全提示批准；Windows 也可能显示未验证发布者。构建不关闭系统安全设置。
 
-首次启动在模型设置中填写自己的模型连接，可选择本地轻量档位。Git、SSH、ffmpeg 或浏览器自动化等外部工具仍按所用插件安装；“内置运行时”不表示打包了每种外部开发工具。
+首次启动在模型设置中填写自己的模型连接，可选择本地轻量档位。Git、SSH、ffmpeg 等外部工具仍按所用插件安装。浏览器插件内置 Playwright 驱动，并复用 Electron 的 Node 运行时；无需另装 Node/Playwright。浏览器自动化使用已安装的 Chrome/Edge，Windows 自动检测常见安装路径；也可通过 `XUENESS_BROWSER_EXECUTABLE` 指定 Chromium 浏览器。“内置运行时”不表示打包了每种外部开发工具。
 
 ## 数据与升级
 
@@ -54,6 +54,8 @@ python desktop/scripts/checksums.py
 本机开发建议使用独立 Python 虚拟环境。构建产物在 `desktop/release/`，原生后端载荷在 `desktop/runtime/backend/`，均不提交到源码。后端分发包含 Python 许可证、PyInstaller bootloader 分发例外及适用依赖声明。
 
 `.github/workflows/desktop-build.yml` 提供手动触发的 Windows x64 与 Intel Mac 构建、冻结后端真实检查、打包应用检查和校验和产物。源码上传和 CI 构建不自动创建 GitHub Release 或部署服务。
+
+打包应用检查会使用隔离数据打开完整工作台，并启动真实的浏览器 worker 验证驱动与内置 Node；构建机器需要预装 Chrome/Edge。不会发送模型请求。
 
 ## 参考来源
 

@@ -35,7 +35,8 @@ async function start() {
     : process.env.XUENESS_PYTHON || (process.platform === 'win32' ? 'python' : 'python3');
   if (app.isPackaged && !existsSync(executable)) throw new Error('Missing bundled backend');
   backend = new Backend({ executable, args: app.isPackaged ? [] : [join(root, 'desktop/entrypoint.py')],
-    cwd: app.isPackaged ? data : root, data,
+    cwd: app.isPackaged ? data : root, data, node: process.execPath,
+    playwright: app.isPackaged ? join(process.resourcesPath, 'browser-runtime/node_modules/playwright/index.mjs') : join(root, 'webapp/node_modules/playwright/index.mjs'),
     assets: app.isPackaged ? join(process.resourcesPath, 'webapp') : join(root, 'webapp/dist') });
   window = new BrowserWindow({ width: 1280, height: 840, minWidth: 760, minHeight: 540,
     title: 'Xueness', backgroundColor: '#171717', show: false,
@@ -91,8 +92,21 @@ async function start() {
         await new Promise(resolve => setTimeout(resolve,100));
       if (!document.querySelector('[data-testid=xn-shell] [data-testid=xn-sidebar-action-new-task]')) throw new Error('Workbench did not render');
       const response = await fetch('/api/plugins'); const catalog = await response.json();
+      const waitFor = async selector => {
+        for (let n=0;n<100;n++) { const element=document.querySelector(selector); if (element) return element;
+          await new Promise(resolve => setTimeout(resolve,100)); }
+        throw new Error('Settings did not render: '+selector);
+      };
+      document.querySelector('button[aria-label="打开设置"]').click();
+      (await waitFor('[data-testid=xn-settings-nav-plugins]')).click();
+      await waitFor('[data-testid=xn-installed-plugin-desktop]');
+      const installedCards = document.querySelectorAll('[data-testid^="xn-installed-plugin-"]').length;
+      document.querySelector('.xn-settings-view__extensions > summary').click();
+      (await waitFor('[data-testid=xn-settings-nav-desktop]')).click();
+      await waitFor('[data-testid=desktop-settings] dl');
       return { title: document.title, plugins: catalog.plugins.length,
         features: catalog.plugins.reduce((n,p) => n+p.features.length,0),
+        installedCards, desktopSettingsReady: !!document.querySelector('[data-testid=desktop-settings] dl'),
         nodeAccess: typeof window.require !== 'undefined', workbenchReady: !!document.querySelector('[data-testid=xn-shell] [data-testid=xn-sidebar-action-new-task]'), body: document.body.textContent.length };
     })()`);
     writeFileSync(process.env.XUENESS_DESKTOP_SMOKE_FILE, JSON.stringify(result));

@@ -5,15 +5,16 @@ const { EventEmitter } = require('node:events');
 const { readyOrigin } = require('./security.cjs');
 
 class Backend extends EventEmitter {
-  constructor({ executable, args, cwd, data, assets }) {
-    super(); this.config = { executable, args, cwd, data, assets };
+  constructor({ executable, args, cwd, data, assets, node, playwright }) {
+    super(); this.config = { executable, args, cwd, data, assets, node, playwright };
     this.token = randomBytes(32).toString('hex'); this.stopping = false;
   }
   start() {
-    const { executable, args, cwd, data, assets } = this.config;
+    const { executable, args, cwd, data, assets, node, playwright } = this.config;
     this.child = spawn(executable, [...args, '--data', data, '--assets', assets], {
       cwd, stdio: ['pipe', 'pipe', 'pipe'], detached: process.platform !== 'win32', windowsHide: true,
-      env: { ...process.env, XUENESS_DESKTOP_TOKEN: this.token, XUENESS_DESKTOP_HOST: '1', PYTHONUNBUFFERED: '1' },
+      env: { ...process.env, XUENESS_DESKTOP_TOKEN: this.token, XUENESS_DESKTOP_HOST: '1', PYTHONUNBUFFERED: '1',
+        XUENESS_DESKTOP_NODE: node, XUENESS_DESKTOP_PLAYWRIGHT: playwright },
     });
     this.child.stdin.on('error', () => {});
     this.child.stderr.on('data', () => {}); // Request/model output never enters desktop logs.

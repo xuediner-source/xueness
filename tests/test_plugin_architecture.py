@@ -40,6 +40,11 @@ class ArchitectureTests(unittest.TestCase):
     def test_current_tree_has_complete_ownership(self):
         self.assertEqual(guard.audit(ROOT), [])
 
+    def test_backend_worker_assets_require_plugin_ownership(self):
+        root = self.fixture()
+        (root/'xueness/bundled_plugins/browser/undeclared.mjs').write_text('')
+        self.assertTrue(any('browser: backend worker assets' in e for e in guard.audit(root)))
+
     def test_orphan_backend_module_and_unregistered_package_fail(self):
         root = self.fixture()
         (root / 'xueness/bundled_plugins/providers/new_feature.py').write_text('')

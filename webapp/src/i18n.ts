@@ -698,6 +698,8 @@ Object.assign(messages, {"技能": "Skills", "子代理": "Subagents", "插件":
 Object.assign(messages, {"名称": "Name", "传输方式": "Transport", "程序路径": "Executable path", "参数 JSON": "Arguments JSON", "认证环境变量 JSON": "Authentication environment variables JSON", "允许本机 HTTP": "Allow loopback HTTP", "子代理指令": "Subagent instructions", "JSON 配置格式无效": "Invalid JSON configuration"});
 Object.assign(messages, {"按需加载技能": "Load skills on demand"});
 Object.assign(messages, {
+  "桌面端": "Desktop",
+  "查看桌面平台、版本与私有数据位置。": "View the desktop platform, version and private data directory.",
   "插件管理": "Plugin manager",
   "功能与接口（{0}）": "Features & interfaces ({0})",
   "插件功能": "Features",

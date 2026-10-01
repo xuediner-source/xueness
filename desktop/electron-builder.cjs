@@ -5,6 +5,8 @@ module.exports = {
   extraResources: [
     { from: 'runtime/backend', to: 'backend' },
     { from: '../webapp/dist', to: 'webapp' },
+    { from: '../webapp/node_modules/playwright', to: 'browser-runtime/node_modules/playwright' },
+    { from: '../webapp/node_modules/playwright-core', to: 'browser-runtime/node_modules/playwright-core' },
     { from: '../LICENSE', to: 'LICENSE' },
     { from: '../NOTICE.md', to: 'NOTICE.md' },
   ],

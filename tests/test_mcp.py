@@ -123,6 +123,7 @@ for line in sys.stdin:
 class McpTestCase(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temp.cleanup)
         self.root = Path(self.temp.name)
         self.state_dir = self.root / "state"
         self.mcp_dir = self.state_dir / "resources" / "mcp"
@@ -133,9 +134,6 @@ class McpTestCase(unittest.TestCase):
         self.script.write_text(FAKE_SERVER, encoding="utf-8")
         self.log = self.root / "requests.jsonl"
         self.pidfile = self.root / "server.pid"
-
-    def tearDown(self):
-        self.temp.cleanup()
 
     # --- helpers ------------------------------------------------------------
 

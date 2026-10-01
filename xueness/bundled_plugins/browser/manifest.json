@@ -22,6 +22,7 @@
   "modules": [
     "settings_api"
   ],
+  "backendAssets": ["bridge.mjs"],
   "features": [
     {
       "id": "browser.pages",

@@ -159,6 +159,15 @@ def audit(root: Path) -> list[str]:
                     errors.append('multiple desktop owners: ' + ref)
                 desktop_refs[ref] = pid
                 _read(root, 'desktop/' + ref)
+            assets = manifest.get('backendAssets', [])
+            if not isinstance(assets, list) or any(not isinstance(ref, str) or Path(ref).is_absolute() or '..' in Path(ref).parts for ref in assets):
+                errors.append(pid + ': invalid backend asset declaration')
+            else:
+                for ref in assets:
+                    _read(root, prefix + ref)
+                actual = {p.relative_to(package_root / pid).as_posix() for p in (package_root / pid).rglob('*') if p.suffix in ('.js', '.mjs', '.cjs')}
+                if actual != set(assets):
+                    errors.append(pid + ': backend worker assets must all have an explicit owner')
         except (OSError, ValueError, SyntaxError, KeyError) as exc:
             errors.append(pid + ': ' + str(exc))
 

@@ -46,10 +46,15 @@ class _BrowserBroker:
         self.lock = threading.RLock()
         self.responses = queue.Queue()
         script = Path(__file__).with_name("bridge.mjs")
+        env = _worker_environment()
+        executable = os.environ.get('XUENESS_DESKTOP_NODE') or 'node'
+        if os.environ.get('XUENESS_DESKTOP_NODE'):
+            env['ELECTRON_RUN_AS_NODE'] = '1'
         self.process = subprocess.Popen(
-            ["node", str(script), str(self.profile)], cwd=self.root,
-            env=_worker_environment(), stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+            [executable, str(script), str(self.profile)], cwd=self.root,
+            env=env, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
             stderr=subprocess.DEVNULL, text=True, encoding="utf-8", bufsize=1,
+            creationflags=getattr(subprocess, 'CREATE_NO_WINDOW', 0) if os.name == 'nt' else 0,
         )
         self.reader = threading.Thread(target=self._read_output, daemon=True,
                                        name="xueness-browser-output")
