@@ -142,6 +142,9 @@ def _candidate_files(root: Path, session: Any) -> list[str]:
 
 def _open_regular_file(root: Path, relative_path: str) -> tuple[int, os.stat_result] | None:
     """Open a file beneath root without following any parent/file symlink."""
+    if os.name == 'nt':
+        from .windows_paths import open_regular_file
+        return open_regular_file(root, relative_path)
     if not hasattr(os, "O_NOFOLLOW") or not hasattr(os, "O_DIRECTORY"):
         return None  # Fail closed on platforms without the required guarantees.
     parts = PurePosixPath(relative_path).parts

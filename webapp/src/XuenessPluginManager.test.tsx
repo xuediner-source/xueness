@@ -189,7 +189,7 @@ test("the primary Plugins page shows every bundled plugin rather than an empty r
       const manifest = JSON.parse(readFileSync(resolve(bundleRoot, entry.name, "manifest.json"), "utf8"));
       return { ...manifest, enabled: manifest.defaultEnabled, effective: manifest.defaultEnabled, blockedBy: [] };
     });
-  assert.equal(catalog.length, 26);
+  assert.equal(catalog.length, 27);
   const html = renderToStaticMarkup(<XuenessPluginSettingsPanel plugins={catalog} loading={false} error=""
     onRefresh={async () => {}} onToggle={async () => {}}
     resourceContent={<div>empty-resource-list-fixture</div>} />);

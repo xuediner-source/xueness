@@ -81,6 +81,7 @@ import {
 import { getRunChoices, mergeRunChoices, setRunChoices, type RunChoices } from "./xuenessBridge";
 import { effectiveRuntimeProfile, emptyComposerCatalog, loadComposerCatalog, prepareComposer, runtimeProfileFromSession, switchComposerBranch, type ComposerCatalog, type ComposerInput } from "./xuenessComposer";
 import { XuenessComposerToolbar } from "./XuenessComposerToolbar";
+import { DesktopSettings } from "./plugins/desktop/DesktopSettings";
 import { XuenessSettingsView } from "./XuenessSettingsView";
 import { settingsNavigation } from "./xuenessSettingsNavigation";
 import { XuenessWorkspaceSettings } from "./XuenessWorkspaceSettings";
@@ -1304,6 +1305,7 @@ export function XuenessWorkbenchContainer() {
   }, [settingsSectionIds, settingsSection]);
   const inlineSettings = ["general", "appearance", "shortcuts", "agent"].includes(settingsSection);
   const settingsContent = () => {
+    if (settingsSection === "desktop" && isPluginEffective("desktop")) return <DesktopSettings />;
     if (settingsSection === "browser") return <BrowserSettings enabled={isPluginEffective("browser")} disabled={busy || settingsSaving || pluginCatalogLoading}
       onEnabledChange={async enabled => {
         await togglePlugin("browser", enabled);

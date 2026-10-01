@@ -2,7 +2,7 @@
 
 自用的 Agent CLI 与本地 Web 工作台，面向本地小模型提供详细的轻量化配置、机器资源监测和模型输出状态展示。
 
-功能设计参考开源 [ZCode](https://github.com/zai-org/ZCode)，采用 Xueness 自有运行时、协议和界面。现有产品能力由 **26 个可信功能插件、84 项子功能**提供，CLI、模型工具和 Web 共用插件开关与依赖检查。轻量模式参考 [Pi](https://github.com/badlogic/pi-mono) 的按需工具和预算思路；插件组织参考 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness)，不承诺上游插件 ABI 兼容。
+功能设计参考开源 [ZCode](https://github.com/zai-org/ZCode)，采用 Xueness 自有运行时、协议和界面。现有产品能力由 **27 个可信功能插件、88 项子功能**提供，CLI、模型工具和 Web 共用插件开关与依赖检查。轻量模式参考 [Pi](https://github.com/badlogic/pi-mono) 的按需工具和预算思路；插件组织参考 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness)，不承诺上游插件 ABI 兼容。
 
 ## 获取项目
 
@@ -14,6 +14,12 @@ cd xueness
 ```
 
 仓库包含 Python 后端、全部功能插件、React 前端源码、预构建的 `webapp/dist`、测试、文档、安装入口和第三方声明。无需 Node.js 即可运行已构建界面；首次使用需配置自己的真实模型。
+
+## 桌面端
+
+Windows x64 提供安装程序与便携 ZIP；macOS 提供 Apple Silicon 和 Intel 两种独立安装包。Electron 外壳内置 Python 后端和已构建工作台，安装后的电脑不需要另装 Python 或 Node.js。首次运行需要配置自己的模型。
+
+构建、数据位置、平台边界和验收见 [桌面端说明](docs/xueness-desktop.md)。桌面能力属于 `desktop` 插件；文件锁、终端、工作流及机器指标的系统适配保留在各自所属模块。
 
 ## 快速开始
 
@@ -48,7 +54,7 @@ CLI 支持会话选择、归档、恢复、模型切换、多行输入、附件�
 
 包括会话、文件、Shell、规划、模型、记忆、设置、用量、Git、工作流、终端、Office、命令、技能、Hooks、MCP、子代理、网络、自动化、扩展、诊断、浏览器、远程、渠道、引导和更新。
 
-Web「设置 → 插件」显示全部 26 个插件及子功能，包含禁用和依赖阻塞状态。即使其它功能全关，也可通过账户菜单的「插件管理」恢复。CLI 使用：
+Web「设置 → 插件」显示全部 27 个插件及子功能，包含禁用和依赖阻塞状态。即使其它功能全关，也可通过账户菜单的「插件管理」恢复。CLI 使用：
 
 ```sh
 python3 -m xueness plugins list

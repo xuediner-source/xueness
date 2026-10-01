@@ -13,7 +13,7 @@ import re
 # exception requires an architecture review and a reason in CONTRIBUTING.md.
 KERNEL_BACKEND = {
     '__init__.py', '__main__.py', 'cli.py', 'core.py', 'events.py',
-    'http_contract.py', 'plugin_cli.py', 'plugin_contract.py', 'plugin_runtime.py',
+    'http_contract.py', 'file_lock.py', 'plugin_cli.py', 'plugin_contract.py', 'plugin_runtime.py',
     'plugin_sdk.py', 'plugins.py', 'resources.py', 'session_lease.py',
     'tool_contract.py', 'tool_registry.py', 'builtin_tools.py', 'web.py', 'write_lock.py',
 }
@@ -82,6 +82,7 @@ def audit(root: Path) -> list[str]:
     contribution_owners = {'tools': {}, 'commands': {}, 'resources': {}}
     feature_ids = set()
     ui_refs: dict[str, str] = {}
+    desktop_refs: dict[str, str] = {}
     for pid in ids:
         prefix = 'xueness/bundled_plugins/' + pid + '/'
         try:
@@ -150,6 +151,14 @@ def audit(root: Path) -> list[str]:
                     errors.append(pid + ': frontend package owned by another plugin ' + file)
                 if symbol and not re.search(r'^export (?:async )?(?:function|class|const) ' + re.escape(symbol) + r'\b', text, re.M):
                     errors.append(pid + ': missing frontend export ' + ref)
+            for ref in manifest.get('desktopModules', []):
+                if not isinstance(ref, str) or not ref.startswith('src/') or '..' in Path(ref).parts:
+                    errors.append(pid + ': invalid desktop module declaration')
+                    continue
+                if ref in desktop_refs:
+                    errors.append('multiple desktop owners: ' + ref)
+                desktop_refs[ref] = pid
+                _read(root, 'desktop/' + ref)
         except (OSError, ValueError, SyntaxError, KeyError) as exc:
             errors.append(pid + ': ' + str(exc))
 
@@ -183,6 +192,9 @@ def audit(root: Path) -> list[str]:
             errors.append('business code outside plugin package: xueness/' + path.name)
         elif target[2] not in ids or not (root / (target[1].replace('.', '/') + '.py')).is_file():
             errors.append('invalid plugin compatibility target: xueness/' + path.name)
+    for path in (root / 'desktop/src').rglob('*'):
+        if path.is_file() and path.relative_to(root / 'desktop').as_posix() not in desktop_refs:
+            errors.append('unowned desktop feature module: ' + path.relative_to(root).as_posix())
     cli = ast.parse(_read(root, 'xueness/cli.py'))
     compatibility = {'_render_event', '_add_agent_flags', '_model_selection_record',
                      '_prepare_agent', '_load_commands', '_prompt', '_approval_prompt',

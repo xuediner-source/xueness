@@ -1,0 +1,112 @@
+"""Desktop plugin policy, parent-pipe cancellation and real portable locks."""
+import io
+import json
+import os
+from pathlib import Path
+import subprocess
+import sys
+import tempfile
+import threading
+import time
+import unittest
+
+from xueness import file_lock, plugin_runtime, web
+from xueness.bundled_plugins.desktop.bridge import DesktopBridge
+from xueness.bundled_plugins.settings import workspaces_api
+from xueness.bundled_plugins.files.instructions import load_workspace_instructions
+
+
+class DesktopTests(unittest.TestCase):
+    def test_disabling_desktop_while_dialog_is_open_prevents_directory_grant(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            base = Path(temporary)
+            project, selected = base/'project', base/'selected'
+            project.mkdir(); selected.mkdir()
+            ctx = web.build_context(base/'state', base/'runs', project)
+            self.addCleanup(ctx['terminals'].close)
+            class Local:
+                client_address = ('127.0.0.1', 1000)
+            ctx['handler'] = Local()
+            def choose(initial):
+                plugin_runtime.set_enabled(ctx['state_dir'], 'desktop', False)
+                return str(selected)
+            ctx['desktop_choose_directory'] = choose
+            status, _ = workspaces_api.dispatch('POST', ['api', 'workspaces', 'native-picker'], {}, {}, ctx)
+            self.assertEqual(status, 403)
+            self.assertNotIn(selected, workspaces_api.selected_roots(ctx))
+
+    @unittest.skipUnless(os.name == 'nt', 'native Windows handle boundary')
+    def test_windows_guidance_rejects_junction_and_loads_unicode_path(self):
+        from xueness.core import Gate
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)/'项目'
+            root.mkdir()
+            (root/'AGENTS.md').write_text('工作区指导', encoding='utf-8')
+            text, sources = load_workspace_instructions(root, {}, Gate(root, disallow=set()))
+            self.assertEqual(sources, ['AGENTS.md'])
+            self.assertIn('工作区指导', text)
+            outside = Path(temporary)/'outside'
+            outside.mkdir()
+            (outside/'AGENTS.md').write_text('must not load', encoding='utf-8')
+            result = subprocess.run(['cmd.exe', '/c', 'mklink', '/J', str(root/'linked'), str(outside)], capture_output=True)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            session = {'messages': [{'role': 'assistant', 'tool_calls': [{'id': 'r', 'function': {'name': 'read', 'arguments': {'path': 'linked/file.txt'}}}]}], 'results': {'r': {'ok': True, 'path': 'linked/file.txt'}}}
+            text, sources = load_workspace_instructions(root, session, Gate(root, disallow=set()))
+            self.assertEqual(sources, ['AGENTS.md'])
+            self.assertNotIn('must not load', text)
+
+    def test_parent_disconnect_unblocks_a_pending_native_dialog(self):
+        stream = io.StringIO()
+        bridge = DesktopBridge(stream)
+        errors = []
+        def choose():
+            try:
+                bridge.choose_directory('/project')
+            except RuntimeError as exc:
+                errors.append(str(exc))
+        worker = threading.Thread(target=choose)
+        worker.start()
+        deadline = time.monotonic()+2
+        while not stream.getvalue() and time.monotonic() < deadline:
+            time.sleep(.005)
+        message = json.loads(stream.getvalue())
+        self.assertEqual(message['type'], 'dialog')
+        bridge.receive({'id': 'unrelated', 'path': '/must-not-register'})
+        self.assertTrue(worker.is_alive())
+        bridge.close()
+        worker.join(timeout=2)
+        self.assertFalse(worker.is_alive())
+        self.assertEqual(errors, ['desktop directory picker failed'])
+
+    def test_disabled_desktop_hides_native_picker_but_keeps_recovery_catalog(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            ctx = web.build_context(root/'state', root/'runs', root)
+            self.addCleanup(ctx['terminals'].close)
+            class Local:
+                client_address = ('127.0.0.1', 1000)
+            ctx['handler'] = Local()
+            ctx['desktop_choose_directory'] = lambda initial: self.fail('disabled plugin opened a dialog')
+            plugin_runtime.set_enabled(ctx['state_dir'], 'desktop', False)
+            status, capability = workspaces_api.dispatch('GET', ['api', 'workspaces', 'native-picker'], {}, {}, ctx)
+            self.assertEqual(status, 200)
+            self.assertFalse(capability['available'])
+            status, _ = plugin_runtime.dispatch_http('GET', ['api', 'desktop', 'status'], {}, {}, ctx)
+            self.assertEqual(status, 403)
+            status, catalog = plugin_runtime.dispatch_http('GET', ['api', 'plugins'], {}, {}, ctx)
+            self.assertEqual(status, 200)
+            self.assertIn('desktop', {p['id'] for p in catalog['plugins']})
+
+    def test_file_lock_excludes_a_second_process_and_releases_on_close(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            path = Path(temporary)/'state.lock'
+            fd = os.open(path, os.O_RDWR | os.O_CREAT, 0o600)
+            script = 'from xueness import file_lock as f; import os,sys; d=os.open(sys.argv[1],os.O_RDWR);\ntry: f.flock(d,f.LOCK_EX|f.LOCK_NB)\nexcept BlockingIOError: sys.exit(2)'
+            try:
+                file_lock.flock(fd, file_lock.LOCK_EX)
+                proc = subprocess.run([sys.executable, '-c', script, str(path)], capture_output=True, timeout=5)
+                self.assertEqual(proc.returncode, 2, proc.stderr)
+            finally:
+                os.close(fd)
+            proc = subprocess.run([sys.executable, '-c', script, str(path)], capture_output=True, timeout=5)
+            self.assertEqual(proc.returncode, 0, proc.stderr)

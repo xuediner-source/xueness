@@ -32,7 +32,7 @@ ARCHIVE_SUFFIXES = {
     ".css", ".eot", ".gif", ".html", ".ico", ".jpeg", ".jpg", ".js",
     ".json", ".mjs", ".png", ".svg", ".toml", ".ttf", ".txt", ".ts",
     ".tsx", ".wasm", ".webmanifest", ".webp", ".woff", ".woff2", ".yaml",
-    ".yml", ".py", ".sh",
+    ".yml", ".py", ".sh", ".cjs",
 }
 SOURCE_SUFFIXES = ARCHIVE_SUFFIXES - {".eot", ".gif", ".ico", ".jpeg", ".jpg", ".png", ".ttf", ".wasm", ".webp", ".woff", ".woff2"}
 PUBLIC_SUFFIXES = {
@@ -59,11 +59,13 @@ EXCLUDED_DIRECTORY_NAMES = {
     ".pytest_cache", ".mypy_cache", ".ruff_cache", "__pycache__", "node_modules",
     "screenshots", "reviews", "integration-lab", "release", "vendor", "legacy",
     "log", "logs", "coverage", "playwright-report", "test-results",
+    ".venv", ".build", "runtime",
 }
 FORBIDDEN_ARCHIVE_COMPONENTS = {
     ".git", ".state", ".xueness-data", ".web-runs", ".vite", ".cache",
     ".pytest_cache", ".mypy_cache", ".ruff_cache", "__pycache__", "node_modules",
     "vendor", "legacy", "material-icons", "screenshots", "reviews", "integration-lab",
+    ".venv", ".build", "runtime",
 }
 FORBIDDEN_SUFFIXES = {".pem", ".key", ".p12", ".pfx", ".pkcs12", ".keystore"}
 FORBIDDEN_EXACT_NAMES = {
@@ -284,6 +286,8 @@ def _collect_files(root: Path, version: str) -> list[SourceFile]:
     )
     files.extend(_walk_allowlisted_tree(root, PurePosixPath("webapp/dist"), DIST_SUFFIXES))
     files.extend(_walk_allowlisted_tree(root, PurePosixPath("tests"), TEST_SUFFIXES))
+    files.extend(_walk_allowlisted_tree(root, PurePosixPath("desktop"), SOURCE_SUFFIXES))
+    files.extend(_walk_allowlisted_tree(root, PurePosixPath(".github/workflows"), SOURCE_SUFFIXES))
 
     explicit_paths = (
         ".dockerignore",
@@ -316,6 +320,7 @@ def _collect_files(root: Path, version: str) -> list[SourceFile]:
         "docs/xueness-harness-feature-audit-2026-10-01.md",
         "docs/xueness-plugin-architecture.md",
         "docs/release-preparation.md",
+        "docs/xueness-desktop.md",
     )
     for path_text in explicit_paths:
         relative_path = PurePosixPath(path_text)
@@ -370,6 +375,10 @@ in `docs/xueness-local-lightweight-mode.md`. Use `python3 -m xueness` for the Ag
 
 Backend checks: `python3 -m unittest discover -s tests`. To rebuild the web
 interface: `npm --prefix webapp ci`, then `npm --prefix webapp run build`.
+
+Self-contained Windows and macOS installers use the desktop host in
+`desktop/`. Build them on the target operating system and architecture;
+see `docs/xueness-desktop.md` for the runtime and installer build commands.
 
 Every product feature must be implemented by a trusted bundled plugin and
 listed in Settings > Plugins, including each new feature. See `AGENTS.md`,

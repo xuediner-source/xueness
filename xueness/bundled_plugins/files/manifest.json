@@ -29,7 +29,8 @@
     "directory_api",
     "http_routes",
     "instructions",
-    "preview"
+    "preview",
+    "windows_paths"
   ],
   "features": [
     {

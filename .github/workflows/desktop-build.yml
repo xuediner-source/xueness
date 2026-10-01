@@ -1,0 +1,75 @@
+name: Desktop installers
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: windows-2025
+            arch: x64
+            target: windows-x64
+          - runner: macos-15-intel
+            arch: x64
+            target: macos-x64
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 30
+    defaults:
+      run:
+        shell: bash
+    env:
+      PYTHONUTF8: '1'
+      XUENESS_ALLOW_REAL: '0'
+      CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '24.20.0'
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.12'
+          architecture: ${{ matrix.arch }}
+      - name: Install build dependencies
+        run: |
+          python -m pip install -r desktop/requirements-build.txt
+          npm ci --prefix webapp --no-audit --no-fund
+          npm ci --prefix desktop --no-audit --no-fund
+          node desktop/node_modules/electron/install.js
+      - name: Check feature ownership and portable backend behavior
+        run: |
+          python tools/check_plugin_architecture.py
+          python -m unittest tests.test_desktop tests.test_plugin_architecture tests.test_workspace_instructions -q
+          npm --prefix desktop test
+          npm --prefix webapp test
+          npm --prefix webapp run typecheck
+          npm --prefix webapp run build
+      - name: Freeze and exercise the actual backend
+        run: |
+          python desktop/scripts/build_backend.py
+          python desktop/scripts/check_backend.py
+          python desktop/scripts/check_backend.py --force-exit
+      - name: Build Windows installer and portable ZIP
+        if: runner.os == 'Windows'
+        run: npm --prefix desktop run dist:win -- --x64
+      - name: Build Intel Mac disk image and ZIP
+        if: runner.os == 'macOS'
+        run: npm --prefix desktop run dist:mac -- --x64
+      - name: Verify packaged Electron workbench
+        run: python desktop/scripts/check_app.py
+      - name: Generate installer checksums
+        run: python desktop/scripts/checksums.py
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: Xueness-${{ matrix.target }}
+          compression-level: 0
+          retention-days: 1
+          if-no-files-found: error
+          path: |
+            desktop/release/*.exe
+            desktop/release/*.zip
+            desktop/release/*.dmg
+            desktop/release/SHA256SUMS.txt

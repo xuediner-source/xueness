@@ -392,6 +392,11 @@ class Handler(BaseHTTPRequestHandler):
         self.wfile.write(body)
 
     def _guard(self, need_csrf=False) -> bool:
+        desktop_token = self._ctx.get('desktop_token')
+        if desktop_token and not secrets.compare_digest(
+                self.headers.get('X-Xueness-Desktop-Token', ''), desktop_token):
+            self._send(403, {'error': 'desktop host authentication required'})
+            return False
         if not _host_ok(self.headers) or not _origin_ok(self.headers):
             self._send(403, {"error": "host not permitted"})
             return False

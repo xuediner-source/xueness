@@ -18,7 +18,7 @@ from .resources import _atomic_write_json
 API_VERSION = 1
 PLUGIN_IDS = ('sessions', 'files', 'shell', 'planning', 'providers', 'memory',
               'settings', 'usage', 'git', 'workflows', 'terminal', 'office',
-              'commands', 'skills', 'hooks', 'mcp', 'subagents', 'network', 'automation', 'extensions', 'diagnostics', 'browser', 'remote', 'bots', 'onboarding', 'updates')
+              'commands', 'skills', 'hooks', 'mcp', 'subagents', 'network', 'automation', 'extensions', 'diagnostics', 'browser', 'remote', 'bots', 'onboarding', 'updates', 'desktop')
 PACKAGE_ROOT = Path(__file__).with_name('bundled_plugins')
 CONFIG_NAME = 'plugin-state.json'
 _LOCK = threading.RLock()
@@ -107,7 +107,7 @@ def require_enabled(state_dir, plugin_id):
 def _config_lock(state_dir):
     # CLI and Web may run in separate processes. Re-read under this lock to
     # avoid one toggle losing another writer's change.
-    import fcntl
+    from . import file_lock as fcntl
     root = Path(state_dir)
     root.mkdir(parents=True, exist_ok=True)
     path = root / '.plugin-state.lock'
@@ -196,7 +196,7 @@ def route_owner(parts):
         if parts[2] == 'plugins':
             return 'extensions'
         return parts[2] if parts[2] in ('skills','commands','hooks','mcp','subagents') else None
-    return {'bots':'bots','remote':'remote','diagnostics':'diagnostics','automations':'automation','workflows':'workflows','terminals':'terminal','mcp':'mcp',
+    return {'desktop':'desktop','bots':'bots','remote':'remote','diagnostics':'diagnostics','automations':'automation','workflows':'workflows','terminals':'terminal','mcp':'mcp',
             'providers':'providers','settings':'settings','workspaces':'settings','usage':'usage',
             'memory':'memory','browser':'browser','directory':'files','home':'files','system':'files'}.get(family)
 

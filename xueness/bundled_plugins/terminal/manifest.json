@@ -21,13 +21,14 @@
   "modules": [
     "shells",
     "terminal_worker",
-    "terminals"
+    "terminals",
+    "windows"
   ],
   "features": [
     {
       "id": "terminal.pty",
-      "name": "工作区交互式 POSIX PTY",
-      "nameEn": "Interactive workspace POSIX PTY"
+      "name": "工作区 POSIX PTY / Windows ConPTY 交互式终端",
+      "nameEn": "Interactive workspace POSIX PTY / Windows ConPTY"
     },
     {
       "id": "terminal.lifecycle",

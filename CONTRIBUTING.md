@@ -41,3 +41,9 @@ Xueness 的固定开发规则是：**每项产品功能归属于插件，并在�
 结构检查能发现漏登记或注册表漂移，不能替代对语义、权限、动态执行与生命周期的审查。不得只改检查白名单、填空壳功能名或添加卡片来宣称完成插件拆分。
 
 共享基础设施的允许范围见 [AGENTS.md](AGENTS.md)。添加共享例外必须记录理由并经架构审查；默认应放进业务插件。
+
+## 桌面宿主与平台适配
+
+桌面产品集成属于 `desktop` 插件。Electron 业务模块在 `desktop/src/`，由 desktop manifest 的 `desktopModules` 精确登记；Python 对应实现位于 `xueness/bundled_plugins/desktop/`，界面位于 `webapp/src/plugins/desktop/`。结构门禁同样检查 Electron 模块归属。
+
+窗口、私有后端连接和插件管理是桌面入口的恢复基础设施，类似 Web HTTP 宿主；禁用 desktop 时它们仍提供其它插件和插件恢复入口，原生目录选择和桌面状态 API 则关闭。不能将其它桌面业务借此放入宿主。跨平台文件锁是已有 lease/写锁基础设施的实现；Shell、终端、工作流和机器指标的系统差异必须留在各自插件。

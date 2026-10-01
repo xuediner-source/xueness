@@ -1,19 +1,21 @@
 """Bounded local PTY broker. Every shell is explicitly opened by its operator."""
 import base64
-import fcntl
 import os
 from pathlib import Path
-import pty
 import signal
 import select
 import struct
 import subprocess
 import sys
-import termios
 import threading
 import time
 import uuid
 from .shells import available_shells, resolve_shell
+
+if os.name != 'nt':
+    import fcntl
+    import pty
+    import termios
 
 
 class Terminal:
@@ -30,7 +32,10 @@ class Terminal:
         env = {k: v for k, v in os.environ.items() if k in ('PATH', 'HOME', 'LANG', 'LC_ALL')}
         env['TERM'] = 'xterm-256color'
         try:
-            self.proc = subprocess.Popen([sys.executable, str(Path(__file__).with_name('terminal_worker.py')), self.shell],
+            worker_argv = ([sys.executable, '--worker', 'terminal', self.shell]
+                           if getattr(sys, 'frozen', False) else
+                           [sys.executable, str(Path(__file__).with_name('terminal_worker.py')), self.shell])
+            self.proc = subprocess.Popen(worker_argv,
                                          cwd=root, env=env, stdin=slave, stdout=slave, stderr=slave,
                                          start_new_session=True)
         except Exception:
@@ -151,7 +156,11 @@ class Broker:
                     del self.items[tid]
             if len(self.items) >= 4:
                 raise ValueError('at most four terminals may be open')
-            term = Terminal(root, session_id, shell)
+            if os.name == 'nt':
+                from .windows import WindowsTerminal
+                term = WindowsTerminal(root, session_id, shell)
+            else:
+                term = Terminal(root, session_id, shell)
             self.items[term.id] = term
             return term
 

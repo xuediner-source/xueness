@@ -1,0 +1,50 @@
+{
+  "id": "desktop",
+  "name": "桌面端",
+  "description": "Windows 与 macOS 原生宿主、窗口所属目录选择和桌面状态。",
+  "apiVersion": 1,
+  "version": "1.0.0",
+  "defaultEnabled": true,
+  "dependencies": [],
+  "tools": [],
+  "commands": [],
+  "panels": [],
+  "resources": [],
+  "capabilities": [],
+  "modules": [
+    "host",
+    "bridge",
+    "windows_job"
+  ],
+  "features": [
+    {
+      "id": "desktop.application",
+      "name": "Windows / macOS 独立桌面应用与内置运行时",
+      "nameEn": "Windows / macOS application with bundled runtime"
+    },
+    {
+      "id": "desktop.folder_picker",
+      "name": "窗口所属的原生项目文件夹选择",
+      "nameEn": "Window-owned native project folder selection"
+    },
+    {
+      "id": "desktop.lifecycle",
+      "name": "单实例、启动恢复与后台进程清理",
+      "nameEn": "Single instance, startup recovery and backend cleanup"
+    },
+    {
+      "id": "desktop.status",
+      "name": "桌面平台、版本与数据位置",
+      "nameEn": "Desktop platform, version and data location"
+    }
+  ],
+  "frontendModules": [
+    "plugins/desktop/DesktopSettings.tsx"
+  ],
+  "desktopModules": [
+    "src/main.cjs",
+    "src/backend.cjs",
+    "src/security.cjs",
+    "src/loading.html"
+  ]
+}

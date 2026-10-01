@@ -7,7 +7,8 @@ starting the immutable plan. This is process control, not an OS sandbox.
 from __future__ import annotations
 from contextlib import contextmanager
 from concurrent.futures import ThreadPoolExecutor
-import fcntl
+from ... import file_lock as fcntl
+from .desktop_lifecycle import owner_gone, register as register_desktop_worker
 import hashlib
 import json
 import os
@@ -93,7 +94,7 @@ class ProviderGovernor:
         self.state.mkdir(parents=True, exist_ok=True)
         if self.path.is_symlink() or self.lock_path.is_symlink():
             raise ValueError('provider governor state cannot be a symlink')
-        fd = os.open(self.lock_path, os.O_CREAT | os.O_RDWR | os.O_NOFOLLOW, 0o600)
+        fd = os.open(self.lock_path, os.O_CREAT | os.O_RDWR | getattr(os, 'O_NOFOLLOW', 0), 0o600)
         with os.fdopen(fd, 'a+b') as stream:
             fcntl.flock(stream, fcntl.LOCK_EX)
             try:
@@ -263,7 +264,7 @@ class WorkflowStore:
 
     @contextmanager
     def lock(self, wid, suffix='.lock', blocking=True):
-        fd = os.open(self.path(wid, suffix), os.O_CREAT | os.O_RDWR | os.O_NOFOLLOW, 0o600)
+        fd = os.open(self.path(wid, suffix), os.O_CREAT | os.O_RDWR | getattr(os, 'O_NOFOLLOW', 0), 0o600)
         try:
             fcntl.flock(fd, fcntl.LOCK_EX | (0 if blocking else fcntl.LOCK_NB))
             yield
@@ -404,10 +405,15 @@ class WorkflowStore:
             self.update(wid, prepare)
             try:
                 with open(os.devnull, 'wb') as sink:
-                    worker = subprocess.Popen([sys.executable, '-m', 'xueness.workflow_worker', str(self.state), wid],
+                    worker_argv = ([sys.executable, '--worker', 'workflow', str(self.state), wid]
+                                   if getattr(sys, 'frozen', False) else
+                                   [sys.executable, '-m', 'xueness.workflow_worker', str(self.state), wid])
+                    worker = subprocess.Popen(worker_argv,
                                      cwd=Path(__file__).resolve().parents[3],
-                                     stdin=subprocess.DEVNULL, stdout=sink, stderr=sink, start_new_session=True)
-                    threading.Thread(target=worker.wait, daemon=True).start()
+                                     stdin=subprocess.DEVNULL, stdout=sink, stderr=sink,
+                                     start_new_session=not bool(os.environ.get('XUENESS_DESKTOP_HOST')),
+                                     creationflags=getattr(subprocess, 'CREATE_NO_WINDOW', 0) if os.name == 'nt' else 0)
+                    register_desktop_worker(worker, self, wid)
             except OSError:
                 self.update(wid, lambda r: r.update(status='failed'))
                 raise
@@ -457,6 +463,10 @@ class WorkflowStore:
 def _terminate(proc):
     if proc.poll() is not None:
         return
+    if os.name == 'nt':
+        from .windows import terminate_tree
+        terminate_tree(proc)
+        return
     try:
         os.killpg(proc.pid, signal.SIGTERM)
         proc.wait(timeout=2)
@@ -505,7 +515,7 @@ def _execute(store, record, spec):
         wait_start = time.monotonic()
         while not governor.try_acquire(bucket_key, ticket):
             control = store.load(wid)['control']
-            if control == 'cancel':
+            if control == 'cancel' or owner_gone():
                 governor.cancel(bucket_key, ticket)
                 return {'status': 'cancelled', 'session_id': s['id']}
             if not is_enabled(store.state, 'workflows') or not is_enabled(store.state, 'providers'):
@@ -519,7 +529,7 @@ def _execute(store, record, spec):
             result = run(s, sessions, provider, Gate(cwd, allow_write=writable, allow_edit=writable,
                      mode='build' if writable else 'plan'), max_steps=20, memory=context,
                      max_wall_seconds=spec['timeout'],
-                     should_stop=lambda: (store.load(wid)['control'] == 'cancel' or
+                     should_stop=lambda: (owner_gone() or store.load(wid)['control'] == 'cancel' or
                                           not is_enabled(store.state, 'workflows')),
                      policy_state_dir=store.state)
         except Exception as exc:
@@ -548,11 +558,14 @@ def _execute(store, record, spec):
     try:
         for directory in [*reversed(cwd.parents), cwd]:
             key = hashlib.sha256(str(directory).encode()).hexdigest()
-            fd = os.open(lock_dir / key, os.O_CREAT | os.O_RDWR | os.O_NOFOLLOW, 0o600)
+            lock_path = lock_dir / key
+            if lock_path.is_symlink():
+                raise ValueError('invalid workspace lease')
+            fd = os.open(lock_path, os.O_CREAT | os.O_RDWR | getattr(os, 'O_NOFOLLOW', 0), 0o600)
             locks.append(fd)
             mode = fcntl.LOCK_EX if directory == cwd else fcntl.LOCK_SH
             while True:
-                if store.load(wid)['control'] == 'cancel':
+                if owner_gone() or store.load(wid)['control'] == 'cancel':
                     return {'status': 'cancelled'}
                 if time.monotonic() - start > spec['timeout']:
                     return {'status': 'failed', 'error': 'timeout waiting for workspace lease'}
@@ -563,6 +576,9 @@ def _execute(store, record, spec):
                     time.sleep(.05)
         logpath = store.path(wid, '.' + nid + '.log')
         env = {k: v for k, v in os.environ.items() if k in ('PATH', 'HOME', 'TMPDIR', 'LANG', 'LC_ALL', 'SYSTEMROOT')}
+        if os.name == 'nt':
+            from .windows import execute_command
+            return execute_command(store, record, spec, cwd, logpath, env, start)
         proc = subprocess.Popen(spec['argv'], cwd=cwd, env=env, stdin=subprocess.DEVNULL,
                                 stdout=subprocess.PIPE, stderr=subprocess.STDOUT, start_new_session=True,
                                 pass_fds=tuple(locks))
@@ -573,7 +589,7 @@ def _execute(store, record, spec):
         with selectors.DefaultSelector() as selector, logpath.open('wb') as stream:
             selector.register(proc.stdout, selectors.EVENT_READ)
             while True:
-                if store.load(wid)['control'] == 'cancel':
+                if owner_gone() or store.load(wid)['control'] == 'cancel':
                     reason = 'cancelled'; break
                 if time.monotonic() - start >= spec['timeout']:
                     reason = 'timeout'; break
@@ -621,6 +637,8 @@ def drive(store, wid, executor=None):
         with ThreadPoolExecutor(max_workers=8) as pool:
             while True:
                 r = store.load(wid)
+                if owner_gone():
+                    store.control(wid, 'cancel')
                 from ...plugin_runtime import is_enabled
                 try:
                     if not is_enabled(store.state, 'workflows'):

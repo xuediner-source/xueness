@@ -28,6 +28,7 @@ class ArchitectureTests(unittest.TestCase):
         root = self.base / 'source'
         shutil.copytree(ROOT / 'xueness', root / 'xueness', ignore=shutil.ignore_patterns('__pycache__'))
         shutil.copytree(ROOT / 'webapp/src', root / 'webapp/src')
+        shutil.copytree(ROOT / 'desktop/src', root / 'desktop/src')
         return root
 
     def rewrite(self, root, pid, change):
@@ -81,6 +82,11 @@ class ArchitectureTests(unittest.TestCase):
         root = self.fixture()
         (root / 'xueness/new_feature.py').write_text('def run_feature(): pass\n')
         self.assertIn('business code outside plugin package: xueness/new_feature.py', guard.audit(root))
+
+    def test_desktop_native_modules_require_manifest_ownership(self):
+        root = self.fixture()
+        (root / 'desktop/src/new-feature.cjs').write_text('module.exports = {};\n')
+        self.assertIn('unowned desktop feature module: desktop/src/new-feature.cjs', guard.audit(root))
 
     def test_cli_host_cannot_take_back_feature_implementation(self):
         root = self.fixture()

@@ -141,7 +141,11 @@ def _is_too_broad_native_root(path: Path) -> bool:
             return True
         # POSIX roots and first-level system directories contain unrelated
         # projects. Mounted volume roots are broad even when nested below /.
-        if len(path.parts) <= 2 or path.is_mount():
+        system_locations = {Path(v).resolve() for k, v in os.environ.items()
+                            if k.upper() in ('SYSTEMROOT', 'PROGRAMFILES', 'PROGRAMFILES(X86)') and v}
+        if (os.name == 'nt' and (path == Path(path.anchor) or path in system_locations)):
+            return True
+        if (os.name != 'nt' and len(path.parts) <= 2) or path.is_mount():
             return True
     except (OSError, RuntimeError, ValueError):
         return True
@@ -456,6 +460,11 @@ def dispatch(method: str, parts: list, query: dict, data: dict, ctx: dict):
     method = (method or "").upper()
     if tuple(parts) == ("api", "workspaces", "native-picker"):
         capability = native_picker_capability()
+        desktop_chooser = ctx.get('desktop_choose_directory')
+        if callable(desktop_chooser):
+            from ... import plugin_runtime
+            capability = {'available': plugin_runtime.is_enabled(ctx['state_dir'], 'desktop'),
+                          'platform': _platform_name()}
         if method == "GET":
             # The dialog belongs to the server host. Do not advertise it to a
             # remote client that cannot safely interact with that desktop.
@@ -488,11 +497,15 @@ def dispatch(method: str, parts: list, query: dict, data: dict, ctx: dict):
                 # still independently validated below.
                 pass
         try:
-            selected = _choose_native_directory(initial_root)
+            selected = desktop_chooser(initial_root) if callable(desktop_chooser) else _choose_native_directory(initial_root)
         except NotImplementedError:
             return 501, {"error": "native directory picker is unavailable", **capability}
         except RuntimeError:
             return 500, {"error": "native directory picker failed"}
+        # A dialog can outlive a settings change. Do not grant a returned path
+        # after its owner/dependencies have been disabled in another request.
+        if not _plugin_access(ctx) or (callable(desktop_chooser) and not plugin_runtime.is_enabled(ctx['state_dir'], 'desktop')):
+            return 403, {"error": "directory picker plugin was disabled"}
         if selected is None:
             return 200, {"cancelled": True}
         try:

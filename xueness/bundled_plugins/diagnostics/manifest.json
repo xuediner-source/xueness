@@ -12,7 +12,8 @@
     "diagnostics"
   ],
   "modules": [
-    "runtime_metrics"
+    "runtime_metrics",
+    "windows_metrics"
   ],
   "resources": [],
   "capabilities": [],

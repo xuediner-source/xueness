@@ -174,6 +174,9 @@ def _memory() -> tuple[int | None, int | None, str | None, int | None]:
     system = platform.system()
     if system == "Darwin":
         return _darwin_memory()
+    if system == "Windows":
+        from .windows_metrics import memory
+        return memory()
     if system == "Linux":
         total, available, kind = _read_linux_meminfo()
         try:
@@ -188,6 +191,10 @@ def _memory() -> tuple[int | None, int | None, str | None, int | None]:
 
 def _disk(state_dir) -> tuple[int | None, int | None]:
     try:
+        if os.name == 'nt':
+            import shutil
+            usage = shutil.disk_usage(state_dir)
+            return usage.total, usage.free
         stats = os.statvfs(state_dir)
         block_size = _bounded_int(stats.f_frsize or stats.f_bsize)
         if not block_size:
@@ -216,6 +223,8 @@ def _load_average() -> list[float | None]:
 
 def _process_cpu_sample() -> tuple[float, float] | None:
     if resource is None:
+        if os.name == 'nt':
+            return time.monotonic(), time.process_time()
         return None
     try:
         usage = resource.getrusage(resource.RUSAGE_SELF)

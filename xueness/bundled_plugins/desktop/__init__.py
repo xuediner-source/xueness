@@ -1,0 +1,1 @@
+"""Trusted desktop integration plugin."""

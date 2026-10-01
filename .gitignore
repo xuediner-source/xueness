@@ -52,3 +52,9 @@ tools/.validate-events-v1.mjs
 # Prebuilt workbench is shipped so a checkout runs without Node.js
 !webapp/dist/
 !webapp/dist/**
+
+# Desktop build runtime and installers
+desktop/runtime/
+desktop/release/
+desktop/.build/
+desktop/.venv/

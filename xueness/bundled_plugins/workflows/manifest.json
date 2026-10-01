@@ -38,7 +38,9 @@
     "tools",
     "workflow_cli",
     "workflow_worker",
-    "workflows"
+    "workflows",
+    "windows",
+    "desktop_lifecycle"
   ],
   "features": [
     {
