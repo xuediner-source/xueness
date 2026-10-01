@@ -221,7 +221,7 @@ def _run_command_probe(label, argv, cwd=None, env=None):
     """Run a bounded comparison command from the independent Python parent."""
     cwd = Path(cwd or ROOT)
     env = os.environ.copy() if env is None else env
-    print(f'[command probe] {label}: cwd={cwd} env_keys={sorted(env)} '
+    print(f'[command probe] {label}: cwd={cwd} env_key_count={len(env)} '
           f'argv={json.dumps(argv, ensure_ascii=False)}', flush=True)
     kwargs = dict(cwd=cwd, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
                   stderr=subprocess.PIPE, text=True, encoding='utf-8', errors='replace',

@@ -1,4 +1,4 @@
-"""Restore OS DLL search rules only while spawning external programs.
+"""Prepare OS runtime variables and DLL search rules for external programs.
 
 PyInstaller's Windows DLL directory is process global. All plugin launchers
 share this short critical section, restoring it before waiting for children.

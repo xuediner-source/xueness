@@ -15,7 +15,8 @@ entry instead of failing the whole list.
 Execution is opt-in and deliberately paranoid:
 
 * ``enabled=False`` short-circuits ``fire`` before any process is spawned.
-* the child only ever sees ``PATH`` and ``HOME`` -- never ``os.environ``, so
+* POSIX children see only ``PATH`` and ``HOME``; Windows also restores a fixed
+  public OS/runtime allowlist, never the full private environment, so
   server secrets cannot leak into a user hook.
 * the event payload travels on **stdin** as JSON, not through argv or env.
 * argv is a list with ``shell=False``; the command is never a shell string.

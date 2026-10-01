@@ -13,8 +13,9 @@ untrusted-ish configuration:
 
 * ``load`` never writes, refuses a symlinked directory and symlinked entries
   (``O_NOFOLLOW``), and skips one broken entry instead of failing the list.
-* the child only ever sees ``PATH`` and ``HOME`` -- never ``os.environ``, so
-  server secrets cannot leak into a spawned MCP server.
+* POSIX children see only ``PATH`` and ``HOME``; Windows also restores the
+  fixed public OS/runtime allowlist through ``process_runtime``. Private
+  environment variables are never inherited wholesale.
 * ``argv`` is a list with ``shell=False``; a configured ``args`` entry is never
   re-parsed by a shell.
 * the child's ``stderr`` is drained into a small bounded buffer purely to keep

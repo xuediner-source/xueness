@@ -103,7 +103,17 @@ class DesktopTests(unittest.TestCase):
                     detail = cleanup._stop_process_tree(worker, (node_pid,))
                     self.fail('source PowerShell workflow did not terminate: '+detail)
                 self.assertEqual(worker.returncode, 0, stderr.decode('utf-8', 'replace'))
-                self.assertEqual(store.load(record['id'])['status'], 'completed')
+                state = store.load(record['id'])
+                if state['status'] != 'completed':
+                    print('SOURCE_WORKFLOW_FAILURE', json.dumps(state, ensure_ascii=False), flush=True)
+                    print('SOURCE_WORKFLOW_LOG', store.log(record['id'], 'native'), flush=True)
+                    cleanup._run_command_probe('full env and exact workspace', argv, cwd=workspace)
+                    cleanup._run_command_probe('restored env and exact workspace', argv, cwd=workspace,
+                                               env=cleanup._filtered_workflow_env())
+                    cleanup._run_command_probe('restored env ASCII', ['powershell.exe', '-NoProfile',
+                                               '-Command', "Write-Output 'ASCII_OK'"], cwd=workspace,
+                                               env=cleanup._filtered_workflow_env())
+                self.assertEqual(state['status'], 'completed', state)
                 self.assertIn('工作流_OK', store.log(record['id'], 'native')['output'])
             finally:
                 if worker.poll() is None:
