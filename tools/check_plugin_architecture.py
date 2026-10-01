@@ -13,7 +13,7 @@ import re
 # exception requires an architecture review and a reason in CONTRIBUTING.md.
 KERNEL_BACKEND = {
     '__init__.py', '__main__.py', 'cli.py', 'core.py', 'events.py',
-    'http_contract.py', 'file_lock.py', 'plugin_cli.py', 'plugin_contract.py', 'plugin_runtime.py',
+    'http_contract.py', 'file_lock.py', 'process_runtime.py', 'plugin_cli.py', 'plugin_contract.py', 'plugin_runtime.py',
     'plugin_sdk.py', 'plugins.py', 'resources.py', 'session_lease.py',
     'tool_contract.py', 'tool_registry.py', 'builtin_tools.py', 'web.py', 'write_lock.py',
 }

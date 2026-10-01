@@ -11,7 +11,8 @@ def _exec(root, gate, args, session, call_id) -> dict:
         gate.check("exec", json.dumps(argv, ensure_ascii=False, separators=(",", ":")), call_id)
     else:
         gate.check("exec", " ".join(argv))
-    proc = subprocess.run(argv, cwd=root, shell=False, capture_output=True, text=True, timeout=30,
+    from ...process_runtime import run_external
+    proc = run_external(subprocess.run, argv, cwd=root, shell=False, capture_output=True, text=True, timeout=30,
                           env={k: v for k, v in os.environ.items()
                                if not re.search(r"KEY|TOKEN|SECRET|PASSWORD|CREDENTIAL", k, re.I)})
     output = (proc.stdout + proc.stderr)[:12000]

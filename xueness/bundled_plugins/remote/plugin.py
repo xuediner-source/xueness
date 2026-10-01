@@ -54,7 +54,8 @@ def _exec(root,gate,args,session,call_id):
     if args.get('connection_digest')!=__import__('hashlib').sha256(expected.encode()).hexdigest(): raise ValueError('connection changed; inspect configuration again')
     gate.check('exec',_subject(args),call_id)
     command='cd -- '+shlex.quote(row.get('directory','.'))+' && exec '+shlex.join(argv)
-    proc=subprocess.run(['ssh','-F',os.devnull,'-o','BatchMode=yes','-o','StrictHostKeyChecking=yes','-o','ConnectTimeout=10','-p',str(row.get('port',22)),row['user']+'@'+row['host'],command],cwd=root,text=True,capture_output=True,timeout=40,creationflags=getattr(subprocess,'CREATE_NO_WINDOW',0) if os.name=='nt' else 0,env={k:v for k,v in os.environ.items() if not re.search('KEY|TOKEN|SECRET|PASSWORD|CREDENTIAL',k,re.I)})
+    from ...process_runtime import run_external
+    proc=run_external(subprocess.run,['ssh','-F',os.devnull,'-o','BatchMode=yes','-o','StrictHostKeyChecking=yes','-o','ConnectTimeout=10','-p',str(row.get('port',22)),row['user']+'@'+row['host'],command],cwd=root,text=True,capture_output=True,timeout=40,creationflags=getattr(subprocess,'CREATE_NO_WINDOW',0) if os.name=='nt' else 0,env={k:v for k,v in os.environ.items() if not re.search('KEY|TOKEN|SECRET|PASSWORD|CREDENTIAL',k,re.I)})
     return {'ok':proc.returncode==0,'exit_code':proc.returncode,'output':(proc.stdout+proc.stderr)[:16000]}
 
 REGISTRY=(BuiltinTool('remote_exec','Run literal argv on a configured SSH host; trusted host key and exact action approval required',{'connection':{'type':'string'},'connection_digest':{'type':'string'},'argv':{'type':'array','items':{'type':'string'}}},('connection','connection_digest','argv'),'exec',True,_exec,_subject),)

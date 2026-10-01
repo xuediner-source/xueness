@@ -9,6 +9,7 @@ import tempfile
 import threading
 import time
 import unittest
+from unittest.mock import patch
 
 from xueness import file_lock, plugin_runtime, web
 from xueness.bundled_plugins.desktop.bridge import DesktopBridge
@@ -17,6 +18,31 @@ from xueness.bundled_plugins.files.instructions import load_workspace_instructio
 
 
 class DesktopTests(unittest.TestCase):
+    @unittest.skipUnless(os.name == 'nt', 'native Windows DLL search path')
+    def test_external_spawn_restores_global_dll_directory_after_failure(self):
+        import ctypes
+        from ctypes import wintypes
+        from xueness.process_runtime import spawn_external
+        kernel = ctypes.WinDLL('kernel32', use_last_error=True)
+        kernel.GetDllDirectoryW.argtypes = [wintypes.DWORD, wintypes.LPWSTR]
+        kernel.SetDllDirectoryW.argtypes = [wintypes.LPCWSTR]
+        def current():
+            buffer = ctypes.create_unicode_buffer(32768)
+            kernel.GetDllDirectoryW(len(buffer), buffer)
+            return buffer.value
+        original = current()
+        with tempfile.TemporaryDirectory() as temporary:
+            try:
+                self.assertTrue(kernel.SetDllDirectoryW(temporary))
+                def failing():
+                    self.assertEqual(current(), '')
+                    raise RuntimeError('creation failed')
+                with patch.object(sys, 'frozen', True, create=True), self.assertRaisesRegex(RuntimeError, 'creation failed'):
+                    spawn_external(failing)
+                self.assertEqual(current(), temporary)
+            finally:
+                kernel.SetDllDirectoryW(original or None)
+
     def test_native_workflow_worker_entrypoint_completes_and_releases_its_lease(self):
         from xueness.workflows import WorkflowStore
         with tempfile.TemporaryDirectory() as temporary:

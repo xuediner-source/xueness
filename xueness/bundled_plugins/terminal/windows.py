@@ -19,7 +19,8 @@ class WindowsTerminal:
         env = {k: v for k, v in os.environ.items() if k.upper() in
                ('PATH', 'SYSTEMROOT', 'WINDIR', 'TEMP', 'TMP', 'COMSPEC', 'PATHEXT',
                 'USERPROFILE', 'APPDATA', 'LOCALAPPDATA')}
-        self.proc = PtyProcess.spawn(argv, cwd=str(root),
+        from ...process_runtime import spawn_external
+        self.proc = spawn_external(PtyProcess.spawn, argv, cwd=str(root),
                                      dimensions=(28, 100), backend=Backend.ConPTY, env=env)
         self.id, self.session_id = uuid.uuid4().hex, session_id
         self.lock = threading.RLock()

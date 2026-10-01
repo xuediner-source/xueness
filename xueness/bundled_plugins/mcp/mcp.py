@@ -453,7 +453,8 @@ class McpClient:
             env.update({key: value for key, value in os.environ.items()
                         if key.upper() in ('SYSTEMROOT', 'WINDIR', 'TEMP', 'TMP', 'COMSPEC', 'PATHEXT', 'USERPROFILE')})
         try:
-            self.proc = subprocess.Popen(
+            from ...process_runtime import spawn_external
+            self.proc = spawn_external(subprocess.Popen,
                 argv,
                 shell=False,
                 stdin=subprocess.PIPE,

@@ -186,3 +186,5 @@ providers 的 CLI parser/handler 已迁入 `xueness/bundled_plugins/providers/op
 新增第 27 个 `desktop` 插件，共 88 项登记能力。Python 集成在 `desktop/{host,bridge,windows_job}.py`，前端状态页在 `plugins/desktop/DesktopSettings.tsx`，Electron 原生模块通过 `desktopModules` 登记。文件锁、Windows ConPTY、后台命令的 Windows 管道以及本机指标分别归共享锁、terminal、workflows、diagnostics。
 
 桌面应用窗口、私有后端传输和恢复入口属于运行宿主基础设施，与 Web HTTP 服务同等；它们需要在全关后保留插件管理入口。desktop 关闭后不提供原生目录选择或桌面状态业务，settings/sessions 的目录授权仍优先。具体打包与验证见 [桌面端说明](xueness-desktop.md)。
+
+共享例外审查：`process_runtime.py` 仅协调进程全局的 Windows DLL 搜索路径，防止冻结后端的私有 DLL 环境传给 PowerShell、MCP、SSH 或浏览器。所有插件共用短暂的创建锁，并在等待子进程之前恢复原目录；业务逻辑、权限与开关仍在各所属插件。这是跨插件进程创建基础设施，不能作为新增用户能力绕过插件归属的理由。

@@ -50,7 +50,8 @@ class _BrowserBroker:
         executable = os.environ.get('XUENESS_DESKTOP_NODE') or 'node'
         if os.environ.get('XUENESS_DESKTOP_NODE'):
             env['ELECTRON_RUN_AS_NODE'] = '1'
-        self.process = subprocess.Popen(
+        from ...process_runtime import spawn_external
+        self.process = spawn_external(subprocess.Popen,
             [executable, str(script), str(self.profile)], cwd=self.root,
             env=env, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
             stderr=subprocess.DEVNULL, text=True, encoding="utf-8", bufsize=1,

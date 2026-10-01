@@ -4,11 +4,12 @@ import queue
 import subprocess
 import threading
 import time
+from ...process_runtime import spawn_external, run_external
 
 
 def terminate_tree(proc):
     if proc.poll() is None:
-        subprocess.run(['taskkill', '/PID', str(proc.pid), '/T', '/F'],
+        run_external(subprocess.run, ['taskkill', '/PID', str(proc.pid), '/T', '/F'],
                        stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
                        stderr=subprocess.DEVNULL, timeout=8,
                        creationflags=getattr(subprocess, 'CREATE_NO_WINDOW', 0))
@@ -23,8 +24,8 @@ def execute_command(store, record, spec, cwd, logpath, env, start):
     # Windows selectors only handle sockets. A bounded reader queue drains a
     # real pipe while the owner independently observes cancel and timeout.
     env = {**env, **{k: v for k, v in os.environ.items()
-                    if k.upper() in ('SYSTEMROOT', 'WINDIR', 'TEMP', 'TMP', 'COMSPEC', 'PATHEXT')}}
-    proc = subprocess.Popen(spec['argv'], cwd=cwd, env=env, stdin=subprocess.DEVNULL,
+                    if k.upper() in ('SYSTEMROOT', 'WINDIR', 'TEMP', 'TMP', 'COMSPEC', 'PATHEXT', 'USERPROFILE', 'APPDATA', 'LOCALAPPDATA')}}
+    proc = spawn_external(subprocess.Popen, spec['argv'], cwd=cwd, env=env, stdin=subprocess.DEVNULL,
                             stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
                             creationflags=subprocess.CREATE_NO_WINDOW)
     store.update(record['id'], lambda r: r['nodes'][spec['id']].update(pid=proc.pid))
@@ -51,7 +52,7 @@ def execute_command(store, record, spec, cwd, logpath, env, start):
 
     reader = threading.Thread(target=read, daemon=True)
     reader.start()
-    reason, total = None, 0
+    reason, total, exited_at = None, 0, None
     try:
         with logpath.open('wb') as stream:
             while True:
@@ -64,6 +65,10 @@ def execute_command(store, record, spec, cwd, logpath, env, start):
                 try:
                     chunk = chunks.get(timeout=.05)
                 except queue.Empty:
+                    if proc.poll() is not None:
+                        exited_at = exited_at or time.monotonic()
+                        if time.monotonic()-exited_at > .5:
+                            break
                     continue
                 if chunk is None:
                     break

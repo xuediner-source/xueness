@@ -79,7 +79,9 @@ def main():
                 # Diagnostics contain only this script's isolated fixture. A
                 # foreground worker reveals startup failures hidden by the
                 # detached production worker's intentionally silent stderr.
-                diagnostic = json.loads(request('/api/workflows', {'root': str(workspace), 'plan': {'nodes': [{'id': 'native', 'argv': argv}]}}))
+                diagnostic_root = data/'runs/diagnostic'
+                diagnostic_root.mkdir(parents=True, exist_ok=True)
+                diagnostic = json.loads(request('/api/workflows', {'root': str(diagnostic_root), 'plan': {'nodes': [{'id': 'native', 'argv': argv}]}}))
                 diagnostic['status'] = 'queued'
                 path = data/'state/workflows'/f"{diagnostic['id']}.json"
                 path.write_text(json.dumps(diagnostic, ensure_ascii=False), encoding='utf-8')
