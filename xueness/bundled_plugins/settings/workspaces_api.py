@@ -18,6 +18,7 @@ import threading
 from datetime import datetime, timezone
 from pathlib import Path
 
+from ...process_runtime import run_external
 from . import settings_store
 
 _MAX_RECENT = 10
@@ -181,12 +182,14 @@ def _choose_native_directory(initial_root: str | None = None) -> str | None:
         # This lock serializes native dialogs only. In particular, no settings
         # persistence lock is held while waiting for operator interaction.
         with _NATIVE_PICKER_LOCK:
-            completed = subprocess.run(
+            completed = run_external(
+                subprocess.run,
                 args,
                 check=False,
                 capture_output=True,
                 text=True,
                 timeout=_PICKER_TIMEOUT_SECONDS,
+                creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0) if os.name == "nt" else 0,
             )
     except (OSError, subprocess.TimeoutExpired) as exc:
         raise RuntimeError("native directory picker failed") from exc

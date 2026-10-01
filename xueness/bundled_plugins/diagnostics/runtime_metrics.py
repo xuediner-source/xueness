@@ -12,6 +12,8 @@ import threading
 import time
 from datetime import datetime, timezone
 
+from ...process_runtime import run_external
+
 try:
     import resource
 except ImportError:  # Windows has no resource module; probes become unavailable.
@@ -76,7 +78,8 @@ def _bounded_int(raw, *, multiplier: int = 1) -> int | None:
 def _run_fixed(argv: list[str]) -> str | None:
     """Run a fixed, non-shell system query and discard all failures quietly."""
     try:
-        completed = subprocess.run(
+        completed = run_external(
+            subprocess.run,
             argv,
             stdin=subprocess.DEVNULL,
             stdout=subprocess.PIPE,
@@ -85,6 +88,7 @@ def _run_fixed(argv: list[str]) -> str | None:
             timeout=COMMAND_TIMEOUT_SECONDS,
             check=False,
             close_fds=True,
+            creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0) if os.name == "nt" else 0,
         )
         if completed.returncode != 0 or not isinstance(completed.stdout, str):
             return None

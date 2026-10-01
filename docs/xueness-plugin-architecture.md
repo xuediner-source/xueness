@@ -187,4 +187,4 @@ providers 的 CLI parser/handler 已迁入 `xueness/bundled_plugins/providers/op
 
 桌面应用窗口、私有后端传输和恢复入口属于运行宿主基础设施，与 Web HTTP 服务同等；它们需要在全关后保留插件管理入口。desktop 关闭后不提供原生目录选择或桌面状态业务，settings/sessions 的目录授权仍优先。具体打包与验证见 [桌面端说明](xueness-desktop.md)。
 
-共享例外审查：`process_runtime.py` 仅协调进程全局的 Windows DLL 搜索路径，防止冻结后端的私有 DLL 环境传给 PowerShell、MCP、SSH 或浏览器。所有插件共用短暂的创建锁，并在等待子进程之前恢复原目录；业务逻辑、权限与开关仍在各所属插件。这是跨插件进程创建基础设施，不能作为新增用户能力绕过插件归属的理由。
+共享例外审查：`process_runtime.py` 协调进程全局的 Windows DLL 搜索路径，防止冻结后端的私有 DLL 环境传给外部程序。所有插件共用短暂的创建锁，并在等待子进程之前恢复原目录。它还为 Windows 最小子进程环境补齐固定 allowlist 中的系统、架构、用户目录和 PowerShell 模块路径，保留调用者显式覆盖，不继承模型密钥等其它私密变量；PowerShell/.NET 在缺少完整系统启动上下文时会卡在初始化。这两项都是操作系统进程创建适配，业务逻辑、权限与开关仍在所属插件，不能作为新增用户能力绕过插件归属的理由。

@@ -11,6 +11,7 @@ import tempfile
 import uuid
 from pathlib import Path
 from ...session_lease import lease
+from ...process_runtime import run_external
 from .git_api import GitApiError
 
 ID_RE=re.compile(r'[0-9a-f]{32}')
@@ -18,7 +19,7 @@ LOCKED=('stage','unstage','commit','branch','stash','checkpoints','init')
 
 def _git(root,argv,env=None,stdin=None):
     try:
-        proc=subprocess.run(['git',*argv],cwd=root,env={**os.environ,**(env or {}),'GIT_TERMINAL_PROMPT':'0'},input=stdin,text=True,capture_output=True,timeout=15)
+        proc=run_external(subprocess.run,['git',*argv],cwd=root,env={**os.environ,**(env or {}),'GIT_TERMINAL_PROMPT':'0'},input=stdin,text=True,capture_output=True,timeout=15,creationflags=getattr(subprocess,'CREATE_NO_WINDOW',0) if os.name=='nt' else 0)
     except (OSError,subprocess.TimeoutExpired): raise GitApiError(400,'Git operation failed') from None
     if proc.returncode: raise GitApiError(409,'Git operation failed; review repository state')
     return proc.stdout.strip()

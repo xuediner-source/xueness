@@ -11,8 +11,31 @@ import threading
 
 _lock = threading.RLock()
 
+# Windows/.NET startup needs these public OS and profile paths even when a
+# plugin deliberately omits provider keys and other private environment data.
+WINDOWS_ENV_KEYS = frozenset('''PATH SYSTEMROOT SYSTEMDRIVE WINDIR TEMP TMP COMSPEC PATHEXT
+USERPROFILE APPDATA LOCALAPPDATA HOMEDRIVE HOMEPATH USERNAME USERDOMAIN COMPUTERNAME
+OS NUMBER_OF_PROCESSORS PROCESSOR_ARCHITECTURE PROGRAMDATA ALLUSERSPROFILE PUBLIC
+PROGRAMFILES PROGRAMFILES(X86) PROGRAMW6432 COMMONPROGRAMFILES COMMONPROGRAMFILES(X86)
+COMMONPROGRAMW6432 PSMODULEPATH PSMODULEANALYSISCACHEPATH'''.split())
+
+
+def windows_environment(env):
+    result = dict(env)
+    supplied = {key.upper() for key in result}
+    for key, value in os.environ.items():
+        if key.upper() in WINDOWS_ENV_KEYS and key.upper() not in supplied:
+            result[key] = value
+    return result
+
+
+def _prepare_environment(kwargs):
+    if os.name == 'nt' and kwargs.get('env') is not None:
+        kwargs['env'] = windows_environment(kwargs['env'])
+
 
 def spawn_external(factory, *args, **kwargs):
+    _prepare_environment(kwargs)
     if os.name != 'nt' or not getattr(sys, 'frozen', False):
         return factory(*args, **kwargs)
     import ctypes
@@ -40,6 +63,7 @@ def spawn_external(factory, *args, **kwargs):
 
 
 def run_external(factory, *args, **kwargs):
+    _prepare_environment(kwargs)
     if os.name != 'nt' or not getattr(sys, 'frozen', False):
         return factory(*args, **kwargs)
     check = kwargs.pop('check', False)

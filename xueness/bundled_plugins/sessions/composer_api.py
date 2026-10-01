@@ -21,6 +21,7 @@ import time
 
 from ... import plugin_runtime
 from ...memory import UNTRUSTED_PREAMBLE
+from ...process_runtime import run_external
 
 
 _SID_RE = re.compile(r"^[0-9a-f]{32}$")
@@ -1107,9 +1108,11 @@ def _switch_branch(ctx: dict, root: Path, branch: str) -> dict:
     env.update({"GIT_TERMINAL_PROMPT": "0", "GIT_OPTIONAL_LOCKS": "0",
                 "GIT_CONFIG_NOSYSTEM": "1", "GIT_CONFIG_GLOBAL": os.devnull})
     try:
-        result = subprocess.run(
+        result = run_external(
+            subprocess.run,
             ["git", "-c", "core.hooksPath=" + os.devnull, "switch", "--", branch],
             cwd=root, env=env, capture_output=True, text=True, timeout=10, check=False,
+            creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0) if os.name == "nt" else 0,
         )
     except (OSError, subprocess.TimeoutExpired):
         raise _ComposerError(409, "cannot switch branch; review repository state") from None

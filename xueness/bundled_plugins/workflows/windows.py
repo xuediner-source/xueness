@@ -23,8 +23,6 @@ def terminate_tree(proc):
 def execute_command(store, record, spec, cwd, logpath, env, start):
     # Windows selectors only handle sockets. A bounded reader queue drains a
     # real pipe while the owner independently observes cancel and timeout.
-    env = {**env, **{k: v for k, v in os.environ.items()
-                    if k.upper() in ('SYSTEMROOT', 'WINDIR', 'TEMP', 'TMP', 'COMSPEC', 'PATHEXT', 'USERPROFILE', 'APPDATA', 'LOCALAPPDATA')}}
     proc = spawn_external(subprocess.Popen, spec['argv'], cwd=cwd, env=env, stdin=subprocess.DEVNULL,
                             stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
                             creationflags=subprocess.CREATE_NO_WINDOW)

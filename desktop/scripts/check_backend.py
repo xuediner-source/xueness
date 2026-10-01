@@ -119,10 +119,10 @@ def _filtered_workflow_env():
     """Mirror the exact environment passed by workflows._execute/windows.py."""
     env = {k: v for k, v in os.environ.items()
            if k in ('PATH', 'HOME', 'TMPDIR', 'LANG', 'LC_ALL', 'SYSTEMROOT')}
-    env.update({k: v for k, v in os.environ.items()
-                if k.upper() in ('SYSTEMROOT', 'WINDIR', 'TEMP', 'TMP', 'COMSPEC', 'PATHEXT',
-                                 'USERPROFILE', 'APPDATA', 'LOCALAPPDATA')})
-    return env
+    import sys
+    sys.path.insert(0, str(ROOT))
+    from xueness.process_runtime import windows_environment
+    return windows_environment(env)
 
 
 def _query_fixture_processes(pid, label):

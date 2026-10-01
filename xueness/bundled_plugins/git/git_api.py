@@ -32,6 +32,8 @@ import os
 import re
 import subprocess
 
+from ...process_runtime import run_external
+
 GIT_TIMEOUT = 10  # seconds; a hung git must not pin a request thread
 MAX_PATCH_CHARS = 200_000  # hard cap on the patch text sent to the browser
 SID_RE = re.compile(r"[0-9a-f]{32}")
@@ -56,13 +58,15 @@ def _run_git(root: str, argv: list, *, empty_repo_ok: bool = False) -> subproces
     """
     try:
         # git 只读本地命令（status/diff/log 不联网、不拉取），继承进程环境即可。
-        proc = subprocess.run(
+        proc = run_external(
+            subprocess.run,
             ["git", *argv],
             cwd=root,
             capture_output=True,
             text=True,
             timeout=GIT_TIMEOUT,
             env=dict(os.environ),
+            creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0) if os.name == "nt" else 0,
         )
     except FileNotFoundError:
         # At this point the workspace root is known to exist, so a missing

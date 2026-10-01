@@ -18,6 +18,22 @@ from xueness.bundled_plugins.files.instructions import load_workspace_instructio
 
 
 class DesktopTests(unittest.TestCase):
+    def test_windows_runtime_environment_restores_os_paths_without_inheriting_credentials(self):
+        from xueness.process_runtime import windows_environment
+        original = {'Path': 'explicit-tool-path', 'APPDATA': 'explicit-profile'}
+        with patch.dict(os.environ, {'PATH': 'host-path', 'APPDATA': 'host-profile',
+                                    'SYSTEMDRIVE': 'C:', 'PSMODULEPATH': 'system-modules',
+                                    'API_KEY': 'test-only-placeholder', 'PRIVATE_SETTING': 'private'}, clear=True):
+            env = windows_environment(original)
+        self.assertEqual(env['Path'], 'explicit-tool-path')
+        self.assertNotIn('PATH', env)
+        self.assertEqual(env['APPDATA'], 'explicit-profile')
+        self.assertEqual(env['SYSTEMDRIVE'], 'C:')
+        self.assertEqual(env['PSMODULEPATH'], 'system-modules')
+        self.assertNotIn('API_KEY', env)
+        self.assertNotIn('PRIVATE_SETTING', env)
+        self.assertEqual(original, {'Path': 'explicit-tool-path', 'APPDATA': 'explicit-profile'})
+
     @unittest.skipUnless(os.name == 'nt', 'native Windows DLL search path')
     def test_external_spawn_restores_global_dll_directory_after_failure(self):
         import ctypes
@@ -57,6 +73,43 @@ class DesktopTests(unittest.TestCase):
             self.assertIn('worker ready', store.log(record['id'], 'native')['output'])
             with store.lock(record['id'], '.runner', blocking=False):
                 pass
+
+    @unittest.skipUnless(os.name == 'nt', 'native Windows PowerShell workflow')
+    def test_source_workflow_worker_completes_powershell_unicode_command(self):
+        import importlib.util
+        from xueness.workflows import WorkflowStore
+        root = Path(__file__).resolve().parents[1]
+        spec = importlib.util.spec_from_file_location('desktop_fixture_cleanup', root/'desktop/scripts/check_backend.py')
+        cleanup = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(cleanup)
+        with tempfile.TemporaryDirectory(prefix='xueness-source-worker-windows-') as temporary:
+            fixture = Path(temporary)
+            workspace = fixture/'工作流工作区'
+            workspace.mkdir()
+            store = WorkflowStore(fixture/'state')
+            argv = ['powershell.exe', '-NoProfile', '-Command',
+                    "[Console]::OutputEncoding=[Text.UTF8Encoding]::new(); Write-Output '工作流_OK'"]
+            record = store.create({'nodes': [{'id': 'native', 'argv': argv, 'timeout': 5}]}, workspace)
+            store.update(record['id'], lambda row: row.update(status='queued'))
+            worker = subprocess.Popen(
+                [sys.executable, '-m', 'xueness.workflow_worker', str(store.state), record['id']],
+                cwd=root, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                creationflags=getattr(subprocess, 'CREATE_NO_WINDOW', 0))
+            try:
+                try:
+                    stdout, stderr = worker.communicate(timeout=10)
+                except subprocess.TimeoutExpired:
+                    node_pid = store.load(record['id'])['nodes']['native'].get('pid')
+                    detail = cleanup._stop_process_tree(worker, (node_pid,))
+                    self.fail('source PowerShell workflow did not terminate: '+detail)
+                self.assertEqual(worker.returncode, 0, stderr.decode('utf-8', 'replace'))
+                self.assertEqual(store.load(record['id'])['status'], 'completed')
+                self.assertIn('工作流_OK', store.log(record['id'], 'native')['output'])
+            finally:
+                if worker.poll() is None:
+                    node_pid = store.load(record['id'])['nodes']['native'].get('pid')
+                    cleanup._stop_process_tree(worker, (node_pid,))
+                worker.stdout.close(); worker.stderr.close()
 
     def test_disabling_desktop_while_dialog_is_open_prevents_directory_grant(self):
         with tempfile.TemporaryDirectory() as temporary:

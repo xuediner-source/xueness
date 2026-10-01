@@ -39,6 +39,8 @@ import subprocess
 import time
 from pathlib import Path
 
+from ...process_runtime import run_external
+
 # The seven upstream events, in upstream order.
 HOOK_EVENTS = (
     "SessionStart",
@@ -238,7 +240,8 @@ class HookRunner:
                 "PATH": os.environ.get("PATH", ""),
                 "HOME": os.environ.get("HOME", ""),
             }
-            completed = subprocess.run(
+            completed = run_external(
+                subprocess.run,
                 argv,
                 shell=False,
                 cwd=str(root),
@@ -248,6 +251,7 @@ class HookRunner:
                 stderr=subprocess.STDOUT,
                 timeout=self._timeout_for(hook),
                 env=env,
+                creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0) if os.name == "nt" else 0,
             )
             result["exit_code"] = int(completed.returncode)
             result["output"] = clip(completed.stdout or "", self.output_cap)

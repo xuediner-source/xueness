@@ -12,6 +12,8 @@ import stat
 import tempfile
 import re
 
+from ...process_runtime import run_external, spawn_external
+
 MAX_FILES = 4
 MAX_FILE_BYTES = 65536
 MAX_FILE_CHARS = 8000
@@ -70,13 +72,15 @@ def _extract_video_frames(data):
     if not executable:
         raise ValueError("video attachments require ffmpeg; extract up to 6 frames and attach those images")
     try:
-        result = subprocess.run(
+        result = run_external(
+            subprocess.run,
             [executable, "-v", "error", "-i", "pipe:0", "-vf",
              "fps=1/10,scale=768:768:force_original_aspect_ratio=decrease",
              "-frames:v", "6", "-fs", "12582912",
              "-f", "image2pipe", "-vcodec", "mjpeg", "pipe:1"],
             input=data, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
             timeout=8, check=False,
+            creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0) if os.name == "nt" else 0,
         )
     except (OSError, subprocess.TimeoutExpired):
         raise ValueError("video could not be decoded within the local preview limit") from None
@@ -160,10 +164,11 @@ def capture_clipboard_image(root):
                           'close access fileRef\non error\ntry\nclose access fileRef\nend try\nerror\nend try\n'
                           'return "captured"')
                 try:
-                    result = subprocess.run([executable, "-e", script], cwd=root,
+                    result = run_external(subprocess.run, [executable, "-e", script], cwd=root,
                                             env=env, stdin=subprocess.DEVNULL,
                                             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-                                            timeout=8, check=False)
+                                            timeout=8, check=False,
+                                            creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0) if os.name == "nt" else 0)
                 except (OSError, subprocess.TimeoutExpired):
                     raise ValueError("clipboard image capture failed") from None
                 if result.returncode:
@@ -199,8 +204,9 @@ def capture_clipboard_image(root):
 def _capture_bounded_stdout(command, target, cwd, env):
     """Capture one image/png stream without buffering unbounded clipboard data."""
     try:
-        process = subprocess.Popen(command, cwd=cwd, env=env, stdin=subprocess.DEVNULL,
-                                   stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
+        process = spawn_external(subprocess.Popen, command, cwd=cwd, env=env, stdin=subprocess.DEVNULL,
+                                 stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
+                                 creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0) if os.name == "nt" else 0)
     except OSError:
         raise ValueError("clipboard image capture command failed") from None
     try:

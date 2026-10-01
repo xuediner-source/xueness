@@ -7,6 +7,8 @@ import subprocess
 import sys
 from urllib.parse import urlsplit
 
+from ...process_runtime import run_external
+
 
 def register_cli(commands):
     update = commands.add_parser('update', help='check or explicitly apply a source update from configured origin')
@@ -41,16 +43,18 @@ def _git(root, *argv, check=True):
         env.pop(key, None)
     # A local filter driver may run an arbitrary command during checkout. Blank
     # every locally configured smudge/process driver for these read/update ops.
-    filters = subprocess.run(['git', 'config', '--local', '--name-only', '--get-regexp',
+    filters = run_external(subprocess.run, ['git', 'config', '--local', '--name-only', '--get-regexp',
                               r'^filter\..*\.(smudge|process)$'], cwd=root, env=env,
-                             text=True, capture_output=True, timeout=10, check=False)
+                             text=True, capture_output=True, timeout=10, check=False,
+                             creationflags=getattr(subprocess, 'CREATE_NO_WINDOW', 0) if os.name == 'nt' else 0)
     if filters.returncode not in (0, 1):
         raise ValueError('could not inspect local Git filters')
     for key in filters.stdout.splitlines():
         if re.fullmatch(r'filter\.[A-Za-z0-9._-]+\.(?:smudge|process)', key):
             command.extend(['-c', key + '='])
-    result = subprocess.run(command, cwd=root, env=env, text=True, capture_output=True,
-                            timeout=45, check=False)
+    result = run_external(subprocess.run, command, cwd=root, env=env, text=True, capture_output=True,
+                          timeout=45, check=False,
+                          creationflags=getattr(subprocess, 'CREATE_NO_WINDOW', 0) if os.name == 'nt' else 0)
     if len(result.stdout) > 1_000_000 or len(result.stderr) > 100_000:
         raise ValueError('git response exceeded safety limits')
     if check and result.returncode:
