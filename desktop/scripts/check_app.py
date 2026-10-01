@@ -23,7 +23,8 @@ with tempfile.TemporaryDirectory(prefix='xueness-app-check-') as temporary:
            'XUENESS_DESKTOP_SMOKE_FILE': str(report), 'XUENESS_ALLOW_REAL': '0'}
     result = subprocess.run([str(executable)], env=env, capture_output=True, timeout=90)
     if result.returncode or not report.exists():
-        raise SystemExit('Packaged desktop did not complete its UI startup check.')
+        detail = json.loads(report.read_text()).get('reason', '') if report.exists() else ''
+        raise SystemExit('Packaged desktop did not complete its UI startup check. '+detail)
     state = json.loads(report.read_text())
     assert state.get('plugins') == 27 and state.get('features') == 88, state
     assert state.get('installedCards') == 27 and state.get('desktopSettingsReady') is True, state

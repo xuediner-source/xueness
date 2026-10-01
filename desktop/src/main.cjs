@@ -90,7 +90,8 @@ async function start() {
     const result = await window.webContents.executeJavaScript(`(async () => {
       for (let n=0;n<100 && !document.querySelector('[data-testid=xn-shell] [data-testid=xn-sidebar-action-new-task]');n++)
         await new Promise(resolve => setTimeout(resolve,100));
-      if (!document.querySelector('[data-testid=xn-shell] [data-testid=xn-sidebar-action-new-task]')) throw new Error('Workbench did not render');
+      const workbenchReady = !!document.querySelector('[data-testid=xn-shell] [data-testid=xn-sidebar-action-new-task]');
+      if (!workbenchReady) throw new Error('Workbench did not render');
       const response = await fetch('/api/plugins'); const catalog = await response.json();
       const waitFor = async selector => {
         for (let n=0;n<100;n++) { const element=document.querySelector(selector); if (element) return element;
@@ -107,7 +108,7 @@ async function start() {
       return { title: document.title, plugins: catalog.plugins.length,
         features: catalog.plugins.reduce((n,p) => n+p.features.length,0),
         installedCards, desktopSettingsReady: !!document.querySelector('[data-testid=desktop-settings] dl'),
-        nodeAccess: typeof window.require !== 'undefined', workbenchReady: !!document.querySelector('[data-testid=xn-shell] [data-testid=xn-sidebar-action-new-task]'), body: document.body.textContent.length };
+        nodeAccess: typeof window.require !== 'undefined', workbenchReady, body: document.body.textContent.length };
     })()`);
     writeFileSync(process.env.XUENESS_DESKTOP_SMOKE_FILE, JSON.stringify(result));
     app.quit();
