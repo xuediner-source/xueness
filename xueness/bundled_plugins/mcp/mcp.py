@@ -449,6 +449,9 @@ class McpClient:
             "PATH": os.environ.get("PATH", ""),
             "HOME": os.environ.get("HOME", ""),
         }
+        if os.name == 'nt':
+            env.update({key: value for key, value in os.environ.items()
+                        if key.upper() in ('SYSTEMROOT', 'WINDIR', 'TEMP', 'TMP', 'COMSPEC', 'PATHEXT', 'USERPROFILE')})
         try:
             self.proc = subprocess.Popen(
                 argv,
@@ -458,8 +461,10 @@ class McpClient:
                 stderr=subprocess.PIPE,
                 cwd=str(self.cwd) if self.cwd is not None else None,
                 text=True,
+                encoding='utf-8',
                 bufsize=1,
                 env=env,
+                creationflags=getattr(subprocess, 'CREATE_NO_WINDOW', 0) if os.name == 'nt' else 0,
             )
         except Exception as exc:  # noqa: BLE001 - a bad command is data, not a crash
             self.proc = None

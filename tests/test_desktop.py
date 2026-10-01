@@ -17,6 +17,21 @@ from xueness.bundled_plugins.files.instructions import load_workspace_instructio
 
 
 class DesktopTests(unittest.TestCase):
+    def test_native_workflow_worker_entrypoint_completes_and_releases_its_lease(self):
+        from xueness.workflows import WorkflowStore
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            store = WorkflowStore(root/'state')
+            record = store.create({'nodes': [{'id': 'native', 'argv': [sys.executable, '-c', 'print("worker ready")']}]}, root)
+            store.update(record['id'], lambda row: row.update(status='queued'))
+            result = subprocess.run([sys.executable, '-m', 'xueness.workflow_worker', str(store.state), record['id']],
+                                    capture_output=True, timeout=10)
+            self.assertEqual(result.returncode, 0, result.stderr.decode('utf-8', 'replace'))
+            self.assertEqual(store.load(record['id'])['status'], 'completed')
+            self.assertIn('worker ready', store.log(record['id'], 'native')['output'])
+            with store.lock(record['id'], '.runner', blocking=False):
+                pass
+
     def test_disabling_desktop_while_dialog_is_open_prevents_directory_grant(self):
         with tempfile.TemporaryDirectory() as temporary:
             base = Path(temporary)

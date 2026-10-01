@@ -75,17 +75,32 @@ def main():
             request(f"/api/terminals/{term['id']}/close", {})
             argv = ['powershell.exe', '-NoProfile', '-Command', "[Console]::OutputEncoding=[Text.UTF8Encoding]::new(); Write-Output '工作流_OK'"] if os.name == 'nt' else ['/bin/sh', '-c', "printf '工作流_OK\\n'"]
             workflow = json.loads(request('/api/workflows', {'root': str(workspace), 'plan': {'nodes': [{'id': 'native', 'argv': argv}]}}))
+            def workflow_failure(state):
+                # Diagnostics contain only this script's isolated fixture. A
+                # foreground worker reveals startup failures hidden by the
+                # detached production worker's intentionally silent stderr.
+                diagnostic = json.loads(request('/api/workflows', {'root': str(workspace), 'plan': {'nodes': [{'id': 'native', 'argv': argv}]}}))
+                diagnostic['status'] = 'queued'
+                path = data/'state/workflows'/f"{diagnostic['id']}.json"
+                path.write_text(json.dumps(diagnostic, ensure_ascii=False), encoding='utf-8')
+                try:
+                    direct = subprocess.run([str(executable), '--worker', 'workflow', str(data/'state'), diagnostic['id']],
+                                            capture_output=True, text=True, encoding='utf-8', timeout=5)
+                    detail = direct.stderr[-2500:]
+                except subprocess.TimeoutExpired:
+                    detail = 'foreground worker also timed out'
+                raise AssertionError(('packaged workflow failed', state, detail))
             request(f"/api/workflows/{workflow['id']}/start", {'approve': True})
             deadline = time.monotonic()+15
             while time.monotonic() < deadline:
                 state = json.loads(request(f"/api/workflows/{workflow['id']}"))
                 if state['status'] == 'completed':
                     break
-                if state['status'] in ('failed', 'cancelled'):
-                    raise AssertionError(('packaged workflow failed', state))
+                if state['status'] in ('failed', 'cancelled', 'interrupted'):
+                    workflow_failure(state)
                 time.sleep(.1)
             else:
-                raise AssertionError('packaged workflow worker did not finish')
+                workflow_failure(state)
             assert '工作流_OK' in json.loads(request(f"/api/workflows/{workflow['id']}/logs/native"))['output']
             # Plugin gating keeps the baseline window/catalog available for recovery.
             request('/api/plugins/desktop', {'enabled': False})

@@ -43,6 +43,7 @@ jobs:
         run: |
           python tools/check_plugin_architecture.py
           python -m unittest tests.test_desktop tests.test_plugin_architecture tests.test_workspace_instructions -q
+          python -m unittest tests.test_workflows.WorkflowTests.test_real_background_dag_failure_then_resume_without_replaying_success tests.test_mcp.McpTestCase.test_start_performs_the_initialize_handshake -q
           npm --prefix desktop test
           npm --prefix webapp test
           npm --prefix webapp run typecheck
