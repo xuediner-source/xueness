@@ -212,20 +212,19 @@ export function IconMenu(props: IconProps) {
 /* ---------------------------------------------------------------------------
  * Xueness identity.
  *
- * The mark is an original six-spoke lattice: three axes through a common hub,
- * each ending in a short terminal tick. It reads as a crystal at sidebar size,
- * survives a single-colour 16px render, and carries no other product's shape.
+ * Quantum superposition X mark: solid line (deterministic state / particle)
+ * crossing a dashed line (probability wave / uncollapsed state), meeting at
+ * the quantum transition core.
  * Geometry is shared with webapp/public/xueness-mark.svg (the favicon) — keep
  * the two in step when either changes.
  * ------------------------------------------------------------------------- */
 
 export function IconXuenessMark({ size = 20, className, title }: IconProps): React.JSX.Element {
   return (
-    <Svg size={size} className={className} title={title} strokeWidth={1.6}>
-      <path d="M12 3.2v17.6" />
-      <path d="M4.38 7.6 19.62 16.4" />
-      <path d="M19.62 7.6 4.38 16.4" />
-      <circle cx="12" cy="12" r="2.1" />
+    <Svg size={size} className={className} title={title} strokeWidth={2}>
+      <line x1="5.5" y1="5.5" x2="18.5" y2="18.5" />
+      <line x1="18.5" y1="5.5" x2="5.5" y2="18.5" strokeDasharray="0.1 3.8" opacity="0.45" />
+      <circle cx="12" cy="12" r="2.4" strokeWidth="1.5" />
     </Svg>
   );
 }
@@ -233,11 +232,11 @@ export function IconXuenessMark({ size = 20, className, title }: IconProps): Rea
 /** Mark inside a rounded tile — the app-icon form used at larger sizes. */
 export function IconXuenessGlyph({ size = 28, className, title }: IconProps): React.JSX.Element {
   return (
-    <Svg size={size} className={className} title={title} strokeWidth={1.5}>
-      <rect x="2.4" y="2.4" width="19.2" height="19.2" rx="5.4" />
-      <path d="M12 6.6v10.8" />
-      <path d="M7.32 9.3 16.68 14.7" />
-      <path d="M16.68 9.3 7.32 14.7" />
+    <Svg size={size} className={className} title={title} strokeWidth={1.8}>
+      <rect x="2.4" y="2.4" width="19.2" height="19.2" rx="5.4" opacity="0.25" />
+      <line x1="6.8" y1="6.8" x2="17.2" y2="17.2" />
+      <line x1="17.2" y1="6.8" x2="6.8" y2="17.2" strokeDasharray="0.1 3.4" opacity="0.45" />
+      <circle cx="12" cy="12" r="2.2" strokeWidth="1.4" />
     </Svg>
   );
 }

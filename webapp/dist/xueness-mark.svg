@@ -1,7 +1,18 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24" fill="none" stroke-linecap="round" stroke-linejoin="round">
   <title>Xueness</title>
-  <path d="M12 3.2v17.6" />
-  <path d="M4.38 7.6 19.62 16.4" />
-  <path d="M19.62 7.6 4.38 16.4" />
-  <circle cx="12" cy="12" r="2.1" />
+  <style>
+    :root {
+      --solid: #18181b;
+      --prob: #71717a;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --solid: #ffffff;
+        --prob: #8b949e;
+      }
+    }
+  </style>
+  <line x1="5.5" y1="5.5" x2="18.5" y2="18.5" stroke="var(--solid)" stroke-width="2.4" />
+  <line x1="18.5" y1="5.5" x2="5.5" y2="18.5" stroke="var(--prob)" stroke-width="2.4" stroke-dasharray="0.1 3.8" />
+  <circle cx="12" cy="12" r="2.4" stroke="var(--solid)" stroke-width="1.5" />
 </svg>
