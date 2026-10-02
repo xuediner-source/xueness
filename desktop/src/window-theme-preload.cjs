@@ -1,7 +1,7 @@
 // Read the same CSS tokens as the title bar. No Electron API is exposed to the page.
 const { ipcRenderer } = require('electron');
 
-if (process.isMainFrame && process.platform === 'win32') {
+if (process.platform === 'win32' && window.top === window) {
   const observeTheme = () => {
     const root = document.documentElement;
     let previous = '';

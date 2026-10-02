@@ -83,11 +83,13 @@ test('non-Windows hosts do not install an unsupported overlay listener', () => {
 test('isolated preload follows theme mutations, deduplicates unrelated changes and cleans up', () => {
   const callbacks = new Map(), sent = [], root = {};
   let color = '#ececee', symbolColor = '#262626', observed, disconnected = false, sync;
+  const page = { addEventListener: (name, callback) => callbacks.set(name, callback) };
+  page.top = page;
   runInNewContext(readFileSync(join(__dirname, '../src/window-theme-preload.cjs'), 'utf8'), {
     require: name => { assert.equal(name, 'electron'); return { ipcRenderer: { send: (...args) => sent.push(args) } }; },
-    process: { isMainFrame: true, platform: 'win32' },
+    process: { platform: 'win32' }, // Sandboxed preloads expose a reduced process object.
     document: { readyState: 'loading', documentElement: root },
-    window: { addEventListener: (name, callback) => callbacks.set(name, callback) },
+    window: page,
     getComputedStyle: element => {
       assert.equal(element, root);
       return { getPropertyValue: name => name === '--bg-window' ? color : symbolColor };
