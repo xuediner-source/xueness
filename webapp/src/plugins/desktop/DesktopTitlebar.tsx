@@ -1,10 +1,11 @@
-import React from "react";
+import React, { useEffect } from "react";
 import { ArrowLeft, ArrowRight, CircleHelp, PanelLeft, Terminal } from "lucide-react";
 import { t as tr } from "../../i18n";
 import { IconXuenessMark } from "../../ui/icons";
 import "./desktop-titlebar.css";
 
 export type DesktopTitlebarProps = {
+  desktopEnabled?: boolean;
   canGoBack: boolean;
   canGoForward: boolean;
   onGoBack?: () => void;
@@ -23,6 +24,7 @@ export type DesktopTitlebarProps = {
  * frontend feature is effective.
  */
 export function DesktopTitlebar({
+  desktopEnabled = false,
   canGoBack,
   canGoForward,
   onGoBack,
@@ -33,6 +35,10 @@ export function DesktopTitlebar({
   onOpenTerminal,
   helpContent,
 }: DesktopTitlebarProps): React.JSX.Element {
+  useEffect(() => {
+    document.documentElement.setAttribute('data-xn-desktop-enabled', String(desktopEnabled));
+    return () => document.documentElement.setAttribute('data-xn-desktop-enabled', 'false');
+  }, [desktopEnabled]);
   return <div className="xn-desktop-titlebar" data-testid="xn-desktop-titlebar">
     <div className="xn-desktop-titlebar__brand" aria-label="Xueness">
       <IconXuenessMark size={17} className="xn-desktop-titlebar__mark" />

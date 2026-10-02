@@ -73,12 +73,12 @@ export type ComposerCatalog = {
 export const emptyComposerCatalog: ComposerCatalog = {
   root: null, isolatedRoot: "", roots: [], files: [], sessions: [], skills: [], plugins: [], models: [], allowReal: false,
 };
-export async function loadComposerCatalog(root?: string, sessionId?: string): Promise<ComposerCatalog> {
+export async function loadComposerCatalog(root?: string, sessionId?: string, signal?: AbortSignal): Promise<ComposerCatalog> {
   const query = new URLSearchParams();
   if (root) query.set("root", root);
   if (sessionId) query.set("session_id", sessionId);
   const response = await fetch(`/api/composer${query.size ? `?${query}` : ""}`, {
-    credentials: "same-origin", cache: "no-store",
+    credentials: "same-origin", cache: "no-store", signal,
   });
   const payload = await response.json();
   if (!response.ok) throw new Error(payload.error || `HTTP ${response.status}`);

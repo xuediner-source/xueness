@@ -11,9 +11,11 @@ The product contract under test is twofold:
   checking that a real repository's HEAD and porcelain state are untouched
   after a full status/diff/log round.
 """
+import os
 import shutil
 import subprocess
 import tempfile
+import sys
 import unittest
 from pathlib import Path
 from unittest import mock
@@ -64,6 +66,20 @@ class GitApiDispatchTests(unittest.TestCase):
         )
 
     # -- status -----------------------------------------------------------
+    def test_read_only_git_does_not_inherit_the_open_desktop_control_pipe(self):
+        reader, writer = os.pipe()
+        real_run = subprocess.run
+        def executable(_argv, **kwargs):
+            kwargs.setdefault('stdin', reader)
+            kwargs['timeout'] = 3
+            return real_run([sys.executable, '-c', 'import sys; sys.stdin.read(); print("input closed")'], **kwargs)
+        try:
+            with mock.patch.object(git_api.subprocess, 'run', side_effect=executable):
+                result = git_api._run_git(str(self.repo), ['--no-optional-locks', 'status', '--porcelain=v1', '-b'])
+            self.assertEqual(result.stdout.strip(), 'input closed')
+        finally:
+            os.close(reader); os.close(writer)
+
     def test_status_clean_fresh_repo(self):
         status, payload = self._dispatch("status")
         self.assertEqual(status, 200)

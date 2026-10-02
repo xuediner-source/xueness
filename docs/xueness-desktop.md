@@ -26,7 +26,11 @@
 
 Windows 窗口按钮区使用工作台标题栏的背景与文字颜色，跟随浅色、深色及系统主题切换。隔离 preload 仅读取主题 CSS token 并发送固定颜色消息，不向页面暴露 Electron API；主进程校验窗口、主 frame、私有后端 origin 和颜色格式，窗口关闭后移除监听。窗口配色属于 `desktop.window_chrome` 的宿主恢复基础设施，关闭业务插件后仍与工作台保持一致。
 
-应用单实例运行，重复打开聚焦现有窗口。关闭窗口/退出应用停止后端与所属子进程；Windows 通过 Job Object 保证宿主结束时清理继承任务，超时还会终止所拥有的进程树。POSIX 工作流跟踪宿主所属 worker，并在父进程丢失后取消命令；同一状态目录中由 CLI 启动的 worker 不属于桌面清理范围。POSIX 终端保持真实 PTY，Windows 使用真实 ConPTY 和固定 PowerShell/CMD 配置；插件关闭后服务清理沿用现有生命周期门禁。
+应用单实例运行，重复打开聚焦现有窗口。Windows 的 desktop 插件生效时提供系统托盘：关闭窗口隐藏工作台，后端与任务继续运行；点击托盘或再次打开快捷方式恢复窗口，托盘菜单「退出 Xueness」才结束应用。也可用 `Xueness.exe --quit` 请求现有实例正常退出。desktop 关闭或系统托盘不可用时，关闭窗口仍正常退出；其它平台保持原有关闭行为。明确退出应用会停止后端与所属子进程，Windows 通过 Job Object 保证宿主结束时清理继承任务。POSIX 工作流跟踪宿主所属 worker，并在父进程丢失后取消命令；同一状态目录中由 CLI 启动的 worker 不属于桌面清理范围。POSIX 终端保持真实 PTY，Windows 使用真实 ConPTY 和固定 PowerShell/CMD 配置；插件关闭后服务清理沿用现有生命周期门禁。
+
+工作区切换保持可点击，目录、文件与 Git 信息在后台刷新；下一次选择取消旧请求，旧响应不能覆盖当前目录。发送任务仍等待新目录的信息加载完成，超时提供重试入口。Git 只读命令不继承桌面宿主的控制管道，避免 Windows Git 启动器等待输入而阻塞工作区信息读取。
+
+品牌图标保留原来的量子 X 造型，统一为黑底、白色实线与中性灰概率点。矢量源在 `webapp/public/xueness-icon.svg`，PNG/ICO 由 `node tools/build_brand_assets.mjs [包含 node_modules/sharp 的目录]` 生成；Sharp 只用于生成资产，不属于应用运行时。Windows 托盘使用包含 16–256px 的 ICO。
 
 跨平台文件锁是已有 lease/写锁基础设施的适配。终端、后台命令管道与机器资源检测的 Windows 实现分别归 terminal、workflows、diagnostics，未堆入 Agent 内核。
 

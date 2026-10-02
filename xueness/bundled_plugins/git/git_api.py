@@ -62,6 +62,7 @@ def _run_git(root: str, argv: list, *, empty_repo_ok: bool = False) -> subproces
             subprocess.run,
             ["git", *argv],
             cwd=root,
+            stdin=subprocess.DEVNULL,  # Never inherit the desktop's open JSON control pipe.
             capture_output=True,
             text=True,
             timeout=GIT_TIMEOUT,

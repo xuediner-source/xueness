@@ -90,6 +90,8 @@
     "xuenessComposer.ts",
     "xuenessWorkbench.ts",
     "plugins/sessions/ForkSessionDialog.tsx",
-    "plugins/sessions/index.ts"
+    "plugins/sessions/index.ts",
+    "plugins/sessions/composerCatalogLifecycle.ts",
+    "plugins/sessions/ComposerWorkspaceSelect.tsx"
   ]
 }

@@ -2,13 +2,13 @@
   <title>Xueness</title>
   <style>
     :root {
-      --solid: #18181b;
-      --prob: #71717a;
+      --solid: #111111;
+      --prob: #888888;
     }
     @media (prefers-color-scheme: dark) {
       :root {
         --solid: #ffffff;
-        --prob: #8b949e;
+        --prob: #b0b0b0;
       }
     }
   </style>

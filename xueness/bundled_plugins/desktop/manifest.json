@@ -41,6 +41,11 @@
       "id": "desktop.window_chrome",
       "name": "原生窗口控件与沉浸式工作台标题栏",
       "nameEn": "Native window controls and integrated workbench title bar"
+    },
+    {
+      "id": "desktop.background",
+      "name": "Windows 系统托盘与关闭窗口后后台运行",
+      "nameEn": "Windows system tray and background operation after closing the window"
     }
   ],
   "frontendModules": [
@@ -53,6 +58,7 @@
     "src/security.cjs",
     "src/window-chrome.cjs",
     "src/window-theme-preload.cjs",
+    "src/desktop-background.cjs",
     "src/loading.html"
   ]
 }

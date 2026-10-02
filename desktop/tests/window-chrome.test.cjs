@@ -81,7 +81,9 @@ test('non-Windows hosts do not install an unsupported overlay listener', () => {
 });
 
 test('isolated preload follows theme mutations, deduplicates unrelated changes and cleans up', () => {
-  const callbacks = new Map(), sent = [], root = {};
+  const callbacks = new Map(), sent = [];
+  let policy = null;
+  const root = { getAttribute: name => name === 'data-xn-desktop-enabled' ? policy : null };
   let color = '#ececee', symbolColor = '#262626', observed, disconnected = false, sync;
   const page = { addEventListener: (name, callback) => callbacks.set(name, callback) };
   page.top = page;
@@ -103,7 +105,7 @@ test('isolated preload follows theme mutations, deduplicates unrelated changes a
   assert.equal(sent.length, 0);
   callbacks.get('DOMContentLoaded')();
   assert.equal(observed.element, root);
-  assert.deepEqual(Array.from(observed.options.attributeFilter), ['class', 'style']);
+  assert.deepEqual(Array.from(observed.options.attributeFilter), ['class', 'style', 'data-xn-desktop-enabled']);
   sync();
   assert.equal(sent.length, 1);
   color = '#2b2b2b'; symbolColor = '#d4d4d4'; sync();
@@ -113,6 +115,11 @@ test('isolated preload follows theme mutations, deduplicates unrelated changes a
   ]);
   color = ''; sync();
   assert.equal(sent.length, 2);
+  policy = 'true'; sync(); sync();
+  assert.equal(sent.length, 3);
+  assert.equal(sent[2][0], 'xueness:desktop-background'); assert.equal(sent[2][1], true);
+  policy = 'false'; sync();
+  assert.equal(sent[3][1], false);
   callbacks.get('pagehide')();
   assert.equal(disconnected, true);
 });

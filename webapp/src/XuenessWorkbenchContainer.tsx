@@ -78,7 +78,9 @@ import {
   type XuenessDirectoryListing,
 } from "./xuenessWorkspace";
 import { getRunChoices, mergeRunChoices, setRunChoices, type RunChoices } from "./xuenessBridge";
-import { effectiveRuntimeProfile, emptyComposerCatalog, loadComposerCatalog, prepareComposer, runtimeProfileFromSession, switchComposerBranch, type ComposerCatalog, type ComposerInput } from "./xuenessComposer";
+import { effectiveRuntimeProfile, emptyComposerCatalog, prepareComposer, runtimeProfileFromSession, switchComposerBranch, type ComposerCatalog, type ComposerInput } from "./xuenessComposer";
+import { createComposerCatalogLoader, clearWorkspaceComposerCatalog } from './plugins/sessions/composerCatalogLifecycle';
+import { ComposerWorkspaceSelect } from './plugins/sessions/ComposerWorkspaceSelect';
 import { XuenessComposerToolbar } from "./plugins/sessions/XuenessComposerToolbar";
 import { DesktopSettings } from "./plugins/desktop/DesktopSettings";
 import { DesktopTitlebar } from "./plugins/desktop/DesktopTitlebar";
@@ -309,7 +311,8 @@ export function XuenessWorkbenchContainer() {
   const [workspacePickerMode, setWorkspacePickerMode] = useState<"workspace" | "project">("workspace");
   const workspacePickerOpener = useRef<HTMLElement | null>(null);
   const [branchBusy, setBranchBusy] = useState(false);
-  const composerRequest = useRef(0);
+  const [composerRequests] = useState(() => createComposerCatalogLoader());
+  const [composerRefreshTick, setComposerRefreshTick] = useState(0);
   const defaultModelChosen = useRef(false);
   const initialBrowserPreferenceLoaded = useRef(false);
   const settingsHaveLoaded = useRef(false);
@@ -554,33 +557,31 @@ export function XuenessWorkbenchContainer() {
   }, [choices.browser, choices.skill_catalog, isPluginEffective, updateChoices]);
 
   const refreshComposerCatalog = useCallback(async () => {
-    const sequence = ++composerRequest.current;
     if (!isPluginEffective("sessions")) {
+      composerRequests.cancel();
       setComposerCatalog(emptyComposerCatalog);
       setComposerCatalogLoading(false);
       return;
     }
-    setComposerCatalogLoading(true);
     setComposerCatalogError("");
-    try {
-      const next = await loadComposerCatalog(draftRoot, activeId ?? undefined);
-      if (sequence !== composerRequest.current) return;
-      setComposerCatalog(next);
-      const current = getRunChoices();
-      if (!defaultModelChosen.current && !current.provider_id && !next.models.some(model => model.id === "" && model.configured)) {
-        const first = next.models.find(model => model.configured);
-        if (first) updateChoices({ provider_id: first.id || undefined, model: undefined, reasoning_effort: undefined });
-      }
-      defaultModelChosen.current = true;
-    } catch (reason) {
-      if (sequence !== composerRequest.current) return;
-      setComposerCatalog(emptyComposerCatalog);
-      setComposerCatalogError(reason instanceof Error ? reason.message : String(reason));
-    } finally {
-      if (sequence === composerRequest.current) setComposerCatalogLoading(false);
-    }
-  }, [activeId, draftRoot, isPluginEffective, updateChoices]);
-  useEffect(() => { void refreshComposerCatalog(); }, [refreshComposerCatalog, panel]);
+    await composerRequests.load({ root: draftRoot, sessionId: activeId ?? undefined,
+      onLoading: setComposerCatalogLoading,
+      onCatalog: next => {
+        setComposerCatalog(next);
+        const current = getRunChoices();
+        if (!defaultModelChosen.current && !current.provider_id && !next.models.some(model => model.id === "" && model.configured)) {
+          const first = next.models.find(model => model.configured);
+          if (first) updateChoices({ provider_id: first.id || undefined, model: undefined, reasoning_effort: undefined });
+        }
+        defaultModelChosen.current = true;
+      },
+      onError: reason => {
+        setComposerCatalog(clearWorkspaceComposerCatalog);
+        setComposerCatalogError(reason instanceof Error ? reason.message : String(reason));
+      },
+    });
+  }, [activeId, draftRoot, isPluginEffective, updateChoices, composerRequests]);
+  useEffect(() => { void refreshComposerCatalog(); return () => composerRequests.cancel(); }, [refreshComposerCatalog, composerRequests, composerRefreshTick]);
   useEffect(() => {
     if (!session || session.id !== activeId || executing || loadedSessionChoices.current === session.id) return;
     loadedSessionChoices.current = session.id;
@@ -606,7 +607,9 @@ export function XuenessWorkbenchContainer() {
     setSession(null);
     setDraftRoot(undefined);
     setIsolatedWorkspace(false);
-    composerRequest.current += 1;
+    composerRequests.cancel();
+    setComposerRefreshTick(tick => tick + 1);
+    setComposerCatalog(clearWorkspaceComposerCatalog);
     setComposerCatalogLoading(true);
     loadedSessionChoices.current = null;
     updateChoices({ remote: undefined, browser: settingsValues.browserControlEnabled === true && isPluginEffective("browser") });
@@ -614,7 +617,7 @@ export function XuenessWorkbenchContainer() {
     setDataErrors(previous => ({ ...previous, active: "" }));
     setPanel("chat");
     setHeroFocusTick((tick) => tick + 1);
-  }, [busy, settingsValues.browserControlEnabled, isPluginEffective, updateChoices]);
+  }, [busy, settingsValues.browserControlEnabled, isPluginEffective, updateChoices, composerRequests]);
 
   useEffect(() => {
     if (!commandOpen) return;
@@ -1148,6 +1151,13 @@ export function XuenessWorkbenchContainer() {
     onWorkflow: () => setPanel("workflows"), onPlugins: () => setPanel("plugins"),
   };
   const chooseWorkspace = (root: string, isolated = false, forceNew = false) => {
+    if (busy || branchBusy) return;
+    if (root === (draftRoot ?? composerCatalog.root) && isolated === isolatedWorkspace && !choices.remote && !forceNew && !(workspacePicking && workspacePickerMode === 'project')) {
+      setWorkspacePicking(false);
+      return;
+    }
+    composerRequests.cancel();
+    setComposerCatalog(clearWorkspaceComposerCatalog);
     if (forceNew || workspacePicking && workspacePickerMode === "project" || activeId && (isolated || root !== session?.root)) startNewTask();
     updateChoices({ remote: undefined });
     setDraftRoot(root);
@@ -1159,7 +1169,7 @@ export function XuenessWorkbenchContainer() {
   };
   const workspaceContext = <div className="xn-composer-workspace" aria-label={tr("任务工作区")}>
     <Folder size={16} strokeWidth={1.5} aria-hidden="true" />
-    <Select aria-label={tr("选择工作区")} disabled={busy || composerCatalogLoading} value={choices.remote ? `remote:${choices.remote}` : isolatedWorkspace ? "__isolated__" : (draftRoot ?? composerCatalog.root ?? "")} onChange={event => {
+    <ComposerWorkspaceSelect busy={busy || branchBusy} loading={composerCatalogLoading} value={choices.remote ? `remote:${choices.remote}` : isolatedWorkspace ? "__isolated__" : (draftRoot ?? composerCatalog.root ?? "")} onChange={event => {
       if (event.target.value === "__browse__") {
         workspacePickerOpener.current = document.querySelector<HTMLElement>('.xn-composer-workspace [role="combobox"]');
         setWorkspacePickerMode("workspace");
@@ -1179,7 +1189,7 @@ export function XuenessWorkbenchContainer() {
       {isPluginEffective("files") && isPluginEffective("settings") && <option value="__browse__">{tr("打开文件夹…")}</option>}
       {(composerCatalog.remoteConnections ?? []).map(item => <option value={`remote:${item.id}`} key={`remote:${item.id}`}>{item.label}</option>)}
       {isPluginEffective("remote") && <option value="__remote__">{tr("连接 SSH…")}</option>}
-    </Select>
+    </ComposerWorkspaceSelect>
     {composerCatalog.git && <Select aria-label={tr("Git 分支")} disabled={busy || branchBusy} value={composerCatalog.git.branch} onChange={event => {
       const root = draftRoot ?? composerCatalog.root;
       if (!root) return;
@@ -1466,6 +1476,7 @@ export function XuenessWorkbenchContainer() {
     <CodeDisplayProvider settings={settingsValues.codePreviewSettings} dark={String(settingsValues.theme) === "dark" || (settingsValues.theme === "system" && systemDark)}>
     <Shell
       titlebar={typeof window !== "undefined" && new URLSearchParams(window.location.search).get("xuenessDesktop") === "1" ? <DesktopTitlebar
+        desktopEnabled={isPluginEffective('desktop')}
         canGoBack={isPluginEffective("sessions") && !busy && historyPosition.cursor > 0}
         canGoForward={isPluginEffective("sessions") && !busy && historyPosition.cursor < historyPosition.length - 1}
         onGoBack={() => navigateHistory(-1)}

@@ -1,20 +1,25 @@
-const { app, BrowserWindow, Menu, dialog, shell, net, ipcMain } = require('electron');
+const { app, BrowserWindow, Menu, dialog, shell, net, ipcMain, Tray } = require('electron');
 const { join, resolve } = require('node:path');
 const { existsSync, mkdirSync, writeFileSync } = require('node:fs');
 const { Backend } = require('./backend.cjs');
 const { isOwnedUrl, isExternalUrl, installPermissionPolicy } = require('./security.cjs');
 const { getWindowChromeOptions, installWindowThemeSync } = require('./window-chrome.cjs');
+const { createDesktopBackground, handleSecondInstance } = require('./desktop-background.cjs');
 const { UpdateCoordinator } = require('./update-coordinator.cjs');
 const { autoUpdater } = require('electron-updater');
 
-let window, backend, updater, quitting = false;
+let window, backend, updater, background, quitting = false;
 let updatePolicy = false, autoDownloadUpdates = true;
 app.setName('Xueness');
 if (process.env.XUENESS_DESKTOP_DATA) app.setPath('userData', resolve(process.env.XUENESS_DESKTOP_DATA));
 if (!app.requestSingleInstanceLock()) app.quit();
+else if (process.argv.includes('--quit')) app.quit();
 else {
-  app.on('second-instance', () => { if (window) { if (window.isMinimized()) window.restore(); window.show(); window.focus(); } });
+  app.on('second-instance', (_event, argv) => handleSecondInstance(argv, {
+    quit: () => app.quit(), show: () => background?.show(),
+  }));
   app.on('before-quit', event => {
+    background?.dispose();
     void updater?.dispose();
     if (!quitting && backend) {
       event.preventDefault(); quitting = true;
@@ -34,6 +39,7 @@ else {
 
 async function start() {
   const root = resolve(__dirname, '../..');
+  const iconPath = app.isPackaged ? join(process.resourcesPath, 'webapp/favicon.ico') : join(root, 'webapp/public/favicon.ico');
   const data = app.getPath('userData'); mkdirSync(data, { recursive: true, mode: 0o700 });
   const executable = app.isPackaged
     ? join(process.resourcesPath, 'backend', process.platform === 'win32' ? 'xueness-backend.exe' : 'xueness-backend')
@@ -69,12 +75,14 @@ async function start() {
   });
   backend.on('update', message => { void updater.handleRequest(message, result => backend.reply(result)); });
   window = new BrowserWindow({ width: 1280, height: 840, minWidth: 760, minHeight: 540,
-    title: 'Xueness', backgroundColor: '#171717', show: false,
+    title: 'Xueness', icon: iconPath, backgroundColor: '#171717', show: false,
     ...getWindowChromeOptions(process.platform),
     webPreferences: { sandbox: true, contextIsolation: true, nodeIntegration: false,
       preload: join(__dirname, 'window-theme-preload.cjs'),
       webSecurity: true, spellcheck: false, webviewTag: false } });
   installWindowThemeSync({ ipcMain, window, getOrigin: () => backend.origin });
+  background = createDesktopBackground({ app, window, Tray, Menu, ipcMain, iconPath,
+    getOrigin: () => backend.origin, isQuitting: () => quitting });
   window.once('ready-to-show', () => window.show());
   await window.loadFile(join(__dirname, 'loading.html'));
   const origin = await backend.start();

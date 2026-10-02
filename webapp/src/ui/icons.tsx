@@ -223,7 +223,7 @@ export function IconXuenessMark({ size = 20, className, title }: IconProps): Rea
   return (
     <Svg size={size} className={className} title={title} strokeWidth={2}>
       <line x1="5.5" y1="5.5" x2="18.5" y2="18.5" />
-      <line x1="18.5" y1="5.5" x2="5.5" y2="18.5" strokeDasharray="0.1 3.8" opacity="0.45" />
+      <line x1="18.5" y1="5.5" x2="5.5" y2="18.5" strokeDasharray="0.1 3.8" opacity="0.65" />
       <circle cx="12" cy="12" r="2.4" strokeWidth="1.5" />
     </Svg>
   );
@@ -235,7 +235,7 @@ export function IconXuenessGlyph({ size = 28, className, title }: IconProps): Re
     <Svg size={size} className={className} title={title} strokeWidth={1.8}>
       <rect x="2.4" y="2.4" width="19.2" height="19.2" rx="5.4" opacity="0.25" />
       <line x1="6.8" y1="6.8" x2="17.2" y2="17.2" />
-      <line x1="17.2" y1="6.8" x2="6.8" y2="17.2" strokeDasharray="0.1 3.4" opacity="0.45" />
+      <line x1="17.2" y1="6.8" x2="6.8" y2="17.2" strokeDasharray="0.1 3.4" opacity="0.65" />
       <circle cx="12" cy="12" r="2.2" strokeWidth="1.4" />
     </Svg>
   );
