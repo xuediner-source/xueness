@@ -1,10 +1,28 @@
 import React, { useEffect, useState } from 'react';
+import { CircleArrowUp, LoaderCircle } from 'lucide-react';
 import { get, post } from '../../xuenessApi';
 import { t } from '../../i18n';
 import { startUpdateStatusPolling, updateActionAvailability } from './updateLifecycle';
 import './DesktopUpdates.css';
 
 type UpdateState = { phase: string; version?: string; currentVersion?: string; reason?: string; percent?: number; canDownload?: boolean; canInstall?: boolean; installMode?: string };
+
+export function DesktopUpdateIndicator({ state, failed = false, onManage }: { state: UpdateState | null; failed?: boolean; onManage?: () => void }) {
+  if (state && ['disabled', 'unsupported'].includes(state.phase)) return null;
+  const phase = failed ? 'error' : state?.phase ?? 'idle';
+  const pending = ['available', 'ready', 'installer_opened'].includes(phase);
+  const working = ['checking', 'downloading', 'installing', 'opening-installer'].includes(phase);
+  const status = phase === 'error' ? t('检查失败') : phase === 'ready' ? t('重启并更新')
+    : phase === 'downloading' ? t('更新下载进度') : phase === 'available' ? t('下载更新')
+    : phase === 'installer_opened' ? t('打开安装器') : working ? t('检查更新') : '';
+  const label = [t('应用更新'), state?.version ? `Xueness ${state.version}` : '', status].filter(Boolean).join(' · ');
+  return <button type="button" className="xn-sidebar-footer__action xn-update-indicator" onClick={onManage}
+    aria-label={label} title={label} data-sidebar-navigate="true" data-testid="desktop-update-indicator"
+    data-pending={pending || undefined} data-error={phase === 'error' || undefined}>
+    {working ? <LoaderCircle size={16} className="xn-update-indicator__spinner" aria-hidden="true" /> : <CircleArrowUp size={16} aria-hidden="true" />}
+    {(pending || phase === 'error') && <span className="xn-update-indicator__dot" aria-hidden="true" />}
+  </button>;
+}
 export function DesktopUpdates({ enabled, compact = false, onManage }: { enabled: boolean; compact?: boolean; onManage?: () => void }) {
   const [state, setState] = useState<UpdateState | null>(null);
   const [autoDownload, setAutoDownload] = useState(true);
@@ -29,7 +47,7 @@ export function DesktopUpdates({ enabled, compact = false, onManage }: { enabled
     finally { setBusy(false); }
   };
   if (!enabled) return null;
-  if (compact) return state && ['available', 'downloading', 'ready', 'error', 'installer_opened'].includes(state.phase) ? <aside className="xn-update-notice" role="status"><span>{state.version ? `Xueness ${state.version} · ` : ''}{state.reason}</span><button type="button" onClick={onManage}>{t('查看更新')}</button></aside> : null;
+  if (compact) return <DesktopUpdateIndicator state={state} failed={Boolean(error)} onManage={onManage} />;
   const actions = updateActionAvailability(state, busy);
   return <section className="xn-desktop-updates" data-testid="desktop-updates"><h2>{t('应用更新')}</h2>
     <p>{t('启动时检查稳定版，此后定期检查。更新下载到客户端，安装前保留会话并检查运行中的任务。')}</p>

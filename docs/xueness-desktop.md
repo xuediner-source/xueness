@@ -24,6 +24,8 @@
 
 主进程创建随机 loopback 端口及独立宿主凭据。凭据通过进程环境传入后立即从后端环境移除，渲染进程没有 Node.js 或任意 Electron IPC 权限。目录选择通过私有父子进程通道交给窗口所属的系统对话框，只有系统返回的目录经后端校验后进入授权范围。
 
+Windows 窗口按钮区使用工作台标题栏的背景与文字颜色，跟随浅色、深色及系统主题切换。隔离 preload 仅读取主题 CSS token 并发送固定颜色消息，不向页面暴露 Electron API；主进程校验窗口、主 frame、私有后端 origin 和颜色格式，窗口关闭后移除监听。窗口配色属于 `desktop.window_chrome` 的宿主恢复基础设施，关闭业务插件后仍与工作台保持一致。
+
 应用单实例运行，重复打开聚焦现有窗口。关闭窗口/退出应用停止后端与所属子进程；Windows 通过 Job Object 保证宿主结束时清理继承任务，超时还会终止所拥有的进程树。POSIX 工作流跟踪宿主所属 worker，并在父进程丢失后取消命令；同一状态目录中由 CLI 启动的 worker 不属于桌面清理范围。POSIX 终端保持真实 PTY，Windows 使用真实 ConPTY 和固定 PowerShell/CMD 配置；插件关闭后服务清理沿用现有生命周期门禁。
 
 跨平台文件锁是已有 lease/写锁基础设施的适配。终端、后台命令管道与机器资源检测的 Windows 实现分别归 terminal、workflows、diagnostics，未堆入 Agent 内核。
@@ -64,5 +66,7 @@ python desktop/scripts/checksums.py
 Xueness 没有复制上游桌面源码、品牌或图标，也没有加入上游账户、遥测、强制更新或云分发。宿主边界遵循 [Electron 安全建议](https://www.electronjs.org/docs/latest/tutorial/security)，后端打包方式见 [PyInstaller 运行模式](https://pyinstaller.org/en/stable/operating-mode.html)。
 
 ## 客户端更新
+
+左下角侧栏底部提供小型更新图标，点击打开更新设置。可下载或待安装时显示提示点，检查与下载时显示转动图标，失败时显示低干扰提示点；详细状态及错误只在更新设置中展开。入口和轮询仅在 updates 与 desktop 插件同时生效时启用，关闭后停止请求。
 
 0.1.1 加入 updates 插件的应用内更新入口。稳定更新源固定为本仓库 GitHub Releases，支持自动检查、自动下载开关、手动下载及取消，安装前检查活动任务。Windows 安装版提供「重启并更新」；便携版不能原地更新。当前无签名 Mac 版本在客户端校验并下载对应架构 DMG，打开后仍需在 Finder 中替换。0.1.0 未内置更新器，首次迁移需要手动升级一次。完整行为和边界见[客户端更新说明](xueness-reliability-and-updates.md#桌面更新)。版本源码与客户端发布状态分别以仓库和 Releases 为准。

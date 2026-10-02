@@ -1,9 +1,9 @@
-const { app, BrowserWindow, Menu, dialog, shell, net } = require('electron');
+const { app, BrowserWindow, Menu, dialog, shell, net, ipcMain } = require('electron');
 const { join, resolve } = require('node:path');
 const { existsSync, mkdirSync, writeFileSync } = require('node:fs');
 const { Backend } = require('./backend.cjs');
 const { isOwnedUrl, isExternalUrl, installPermissionPolicy } = require('./security.cjs');
-const { getWindowChromeOptions } = require('./window-chrome.cjs');
+const { getWindowChromeOptions, installWindowThemeSync } = require('./window-chrome.cjs');
 const { UpdateCoordinator } = require('./update-coordinator.cjs');
 const { autoUpdater } = require('electron-updater');
 
@@ -72,7 +72,9 @@ async function start() {
     title: 'Xueness', backgroundColor: '#171717', show: false,
     ...getWindowChromeOptions(process.platform),
     webPreferences: { sandbox: true, contextIsolation: true, nodeIntegration: false,
+      preload: join(__dirname, 'window-theme-preload.cjs'),
       webSecurity: true, spellcheck: false, webviewTag: false } });
+  installWindowThemeSync({ ipcMain, window, getOrigin: () => backend.origin });
   window.once('ready-to-show', () => window.show());
   await window.loadFile(join(__dirname, 'loading.html'));
   const origin = await backend.start();

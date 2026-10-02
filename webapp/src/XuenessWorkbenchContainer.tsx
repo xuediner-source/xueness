@@ -1545,6 +1545,7 @@ export function XuenessWorkbenchContainer() {
       )}
       sidebarFooter={
         <>
+          <DesktopUpdates compact enabled={isPluginEffective('updates') && isPluginEffective('desktop')} onManage={() => { setSettingsSection('updates'); setPanel('settings'); }} />
           <details className="xn-sidebar-account">
             <summary><span className="xn-sidebar-account__avatar"><UserRound size={16} /></span><span>Xueness</span><ChevronDown size={12} /></summary>
             <div className="xn-sidebar-account__menu">
@@ -1623,7 +1624,6 @@ export function XuenessWorkbenchContainer() {
           <button type="button" disabled={busy} onClick={() => { setError(""); void handleRefreshAll(); }}>{tr("重新加载")}</button>
         </div>
       )}
-      <DesktopUpdates compact enabled={isPluginEffective('updates') && isPluginEffective('desktop')} onManage={() => { setSettingsSection('updates'); setPanel('settings'); }} />
 
       {panel === "settings" ? secondaryPanels.settings : panel !== "chat" ? (
         <div className="xn-secondary-view">

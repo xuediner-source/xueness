@@ -52,6 +52,7 @@
     "src/backend.cjs",
     "src/security.cjs",
     "src/window-chrome.cjs",
+    "src/window-theme-preload.cjs",
     "src/loading.html"
   ]
 }

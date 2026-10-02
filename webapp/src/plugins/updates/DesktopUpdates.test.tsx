@@ -2,10 +2,35 @@ import React from 'react';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { DesktopUpdates } from './DesktopUpdates';
+import { DesktopUpdates, DesktopUpdateIndicator } from './DesktopUpdates';
 import { startUpdateStatusPolling, updateActionAvailability } from './updateLifecycle';
 test('disabled updates mount no controls and do not claim an installation', () => {
   assert.equal(renderToStaticMarkup(<DesktopUpdates enabled={false} />), '');
+  assert.equal(renderToStaticMarkup(<DesktopUpdates enabled={false} compact />), '');
+});
+
+test('compact updates expose a small accessible entry instead of a banner', () => {
+  const html = renderToStaticMarkup(<DesktopUpdates enabled compact onManage={() => {}} />);
+  assert.match(html, /data-testid="desktop-update-indicator"/);
+  assert.match(html, /aria-label="应用更新"/);
+  assert.match(html, /data-sidebar-navigate="true"/);
+  assert.doesNotMatch(html, /<aside|xn-update-notice|查看更新/);
+});
+
+test('update indicator marks ready, download and failure states without dumping server errors', () => {
+  const ready = renderToStaticMarkup(<DesktopUpdateIndicator state={{ phase: 'ready', version: '0.2.0' }} />);
+  assert.match(ready, /data-pending="true"/);
+  assert.match(ready, /重启并更新/);
+  assert.match(ready, /Xueness 0.2.0/);
+  const downloading = renderToStaticMarkup(<DesktopUpdateIndicator state={{ phase: 'downloading', percent: 35 }} />);
+  assert.match(downloading, /xn-update-indicator__spinner/);
+  assert.match(downloading, /更新下载进度/);
+  const failed = renderToStaticMarkup(<DesktopUpdateIndicator state={{ phase: 'error', reason: 'Cannot find latest.yml: Headers: long raw trace' }} />);
+  assert.match(failed, /data-error="true"/);
+  assert.match(failed, /检查失败/);
+  assert.doesNotMatch(failed, /latest.yml|Headers|raw trace/);
+  assert.match(renderToStaticMarkup(<DesktopUpdateIndicator state={null} failed />), /data-error="true"/);
+  for (const phase of ['disabled', 'unsupported']) assert.equal(renderToStaticMarkup(<DesktopUpdateIndicator state={{ phase }} />), '');
 });
 test('updater UI explains signed Mac limitation and keeps actions unavailable before status', () => {
   const html = renderToStaticMarkup(<DesktopUpdates enabled />);
