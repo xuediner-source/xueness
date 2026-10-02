@@ -9,6 +9,8 @@ import {
   ModelProviderNavigation,
   ProviderEditor,
   adjustedLightweightOutput,
+  canAdoptProviderCompatibility,
+  canTestProviderCompatibility,
   emptyProviderDraft,
   lightweightBudgetPreview,
   providerDraftFromSummary,
@@ -16,8 +18,8 @@ import {
   providerSavePayload,
   validateProviderDraft,
 } from './index';
-import { testProviderConnection } from '../../xuenessApi';
-import type { ProviderConnectionTest, ProviderSummary } from '../../xuenessApi';
+import { adoptProviderCompatibility, testProviderCompatibility, testProviderConnection } from '../../xuenessApi';
+import type { ProviderCompatibilityTest, ProviderConnectionTest, ProviderSummary } from '../../xuenessApi';
 
 const provider = (overrides: Partial<ProviderSummary> = {}): ProviderSummary => ({
   id: 'local-openai',
@@ -60,14 +62,14 @@ test('save payload omits blank keys and Anthropic reasoning, but sends a deliber
 test('runtime metadata round-trips compatibility options without echoing the saved key', () => {
   const summary = provider({
     runtimeProfile: 'lightweight', contextWindow: 8192, maxOutputTokens: 1024, toolCalling: 'json',
-    compatibility: { streamUsage: false, parallelToolCalls: false, maxTokensField: 'max_completion_tokens' },
+    compatibility: { streamUsage: false, parallelToolCalls: false, maxTokensField: 'max_completion_tokens', toolChoice: 'required', think: false },
   });
   const draft = providerDraftFromSummary(summary);
   const payload = providerSavePayload(draft);
   assert.equal(draft.apiKey, '');
   assert.equal(validateProviderDraft(draft), null);
   assert.deepEqual(payload.compatibility, {
-    streamUsage: false, parallelToolCalls: false, maxTokensField: 'max_completion_tokens',
+    streamUsage: false, parallelToolCalls: false, maxTokensField: 'max_completion_tokens', toolChoice: 'required', think: false,
   });
   assert.equal(payload.runtimeProfile, 'lightweight');
   assert.equal(payload.contextWindow, 8192);
@@ -200,8 +202,8 @@ test('provider editor uses a blank password field and exposes only supported pro
   assert.match(html, /Ollama/);
   assert.match(html, /LM Studio/);
   assert.match(html, /不会填写模型名称或发送请求/);
-  assert.match(html, /测试连接/);
-  assert.match(html, /连接成功，响应时间 42 ms/);
+  assert.match(html, /测试对话/);
+  assert.match(html, /对话测试成功，响应时间 42 ms（未验证工具）/);
   assert.match(html, /可能收取少量费用/);
   assert.doesNotMatch(html, /private-test-secret/);
 });
@@ -370,6 +372,138 @@ test('connection-test API method uses CSRF and sends only the profile ID', async
   assert.equal(calls[1].init?.method, 'POST');
   assert.equal(new Headers(calls[1].init?.headers).get('X-CSRF-Token'), 'csrf-fixture');
   assert.deepEqual(JSON.parse(String(calls[1].init?.body)), { id: 'local-openai' });
+});
+
+test('compatibility diagnostics send only the saved ID, selected mode and candidate options', async () => {
+  const originalFetch = globalThis.fetch;
+  const calls: { url: string; init?: RequestInit }[] = [];
+  const result: ProviderCompatibilityTest = {
+    ok: true,
+    provider: { id: 'local-openai', name: 'Local OpenAI', model: 'gpt-test', protocol: 'openai' },
+    latencyMs: 21,
+    optionsHash: 'a'.repeat(64),
+    testedAt: '2026-10-01T00:00:00Z',
+    providerCompatibilityDiagnostics: [],
+    details: { mode: 'native_tool_call', requestCount: 1, toolCallValidated: true },
+  };
+  globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = String(input);
+    calls.push({ url, init });
+    if (url === '/api/csrf') return new Response(JSON.stringify({ csrfToken: 'csrf-fixture' }), { status: 200 });
+    return new Response(JSON.stringify(result), { status: 200 });
+  }) as typeof fetch;
+  try {
+    assert.deepEqual(await testProviderCompatibility('local-openai', 'native_tool_call', {
+      toolChoice: 'required', parallelToolCalls: false, think: false,
+    }), result);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+  assert.equal(calls[1].url, '/api/providers/compatibility-test');
+  assert.equal(calls[1].init?.method, 'POST');
+  assert.equal(new Headers(calls[1].init?.headers).get('X-CSRF-Token'), 'csrf-fixture');
+  assert.deepEqual(JSON.parse(String(calls[1].init?.body)), {
+    id: 'local-openai', mode: 'native_tool_call',
+    compatibility: { toolChoice: 'required', parallelToolCalls: false, think: false },
+  });
+});
+
+test('compatibility diagnostics require an unchanged saved connection and never save candidates', () => {
+  const original = provider();
+  const saved = providerDraftFromSummary(original);
+  assert.equal(canTestProviderCompatibility(saved, original), true);
+  assert.equal(canTestProviderCompatibility({ ...saved, compatibility: { think: false } }, original), true);
+  assert.equal(canTestProviderCompatibility({ ...saved, baseUrl: 'https://changed.example.test/v1' }, original), false);
+  assert.equal(canTestProviderCompatibility({ ...saved, model: 'unsaved-model' }, original), false);
+  assert.equal(canTestProviderCompatibility({ ...saved, apiKey: 'new-key' }, original), false);
+
+  const candidate = { toolChoice: 'required' as const, think: false };
+  const checks = [
+    { mode: 'conversation' as const, ok: true, testedAt: '2026-10-01T00:00:00Z', requestCount: 1 },
+    { mode: 'stream' as const, ok: true, testedAt: '2026-10-01T00:00:01Z', requestCount: 1 },
+    { mode: 'tool_roundtrip' as const, ok: true, testedAt: '2026-10-01T00:00:02Z', requestCount: 2 },
+  ];
+  const tested = { ...original, compatibilityDiagnostics: [{ optionsHash: 'b'.repeat(64), compatibility: candidate, checks }] };
+  assert.equal(canAdoptProviderCompatibility({ ...saved, compatibility: candidate }, tested), true);
+  assert.equal(canAdoptProviderCompatibility({ ...saved, compatibility: candidate }, {
+    ...tested, compatibilityDiagnostics: [{ ...tested.compatibilityDiagnostics![0], checks: checks.slice(0, 2) }],
+  }), false);
+  const jsonOriginal = provider({ runtimeProfile: 'lightweight', contextWindow: 8192,
+    maxOutputTokens: 1024, toolCalling: 'json' });
+  const jsonSaved = providerDraftFromSummary(jsonOriginal);
+  const jsonTested = { ...jsonOriginal, compatibilityDiagnostics: [{
+    optionsHash: 'd'.repeat(64), compatibility: candidate,
+    checks: [checks[0], checks[1], { ...checks[2], mode: 'json_tool_call' as const }],
+  }] };
+  assert.equal(canAdoptProviderCompatibility({ ...jsonSaved, compatibility: candidate }, jsonTested), true);
+
+  const html = renderToStaticMarkup(<ProviderEditor
+    draft={{ ...saved, compatibility: { toolChoice: 'required', think: false } }}
+    original={original}
+    hasKey
+    busy={false}
+    testing={false}
+    testResult={null}
+    testError=""
+    compatibilityMode="tool_roundtrip"
+    compatibilityTestReady
+    compatibilityAdoptionReady
+    compatibilityHistory={checks}
+    compatibilityGroups={tested.compatibilityDiagnostics}
+    compatibilityResult={{
+      ok: true,
+      provider: { id: original.id, name: original.name, model: original.model, protocol: 'openai' },
+      latencyMs: 32,
+      optionsHash: 'b'.repeat(64),
+      testedAt: '2026-10-01T00:00:02Z',
+      providerCompatibilityDiagnostics: tested.compatibilityDiagnostics,
+      details: { mode: 'tool_roundtrip', requestCount: 2, toolCallValidated: true,
+        toolResultFollowupValidated: true, fixture: 'in-process arithmetic only; no file or command execution' },
+    }}
+    deleting={false}
+    onDraftChange={() => undefined}
+    onSave={() => undefined}
+    onUse={() => undefined}
+    onTest={() => undefined}
+    onCompatibilityTest={() => undefined}
+    onAdoptCompatibility={() => undefined}
+    onLoadCompatibilityCandidate={() => undefined}
+    onDelete={() => undefined}
+    onCancelDelete={() => undefined}
+    onCancelEdit={() => undefined}
+  />);
+  assert.match(html, /data-testid="provider-compatibility-diagnostics"/);
+  assert.match(html, /工具结果续轮（native，两次请求）/);
+  assert.match(html, /data-testid="provider-check-tool_roundtrip"/);
+  assert.match(html, /data-testid="provider-adopt-verified-compatibility"/);
+  assert.match(html, /data-testid="provider-compatibility-history"/);
+  assert.match(html, /data-testid="provider-compatibility-candidate-history"/);
+  assert.match(html, /载入这组已测试参数到草稿/);
+  assert.match(html, /实际请求 2 次/);
+  assert.match(html, /不访问文件或命令/);
+  assert.match(html, /think/);
+  assert.match(html, /省略此字段/);
+});
+
+test('compatibility adoption API posts only profile id and the verified options hash', async () => {
+  const originalFetch = globalThis.fetch;
+  const calls: { url: string; init?: RequestInit }[] = [];
+  globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = String(input);
+    calls.push({ url, init });
+    if (url === '/api/csrf') return new Response(JSON.stringify({ csrfToken: 'csrf-fixture' }), { status: 200 });
+    return new Response(JSON.stringify({ provider: provider({ compatibility: { think: false } }) }), { status: 200 });
+  }) as typeof fetch;
+  try {
+    await adoptProviderCompatibility('local-openai', 'c'.repeat(64));
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+  assert.equal(calls[1].url, '/api/providers/compatibility-adopt');
+  assert.equal(new Headers(calls[1].init?.headers).get('X-CSRF-Token'), 'csrf-fixture');
+  assert.deepEqual(JSON.parse(String(calls[1].init?.body)), {
+    id: 'local-openai', optionsHash: 'c'.repeat(64),
+  });
 });
 
 test('settings initially offers the server environment profile without disclosing environment details', () => {

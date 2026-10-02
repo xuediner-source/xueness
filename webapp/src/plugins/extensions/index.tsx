@@ -53,10 +53,10 @@ export function restoreMarketplaceDialogFocus(
 }
 
 export function shouldDismissMarketplaceDialogOnEscape(
-  event: { key: string; isComposing?: boolean },
+  event: { key: string; isComposing?: boolean; keyCode?: number },
   busy: boolean,
 ): boolean {
-  return event.key === "Escape" && !event.isComposing && !busy;
+  return event.key === "Escape" && !event.isComposing && event.keyCode !== 229 && !busy;
 }
 
 export function shouldDismissMarketplaceDialogOnBackdrop(
@@ -288,6 +288,7 @@ export function XuenessMarketplace({ onInstalled }: { onInstalled?: () => void }
     const onKeyDown = (event: KeyboardEvent) => {
       if (shouldDismissMarketplaceDialogOnEscape(event, busyRef.current === confirmingId)) {
         event.preventDefault();
+        event.stopPropagation();
         setConfirm(null);
         return;
       }

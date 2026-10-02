@@ -8,4 +8,4 @@
 .xn-model-options { display:flex; flex-wrap:wrap; align-items:center; gap:8px 16px; border:1px solid var(--border); border-radius:var(--radius-sm); padding:10px; }
 .xn-model-options label { display:inline-flex !important; flex-direction:row !important; align-items:center; gap:5px; }
 .xn-model-options input { width:auto !important; }
-@media(max-width:600px) { .xn-composer-workspace span { flex-basis:100%; text-align:left; } .xn-composer-workspace select { max-width:100%; min-width:0; } }
+@media(max-width:680px) { .xn-composer-workspace span { flex-basis:100%; text-align:left; } .xn-composer-workspace select { max-width:100%; min-width:0; } }

@@ -7,7 +7,9 @@ both normal calls and connection checks send the same compatible payload.
 RUNTIME_PROFILES = frozenset({"standard", "lightweight"})
 TOOL_CALLING_MODES = frozenset({"native", "json"})
 MAX_TOKENS_FIELDS = frozenset({"max_tokens", "max_completion_tokens"})
-COMPATIBILITY_KEYS = frozenset({"streamUsage", "parallelToolCalls", "maxTokensField"})
+COMPATIBILITY_KEYS = frozenset({
+    "streamUsage", "parallelToolCalls", "maxTokensField", "toolChoice", "think",
+})
 from .lightweight_config import validate_options, effective_options
 
 LIGHTWEIGHT_CONTEXT_WINDOW = 8192
@@ -44,6 +46,14 @@ def validate_compatibility(value):
                 or value["maxTokensField"] not in MAX_TOKENS_FIELDS):
             raise ValueError("compatibility.maxTokensField is unsupported")
         clean["maxTokensField"] = value["maxTokensField"]
+    if "toolChoice" in value:
+        if value["toolChoice"] not in ("auto", "required"):
+            raise ValueError("compatibility.toolChoice must be auto or required")
+        clean["toolChoice"] = value["toolChoice"]
+    if "think" in value:
+        if not isinstance(value["think"], bool):
+            raise ValueError("compatibility.think must be a boolean")
+        clean["think"] = value["think"]
     return clean
 
 
@@ -137,6 +147,7 @@ def build_openai_payload(
     max_output_tokens=None, tool_calling="native", compatibility=None,
     stream=False, reasoning_effort=None, test_connection=False,
     default_max_tokens_field="max_tokens", lightweight_options=None,
+    test_max_tokens=8,
 ):
     """Build one OpenAI-compatible payload for inference or connection tests.
 
@@ -147,9 +158,13 @@ def build_openai_payload(
     if not isinstance(runtime_profile, str) or runtime_profile not in RUNTIME_PROFILES:
         raise ValueError("runtimeProfile must be standard or lightweight")
     if not isinstance(tool_calling, str) or tool_calling not in TOOL_CALLING_MODES:
-        raise ValueError("toolCalling must be native or json")
+        if tool_calling != "plain":
+            raise ValueError("toolCalling must be native, json or plain")
     if tool_calling == "json" and runtime_profile != "lightweight":
         raise ValueError("toolCalling=json requires a lightweight profile")
+    if (isinstance(test_max_tokens, bool) or not isinstance(test_max_tokens, int)
+            or not 1 <= test_max_tokens <= 128):
+        raise ValueError("test_max_tokens must be an integer from 1 to 128")
 
     if context_window is not None:
         context_window = _bounded_integer(
@@ -179,21 +194,24 @@ def build_openai_payload(
     if tool_calling == "native":
         if "parallelToolCalls" in compatibility:
             body["parallel_tool_calls"] = compatibility["parallelToolCalls"]
-        elif runtime_profile == "lightweight":
-            body["parallel_tool_calls"] = False
+        if "toolChoice" in compatibility:
+            body["tool_choice"] = compatibility["toolChoice"]
+    if "think" in compatibility:
+        body["think"] = compatibility["think"]
 
     token_field = _default_max_tokens_field(
         model, runtime_profile, compatibility, default_max_tokens_field)
     token_limit = None
     if test_connection:
         # Keep the connection probe small regardless of a profile's larger cap.
-        token_limit = min(8, max_output_tokens) if max_output_tokens is not None else 8
+        token_limit = (min(test_max_tokens, max_output_tokens)
+                       if max_output_tokens is not None else test_max_tokens)
     elif max_output_tokens is not None:
         token_limit = max_output_tokens
     if token_limit is not None:
         body[token_field] = token_limit
 
-    if reasoning_effort is not None:
+    if reasoning_effort is not None and "think" not in compatibility:
         body["reasoning_effort"] = reasoning_effort
     options = validate_options({} if lightweight_options is None else lightweight_options)
     if runtime_profile == 'lightweight' and not test_connection:

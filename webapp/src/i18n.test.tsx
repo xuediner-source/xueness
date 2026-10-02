@@ -3,8 +3,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { setLocale, t, tf } from './i18n';
-import { FileBrowser } from './XuenessWorkbenchView2';
-import { SettingsSections } from './XuenessPanels';
+import { FileBrowser } from './plugins/files/FileBrowser';
+import { SettingsSections } from './plugins/settings/SettingsSections';
 import { XuenessCapabilityDialog } from './XuenessCapabilityDialog';
 
 test('Office renders escaped structured contents in both languages', () => {
@@ -54,5 +54,24 @@ test('runtime locale changes translate static settings labels and resource field
     setLocale('zh');
     html = renderToStaticMarkup(<XuenessCapabilityDialog open mode="create" kind="skills" />);
     assert.match(html, /新建技能/);
+  } finally { setLocale('zh'); }
+});
+
+test('batch B translation keys are present in English', () => {
+  try {
+    setLocale('en');
+    assert.equal(t('连接已保存'), 'Connection saved');
+    assert.equal(t('已保存的连接'), 'Saved connections');
+    assert.equal(t('刷新连接列表'), 'Refresh connection list');
+    assert.equal(t('正在加载连接…'), 'Loading connections...');
+    assert.equal(t('还没有任何 SSH 连接，使用右侧表单添加第一个。'), 'No SSH connections yet. Use the form on the right to add the first one.');
+    assert.equal(t('连接详情'), 'Connection details');
+    assert.equal(t('工作流计划不是有效的 JSON，请检查括号和引号。'), 'Workflow plan is not valid JSON. Please check brackets and quotes.');
+    assert.equal(t('命令参数不是有效的 JSON 数组，例如 ["python3","-c","print(1)"]。'), 'Command arguments are not a valid JSON array, e.g. ["python3","-c","print(1)"].');
+    assert.equal(t('命令参数必须是字符串数组，例如 ["python3","-c","print(1)"]。'), 'Command arguments must be an array of strings, e.g. ["python3","-c","print(1)"].');
+    assert.equal(t('提示参数不是有效的 JSON，请输入一个对象，例如 {"key":"value"}。'), 'Prompt arguments are not valid JSON. Please enter an object, e.g. {"key":"value"}.');
+    assert.equal(t('打开 OAuth 授权页'), 'Open OAuth authorization page');
+    assert.equal(t('OAuth URL 必须使用 HTTPS'), 'OAuth URL must use HTTPS');
+    assert.equal(tf('将删除早于 {0} 天的日志文件。其他存储数据不会更改。', [30]), 'Log files older than 30 days will be deleted. Other stored data will not change.');
   } finally { setLocale('zh'); }
 });

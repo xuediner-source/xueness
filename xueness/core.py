@@ -12,6 +12,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from .memory import UNTRUSTED_PREAMBLE
+from .tool_contract import permission_result
 from .cli_input import with_attachments, record_attachments
 # Base tool registration/dispatch now lives in the Xueness-owned registry. These
 # names stay importable from ``core`` for compatibility: ``KNOWN_TOOLS`` and
@@ -158,8 +159,9 @@ def call_mcp(gate, mcp_call, tool_name: str, arguments, tool_call_id=None) -> di
             gate.check("mcp", subject, tool_call_id)
         else:
             gate.check("mcp", subject)
-    except PermissionError:
-        return {"ok": False, "error": "denied"}
+    except PermissionError as exc:
+        from .tool_contract import permission_result
+        return permission_result(gate, exc)
     try:
         result = mcp_call(tool_name, arguments)
     except Exception:  # noqa: BLE001 - a failed server call must not break a run
@@ -267,7 +269,9 @@ def session_events(session: dict, limit: int = 200) -> list:
     completion = session.get("completion")
     if isinstance(completion, dict) and completion:
         events.append({"type": "completion", "verified": bool(completion.get("verified")),
-                       "summary": str(completion.get("summary", ""))[:500]})
+                       "summary": str(completion.get("summary", ""))[:500],
+                       "tool_execution_success": bool(completion.get("tool_execution_success", completion.get("verified"))),
+                       "delivery_status": completion.get("delivery_status", "not_assessed")})
     if session.get("pending_question"):
         events.append({"type": "pending_question",
                        "question": str(session["pending_question"])[:1000]})
@@ -287,7 +291,8 @@ SYSTEM = ("You are Xueness, a local coding assistant. Use tools to inspect and v
           "file in the workspace and keep it current: older turns may be compacted out of your context, "
           "but a file you wrote survives, and that is how the next run picks up where you left off. "
           "To finish, return JSON text with keys summary and evidence: evidence is an array of "
-          "{tool_call_id, observation} entries citing successful tool results, preferably an exit-zero test. "
+          "{evidence_id, observation} entries citing host-issued E1/E2 identifiers from successful tool results. "
+          "Legacy real tool_call_id is also accepted; never invent an identifier. "
           "Denied tools and failed commands are not proof of success. Otherwise explain what remains.")
 
 
@@ -453,6 +458,7 @@ def append_user_turn(session: dict, store: Store, text: str, commands=None, *, a
             del log[:-COMMAND_LOG_MAX]
     session["status"] = "pending"
     session["completion"] = None
+    session.pop("completion_reference_repair", None)
     store.save(session)
     return session
 
@@ -469,6 +475,7 @@ def answer_session(session: dict, store: Store, answer: str, *, attachments=(), 
         raise ValueError("answer must be 1..5000 characters")
     content = with_attachments("Operator answer: " + (answer if preserve_whitespace else answer.strip()), attachments)
     session["pending_question"] = None
+    session.pop("completion_reference_repair", None)
     session.setdefault("messages", []).append({"role": "user", "content": content})
     record_attachments(session, attachments)
     session["status"] = "paused"
@@ -781,17 +788,40 @@ def compact(session: dict, max_chars: int, max_tokens: int | None = None) -> Non
     window_oversized()
 
 
-def assess(content: str, results: dict) -> dict:
+def evidence_aliases(session):
+    """Journal-stable host evidence names; providers cannot choose or overwrite them."""
+    aliases = session.setdefault('evidence_aliases', {})
+    if not isinstance(aliases, dict):
+        aliases = session['evidence_aliases'] = {}
+    aliases = session['evidence_aliases'] = {key: cid for key, cid in aliases.items()
+        if isinstance(key, str) and re.fullmatch(r'E[1-9][0-9]*', key)
+        and isinstance(cid, str) and isinstance(session.get('results', {}).get(cid), dict)
+        and session['results'][cid].get('ok') is True}
+    used = set(aliases.values())
+    next_number = max([int(k[1:]) for k in aliases if re.fullmatch(r'E[1-9][0-9]*', k)] or [0]) + 1
+    for cid, result in session.get('results', {}).items():
+        if cid not in used and isinstance(result, dict) and result.get('ok') is True:
+            aliases['E' + str(next_number)] = cid
+            used.add(cid)
+            next_number += 1
+    return aliases
+
+
+def assess(content: str, results: dict, aliases=None) -> dict:
     try:
         report = json.loads(content)
         evidence = report["evidence"]
         if not isinstance(report.get("summary"), str) or not isinstance(evidence, list) or not evidence:
             raise ValueError("missing summary/evidence")
-        if any(not isinstance(item, dict) or not isinstance(item.get("observation"), str)
-               or not item["observation"].strip() or not results.get(item.get("tool_call_id"), {}).get("ok")
-               for item in evidence):
-            raise ValueError("evidence must cite successful recorded tool calls")
-        return {"verified": True, "summary": report["summary"], "evidence": evidence}
+        resolved = []
+        for item in evidence:
+            if not isinstance(item, dict) or not isinstance(item.get('observation'), str) or not item['observation'].strip():
+                raise ValueError('invalid evidence')
+            cid = (aliases or {}).get(item.get('evidence_id')) if item.get('evidence_id') else item.get('tool_call_id')
+            if not isinstance(cid, str) or not results.get(cid, {}).get('ok'):
+                return {'verified': False, 'summary': report['summary'], 'error_code': 'invalid_evidence_reference'}
+            resolved.append({**item, 'tool_call_id': cid})
+        return {"verified": True, "summary": report["summary"], "evidence": resolved}
     except (ValueError, KeyError, TypeError):
         return {"verified": False, "summary": "No valid evidence-backed completion; see last assistant message."}
 
@@ -936,7 +966,6 @@ def run(session: dict, store: Store, provider, gate: Gate, max_steps=8, max_char
     else:
         light_options = {}
         session.pop('lightweight_options', None)
-        session.pop('runtime_activity', None)
         session.pop('runtime_budget', None)
     session.pop('pause_reason', None)
     root = Path(session["root"]).resolve()
@@ -989,7 +1018,7 @@ def run(session: dict, store: Store, provider, gate: Gate, max_steps=8, max_char
     store.save(session)
 
     def save_session():
-        if light:
+        if plugin_enabled('providers'):
             from .bundled_plugins.providers.activity import settle_activity
             settle_activity(session)
         if registry is not None:
@@ -1041,7 +1070,16 @@ def run(session: dict, store: Store, provider, gate: Gate, max_steps=8, max_char
     prev_call_ids: list = []
     consecutive = 0
     protocol_repairs = 0
-    repair = None
+    # The one repair allowance belongs to the current human turn, including
+    # manual resumes and process recovery. New human turns explicitly clear it.
+    repair_state = session.get('completion_reference_repair')
+    evidence_repairs = int(isinstance(repair_state, dict) and repair_state.get('used') is True)
+    evidence_repair_active = bool(evidence_repairs and repair_state.get('pending') is True)
+    def reference_repair_prompt():
+        return ('Repair only the final JSON evidence references. Do not call tools or redo work. '
+                'Keep the summary and observations unchanged. Use evidence_id from the following '
+                'host-issued successful references: ' + json.dumps(evidence_aliases(session), ensure_ascii=False))
+    repair = reference_repair_prompt() if evidence_repair_active else None
     context_shrink = 1.0
     overflow_retried = False
     for _ in range(max_steps):
@@ -1057,8 +1095,11 @@ def run(session: dict, store: Store, provider, gate: Gate, max_steps=8, max_char
             _emit_event(on_event, "status", status="paused", steps=session.get("steps", 0),
                         reason="providers plugin disabled")
             return session
+        guidance_loader = getattr(plugin_runtime, 'completion_instructions', None)
+        host_guidance = guidance_loader(state_dir, session) if callable(guidance_loader) else []
         if not light:
-            compact(session, max_chars, max_tokens)
+            overhead = len(json.dumps(host_guidance, ensure_ascii=False)) if host_guidance else 0
+            compact(session, max(256, max_chars - overhead), max_tokens)
         save_session()
         if on_step is not None:
             try:
@@ -1088,6 +1129,8 @@ def run(session: dict, store: Store, provider, gate: Gate, max_steps=8, max_char
                 injected.append(UNTRUSTED_PREAMBLE + "\n\n" + skills)
             if injected:
                 prompt = [prompt[0], {"role": "user", "content": "\n\n".join(injected)}] + prompt[1:]
+            if not light and (host_guidance or repair):
+                prompt = [{**prompt[0], 'content': prompt[0]['content'] + '\n' + '\n'.join(host_guidance + ([repair] if repair else []))}] + prompt[1:]
             schema_loader = getattr(plugin_runtime, "tool_schemas", None)
             try:
                 schemas = (schema_loader(state_dir) if callable(schema_loader) else
@@ -1115,15 +1158,14 @@ def run(session: dict, store: Store, provider, gate: Gate, max_steps=8, max_char
                 tool_catalog, active_tools = lightweight.select_tools(tool_catalog, session, gate, provider)
                 prompt, session['runtime_budget'] = lightweight.prompt_view(
                     session['messages'], active_tools, provider, max_chars=max_chars,
-                    max_tokens=max_tokens, injected=injected, shrink=context_shrink, repair=repair)
+                    max_tokens=max_tokens, injected=injected, shrink=context_shrink, repair=repair, host_instructions=host_guidance)
                 if getattr(provider, 'tool_calling', 'native') == 'json':
                     prompt = lightweight.text_messages(prompt)
             stream = getattr(provider, "stream", None)
             activity = None
-            if light:
-                from .bundled_plugins.providers.activity import RequestActivity
-                activity = RequestActivity(session)
-                save_session()
+            from .bundled_plugins.providers.activity import RequestActivity
+            activity = RequestActivity(session)
+            save_session()
             stream_id = uuid.uuid4().hex if callable(stream) else None
             if stream_id:
                 previous = session.get("streaming")
@@ -1193,6 +1235,7 @@ def run(session: dict, store: Store, provider, gate: Gate, max_steps=8, max_char
                     return stream(prompt, active_tools, **stream_kwargs)
                 return provider.complete(prompt, active_tools)
 
+            extra_request_attempts = 0
             try:
                 response = request_model()
             except Exception as exc:
@@ -1203,10 +1246,11 @@ def run(session: dict, store: Store, provider, gate: Gate, max_steps=8, max_char
                         or record.get('text') or record.get('reasoning')):
                     raise
                 overflow_retried = True
+                extra_request_attempts = 1
                 context_shrink = light_options['overflowRetryRatio']
                 prompt, session['runtime_budget'] = lightweight.prompt_view(
                     session['messages'], active_tools, provider, max_chars=max_chars,
-                    max_tokens=max_tokens, injected=injected, shrink=context_shrink, repair=repair)
+                    max_tokens=max_tokens, injected=injected, shrink=context_shrink, repair=repair, host_instructions=host_guidance)
                 session['runtime_budget']['overflowRetry'] = True
                 if getattr(provider, 'tool_calling', 'native') == 'json':
                     prompt = lightweight.text_messages(prompt)
@@ -1219,14 +1263,18 @@ def run(session: dict, store: Store, provider, gate: Gate, max_steps=8, max_char
             protocol_error = response.pop('_protocol_error', None) if isinstance(response, dict) else None
             usage = response.get("_usage") if isinstance(response, dict) else None
             cost = response.get("_cost") if isinstance(response, dict) else None
+            request_attempts = response.get('_request_attempts') if isinstance(response, dict) else None
+            if type(request_attempts) is int and request_attempts > 0:
+                request_attempts += extra_request_attempts
             if isinstance(response, dict):
                 response = dict(response)
                 response.pop("_usage", None)
                 response.pop("_cost", None)
+                response.pop('_request_attempts', None)
             safe_usage = _bounded_provider_metadata(usage)
             safe_cost = _bounded_provider_metadata(cost)
             if activity is not None:
-                activity.complete(response, safe_usage)
+                activity.complete(response, safe_usage, request_attempts)
             if safe_usage is not None or safe_cost is not None:
                 record = {"step": session.get("steps", 0) + 1,
                           "at": datetime.now(timezone.utc).isoformat()}
@@ -1315,6 +1363,8 @@ def run(session: dict, store: Store, provider, gate: Gate, max_steps=8, max_char
         if calls:
             message["tool_calls"] = calls
         session["messages"].append(message)
+        if evidence_repair_active:
+            session['completion_reference_repair'] = {'used': True, 'pending': False}
         session["steps"] += 1
         save_session()  # persist intent before side effects; interrupted writes are NOT replayed
         if "stream_id" in locals() and stream_id:
@@ -1335,7 +1385,17 @@ def run(session: dict, store: Store, provider, gate: Gate, max_steps=8, max_char
             _emit_event(on_event, "tool_call", id=call.get("id", ""), name=fn.get("name", ""),
                         subject=(fn.get("arguments") or "")[:160])
         if not calls:
-            session["completion"] = assess(message["content"], session["results"])
+            aliases = evidence_aliases(session)
+            session["completion"] = assess(message["content"], session["results"], aliases)
+            if (session['completion'].get('error_code') == 'invalid_evidence_reference'
+                    and aliases and evidence_repairs == 0 and _ + 1 < max_steps):
+                evidence_repairs += 1
+                evidence_repair_active = True
+                repair = reference_repair_prompt()
+                session['completion_reference_repair'] = {'used': True, 'pending': True}
+                session['completion_reference_repairs'] = session.get('completion_reference_repairs', 0) + 1
+                save_session()
+                continue
             if light and not session['completion']['verified'] and message['content'].strip():
                 try:
                     report = json.loads(message['content'])
@@ -1344,7 +1404,16 @@ def run(session: dict, store: Store, provider, gate: Gate, max_steps=8, max_char
                 summary = report.get('summary') if isinstance(report, dict) else message['content']
                 if isinstance(summary, str) and summary.strip():
                     session['completion']['summary'] = summary[:4000]
-            session["status"] = "completed" if session["completion"]["verified"] else "needs_review"
+            completion = session['completion']
+            completion['tool_execution_success'] = bool(completion['verified'])
+            checker = getattr(plugin_runtime, 'completion_checks', None)
+            checks = checker(state_dir, root, gate, session, completion.get('summary', '')) if callable(checker) else {}
+            completion['delivery_checks'] = checks
+            assessed = [item for item in checks.values() if isinstance(item, dict) and item.get('status') != 'not_assessed']
+            completion['delivery_status'] = ('failed' if any(item.get('status') != 'passed' for item in assessed)
+                                             else 'passed' if assessed else 'not_assessed')
+            completion['delivery_check_passed'] = completion['delivery_status'] == 'passed'
+            session["status"] = "completed" if completion["verified"] and completion['delivery_status'] != 'failed' else "needs_review"
             fire_stop()
             save_session()
             _emit_event(on_event, "status", status=session["status"], steps=session.get("steps", 0),
@@ -1389,11 +1458,18 @@ def run(session: dict, store: Store, provider, gate: Gate, max_steps=8, max_char
         # still awaiting a decision is a legitimate approval retry, not a loop.
         prev_call_ids = [c.get("id", "") for c in calls if isinstance(c, dict)]
         asked = None
+        halt_result = None
         for call in calls:
+            tool_started = time.monotonic()
             cid = call.get("id", "")
             function = call.get("function", {})
             tool_name = function.get("name", "")
-            if not cid or cid in session["results"]:
+            if halt_result is not None or evidence_repair_active:
+                result = {'ok': False, 'error': 'not executed: run paused', 'retryable': False,
+                          'error_code': 'run_paused', 'user_reason': '运行已暂停，此批后续调用未执行。'}
+                if cid and cid not in session['results']:
+                    session['results'][cid] = result
+            elif not cid or cid in session["results"]:
                 result = {"ok": False, "error": "duplicate or missing tool call id"}
             else:
                 # PreToolUse may veto the call before any side effect happens.
@@ -1442,19 +1518,20 @@ def run(session: dict, store: Store, provider, gate: Gate, max_steps=8, max_char
                         result = {"ok": False, "error": "invalid tool arguments"}
                     elif (getattr(gate, "allowed_tool_names", None) is not None
                           and tool_name not in gate.allowed_tool_names):
-                        result = {"ok": False, "error": "denied"}
+                        result = permission_result(gate, PermissionError("tool denied by policy"))
                     elif tool_name in getattr(gate, "denied_tool_names", ()):
-                        result = {"ok": False, "error": "denied"}
+                        result = permission_result(gate, PermissionError("tool denied by policy"))
                     elif light and tool_name not in {lightweight.tool_name(s) for s in active_tools}:
                         result = {"ok": False, "error": "tool not active; discover it with tool_search first"}
                     elif (remote_bound and tool_name not in REMOTE_ALLOWED_TOOL_NAMES):
-                        result = {"ok": False, "error": "denied"}
+                        result = permission_result(gate, PermissionError("tool denied by policy"))
                     elif ((owner := tool_owner(tool_name)) is not None
                           and not plugin_enabled(owner)):
-                        result = {"ok": False, "error": "plugin disabled"}
+                        result = {"ok": False, "error": "plugin disabled", "error_code": "plugin_disabled",
+                                  "retryable": False, "user_reason": "工具所属插件已关闭；请在插件管理中启用后继续。"}
                     elif tool_name == 'skill_read' and skill_reader is not None:
                         if 'skill_read' in getattr(gate, 'disallow', ()) or 'read' in getattr(gate, 'disallow', ()):
-                            result = {'ok': False, 'error': 'denied'}
+                            result = permission_result(gate, PermissionError("tool denied by policy"))
                         else:
                             result = skill_reader(arguments.get('id'))
                     elif tool_name.startswith(MCP_TOOL_PREFIX) and mcp_call is not None:
@@ -1482,6 +1559,19 @@ def run(session: dict, store: Store, provider, gate: Gate, max_steps=8, max_char
                 session["results"][cid] = result
                 if isinstance(result, dict) and result.get("awaiting_user"):
                     asked = result.get("question", "")
+            # Only the host can bind an E identifier to a genuine successful call.
+            aliases = evidence_aliases(session)
+            result = {key: value for key, value in result.items() if key != 'evidence_id'}
+            if result.get('ok') is True:
+                result = {'evidence_id': next((alias for alias, ident in aliases.items() if ident == cid), None), **result}
+            if cid in session['results']:
+                session['results'][cid] = result
+            elapsed = max(0, time.monotonic() - tool_started)
+            if activity is not None:
+                activity.tool(tool_name, cid, elapsed, bool(result.get('ok')))
+            if halt_result is None and (result.get('awaiting_approval') or
+                                       result.get('retryable') is False and not result.get('ok')):
+                halt_result = result
             session["messages"].append({"role": "tool", "tool_call_id": cid, "content": json.dumps(result, ensure_ascii=False)})
             _emit_event(on_event, "tool_result", id=cid, name=tool_name,
                         ok=bool(isinstance(result, dict) and result.get("ok")),
@@ -1506,6 +1596,20 @@ def run(session: dict, store: Store, provider, gate: Gate, max_steps=8, max_char
                                                 "ok": ok}):
                     _hook_record(session, event, entry)
             save_session()
+        if stop_requested():
+            return settle_stopped()
+        if halt_result is not None or evidence_repair_active:
+            session['status'] = 'paused' if halt_result and halt_result.get('awaiting_approval') else 'needs_review'
+            session['pause_reason'] = (halt_result or {}).get('user_reason') or '证据引用修复失败，未再次执行工具。'
+            session['pause_code'] = (halt_result or {}).get('error_code') or 'invalid_evidence_reference'
+            if session['status'] == 'needs_review':
+                session['completion'] = {'verified': False, 'tool_execution_success': False,
+                                         'delivery_status': 'not_assessed', 'summary': session['pause_reason'],
+                                         'evidence': []}
+            fire_stop()
+            save_session()
+            _emit_event(on_event, 'status', status=session['status'], steps=session.get('steps', 0), reason=session['pause_reason'])
+            return session
         if asked:
             session["pending_question"] = asked
             session["status"] = "awaiting_user"

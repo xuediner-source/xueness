@@ -1,0 +1,91 @@
+.xn-desktop-titlebar {
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: env(titlebar-area-width, 100%);
+  height: 40px;
+  margin-inline-start: env(titlebar-area-x, 0px);
+  padding: 0 10px;
+  color: var(--fg, #f4f4f5);
+  background: var(--bg-window, #171717);
+  -webkit-app-region: drag;
+  user-select: none;
+}
+
+.xn-desktop-titlebar__brand,
+.xn-desktop-titlebar__history,
+.xn-desktop-titlebar__actions {
+  display: flex;
+  align-items: center;
+  flex: 0 0 auto;
+}
+
+.xn-desktop-titlebar__brand {
+  gap: 8px;
+  min-width: 0;
+  color: var(--fg, #f4f4f5);
+  font-size: 12px;
+  font-weight: 550;
+  letter-spacing: -.01em;
+}
+
+.xn-desktop-titlebar__brand img {
+  display: block;
+  width: 18px;
+  height: 18px;
+  border-radius: 5px;
+}
+
+.xn-desktop-titlebar__history,
+.xn-desktop-titlebar__actions {
+  gap: 3px;
+}
+
+.xn-desktop-titlebar__spacer { flex: 1 1 auto; min-width: 12px; }
+
+.xn-desktop-titlebar__history button,
+.xn-desktop-titlebar__actions > button,
+.xn-desktop-titlebar__help > summary {
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 29px;
+  height: 29px;
+  padding: 0;
+  border: 0;
+  border-radius: 7px;
+  color: var(--fg-muted, #a1a1aa);
+  background: transparent;
+  cursor: pointer;
+  -webkit-app-region: no-drag;
+}
+
+.xn-desktop-titlebar__history button:hover:not(:disabled),
+.xn-desktop-titlebar__actions > button:hover,
+.xn-desktop-titlebar__help > summary:hover,
+.xn-desktop-titlebar__help[open] > summary {
+  color: var(--fg, #f4f4f5);
+  background: var(--bg-hover, rgb(255 255 255 / .08));
+}
+
+.xn-desktop-titlebar__history button:disabled { opacity: .38; cursor: default; }
+.xn-desktop-titlebar__help { position: relative; -webkit-app-region: no-drag; }
+.xn-desktop-titlebar__help > summary { list-style: none; }
+.xn-desktop-titlebar__help > summary::-webkit-details-marker { display: none; }
+.xn-desktop-titlebar__menu {
+  position: absolute;
+  z-index: 60;
+  top: calc(100% + 6px);
+  right: 0;
+  min-width: 190px;
+  padding: 7px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: var(--bg-card, var(--bg));
+  box-shadow: var(--shadow-lg);
+  -webkit-app-region: no-drag;
+}
+
+.xn-desktop-titlebar__menu select { width: 100%; max-width: 250px; }

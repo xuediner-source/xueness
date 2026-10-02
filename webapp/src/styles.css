@@ -443,13 +443,6 @@ code, kbd, samp, pre {
   background: var(--bg);
 }
 
-/* Responsive sidebar collapse */
-@media (max-width: 899px) {
-  .xn-shell__sidebar {
-    width: 200px;
-  }
-}
-
 /* --- Stat --- */
 .xn-stat {
   display: inline-flex;
@@ -1427,6 +1420,10 @@ code, kbd, samp, pre {
  * area to nothing. */
 
 @media (max-width: 900px) {
+  .xn-shell__sidebar {
+    width: 200px;
+  }
+
   .xn-shell-layout {
     grid-template-columns: 1fr;
   }

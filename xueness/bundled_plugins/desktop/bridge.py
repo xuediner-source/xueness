@@ -42,7 +42,24 @@ class DesktopBridge:
         with self.lock:
             target = self.pending.get(message.get('id'))
             if target is not None and target.empty():
-                target.put_nowait(message)
+                    target.put_nowait(message)
+
+    def request(self, message, *, timeout=30):
+        """Private parent transport; callers own the fixed feature action contract."""
+        response = queue.Queue(maxsize=1)
+        request_id = uuid.uuid4().hex
+        with self.lock:
+            if self.closed:
+                raise RuntimeError('desktop host disconnected')
+            self.pending[request_id] = response
+        try:
+            self.send({**message, 'id': request_id})
+            return response.get(timeout=timeout)
+        except queue.Empty:
+            raise RuntimeError('desktop request timed out') from None
+        finally:
+            with self.lock:
+                self.pending.pop(request_id, None)
 
     def close(self):
         with self.lock:

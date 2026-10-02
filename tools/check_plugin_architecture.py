@@ -184,6 +184,8 @@ def audit(root: Path) -> list[str]:
         file = path.relative_to(root / 'webapp/src').as_posix()
         if path.suffix not in ('.ts', '.tsx') or '.test.' in file or file in SHARED_FRONTEND:
             continue
+        if path.suffix == '.tsx' and not file.startswith(('plugins/', 'ui/')):
+            errors.append('product component outside plugin directory: ' + file)
         if file in ui_refs:
             if any(ref.startswith(file + '#') for ref in ui_refs):
                 errors.append('whole-file/export ownership overlap: ' + file)

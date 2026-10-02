@@ -14,7 +14,7 @@
     <a href="https://github.com/xuediner-source/xueness/actions/workflows/desktop-build.yml"><img src="https://github.com/xuediner-source/xueness/actions/workflows/desktop-build.yml/badge.svg?branch=main" alt="Desktop build"></a>
     <a href="https://github.com/xuediner-source/xueness/blob/main/LICENSE"><img src="https://img.shields.io/github/license/xuediner-source/xueness?label=license" alt="Apache 2.0 license"></a>
     <a href="https://github.com/xuediner-source/xueness/releases/latest"><img src="https://img.shields.io/github/v/release/xuediner-source/xueness?label=release" alt="Latest release"></a>
-    <img src="https://img.shields.io/badge/plugins-27%20%7C%2088-4263eb" alt="27 plugins and 88 features">
+    <img src="https://img.shields.io/badge/plugins-27%20%7C%2096-4263eb" alt="27 plugins and 96 features">
   </p>
 </div>
 
@@ -44,7 +44,7 @@ Xueness 面向个人本地开发，提供可从终端、浏览器或 Windows/mac
 ## 功能概览
 
 - **本地小模型配置。** 选择「本地轻量」运行档，细调提示、工具集合、上下文与输出预算、采样和协议选项。资源面板报告运行 Xueness 的机器 CPU、内存及进程状态；模型输出面板展示请求阶段、工具调用和服务实际返回的用量。缺少的 Token 或显存数据会标为不可用，不会估算成真实测量值。
-- **27 个可信插件，88 项登记功能。** 会话、工作区文件、模型、Shell、Git、终端、工作流、记忆、Hooks、MCP、浏览器、远程连接、渠道、自动化、诊断、Office 预览等能力都有明确归属。插件管理页显示完整目录与依赖状态，CLI 也可查看和更改插件开关。
+- **27 个可信插件，96 项登记功能。** 会话、工作区文件、模型、Shell、Git、终端、工作流、记忆、Hooks、MCP、浏览器、远程连接、渠道、自动化、诊断、Office 预览等能力都有明确归属。插件管理页显示完整目录与依赖状态，CLI 也可查看和更改插件开关。
 - **三种入口，共用运行时。** 使用 Agent CLI 运行会话，通过 loopback Web 工作台查看和管理任务，或安装 Windows/macOS 桌面应用。桌面包自带运行时，跨平台差异留在对应插件适配中。
 
 轻量设置用于控制运行行为，不会下载模型、调整模型权重或自动改变推理服务的显存分配。Office 预览支持部分文档页面、图像、图表和缓存单元格数据；它不是 Microsoft Office 的完整排版或兼容实现。
@@ -110,6 +110,7 @@ python3 -m unittest tests.test_plugin_architecture -q
 ## 文档
 
 - [桌面版、数据位置与平台支持](docs/xueness-desktop.md)
+- [网络搜索配置与 FakeIP DNS 诊断](docs/xueness-network-tools.md)
 - [本地小模型轻量模式](docs/xueness-local-lightweight-mode.md)
 - [插件架构与逐项归属清单](docs/xueness-plugin-architecture.md)
 - [CLI、工作流和工作台使用说明](docs/xueness-four-workstreams.md)

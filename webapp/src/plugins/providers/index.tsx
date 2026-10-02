@@ -14,8 +14,8 @@ import {
   ShieldCheck,
   Trash2,
 } from 'lucide-react';
-import { deleteProvider, discoverProviderModels, listProviders, saveProvider, testProviderConnection } from '../../xuenessApi';
-import type { ProviderConnectionTest, ProviderDiscoveredModel, ProviderLightweightOptions, ProviderSummary } from '../../xuenessApi';
+import { adoptProviderCompatibility, deleteProvider, discoverProviderModels, listProviders, saveProvider, testProviderCompatibility, testProviderConnection } from '../../xuenessApi';
+import type { ProviderCompatibilityCheckRecord, ProviderCompatibilityDiagnosticGroup, ProviderCompatibilityTest, ProviderCompatibilityTestMode, ProviderConnectionTest, ProviderDiscoveredModel, ProviderLightweightOptions, ProviderSummary } from '../../xuenessApi';
 import { Select } from '../../ui/Select';
 import { t as tr, tf } from '../../i18n';
 import { OperationHeader } from '../shared';
@@ -114,14 +114,19 @@ export function validateProviderDraft(draft: ProviderDraft): string | null {
     return 'JSON 工具模式仅适用于 OpenAI-compatible 本地轻量配置。';
   }
   const compatibility = draft.compatibility ?? {};
-  const allowedCompatibility = new Set(['streamUsage', 'parallelToolCalls', 'maxTokensField']);
+  const allowedCompatibility = new Set(['streamUsage', 'parallelToolCalls', 'maxTokensField', 'toolChoice', 'think']);
   if (Object.keys(compatibility).some(key => !allowedCompatibility.has(key))) return '兼容设置包含当前服务端不支持的选项，请先刷新配置。';
-  if (['streamUsage', 'parallelToolCalls'].some(key => key in compatibility && typeof compatibility[key] !== 'boolean')) {
+  if ((compatibility.streamUsage !== undefined && typeof compatibility.streamUsage !== 'boolean')
+    || (compatibility.parallelToolCalls !== undefined && typeof compatibility.parallelToolCalls !== 'boolean')) {
     return '兼容开关必须是布尔值。';
   }
   if ('maxTokensField' in compatibility && !['max_tokens', 'max_completion_tokens'].includes(String(compatibility.maxTokensField))) {
     return '最大输出字段设置无效。';
   }
+  if ('toolChoice' in compatibility && !['auto', 'required'].includes(String(compatibility.toolChoice))) {
+    return 'tool_choice 设置无效。';
+  }
+  if ('think' in compatibility && typeof compatibility.think !== 'boolean') return 'think 必须是布尔值。';
   return null;
 }
 
@@ -245,6 +250,29 @@ function draftsEqual(left: ProviderDraft, right: ProviderDraft): boolean {
     && JSON.stringify(left.lightweightOptions ?? {}) === JSON.stringify(right.lightweightOptions ?? {});
 }
 
+export function canTestProviderCompatibility(draft: ProviderDraft, original: ProviderSummary | null): boolean {
+  if (!original || original.protocol === 'anthropic' || draft.protocol !== 'openai' || draft.apiKey) return false;
+  const savedDraft = providerDraftFromSummary(original);
+  return draftsEqual({ ...draft, compatibility: savedDraft.compatibility }, savedDraft);
+}
+
+function compatibilityOptionsKey(value: NonNullable<ProviderSummary['compatibility']> | undefined): string {
+  return JSON.stringify(Object.entries(value ?? {}).sort(([left], [right]) => left.localeCompare(right)));
+}
+
+function requiredCompatibilityModes(draft: ProviderDraft): ProviderCompatibilityTestMode[] {
+  return ['conversation', 'stream', draft.toolCalling === 'json' ? 'json_tool_call' : 'tool_roundtrip'];
+}
+
+export function canAdoptProviderCompatibility(draft: ProviderDraft, original: ProviderSummary | null): boolean {
+  if (!canTestProviderCompatibility(draft, original)) return false;
+  const candidateKey = compatibilityOptionsKey(draft.compatibility);
+  const group = original?.compatibilityDiagnostics?.find(item =>
+    compatibilityOptionsKey(item.compatibility) === candidateKey);
+  return Boolean(group && requiredCompatibilityModes(draft).every(mode =>
+    group.checks.some(check => check.mode === mode && check.ok)));
+}
+
 function isLoopbackLiteral(baseUrl: string): boolean {
   try {
     const hostname = new URL(baseUrl).hostname.toLowerCase();
@@ -340,6 +368,19 @@ export function ProviderEditor({
   testing,
   testResult,
   testError,
+  compatibilityMode = 'conversation',
+  compatibilityResult = null,
+  compatibilityError = '',
+  compatibilityTesting = false,
+  compatibilityTestReady = false,
+  compatibilityHistory = [],
+  compatibilityGroups = [],
+  compatibilityAdoptionReady = false,
+  adoptingCompatibility = false,
+  onCompatibilityModeChange = () => undefined,
+  onCompatibilityTest = () => undefined,
+  onAdoptCompatibility = () => undefined,
+  onLoadCompatibilityCandidate = () => undefined,
   discovering = false,
   discoveredModels = null,
   discoveryError = '',
@@ -362,6 +403,19 @@ export function ProviderEditor({
   testing: boolean;
   testResult: ProviderConnectionTest | null;
   testError: string;
+  compatibilityMode?: ProviderCompatibilityTestMode;
+  compatibilityResult?: ProviderCompatibilityTest | null;
+  compatibilityError?: string;
+  compatibilityTesting?: boolean;
+  compatibilityTestReady?: boolean;
+  compatibilityHistory?: ProviderCompatibilityCheckRecord[];
+  compatibilityGroups?: ProviderCompatibilityDiagnosticGroup[];
+  compatibilityAdoptionReady?: boolean;
+  adoptingCompatibility?: boolean;
+  onCompatibilityModeChange?: (mode: ProviderCompatibilityTestMode) => void;
+  onCompatibilityTest?: () => void;
+  onAdoptCompatibility?: () => void;
+  onLoadCompatibilityCandidate?: (compatibility: NonNullable<ProviderSummary['compatibility']>) => void;
   discovering?: boolean;
   discoveredModels?: ProviderDiscoveredModel[] | null;
   discoveryError?: string;
@@ -382,7 +436,7 @@ export function ProviderEditor({
   const validationError = validateProviderDraft(draft);
   const isNew = original === null;
   const changed = isNew ? !draftsEqual(draft, emptyProviderDraft()) : !draftsEqual(draft, providerDraftFromSummary(original));
-  const locked = busy || testing;
+  const locked = busy || testing || compatibilityTesting || adoptingCompatibility;
   const canSave = !locked && changed && !validationError;
   const update = <K extends keyof ProviderDraft>(field: K, value: ProviderDraft[K]) => onDraftChange({ ...draft, [field]: value });
   const runtimeProfile = draft.runtimeProfile ?? 'standard';
@@ -436,6 +490,15 @@ export function ProviderEditor({
     </label>;
   };
   const resetCompatibility = () => onDraftChange({ ...draft, compatibility: {} });
+  const updateCompatibility = <K extends keyof NonNullable<ProviderDraft['compatibility']>>(
+    field: K,
+    value: NonNullable<ProviderDraft['compatibility']>[K] | undefined,
+  ) => {
+    const compatibility = { ...(draft.compatibility ?? {}) };
+    if (value === undefined) delete compatibility[field];
+    else compatibility[field] = value;
+    onDraftChange({ ...draft, compatibility });
+  };
   const compatibilityConfigured = Object.keys(draft.compatibility ?? {}).length > 0;
   const budgetPreview = lightweightBudgetPreview(draft);
 
@@ -451,16 +514,16 @@ export function ProviderEditor({
         </div>
       </div>
       {!isNew && <div className="xn-provider-editor__header-actions">
-        <button type="button" className="xn-provider-button" disabled={busy || testing} onClick={onTest}>
+        <button type="button" className="xn-provider-button" disabled={busy || testing || compatibilityTesting} onClick={onTest}>
           {testing ? <LoaderCircle size={14} className="xn-provider-spin" aria-hidden="true" /> : <Radio size={14} aria-hidden="true" />}
-          {tr(testing ? '正在测试连接' : '测试连接')}
+          {tr(testing ? '正在测试连接' : '测试对话')}
         </button>
         <button type="button" className="xn-provider-button" disabled={busy} onClick={onUse}>{tr('用于当前运行')}</button>
         <button type="button" className="xn-provider-icon-button xn-provider-icon-button--danger" disabled={busy || testing} aria-label={tr('删除配置')} title={tr('删除配置')} onClick={onDelete}><Trash2 size={16} aria-hidden="true" /></button>
       </div>}
     </header>
-    {!isNew && <p className="xn-provider-test-note">{tr('测试会向模型发送一次简短提示，不调用工具；服务商可能收取少量费用。')}</p>}
-    {testResult && <p className="xn-provider-test-feedback" role="status"><Check size={15} aria-hidden="true" />{tf('连接成功，响应时间 {0} ms', [testResult.latencyMs])}</p>}
+    {!isNew && <p className="xn-provider-test-note">{tr('对话测试只检查一次简短文本回复，不验证工具调用；服务商可能收取少量费用。')}</p>}
+    {testResult && <p className="xn-provider-test-feedback" role="status"><Check size={15} aria-hidden="true" />{tf('对话测试成功，响应时间 {0} ms（未验证工具）', [testResult.latencyMs])}</p>}
     {testError && <p className="xn-provider-test-feedback xn-provider-test-feedback--error" role="alert"><Radio size={15} aria-hidden="true" />{tr('连接测试失败：')}{testError}</p>}
 
     <section className="xn-provider-section">
@@ -604,28 +667,129 @@ export function ProviderEditor({
             <input type="checkbox" checked={draft.compatibility?.streamUsage ?? (runtimeProfile === 'standard')} onChange={event => onDraftChange({ ...draft, compatibility: { ...draft.compatibility, streamUsage: event.currentTarget.checked } })} />
             <span>{tr('在流式请求中发送 stream_options.include_usage')}</span>
           </label>
-          <label>
-            <input type="checkbox" checked={draft.compatibility?.parallelToolCalls ?? false} onChange={event => update('compatibility', { ...draft.compatibility, parallelToolCalls: event.currentTarget.checked })} />
-            <span>{tr('在工具调用请求中发送 parallel_tool_calls')}</span>
-          </label>
         </fieldset>
         <div className="xn-provider-compatibility-fields">
+          <label className="xn-provider-field">
+            <span>{tr('parallel_tool_calls')}</span>
+            <Select aria-label={tr('parallel_tool_calls')} disabled={locked}
+              value={draft.compatibility?.parallelToolCalls === undefined ? '__omit__' : String(draft.compatibility.parallelToolCalls)}
+              onChange={event => updateCompatibility('parallelToolCalls', event.currentTarget.value === '__omit__' ? undefined : event.currentTarget.value === 'true')}>
+              <option value="__omit__">{tr('省略此字段')}</option>
+              <option value="false">{tr('发送 false')}</option>
+              <option value="true">{tr('发送 true')}</option>
+            </Select>
+            <small>{tr('本地接口可能不接受此参数；省略会从请求中移除它。')}</small>
+          </label>
+          <label className="xn-provider-field">
+            <span>{tr('tool_choice')}</span>
+            <Select aria-label={tr('tool_choice')} disabled={locked}
+              value={draft.compatibility?.toolChoice ?? '__omit__'}
+              onChange={event => updateCompatibility('toolChoice', event.currentTarget.value === '__omit__' ? undefined : event.currentTarget.value as 'auto' | 'required')}>
+              <option value="__omit__">{tr('省略此字段')}</option>
+              <option value="auto">auto</option>
+              <option value="required">required</option>
+            </Select>
+            <small>{tr('仅原生工具诊断和实际工具请求会发送；plain/JSON 诊断会省略。')}</small>
+          </label>
+          <label className="xn-provider-field">
+            <span>{tr('think')}</span>
+            <Select aria-label={tr('think')} disabled={locked}
+              value={draft.compatibility?.think === undefined ? '__omit__' : String(draft.compatibility.think)}
+              onChange={event => updateCompatibility('think', event.currentTarget.value === '__omit__' ? undefined : event.currentTarget.value === 'true')}>
+              <option value="__omit__">{tr('省略此字段')}</option>
+              <option value="false">{tr('发送 false')}</option>
+              <option value="true">{tr('发送 true')}</option>
+            </Select>
+            <small>{tr('明确选择后发送 think 布尔值，并省略 reasoning_effort。')}</small>
+          </label>
           <label className="xn-provider-field">
             <span>{tr('最大输出字段')}</span>
             <Select aria-label={tr('最大输出字段')} disabled={locked} value={draft.compatibility?.maxTokensField ?? '__service_default__'} onChange={event => {
               const value = event.currentTarget.value;
-              if (value === '__service_default__') resetCompatibility();
-              else update('compatibility', { ...draft.compatibility, maxTokensField: value as 'max_tokens' | 'max_completion_tokens' });
+              if (value === '__service_default__') updateCompatibility('maxTokensField', undefined);
+              else updateCompatibility('maxTokensField', value as 'max_tokens' | 'max_completion_tokens');
             }}>
               <option value="__service_default__">{tr('服务默认')}</option>
               <option value="max_tokens">max_tokens</option>
               <option value="max_completion_tokens">max_completion_tokens</option>
             </Select>
-            <small>{tr('选择服务默认会同时恢复 stream_usage 与 parallel_tool_calls 的默认设置。')}</small>
+            <small>{tr('选择服务默认只省略 max_tokens 字段覆盖。')}</small>
           </label>
           <button type="button" className="xn-provider-button" disabled={locked || !compatibilityConfigured} onClick={resetCompatibility}>{tr('恢复 API 兼容默认')}</button>
         </div>
-        <p className="xn-provider-hint">{tr('只有服务商文档确认支持时才设置这些兼容选项；不支持的服务可能拒绝请求。')}</p>
+        <p className="xn-provider-hint">{tr('未选择的兼容字段会省略；只有服务商文档确认支持时才启用。明确设置后，实际请求会发送所选参数。')}</p>
+        <section className="xn-provider-section" data-testid="provider-compatibility-diagnostics">
+          <div className="xn-provider-section__heading">
+            <h4>{tr('本地接口兼容诊断')}</h4>
+            <p>{tr('每次只运行所选检查，不会自动回退或重试，也不会保存草稿或切换当前运行配置。')}</p>
+          </div>
+          <div className="xn-provider-fields">
+            <label className="xn-provider-field xn-provider-runtime-select">
+              <span>{tr('诊断项目')}</span>
+              <Select aria-label={tr('诊断项目')} disabled={locked}
+                value={compatibilityMode}
+                onChange={event => onCompatibilityModeChange(event.currentTarget.value as ProviderCompatibilityTestMode)}>
+                <option value="conversation">{tr('普通对话（plain）')}</option>
+                <option value="native_tool_call">{tr('原生工具调用（native）')}</option>
+                <option value="json_tool_call" disabled={runtimeProfile !== 'lightweight'}>{tr('JSON 工具调用（json）')}</option>
+                <option value="stream">{tr('SSE 流式 delta + done（plain）')}</option>
+                <option value="tool_roundtrip">{tr('工具结果续轮（native，两次请求）')}</option>
+              </Select>
+            </label>
+            <button type="button" className="xn-provider-button xn-provider-button--primary"
+              disabled={locked || !compatibilityTestReady}
+              onClick={onCompatibilityTest}>
+              {compatibilityTesting ? <LoaderCircle size={14} className="xn-provider-spin" aria-hidden="true" /> : <Radio size={14} aria-hidden="true" />}
+              {tr(compatibilityTesting ? '正在执行所选诊断' : '运行所选诊断')}
+            </button>
+          </div>
+          <p className="xn-provider-test-note">
+            {tr('诊断使用已保存的 API 地址、模型和密钥，并只覆盖本草稿中的兼容参数；每个请求最多 96 个输出 tokens，工具结果续轮最多发送两次请求。fixture 只在进程内计算 3+4，不访问文件或命令。服务商可能收费。诊断会保存安全结果，不会更改运行参数；完整通过后可明确采用已验证参数。')}
+          </p>
+          {compatibilityHistory.length > 0 && <div className="xn-provider-test-feedback" data-testid="provider-compatibility-history">
+            <strong>{tr('已保存的兼容诊断历史')}</strong>
+            {compatibilityHistory.map(check => <span key={check.mode}>
+              {tf('{0}：{1}（{2} 次请求，{3}）', [check.mode, check.ok ? tr('通过') : tr('失败'), check.requestCount, check.testedAt])}
+              {check.error ? ` ${tr(check.error)}` : ''}
+            </span>)}
+          </div>}
+          {compatibilityGroups.map(group => <div className="xn-provider-test-feedback" key={group.optionsHash}
+            data-testid="provider-compatibility-candidate-history">
+            <strong>{tf('已保存候选 {0}：{1}', [group.optionsHash.slice(0, 12), JSON.stringify(group.compatibility)])}</strong>
+            {group.checks.map(check => <span key={check.mode}>
+              {tf('{0}：{1}（{2} 次请求，{3}）', [check.mode, check.ok ? tr('通过') : tr('失败'), check.requestCount, check.testedAt])}
+            </span>)}
+            <button type="button" className="xn-provider-button" disabled={locked}
+              onClick={() => onLoadCompatibilityCandidate(group.compatibility)}>
+              {tr('载入这组已测试参数到草稿')}
+            </button>
+          </div>)}
+          {original?.compatibilityVerification && <p className="xn-provider-test-feedback" data-testid="provider-compatibility-verification">
+            {tf('当前参数已于 {0} 通过兼容验证并保存。', [original.compatibilityVerification.verifiedAt])}
+          </p>}
+          <button type="button" className="xn-provider-button xn-provider-button--primary"
+            data-testid="provider-adopt-verified-compatibility"
+            disabled={locked || !compatibilityAdoptionReady}
+            onClick={onAdoptCompatibility}>
+            {adoptingCompatibility ? <LoaderCircle size={14} className="xn-provider-spin" aria-hidden="true" /> : <Check size={14} aria-hidden="true" />}
+            {tr(adoptingCompatibility ? '正在保存已验证参数' : '采用已验证兼容参数')}
+          </button>
+          {!compatibilityTestReady && <p className="xn-provider-hint">
+            {tr(isNew ? '先保存此配置，再用已保存的服务地址和密钥测试兼容参数。' : '只有端点、模型和其它运行字段与已保存配置一致时才能测试；请先保存这些更改。')}
+          </p>}
+          {compatibilityError && <p className="xn-provider-test-feedback xn-provider-test-feedback--error" role="alert">{tr('兼容诊断失败：')}{compatibilityError}</p>}
+          {compatibilityResult && <div className={`xn-provider-test-feedback${compatibilityResult.ok ? '' : ' xn-provider-test-feedback--error'}`}
+            role={compatibilityResult.ok ? 'status' : 'alert'} data-testid={`provider-check-${compatibilityResult.details.mode}`}>
+            <strong>{tf('{0}：{1}', [compatibilityResult.details.mode, compatibilityResult.ok ? tr('通过') : tr('失败')])}</strong>
+            <span>{tf('实际请求 {0} 次，耗时 {1} ms。', [compatibilityResult.details.requestCount, compatibilityResult.latencyMs])}</span>
+            {!compatibilityResult.ok && compatibilityResult.error && <span>{tr(compatibilityResult.error)}</span>}
+            {!compatibilityResult.ok && compatibilityResult.details.httpStatus && <span>{tf('HTTP 状态：{0}', [compatibilityResult.details.httpStatus])}</span>}
+            {compatibilityResult.details.failedStep && <span>{tf('失败步骤：{0}', [compatibilityResult.details.failedStep])}</span>}
+            {compatibilityResult.details.requests?.map(request => <span key={request.step}>
+              {tf('{0} 请求字段：{1}', [request.step, request.fields.join(', ') || tr('无')])}
+            </span>)}
+          </div>}
+        </section>
       </>}
       {draft.protocol === 'anthropic' && <p className="xn-provider-hint">{tr('stream_usage 与 JSON 工具模式仅适用于 OpenAI-compatible API。')}</p>}
 
@@ -740,6 +904,14 @@ export function ModelManager({ onSelect, runtimeMonitorEnabled = false }: {
   const [pendingSelection, setPendingSelection] = useState<string | null>(null);
   const [testingProviderId, setTestingProviderId] = useState('');
   const [connectionTest, setConnectionTest] = useState<{ id: string; result?: ProviderConnectionTest; error?: string } | null>(null);
+  const [compatibilityMode, setCompatibilityMode] = useState<ProviderCompatibilityTestMode>('conversation');
+  const [compatibilityTestingMode, setCompatibilityTestingMode] = useState<ProviderCompatibilityTestMode | ''>('');
+  const [adoptingCompatibility, setAdoptingCompatibility] = useState(false);
+  const [compatibilityChecks, setCompatibilityChecks] = useState(new Map<string, {
+    compatibilityKey: string;
+    result?: ProviderCompatibilityTest;
+    error?: string;
+  }>());
   const [discovery, setDiscovery] = useState<{ id: string; models: ProviderDiscoveredModel[]; error?: string } | null>(null);
   const [discoveringProviderId, setDiscoveringProviderId] = useState('');
   const discoveryRequest = React.useRef(0);
@@ -747,6 +919,20 @@ export function ModelManager({ onSelect, runtimeMonitorEnabled = false }: {
   const currentProvider = useMemo(() => items.find(provider => provider.id === selectedKey) ?? null, [items, selectedKey]);
   const isNew = selectedKey === NEW_PROVIDER_KEY;
   const currentConnectionTest = connectionTest?.id === currentProvider?.id ? connectionTest : null;
+  const compatibilityKey = compatibilityOptionsKey(draft.compatibility);
+  const currentCompatibilityCheck = currentProvider
+    ? compatibilityChecks.get(`${currentProvider.id}\0${compatibilityMode}`)
+    : undefined;
+  const currentCompatibilityResult = currentCompatibilityCheck?.compatibilityKey === compatibilityKey
+    ? currentCompatibilityCheck.result ?? null
+    : null;
+  const currentCompatibilityError = currentCompatibilityCheck?.compatibilityKey === compatibilityKey
+    ? currentCompatibilityCheck.error ?? ''
+    : '';
+  const currentCompatibilityGroup = currentProvider?.compatibilityDiagnostics?.find(group =>
+    compatibilityOptionsKey(group.compatibility) === compatibilityKey);
+  const currentCompatibilityHistory = currentCompatibilityGroup?.checks ?? [];
+  const compatibilityAdoptionReady = canAdoptProviderCompatibility(draft, currentProvider);
   const currentDiscovery = discovery?.id === currentProvider?.id ? discovery : null;
   const discoveryStillApplies = Boolean(currentProvider && draftsEqual(
     { ...draft, model: providerDraftFromSummary(currentProvider).model },
@@ -833,6 +1019,62 @@ export function ModelManager({ onSelect, runtimeMonitorEnabled = false }: {
     }
   };
 
+  const runCompatibilityTest = async () => {
+    if (!currentProvider || !canTestProviderCompatibility(draft, currentProvider)
+      || busy || testingProviderId || compatibilityTestingMode) return;
+    const { id } = currentProvider;
+    const mode = compatibilityMode;
+    const compatibilityCandidate = { ...(draft.compatibility ?? {}) };
+    const candidateKey = compatibilityOptionsKey(compatibilityCandidate);
+    const checkKey = `${id}\0${mode}`;
+    setCompatibilityTestingMode(mode);
+    setCompatibilityChecks(previous => {
+      const next = new Map(previous);
+      next.set(checkKey, { compatibilityKey: candidateKey });
+      return next;
+    });
+    setError('');
+    try {
+      const result = await testProviderCompatibility(id, mode, compatibilityCandidate);
+      setCompatibilityChecks(previous => {
+        const next = new Map(previous);
+        next.set(checkKey, { compatibilityKey: candidateKey, result });
+        return next;
+      });
+      setItems(previous => previous.map(provider => provider.id === id
+        ? { ...provider, compatibilityDiagnostics: result.providerCompatibilityDiagnostics }
+        : provider));
+    } catch (reason) {
+      setCompatibilityChecks(previous => {
+        const next = new Map(previous);
+        next.set(checkKey, { compatibilityKey: candidateKey, error: errorText(reason) });
+        return next;
+      });
+    } finally {
+      setCompatibilityTestingMode('');
+    }
+  };
+
+  const runAdoptCompatibility = async () => {
+    if (!currentProvider || !compatibilityAdoptionReady || !currentCompatibilityGroup
+      || busy || testingProviderId || compatibilityTestingMode || adoptingCompatibility) return;
+    setAdoptingCompatibility(true);
+    setError('');
+    setNotice('');
+    try {
+      const result = await adoptProviderCompatibility(currentProvider.id, currentCompatibilityGroup.optionsHash);
+      setItems(previous => [...previous.filter(provider => provider.id !== result.provider.id), result.provider]
+        .sort((left, right) => left.id.localeCompare(right.id)));
+      setSelectedKey(result.provider.id);
+      setDraft(providerDraftFromSummary(result.provider));
+      setNotice(tr('已采用通过全部兼容诊断的参数；当前运行模型选择未更改。'));
+    } catch (reason) {
+      setError(errorText(reason));
+    } finally {
+      setAdoptingCompatibility(false);
+    }
+  };
+
   const runModelDiscovery = async (id: string) => {
     if (!currentProvider || currentProvider.id !== id || currentProvider.protocol === 'anthropic'
       || draft.protocol !== 'openai' || currentDraftChanged || busy || testingProviderId) return;
@@ -873,6 +1115,11 @@ export function ModelManager({ onSelect, runtimeMonitorEnabled = false }: {
       setConfirmDelete(false);
       setConnectionTest(null);
       setDiscovery(null);
+      setCompatibilityChecks(previous => {
+        const next = new Map(previous);
+        for (const key of next.keys()) if (key.startsWith(`${provider.id}\0`)) next.delete(key);
+        return next;
+      });
       setNotice(tr('配置已保存'));
     } catch (reason) {
       setError(errorText(reason));
@@ -918,7 +1165,7 @@ export function ModelManager({ onSelect, runtimeMonitorEnabled = false }: {
     {error && <p className="xn-provider-feedback xn-provider-feedback--error" role="alert">{error}</p>}
     {notice && <p className="xn-provider-feedback" role="status"><Check size={15} aria-hidden="true" />{notice}</p>}
     <div className="xn-provider-split" data-model-provider-split-panel="true" data-testid="model-provider-split-panel">
-          <ModelProviderNavigation providers={items} selectedKey={selectedKey} loading={loading} busy={busy} onSelect={requestNavigationItem} onAdd={addProvider} />
+          <ModelProviderNavigation providers={items} selectedKey={selectedKey} loading={loading} busy={busy || Boolean(testingProviderId) || Boolean(compatibilityTestingMode) || adoptingCompatibility} onSelect={requestNavigationItem} onAdd={addProvider} />
       <main className="xn-provider-detail" data-model-provider-detail-scroll="true">
         {pendingSelection !== null && <div className="xn-provider-unsaved" role="alertdialog" aria-modal="false" aria-label={tr('未保存的更改')}>
           <div><strong>{tr('有未保存的更改')}</strong><p>{tr('切换配置会放弃当前表单中的更改。')}</p></div>
@@ -933,6 +1180,19 @@ export function ModelManager({ onSelect, runtimeMonitorEnabled = false }: {
           testing={testingProviderId === currentProvider?.id}
           testResult={currentConnectionTest?.result ?? null}
           testError={currentConnectionTest?.error ?? ''}
+          compatibilityMode={compatibilityMode}
+          compatibilityResult={currentCompatibilityResult}
+          compatibilityError={currentCompatibilityError}
+          compatibilityTesting={compatibilityTestingMode === compatibilityMode}
+          compatibilityTestReady={canTestProviderCompatibility(draft, currentProvider)}
+          compatibilityHistory={currentCompatibilityHistory}
+          compatibilityGroups={currentProvider?.compatibilityDiagnostics ?? []}
+          compatibilityAdoptionReady={compatibilityAdoptionReady}
+          adoptingCompatibility={adoptingCompatibility}
+          onCompatibilityModeChange={setCompatibilityMode}
+          onCompatibilityTest={() => void runCompatibilityTest()}
+          onAdoptCompatibility={() => void runAdoptCompatibility()}
+          onLoadCompatibilityCandidate={compatibility => setDraft(current => ({ ...current, compatibility: { ...compatibility } }))}
           discovering={discoveringProviderId === currentProvider?.id}
           discoveredModels={discoveryStillApplies ? currentDiscovery?.models ?? null : null}
           discoveryError={discoveryStillApplies ? currentDiscovery?.error ?? '' : ''}

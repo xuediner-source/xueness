@@ -12,7 +12,9 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { renderToStaticMarkup } from "react-dom/server";
 
-import { FileBrowser, DiffView, SettingsPanel } from "./XuenessWorkbenchView2";
+import { FileBrowser } from "./plugins/files/FileBrowser";
+import { DiffView } from "./plugins/files/DiffView";
+import { SettingsPanel } from "./plugins/settings/SettingsPanel";
 import type { FileChangeSet } from "./xuenessWorkbench";
 import type { AgentCapabilities } from "./xuenessSettings";
 

@@ -123,6 +123,17 @@ class ProviderApiTest(unittest.TestCase):
         raw = self.key_path("openai").read_text(encoding="utf-8")
         self.assertIn(SECRET, raw)
 
+    def test_legacy_url_credentials_are_redacted_from_public_summary(self):
+        profile = self.base(
+            apiKey=SECRET,
+            baseUrl=f"https://user:{SECRET}@api.example.com/v1?token={SECRET}",
+        )
+        self.key_path("openai").write_text(json.dumps(profile), encoding="utf-8")
+        _, listing = self.call("GET", "/api/providers")
+        encoded = self.body_text(listing)
+        self.assertNotIn(SECRET, encoded)
+        self.assertEqual("https://api.example.com/v1", listing["providers"][0]["baseUrl"])
+
     def test_has_key_false_without_api_key(self):
         status, payload = self.post(self.base())
         self.assertEqual(200, status)
@@ -166,10 +177,16 @@ class ProviderApiTest(unittest.TestCase):
     def test_hostile_base_urls_rejected(self):
         for bad in ("ftp://x", "javascript:alert(1)", "notaurl",
                     "file:///etc/passwd", "//example.com", "",
-                    "http://", "   ", 123, None):
+                    "http://", "   ", 123, None,
+                    "https://user:embedded-secret@example.com/v1",
+                    "https://@api.example.com/v1",
+                    "https://api.example.com/v1?token=embedded-secret",
+                    "https://api.example.com/v1#embedded-secret",
+                    "https://api.example.com:bad/v1"):
             status, payload = self.post(self.base(baseUrl=bad))
             self.assertEqual(400, status, f"baseUrl={bad!r} should be 400")
             self.assertIn("error", payload)
+            self.assertNotIn("embedded-secret", json.dumps(payload))
         self.assertFalse(self.key_path("openai").exists())
 
     def test_http_and_https_accepted(self):
@@ -232,6 +249,8 @@ class ProviderApiTest(unittest.TestCase):
     def test_readback_after_atomic_write(self):
         self.assertEqual(200, self.post(self.base(apiKey=SECRET))[0])
         stored = json.loads(self.key_path("openai").read_text(encoding="utf-8"))
+        revision = stored.pop("_profileRevision")
+        self.assertRegex(revision, r"^[0-9a-f]{32}$")
         self.assertEqual(
             {"id": "openai", "name": "OpenAI",
              "baseUrl": "https://api.openai.com/v1", "model": "gpt-4o",

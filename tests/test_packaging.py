@@ -80,11 +80,11 @@ class PackagingFilesTests(unittest.TestCase):
 class FreshMachineDocsTests(unittest.TestCase):
     def test_no_false_oneliner_claim(self):
         text = (PROJECT / "README.md").read_text(encoding="utf-8")
-        # Authorized source publication does not claim a tagged release or
-        # anonymous access to the private repository. Never run remote scripts.
+        # The owner explicitly made the repository public and published native
+        # installers. Setup still must not silently execute remote scripts.
         self.assertIn("https://github.com/xuediner-source/xueness", text)
-        self.assertIn("需要仓库访问权限", text)
-        self.assertIn("尚未建立发行标签、签名或容器镜像", text)
+        self.assertIn("releases", text)
+        self.assertIn("未进行代码签名", text)
         self.assertNotRegex(text, r"curl\b[^\n]*\|\s*(?:sh|bash)\b")
         self.assertIn("127.0.0.1:8137", text)
 

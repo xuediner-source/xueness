@@ -3,13 +3,11 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { renderToStaticMarkup } from "react-dom/server";
 
-import {
-  DirectoryBrowser,
-  ProvidersPanel,
-  UsagePanel,
-  MemoryPanel,
-  SettingsSections,
-} from "./XuenessPanels";
+import { DirectoryBrowser } from "./plugins/files/DirectoryBrowser";
+import { ProvidersPanel } from "./plugins/providers/ProvidersPanel";
+import { UsagePanel } from "./plugins/usage/UsagePanel";
+import { MemoryPanel } from "./plugins/memory/MemoryPanel";
+import { SettingsSections } from "./plugins/settings/SettingsSections";
 import type {
   ProviderSummary,
   UsageSummary,

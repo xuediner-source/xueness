@@ -189,11 +189,12 @@ class LightweightTests(unittest.TestCase):
             context_overflow = True
         def overflow(messages, tools):
             raise Overflow()
-        provider = ScriptedProvider([overflow, {'role': 'assistant', 'content': 'done'}])
+        provider = ScriptedProvider([overflow, {'role': 'assistant', 'content': 'done', '_request_attempts': 1}])
         result = run(self.session(), self.store, provider, self.gate)
         self.assertEqual(len(provider.requests), 2)
         self.assertEqual(result['results'], {})
         self.assertTrue(result['runtime_budget']['overflowRetry'])
+        self.assertEqual(1, result['runtime_activity']['retryCount'])
 
     def test_profile_validation_and_resume(self):
         self.assertEqual(lw.profile_for({'runtime_profile': 'lightweight'}, SimpleNamespace()), 'lightweight')

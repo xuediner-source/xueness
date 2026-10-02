@@ -9,7 +9,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { renderToStaticMarkup } from "react-dom/server";
 
-import { XuenessCapabilityDialog } from "./XuenessCapabilityDialog";
+import { XuenessCapabilityDialog, shouldDismissCapabilityDialogOnEscape, trapCapabilityDialogTab } from "./XuenessCapabilityDialog";
 import type { CapabilityItem } from "./xuenessCapabilities";
 
 function item(partial: Partial<CapabilityItem> & { id: string }): CapabilityItem {
@@ -149,4 +149,50 @@ test("edit mode: error prop renders as alert; busy disables both buttons", () =>
     const button = html.match(new RegExp(`<button[^>]*data-testid="${testid}"[^>]*>`))?.[0] ?? "";
     assert.match(button, /disabled/);
   }
+});
+
+test("CapabilityDialog: Tab 键在表单所有控件间循环约束，支持外部聚焦收拢", () => {
+  const calls: string[] = [];
+  const back = { focus: () => calls.push("back") };
+  const input = { focus: () => calls.push("input") };
+  const submit = { focus: () => calls.push("submit") };
+  const dialog = { focus: () => calls.push("dialog") };
+  const forwardTab = { key: "Tab", shiftKey: false, preventDefault: () => calls.push("prevent") };
+  const backwardTab = { key: "Tab", shiftKey: true, preventDefault: () => calls.push("prevent") };
+
+  // 末尾控件 Tab 循环回到首项
+  assert.equal(trapCapabilityDialogTab(forwardTab, submit, [back, input, submit], dialog), true);
+  // 首项 Shift+Tab 循环跳到末尾
+  assert.equal(trapCapabilityDialogTab(backwardTab, back, [back, input, submit], dialog), true);
+  // 外部/容器聚焦时 Tab 聚焦首项
+  assert.equal(trapCapabilityDialogTab(forwardTab, null, [back, input, submit], dialog), true);
+  // 外部/容器聚焦时 Shift+Tab 聚焦末尾
+  assert.equal(trapCapabilityDialogTab(backwardTab, null, [back, input, submit], dialog), true);
+  // 中间控件让浏览器默认 tab 自然流转
+  assert.equal(trapCapabilityDialogTab(forwardTab, input, [back, input, submit], dialog), false);
+  // 空控件列表聚焦对话框容器
+  assert.equal(trapCapabilityDialogTab(forwardTab, null, [], dialog), true);
+
+  assert.deepEqual(calls, [
+    "prevent", "back",
+    "prevent", "submit",
+    "prevent", "back",
+    "prevent", "submit",
+    "prevent", "dialog",
+  ]);
+});
+
+test("CapabilityDialog: IME 组合输入状态下的 Escape 不触发退出", () => {
+  // 正常 Escape 退出
+  assert.equal(shouldDismissCapabilityDialogOnEscape({ key: "Escape" }, false, true), true);
+  // busy 时不退出
+  assert.equal(shouldDismissCapabilityDialogOnEscape({ key: "Escape" }, true, true), false);
+  // 没有 onCancel 回调时不退出
+  assert.equal(shouldDismissCapabilityDialogOnEscape({ key: "Escape" }, false, false), false);
+  // IME isComposing 期间的 Escape 不退出
+  assert.equal(shouldDismissCapabilityDialogOnEscape({ key: "Escape", nativeEvent: { isComposing: true } }, false, true), false);
+  // keyCode 229 期间的 Escape 不退出
+  assert.equal(shouldDismissCapabilityDialogOnEscape({ key: "Escape", keyCode: 229 }, false, true), false);
+  // 非 Escape 键不退出
+  assert.equal(shouldDismissCapabilityDialogOnEscape({ key: "Enter" }, false, true), false);
 });

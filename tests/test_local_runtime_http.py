@@ -13,7 +13,6 @@ from __future__ import annotations
 import io
 import json
 import os
-import re
 import tempfile
 import threading
 import unittest
@@ -217,7 +216,7 @@ class LocalRuntimeHttpTests(unittest.TestCase):
         for request in fixture.requests:
             self.assertEqual("/v1/chat/completions", request["path"])
             self.assertEqual(1024, request["body"]["max_tokens"])
-            self.assertFalse(request["body"]["parallel_tool_calls"])
+            self.assertNotIn("parallel_tool_calls", request["body"])
             self.assertNotIn("stream_options", request["body"])
             self.assertNotIn("Authorization", request["headers"])
         self.assertTrue(all(request["body"]["stream"] is True for request in fixture.requests))
@@ -256,37 +255,18 @@ class LocalRuntimeHttpTests(unittest.TestCase):
 
     def test_json_adapter_uses_same_gate_for_read_and_denies_write(self):
         (self.workspace / "input.txt").write_text("safe read\n", encoding="utf-8")
-        read_call_ids = []
 
         def reply(body, index):
             if index == 0:
                 return {"content": json.dumps({
                     "tool": "read", "arguments": {"path": "input.txt"},
                 })}
-            # The JSON adapter serializes tool results into untrusted user
-            # messages. Recover the successful read call id for final evidence.
-            for message in body.get("messages", []):
-                match = re.search(
-                    r"UNTRUSTED tool result \(([^)]+)\):\s*(\{.*\})",
-                    message.get("content") or "", re.S)
-                if not match:
-                    continue
-                try:
-                    result = json.loads(match.group(2))
-                except ValueError:
-                    continue
-                if result.get("ok") is True and result.get("path") == "input.txt":
-                    read_call_ids.append(match.group(1))
             if index == 1:
                 return {"content": json.dumps({
                     "tool": "write",
                     "arguments": {"path": "denied.txt", "content": "must stay absent"},
                 })}
-            return {"content": json.dumps({
-                "answer": "The read worked and the write stayed denied.",
-                "evidence": [{"tool_call_id": read_call_ids[0],
-                              "observation": "The read operation succeeded."}],
-            })}
+            return {"content": "unexpected extra request"}
 
         fixture = ChatFixture(reply)
         self.addCleanup(fixture.close)
@@ -297,9 +277,11 @@ class LocalRuntimeHttpTests(unittest.TestCase):
         sid = self._new_session("json-local", task="Read input.txt and do not write files")
         status, result = self._run(sid, provider_id="json-local", model="fixture-model")
         self.assertEqual(200, status, result)
-        self.assertTrue(result["completion"]["verified"], result)
+        self.assertEqual("paused", result["status"], result)
+        self.assertIsNone(result["completion"], result)
+        self.assertTrue(any(item.get("tool_call_id") for item in result.get("pending", [])), result)
         self.assertFalse((self.workspace / "denied.txt").exists())
-        self.assertEqual(3, len(fixture.requests))
+        self.assertEqual(2, len(fixture.requests))
         for request in fixture.requests:
             self.assertNotIn("tools", request["body"])
             self.assertNotIn("parallel_tool_calls", request["body"])
@@ -308,6 +290,7 @@ class LocalRuntimeHttpTests(unittest.TestCase):
             "GET", f"/api/sessions/{sid}/journal", csrf=False)
         self.assertEqual(200, journal_status)
         self.assertTrue(any(value.get("error") == "denied"
+                            and value.get("awaiting_approval") is True
                             for value in journal["results"].values()))
         self.assertTrue(any(value.get("ok") is True and value.get("path") == "input.txt"
                             for value in journal["results"].values()))
@@ -337,7 +320,7 @@ class LocalRuntimeHttpTests(unittest.TestCase):
         self.assertEqual(1, len(fixture.requests))
         body = fixture.requests[0]["body"]
         self.assertEqual(1024, body["max_tokens"])
-        self.assertFalse(body["parallel_tool_calls"])
+        self.assertNotIn("parallel_tool_calls", body)
         self.assertNotIn("stream_options", body)
         self.assertNotIn("Authorization", fixture.requests[0]["headers"])
 

@@ -302,13 +302,24 @@ class SubagentsTests(unittest.TestCase):
 
                     provider = Provider()
                     agent = {"id": "fixture", "name": "Fixture", **tool_config}
-                    result = _run_subagent(
-                        Gate(self.root), provider, [agent], "Inspect safely", "fixture",
-                        depth=0, max_depth=1, state_dir=self.state_dir,
-                    )
+                    child_results = []
+                    def capture_child(_store, child):
+                        if child.get("results"):
+                            child_results[:] = list(child["results"].values())
+                    with patch("xueness.bundled_plugins.subagents.runner._NullStore.save", capture_child):
+                        result = _run_subagent(
+                            Gate(self.root), provider, [agent], "Inspect safely", "fixture",
+                            depth=0, max_depth=1, state_dir=self.state_dir,
+                        )
                     self.assertTrue(result["ok"])
-                    self.assertEqual(provider.call_count, 2)
-                    self.assertEqual(provider.tool_results, [{"ok": False, "error": "denied"}])
+                    # A policy refusal stops immediately, without sending a
+                    # second request merely to ask the model to explain it.
+                    self.assertEqual(provider.call_count, 1)
+                    self.assertEqual(result["steps"], 1)
+                    self.assertEqual(len(child_results), 1)
+                    self.assertFalse(child_results[0]["ok"])
+                    self.assertEqual(child_results[0]["error_code"], "permission_denied")
+                    self.assertFalse(child_results[0]["retryable"])
                     first_names = {schema["function"]["name"]
                                    for schema in provider.requested_schemas[0]}
                     self.assertTrue(SUBAGENT_DENIED_TOOL_NAMES.isdisjoint(first_names))

@@ -1,6 +1,6 @@
 {
   "name": "xueness-desktop",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "private": true,
   "description": "Xueness desktop Agent CLI workbench",
   "license": "Apache-2.0",
@@ -20,5 +20,8 @@
   },
   "build": {
     "extends": "./electron-builder.cjs"
+  },
+  "dependencies": {
+    "electron-updater": "6.8.10"
   }
 }

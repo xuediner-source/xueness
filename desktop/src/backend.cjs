@@ -5,6 +5,18 @@ const { EventEmitter } = require('node:events');
 const { readyOrigin } = require('./security.cjs');
 
 const POSIX_GROUP_DRAIN_MS = 3000;
+const UPDATE_ACTIONS = new Set(['status', 'check', 'download', 'install', 'cancel']);
+const UPDATE_VERSION = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/;
+
+function isUpdateRequest(message) {
+  if (message.type !== 'update' || typeof message.id !== 'string' || !/^[a-f0-9]{32}$/.test(message.id)
+    || !UPDATE_ACTIONS.has(message.action)) return false;
+  const needsVersion = message.action === 'download' || message.action === 'install';
+  const expectedKeys = needsVersion ? ['type', 'id', 'action', 'version'] : ['type', 'id', 'action'];
+  return Object.keys(message).every(key => expectedKeys.includes(key))
+    && expectedKeys.every(key => Object.hasOwn(message, key))
+    && (!needsVersion || (typeof message.version === 'string' && UPDATE_VERSION.test(message.version)));
+}
 
 function waitForChildExit(child, timeoutMs) {
   if (child.exitCode !== null || child.signalCode !== null) return Promise.resolve(true);
@@ -81,6 +93,12 @@ class Backend extends EventEmitter {
           } catch { fail(); }
         } else if (message.type === 'dialog' && typeof message.id === 'string' && /^[a-f0-9]{32}$/.test(message.id)) {
           this.emit('dialog', message);
+        } else if (isUpdateRequest(message)) {
+          this.emit('update', message);
+        } else if (message.type === 'update-policy' && typeof message.enabled === 'boolean'
+          && (message.autoDownload === undefined || typeof message.autoDownload === 'boolean')
+          && Object.keys(message).every(key => ['type', 'enabled', 'autoDownload'].includes(key))) {
+          this.emit('update-policy', { enabled: message.enabled, autoDownload: message.autoDownload !== false });
         }
       });
     });

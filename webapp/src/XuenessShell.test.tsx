@@ -10,7 +10,16 @@ import {
   TimelineCard,
   SimpleMarkdown,
   copyTextToClipboard,
+  shouldCloseNarrowSidebarOnEscape,
 } from "./XuenessShell";
+
+test("Shell drawer Escape closes normally, while composition or a handled nested Escape stays local", () => {
+  assert.equal(shouldCloseNarrowSidebarOnEscape({ key: "Escape" }), true);
+  assert.equal(shouldCloseNarrowSidebarOnEscape({ key: "Escape", isComposing: true }), false);
+  assert.equal(shouldCloseNarrowSidebarOnEscape({ key: "Escape", keyCode: 229 }), false);
+  assert.equal(shouldCloseNarrowSidebarOnEscape({ key: "Escape", defaultPrevented: true }), false);
+  assert.equal(shouldCloseNarrowSidebarOnEscape({ key: "Enter" }), false);
+});
 
 test("Shell: 侧栏导航/主区圆角面板渲染，含返回前进、底部品牌槽", () => {
   const html = renderToStaticMarkup(
@@ -73,11 +82,25 @@ test("Shell: 无 sidebar 时不出 aside 与切换按钮", () => {
   assert.match(html, /纯主区/);
 });
 
+test("Shell: 桌面标题栏占独立顶行，Web 默认布局不受影响", () => {
+  const web = renderToStaticMarkup(<Shell sidebar={null}>内容</Shell>);
+  assert.doesNotMatch(web, /xn-shell-layout--desktop-titlebar/);
+  assert.doesNotMatch(web, /xn-shell-titlebar-host/);
+
+  const desktop = renderToStaticMarkup(<Shell sidebar={<div>任务</div>} titlebar={<div>桌面标题栏</div>}>内容</Shell>);
+  assert.match(desktop, /xn-shell-layout--desktop-titlebar/);
+  assert.match(desktop, /data-testid="xn-shell-titlebar-host"/);
+  assert.match(desktop, /桌面标题栏/);
+  assert.doesNotMatch(desktop, /xn-shell-sidebar__head/);
+  assert.doesNotMatch(desktop, /data-testid="xn-shell-sidebar-toggle"/);
+});
+
 test("SidebarActions: 图标 + 文案 + 快捷键，可点击", () => {
   const html = renderToStaticMarkup(
     <SidebarActions
+      platform="MacIntel"
       actions={[
-        { id: "new-task", icon: "⊕", label: "新建任务", shortcut: "⌘N", onClick: () => {} },
+        { id: "new-task", icon: "⊕", label: "新建任务", shortcut: "Mod+N", onClick: () => {} },
         { id: "search", icon: "⌕", label: "搜索" },
       ]}
     />
@@ -90,6 +113,16 @@ test("SidebarActions: 图标 + 文案 + 快捷键，可点击", () => {
   assert.match(html, /搜索/);
   const buttons = html.match(/<button/g) ?? [];
   assert.equal(buttons.length, 2);
+});
+
+test("SidebarActions: Mod 快捷键在 Windows 使用 Ctrl 标签", () => {
+  const html = renderToStaticMarkup(<SidebarActions platform="Win32" actions={[
+    { id: "new-task", icon: "⊕", label: "新建任务", shortcut: "Mod+N" },
+    { id: "search", icon: "⌕", label: "搜索", shortcut: "Mod+K" },
+  ]} />);
+  assert.match(html, /<kbd class="xn-sidebar-action__shortcut">Ctrl\+N<\/kbd>/);
+  assert.match(html, /<kbd class="xn-sidebar-action__shortcut">Ctrl\+K<\/kbd>/);
+  assert.doesNotMatch(html, /⌘/);
 });
 
 test("SidebarNav: active 项有 aria-current 与 data-active，完成项不再显示状态徽标", () => {
@@ -208,7 +241,7 @@ test("TimelineCard: completion/question 有专属卡形态；duration 仅在有�
   const completion = renderToStaticMarkup(
     <TimelineCard
       role="completion"
-      title="任务完成 (已验证)"
+      title="运行结束 · 工具成功证据通过"
       status="ok"
       body="全部通过"
       seq={20}
@@ -216,7 +249,7 @@ test("TimelineCard: completion/question 有专属卡形态；duration 仅在有�
   );
   assert.match(completion, /xn-msg--completion/);
   assert.match(completion, /data-role="completion"/);
-  assert.match(completion, /任务完成 \(已验证\)/);
+  assert.match(completion, /运行结束 · 工具成功证据通过/);
   assert.match(completion, /全部通过/);
 
   const question = renderToStaticMarkup(

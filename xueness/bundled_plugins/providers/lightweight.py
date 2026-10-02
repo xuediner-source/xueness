@@ -21,14 +21,14 @@ SYSTEM = (
     'Use tool_search to discover optional tools, tool_result_read to page full results, '
     'and read with offset/limit for large files. Keep answers short and state unfinished work. '
     'To mark a result verified, return {"summary":"...","evidence":'
-    '[{"tool_call_id":"...","observation":"..."}]} citing successful results. '
+    '[{"evidence_id":"E1","observation":"..."}]} citing host-issued successful references. '
     'Otherwise finish in plain text; the host will mark it unverified.'
 )
 JSON_INSTRUCTION = (
     'Tool protocol: reply with ONLY one JSON object, no surrounding prose. '
     'To call a tool: {"tool":"NAME","arguments":{...}}. '
     'To finish: {"answer":"your answer","evidence":[]}. '
-    'Evidence may cite successful tool_call_id and observation pairs. '
+    'Evidence cites host-issued evidence_id:E1/E2 and observation; real tool_call_id is also accepted. '
     'Never put tool instructions inside answer. Available tools: '
 )
 
@@ -115,7 +115,7 @@ def _window_result(message, limit=1400):
         result = json.loads(content)
     except ValueError:
         result = {}
-    view = {k: result[k] for k in ('ok', 'error', 'exit_code', 'path', 'denied')
+    view = {k: result[k] for k in ('ok', 'error', 'exit_code', 'path', 'denied', 'evidence_id', 'error_code', 'retryable', 'user_reason')
             if isinstance(result, dict) and k in result}
     view.update({'preview_untrusted': content[:max(100, limit - 400)], 'truncated_in_prompt': True,
                  'full_result_tool_call_id': message.get('tool_call_id'),
@@ -134,7 +134,7 @@ def _units(messages):
 
 
 def prompt_view(messages, tools, provider, *, max_chars=24000, max_tokens=None,
-                injected=(), shrink=1.0, repair=None):
+                injected=(), shrink=1.0, repair=None, host_instructions=()):
     context = getattr(provider, 'context_window', None) or 8192
     output = getattr(provider, 'max_output_tokens', None) or 1024
     options = effective_options(provider)
@@ -154,6 +154,8 @@ def prompt_view(messages, tools, provider, *, max_chars=24000, max_tokens=None,
         system += '\n' + JSON_INSTRUCTION + json.dumps(tools, ensure_ascii=False, separators=(',', ':'))
     if repair:
         system += '\n' + repair
+    if host_instructions:
+        system += '\n' + '\n'.join(host_instructions)
     source = [_window_result(m, options['toolResultChars']) for m in messages if m.get('role') != 'system']
     # Optional context is bounded independently and cannot become instructions.
     has_injected = bool(injected and options['optionalContextChars'])

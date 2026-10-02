@@ -18,7 +18,7 @@ Xueness 的固定开发规则是：**每项产品功能归属于插件，并在�
 }
 ```
 
-`modules` 列出包内全部实际 Python 业务模块，排除入口 `plugin.py` 和 `__init__.py`；嵌套模块使用点分隔名称。`frontendModules` 路径相对于 `webapp/src/`。历史跨插件纯展示文件可使用 `XuenessPanels.tsx#DirectoryBrowser` 指定导出归属；新业务组件应使用插件目录。
+`modules` 列出包内全部实际 Python 业务模块，排除入口 `plugin.py` 和 `__init__.py`；嵌套模块使用点分隔名称。`frontendModules` 路径相对于 `webapp/src/`。新业务组件应直接放在所属插件目录；确需共享纯展示文件时才按导出符号声明归属，并记录共享理由。
 
 创建新插件时，还需登记后端 `PLUGIN_IDS`、前端 `XUENESS_PLUGIN_REGISTRY`、依赖、真实工具/命令/面板/资源，并更新 [架构功能清单](docs/xueness-plugin-architecture.md)。共享 `capabilities` 面板可由多个资源插件贡献，实际工具、CLI 命令和子功能 ID 不能重复归属。没有单独 Web 面板的 CLI/工具插件，也必须出现在完整 catalog 中。通常从「设置 → 插件」进入；settings 关闭时从账户菜单中的「插件管理」进入，全部插件关闭后仍能查看及恢复。
 
@@ -49,3 +49,7 @@ Xueness 的固定开发规则是：**每项产品功能归属于插件，并在�
 窗口、私有后端连接和插件管理是桌面入口的恢复基础设施，类似 Web HTTP 宿主；禁用 desktop 时它们仍提供其它插件和插件恢复入口，原生目录选择和桌面状态 API 则关闭。不能将其它桌面业务借此放入宿主。跨平台文件锁是已有 lease/写锁基础设施的实现；Shell、终端、工作流和机器指标的系统差异必须留在各自插件。
 
 `process_runtime.py` 是进程创建的共享基础设施例外：Windows 冻结后端的 DLL 搜索目录是进程全局状态，多个插件必须共用同一把锁，在创建外部进程时暂时恢复系统搜索路径，创建后立即还原。Windows 子进程的最小环境还需保留固定 allowlist 内的系统、架构、用户目录与 PowerShell 模块路径，使 .NET/PowerShell 能启动；不会追加模型密钥或其它私密环境变量。它不检查或授予业务权限；调用插件仍先执行原有 Gate 与开关检查。不能为不同插件复制互不协调的 DLL 目录修改器。参考 [PyInstaller 外部进程要求](https://pyinstaller.org/en/stable/common-issues-and-pitfalls.html#launching-external-programs-from-the-frozen-application)。
+
+## 前端共享焦点基础设施
+
+`plugins/shared.tsx` 的 `useModalFocusScope` 和 `shouldDismissModalOnEscape` 属于基础 UI：只处理可见模态窗口的焦点、Tab、输入法保护与清理，不读取产品数据、发起请求、执行动作或授予权限。各插件仍持有确认状态、业务回调与开关边界。它统一已有跨插件对话框的键盘行为，避免各插件重复不完整的焦点陷阱；未扩大结构门禁共享白名单。独立产品组件必须物理放在所属插件目录，不能仅登记顶层文件绕过此要求。

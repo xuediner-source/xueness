@@ -1,16 +1,21 @@
-const { app, BrowserWindow, Menu, dialog, shell } = require('electron');
+const { app, BrowserWindow, Menu, dialog, shell, net } = require('electron');
 const { join, resolve } = require('node:path');
 const { existsSync, mkdirSync, writeFileSync } = require('node:fs');
 const { Backend } = require('./backend.cjs');
 const { isOwnedUrl, isExternalUrl, installPermissionPolicy } = require('./security.cjs');
+const { getWindowChromeOptions } = require('./window-chrome.cjs');
+const { UpdateCoordinator } = require('./update-coordinator.cjs');
+const { autoUpdater } = require('electron-updater');
 
-let window, backend, quitting = false;
+let window, backend, updater, quitting = false;
+let updatePolicy = false, autoDownloadUpdates = true;
 app.setName('Xueness');
 if (process.env.XUENESS_DESKTOP_DATA) app.setPath('userData', resolve(process.env.XUENESS_DESKTOP_DATA));
 if (!app.requestSingleInstanceLock()) app.quit();
 else {
   app.on('second-instance', () => { if (window) { if (window.isMinimized()) window.restore(); window.show(); window.focus(); } });
   app.on('before-quit', event => {
+    void updater?.dispose();
     if (!quitting && backend) {
       event.preventDefault(); quitting = true;
       void backend.stop().finally(() => app.quit());
@@ -38,8 +43,34 @@ async function start() {
     cwd: app.isPackaged ? data : root, data, node: process.execPath,
     playwright: app.isPackaged ? join(process.resourcesPath, 'browser-runtime/node_modules/playwright/index.mjs') : join(root, 'webapp/node_modules/playwright/index.mjs'),
     assets: app.isPackaged ? join(process.resourcesPath, 'webapp') : join(root, 'webapp/dist') });
+  updater = new UpdateCoordinator({ app, autoUpdater, shell, signedMac: false,
+    fetchImpl: (...args) => net.fetch(...args),
+    isEnabled: () => updatePolicy,
+    autoDownload: () => autoDownloadUpdates,
+    beforeInstall: async () => {
+      if (!backend.origin || !updatePolicy) return { ok: false, reason: '更新服务尚未准备完成。' };
+      const headers = { 'X-Xueness-Desktop-Token': backend.token };
+      const csrfResponse = await fetch(backend.origin + '/api/csrf', { headers, redirect: 'error', signal: AbortSignal.timeout(5000) });
+      if (!csrfResponse.ok) return { ok: false, reason: '无法确认桌面更新权限。' };
+      const csrf = await csrfResponse.json();
+      const prepared = await fetch(backend.origin + '/api/updates/prepare-install', { method: 'POST', redirect: 'error',
+        headers: { ...headers, 'Content-Type': 'application/json', 'X-CSRF-Token': csrf.csrfToken },
+        body: JSON.stringify(updater.installMode === 'open-dmg' ? { checkOnly: true } : {}), signal: AbortSignal.timeout(5000) });
+      const result = await prepared.json();
+      if (!prepared.ok || result.ok !== true) return { ok: false, reason: result.reason || '请先结束当前任务，再重启更新。' };
+      if (updater.installMode === 'open-dmg') return { ok: true };
+      return { ok: true, afterReply: async () => { quitting = true; await backend.stop(); } };
+    },
+  });
+  backend.on('update-policy', policy => {
+    updatePolicy = policy.enabled;
+    autoDownloadUpdates = policy.autoDownload !== false;
+    void updater.setEnabled(updatePolicy);
+  });
+  backend.on('update', message => { void updater.handleRequest(message, result => backend.reply(result)); });
   window = new BrowserWindow({ width: 1280, height: 840, minWidth: 760, minHeight: 540,
     title: 'Xueness', backgroundColor: '#171717', show: false,
+    ...getWindowChromeOptions(process.platform),
     webPreferences: { sandbox: true, contextIsolation: true, nodeIntegration: false,
       webSecurity: true, spellcheck: false, webviewTag: false } });
   window.once('ready-to-show', () => window.show());
@@ -84,7 +115,8 @@ async function start() {
     { role: 'windowMenu' },
     ...(process.platform !== 'darwin' ? [{ label: '文件', submenu: [{ role: 'quit' }] }] : []),
   ]));
-  await window.loadURL(origin);
+  const desktopChrome = process.platform === 'darwin' || process.platform === 'win32';
+  await window.loadURL(desktopChrome ? `${origin}/?xuenessDesktop=1` : origin);
   if (process.env.XUENESS_DESKTOP_SMOKE_FILE) {
     const result = await window.webContents.executeJavaScript(`(async () => {
       for (let n=0;n<100 && !document.querySelector('[data-testid=xn-shell] [data-testid=xn-sidebar-action-new-task]');n++)
@@ -112,7 +144,7 @@ async function start() {
         nodeAccess: typeof window.require !== 'undefined', workbenchReady, body: document.body.textContent.length,
         clipWriteGranted: clipWrite.state === 'granted', clipReadDenied: clipRead.state === 'denied' };
     })()`);
-    writeFileSync(process.env.XUENESS_DESKTOP_SMOKE_FILE, JSON.stringify(result));
+    writeFileSync(process.env.XUENESS_DESKTOP_SMOKE_FILE, JSON.stringify({ ...result, updates: updater.status() }));
     app.quit();
   }
 }

@@ -1,5 +1,5 @@
 import { t as tr } from './i18n';
-import type { XuenessSettingsSection } from './XuenessSettingsView';
+import type { XuenessSettingsSection } from './plugins/settings/XuenessSettingsView';
 
 type SettingsGroupId = 'basics' | 'agentCapabilities' | 'dataAndStats' | 'extensions';
 
@@ -25,6 +25,7 @@ const definitions: readonly SectionDefinition[] = [
   ['appearance', '外观', '主题、字体与文件内容显示。', 'basics', 'settings'],
   ['providers', '模型设置', '管理模型连接、附件能力和思考强度。', 'basics', 'providers'],
   ['browser', '浏览器控制', '配置新任务的浏览器工具。', 'basics', 'browser'],
+  ['network', '网络搜索', '搜索服务、搜索模型 API 与真实 DNS 诊断。', 'basics', 'network'],
   ['shortcuts', '键盘快捷键', '自定义工作台快捷键。', 'basics', 'settings'],
   ['memory', '记忆', '查看和编辑项目记忆。', 'agentCapabilities', 'memory'],
   ['subagents', '子智能体', '配置子代理的提示词与模型。', 'agentCapabilities', 'subagents'],
@@ -41,6 +42,7 @@ const definitions: readonly SectionDefinition[] = [
   ['remote', 'SSH 工作区', '管理远程工作区连接。', 'extensions', 'remote'],
   ['automations', '自动化', '管理定时任务与审批。', 'extensions', 'automation'],
   ['desktop', '桌面端', '查看桌面平台、版本与私有数据位置。', 'extensions', 'desktop'],
+  ['updates', '应用更新', '检查、下载和安装客户端稳定版。', 'extensions', 'updates'],
   ['diagnostics', '诊断与维护', '导出脱敏诊断和清理旧日志。', 'extensions', 'diagnostics'],
 ];
 

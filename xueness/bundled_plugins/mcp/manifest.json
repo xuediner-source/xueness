@@ -54,8 +54,7 @@
     }
   ],
   "frontendModules": [
-    "XuenessMcpTools.tsx",
-    "XuenessOperations.tsx#McpDiagnostics",
-    "plugins/mcp/index.tsx"
+    "plugins/mcp/index.tsx",
+    "plugins/mcp/McpDiagnostics.tsx"
   ]
 }

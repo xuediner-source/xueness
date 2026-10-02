@@ -9,14 +9,16 @@
   "tools": [
     "todo_read",
     "todo_write",
-    "ask_user"
+    "ask_user",
+    "delivery_plan"
   ],
   "commands": [],
   "panels": [],
   "resources": [],
   "capabilities": [],
   "modules": [
-    "tooling"
+    "tooling",
+    "delivery"
   ],
   "features": [
     {
@@ -28,7 +30,14 @@
       "id": "planning.questions",
       "name": "提问、用户回答与继续",
       "nameEn": "Questions, user answers and continuation"
+    },
+    {
+      "id": "planning.delivery",
+      "name": "交付清单与内容完整性检查",
+      "nameEn": "Delivery checklist and content completeness checks"
     }
   ],
-  "frontendModules": []
+  "frontendModules": [
+    "plugins/planning/CompletionChecks.tsx"
+  ]
 }

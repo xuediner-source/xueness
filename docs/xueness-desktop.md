@@ -62,3 +62,7 @@ python desktop/scripts/checksums.py
 审查 [DeepSeek Harness 官方桌面源码](https://github.com/deepseek-ai/deepseek-harness/tree/639ed015397290b3745d163aafe02ffee4aa3f84/apps/desktop)，其中 [运行时宿主](https://github.com/deepseek-ai/deepseek-harness/blob/639ed015397290b3745d163aafe02ffee4aa3f84/apps/desktop/src/host-process.ts) 和 [原生目录选择](https://github.com/deepseek-ai/deepseek-harness/blob/639ed015397290b3745d163aafe02ffee4aa3f84/apps/desktop/src/directory-picker.ts) 提供了独立进程、窗口所属对话框和复用插件运行时的设计参照。
 
 Xueness 没有复制上游桌面源码、品牌或图标，也没有加入上游账户、遥测、强制更新或云分发。宿主边界遵循 [Electron 安全建议](https://www.electronjs.org/docs/latest/tutorial/security)，后端打包方式见 [PyInstaller 运行模式](https://pyinstaller.org/en/stable/operating-mode.html)。
+
+## 客户端更新
+
+0.1.1 加入 updates 插件的应用内更新入口。稳定更新源固定为本仓库 GitHub Releases，支持自动检查、自动下载开关、手动下载及取消，安装前检查活动任务。Windows 安装版提供「重启并更新」；便携版不能原地更新。当前无签名 Mac 版本在客户端校验并下载对应架构 DMG，打开后仍需在 Finder 中替换。0.1.0 未内置更新器，首次迁移需要手动升级一次。完整行为和边界见[客户端更新说明](xueness-reliability-and-updates.md#桌面更新)。版本源码与客户端发布状态分别以仓库和 Releases 为准。

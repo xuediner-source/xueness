@@ -33,5 +33,7 @@
       "nameEn": "XLSX worksheets and cached cell values"
     }
   ],
-  "frontendModules": []
+  "frontendModules": [
+    "plugins/office/OfficeDocumentRenderer.tsx"
+  ]
 }

@@ -338,6 +338,8 @@ def handle_GET(self, parts, path, data):
             'reasoning_history': _public_reasoning_history(session),
             'provider_usage': session.get('provider_usage', []),
             'completion': session.get('completion'), 'todos': session.get('todos', []),
+            'delivery_requirements': session.get('delivery_requirements', []),
+            'tool_timings': session.get('tool_timings', [])[-200:],
             'pending_question': session.get('pending_question'),
             'pending': host.pending_denials(session), 'approved': approved,
             'changed_files': host.changed_paths(session),

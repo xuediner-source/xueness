@@ -20,6 +20,7 @@ function Svg({
   children,
   viewBox = "0 0 24 24",
 }: IconProps & { children: React.ReactNode; viewBox?: string }): React.JSX.Element {
+  const titleId = React.useId();
   return (
     <svg
       width={size}
@@ -33,8 +34,9 @@ function Svg({
       className={className}
       aria-hidden={title ? undefined : true}
       role={title ? "img" : undefined}
-      {...(title ? { title } : {})}
+      aria-labelledby={title ? titleId : undefined}
     >
+      {title ? <title id={titleId}>{title}</title> : null}
       {children}
     </svg>
   );
@@ -205,4 +207,37 @@ export function IconTerminal(props: IconProps) {
 
 export function IconMenu(props: IconProps) {
   return <Svg {...props}><path d="M4 6h16M4 12h16M4 18h16" /></Svg>;
+}
+
+/* ---------------------------------------------------------------------------
+ * Xueness identity.
+ *
+ * The mark is an original six-spoke lattice: three axes through a common hub,
+ * each ending in a short terminal tick. It reads as a crystal at sidebar size,
+ * survives a single-colour 16px render, and carries no other product's shape.
+ * Geometry is shared with webapp/public/xueness-mark.svg (the favicon) — keep
+ * the two in step when either changes.
+ * ------------------------------------------------------------------------- */
+
+export function IconXuenessMark({ size = 20, className, title }: IconProps): React.JSX.Element {
+  return (
+    <Svg size={size} className={className} title={title} strokeWidth={1.6}>
+      <path d="M12 3.2v17.6" />
+      <path d="M4.38 7.6 19.62 16.4" />
+      <path d="M19.62 7.6 4.38 16.4" />
+      <circle cx="12" cy="12" r="2.1" />
+    </Svg>
+  );
+}
+
+/** Mark inside a rounded tile — the app-icon form used at larger sizes. */
+export function IconXuenessGlyph({ size = 28, className, title }: IconProps): React.JSX.Element {
+  return (
+    <Svg size={size} className={className} title={title} strokeWidth={1.5}>
+      <rect x="2.4" y="2.4" width="19.2" height="19.2" rx="5.4" />
+      <path d="M12 6.6v10.8" />
+      <path d="M7.32 9.3 16.68 14.7" />
+      <path d="M16.68 9.3 7.32 14.7" />
+    </Svg>
+  );
 }

@@ -16,6 +16,13 @@ export type RuntimeActivity = {
   charactersPerSecond?: number;
   reportedOutputTokens?: number;
   tokensPerSecond?: number;
+  reportedInputTokens?: number;
+  reportedCachedTokens?: number;
+  retryCount?: number;
+  waitingSeconds?: number;
+  thinkingSeconds?: number;
+  generatingSeconds?: number;
+  toolSeconds?: number;
 };
 
 export type LocalRuntimeSession = {
@@ -33,7 +40,22 @@ export type LocalRuntimeSession = {
   } | null;
   runtime_activity?: RuntimeActivity | null;
   runtime_activity_history?: RuntimeActivity[] | null;
+  tool_timings?: { step: number; name: string; tool_call_id: string; seconds: number; ok: boolean }[];
 };
+
+export function RequestTiming({ session }: { session: LocalRuntimeSession | null }) {
+  const rows = session?.runtime_activity_history ?? [];
+  if (!rows.length) return null;
+  return <details className="xn-runtime-monitor__timings"><summary>{t('步骤耗时与实际用量')}</summary>
+    <p>{t('等待、思考和生成按收到流数据的时段计时，包含传输等待；非流式请求无法拆分思考与生成。缺失 Token 和重试信息显示 —。')}</p>
+    <div style={{ overflowX: 'auto' }}><table><thead><tr>{['步骤', '模型请求', '等待', '思考流', '生成流', '工具', '输入 Token', '缓存 Token', '输出 Token', '失败重试'].map(label => <th key={label}>{t(label)}</th>)}</tr></thead>
+      <tbody>{rows.map((row, index) => <tr key={row.startedAt ?? index}><td>#{row.requestStep ?? index + 1}</td>
+        {[row.requestSeconds, row.waitingSeconds, row.thinkingSeconds, row.generatingSeconds, row.toolSeconds].map((seconds, i) => <td key={i}>{finite(seconds) ? `${seconds.toFixed(2)} s` : '—'}</td>)}
+        {[row.reportedInputTokens, row.reportedCachedTokens, row.reportedOutputTokens, row.retryCount].map((count, i) => <td key={i}>{formatCount(count)}</td>)}
+      </tr>)}</tbody></table></div>
+    {session?.tool_timings?.length ? <ul>{session.tool_timings.slice(-30).map((tool, i) => <li key={`${tool.tool_call_id}-${i}`}>#{tool.step} · {tool.name} · {tool.seconds.toFixed(3)} s · {t(tool.ok ? '执行成功' : '执行未成功')}</li>)}</ul> : null}
+  </details>;
+}
 
 export type RuntimeMetrics = {
   schema: 'xueness.runtime-metrics.v1';

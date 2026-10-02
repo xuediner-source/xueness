@@ -326,24 +326,18 @@ class SubagentLoopTests(unittest.TestCase):
         from xueness.subagents import load as load_subagents
 
         class WriteAttemptProvider:
-            """Child: try a write, then report whatever the tool said."""
+            """Child: attempt one write; the host must deny and pause it."""
 
             def __init__(self):
                 self.n = 0
-                self.tool_output = None
 
             def complete(self, messages, tools):
                 self.n += 1
-                if self.n == 1:
-                    return {"content": "", "tool_calls": [
-                        {"id": "c-w", "type": "function",
-                         "function": {"name": "write",
-                                      "arguments": json.dumps({"path": "should-not-exist.txt",
-                                                               "content": "x"})}}]}
-                for m in messages:
-                    if m.get("role") == "tool":
-                        self.tool_output = m.get("content") or ""
-                return {"content": json.dumps({"summary": "tried to write", "evidence": []})}
+                return {"content": "", "tool_calls": [
+                    {"id": "c-w", "type": "function",
+                     "function": {"name": "write",
+                                  "arguments": json.dumps({"path": "should-not-exist.txt",
+                                                           "content": "x"})}}]}
 
         parent_provider = RecordingProvider([
             {"content": "", "tool_calls": [
@@ -364,14 +358,17 @@ class SubagentLoopTests(unittest.TestCase):
                 return child_provider.complete(messages, tools)
 
         parent = self.store.new("delegate", self.workspace)
-        run(parent, self.store, Router(), Gate(self.workspace, allow_write=True),
-            max_steps=3, subagents=load_subagents(self.state), max_depth=1)
+        out = run(parent, self.store, Router(), Gate(self.workspace, allow_write=True),
+                  max_steps=3, subagents=load_subagents(self.state), max_depth=1)
 
         self.assertFalse((self.workspace / "should-not-exist.txt").exists(),
                          "a delegated run wrote to the workspace despite the read-only gate")
-        # The child really did attempt it, and was told no.
-        self.assertIsNotNone(child_provider.tool_output, "the child never got a tool result")
-        self.assertIn('"ok": false', (child_provider.tool_output or "").lower())
+        # A hard denial is returned to the delegated task and pauses it before
+        # another provider request can repeat the same refused action.
+        self.assertEqual(child_provider.n, 1)
+        result = out["results"]["s1"]
+        self.assertTrue(result["ok"], result)
+        self.assertIn("权限策略禁止", result["summary"])
 
     def test_depth_cap_hides_the_task_tool(self):
         from xueness.subagents import load as load_subagents

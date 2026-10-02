@@ -44,6 +44,7 @@ class WebTests(unittest.TestCase):
         # Vite copies public/ to the dist root; the HTML and bundle reference
         # these by root URL, so they must be served from there.
         (dist / "favicon.ico").write_bytes(b"\\x00\\x00\\x01\\x00")
+        (dist / "xueness-mark.svg").write_text('<svg xmlns="http://www.w3.org/2000/svg"><title>Xueness</title></svg>', encoding="utf-8")
         (dist / "apple-touch-icon.png").write_bytes(b"\\x89PNG\\r\\n")
         (dist / "icon_512@2x.png").write_bytes(b"\\x89PNG\\r\\n")
         (dist / "third-party-notices.txt").write_text(
@@ -147,7 +148,8 @@ class WebTests(unittest.TestCase):
 
     def test_root_static_icons_are_served(self):
         """The favicon request is browser-implicit; a 404 there is a real defect."""
-        for path, mime in (("/favicon.ico", "image/"),
+        for path, mime in (("/xueness-mark.svg", "image/svg+xml"),
+                           ("/favicon.ico", "image/"),
                            ("/apple-touch-icon.png", "image/png"),
                            ("/icon_512@2x.png", "image/png")):
             code, body, headers = self._req(path)

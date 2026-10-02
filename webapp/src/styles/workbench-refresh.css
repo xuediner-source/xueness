@@ -117,3 +117,37 @@
 @media (prefers-reduced-motion: reduce) {
   .xn-shell-layout *, .xn-shell-layout *::before, .xn-shell-layout *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; scroll-behavior: auto !important; }
 }
+
+/* Native desktop window chrome spans the app and reserves its own top row. */
+.xn-shell-layout--desktop-titlebar {
+  grid-template-rows: 40px minmax(0, 1fr);
+  grid-template-columns: 270px minmax(0, 1fr);
+}
+.xn-shell-layout--desktop-titlebar .xn-shell-layout__titlebar {
+  grid-column: 1 / -1;
+  grid-row: 1;
+  z-index: 50;
+  min-width: 0;
+  height: 40px;
+  overflow: visible;
+}
+.xn-shell-layout--desktop-titlebar .xn-shell-main {
+  grid-row: 2;
+  height: auto;
+}
+.xn-shell-layout--desktop-titlebar .xn-shell-sidebar { grid-row: 2; }
+.xn-shell-layout--desktop-titlebar .xn-shell-sidebar-toggle { display: none; }
+.xn-shell-layout--desktop-titlebar .xn-hero { padding-top: 48px; }
+.xn-shell-layout--desktop-titlebar .xn-hero__bar { display: none; }
+.xn-shell-layout--desktop-titlebar.xn-shell-layout--sidebar-collapsed { grid-template-columns: minmax(0, 1fr); }
+.xn-shell-layout--desktop-titlebar.xn-shell-layout--sidebar-collapsed .xn-shell-sidebar { display: none; }
+.xn-shell-layout--desktop-titlebar.xn-shell-layout--sidebar-collapsed .xn-shell-main { grid-column: 1; }
+.xn-shell-layout--desktop-titlebar.xn-shell-layout--no-sidebar { grid-template-columns: minmax(0, 1fr); }
+.xn-shell-layout--desktop-titlebar.xn-shell-layout--no-sidebar .xn-shell-main { grid-column: 1; }
+
+@media (max-width: 900px) {
+  .xn-shell-layout--desktop-titlebar { grid-template-rows: 40px minmax(0, 1fr); grid-template-columns: minmax(0, 1fr); }
+  .xn-shell-layout--desktop-titlebar .xn-shell-sidebar { grid-row: 2; inset-block-start: 40px; height: calc(100dvh - 40px); }
+  .xn-shell-layout--desktop-titlebar .xn-shell-main { grid-column: 1; grid-row: 2; height: auto; }
+  .xn-shell-layout--desktop-titlebar .xn-shell-sidebar-toggle { display: none; }
+}

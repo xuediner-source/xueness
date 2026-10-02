@@ -14,7 +14,7 @@ from xueness.bundled_plugins.git.actions import checkpoint, restore, action, che
 from xueness.bundled_plugins.mcp import oauth
 from xueness.bundled_plugins.memory import editor
 from xueness.bundled_plugins.settings.preferences import validate
-from xueness.bundled_plugins.network import tooling as network
+from xueness.bundled_plugins.network import transport as network
 from xueness.plugin_runtime import set_enabled
 
 class GapTests(unittest.TestCase):
@@ -124,10 +124,16 @@ class GapTests(unittest.TestCase):
         with self.assertRaises(ValueError): validate('appearance',{'fontSize':100})
         self.assertEqual(validate('appearance',{'theme':'dark'})['theme'],'dark')
     def test_network_rejects_private_dns_and_redirect_credentials_before_connection(self):
-        with patch.object(network.socket,'getaddrinfo',return_value=[(2,1,6,'',('127.0.0.1',443))]),patch.object(network,'_PinnedHTTPS') as connect:
-            with self.assertRaises(PermissionError): network.fetch('https://public.example.test/')
+        with patch.object(network.socket, 'getaddrinfo',
+                          return_value=[(2, 1, 6, '', ('127.0.0.1', 443))]), \
+                patch.object(network, '_PinnedHTTPS') as connect:
+            with self.assertRaises(network.NetworkError) as blocked:
+                network.fetch('https://public.example.test/')
+            self.assertEqual('ssrf_blocked', blocked.exception.error_code)
             connect.assert_not_called()
         for url in ('http://example.com','https://user:secret@example.com','https://example.com:8443'):
-            with self.assertRaises(ValueError): network.fetch(url)
+            with self.assertRaises(network.NetworkError) as invalid:
+                network.fetch(url)
+            self.assertEqual('invalid_url', invalid.exception.error_code)
 
 if __name__=='__main__': unittest.main()

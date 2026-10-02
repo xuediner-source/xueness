@@ -70,7 +70,7 @@ class ArchitectureTests(unittest.TestCase):
 
     def test_stale_frontend_export_and_duplicate_contributions_fail(self):
         root = self.fixture()
-        self.rewrite(root, 'providers', lambda m: m['frontendModules'].append('XuenessPanels.tsx#NoSuchPanel'))
+        self.rewrite(root, 'providers', lambda m: m['frontendModules'].append('plugins/providers/ProvidersPanel.tsx#NoSuchPanel'))
         self.rewrite(root, 'shell', lambda m: m['tools'].append('read'))
         errors = guard.audit(root)
         self.assertTrue(any('missing frontend export' in e for e in errors), errors)
@@ -87,6 +87,12 @@ class ArchitectureTests(unittest.TestCase):
         root = self.fixture()
         (root / 'xueness/new_feature.py').write_text('def run_feature(): pass\n')
         self.assertIn('business code outside plugin package: xueness/new_feature.py', guard.audit(root))
+
+    def test_registered_product_component_still_requires_plugin_directory(self):
+        root = self.fixture()
+        (root / 'webapp/src/NewProduct.tsx').write_text('export function NewProduct() {}\n')
+        self.rewrite(root, 'providers', lambda m: m['frontendModules'].append('NewProduct.tsx'))
+        self.assertIn('product component outside plugin directory: NewProduct.tsx', guard.audit(root))
 
     def test_desktop_native_modules_require_manifest_ownership(self):
         root = self.fixture()

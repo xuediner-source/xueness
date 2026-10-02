@@ -58,6 +58,7 @@ _MAX_TASK = 5000
 # allowlist rather than a directory listing keeps this from turning into a
 # general file server.
 _ROOT_STATIC_FILES = {
+    "/xueness-mark.svg": ("xueness-mark.svg", "image/svg+xml"),
     "/favicon.ico": ("favicon.ico", "image/x-icon"),
     "/apple-touch-icon.png": ("apple-touch-icon.png", "image/png"),
     "/icon_512@2x.png": ("icon_512@2x.png", "image/png"),
@@ -262,6 +263,9 @@ def pending_denials(session: dict) -> list:
         info for cid, info in calls.items()
         if isinstance((session.get("results") or {}).get(cid), dict)
         and (session["results"][cid] or {}).get("error") == "denied"
+        # Legacy journals have no classification. New policy denials cannot be
+        # resolved with a one-shot approval and must never offer that button.
+        and (session["results"][cid] or {}).get("error_code") in (None, "approval_required")
         and (info["name"], info["subject"]) not in succeeded
     ]
 
@@ -391,6 +395,15 @@ class Handler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
+    def handle_one_request(self):
+        self._mutation_id = None
+        try:
+            return super().handle_one_request()
+        finally:
+            if self._mutation_id is not None:
+                with self._ctx['lock']:
+                    self._ctx.get('active_mutations', {}).pop(self._mutation_id, None)
+
     def _guard(self, need_csrf=False) -> bool:
         desktop_token = self._ctx.get('desktop_token')
         if desktop_token and not secrets.compare_digest(
@@ -405,6 +418,13 @@ class Handler(BaseHTTPRequestHandler):
             if not token or not secrets.compare_digest(token, self._ctx["csrf"]):
                 self._send(403, {"error": "csrf token required"})
                 return False
+            with self._ctx['lock']:
+                if self._ctx.get('admission_closed'):
+                    self._send(503, {'error': '服务即将重启，暂不接收新操作。'})
+                    return False
+                if getattr(self, '_mutation_id', None) is None:
+                    self._mutation_id = str(id(self))
+                    self._ctx.setdefault('active_mutations', {})[self._mutation_id] = urllib.parse.urlparse(self.path).path
         plugin_runtime.sync_services(self._ctx)
         parsed = urllib.parse.urlparse(self.path)
         parts = [p for p in parsed.path.split('/') if p]

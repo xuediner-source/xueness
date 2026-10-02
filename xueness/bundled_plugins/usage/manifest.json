@@ -37,7 +37,7 @@
     }
   ],
   "frontendModules": [
-    "XuenessPanels.tsx#UsagePanel",
-    "XuenessUsageSettings.tsx"
+    "plugins/usage/UsagePanel.tsx",
+    "plugins/usage/XuenessUsageSettings.tsx"
   ]
 }

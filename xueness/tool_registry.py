@@ -6,7 +6,7 @@ The legacy xueness.builtin_tools import aliases this router.
 from __future__ import annotations
 import subprocess
 from pathlib import Path
-from .tool_contract import BuiltinTool, Handler, execution_context
+from .tool_contract import BuiltinTool, Handler, execution_context, permission_result
 from .bundled_plugins.files.builtin_tools import _walk_files, path_in, glob_search, grep_search, MAX_GLOB_HITS, MAX_GREP_HITS, MAX_GREP_PER_FILE
 from .bundled_plugins.planning.tooling import normalize_todos, MAX_TODO_ITEMS, TODO_STATUSES
 from .plugin_runtime import PLUGIN_IDS, entrypoint
@@ -87,4 +87,4 @@ def dispatch(root: Path, gate, name: str, args: dict, session: dict | None = Non
     except (OSError, ValueError, KeyError, PermissionError, subprocess.TimeoutExpired) as exc:
         # Exceptions may contain command output/environment from untrusted
         # processes: do not echo them.
-        return {"ok": False, "error": "denied" if isinstance(exc, PermissionError) else type(exc).__name__}
+        return permission_result(gate, exc) if isinstance(exc, PermissionError) else {"ok": False, "error": type(exc).__name__}

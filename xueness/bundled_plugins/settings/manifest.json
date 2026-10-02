@@ -45,12 +45,12 @@
     }
   ],
   "frontendModules": [
-    "XuenessPanels.tsx#SettingsSections",
-    "XuenessWorkbenchView2.tsx#SettingsPanel",
-    "XuenessSettingsView.tsx",
-    "XuenessShortcutsPanel.tsx",
-    "XuenessWorkspacePickerDialog.tsx",
-    "XuenessWorkspaceSettings.tsx",
+    "plugins/settings/SettingsSections.tsx",
+    "plugins/settings/SettingsPanel.tsx",
+    "plugins/settings/XuenessSettingsView.tsx",
+    "plugins/settings/XuenessShortcutsPanel.tsx",
+    "plugins/settings/XuenessWorkspacePickerDialog.tsx",
+    "plugins/settings/XuenessWorkspaceSettings.tsx",
     "xuenessSettings.ts",
     "xuenessSettingsNavigation.ts",
     "xuenessShortcutCommands.ts",

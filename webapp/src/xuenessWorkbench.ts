@@ -23,7 +23,7 @@ export type PendingApproval = {
   preview: string;
 };
 
-export type WorkbenchRuntimeActivity = {
+export type WorkbenchRuntimeActivity = import('./plugins/providers/LocalRuntimeMonitor').RuntimeActivity & {
   phase: string;
   startedAt?: string;
   requestStep?: number;
@@ -46,7 +46,8 @@ export type WorkbenchSession = {
   pinned?: boolean;
   steps: number;
   mode: string;
-  completion?: { verified?: boolean; summary?: string; evidence?: unknown[] } | null;
+  completion?: import('./plugins/planning/CompletionChecks').CompletionAssessment & { summary?: string; evidence?: unknown[] } | null;
+  delivery_requirements?: import('./plugins/planning/CompletionChecks').DeliveryRequirement[];
   todos?: unknown[];
   pending_question?: string | null;
   /** Bounded provider reasoning, keyed by the assistant message's journal index. */
@@ -73,6 +74,7 @@ export type WorkbenchSession = {
   } | null;
   runtime_activity?: WorkbenchRuntimeActivity | null;
   runtime_activity_history?: WorkbenchRuntimeActivity[] | null;
+  tool_timings?: { step: number; name: string; tool_call_id: string; seconds: number; ok: boolean }[];
   pause_reason?: string | null;
   permission_mode?: "build" | "edit" | "yolo";
   browser_enabled?: boolean;

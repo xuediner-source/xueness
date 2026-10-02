@@ -29,7 +29,6 @@
     }
   ],
   "frontendModules": [
-    "XuenessMarketplace.tsx",
     "plugins/extensions/index.tsx"
   ]
 }

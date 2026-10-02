@@ -325,6 +325,9 @@ def _collect_files(root: Path, version: str) -> list[SourceFile]:
         "docs/release-preparation.md",
         "docs/github-publishing.md",
         "docs/xueness-desktop.md",
+        "docs/xueness-network-tools.md",
+        "docs/xueness-reliability-and-updates.md",
+        "docs/frontend-handoff-prompt.md",
     )
     for path_text in explicit_paths:
         relative_path = PurePosixPath(path_text)

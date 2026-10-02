@@ -65,8 +65,8 @@
     }
   ],
   "frontendModules": [
-    "XuenessPanels.tsx#DirectoryBrowser",
-    "XuenessWorkbenchView2.tsx#FileBrowser",
-    "XuenessWorkbenchView2.tsx#DiffView"
+    "plugins/files/DirectoryBrowser.tsx",
+    "plugins/files/FileBrowser.tsx",
+    "plugins/files/DiffView.tsx"
   ]
 }

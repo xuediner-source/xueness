@@ -1,7 +1,7 @@
 {
   "id": "providers",
   "name": "模型供应商",
-  "description": "保存模型配置，发现 OpenAI 兼容服务模型，并配置轻量运行参数。",
+  "description": "保存模型配置，发现 OpenAI 兼容服务模型，设置轻量参数并诊断本地接口兼容性。",
   "version": "1.0.0",
   "apiVersion": 1,
   "defaultEnabled": true,
@@ -73,13 +73,18 @@
       "nameEn": "Compatibility, deadlines and bounded retries"
     },
     {
+      "id": "providers.compatibility_checks",
+      "name": "本地接口对话、工具与流式兼容诊断",
+      "nameEn": "Local endpoint conversation, tool and streaming diagnostics"
+    },
+    {
       "id": "providers.activity",
       "name": "输出阶段、延迟、计数与速率趋势",
       "nameEn": "Output phase, latency, counts and rate trends"
     }
   ],
   "frontendModules": [
-    "XuenessPanels.tsx#ProvidersPanel",
+    "plugins/providers/ProvidersPanel.tsx",
     "plugins/providers/LocalRuntimeMonitor.tsx",
     "plugins/providers/index.tsx"
   ]

@@ -153,12 +153,20 @@ class DispatchTests(unittest.TestCase):
         remote = {"id": "lab", "digest": "a" * 64}
         local = dispatch(self.workspace, Gate(self.workspace), "read",
                          {"path": "secret.txt"}, {"remote_connection": remote})
-        self.assertEqual(local, {"ok": False, "error": "denied"})
+        self.assertFalse(local["ok"])
+        self.assertEqual(local["error"], "denied")
+        self.assertEqual(local["error_code"], "permission_denied")
+        self.assertFalse(local["awaiting_approval"])
+        self.assertFalse(local["retryable"])
         wrong_remote = dispatch(self.workspace, Gate(self.workspace), "remote_exec", {
             "connection": "other", "connection_digest": "b" * 64,
             "argv": ["pwd"],
         }, {"remote_connection": remote})
-        self.assertEqual(wrong_remote, {"ok": False, "error": "denied"})
+        self.assertFalse(wrong_remote["ok"])
+        self.assertEqual(wrong_remote["error"], "denied")
+        self.assertEqual(wrong_remote["error_code"], "permission_denied")
+        self.assertFalse(wrong_remote["awaiting_approval"])
+        self.assertFalse(wrong_remote["retryable"])
 
     def test_remote_run_does_not_advertise_local_file_or_shell_tools(self):
         from xueness.plugin_runtime import set_enabled
@@ -174,7 +182,14 @@ class DispatchTests(unittest.TestCase):
         self.assertIn("ask_user", offered)
         self.assertNotIn("read", offered)
         self.assertNotIn("exec", offered)
-        self.assertEqual(out["results"]["local-read"], {"ok": False, "error": "denied"})
+        refusal = out["results"]["local-read"]
+        self.assertFalse(refusal["ok"])
+        self.assertEqual(refusal["error"], "denied")
+        self.assertEqual(refusal["error_code"], "permission_denied")
+        self.assertFalse(refusal["awaiting_approval"])
+        self.assertFalse(refusal["retryable"])
+        self.assertEqual(out["status"], "needs_review")
+        self.assertEqual(out["steps"], 1)
 
     def test_unknown_name_cannot_reach_registry_via_prefix_tricks(self):
         for name in ("", "read.__class__", "core.read", "mcp__srv__echo"):

@@ -183,7 +183,7 @@ class LocalProviderOptionsTests(unittest.TestCase):
             server.server_close()
         self.assertEqual("OK", result["content"])
         self.assertEqual(1024, state["body"]["max_tokens"])
-        self.assertFalse(state["body"]["parallel_tool_calls"])
+        self.assertNotIn("parallel_tool_calls", state["body"])
         self.assertNotIn("stream_options", state["body"])
 
         state = {}
@@ -225,7 +225,7 @@ class LocalProviderOptionsTests(unittest.TestCase):
         self.assertEqual(200, status, response)
         self.assertNotIn("Authorization", state["headers"])
         self.assertEqual(8, state["body"]["max_tokens"])
-        self.assertFalse(state["body"]["parallel_tool_calls"])
+        self.assertNotIn("parallel_tool_calls", state["body"])
         self.assertEqual([], state["body"]["tools"])
 
     def test_empty_key_requires_opted_in_literal_loopback_even_for_https(self):

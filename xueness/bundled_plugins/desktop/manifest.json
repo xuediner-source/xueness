@@ -36,15 +36,22 @@
       "id": "desktop.status",
       "name": "桌面平台、版本与数据位置",
       "nameEn": "Desktop platform, version and data location"
+    },
+    {
+      "id": "desktop.window_chrome",
+      "name": "原生窗口控件与沉浸式工作台标题栏",
+      "nameEn": "Native window controls and integrated workbench title bar"
     }
   ],
   "frontendModules": [
-    "plugins/desktop/DesktopSettings.tsx"
+    "plugins/desktop/DesktopSettings.tsx",
+    "plugins/desktop/DesktopTitlebar.tsx"
   ],
   "desktopModules": [
     "src/main.cjs",
     "src/backend.cjs",
     "src/security.cjs",
+    "src/window-chrome.cjs",
     "src/loading.html"
   ]
 }

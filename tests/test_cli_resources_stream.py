@@ -127,7 +127,8 @@ class ShowTimelineTests(unittest.TestCase):
         # …then the event tail in the shared vocabulary.
         self.assertIn("→ write", out)
         self.assertIn("✓", out)
-        self.assertIn("任务完成", out)
+        self.assertIn("运行结束", out)
+        self.assertIn("交付内容尚未检查", out)
 
     def test_plain_show_stays_json_only(self):
         stderr = io.StringIO()

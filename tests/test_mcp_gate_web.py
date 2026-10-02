@@ -89,7 +89,10 @@ class McpCallProvider:
                 {"id": self.call_id, "type": "function",
                  "function": {"name": self.tool,
                               "arguments": json.dumps({"text": "ping"})}}]}
-        return {"content": json.dumps({"summary": "done", "evidence": []})}
+        return {"content": json.dumps({"summary": "done", "evidence": [{
+            "tool_call_id": self.call_id,
+            "observation": "The approved MCP call returned a successful result.",
+        }]})}
 
 
 class McpGateWebTests(unittest.TestCase):
@@ -208,6 +211,8 @@ class McpGateWebTests(unittest.TestCase):
         with inject_provider(provider, ctx=self.ctx):
             status, payload = self._run(sid)
             self.assertEqual(status, 200, payload)
+            self.assertEqual("paused", payload["status"], payload)
+            self.assertIsNone(payload["completion"], payload)
             entry = next(p for p in payload["pending"] if p["tool_call_id"] == "m1")
 
             # Approve exactly that call.
@@ -220,6 +225,9 @@ class McpGateWebTests(unittest.TestCase):
             # Re-run: the replay executes the approved call against the server.
             status, payload2 = self._run(sid)
             self.assertEqual(status, 200, payload2)
+            self.assertEqual("completed", payload2["status"], payload2)
+            self.assertTrue(payload2["completion"]["verified"], payload2)
+            self.assertEqual([], payload2["pending"], payload2)
 
         result = self._tool_result(self._journal(sid), "m1")
         self.assertTrue(result.get("ok"), result)

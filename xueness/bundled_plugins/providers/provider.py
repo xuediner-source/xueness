@@ -15,7 +15,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 
-from .runtime_options import build_openai_payload, resolve_runtime_options
+from .runtime_options import build_openai_payload, resolve_runtime_options, validate_compatibility
 from .lightweight_config import effective_options
 
 #: Opt-in env flag unlocking plaintext HTTP **only** for loopback IP literals.
@@ -27,6 +27,95 @@ MAX_DISCOVERED_MODELS = 500
 MAX_DISCOVERED_MODEL_ID_CHARS = 256
 MAX_MODEL_OWNER_CHARS = 128
 MODEL_DISCOVERY_MAX_TIMEOUT_SECONDS = 8.0
+COMPATIBILITY_TEST_MAX_OUTPUT_TOKENS = 96
+COMPATIBILITY_TEST_MODES = frozenset({
+    "conversation", "native_tool_call", "json_tool_call", "stream", "tool_roundtrip",
+})
+COMPATIBILITY_FIXTURE_NAME = "xueness_fixture_add"
+COMPATIBILITY_FIXTURE_RECEIPT = "xueness-local-fixture:3+4=7"
+
+
+def _native_fixture_prompt():
+    return [
+        {"role": "system", "content": (
+            "This is a provider compatibility diagnostic. Call the supplied test-only "
+            "arithmetic function exactly once with a=3 and b=4. Do not answer in prose. "
+            "The function is isolated and has no file or command effects.")},
+        {"role": "user", "content": "Call the supplied arithmetic function with a=3 and b=4."},
+    ]
+
+
+def _json_fixture_prompt():
+    return [
+        {"role": "system", "content": (
+            "This is a provider compatibility diagnostic. Return exactly one JSON object "
+            "with keys tool_call, no markdown or extra keys. tool_call must have name "
+            "xueness_fixture_add and arguments with integer values a=3 and b=4. "
+            "Do not answer in prose.")},
+        {"role": "user", "content": (
+            'Return {"tool_call":{"name":"xueness_fixture_add",'
+            '"arguments":{"a":3,"b":4}}} exactly.')},
+    ]
+
+
+def _unique_json_object(pairs):
+    result = {}
+    for key, value in pairs:
+        if key in result:
+            raise ValueError("duplicate JSON key")
+        result[key] = value
+    return result
+
+
+def _fixture_arguments_valid(value):
+    return (type(value) is dict and set(value) == {"a", "b"}
+            and type(value.get("a")) is int and value["a"] == 3
+            and type(value.get("b")) is int and value["b"] == 4)
+
+
+def _validated_fixture_tool_call(reply):
+    calls = reply.get("tool_calls") if isinstance(reply, dict) else None
+    if not isinstance(calls, list) or len(calls) != 1:
+        return None, "The provider did not return exactly one function call."
+    call = calls[0]
+    if not isinstance(call, dict) or call.get("type") != "function":
+        return None, "The provider returned an invalid function-call envelope."
+    call_id = call.get("id")
+    if (not isinstance(call_id, str) or not call_id or len(call_id) > 128
+            or not call_id.isascii()
+            or any(not (char.isalnum() or char in "._:-") for char in call_id)):
+        return None, "The provider returned an invalid function-call ID."
+    function = call.get("function")
+    if (not isinstance(function, dict) or function.get("name") != COMPATIBILITY_FIXTURE_NAME
+            or set(function) != {"name", "arguments"}):
+        return None, "The provider returned an unexpected function name or shape."
+    raw_arguments = function.get("arguments")
+    if not isinstance(raw_arguments, str) or len(raw_arguments) > 1024:
+        return None, "The provider returned invalid function arguments."
+    try:
+        arguments = json.loads(raw_arguments, object_pairs_hook=_unique_json_object)
+    except (TypeError, ValueError):
+        return None, "The provider returned invalid function arguments."
+    if not _fixture_arguments_valid(arguments):
+        return None, "The provider returned arguments outside the required {a: 3, b: 4} schema."
+    return call, None
+
+
+def _validated_fixture_json_call(reply):
+    raw = reply.get("content") if isinstance(reply, dict) else None
+    if not isinstance(raw, str) or len(raw) > 2048:
+        return "The provider returned no bounded JSON tool-call response."
+    try:
+        value = json.loads(raw, object_pairs_hook=_unique_json_object)
+    except (TypeError, ValueError):
+        return "The provider did not return strict JSON."
+    if (type(value) is not dict or set(value) != {"tool_call"}
+            or type(value.get("tool_call")) is not dict
+            or set(value["tool_call"]) != {"name", "arguments"}
+            or value["tool_call"].get("name") != COMPATIBILITY_FIXTURE_NAME
+            or not _fixture_arguments_valid(value["tool_call"].get("arguments"))):
+        return "The provider returned JSON outside the required function name and argument schema."
+    return None
 
 
 def _with_reported_usage(message, payload):
@@ -37,6 +126,16 @@ def _with_reported_usage(message, payload):
     usage = payload.get("usage")
     if isinstance(usage, dict) and usage:
         result["_usage"] = dict(usage)
+    return result
+
+
+def _with_request_attempts(response, attempts):
+    """Attach adapter-owned retry telemetry after discarding remote lookalikes."""
+    if not isinstance(response, dict):
+        raise ValueError("provider response must be an object")
+    result = dict(response)
+    result.pop("_request_attempts", None)
+    result["_request_attempts"] = max(1, int(attempts))
     return result
 
 
@@ -430,6 +529,220 @@ class OpenAICompatible:
             total_timeout=timeout, max_response_bytes=MAX_PROVIDER_RESPONSE_BYTES,
         )
 
+    def compatibility_test(self, mode, compatibility=None, timeout=8):
+        """Run one explicit, bounded wire-compatibility diagnostic.
+
+        The fixture tool is an in-process arithmetic example. It never reaches
+        the workspace, command runner, or Xueness tool dispatcher. Each mode
+        sends at most one model request except ``tool_roundtrip``, which sends
+        one tool-call request and one result-follow-up request.
+        """
+        if mode not in COMPATIBILITY_TEST_MODES:
+            raise ValueError("unsupported provider compatibility test mode")
+        options = validate_compatibility(
+            self.compatibility if compatibility is None else compatibility)
+        if self.runtime_profile != "lightweight" and mode == "json_tool_call":
+            raise ValueError("JSON tool-call diagnostics require a lightweight profile")
+        if not math.isfinite(float(timeout)) or float(timeout) <= 0:
+            raise ValueError("invalid compatibility test timeout")
+
+        deadline = time.monotonic() + min(float(timeout), MODEL_DISCOVERY_MAX_TIMEOUT_SECONDS)
+        request_count = 0
+        request_fields = []
+
+        fixture_tool = [{
+            "type": "function",
+            "function": {
+                "name": COMPATIBILITY_FIXTURE_NAME,
+                "description": "Test-only deterministic addition. Does not access files or commands.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {"a": {"type": "integer"}, "b": {"type": "integer"}},
+                    "required": ["a", "b"],
+                    "additionalProperties": False,
+                },
+            },
+        }]
+
+        def build(messages, tool_calling, tools, *, stream=False, test_options=None):
+            return build_openai_payload(
+                model=self.model, messages=messages, tools=tools,
+                runtime_profile=self.runtime_profile, context_window=self.context_window,
+                max_output_tokens=self.max_output_tokens, tool_calling=tool_calling,
+                compatibility=options if test_options is None else test_options,
+                stream=stream, reasoning_effort=self.reasoning_effort,
+                test_connection=True, test_max_tokens=COMPATIBILITY_TEST_MAX_OUTPUT_TOKENS,
+                default_max_tokens_field=self._default_max_tokens_field(),
+                lightweight_options=self.lightweight_options,
+            )
+
+        def remaining():
+            amount = deadline - time.monotonic()
+            if amount <= 0:
+                raise TimeoutError("provider compatibility test deadline exceeded")
+            return amount
+
+        def request_json(messages, tool_calling, tools, step, *, test_options=None):
+            nonlocal request_count
+            body = build(messages, tool_calling, tools, test_options=test_options)
+            request_count += 1
+            request_fields.append({"step": step, "fields": sorted(body)})
+            return self._request_json(
+                body, "/chat/completions", timeout=remaining(), attempts=1,
+                total_timeout=remaining(), max_response_bytes=MAX_PROVIDER_RESPONSE_BYTES,
+            )
+
+        def request_stream(messages, tool_calling, tools, step, *, test_options=None):
+            nonlocal request_count
+            body = build(messages, tool_calling, tools, stream=True, test_options=test_options)
+            request_count += 1
+            request_fields.append({"step": step, "fields": sorted(body)})
+            guard = _SocketDeadlineGuard(deadline)
+            deltas = []
+            try:
+                opener = _deadline_opener(guard, self.base)
+                with _open_with_retry(
+                        opener, self._request(body, "/chat/completions"), remaining()) as response:
+                    content_type = response.headers.get("Content-Type", "")
+                    if "text/event-stream" not in content_type.casefold():
+                        raise ValueError("The endpoint did not return an SSE event stream.")
+                    text, calls, _usage = _read_openai_stream(
+                        response, deltas.append, lambda: None, require_done=True)
+            finally:
+                guard.close()
+            return {"content": text, "tool_calls": calls}, {
+                "sseContentType": True, "doneReceived": True,
+                "deltaCount": len(deltas), "deltaCharacters": len(text),
+            }
+
+        def fail(message, *, step=None, status=None):
+            return {
+                "ok": False,
+                "error": message,
+                "details": {
+                    "mode": mode,
+                    "requestCount": request_count,
+                    "failedStep": step,
+                    "httpStatus": status,
+                    "requests": request_fields,
+                    "fixture": "in-process arithmetic only; no file or command execution",
+                },
+            }
+
+        try:
+            if mode == "conversation":
+                reply = request_json(
+                    [{"role": "user", "content": "Reply with exactly COMPAT_OK."}],
+                    "plain", [], "conversation")
+                content = reply.get("content")
+                if not isinstance(content, str) or not content.strip():
+                    return fail("The provider returned no assistant text.", step="conversation")
+                return {
+                    "ok": True,
+                    "details": {"mode": mode, "requestCount": request_count,
+                                "assistantTextReceived": True, "requests": request_fields},
+                }
+
+            if mode == "native_tool_call":
+                reply = request_json(_native_fixture_prompt(), "native", fixture_tool,
+                                     "native_tool_call")
+                call, error = _validated_fixture_tool_call(reply)
+                if error:
+                    return fail(error, step="native_tool_call")
+                return {
+                    "ok": True,
+                    "details": {"mode": mode, "requestCount": request_count,
+                                "toolCallValidated": True, "toolName": COMPATIBILITY_FIXTURE_NAME,
+                                "arguments": {"a": 3, "b": 4}, "fixtureExecuted": False,
+                                "requests": request_fields},
+                }
+
+            if mode == "json_tool_call":
+                reply = request_json(_json_fixture_prompt(), "json", [], "json_tool_call")
+                error = _validated_fixture_json_call(reply)
+                if error:
+                    return fail(error, step="json_tool_call")
+                return {
+                    "ok": True,
+                    "details": {"mode": mode, "requestCount": request_count,
+                                "jsonToolCallValidated": True,
+                                "toolName": COMPATIBILITY_FIXTURE_NAME,
+                                "arguments": {"a": 3, "b": 4}, "fixtureExecuted": False,
+                                "requests": request_fields},
+                }
+
+            if mode == "stream":
+                reply, stream_details = request_stream(
+                    [{"role": "user", "content": "Reply with exactly STREAM_OK."}],
+                    "plain", [], "stream")
+                text = reply.get("content")
+                deltas = stream_details["deltaCount"]
+                if not text or not deltas:
+                    return fail("The SSE stream contained no assistant text delta.", step="stream")
+                return {
+                    "ok": True,
+                    "details": {"mode": mode, "requestCount": request_count,
+                                **stream_details,
+                                "requests": request_fields},
+                }
+
+            if mode == "tool_roundtrip":
+                first, first_stream = request_stream(
+                    _native_fixture_prompt(), "native", fixture_tool, "native_tool_call")
+                call, error = _validated_fixture_tool_call(first)
+                if error:
+                    return fail(error, step="native_tool_call")
+                # This isolated fixture has one fixed input and no side effects.
+                fixture_result = {"sum": 3 + 4, "receipt": COMPATIBILITY_FIXTURE_RECEIPT}
+                followup_compatibility = {
+                    key: value for key, value in options.items()
+                    if key != "toolChoice"
+                }
+                followup_messages = [
+                    {"role": "system", "content": (
+                        "This is a local compatibility diagnostic. Read the prior tool result "
+                        "and reply with exactly its receipt string, with no other text.")},
+                    _native_fixture_prompt()[1],
+                    {"role": "assistant", "content": None, "tool_calls": [call]},
+                    {"role": "tool", "tool_call_id": call["id"],
+                     "name": COMPATIBILITY_FIXTURE_NAME,
+                     "content": json.dumps(fixture_result, separators=(",", ":"))},
+                    {"role": "user", "content": (
+                        "Reply with exactly the receipt from the tool result above.")},
+                ]
+                followup, followup_stream = request_stream(
+                    followup_messages, "native", fixture_tool, "tool_result_followup",
+                    test_options=followup_compatibility)
+                content = followup.get("content")
+                followed = isinstance(content, str) and content.strip() == COMPATIBILITY_FIXTURE_RECEIPT
+                if not followed:
+                    return fail("The provider did not echo the deterministic tool-result receipt.",
+                                step="tool_result_followup")
+                return {
+                    "ok": True,
+                    "details": {"mode": mode, "requestCount": request_count,
+                                "toolCallValidated": True, "toolResultFollowupValidated": True,
+                                "toolName": COMPATIBILITY_FIXTURE_NAME,
+                                "arguments": {"a": 3, "b": 4}, "fixtureExecuted": True,
+                                "sseContentType": first_stream["sseContentType"] and followup_stream["sseContentType"],
+                                "doneReceived": first_stream["doneReceived"] and followup_stream["doneReceived"],
+                                "deltaCount": first_stream["deltaCount"] + followup_stream["deltaCount"],
+                                "deltaCharacters": first_stream["deltaCharacters"] + followup_stream["deltaCharacters"],
+                                "requests": request_fields},
+                }
+        except Exception as exc:
+            status = getattr(exc, "status", None)
+            if isinstance(exc, _RetryableProviderError):
+                status = exc.status
+            message = ("The endpoint rejected one or more request fields (HTTP 400). "
+                       "Change compatibility options explicitly and rerun this check."
+                       if status == 400 else
+                       "The provider compatibility request failed (details suppressed).")
+            return fail(message, step=(request_fields[-1]["step"] if request_fields else None),
+                        status=status)
+
+        return fail("Unsupported provider compatibility test mode.")
+
     def discover_models(self, timeout=MODEL_DISCOVERY_MAX_TIMEOUT_SECONDS):
         """List explicit model IDs from this OpenAI-compatible endpoint.
 
@@ -503,13 +816,16 @@ class OpenAICompatible:
                         if len(raw) > 2_000_000:
                             raise ValueError("provider response too large")
                         payload = json.loads(raw)
-                        return _with_reported_usage(payload["choices"][0]["message"], payload)
+                        return _with_request_attempts(
+                            _with_reported_usage(payload["choices"][0]["message"], payload),
+                            attempts,
+                        )
                     text, calls, usage = _read_openai_stream(
                         response, on_delta, mark_delivered, on_reasoning_delta)
                 result = {"content": text, "tool_calls": calls}
                 if usage:
                     result["_usage"] = usage
-                return result
+                return _with_request_attempts(result, attempts)
             except _RetryableProviderError as exc:
                 delivered = delivered or exc.delivered
                 if delivered or attempts >= 3 or not exc.retryable:
@@ -551,15 +867,18 @@ class OpenAICompatible:
                                 max_bytes=MAX_PROVIDER_RESPONSE_BYTES,
                             )
                             payload = json.loads(raw)
-                            return _with_reported_usage(
-                                payload["choices"][0]["message"], payload)
+                            return _with_request_attempts(
+                                _with_reported_usage(
+                                    payload["choices"][0]["message"], payload),
+                                attempt + 1,
+                            )
                         text, calls, usage = _read_openai_stream(
                             response, on_delta, mark_delivered,
                             on_reasoning_delta)
                     result = {"content": text, "tool_calls": calls}
                     if usage:
                         result["_usage"] = usage
-                    return result
+                    return _with_request_attempts(result, attempt + 1)
                 except _RetryableProviderError as exc:
                     delivered = delivered or exc.delivered
                     _raise_if_deadline_expired(deadline)
@@ -625,7 +944,10 @@ class OpenAICompatible:
                         if len(payload) > max_response_bytes:
                             raise ValueError("provider response too large")
                     parsed = json.loads(payload)
-                    return _with_reported_usage(parsed["choices"][0]["message"], parsed)
+                    return _with_request_attempts(
+                        _with_reported_usage(parsed["choices"][0]["message"], parsed),
+                        attempt + 1,
+                    )
                 except _RetryableProviderError as exc:
                     last_http_error = exc
                     _raise_if_deadline_expired(deadline)
@@ -870,14 +1192,17 @@ def _read_sse(response):
             data.append(line[5:].lstrip())
 
 
-def _read_openai_stream(response, on_delta, mark_delivered, on_reasoning_delta=None):
+def _read_openai_stream(response, on_delta, mark_delivered, on_reasoning_delta=None,
+                        require_done=False):
     text_parts = []
     calls = {}
     finished = False
+    done_marker = False
     usage = None
     for payload in _read_sse(response):
         if payload == "[DONE]":
             finished = True
+            done_marker = True
             break
         item = json.loads(payload)
         raw_usage = item.get("usage")
@@ -918,6 +1243,8 @@ def _read_openai_stream(response, on_delta, mark_delivered, on_reasoning_delta=N
                 target["function"]["arguments"] += fn["arguments"]
     if not finished:
         raise ConnectionError("incomplete provider stream")
+    if require_done and not done_marker:
+        raise ConnectionError("provider stream ended without the required done marker")
     return "".join(text_parts), [calls[index] for index in sorted(calls)], usage
 
 
@@ -1245,7 +1572,7 @@ class AnthropicMessages:
                 raw = response.read(2_000_001)
                 if len(raw) > 2_000_000:
                     raise ValueError("provider response too large")
-            return _anthropic_message(json.loads(raw))
+            return _with_request_attempts(_anthropic_message(json.loads(raw)), 1)
         except (urllib.error.HTTPError, urllib.error.URLError, ValueError, KeyError, OSError):
             raise RuntimeError("provider request failed (details suppressed)") from None
 
@@ -1264,7 +1591,7 @@ class AnthropicMessages:
                             response, deadline=deadline,
                             max_bytes=MAX_PROVIDER_RESPONSE_BYTES,
                         )
-                    return _anthropic_message(json.loads(raw))
+                    return _with_request_attempts(_anthropic_message(json.loads(raw)), attempt + 1)
                 except _RetryableProviderError as exc:
                     last_http_error = exc
                     _raise_if_deadline_expired(deadline)
@@ -1312,7 +1639,7 @@ class AnthropicMessages:
                         raise ValueError("provider response too large")
             finally:
                 guard.close()
-            return _anthropic_message(json.loads(raw))
+            return _with_request_attempts(_anthropic_message(json.loads(raw)), 1)
         except (urllib.error.HTTPError, urllib.error.URLError, ValueError, KeyError, OSError):
             raise RuntimeError("provider request failed (details suppressed)") from None
 
@@ -1338,7 +1665,7 @@ class AnthropicMessages:
                 result = {"content": content, "tool_calls": calls}
                 if usage:
                     result["_usage"] = usage
-                return result
+                return _with_request_attempts(result, attempt + 1)
             except _RetryableProviderError as exc:
                 delivered = delivered or exc.delivered
                 if delivered or attempt == 2 or not exc.retryable:
@@ -1377,7 +1704,7 @@ class AnthropicMessages:
                     result = {"content": content, "tool_calls": calls}
                     if usage:
                         result["_usage"] = usage
-                    return result
+                    return _with_request_attempts(result, attempt + 1)
                 except _RetryableProviderError as exc:
                     delivered = delivered or exc.delivered
                     _raise_if_deadline_expired(deadline)

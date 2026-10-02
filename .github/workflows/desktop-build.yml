@@ -47,6 +47,7 @@ jobs:
           python tools/check_plugin_architecture.py
           python -m unittest tests.test_desktop tests.test_plugin_architecture tests.test_workspace_instructions -q
           python -m unittest tests.test_workflows.WorkflowTests.test_real_background_dag_failure_then_resume_without_replaying_success tests.test_mcp.McpTestCase.test_start_performs_the_initialize_handshake -q
+          python -m unittest discover -s desktop/tests -p 'test_windows_update_smoke.py' -q
           npm --prefix desktop test
           npm --prefix webapp test
           npm --prefix webapp run typecheck
@@ -64,6 +65,9 @@ jobs:
         run: npm --prefix desktop run dist:mac -- --${{ matrix.arch }}
       - name: Verify packaged Electron workbench
         run: python desktop/scripts/check_app.py
+      - name: Exercise the installed NSIS in-app update path
+        if: runner.os == 'Windows'
+        run: python desktop/scripts/check_windows_update.py
       - name: Generate installer checksums
         run: python desktop/scripts/checksums.py
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -76,4 +80,6 @@ jobs:
             desktop/release/*.exe
             desktop/release/*.zip
             desktop/release/*.dmg
+            desktop/release/latest*.yml
+            desktop/release/*.blockmap
             desktop/release/SHA256SUMS.txt

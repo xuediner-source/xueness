@@ -1,5 +1,9 @@
 """Explicit, fast-forward-only updates from the checkout's configured origin."""
 import json
+
+def dispatch(method, parts, query, data, ctx):
+    from .desktop_updates import dispatch as route
+    return route(method, parts, query, data, ctx)
 import os
 from pathlib import Path
 import re

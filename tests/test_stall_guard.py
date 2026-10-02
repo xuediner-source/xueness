@@ -13,10 +13,9 @@ passing vacuously:
 
 1. An ordinary repeated tool loop stalls exactly at the threshold, and the
    repeated call's side effect does NOT happen another time.
-2. A repeated MCP call that is still awaiting a human approval decision must NOT
-   be treated as a stall -- re-issuing a denied call is the approval-retry
-   pattern the UI depends on, and ending the run there would hide the pending
-   request. (Control: an MCP call that *does* run is a real loop and stalls.)
+2. An MCP call awaiting a human decision pauses after its first request, so it
+   cannot spend more model calls retrying an approval gate. (Control: repeated
+   MCP calls that *do* run are real loops and stall.)
 3. On a stall the journal keeps its tool-call/tool-result pairing invariant:
    every recorded call has a result and every result has a call.
 """
@@ -138,16 +137,10 @@ class StallGuardTests(unittest.TestCase):
         self.assertEqual(self._side_effect_count(), STALL_REPEAT_LIMIT - 1)
         self.assertNotIn(NOT_EXECUTED, json.dumps(out["results"]))
 
-    # -- 2. MCP awaiting approval must not falsely stall --------------------
+    # -- 2. MCP awaiting approval pauses without another model request -------
 
-    def test_mcp_awaiting_approval_does_not_falsely_stall(self):
-        """Re-issuing a denied MCP call is an approval retry, not a loop.
-
-        The WebGate denies every MCP call until a human approves the exact
-        tool_call_id, so the model legitimately repeats the identical call each
-        turn. Treating that as a stall would end the run before the operator can
-        act, which is the very pattern the two-part check protects.
-        """
+    def test_mcp_awaiting_approval_pauses_immediately(self):
+        """An approval gate pauses before any retry can spend another request."""
         steps = [[_call("m%d" % i, "mcp__srv__echo", {"text": "ping"})] for i in range(1, 4)]
         session = self.store.new("mcp awaiting approval", self.root)
         provider = _ScriptedProvider(steps)
@@ -166,16 +159,16 @@ class StallGuardTests(unittest.TestCase):
                   mcp_tools=[{"type": "function", "function": {"name": "mcp__srv__echo"}}],
                   mcp_call=mcp_call)
 
-        # It must NOT be reported as a stall, and it must NOT have ended early.
-        self.assertNotEqual(out["status"], "stalled")
+        self.assertEqual(out["status"], "paused")
+        self.assertEqual(out["pause_code"], "approval_required")
         self.assertNotIn(NOT_EXECUTED, json.dumps(out["results"]))
-
-        # All three retry turns really ran (3 call turns + 1 completion turn).
-        self.assertEqual(provider.calls, 4)
+        self.assertEqual(provider.calls, 1)
         # Every attempt was denied by the gate, so the server was never reached.
         self.assertEqual(server_calls, [])
-        for call_id in ("m1", "m2", "m3"):
-            self.assertEqual(out["results"][call_id], {"ok": False, "error": "denied"})
+        result = out["results"]["m1"]
+        self.assertEqual(result["error"], "denied")
+        self.assertEqual(result["error_code"], "approval_required")
+        self.assertTrue(result["awaiting_approval"])
 
     def test_control_mcp_repeat_that_actually_runs_still_stalls(self):
         """Proof the test above is not vacuous: a *successful* MCP repeat is a loop.

@@ -214,15 +214,7 @@
   justify-content: flex-end;
 }
 
-@media (max-width: 680px) {
-  .xn-composer-toolbar {
-    grid-template-columns: minmax(0, 1fr);
-  }
 
-  .xn-composer-toolbar__right {
-    justify-content: flex-start;
-  }
-}
 
 .xn-composer-toolbar__mode-control {
   display: inline-flex;
@@ -633,24 +625,7 @@
   font-weight: 500;
 }
 
-@media (max-width: 680px) {
-  .xn-composer-toolbar {
-    grid-template-columns: minmax(0, 1fr);
-    gap: 6px;
-  }
 
-  .xn-composer-toolbar__right {
-    justify-content: flex-start;
-  }
-
-  .xn-composer-toolbar__model-trigger {
-    max-width: min(180px, 42vw);
-  }
-
-  .xn-composer__plus-menu {
-    width: min(320px, calc(100vw - 22px));
-  }
-}
 
 /* Source-aligned composer controls: compact ghost triggers and small top-side menus. */
 .xn-shell-layout .xn-composer-toolbar__mode-control,
@@ -1032,7 +1007,69 @@
   cursor: not-allowed;
 }
 
+/* Narrow composer layout has one source; keep grouped controls sized to content. */
 @media (max-width: 680px) {
+  .xn-composer-toolbar {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 6px;
+  }
+
+  /* In the shell the toolbar dissolves into the tools flex row, so left and
+     right are flex items beside the attachment control. Size them to their
+     content; flex-wrap on each group only kicks in when the row runs out. */
+  .xn-composer-toolbar__left,
+  .xn-composer-toolbar__right {
+    flex: 0 1 auto;
+    min-width: 0;
+  }
+
+  /* When a group does wrap to its own row, left-align it instead of
+     stranding its controls against the right edge. */
+  .xn-composer-toolbar__right {
+    justify-content: flex-start;
+  }
+
+  /* Nowrap triggers otherwise push past the composer edge and drag the row
+     width with them, so cap them against the available width and let the
+     label ellipsize rather than overflow. */
+  .xn-composer-toolbar__mode-trigger,
+  .xn-composer-toolbar__model-trigger {
+    max-width: 100%;
+    min-width: 0;
+    flex: 0 1 auto;
+  }
+
+  .xn-composer-toolbar__model-trigger,
+  .xn-composer-toolbar__mode-trigger {
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .xn-composer-toolbar__model-trigger > span,
+  .xn-composer-toolbar__mode-trigger > span {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  /* Keep each control on one line instead of splitting its icon from its
+     label across a wrap. */
+  .xn-composer-toolbar__mode,
+  .xn-composer-toolbar__model,
+  .xn-composer-toolbar__mode-control {
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  .xn-composer-toolbar__model-trigger {
+    max-width: min(180px, 42vw);
+  }
+
+  .xn-composer__plus-menu {
+    width: min(320px, calc(100vw - 22px));
+  }
+
   .xn-shell-layout .xn-composer-toolbar__model-popover {
     right: auto;
     left: 0;
@@ -1040,5 +1077,41 @@
 
   .xn-shell-layout .xn-composer-toolbar__model-trigger {
     max-width: min(180px, 42vw);
+  }
+
+  .xn-shell-layout .xn-composer-region--docked {
+    width: calc(100% - 24px);
+    margin: 0 auto 10px;
+  }
+
+  .xn-shell-layout .xn-composer--docked {
+    width: 100%;
+    margin: 0;
+  }
+
+  .xn-shell-layout .xn-composer__row {
+    align-items: center;
+    flex-wrap: wrap;
+  }
+
+  .xn-shell-layout .xn-composer__tools {
+    flex-basis: calc(100% - 44px);
+    gap: 8px;
+  }
+
+  .xn-shell-layout .xn-composer__settings {
+    flex-basis: auto;
+  }
+
+  /* Size each group to its content so the mode/model triggers share one row
+     with the attachment control; they wrap only when the row runs out. */
+  .xn-shell-layout .xn-composer-toolbar__left,
+  .xn-shell-layout .xn-composer-toolbar__right {
+    flex-basis: auto;
+    margin-left: 0;
+  }
+
+  .xn-shell-layout .xn-composer-toolbar {
+    width: 100%;
   }
 }

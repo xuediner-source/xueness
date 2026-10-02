@@ -4,17 +4,28 @@ import ReactMarkdown, { defaultUrlTransform, type Components } from "react-markd
 import remarkGfm from "remark-gfm";
 import { Check, Copy, X } from "lucide-react";
 import { Badge } from "./ui/primitives";
-import { IconBack, IconCheck, IconLoader, IconPencil, IconPin, IconTrash, IconX, IconMenu } from "./ui/icons";
+import { IconBack, IconCheck, IconLoader, IconPencil, IconPin, IconTrash, IconX, IconMenu, IconXuenessMark } from "./ui/icons";
 import { CodeContent } from "./ui/CodeContent";
 import type { CodeLanguage } from "./ui/CodePreview";
 
+export function shouldCloseNarrowSidebarOnEscape(event: {
+  key: string;
+  isComposing?: boolean;
+  keyCode?: number;
+  defaultPrevented?: boolean;
+}): boolean {
+  return event.key === "Escape" && !event.defaultPrevented && !event.isComposing && event.keyCode !== 229;
+}
+
 /**
  * Application shell in the chat-workbench shape: a dark sidebar (nav actions,
- * task list, footer) plus a main area. There is deliberately no top brand bar —
- * identity lives in the sidebar footer, and the main area belongs to the
- * conversation (or the hero composer when no task is selected).
+ * task list, footer) plus a main area. The ordinary web layout has no top
+ * brand bar; Electron can provide its native-aligned host bar through the
+ * optional titlebar slot.
  */
 export type ShellProps = {
+  /** Optional host title bar. Web workbenches leave this unset. */
+  titlebar?: React.ReactNode;
   /** Sidebar body: nav actions + task list. */
   sidebar: React.ReactNode;
   /** Sidebar footer: brand + settings entry. */
@@ -31,6 +42,7 @@ export type ShellProps = {
 };
 
 export function Shell({
+  titlebar,
   sidebar,
   sidebarFooter,
   navigationKey,
@@ -92,31 +104,49 @@ export function Shell({
   React.useEffect(() => {
     if (!narrow || !sidebarOpen) return;
     const aside = asideRef.current;
-    const focusable = () => Array.from(aside?.querySelectorAll<HTMLElement>("button:not(:disabled), input:not(:disabled), select:not(:disabled), [tabindex='0']") ?? []).filter(node => node.getClientRects().length);
-    focusable()[0]?.focus();
+    const focusable = () => Array.from(aside?.querySelectorAll<HTMLElement>("a[href], button:not(:disabled), input:not(:disabled), select:not(:disabled), textarea:not(:disabled), [tabindex]:not([tabindex='-1'])") ?? []).filter(node => node.getAttribute("aria-hidden") !== "true" && node.getClientRects().length);
+    const activeModalOutsideDrawer = () => Array.from(document.querySelectorAll<HTMLElement>('[aria-modal="true"]'))
+      .filter(activeModal => activeModal !== aside && !aside?.contains(activeModal))
+      .at(-1) ?? null;
+    (focusable()[0] ?? aside)?.focus();
     const key = (event: KeyboardEvent) => {
-      if (event.key === "Escape") { event.preventDefault(); closeDrawer(); }
+      const outsideModal = activeModalOutsideDrawer();
+      if (outsideModal?.contains(document.activeElement)) return;
+      if (shouldCloseNarrowSidebarOnEscape(event)) { event.preventDefault(); closeDrawer(); return; }
       if (event.key !== "Tab") return;
       const items = focusable();
       const first = items[0], last = items[items.length - 1];
-      if (!first || !last) { event.preventDefault(); return; }
-      if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
-      else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
+      if (!first || !last) { event.preventDefault(); aside?.focus(); return; }
+      const activeIndex = items.indexOf(document.activeElement as HTMLElement);
+      if (activeIndex < 0) { event.preventDefault(); (event.shiftKey ? last : first).focus(); }
+      else if (event.shiftKey && activeIndex === 0) { event.preventDefault(); last.focus(); }
+      else if (!event.shiftKey && activeIndex === items.length - 1) { event.preventDefault(); first.focus(); }
+    };
+    const keepFocusInside = (event: FocusEvent) => {
+      if (aside?.contains(event.target as Node)) return;
+      if (activeModalOutsideDrawer()?.contains(event.target as Node)) return;
+      (focusable()[0] ?? aside)?.focus({ preventScroll: true });
     };
     document.addEventListener("keydown", key);
-    return () => document.removeEventListener("keydown", key);
+    document.addEventListener("focusin", keepFocusInside, true);
+    return () => {
+      document.removeEventListener("keydown", key);
+      document.removeEventListener("focusin", keepFocusInside, true);
+    };
   }, [narrow, sidebarOpen, closeDrawer]);
 
   return (
     <div
-      className={`xn-shell-layout ${narrow && sidebarOpen ? "xn-shell-layout--sidebar-open" : ""} ${!narrow && sidebarCollapsed ? "xn-shell-layout--sidebar-collapsed" : ""}`}
+      className={`xn-shell-layout ${titlebar ? "xn-shell-layout--desktop-titlebar" : ""} ${titlebar && !sidebar ? "xn-shell-layout--no-sidebar" : ""} ${narrow && sidebarOpen ? "xn-shell-layout--sidebar-open" : ""} ${!narrow && sidebarCollapsed ? "xn-shell-layout--sidebar-collapsed" : ""}`}
       data-testid="xn-shell"
       data-sidebar-open={sidebarOpen}
     >
+      {titlebar && <div className="xn-shell-layout__titlebar" data-testid="xn-shell-titlebar-host">{titlebar}</div>}
       {sidebar && (
         <aside
           ref={asideRef}
           id="xn-shell-sidebar"
+          tabIndex={narrow && sidebarOpen ? -1 : undefined}
           className="xn-shell-sidebar"
           data-testid="xn-shell-sidebar"
           aria-label={tr("侧边栏导航")}
@@ -129,8 +159,11 @@ export function Shell({
             }
           }}
         >
-          <div className="xn-shell-sidebar__head">
-            <span className="xn-sidebar-brand">Xueness</span>
+          {!titlebar && <div className="xn-shell-sidebar__head">
+            <span className="xn-sidebar-brand">
+              <IconXuenessMark size={18} className="xn-sidebar-brand__mark" />
+              <span className="xn-sidebar-brand__word">Xueness</span>
+            </span>
             <div className="xn-shell-sidebar__head-actions">
               <div className="xn-shell-history" role="group" aria-label={tr("任务导航")}>
                 <button
@@ -162,7 +195,7 @@ export function Shell({
                 <IconMenu size={16} />
               </button>
             </div>
-          </div>
+          </div>}
           <div className="xn-shell-sidebar__body">{sidebar}</div>
           {sidebarFooter && (
             <div className="xn-shell-sidebar__footer" data-testid="xn-shell-sidebar-footer">
@@ -175,7 +208,7 @@ export function Shell({
       {sidebar && narrow && sidebarOpen && <button type="button" className="xn-shell-backdrop" aria-label={tr("收起侧栏")} tabIndex={-1} onClick={closeDrawer} />}
 
       <main ref={mainRef} tabIndex={-1} inert={Boolean(sidebar && narrow && sidebarOpen)} className="xn-shell-main" data-testid="xn-shell-main">
-        {sidebar && (
+        {sidebar && !titlebar && (
           <button
             ref={toggleRef}
             type="button"
@@ -197,17 +230,24 @@ export function Shell({
   );
 }
 
-/** Sidebar top actions ("新建任务 ⌘N" / "搜索 ⌘K"), ZCode-style icon rows. */
+/** Sidebar top actions with OS-aware Mod shortcut labels. */
 export type SidebarAction = {
   id: string;
   /** Thin-line SVG node (see ui/icons); decorative — the label carries meaning. */
   icon: React.ReactNode;
   label: string;
   shortcut?: string;
-  onClick?: () => void;
+  onClick?: (event: React.MouseEvent<HTMLButtonElement>) => void;
 };
 
-export function SidebarActions({ actions }: { actions: SidebarAction[] }): React.JSX.Element {
+export function SidebarActions({ actions, platform }: { actions: SidebarAction[]; platform?: string }): React.JSX.Element {
+  const isMac = (platform ?? (typeof navigator === "undefined" ? "" : navigator.platform)).toLowerCase().includes("mac");
+  const displayShortcut = (shortcut: string) => shortcut.split("+").map((part) => {
+    if (part === "Mod") return isMac ? "⌘" : "Ctrl";
+    if (part === "Alt") return isMac ? "⌥" : "Alt";
+    if (part === "Shift") return isMac ? "⇧" : "Shift";
+    return part;
+  }).join(isMac ? "" : "+");
   return (
     <div className="xn-sidebar-actions" data-testid="xn-sidebar-actions">
       {actions.map((action) => (
@@ -224,7 +264,7 @@ export function SidebarActions({ actions }: { actions: SidebarAction[] }): React
           </span>
           <span className="xn-sidebar-action__label">{action.label}</span>
           {action.shortcut && (
-            <kbd className="xn-sidebar-action__shortcut">{action.shortcut}</kbd>
+            <kbd className="xn-sidebar-action__shortcut">{displayShortcut(action.shortcut)}</kbd>
           )}
         </button>
       ))}
@@ -257,7 +297,7 @@ function StatusDot({ status }: { status?: string }): React.JSX.Element | null {
 export type SidebarNavProps = {
   items: { id: string; label: string; active: boolean; status?: string; pinned?: boolean; timeLabel?: string }[];
   onSelect?: (id: string) => void;
-  onRename?: (id: string) => void;
+  onRename?: (id: string, returnFocusTo?: HTMLElement | null) => void;
   onDelete?: (id: string) => void;
   /** 侧栏宽度（px），默认 270 */
   width?: number;
@@ -331,7 +371,7 @@ export function SidebarNav({
                       aria-label={tr("重命名任务")}
                       title={tr("重命名")}
                       data-testid={`xn-sidebar-rename-${item.id}`}
-                      onClick={() => onRename(item.id)}
+                      onClick={(event) => onRename(item.id, event.currentTarget)}
                     >
                       <IconPencil size={13} />
                     </button>
@@ -568,7 +608,7 @@ export function TimelineCard({
       >
         <div className="xn-msg__tool-line">
           <ToolStatusIcon status={status} />
-          <span className="xn-msg__tool-name">{title || tr("任务完成")}</span>
+          <span className="xn-msg__tool-name">{title || tr("运行结束")}</span>
           <span className="xn-msg__tool-trailing">
             {status && (
               <Badge tone={tone} data-testid="xn-card-status">

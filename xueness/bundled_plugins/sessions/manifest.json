@@ -81,12 +81,12 @@
     }
   ],
   "frontendModules": [
-    "XuenessComposerToolbar.tsx",
-    "XuenessConversationHistoryRail.tsx",
-    "XuenessRenameDialog.tsx",
-    "XuenessTaskList.tsx",
-    "XuenessTimeline.tsx",
-    "XuenessWorkbenchView.tsx",
+    "plugins/sessions/XuenessComposerToolbar.tsx",
+    "plugins/sessions/XuenessConversationHistoryRail.tsx",
+    "plugins/sessions/XuenessRenameDialog.tsx",
+    "plugins/sessions/XuenessTaskList.tsx",
+    "plugins/sessions/XuenessTimeline.tsx",
+    "plugins/sessions/XuenessWorkbenchView.tsx",
     "xuenessComposer.ts",
     "xuenessWorkbench.ts",
     "plugins/sessions/ForkSessionDialog.tsx",

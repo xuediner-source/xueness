@@ -146,6 +146,30 @@ def entrypoint(plugin_id):
     return importlib.import_module('xueness.bundled_plugins.' + plugin_id + '.plugin')
 
 
+def completion_instructions(state_dir, session):
+    """Trusted optional plugin guidance, with the same effective gate as tools."""
+    blocks = []
+    for item in catalog(state_dir):
+        if item['effective']:
+            callback = getattr(entrypoint(item['id']), 'completion_instructions', None)
+            if callable(callback):
+                block = callback(session)
+                if isinstance(block, str) and block:
+                    blocks.append(block[:6000])
+    return blocks
+
+
+def completion_checks(state_dir, root, gate, session, summary):
+    """Collect host checks from active plugins; no plugin claims another's outcome."""
+    checks = {}
+    for item in catalog(state_dir):
+        if item['effective']:
+            callback = getattr(entrypoint(item['id']), 'completion_check', None)
+            if callable(callback):
+                checks[item['id']] = callback(root, gate, session, summary, state_dir=state_dir)
+    return checks
+
+
 def active_tool_names(state_dir):
     from .tool_registry import REGISTRY
     effective = {p['id'] for p in catalog(state_dir) if p['effective']}
@@ -196,7 +220,7 @@ def route_owner(parts):
         if parts[2] == 'plugins':
             return 'extensions'
         return parts[2] if parts[2] in ('skills','commands','hooks','mcp','subagents') else None
-    return {'desktop':'desktop','bots':'bots','remote':'remote','diagnostics':'diagnostics','automations':'automation','workflows':'workflows','terminals':'terminal','mcp':'mcp',
+    return {'updates':'updates','delivery':'planning','desktop':'desktop','bots':'bots','remote':'remote','diagnostics':'diagnostics','automations':'automation','workflows':'workflows','terminals':'terminal','mcp':'mcp','network':'network',
             'providers':'providers','settings':'settings','workspaces':'settings','usage':'usage',
             'memory':'memory','browser':'browser','directory':'files','home':'files','system':'files'}.get(family)
 
@@ -237,6 +261,9 @@ def sync_services(ctx):
     if ctx.get("handler") is not None:
         ctx = ctx["handler"]._ctx
     enabled = {p['id'] for p in catalog(ctx['state_dir']) if p['effective']}
+    policy_sync = ctx.get('native_policy_sync')
+    if callable(policy_sync):
+        policy_sync()
     with ctx['lock']:
         broker = ctx.get('terminals')
         if 'terminal' not in enabled:
@@ -254,7 +281,7 @@ def sync_services(ctx):
             if scheduler is not None:
                 scheduler.close()
                 ctx['automation_service'] = None
-        elif scheduler is None and ctx.get('serve_plugins'):
+        elif scheduler is None and ctx.get('serve_plugins') and not ctx.get('admission_closed'):
             ctx['automation_service'] = entrypoint('automation').create_service(ctx['state_dir'], allow_real=ctx.get('allow_real', False))
 
 

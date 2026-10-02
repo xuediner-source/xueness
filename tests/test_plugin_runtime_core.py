@@ -133,7 +133,12 @@ class PluginRuntimeCoreTests(unittest.TestCase):
         self.assertEqual(invoked, [])
         self.assertEqual([result["results"][key]["error"]
                           for key in ("skill", "mcp", "task")],
-                         ["plugin disabled"] * 3)
+                         ["plugin disabled", "not executed: run paused", "not executed: run paused"])
+        self.assertEqual([result["results"][key]["error_code"]
+                          for key in ("skill", "mcp", "task")],
+                         ["plugin_disabled", "run_paused", "run_paused"])
+        self.assertEqual(result["status"], "needs_review")
+        self.assertEqual(len(provider.calls), 1)
 
     def test_disabled_modules_strip_injected_callbacks_and_context(self):
         from xueness.plugin_runtime import set_enabled

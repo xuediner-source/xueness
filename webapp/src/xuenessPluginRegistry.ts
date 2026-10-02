@@ -25,7 +25,7 @@ export const XUENESS_PLUGIN_REGISTRY = {
   sessions: { name: "会话", description: "会话列表、Agent 对话与历史分叉", panels: ["chat"] },
   files: { name: "文件", description: "工作区文件、改动和目录浏览", panels: ["files", "changes", "directory"] },
   git: { name: "Git", description: "工作区状态、差异和提交记录", panels: ["git"] },
-  providers: { name: "供应商", description: "模型配置、模型发现与本地轻量模式", panels: ["providers"] },
+  providers: { name: "供应商", description: "模型配置、模型发现、本地轻量模式与接口兼容诊断", panels: ["providers"] },
   usage: { name: "用量", description: "会话和步骤用量统计", panels: ["usage"] },
   memory: { name: "记忆", description: "记忆文件轨道状态", panels: ["memory"] },
   settings: { name: "设置", description: "工作台和运行设置", panels: ["settings"] },
@@ -33,7 +33,7 @@ export const XUENESS_PLUGIN_REGISTRY = {
   terminal: { name: "终端", description: "工作区交互式终端", panels: ["terminal"] },
   automation: { name: "自动化", description: "本地计划与审批队列", panels: ["automations"] },
   extensions: { name: "扩展市场", description: "查看并安装可信资源清单", panels: ["marketplace"] },
-  network: { name: "网络工具", description: "受限网络搜索与读取工具", panels: [] },
+  network: { name: "网络工具", description: "受限公网读取、搜索服务配置与按需诊断", panels: [] },
   diagnostics: { name: "诊断与维护", description: "导出脱敏状态并清理旧日志", panels: ["diagnostics"] },
   browser: { name: "浏览器自动化", description: "受审批约束的 Playwright 浏览器操作工具", panels: [] },
   remote: { name: "远程连接", description: "连接已配置的 SSH 主机", panels: ["remote"] },
@@ -48,7 +48,7 @@ export const XUENESS_PLUGIN_REGISTRY = {
   mcp: { name: "MCP", description: "外部 MCP 服务配置", panels: ["capabilities"] },
   subagents: { name: "子代理", description: "子代理资源", panels: ["capabilities"] },
   shell: { name: "Shell 工具", description: "执行命令工具", panels: [] },
-  planning: { name: "规划工具", description: "待办和提问工具", panels: [] },
+  planning: { name: "规划工具", description: "待办、提问和交付完整性检查", panels: [] },
 } as const satisfies Record<string, { name: string; description: string; panels: readonly PluginPanel[] }>;
 
 export type XuenessPluginId = keyof typeof XUENESS_PLUGIN_REGISTRY;

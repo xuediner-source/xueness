@@ -9,6 +9,11 @@ import threading
 
 ROOT = Path(__file__).resolve().parents[2]
 RELEASE = ROOT/'desktop/release'
+from sys import path as module_path
+module_path.insert(0, str(ROOT))
+from xueness.bundled_plugins import PLUGIN_IDS
+expected_plugins = len(PLUGIN_IDS)
+expected_features = sum(len(json.loads((ROOT/'xueness/bundled_plugins'/ident/'manifest.json').read_text(encoding='utf-8'))['features']) for ident in PLUGIN_IDS)
 if os.name == 'nt':
     executable = RELEASE/'win-unpacked/Xueness.exe'
 else:
@@ -26,11 +31,11 @@ with tempfile.TemporaryDirectory(prefix='xueness-app-check-') as temporary:
         detail = json.loads(report.read_text()).get('reason', '') if report.exists() else ''
         raise SystemExit('Packaged desktop did not complete its UI startup check. '+detail)
     state = json.loads(report.read_text())
-    assert state.get('plugins') == 27 and state.get('features') == 88, state
-    assert state.get('installedCards') == 27 and state.get('desktopSettingsReady') is True, state
+    assert state.get('plugins') == expected_plugins and state.get('features') == expected_features, state
+    assert state.get('installedCards') == expected_plugins and state.get('desktopSettingsReady') is True, state
     assert state.get('clipWriteGranted') is True and state.get('clipReadDenied') is True, state
     assert state.get('title') == 'Xueness' and state.get('nodeAccess') is False and state.get('workbenchReady') is True and state.get('body', 0) > 100, state
-    print('PASS: packaged Electron workbench renders, 27 plugins/88 features, isolated renderer and clean exit')
+    print(f'PASS: packaged Electron workbench renders, {expected_plugins} plugins/{expected_features} features, isolated renderer and clean exit')
     resources = executable.parent/'resources' if os.name == 'nt' else executable.parents[1]/'Resources'
     worker = resources/'backend/_internal/xueness/bundled_plugins/browser/bridge.mjs'
     driver = resources/'browser-runtime/node_modules/playwright/index.mjs'

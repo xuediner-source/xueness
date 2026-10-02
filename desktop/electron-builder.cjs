@@ -1,6 +1,7 @@
 module.exports = {
   appId: 'app.xueness.desktop', productName: 'Xueness', asar: true,
   directories: { output: 'release', buildResources: 'build' },
+  publish: [{ provider: 'github', owner: 'xuediner-source', repo: 'xueness', releaseType: 'release' }],
   files: ['src/**/*', 'package.json'],
   extraResources: [
     { from: 'runtime/backend', to: 'backend' },

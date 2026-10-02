@@ -14,7 +14,7 @@
     <a href="https://github.com/xuediner-source/xueness/actions/workflows/desktop-build.yml"><img src="https://github.com/xuediner-source/xueness/actions/workflows/desktop-build.yml/badge.svg?branch=main" alt="Desktop build"></a>
     <a href="https://github.com/xuediner-source/xueness/blob/main/LICENSE"><img src="https://img.shields.io/github/license/xuediner-source/xueness?label=license" alt="Apache 2.0 license"></a>
     <a href="https://github.com/xuediner-source/xueness/releases/latest"><img src="https://img.shields.io/github/v/release/xuediner-source/xueness?label=release" alt="Latest release"></a>
-    <img src="https://img.shields.io/badge/plugins-27%20%7C%2088-4263eb" alt="27 plugins and 88 features">
+    <img src="https://img.shields.io/badge/plugins-27%20%7C%2096-4263eb" alt="27 plugins and 96 features">
   </p>
 </div>
 
@@ -43,7 +43,7 @@ SHA-256 checksums for this release are in [`SHA256SUMS.txt`](https://github.com/
 ## What you can do
 
 - **Tune local-model runs.** Choose the “Local lightweight” profile and adjust prompts, tool selection, context and output budgets, sampling, and protocol options. The resource panel reports CPU, memory, and process activity on the machine running Xueness. The output view shows request phases, tool activity, and usage reported by the model service. Missing token or GPU-memory measurements are shown as unavailable instead of being estimated.
-- **Use 27 trusted plugins and 88 registered features.** Capabilities include sessions, workspace files, providers, shell, Git, terminals, workflows, memory, hooks, MCP, browser automation, remote connections, channels, automations, diagnostics, and Office previews. The plugin manager shows the full catalog and dependency state; the CLI can inspect and change plugin switches.
+- **Use 27 trusted plugins and 96 registered features.** Capabilities include sessions, workspace files, providers, shell, Git, terminals, workflows, memory, hooks, MCP, browser automation, remote connections, channels, automations, diagnostics, and Office previews. The plugin manager shows the full catalog and dependency state; the CLI can inspect and change plugin switches.
 - **Keep one local runtime across three entry points.** Run sessions in the Agent CLI, manage them in the loopback Web workbench, or install the Windows/macOS desktop app. Platform-specific support stays with the plugin that owns the feature.
 
 The lightweight profile tunes runtime behavior; it does not download models, change model weights, or automatically alter the inference server’s GPU allocation. Office previews cover selected document pages, images, charts, and cached spreadsheet values. They are not a complete Microsoft Office layout or compatibility engine.

@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from "react";
 import { get, post } from "../../xuenessApi";
 import { t as tr } from "../../i18n";
 import "../../styles/memory-editor.css";
+import { shouldDismissModalOnEscape, useModalFocusScope } from "../shared";
 
 type MemoryDocument = { name: "memory" | "user" | "key"; content: string; digest: string };
 export function XuenessMemoryEditor({ workspaceRoot, initialTrack = "memory", onSaved }: { workspaceRoot?: string; initialTrack?: MemoryDocument["name"]; onSaved?(): void } = {}): React.JSX.Element {
@@ -14,24 +15,7 @@ export function XuenessMemoryEditor({ workspaceRoot, initialTrack = "memory", on
   const [stale, setStale] = useState(false);
   const dialogRef = useRef<HTMLElement>(null);
   const saveButtonRef = useRef<HTMLButtonElement>(null);
-  useEffect(() => {
-    if (!confirm) return;
-    const dialog = dialogRef.current;
-    dialog?.querySelector<HTMLButtonElement>('button')?.focus();
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key === "Escape") { event.preventDefault(); event.stopPropagation(); setConfirm(false); }
-      if (event.key !== "Tab" || !dialog) return;
-      const buttons = Array.from(dialog.querySelectorAll<HTMLButtonElement>('button:not(:disabled)'));
-      const index = buttons.indexOf(window.document.activeElement as HTMLButtonElement);
-      if (index < 0 || (event.shiftKey && index === 0) || (!event.shiftKey && index === buttons.length - 1)) {
-        event.preventDefault(); (event.shiftKey ? buttons.at(-1) : buttons[0])?.focus();
-      }
-    };
-    const keepFocus = (event: FocusEvent) => { if (!dialog?.contains(event.target as Node)) dialog?.querySelector<HTMLButtonElement>('button')?.focus(); };
-    window.document.addEventListener("keydown", onKey, true);
-    window.document.addEventListener("focusin", keepFocus, true);
-    return () => { window.document.removeEventListener("keydown", onKey, true); window.document.removeEventListener("focusin", keepFocus, true); saveButtonRef.current?.focus(); };
-  }, [confirm]);
+  useModalFocusScope({ open: confirm, dialogRef, returnFocusTo: saveButtonRef.current });
   const reload = async () => {
     setBusy(true); setError(""); setNotice(""); setStale(false);
     try { setDocument(await get<MemoryDocument>(`/api/memory/tracks/${name}${workspaceRoot ? `?root=${encodeURIComponent(workspaceRoot)}` : ""}`)); }
@@ -51,6 +35,10 @@ export function XuenessMemoryEditor({ workspaceRoot, initialTrack = "memory", on
     {error && <p role="alert">{error}</p>}{notice && <p role="status">{notice}</p>}
     {stale && <div role="alert" className="xn-memory-editor__stale"><p>{tr("此文件已被其他操作修改。请重新加载后再编辑。")}</p><button type="button" disabled={busy} onClick={() => void reload()}>{tr("重新加载最新版本")}</button></div>}
     {document && <><textarea aria-label={tr("记忆内容")} value={document.content} disabled={busy || stale} onChange={e => setDocument({ ...document, content: e.target.value })} /><small>{tr("版本摘要：")}<code>{document.digest}</code></small><button ref={saveButtonRef} type="button" disabled={busy || stale} onClick={() => setConfirm(true)}>{tr("审阅并保存")}</button></>}
-    {confirm && document && <div className="xn-memory-editor__backdrop"><section ref={dialogRef} role="alertdialog" aria-modal="true" aria-labelledby="xn-memory-confirm-title" aria-describedby="xn-memory-confirm-description"><h3 id="xn-memory-confirm-title">{tr("确认保存记忆")}</h3><p id="xn-memory-confirm-description">{document.name} · {tr("将以此加载版本的摘要条件保存。若内容变更，保存会被拒绝。")}</p><div><button type="button" onClick={() => setConfirm(false)}>{tr("取消")}</button><button type="button" disabled={busy} onClick={() => void save()}>{tr("确认保存")}</button></div></section></div>}
+    {confirm && document && <div className="xn-memory-editor__backdrop"><section ref={dialogRef} tabIndex={-1} onKeyDown={event => {
+      if (event.key !== "Escape") return;
+      event.stopPropagation();
+      if (shouldDismissModalOnEscape(event, busy)) { event.preventDefault(); setConfirm(false); }
+    }} role="alertdialog" aria-modal="true" aria-labelledby="xn-memory-confirm-title" aria-describedby="xn-memory-confirm-description"><h3 id="xn-memory-confirm-title">{tr("确认保存记忆")}</h3><p id="xn-memory-confirm-description">{document.name} · {tr("将以此加载版本的摘要条件保存。若内容变更，保存会被拒绝。")}</p><div><button type="button" onClick={() => setConfirm(false)}>{tr("取消")}</button><button type="button" disabled={busy} onClick={() => void save()}>{tr("确认保存")}</button></div></section></div>}
   </section>;
 }

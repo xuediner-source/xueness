@@ -42,7 +42,7 @@
     }
   ],
   "frontendModules": [
-    "XuenessTerminalPreferences.tsx",
+    "plugins/terminal/XuenessTerminalPreferences.tsx",
     "plugins/terminal/index.tsx"
   ]
 }

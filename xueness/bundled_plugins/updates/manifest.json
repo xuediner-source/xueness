@@ -1,7 +1,7 @@
 {
   "id": "updates",
-  "name": "CLI source updates",
-  "description": "CLI source updates",
+  "name": "应用更新",
+  "description": "源仓库更新与桌面客户端检查、下载和安装",
   "apiVersion": 1,
   "version": "1.0.0",
   "defaultEnabled": true,
@@ -13,7 +13,9 @@
   "panels": [],
   "resources": [],
   "capabilities": [],
-  "modules": [],
+  "modules": [
+    "desktop_updates"
+  ],
   "features": [
     {
       "id": "updates.check",
@@ -24,7 +26,18 @@
       "id": "updates.apply",
       "name": "明确批准的干净仓库快进更新",
       "nameEn": "Approved clean-repository fast-forward update"
+    },
+    {
+      "id": "updates.desktop",
+      "name": "客户端更新检查、下载与重启安装",
+      "nameEn": "Desktop update checks, downloads and restart installation"
     }
   ],
-  "frontendModules": []
+  "frontendModules": [
+    "plugins/updates/DesktopUpdates.tsx",
+    "plugins/updates/updateLifecycle.ts"
+  ],
+  "desktopModules": [
+    "src/update-coordinator.cjs"
+  ]
 }

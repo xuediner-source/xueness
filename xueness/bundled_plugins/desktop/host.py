@@ -36,6 +36,8 @@ def main(argv=None):
     ctx['webapp_dir'] = args.assets.resolve() if args.assets else Path(__file__).resolve().parents[3]/'webapp/dist'
     ctx['desktop_token'] = token
     bridge = DesktopBridge(sys.stdout)
+    from ..updates.desktop_updates import bind_desktop
+    bind_desktop(ctx, bridge)
 
     def choose(initial_root):
         plugin_runtime.require_enabled(ctx['state_dir'], 'desktop')

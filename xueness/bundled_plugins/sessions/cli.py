@@ -62,10 +62,15 @@ def _render_event(ev, file=None, language="zh", stream_state=None) -> None:
     elif t == "completion":
         mark = "\u2713" if ev.get("verified") else "\u26a0"
         summary = (ev.get("summary") or "").strip()
+        delivery = ev.get("delivery_status", "not_assessed")
         if language == "en":
-            print(f"{mark} Task complete ({'verified' if ev.get('verified') else 'unverified'}){': ' + summary if summary else ''}", file=out)
+            tool_label = 'tool evidence passed' if ev.get('verified') else 'tool evidence needs review'
+            delivery_label = {'passed': 'delivery checks passed', 'failed': 'delivery checks failed'}.get(delivery, 'delivery not assessed')
+            print(f"{mark} Run ended ({tool_label}; {delivery_label}){': ' + summary if summary else ''}", file=out)
         else:
-            print(f"{mark} \u4efb\u52a1\u5b8c\u6210\uff08{'\u5df2\u9a8c\u8bc1' if ev.get('verified') else '\u672a\u9a8c\u8bc1'}\uff09{': ' + summary if summary else ''}", file=out)
+            tool_label = '工具成功证据通过' if ev.get('verified') else '工具证据待审核'
+            delivery_label = {'passed': '交付检查通过', 'failed': '交付检查未通过'}.get(delivery, '交付内容尚未检查')
+            print(f"{mark} 运行结束（{tool_label}；{delivery_label}）{': ' + summary if summary else ''}", file=out)
     elif t == "status":
         line = (f"== {ev.get('status')} ({ev.get('steps', 0)} steps)" if language == "en"
                 else f"== {ev.get('status')} (\u5171 {ev.get('steps', 0)} \u6b65)")

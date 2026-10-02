@@ -22,6 +22,24 @@ export type ResourceItem = {
 };
 
 /** 供应商摘要——**刻意不含 apiKey**，密钥永不回显。 */
+export type ProviderCompatibilityCheckRecord = {
+  mode: ProviderCompatibilityTestMode;
+  ok: boolean;
+  testedAt: string;
+  requestCount: number;
+  latencyMs?: number;
+  error?: string;
+  failedStep?: string;
+  httpStatus?: number;
+  details?: Record<string, unknown>;
+};
+
+export type ProviderCompatibilityDiagnosticGroup = {
+  optionsHash: string;
+  compatibility: NonNullable<ProviderSummary["compatibility"]>;
+  checks: ProviderCompatibilityCheckRecord[];
+};
+
 export type ProviderSummary = {
   id: string;
   name: string;
@@ -40,7 +58,14 @@ export type ProviderSummary = {
     streamUsage?: boolean;
     parallelToolCalls?: boolean;
     maxTokensField?: "max_tokens" | "max_completion_tokens";
-    [key: string]: unknown;
+    toolChoice?: "auto" | "required";
+    think?: boolean;
+  };
+  compatibilityDiagnostics?: ProviderCompatibilityDiagnosticGroup[];
+  compatibilityVerification?: {
+    verifiedAt: string;
+    optionsHash: string;
+    checks: ProviderCompatibilityCheckRecord[];
   };
 };
 
@@ -315,6 +340,31 @@ export type ProviderConnectionTest = {
   latencyMs: number;
 };
 
+export type ProviderCompatibilityTestMode =
+  | "conversation"
+  | "native_tool_call"
+  | "json_tool_call"
+  | "stream"
+  | "tool_roundtrip";
+
+export type ProviderCompatibilityTest = {
+  ok: boolean;
+  error?: string;
+  provider: { id: string; name: string; model: string; protocol: "openai" };
+  latencyMs: number;
+  optionsHash: string;
+  testedAt: string;
+  providerCompatibilityDiagnostics: ProviderCompatibilityDiagnosticGroup[];
+  details: {
+    mode: ProviderCompatibilityTestMode;
+    requestCount: number;
+    failedStep?: string | null;
+    httpStatus?: number | null;
+    requests?: { step: string; fields: string[] }[];
+    [key: string]: unknown;
+  };
+};
+
 export type ProviderDiscoveredModel = {
   id: string;
   created?: number;
@@ -330,6 +380,22 @@ export type ProviderModelDiscovery = {
 /** POST /api/providers/test; the server reads credentials only from its saved profile. */
 export async function testProviderConnection(id: string): Promise<ProviderConnectionTest> {
   return post<ProviderConnectionTest>("/api/providers/test", { id });
+}
+
+/** POST /api/providers/compatibility-test; tests only a saved profile and never stores draft options. */
+export async function testProviderCompatibility(
+  id: string,
+  mode: ProviderCompatibilityTestMode,
+  compatibility: NonNullable<ProviderSummary["compatibility"]>,
+): Promise<ProviderCompatibilityTest> {
+  return post<ProviderCompatibilityTest>("/api/providers/compatibility-test", {
+    id, mode, compatibility: { ...compatibility },
+  });
+}
+
+/** POST /api/providers/compatibility-adopt; server checks persisted results before saving. */
+export async function adoptProviderCompatibility(id: string, optionsHash: string): Promise<{ provider: ProviderSummary }> {
+  return post<{ provider: ProviderSummary }>("/api/providers/compatibility-adopt", { id, optionsHash });
 }
 
 /** POST /api/providers/discover; reads the saved OpenAI profile without sending a chat request. */

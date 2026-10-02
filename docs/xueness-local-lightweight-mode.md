@@ -77,7 +77,13 @@ python3 -m xueness providers save local --name '本地轻量' \
 
 ## API 兼容和完成状态
 
-原生 function calling 可用时选择 `native`。兼容配置支持 `streamUsage`、`parallelToolCalls`、`maxTokensField`（`max_tokens` / `max_completion_tokens`）。轻量默认省略 `stream_options`，发送 `parallel_tool_calls=false`。
+原生 function calling 可用时选择 `native`。兼容配置支持 `streamUsage`、`parallelToolCalls`、`maxTokensField`（`max_tokens` / `max_completion_tokens`）、`toolChoice`（`auto` / `required`）和可省略的 `think` 布尔参数。未配置 `parallelToolCalls` 时省略 `parallel_tool_calls`；轻量档位默认也省略 `stream_options`。选择 `think` 时会发 `think`，并省略 `reasoning_effort`，避免对同一请求发送两种思考控制字段。
+
+### 本地接口兼容诊断
+
+「设置 → 模型配置 → 本地接口兼容诊断」每次只执行用户选中的检查：普通对话、原生工具调用、JSON 工具调用、SSE 流式 delta 与 `[DONE]` 标记，或原生工具结果续轮。原生工具检查要求模型只返回一个 `xueness_fixture_add` 调用，且服务端严格验证函数名和 `{a: 3, b: 4}` 参数；工具续轮会通过 SSE 接收工具调用增量，回传真实 `tool` 消息，再要求服务商基于固定的算术回执回答，最多发两次模型请求。诊断 fixture 仅在进程内计算 `3+4`，不会读取/写入工作区、运行命令或调用产品工具。
+
+每个普通检查最多请求一次，续轮最多请求两次；每个请求输出上限为 96 tokens，总期限为 8 秒。诊断无自动回退和重试，400 结果会列出已发送字段供用户手动省略参数后重新选择运行。测试只读取已保存的地址、模型和密钥，兼容候选来自编辑草稿；检查历史按参数哈希和当前配置版本保存，不记录 prompt、response 或凭据，也不会自动改运行参数或活动模型。只有普通对话、SSE 流式和适用的工具检查全部通过后，才可显式点击「采用已验证兼容参数」保存候选；原生模式要求工具结果续轮通过，JSON 模式要求 JSON 工具调用通过。重新保存连接或运行选项会使历史验证失效。服务商可能按请求收费；普通对话成功不能作为工具支持证据。
 
 不支持原生工具时，OpenAI-compatible 轻量配置可以选择 `json`：
 

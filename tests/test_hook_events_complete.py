@@ -75,12 +75,12 @@ class EveryEventFiresTests(unittest.TestCase):
                    max_steps=8, hooks=HookRunner(load_hooks(self.state), self.workspace))
 
     def test_all_seven_events_fire_in_one_turn(self):
-        """A successful call, a failed call and a denied call, all in one run."""
+        """A failed call, successful call, then denied call all fire their hooks."""
         (self.workspace / "ok.txt").write_text("hello", encoding="utf-8")
         provider = _ScriptedProvider([
-            _call("c1", "write", path="a.txt", content="x"),   # denied -> PermissionRequest
-            _call("c2", "read", path="nope.txt"),              # fails -> PostToolUseFailure
-            _call("c3", "read", path="ok.txt"),                # succeeds -> PostToolUse
+            _call("c1", "read", path="nope.txt"),              # fails -> PostToolUseFailure
+            _call("c2", "read", path="ok.txt"),                # succeeds -> PostToolUse
+            _call("c3", "write", path="a.txt", content="x"),   # denied -> PermissionRequest
         ])
         self._run(provider)
 

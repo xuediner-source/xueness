@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from "react";
 import { get, post } from "../../xuenessApi";
 import { t as tr } from "../../i18n";
 import "../../styles/browser.css";
+import { shouldDismissModalOnEscape, useModalFocusScope } from "../shared";
 
 export type BrowserDataOperation = "cache" | "all";
 
@@ -63,43 +64,7 @@ export function BrowserSettings({ enabled, onEnabledChange, disabled = false }: 
     return () => { current = false; };
   }, [enabled]);
 
-  useEffect(() => {
-    if (!confirmClearAll) return;
-    const dialog = dialogRef.current;
-    const initialFocus = cancelButtonRef.current ?? confirmButtonRef.current;
-    initialFocus?.focus();
-
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
-        event.preventDefault();
-        event.stopPropagation();
-        setConfirmClearAll(false);
-        return;
-      }
-      if (event.key !== "Tab" || !dialog) return;
-      const focusable = Array.from(dialog.querySelectorAll<HTMLElement>(
-        'button:not(:disabled):not([aria-disabled="true"]),a[href],input:not(:disabled),select:not(:disabled),textarea:not(:disabled),[tabindex]:not([tabindex="-1"])',
-      ));
-      if (focusable.length === 0) {
-        event.preventDefault();
-        dialog.focus();
-        return;
-      }
-      const activeIndex = focusable.indexOf(document.activeElement as HTMLElement);
-      const targetIndex = dialogTabWrapTarget(activeIndex, focusable.length, event.shiftKey);
-      if (targetIndex !== null) {
-        event.preventDefault();
-        focusable[targetIndex].focus();
-      }
-    };
-
-    document.addEventListener("keydown", onKeyDown);
-    return () => {
-      document.removeEventListener("keydown", onKeyDown);
-      focusReturnRef.current?.focus();
-      focusReturnRef.current = null;
-    };
-  }, [confirmClearAll]);
+  useModalFocusScope({ open: confirmClearAll, dialogRef, initialFocusRef: cancelButtonRef, returnFocusTo: focusReturnRef.current });
 
   const changeEnabled = async () => {
     if (disabled || togglePending) return;
@@ -243,6 +208,11 @@ export function BrowserSettings({ enabled, onEnabledChange, disabled = false }: 
             aria-labelledby="xn-browser-clear-title"
             aria-describedby="xn-browser-clear-description"
             tabIndex={-1}
+            onKeyDown={event => {
+              if (event.key !== "Escape") return;
+              event.stopPropagation();
+              if (shouldDismissModalOnEscape(event, operationPending !== null)) { event.preventDefault(); setConfirmClearAll(false); }
+            }}
             className="xn-browser-settings__dialog"
           >
             <h4 id="xn-browser-clear-title">{tr("清除所有浏览器数据？")}</h4>

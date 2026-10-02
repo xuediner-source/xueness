@@ -1,0 +1,159 @@
+.xn-delivery-checks {
+  width: min(100% - 32px, 760px);
+  margin: 0 auto 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md, 9px);
+  background: var(--bg-panel, var(--bg-card));
+  color: var(--fg);
+  font-size: 12px;
+}
+
+.xn-delivery-checks > .xn-delivery-checks__summary {
+  display: flex;
+  min-height: 38px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 7px 11px;
+  list-style: none;
+  cursor: pointer;
+}
+
+.xn-delivery-checks > .xn-delivery-checks__summary::-webkit-details-marker { display: none; }
+.xn-delivery-checks > .xn-delivery-checks__summary::after {
+  flex: 0 0 auto;
+  color: var(--fg-muted);
+  content: '⌄';
+  font-size: 16px;
+  line-height: 1;
+  transition: transform 120ms ease;
+}
+.xn-delivery-checks[open] > .xn-delivery-checks__summary::after { transform: rotate(180deg); }
+.xn-delivery-checks > .xn-delivery-checks__summary:hover { background: var(--bg-hover); }
+.xn-delivery-checks > .xn-delivery-checks__summary:focus-visible {
+  border-radius: inherit;
+  outline: 2px solid var(--border-focus, var(--primary));
+  outline-offset: 2px;
+}
+
+.xn-delivery-checks__title { flex: 0 0 auto; font-weight: 650; }
+.xn-delivery-checks__badges { display: flex; min-width: 0; flex: 1 1 auto; justify-content: flex-end; flex-wrap: wrap; gap: 5px; }
+.xn-delivery-checks__badge {
+  display: inline-flex;
+  align-items: center;
+  min-height: 21px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-full, 9999px);
+  padding: 1px 7px;
+  background: var(--bg-subtle);
+  color: var(--fg-muted);
+  font-size: 10px;
+  line-height: 1.4;
+  white-space: nowrap;
+}
+.xn-delivery-checks__badge[data-status="passed"] { border-color: var(--ok-border); background: var(--ok-bg); color: var(--ok-fg); }
+.xn-delivery-checks__badge[data-status="failed"] { border-color: var(--error-border); background: var(--error-bg); color: var(--error-fg); }
+.xn-delivery-checks__badge[data-status="unchecked"] { color: var(--fg-muted); }
+
+.xn-delivery-checks__body {
+  display: grid;
+  gap: 8px;
+  border-top: 1px solid var(--border);
+  padding: 10px 11px;
+}
+.xn-delivery-checks__intro,
+.xn-delivery-checks__reason,
+.xn-delivery-checks__error { margin: 0; line-height: 1.5; overflow-wrap: anywhere; }
+.xn-delivery-checks__intro,
+.xn-delivery-checks__scope { color: var(--fg-muted); }
+.xn-delivery-checks__reason,
+.xn-delivery-checks__error {
+  border-inline-start: 2px solid var(--error-border);
+  padding: 5px 8px;
+  background: var(--error-bg);
+  color: var(--error-fg);
+}
+.xn-delivery-checks__item {
+  display: grid;
+  gap: 3px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm, 6px);
+  padding: 7px 9px;
+  background: var(--bg-card);
+  overflow-wrap: anywhere;
+}
+.xn-delivery-checks__item[data-status="passed"] > strong { color: var(--ok-fg); }
+.xn-delivery-checks__item[data-status="failed"] > strong { color: var(--error-fg); }
+.xn-delivery-checks__item ul { display: grid; gap: 2px; margin: 0; padding-inline-start: 18px; color: var(--fg-muted); }
+.xn-delivery-checks__listed-item { display: flex; min-width: 0; flex-wrap: wrap; gap: 4px 9px; margin: 0; }
+.xn-delivery-checks__listed-item > span { color: var(--fg-muted); overflow-wrap: anywhere; }
+.xn-delivery-checks__scope { font-size: 10px; line-height: 1.45; overflow-wrap: anywhere; }
+
+.xn-delivery-checks__button {
+  display: inline-flex;
+  min-height: 30px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--border-strong, var(--border));
+  border-radius: var(--radius-sm, 6px);
+  padding: 5px 9px;
+  background: var(--bg-card);
+  color: var(--fg);
+  font: inherit;
+  cursor: pointer;
+}
+.xn-delivery-checks__button:hover:not(:disabled) { background: var(--bg-hover); }
+.xn-delivery-checks__button:focus-visible,
+.xn-delivery-checks__requirement input:focus-visible,
+.xn-delivery-checks__requirement textarea:focus-visible {
+  outline: 2px solid var(--border-focus, var(--primary));
+  outline-offset: 1px;
+}
+.xn-delivery-checks__button:disabled { opacity: .5; cursor: not-allowed; }
+.xn-delivery-checks__button--primary { border-color: var(--primary); background: var(--primary); color: var(--primary-fg); }
+.xn-delivery-checks__button--primary:hover:not(:disabled) { filter: brightness(1.08); }
+.xn-delivery-checks__button--quiet { justify-self: start; color: var(--error-fg); }
+.xn-delivery-checks__editor { display: grid; gap: 8px; }
+.xn-delivery-checks__requirement {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px 10px;
+  margin: 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm, 6px);
+  padding: 9px;
+  background: var(--bg-subtle);
+}
+.xn-delivery-checks__requirement legend { max-width: 100%; padding: 0 4px; color: var(--fg-muted); font-size: 10px; overflow-wrap: anywhere; }
+.xn-delivery-checks__requirement label { display: grid; min-width: 0; align-content: start; gap: 4px; color: var(--fg-muted); font-size: 10px; line-height: 1.4; }
+.xn-delivery-checks__requirement label:nth-of-type(3) { grid-column: 1 / -1; }
+.xn-delivery-checks__requirement input,
+.xn-delivery-checks__requirement textarea {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  min-height: 30px;
+  border: 1px solid var(--border-strong, var(--border));
+  border-radius: var(--radius-sm, 6px);
+  padding: 6px 7px;
+  background: var(--bg-input, var(--bg-card));
+  color: var(--fg);
+  font: inherit;
+  font-size: 11px;
+}
+.xn-delivery-checks__requirement textarea { min-height: 58px; resize: vertical; }
+.xn-delivery-checks__requirement input[type="number"] { max-width: 110px; }
+.xn-delivery-checks__requirement:disabled { opacity: .55; }
+.xn-delivery-checks__actions { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: 7px; }
+
+@media (max-width: 600px) {
+  .xn-delivery-checks { width: calc(100% - 20px); }
+  .xn-delivery-checks > .xn-delivery-checks__summary { align-items: flex-start; flex-wrap: wrap; padding: 8px; }
+  .xn-delivery-checks__badges { order: 2; flex-basis: 100%; justify-content: flex-start; }
+  .xn-delivery-checks__body { padding: 9px; }
+  .xn-delivery-checks__requirement { grid-template-columns: minmax(0, 1fr); }
+  .xn-delivery-checks__requirement label:nth-of-type(3) { grid-column: auto; }
+  .xn-delivery-checks__actions { display: grid; grid-template-columns: 1fr; }
+  .xn-delivery-checks__actions .xn-delivery-checks__button { width: 100%; }
+}

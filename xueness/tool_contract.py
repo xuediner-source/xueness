@@ -78,6 +78,16 @@ def execution_context():
         raise ValueError('tool requires an active harness context')
     return value
 
+
+def permission_result(gate, exc):
+    """Distinguish a host approval pause from a policy refusal, without echoing data."""
+    waiting = bool(getattr(gate, 'web_approval_gate', False)
+                   and str(exc).endswith('requires explicit approval'))
+    return {'ok': False, 'error': 'denied',
+            'error_code': 'approval_required' if waiting else 'permission_denied',
+            'awaiting_approval': waiting, 'retryable': False,
+            'user_reason': '等待你批准工具调用；批准后继续。' if waiting else '当前权限策略禁止此工具；请调整权限或任务要求。'}
+
 @contextmanager
 def bind_execution(**values):
     token = _EXECUTION.set(values)

@@ -58,14 +58,13 @@ import {
   type AgentCapabilities,
   type SettingsMap,
 } from "./xuenessSettings";
-import { FileBrowser, DiffView } from "./XuenessWorkbenchView2";
-import {
-  DirectoryBrowser,
-  MemoryPanel,
-  ProvidersPanel,
-  SettingsSections,
-  UsagePanel,
-} from "./XuenessPanels";
+import { FileBrowser } from "./plugins/files/FileBrowser";
+import { DiffView } from "./plugins/files/DiffView";
+import { DirectoryBrowser } from "./plugins/files/DirectoryBrowser";
+import { MemoryPanel } from "./plugins/memory/MemoryPanel";
+import { ProvidersPanel } from "./plugins/providers/ProvidersPanel";
+import { SettingsSections } from "./plugins/settings/SettingsSections";
+import { UsagePanel } from "./plugins/usage/UsagePanel";
 import {
   createFolder,
   loadDirectory,
@@ -80,28 +79,32 @@ import {
 } from "./xuenessWorkspace";
 import { getRunChoices, mergeRunChoices, setRunChoices, type RunChoices } from "./xuenessBridge";
 import { effectiveRuntimeProfile, emptyComposerCatalog, loadComposerCatalog, prepareComposer, runtimeProfileFromSession, switchComposerBranch, type ComposerCatalog, type ComposerInput } from "./xuenessComposer";
-import { XuenessComposerToolbar } from "./XuenessComposerToolbar";
+import { XuenessComposerToolbar } from "./plugins/sessions/XuenessComposerToolbar";
 import { DesktopSettings } from "./plugins/desktop/DesktopSettings";
-import { XuenessSettingsView } from "./XuenessSettingsView";
+import { DesktopTitlebar } from "./plugins/desktop/DesktopTitlebar";
+import { XuenessSettingsView } from "./plugins/settings/XuenessSettingsView";
 import { settingsNavigation } from "./xuenessSettingsNavigation";
-import { XuenessWorkspaceSettings } from "./XuenessWorkspaceSettings";
+import { CompletionChecks } from './plugins/planning/CompletionChecks';
+import { NetworkSettings } from './plugins/network/NetworkSettings';
+import { DesktopUpdates } from './plugins/updates/DesktopUpdates';
+import { XuenessWorkspaceSettings } from "./plugins/settings/XuenessWorkspaceSettings";
 import { WorkflowPanel } from "./plugins/workflows";
 import { ModelManager } from "./plugins/providers";
-import { LocalRuntimeMonitor, type LocalRuntimeSession } from "./plugins/providers/LocalRuntimeMonitor";
+import { LocalRuntimeMonitor, RequestTiming, type LocalRuntimeSession } from "./plugins/providers/LocalRuntimeMonitor";
 import { ForkSessionDialog } from "./plugins/sessions";
 import { TerminalPanel } from "./plugins/terminal";
 import { RemoteConnections } from "./plugins/remote";
-import { Approvals, Composer, WorkbenchHeader, heroGreeting } from "./XuenessWorkbenchView";
-import { IconBack, IconGear, IconNewTask, IconSearch, IconWorkflow, IconModel } from "./ui/icons";
+import { Approvals, Composer, WorkbenchHeader, heroGreeting } from "./plugins/sessions/XuenessWorkbenchView";
+import { IconBack, IconGear, IconNewTask, IconSearch, IconWorkflow, IconModel, IconXuenessMark } from "./ui/icons";
 import { CalendarClock, Archive, ArrowDownWideNarrow, ChevronsDownUp, Folder, Hash, MessageCirclePlus, UserRound, CircleHelp, ChevronDown, Blocks, GitBranch } from "lucide-react";
 import { Select } from "./ui/Select";
-import { XuenessTaskList, type SidebarPreferences } from "./XuenessTaskList";
-import { XuenessWorkspacePickerDialog } from "./XuenessWorkspacePickerDialog";
+import { XuenessTaskList, type SidebarPreferences } from "./plugins/sessions/XuenessTaskList";
+import { XuenessWorkspacePickerDialog } from "./plugins/settings/XuenessWorkspacePickerDialog";
 import { CodeDisplayProvider } from "./ui/CodeContent";
 import { SHORTCUT_COMMANDS, resolveShortcutBinding } from "./xuenessShortcutCommands";
 import { Shell, SidebarActions, SidebarNav } from "./XuenessShell";
-import { TimelineStream, TaskTodos } from "./XuenessTimeline";
-import { XuenessRenameDialog } from "./XuenessRenameDialog";
+import { TimelineStream, TaskTodos } from "./plugins/sessions/XuenessTimeline";
+import { XuenessRenameDialog } from "./plugins/sessions/XuenessRenameDialog";
 import {
   CAPABILITY_KINDS,
   CAPABILITY_LABELS,
@@ -116,14 +119,15 @@ import {
 import { CapabilitiesPanel, type CapabilitySectionProps } from "./XuenessCapabilitiesPanel";
 import { XuenessCapabilityDialog } from "./XuenessCapabilityDialog";
 import { fuzzyFilter } from "./xuenessFuzzy";
-import { XuenessGitView } from "./XuenessGitView";
+import { XuenessGitView } from "./plugins/git/XuenessGitView";
 import { XuenessMarketplace } from "./plugins/extensions";
 import { XuenessAutomationsPanel } from "./plugins/automation";
 import { XuenessMcpTools } from "./plugins/mcp";
 import { XuenessDiagnosticsPanel } from "./plugins/diagnostics";
+import { shouldDismissModalOnEscape, useModalFocusScope } from "./plugins/shared";
 import { XuenessMemoryEditor } from "./plugins/memory";
 import { XuenessMemorySettings } from "./plugins/memory/MemorySettings";
-import { XuenessUsageSettings } from "./XuenessUsageSettings";
+import { XuenessUsageSettings } from "./plugins/usage/XuenessUsageSettings";
 import { BrowserSettings } from "./plugins/browser/BrowserSettings";
 import { XuenessSubagentSettings } from "./plugins/subagents/SubagentSettings";
 import { FeatureUnavailable, XuenessPluginManager, XuenessPluginSettingsPanel } from "./XuenessPluginManager";
@@ -154,7 +158,7 @@ import {
 
 /** Palette commands with honest descriptions; ids double as fuzzy keys. */
 const PALETTE_COMMANDS = (): { id: string; label: string; description: string }[] => ([
-  { id: "new-task", label: tr("新建任务"), description: tr("回到空态输入卡开始新任务（⌘N）") },
+  { id: "new-task", label: tr("新建任务"), description: tr("回到空态输入卡开始新任务") },
   { id: "open-settings", label: tr("打开设置"), description: tr("运行参数与 Agent 能力开关") },
   { id: "refresh", label: tr("刷新历史"), description: tr("重新加载任务列表与当前会话") },
 ]);
@@ -397,6 +401,20 @@ export function XuenessWorkbenchContainer() {
 
   const heroInputRef = useRef<HTMLTextAreaElement | null>(null);
   const commandRef = useRef<HTMLInputElement | null>(null);
+  const commandDialogRef = useRef<HTMLDivElement | null>(null);
+  const commandOpenerRef = useRef<HTMLElement | null>(null);
+  useModalFocusScope({
+    open: commandOpen,
+    dialogRef: commandDialogRef,
+    initialFocusRef: commandRef,
+    returnFocusTo: commandOpenerRef.current,
+  });
+
+  const openCommandPalette = useCallback((returnFocusTo?: HTMLElement | null) => {
+    if (commandOpen) return;
+    commandOpenerRef.current = returnFocusTo ?? (document.activeElement instanceof HTMLElement ? document.activeElement : null);
+    setCommandOpen(true);
+  }, [commandOpen]);
 
   const refreshList = useCallback(async () => {
     if (!isPluginEffective("sessions")) {
@@ -600,10 +618,19 @@ export function XuenessWorkbenchContainer() {
 
   useEffect(() => {
     if (!commandOpen) return;
-    // A narrow sidebar becomes non-modal in the same transition. Focus after
-    // its inert attribute has been removed so the palette is operable.
-    const frame = window.requestAnimationFrame(() => commandRef.current?.focus());
-    return () => window.cancelAnimationFrame(frame);
+    const onEscape = (event: KeyboardEvent) => {
+      if (event.key !== "Escape" || event.defaultPrevented) return;
+      const dialog = commandDialogRef.current;
+      if (!dialog || Array.from(document.querySelectorAll<HTMLElement>('[aria-modal="true"]')).at(-1) !== dialog) return;
+      // Leave composing Escape to the IME. Other shell listeners have the
+      // same guard, so candidate selection cannot dismiss the palette.
+      if (!shouldDismissModalOnEscape(event)) return;
+      event.preventDefault();
+      event.stopPropagation();
+      setCommandOpen(false);
+    };
+    document.addEventListener("keydown", onEscape, true);
+    return () => document.removeEventListener("keydown", onEscape, true);
   }, [commandOpen]);
   useEffect(() => {
     if (!activeId && !session) heroInputRef.current?.focus();
@@ -759,9 +786,11 @@ export function XuenessWorkbenchContainer() {
   );
 
   const [renameRequest, setRenameRequest] = useState<{ id: string; initialValue: string } | null>(null);
+  const renameOpenerRef = useRef<HTMLElement | null>(null);
   const requestRename = useCallback(
-    (id: string) => {
+    (id: string, returnFocusTo?: HTMLElement | null) => {
       const target = sessions.find((s) => s.id === id);
+      renameOpenerRef.current = returnFocusTo ?? (document.activeElement instanceof HTMLElement ? document.activeElement : null);
       setRenameRequest({ id, initialValue: target?.title || target?.task || "" });
     },
     [sessions],
@@ -831,8 +860,7 @@ export function XuenessWorkbenchContainer() {
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
-      if (event.defaultPrevented || event.isComposing || event.repeat) return;
-      if (event.key === "Escape") { setCommandOpen(false); return; }
+      if (event.defaultPrevented || event.isComposing || event.keyCode === 229 || event.repeat) return;
       const bindings = (settingsValues.bindings && typeof settingsValues.bindings === "object" ? settingsValues.bindings : {}) as Record<string, string>;
       const command = SHORTCUT_COMMANDS.find(item => { const binding = resolveShortcutBinding(item.id, bindings); return binding && matchesShortcut(event, binding); });
       if (!command) return;
@@ -841,14 +869,14 @@ export function XuenessWorkbenchContainer() {
       if (command.id === "toggle-sidebar" && panel === "settings") return;
       event.preventDefault();
       if (command.id === "new-session") startNewTask();
-      else if (command.id === "command-palette") setCommandOpen(true);
+      else if (command.id === "command-palette") openCommandPalette();
       else if (command.id === "open-settings") setPanel("settings");
       else if (command.id === "toggle-sidebar") setSidebarToggleToken(value => value + 1);
       else if (command.id === "refresh-session" && !busy) void handleRefreshAll();
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [startNewTask, isPluginEffective, settingsValues.bindings, handleRefreshAll, panel, busy]);
+  }, [startNewTask, isPluginEffective, settingsValues.bindings, handleRefreshAll, panel, busy, openCommandPalette]);
 
   // -- files panel ---------------------------------------------------------
   const handleLoadFiles = useCallback(async () => {
@@ -1306,6 +1334,8 @@ export function XuenessWorkbenchContainer() {
   const inlineSettings = ["general", "appearance", "shortcuts", "agent"].includes(settingsSection);
   const settingsContent = () => {
     if (settingsSection === "desktop" && isPluginEffective("desktop")) return <DesktopSettings />;
+    if (settingsSection === "network") return <NetworkSettings enabled={isPluginEffective('network')} disabled={busy || settingsSaving || pluginCatalogLoading} />;
+    if (settingsSection === 'updates') return <DesktopUpdates enabled={isPluginEffective('updates') && isPluginEffective('desktop')} />;
     if (settingsSection === "browser") return <BrowserSettings enabled={isPluginEffective("browser")} disabled={busy || settingsSaving || pluginCatalogLoading}
       onEnabledChange={async enabled => {
         await togglePlugin("browser", enabled);
@@ -1435,6 +1465,17 @@ export function XuenessWorkbenchContainer() {
   return (
     <CodeDisplayProvider settings={settingsValues.codePreviewSettings} dark={String(settingsValues.theme) === "dark" || (settingsValues.theme === "system" && systemDark)}>
     <Shell
+      titlebar={typeof window !== "undefined" && new URLSearchParams(window.location.search).get("xuenessDesktop") === "1" ? <DesktopTitlebar
+        canGoBack={isPluginEffective("sessions") && !busy && historyPosition.cursor > 0}
+        canGoForward={isPluginEffective("sessions") && !busy && historyPosition.cursor < historyPosition.length - 1}
+        onGoBack={() => navigateHistory(-1)}
+        onGoForward={() => navigateHistory(1)}
+        hasSidebar={panel !== "settings" && isPluginEffective("sessions")}
+        onToggleSidebar={() => setSidebarToggleToken(value => value + 1)}
+        terminalEnabled={isPluginEffective("terminal")}
+        onOpenTerminal={() => { if (isPluginEffective("terminal")) setPanel("terminal"); }}
+        helpContent={viewSwitcher}
+      /> : undefined}
       navigationKey={`${panel}:${activeId ?? ""}:${commandOpen}:${workspacePicking}:${heroFocusTick}`}
       sidebarToggleToken={sidebarToggleToken}
       canGoBack={!busy && historyPosition.cursor > 0}
@@ -1445,8 +1486,8 @@ export function XuenessWorkbenchContainer() {
           <SidebarActions
             actions={[
               ...(isPluginEffective("sessions") ? [
-                { id: "new-task", icon: <MessageCirclePlus size={16} />, label: tr("新建任务"), shortcut: "⌘N", onClick: startNewTask },
-                { id: "search", icon: <IconSearch size={15} />, label: tr("搜索"), shortcut: "⌘K", onClick: () => setCommandOpen(true) },
+                { id: "new-task", icon: <MessageCirclePlus size={16} />, label: tr("新建任务"), shortcut: "Mod+N", onClick: startNewTask },
+                { id: "search", icon: <IconSearch size={15} />, label: tr("搜索"), shortcut: "Mod+K", onClick: (event: React.MouseEvent<HTMLButtonElement>) => openCommandPalette(event.currentTarget) },
               ] : []),
               ...(isPluginEffective("automation") ? [{ id: "automations", icon: <CalendarClock size={16} />, label: tr("自动化"), onClick: () => setPanel("automations") }] : []),
               ...(isPluginEffective("extensions") ? [{ id: "marketplace", icon: <Blocks size={16} />, label: tr("插件市场"), onClick: () => setPanel("marketplace") }] : []),
@@ -1517,7 +1558,7 @@ export function XuenessWorkbenchContainer() {
       }
     >
       {commandOpen && (
-        <div role="dialog" aria-label={tr("命令面板")} className="xn-command-overlay" onClick={() => setCommandOpen(false)}>
+        <div ref={commandDialogRef} role="dialog" aria-modal="true" aria-label={tr("命令面板")} tabIndex={-1} className="xn-command-overlay" onClick={() => setCommandOpen(false)}>
           <div className="xn-command-panel" onClick={(event) => event.stopPropagation()}>
             <input
               ref={commandRef}
@@ -1582,6 +1623,7 @@ export function XuenessWorkbenchContainer() {
           <button type="button" disabled={busy} onClick={() => { setError(""); void handleRefreshAll(); }}>{tr("重新加载")}</button>
         </div>
       )}
+      <DesktopUpdates compact enabled={isPluginEffective('updates') && isPluginEffective('desktop')} onManage={() => { setSettingsSection('updates'); setPanel('settings'); }} />
 
       {panel === "settings" ? secondaryPanels.settings : panel !== "chat" ? (
         <div className="xn-secondary-view">
@@ -1618,6 +1660,8 @@ export function XuenessWorkbenchContainer() {
             <button type="button" className="xn-session-fork-provenance__open" data-testid="fork-open-parent" disabled={busy} onClick={() => selectSession(session.forkParent!.sourceId)}>{tr("打开原会话")}</button>
           </p>}
           {session.pause_reason && ["paused", "needs_review"].includes(session.status) && <p role="status" className="xn-run-error">{tf("暂停原因：{0}", [session.pause_reason])}</p>}
+          {isPluginEffective('planning') && <CompletionChecks sessionId={session.id} completion={session.completion} items={session.delivery_requirements ?? []} disabled={busy || session.status === 'running'} onSaved={() => void handleRefreshAll()} />}
+          {isPluginEffective('providers') && <RequestTiming session={session} />}
           {activeRuntimeProfile === "lightweight" && isPluginEffective("providers") && isPluginEffective("diagnostics") &&
             <LocalRuntimeMonitor lightweight session={runtimeMonitorSession} />}
           {session.pending && session.pending.length > 0 && (
@@ -1658,7 +1702,11 @@ export function XuenessWorkbenchContainer() {
       ) : (
         <div className="xn-hero" data-testid="xn-hero">
           <div className="xn-hero__bar"><details className="xn-workbench-menu"><summary aria-label={tr("工作台")}><CircleHelp size={16} /></summary><div>{viewSwitcher}</div></details></div>
+          <div className="xn-hero__brand" aria-hidden="true">
+            <IconXuenessMark size={34} className="xn-hero__brand-mark" />
+          </div>
           <h1 className="xn-hero__greeting">{heroGreeting(new Date())}</h1>
+          <p className="xn-hero__hint">{tr("描述你想完成的事，Xueness 会在你的工作区里执行。")}</p>
 
           <div className="xn-hero__composer">
             {runError && (
@@ -1696,6 +1744,7 @@ export function XuenessWorkbenchContainer() {
       <XuenessRenameDialog
         open={renameRequest !== null}
         initialValue={renameRequest?.initialValue ?? ""}
+        returnFocusTo={renameOpenerRef.current}
         onCancel={() => setRenameRequest(null)}
         onConfirm={(value) => {
           const request = renameRequest;

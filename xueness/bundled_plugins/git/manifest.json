@@ -40,7 +40,7 @@
     }
   ],
   "frontendModules": [
-    "XuenessGitView.tsx",
+    "plugins/git/XuenessGitView.tsx",
     "xuenessGit.ts"
   ]
 }

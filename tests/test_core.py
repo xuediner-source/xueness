@@ -195,7 +195,11 @@ class HarnessTests(unittest.TestCase):
 
     def test_unverified_completion(self):
         s = self.store.new("demo", self.root)
-        out = run(s, self.store, FakeProvider(), Gate(self.root))
+        class UnsupportedFinal:
+            def complete(self, messages, tools):
+                return {"content": json.dumps({"summary": "No tool evidence", "evidence": []})}
+
+        out = run(s, self.store, UnsupportedFinal(), Gate(self.root))
         self.assertEqual(out["status"], "needs_review")
         self.assertFalse(out["completion"]["verified"])
 

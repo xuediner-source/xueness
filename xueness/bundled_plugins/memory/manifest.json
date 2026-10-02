@@ -40,7 +40,7 @@
     }
   ],
   "frontendModules": [
-    "XuenessPanels.tsx#MemoryPanel",
+    "plugins/memory/MemoryPanel.tsx",
     "plugins/memory/MemorySettings.tsx",
     "plugins/memory/index.tsx"
   ]

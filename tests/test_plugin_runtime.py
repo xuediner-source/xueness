@@ -54,6 +54,10 @@ class RuntimeTests(unittest.TestCase):
         self.assertEqual(result['matches'][0]['session_id'],session['id'])
     def test_individual_disallow_applies_to_contributed_tools(self):
         result=dispatch(self.root,Gate(self.root,disallow=['workflow_create']),'workflow_create',{'plan':{}},{})
-        self.assertEqual(result,{'ok':False,'error':'denied'})
+        self.assertFalse(result['ok'])
+        self.assertEqual(result['error'], 'denied')
+        self.assertEqual(result['error_code'], 'permission_denied')
+        self.assertFalse(result['awaiting_approval'])
+        self.assertFalse(result['retryable'])
 
 if __name__=='__main__': unittest.main()

@@ -19,6 +19,55 @@ function historyNote(reason: string | null): string {
     : tr("较早的压缩归档与摘要不会继承，仅保留当前可定位历史；分叉位置只包含服务端确认完整的用户轮次。");
 }
 
+const FOCUSABLE = [
+  "a[href]",
+  "button:not([disabled])",
+  "input:not([disabled])",
+  "select:not([disabled])",
+  "textarea:not([disabled])",
+  "[tabindex]:not([tabindex='-1'])",
+].join(",");
+
+export function shouldDismissForkDialogOnEscape(
+  event: { key: string; isComposing?: boolean; keyCode?: number },
+  busy = false,
+): boolean {
+  if (event.key !== "Escape" || busy) return false;
+  if (event.isComposing || event.keyCode === 229) return false;
+  return true;
+}
+
+export function trapForkDialogTab(
+  event: { key: string; shiftKey: boolean; preventDefault: () => void },
+  activeElement: unknown,
+  items: { focus: () => void }[],
+  fallbackTarget?: { focus?: () => void } | null,
+): boolean {
+  if (event.key !== "Tab") return false;
+  if (!items.length) {
+    event.preventDefault();
+    fallbackTarget?.focus?.();
+    return true;
+  }
+  const first = items[0];
+  const last = items[items.length - 1];
+  const activeIndex = items.indexOf(activeElement as { focus: () => void });
+  if (activeIndex < 0) {
+    event.preventDefault();
+    (event.shiftKey ? last : first).focus();
+    return true;
+  } else if (event.shiftKey && activeIndex === 0) {
+    event.preventDefault();
+    last.focus();
+    return true;
+  } else if (!event.shiftKey && activeIndex === items.length - 1) {
+    event.preventDefault();
+    first.focus();
+    return true;
+  }
+  return false;
+}
+
 export function ForkBoundaryChoices({ boundaries, selectedToken, busy = false, onSelect }: {
   boundaries: ForkBoundary[];
   selectedToken: string;
@@ -47,6 +96,7 @@ export function ForkSessionDialog({ open, sourceId, sourceTitle, onCancel, onFor
   const [error, setError] = React.useState("");
   const [requestMessage, setRequestMessage] = React.useState("");
   const requestNumber = React.useRef(0);
+  const dialogRef = React.useRef<HTMLElement | null>(null);
   const selected = boundaries.find(boundary => boundary.token === selectedToken) ?? null;
   const titleValue = title.trim();
   const titleValid = Array.from(titleValue).length <= 120 && !/[\x00-\x1f\x7f]/u.test(titleValue);
@@ -87,7 +137,7 @@ export function ForkSessionDialog({ open, sourceId, sourceTitle, onCancel, onFor
   React.useEffect(() => {
     if (!open || busy) return;
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
+      if (shouldDismissForkDialogOnEscape(event, busy)) {
         event.preventDefault();
         onCancel();
       }
@@ -96,7 +146,32 @@ export function ForkSessionDialog({ open, sourceId, sourceTitle, onCancel, onFor
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [open, busy, onCancel]);
 
+  React.useEffect(() => {
+    if (!open) return;
+    const keepFocusInside = (event: FocusEvent) => {
+      if (!dialogRef.current?.contains(event.target as Node)) {
+        const target = dialogRef.current?.querySelector<HTMLElement>(FOCUSABLE);
+        target?.focus({ preventScroll: true });
+      }
+    };
+    document.addEventListener("focusin", keepFocusInside, true);
+    return () => {
+      document.removeEventListener("focusin", keepFocusInside, true);
+    };
+  }, [open]);
+
   if (!open) return null;
+
+  const handleKeyDown = (event: React.KeyboardEvent<HTMLElement>) => {
+    if (event.key !== "Tab") return;
+    const dialog = dialogRef.current;
+    if (!dialog) return;
+    const allItems = Array.from(dialog.querySelectorAll<HTMLElement>(FOCUSABLE))
+      .filter((item) => item.getAttribute("aria-hidden") !== "true");
+    const visibleItems = allItems.filter((item) => item.getClientRects().length > 0);
+    const items = visibleItems.length > 0 ? visibleItems : allItems;
+    trapForkDialogTab(event, document.activeElement, items, dialog);
+  };
 
   const submit = async () => {
     if (!selected || !revision || !titleValid || busy) return;
@@ -119,7 +194,7 @@ export function ForkSessionDialog({ open, sourceId, sourceTitle, onCancel, onFor
   };
 
   return <div className="xn-session-fork__backdrop" role="presentation" onMouseDown={event => { if (event.target === event.currentTarget && !busy) onCancel(); }}>
-    <section className="xn-session-fork" role="dialog" aria-modal="true" aria-labelledby="xn-session-fork-title" data-testid="fork-session-dialog">
+    <section ref={dialogRef} tabIndex={-1} onKeyDown={handleKeyDown} className="xn-session-fork" role="dialog" aria-modal="true" aria-labelledby="xn-session-fork-title" data-testid="fork-session-dialog">
       <header className="xn-session-fork__header">
         <div className="xn-session-fork__heading-icon"><GitBranch size={18} aria-hidden="true" /></div>
         <div><h2 id="xn-session-fork-title">{tr("分叉会话")}</h2><p>{tf("从“{0}”的完整历史轮次创建新会话", [sourceTitle])}</p></div>

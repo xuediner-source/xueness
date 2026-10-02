@@ -45,6 +45,11 @@ class SessionForkTests(unittest.TestCase):
                 for step in range(25)
             ],
             "provider_usage": [{"secret": "discard me"}],
+            "delivery_requirements": [{
+                "id": "source-output", "label": "source report", "path": "old-report.md",
+                "contains": ["old task marker"], "min_links": 1,
+            }],
+            "delivery_seeded": True,
             "steps": 9,
             "completion": {"verified": True, "summary": "source completion"},
             "pending_question": None,
@@ -119,6 +124,8 @@ class SessionForkTests(unittest.TestCase):
         self.assertEqual(0, child["steps"])
         self.assertIsNone(child["completion"])
         self.assertIsNone(child["pending_question"])
+        self.assertNotIn("delivery_requirements", child)
+        self.assertNotIn("delivery_seeded", child)
         self.assertEqual({"provider_id": "fixture", "model": "model-a",
                           "reasoning_effort": "medium"}, child["model_selection"])
         self.assertEqual("lightweight", child["runtime_profile"])

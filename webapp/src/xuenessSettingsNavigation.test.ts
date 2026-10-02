@@ -1,6 +1,26 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { settingsNavigation } from './xuenessSettingsNavigation';
+import { getLocale, setLocale } from './i18n';
+
+test('all installed settings destinations have English labels, descriptions and groups', () => {
+  const previous = getLocale();
+  try {
+    setLocale('en');
+    const sections = settingsNavigation(new Set([
+      'settings', 'files', 'providers', 'browser', 'network', 'memory', 'subagents',
+      'mcp', 'skills', 'commands', 'hooks', 'usage', 'extensions', 'remote',
+      'automation', 'desktop', 'updates', 'diagnostics',
+    ]));
+    assert.ok(sections.some(section => section.id === 'network'));
+    assert.ok(sections.some(section => section.id === 'updates'));
+    for (const section of sections) {
+      assert.doesNotMatch(`${section.label} ${section.description} ${section.group}`, /[\u3400-\u9fff]/, section.id);
+    }
+  } finally {
+    setLocale(previous);
+  }
+});
 
 test('settings navigation hides ineffective plugin routes and keeps plugin management reachable', () => {
   assert.deepEqual(settingsNavigation(new Set()).map(section => section.id), ['plugins', 'modules']);

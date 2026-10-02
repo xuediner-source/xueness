@@ -1,0 +1,9 @@
+.xn-desktop-updates { display: grid; gap: 14px; max-width: 740px; padding: 4px; }
+.xn-desktop-updates h2 { font-size: 20px; margin: 0; font-weight: 600; }
+.xn-desktop-updates p { margin: 0; line-height: 1.65; color: var(--fg-muted, #999); }
+.xn-desktop-updates label { display: flex; align-items: center; gap: 9px; font-size: 14px; }
+.xn-desktop-updates > div { display: flex; flex-wrap: wrap; gap: 8px; }
+.xn-desktop-updates button, .xn-update-notice button { padding: 8px 13px; border: 1px solid var(--border, #5555); border-radius: 8px; background: var(--bg-card, #8881); color: inherit; cursor: pointer; }
+.xn-desktop-updates button:disabled { opacity: .4; cursor: default; }
+.xn-desktop-updates small { font-size: 12px; line-height: 1.6; color: var(--fg-muted, #999); }
+.xn-update-notice { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin: 12px 20px; padding: 12px 16px; border: 1px solid var(--border, #5555); background: var(--bg-card, #8881); border-radius: 12px; font-size: 13px; }

@@ -1,7 +1,7 @@
 {
   "id": "network",
-  "name": "Web tools",
-  "description": "Bounded public WebFetch and configurable WebSearch, gated per run.",
+  "name": "网络工具",
+  "description": "批准约束的公网 HTTPS 页面读取、网页搜索服务配置与 DNS 诊断。",
   "apiVersion": 1,
   "version": "1.0.0",
   "defaultEnabled": true,
@@ -15,7 +15,11 @@
   "resources": [],
   "capabilities": [],
   "modules": [
-    "tooling"
+    "search_settings",
+    "search_model",
+    "settings_api",
+    "tooling",
+    "transport"
   ],
   "features": [
     {
@@ -27,7 +31,29 @@
       "id": "network.search",
       "name": "显式配置的网页搜索",
       "nameEn": "Explicitly configured web search"
+    },
+    {
+      "id": "network.search_model",
+      "name": "独立 OpenAI 兼容搜索模型",
+      "nameEn": "Independent OpenAI-compatible search model"
+    },
+    {
+      "id": "network.search_settings",
+      "name": "搜索服务地址与密钥配置",
+      "nameEn": "Search service endpoint and key settings"
+    },
+    {
+      "id": "network.dns_diagnostics",
+      "name": "按需诊断 DNS 与搜索服务",
+      "nameEn": "On-demand DNS and search service diagnostics"
+    },
+    {
+      "id": "network.fakeip_doh",
+      "name": "FakeIP 环境的显式 DoH 解析",
+      "nameEn": "Explicit DoH resolution in FakeIP environments"
     }
   ],
-  "frontendModules": []
+  "frontendModules": [
+    "plugins/network/NetworkSettings.tsx"
+  ]
 }

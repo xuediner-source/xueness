@@ -1,4 +1,4 @@
-import React, { useEffect, useState, type FormEvent } from "react";
+import React, { useEffect, useRef, useState, type FormEvent } from "react";
 import {
   approveAutomation,
   createAutomation,
@@ -22,6 +22,8 @@ import {
   type WorkflowNodeDraft,
 } from "./automationModel";
 import "../../styles/automation.css";
+
+import { shouldDismissModalOnEscape, useModalFocusScope } from "../shared";
 
 type ConfirmAction = { kind: "approve" | "delete" | "run"; record: AutomationRecord };
 
@@ -57,6 +59,9 @@ export function XuenessAutomationsPanel(): React.JSX.Element {
   const [busy, setBusy] = useState(false);
   const [confirm, setConfirm] = useState<ConfirmAction | null>(null);
   const [allowReal, setAllowReal] = useState(false);
+  const confirmDialogRef = useRef<HTMLElement>(null);
+  const confirmCancelRef = useRef<HTMLButtonElement>(null);
+  useModalFocusScope({ open: confirm !== null, dialogRef: confirmDialogRef, initialFocusRef: confirmCancelRef });
 
   const refresh = async () => {
     try {
@@ -216,11 +221,15 @@ export function XuenessAutomationsPanel(): React.JSX.Element {
 
       {confirm && (
         <div className="xn-automation__backdrop">
-          <section role="alertdialog" aria-modal="true" aria-labelledby="xn-automation-confirm-title">
+          <section ref={confirmDialogRef} tabIndex={-1} role="alertdialog" aria-modal="true" aria-labelledby="xn-automation-confirm-title" aria-describedby="xn-automation-confirm-description" onKeyDown={event => {
+            if (event.key !== "Escape") return;
+            event.stopPropagation();
+            if (shouldDismissModalOnEscape(event, busy)) { event.preventDefault(); setConfirm(null); }
+          }}>
             <h3 id="xn-automation-confirm-title">
               {confirm.kind === "delete" ? tr("删除自动化") : confirm.kind === "approve" ? tr("批准定时计划") : tr("立即运行")}
             </h3>
-            <p>
+            <p id="xn-automation-confirm-description">
               {confirm.kind === "delete"
                 ? tr("删除此计划及其保留的运行记录？")
                 : confirm.kind === "approve"
@@ -235,7 +244,7 @@ export function XuenessAutomationsPanel(): React.JSX.Element {
               </label>
             )}
             <div className="xn-automation__dialog-actions">
-              <button type="button" disabled={busy} onClick={() => setConfirm(null)}>{tr("取消")}</button>
+              <button ref={confirmCancelRef} type="button" disabled={busy} onClick={() => setConfirm(null)}>{tr("取消")}</button>
               <button type="button" disabled={busy} onClick={() => void confirmAction()}>{tr("确认")}</button>
             </div>
           </section>

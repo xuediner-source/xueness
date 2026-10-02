@@ -4,6 +4,11 @@ const listeners = new Set<() => void>();
 let locale: Locale = 'zh';
 try { if (typeof localStorage !== 'undefined' && localStorage.getItem('xueness.language') === 'en') locale = 'en'; } catch { /* Private browsing. */ }
 export const messages: Record<string, string> = {
+  "网络搜索": "Web search",
+  "搜索服务、搜索模型 API 与真实 DNS 诊断。": "Search services, SearchModel API and real DNS diagnostics.",
+  "应用更新": "App updates",
+  "检查、下载和安装客户端稳定版。": "Check, download and install stable client releases.",
+  "已清理日志：{0}": "Logs cleaned: {0}",
   "添加项目": "Add project",
   "当前": "Current",
   "对话历史": "Conversation history",
@@ -419,6 +424,17 @@ export const messages: Record<string, string> = {
   "任务完成": "Task completed",
   "任务完成 (已验证)": "Task completed (verified)",
   "任务完成 (未验证)": "Task completed (unverified)",
+  "运行结束": "Run ended",
+  "工具成功证据通过": "Tool execution evidence passed",
+  "工具证据待审核": "Tool execution evidence pending review",
+  "运行结束 · 工具成功证据通过": "Run ended · tool execution evidence passed",
+  "运行结束 · 工具证据待审核": "Run ended · tool execution evidence pending review",
+  "工具执行成功": "Tool execution succeeded",
+  "工具成功证据未通过": "Tool success evidence did not pass",
+  "交付检查通过": "Delivery checks passed",
+  "交付检查未通过": "Delivery checks failed",
+  "交付内容尚未检查": "Delivery has not been checked",
+  "工具成功只证明引用的调用成功；交付检查另行核对文件、必需条目和链接数量。": "Tool success only confirms the cited call; delivery checks separately verify files, required items, and links.",
   "任务导航": "Task navigation",
   "会发起嵌套模型调用": "Makes nested model calls",
   "会启动外部 MCP 子进程": "Starts external MCP processes",
@@ -1355,4 +1371,20 @@ Object.assign(messages, {
   "可用内存为内核估计": "Available memory is a kernel estimate",
   "可用内存含可回收估算": "Available memory includes reclaimable-memory estimates",
   "已报告输出 Token": "Reported output tokens",
+});
+
+Object.assign(messages, {
+  "连接已保存": "Connection saved",
+  "已保存的连接": "Saved connections",
+  "刷新连接列表": "Refresh connection list",
+  "正在加载连接…": "Loading connections...",
+  "还没有任何 SSH 连接，使用右侧表单添加第一个。": "No SSH connections yet. Use the form on the right to add the first one.",
+  "连接详情": "Connection details",
+  "工作流计划不是有效的 JSON，请检查括号和引号。": "Workflow plan is not valid JSON. Please check brackets and quotes.",
+  '命令参数不是有效的 JSON 数组，例如 ["python3","-c","print(1)"]。': 'Command arguments are not a valid JSON array, e.g. ["python3","-c","print(1)"].',
+  '命令参数必须是字符串数组，例如 ["python3","-c","print(1)"]。': 'Command arguments must be an array of strings, e.g. ["python3","-c","print(1)"].',
+  '提示参数不是有效的 JSON，请输入一个对象，例如 {"key":"value"}。': 'Prompt arguments are not valid JSON. Please enter an object, e.g. {"key":"value"}.',
+  "打开 OAuth 授权页": "Open OAuth authorization page",
+  "OAuth URL 必须使用 HTTPS": "OAuth URL must use HTTPS",
+  "将删除早于 {0} 天的日志文件。其他存储数据不会更改。": "Log files older than {0} days will be deleted. Other stored data will not change.",
 });

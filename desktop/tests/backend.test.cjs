@@ -16,6 +16,15 @@ async function waitForFile(path, timeoutMs = 3000) {
   throw new Error(`timed out waiting for ${path}`);
 }
 
+async function waitFor(predicate, timeoutMs = 3000) {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    if (predicate()) return;
+    await delay(20);
+  }
+  throw new Error('timed out waiting for condition');
+}
+
 function processExists(pid) {
   try { process.kill(pid, 0); return true; }
   catch (error) { if (error.code === 'ESRCH') return false; if (error.code === 'EPERM') return true; throw error; }
@@ -114,4 +123,51 @@ test('POSIX forced host exit leaves the workflow worker alive to kill its comman
   skip: process.platform === 'win32',
 }, async t => {
   await stopFixture(t, 'forced', 5500, 700);
+});
+
+test('private pipe accepts only well-formed update policy and fixed update request shapes before ready', async t => {
+  const root = mkdtempSync(join(tmpdir(), 'xueness-desktop-update-pipe-'));
+  const hostPath = join(root, 'host.cjs');
+  const replyPath = join(root, 'reply.json');
+  const requestId = '0123456789abcdef0123456789abcdef';
+  writeFileSync(hostPath, `
+    const fs = require('node:fs');
+    const { createInterface } = require('node:readline');
+    const requestId = ${JSON.stringify(requestId)};
+    const replyPath = ${JSON.stringify(replyPath)};
+    const send = value => process.stdout.write(JSON.stringify(value) + '\\n');
+    send({ type: 'update-policy', enabled: true, autoDownload: false });
+    send({ type: 'update-policy', enabled: true, autoDownload: 'false' });
+    send({ type: 'update-policy', enabled: true, autoDownload: false, url: 'https://example.invalid' });
+    send({ type: 'update', id: 'bad', action: 'status' });
+    send({ type: 'update', id: requestId, action: 'status', url: 'https://example.invalid' });
+    send({ type: 'update', id: requestId, action: 'download' });
+    send({ type: 'update', id: requestId, action: 'install', version: '1.2.3-beta' });
+    send({ type: 'update', id: requestId, action: 'status' });
+    send({ type: 'ready', url: 'http://127.0.0.1:4567' });
+    createInterface({ input: process.stdin }).on('line', line => {
+      let value; try { value = JSON.parse(line); } catch { return; }
+      if (value.id === requestId) fs.writeFileSync(replyPath, JSON.stringify(value));
+      if (value.type === 'shutdown') process.exit(0);
+    });
+  `);
+  const backend = new Backend({ executable: process.execPath, args: [hostPath], cwd: root,
+    data: root, assets: root, node: process.execPath, playwright: '' });
+  const policies = [];
+  const requests = [];
+  backend.on('update-policy', message => policies.push(message));
+  backend.on('update', message => requests.push(message));
+  t.after(async () => {
+    if (backend.child && backend.child.exitCode === null && backend.child.signalCode === null) await backend.stop();
+    rmSync(root, { recursive: true, force: true });
+  });
+
+  await backend.start();
+  await waitFor(() => requests.length === 1);
+  assert.deepEqual(policies, [{ enabled: true, autoDownload: false }]);
+  assert.deepEqual(requests, [{ type: 'update', id: requestId, action: 'status' }]);
+  backend.reply({ id: requestId, state: { phase: 'current' } });
+  const reply = JSON.parse(await waitForFile(replyPath));
+  assert.deepEqual(reply, { id: requestId, state: { phase: 'current' } });
+  await backend.stop();
 });

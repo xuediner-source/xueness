@@ -11,6 +11,56 @@ import {
   type CapabilityKind,
 } from "./xuenessCapabilities";
 
+const FOCUSABLE = [
+  "a[href]",
+  "button:not([disabled])",
+  "input:not([disabled])",
+  "select:not([disabled])",
+  "textarea:not([disabled])",
+  "[tabindex]:not([tabindex='-1'])",
+].join(",");
+
+export function shouldDismissCapabilityDialogOnEscape(
+  event: { key: string; nativeEvent?: { isComposing?: boolean }; keyCode?: number },
+  busy = false,
+  hasCancel = true,
+): boolean {
+  if (event.key !== "Escape" || busy || !hasCancel) return false;
+  if (event.nativeEvent?.isComposing || event.keyCode === 229) return false;
+  return true;
+}
+
+export function trapCapabilityDialogTab(
+  event: { key: string; shiftKey: boolean; preventDefault: () => void },
+  activeElement: unknown,
+  items: { focus: () => void }[],
+  fallbackDialog?: { focus?: () => void } | null,
+): boolean {
+  if (event.key !== "Tab") return false;
+  if (!items.length) {
+    event.preventDefault();
+    fallbackDialog?.focus?.();
+    return true;
+  }
+  const first = items[0];
+  const last = items[items.length - 1];
+  const activeIndex = items.indexOf(activeElement as { focus: () => void });
+  if (activeIndex < 0) {
+    event.preventDefault();
+    (event.shiftKey ? last : first).focus();
+    return true;
+  } else if (event.shiftKey && activeIndex === 0) {
+    event.preventDefault();
+    last.focus();
+    return true;
+  } else if (!event.shiftKey && activeIndex === items.length - 1) {
+    event.preventDefault();
+    first.focus();
+    return true;
+  }
+  return false;
+}
+
 /**
  * Create/edit dialog for capability resources (Batch10).
  *
@@ -75,6 +125,7 @@ export function XuenessCapabilityDialog({
 }: CapabilityDialogProps): React.JSX.Element | null {
   const [draftId, setDraftId] = React.useState(() => (mode === "edit" ? initial?.id ?? "" : ""));
   const [fields, setFields] = React.useState<Record<string, unknown>>(() => seedFields(kind, initial));
+  const dialogRef = React.useRef<HTMLElement | null>(null);
 
   // Re-seed whenever the dialog (re)opens or its source changes; SSR renders
   // from the lazy initializers above.
@@ -94,6 +145,20 @@ export function XuenessCapabilityDialog({
     onBreadcrumbChange?.([tr("能力"), tr(CAPABILITY_LABELS[kind]), title]);
     return () => onBreadcrumbChange?.(null);
   }, [open, kind, title, onBreadcrumbChange]);
+
+  React.useEffect(() => {
+    if (!open) return;
+    const keepFocusInside = (event: FocusEvent) => {
+      if (!dialogRef.current?.contains(event.target as Node)) {
+        const target = dialogRef.current?.querySelector<HTMLElement>(FOCUSABLE);
+        target?.focus({ preventScroll: true });
+      }
+    };
+    document.addEventListener("focusin", keepFocusInside, true);
+    return () => {
+      document.removeEventListener("focusin", keepFocusInside, true);
+    };
+  }, [open]);
 
   if (!open) return null;
 
@@ -171,12 +236,10 @@ export function XuenessCapabilityDialog({
 
   const handleKeyDown = (event: React.KeyboardEvent) => {
     // An IME composition's Enter/Esc belong to the composition, not the dialog.
-    if (event.nativeEvent.isComposing) return;
-    if (event.key === "Escape") {
-      if (!busy && onCancel) {
-        event.preventDefault();
-        onCancel();
-      }
+    if (event.nativeEvent.isComposing || event.keyCode === 229) return;
+    if (shouldDismissCapabilityDialogOnEscape(event, busy, Boolean(onCancel))) {
+      event.preventDefault();
+      onCancel?.();
       return;
     }
     if (event.key === "Enter") {
@@ -184,12 +247,23 @@ export function XuenessCapabilityDialog({
       if (target?.tagName === "TEXTAREA") return; // Enter is a newline there
       event.preventDefault();
       submit();
+      return;
     }
+    if (event.key !== "Tab") return;
+    const dialog = dialogRef.current;
+    if (!dialog) return;
+    const allItems = Array.from(dialog.querySelectorAll<HTMLElement>(FOCUSABLE))
+      .filter((item) => item.getAttribute("aria-hidden") !== "true");
+    const visibleItems = allItems.filter((item) => item.getClientRects().length > 0);
+    const items = visibleItems.length > 0 ? visibleItems : allItems;
+    trapCapabilityDialogTab(event, document.activeElement, items, dialog);
   };
 
   return (
     <div className="xn-cap-detail" data-testid="xn-cap-detail">
       <section
+        ref={dialogRef}
+        tabIndex={-1}
         className="xn-cap-dialog"
         role="dialog"
         aria-modal="true"

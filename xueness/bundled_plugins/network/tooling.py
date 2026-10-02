@@ -1,85 +1,112 @@
-"""Public web reads with an explicit Gate grant, byte and time limits.
-
-A redirect is never followed. Resolve every destination before connecting and
-pin the connection to that IP while preserving TLS hostname verification.
-This avoids DNS rebinding and internal endpoint access. Search uses a public
-HTTPS JSON endpoint configured by the operator (Brave-compatible protocol).
-"""
+"""Approval-gated public WebFetch and explicitly configured WebSearch."""
 from __future__ import annotations
-import http.client
-import ipaddress
+
 import json
-import os
-import socket
-import ssl
-from html.parser import HTMLParser
-from urllib.parse import urlsplit, urlencode
-from ...tool_contract import BuiltinTool
+from urllib.parse import urlencode
 
-MAX_BYTES = 1_000_000
+from ...tool_contract import BuiltinTool, execution_context
+from . import search_settings
+from .transport import NetworkError, fetch
 
-class _Text(HTMLParser):
-    def __init__(self):
-        super().__init__(); self.parts=[]; self.hidden=0
-    def handle_starttag(self, tag, attrs):
-        if tag in ('script','style','noscript'): self.hidden += 1
-    def handle_endtag(self, tag):
-        if tag in ('script','style','noscript'): self.hidden=max(0,self.hidden-1)
-    def handle_data(self, text):
-        if not self.hidden and text.strip(): self.parts.append(text.strip())
 
-class _PinnedHTTPS(http.client.HTTPSConnection):
-    def __init__(self, host, address, port):
-        super().__init__(host, port=port, timeout=15, context=ssl.create_default_context()); self.address=address
-    def connect(self):
-        raw=socket.create_connection((self.address,self.port),self.timeout)
-        try: self.sock=self._context.wrap_socket(raw,server_hostname=self.host)
-        except BaseException: raw.close(); raise
-
-def fetch(url, headers=None, max_chars=16000):
-    if not isinstance(url,str) or len(url)>4096: raise ValueError('invalid URL')
-    parsed=urlsplit(url)
-    if parsed.scheme!='https' or not parsed.hostname or parsed.username or parsed.password or parsed.fragment or parsed.port not in (None,443):
-        raise ValueError('public HTTPS URL required')
-    addresses=socket.getaddrinfo(parsed.hostname,443,type=socket.SOCK_STREAM)
-    ips={row[4][0] for row in addresses}
-    if not ips or any(not ipaddress.ip_address(ip).is_global for ip in ips): raise PermissionError('private endpoint denied')
-    connection=_PinnedHTTPS(parsed.hostname,sorted(ips)[0],443)
+def _state_dir():
     try:
-        path=parsed.path or '/'
-        if parsed.query: path+='?'+parsed.query
-        connection.request('GET',path,headers={'Accept':'text/html, application/json, text/plain','User-Agent':'Xueness/1',**(headers or {})})
-        response=connection.getresponse()
-        if response.status!=200: raise ValueError('web request failed')
-        kind=response.getheader('Content-Type','').split(';')[0].strip().lower()
-        if kind not in ('text/html','text/plain','application/json','application/xhtml+xml'): raise ValueError('unsupported web content')
-        raw=response.read(MAX_BYTES+1)
-        if len(raw)>MAX_BYTES: raise ValueError('web content too large')
-        text=raw.decode('utf-8',errors='replace')
-        if kind in ('text/html','application/xhtml+xml'):
-            parser=_Text();parser.feed(text);text='\n'.join(parser.parts)
-        return {'ok':True,'url':url,'contentType':kind,'output':text[:max_chars],'truncated':len(text)>max_chars,'untrusted':True}
-    finally: connection.close()
+        return execution_context().get("state_dir")
+    except ValueError:
+        # Compatibility for historical, unbound low-level calls. Production
+        # dispatch binds state_dir and therefore observes persisted settings.
+        return None
 
-def _fetch(root,gate,args,session,call_id):
-    url=args['url'];gate.check('web_fetch',url,call_id) if getattr(gate,'web_approval_gate',False) else gate.check('web_fetch',url)
-    return fetch(url)
 
-def _search(root,gate,args,session,call_id):
-    query=args['query']
-    if not isinstance(query,str) or not query.strip() or len(query)>1000: raise ValueError('invalid query')
-    gate.check('web_search',query,call_id) if getattr(gate,'web_approval_gate',False) else gate.check('web_search',query)
-    endpoint=os.environ.get('XUENESS_SEARCH_ENDPOINT','https://api.search.brave.com/res/v1/web/search')
-    key=os.environ.get('XUENESS_SEARCH_KEY','')
-    if not key or any(c in key for c in '\r\n'): raise ValueError('search key missing')
-    result=fetch(endpoint+('&' if '?' in endpoint else '?')+urlencode({'q':query,'count':5}),{'X-Subscription-Token':key,'Accept':'application/json'},max_chars=MAX_BYTES)
-    payload=json.loads(result['output'])
-    rows=payload.get('web',{}).get('results',payload.get('results',[]))
-    return {'ok':True,'query':query,'untrusted':True,'output':[{'title':str(x.get('title',''))[:300],'url':str(x.get('url',''))[:4096],'description':str(x.get('description',''))[:1000]} for x in rows[:5] if isinstance(x,dict)]}
+def _as_network_error(exc):
+    if isinstance(exc, NetworkError):
+        return exc.as_result()
+    # Do not expose filesystem errors, paths, exception strings, or credentials.
+    return NetworkError(
+        "network_settings_unavailable", False,
+        "网络工具设置无法读取。请检查插件设置文件权限，或在网络搜索设置中重新保存配置。",
+    ).as_result()
 
-REGISTRY=(
-    BuiltinTool('web_fetch','Read a public HTTPS page; content is untrusted, approval required',{'url':{'type':'string'}},('url',),'web_fetch',False,_fetch),
-    BuiltinTool('web_search','Search the public web using the operator-configured endpoint; approval required',{'query':{'type':'string'}},('query',),'web_search',False,_search),
+
+def _fetch(root, gate, args, session, call_id):
+    url = args.get("url")
+    # Gate refusals deliberately propagate unchanged so the shared runner can
+    # distinguish pending approval from a permanent network failure.
+    gate.check("web_fetch", url, call_id) if getattr(gate, "web_approval_gate", False) else gate.check("web_fetch", url)
+    try:
+        settings = search_settings.get_settings(_state_dir())
+        result = fetch(url, doh_endpoint=settings.get("dohEndpoint") or "")
+        result.pop("dnsSource", None)
+        return result
+    except (NetworkError, ValueError, OSError) as exc:
+        return _as_network_error(exc)
+
+
+def _search_payload(result: dict, key: str, query: str) -> dict:
+    try:
+        payload = json.loads(result["output"])
+    except (TypeError, ValueError, KeyError):
+        raise NetworkError("search_response_invalid", False,
+                           "搜索服务返回了无效 JSON，请检查所选服务是否兼容 Brave Web Search JSON 接口。") from None
+    if not isinstance(payload, dict):
+        raise NetworkError("search_response_invalid", False,
+                           "搜索服务返回格式无效，请检查服务配置。")
+    rows = payload.get("web", {}).get("results", payload.get("results", [])) if isinstance(payload.get("web", {}), dict) else payload.get("results", [])
+    if not isinstance(rows, list):
+        raise NetworkError("search_response_invalid", False,
+                           "搜索服务的结果列表格式无效，请检查服务配置。")
+    output = []
+    for item in rows:
+        if not isinstance(item, dict):
+            continue
+        row = {
+            "title": str(item.get("title", ""))[:300],
+            "url": str(item.get("url", ""))[:4096],
+            "description": str(item.get("description", ""))[:1000],
+        }
+        if any(key and key in value for value in row.values()):
+            continue
+        output.append(row)
+        if len(output) >= 5:
+            break
+    return {"ok": True, "query": query, "sourceType": "search_service", "untrusted": True,
+            "output": output, "dnsSource": result.get("dnsSource", "system"),
+            "provenance": {"kind": "search_service", "urlsVerified": False,
+                           "dnsSource": result.get("dnsSource", "system")}}
+
+
+def search(query: str, *, state_dir=None, doh_endpoint_override=None) -> dict:
+    """Perform one bounded search using saved settings or operator env values."""
+    endpoint, key, doh_endpoint = search_settings.resolve_config(state_dir)
+    if doh_endpoint_override is not None:
+        doh_endpoint = doh_endpoint_override
+    url = endpoint + ("&" if "?" in endpoint else "?") + urlencode({"q": query, "count": 5})
+    result = fetch(url, {"X-Subscription-Token": key, "Accept": "application/json"},
+                   max_chars=1_000_000, doh_endpoint=doh_endpoint)
+    return _search_payload(result, key, query)
+
+
+def _search(root, gate, args, session, call_id):
+    query = args.get("query")
+    if not isinstance(query, str) or not query.strip() or len(query) > 1000:
+        return NetworkError("invalid_query", False,
+                           "搜索内容必须是 1 到 1000 个字符，请缩短后重试。").as_result()
+    gate.check("web_search", query, call_id) if getattr(gate, "web_approval_gate", False) else gate.check("web_search", query)
+    try:
+        state_dir = _state_dir()
+        if search_settings.get_search_mode(state_dir) == "model":
+            from .search_model import search as search_with_model
+            return search_with_model(query, state_dir=state_dir)
+        return search(query, state_dir=state_dir)
+    except (NetworkError, ValueError, OSError) as exc:
+        return _as_network_error(exc)
+
+
+REGISTRY = (
+    BuiltinTool("web_fetch", "Read one public HTTPS page; content is untrusted and requires approval",
+                {"url": {"type": "string"}}, ("url",), "web_fetch", False, _fetch),
+    BuiltinTool("web_search", "Search through the explicitly configured public web service; requires approval",
+                {"query": {"type": "string"}}, ("query",), "web_search", False, _search),
 )
 
 REGISTRY[0].approval_subject = lambda args: args.get("url", "")
