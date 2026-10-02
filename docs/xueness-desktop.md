@@ -14,6 +14,8 @@
 
 ## 数据与升级
 
+会话工具栏独占一行，不遮挡交付检查或消息。运行结束记录显示静态结果；工具证据未通过验证与模型 JSON 工具协议错误分别提示，不表示仍在运行。轻量会话的本机资源面板默认收起，点击标题可展开/收起；展开后开始采样，收起、页面隐藏或禁用所属插件时停止采样并取消未完成请求。面板上的运行阶段来自会话数据，资源采样不会启动模型。
+
 默认使用 Electron 的 Xueness 用户数据目录：Mac 在 `~/Library/Application Support/Xueness`，Windows 在 `%APPDATA%/Xueness`。会话与模型配置在其中的 `state/`，运行工作区在 `runs/`，默认项目在 `workspace/`。更新应用文件不会删除这些数据，Windows 卸载也保留应用数据。
 
 可在启动前用 `XUENESS_DESKTOP_DATA` 指向独立数据目录。CLI 如需与桌面共享数据，使用 `python -m xueness --state /absolute/path/to/Xueness/state ...`。本项目原有 `.state` 不会被自动复制或更改，也不会打进安装包。

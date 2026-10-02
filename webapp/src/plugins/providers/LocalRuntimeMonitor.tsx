@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Activity, Cpu, HardDrive, MemoryStick, Pause, Play, RefreshCw } from 'lucide-react';
-import { get } from '../../xuenessApi';
+import { Activity, ChevronDown, Cpu, HardDrive, MemoryStick, Pause, Play, RefreshCw } from 'lucide-react';
+import { startRuntimeSampling } from './runtimeSampling';
 import { t } from '../../i18n';
 import '../../styles/local-runtime-monitor.css';
 
@@ -216,7 +216,7 @@ function RuntimeActivityView({ session }: { session: LocalRuntimeSession | null 
   </section>;
 }
 
-export function LocalRuntimeMonitor({ lightweight, session }: {
+export function RuntimeMonitorDetails({ lightweight, session }: {
   lightweight: boolean;
   session: LocalRuntimeSession | null;
 }) {
@@ -242,33 +242,7 @@ export function LocalRuntimeMonitor({ lightweight, session }: {
       return undefined;
     }
     lastManualRefresh.current = manualRefresh;
-    let active = true;
-    let timer: ReturnType<typeof setTimeout> | undefined;
-    const keepPolling = !paused;
-    const sample = async () => {
-      setLoading(true);
-      try {
-        const result = await get<RuntimeMetrics>('/api/diagnostics/runtime');
-        if (active && result?.schema === 'xueness.runtime-metrics.v1') {
-          setMetrics(result);
-          setError(false);
-        } else if (active) {
-          setError(true);
-        }
-      } catch {
-        if (active) setError(true);
-      } finally {
-        if (active) {
-          setLoading(false);
-          if (keepPolling) timer = setTimeout(sample, 2000);
-        }
-      }
-    };
-    void sample();
-    return () => {
-      active = false;
-      if (timer !== undefined) clearTimeout(timer);
-    };
+    return startRuntimeSampling({ repeat: !paused, onMetrics: setMetrics, onError: setError, onLoading: setLoading });
   }, [lightweight, visible, paused, manualRefresh]);
 
   if (!lightweight) return null;
@@ -286,9 +260,9 @@ export function LocalRuntimeMonitor({ lightweight, session }: {
   const loads = metrics?.cpu.loadAverage ?? [null, null, null];
   const memoryEstimateLabel = memoryAvailabilityExplanation(memory?.availableKind ?? null);
 
-  return <section className="xn-runtime-monitor" aria-label={t('本机运行状态')}>
+  return <section className="xn-runtime-monitor__body" aria-label={t('详细资源采样')}>
     <header className="xn-runtime-monitor__header">
-      <div><h2>{t('本机资源')}</h2><p>{t('资源数据来自本机 Xueness 服务所在设备；远端模型主机资源不可见')}</p><small>{t('约每 2 秒自动采样')}</small></div>
+      <div><p>{t('资源数据来自本机 Xueness 服务所在设备；远端模型主机资源不可见')}</p><small>{t('约每 2 秒自动采样')}</small></div>
       <div className="xn-runtime-monitor__actions">
         <button type="button" onClick={() => setPaused(value => !value)} aria-label={t(paused ? '恢复采样' : '暂停采样')} title={t(paused ? '恢复采样' : '暂停采样')}>
           {paused ? <Play size={14} /> : <Pause size={14} />}
@@ -318,6 +292,24 @@ export function LocalRuntimeMonitor({ lightweight, session }: {
     </div>
     <div className="xn-runtime-monitor__gpu"><span>{t('GPU / 模型显存遥测不可用')}</span><small>{t('GPU 内存遥测不可用于本地运行时采样。')}</small></div>
     <RuntimeActivityView session={session} />
+  </section>;
+}
+
+export function LocalRuntimeMonitor({ lightweight, session }: { lightweight: boolean; session: LocalRuntimeSession | null }) {
+  const [expanded, setExpanded] = useState(false);
+  const id = React.useId();
+  if (!lightweight) return null;
+  const phase = session?.runtime_activity?.phase;
+  return <section className="xn-runtime-monitor" aria-label={t('本机运行状态')}>
+    <button type="button" className="xn-runtime-monitor__toggle" aria-expanded={expanded} aria-controls={id}
+      onClick={() => setExpanded(value => !value)}>
+      <Activity size={15} aria-hidden="true" /><span>{t('本机资源')}</span>
+      <span className="xn-runtime-monitor__compact-status">{phase ? t(PHASE_LABELS[phase] ?? phase) : t('资源与运行详情')}</span>
+      <ChevronDown size={15} aria-hidden="true" className={expanded ? 'xn-runtime-monitor__chevron--expanded' : ''} />
+    </button>
+    <div id={id} hidden={!expanded}>
+      {expanded && <RuntimeMonitorDetails lightweight session={session} />}
+    </div>
   </section>;
 }
 

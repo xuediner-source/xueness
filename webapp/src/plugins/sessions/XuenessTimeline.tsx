@@ -6,6 +6,7 @@ import { TimelineCard } from "../../XuenessShell";
 import { EmptyState } from "../../ui/primitives";
 import { IconGear, IconPencil, IconSearch } from "../../ui/icons";
 import { XuenessConversationHistoryRail } from "./XuenessConversationHistoryRail";
+import { completionPresentation } from './completionPresentation';
 import "../../styles/conversation-history-rail.css";
 
 export type TimelineStreamProps = {
@@ -358,6 +359,7 @@ export function TimelineStream({ rows, emptyText = tr("暂无事件"), collapseT
         }
 
         if (r.kind === "completion") {
+          const completion = completionPresentation(r);
           return (
             <div
               key={key}
@@ -367,9 +369,10 @@ export function TimelineStream({ rows, emptyText = tr("暂无事件"), collapseT
             >
               <TimelineCard
                 role="completion"
-                title={r.verified ? tr("运行结束 · 工具成功证据通过") : tr("运行结束 · 工具证据待审核")}
-                status={r.verified ? "ok" : "pending"}
-                body={r.summary || tr("无完成总结")}
+                title={completion.title}
+                status={completion.status}
+                statusLabel={completion.label}
+                body={completion.summary}
                 markdown
                 seq={r.seq}
               />

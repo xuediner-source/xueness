@@ -9,6 +9,7 @@ import type {
 import { Button, Badge, EmptyState } from "../../ui/primitives";
 import { IconArrowUp, IconLoader, IconPaperclip, IconPencil, IconPin, IconRefresh, IconTrash, IconX } from "../../ui/icons";
 import type { ComposerInput } from "../../xuenessComposer";
+import { completionPresentation } from './completionPresentation';
 
 export type TaskListProps = {
   sessions: SessionSummary[];
@@ -156,6 +157,7 @@ export function Timeline({ rows }: TimelineProps) {
         }
 
         if (r.kind === "completion") {
+          const completion = completionPresentation(r);
           return (
             <div
               key={key}
@@ -163,14 +165,10 @@ export function Timeline({ rows }: TimelineProps) {
               className="xn-timeline-row--completion"
             >
               <div style={{ display: "flex", alignItems: "center", gap: 6, fontWeight: 600 }}>
-                <span>{tr("运行结束")}</span>
-                {r.verified ? (
-                  <Badge tone="ok">{tr("工具成功证据通过")}</Badge>
-                ) : (
-                  <Badge tone="warn">{tr("工具证据待审核")}</Badge>
-                )}
+                <span>{completion.title}</span>
+                <Badge tone={completion.status === 'ok' ? 'ok' : completion.status === 'error' ? 'error' : 'warn'}>{completion.label}</Badge>
               </div>
-              {r.summary && <div>{r.summary}</div>}
+              <div>{completion.summary}</div>
             </div>
           );
         }

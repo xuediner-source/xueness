@@ -2,7 +2,7 @@ import { t as tr, tf } from './i18n';
 import React, { useEffect, useRef, useState } from "react";
 import ReactMarkdown, { defaultUrlTransform, type Components } from "react-markdown";
 import remarkGfm from "remark-gfm";
-import { Check, Copy, X } from "lucide-react";
+import { Check, Copy, TriangleAlert, X } from "lucide-react";
 import { Badge } from "./ui/primitives";
 import { IconBack, IconCheck, IconLoader, IconPencil, IconPin, IconTrash, IconX, IconMenu, IconXuenessMark } from "./ui/icons";
 import { CodeContent } from "./ui/CodeContent";
@@ -411,6 +411,7 @@ export type TimelineCardProps = {
   subject?: string;
   title?: string;
   status?: "ok" | "error" | "pending" | string;
+  statusLabel?: string;
   /** 正文（纯文本；等宽显示当 mono 为真） */
   body: string;
   mono?: boolean;
@@ -493,11 +494,11 @@ function CopyFeedbackAction({
 function statusToTone(status?: string): "ok" | "error" | "warn" | "neutral" {
   if (status === "ok") return "ok";
   if (status === "error") return "error";
-  if (status === "pending" || status === "running") return "warn";
+  if (status === "pending" || status === "running" || status === "review") return "warn";
   return "neutral";
 }
 
-function ToolStatusIcon({ status }: { status?: string }): React.JSX.Element {
+function ToolStatusIcon({ status, terminal = false }: { status?: string; terminal?: boolean }): React.JSX.Element {
   const tone = statusToTone(status);
   return (
     <span className={`xn-msg__tool-icon xn-msg__tool-icon--${tone}`} aria-hidden="true">
@@ -505,6 +506,8 @@ function ToolStatusIcon({ status }: { status?: string }): React.JSX.Element {
         <IconCheck size={13} />
       ) : status === "error" ? (
         <IconX size={13} />
+      ) : terminal ? (
+        <TriangleAlert size={13} />
       ) : (
         <IconLoader size={13} className="xn-spin" />
       )}
@@ -518,6 +521,7 @@ export function TimelineCard({
   subject,
   title,
   status,
+  statusLabel,
   body,
   mono,
   meta,
@@ -526,7 +530,8 @@ export function TimelineCard({
   seq,
   detailsOpen = false,
 }: TimelineCardProps): React.JSX.Element {
-  const tone = statusToTone(status);
+  const terminalStatus = role === 'completion' && (status === 'pending' || status === 'running') ? 'review' : status;
+  const tone = statusToTone(terminalStatus);
   const duration = typeof durationMs === "number" && Number.isFinite(durationMs) && durationMs >= 0
     ? durationMs < 1000 ? `${Math.round(durationMs)} ms` : `${(durationMs / 1000).toFixed(1)} s`
     : null;
@@ -603,16 +608,16 @@ export function TimelineCard({
         className={`xn-msg xn-msg--completion ${status ? `xn-msg--status-${tone}` : ""}`}
         data-testid="xn-timeline-card"
         data-role="completion"
-        data-status={status}
+        data-status={terminalStatus}
         {...seqTag}
       >
         <div className="xn-msg__tool-line">
-          <ToolStatusIcon status={status} />
+          <ToolStatusIcon status={terminalStatus} terminal />
           <span className="xn-msg__tool-name">{title || tr("运行结束")}</span>
           <span className="xn-msg__tool-trailing">
             {status && (
               <Badge tone={tone} data-testid="xn-card-status">
-                {status}
+                {statusLabel ?? tr('运行结束')}
               </Badge>
             )}
           </span>

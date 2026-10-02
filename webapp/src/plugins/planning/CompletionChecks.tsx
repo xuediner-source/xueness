@@ -41,8 +41,8 @@ export function CompletionChecks({ sessionId, completion, items, disabled, onSav
     <summary className="xn-delivery-checks__summary">
       <span className="xn-delivery-checks__title">{t('交付检查')}</span>
       <span className="xn-delivery-checks__badges">
-        <span className="xn-delivery-checks__badge" data-status={toolOk ? 'passed' : 'failed'}>
-          {toolOk ? t('工具执行成功') : t('工具成功证据未通过')}
+        <span className="xn-delivery-checks__badge" data-status={toolOk === true ? 'passed' : toolOk === false ? 'failed' : 'unchecked'}>
+          {toolOk === true ? t('工具执行成功') : toolOk === false ? t('工具成功证据未通过') : t('工具证据尚未检查')}
         </span>
         <span className="xn-delivery-checks__badge" data-status={deliveryStatus === 'passed' ? 'passed' : deliveryStatus === 'failed' ? 'failed' : 'unchecked'}>
           {deliveryStatus === 'passed' ? t('交付检查通过') : deliveryStatus === 'failed' ? t('交付检查未通过') : t('交付内容尚未检查')}

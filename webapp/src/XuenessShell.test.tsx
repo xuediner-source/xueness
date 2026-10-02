@@ -270,6 +270,13 @@ test("TimelineCard: completion/question 有专属卡形态；duration 仅在有�
   assert.doesNotMatch(noTiming, /xn-card-duration/);
 });
 
+test('a terminal completion never inherits the busy spinner from legacy pending or missing statuses', () => {
+  for (const status of [undefined, 'pending', 'review', 'error', 'ok']) {
+    const html = renderToStaticMarkup(<TimelineCard role="completion" status={status} body="Ended" />);
+    assert.doesNotMatch(html, /xn-spin|PENDING/i);
+  }
+});
+
 test("SimpleMarkdown: GFM headings, nested lists, tables, quotes, tasks and code fences render", () => {
   const md = [
     "# 标题",

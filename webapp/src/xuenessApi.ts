@@ -190,8 +190,8 @@ export type AutomationRecord = {
 /* 传输层（复用 xuenessBridge.ts 的 get/post 风格）                     */
 /* ------------------------------------------------------------------ */
 
-export async function get<T>(path: string): Promise<T> {
-  const response = await fetch(path, { credentials: "same-origin", cache: "no-store" });
+export async function get<T>(path: string, signal?: AbortSignal): Promise<T> {
+  const response = await fetch(path, { credentials: "same-origin", cache: "no-store", ...(signal ? { signal } : {}) });
   const payload = await response.json();
   if (!response.ok) throw new Error(payload.error || `HTTP ${response.status}`);
   return payload as T;

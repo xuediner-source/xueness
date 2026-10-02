@@ -4,21 +4,23 @@
   position: relative;
 }
 
-/* Session title is an accessible projection; conversation chrome floats over
-   the transcript instead of taking a title/status summary row out of it. */
+/* Keep the compact session toolbar in flow so it cannot cover checks or messages. */
 .xn-shell-layout .xn-conversation > .xn-conv-header {
-  position: absolute;
+  position: relative;
   z-index: 30;
-  inset: 4px 12px auto auto;
+  inset: auto;
   display: block;
-  width: max-content;
-  max-width: calc(100% - 24px);
-  height: 0;
-  padding: 0;
+  flex: 0 0 auto;
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 100%;
+  min-height: 44px;
+  height: auto;
+  padding: 6px 12px;
   overflow: visible;
   border: 0;
   background: transparent;
-  pointer-events: none;
+  pointer-events: auto;
 }
 
 .xn-shell-layout .xn-conv-header__title {
@@ -35,7 +37,7 @@
 .xn-shell-layout .xn-conv-header__main {
   min-width: 0;
   justify-content: flex-end;
-  pointer-events: none;
+  pointer-events: auto;
 }
 
 .xn-shell-layout .xn-conv-header__spacer { display: none; }
@@ -43,8 +45,11 @@
 .xn-shell-layout .xn-conv-header__tools {
   display: flex;
   min-width: 0;
+  max-width: 100%;
+  flex: 0 1 auto;
   align-items: center;
   justify-content: flex-end;
+  flex-wrap: wrap;
   gap: 6px;
   pointer-events: auto;
 }
@@ -59,10 +64,15 @@
 .xn-shell-layout .xn-conversation > .xn-runtime-monitor {
   box-sizing: border-box;
   flex: 0 0 auto;
-  margin: 48px 12px 8px;
+  margin: 4px 16px 8px;
   min-height: 0;
-  max-height: min(40vh, 360px);
-  overflow: auto;
+  max-height: none;
+  overflow: hidden;
+}
+
+.xn-shell-layout--sidebar-collapsed .xn-conversation > .xn-conv-header { padding-inline-start: 52px; }
+@media (max-width: 900px) {
+  .xn-shell-layout .xn-conversation > .xn-conv-header { padding-inline-start: 52px; }
 }
 
 .xn-shell-layout .xn-timeline-stream {
@@ -573,6 +583,8 @@
 .xn-shell-layout .xn-msg--completion {
   border-left-color: var(--ok-border);
 }
+.xn-shell-layout .xn-msg--completion.xn-msg--status-warn { border-left-color: var(--warn-border); }
+.xn-shell-layout .xn-msg--completion.xn-msg--status-error { border-left-color: var(--error-border); }
 
 .xn-shell-layout .xn-msg--question {
   border-left-color: var(--warn-border);
@@ -844,7 +856,7 @@
     max-width: min(100%, 576px);
   }
 
-  .xn-shell-layout .xn-conversation > .xn-conv-header { inset-inline-end: 8px; }
+  .xn-shell-layout .xn-conversation > .xn-conv-header { padding-inline-end: 8px; }
 }
 
 @media (prefers-reduced-motion: reduce) {

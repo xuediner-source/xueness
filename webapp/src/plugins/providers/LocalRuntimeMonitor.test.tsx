@@ -6,6 +6,7 @@ import {
   formatRuntimeBytes,
   estimatedMemoryUsedBytes,
   LocalRuntimeMonitor,
+  RuntimeMonitorDetails,
   memoryAvailabilityExplanation,
   runtimeCharacterTrend,
 } from './LocalRuntimeMonitor';
@@ -13,6 +14,16 @@ import type { LocalRuntimeSession } from './LocalRuntimeMonitor';
 
 test('monitor stays absent outside lightweight mode', () => {
   assert.equal(renderToStaticMarkup(<LocalRuntimeMonitor lightweight={false} session={null} />), '');
+});
+
+test('monitor defaults to a compact collapsed button without mounting resource sampling details', () => {
+  const html = renderToStaticMarkup(<LocalRuntimeMonitor lightweight session={{ runtime_activity: { phase: 'generating' } }} />);
+  assert.match(html, /本机资源/);
+  assert.match(html, /aria-expanded="false"/);
+  assert.match(html, /aria-controls="[^"]+"/);
+  assert.match(html, /生成/);
+  assert.match(html, /hidden=""/);
+  assert.doesNotMatch(html, /xn-runtime-monitor__body|本进程 CPU|progressbar|暂停采样/);
 });
 
 test('lightweight monitor displays local resource and separated request activity estimates', () => {
@@ -33,8 +44,8 @@ test('lightweight monitor displays local resource and separated request activity
       { phase: 'completed', requestStep: 2, charactersPerSecond: 9, outputChars: 80 },
     ],
   };
-  const html = renderToStaticMarkup(<LocalRuntimeMonitor lightweight session={session} />);
-  assert.match(html, /本机资源/);
+  const html = renderToStaticMarkup(<RuntimeMonitorDetails lightweight session={session} />);
+  assert.match(html, /详细资源采样/);
   assert.match(html, /CPU/);
   assert.match(html, /内存已用估算/);
   assert.match(html, /轻量输出状态/);
@@ -56,7 +67,7 @@ test('token rate is withheld unless output token usage was reported', () => {
   const session: LocalRuntimeSession = { runtime_activity: {
     phase: 'completed', charactersPerSecond: 5, requestSeconds: 2, outputChars: 10, tokensPerSecond: 90,
   } };
-  const html = renderToStaticMarkup(<LocalRuntimeMonitor lightweight session={session} />);
+  const html = renderToStaticMarkup(<RuntimeMonitorDetails lightweight session={session} />);
   assert.match(html, /本轮未报告输出 Token/);
   assert.doesNotMatch(html, /90 Token\/秒/);
 });

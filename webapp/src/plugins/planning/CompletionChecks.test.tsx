@@ -12,3 +12,11 @@ test('legacy evidence never silently certifies content completion', () => {
   const html = renderToStaticMarkup(<CompletionChecks sessionId="abc" items={[]} onSaved={() => {}} completion={{ verified: true }} />);
   assert.match(html, /交付内容尚未检查/); assert.doesNotMatch(html, /交付检查通过/);
 });
+
+test('a run without any completion is unchecked rather than a premature evidence failure', () => {
+  const html = renderToStaticMarkup(<CompletionChecks sessionId="new" items={[]} onSaved={() => {}} />);
+  assert.match(html, /工具证据尚未检查/);
+  assert.doesNotMatch(html, /工具成功证据未通过|data-status="failed"/);
+  const failed = renderToStaticMarkup(<CompletionChecks sessionId="ended" completion={{ verified: false }} items={[]} onSaved={() => {}} />);
+  assert.match(failed, /工具成功证据未通过/);
+});

@@ -209,6 +209,24 @@ test("TimelineStream: renders completion and pending_question rows", () => {
   assert.match(html, /xn-msg--question/);
 });
 
+test('ended unverified runs show a static warning while actual tools retain their running state', () => {
+  const html = renderToStaticMarkup(<TimelineStream rows={[{ kind: 'completion', seq: 1, verified: false, summary: 'Evidence was insufficient' }]} />);
+  assert.match(html, /运行结束 · 工具证据未通过验证/);
+  assert.match(html, /data-status="review"/);
+  assert.doesNotMatch(html, /xn-spin|PENDING|工具证据待审核/i);
+  const running = renderToStaticMarkup(<TimelineStream rows={[{ kind: 'tool', seq: 2, turnId: 't', toolCallId: 'c', name: 'exec', subject: 'echo test', status: 'running', error: '', errorCode: '' }]} />);
+  assert.match(running, /data-status="running"/);
+  assert.match(running, /运行中/);
+});
+
+test('the local JSON protocol failure has an explicit terminal error and translated explanation', () => {
+  const html = renderToStaticMarkup(<TimelineStream rows={[{ kind: 'completion', seq: 1, verified: false, summary: 'The local model could not follow the configured JSON tool protocol within the configured response limit.' }]} />);
+  assert.match(html, /运行结束 · 模型工具协议失败/);
+  assert.match(html, /本轮已停止/);
+  assert.match(html, /data-status="error"/);
+  assert.doesNotMatch(html, /xn-spin|PENDING|could not follow/i);
+});
+
 
 test("tool grouping respects messages, categories, and disabled preferences", () => {
   const tool = (seq: number, name: string): TimelineRow => ({kind:"tool", seq, turnId:"t", toolCallId:String(seq), name, subject:"sample", status:"ok", error:"", errorCode:""});

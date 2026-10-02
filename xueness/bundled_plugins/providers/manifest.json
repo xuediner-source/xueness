@@ -86,6 +86,7 @@
   "frontendModules": [
     "plugins/providers/ProvidersPanel.tsx",
     "plugins/providers/LocalRuntimeMonitor.tsx",
+    "plugins/providers/runtimeSampling.ts",
     "plugins/providers/index.tsx"
   ]
 }
