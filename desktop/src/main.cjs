@@ -1,4 +1,4 @@
-const { app, BrowserWindow, Menu, dialog, shell, net, ipcMain, Tray } = require('electron');
+const { app, BrowserWindow, Menu, dialog, shell, net, ipcMain, Tray, screen } = require('electron');
 const { join, resolve } = require('node:path');
 const { existsSync, mkdirSync, writeFileSync } = require('node:fs');
 const { Backend } = require('./backend.cjs');
@@ -82,7 +82,7 @@ async function start() {
       webSecurity: true, spellcheck: false, webviewTag: false } });
   installWindowThemeSync({ ipcMain, window, getOrigin: () => backend.origin });
   background = createDesktopBackground({ app, window, Tray, Menu, ipcMain, iconPath,
-    getOrigin: () => backend.origin, isQuitting: () => quitting });
+    getOrigin: () => backend.origin, isQuitting: () => quitting, BrowserWindow, screen, getBackend: () => backend, shell });
   window.once('ready-to-show', () => window.show());
   await window.loadFile(join(__dirname, 'loading.html'));
   const origin = await backend.start();

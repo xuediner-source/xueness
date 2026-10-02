@@ -84,6 +84,7 @@ import { ComposerWorkspaceSelect } from './plugins/sessions/ComposerWorkspaceSel
 import { XuenessComposerToolbar } from "./plugins/sessions/XuenessComposerToolbar";
 import { DesktopSettings } from "./plugins/desktop/DesktopSettings";
 import { DesktopTitlebar } from "./plugins/desktop/DesktopTitlebar";
+import { DesktopTrayBridge } from './plugins/desktop/DesktopTrayBridge';
 import { XuenessSettingsView } from "./plugins/settings/XuenessSettingsView";
 import { settingsNavigation } from "./xuenessSettingsNavigation";
 import { CompletionChecks } from './plugins/planning/CompletionChecks';
@@ -440,6 +441,11 @@ export function XuenessWorkbenchContainer() {
     setPanel("chat");
     setActiveId(id);
   }, [busy]);
+
+  const selectTraySession = useCallback((id: string) => {
+    if (id === activeId) setPanel('chat');
+    else selectSession(id);
+  }, [activeId, selectSession]);
 
   const completeFork = useCallback((result: ForkSessionResponse) => {
     const source = forkSource;
@@ -1474,6 +1480,9 @@ export function XuenessWorkbenchContainer() {
 
   return (
     <CodeDisplayProvider settings={settingsValues.codePreviewSettings} dark={String(settingsValues.theme) === "dark" || (settingsValues.theme === "system" && systemDark)}>
+    <DesktopTrayBridge enabled={isPluginEffective('desktop')} sessionsEnabled={isPluginEffective('sessions')} busy={busy}
+      activeId={activeId} locale={locale} dark={String(settingsValues.theme) === 'dark' || (settingsValues.theme === 'system' && systemDark)}
+      onNew={startNewTask} onSession={selectTraySession} />
     <Shell
       titlebar={typeof window !== "undefined" && new URLSearchParams(window.location.search).get("xuenessDesktop") === "1" ? <DesktopTitlebar
         desktopEnabled={isPluginEffective('desktop')}

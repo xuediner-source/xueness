@@ -26,7 +26,7 @@ export function DesktopSettings({ enabled = true }: { enabled?: boolean }): Reac
         <dt>{text("数据位置", "Data directory")}</dt><dd style={{ overflowWrap: "anywhere" }}>{status.dataDirectory}</dd>
         <dt>{text("原生目录选择", "Native folder picker")}</dt><dd>{status.nativeDirectoryPicker ? text("可用", "Available") : text("使用工作区目录浏览", "Use workspace directory browsing")}</dd></dl>
       <p>{text("应用升级会保留数据。桌面端与 CLI 共享数据时，为 CLI 指定相同的 state 目录。", "Application upgrades preserve data. To share data with the CLI, select the same state directory.")}</p>
-      {status.desktop && status.platform === 'win32' && <p>{text("关闭窗口后仍在系统托盘后台运行，任务会继续。点击托盘图标恢复窗口；要完全退出，请使用托盘菜单中的「退出 Xueness」。", "Closing the window keeps Xueness and its tasks running in the system tray. Click the tray icon to restore the window; choose Quit Xueness in its menu to exit completely.")}</p>}
+      {status.desktop && status.platform === 'win32' && <p>{text("关闭窗口后仍在系统托盘后台运行，任务会继续。右键托盘图标可打开运行中、已固定或最近会话，也可新建会话、发送反馈。点击图标恢复窗口；要完全退出，请使用「退出 Xueness」。", "Closing the window keeps Xueness and its tasks running in the system tray. Right-click its icon to open running, pinned or recent chats, create a chat or send feedback. Click the icon to restore the window; choose Quit Xueness to exit completely.")}</p>}
     </> : <p role="status">{text("正在读取桌面状态…", "Reading desktop status…")}</p>}
   </section>;
 }

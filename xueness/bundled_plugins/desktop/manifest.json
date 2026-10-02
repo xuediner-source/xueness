@@ -46,11 +46,19 @@
       "id": "desktop.background",
       "name": "Windows 系统托盘与关闭窗口后后台运行",
       "nameEn": "Windows system tray and background operation after closing the window"
+    },
+    {
+      "id": "desktop.tray_navigation",
+      "name": "托盘会话分组、快速打开、新建与反馈入口",
+      "nameEn": "Tray chat groups, quick navigation, new chat and feedback"
     }
   ],
   "frontendModules": [
     "plugins/desktop/DesktopSettings.tsx",
-    "plugins/desktop/DesktopTitlebar.tsx"
+    "plugins/desktop/DesktopTitlebar.tsx",
+    "plugins/desktop/DesktopTrayBridge.tsx",
+    "plugins/desktop/DesktopTrayMenu.tsx",
+    "plugins/desktop/tray-main.tsx"
   ],
   "desktopModules": [
     "src/main.cjs",
@@ -59,6 +67,8 @@
     "src/window-chrome.cjs",
     "src/window-theme-preload.cjs",
     "src/desktop-background.cjs",
+    "src/tray-menu.cjs",
+    "src/tray-menu-preload.cjs",
     "src/loading.html"
   ]
 }

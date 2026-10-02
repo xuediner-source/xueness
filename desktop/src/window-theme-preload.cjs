@@ -6,6 +6,7 @@ if (process.platform === 'win32' && window.top === window) {
     const root = document.documentElement;
     let previous = '';
     let previousPolicy;
+    let previousTrayState = '';
     const sync = () => {
       const style = getComputedStyle(root);
       const color = style.getPropertyValue('--bg-window').trim();
@@ -22,11 +23,26 @@ if (process.platform === 'win32' && window.top === window) {
         previousPolicy = policy;
         ipcRenderer.send('xueness:desktop-background', policy === 'true');
       }
+      const trayState = root.getAttribute('data-xn-desktop-tray-state');
+      if (trayState && trayState.length < 1024 && trayState !== previousTrayState) {
+        try {
+          const parsed = JSON.parse(trayState);
+          ipcRenderer.send('xueness:desktop-tray-state', parsed);
+          previousTrayState = trayState;
+        } catch { /* Ignore incomplete state mutations. */ }
+      }
     };
     const observer = new MutationObserver(sync);
-    observer.observe(root, { attributes: true, attributeFilter: ['class', 'style', 'data-xn-desktop-enabled'] });
+    observer.observe(root, { attributes: true, attributeFilter: ['class', 'style', 'data-xn-desktop-enabled', 'data-xn-desktop-tray-state'] });
     sync();
-    window.addEventListener('pagehide', () => observer.disconnect(), { once: true });
+    const command = (_event, action) => {
+      if (!action || typeof action !== 'object') return;
+      if (action.kind === 'new' || (action.kind === 'session' && typeof action.id === 'string' && /^[a-f0-9]{32}$/.test(action.id))) {
+        window.dispatchEvent(new CustomEvent('xueness:desktop-command', { detail: action.kind === 'new' ? { kind: 'new' } : { kind: 'session', id: action.id } }));
+      }
+    };
+    ipcRenderer.on('xueness:desktop-command', command);
+    window.addEventListener('pagehide', () => { observer.disconnect(); ipcRenderer.removeListener('xueness:desktop-command', command); }, { once: true });
   };
   if (document.readyState === 'loading') window.addEventListener('DOMContentLoaded', observeTheme, { once: true });
   else observeTheme();

@@ -3,7 +3,7 @@ const assert = require('node:assert/strict');
 const { EventEmitter } = require('node:events');
 const { createDesktopBackground, handleSecondInstance } = require('../src/desktop-background.cjs');
 
-function fixture({ failTray = false, platform = 'win32' } = {}) {
+function fixture({ failTray = false, platform = 'win32', customMenu = false } = {}) {
   const ipcMain = new EventEmitter(), window = new EventEmitter(), trays = [];
   let quitting = false;
   const calls = { hide: 0, show: 0, focus: 0, restore: 0, quit: 0 };
@@ -15,14 +15,30 @@ function fixture({ failTray = false, platform = 'win32' } = {}) {
     setToolTip(value) { this.tooltip = value; }
     setContextMenu(value) { this.menu = value; }
     destroy() { this.destroyed = true; }
+    getBounds() { return { x: 1200, y: 1040, width: 20, height: 20 }; }
+    popUpContextMenu(value) { this.fallback = value; }
+  }
+  const popups = [], snapshots = [];
+  class BrowserWindow extends EventEmitter {
+    constructor() {
+      super(); this.webContents = new EventEmitter(); this.webContents.mainFrame = { url: 'http://127.0.0.1:45678/api/desktop/tray' };
+      this.webContents.send = (_channel, value) => snapshots.push(value);
+      this.webContents.setWindowOpenHandler = () => {}; popups.push(this);
+    }
+    isDestroyed() { return Boolean(this.destroyed); }
+    async loadURL() {}
+    setBounds() {} show() {} focus() {} hide() {}
+    destroy() { this.destroyed = true; this.emit('closed'); }
   }
   const app = { quit: () => { calls.quit++; quitting = true; } };
   const host = createDesktopBackground({ app, window, Tray, Menu: { buildFromTemplate: items => items }, ipcMain,
-    iconPath: 'icon.ico', getOrigin: () => 'http://127.0.0.1:45678', isQuitting: () => quitting, platform });
+    iconPath: 'icon.ico', getOrigin: () => 'http://127.0.0.1:45678', isQuitting: () => quitting, platform,
+    ...(customMenu ? { BrowserWindow, screen: { getDisplayMatching: () => ({ workArea: { x: 0, y: 0, width: 1920, height: 1040 } }) },
+      getBackend: () => ({ origin: 'http://127.0.0.1:45678', token: 'fixture-token' }), shell: { openExternal: async () => {} } } : {}) });
   const event = { sender: window.webContents, senderFrame: window.webContents.mainFrame };
   const policy = (enabled, sender = event) => ipcMain.emit('xueness:desktop-background', sender, enabled);
   const close = () => { let prevented = false; window.emit('close', { preventDefault: () => { prevented = true; } }); return prevented; };
-  return { host, window, trays, calls, app, ipcMain, event, policy, close };
+  return { host, window, trays, calls, app, ipcMain, event, policy, close, popups, snapshots };
 }
 
 test('enabled desktop creates one tray and closing hides the window without quitting', () => {
@@ -64,4 +80,21 @@ test('second launch restores a background window and an explicit quit argument s
   const actions = { show: () => shown++, quit: () => quit++ };
   handleSecondInstance(['Xueness.exe'], actions); handleSecondInstance(['Xueness.exe', '--quit'], actions);
   assert.equal(shown, 1); assert.equal(quit, 1);
+});
+
+test('custom tray retains state published before enable and destroys its menu when desktop is disabled', async t => {
+  t.mock.method(globalThis, 'fetch', async () => ({ ok: true, json: async () => ({ sessions: [] }) }));
+  const f = fixture({ customMenu: true });
+  const state = { busy: false, sessionsEnabled: true, activeId: null, locale: 'en', dark: true };
+  f.ipcMain.emit('xueness:desktop-tray-state', f.event, state);
+  f.ipcMain.emit('xueness:desktop-tray-state', { ...f.event, sender: {} }, { ...state, busy: true });
+  f.policy(true); f.trays[0].emit('right-click'); await new Promise(resolve => setImmediate(resolve));
+  assert.equal(f.popups.length, 1); assert.equal(f.snapshots.at(-1).busy, false);
+  assert.equal(f.snapshots.at(-1).locale, 'en'); assert.equal(f.snapshots.at(-1).dark, true);
+  f.policy(false); assert.equal(f.popups[0].destroyed, true);
+  assert.equal(f.ipcMain.listenerCount('xueness:tray-command'), 0);
+  f.policy(true); f.trays[1].emit('right-click'); await new Promise(resolve => setImmediate(resolve));
+  assert.equal(f.popups.length, 2); assert.equal(f.snapshots.at(-1).sessionsEnabled, true);
+  f.host.dispose(); assert.equal(f.popups[1].destroyed, true);
+  assert.equal(f.ipcMain.listenerCount('xueness:desktop-tray-state'), 0);
 });

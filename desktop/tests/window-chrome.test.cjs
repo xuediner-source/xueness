@@ -82,13 +82,16 @@ test('non-Windows hosts do not install an unsupported overlay listener', () => {
 
 test('isolated preload follows theme mutations, deduplicates unrelated changes and cleans up', () => {
   const callbacks = new Map(), sent = [];
-  let policy = null;
-  const root = { getAttribute: name => name === 'data-xn-desktop-enabled' ? policy : null };
+  let policy = null, trayState = null;
+  const root = { getAttribute: name => name === 'data-xn-desktop-enabled' ? policy : name === 'data-xn-desktop-tray-state' ? trayState : null };
   let color = '#ececee', symbolColor = '#262626', observed, disconnected = false, sync;
-  const page = { addEventListener: (name, callback) => callbacks.set(name, callback) };
+  const ipcRenderer = new EventEmitter(); ipcRenderer.send = (...args) => sent.push(args);
+  const dispatched = [];
+  const page = { addEventListener: (name, callback) => callbacks.set(name, callback), dispatchEvent: event => dispatched.push(event) };
   page.top = page;
   runInNewContext(readFileSync(join(__dirname, '../src/window-theme-preload.cjs'), 'utf8'), {
-    require: name => { assert.equal(name, 'electron'); return { ipcRenderer: { send: (...args) => sent.push(args) } }; },
+    require: name => { assert.equal(name, 'electron'); return { ipcRenderer }; },
+    CustomEvent: class { constructor(type, options) { this.type = type; this.detail = options.detail; } },
     process: { platform: 'win32' }, // Sandboxed preloads expose a reduced process object.
     document: { readyState: 'loading', documentElement: root },
     window: page,
@@ -105,7 +108,7 @@ test('isolated preload follows theme mutations, deduplicates unrelated changes a
   assert.equal(sent.length, 0);
   callbacks.get('DOMContentLoaded')();
   assert.equal(observed.element, root);
-  assert.deepEqual(Array.from(observed.options.attributeFilter), ['class', 'style', 'data-xn-desktop-enabled']);
+  assert.deepEqual(Array.from(observed.options.attributeFilter), ['class', 'style', 'data-xn-desktop-enabled', 'data-xn-desktop-tray-state']);
   sync();
   assert.equal(sent.length, 1);
   color = '#2b2b2b'; symbolColor = '#d4d4d4'; sync();
@@ -120,6 +123,19 @@ test('isolated preload follows theme mutations, deduplicates unrelated changes a
   assert.equal(sent[2][0], 'xueness:desktop-background'); assert.equal(sent[2][1], true);
   policy = 'false'; sync();
   assert.equal(sent[3][1], false);
+  trayState = '{bad'; sync(); assert.equal(sent.length, 4);
+  trayState = JSON.stringify({ busy: false, sessionsEnabled: true, activeId: null, locale: 'zh', dark: false }); sync(); sync();
+  assert.equal(sent.length, 5); assert.equal(sent[4][0], 'xueness:desktop-tray-state');
+  const id = 'a'.repeat(32);
+  ipcRenderer.emit('xueness:desktop-command', {}, { kind: 'session', id, secret: 'discard' });
+  ipcRenderer.emit('xueness:desktop-command', {}, { kind: 'new', url: 'https://example.com' });
+  ipcRenderer.emit('xueness:desktop-command', {}, { kind: 'session', id: '../secret' });
+  ipcRenderer.emit('xueness:desktop-command', {}, { kind: 'feedback' });
+  assert.deepEqual(JSON.parse(JSON.stringify(dispatched)), [
+    { type: 'xueness:desktop-command', detail: { kind: 'session', id } },
+    { type: 'xueness:desktop-command', detail: { kind: 'new' } },
+  ]);
   callbacks.get('pagehide')();
   assert.equal(disconnected, true);
+  assert.equal(ipcRenderer.listenerCount('xueness:desktop-command'), 0);
 });
