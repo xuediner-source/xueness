@@ -61,12 +61,40 @@ function loadRuntimeDependencies() {
   return resolveRuntimeDependencies(require('electron'), require('electron-updater'));
 }
 
+function canonicalExistingPath(fsApi, pathApi, value) {
+  const realpath = fsApi.realpathSync?.native;
+  if (typeof realpath !== 'function') throw new Error('Windows update fixture path verification is unavailable.');
+  let current = pathApi.resolve(value);
+  const remaining = [];
+  while (true) {
+    try {
+      return pathApi.resolve(realpath(current), ...remaining.reverse());
+    } catch (error) {
+      if (!['ENOENT', 'ENOTDIR'].includes(error?.code)) throw error;
+      const parent = pathApi.dirname(current);
+      if (parent === current) throw error;
+      remaining.push(pathApi.basename(current));
+      current = parent;
+    }
+  }
+}
+
+function comparablePath(value, pathApi) {
+  let normalized = pathApi.resolve(value);
+  normalized = normalized.replace(/^\\\\\?\\UNC\\/i, '\\\\').replace(/^\\\\\?\\/, '');
+  return normalized.replace(/[\\/]+$/, '').toLowerCase();
+}
+
 function loadSmokeConfig({
   fsApi = require('node:fs'),
   pathApi = require('node:path'),
   executablePath = process.execPath,
 } = {}) {
-  const fixtureRoot = pathApi.resolve(pathApi.dirname(pathApi.resolve(executablePath)), '..');
+  const fixtureRoot = canonicalExistingPath(
+    fsApi,
+    pathApi,
+    pathApi.resolve(pathApi.dirname(pathApi.resolve(executablePath)), '..'),
+  );
   const descriptorPath = pathApi.join(fixtureRoot, 'update-smoke-config.json');
   let config;
   try {
@@ -75,17 +103,18 @@ function loadSmokeConfig({
     throw new Error('Windows update fixture descriptor is missing or invalid.');
   }
 
-  const samePath = (left, right) => pathApi.resolve(left).replace(/[\\/]+$/, '').toLowerCase()
-    === pathApi.resolve(right).replace(/[\\/]+$/, '').toLowerCase();
   const expectedAppData = pathApi.join(fixtureRoot, 'isolated-appdata', 'user-data');
   const expectedReport = pathApi.join(fixtureRoot, 'update-report.json');
   if (!config || typeof config !== 'object' || Array.isArray(config)
     || typeof config.fixtureRoot !== 'string'
     || typeof config.appData !== 'string'
     || typeof config.report !== 'string'
-    || !samePath(config.fixtureRoot, fixtureRoot)
-    || !samePath(config.appData, expectedAppData)
-    || !samePath(config.report, expectedReport)
+    || comparablePath(canonicalExistingPath(fsApi, pathApi, config.fixtureRoot), pathApi)
+      !== comparablePath(fixtureRoot, pathApi)
+    || comparablePath(canonicalExistingPath(fsApi, pathApi, config.appData), pathApi)
+      !== comparablePath(expectedAppData, pathApi)
+    || comparablePath(canonicalExistingPath(fsApi, pathApi, config.report), pathApi)
+      !== comparablePath(expectedReport, pathApi)
     || !/^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/.test(config.expectedVersion || '')) {
     throw new Error('Windows update fixture descriptor contains unsafe or invalid paths/version.');
   }
@@ -214,11 +243,18 @@ if (require.main === module) {
       process.exitCode = 1;
     });
   } else {
-    runFixture();
+    try {
+      runFixture();
+    } catch (error) {
+      try { process.stderr.write('Windows update fixture startup failed: ' + (error?.stack || String(error)) + '\n'); } catch {}
+      process.exitCode = 2;
+      try { process.exit(2); } catch {}
+    }
   }
 }
 
 module.exports = {
+  canonicalExistingPath,
   createFixtureBuildOptions,
   loadSmokeConfig,
   resolveRuntimeDependencies,

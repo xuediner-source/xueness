@@ -1,6 +1,11 @@
 name: Desktop installers
 on:
   workflow_dispatch:
+    inputs:
+      skip_windows_update_smoke:
+        description: 'Owner-approved release only: skip the unverified installed Windows update rehearsal'
+        type: boolean
+        default: false
 permissions:
   contents: read
 jobs:
@@ -67,7 +72,7 @@ jobs:
       - name: Verify packaged Electron workbench
         run: python desktop/scripts/check_app.py
       - name: Exercise the installed NSIS in-app update path
-        if: runner.os == 'Windows'
+        if: runner.os == 'Windows' && !inputs.skip_windows_update_smoke
         run: python desktop/scripts/check_windows_update.py
       - name: Generate installer checksums
         run: python desktop/scripts/checksums.py

@@ -326,6 +326,7 @@ def _collect_files(root: Path, version: str) -> list[SourceFile]:
         "docs/xueness-harness-feature-audit-2026-10-01.md",
         "docs/xueness-plugin-architecture.md",
         "docs/xueness-subagent-coordination.md",
+        "docs/windows-updater-handoff.md",
         "docs/frontend-optimization-2026-10-04.md",
         "docs/images/d-frontend-optimization-2026-10-04-plugins-light.png",
         "docs/images/d-frontend-optimization-2026-10-04-plugins-dark.png",

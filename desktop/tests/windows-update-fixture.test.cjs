@@ -8,13 +8,18 @@ const vm = require('node:vm');
 
 const fixturePath = path.resolve(__dirname, '../scripts/windows_update_fixture.cjs');
 const { createFixtureBuildOptions } = require('../scripts/windows_update_fixture.cjs');
+const winPath = path.win32;
+
+function nativeWindowsRealpath(value) {
+  return winPath.resolve(value).replace(/^C:\\Users\\RUNNER~1(?=\\|$)/i, 'C:\\Users\\runner');
+}
 
 test('NSIS --updated relaunch loads its isolated descriptor after Explorer drops fixture environment', async () => {
   let resolveOptions;
   const optionsCaptured = new Promise(resolve => { resolveOptions = resolve; });
   const autoUpdater = { quitAndInstall() {} };
-  const winPath = path.win32;
   const fixtureRoot = 'C:\\Users\\runner\\AppData\\Local\\Temp\\xueness-nsis-update-test';
+  const shortFixtureRoot = fixtureRoot.replace('C:\\Users\\runner', 'C:\\Users\\RUNNER~1');
   const appData = winPath.join(fixtureRoot, 'isolated-appdata', 'user-data');
   const report = winPath.join(fixtureRoot, 'update-report.json');
   const descriptorPath = winPath.join(fixtureRoot, 'update-smoke-config.json');
@@ -43,6 +48,7 @@ test('NSIS --updated relaunch loads its isolated descriptor after Explorer drops
     'electron-updater': { autoUpdater },
     'node:path': winPath,
     'node:fs': {
+      realpathSync: { native: nativeWindowsRealpath },
       mkdirSync() {},
       readFileSync(filePath) {
         assert.equal(winPath.resolve(filePath), winPath.resolve(descriptorPath));
@@ -68,8 +74,8 @@ test('NSIS --updated relaunch loads its isolated descriptor after Explorer drops
   }
   fixtureRequire.main = fixtureModule;
   const fixtureProcess = {
-    execPath: winPath.join(fixtureRoot, 'installed-app', 'Xueness.exe'),
-    argv: [winPath.join(fixtureRoot, 'installed-app', 'Xueness.exe'), '--updated'],
+    execPath: winPath.join(shortFixtureRoot, 'installed-app', 'Xueness.exe'),
+    argv: [winPath.join(shortFixtureRoot, 'installed-app', 'Xueness.exe'), '--updated'],
     env: {},
     pid: 42,
     stderr: { write() {} },
@@ -103,9 +109,9 @@ test('NSIS --updated relaunch loads its isolated descriptor after Explorer drops
 });
 
 test('restarted updated version verifies and reports preserved isolated data using only its descriptor', async () => {
-  const winPath = path.win32;
   const fixtureRoot = 'C:\\Users\\runner\\AppData\\Local\\Temp\\xueness-nsis-update-relaunch';
-  const executable = winPath.join(fixtureRoot, 'installed-app', 'Xueness.exe');
+  const shortFixtureRoot = fixtureRoot.replace('C:\\Users\\runner', 'C:\\Users\\RUNNER~1');
+  const executable = winPath.join(shortFixtureRoot, 'installed-app', 'Xueness.exe');
   const appData = winPath.join(fixtureRoot, 'isolated-appdata', 'user-data');
   const reportPath = winPath.join(fixtureRoot, 'update-report.json');
   const descriptorPath = winPath.join(fixtureRoot, 'update-smoke-config.json');
@@ -141,6 +147,7 @@ test('restarted updated version verifies and reports preserved isolated data usi
     'electron-updater': { autoUpdater: { quitAndInstall() {} } },
     'node:path': winPath,
     'node:fs': {
+      realpathSync: { native: nativeWindowsRealpath },
       mkdirSync() {},
       readFileSync(filePath) {
         const actual = winPath.resolve(filePath);
@@ -181,31 +188,44 @@ test('restarted updated version verifies and reports preserved isolated data usi
   });
 });
 
-test('fixture fails closed on a missing descriptor before loading Electron or reading app paths', () => {
+test('fixture reports startup failure and exits before loading Electron paths when descriptor is missing', () => {
   const fixtureRoot = 'C:\\Users\\runner\\AppData\\Local\\Temp\\xueness-nsis-update-missing';
   const source = fs.readFileSync(fixturePath, 'utf8');
   const fixtureModule = { exports: {} };
+  const exitCodes = [];
+  const stderr = [];
   const fixtureProcess = {
     execPath: path.win32.join(fixtureRoot, 'installed-app', 'Xueness.exe'),
     argv: [path.win32.join(fixtureRoot, 'installed-app', 'Xueness.exe'), '--updated'],
     env: {},
-    stderr: { write() {} },
+    stderr: { write(message) { stderr.push(message); } },
     exitCode: 0,
+    exit(code) { exitCodes.push(code); },
   };
   function fixtureRequire(name) {
     if (name === 'node:path') return path.win32;
-    if (name === 'node:fs') return { readFileSync() { throw new Error('ENOENT'); } };
+    if (name === 'node:fs') return {
+      realpathSync: { native: nativeWindowsRealpath },
+      readFileSync() {
+        const error = new Error('missing descriptor');
+        error.code = 'ENOENT';
+        throw error;
+      },
+    };
     throw new Error(`Unexpected import before validating descriptor: ${name}`);
   }
   fixtureRequire.main = fixtureModule;
 
-  assert.throws(() => vm.runInNewContext(source, {
+  vm.runInNewContext(source, {
     require: fixtureRequire,
     module: fixtureModule,
     process: fixtureProcess,
     __filename: fixturePath,
     __dirname: path.dirname(fixturePath),
-  }, { filename: fixturePath }), /descriptor is missing or invalid/);
+  }, { filename: fixturePath });
+  assert.equal(fixtureProcess.exitCode, 2);
+  assert.deepEqual(exitCodes, [2]);
+  assert.match(stderr.join(''), /descriptor is missing or invalid/);
 });
 
 test('fixture build writes a generic update feed without publishing artifacts', () => {

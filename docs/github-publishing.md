@@ -27,3 +27,6 @@
 项目所有者授权发布 0.1.2，用于已有 0.1.1 客户端接收更新。此版包含前端优化和异步子代理协调，完整验证记录见 [前端优化](frontend-optimization-2026-10-04.md)与[子代理协调](xueness-subagent-coordination.md)。
 
 三平台安装包从同一 Git 提交通过原生 runner 构建。Release 必须包含 Windows `latest.yml`、匹配的 NSIS 安装器及 blockmap，统一合并三平台 SHA-256 清单；不能只推源码或只上传安装器。未签名 Mac 使用对应架构 DMG 的应用内下载及校验，下载完成后仍由用户替换应用。0.1.0 客户端没有更新器，需要先手动升级；Windows 便携版不支持原地更新。实际已发布版本与构建提交以 Releases 中的构建来源文件为准。
+
+
+本次发布由所有者明确允许先上传包、随后在 Windows 电脑上排查更新。仅此发布使用 `skip_windows_update_smoke=true`；该工作流输入默认关闭，其它插件、后端、前端、打包启动检查仍执行。Windows 安装包能构建和启动，并曾在隔离源完成新版下载及校验，但安装后重启的完整更新验收尚未通过，不能将本次绿色构建当作此项通过的证据。后续 Windows 接手任务见 [Windows 更新交接提示词](windows-updater-handoff.md)。
