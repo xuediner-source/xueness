@@ -61,18 +61,55 @@ function loadRuntimeDependencies() {
   return resolveRuntimeDependencies(require('electron'), require('electron-updater'));
 }
 
+function loadSmokeConfig({
+  fsApi = require('node:fs'),
+  pathApi = require('node:path'),
+  executablePath = process.execPath,
+} = {}) {
+  const fixtureRoot = pathApi.resolve(pathApi.dirname(pathApi.resolve(executablePath)), '..');
+  const descriptorPath = pathApi.join(fixtureRoot, 'update-smoke-config.json');
+  let config;
+  try {
+    config = JSON.parse(fsApi.readFileSync(descriptorPath, 'utf8'));
+  } catch (error) {
+    throw new Error('Windows update fixture descriptor is missing or invalid.');
+  }
+
+  const samePath = (left, right) => pathApi.resolve(left).replace(/[\\/]+$/, '').toLowerCase()
+    === pathApi.resolve(right).replace(/[\\/]+$/, '').toLowerCase();
+  const expectedAppData = pathApi.join(fixtureRoot, 'isolated-appdata', 'user-data');
+  const expectedReport = pathApi.join(fixtureRoot, 'update-report.json');
+  if (!config || typeof config !== 'object' || Array.isArray(config)
+    || typeof config.fixtureRoot !== 'string'
+    || typeof config.appData !== 'string'
+    || typeof config.report !== 'string'
+    || !samePath(config.fixtureRoot, fixtureRoot)
+    || !samePath(config.appData, expectedAppData)
+    || !samePath(config.report, expectedReport)
+    || !/^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/.test(config.expectedVersion || '')) {
+    throw new Error('Windows update fixture descriptor contains unsafe or invalid paths/version.');
+  }
+  return {
+    fixtureRoot,
+    appData: expectedAppData,
+    report: expectedReport,
+    expectedVersion: config.expectedVersion,
+  };
+}
+
 function runFixture() {
+  const smoke = loadSmokeConfig();
   const { app, autoUpdater } = loadRuntimeDependencies();
   const { mkdirSync, readFileSync, writeFileSync } = require('node:fs');
   const { UpdateCoordinator } = require('../src/update-coordinator.cjs');
 
   app.setName('Xueness');
-  const appData = resolve(process.env.XUENESS_UPDATE_SMOKE_APPDATA || app.getPath('userData'));
+  const appData = smoke.appData;
   mkdirSync(appData, { recursive: true });
   app.setPath('userData', appData);
 
-  const reportPath = resolve(process.env.XUENESS_UPDATE_SMOKE_REPORT || join(appData, 'update-smoke-report.json'));
-  const expectedVersion = process.env.XUENESS_UPDATE_SMOKE_EXPECTED_VERSION || '';
+  const reportPath = smoke.report;
+  const expectedVersion = smoke.expectedVersion;
   const configPath = join(appData, 'configs', 'desktop.json');
   const sessionPath = join(appData, 'sessions', 'fixture-session.json');
   const configSeed = { channel: 'stable', theme: 'dark', fixture: 'desktop-update-preserve' };
@@ -118,7 +155,7 @@ function runFixture() {
       return;
     }
 
-    if (!expectedVersion || !process.env.XUENESS_UPDATE_SMOKE_REPORT) {
+    if (!expectedVersion) {
       finish(2, { stage: 'error', reason: 'The isolated update smoke configuration is incomplete.' });
       return;
     }
@@ -183,5 +220,6 @@ if (require.main === module) {
 
 module.exports = {
   createFixtureBuildOptions,
+  loadSmokeConfig,
   resolveRuntimeDependencies,
 };

@@ -1,13 +1,18 @@
 """Fast contract checks for the Windows-only installed-update harness."""
 from http.server import ThreadingHTTPServer
 from pathlib import Path
+import json
 import tempfile
 import threading
 import unittest
 from urllib.error import HTTPError
 from urllib.request import Request, urlopen
 
-from desktop.scripts.check_windows_update import make_feed_handler, next_patch_version
+from desktop.scripts.check_windows_update import (
+    make_feed_handler,
+    next_patch_version,
+    write_fixture_descriptor,
+)
 
 
 class WindowsUpdateSmokeTests(unittest.TestCase):
@@ -17,6 +22,20 @@ class WindowsUpdateSmokeTests(unittest.TestCase):
         for version in ('0.1.1-beta.1', 'v0.1.1', '01.2.3', '1.2'):
             with self.subTest(version=version), self.assertRaises(ValueError):
                 next_patch_version(version)
+
+    def test_fixture_descriptor_persists_isolated_paths_outside_installed_app(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            app_data = root / 'isolated-appdata'
+            report = root / 'update-report.json'
+            descriptor_path = write_fixture_descriptor(root, app_data, report, '0.1.3')
+            descriptor = json.loads(descriptor_path.read_text(encoding='utf-8'))
+
+            self.assertEqual(descriptor_path, root / 'update-smoke-config.json')
+            self.assertEqual(descriptor['fixtureRoot'], str(root.resolve()))
+            self.assertEqual(descriptor['appData'], str((app_data / 'user-data').resolve()))
+            self.assertEqual(descriptor['report'], str(report.resolve()))
+            self.assertEqual(descriptor['expectedVersion'], '0.1.3')
 
     def test_loopback_feed_serves_allowlisted_assets_and_byte_ranges_only(self):
         with tempfile.TemporaryDirectory() as temporary:

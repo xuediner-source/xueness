@@ -169,7 +169,7 @@ def find_setup(output: Path, version: str) -> Path:
     return expected
 
 
-def isolated_environment(app_data: Path, report: Path, expected_version: str) -> dict[str, str]:
+def isolated_environment(app_data: Path) -> dict[str, str]:
     local_app_data = app_data.parent / 'LocalAppData'
     app_data.mkdir(parents=True, exist_ok=True)
     local_app_data.mkdir(parents=True, exist_ok=True)
@@ -177,10 +177,26 @@ def isolated_environment(app_data: Path, report: Path, expected_version: str) ->
         **os.environ,
         'APPDATA': str(app_data),
         'LOCALAPPDATA': str(local_app_data),
-        'XUENESS_UPDATE_SMOKE_APPDATA': str(app_data / 'user-data'),
-        'XUENESS_UPDATE_SMOKE_REPORT': str(report),
-        'XUENESS_UPDATE_SMOKE_EXPECTED_VERSION': expected_version,
     }
+
+
+def write_fixture_descriptor(work: Path, app_data: Path, report: Path, expected_version: str) -> Path:
+    descriptor = {
+        'fixtureRoot': str(work.resolve()),
+        'appData': str((app_data / 'user-data').resolve()),
+        'report': str(report.resolve()),
+        'expectedVersion': expected_version,
+    }
+    descriptor_path = work / 'update-smoke-config.json'
+    descriptor_path.write_text(json.dumps(descriptor, indent=2) + '\n', encoding='utf-8')
+    return descriptor_path
+
+
+def read_log_tail(path: Path, limit: int = 40_000) -> str:
+    try:
+        return path.read_text(encoding='utf-8', errors='replace')[-limit:]
+    except OSError:
+        return '<updater log is unavailable>'
 
 
 def run_windows_update_smoke() -> None:
@@ -197,13 +213,14 @@ def run_windows_update_smoke() -> None:
         install_root = work / 'installed-app'
         report = work / 'update-report.json'
         app_data = work / 'isolated-appdata'
+        write_fixture_descriptor(work, app_data, report, update_version)
         feed = LoopbackFeed(feed_root)
         feed.start()
         try:
             run_fixture_builder(base_build, base_version, feed.url)
             base_setup = find_setup(base_build, base_version)
             install_root.mkdir(parents=True)
-            env = isolated_environment(app_data, report, update_version)
+            env = isolated_environment(app_data)
 
             # Install the older NSIS package into a fresh, disposable location.
             installed = subprocess.run(
@@ -221,6 +238,15 @@ def run_windows_update_smoke() -> None:
             executable = install_root / 'Xueness.exe'
             if not executable.is_file():
                 raise RuntimeError('The installed NSIS fixture did not contain Xueness.exe.')
+            descriptor = json.loads((work / 'update-smoke-config.json').read_text(encoding='utf-8'))
+            runtime_fixture_root = executable.resolve().parent.parent
+            if (Path(descriptor.get('fixtureRoot', '')).resolve() != runtime_fixture_root
+                    or Path(descriptor.get('appData', '')).resolve() != (app_data / 'user-data').resolve()
+                    or Path(descriptor.get('report', '')).resolve() != report.resolve()):
+                raise RuntimeError(
+                    'The installed updater fixture descriptor does not resolve beside the install directory '
+                    'to the isolated app data and report paths.'
+                )
 
             seeded = subprocess.run(
                 [str(executable), '--seed'], cwd=work, env=env, capture_output=True,
@@ -245,28 +271,38 @@ def run_windows_update_smoke() -> None:
             # This starts the installed app's production UpdateCoordinator and
             # electron-updater. The generated app-update.yml points only at the
             # loopback feed; electron-updater's SHA-512 verification stays on.
-            updater_process = subprocess.Popen(
-                [str(executable), '--update'], cwd=work, env=env,
-                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-                creationflags=getattr(subprocess, 'CREATE_NO_WINDOW', 0),
-            )
-            deadline = time.monotonic() + 300
-            latest: dict[str, object] = {}
-            while time.monotonic() < deadline:
-                if report.is_file():
-                    try:
-                        latest = json.loads(report.read_text(encoding='utf-8'))
-                    except (OSError, json.JSONDecodeError):
-                        latest = {}
-                    if latest.get('stage') == 'error':
-                        raise RuntimeError(f'Packaged in-app update failed: {latest}')
-                    if latest.get('stage') == 'verified':
-                        break
-                if updater_process.poll() is not None and not latest:
-                    raise RuntimeError(f'Installed updater process exited early ({updater_process.returncode}).')
-                time.sleep(0.25)
-            else:
-                raise RuntimeError(f'Timed out waiting for the installed NSIS update: {latest}')
+            updater_log_path = work / 'updater-process.log'
+            with updater_log_path.open('w', encoding='utf-8', errors='replace') as updater_log:
+                updater_process = subprocess.Popen(
+                    [str(executable), '--update'], cwd=work, env=env,
+                    stdout=updater_log, stderr=subprocess.STDOUT,
+                    creationflags=getattr(subprocess, 'CREATE_NO_WINDOW', 0),
+                )
+                deadline = time.monotonic() + 300
+                latest: dict[str, object] = {}
+                while time.monotonic() < deadline:
+                    if report.is_file():
+                        try:
+                            latest = json.loads(report.read_text(encoding='utf-8'))
+                        except (OSError, json.JSONDecodeError):
+                            latest = {}
+                        if latest.get('stage') == 'error':
+                            raise RuntimeError(f'Packaged in-app update failed: {latest}')
+                        if latest.get('stage') == 'verified':
+                            break
+                    if updater_process.poll() is not None and not latest:
+                        raise RuntimeError(
+                            'Installed updater process exited early '
+                            f'({updater_process.returncode}); log tail:\n{read_log_tail(updater_log_path)}'
+                        )
+                    time.sleep(0.25)
+                else:
+                    updater_log.flush()
+                    raise RuntimeError(
+                        'Timed out waiting for the installed NSIS update: '
+                        f'{latest}; updater_process_exit={updater_process.poll()}; '
+                        f'log tail:\n{read_log_tail(updater_log_path)}'
+                    )
 
             if (latest.get('version') != update_version or latest.get('preserved') is not True
                     or latest.get('config') != {
