@@ -110,6 +110,11 @@
       "id": "sessions.timeline_follow",
       "name": "时间线跟随与回到底部",
       "nameEn": "Timeline following and return to bottom"
+    },
+    {
+      "id": "sessions.start_page",
+      "name": "空会话起始页快捷动作与最近会话",
+      "nameEn": "Empty-session start page actions and recent sessions"
     }
   ],
   "frontendModules": [
@@ -129,6 +134,7 @@
     "plugins/sessions/SessionQueue.tsx",
     "plugins/sessions/CommandPalette.tsx",
     "plugins/sessions/ConversationTimelineViewport.tsx",
-    "plugins/sessions/SessionPolling.ts"
+    "plugins/sessions/SessionPolling.ts",
+    "plugins/sessions/XuenessStartPage.tsx"
   ]
 }

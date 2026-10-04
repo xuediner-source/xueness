@@ -1,5 +1,7 @@
 # Xueness 插件架构与功能归属
 
+2026-10-05 前端体验（参照 Qoder IDE）：模型选择弹层重构为 `sessions` 的 `XuenessComposerToolbar.tsx` 内 `ComposerModelMenu`/`ComposerModelDetailCard`——顶部「标准 / 本地轻量」档位行、模型行右侧显示服务商声明的上下文窗口与推理档位、悬停/键盘聚焦弹出模型详情卡（模型 ID、协议、上下文、最大输出、推理档位与编辑入口，编辑跳转模型配置）。同轮新增的 `XuenessStartPage.tsx` 登记为 `sessions.start_page`，提供空会话起始页（左侧快捷动作块只接已有能力，右侧最近会话最多 5 条）。工作台用量速览归 `usage.quick_card`（`XuenessUsageQuickCard.tsx`）：输入框工具行的小「用量」按钮弹出本会话与今日的 Token 卡片，只统计服务商实际报告的用量，缺失不估算，usage 插件关闭时整个入口不渲染。与同日合入的 `planning.session_goal` 合计，当前完整目录包含 **27 个插件、115 项子功能**。
+
 2026-10-04 前端优化：设置搜索归 `settings.destination_search`；命令面板搜索与键盘导航归 `sessions.command_palette`；跟随消息及回到底部归 `sessions.timeline_follow`。文件逐行差异与未变上下文折叠扩展既有 `files.changes`。启动主题解析位于 settings 的 `themeBoot.ts`，会话刷新调度位于 sessions 的 `SessionPolling.ts`，均登记实际 frontendModules。当前完整目录包含 **27 个插件、108 项子功能**。令牌、跳转主要内容、加载占位及局部渲染错误边界属于既有基础 UI，不执行产品操作，也不改变插件权限。完整改动与验收见 [本轮记录](frontend-optimization-2026-10-04.md)。
 
 第二十批历史记录：2026-09-30。本轮将现有功能实现迁入独立包，同时补齐第十九批审查中的本地 Agent CLI 缺口。上游参照仍为 ZCode `29628c9`；功能范围以自用 CLI 与辅助 Web 为准。
@@ -30,12 +32,12 @@ flowchart LR
 
 | 插件 | 插件目录下的前端组件 |
 |---|---|
-| sessions | `XuenessComposerToolbar.tsx`、`XuenessConversationHistoryRail.tsx`、`XuenessRenameDialog.tsx`、`XuenessTaskList.tsx`、`XuenessTimeline.tsx`、`XuenessWorkbenchView.tsx` |
+| sessions | `XuenessComposerToolbar.tsx`、`XuenessConversationHistoryRail.tsx`、`XuenessRenameDialog.tsx`、`XuenessStartPage.tsx`、`XuenessTaskList.tsx`、`XuenessTimeline.tsx`、`XuenessWorkbenchView.tsx` |
 | files | `DirectoryBrowser.tsx`、`FileBrowser.tsx`、`DiffView.tsx` |
 | settings | `SettingsPanel.tsx`、`SettingsSections.tsx`、`SettingsPrimitives.tsx`、`XuenessSettingsView.tsx`、`XuenessShortcutsPanel.tsx`、`XuenessWorkspacePickerDialog.tsx`、`XuenessWorkspaceSettings.tsx` |
 | providers | `ProvidersPanel.tsx` |
 | mcp | `McpDiagnostics.tsx` |
-| usage | `UsagePanel.tsx`、`XuenessUsageSettings.tsx` |
+| usage | `UsagePanel.tsx`、`XuenessUsageQuickCard.tsx`、`XuenessUsageSettings.tsx` |
 | memory | `MemoryPanel.tsx` |
 | terminal | `XuenessTerminalPreferences.tsx` |
 | git | `XuenessGitView.tsx` |

@@ -89,8 +89,10 @@ import { LightweightComposerControls, lightweightLayoutActive } from "./plugins/
 import { ForkSessionDialog } from "./plugins/sessions";
 import { SessionQueue } from "./plugins/sessions/SessionQueue";
 import { Approvals, Composer, WorkbenchHeader, heroGreeting, type ComposerDraftState } from "./plugins/sessions/XuenessWorkbenchView";
+import { XuenessStartPage, type StartPageAction } from "./plugins/sessions/XuenessStartPage";
+import { XuenessUsageQuickCard } from "./plugins/usage/XuenessUsageQuickCard";
 import { IconBack, IconGear, IconNewTask, IconSearch, IconWorkflow, IconModel, IconXuenessMark } from "./ui/icons";
-import { CalendarClock, Archive, ArrowDownWideNarrow, ChevronsDownUp, Folder, Hash, MessageCirclePlus, UserRound, CircleHelp, ChevronDown, Blocks, GitBranch } from "lucide-react";
+import { CalendarClock, Archive, ArrowDownWideNarrow, ChevronsDownUp, Folder, FolderOpen, Hash, MessageCirclePlus, Sparkles, UserRound, CircleHelp, ChevronDown, Blocks, GitBranch } from "lucide-react";
 import { Select } from "./ui/Select";
 import { RegionBoundary } from "./ui/primitives";
 import { XuenessWorkspaceSettings } from "./plugins/settings/XuenessWorkspaceSettings";
@@ -1329,29 +1331,70 @@ export function XuenessWorkbenchContainer() {
     ...composerCatalog.skills.map(item => ({ ...item, kind: "skill" as const })),
     ...composerCatalog.plugins.map(item => ({ ...item, kind: "plugin" as const })),
   ];
-  const composerControls = lightweightLayout ? <LightweightComposerControls
-    enabled
-    choices={choices} onChange={updateChoices} models={composerCatalog.models}
-    loading={composerCatalogLoading} error={composerCatalogError}
-    onReload={() => void refreshComposerCatalog()}
-    onManageModels={() => setPanel(isPluginEffective("providers") ? "providers" : "plugins")}
-    runtimeBudget={session?.id === activeId ? session.runtime_budget : undefined}
-    pauseReason={session?.id === activeId ? session.pause_reason : undefined}
-    disabled={busy || branchBusy || composerRunning}
-  /> : <XuenessComposerToolbar
-    choices={choices} onChange={updateChoices} models={composerCatalog.models}
-    loading={composerCatalogLoading} error={composerCatalogError}
-    onReload={() => void refreshComposerCatalog()}
-    onManageModels={() => setPanel(isPluginEffective("providers") ? "providers" : "plugins")}
-    onBackground={isPluginEffective("workflows") ? () => setPanel("workflows") : undefined}
-    backgroundCount={composerCatalog.backgroundCount ?? 0}
-    browserEnabled={choices.browser === true}
-    onToggleBrowser={activeId !== null && isPluginEffective("browser") ? enabled => updateChoices({ browser: enabled }) : undefined}
-    disabled={busy || branchBusy || composerRunning}
-    onOpenUsage={isPluginEffective("usage") ? () => setPanel("usage") : undefined}
-    runtimeBudget={session?.id === activeId ? session.runtime_budget : undefined}
-    pauseReason={session?.id === activeId ? session.pause_reason : undefined}
+  // 用量速览属于 usage 插件：插件生效才挂载入口，会话数据由容器透传。
+  const usageQuickCard = <XuenessUsageQuickCard
+    enabled={isPluginEffective("usage")}
+    sessionProviderUsage={session?.id === activeId ? session.provider_usage : undefined}
+    onOpenPanel={isPluginEffective("usage") ? () => setPanel("usage") : undefined}
   />;
+  const composerControls = lightweightLayout ? <>
+    <LightweightComposerControls
+      enabled
+      choices={choices} onChange={updateChoices} models={composerCatalog.models}
+      loading={composerCatalogLoading} error={composerCatalogError}
+      onReload={() => void refreshComposerCatalog()}
+      onManageModels={() => setPanel(isPluginEffective("providers") ? "providers" : "plugins")}
+      runtimeBudget={session?.id === activeId ? session.runtime_budget : undefined}
+      pauseReason={session?.id === activeId ? session.pause_reason : undefined}
+      disabled={busy || branchBusy || composerRunning}
+    />
+    {usageQuickCard}
+  </> : <>
+    <XuenessComposerToolbar
+      choices={choices} onChange={updateChoices} models={composerCatalog.models}
+      loading={composerCatalogLoading} error={composerCatalogError}
+      onReload={() => void refreshComposerCatalog()}
+      onManageModels={() => setPanel(isPluginEffective("providers") ? "providers" : "plugins")}
+      onBackground={isPluginEffective("workflows") ? () => setPanel("workflows") : undefined}
+      backgroundCount={composerCatalog.backgroundCount ?? 0}
+      browserEnabled={choices.browser === true}
+      onToggleBrowser={activeId !== null && isPluginEffective("browser") ? enabled => updateChoices({ browser: enabled }) : undefined}
+      disabled={busy || branchBusy || composerRunning}
+      onOpenUsage={isPluginEffective("usage") ? () => setPanel("usage") : undefined}
+      runtimeBudget={session?.id === activeId ? session.runtime_budget : undefined}
+      pauseReason={session?.id === activeId ? session.pause_reason : undefined}
+    />
+    {usageQuickCard}
+  </>;
+  // 起始页动作块只接已有能力：工作区选择、新建任务与命令模板/技能资源视图。
+  const startPageActions: StartPageAction[] = [
+    {
+      id: "open-workspace",
+      label: tr("打开工作区"),
+      description: tr("选择一个文件夹，在其中执行任务。"),
+      Icon: FolderOpen,
+      onSelect: (trigger) => {
+        if (busy || branchBusy) return;
+        workspacePickerOpener.current = trigger;
+        setWorkspacePickerMode("workspace");
+        setWorkspacePicking(true);
+      },
+    },
+    {
+      id: "new-session",
+      label: tr("新建会话"),
+      description: tr("回到空白输入卡，立即开始新任务。"),
+      Icon: MessageCirclePlus,
+      onSelect: () => startNewTask(),
+    },
+    ...(pluginAvailability.capabilityKinds.length > 0 ? [{
+      id: "skills-commands",
+      label: tr("从模板或技能开始"),
+      description: tr("浏览命令模板与技能资源，在输入框中引用。"),
+      Icon: Sparkles,
+      onSelect: () => setPanel("capabilities"),
+    }] : []),
+  ];
   const composerStartActions = {
     canGoal: !activeId && isPluginEffective('planning'), canWorkflow: isPluginEffective("workflows"),
     onWorkflow: () => setPanel("workflows"), onPlugins: () => setPanel("plugins"),
@@ -1963,6 +2006,12 @@ export function XuenessWorkbenchContainer() {
               <button type="button" onClick={() => composerCatalogError ? void refreshComposerCatalog() : setPanel(isPluginEffective("providers") ? "providers" : "plugins")}>{tr(composerCatalogError ? "重试" : "配置模型")}</button>
             </div>}
           </div>
+          {!lightweightLayout && <XuenessStartPage
+            actions={startPageActions}
+            sessions={liveSessions}
+            locale={locale}
+            onSelectSession={selectSession}
+          />}
         </div>
       )}
 

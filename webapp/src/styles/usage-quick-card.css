@@ -1,0 +1,173 @@
+/* Workbench usage quick card (usage plugin): small trigger beside the composer
+ * tools row and its popover card. Colours inherit the shared theme tokens. */
+.xn-usage-quick {
+  position: relative;
+  display: inline-flex;
+  min-width: 0;
+}
+
+.xn-usage-quick__trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 28px;
+  min-height: 28px;
+  padding: 4px 7px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--fg-muted);
+  font: inherit;
+  font-size: 11px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.xn-usage-quick__trigger:hover:not(:disabled),
+.xn-usage-quick__trigger[aria-expanded="true"] {
+  background: var(--bg-hover);
+  color: var(--fg);
+}
+
+.xn-usage-quick__trigger:focus-visible {
+  outline: 2px solid var(--border-focus);
+  outline-offset: 1px;
+}
+
+.xn-usage-quick__card {
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + 6px);
+  z-index: 100;
+  display: grid;
+  gap: 8px;
+  width: min(264px, calc(100vw - 28px));
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--bg-popover, var(--bg-card));
+  color: var(--fg);
+  box-shadow: var(--shadow-md);
+  outline: none;
+}
+
+.xn-usage-quick__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 12px;
+}
+
+.xn-usage-quick__refresh {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--fg-muted);
+  cursor: pointer;
+}
+
+.xn-usage-quick__refresh:hover:not(:disabled) {
+  background: var(--bg-hover);
+  color: var(--fg);
+}
+
+.xn-usage-quick__refresh svg.is-spinning {
+  animation: xn-usage-quick-spin 0.8s linear infinite;
+}
+
+@keyframes xn-usage-quick-spin {
+  to { transform: rotate(360deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .xn-usage-quick__refresh svg.is-spinning { animation: none; }
+}
+
+.xn-usage-quick__section {
+  display: grid;
+  gap: 3px;
+  padding: 7px 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg-subtle);
+}
+
+.xn-usage-quick__label {
+  color: var(--fg-muted);
+  font-size: 10px;
+  font-weight: 600;
+}
+
+.xn-usage-quick__totals {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 10px;
+  margin: 0;
+  color: var(--fg-subtle);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+.xn-usage-quick__totals strong {
+  color: var(--fg);
+  font-weight: 600;
+}
+
+.xn-usage-quick__requests {
+  margin-left: auto;
+  color: var(--fg-muted);
+  font-size: 10px;
+}
+
+.xn-usage-quick__empty {
+  margin: 0;
+  color: var(--fg-muted);
+  font-size: 11px;
+}
+
+.xn-usage-quick__error {
+  margin: 0;
+  color: var(--error-fg);
+  font-size: 11px;
+  overflow-wrap: anywhere;
+}
+
+.xn-usage-quick__note {
+  margin: 0;
+  color: var(--fg-muted);
+  font-size: 10px;
+  line-height: 1.45;
+}
+
+.xn-usage-quick__open {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  min-height: 26px;
+  padding: 3px 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--fg);
+  font: inherit;
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.xn-usage-quick__open:hover {
+  background: var(--bg-hover);
+}
+
+.xn-usage-quick__card button:focus-visible {
+  outline: 2px solid var(--border-focus);
+  outline-offset: 1px;
+}

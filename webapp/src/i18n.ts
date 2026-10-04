@@ -1501,3 +1501,28 @@ Object.assign(messages, {
   "添加一个 API 配置后，可随时切换当前运行使用的模型。": "Add an API profile to switch the model used by the current run at any time.",
   "查看文档": "View docs",
 });
+
+// 模型菜单详情卡、用量速览与空会话起始页。
+Object.assign(messages, {
+  "模型 ID": "Model ID",
+  "协议": "Protocol",
+  "上下文窗口": "Context",
+  "最大输出": "Max output",
+  "推理档位": "Reasoning levels",
+  "模型详情：{0}": "Model details: {0}",
+  "快捷开始": "Quick start",
+  "最近会话": "Recent sessions",
+  "暂无最近会话": "No recent sessions",
+  "打开工作区": "Open workspace",
+  "选择一个文件夹，在其中执行任务。": "Choose a folder to work in.",
+  "新建会话": "New session",
+  "回到空白输入卡，立即开始新任务。": "Back to a blank prompt to start a new task right away.",
+  "从模板或技能开始": "Start from templates or skills",
+  "浏览命令模板与技能资源，在输入框中引用。": "Browse command templates and skill resources to reference in the prompt.",
+  "用量速览": "Usage snapshot",
+  "本会话": "This session",
+  "今日": "Today",
+  "暂无实际用量": "No reported usage yet",
+  "打开用量面板": "Open usage panel",
+  "仅统计服务商实际报告的用量，缺失部分不作估算。": "Only provider-reported usage is counted; missing values are never estimated.",
+});

@@ -308,14 +308,6 @@
   gap: 3px;
 }
 
-.xn-composer-toolbar__popover-heading,
-.xn-composer-toolbar__permission-heading {
-  padding: 5px 7px 7px;
-  color: var(--fg-subtle);
-  font-size: 10px;
-  font-weight: 600;
-}
-
 .xn-composer-toolbar__plan-toggle,
 .xn-composer-toolbar__permission-option,
 .xn-composer-toolbar__model-option,
@@ -479,11 +471,12 @@
   font-size: 10px;
 }
 
+/* Runtime profile rows sit at the top of the model popover (Qoder-style tiers). */
 .xn-composer-toolbar__runtime-profile {
   display: grid;
   gap: 2px;
-  padding: 4px 0;
-  border-top: 1px solid var(--border);
+  padding: 2px 0 6px;
+  border-bottom: 1px solid var(--border);
 }
 
 .xn-composer-toolbar__profile-option {
@@ -707,7 +700,7 @@
 
 .xn-shell-layout .xn-composer-toolbar__model-popover {
   right: 0;
-  width: min(192px, calc(100vw - 32px));
+  width: min(248px, calc(100vw - 32px));
 }
 
 .xn-shell-layout .xn-composer-toolbar__menu-row {
@@ -877,6 +870,111 @@
   flex: 0 0 auto;
   color: var(--fg-subtle);
   font-size: 10px;
+}
+
+/* Right-side row facts: context window and reasoning levels, when reported. */
+.xn-composer-toolbar__model-meta {
+  display: inline-flex;
+  flex: 0 1 auto;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.xn-composer-toolbar__model-meta small {
+  overflow: hidden;
+  color: var(--fg-subtle);
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Hover/focus detail card. Fixed positioning escapes the popover's scroll
+ * clipping; geometry comes from modelDetailCardStyle(). */
+.xn-composer-toolbar__model-detail {
+  position: fixed;
+  z-index: 101;
+  display: grid;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid var(--border-strong);
+  border-radius: 12px;
+  background: var(--bg-popover, var(--bg-card));
+  color: var(--fg);
+  box-shadow: var(--shadow-lg);
+  overflow-y: auto;
+}
+
+.xn-composer-toolbar__model-detail-name {
+  overflow: hidden;
+  font-size: 13px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.xn-composer-toolbar__model-detail-unconfigured {
+  margin-top: -4px;
+  color: var(--fg-muted);
+  font-size: 10px;
+}
+
+.xn-composer-toolbar__model-detail-facts {
+  display: grid;
+  gap: 5px;
+  margin: 0;
+}
+
+.xn-composer-toolbar__model-detail-facts > div {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.xn-composer-toolbar__model-detail-facts dt {
+  flex: 0 0 auto;
+  color: var(--fg-muted);
+  font-size: 11px;
+}
+
+.xn-composer-toolbar__model-detail-facts dd {
+  min-width: 0;
+  margin: 0;
+  overflow: hidden;
+  color: var(--fg);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  text-align: right;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.xn-composer-toolbar__model-detail-edit {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  min-height: 26px;
+  padding: 3px 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--fg);
+  font: inherit;
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.xn-composer-toolbar__model-detail-edit:hover {
+  background: var(--bg-hover);
+}
+
+.xn-composer-toolbar__model-detail button:focus-visible {
+  outline: 2px solid var(--border-focus);
+  outline-offset: 1px;
 }
 
 .xn-shell-layout .xn-composer-toolbar__model-footer {
