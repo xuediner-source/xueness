@@ -19,6 +19,8 @@ export default defineConfig({
     output: { manualChunks(id) {
       // Give the shared React runtime a stable cache identity across plugin chunks.
       if (/node_modules\/(react|react-dom|scheduler)\//.test(id)) return 'react-vendor';
+      if (/node_modules\/(micromark|mdast|unist|unified|vfile|hast|property-information|remark|react-markdown)/.test(id)) return 'markdown-vendor';
+      if (/node_modules\/(@radix-ui|@floating-ui)/.test(id)) return 'radix-vendor';
     } },
   } },
   // Keep ES workers enabled for the dynamically loaded Office/PPTX renderer.

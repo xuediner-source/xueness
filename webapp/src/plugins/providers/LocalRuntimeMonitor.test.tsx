@@ -16,6 +16,17 @@ test('monitor stays absent outside lightweight mode', () => {
   assert.equal(renderToStaticMarkup(<LocalRuntimeMonitor lightweight={false} session={null} />), '');
 });
 
+test('calibrated budget stays labelled as an estimate and counts cached context', () => {
+  const html = renderToStaticMarkup(<RuntimeMonitorDetails lightweight session={{
+    runtime_budget: { estimatedInputTokens: 2500, inputBudgetTokens: 6144,
+      reservedOutputTokens: 1024, safetyReserveTokens: 512, calibrationFactor: 1.25 },
+  }} />);
+  assert.match(html, /输入预算估算/);
+  assert.match(html, /已按实际输入用量校准估算/);
+  assert.match(html, /1\.25/);
+  assert.match(html, /缓存 Token 仍占上下文/);
+});
+
 test('monitor defaults to a compact collapsed button without mounting resource sampling details', () => {
   const html = renderToStaticMarkup(<LocalRuntimeMonitor lightweight session={{ runtime_activity: { phase: 'generating' } }} />);
   assert.match(html, /本机资源/);

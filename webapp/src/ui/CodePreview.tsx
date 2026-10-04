@@ -38,7 +38,11 @@ const THEME_LOADERS = {
 } satisfies Record<CodePreviewTheme, () => Promise<{ default: unknown }>>;
 
 type PreviewHighlighter = Awaited<ReturnType<typeof import("shiki/dist/core.mjs").createHighlighterCore>>;
-const highlighterCache = new Map<string, Promise<PreviewHighlighter>>();
+
+let sharedHighlighterPromise: Promise<PreviewHighlighter> | null = null;
+let sharedHighlighter: PreviewHighlighter | null = null;
+const loadedThemesSet = new Set<string>();
+const loadedLangsSet = new Set<string>();
 
 const LANGUAGE_LOADERS = {
   typescript: () => import("shiki/dist/langs/typescript.mjs"),
@@ -59,34 +63,58 @@ const LANGUAGE_LOADERS = {
   sql: () => import("shiki/dist/langs/sql.mjs"),
 };
 export type CodeLanguage = keyof typeof LANGUAGE_LOADERS;
+
+export function getLoadedHighlighter(theme: CodePreviewTheme, language: CodeLanguage | "text"): PreviewHighlighter | null {
+  if (!sharedHighlighter) return null;
+  if (!loadedThemesSet.has(theme)) return null;
+  if (language !== "text" && !loadedLangsSet.has(language)) return null;
+  return sharedHighlighter;
+}
+
 export function loadHighlighter(themes: readonly CodePreviewTheme[], language: CodeLanguage = "typescript"): Promise<PreviewHighlighter> {
   const themeNames = [...new Set(themes)].sort();
-  const cacheKey = `${themeNames.join("|")}:${language}`;
-  const cached = highlighterCache.get(cacheKey);
-  if (cached) return cached;
-
-  const task = Promise.all([
-    Promise.all(themeNames.map((theme) => THEME_LOADERS[theme]())),
-    LANGUAGE_LOADERS[language](),
-    import("shiki/dist/wasm.mjs"),
-    import("shiki/dist/core.mjs"),
-    import("shiki/dist/engine-oniguruma.mjs"),
-  ]).then(([loadedThemes, language, wasm, { createHighlighterCore }, { createOnigurumaEngine }]) => createHighlighterCore({
-    themes: loadedThemes.map(({ default: theme }) => theme),
-    langs: [language.default],
-    engine: createOnigurumaEngine(wasm.default),
-    warnings: false,
-  }));
-
-  highlighterCache.set(cacheKey, task);
-  if (highlighterCache.size > 4) {
-    const oldestKey = highlighterCache.keys().next().value;
-    if (oldestKey !== undefined && oldestKey !== cacheKey) highlighterCache.delete(oldestKey);
+  if (!sharedHighlighterPromise) {
+    sharedHighlighterPromise = Promise.all([
+      import("shiki/dist/wasm.mjs"),
+      import("shiki/dist/core.mjs"),
+      import("shiki/dist/engine-oniguruma.mjs"),
+    ]).then(([wasm, { createHighlighterCore }, { createOnigurumaEngine }]) =>
+      createHighlighterCore({
+        themes: [],
+        langs: [],
+        engine: createOnigurumaEngine(wasm.default),
+        warnings: false,
+      })
+    ).then((hl) => {
+      sharedHighlighter = hl;
+      return hl;
+    }).catch((err) => {
+      sharedHighlighterPromise = null;
+      sharedHighlighter = null;
+      throw err;
+    });
   }
-  task.catch(() => {
-    if (highlighterCache.get(cacheKey) === task) highlighterCache.delete(cacheKey);
+
+  return sharedHighlighterPromise.then(async (hl) => {
+    const missingThemes = themeNames.filter((t) => !loadedThemesSet.has(t));
+    const missingLang = !loadedLangsSet.has(language) ? language : null;
+
+    if (missingThemes.length > 0) {
+      const loaded = await Promise.all(missingThemes.map((t) => THEME_LOADERS[t]()));
+      for (let i = 0; i < missingThemes.length; i++) {
+        await hl.loadTheme((loaded[i] as { default: any }).default);
+        loadedThemesSet.add(missingThemes[i]);
+      }
+    }
+
+    if (missingLang) {
+      const langMod = await LANGUAGE_LOADERS[missingLang]();
+      await hl.loadLanguage((langMod as { default: any }).default);
+      loadedLangsSet.add(missingLang);
+    }
+
+    return hl;
   });
-  return task;
 }
 
 export function isCodePreviewTheme(value: unknown): value is CodePreviewTheme {

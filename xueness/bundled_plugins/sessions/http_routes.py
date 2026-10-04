@@ -25,12 +25,15 @@ def _public_runtime_budget(session):
     if not isinstance(raw, dict):
         return None
     result = {key: raw[key] for key in ('contextWindow', 'reservedOutputTokens', 'safetyReserveTokens', 'inputBudgetTokens',
-              'estimatedInputTokens', 'previousEstimatedTokens', 'omittedMessages', 'activeTools')
+              'estimatedInputTokens', 'previousEstimatedTokens', 'baseEstimatedInputTokens', 'checkpointChars', 'omittedMessages', 'activeTools')
               if type(raw.get(key)) is int and 0 <= raw[key] <= 100000000}
     if raw.get('profile') == 'lightweight':
         result['profile'] = 'lightweight'
     if raw.get('estimateMethod') == 'utf8-bytes/2':
         result['estimateMethod'] = raw['estimateMethod']
+    factor = raw.get('calibrationFactor')
+    if type(factor) in (int, float) and 1 <= factor <= 8:
+        result['calibrationFactor'] = factor
     if type(raw.get('overflowRetry')) is bool:
         result['overflowRetry'] = raw['overflowRetry']
     return result

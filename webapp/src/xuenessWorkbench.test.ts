@@ -23,6 +23,9 @@ import {
   hydrateTimelineJournalRows,
   withAssistantStream,
   withInitialUserMessage,
+  stabilizeTimelineRows,
+  stabilizeSession,
+  stabilizeSessionList,
   type PendingApproval,
 } from "./xuenessWorkbench";
 import type { XuenessEventV1 } from "./xuenessEvents";
@@ -1195,5 +1198,88 @@ describe("toTimelineRows", () => {
     const snapshot = structuredClone(events);
     toTimelineRows(events);
     assert.deepEqual(events, snapshot);
+  });
+});
+
+describe("structural sharing stabilization", () => {
+  it("stabilizeTimelineRows returns the identical array instance when rows match", () => {
+    const prev: any[] = [
+      { kind: "user", seq: 1, turnId: "t1", text: "hello" },
+      { kind: "assistant", seq: 2, turnId: "t1", text: "world", streaming: false },
+    ];
+    const next: any[] = [
+      { kind: "user", seq: 1, turnId: "t1", text: "hello" },
+      { kind: "assistant", seq: 2, turnId: "t1", text: "world", streaming: false },
+    ];
+    const result = stabilizeTimelineRows(prev, next);
+    assert.equal(result, prev);
+    assert.equal(result[0], prev[0]);
+    assert.equal(result[1], prev[1]);
+  });
+
+  it("stabilizeTimelineRows reuses unchanged row instances when new rows append", () => {
+    const prev: any[] = [
+      { kind: "user", seq: 1, turnId: "t1", text: "hello" },
+    ];
+    const next: any[] = [
+      { kind: "user", seq: 1, turnId: "t1", text: "hello" },
+      { kind: "assistant", seq: 2, turnId: "t1", text: "new response", streaming: true },
+    ];
+    const result = stabilizeTimelineRows(prev, next);
+    assert.notEqual(result, prev);
+    assert.equal(result[0], prev[0]); // reused previous instance!
+    assert.equal(result[1], next[1]);
+  });
+
+  it("stabilizeSession returns the same session instance when data has not changed", () => {
+    const prev: any = {
+      id: "s1", status: "completed", task: "do something", title: "Task 1",
+      pinned: false, root: "/ws", streaming: null, todos: [], queued_messages: [],
+    };
+    const next: any = {
+      id: "s1", status: "completed", task: "do something", title: "Task 1",
+      pinned: false, root: "/ws", streaming: null, todos: [], queued_messages: [],
+    };
+    assert.equal(stabilizeSession(prev, next), prev);
+  });
+
+  it("stabilizeSession returns new session instance when streaming status updates", () => {
+    const prev: any = {
+      id: "s1", status: "running", task: "do something",
+      streaming: { id: "turn1", status: "streaming", text: "foo" },
+    };
+    const next: any = {
+      id: "s1", status: "running", task: "do something",
+      streaming: { id: "turn1", status: "streaming", text: "foo bar" },
+    };
+    assert.notEqual(stabilizeSession(prev, next), prev);
+  });
+
+  it("stabilizeSessionList returns the identical array when sessions match", () => {
+    const prev: any[] = [
+      { id: "s1", task: "task 1", title: "Title 1", status: "completed", pinned: true },
+      { id: "s2", task: "task 2", title: "Title 2", status: "running", pinned: false },
+    ];
+    const next: any[] = [
+      { id: "s1", task: "task 1", title: "Title 1", status: "completed", pinned: true },
+      { id: "s2", task: "task 2", title: "Title 2", status: "running", pinned: false },
+    ];
+    const result = stabilizeSessionList(prev, next);
+    assert.equal(result, prev);
+  });
+
+  it("stabilizeSessionList reuses unchanged item references when one status changes", () => {
+    const prev: any[] = [
+      { id: "s1", task: "task 1", title: "Title 1", status: "running", pinned: false },
+      { id: "s2", task: "task 2", title: "Title 2", status: "completed", pinned: true },
+    ];
+    const next: any[] = [
+      { id: "s1", task: "task 1", title: "Title 1", status: "completed", pinned: false },
+      { id: "s2", task: "task 2", title: "Title 2", status: "completed", pinned: true },
+    ];
+    const result = stabilizeSessionList(prev, next);
+    assert.notEqual(result, prev);
+    assert.equal(result[1], prev[1]); // s2 reused!
+    assert.equal(result[0], next[0]); // s1 updated!
   });
 });

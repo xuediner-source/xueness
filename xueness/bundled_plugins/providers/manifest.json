@@ -22,16 +22,33 @@
   ],
   "modules": [
     "activity",
+    "context_budget",
     "lightweight",
     "lightweight_config",
     "operator_cli",
     "provider",
     "provider_config",
     "providers_api",
+    "response_metadata",
     "runtime_options",
     "tooling"
   ],
   "features": [
+    {
+      "id": "providers.termination",
+      "name": "生成结束原因与截断安全暂停",
+      "nameEn": "Generation termination and safe truncation pause"
+    },
+    {
+      "id": "providers.budget_feedback",
+      "name": "实际用量校准与缓存容量计入",
+      "nameEn": "Measured budget calibration including cached context"
+    },
+    {
+      "id": "providers.checkpoints",
+      "name": "用户要求保留与可追溯历史摘要",
+      "nameEn": "Preserved human requirements and traceable history checkpoints"
+    },
     {
       "id": "providers.profiles",
       "name": "模型配置保存、选择与切换",

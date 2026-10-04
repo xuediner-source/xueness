@@ -41,6 +41,9 @@ import {
   withInitialUserMessage,
   loadCompleteTimeline,
   withAssistantStream,
+  stabilizeSession,
+  stabilizeSessionList,
+  stabilizeTimelineRows,
   type ArchivedSummary,
   type ForkSessionResponse,
   type FileChangeSet,
@@ -456,7 +459,7 @@ export function XuenessWorkbenchContainer() {
     const res = await listSessions();
     if (!pluginEffectiveRef.current("sessions")) return;
     if (res.ok) {
-      setSessions(res.value);
+      setSessions(prev => stabilizeSessionList(prev, res.value));
       if (stoppingSessionsRef.current.size > 0) {
         const runningIds = new Set(res.value.filter(s => s.status === "running").map(s => s.id));
         for (const id of Array.from(stoppingSessionsRef.current)) {
@@ -466,7 +469,10 @@ export function XuenessWorkbenchContainer() {
         }
       }
     }
-    setDataErrors(previous => ({ ...previous, list: res.ok ? "" : res.error }));
+    setDataErrors(previous => {
+      const nextList = res.ok ? "" : res.error;
+      return previous.list === nextList ? previous : { ...previous, list: nextList };
+    });
   }, [isPluginEffective]);
   const listLoaderRef = useRef(refreshListSnapshot);
   listLoaderRef.current = refreshListSnapshot;
@@ -518,13 +524,27 @@ export function XuenessWorkbenchContainer() {
     ]);
     if (activeIdRef.current !== id || !pluginEffectiveRef.current("sessions")) return;
     if (detail.ok) {
-      setSession(detail.value);
+      setSession(prev => stabilizeSession(prev, detail.value));
       if (detail.value.status !== "running" && detail.value.streaming?.status !== "streaming") {
         trackSessionId(stoppingSessionsRef, setStoppingSessions, id, false);
       }
     }
-    if (timeline.ok) setRows(withInitialUserMessage(hydrateTimelineJournalRows(hydrateTimelineTools(toTimelineRows(timeline.value.events), journal.ok ? journal.value : null), journal.ok ? journal.value : null, detail.ok ? detail.value.reasoning_history : []), journal.ok ? journal.value : null, detail.ok ? detail.value.task : undefined));
-    setDataErrors(previous => ({ ...previous, active: !detail.ok ? detail.error : !timeline.ok ? timeline.error : "" }));
+    if (timeline.ok) {
+      const nextRows = withInitialUserMessage(
+        hydrateTimelineJournalRows(
+          hydrateTimelineTools(toTimelineRows(timeline.value.events), journal.ok ? journal.value : null),
+          journal.ok ? journal.value : null,
+          detail.ok ? detail.value.reasoning_history : []
+        ),
+        journal.ok ? journal.value : null,
+        detail.ok ? detail.value.task : undefined
+      );
+      setRows(prevRows => stabilizeTimelineRows(prevRows, nextRows));
+    }
+    setDataErrors(previous => {
+      const nextActive = !detail.ok ? detail.error : !timeline.ok ? timeline.error : "";
+      return previous.active === nextActive ? previous : { ...previous, active: nextActive };
+    });
     // @ 文件提及候选：会话工作区文件列表（失败静默，composer 不出建议）。
     if (includeFiles && pluginEffectiveRef.current("files")) {
       const listing = await loadFiles(id);
@@ -1657,6 +1677,13 @@ export function XuenessWorkbenchContainer() {
     });
   }, [sessions, stoppingSessions, runRequestSessions, activeId, session?.id, session?.status, session?.streaming?.status]);
 
+  const displayTimelineRows = useMemo(() => withAssistantStream(rows, session?.streaming), [rows, session?.streaming]);
+  const timelineGrouping = useMemo(() => ({
+    explore: settingsValues.toolGroupingExploreEnabled !== false,
+    terminal: settingsValues.toolGroupingTerminalEnabled !== false,
+    changes: settingsValues.toolGroupingChangesEnabled === true,
+  }), [settingsValues.toolGroupingExploreEnabled, settingsValues.toolGroupingTerminalEnabled, settingsValues.toolGroupingChangesEnabled]);
+
   return (
     <CodeDisplayProvider settings={settingsValues.codePreviewSettings} dark={String(settingsValues.theme) === "dark" || (settingsValues.theme === "system" && systemDark)}>
     <DesktopTrayBridge enabled={isPluginEffective('desktop')} sessionsEnabled={isPluginEffective('sessions')} busy={busy}
@@ -1829,10 +1856,10 @@ export function XuenessWorkbenchContainer() {
             queuedMessages={session.queued_messages}
           >
             {settingsValues.showTodos !== false && <TaskTodos todos={session.todos ?? []} />}
-            <TimelineStream rows={withAssistantStream(rows, session.streaming)} collapseTools={settingsValues.collapseTools !== false} messageStreamShowReasoning={settingsValues.messageStreamShowReasoning !== false}
+            <TimelineStream rows={displayTimelineRows} collapseTools={settingsValues.collapseTools !== false} messageStreamShowReasoning={settingsValues.messageStreamShowReasoning !== false}
               jsonToolProtocol={session.model_selection?.tool_calling === "json" && activeRuntimeProfile === "lightweight" && session.streaming?.text_format !== "markdown"}
               protocolModePending={activeSessionRunning && activeRuntimeProfile === "lightweight" && session.streaming?.text_format !== "markdown" && session.model_selection?.tool_calling === "json" && false}
-              streamingPending={activeSessionRunning} grouping={{ explore: settingsValues.toolGroupingExploreEnabled !== false, terminal: settingsValues.toolGroupingTerminalEnabled !== false, changes: settingsValues.toolGroupingChangesEnabled === true }} />
+              streamingPending={activeSessionRunning} grouping={timelineGrouping} />
             <SessionQueue items={session.queued_messages ?? []} cancellingId={queueCancelling?.sessionId === session.id ? queueCancelling.queueId : null} onCancel={handleCancelQueuedTurn}
               canContinue={session.status !== "running" && session.streaming?.status !== "streaming" && (session.queued_messages ?? []).some(item => item.status === "paused")}
               continuing={queueContinuingSessions.has(session.id)} onContinue={handleContinueQueuedMessages} />

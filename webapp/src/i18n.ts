@@ -4,6 +4,9 @@ const listeners = new Set<() => void>();
 let locale: Locale = 'zh';
 try { if (typeof localStorage !== 'undefined' && localStorage.getItem('xueness.language') === 'en') locale = 'en'; } catch { /* Private browsing. */ }
 export const messages: Record<string, string> = {
+  "回答尚未完成": "Answer incomplete",
+  "已按实际输入用量校准估算": "Estimate calibrated against reported input usage",
+  "缓存 Token 仍占上下文": "Cached tokens still occupy context",
   "插件市场": "Plugin marketplace",
   "模型配置、模型发现、本地轻量模式与接口兼容诊断": "Model profiles, discovery, local lightweight mode and compatibility diagnostics",
   "网络工具": "Network tools",

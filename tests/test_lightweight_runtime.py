@@ -98,7 +98,7 @@ class LightweightTests(unittest.TestCase):
         self.assertFalse(bad['ok'])
 
     def test_read_file_page_unicode_and_denial(self):
-        (self.root / 'data.txt').write_text('甲乙丙丁' * 5000)
+        (self.root / 'data.txt').write_text('甲乙丙丁' * 5000, encoding='utf-8')
         page = dispatch(self.root, self.gate, 'read', {'path': 'data.txt', 'offset': 2, 'limit': 4})
         self.assertEqual(page['output'], '丙丁甲乙')
         self.assertEqual(page['nextOffset'], 6)
@@ -125,7 +125,7 @@ class LightweightTests(unittest.TestCase):
         session = self.session('中文' * 20000)
         result = run(session, self.store, self.provider, self.gate)
         self.assertEqual(result['status'], 'paused')
-        self.assertIn('context budget', result['pause_reason'])
+        self.assertIn('输入预算', result['pause_reason'])
         self.assertEqual(self.provider.requests, [])
         self.assertEqual(result['messages'][1]['content'], '中文' * 20000)
 

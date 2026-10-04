@@ -1237,7 +1237,8 @@ def _drive_run(session: dict, store: Store, provider, gate: Gate, max_steps=8, m
                 'Keep the summary and observations unchanged. Use evidence_id from the following '
                 'host-issued successful references: ' + json.dumps(evidence_aliases(session), ensure_ascii=False))
     repair = reference_repair_prompt() if evidence_repair_active else None
-    context_shrink = 1.0
+    context_shrink = (light_options['overflowRetryRatio']
+                      if light and session.get('runtime_context_recovery') is True else 1.0)
     overflow_retried = False
     for _ in range(max_steps):
         # Cooperative stop: settle at a journal boundary, not mid-tool-call.
@@ -1320,7 +1321,8 @@ def _drive_run(session: dict, store: Store, provider, gate: Gate, max_steps=8, m
                 tool_catalog, active_tools = lightweight.select_tools(tool_catalog, session, gate, provider)
                 prompt, session['runtime_budget'] = lightweight.prompt_view(
                     session['messages'], active_tools, provider, max_chars=max_chars,
-                    max_tokens=max_tokens, injected=injected, shrink=context_shrink, repair=repair, host_instructions=host_guidance)
+                    max_tokens=max_tokens, injected=injected, shrink=context_shrink, repair=repair, host_instructions=host_guidance,
+                    calibration=session.get('runtime_budget_calibration'))
                 if getattr(provider, 'tool_calling', 'native') == 'json':
                     prompt = lightweight.text_messages(prompt)
             stream = getattr(provider, "stream", None)
@@ -1439,7 +1441,8 @@ def _drive_run(session: dict, store: Store, provider, gate: Gate, max_steps=8, m
                 context_shrink = light_options['overflowRetryRatio']
                 prompt, session['runtime_budget'] = lightweight.prompt_view(
                     session['messages'], active_tools, provider, max_chars=max_chars,
-                    max_tokens=max_tokens, injected=injected, shrink=context_shrink, repair=repair, host_instructions=host_guidance)
+                    max_tokens=max_tokens, injected=injected, shrink=context_shrink, repair=repair, host_instructions=host_guidance,
+                    calibration=session.get('runtime_budget_calibration'))
                 session['runtime_budget']['overflowRetry'] = True
                 if getattr(provider, 'tool_calling', 'native') == 'json':
                     prompt = lightweight.text_messages(prompt)
@@ -1462,8 +1465,16 @@ def _drive_run(session: dict, store: Store, provider, gate: Gate, max_steps=8, m
                 response.pop('_request_attempts', None)
             safe_usage = _bounded_provider_metadata(usage)
             safe_cost = _bounded_provider_metadata(cost)
+            from .bundled_plugins.providers.response_metadata import finish_reason, incomplete_reason
+            finish = finish_reason(response.pop('_finish_reason', None))
+            incomplete = incomplete_reason(finish, safe_usage, provider)
+            if light and not incomplete:
+                session.pop('runtime_context_recovery', None)
+            if light:
+                from .bundled_plugins.providers.context_budget import observe_usage
+                observe_usage(session, provider, safe_usage)
             if activity is not None:
-                activity.complete(response, safe_usage, request_attempts)
+                activity.complete(response, safe_usage, request_attempts, finish=finish, termination=incomplete)
             if safe_usage is not None or safe_cost is not None:
                 record = {"step": session.get("steps", 0) + 1,
                           "at": datetime.now(timezone.utc).isoformat()}
@@ -1495,6 +1506,9 @@ def _drive_run(session: dict, store: Store, provider, gate: Gate, max_steps=8, m
                 if len(history) > PROVIDER_USAGE_MAX:
                     del history[:-PROVIDER_USAGE_MAX]
                 save_session()
+            if incomplete:
+                response = {'content': lightweight.partial_answer(
+                    response, light and getattr(provider, 'tool_calling', 'native') == 'json')}
             response = validate_message(response)
         except lightweight.ContextBudgetError as exc:
             session['status'] = 'paused'
@@ -1530,6 +1544,34 @@ def _drive_run(session: dict, store: Store, provider, gate: Gate, max_steps=8, m
                     record["interrupted_at"] = datetime.now(timezone.utc).isoformat()
                     save_session()
             return settle_stopped()
+        if incomplete:
+            from .bundled_plugins.providers.response_metadata import pause_message
+            if light and incomplete == 'context_limit':
+                session['runtime_context_recovery'] = True
+            session['messages'].append({'role': 'assistant', 'content': response.get('content') or ''})
+            session['steps'] += 1
+            record = session.pop('streaming', None)
+            if isinstance(record, dict):
+                record.update(status='interrupted', interrupted=True,
+                              final_message_index=len(session['messages']) - 1,
+                              completed_at=datetime.now(timezone.utc).isoformat())
+                _archive_stream(session, record)
+                _append_reasoning_history(session, len(session['messages']) - 1, record.get('reasoning', ''))
+            summary = pause_message(incomplete)
+            completion = {'status': 'incomplete', 'verified': False, 'summary': summary,
+                          'error_code': 'generation_' + incomplete, 'finish_reason': finish,
+                          'evidence': [], 'evidence_count': 0,
+                          'tool_execution_status': _tool_execution_status(session, _current_turn_tool_ids(session)),
+                          'tool_execution_success': False, 'delivery_status': 'not_assessed',
+                          'turn_id': _turn_id(session)}
+            session.update(status='paused', pause_reason=summary, completion=completion)
+            _record_completion_history(session, completion)
+            fire_stop()
+            save_session()
+            _emit_event(on_event, 'assistant', text=response.get('content') or '')
+            _emit_event(on_event, 'status', status='paused', steps=session['steps'],
+                        reason=summary, completion_status='incomplete', verified=False)
+            return session
         calls = response.get("tool_calls") or []
         if protocol_error:
             if activity is not None:

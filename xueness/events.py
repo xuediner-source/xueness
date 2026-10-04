@@ -141,7 +141,7 @@ def derive_events(session: dict) -> list[dict]:
                       evidenceCount=count if type(count) is int and count >= 0 else
                       len(evidence) if isinstance(evidence, list) else 0)
         optional = (
-            ('status', 'status', ('verified', 'unverified', 'not_applicable')),
+            ('status', 'status', ('verified', 'unverified', 'not_applicable', 'incomplete')),
             ('tool_execution_status', 'toolExecutionStatus', ('succeeded', 'failed', 'incomplete', 'not_applicable')),
             ('delivery_status', 'deliveryStatus', ('passed', 'failed', 'not_assessed')),
         )

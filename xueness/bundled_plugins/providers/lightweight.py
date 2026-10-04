@@ -11,6 +11,7 @@ import math
 import re
 import uuid
 from .lightweight_config import effective_options
+from .context_budget import calibration_factor, history_digest
 
 BASE_TOOLS = frozenset({'read', 'write', 'edit', 'exec',
                         'ask_user', 'tool_search', 'tool_result_read'})
@@ -108,7 +109,7 @@ def select_tools(catalog, session, gate, provider=None):
     if any(not row.get('collected') for row in session.get('subagent_coordination', {}).values()):
         # A launched task must remain collectable even in a minimal tool window.
         names = names | {'task_collect'}
-    return catalog, [s for s in catalog if tool_name(s) in names]
+    return catalog, sorted((s for s in catalog if tool_name(s) in names), key=tool_name)
 
 
 def estimate_tokens(value):
@@ -125,9 +126,30 @@ def _window_result(message, limit=1400):
         result = json.loads(content)
     except ValueError:
         result = {}
-    view = {k: result[k] for k in ('ok', 'error', 'exit_code', 'path', 'denied', 'evidence_id', 'error_code', 'retryable', 'user_reason')
-            if isinstance(result, dict) and k in result}
-    view.update({'preview_untrusted': content[:max(100, limit - 400)], 'truncated_in_prompt': True,
+    view = {k: result[k] for k in ('ok', 'error', 'exit_code', 'path', 'denied', 'evidence_id', 'error_code', 'retryable', 'user_reason', 'sourceType', 'provenance')
+             if isinstance(result, dict) and k in result}
+    rows = result.get('output') if isinstance(result, dict) else None
+    if isinstance(rows, list) and any(isinstance(row, dict) and 'url' in row for row in rows):
+        # Preserve source URLs, titles and relevant excerpts instead of cutting
+        # arbitrary JSON mid-URL. Search-model provenance remains unverified.
+        sources, seen = [], set()
+        for row in rows:
+            if not isinstance(row, dict) or not isinstance(row.get('url'), str):
+                continue
+            url = row['url']
+            if url in seen:
+                continue
+            seen.add(url)
+            item = {k: row[k] for k in ('title', 'url') if isinstance(row.get(k), str)}
+            item['excerpt_untrusted'] = str(row.get('description', row.get('snippet', '')))[:300]
+            candidate = {**view, 'sources_untrusted': sources + [item]}
+            if len(json.dumps(candidate, ensure_ascii=False)) > max(100, limit - 400):
+                break
+            sources.append(item)
+        view['sources_untrusted'] = sources
+    if not view.get('sources_untrusted'):
+        view['preview_untrusted'] = content[:max(100, limit - 400)]
+    view.update({'truncated_in_prompt': True,
                  'full_result_tool_call_id': message.get('tool_call_id'),
                  'read_more': 'tool_result_read with this tool_call_id, offset and limit'})
     return {**message, 'content': json.dumps(view, ensure_ascii=False)}
@@ -144,7 +166,7 @@ def _units(messages):
 
 
 def prompt_view(messages, tools, provider, *, max_chars=24000, max_tokens=None,
-                injected=(), shrink=1.0, repair=None, host_instructions=()):
+                 injected=(), shrink=1.0, repair=None, host_instructions=(), calibration=None):
     context = getattr(provider, 'context_window', None) or 8192
     output = getattr(provider, 'max_output_tokens', None) or 1024
     options = effective_options(provider)
@@ -184,18 +206,28 @@ def prompt_view(messages, tools, provider, *, max_chars=24000, max_tokens=None,
     # Original and latest human messages survive verbatim. Optional memory is
     # the first removable unit, not the original task.
     human_indices = user_indices[1:] if has_injected else user_indices
-    protected = set(human_indices[:1] + human_indices[-1:])
+    protected = set(human_indices)
     retained = list(range(len(units)))
     omitted = 0
+    removed = []
+    digest_limit = min(2400, max(400, budget // 3))
+    factor = calibration_factor(calibration, provider)
 
     def build():
         prefix = [{'role': 'system', 'content': system}]
-        if omitted:
-            prefix[0]['content'] += ('\nOlder exchanges are omitted from this request; '
-                                     'the durable session journal retains them. Search history if needed.')
-        return prefix + [m for i in retained for m in units[i]]
+        # Keep the system prefix stable as history pressure changes. A quoted
+        # checkpoint belongs at the first omitted exchange, after the task.
+        for i in range(len(units)):
+            if removed and i == removed[0]:
+                prefix.append({'role': 'user', 'content': history_digest(units, removed, digest_limit)})
+            if i in retained:
+                prefix.extend(units[i])
+        return prefix
 
     def cost(view):
+        return math.ceil(base_cost(view) * factor)
+
+    def base_cost(view):
         return estimate_tokens({'messages': text_messages(view) if json_mode else view,
                                 'tools': [] if json_mode else tools})
 
@@ -209,15 +241,23 @@ def prompt_view(messages, tools, provider, *, max_chars=24000, max_tokens=None,
         if cost(view) <= budget and len(json.dumps(view, ensure_ascii=False)) <= max_chars:
             break
         retained.remove(i)
+        removed.append(i)
         omitted += len(units[i])
         view = build()
+    # Prefer a shorter checkpoint over discarding a human requirement or the
+    # latest tool exchange. Full journal/evidence is never rewritten.
+    while omitted and digest_limit > 400 and (cost(view) > budget or len(json.dumps(view, ensure_ascii=False)) > max_chars):
+        digest_limit = max(400, digest_limit // 2)
+        view = build()
     if cost(view) > budget or len(json.dumps(view, ensure_ascii=False)) > max_chars:
-        raise ContextBudgetError('The original task, latest message and current tool schemas exceed the local context budget. Shorten the input or increase the configured context window.')
+        raise ContextBudgetError('用户任务、补充要求和当前工具记录超过输入预算。请缩短输入或新建会话；宿主不会静默丢弃用户要求，也不会挤占预留输出空间。')
     stats = {'profile': 'lightweight', 'contextWindow': context, 'reservedOutputTokens': output,
              'safetyReserveTokens': reserve,
              'inputBudgetTokens': budget, 'estimatedInputTokens': cost(view),
-             'previousEstimatedTokens': previous, 'estimateMethod': 'utf8-bytes/2',
-             'omittedMessages': omitted, 'activeTools': len(tools)}
+              'previousEstimatedTokens': previous, 'estimateMethod': 'utf8-bytes/2',
+              'baseEstimatedInputTokens': base_cost(view), 'calibrationFactor': factor,
+              'checkpointChars': len(history_digest(units, removed, digest_limit)) if omitted else 0,
+              'omittedMessages': omitted, 'activeTools': len(tools)}
     return view, stats
 
 
@@ -346,3 +386,28 @@ def normalize_native_response(response):
         calls.append({**call, 'function': fn})
     normalized['tool_calls'] = calls
     return normalized
+
+
+def partial_answer(response, json_mode=False):
+    content = response.get('content')
+    if not isinstance(content, str):
+        return ''
+    if not json_mode:
+        return _unicode_prefix(content)
+    try:
+        obj = json.loads(content)
+    except ValueError:
+        obj = None
+    if isinstance(obj, dict) and set(obj) <= {'answer', 'summary', 'evidence'}:
+        value = obj.get('answer', obj.get('summary'))
+        if isinstance(value, str):
+            return _unicode_prefix(value)
+    # Never expose a cut-off tool object as an answer or try to execute it.
+    return stream_answer_text(content)
+
+
+def _unicode_prefix(text):
+    for index, char in enumerate(text):
+        if 0xD800 <= ord(char) <= 0xDFFF:
+            return text[:index]
+    return text

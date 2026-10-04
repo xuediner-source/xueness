@@ -517,7 +517,7 @@ function ToolStatusIcon({ status, terminal = false }: { status?: string; termina
   );
 }
 
-export function TimelineCard({
+export const TimelineCard = React.memo(function TimelineCard({
   role,
   name,
   subject,
@@ -669,7 +669,7 @@ export function TimelineCard({
       </div>
     </div>
   );
-}
+});
 
 const MARKDOWN_CODE_LANGUAGES: Record<string, CodeLanguage> = {
   bash: "bash", sh: "bash", shell: "bash", zsh: "bash",
@@ -763,13 +763,15 @@ const markdownComponents: Components = {
   },
 };
 
+const REMARK_PLUGINS = [remarkGfm];
+
 /** Markdown renderer for transcript prose. Raw HTML stays disabled; unsafe URL schemes are omitted. */
-export function SimpleMarkdown({ text }: { text: string }): React.JSX.Element {
+export const SimpleMarkdown = React.memo(function SimpleMarkdown({ text }: { text: string }): React.JSX.Element {
   return (
     <div className="xn-md" data-testid="xn-simple-markdown">
-      <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents} skipHtml urlTransform={safeMarkdownUrl}>
+      <ReactMarkdown remarkPlugins={REMARK_PLUGINS} components={markdownComponents} skipHtml urlTransform={safeMarkdownUrl}>
         {text}
       </ReactMarkdown>
     </div>
   );
-}
+});

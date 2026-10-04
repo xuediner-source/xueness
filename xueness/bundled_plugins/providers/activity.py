@@ -6,7 +6,7 @@ from datetime import datetime, timezone
 PHASES = frozenset({'waiting_model', 'generating', 'thinking', 'tools', 'repairing',
                     'completed', 'needs_review', 'paused', 'stopped', 'stalled',
                     'awaiting_user', 'provider_error', 'interrupted'})
-COUNTS = ('requestStep', 'outputChars', 'reasoningChars', 'reportedOutputTokens', 'reportedInputTokens', 'reportedCachedTokens', 'retryCount')
+COUNTS = ('requestStep', 'outputChars', 'reasoningChars', 'reportedOutputTokens', 'reportedInputTokens', 'reportedCachedTokens', 'reportedReasoningTokens', 'retryCount')
 TIMES = ('firstOutputSeconds', 'firstReasoningSeconds', 'requestSeconds', 'charactersPerSecond', 'tokensPerSecond',
          'waitingSeconds', 'thinkingSeconds', 'generatingSeconds', 'toolSeconds')
 
@@ -15,6 +15,12 @@ def public_activity(raw):
     if not isinstance(raw, dict) or raw.get('phase') not in PHASES:
         return None
     result = {'phase': raw['phase']}
+    from .response_metadata import FINISH_REASONS
+    if isinstance(raw.get('finishReason'), str) and raw['finishReason'] in FINISH_REASONS:
+        result['finishReason'] = raw['finishReason']
+    if isinstance(raw.get('terminationReason'), str) and raw['terminationReason'] in {'output_limit', 'context_limit', 'generation_limit',
+                                       'provider_filtered', 'provider_paused', 'unknown_termination'}:
+        result['terminationReason'] = raw['terminationReason']
     for key in COUNTS:
         value = raw.get(key)
         if type(value) is int and 0 <= value <= 1_000_000_000:
@@ -68,13 +74,17 @@ class RequestActivity:
             if elapsed > 0:
                 self.record['charactersPerSecond'] = round(self.record['outputChars'] / elapsed, 3)
 
-    def complete(self, response, usage, attempts=None):
+    def complete(self, response, usage, attempts=None, *, finish=None, termination=None):
         now = time.monotonic()
         elapsed = max(0, now - self.started)
         timing = {'waiting_model': 'waitingSeconds', 'thinking': 'thinkingSeconds', 'generating': 'generatingSeconds'}.get(self.record['phase'])
         if timing:
             self.record[timing] = round(self.record.get(timing, 0) + max(0, now - self.last_delta), 4)
         self.record['requestSeconds'] = round(elapsed, 4)
+        if finish is not None:
+            self.record['finishReason'] = finish
+        if termination is not None:
+            self.record['terminationReason'] = termination
         if not self.record['outputChars'] and isinstance(response, dict):
             content = response.get('content')
             if isinstance(content, str):
@@ -82,7 +92,7 @@ class RequestActivity:
         if elapsed > 0 and self.record['outputChars']:
             self.record['charactersPerSecond'] = round(self.record['outputChars'] / elapsed, 3)
         if isinstance(usage, dict):
-            inputs = usage.get('input_tokens', usage.get('prompt_tokens'))
+            inputs = usage.get('prompt_tokens', usage.get('input_tokens'))
             details = usage.get('prompt_tokens_details')
             cached = usage.get('cache_read_input_tokens', usage.get('cached_tokens', details.get('cached_tokens') if isinstance(details, dict) else None))
             for key, count in (('reportedInputTokens', inputs), ('reportedCachedTokens', cached)):
@@ -93,6 +103,10 @@ class RequestActivity:
                 self.record['reportedOutputTokens'] = tokens
                 if elapsed > 0:
                     self.record['tokensPerSecond'] = round(tokens / elapsed, 3)
+            output_details = usage.get('completion_tokens_details')
+            thinking = usage.get('reasoning_tokens', output_details.get('reasoning_tokens') if isinstance(output_details, dict) else None)
+            if type(thinking) is int and 0 <= thinking <= 1_000_000_000:
+                self.record['reportedReasoningTokens'] = thinking
         if type(attempts) is int and 1 <= attempts <= 100:
             self.record['retryCount'] = attempts - 1
         self.record['toolSeconds'] = 0

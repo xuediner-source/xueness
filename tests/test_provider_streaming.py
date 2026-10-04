@@ -258,7 +258,8 @@ class ProviderStreamTests(unittest.TestCase):
                                       {"role": "user", "content": "hi"}], [schema], deltas.append,
                                      on_reasoning_delta=reasoning_deltas.append)
             self.assertEqual("answer", result["content"])
-            self.assertEqual({"prompt_tokens": 8, "completion_tokens": 2, "total_tokens": 10}, result["_usage"])
+            self.assertEqual({"input_tokens": 8, "output_tokens": 2,
+                              "prompt_tokens": 8, "completion_tokens": 2, "total_tokens": 10}, result["_usage"])
             self.assertEqual(["answer"], deltas)
             self.assertEqual(["initial ", "thought"], reasoning_deltas)
             self.assertEqual("system rules", state["body"]["system"])

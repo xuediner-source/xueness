@@ -18,6 +18,8 @@ export type RuntimeActivity = {
   tokensPerSecond?: number;
   reportedInputTokens?: number;
   reportedCachedTokens?: number;
+  reportedReasoningTokens?: number;
+  terminationReason?: string;
   retryCount?: number;
   waitingSeconds?: number;
   thinkingSeconds?: number;
@@ -37,6 +39,7 @@ export type LocalRuntimeSession = {
     previousEstimatedTokens?: number;
     omittedMessages?: number;
     activeTools?: number;
+    calibrationFactor?: number;
   } | null;
   runtime_activity?: RuntimeActivity | null;
   runtime_activity_history?: RuntimeActivity[] | null;
@@ -205,6 +208,9 @@ function RuntimeActivityView({ session }: { session: LocalRuntimeSession | null 
       </strong></div>
       <Meter value={inputPercent} label={t('输入预算估算')} />
       <small>{t('估算输入')} · {t('预留输出')} {formatCount(budget.reservedOutputTokens)} · {t('安全预留')} {formatCount(budget.safetyReserveTokens)}</small>
+      {finite(budget.calibrationFactor) && budget.calibrationFactor > 1 && <small>
+        {t('已按实际输入用量校准估算')} ×{budget.calibrationFactor.toFixed(2)} · {t('缓存 Token 仍占上下文')}
+      </small>}
     </div>}
     <div className="xn-runtime-monitor__trend-wrap">
       <div className="xn-runtime-monitor__trend-title">{t('按请求统计的字符速率趋势')}</div>

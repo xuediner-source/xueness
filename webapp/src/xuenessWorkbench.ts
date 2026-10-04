@@ -218,7 +218,7 @@ export type TimelineRow =
       input?: Record<string, unknown>;
       output?: unknown;
     }
-  | { kind: "completion"; seq: number; verified: boolean; summary: string; status?: "verified" | "unverified" | "not_applicable"; toolExecutionStatus?: "succeeded" | "failed" | "incomplete" | "not_applicable"; deliveryStatus?: "passed" | "failed" | "not_assessed"; turnId?: string }
+  | { kind: "completion"; seq: number; verified: boolean; summary: string; status?: "verified" | "unverified" | "not_applicable" | "incomplete"; toolExecutionStatus?: "succeeded" | "failed" | "incomplete" | "not_applicable"; deliveryStatus?: "passed" | "failed" | "not_assessed"; turnId?: string }
   | { kind: "pending_question"; seq: number; question: string };
 
 /** Show durable text during generation and after an interrupted request. */
@@ -234,6 +234,142 @@ export function withAssistantStream(rows: TimelineRow[], stream: WorkbenchSessio
     turnId: stream.id, text: stream.text,
     ...(stream.reasoning ? { reasoning: stream.reasoning } : {}),
     streaming: stream.status === "streaming" }];
+}
+
+function shallowEqualRecords(a: Record<string, unknown> | undefined | null, b: Record<string, unknown> | undefined | null): boolean {
+  if (a === b) return true;
+  if (!a || !b) return false;
+  const keysA = Object.keys(a);
+  const keysB = Object.keys(b);
+  if (keysA.length !== keysB.length) return false;
+  for (const k of keysA) {
+    if (a[k] !== b[k]) return false;
+  }
+  return true;
+}
+
+function isEqualTimelineRow(a: TimelineRow, b: TimelineRow): boolean {
+  if (a === b) return true;
+  if (a.kind !== b.kind || a.seq !== b.seq) return false;
+  if (a.kind === "user" && b.kind === "user") {
+    return a.turnId === b.turnId && a.text === b.text;
+  }
+  if (a.kind === "assistant" && b.kind === "assistant") {
+    return a.turnId === b.turnId && a.text === b.text && a.reasoning === b.reasoning && a.messageIndex === b.messageIndex && a.streaming === b.streaming;
+  }
+  if (a.kind === "tool" && b.kind === "tool") {
+    if (a.turnId !== b.turnId || a.toolCallId !== b.toolCallId || a.name !== b.name || a.subject !== b.subject || a.status !== b.status || a.error !== b.error || a.errorCode !== b.errorCode) return false;
+    if (!shallowEqualRecords(a.input, b.input)) return false;
+    if (a.output !== b.output) {
+      if (typeof a.output === "object" && typeof b.output === "object" && a.output !== null && b.output !== null) {
+        if (!shallowEqualRecords(a.output as Record<string, unknown>, b.output as Record<string, unknown>)) return false;
+      } else {
+        return false;
+      }
+    }
+    return true;
+  }
+  if (a.kind === "completion" && b.kind === "completion") {
+    return a.verified === b.verified && a.summary === b.summary && a.status === b.status && a.toolExecutionStatus === b.toolExecutionStatus && a.deliveryStatus === b.deliveryStatus && a.turnId === b.turnId;
+  }
+  if (a.kind === "pending_question" && b.kind === "pending_question") {
+    return a.question === b.question;
+  }
+  return false;
+}
+
+/** Structural sharing for timeline rows to avoid re-rendering unchanged cards on polling ticks. */
+export function stabilizeTimelineRows(prevRows: TimelineRow[] | undefined, nextRows: TimelineRow[]): TimelineRow[] {
+  if (!prevRows || prevRows.length === 0) return nextRows;
+  if (prevRows === nextRows) return prevRows;
+
+  let allReused = prevRows.length === nextRows.length;
+  const result: TimelineRow[] = new Array(nextRows.length);
+  for (let i = 0; i < nextRows.length; i++) {
+    const nextItem = nextRows[i];
+    const prevItem = prevRows[i];
+    if (prevItem && isEqualTimelineRow(prevItem, nextItem)) {
+      result[i] = prevItem;
+    } else {
+      result[i] = nextItem;
+      allReused = false;
+    }
+  }
+  return allReused ? prevRows : result;
+}
+
+function areSessionSummariesEqual(a: SessionSummary, b: SessionSummary): boolean {
+  return a.id === b.id && a.task === b.task && a.title === b.title && a.status === b.status && a.pinned === b.pinned && a.root === b.root && a.updatedAt === b.updatedAt;
+}
+
+/** Structural sharing for session lists so polling skips re-rendering when sessions are unchanged. */
+export function stabilizeSessionList(prev: SessionSummary[] | undefined, next: SessionSummary[]): SessionSummary[] {
+  if (!prev || prev.length === 0) return next;
+  if (prev === next) return prev;
+  if (prev.length === next.length) {
+    let allEqual = true;
+    for (let i = 0; i < prev.length; i++) {
+      if (!areSessionSummariesEqual(prev[i], next[i])) {
+        allEqual = false;
+        break;
+      }
+    }
+    if (allEqual) return prev;
+  }
+
+  const prevById = new Map<string, SessionSummary>();
+  for (const item of prev) prevById.set(item.id, item);
+
+  let anyReused = false;
+  const result = next.map(item => {
+    const existing = prevById.get(item.id);
+    if (existing && areSessionSummariesEqual(existing, item)) {
+      anyReused = true;
+      return existing;
+    }
+    return item;
+  });
+  return result;
+}
+
+/** Structural sharing for session details so polling returns the stable object reference when data has not changed. */
+export function stabilizeSession(prev: WorkbenchSession | null | undefined, next: WorkbenchSession): WorkbenchSession {
+  if (!prev || prev.id !== next.id) return next;
+  if (prev === next) return prev;
+
+  const basicEqual = (
+    prev.status === next.status &&
+    prev.task === next.task &&
+    prev.title === next.title &&
+    prev.pinned === next.pinned &&
+    prev.root === next.root &&
+    prev.pause_reason === next.pause_reason
+  );
+  if (!basicEqual) return next;
+
+  const streamPrev = prev.streaming;
+  const streamNext = next.streaming;
+  const streamingEqual = streamPrev === streamNext || (
+    Boolean(streamPrev) === Boolean(streamNext) &&
+    (!streamPrev || !streamNext || (
+      streamPrev.id === streamNext.id &&
+      streamPrev.status === streamNext.status &&
+      streamPrev.text === streamNext.text &&
+      streamPrev.reasoning === streamNext.reasoning &&
+      streamPrev.text_format === streamNext.text_format
+    ))
+  );
+  if (!streamingEqual) return next;
+
+  // Check lightweight budget calibration or runtime telemetry
+  if (JSON.stringify(prev.runtime_budget) !== JSON.stringify(next.runtime_budget)) return next;
+  if (JSON.stringify(prev.runtime_activity) !== JSON.stringify(next.runtime_activity)) return next;
+  if (JSON.stringify(prev.todos) !== JSON.stringify(next.todos)) return next;
+  if (JSON.stringify(prev.queued_messages) !== JSON.stringify(next.queued_messages)) return next;
+  if (JSON.stringify(prev.pending) !== JSON.stringify(next.pending)) return next;
+  if (JSON.stringify(prev.completion) !== JSON.stringify(next.completion)) return next;
+
+  return prev;
 }
 
 // -- implementation below is filled by the data-layer lane ------------------

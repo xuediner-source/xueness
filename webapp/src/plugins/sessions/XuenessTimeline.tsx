@@ -384,7 +384,7 @@ function ToolKindIcon({ name }: { name: string }): React.JSX.Element {
   return <IconGear size={16} />;
 }
 
-function ToolTimelineCard({
+const ToolTimelineCard = React.memo(function ToolTimelineCard({
   row,
   collapseTools,
 }: {
@@ -456,11 +456,12 @@ function ToolTimelineCard({
       {errorText && <div className={status === "cancelled" ? "xn-toolcall__cancel-note" : "xn-msg__tool-error"} data-testid="xn-card-body">{errorText}</div>}
     </div>
   );
-}
+});
 
 export function TimelineStream({ rows, emptyText = tr("暂无事件"), collapseTools = true, grouping, messageStreamShowReasoning = true, jsonToolProtocol = false, protocolModePending = false, streamingPending = false }: TimelineStreamProps): React.JSX.Element {
   const timelineRootRef = React.useRef<HTMLDivElement>(null);
   const conversationIndexes = React.useMemo(() => indexConversationRows(rows ?? []), [rows]);
+  const groupedTimeline = React.useMemo(() => groupTimelineRows(rows ?? [], grouping), [rows, grouping]);
   if (!rows || rows.length === 0) {
     if (streamingPending) return <div className="xn-timeline-empty xn-timeline-empty--streaming" data-testid="timeline-stream-loading">
       <p className="xn-assistant-stream-status" role="status">{tr("正在生成回复…")}</p>
@@ -478,7 +479,7 @@ export function TimelineStream({ rows, emptyText = tr("暂无事件"), collapseT
       data-testid="timeline-stream"
       className="xn-timeline-stream"
     >
-      {groupTimelineRows(rows, grouping).map((r, idx) => {
+      {groupedTimeline.map((r, idx) => {
         if (r.kind === "tool-group") {
           const label = r.category === "explore" ? tr("探索工作区") : r.category === "terminal" ? tr("终端操作") : tr("文件修改");
           const errors = r.rows.filter(row => row.kind === "tool" && toolDisplayStatus(row) === "error").length;

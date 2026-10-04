@@ -5,7 +5,7 @@ const JSON_PROTOCOL_ERROR = 'The local model could not follow the configured JSO
 export type CompletionPresentationInput = {
   verified: boolean;
   summary: string;
-  status?: "verified" | "unverified" | "not_applicable";
+  status?: "verified" | "unverified" | "not_applicable" | "incomplete";
   toolExecutionStatus?: "succeeded" | "failed" | "incomplete" | "not_applicable";
   deliveryStatus?: "passed" | "failed" | "not_assessed";
   turnId?: string;
@@ -323,6 +323,13 @@ export function unwrapProtocolEnvelopeText(text: string, jsonToolProtocol = fals
 
 /** A terminal record describes the run outcome; the assistant row owns the answer. */
 export function completionPresentation(completion: CompletionPresentationInput, jsonToolProtocol = false) {
+  if (completion.status === 'incomplete') return {
+    title: t('回答尚未完成'),
+    status: 'review',
+    label: t('已暂停'),
+    summary: completion.summary,
+    detailsOpen: true,
+  };
   if (completion.summary === JSON_PROTOCOL_ERROR) return {
     title: t('运行结束 · 模型工具协议失败'),
     status: 'error',

@@ -6,8 +6,8 @@ import './CompletionChecks.css';
 export type DeliveryRequirement = { id: string; label: string; path?: string | null; contains: string[]; min_links: number };
 export type CompletionAssessment = {
   verified?: boolean; tool_execution_success?: boolean; delivery_status?: string;
-  status?: "verified" | "unverified" | "not_applicable";
-  verification_status?: "verified" | "unverified" | "not_applicable";
+  status?: "verified" | "unverified" | "not_applicable" | "incomplete";
+  verification_status?: "verified" | "unverified" | "not_applicable" | "incomplete";
   tool_execution_status?: "succeeded" | "failed" | "incomplete" | "not_applicable";
   delivery_checks?: Record<string, { status: string; reason?: string; scope?: string; items?: (DeliveryRequirement & { passed: boolean; missing: string[] })[] }>;
 };

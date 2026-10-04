@@ -120,12 +120,21 @@ def _validated_fixture_json_call(reply):
 
 def _with_reported_usage(message, payload):
     """Retain actual JSON-response usage just as the SSE adapter does."""
+    from .response_metadata import reported_usage, finish_reason
     if not isinstance(message, dict):
         raise ValueError("provider message must be an object")
     result = dict(message)
-    usage = payload.get("usage")
-    if isinstance(usage, dict) and usage:
-        result["_usage"] = dict(usage)
+    result.pop('_usage', None)
+    result.pop('_finish_reason', None)
+    usage = reported_usage(payload.get('usage'))
+    if usage:
+        result['_usage'] = usage
+    choices = payload.get('choices') or []
+    raw_reason = (choices[0].get('finish_reason') if choices and isinstance(choices[0], dict)
+                  else payload.get('stop_reason'))
+    reason = finish_reason(raw_reason)
+    if reason is not None:
+        result['_finish_reason'] = reason
     return result
 
 
@@ -840,9 +849,11 @@ class OpenAICompatible:
                             _with_reported_usage(payload["choices"][0]["message"], payload),
                             attempts,
                         )
+                    metadata = {}
                     text, calls, usage = _read_openai_stream(
-                        response, on_delta, mark_delivered, on_reasoning_delta)
-                result = {"content": text, "tool_calls": calls}
+                        response, on_delta, mark_delivered, on_reasoning_delta,
+                        finish_metadata=metadata)
+                result = {"content": text, "tool_calls": calls, **metadata}
                 if usage:
                     result["_usage"] = usage
                 return _with_request_attempts(result, attempts)
@@ -892,10 +903,11 @@ class OpenAICompatible:
                                     payload["choices"][0]["message"], payload),
                                 attempt + 1,
                             )
+                        metadata = {}
                         text, calls, usage = _read_openai_stream(
                             response, on_delta, mark_delivered,
-                            on_reasoning_delta)
-                    result = {"content": text, "tool_calls": calls}
+                            on_reasoning_delta, finish_metadata=metadata)
+                    result = {"content": text, "tool_calls": calls, **metadata}
                     if usage:
                         result["_usage"] = usage
                     return _with_request_attempts(result, attempt + 1)
@@ -1213,7 +1225,8 @@ def _read_sse(response):
 
 
 def _read_openai_stream(response, on_delta, mark_delivered, on_reasoning_delta=None,
-                        require_done=False):
+                        require_done=False, finish_metadata=None):
+    from .response_metadata import reported_usage, finish_reason
     text_parts = []
     calls = {}
     finished = False
@@ -1227,14 +1240,14 @@ def _read_openai_stream(response, on_delta, mark_delivered, on_reasoning_delta=N
         item = json.loads(payload)
         raw_usage = item.get("usage")
         if isinstance(raw_usage, dict):
-            usage = {key: value for key, value in raw_usage.items()
-                     if key in ("prompt_tokens", "completion_tokens", "total_tokens")
-                     and isinstance(value, int) and value >= 0}
+            usage = {**(usage or {}), **reported_usage(raw_usage)}
         choices = item.get("choices") or []
         if not choices:
             continue
         if choices[0].get("finish_reason") is not None:
             finished = True
+            if finish_metadata is not None:
+                finish_metadata['_finish_reason'] = finish_reason(choices[0]['finish_reason'])
         delta = choices[0].get("delta") or {}
         # Compatible APIs expose reasoning under different names. Keep it out
         # of assistant content and only forward it through the opt-in observer;
@@ -1458,7 +1471,9 @@ def _anthropic_message(payload):
     return _with_reported_usage({"content": "".join(text), "tool_calls": calls}, payload)
 
 
-def _read_anthropic_stream(response, on_delta, mark_delivered, on_reasoning_delta=None):
+def _read_anthropic_stream(response, on_delta, mark_delivered, on_reasoning_delta=None,
+                           finish_metadata=None):
+    from .response_metadata import reported_usage, finish_reason
     text_parts = []
     blocks = {}
     stopped = False
@@ -1468,14 +1483,13 @@ def _read_anthropic_stream(response, on_delta, mark_delivered, on_reasoning_delt
         kind = event.get("type")
         if kind == "message_start":
             raw_usage = ((event.get("message") or {}).get("usage") or {})
-            value = raw_usage.get("input_tokens")
-            if isinstance(value, int) and value >= 0:
-                usage["prompt_tokens"] = value
+            usage.update(reported_usage(raw_usage))
         elif kind == "message_delta":
             raw_usage = event.get("usage") or {}
-            value = raw_usage.get("output_tokens")
-            if isinstance(value, int) and value >= 0:
-                usage["completion_tokens"] = value
+            usage.update(reported_usage(raw_usage))
+            reason = finish_reason((event.get('delta') or {}).get('stop_reason'))
+            if reason is not None and finish_metadata is not None:
+                finish_metadata['_finish_reason'] = reason
         if kind == "content_block_start":
             index = event.get("index", 0)
             block = event.get("content_block") or {}
@@ -1524,6 +1538,11 @@ def _read_anthropic_stream(response, on_delta, mark_delivered, on_reasoning_delt
             try:
                 args = json.loads(block["json"])
             except ValueError:
+                if (finish_metadata or {}).get('_finish_reason') not in (None, 'stop', 'tool_calls'):
+                    # A cut-off argument is not a protocol repair opportunity.
+                    # Retain the termination and text; the host pauses without
+                    # persisting any executable intent from this response.
+                    continue
                 raise ValueError("malformed streamed tool input") from None
         else:
             args = block.get("input") or {}
@@ -1691,9 +1710,11 @@ class AnthropicMessages:
                 request = self._request(messages, tools, True)
                 opener = _provider_opener(self.base, _NoRedirect)
                 with _open_with_retry(opener, request, 40, lambda: delivered) as response:
+                    metadata = {}
                     content, calls, usage = _read_anthropic_stream(
-                        response, on_delta, mark_delivered, on_reasoning_delta)
-                result = {"content": content, "tool_calls": calls}
+                        response, on_delta, mark_delivered, on_reasoning_delta,
+                        finish_metadata=metadata)
+                result = {"content": content, "tool_calls": calls, **metadata}
                 if usage:
                     result["_usage"] = usage
                 return _with_request_attempts(result, attempt + 1)
@@ -1729,10 +1750,11 @@ class AnthropicMessages:
                     with _open_with_retry(
                             opener, request, remaining,
                             lambda: delivered) as response:
+                        metadata = {}
                         content, calls, usage = _read_anthropic_stream(
                             response, on_delta, mark_delivered,
-                            on_reasoning_delta)
-                    result = {"content": content, "tool_calls": calls}
+                            on_reasoning_delta, finish_metadata=metadata)
+                    result = {"content": content, "tool_calls": calls, **metadata}
                     if usage:
                         result["_usage"] = usage
                     return _with_request_attempts(result, attempt + 1)

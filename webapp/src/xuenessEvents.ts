@@ -63,7 +63,7 @@ export interface XuenessSessionCompletionEvent extends XuenessEventBase {
   summary: string;
   evidenceCount: number;
   /** Assessment state; optional to keep older v1 event journals valid. */
-  status?: "verified" | "unverified" | "not_applicable";
+  status?: "verified" | "unverified" | "not_applicable" | "incomplete";
   toolExecutionStatus?: "succeeded" | "failed" | "incomplete" | "not_applicable";
   deliveryStatus?: "passed" | "failed" | "not_assessed";
   turnId?: string;
@@ -176,7 +176,7 @@ export function isXuenessEventV1(value: unknown): value is XuenessEventV1 {
         typeof value.summary === "string" &&
         Number.isInteger(value.evidenceCount) &&
         (value.evidenceCount as number) >= 0 &&
-        isOptionalEnum(value.status, ["verified", "unverified", "not_applicable"]) &&
+        isOptionalEnum(value.status, ["verified", "unverified", "not_applicable", "incomplete"]) &&
         isOptionalEnum(value.toolExecutionStatus, ["succeeded", "failed", "incomplete", "not_applicable"]) &&
         isOptionalEnum(value.deliveryStatus, ["passed", "failed", "not_assessed"]) &&
         (value.turnId === undefined || typeof value.turnId === "string")
