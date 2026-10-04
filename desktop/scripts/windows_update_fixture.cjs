@@ -8,43 +8,61 @@ async function buildFixture() {
     throw new Error('Usage: windows_update_fixture.cjs --build-fixture OUTPUT VERSION LOOPBACK_FEED_URL');
   }
   const { Arch, Platform, build } = require('electron-builder');
-  const config = {
-    // Do not inherit the product's GitHub release publisher into this test app.
-    extends: null,
-    appId: 'app.xueness.desktop',
-    productName: 'Xueness',
-    asar: true,
-    directories: { output: resolve(outputDir) },
-    files: [
-      'scripts/windows_update_fixture.cjs',
-      'src/update-coordinator.cjs',
-      'package.json',
-    ],
-    extraMetadata: { main: 'scripts/windows_update_fixture.cjs', version },
-    publish: [{ provider: 'generic', url: feedUrl }],
-    win: {
-      target: ['nsis'],
-      artifactName: 'Xueness-${version}-windows-${arch}-setup.${ext}',
-    },
-    nsis: {
-      oneClick: false,
-      allowToChangeInstallationDirectory: true,
-      perMachine: false,
-      createDesktopShortcut: false,
-      createStartMenuShortcut: false,
-      deleteAppDataOnUninstall: false,
-      artifactName: 'Xueness-${version}-windows-${arch}-setup.${ext}',
-    },
-  };
   await build({
     projectDir: resolve(__dirname, '..'),
     targets: Platform.WINDOWS.createTarget('nsis', Arch.x64),
-    config,
+    ...createFixtureBuildOptions(outputDir, version, feedUrl),
   });
 }
 
+function createFixtureBuildOptions(outputDir, version, feedUrl) {
+  return {
+    // CI auto-publish detection must never upload this disposable fixture.
+    publish: 'never',
+    config: {
+      // Do not inherit the product's GitHub release publisher into this test app.
+      extends: null,
+      appId: 'app.xueness.desktop',
+      productName: 'Xueness',
+      asar: true,
+      directories: { output: resolve(outputDir) },
+      files: [
+        'scripts/windows_update_fixture.cjs',
+        'src/update-coordinator.cjs',
+        'package.json',
+      ],
+      extraMetadata: { main: 'scripts/windows_update_fixture.cjs', version },
+      publish: [{ provider: 'generic', url: feedUrl }],
+      win: {
+        target: ['nsis'],
+        artifactName: 'Xueness-${version}-windows-${arch}-setup.${ext}',
+      },
+      nsis: {
+        oneClick: false,
+        allowToChangeInstallationDirectory: true,
+        perMachine: false,
+        createDesktopShortcut: false,
+        createStartMenuShortcut: false,
+        deleteAppDataOnUninstall: false,
+        artifactName: 'Xueness-${version}-windows-${arch}-setup.${ext}',
+      },
+    },
+  };
+}
+
+function resolveRuntimeDependencies(electronApi, electronUpdaterApi) {
+  return {
+    app: electronApi.app,
+    autoUpdater: electronUpdaterApi.autoUpdater,
+  };
+}
+
+function loadRuntimeDependencies() {
+  return resolveRuntimeDependencies(require('electron'), require('electron-updater'));
+}
+
 function runFixture() {
-  const { app, autoUpdater } = require('electron');
+  const { app, autoUpdater } = loadRuntimeDependencies();
   const { mkdirSync, readFileSync, writeFileSync } = require('node:fs');
   const { UpdateCoordinator } = require('../src/update-coordinator.cjs');
 
@@ -152,11 +170,18 @@ function runFixture() {
   }).catch(error => finish(1, { stage: 'error', reason: error?.message || String(error) }));
 }
 
-if (process.argv[2] === '--build-fixture') {
-  buildFixture().catch(error => {
-    process.stderr.write((error?.stack || String(error)) + '\n');
-    process.exitCode = 1;
-  });
-} else {
-  runFixture();
+if (require.main === module) {
+  if (process.argv[2] === '--build-fixture') {
+    buildFixture().catch(error => {
+      process.stderr.write((error?.stack || String(error)) + '\n');
+      process.exitCode = 1;
+    });
+  } else {
+    runFixture();
+  }
 }
+
+module.exports = {
+  createFixtureBuildOptions,
+  resolveRuntimeDependencies,
+};
