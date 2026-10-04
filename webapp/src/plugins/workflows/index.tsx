@@ -3,6 +3,7 @@ import { get, post } from '../../xuenessApi';
 import { IconWorkflow, IconTerminal, IconFolder, IconNewTask } from '../../ui/icons';
 import { t as tr, tf } from '../../i18n';
 import { OperationHeader, OperationStatus } from '../shared';
+import { ExpertPanel } from './ExpertPanel';
 import '../../styles/operations.css';
 type NodeState = { status: string; attempts: number; error?: string; summary?: string; reused_from?: string; log_capped?: boolean };
 type Workflow = { id: string; status: string; root: string; concurrency: number; plan: { name: string; nodes: unknown[] }; nodes: Record<string, NodeState>; events: { seq: number; type: string; node?: string; status?: string }[] };
@@ -161,6 +162,7 @@ export function WorkflowPanel({ sessionId, subagentsEnabled }: { sessionId: stri
   const isActive = Boolean(record && ACTIVE_STATUSES.has(record.status));
   return <section className="xn-operations" aria-label={tr("工作流与后台任务")}>
     <OperationHeader icon={<IconWorkflow size={22} />} title={tr("工作流与后台任务")} description={tr("创建后检查完整计划，再批准执行。命令会在所选工作区运行。")} />
+    <ExpertPanel sessionId={sessionId} />
     {error && <p role="alert">{error}</p>}
     <div className="xn-operation-card xn-workspace-context"><IconFolder /><label>{tr("工作区")}<input aria-label={tr("工作流工作区")} value={root} onChange={e => setRoot(e.target.value)} /></label></div>
     <div className="xn-operation-create-grid">

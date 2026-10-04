@@ -23,7 +23,8 @@
   ],
   "commands": [
     "workflow",
-    "jobs"
+    "jobs",
+    "expert"
   ],
   "panels": [
     "workflows"
@@ -37,6 +38,7 @@
   ],
   "modules": [
     "dsl",
+    "expert",
     "operations_api",
     "tools",
     "workflow_cli",
@@ -70,9 +72,15 @@
       "id": "workflows.background",
       "name": "后台命令、日志、状态与取消",
       "nameEn": "Background commands, logs, status and cancellation"
+    },
+    {
+      "id": "workflows.expert",
+      "name": "专家工作流（调研、计划、实现、审查）",
+      "nameEn": "Expert workflow (research, plan, implement, review)"
     }
   ],
   "frontendModules": [
-    "plugins/workflows/index.tsx"
+    "plugins/workflows/index.tsx",
+    "plugins/workflows/ExpertPanel.tsx"
   ]
 }

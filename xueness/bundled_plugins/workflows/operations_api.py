@@ -17,6 +17,9 @@ def dispatch(method, parts, query, data, ctx):
         from ..settings.workspaces_api import allowed_roots
         return _allowed_root(Path(value), ctx['web_runs'], ctx['project_dir'], allowed_roots(ctx))
     try:
+        if workflow and len(parts) >= 3 and parts[2] == 'expert':
+            from . import expert
+            return expert.dispatch_http(method, parts, query, data, ctx)
         if tasks and method == 'GET':
             session = ctx['store'].load(parts[2])
             live = ctx['task_registry'].list(parts[2])

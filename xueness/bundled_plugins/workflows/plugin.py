@@ -21,6 +21,18 @@ def execute_cli(args, deps=None):
         return 1
 
 
+def execute_slash(name, argument, ctx):
+    """In-chat slash entry contributed through plugin_runtime.dispatch_slash.
+
+    Only ``/expert`` is claimed here; ``/workflow`` and ``/jobs`` keep their
+    CLI-only surface and fall through to the chat loop's existing behavior.
+    """
+    if name != 'expert':
+        return None
+    from . import expert
+    return expert.handle_slash(argument, ctx)
+
+
 def tools():
     from .tools import REGISTRY
     return REGISTRY

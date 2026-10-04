@@ -38,9 +38,19 @@ def add_parsers(commands):
         p.add_argument('id')
         if action == 'wait':
             p.add_argument('--timeout', type=float, default=60)
+    expert = commands.add_parser('expert',
+                                 help='durable expert workflow: research -> plan -> implement -> review')
+    expert.add_argument('task', nargs='*', help='task text, or status|resume|stop')
+    expert.add_argument('--session', help='bind a new run to / select runs of a session id')
+    expert.add_argument('--run', help='operate on an explicit expert run id')
+    expert.add_argument('--answer', help='resume: answer a waiting implement-phase actor')
+    expert.add_argument('--root', type=Path, help='workspace for a new run (default: current directory)')
 
 
 def execute(args):
+    if args.cmd == 'expert':
+        from . import expert
+        return expert.execute_cli(args)
     store = WorkflowStore(args.state)
     action = args.action
     if action == 'list':

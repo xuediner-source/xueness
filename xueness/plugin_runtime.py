@@ -259,6 +259,41 @@ def cli_owner(command, args=None):
     return None
 
 
+def slash_owner(name):
+    """Plugin owning an in-chat ``/name`` command, from the same manifest list
+    that owns the top-level CLI command. Generic routing data, not behavior."""
+    if not isinstance(name, str) or not name or name.startswith('/'):
+        return None
+    for pid, spec in _manifests().items():
+        if name in spec['commands']:
+            return pid
+    return None
+
+
+def dispatch_slash(text, ctx):
+    """Route an in-chat slash command to the plugin that owns its name.
+
+    Same ownership source as the CLI parser registry. Returns the plugin's
+    reply string when it handled the command, ``None`` when no plugin claims
+    the name (the caller keeps its existing behavior), and an error message
+    when the owning plugin is disabled — a disabled feature must fall through
+    into neither execution nor a silent model prompt.
+    """
+    if not isinstance(text, str) or not text.startswith('/'):
+        return None
+    state_dir = ctx.get('state_dir') if isinstance(ctx, dict) else None
+    name, _, argument = text[1:].partition(' ')
+    owner = slash_owner(name)
+    if owner is None or state_dir is None:
+        return None
+    if not is_enabled(state_dir, owner):
+        return 'plugin disabled or dependency unavailable: ' + owner
+    handler = getattr(entrypoint(owner), 'execute_slash', None)
+    if handler is None:
+        return None
+    return handler(name, argument.strip(), ctx)
+
+
 def build_http_family_index(manifests=None):
     """Map each plugin's declared ``httpFamilies`` patterns to its owner.
 

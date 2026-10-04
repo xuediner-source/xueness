@@ -4,6 +4,22 @@ const listeners = new Set<() => void>();
 let locale: Locale = 'zh';
 try { if (typeof localStorage !== 'undefined' && localStorage.getItem('xueness.language') === 'en') locale = 'en'; } catch { /* Private browsing. */ }
 export const messages: Record<string, string> = {
+  "专家工作流": "Expert workflow",
+  "固定四阶段流水线：调研 → 计划 → 实现 → 审查，逐阶段推进并保留各阶段摘要。": "A fixed four-phase pipeline: research → plan → implement → review, advancing phase by phase and keeping each phase summary.",
+  "当前会话暂无专家工作流；输入任务后启动。": "No expert workflow for this session yet; enter a task to start one.",
+  "选择会话后查看专家工作流。": "Select a session to see expert workflows.",
+  "描述要交给专家工作流完成的任务": "Describe the task to hand to the expert workflow",
+  "专家工作流任务": "Expert workflow task",
+  "调研": "Research",
+  "实现": "Implement",
+  "审查": "Review",
+  "启动": "Start",
+  "继续": "Resume",
+  "许可模式": "Permission mode",
+  "调研纪要": "Research notes",
+  "计划文本": "Plan text",
+  "改动摘要": "Change summary",
+  "审查结论": "Review verdict",
   "回答尚未完成": "Answer incomplete",
   "已按实际输入用量校准估算": "Estimate calibrated against reported input usage",
   "缓存 Token 仍占上下文": "Cached tokens still occupy context",

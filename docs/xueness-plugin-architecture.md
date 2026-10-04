@@ -163,7 +163,7 @@ providers 的 CLI parser/handler 已迁入 `xueness/bundled_plugins/providers/op
 
 ## 功能逐项归属清单
 
-下表概述当前 27 份 manifest 中的 111 项用户能力。命令/工具/依赖和实际实现文件以同一份 manifest 为准；前端卡片直接展示该功能清单，不维护第二份隐藏列表。纯安全内核与通用布局的边界如前文所述。
+下表概述当前 27 份 manifest 中的 116 项用户能力。命令/工具/依赖和实际实现文件以同一份 manifest 为准；前端卡片直接展示该功能清单，不维护第二份隐藏列表。纯安全内核与通用布局的边界如前文所述。
 
 | 插件 | 已实现的用户能力 |
 |---|---|
@@ -176,7 +176,7 @@ providers 的 CLI parser/handler 已迁入 `xueness/bundled_plugins/providers/op
 | settings | 工作区登记、项目选择与默认目录；主题、语言、字体与代码显示；快捷键配置、验证与冲突检测；Agent 运行与能力偏好 |
 | usage | 会话、步骤与日期统计；供应商实际报告的 Token 统计；实际报告成本与模型维度统计 |
 | git | 状态、差异、日志与分支查看；批准后的暂存、提交、分支与 stash；检查点、恢复预览与恢复前备份；轮次首个改动前自动检查点；回退工作区到指定轮次检查点 |
-| workflows | DAG、声明式 DSL 与模型编排；只读及已批准可写 actor 与问答；持久恢复、结果复用与文件校验；动态并发、限流退避与跨运行调度；后台命令、日志、状态与取消 |
+| workflows | DAG、声明式 DSL 与模型编排；只读及已批准可写 actor 与问答；持久恢复、结果复用与文件校验；动态并发、限流退避与跨运行调度；后台命令、日志、状态与取消；专家工作流（调研、计划、实现、审查） |
 | terminal | 工作区交互式 POSIX PTY；终端尺寸、日志、关闭与服务清理；默认 Shell 与终端偏好 |
 | office | DOCX 页面与嵌入图片预览；PPTX 幻灯片、图片与缓存图表；XLSX 工作表与缓存单元格值 |
 | commands | 自定义斜杠提示模板；命令资源创建、编辑与开关 |
@@ -293,3 +293,14 @@ manifest 新增三个可选数据字段：`provides`、`inject`（点分服务�
 
 前端 `plugins/planning/SessionGoal.tsx` 只在会话标题下方占一行：状态标记、省略号目标文本与点击查看/清除，`cleared` 或缺失时不渲染，清除走 `DELETE /api/sessions/<sid>/goal`。它登记在 planning manifest 的 `frontendModules`，容器仅在 `isPluginEffective('planning')` 时挂载，业务逻辑不进容器。回归见 `tests/test_session_goal.py` 与 `webapp/src/plugins/planning/SessionGoal.test.tsx`，使用隔离状态目录与本地假 provider/HTTP，不访问网络、不调用真实模型。
 
+## 专家工作流（workflows.expert，2026-10-05）
+
+目录新增 `workflows.expert`：对齐 ZCode `/expert` 的持久专家工作流，固定四阶段「调研 → 计划 → 实现 → 审查」。与同日合入的会话目标、设置卡片与模型弹层等合计，完整目录现为 27 个插件、116 项登记功能。实现全部位于 workflows 包内：`expert.py` 持有固定阶段定义（每阶段简短角色提示、目标与完成条件）、expert run 投影与三个入口；`ExpertPanel.tsx` 在工作流面板内提供状态条。引擎、调度、恢复、并发与停用边界全部复用既有 DAG 运行时，没有第二套子代理实现。
+
+- **运行时**：每个 expert run 是一份持久记录（`<状态目录>/workflows/expert/<id>.json`，原子写 + 记录锁），字段为 id、底层 workflow id、session、task、root、permission_mode、status（`running|paused|done|stopped|failed`）、phase 与各阶段 status/摘要/error，读取时从底层 DAG 运行单向同步（`queued/running → running`、`paused/awaiting_user → paused`、`completed → done`、`cancelled → stopped`、`failed/interrupted → failed`）。四阶段就是四个 `agent` 节点的链式 DAG；上一阶段产物经引擎既有的依赖摘要机制进入下一阶段会话，节点会话本身也持久在 `<状态目录>/workflows/<wid>-sessions`。
+- **互斥**：同一会话（含无会话的 CLI 启动桶）同时最多 1 个 active expert run；检查与创建在目录级 mutex 锁内原子完成，判定前先对候选记录做一次同步，底层已结束的旧 run 不会挡住新 run。
+- **权限映射**：只读阶段（调研/计划/审查）总是自动运行；实现阶段是否可写由绑定会话的 `permission_mode` 决定——`yolo`/`edit` 时实现节点为 writable actor（引擎 Gate 只放写/编辑，不含 exec），`build`/`plan` 时保持只读、只产出拟改动方案。ZCode 的 `/expert <task>` 以 yolo 启动持久专家工作流；Xueness 的对应关系是「绑定会话为 yolo 时启动的 expert run 才有可写实现阶段」，permission_mode 只能由服务端从会话记录派生，客户端不能传入。真实模型调用仍受宿主 `XUENESS_ALLOW_REAL`（HTTP）或既有 `--allow-real` 语义（workflows CLI）约束；expert 的 CLI 启动本身就是运行模型阶段，等价于 `chat` 发消息。
+- **入口**：CLI 为 `xueness expert <task|start|status|resume|stop>`（`--session`、`--run`、`--answer`、`--root`）；HTTP 为 `GET/POST /api/workflows/expert`、`GET /api/workflows/expert/<id>`、`POST /api/workflows/expert/<id>/resume|stop`，归 workflows 的既有 http family，沿用 Host/Origin/CSRF 与工作区根校验（列表与详情只暴露允许根内的 run）。专家路由不读不改会话 journal，因此不取会话 lease；工作区互斥由引擎的 workspace lease 保证。会话内 `/expert [status|resume|stop|<task>]` 经由共享分发 seam 进入同一实现。
+- **共享 seam 审查**：`plugin_runtime.dispatch_slash`/`slash_owner` 是新增的通用路由函数（与 `cli_owner`、`route_owner` 同层）：按 manifest `commands` 找到斜杠命令属主插件，调用其 `execute_slash(name, argument, ctx)`；属主插件禁用时返回既有禁用文案而不是把 `/expert` 落成模型提示，未认领的名字返回 None、聊天循环行为不变。会话聊天循环只在通用 seam 上分发，不包含任何 expert 业务。writable 决策、状态映射与摘要全部留在 workflows 包内。
+
+`tests/test_expert_workflow.py` 覆盖启动（计划形状、yolo/edit 可写、会话派生权限、启动失败标记）、用真实引擎驱动的阶段推进与失败映射、status/resolve、resume（含失联恢复与 actor 答案）、stop（活动取消与无主 settle、中途取消落地 stopped）、同会话互斥、禁用拒绝（开关与依赖级联、slash 禁用文案、CLI/HTTP）、HTTP 路由与工作区根过滤。前端 `ExpertPanel.test.tsx` 覆盖活动 run 选择、固定阶段顺序、按会话轮询与静态结构。

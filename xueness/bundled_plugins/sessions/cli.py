@@ -424,6 +424,19 @@ def _chat_loop_owned(args, parser, store, session, owned):
                 store.save(s)
             print(f"mode: {args.mode}", file=sys.stderr)
             continue
+        if command.startswith('/') and not literal:
+            # Generic plugin-owned slash routing (same manifest commands as the
+            # CLI). None means no plugin claims the name; text then flows on.
+            try:
+                reply = plugin_runtime.dispatch_slash(
+                    text, {"state_dir": args.state, "session": s,
+                           "store": store, "root": str(root)})
+            except (LookupError, OSError, ValueError) as exc:
+                print(f"! {exc}", file=sys.stderr)
+                continue
+            if reply is not None:
+                print(reply, file=sys.stderr)
+                continue
         retry = not literal and text == "/retry"
         if retry and attachments:
             print("! 附件尚未发送：请输入任务/回答，或 /detach all 后重试", file=sys.stderr)
