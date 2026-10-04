@@ -121,6 +121,11 @@
       "id": "sessions.manual_compact",
       "name": "手动压缩上下文（/compact 与说明）",
       "nameEn": "Manual context compaction (/compact with instructions)"
+    },
+    {
+      "id": "sessions.tool_concurrency",
+      "name": "依赖感知的工具并发调度",
+      "nameEn": "Dependency-aware tool concurrency"
     }
   ],
   "frontendModules": [

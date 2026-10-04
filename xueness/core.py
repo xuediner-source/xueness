@@ -8,6 +8,7 @@ import re
 import tempfile
 import time
 import uuid
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -189,6 +190,114 @@ MASK_HEAD = 200
 STALL_REPEAT_LIMIT = 3
 STREAMING_TEXT_MAX = 24000
 PROVIDER_USAGE_MAX = 100
+
+#: Dependency-aware tool concurrency, aligned with ZCode's ZCODE_MAX_TOOL_CONCURRENCY:
+#: within one model turn, consecutive calls that are declared read-only and pass
+#: every static policy pre-check may run concurrently; anything with side effects
+#: (write, edit, exec/terminal, network writes, subagents, MCP) keeps running one
+#: call at a time, in the original order.
+DEFAULT_TOOL_CONCURRENCY = 10
+TOOL_CONCURRENCY_ENV = "XUENESS_MAX_TOOL_CONCURRENCY"
+
+#: Gate kinds that ``Gate.check`` decides without any interactive approval. Only
+#: calls whose gate kind is listed here may join a concurrent batch, so an
+#: approval conversation can never pop up while sibling calls are running.
+BATCH_SAFE_GATE_KINDS = frozenset({
+    "read", "list", "glob", "grep", "todo_read", "tool_result_read",
+    "read_session_context",
+})
+
+
+def _tool_concurrency_limit() -> int:
+    """Upper bound for one concurrent tool batch, read fresh on every turn.
+
+    ``XUENESS_MAX_TOOL_CONCURRENCY`` may raise or lower the default; invalid
+    values fall back to it, and ``1`` means fully serial execution.
+    """
+    raw = os.environ.get(TOOL_CONCURRENCY_ENV)
+    if raw is None:
+        return DEFAULT_TOOL_CONCURRENCY
+    try:
+        value = int(str(raw).strip())
+    except (TypeError, ValueError):
+        return DEFAULT_TOOL_CONCURRENCY
+    if value < 1:
+        return DEFAULT_TOOL_CONCURRENCY
+    return value
+
+
+def _batch_eligible(call, *, gate, session, light, light_tool_names,
+                    remote_bound, plugin_enabled) -> bool:
+    """Static pre-check: may this call join a concurrent batch at all?
+
+    Deliberately conservative and pure-data: only registry tools explicitly
+    declared ``concurrency_safe`` whose gate kind never waits on approval
+    qualify, and every policy denial the loop could produce before dispatch is
+    excluded here, so a denied call keeps its serial short-circuit semantics.
+    """
+    from .plugin_runtime import tool_owner
+    from .tool_registry import REGISTRY_BY_NAME, REMOTE_ALLOWED_TOOL_NAMES
+    if not isinstance(call, dict):
+        return False
+    cid = call.get("id", "")
+    if not cid or cid in (session.get("results") or {}):
+        return False
+    function = call.get("function", {})
+    if not isinstance(function, dict):
+        return False
+    tool_name = function.get("name", "")
+    tool = REGISTRY_BY_NAME.get(tool_name)
+    if (tool is None or not tool.concurrency_safe or tool.mutating
+            or tool.gate_kind not in BATCH_SAFE_GATE_KINDS):
+        return False
+    if tool_name in getattr(gate, "disallow", ()):
+        return False
+    allowed = getattr(gate, "allowed_tool_names", None)
+    if allowed is not None and tool_name not in allowed:
+        return False
+    if tool_name in getattr(gate, "denied_tool_names", ()):
+        return False
+    if light and tool_name not in light_tool_names:
+        return False
+    if remote_bound and tool_name not in REMOTE_ALLOWED_TOOL_NAMES:
+        return False
+    owner = tool_owner(tool_name)
+    if owner is None or not plugin_enabled(owner):
+        return False
+    return True
+
+
+def _concurrent_batch_units(calls, *, gate, session, light, light_tool_names,
+                            remote_bound, plugin_enabled, max_concurrency):
+    """Cut one turn's tool calls into ordered execution units.
+
+    Returns a list of ``(concurrent, calls)`` pairs. Consecutive calls that
+    pass every static safety pre-check form batches capped at
+    ``max_concurrency``; every other call becomes a serial unit of its own.
+    The original call order is preserved throughout, so results can be
+    recorded and replayed in order.
+    """
+    units: list = []
+    pending: list = []
+
+    def flush() -> None:
+        nonlocal pending
+        while pending:
+            take = pending[:max_concurrency]
+            del pending[:max_concurrency]
+            units.append((len(take) > 1, take))
+
+    for call in calls:
+        if _batch_eligible(call, gate=gate, session=session, light=light,
+                           light_tool_names=light_tool_names,
+                           remote_bound=remote_bound,
+                           plugin_enabled=plugin_enabled):
+            pending.append(call)
+            continue
+        flush()
+        units.append((False, [call]))
+    flush()
+    return units
 
 
 class _StreamStopped(Exception):
@@ -1246,6 +1355,168 @@ def _drive_run(session: dict, store: Store, provider, gate: Gate, max_steps=8, m
     context_shrink = (light_options['overflowRetryRatio']
                       if light and session.get('runtime_context_recovery') is True else 1.0)
     overflow_retried = False
+
+    def _pretooluse_veto(cid, tool_name, function):
+        """Fire PreToolUse hooks; return a blocking result or None."""
+        if hooks is None or not plugin_enabled("hooks"):
+            return None
+        try:
+            parsed = json.loads(function.get("arguments", "{}"))
+        except (ValueError, TypeError):
+            parsed = {}
+        pre_results = hooks.fire("PreToolUse", {"session_id": session.get("id", ""),
+                                                "tool_name": tool_name,
+                                                "tool_call_id": cid,
+                                                "arguments": parsed})
+        blocking = [e for e in pre_results
+                    if e.get("exit_code") == 2 and not e.get("timeout")]
+        for entry in pre_results:
+            _hook_record(session, "PreToolUse", entry)
+        if not blocking:
+            return None
+        # Do NOT splice the hook's stdout into the error text: it is untrusted,
+        # it would be replayed as model context on the next turn, and it used to
+        # bypass the output cap entirely. Keep the machine-readable error clean
+        # and put the clipped text in a field whose name says what it is.
+        raw = (blocking[0].get("output") or "").strip()
+        result = {"ok": False,
+                  "error": "blocked by hook %s" % (blocking[0].get("id") or "PreToolUse"),
+                  "hook_blocked": True}
+        if raw:
+            clipped = raw[:HOOK_REASON_MAX]
+            if len(raw) > HOOK_REASON_MAX:
+                clipped += "\n…(truncated)"
+            result["hook_output_untrusted"] = clipped
+        return result
+
+    def _dispatch_registry_tool(cid, tool_name, arguments):
+        """Plain registry dispatch with the per-call execution context bound."""
+        if getattr(gate, "web_approval_gate", False):
+            arguments["_tool_call_id"] = cid
+        from .tool_contract import bind_execution
+        with bind_execution(store=store, state_dir=state_dir,
+                            registry=registry, tool_catalog=tool_catalog,
+                            subagent_coordinator=_subagent_coordinator):
+            result = dispatch(root, gate, tool_name, arguments, session)
+        if not isinstance(result, dict):
+            result = {"ok": False, "error": "tool returned a malformed result"}
+        return result
+
+    def _run_serial_call(cid, function, tool_name):
+        """Hooks, policy checks and dispatch for one serially executed call."""
+        # PreToolUse may veto the call before any side effect happens. Use
+        # fire() rather than pre_tool_use() so each hook's result is available
+        # for the audit log; the gate decision is derived here.
+        veto = _pretooluse_veto(cid, tool_name, function)
+        if veto is not None:
+            return veto
+        try:
+            arguments = json.loads(function.get("arguments", "{}"))
+        except (ValueError, TypeError):
+            arguments = None
+        if not isinstance(arguments, dict):
+            return {"ok": False, "error": "invalid tool arguments"}
+        if tool_name in getattr(gate, 'disallow', ()):
+            return permission_result(gate, PermissionError('tool disallowed'))
+        if (getattr(gate, "allowed_tool_names", None) is not None
+                and tool_name not in gate.allowed_tool_names):
+            return permission_result(gate, PermissionError("tool denied by policy"))
+        if tool_name in getattr(gate, "denied_tool_names", ()):
+            return permission_result(gate, PermissionError("tool denied by policy"))
+        if light and tool_name not in light_tool_names:
+            return {"ok": False, "error": "tool not active; discover it with tool_search first"}
+        if remote_bound and tool_name not in REMOTE_ALLOWED_TOOL_NAMES:
+            return permission_result(gate, PermissionError("tool denied by policy"))
+        if (owner := tool_owner(tool_name)) is not None and not plugin_enabled(owner):
+            return {"ok": False, "error": "plugin disabled", "error_code": "plugin_disabled",
+                    "retryable": False, "user_reason": "工具所属插件已关闭；请在插件管理中启用后继续。"}
+        if tool_name == 'skill_read' and skill_reader is not None:
+            if 'skill_read' in getattr(gate, 'disallow', ()) or 'read' in getattr(gate, 'disallow', ()):
+                result = permission_result(gate, PermissionError("tool denied by policy"))
+            else:
+                result = skill_reader(arguments.get('id'))
+        elif tool_name.startswith(MCP_TOOL_PREFIX) and mcp_call is not None:
+            result = call_mcp(gate, mcp_call, tool_name, arguments, cid)
+        elif (tool_name == TASK_TOOL_NAME and subagents is not None
+                and depth < max_depth and _subagent_coordinator is not None):
+            # Freeze per-call arguments: the worker outlives this dispatch iteration.
+            def execute_child(task_id, child_stop, child_args=dict(arguments)):
+                return _run_subagent(gate, provider, subagents,
+                                     child_args.get('prompt'), child_args.get('agent'),
+                                     depth=depth, max_depth=max_depth, max_chars=max_chars,
+                                     registry=registry, parent_session=session.get('id'),
+                                     parent_should_stop=child_stop, state_dir=state_dir,
+                                     parent_model_selection=session.get('model_selection'), task_id=task_id)
+            result = _subagent_coordinator.dispatch(cid, arguments, execute_child)
+        else:
+            result = _dispatch_registry_tool(cid, tool_name, arguments)
+        if not isinstance(result, dict):
+            result = {"ok": False, "error": "tool returned a malformed result"}
+        return result
+
+    def _prepare_batch_call(cid, function, tool_name):
+        """Serial pre-pass for one batch member: hook veto and argument parsing.
+
+        Batch members already passed every static policy pre-check at scheduling
+        time, so only a PreToolUse veto or malformed arguments can stop them
+        here. Both outcomes are plain failures that never pause the run, so the
+        remaining members still execute, exactly as they would follow such a
+        serial result.
+        """
+        veto = _pretooluse_veto(cid, tool_name, function)
+        if veto is not None:
+            return veto, None
+        try:
+            arguments = json.loads(function.get("arguments", "{}"))
+        except (ValueError, TypeError):
+            return {"ok": False, "error": "invalid tool arguments"}, None
+        if not isinstance(arguments, dict):
+            return {"ok": False, "error": "invalid tool arguments"}, None
+        return None, arguments
+
+    def _record_outcome(cid, tool_name, result, tool_started):
+        """Journal, events and hooks for one settled call; main thread only."""
+        nonlocal asked, halt_result
+        # Only the host can bind an E identifier to a genuine successful call.
+        aliases = evidence_aliases(session)
+        result = {key: value for key, value in result.items() if key != 'evidence_id'}
+        if result.get('ok') is True:
+            result = {'evidence_id': next((alias for alias, ident in aliases.items() if ident == cid), None), **result}
+        if cid in session['results']:
+            session['results'][cid] = result
+        elapsed = max(0, time.monotonic() - tool_started)
+        if activity is not None:
+            activity.tool(tool_name, cid, elapsed, bool(result.get('ok')))
+        if halt_result is None and (result.get('awaiting_approval') or
+                                    result.get('retryable') is False and not result.get('ok')):
+            halt_result = result
+        if isinstance(result, dict) and result.get("awaiting_user"):
+            asked = result.get("question", "")
+        session["messages"].append({"role": "tool", "tool_call_id": cid, "content": json.dumps(result, ensure_ascii=False)})
+        _emit_event(on_event, "tool_result", id=cid, name=tool_name,
+                    ok=bool(isinstance(result, dict) and result.get("ok")),
+                    error=(result.get("error") or "") if isinstance(result, dict) else "malformed result")
+        # PermissionRequest fires when a capability was refused and a human
+        # decision is what unblocks it. It is OBSERVATIONAL ONLY: the exit
+        # code is recorded but never allowed to grant access, because a hook
+        # that could approve would silently defeat the gate it observes.
+        if (hooks is not None and plugin_enabled("hooks") and
+                isinstance(result, dict) and result.get("error") == "denied"):
+            for entry in hooks.fire("PermissionRequest", {"session_id": session.get("id", ""),
+                                                          "tool_name": tool_name,
+                                                          "tool_call_id": cid}):
+                _hook_record(session, "PermissionRequest", entry)
+        # Post hooks observe the outcome; they cannot undo it.
+        if hooks is not None and plugin_enabled("hooks"):
+            ok = bool(isinstance(result, dict) and result.get("ok"))
+            event = "PostToolUse" if ok else "PostToolUseFailure"
+            for entry in hooks.fire(event, {"session_id": session.get("id", ""),
+                                            "tool": tool_name,
+                                            "tool_call_id": cid,
+                                            "ok": ok}):
+                _hook_record(session, event, entry)
+        save_session()
+
     for _ in range(max_steps):
         # Cooperative stop: settle at a journal boundary, not mid-tool-call.
         # This preserves call/result pairing, not transactional filesystem writes.
@@ -1331,6 +1602,10 @@ def _drive_run(session: dict, store: Store, provider, gate: Gate, max_steps=8, m
                     calibration=session.get('runtime_budget_calibration'))
                 if getattr(provider, 'tool_calling', 'native') == 'json':
                     prompt = lightweight.text_messages(prompt)
+            # Stable for the whole step; used by both the batch scheduler and
+            # the serial policy chain (replaces the per-call set comprehension).
+            light_tool_names = ({lightweight.tool_name(s) for s in active_tools}
+                                if light else frozenset())
             stream = getattr(provider, "stream", None)
             hide_structured_stream = bool(
                 light and getattr(provider, "tool_calling", "native") == "json")
@@ -1754,146 +2029,86 @@ def _drive_run(session: dict, store: Store, provider, gate: Gate, max_steps=8, m
         prev_call_ids = [c.get("id", "") for c in calls if isinstance(c, dict)]
         asked = None
         halt_result = None
-        for call in calls:
-            tool_started = time.monotonic()
-            cid = call.get("id", "")
-            function = call.get("function", {})
-            tool_name = function.get("name", "")
+        # Dependency-aware tool scheduling: consecutive calls that are declared
+        # concurrency-safe and pass every static policy pre-check form batches
+        # executed in a thread pool; every other call runs alone. Units keep the
+        # original call order, and recording below happens in call order too.
+        max_concurrency = _tool_concurrency_limit()
+        units = _concurrent_batch_units(
+            calls, gate=gate, session=session, light=light,
+            light_tool_names=light_tool_names, remote_bound=remote_bound,
+            plugin_enabled=plugin_enabled, max_concurrency=max_concurrency)
+        for concurrent, group in units:
             if halt_result is not None or evidence_repair_active:
-                result = {'ok': False, 'error': 'not executed: run paused', 'retryable': False,
-                          'error_code': 'run_paused', 'user_reason': '运行已暂停，此批后续调用未执行。'}
-                if cid and cid not in session['results']:
-                    session['results'][cid] = result
-            elif not cid or cid in session["results"]:
-                result = {"ok": False, "error": "duplicate or missing tool call id"}
-            else:
-                # PreToolUse may veto the call before any side effect happens.
-                # Use fire() rather than pre_tool_use() so each hook's result is
-                # available for the audit log; the gate decision is derived here.
-                if hooks is not None and plugin_enabled("hooks"):
-                    try:
-                        parsed = json.loads(function.get("arguments", "{}"))
-                    except (ValueError, TypeError):
-                        parsed = {}
-                    pre_results = hooks.fire("PreToolUse", {"session_id": session.get("id", ""),
-                                                            "tool_name": tool_name,
-                                                            "tool_call_id": cid,
-                                                            "arguments": parsed})
-                    blocking = [e for e in pre_results
-                                if e.get("exit_code") == 2 and not e.get("timeout")]
-                    for entry in pre_results:
-                        _hook_record(session, "PreToolUse", entry)
-                    if blocking:
-                        # Do NOT splice the hook's stdout into the error text: it
-                        # is untrusted, it would be replayed as model context on
-                        # the next turn, and it used to bypass the output cap
-                        # entirely. Keep the machine-readable error clean and put
-                        # the clipped text in a field whose name says what it is.
-                        raw = (blocking[0].get("output") or "").strip()
-                        result = {"ok": False,
-                                  "error": "blocked by hook %s" % (blocking[0].get("id") or "PreToolUse"),
-                                  "hook_blocked": True}
-                        if raw:
-                            clipped = raw[:HOOK_REASON_MAX]
-                            if len(raw) > HOOK_REASON_MAX:
-                                clipped += "\n…(truncated)"
-                            result["hook_output_untrusted"] = clipped
-                    else:
-                        result = None
-                else:
-                    pre_results = []
-                    result = None
-
-                if result is None:
-                    try:
-                        arguments = json.loads(function.get("arguments", "{}"))
-                    except (ValueError, TypeError):
-                        arguments = None
-                    if not isinstance(arguments, dict):
-                        result = {"ok": False, "error": "invalid tool arguments"}
-                    elif tool_name in getattr(gate, 'disallow', ()):
-                        result = permission_result(gate, PermissionError('tool disallowed'))
-                    elif (getattr(gate, "allowed_tool_names", None) is not None
-                          and tool_name not in gate.allowed_tool_names):
-                        result = permission_result(gate, PermissionError("tool denied by policy"))
-                    elif tool_name in getattr(gate, "denied_tool_names", ()):
-                        result = permission_result(gate, PermissionError("tool denied by policy"))
-                    elif light and tool_name not in {lightweight.tool_name(s) for s in active_tools}:
-                        result = {"ok": False, "error": "tool not active; discover it with tool_search first"}
-                    elif (remote_bound and tool_name not in REMOTE_ALLOWED_TOOL_NAMES):
-                        result = permission_result(gate, PermissionError("tool denied by policy"))
-                    elif ((owner := tool_owner(tool_name)) is not None
-                          and not plugin_enabled(owner)):
-                        result = {"ok": False, "error": "plugin disabled", "error_code": "plugin_disabled",
-                                  "retryable": False, "user_reason": "工具所属插件已关闭；请在插件管理中启用后继续。"}
-                    elif tool_name == 'skill_read' and skill_reader is not None:
-                        if 'skill_read' in getattr(gate, 'disallow', ()) or 'read' in getattr(gate, 'disallow', ()):
-                            result = permission_result(gate, PermissionError("tool denied by policy"))
-                        else:
-                            result = skill_reader(arguments.get('id'))
-                    elif tool_name.startswith(MCP_TOOL_PREFIX) and mcp_call is not None:
-                        result = call_mcp(gate, mcp_call, tool_name, arguments, cid)
-                    elif (tool_name == TASK_TOOL_NAME and subagents is not None
-                          and depth < max_depth and _subagent_coordinator is not None):
-                        # Freeze per-call arguments: the worker outlives this dispatch iteration.
-                        def execute_child(task_id, child_stop, child_args=dict(arguments)):
-                            return _run_subagent(gate, provider, subagents,
-                                                 child_args.get('prompt'), child_args.get('agent'),
-                                                 depth=depth, max_depth=max_depth, max_chars=max_chars,
-                                                 registry=registry, parent_session=session.get('id'),
-                                                 parent_should_stop=child_stop, state_dir=state_dir,
-                                                 parent_model_selection=session.get('model_selection'), task_id=task_id)
-                        result = _subagent_coordinator.dispatch(cid, arguments, execute_child)
-                    else:
-                        if getattr(gate, "web_approval_gate", False):
-                            arguments["_tool_call_id"] = cid
-                        from .tool_contract import bind_execution
-                        with bind_execution(store=store, state_dir=state_dir,
-                                            registry=registry, tool_catalog=tool_catalog,
-                                            subagent_coordinator=_subagent_coordinator):
-                            result = dispatch(root, gate, tool_name, arguments, session)
-                    if not isinstance(result, dict):
-                        result = {"ok": False, "error": "tool returned a malformed result"}
+                for call in group:
+                    tool_started = time.monotonic()
+                    cid = call.get("id", "")
+                    tool_name = call.get("function", {}).get("name", "")
+                    result = {'ok': False, 'error': 'not executed: run paused', 'retryable': False,
+                              'error_code': 'run_paused', 'user_reason': '运行已暂停，此批后续调用未执行。'}
+                    if cid and cid not in session['results']:
+                        session['results'][cid] = result
+                    _record_outcome(cid, tool_name, result, tool_started)
+                continue
+            if not concurrent:
+                call = group[0]
+                tool_started = time.monotonic()
+                cid = call.get("id", "")
+                function = call.get("function", {})
+                tool_name = function.get("name", "")
+                if not cid or cid in session["results"]:
+                    _record_outcome(cid, tool_name,
+                                    {"ok": False, "error": "duplicate or missing tool call id"},
+                                    tool_started)
+                    continue
+                result = _run_serial_call(cid, function, tool_name)
                 session["results"][cid] = result
+                _record_outcome(cid, tool_name, result, tool_started)
+                continue
+            # Concurrent batch of consecutive read-only calls. Hook vetoes and
+            # argument validation stay serial and in call order (external hook
+            # commands may have side effects); only the registry dispatch itself
+            # runs in the thread pool.
+            prepared = []
+            seen_ids: set = set()
+            for call in group:
+                tool_started = time.monotonic()
+                cid = call.get("id", "")
+                function = call.get("function", {})
+                tool_name = function.get("name", "")
+                if not cid or cid in session["results"] or cid in seen_ids:
+                    prepared.append((cid, tool_name,
+                                     {"ok": False, "error": "duplicate or missing tool call id"},
+                                     None, False, tool_started))
+                    continue
+                seen_ids.add(cid)
+                result, arguments = _prepare_batch_call(cid, function, tool_name)
+                prepared.append((cid, tool_name, result, arguments, True, tool_started))
+            jobs = [(cid, tool_name, arguments, started)
+                    for cid, tool_name, result, arguments, _stored, started in prepared
+                    if result is None]
+            outcomes: dict = {}
+            if jobs:
+                def dispatch_member(cid, tool_name, arguments):
+                    try:
+                        return _dispatch_registry_tool(cid, tool_name, arguments)
+                    except Exception as exc:  # noqa: BLE001 - one member must not fail its batch
+                        return {"ok": False, "error": type(exc).__name__}
+                with ThreadPoolExecutor(max_workers=min(len(jobs), max_concurrency)) as pool:
+                    member_results = list(pool.map(
+                        lambda job: dispatch_member(job[0], job[1], job[2]), jobs))
+                for job, member_result in zip(jobs, member_results):
+                    outcomes[job[0]] = (member_result, job[3])
+            # Results are recorded strictly in the original call order, whatever
+            # order the workers finished in.
+            for cid, tool_name, result, arguments, stored, started in prepared:
+                if result is None:
+                    result, started = outcomes[cid]
+                if stored:
+                    session["results"][cid] = result
                 if isinstance(result, dict) and result.get("awaiting_user"):
                     asked = result.get("question", "")
-            # Only the host can bind an E identifier to a genuine successful call.
-            aliases = evidence_aliases(session)
-            result = {key: value for key, value in result.items() if key != 'evidence_id'}
-            if result.get('ok') is True:
-                result = {'evidence_id': next((alias for alias, ident in aliases.items() if ident == cid), None), **result}
-            if cid in session['results']:
-                session['results'][cid] = result
-            elapsed = max(0, time.monotonic() - tool_started)
-            if activity is not None:
-                activity.tool(tool_name, cid, elapsed, bool(result.get('ok')))
-            if halt_result is None and (result.get('awaiting_approval') or
-                                       result.get('retryable') is False and not result.get('ok')):
-                halt_result = result
-            session["messages"].append({"role": "tool", "tool_call_id": cid, "content": json.dumps(result, ensure_ascii=False)})
-            _emit_event(on_event, "tool_result", id=cid, name=tool_name,
-                        ok=bool(isinstance(result, dict) and result.get("ok")),
-                        error=(result.get("error") or "") if isinstance(result, dict) else "malformed result")
-            # PermissionRequest fires when a capability was refused and a human
-            # decision is what unblocks it. It is OBSERVATIONAL ONLY: the exit
-            # code is recorded but never allowed to grant access, because a hook
-            # that could approve would silently defeat the gate it observes.
-            if (hooks is not None and plugin_enabled("hooks") and
-                    isinstance(result, dict) and result.get("error") == "denied"):
-                for entry in hooks.fire("PermissionRequest", {"session_id": session.get("id", ""),
-                                                              "tool_name": tool_name,
-                                                              "tool_call_id": cid}):
-                    _hook_record(session, "PermissionRequest", entry)
-            # Post hooks observe the outcome; they cannot undo it.
-            if hooks is not None and plugin_enabled("hooks"):
-                ok = bool(isinstance(result, dict) and result.get("ok"))
-                event = "PostToolUse" if ok else "PostToolUseFailure"
-                for entry in hooks.fire(event, {"session_id": session.get("id", ""),
-                                                "tool": tool_name,
-                                                "tool_call_id": cid,
-                                                "ok": ok}):
-                    _hook_record(session, event, entry)
-            save_session()
+                _record_outcome(cid, tool_name, result, started)
         if stop_requested():
             return settle_stopped()
         if halt_result is not None or evidence_repair_active:

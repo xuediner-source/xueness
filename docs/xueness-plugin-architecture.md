@@ -163,7 +163,7 @@ providers 的 CLI parser/handler 已迁入 `xueness/bundled_plugins/providers/op
 
 ## 功能逐项归属清单
 
-下表概述当前 27 份 manifest 中的 118 项用户能力。命令/工具/依赖和实际实现文件以同一份 manifest 为准；前端卡片直接展示该功能清单，不维护第二份隐藏列表。纯安全内核与通用布局的边界如前文所述。
+下表概述当前 27 份 manifest 中的 121 项用户能力。命令/工具/依赖和实际实现文件以同一份 manifest 为准；前端卡片直接展示该功能清单，不维护第二份隐藏列表。纯安全内核与通用布局的边界如前文所述。
 
 | 插件 | 已实现的用户能力 |
 |---|---|
@@ -348,3 +348,14 @@ profile 是 Cordis/DeepSeek 那种「组合配置档」的最小安全版本：�
 `tools/check_plugin_architecture.py` 新增两条声明式约束：manifest 可选 `pluginsActions`（字符串数组，跨包唯一属主，声明者必须有 `def execute_cli(args)`）与 `dataFiles`（包内相对路径，禁止 `..`/绝对路径/盘符）；包里任何未被 `dataFiles` 认领的 `*.json`（除 `manifest.json`）都判错，杜绝「数据文件躲在审计之外」。门监会真的读取被声明的数据文件并按形状审计 profile 文档（未知插件、非布尔、空开关、未知顶层/条目字段、自名不一致、环与超深继承），同时受 256 KiB 读取预算约束，且全程只用 JSON 解析、不导入插件代码。`plugin_contract` 同步校验新字段形态。
 
 回归：`tests/test_plugin_validate_update.py`（24 项）覆盖好/坏清单与列表、可执行字段、可信构建 manifest 拒绝、依赖循环、符号链接与超限、目录逐文档报告、`update` 的计划/成功原子替换/摘要不符/校验失败不动原字节/降级与未安装/写入失败回滚、HTTP 只接受内联文档、属主禁用后 CLI 与 HTTP 的拒绝、以及 `route_owner` 未被改坏；`tests/test_plugin_profiles.py`（22 项）覆盖内置档位形状与包含关系、自定义档按数据读取、各类拒绝、环与超深、`preview`/`apply` 一致、显式开关优先与状态文件键集合、依赖不开启时 `blockedBy` 保持、dry-run 与实切无漂移、内核 `set_profile` 拒绝、状态目录只多出锁与 `plugin-state.json`、CLI/HTTP 三入口与禁用行为；`tests/test_plugin_architecture.py` 增加 `pluginsActions`/`dataFiles`/profile 数据的 6 项门禁用例。前端 `webapp/src/plugins/extensions/PluginProfilePicker.tsx` 挂在「设置 → 供应商」的模型管理之上，只在 `isPluginEffective('extensions')` 时加载与渲染，未开启时不发请求也不显示；轻量档位提示（`lightweightTierHint`）只在当前不是 `lightweight` 时出现，点击调用与后端同一 `POST /api/plugins/profiles/apply`，供应商轻量逻辑本身未改动。`webapp/src/plugins/extensions/PluginProfilePicker.test.tsx` 4 项覆盖提示可见性、行渲染与禁用态、切换摘要文案、以及插件关闭时渲染为空字符串。所有测试使用隔离状态目录与本地假 provider，不访问网络、不调用真实模型。
+
+
+## 依赖感知的工具并发（2026-10-05）
+
+目录新增 `sessions.tool_concurrency`：同一轮模型返回多个工具调用时，连续的并发安全只读调用合成批次并发执行，其余调用按原顺序逐个串行。完整目录现为 27 个插件、121 项登记功能。
+
+声明式并发标记是纯数据：`BuiltinTool` 新增 `concurrency_safe` 字段（默认 False），只有确定无副作用的内置工具标为 True——`read`/`list`/`glob`/`grep`（files）、`todo_read`（planning）、`tool_result_read`（providers）与 `read_session_context`（sessions）。写文件、编辑、命令、终端、网络、子代理、MCP、workflow/后台任务以及会写会话状态的工具（`todo_write`、`delivery_plan`、`tool_search`——后者看似只读，实际会写会话的 `discovered_tools`）一律保持默认串行。
+
+调度实现在共享运行内核 `core.py` 的单轮工具执行循环内（与 Gate、预算、完成验证同层的调度基础设施，不是新的产品入口；用户能力归 sessions 插件登记）：按调用顺序做静态预检后，连续通过的调用切成批次，批次上限读取环境变量 `XUENESS_MAX_TOOL_CONCURRENCY`（默认 10；非法值回退默认；设 1 即完全串行），批次内用线程池并发执行注册表 dispatch，每个 worker 自行绑定执行上下文。可入批的充要条件之一是工具的 gate kind 属于 `Gate.check` 中无需交互审批的只读集合，因此审批交互永远不会与其它调用并发弹出；需要审批的调用、被 disallow/策略名单拒绝、轻量档未激活、远程绑定受限或所属插件被禁用的调用都单独串行，其暂停/短路语义与串行完全一致。PreToolUse 钩子 veto 与参数校验仍在主线程按调用顺序串行进行（外部钩子命令可能有副作用，不并发）；PostToolUse/PostToolUseFailure/PermissionRequest 钩子、证据别名、activity 统计与逐调用 save 均在主线程按原顺序执行；`before_tool_execution` 观察钩子只对可变工具触发，而可变工具从不入批，轮次检查点时机因此不变。取消/中断语义不变：stop 仍在步骤与批次边界生效，运行中不重放。
+
+结果严格按原调用顺序回填：`tool_call`/`tool_result` 事件逐调用成对出现，journal 的消息与结果顺序和串行一致；单个批内成员异常只降级为该调用的结构化失败结果，不影响同批其他调用。与串行的唯一已知差异是诊断性的：批内某成员在 handler 内部才产生的暂停类拒绝（例如只读工具的工作区路径逃逸被 Gate 拒绝）发生时，同批其余只读成员仍会完成并记录真实结果——它们没有副作用，批间短路与暂停状态仍与串行完全一致。计划模式下写/执行/网络工具照旧在 Gate 被拒且从不入批，行为与串行完全一致。回归见 `tests/test_tool_concurrency.py`（屏障/区间验证并发与串行、批次切分、结果顺序、上限=1、异常隔离、审批不并发、plan 模式不变），全部使用隔离状态目录与注入的假 handler，不访问网络、不调用真实模型。

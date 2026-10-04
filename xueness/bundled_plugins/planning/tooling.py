@@ -57,7 +57,8 @@ def _ask_user(root, gate, args, session, call_id) -> dict:
 
 REGISTRY: tuple[BuiltinTool, ...] = (
     BuiltinTool("todo_read", "Read the session-scoped todo list (no filesystem access)",
-                {}, (), "todo_read", False, _todo_read),
+                {}, (), "todo_read", False, _todo_read,
+                concurrency_safe=True),
     BuiltinTool("todo_write", "Replace the session-scoped todo list (journal-persisted, capped)",
                 {"todos": {"type": "array", "items": {"type": "object"}}}, ("todos",),
                 "todo_write", False, _todo_write),

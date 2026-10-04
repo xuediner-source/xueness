@@ -63,6 +63,14 @@ class BuiltinTool:
     mutating: bool
     handler: Handler
     approval_subject: Callable[[dict], str] | None = None
+    #: Declarative concurrency hint; pure data, default False. True asserts the
+    #: handler is a pure read with no side effects and no shared mutable state,
+    #: so one model turn's consecutive safe calls may run concurrently. The run
+    #: loop independently re-checks the gate policy: only tools whose gate kind
+    #: never needs interactive approval can actually join a batch, and write,
+    #: edit, exec, terminal, network-write, subagent and MCP tools stay serial
+    #: regardless of this flag.
+    concurrency_safe: bool = False
 
     def schema(self) -> dict:
         return {"type": "function", "function": {
