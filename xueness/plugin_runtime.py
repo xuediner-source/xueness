@@ -187,6 +187,30 @@ def completion_requires_evidence(state_dir, session, call_ids=()):
     return required
 
 
+def before_tool_execution(state_dir, session, store, tool_name, gate_kind):
+    """Tell effective plugins that a mutating tool is about to run.
+
+    Generic kernel seam, resolved by the same ownership rules as the completion
+    callbacks above: it grants nothing, denies nothing, and carries no product
+    behaviour of its own. A plugin that fails here must never break the tool
+    call it was only observing, so errors are dropped.
+    """
+    if session is None or state_dir is None:
+        return
+    payload = {'state_dir': state_dir, 'session': session, 'store': store,
+               'tool': tool_name, 'gate_kind': gate_kind}
+    for item in catalog(state_dir):
+        if not item['effective']:
+            continue
+        callback = getattr(entrypoint(item['id']), 'before_tool_execution', None)
+        if not callable(callback):
+            continue
+        try:
+            callback(payload)
+        except Exception:
+            continue
+
+
 def active_tool_names(state_dir):
     from .tool_registry import REGISTRY
     effective = {p['id'] for p in catalog(state_dir) if p['effective']}

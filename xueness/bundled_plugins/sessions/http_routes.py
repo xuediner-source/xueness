@@ -70,9 +70,19 @@ def _public_fork_parent(session):
             or type(truncated) is not bool
             or (reason is not None and (not isinstance(reason, str) or len(reason) > 500))):
         return None
-    return {'sourceId': source_id, 'sourceRevision': revision, 'turn': turn,
-            'endIndex': end_index, 'historyTruncated': truncated,
-            'truncationReason': reason}
+    public = {'sourceId': source_id, 'sourceRevision': revision, 'turn': turn,
+              'endIndex': end_index, 'historyTruncated': truncated,
+              'truncationReason': reason}
+    checkpoint_id = parent.get('checkpointId')
+    checkpoint_turn = parent.get('checkpointTurn')
+    if (isinstance(checkpoint_id, str) and re.fullmatch(r'[0-9a-f]{32}', checkpoint_id)
+            and type(checkpoint_turn) is int and checkpoint_turn >= 1):
+        # Set only by sessions.fork_from_checkpoint: which workspace snapshot the
+        # fork was derived from. git.rewind remains the only thing that touches
+        # the shared workspace itself.
+        public['checkpointId'] = checkpoint_id
+        public['checkpointTurn'] = checkpoint_turn
+    return public
 
 
 def _public_reasoning_history(session):

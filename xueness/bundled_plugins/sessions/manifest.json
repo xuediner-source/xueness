@@ -68,6 +68,11 @@
       "nameEn": "Safe history forks and parent links"
     },
     {
+      "id": "sessions.fork_from_checkpoint",
+      "name": "从轮次检查点派生新会话",
+      "nameEn": "Fork a session from a turn checkpoint"
+    },
+    {
       "id": "sessions.portable",
       "name": "脱敏导出、导入与恢复",
       "nameEn": "Redacted export, import and resume"

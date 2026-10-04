@@ -46,6 +46,13 @@ def add_session_parsers(commands):
     fork.add_argument('id')
     fork.add_argument('--turn', type=int, help='closed turn ordinal (defaults to latest safe turn)')
     fork.add_argument('--title', help='title for the forked session')
+    fork_checkpoint = sub.add_parser(
+        'fork-checkpoint', help='fork the turns before an automatic workspace checkpoint')
+    fork_checkpoint.add_argument('id')
+    fork_checkpoint.add_argument('--checkpoint', help='turn checkpoint id (git turn-checkpoints list)')
+    fork_checkpoint.add_argument('--latest', action='store_true', help='use the newest turn checkpoint')
+    fork_checkpoint.add_argument('--turn', type=int, help='fork before this turn\'s checkpoint')
+    fork_checkpoint.add_argument('--title', help='title for the forked session')
 
 
 def add_provider_parsers(commands):
@@ -239,6 +246,11 @@ def execute(args, store):
         from .forking import fork_turn
         return fork_turn({'store': store, 'lock': None, 'running': set()}, args.id,
                          turn=args.turn, title=args.title)
+    if args.action == 'fork-checkpoint':
+        from .forking import fork_at_checkpoint
+        return fork_at_checkpoint({'store': store, 'lock': None, 'running': set()}, args.id,
+                                  checkpoint=args.checkpoint, latest=args.latest,
+                                  turn=args.turn, title=args.title)
     if args.action == 'list':
         return {'sessions': list_sessions(store, root=args.root, search=args.search, archived=args.archived)}
     with lease(store, args.id):

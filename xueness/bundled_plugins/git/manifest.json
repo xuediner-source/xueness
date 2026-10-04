@@ -20,7 +20,8 @@
   "modules": [
     "actions",
     "git_api",
-    "operator_cli"
+    "operator_cli",
+    "turn_checkpoints"
   ],
   "features": [
     {
@@ -37,6 +38,16 @@
       "id": "git.checkpoint",
       "name": "检查点、恢复预览与恢复前备份",
       "nameEn": "Checkpoints, restore review and recovery backups"
+    },
+    {
+      "id": "git.turn_checkpoints",
+      "name": "轮次首个写入前自动检查点",
+      "nameEn": "Automatic checkpoints before a turn's first change"
+    },
+    {
+      "id": "git.rewind",
+      "name": "回退工作区到轮次检查点",
+      "nameEn": "Rewind the workspace to a turn checkpoint"
     }
   ],
   "frontendModules": [

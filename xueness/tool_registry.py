@@ -83,6 +83,14 @@ def dispatch(root: Path, gate, name: str, args: dict, session: dict | None = Non
             owner = tool_owner(name)
             if owner is None or not is_enabled(state_dir, owner):
                 return {"ok": False, "error": "plugin disabled"}
+        if tool.mutating and session is not None:
+            # Generic observation seam: plugins that snapshot a workspace run
+            # before the first real change of a turn. Grants nothing; the Gate
+            # checks inside the handler still decide this call.
+            from .plugin_runtime import before_tool_execution
+            before_tool_execution(state_dir, session,
+                                  (context or {}).get("store") if context else None,
+                                  name, tool.gate_kind)
         return tool.handler(root, gate, args, session, call_id)
     except (OSError, ValueError, KeyError, PermissionError, subprocess.TimeoutExpired) as exc:
         # Exceptions may contain command output/environment from untrusted
