@@ -261,3 +261,20 @@ sessions 的时间线展示自然回复和 Markdown，识别协议封装后显�
 
 `sessions.fork_from_checkpoint` 择优复用既有安全轮次分叉实现（`forking._boundaries` + `_make_fork`）：按检查点的轮次序号取「该轮之前」的闭合边界，只复制更早轮次的规范化消息与结果，剥离执行状态，并在 `fork_parent` 中同时记录来源会话/轮次与 `checkpointId`/`checkpointTurn`。它不改写共享工作区——那是 `git.rewind` 的职责；第 1 轮的检查点没有更早的可分叉闭合轮次，返回 409。CLI 为 `sessions fork-checkpoint <sid> [--checkpoint ID|--latest|--turn N] [--title …]`，HTTP 为 `POST /api/sessions/<sid>/fork-from-checkpoint`。回归见 `tests/test_turn_checkpoints.py`（临时仓库 + 隔离状态目录，不访问网络）。
 
+## 插件生命周期与服务注入（2026-10-05）
+
+本轮把「谁在什么时候启停什么」从注册表搬回插件本身，参照 DeepSeek Harness（Cordis）的 everything-is-a-plugin 生命周期，但没有引入它的依赖注入容器，也没有引入动态加载：插件仍只从构建期 `PLUGIN_IDS` 加载，`plugin-state.json` 仍只允许已知 ID 的布尔开关，manifest 的新字段全部是字符串数组数据，状态文件与目录数据都不能引入可执行代码。
+
+共享内核新增 `xueness/plugin_scope.py`，已登记为结构门禁的内核基础设施。它是例外而非产品功能，理由是这一层只描述生命周期协议本身：终端、浏览器、自动化各自的启停条件、获取的资源与释放方式都留在所属插件的 `plugin.py` 里，内核只决定 effective 集合变化时**何时** activate、**何时** dispose，不认识任何具体功能。这与 Store、lease、Gate、journal 协议同层级；后续新增有状态功能不再需要改内核，只需在自己的包内实现 `activate`。
+
+- `PluginScope`：`add_disposer(fn)`、`provide(name, service)`、`inject(name)`、`ensure(name, acquire, release, live=…)`、`dispose()`。dispose 按注册的**逆序**释放，单个 disposer 抛错只记录 `{plugin, disposer, error}` 并继续释放其余，不会把后面的资源留在原地；作用域已销毁后再申请抛 `ScopeActive`，注入尚未就绪的服务抛 `ServiceUnavailable`，两者信息都带插件 ID 与服务名；同一服务被第二个插件 provide 会被拒绝。
+- `activate(scope, ctx)` 是 **reconcile 钩子**：每次请求与开关边界的 `sync_services` 都会对仍 effective 的插件再跑一次 activate，由 `ensure` 保证真实资源只获取一次。这样保留了既有运行语义——更新关闭准入时自动化不启动定时器、重新开放后的下一次 sync 才创建；宿主把 `ctx['automation_service']` 置空（桌面安装前）后，下一轮 sync 重新获取；`deactivate(pid)` 只停一次而插件仍启用时，下一轮同样会自动重建，不需要操作员重新开关。
+- `ScopeRegistry` 按 manifest 的 `dependencies` 与 `inject → provides` 边做拓扑定点排序，provider 先于注入者 activate；离开 effective 集合的插件逆序 dispose，依赖级联因此连带失效。
+
+manifest 新增三个可选数据字段：`provides`、`inject`（点分服务名，如 `terminal.broker`）与 `httpFamilies`（`/api` 之下的一段式模式，`*` 恰好匹配一段，如 `sessions/*/git`）。当前 3 个插件 provide 服务，24 份 manifest 登记 http 家族（shell、office、onboarding 没有 `/api` 家族故留空，字段是可选的）；`inject` 尚无 bundled 使用方，跨插件取服务仍走既有显式 entrypoint 调用，机制由回归覆盖，等有真实需求时不必再改内核。`plugin_contract.lifecycle_field_errors` 与 `tools/check_plugin_architecture.py` 共同校验：字段必须是不重复的字符串数组，服务名与路由段格式合法，`*` 不能是首段；跨包拒绝同一 http 家族或同一服务出现两个属主、同深度可重叠的模式分属两插件、声明 `provides` 却没有 `def activate(scope, ctx)`，以及 `inject` 指向无人提供的服务。
+
+`route_owner` 不再持有硬编码 family→插件映射，改为按 `httpFamilies` 建立最深匹配索引，结果与原映射在所有 `/api/...` 路径上逐项一致（用 3688 条生成路径对照旧实现验证，含 `resources/<kind>`、`plugins/marketplace`、`sessions/*/git` 等嵌套归属）。`plugin_runtime.sync_services` 只做 native policy sync 加一次 `ScopeRegistry.sync()`；`ctx['terminals']`、`ctx['automation_service']` 等外部可见键保持不变，但写入与清空由对应插件负责。Web 服务器 `server_close` 改为 dispose 作用域，因此停服释放的是插件真正获取过的资源，而不再重复一遍启停条件；浏览器 worker 从「每次请求边界扫一遍」改为「持有者释放时清理」，CLI 禁用仍走 `on_disabled`，进程退出仍保留 `atexit` 兜底。
+
+`catalog()` 在既有 `enabled/effective/blockedBy` 之外补出 `activated` 与 `activationError`：启用且依赖齐备但服务注入无法满足的功能会显示原因（`service unavailable: …`、`provider cannot activate: …`、`dependency not effective: …`、`cyclic service injection: …`、`activation failed: …`），把「为什么这个功能没跑起来」放进目录而不是日志。前端目录类型是结构化的、按已知字段渲染，新增数据字段被忽略，因此本轮没有改动 webapp。
+
+验证：`python3 tools/check_plugin_architecture.py` 通过；`tests/test_plugin_scope.py` 21 项覆盖 disposer 逆序与容错、provide 属主冲突、inject 缺失与级联、依赖拓扑、循环注入、禁用后 dispose、再次启用重新激活、宿主替换服务后重取、以及真实 bundled 插件的 terminal/automation/browser 生命周期与目录字段；原有 plugin_runtime、plugins、HTTP 边界、web、terminal profiles、browser runtime 与架构门禁回归合并 296 项通过（20 条环境跳过）。

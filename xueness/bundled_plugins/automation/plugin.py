@@ -3,6 +3,35 @@ from .scheduler import Automations, Scheduler
 
 def create_service(state,allow_real=False): return Scheduler(state,allow_real=allow_real)
 
+
+def activate(scope, ctx):
+    """Run the local cron scheduler while the host serves plugins.
+
+    The host decides whether background triggering may start at all: a server
+    that has closed admission for an update, or one that never serves plugins,
+    must not gain a scheduler here.
+    """
+    state_dir = ctx['state_dir']
+
+    def acquire():
+        scheduler = ctx.get('automation_service')
+        if scheduler is not None:
+            return scheduler
+        if not ctx.get('serve_plugins') or ctx.get('admission_closed'):
+            return None
+        scheduler = create_service(state_dir, allow_real=ctx.get('allow_real', False))
+        ctx['automation_service'] = scheduler
+        return scheduler
+
+    def release(scheduler):
+        scheduler.close()
+        if ctx.get('automation_service') is scheduler:
+            ctx['automation_service'] = None
+
+    scope.ensure('automation.scheduler', acquire, release,
+                 live=lambda scheduler: ctx.get('automation_service') is scheduler)
+
+
 def dispatch(method,parts,query,data,ctx):
     if parts[:2]!=['api','automations']: return None
     try:

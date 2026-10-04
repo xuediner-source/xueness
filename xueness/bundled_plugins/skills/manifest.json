@@ -17,6 +17,9 @@
     "skills"
   ],
   "capabilities": [],
+  "httpFamilies": [
+    "resources/skills"
+  ],
   "modules": [
     "skills"
   ],

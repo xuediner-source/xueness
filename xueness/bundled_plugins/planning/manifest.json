@@ -16,6 +16,9 @@
   "panels": [],
   "resources": [],
   "capabilities": [],
+  "httpFamilies": [
+    "delivery"
+  ],
   "modules": [
     "tooling",
     "delivery"

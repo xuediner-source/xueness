@@ -24,6 +24,10 @@
   ],
   "resources": [],
   "capabilities": [],
+  "httpFamilies": [
+    "composer",
+    "sessions"
+  ],
   "modules": [
     "cli",
     "cli_input",

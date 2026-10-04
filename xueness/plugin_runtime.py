@@ -13,6 +13,8 @@ import threading
 from contextlib import contextmanager
 from pathlib import Path
 
+from .plugin_contract import lifecycle_field_errors
+from .plugin_scope import ScopeRegistry, activation_plan
 from .resources import _atomic_write_json
 
 API_VERSION = 1
@@ -22,6 +24,8 @@ PLUGIN_IDS = ('sessions', 'files', 'shell', 'planning', 'providers', 'memory',
 PACKAGE_ROOT = Path(__file__).with_name('bundled_plugins')
 CONFIG_NAME = 'plugin-state.json'
 _LOCK = threading.RLock()
+#: HTTP ownership comes from the immutable build manifests, so it is resolved once.
+_ROUTE_INDEX: dict | None = None
 
 
 class PluginDisabled(ValueError):
@@ -38,6 +42,9 @@ def _manifests():
             raise ValueError('invalid bundled plugin default')
         if any(dep not in PLUGIN_IDS for dep in item['dependencies']):
             raise ValueError('unknown bundled plugin dependency')
+        errors = lifecycle_field_errors(pid, item)
+        if errors:
+            raise ValueError('; '.join(errors))
         result[pid] = item
     return result
 
@@ -87,11 +94,18 @@ def catalog(state_dir):
         return available
     for pid in PLUGIN_IDS:
         resolve(pid)
-    return [{**manifest, 'enabled': switches.get(pid, manifest['defaultEnabled']),
-             'effective': effective[pid],
-             'blockedBy': [dep for dep in manifest['dependencies'] if not effective[dep]],
-             **({'configurationError': error} if error else {})}
-            for pid, manifest in manifests.items()]
+    items = [{**manifest, 'enabled': switches.get(pid, manifest['defaultEnabled']),
+              'effective': effective[pid],
+              'blockedBy': [dep for dep in manifest['dependencies'] if not effective[dep]],
+              **({'configurationError': error} if error else {})}
+             for pid, manifest in manifests.items()]
+    order, blocked = activation_plan(items)
+    activated = set(order)
+    for item in items:
+        item['activated'] = item['id'] in activated
+        if item['id'] in blocked:
+            item['activationError'] = blocked[item['id']]
+    return items
 
 
 def is_enabled(state_dir, plugin_id):
@@ -245,25 +259,44 @@ def cli_owner(command, args=None):
     return None
 
 
+def build_http_family_index(manifests=None):
+    """Map each plugin's declared ``httpFamilies`` patterns to its owner.
+
+    Entries are path data relative to ``/api``. A literal segment must match, and
+    ``*`` skips exactly one segment, so ``sessions/*/git`` is git's ownership of
+    a session sub-resource without claiming the whole ``sessions`` family.
+    """
+    index = {}
+    for pid, spec in (manifests if manifests is not None else _manifests()).items():
+        for entry in spec.get('httpFamilies') or ():
+            pattern = tuple(entry.split('/'))
+            previous = index.get(pattern)
+            if previous is not None and previous != pid:
+                raise ValueError('http family %s is owned by %s and %s' % (entry, previous, pid))
+            index[pattern] = pid
+    return index
+
+
+def _http_family_index():
+    global _ROUTE_INDEX
+    if _ROUTE_INDEX is None:
+        _ROUTE_INDEX = build_http_family_index()
+    return _ROUTE_INDEX
+
+
 def route_owner(parts):
+    """The plugin owning an ``/api`` path family, longest declared pattern first."""
     if not parts or parts[0] != 'api' or len(parts) < 2:
         return None
-    family = parts[1]
-    if family == 'plugins' and len(parts) > 2 and parts[2] == 'marketplace':
-        return 'extensions'
-    if family == 'composer':
-        return 'sessions'
-    if family == 'sessions':
-        if len(parts) > 3:
-            return {'files':'files','file':'files','git':'git','tasks':'subagents'}.get(parts[3], 'sessions')
-        return 'sessions'
-    if family == 'resources' and len(parts) > 2:
-        if parts[2] == 'plugins':
-            return 'extensions'
-        return parts[2] if parts[2] in ('skills','commands','hooks','mcp','subagents') else None
-    return {'updates':'updates','delivery':'planning','desktop':'desktop','bots':'bots','remote':'remote','diagnostics':'diagnostics','automations':'automation','workflows':'workflows','terminals':'terminal','mcp':'mcp','network':'network',
-            'providers':'providers','settings':'settings','workspaces':'settings','usage':'usage',
-            'memory':'memory','browser':'browser','directory':'files','home':'files','system':'files'}.get(family)
+    path = parts[1:]
+    index = _http_family_index()
+    owner, depth = None, 0
+    for pattern, pid in index.items():
+        if len(pattern) <= depth or len(pattern) > len(path):
+            continue
+        if all(segment == '*' or segment == got for segment, got in zip(pattern, path)):
+            owner, depth = pid, len(pattern)
+    return owner
 
 
 def dispatch_http(method, parts, query, data, ctx):
@@ -298,32 +331,24 @@ def dispatch_http(method, parts, query, data, ctx):
 
 
 def sync_services(ctx):
-    """Apply terminal lifecycle changes at HTTP request boundaries."""
+    """Apply plugin lifecycle changes at HTTP request boundaries.
+
+    The kernel no longer knows which feature owns a terminal, a browser worker
+    or a scheduler: each of those plugins contributes ``activate(scope, ctx)``
+    and releases what it acquired when its scope is disposed.
+    """
     if ctx.get("handler") is not None:
         ctx = ctx["handler"]._ctx
-    enabled = {p['id'] for p in catalog(ctx['state_dir']) if p['effective']}
     policy_sync = ctx.get('native_policy_sync')
     if callable(policy_sync):
         policy_sync()
-    with ctx['lock']:
-        broker = ctx.get('terminals')
-        if 'terminal' not in enabled:
-            if broker is not None:
-                broker.close()
-                ctx['terminals'] = None
-        elif broker is None:
-            ctx['terminals'] = entrypoint('terminal').create_service()
-        if 'browser' not in enabled:
-            shutdown = getattr(entrypoint('browser'), 'shutdown', None)
-            if shutdown:
-                shutdown(ctx['state_dir'])
-        scheduler = ctx.get('automation_service')
-        if 'automation' not in enabled:
-            if scheduler is not None:
-                scheduler.close()
-                ctx['automation_service'] = None
-        elif scheduler is None and ctx.get('serve_plugins') and not ctx.get('admission_closed'):
-            ctx['automation_service'] = entrypoint('automation').create_service(ctx['state_dir'], allow_real=ctx.get('allow_real', False))
+    registry = ctx.get('plugin_scopes')
+    if registry is None:
+        with _LOCK:
+            registry = ctx.get('plugin_scopes')
+            if registry is None:
+                registry = ctx['plugin_scopes'] = ScopeRegistry(ctx)
+    return registry.sync()
 
 
 def register_cli_parsers(commands):

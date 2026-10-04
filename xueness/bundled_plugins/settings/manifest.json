@@ -16,6 +16,10 @@
   ],
   "resources": [],
   "capabilities": [],
+  "httpFamilies": [
+    "settings",
+    "workspaces"
+  ],
   "modules": [
     "operator_cli",
     "preferences",

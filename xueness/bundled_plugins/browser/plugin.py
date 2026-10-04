@@ -147,6 +147,22 @@ def on_disabled(state_dir):
     shutdown(state_dir)
 
 
+class _WorkerHandle:
+    """The lifecycle handle a plugin scope holds on this state directory's worker."""
+
+    def __init__(self, state_dir):
+        self.state_dir = Path(state_dir).resolve()
+
+    def shutdown(self):
+        shutdown(self.state_dir)
+
+
+def activate(scope, ctx):
+    """Own the persistent worker so disabling the feature stops its child process."""
+    scope.ensure('browser.worker', lambda: _WorkerHandle(ctx['state_dir']),
+                 lambda worker: worker.shutdown())
+
+
 def _broker(state, root):
     state = Path(state).resolve()
     key = str(state)

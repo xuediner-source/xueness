@@ -17,6 +17,9 @@
   "capabilities": [
     "command"
   ],
+  "httpFamilies": [
+    "resources/hooks"
+  ],
   "modules": [
     "hooks"
   ],

@@ -20,6 +20,9 @@
   "capabilities": [
     "network"
   ],
+  "httpFamilies": [
+    "providers"
+  ],
   "modules": [
     "activity",
     "context_budget",

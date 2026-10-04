@@ -14,7 +14,7 @@ import re
 KERNEL_BACKEND = {
     '__init__.py', '__main__.py', 'cli.py', 'core.py', 'events.py',
     'http_contract.py', 'file_lock.py', 'process_runtime.py', 'plugin_cli.py', 'plugin_contract.py', 'plugin_runtime.py',
-    'plugin_sdk.py', 'plugins.py', 'resources.py', 'session_lease.py',
+    'plugin_scope.py', 'plugin_sdk.py', 'plugins.py', 'resources.py', 'session_lease.py',
     'tool_contract.py', 'tool_registry.py', 'builtin_tools.py', 'web.py', 'write_lock.py',
 }
 SHARED_FRONTEND = {
@@ -27,6 +27,14 @@ SHARED_FRONTEND = {
     'ui/CodeContent.tsx', 'ui/CodePreview.tsx', 'ui/Select.tsx',
     'ui/icons.tsx', 'ui/primitives.tsx',
 }
+
+SERVICE_NAME = re.compile(r'[a-z][a-z0-9_]*(?:\.[a-z][a-z0-9_]*)*\Z')
+ROUTE_SEGMENT = re.compile(r'\*|[a-z][a-z0-9_]*\Z')
+
+
+def _strings(manifest, field) -> list[str]:
+    values = manifest.get(field)
+    return [value for value in values if isinstance(value, str)] if isinstance(values, list) else []
 
 
 def _read(root: Path, relative: str) -> str:
@@ -114,6 +122,23 @@ def audit(root: Path) -> list[str]:
                             errors.append(field + ': multiple owners for ' + value)
             if any(dep not in ids or dep == pid for dep in manifest['dependencies']):
                 errors.append(pid + ': unknown or self dependency')
+            for field in ('provides', 'inject', 'httpFamilies'):
+                if field not in manifest:
+                    continue
+                values = manifest[field]
+                if not isinstance(values, list) or any(not isinstance(x, str) or not x for x in values):
+                    errors.append(pid + ': ' + field + ' must be a string array')
+                    manifest[field] = []
+                    continue
+                if len(values) != len(set(values)):
+                    errors.append(pid + ': duplicate ' + field)
+                for value in values:
+                    if field == 'httpFamilies':
+                        segments = value.split('/')
+                        if segments[0] == '*' or any(not ROUTE_SEGMENT.match(segment) for segment in segments):
+                            errors.append(pid + ': invalid httpFamilies pattern ' + value)
+                    elif not SERVICE_NAME.match(value):
+                        errors.append(pid + ': invalid ' + field + ' name ' + value)
             actual = {p.relative_to(package_root / pid).with_suffix('').as_posix().replace('/', '.')
                       for p in (package_root / pid).rglob('*.py')
                       if p.name != '__init__.py' and p.relative_to(package_root / pid).as_posix() != 'plugin.py'}
@@ -170,6 +195,40 @@ def audit(root: Path) -> list[str]:
                     errors.append(pid + ': backend worker assets must all have an explicit owner')
         except (OSError, ValueError, SyntaxError, KeyError) as exc:
             errors.append(pid + ': ' + str(exc))
+
+    # Lifecycle declarations are data, but they must stay unambiguous: one HTTP
+    # family and one service name can only have one owner, and a declared
+    # provider or injected service has to exist in the build allowlist.
+    family_owners: dict[tuple[str, ...], str] = {}
+    service_owners: dict[str, str] = {}
+    for pid in ids:
+        manifest = manifests.get(pid) or {}
+        for value in _strings(manifest, 'httpFamilies'):
+            pattern = tuple(value.split('/'))
+            previous = family_owners.get(pattern)
+            if previous is not None and previous != pid:
+                errors.append('http family: multiple owners for ' + value)
+            family_owners[pattern] = pid
+        for name in _strings(manifest, 'provides'):
+            previous = service_owners.get(name)
+            if previous is not None and previous != pid:
+                errors.append('service: multiple providers for ' + name)
+            service_owners[name] = pid
+        if _strings(manifest, 'provides') and not re.search(r'^def activate\(scope, ctx\)',
+                                                            _read(root, 'xueness/bundled_plugins/' + pid + '/plugin.py'), re.M):
+            errors.append(pid + ': declares provides without activate(scope, ctx)')
+    for pid in ids:
+        for name in _strings(manifests.get(pid) or {}, 'inject'):
+            if name not in service_owners:
+                errors.append(pid + ': injects a service no plugin provides: ' + name)
+    claims = sorted(family_owners.items())
+    for index, (pattern, owner) in enumerate(claims):
+        for other, other_owner in claims[index + 1:]:
+            if owner == other_owner or len(pattern) != len(other):
+                continue
+            if all(left == right or left == '*' or right == '*' for left, right in zip(pattern, other)):
+                errors.append('http family overlap: %s (%s) and %s (%s)'
+                              % ('/'.join(pattern), owner, '/'.join(other), other_owner))
 
     def visit(pid, chain):
         if pid in chain:

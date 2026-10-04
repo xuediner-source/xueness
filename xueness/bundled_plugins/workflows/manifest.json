@@ -32,6 +32,9 @@
   "capabilities": [
     "command"
   ],
+  "httpFamilies": [
+    "workflows"
+  ],
   "modules": [
     "dsl",
     "operations_api",

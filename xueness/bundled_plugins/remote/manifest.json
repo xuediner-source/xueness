@@ -17,6 +17,9 @@
   ],
   "resources": [],
   "capabilities": [],
+  "httpFamilies": [
+    "remote"
+  ],
   "modules": [],
   "features": [
     {

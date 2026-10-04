@@ -41,6 +41,21 @@ class RuntimeTests(unittest.TestCase):
         self.assertNotIn('web_fetch',names);self.assertIn('read',names)
         self.assertEqual(runtime.route_owner(['api','sessions','a'*32,'git','commit']),'git')
         self.assertEqual(runtime.route_owner(['api','plugins','marketplace']),'extensions')
+    def test_http_families_decide_route_ownership_without_a_host_map(self):
+        id='a'*32
+        cases={('api','sessions'):'sessions',('api','composer'):'sessions',
+               ('api','directory'):'files',('api','home'):'files',('api','system'):'files',
+               ('api','sessions',id,'files'):'files',('api','sessions',id,'file'):'files',
+               ('api','sessions',id,'tasks'):'subagents',('api','resources','subagents'):'subagents',
+               ('api','sessions',id,'git','branch'):'git',
+               ('api','resources','hooks'):'hooks',('api','resources','skills'):'skills',
+               ('api','resources','commands'):'commands',('api','resources','mcp'):'mcp',
+               ('api','resources','plugins'):'extensions',('api','plugins',id):None,
+               ('api','terminals'):'terminal',('api','automations'):'automation',
+               ('api','delivery'):'planning',('api','workspaces'):'settings',
+               ('api','workflows'):'workflows',('api','not-a-family'):None}
+        for parts,owner in cases.items():
+            self.assertEqual(runtime.route_owner(list(parts)),owner,'/'.join(parts))
     def test_old_imports_are_identity_aliases(self):
         for old,new in [('provider','providers.provider'),('git_api','git.git_api'),('workflows','workflows.workflows'),('memory','memory.memory')]:
             self.assertIs(importlib.import_module('xueness.'+old),importlib.import_module('xueness.bundled_plugins.'+new))

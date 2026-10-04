@@ -19,6 +19,12 @@
   "panels": [],
   "resources": [],
   "capabilities": [],
+  "httpFamilies": [
+    "browser"
+  ],
+  "provides": [
+    "browser.worker"
+  ],
   "modules": [
     "settings_api",
     "profiles",

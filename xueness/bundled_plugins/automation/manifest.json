@@ -17,6 +17,12 @@
   ],
   "resources": [],
   "capabilities": [],
+  "httpFamilies": [
+    "automations"
+  ],
+  "provides": [
+    "automation.scheduler"
+  ],
   "modules": [
     "scheduler"
   ],

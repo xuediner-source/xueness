@@ -83,6 +83,34 @@ class ArchitectureTests(unittest.TestCase):
         for part in ['features must describe', 'frontend/backend panel mismatch', 'cyclic plugin dependency']:
             self.assertTrue(any(part in e for e in errors), errors)
 
+    def test_http_family_cannot_be_claimed_by_two_plugins(self):
+        root = self.fixture()
+        self.rewrite(root, 'usage', lambda m: m.update(httpFamilies=['terminals']))
+        self.assertIn('http family: multiple owners for terminals', guard.audit(root))
+
+    def test_overlapping_http_family_patterns_need_one_owner(self):
+        root = self.fixture()
+        self.rewrite(root, 'memory', lambda m: m.update(httpFamilies=['resources/*']))
+        errors = guard.audit(root)
+        self.assertTrue(any('http family overlap' in e and 'resources/*' in e and 'memory' in e
+                            for e in errors), errors)
+
+    def test_provides_needs_an_activate_hook_and_inject_needs_a_provider(self):
+        root = self.fixture()
+        self.rewrite(root, 'usage', lambda m: m.update(provides=['usage.collector']))
+        self.assertIn('usage: declares provides without activate(scope, ctx)', guard.audit(root))
+        self.rewrite(root, 'usage', lambda m: m.update(provides=[], inject=['ghost.service']))
+        self.assertIn('usage: injects a service no plugin provides: ghost.service', guard.audit(root))
+
+    def test_lifecycle_field_shapes_are_data_only(self):
+        root = self.fixture()
+        self.rewrite(root, 'usage', lambda m: m.update(httpFamilies=['*', 'Sessions'], provides=['Usage Service']))
+        errors = guard.audit(root)
+        for expected in ['usage: invalid httpFamilies pattern *',
+                         'usage: invalid httpFamilies pattern Sessions',
+                         'usage: invalid provides name Usage Service']:
+            self.assertIn(expected, errors)
+
     def test_business_module_cannot_be_added_to_host(self):
         root = self.fixture()
         (root / 'xueness/new_feature.py').write_text('def run_feature(): pass\n')

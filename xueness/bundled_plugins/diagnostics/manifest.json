@@ -17,6 +17,9 @@
   ],
   "resources": [],
   "capabilities": [],
+  "httpFamilies": [
+    "diagnostics"
+  ],
   "features": [
     {
       "id": "diagnostics.export",

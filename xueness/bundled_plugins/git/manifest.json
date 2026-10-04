@@ -17,6 +17,9 @@
   "capabilities": [
     "command"
   ],
+  "httpFamilies": [
+    "sessions/*/git"
+  ],
   "modules": [
     "actions",
     "git_api",

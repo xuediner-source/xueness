@@ -23,6 +23,10 @@
   "capabilities": [
     "network"
   ],
+  "httpFamilies": [
+    "sessions/*/tasks",
+    "resources/subagents"
+  ],
   "modules": [
     "coordinator",
     "tools",

@@ -11,6 +11,9 @@
   "panels": [],
   "resources": [],
   "capabilities": [],
+  "httpFamilies": [
+    "desktop"
+  ],
   "modules": [
     "host",
     "bridge",

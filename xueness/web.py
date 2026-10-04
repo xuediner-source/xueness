@@ -734,13 +734,10 @@ def create_server(port: int, ctx: dict, host: str | None = None) -> ThreadingHTT
     handler = type("XuenessHandler", (Handler,), {"_ctx": ctx})
     class ManagedServer(ThreadingHTTPServer):
         def server_close(self):
-            if ctx.get('terminals') is not None:
-                ctx["terminals"].close()
-            if ctx.get("automation_service") is not None:
-                ctx["automation_service"].close()
-            shutdown = getattr(plugin_runtime.entrypoint("browser"), "shutdown", None)
-            if shutdown:
-                shutdown(ctx["state_dir"])
+            # Plugin scopes release exactly what their activate() acquired.
+            registry = ctx.get('plugin_scopes')
+            if registry is not None:
+                registry.dispose()
             super().server_close()
     server = ManagedServer((bind_host, port), handler)
     ctx["serve_plugins"] = True

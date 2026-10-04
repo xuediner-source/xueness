@@ -13,6 +13,9 @@
   "panels": [],
   "resources": [],
   "capabilities": [],
+  "httpFamilies": [
+    "updates"
+  ],
   "modules": [
     "desktop_updates"
   ],
