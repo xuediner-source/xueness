@@ -15,10 +15,21 @@
   "capabilities": [],
   "httpFamilies": [
     "plugins/marketplace",
+    "plugins/profiles",
     "resources/plugins"
   ],
+  "pluginsActions": [
+    "validate",
+    "update",
+    "profile"
+  ],
+  "dataFiles": [
+    "profiles.json"
+  ],
   "modules": [
-    "marketplace"
+    "marketplace",
+    "profiles",
+    "validate_update"
   ],
   "features": [
     {
@@ -30,9 +41,20 @@
       "id": "extensions.management",
       "name": "数据 manifest 安装、升级与移除",
       "nameEn": "Data manifest install, upgrade and removal"
+    },
+    {
+      "id": "extensions.validate_update",
+      "name": "插件市场清单只读校验与原子升级",
+      "nameEn": "Read-only manifest validation and atomic upgrades"
+    },
+    {
+      "id": "extensions.plugin_profiles",
+      "name": "插件组合 profile 档位",
+      "nameEn": "Plugin composition profiles"
     }
   ],
   "frontendModules": [
-    "plugins/extensions/index.tsx"
+    "plugins/extensions/index.tsx",
+    "plugins/extensions/PluginProfilePicker.tsx"
   ]
 }

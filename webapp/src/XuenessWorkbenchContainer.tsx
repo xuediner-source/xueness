@@ -159,6 +159,8 @@ const NetworkSettings = lazy(() => import("./plugins/network/NetworkSettings").t
 const DesktopUpdates = lazy(() => import("./plugins/updates/DesktopUpdates").then(module => ({ default: module.DesktopUpdates })));
 const WorkflowPanel = lazy(() => import("./plugins/workflows").then(module => ({ default: module.WorkflowPanel })));
 const ModelManager = lazy(() => import("./plugins/providers").then(module => ({ default: module.ModelManager })));
+const PluginProfilePicker = lazy(() => import("./plugins/extensions/PluginProfilePicker")
+  .then(module => ({ default: module.PluginProfilePicker })));
 const TerminalPanel = lazy(() => import("./plugins/terminal").then(module => ({ default: module.TerminalPanel })));
 const RemoteConnections = lazy(() => import("./plugins/remote").then(module => ({ default: module.RemoteConnections })));
 const XuenessGitView = lazy(() => import("./plugins/git/XuenessGitView").then(module => ({ default: module.XuenessGitView })));
@@ -1625,7 +1627,10 @@ export function XuenessWorkbenchContainer() {
       onToggleCapability={handleToggleCapability} onUpdateSetting={handleUpdateSetting} saving={settingsSaving} />;
     if (settingsSection === "workspace") return <><XuenessWorkspaceSettings currentRoot={session?.root ?? draftRoot ?? composerCatalog.root}
       onDefaultChanged={() => { if (!activeId) { setDraftRoot(undefined); setIsolatedWorkspace(false); updateChoices({remote:undefined}); } void refreshComposerCatalog(); }} /><SettingsSections embedded sections={[]} activeSection="workspace-display" values={settingsValues} capabilities={capabilities} onUpdateSetting={handleUpdateSetting} saving={settingsSaving} /></>;
-    if (settingsSection === "providers") return <ModelManager runtimeMonitorEnabled={isPluginEffective("providers") && isPluginEffective("diagnostics")} onSelect={id => { updateChoices({ provider: "real", provider_id: id || undefined, model: undefined, reasoning_effort: undefined }); void refreshComposerCatalog(); }} />;
+    if (settingsSection === "providers") return <>
+      <PluginProfilePicker enabled={isPluginEffective("extensions")} onCatalogChanged={() => void refreshPluginCatalog()} />
+      <ModelManager runtimeMonitorEnabled={isPluginEffective("providers") && isPluginEffective("diagnostics")} onSelect={id => { updateChoices({ provider: "real", provider_id: id || undefined, model: undefined, reasoning_effort: undefined }); void refreshComposerCatalog(); }} />
+    </>;
     if (settingsSection === "mcp") return <><CapabilitiesPanel sections={capSections.filter(section => section.kind === "mcp")} /><XuenessMcpTools /></>;
     if (settingsSection === "plugins") return <XuenessPluginSettingsPanel
       plugins={pluginCatalog} loading={pluginCatalogLoading} error={pluginCatalogError}

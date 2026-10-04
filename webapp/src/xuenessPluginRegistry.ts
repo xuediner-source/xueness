@@ -32,7 +32,7 @@ export const XUENESS_PLUGIN_REGISTRY = {
   workflows: { name: "工作流", description: "工作流和后台任务", panels: ["workflows"] },
   terminal: { name: "终端", description: "工作区交互式终端", panels: ["terminal"] },
   automation: { name: "自动化", description: "本地计划与审批队列", panels: ["automations"] },
-  extensions: { name: "扩展市场", description: "查看并安装可信资源清单", panels: ["marketplace"] },
+  extensions: { name: "扩展市场", description: "查看并安装可信资源清单，切换插件组合档位", panels: ["marketplace"] },
   network: { name: "网络工具", description: "受限公网读取、搜索服务配置与按需诊断", panels: [] },
   diagnostics: { name: "诊断与维护", description: "导出脱敏状态并清理旧日志", panels: ["diagnostics"] },
   browser: { name: "浏览器自动化", description: "受审批约束的 Playwright 浏览器操作工具", panels: [] },

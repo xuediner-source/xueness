@@ -13,14 +13,18 @@ import re
 
 #: Optional manifest fields the lifecycle runtime reads. They are compared as
 #: strings only; a manifest never names importable code or commands to run.
-LIFECYCLE_FIELDS = ('provides', 'inject', 'httpFamilies')
+LIFECYCLE_FIELDS = ('provides', 'inject', 'httpFamilies', 'pluginsActions', 'dataFiles')
 
-#: Services are dot-namespaced data keys, for example ``automation.scheduler``.
+#: Services and sub-actions are lowercase words; ``pluginsActions`` names the
+#: sub-actions of the shared ``plugins`` command group that this plugin runs.
 SERVICE_NAME = re.compile(r'[a-z][a-z0-9_]*(?:\.[a-z][a-z0-9_]*)*\Z')
 
 #: HTTP ownership is declared per path family. ``*`` skips one path segment, so
 #: ``sessions/*/git`` claims the git sub-resource of a session collection.
 ROUTE_SEGMENT = re.compile(r'\*|[a-z][a-z0-9_]*\Z')
+
+#: Data files are read-only package data addressed by relative path.
+DATA_PATH = re.compile(r'[A-Za-z0-9._-]+(?:/[A-Za-z0-9._-]+)*\Z')
 
 
 def lifecycle_field_errors(plugin_id, manifest) -> list[str]:
@@ -38,6 +42,8 @@ def lifecycle_field_errors(plugin_id, manifest) -> list[str]:
         for value in values:
             if field == 'httpFamilies':
                 errors.extend(_route_errors(plugin_id, field, value))
+            elif field == 'dataFiles':
+                errors.extend(_data_errors(plugin_id, field, value))
             elif not SERVICE_NAME.match(value):
                 errors.append('%s: invalid %s name %s' % (plugin_id, field, value))
     return errors
@@ -47,6 +53,12 @@ def _route_errors(plugin_id, field, value) -> list[str]:
     segments = value.split('/')
     if any(not ROUTE_SEGMENT.match(segment) for segment in segments) or segments[0] == '*':
         return ['%s: invalid %s pattern %s' % (plugin_id, field, value)]
+    return []
+
+
+def _data_errors(plugin_id, field, value) -> list[str]:
+    if value.startswith('/') or '..' in value.split('/') or not DATA_PATH.match(value):
+        return ['%s: invalid %s path %s' % (plugin_id, field, value)]
     return []
 
 

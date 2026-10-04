@@ -1,0 +1,91 @@
+{
+  "apiVersion": 1,
+  "profiles": [
+    {
+      "name": "minimal",
+      "nameEn": "Minimal",
+      "description": "只保留本地 Agent 运行主路径与会话恢复所需的插件。",
+      "descriptionEn": "Keeps only the local agent run path and session recovery.",
+      "plugins": {
+        "sessions": true,
+        "files": true,
+        "shell": true,
+        "planning": true,
+        "providers": true,
+        "settings": true,
+        "usage": true,
+        "extensions": true,
+        "memory": false,
+        "git": false,
+        "workflows": false,
+        "terminal": false,
+        "office": false,
+        "commands": false,
+        "skills": false,
+        "hooks": false,
+        "mcp": false,
+        "subagents": false,
+        "network": false,
+        "automation": false,
+        "diagnostics": false,
+        "browser": false,
+        "remote": false,
+        "bots": false,
+        "onboarding": false,
+        "updates": false,
+        "desktop": false
+      }
+    },
+    {
+      "name": "lightweight",
+      "nameEn": "Lightweight",
+      "extends": "minimal",
+      "description": "本地轻量模型档位：在 minimal 之上补本地 Git、记忆、命令与技能等离线能力。",
+      "descriptionEn": "Local lightweight tier: adds offline helpers such as Git, memory, commands and skills.",
+      "plugins": {
+        "git": true,
+        "memory": true,
+        "commands": true,
+        "skills": true,
+        "terminal": true,
+        "diagnostics": true,
+        "onboarding": true
+      }
+    },
+    {
+      "name": "standard",
+      "nameEn": "Standard",
+      "description": "构建默认档位：启用全部默认可用的功能插件，浏览器/远程/Bot 仍需单独开启。",
+      "descriptionEn": "Build defaults: every plugin enabled by default, with browser, remote and bots still opt-in.",
+      "plugins": {
+        "sessions": true,
+        "files": true,
+        "shell": true,
+        "planning": true,
+        "providers": true,
+        "memory": true,
+        "settings": true,
+        "usage": true,
+        "git": true,
+        "workflows": true,
+        "terminal": true,
+        "office": true,
+        "commands": true,
+        "skills": true,
+        "hooks": true,
+        "mcp": true,
+        "subagents": true,
+        "network": true,
+        "automation": true,
+        "extensions": true,
+        "diagnostics": true,
+        "onboarding": true,
+        "updates": true,
+        "desktop": true,
+        "browser": false,
+        "remote": false,
+        "bots": false
+      }
+    }
+  ]
+}

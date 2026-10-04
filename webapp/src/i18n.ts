@@ -1547,3 +1547,25 @@ Object.assign(messages, {
 Object.assign(messages, {
   "按预算压缩当前上下文": "Compact the current context to budget",
 });
+
+// 插件市场 validate/update 与插件组合 profile：档位选择、轻量档联动提示与结果读数。
+Object.assign(messages, {
+  "插件组合档位": "Plugin composition profiles",
+  "profile 只是一张插件开关的数据清单：显式开关优先于档位，档位优先于默认值；切换不会改动工作区、审批或权限模式。":
+    "A profile is only a data list of plugin switches: your explicit switch wins, then the profile, then the default. Switching never changes a workspace, an approval rule or a permission mode.",
+  "当前档位：{0}": "Current profile: {0}",
+  "当前未选择档位": "No profile selected",
+  "档位操作失败：": "Profile action failed: ",
+  "没有可用的组合档位。": "No composition profiles are available.",
+  "未提供说明。": "No description provided.",
+  "{0} 个插件开启": "{0} plugins on",
+  "继承 {0}": "Extends {0}",
+  "当前档位": "Selected",
+  "切换到此档位": "Use this profile",
+  "本地轻量档建议改用 minimal 之上的 lightweight 组合，只保留离线可用的能力。":
+    "The local lightweight runtime fits the lightweight profile, which adds offline helpers to minimal.",
+  "切换到 {0}": "Switch to {0}",
+  "预演：将切换 {0} 个插件开关": "Dry run: would change {0} plugin switches",
+  "已切换 {0} 个插件开关": "Changed {0} plugin switches",
+  "；{0} 项提示": "; {0} notices",
+});

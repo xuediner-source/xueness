@@ -291,7 +291,7 @@ def main(argv=None):
     args = parser.parse_args(argv)
     if args.cmd is None:
         args = parser.parse_args(["--state", str(args.state), "--language", args.language, "chat"])
-    if args.cmd == "plugins":
+    if args.cmd in plugin_cli.GROUP_NAMES:
         return plugin_cli.execute(args)
     refusal = _require_cli_plugins(args)
     if refusal:

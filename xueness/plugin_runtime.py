@@ -4,6 +4,12 @@ Only package code shipped with Xueness is importable. State stores boolean
 switches, never module names, commands or executable entrypoints. Run-time
 permissions remain the kernel Gate's responsibility. Disabling a dependency
 blocks dependents without silently enabling or rewriting any other plugin.
+
+The optional ``profile`` layer in ``plugin-state.json`` is a second set of
+boolean switches chosen by a composition profile. Resolution priority is fixed:
+an explicit user switch, then the profile overlay, then the manifest default.
+A profile can therefore only narrow or restore allowlisted plugins; it never
+names code and never relaxes a Gate, workspace boundary or approval rule.
 """
 from __future__ import annotations
 
@@ -15,7 +21,7 @@ from pathlib import Path
 
 from .plugin_contract import lifecycle_field_errors
 from .plugin_scope import ScopeRegistry, activation_plan
-from .resources import _atomic_write_json
+from .resources import _atomic_write_json, _is_link
 
 API_VERSION = 1
 PLUGIN_IDS = ('sessions', 'files', 'shell', 'planning', 'providers', 'memory',
@@ -23,6 +29,8 @@ PLUGIN_IDS = ('sessions', 'files', 'shell', 'planning', 'providers', 'memory',
               'commands', 'skills', 'hooks', 'mcp', 'subagents', 'network', 'automation', 'extensions', 'diagnostics', 'browser', 'remote', 'bots', 'onboarding', 'updates', 'desktop')
 PACKAGE_ROOT = Path(__file__).with_name('bundled_plugins')
 CONFIG_NAME = 'plugin-state.json'
+MAX_STATE_BYTES = 65536
+MAX_PROFILE_NAME_CHARS = 64
 _LOCK = threading.RLock()
 #: HTTP ownership comes from the immutable build manifests, so it is resolved once.
 _ROUTE_INDEX: dict | None = None
@@ -49,16 +57,41 @@ def _manifests():
     return result
 
 
-def _read_config(state_dir):
+def _switch_map(value, message):
+    """Validate a ``plugin id -> boolean`` mapping, refusing anything else."""
+    if not isinstance(value, dict) or any(
+            pid not in PLUGIN_IDS or type(item) is not bool for pid, item in value.items()):
+        raise ValueError(message)
+    return value
+
+
+def _read_profile(value):
+    if value is None:
+        return {'name': None, 'overlay': {}}
+    if not isinstance(value, dict) or set(value) - {'name', 'overlay'}:
+        raise ValueError('unknown plugin profile fields')
+    name = value.get('name')
+    if name is not None and (type(name) is not str or not name or len(name) > MAX_PROFILE_NAME_CHARS):
+        raise ValueError('invalid plugin profile name')
+    return {'name': name, 'overlay': _switch_map(value.get('overlay'), 'invalid plugin profile switches')}
+
+
+def _read_state(state_dir) -> dict:
+    """The whole switch document: user switches plus the profile overlay.
+
+    Both layers are allowlisted ids with boolean values, read without following
+    a symlink and within one size budget. Unknown fields are refused rather than
+    ignored, so a state file cannot smuggle a new kind of configuration.
+    """
     path = Path(state_dir) / CONFIG_NAME
-    if path.is_symlink():
+    if _is_link(path):
         raise ValueError('plugin configuration must not be a symlink')
     try:
         with path.open('rb') as stream:
-            raw = stream.read(65537)
+            raw = stream.read(MAX_STATE_BYTES + 1)
     except FileNotFoundError:
-        return {}
-    if len(raw) > 65536:
+        return {'enabled': {}, 'profile': {'name': None, 'overlay': {}}}
+    if len(raw) > MAX_STATE_BYTES:
         raise ValueError('plugin configuration too large')
     try:
         item = json.loads(raw)
@@ -66,35 +99,54 @@ def _read_config(state_dir):
         raise ValueError('invalid plugin configuration') from None
     if not isinstance(item, dict) or item.get('apiVersion') != API_VERSION or isinstance(item.get('apiVersion'), bool):
         raise ValueError('invalid plugin configuration version')
-    if set(item) - {'apiVersion', 'enabled'}:
+    if set(item) - {'apiVersion', 'enabled', 'profile'}:
         raise ValueError('unknown plugin configuration fields')
-    switches = item.get('enabled')
-    if not isinstance(switches, dict) or any(pid not in PLUGIN_IDS or type(value) is not bool for pid, value in switches.items()):
-        raise ValueError('invalid plugin switches')
-    return switches
+    return {'enabled': _switch_map(item.get('enabled'), 'invalid plugin switches'),
+            'profile': _read_profile(item.get('profile'))}
 
 
-def catalog(state_dir):
-    manifests = _manifests()
-    error = ''
+def _write_state(state_dir, switches, profile):
+    item = {'apiVersion': API_VERSION, 'enabled': switches}
+    if profile['name'] is not None or profile['overlay']:
+        item['profile'] = profile
+    _atomic_write_json(Path(state_dir) / CONFIG_NAME, item)
+
+
+def profile_state(state_dir) -> dict:
+    """The active composition profile as pure data, failing closed when broken."""
     try:
-        switches = _read_config(state_dir)
+        return _read_state(state_dir)['profile']
     except (OSError, ValueError):
-        switches = {pid: False for pid in PLUGIN_IDS}
-        error = 'invalid plugin configuration; repair plugin-state.json'
+        return {'name': None, 'overlay': {}}
+
+
+def _chooser(manifests, switches, overlay):
+    """Explicit user switch, then the profile overlay, then the manifest default."""
+    def chosen(pid):
+        if pid in switches:
+            return switches[pid]
+        if pid in overlay:
+            return overlay[pid]
+        return manifests[pid]['defaultEnabled']
+    return chosen
+
+
+def _resolve_items(manifests, chosen, error):
     effective = {}
+
     def resolve(pid, visiting=()):
         if pid in effective:
             return effective[pid]
         if pid in visiting:
             raise ValueError('cyclic plugin dependencies')
-        enabled = switches.get(pid, manifests[pid]['defaultEnabled'])
-        available = enabled and all(resolve(dep, visiting + (pid,)) for dep in manifests[pid]['dependencies'])
+        available = chosen(pid) and all(resolve(dep, visiting + (pid,))
+                                        for dep in manifests[pid]['dependencies'])
         effective[pid] = available
         return available
+
     for pid in PLUGIN_IDS:
         resolve(pid)
-    items = [{**manifest, 'enabled': switches.get(pid, manifest['defaultEnabled']),
+    items = [{**manifest, 'enabled': chosen(pid),
               'effective': effective[pid],
               'blockedBy': [dep for dep in manifest['dependencies'] if not effective[dep]],
               **({'configurationError': error} if error else {})}
@@ -106,6 +158,40 @@ def catalog(state_dir):
         if item['id'] in blocked:
             item['activationError'] = blocked[item['id']]
     return items
+
+
+def _broken_state():
+    return {'enabled': {pid: False for pid in PLUGIN_IDS}, 'profile': {'name': None, 'overlay': {}}}
+
+
+def catalog(state_dir):
+    manifests = _manifests()
+    error = ''
+    try:
+        state = _read_state(state_dir)
+    except (OSError, ValueError):
+        state = _broken_state()
+        error = 'invalid plugin configuration; repair plugin-state.json'
+    return _resolve_items(manifests,
+                          _chooser(manifests, state['enabled'], state['profile']['overlay']), error)
+
+
+def preview(state_dir, overlay=None):
+    """The catalog this state would show with a proposed profile overlay.
+
+    Nothing is written: dependency resolution, ``blockedBy`` and activation all
+    run on the proposal, so a dry-run answer cannot drift from the real apply.
+    """
+    manifests = _manifests()
+    error = ''
+    try:
+        state = _read_state(state_dir)
+    except (OSError, ValueError):
+        state = _broken_state()
+        error = 'invalid plugin configuration; repair plugin-state.json'
+    layer = state['profile']['overlay'] if overlay is None else _switch_map(
+        overlay, 'invalid plugin profile switches')
+    return _resolve_items(manifests, _chooser(manifests, state['enabled'], layer), error)
 
 
 def is_enabled(state_dir, plugin_id):
@@ -143,13 +229,38 @@ def set_enabled(state_dir, plugin_id, enabled):
     if type(enabled) is not bool:
         raise ValueError('enabled must be a boolean')
     with _LOCK, _config_lock(state_dir):
-        switches = _read_config(state_dir)
+        state = _read_state(state_dir)
+        switches = state['enabled']
         if enabled:
             unavailable = next(p for p in catalog(state_dir) if p['id'] == plugin_id)['blockedBy']
             if unavailable:
                 raise ValueError('enable dependencies first: ' + ', '.join(unavailable))
         switches[plugin_id] = enabled
-        _atomic_write_json(Path(state_dir) / CONFIG_NAME, {'apiVersion': API_VERSION, 'enabled': switches})
+        _write_state(state_dir, switches, state['profile'])
+        return catalog(state_dir)
+
+
+def set_profile(state_dir, name, overlay):
+    """Record the active profile overlay, keeping every user switch intact.
+
+    ``name`` only labels the profile in the catalog and ``overlay`` holds boolean
+    switches for allowlisted ids. Writing a profile never enables a dependency,
+    so a plugin whose dependency stays off keeps reporting it in ``blockedBy``.
+    """
+    if name is not None and (type(name) is not str or not name or len(name) > MAX_PROFILE_NAME_CHARS):
+        raise ValueError('invalid plugin profile name')
+    if not isinstance(overlay, dict):
+        raise ValueError('plugin profile overlay must be id/boolean switches')
+    if len(overlay) > len(PLUGIN_IDS):
+        raise ValueError('plugin profile overlay too large')
+    unknown = sorted(str(pid) for pid in overlay if pid not in PLUGIN_IDS)
+    if unknown:
+        raise ValueError('unknown plugin: ' + ', '.join(unknown))
+    _switch_map(overlay, 'profile switch must be a boolean')
+    with _LOCK, _config_lock(state_dir):
+        state = _read_state(state_dir)
+        _write_state(state_dir, state['enabled'],
+                     {'name': name, 'overlay': dict(overlay or {})})
         return catalog(state_dir)
 
 
@@ -259,6 +370,19 @@ def cli_owner(command, args=None):
     return None
 
 
+def plugins_action_owner(action):
+    """The plugin running one sub-action of the shared ``plugins`` command group.
+
+    The group itself is kernel routing (``plugin_cli``); a feature plugin owns a
+    sub-action by listing it in ``pluginsActions``, the same declarative source
+    as ``tools`` and ``commands``. One action can have one owner.
+    """
+    for pid, spec in _manifests().items():
+        if action in (spec.get('pluginsActions') or ()):
+            return pid
+    return None
+
+
 def slash_owner(name):
     """Plugin owning an in-chat ``/name`` command, from the same manifest list
     that owns the top-level CLI command. Generic routing data, not behavior."""
@@ -334,8 +458,19 @@ def route_owner(parts):
     return owner
 
 
+def _plugin_owned_segments():
+    """Second ``/api/plugins`` path segments that a build manifest claims.
+
+    The kernel manager answers ``GET /api/plugins`` and ``POST /api/plugins/<id>``;
+    ownership of every other sub-family comes from the same immutable manifests
+    ``route_owner`` reads, so a plugin adding an HTTP surface adds no new host
+    special case.
+    """
+    return {pattern[1] for pattern in _http_family_index() if len(pattern) > 1 and pattern[0] == 'plugins'}
+
+
 def dispatch_http(method, parts, query, data, ctx):
-    if parts[:2] == ['api', 'plugins'] and (len(parts) < 3 or parts[2] != 'marketplace'):
+    if parts[:2] == ['api', 'plugins'] and (len(parts) < 3 or parts[2] not in _plugin_owned_segments()):
         if len(parts) == 2 and method == 'GET':
             return 200, {'plugins': catalog(ctx['state_dir'])}
         if len(parts) == 3 and method == 'POST':

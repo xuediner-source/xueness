@@ -111,6 +111,69 @@ class ArchitectureTests(unittest.TestCase):
                          'usage: invalid provides name Usage Service']:
             self.assertIn(expected, errors)
 
+    def test_a_plugins_subaction_has_one_owner_and_needs_the_seam(self):
+        root = self.fixture()
+        self.rewrite(root, 'usage', lambda m: m.update(pluginsActions=['validate']))
+        self.assertIn('plugins action: multiple owners for validate', guard.audit(root))
+        self.rewrite(root, 'usage', lambda m: m.update(pluginsActions=['Not An Action']))
+        self.assertIn('usage: invalid pluginsActions name Not An Action', guard.audit(root))
+        self.rewrite(root, 'usage', lambda m: m.update(pluginsActions=['audit']))
+        self.assertIn('usage: declares pluginsActions without execute_cli(args)', guard.audit(root))
+
+    def test_package_data_files_need_an_explicit_owner_and_a_safe_path(self):
+        root = self.fixture()
+        (root / 'xueness/bundled_plugins/usage/extra.json').write_text('{}\n', encoding='utf-8')
+        self.assertIn('usage: package data files need an explicit owner: extra.json', guard.audit(root))
+        self.rewrite(root, 'usage', lambda m: m.update(dataFiles=['../escape.json']))
+        self.assertIn('usage: invalid dataFiles path ../escape.json', guard.audit(root))
+        self.rewrite(root, 'usage', lambda m: m.update(dataFiles=['never-written.json']))
+        self.assertTrue(any('usage:' in e and 'never-written.json' in e for e in guard.audit(root)))
+
+    def rewrite_profiles(self, root, document):
+        path = root / 'xueness/bundled_plugins/usage/profiles.json'
+        path.write_text(json.dumps(document), encoding='utf-8')
+        self.rewrite(root, 'usage', lambda m: m.update(dataFiles=['profiles.json']))
+        return guard.audit(root)
+
+    def test_composition_data_may_only_pick_allowlisted_plugins_with_booleans(self):
+        root = self.fixture()
+        cases = (
+            ({'apiVersion': 1, 'profiles': [{'name': 'alpha', 'plugins': {'ghost': True}}]},
+             'usage: profile alpha selects an unknown plugin: ghost'),
+            ({'apiVersion': 1, 'profiles': [{'name': 'alpha', 'plugins': {'git': 'yes'}}]},
+             'usage: profile alpha switch for git must be boolean'),
+            ({'apiVersion': 1, 'profiles': [{'name': 'alpha', 'plugins': {'git': True}, 'command': 'git push'}]},
+             'usage: profile alpha uses unsupported fields: command'),
+            ({'apiVersion': 1, 'profiles': [{'name': 'alpha', 'plugins': {}}]},
+             'usage: profile alpha lists no plugin switches'),
+            ({'apiVersion': 2, 'profiles': [{'name': 'alpha', 'plugins': {'git': True}}]},
+             'usage: profile data profiles.json needs apiVersion 1'),
+            ({'apiVersion': 1, 'profiles': [{'name': 'alpha', 'extends': 'alpha', 'plugins': {'git': True}}]},
+             'usage: cyclic profile inheritance: alpha -> alpha'),
+            ({'apiVersion': 1, 'profiles': [{'name': 'alpha', 'extends': 'nowhere', 'plugins': {'git': True}}]},
+             'usage: profile alpha extends an unknown profile: nowhere'),
+        )
+        for document, expected in cases:
+            self.assertIn(expected, self.rewrite_profiles(root, document), json.dumps(document))
+
+    def test_composition_data_refuses_deep_and_oversized_documents(self):
+        root = self.fixture()
+        depth = guard.MAX_EXTENDS_DEPTH + 2
+        rows = [{'name': 'chain%d' % index,
+                 'extends': None if index == 0 else 'chain%d' % (index - 1),
+                 'plugins': {'git': True}} for index in range(depth)]
+        self.assertIn('usage: profile inheritance deeper than %d levels: chain%d'
+                      % (guard.MAX_EXTENDS_DEPTH, depth - 1), self.rewrite_profiles(root, {'apiVersion': 1, 'profiles': rows}))
+
+    def test_a_declared_data_file_must_be_readable_json(self):
+        root = self.fixture()
+        self.rewrite_profiles(root, {'apiVersion': 1, 'profiles': [{'name': 'alpha', 'plugins': {'git': True}}]})
+        (root / 'xueness/bundled_plugins/usage/profiles.json').write_text('{not json', encoding='utf-8')
+        self.assertIn('usage: data file is not valid JSON: profiles.json', guard.audit(root))
+
+    def test_shipped_profile_data_passes_the_gate(self):
+        self.assertEqual(guard.audit(self.fixture()), [])
+
     def test_business_module_cannot_be_added_to_host(self):
         root = self.fixture()
         (root / 'xueness/new_feature.py').write_text('def run_feature(): pass\n')
