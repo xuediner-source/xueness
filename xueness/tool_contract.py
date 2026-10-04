@@ -81,8 +81,21 @@ def execution_context():
     return value
 
 
+class PlanModeDenied(PermissionError):
+    """计划模式的政策性拒绝：原因要回传给模型，而不是只报 ``denied``。"""
+
+    def __init__(self, message: str, plan_draft_path: str | None = None):
+        super().__init__(message)
+        self.plan_draft_path = plan_draft_path
+
+
 def permission_result(gate, exc):
     """Distinguish a host approval pause from a policy refusal, without echoing data."""
+    if isinstance(exc, PlanModeDenied):
+        return {'ok': False, 'error': 'denied',
+                'error_code': 'plan_mode_denied', 'awaiting_approval': False,
+                'retryable': False, 'user_reason': str(exc),
+                **({'plan_draft_path': exc.plan_draft_path} if exc.plan_draft_path else {})}
     waiting = bool(getattr(gate, 'web_approval_gate', False)
                    and str(exc).endswith('requires explicit approval'))
     return {'ok': False, 'error': 'denied',

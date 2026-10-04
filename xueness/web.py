@@ -146,6 +146,12 @@ class WebGate:
     IDs. Plan mode denies write/edit/exec/mcp before any approval lookup; build
     keeps deny-by-default.
 
+    ``permission_mode`` adds the operator-facing modes: ``edit`` and ``yolo``
+    widen the named kinds, while ``plan`` is read-only except for the session's
+    own plan draft file. ``plan_draft`` is that policy -- contributed by the
+    sessions plugin, exposing ``matches(subject)``, ``denial(kind)`` and
+    ``path`` -- so the host gate holds no plan business logic of its own.
+
     ``session`` is optional and used only to audit the decision: consuming an
     approval without a trace makes it impossible to answer "who authorised
     this?" after the fact.
@@ -155,11 +161,11 @@ class WebGate:
 
     def __init__(self, root: Path, session_id: str, approvals: dict, lock: threading.Lock,
                  mode: str = "build", disallow=(), session: dict | None = None,
-                 permission_mode: str = "build"):
+                 permission_mode: str = "build", plan_draft=None):
         if mode not in ("plan", "build"):
             raise ValueError("mode must be 'plan' or 'build'")
-        if permission_mode not in ("build", "edit", "yolo"):
-            raise ValueError("permission_mode must be 'build', 'edit', or 'yolo'")
+        if permission_mode not in ("build", "edit", "yolo", "plan"):
+            raise ValueError("permission_mode must be 'build', 'edit', 'yolo', or 'plan'")
         self.root = Path(root).resolve()
         self.session_id = session_id
         self.approvals = approvals
@@ -168,10 +174,21 @@ class WebGate:
         self.disallow = frozenset(disallow or ())
         self.session = session
         self.permission_mode = permission_mode
+        self.plan_draft = plan_draft
+
+    def plan_draft_target(self, subject) -> Path | None:
+        """计划模式下工作区外唯一可写目标：本会话绑定的计划草稿文件。"""
+        if self.permission_mode != "plan" or self.plan_draft is None:
+            return None
+        return Path(self.plan_draft.path) if self.plan_draft.matches(subject) else None
 
     def check(self, kind: str, subject: str, tool_call_id: str | None = None) -> None:
+        draft = self.plan_draft_target(subject) if kind in ("write", "edit") else None
         if kind in ("read", "list", "write", "edit", "glob", "grep"):
-            path_in(self.root, subject)
+            # The session plan draft lives in the state directory by design, so
+            # the workspace jail cannot contain it; only plan mode may name it.
+            if draft is None:
+                path_in(self.root, subject)
         else:
             from .tool_registry import REGISTRY
             known = {tool.gate_kind for tool in REGISTRY} | {"mcp", "planning"}
@@ -182,6 +199,14 @@ class WebGate:
         if kind in ("write", "edit", "exec", "mcp", "web_fetch", "web_search"):
             if self.mode == "plan":
                 raise PermissionError(f"{kind} denied in plan mode")
+            if self.permission_mode == "plan":
+                if draft is not None:
+                    return
+                from .tool_contract import PlanModeDenied
+                raise PlanModeDenied(
+                    self.plan_draft.denial(kind) if self.plan_draft is not None
+                    else f"{kind} denied in plan mode",
+                    str(self.plan_draft.path) if self.plan_draft is not None else None)
             remote_exec = False
             if kind == "exec" and isinstance(subject, str):
                 try:

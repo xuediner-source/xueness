@@ -40,6 +40,14 @@ test("Toolbar: the trigger reports the selected permission and the mode can open
   assert.match(html, /data-testid="composer-plan-marker"/);
 });
 
+test("Toolbar: plan is a selectable permission mode shown by the trigger", () => {
+  const html = renderToStaticMarkup(
+    <XuenessComposerToolbar {...baseProps} choices={{ ...choices, permission_mode: "plan" }} />,
+  );
+  assert.match(html, /<span>计划<\/span>/);
+  assert.doesNotMatch(html, /<span>自动编辑<\/span>/);
+});
+
 test("Toolbar: model picker is a keyboard-openable menu and unsupported context usage stays hidden", () => {
   const noUsage = renderToStaticMarkup(<XuenessComposerToolbar {...baseProps} />);
   assert.match(noUsage, /aria-label="选择模型"[^>]*aria-haspopup="menu"[^>]*aria-expanded="false"/);

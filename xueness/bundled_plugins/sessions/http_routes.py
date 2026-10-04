@@ -698,10 +698,27 @@ def handle_POST(self, parts, path, data):
             from ...tool_registry import BUILTIN_TOOL_NAMES
             disallowed = frozenset(disallowed) | frozenset(
                 name for name in BUILTIN_TOOL_NAMES if name.startswith('browser_'))
+        from .plan_mode import draft_policy, is_permission_mode
         permission_mode = data.get('permission_mode', data.get('permissionMode'))
-        if permission_mode is not None and permission_mode not in ('build', 'edit', 'yolo'):
-            self._send(400, {'error': "permission_mode must be 'build', 'edit', or 'yolo'"})
+        if permission_mode is not None and not is_permission_mode(permission_mode):
+            self._send(400, {'error': "permission_mode must be 'build', 'edit', 'yolo', or 'plan'"})
             return True
+        # ``plan`` belongs to this plugin, so its availability is decided by the
+        # persisted sessions switch rather than by the request body alone.
+        plan_available = host.plugin_runtime.is_enabled(ctx['state_dir'], 'sessions')
+        if permission_mode == 'plan' and not plan_available:
+            self._send(403, {'error': 'plugin disabled or dependency unavailable: sessions',
+                             'plugin': 'sessions'})
+            return True
+        # Inert unless the run actually uses plan mode; bound to this session id
+        # so one session's draft can never be the writable exception for another.
+        plan_draft = None
+        if plan_available:
+            try:
+                plan_draft = draft_policy(ctx['state_dir'], parts[2])
+            except ValueError as exc:
+                self._send(400, {'error': str(exc)})
+                return True
         remote_choice = data.get('remote')
         if remote_choice is not None and (not isinstance(remote_choice, str) or not remote_choice):
             self._send(400, {'error': 'remote must be a configured connection id'})
@@ -791,7 +808,8 @@ def handle_POST(self, parts, path, data):
                 reasoning_effort = selection.get('reasoning_effort')
             if permission_mode is None:
                 permission_mode = session.get('permission_mode', 'build')
-            if permission_mode not in ('build', 'edit', 'yolo'):
+            if (not is_permission_mode(permission_mode)
+                    or (permission_mode == 'plan' and not plan_available)):
                 self._send(400, {'error': 'saved permission mode is invalid'})
                 return True
             ctx.setdefault('running_context', {})[parts[2]] = {
@@ -843,7 +861,7 @@ def handle_POST(self, parts, path, data):
                 if browser is not None:
                     session['browser_enabled'] = browser
                 ctx['store'].save(session)
-                gate = host.WebGate(host.Path(session['root']), parts[2], ctx['approvals'], ctx['lock'], mode=mode, disallow=disallowed, session=session, permission_mode=permission_mode)
+                gate = host.WebGate(host.Path(session['root']), parts[2], ctx['approvals'], ctx['lock'], mode=mode, disallow=disallowed, session=session, permission_mode=permission_mode, plan_draft=plan_draft)
                 gate.allow_real = ctx['allow_real']
                 if session.get('remote_connection'):
                     from ...tool_registry import REMOTE_LOCAL_TOOL_NAMES

@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
-import { Hand, Lightbulb, ShieldAlert, ShieldCheck } from "lucide-react";
+import { ClipboardList, Hand, Lightbulb, ShieldAlert, ShieldCheck } from "lucide-react";
 import { t as tr, tf } from "../../i18n";
 import { IconCheck, IconChevronDown, IconRefresh, IconX } from "../../ui/icons";
 import { Select } from "../../ui/Select";
@@ -28,6 +28,7 @@ export type ComposerToolbarProps = {
 };
 
 const permissionChoices = [
+  { value: "plan", label: "计划", description: "只读并先出计划。", Icon: ClipboardList },
   { value: "build", label: "变更前确认", description: "改文件前先问我。", Icon: Hand },
   { value: "edit", label: "自动编辑", description: "自动编辑文件。", Icon: ShieldCheck },
   { value: "yolo", label: "完全访问", description: "减少确认次数。", Icon: ShieldAlert },

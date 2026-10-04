@@ -39,6 +39,7 @@ from pathlib import Path
 
 from ...write_lock import DEFAULT_LOCKS, owner_for
 from ...tool_contract import BuiltinTool
+from ...resources import _is_link
 
 #: Caps for the read-only search tools.
 MAX_GLOB_HITS = 200
@@ -177,6 +178,24 @@ def _check_path(gate, kind: str, path: str, call_id: "str | None") -> None:
         gate.check(kind, path)
 
 
+def _mutating_target(gate, root, path: str) -> Path:
+    """Resolve a write/edit target without ever widening the workspace jail.
+
+    The one out-of-workspace exception is the session plan draft, which the
+    owning plugin binds to the gate; it is matched by exact path only, and a
+    link standing at that spot is refused rather than followed.
+    """
+    resolve_draft = getattr(gate, "plan_draft_target", None)
+    if callable(resolve_draft):
+        draft = resolve_draft(path)
+        if draft is not None:
+            draft = Path(draft)
+            if _is_link(draft) or _is_link(draft.parent):
+                raise PermissionError("plan draft must not be a link or reparse point")
+            return draft
+    return path_in(root, path)
+
+
 def _glob(root, gate, args, session, call_id) -> dict:
     base = args.get("path", ".")
     if not isinstance(base, str):
@@ -250,7 +269,7 @@ def _edit(root, gate, args, session, call_id) -> dict:
     if not isinstance(path, str):
         raise ValueError("path must be a string")
     _check_path(gate, "edit", path, call_id)
-    target = path_in(root, path)
+    target = _mutating_target(gate, root, path)
     old = args["old"]
     new = args["new"]
     if not isinstance(old, str) or not old:
@@ -282,7 +301,7 @@ def _write(root, gate, args, session, call_id) -> dict:
     if not isinstance(path, str):
         raise ValueError("path must be a string")
     _check_path(gate, "write", path, call_id)
-    target = path_in(root, path)
+    target = _mutating_target(gate, root, path)
     content = args["content"]
     if not isinstance(content, str) or len(content) > 200000:
         raise ValueError("content must be a string of at most 200000 characters")
@@ -295,7 +314,7 @@ def _write(root, gate, args, session, call_id) -> dict:
     try:
         target.parent.mkdir(parents=True, exist_ok=True)
         # Recheck after creating parent: symlink races still require a real sandbox.
-        path_in(root, path)
+        _mutating_target(gate, root, path)
         target.write_text(content, encoding="utf-8")
     finally:
         DEFAULT_LOCKS.release(target, owner)

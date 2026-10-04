@@ -157,6 +157,7 @@ export const messages: Record<string, string> = {
   "自动编辑文件。": "Edit files automatically.",
   "完全访问": "Full access",
   "减少确认次数。": "Run with fewer confirmations.",
+  "只读并先出计划。": "Read only, and write the plan first.",
   "编辑前先出计划。": "Plan before editing.",
   "自动归档旧任务": "Auto-archive old tasks",
   "仅归档已完成、已查看且长期未更新的任务；归档可在历史记录中恢复。": "Archive completed, viewed tasks with no recent updates. They can be restored from history.",

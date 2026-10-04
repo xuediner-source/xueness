@@ -115,7 +115,7 @@ export type WorkbenchSession = {
   runtime_activity_history?: WorkbenchRuntimeActivity[] | null;
   tool_timings?: { step: number; name: string; tool_call_id: string; seconds: number; ok: boolean }[];
   pause_reason?: string | null;
-  permission_mode?: "build" | "edit" | "yolo";
+  permission_mode?: "plan" | "build" | "edit" | "yolo";
   browser_enabled?: boolean;
   remote_connection?: { id: string; digest: string } | null;
   forkParent?: ForkParentInfo | null;

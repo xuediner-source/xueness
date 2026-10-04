@@ -35,6 +35,7 @@
     "forking",
     "http_routes",
     "operator_cli",
+    "plan_mode",
     "queue",
     "session_management",
     "sessions_api",
@@ -45,6 +46,11 @@
       "id": "sessions.conversation",
       "name": "会话创建与 Agent 对话",
       "nameEn": "Sessions and agent conversations"
+    },
+    {
+      "id": "sessions.plan_mode",
+      "name": "计划权限模式（只读并先出计划）",
+      "nameEn": "Plan permission mode (read-only, plan first)"
     },
     {
       "id": "sessions.management",
