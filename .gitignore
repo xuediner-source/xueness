@@ -58,3 +58,4 @@ desktop/runtime/
 desktop/release/
 desktop/.build/
 desktop/.venv/
+desktop/update-smoke-evidence/

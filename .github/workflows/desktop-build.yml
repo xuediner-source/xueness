@@ -50,7 +50,7 @@ jobs:
       - name: Check feature ownership and portable backend behavior
         run: |
           python tools/check_plugin_architecture.py
-          python -m unittest tests.test_desktop tests.test_plugin_architecture tests.test_workspace_instructions -q
+          python -m unittest tests.test_desktop tests.test_desktop_updates tests.test_plugin_architecture tests.test_workspace_instructions -q
           python -m unittest tests.test_workflows.WorkflowTests.test_real_background_dag_failure_then_resume_without_replaying_success tests.test_mcp.McpTestCase.test_start_performs_the_initialize_handshake -q
           python -m unittest tests.test_desktop_subagents tests.test_subagent_coordination tests.test_subagents tests.test_subagent_deadlines -q
           python -m unittest discover -s desktop/tests -p 'test_windows_update_smoke.py' -q
@@ -74,6 +74,20 @@ jobs:
       - name: Exercise the installed NSIS in-app update path
         if: runner.os == 'Windows' && !inputs.skip_windows_update_smoke
         run: python desktop/scripts/check_windows_update.py
+      - name: Upload Windows update smoke diagnostics
+        if: ${{ always() && runner.os == 'Windows' }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: Xueness-Windows-update-smoke-evidence
+          path: |
+            desktop/update-smoke-evidence/*/*.json
+            desktop/update-smoke-evidence/*/*.jsonl
+            desktop/update-smoke-evidence/*/*.log
+            desktop/update-smoke-evidence/*/*.txt
+            desktop/update-smoke-evidence/*/loopback-feed/latest.yml
+            desktop/update-smoke-evidence/*/base-build/builder-effective-config.yaml
+          retention-days: 7
+          if-no-files-found: ignore
       - name: Generate installer checksums
         run: python desktop/scripts/checksums.py
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1

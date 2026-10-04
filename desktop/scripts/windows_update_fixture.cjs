@@ -3,27 +3,34 @@
 const { join, resolve } = require('node:path');
 
 async function buildFixture() {
-  const [outputDir, version, feedUrl] = process.argv.slice(3);
+  const [outputDir, version, feedUrl, fixtureId] = process.argv.slice(3);
   if (!outputDir || !/^\d+\.\d+\.\d+$/.test(version || '') || !feedUrl) {
-    throw new Error('Usage: windows_update_fixture.cjs --build-fixture OUTPUT VERSION LOOPBACK_FEED_URL');
+    throw new Error('Usage: windows_update_fixture.cjs --build-fixture OUTPUT VERSION LOOPBACK_FEED_URL FIXTURE_GUID');
   }
   const { Arch, Platform, build } = require('electron-builder');
   await build({
     projectDir: resolve(__dirname, '..'),
     targets: Platform.WINDOWS.createTarget('nsis', Arch.x64),
-    ...createFixtureBuildOptions(outputDir, version, feedUrl),
+    ...createFixtureBuildOptions(outputDir, version, feedUrl, fixtureId),
   });
 }
 
-function createFixtureBuildOptions(outputDir, version, feedUrl) {
+function createFixtureBuildOptions(outputDir, version, feedUrl, fixtureId) {
+  if (!/^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/.test(fixtureId || '')) {
+    throw new Error('A unique fixture GUID is required before building an NSIS test installer.');
+  }
+  const name = 'xueness-update-smoke-' + fixtureId;
   return {
     // CI auto-publish detection must never upload this disposable fixture.
     publish: 'never',
     config: {
       // Do not inherit the product's GitHub release publisher into this test app.
       extends: null,
-      appId: 'app.xueness.desktop',
-      productName: 'Xueness',
+      // NSIS reads HKCU/HKLM, regardless of APPDATA or /D. Both versions share
+      // this run's identity, never the product's registration or process name.
+      appId: 'app.xueness.update-smoke.' + fixtureId,
+      productName: 'Xueness Update Smoke',
+      executableName: name,
       asar: true,
       directories: { output: resolve(outputDir) },
       files: [
@@ -31,13 +38,14 @@ function createFixtureBuildOptions(outputDir, version, feedUrl) {
         'src/update-coordinator.cjs',
         'package.json',
       ],
-      extraMetadata: { main: 'scripts/windows_update_fixture.cjs', version },
+      extraMetadata: { name, main: 'scripts/windows_update_fixture.cjs', version },
       publish: [{ provider: 'generic', url: feedUrl }],
       win: {
         target: ['nsis'],
         artifactName: 'Xueness-${version}-windows-${arch}-setup.${ext}',
       },
       nsis: {
+        guid: fixtureId,
         oneClick: false,
         allowToChangeInstallationDirectory: true,
         perMachine: false,
@@ -128,14 +136,24 @@ function loadSmokeConfig({
 
 function runFixture() {
   const smoke = loadSmokeConfig();
+  // Explorer's --updated relaunch need not inherit the launcher's environment.
+  process.env.APPDATA = join(smoke.fixtureRoot, 'isolated-appdata');
+  process.env.LOCALAPPDATA = join(smoke.fixtureRoot, 'LocalAppData');
   const { app, autoUpdater } = loadRuntimeDependencies();
-  const { mkdirSync, readFileSync, writeFileSync } = require('node:fs');
+  const { appendFileSync, mkdirSync, readFileSync, writeFileSync } = require('node:fs');
   const { UpdateCoordinator } = require('../src/update-coordinator.cjs');
 
-  app.setName('Xueness');
+  app.setName('Xueness Update Smoke');
   const appData = smoke.appData;
   mkdirSync(appData, { recursive: true });
   app.setPath('userData', appData);
+  app.setPath('appData', process.env.APPDATA);
+  const runtimeLog = join(smoke.fixtureRoot, 'fixture-runtime.jsonl');
+  const log = value => appendFileSync(runtimeLog, JSON.stringify({ time: new Date().toISOString(), pid: process.pid, ...value }) + '\n');
+  log({ event: 'startup', executable: process.execPath, argv: process.argv, version: app.getVersion(), appData });
+  app.on('will-quit', () => log({ event: 'will-quit' }));
+  autoUpdater.logger = Object.fromEntries(['info', 'warn', 'error', 'debug'].map(level =>
+    [level, (...values) => log({ event: 'updater-log', level, message: values.map(String).join(' ') })]));
 
   const reportPath = smoke.report;
   const expectedVersion = smoke.expectedVersion;
@@ -149,7 +167,9 @@ function runFixture() {
 
   function report(value) {
     mkdirSync(require('node:path').dirname(reportPath), { recursive: true });
-    writeFileSync(reportPath, JSON.stringify({ pid: process.pid, version: app.getVersion(), ...value }));
+    const result = { pid: process.pid, version: app.getVersion(), executable: process.execPath, argv: process.argv, ...value };
+    log({ event: 'report', ...result });
+    writeFileSync(reportPath, JSON.stringify(result));
   }
 
   function finish(code, value) {
