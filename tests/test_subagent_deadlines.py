@@ -224,7 +224,8 @@ class SubagentDeadlineTests(unittest.TestCase):
             max_steps=4, summary_max=4000,
         )
         self.assertTrue(result["ok"])
-        self.assertLessEqual(observed[0] - time.monotonic(), 120)
+        # Compare absolute deadlines to avoid subtraction rounding on Windows.
+        self.assertLessEqual(observed[0], time.monotonic() + 120)
         self.assertEqual(float("inf"), parent.request_deadline)
 
         class FakeProvider:
