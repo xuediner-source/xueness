@@ -11,6 +11,7 @@ import json
 from pathlib import Path
 
 from ...tool_contract import BuiltinTool, execution_context
+from .dynamic_runs import owner_session_id
 from .workflows import WorkflowStore
 
 
@@ -63,7 +64,8 @@ def _plan(args, root):
 def _create(root, gate, args, session, call_id):
     gate.check("planning", "workflow_create", call_id)
     workspace = _root(session)
-    row = _store().create(_plan(args, workspace), workspace, args.get("reuse"))
+    row = _store().create(_plan(args, workspace), workspace, args.get("reuse"),
+                          owner_session=owner_session_id(session))
     return {"ok": True, "workflow": row}
 
 
@@ -119,7 +121,7 @@ def _background_exec(root, gate, args, session, call_id):
         "id": "command", "argv": argv, "timeout": timeout,
     }]}
     store = _store()
-    created = store.create(plan, root)
+    created = store.create(plan, root, owner_session=owner_session_id(session))
     row = store.launch(created["id"], approved=True)
     return {"ok": True, "workflow": row}
 

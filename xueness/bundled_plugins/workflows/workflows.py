@@ -332,7 +332,13 @@ class WorkflowStore:
         record.setdefault('events', []).append({'seq': record['sequence'], 'at': time.time(), 'type': kind, **fields})
         record['events'] = record['events'][-500:]
 
-    def create(self, plan, root, reuse=None):
+    def create(self, plan, root, reuse=None, owner_session=None):
+        """Create one durable run.
+
+        ``owner_session`` stamps the conversation that spawned the run, which is
+        what makes it a *dynamic* run manageable by ``/dwf``; plain CLI and panel
+        runs stay untagged and are attributed by their workspace instead.
+        """
         root = Path(root).resolve()
         plan = validate_plan(plan, root)
         wid = uuid.uuid4().hex
@@ -342,6 +348,8 @@ class WorkflowStore:
                   'updated_at': time.time(), 'events': [], 'sequence': 0,
                   'cache_fingerprint': workspace_fingerprint(root, self.state)}
         record['plan_digest'] = workflow_plan_digest(record)
+        if isinstance(owner_session, str) and ID.fullmatch(owner_session):
+            record['owner_session'] = owner_session
         if reuse:
             previous = self.load(reuse)
             if previous['status'] in ACTIVE or previous['root'] != str(root):

@@ -163,7 +163,7 @@ providers 的 CLI parser/handler 已迁入 `xueness/bundled_plugins/providers/op
 
 ## 功能逐项归属清单
 
-下表概述当前 27 份 manifest 中的 116 项用户能力。命令/工具/依赖和实际实现文件以同一份 manifest 为准；前端卡片直接展示该功能清单，不维护第二份隐藏列表。纯安全内核与通用布局的边界如前文所述。
+下表概述当前 27 份 manifest 中的 118 项用户能力。命令/工具/依赖和实际实现文件以同一份 manifest 为准；前端卡片直接展示该功能清单，不维护第二份隐藏列表。纯安全内核与通用布局的边界如前文所述。
 
 | 插件 | 已实现的用户能力 |
 |---|---|
@@ -295,7 +295,7 @@ manifest 新增三个可选数据字段：`provides`、`inject`（点分服务�
 
 ## 专家工作流（workflows.expert，2026-10-05）
 
-目录新增 `workflows.expert`：对齐 ZCode `/expert` 的持久专家工作流，固定四阶段「调研 → 计划 → 实现 → 审查」。与同日合入的会话目标、设置卡片与模型弹层等合计，完整目录现为 27 个插件、116 项登记功能。实现全部位于 workflows 包内：`expert.py` 持有固定阶段定义（每阶段简短角色提示、目标与完成条件）、expert run 投影与三个入口；`ExpertPanel.tsx` 在工作流面板内提供状态条。引擎、调度、恢复、并发与停用边界全部复用既有 DAG 运行时，没有第二套子代理实现。
+目录新增 `workflows.expert`：对齐 ZCode `/expert` 的持久专家工作流，固定四阶段「调研 → 计划 → 实现 → 审查」。与同日合入的会话目标、设置卡片与模型弹层等合计，完整目录现为 27 个插件、116 项登记功能（加上随后合入的 dynamic_runs、manual_compact 为 118 项）。实现全部位于 workflows 包内：`expert.py` 持有固定阶段定义（每阶段简短角色提示、目标与完成条件）、expert run 投影与三个入口；`ExpertPanel.tsx` 在工作流面板内提供状态条。引擎、调度、恢复、并发与停用边界全部复用既有 DAG 运行时，没有第二套子代理实现。
 
 - **运行时**：每个 expert run 是一份持久记录（`<状态目录>/workflows/expert/<id>.json`，原子写 + 记录锁），字段为 id、底层 workflow id、session、task、root、permission_mode、status（`running|paused|done|stopped|failed`）、phase 与各阶段 status/摘要/error，读取时从底层 DAG 运行单向同步（`queued/running → running`、`paused/awaiting_user → paused`、`completed → done`、`cancelled → stopped`、`failed/interrupted → failed`）。四阶段就是四个 `agent` 节点的链式 DAG；上一阶段产物经引擎既有的依赖摘要机制进入下一阶段会话，节点会话本身也持久在 `<状态目录>/workflows/<wid>-sessions`。
 - **互斥**：同一会话（含无会话的 CLI 启动桶）同时最多 1 个 active expert run；检查与创建在目录级 mutex 锁内原子完成，判定前先对候选记录做一次同步，底层已结束的旧 run 不会挡住新 run。
@@ -304,3 +304,9 @@ manifest 新增三个可选数据字段：`provides`、`inject`（点分服务�
 - **共享 seam 审查**：`plugin_runtime.dispatch_slash`/`slash_owner` 是新增的通用路由函数（与 `cli_owner`、`route_owner` 同层）：按 manifest `commands` 找到斜杠命令属主插件，调用其 `execute_slash(name, argument, ctx)`；属主插件禁用时返回既有禁用文案而不是把 `/expert` 落成模型提示，未认领的名字返回 None、聊天循环行为不变。会话聊天循环只在通用 seam 上分发，不包含任何 expert 业务。writable 决策、状态映射与摘要全部留在 workflows 包内。
 
 `tests/test_expert_workflow.py` 覆盖启动（计划形状、yolo/edit 可写、会话派生权限、启动失败标记）、用真实引擎驱动的阶段推进与失败映射、status/resolve、resume（含失联恢复与 actor 答案）、stop（活动取消与无主 settle、中途取消落地 stopped）、同会话互斥、禁用拒绝（开关与依赖级联、slash 禁用文案、CLI/HTTP）、HTTP 路由与工作区根过滤。前端 `ExpertPanel.test.tsx` 覆盖活动 run 选择、固定阶段顺序、按会话轮询与静态结构。
+
+## 动态工作流运行管理与手动压缩（2026-10-05）
+
+`workflows.dynamic_runs`（新模块 `bundled_plugins/workflows/dynamic_runs.py`）在一个会话内管理该会话工作区产生的工作流运行，连同同轮合入的 `workflows.expert`，完整目录现为 27 个插件、118 项登记功能。它不引入第二套运行时：DAG 引擎、后台 worker、事件日志与 resume 语义全部复用 workflows 既有实现，本模块只做「按会话检索 + 结构化决策」。归属按两条证据合并——记录里的 `owner_session` 戳（由 `tools.py` 在 `bind_execution` 的会话上下文里创建运行时写入）与运行工作区等于会话工作区的回退归属；外部传入的 `owner_session` 值只当数据处理，不匹配会话 id 形态就忽略，因此一个会话看不到另一个会话的运行。列表视图每项给出 `id/name/status/startedAt/updatedAt/attribution/inFlight/stale/requiresApproval/requiresRealModel/resumable/resumeRefusal`，其中 `resumable` 与原因是服务端判定：存活看 `.runner` 非阻塞 flock，已结束、正在被其他进程驱动、`created` 尚未启动、等待 actor 回答、需要审批或需要真实模型各自返回不同 reason，前端与 CLI 只渲染结论，不自行推断。取消走既有 `control('cancel')`（`stopping` 由驱动循环落到 `cancelled`），未给 runId 时只取消唯一进行中项、没有则说明、多个则列出候选而不擅自选择，已结束的运行重复取消是幂等且不改写事件日志；恢复走既有 `control('recover')` + `launch`，审批与真实模型开关沿用 `start/resume` 的约定。所有拒绝是 `{reason, detail}` 结构（`plugin_disabled`/`invalid_session`/`session_not_found`/`invalid_run`/`not_found`/`none_in_flight`/`ambiguous`/`not_active`/`not_resumable`/`already_running`/`approval_required`/`model_execution_disabled`/`workspace_not_allowed`/`invalid_arguments`）配 HTTP 状态，拒绝是答案而不是异常外泄。三个入口共用同一实现：CLI `xueness workflow dwf [list|cancel [runId]|resume <runId>] --session <id>`（挂在既有 `workflow` 命令下，不新增顶层命令）、HTTP `GET /api/workflows/dwf?session=<id>` 与 `POST /api/workflows/dwf/cancel|resume`（`workflows` 家族已登记，沿用 Host/Origin/CSRF 与工作区围栏）、聊天 `/dwf` 只把文本交给插件 `dynamic_runs_command` 钩子渲染，不复制判断。插件关闭时 CLI 在 `_require_cli_plugins` 就退出（stderr 提示、stdout 为空）、HTTP 返回 403、聊天打印同一行拒绝；启用只是暴露入口，不构成执行授权。
+
+`sessions.manual_compact`（新模块 `bundled_plugins/sessions/manual_compact.py`）把已有的确定性压缩提前到用户手里，不调用模型、不改 `context_budget.py`。预算规则是 `max(256, min(目标基数, 当前字数 × 0.6))`，基数默认 24000、可由 `--max-chars` 显式收紧但不能放宽，轻量模式再与 `runtime_budget.inputBudgetTokens × 2` 取小，因此手动压缩不会成为绕过输入预算的后门。实际压缩仍是 `core.compact`：可复用的不变量由内核保证（system 提示与原始任务保留、每一轮用户发言原文保留、tool 调用与结果成对保留、被丢弃内容在 `archived_messages` 留有原文、超长输出截断为头尾加回指产物路径）。`instructions` 上限 2000 字符、含控制字符或非文本直接拒绝，原文按空白归一后写进摘要 system 消息的 `operator note`，并在 `compactions` 新增记录上逐条标注 `manual: true` 与 `source`（`chat`/`cli`/`http`）、`targetChars`、`instructions`、`instructionsChars`，让「人主动要求的压缩」与「每轮自动压缩」在会话数据里可分辨；已经在预算内时返回 `nothing_to_compact` 且不写文件。入口同样共用一份实现：`xueness sessions compact <sid> --instructions TEXT` 与 `POST /api/sessions/<sid>/compact`（`sessions` 家族已登记，无需改 `httpFamilies`）在会话 lease 下执行，跨进程占用返回 409 `session_busy`、会话正在运行时返回 409 `run_in_progress`；聊天循环已持有同一把非重入 flock，因此 `/compact` 走不重复取锁的 `compact_now`。前端只增加 Composer 斜杠建议里的 `/compact` 一项，归属检查为 `isPluginEffective('sessions')`，不新增面板。回归见 `tests/test_dynamic_workflow_runs.py`（24 项）与 `tests/test_manual_compact.py`（20 项），使用隔离状态目录与本地假 provider，含真实 `chat` 循环与真实 worker 恢复，不访问网络、不调用真实模型。

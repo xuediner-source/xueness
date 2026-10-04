@@ -370,6 +370,7 @@ export type ContextComposerSuggestion = {
 export type ComposerStartActions = {
   canGoal: boolean;
   canWorkflow: boolean;
+  canCompact?: boolean;
   onWorkflow: () => void;
   onPlugins: () => void;
 };
@@ -379,7 +380,7 @@ export function contextComposerSuggestions(
   text: string,
   commands: { id: string; description?: string }[],
   mentions: ComposerMention[],
-  actions?: Pick<ComposerStartActions, "canGoal" | "canWorkflow">,
+  actions?: Pick<ComposerStartActions, "canGoal" | "canWorkflow" | "canCompact">,
 ): ContextComposerSuggestion[] {
   const slash = /(?:^|\s)\/([A-Za-z0-9._-]*)$/.exec(text);
   if (slash) {
@@ -390,6 +391,11 @@ export function contextComposerSuggestions(
       .map((command) => ({ kind: "command", token: command.id, description: command.description }));
     if (actions?.canGoal && "goal".startsWith(prefix)) items.push({ kind: "goal", token: "goal", description: tr("标记为目标任务") });
     if (actions?.canWorkflow && "workflow".startsWith(prefix)) items.push({ kind: "workflow", token: "workflow", description: tr("创建工作流") });
+    // /compact is a host command, not a user-defined one: it only appears while
+    // the sessions plugin that implements it is effective.
+    if (actions?.canCompact && "compact".startsWith(prefix) && !items.some((item) => item.token === "compact")) {
+      items.push({ kind: "command", token: "compact", description: tr("按预算压缩当前上下文") });
+    }
     return items.slice(0, 8);
   }
   const trigger = /(?:^|\s)([@$])([^\s@#$]*)$/.exec(text);
@@ -773,6 +779,7 @@ export function Composer({
     ? contextComposerSuggestions(text, commands, availableMentions, {
       canGoal: canOfferGoal,
       canWorkflow: canOfferWorkflow,
+      canCompact: Boolean(startActions?.canCompact),
     })
     : [];
   const [activeSuggestion, setActiveSuggestion] = useState(0);

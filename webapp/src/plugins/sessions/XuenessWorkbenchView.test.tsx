@@ -490,6 +490,10 @@ test("Composer contexts: @ resolves files/plugins/sessions, $ resolves skills, g
   assert.equal(contextComposerSuggestions("/", [], mentions, { canGoal: true, canWorkflow: true }).some((item) => item.kind === "workflow"), true);
   // The container only offers the goal action while the planning plugin is effective.
   assert.deepEqual(contextComposerSuggestions("/go", [], mentions, { canGoal: false, canWorkflow: true }), []);
+  // /compact belongs to sessions: offered only while that plugin is effective.
+  assert.deepEqual(contextComposerSuggestions("/comp", [], mentions, { canGoal: true, canWorkflow: true, canCompact: true })
+    .map((item) => item.token), ["compact"]);
+  assert.deepEqual(contextComposerSuggestions("/comp", [], mentions, { canGoal: true, canWorkflow: true }), []);
 });
 
 test("Composer attachment payload sizing uses decoded base64 bytes and fixed limits", () => {

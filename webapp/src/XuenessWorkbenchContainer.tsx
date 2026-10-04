@@ -1397,6 +1397,7 @@ export function XuenessWorkbenchContainer() {
   ];
   const composerStartActions = {
     canGoal: !activeId && isPluginEffective('planning'), canWorkflow: isPluginEffective("workflows"),
+    canCompact: isPluginEffective('sessions'),
     onWorkflow: () => setPanel("workflows"), onPlugins: () => setPanel("plugins"),
   };
   const chooseWorkspace = (root: string, isolated = false, forceNew = false) => {

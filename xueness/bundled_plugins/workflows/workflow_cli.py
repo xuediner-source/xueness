@@ -13,6 +13,12 @@ def add_parsers(commands):
     create.add_argument('--root', type=Path, required=True)
     create.add_argument('--reuse', help='reuse unchanged completed nodes from a settled run')
     sub.add_parser('list')
+    dwf = sub.add_parser('dwf', help="one session's dynamic workflow runs: list, cancel, resume")
+    dwf.add_argument('dwf_action', nargs='?', default='list', choices=('list', 'cancel', 'resume'))
+    dwf.add_argument('run', nargs='?', help='run id for cancel/resume')
+    dwf.add_argument('--session', required=True, help='owning session id')
+    dwf.add_argument('--approve', action='store_true', help='approve re-running the stored command plan')
+    dwf.add_argument('--allow-real', action='store_true', help='allow model calls by agent nodes')
     for action in ('show', 'start', 'resume', 'pause', 'cancel', 'recover', 'concurrency', 'logs', 'wait'):
         p = sub.add_parser(action)
         p.add_argument('id')
@@ -51,6 +57,10 @@ def execute(args):
     if args.cmd == 'expert':
         from . import expert
         return expert.execute_cli(args)
+    if args.action == 'dwf':
+        # Same implementation the web API and the chat /dwf command call.
+        from . import dynamic_runs
+        return dynamic_runs.execute_cli(args)
     store = WorkflowStore(args.state)
     action = args.action
     if action == 'list':

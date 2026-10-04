@@ -666,11 +666,14 @@ def _window(content: str, limit: int, pointer: str) -> str:
     return "\n\n".join(part for part in (head, pointer, tail) if part)
 
 
-def compact(session: dict, max_chars: int, max_tokens: int | None = None) -> None:
+def compact(session: dict, max_chars: int, max_tokens: int | None = None,
+            instructions: str | None = None) -> None:
     """Deterministic bounded prompt view; complete raw journal remains on disk.
 
     Character budget is the real bound. ``max_tokens`` is advisory only
-    (estimate = len(chars) // 4) and never calls a model.
+    (estimate = len(chars) // 4) and never calls a model. ``instructions`` is
+    the operator note a manual compaction is asked to carry into the digest;
+    automatic per-step compaction never passes one.
 
     Invariants the caller may rely on afterwards (see docs/xueness-batch5.md):
 
@@ -791,8 +794,11 @@ def compact(session: dict, max_chars: int, max_tokens: int | None = None) -> Non
 
     digest = "; ".join(str(m.get("role", "?")) + ":" + str(m.get("content", ""))[:80] for m in dropped)
     budget = max(80, max_chars // 4)
+    note = (" operator note: " + " ".join(instructions.split())[:400]
+            if isinstance(instructions, str) and instructions.strip() else "")
     summary = {"role": "system",
-               "content": "Older history compacted; consult durable journal for details: " + digest[:budget]}
+               "content": "Older history compacted" + note +
+                          "; consult durable journal for details: " + digest[:budget]}
 
     kept_pairs = [(index, message) for flag, unit in zip(kept, units) if flag
                   for index, message in unit["msgs"]]

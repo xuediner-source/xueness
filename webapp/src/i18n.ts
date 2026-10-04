@@ -1542,3 +1542,8 @@ Object.assign(messages, {
   "打开用量面板": "Open usage panel",
   "仅统计服务商实际报告的用量，缺失部分不作估算。": "Only provider-reported usage is counted; missing values are never estimated.",
 });
+
+// 动态工作流运行管理与手动压缩：/dwf、/compact 与压缩结果说明。
+Object.assign(messages, {
+  "按预算压缩当前上下文": "Compact the current context to budget",
+});

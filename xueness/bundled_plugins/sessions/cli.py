@@ -246,6 +246,11 @@ CHAT_HELP = """/help               显示帮助与自定义命令
 /detach N|all       移除第 N 个或所有待发送附件
 /models             列出已保存的模型配置
 /model ID [MODEL]   切换供应商/模型；env 使用环境配置
+/dwf [list|cancel [runId]|resume <runId>]
+                    本会话启动的动态工作流运行
+/compact [说明]     立即按预算压缩上下文（不调用模型，原始日志保留）
+/expert [status|resume|stop|任务]
+                    专家工作流：调研→计划→实现→审查
 /exit 或 /quit      保存会话并退出
 运行中 Ctrl+C 请求停止；停止后 /retry 继续，或输入新方向。
 输入提示处 Ctrl+C 退出；写入/编辑/执行默认逐次询问。"""
@@ -261,6 +266,11 @@ CHAT_HELP_EN = """/help               Show help and custom commands
 /detach N|all       Remove one or all queued attachments
 /models             List saved model profiles
 /model ID [MODEL]   Switch provider/model; env uses environment config
+/dwf [list|cancel [runId]|resume <runId>]
+                    Dynamic workflow runs started by this session
+/compact [notes]    Compact the context to budget now (no model call; journal kept)
+/expert [status|resume|stop|task]
+                    Expert workflow: research → plan → implement → review
 /exit or /quit      Save the session and exit
 Ctrl+C requests a stop while running; use /retry or enter a new direction afterward."""
 
@@ -277,6 +287,86 @@ def _latest_chat(store, root):
         except (OSError, ValueError, KeyError, TypeError):
             continue
     return max(candidates, key=lambda item: item[:2])[2] if candidates else None
+
+def _report_dynamic_runs(args, store, session, argument):
+    """Render the workflows plugin's answer to ``/dwf``; the host decides nothing.
+
+    Listing, cancelling and resuming all live in ``workflows.dynamic_runs``, so
+    the chat loop only turns that one payload into lines a human can read.
+    """
+    language = getattr(args, "language", "zh")
+    if not plugin_runtime.is_enabled(args.state, "workflows"):
+        print("! " + ("workflows plugin is not enabled" if language == "en"
+                      else "插件已禁用或依赖不可用: workflows"), file=sys.stderr)
+        return
+    handler = getattr(plugin_runtime.entrypoint("workflows"), "dynamic_runs_command", None)
+    if not callable(handler):
+        return
+    try:
+        result = handler(args.state, store, session, argument)
+    except ValueError as exc:
+        # A refusal is an answer: reason plus detail, the same pair CLI and HTTP give.
+        payload = exc.payload() if hasattr(exc, "payload") else None
+        refusal = (payload or {}).get("refusal") or {"reason": "invalid", "detail": str(exc)}
+        print(f"! {refusal['reason']}: {refusal['detail']}", file=sys.stderr)
+        return
+    runs = result.get("runs")
+    if runs is None:
+        run = result.get("run") or {}
+        if result.get("action") == "cancel":
+            label = "Cancelled" if language == "en" else "已取消"
+        else:
+            label = "Resumed" if language == "en" else "已恢复"
+        print(f"{label} {run.get('name', '')} · {run.get('status', '')}".rstrip(" ·"), file=sys.stderr)
+        return
+    if not runs:
+        print("（该会话没有动态工作流运行）" if language == "zh" else "(no dynamic workflow runs)", file=sys.stderr)
+        return
+    for run in runs:
+        state = run.get("resumeRefusal") or {}
+        mark = "✓" if run.get("resumable") else "✗"
+        line = (f"- {run['id'][:8]} {run.get('name', '')} · {run.get('status')}"
+                f" · {run.get('startedAt')} → {run.get('updatedAt')} · {mark}")
+        if not run.get("resumable") and state.get("reason"):
+            line += f" ({state['reason']})"
+        print(line, file=sys.stderr)
+    summary = (f"{len(runs)} runs · {result.get('inFlight', 0)} in flight · "
+               f"{result.get('resumable', 0)} resumable" if language == "en" else
+               f"共 {len(runs)} 个运行 · 进行中 {result.get('inFlight', 0)} · 可恢复 {result.get('resumable', 0)}")
+    print(summary + " · /dwf cancel [runId] · /dwf resume <runId>", file=sys.stderr)
+
+def _report_compaction(args, store, session, argument):
+    """Hand ``/compact`` to this plugin's compaction face and render the answer.
+
+    Returns the reloaded session, because the compaction rewrote the journal this
+    loop is holding; ``None`` when there was nothing to reload.
+    """
+    language = getattr(args, "language", "zh")
+    if not isinstance(session, dict):
+        print("! " + ("no session to compact yet" if language == "en"
+                      else "还没有可压缩的会话"), file=sys.stderr)
+        return None
+    from .manual_compact import CompactError, chat
+    try:
+        report = chat(store, session, argument, state_dir=args.state)
+    except CompactError as exc:
+        print(f"! {exc.reason}: {exc.detail}", file=sys.stderr)
+        return store.load(session["id"])
+    if not report.get("compacted"):
+        note = ("nothing to compact: the window is already inside its budget"
+                if language == "en" else "上下文已在预算内，无需压缩")
+        print(f"== {note}", file=sys.stderr)
+    else:
+        before, after = report["before"], report["after"]
+        print((f"Compacted: {before['messages']} → {after['messages']} messages, "
+               f"{before['chars']} → {after['chars']} chars, budget {report['budget']}, "
+               f"dropped {report['dropped']}, masked {report['masked']}" if language == "en" else
+               f"已压缩：消息 {before['messages']} → {after['messages']} 条，"
+               f"{before['chars']} → {after['chars']} 字符，预算 {report['budget']}，"
+               f"归档 {report['dropped']} 条、遮蔽 {report['masked']} 条（原始日志与全部用户发言保留）"),
+              file=sys.stderr)
+    return store.load(session["id"])
+
 
 def _chat_loop(args, parser, store, session):
     try:
@@ -424,6 +514,14 @@ def _chat_loop_owned(args, parser, store, session, owned):
                 store.save(s)
             print(f"mode: {args.mode}", file=sys.stderr)
             continue
+        if command == "/dwf":
+            _report_dynamic_runs(args, store, s, argument)
+            continue
+        if command == "/compact":
+            refreshed = _report_compaction(args, store, s, argument)
+            if refreshed is not None:
+                s = refreshed
+            continue
         if command.startswith('/') and not literal:
             # Generic plugin-owned slash routing (same manifest commands as the
             # CLI). None means no plugin claims the name; text then flows on.
@@ -564,10 +662,16 @@ def _register_session_cli(commands):
 
 def _execute_cli_impl(args, parser, store):
     if args.cmd == "sessions":
+        from .manual_compact import CompactError
         try:
             result = operator_cli.execute(args, store)
             print(json.dumps(result, ensure_ascii=False, indent=2))
             return 0
+        except CompactError as exc:
+            # A refusal keeps its reason and status on stdout, like every other
+            # machine-readable answer; the exit code still says "refused".
+            print(json.dumps(exc.payload(), ensure_ascii=False, indent=2))
+            return 1
         except (OSError, ValueError) as exc:
             print(f"ERROR: {exc}", file=sys.stderr)
             return 1

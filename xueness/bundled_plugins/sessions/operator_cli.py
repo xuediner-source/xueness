@@ -36,6 +36,10 @@ def add_session_parsers(commands):
         p.add_argument('id')
         if action == 'rename':
             p.add_argument('title')
+    compact = sub.add_parser('compact', help='bound the prompt view now, without a model call')
+    compact.add_argument('id')
+    compact.add_argument('--instructions', default=None, metavar='TEXT',
+                         help='what the compacted digest should keep in mind, at most 2000 characters')
     export = sub.add_parser('export', help='write a bounded redacted transcript into the local exports folder')
     export.add_argument('id')
     export.add_argument('--output', help='filename under <state>/exports (defaults to session id)')
@@ -240,6 +244,11 @@ def _import_payload(store, task, title, messages, root):
 def execute(args, store):
     if args.action == 'export':
         return export_session(store, args.id, args.state, args.output)
+    if args.action == 'compact':
+        # Same handler the web route and the chat /compact command reach.
+        from .manual_compact import compact_leased
+        return compact_leased(store, args.id, args.instructions,
+                              state_dir=args.state, source='cli')
     if args.action == 'import':
         return import_session(store, args.file, args.root)
     if args.action == 'fork':

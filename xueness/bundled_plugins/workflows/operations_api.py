@@ -30,6 +30,9 @@ def dispatch(method, parts, query, data, ctx):
             return 200, check_mcp(ctx['state_dir'], data.get('id'), root_for(data.get('root')))
         if not workflow:
             return 405, {'error': 'method not allowed'}
+        if len(parts) >= 3 and parts[2] == 'dwf':
+            from . import dynamic_runs
+            return dynamic_runs.dispatch(method, parts, query, data, ctx)
         store = WorkflowStore(ctx['state_dir'])
         def submitted_plan(payload, root):
             has_plan, has_script = 'plan' in payload, 'script' in payload
