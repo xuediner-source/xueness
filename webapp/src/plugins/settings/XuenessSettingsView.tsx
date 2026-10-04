@@ -15,12 +15,14 @@ import {
   MoreHorizontal,
   Package,
   Palette,
+  Search,
   Settings2,
   ShieldCheck,
   Store,
   Stethoscope,
   Terminal,
   WandSparkles,
+  X,
   type LucideIcon,
 } from "lucide-react";
 import { t as tr } from "../../i18n";
@@ -97,6 +99,18 @@ export function groupSettingsSections(sections: XuenessSettingsSection[]): Setti
   return groups;
 }
 
+export function filterSettingsSections(
+  sections: XuenessSettingsSection[],
+  query: string,
+): XuenessSettingsSection[] {
+  const needle = query.trim().toLocaleLowerCase();
+  if (!needle) return sections;
+  return sections.filter((section) =>
+    [section.id, section.label, section.description]
+      .some((term) => term.toLocaleLowerCase().includes(needle)),
+  );
+}
+
 function SettingsSidebarButton({
   section,
   active,
@@ -137,11 +151,19 @@ export function XuenessSettingsView({
 }: XuenessSettingsViewProps): React.JSX.Element {
   const scrollRef = useRef<HTMLDivElement>(null);
   const active = sections.find((section) => section.id === activeSection);
-  const groups = useMemo(() => groupSettingsSections(sections), [sections]);
-  const hasActiveExtension = groups.some(
+  const allGroups = useMemo(() => groupSettingsSections(sections), [sections]);
+  const [search, setSearch] = useState("");
+  const searchActive = Boolean(search.trim());
+  const visibleSections = useMemo(() => filterSettingsSections(sections, search), [sections, search]);
+  const groups = useMemo(() => groupSettingsSections(visibleSections), [visibleSections]);
+  const hasActiveExtension = allGroups.some(
     (group) => group.id === "extensions" && group.sections.some((section) => section.id === activeSection),
   );
   const [extensionsExpanded, setExtensionsExpanded] = useState(hasActiveExtension);
+  const selectSection = (sectionId: string) => {
+    setSearch("");
+    onSelect(sectionId);
+  };
 
   useEffect(() => {
     if (scrollRef.current) scrollRef.current.scrollTop = 0;
@@ -149,7 +171,7 @@ export function XuenessSettingsView({
   }, [activeSection, hasActiveExtension]);
 
   return (
-    <section className="xn-settings-view" aria-label={tr("设置")} data-testid="xn-settings-view">
+    <section className={`xn-settings-view${activeSection === "plugins" ? " xn-settings-view--plugin-catalog" : ""}`} aria-label={tr("设置")} data-testid="xn-settings-view" data-searching={searchActive || undefined}>
       <aside className="xn-settings-view__sidebar">
         <div className="xn-settings-view__drag-space" aria-hidden="true" />
         {onBack && (
@@ -168,7 +190,28 @@ export function XuenessSettingsView({
           </div>
         )}
 
-        <nav className="xn-settings-view__nav" aria-label={tr("设置分类")}>
+        <div className="xn-settings-view__search">
+          <label>
+            <Search size={15} strokeWidth={1.8} aria-hidden="true" />
+            <span className="xn-settings-view__visually-hidden">{tr("搜索设置")}</span>
+            <input
+              type="search"
+              aria-label={tr("搜索设置")}
+              aria-controls="xn-settings-nav-results"
+              data-testid="xn-settings-search"
+              value={search}
+              placeholder={tr("搜索设置")}
+              onChange={(event) => setSearch(event.target.value)}
+            />
+          </label>
+          {search && (
+            <button type="button" aria-label={tr("清除搜索")} title={tr("清除搜索")} onClick={() => setSearch("")}>
+              <X size={14} aria-hidden="true" />
+            </button>
+          )}
+        </div>
+
+        <nav className="xn-settings-view__nav" id="xn-settings-nav-results" aria-label={tr("设置分类")}>
           {groups.filter((group) => group.id !== "extensions").map((group, groupIndex) => (
             <div
               className={`xn-settings-view__nav-group${groupIndex > 0 ? " is-separated" : ""}`}
@@ -185,7 +228,7 @@ export function XuenessSettingsView({
                     <SettingsSidebarButton
                       section={section}
                       active={section.id === activeSection}
-                      onClick={() => onSelect(section.id)}
+                      onClick={() => selectSection(section.id)}
                     />
                   </li>
                 ))}
@@ -195,8 +238,8 @@ export function XuenessSettingsView({
           {groups.find((group) => group.id === "extensions") && (
             <details
               className="xn-settings-view__extensions"
-              open={extensionsExpanded}
-              onToggle={(event) => setExtensionsExpanded(event.currentTarget.open)}
+              open={searchActive || extensionsExpanded}
+              onToggle={(event) => { if (!searchActive) setExtensionsExpanded(event.currentTarget.open); }}
             >
               <summary aria-label={tr("扩展与维护")} title={tr("扩展与维护")}>
                 <MoreHorizontal size={16} strokeWidth={1.8} aria-hidden="true" />
@@ -208,12 +251,17 @@ export function XuenessSettingsView({
                     <SettingsSidebarButton
                       section={section}
                       active={section.id === activeSection}
-                      onClick={() => onSelect(section.id)}
+                      onClick={() => selectSection(section.id)}
                     />
                   </li>
                 ))}
               </ul>
             </details>
+          )}
+          {searchActive && visibleSections.length === 0 && (
+            <p className="xn-settings-view__search-empty" role="status" aria-live="polite">
+              {tr("没有匹配的设置分类")}
+            </p>
           )}
         </nav>
       </aside>
@@ -224,7 +272,7 @@ export function XuenessSettingsView({
             <summary aria-label={tr("帮助")} title={tr("帮助")}><CircleHelp size={16} strokeWidth={1.5} /></summary>
             <div>{["shortcuts", "workspace", "providers"].map(id => {
               const section = sections.find(item => item.id === id);
-              return section && <button key={id} type="button" onClick={event => { event.currentTarget.closest("details")?.removeAttribute("open"); onSelect(id); }}>{section.label}</button>;
+              return section && <button key={id} type="button" onClick={event => { event.currentTarget.closest("details")?.removeAttribute("open"); selectSection(id); }}>{section.label}</button>;
             })}</div>
           </details>
         </div>

@@ -115,6 +115,22 @@ class SubagentsTests(unittest.TestCase):
         parent = object()
         self.assertIs(provider_for_agent({"name": "Reader"}, parent, self.state_dir), parent)
 
+    def test_configured_parent_adapter_is_copied_for_an_overlapping_child(self):
+        from xueness.bundled_plugins.providers.provider import OpenAICompatible
+
+        parent = object.__new__(OpenAICompatible)
+        parent.model = "fixture-model"
+        parent.compatibility = {"stream": True}
+        parent.lightweight_options = {"requestDeadlineSeconds": 20}
+        parent.capabilities = {"image"}
+        child = provider_for_agent({"name": "Reader"}, parent, self.state_dir)
+
+        self.assertIsNot(child, parent)
+        self.assertEqual(child.model, parent.model)
+        self.assertIsNot(child.compatibility, parent.compatibility)
+        self.assertIsNot(child.lightweight_options, parent.lightweight_options)
+        self.assertIsNot(child.capabilities, parent.capabilities)
+
     def test_model_only_override_keeps_the_parent_profile(self):
         parent = object()
         selected = object()
@@ -148,6 +164,8 @@ class SubagentsTests(unittest.TestCase):
         wrapped.complete([], schemas)
         self.assertEqual([item["function"]["name"] for item in provider.seen], ["read"])
         self.assertEqual(wrapped.model, "fixture-model")
+        wrapped.request_deadline = 42.0
+        self.assertEqual(provider.request_deadline, 42.0)
 
     def test_inherited_explicit_all_and_custom_schemas_never_advertise_workflow_mutators(self):
         class Provider:
@@ -182,7 +200,11 @@ class SubagentsTests(unittest.TestCase):
         selected = object()
         agent = {"id": "reader", "name": "Reader", "providerId": "fast",
                  "model": "custom-2", "reasoningEffort": "high", "tools": ["read"]}
-        with patch("xueness.core.run") as child_run, patch(
+        def complete_child(child, *_args, **_kwargs):
+            child["status"] = "completed"
+            child["completion"] = {"summary": "done"}
+
+        with patch("xueness.core.run", side_effect=complete_child) as child_run, patch(
             "xueness.bundled_plugins.providers.provider_config.resolve",
             return_value=selected,
         ) as resolve:
@@ -200,6 +222,91 @@ class SubagentsTests(unittest.TestCase):
         self.assertEqual(args[3].allowed_tool_names, frozenset({"read"}))
         self.assertEqual(args[3].disallow, frozenset())
         self.assertEqual(kwargs["policy_state_dir"], self.state_dir)
+        self.assertEqual(kwargs["max_wall_seconds"], 120)
+
+    def test_explicit_unknown_agent_does_not_fall_back_to_a_generic_child(self):
+        from xueness.core import Gate, _run_subagent
+        from xueness.task_registry import TaskRegistry
+
+        with patch("xueness.core.run") as child_run:
+            result = _run_subagent(
+                Gate(self.root), object(), [], "Inspect one file", "missing",
+                depth=0, max_depth=1, state_dir=self.state_dir,
+                registry=TaskRegistry(),
+            )
+
+        self.assertFalse(result["ok"])
+        self.assertEqual(result["error"], "sub-agent not found")
+        child_run.assert_not_called()
+
+    def test_async_runner_finishes_pre_recorded_task_with_child_terminal_status(self):
+        from xueness.bundled_plugins.subagents.runner import run_subagent
+        from xueness.core import Gate
+        from xueness.task_registry import FAILED, TaskRegistry
+
+        registry = TaskRegistry()
+        registry.record("task-pre-recorded", parent_session="parent", agent=None,
+                        prompt="inspect", root=self.root)
+        original_started_at = registry.get("task-pre-recorded")["startedAt"]
+        observed = {}
+
+        class Provider:
+            model = "fixture-model"
+
+        def pause_child(child, _store, provider, gate, **kwargs):
+            observed.update(provider=provider, gate=gate, kwargs=kwargs)
+            child["status"] = "paused"
+            child["pause_reason"] = "child time limit reached"
+            child["messages"].append({"role": "assistant", "content": "partial result"})
+
+        with patch.object(registry, "record", side_effect=AssertionError("duplicate record")):
+            result = run_subagent(
+                Gate(self.root, disallow={"read", "workflow_status"}), Provider(), [],
+                "inspect", None, depth=0, max_depth=1, state_dir=self.state_dir,
+                registry=registry, parent_session="parent", task_id="task-pre-recorded",
+                gate_class=Gate, run_fn=pause_child, base_system="base",
+                max_steps=4, summary_max=100,
+            )
+
+        self.assertFalse(result["ok"])
+        self.assertEqual(result["error"], "child time limit reached")
+        self.assertEqual(result["task_id"], "task-pre-recorded")
+        task = registry.get("task-pre-recorded")
+        self.assertEqual(task["status"], FAILED)
+        self.assertEqual(task["summary"], "partial result")
+        self.assertEqual(task["error"], "child time limit reached")
+        self.assertEqual(task["startedAt"], original_started_at)
+        self.assertIn("read", observed["gate"].disallow)
+        self.assertEqual(observed["gate"].allowed_tool_names, None)
+        self.assertIn("read", observed["gate"].denied_tool_names)
+        self.assertIn("workflow_status", observed["gate"].denied_tool_names)
+        self.assertEqual(observed["kwargs"]["max_wall_seconds"], 120)
+        filtered = observed["provider"]._filter([
+            {"type": "function", "function": {"name": name}}
+            for name in ("read", "list", "workflow_status", "workflow_create")
+        ])
+        self.assertEqual([item["function"]["name"] for item in filtered], ["list"])
+
+    def test_async_runner_records_provider_failure_instead_of_leaving_task_running(self):
+        from xueness.bundled_plugins.subagents.runner import run_subagent
+        from xueness.core import Gate
+        from xueness.task_registry import FAILED, TaskRegistry
+
+        registry = TaskRegistry()
+
+        def fail_child(*_args, **_kwargs):
+            raise RuntimeError("provider request failed")
+
+        result = run_subagent(
+            Gate(self.root), object(), [], "inspect", None, depth=0, max_depth=1,
+            state_dir=self.state_dir, registry=registry, parent_session="parent",
+            gate_class=Gate, run_fn=fail_child, base_system="base",
+            max_steps=4, summary_max=100,
+        )
+
+        self.assertFalse(result["ok"])
+        self.assertEqual(result["error"], "sub-agent run failed")
+        self.assertEqual(registry.get(result["task_id"])["status"], FAILED)
 
     def test_tool_allowlist_blocks_a_model_call_even_when_schema_filter_is_bypassed(self):
         from xueness.core import Gate, run
@@ -312,7 +419,8 @@ class SubagentsTests(unittest.TestCase):
                             Gate(self.root), provider, [agent], "Inspect safely", "fixture",
                             depth=0, max_depth=1, state_dir=self.state_dir,
                         )
-                    self.assertTrue(result["ok"])
+                    self.assertFalse(result["ok"], "a denied child action is not a completed task")
+                    self.assertTrue(result["error"])
                     # A policy refusal stops immediately, without sending a
                     # second request merely to ask the model to explain it.
                     self.assertEqual(provider.call_count, 1)

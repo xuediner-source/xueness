@@ -14,7 +14,7 @@
     <a href="https://github.com/xuediner-source/xueness/actions/workflows/desktop-build.yml"><img src="https://github.com/xuediner-source/xueness/actions/workflows/desktop-build.yml/badge.svg?branch=main" alt="Desktop build"></a>
     <a href="https://github.com/xuediner-source/xueness/blob/main/LICENSE"><img src="https://img.shields.io/github/license/xuediner-source/xueness?label=license" alt="Apache 2.0 license"></a>
     <a href="https://github.com/xuediner-source/xueness/releases/latest"><img src="https://img.shields.io/github/v/release/xuediner-source/xueness?label=release" alt="Latest release"></a>
-    <img src="https://img.shields.io/badge/plugins-27%20%7C%2096-4263eb" alt="27 plugins and 96 features">
+    <img src="https://img.shields.io/badge/plugins-27%20%7C%20104-4263eb" alt="27 plugins and 104 features">
   </p>
 </div>
 
@@ -34,16 +34,16 @@ Visit [GitHub Releases](https://github.com/xuediner-source/xueness/releases/late
 
 | System | Installer / disk image | Portable / app ZIP |
 | --- | --- | --- |
-| Windows 10/11 · x64 | [Installer `.exe`](https://github.com/xuediner-source/xueness/releases/download/v0.1.0/Xueness-0.1.0-windows-x64-setup.exe) | [Portable `.zip`](https://github.com/xuediner-source/xueness/releases/download/v0.1.0/Xueness-0.1.0-windows-x64-portable.zip) |
-| macOS · Apple Silicon | [arm64 `.dmg`](https://github.com/xuediner-source/xueness/releases/download/v0.1.0/Xueness-0.1.0-macos-arm64.dmg) | [arm64 app `.zip`](https://github.com/xuediner-source/xueness/releases/download/v0.1.0/Xueness-0.1.0-macos-arm64.zip) |
-| macOS · Intel | [x64 `.dmg`](https://github.com/xuediner-source/xueness/releases/download/v0.1.0/Xueness-0.1.0-macos-x64.dmg) | [x64 app `.zip`](https://github.com/xuediner-source/xueness/releases/download/v0.1.0/Xueness-0.1.0-macos-x64.zip) |
+| Windows 10/11 · x64 | [Installer `.exe`](https://github.com/xuediner-source/xueness/releases/download/v0.1.2/Xueness-0.1.2-windows-x64-setup.exe) | [Portable `.zip`](https://github.com/xuediner-source/xueness/releases/download/v0.1.2/Xueness-0.1.2-windows-x64-portable.zip) |
+| macOS · Apple Silicon | [arm64 `.dmg`](https://github.com/xuediner-source/xueness/releases/download/v0.1.2/Xueness-0.1.2-macos-arm64.dmg) | [arm64 app `.zip`](https://github.com/xuediner-source/xueness/releases/download/v0.1.2/Xueness-0.1.2-macos-arm64.zip) |
+| macOS · Intel | [x64 `.dmg`](https://github.com/xuediner-source/xueness/releases/download/v0.1.2/Xueness-0.1.2-macos-x64.dmg) | [x64 app `.zip`](https://github.com/xuediner-source/xueness/releases/download/v0.1.2/Xueness-0.1.2-macos-x64.zip) |
 
-SHA-256 checksums for this release are in [`SHA256SUMS.txt`](https://github.com/xuediner-source/xueness/releases/download/v0.1.0/SHA256SUMS.txt). Desktop packages include Electron, a frozen Python backend, the built workbench, and browser drivers; Python and Node.js do not need to be installed separately. Git, SSH, ffmpeg, and other external programs are still required by the plugins that use them. Browser automation requires Chrome or Edge on the machine. Current builds are not code-signed or notarized; see the [desktop guide](docs/xueness-desktop.md) for first-launch and data-location details.
+SHA-256 checksums for this release are in [`SHA256SUMS.txt`](https://github.com/xuediner-source/xueness/releases/download/v0.1.2/SHA256SUMS.txt). Desktop packages include Electron, a frozen Python backend, the built workbench, and browser drivers; Python and Node.js do not need to be installed separately. Git, SSH, ffmpeg, and other external programs are still required by the plugins that use them. Browser automation requires Chrome or Edge on the machine. Current builds are not code-signed or notarized; see the [desktop guide](docs/xueness-desktop.md) for first-launch and data-location details.
 
 ## What you can do
 
 - **Tune local-model runs.** Choose the “Local lightweight” profile and adjust prompts, tool selection, context and output budgets, sampling, and protocol options. The resource panel reports CPU, memory, and process activity on the machine running Xueness. The output view shows request phases, tool activity, and usage reported by the model service. Missing token or GPU-memory measurements are shown as unavailable instead of being estimated.
-- **Use 27 trusted plugins and 96 registered features.** Capabilities include sessions, workspace files, providers, shell, Git, terminals, workflows, memory, hooks, MCP, browser automation, remote connections, channels, automations, diagnostics, and Office previews. The plugin manager shows the full catalog and dependency state; the CLI can inspect and change plugin switches.
+- **Use 27 trusted plugins and 104 registered features.** Capabilities include sessions, workspace files, providers, shell, Git, terminals, workflows, memory, hooks, MCP, browser automation, remote connections, channels, automations, diagnostics, and Office previews. The plugin manager shows the full catalog and dependency state; the CLI can inspect and change plugin switches.
 - **Keep one local runtime across three entry points.** Run sessions in the Agent CLI, manage them in the loopback Web workbench, or install the Windows/macOS desktop app. Platform-specific support stays with the plugin that owns the feature.
 
 The lightweight profile tunes runtime behavior; it does not download models, change model weights, or automatically alter the inference server’s GPU allocation. Office previews cover selected document pages, images, charts, and cached spreadsheet values. They are not a complete Microsoft Office layout or compatibility engine.

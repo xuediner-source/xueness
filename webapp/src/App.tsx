@@ -6,6 +6,7 @@
  */
 import React from "react";
 import { XuenessWorkbenchContainer } from "./XuenessWorkbenchContainer";
+import { RegionBoundary } from "./ui/primitives";
 
 /** Base styling for the standalone workbench. */
 const BASE_STYLE = `
@@ -20,7 +21,9 @@ export function XuenessApp() {
       <style>{BASE_STYLE}</style>
       <div className="xn-app" data-testid="xn-app">
         {/* The workbench owns the whole shell: sidebar + chat-first main area. */}
-        <XuenessWorkbenchContainer />
+        <RegionBoundary onReload={() => window.location.reload()}>
+          <XuenessWorkbenchContainer />
+        </RegionBoundary>
       </div>
     </>
   );

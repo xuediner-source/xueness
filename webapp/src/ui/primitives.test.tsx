@@ -14,7 +14,28 @@ import {
   Spinner,
   AppShell,
   Stat,
+  RegionBoundary,
 } from "./primitives";
+
+test("region failure recovery offers retry without exposing exception details", () => {
+  const boundary = new RegionBoundary({ children: <div>original</div>, onRecover: () => {} });
+  boundary.state = RegionBoundary.getDerivedStateFromError();
+  const html = renderToStaticMarkup(boundary.render());
+  assert.match(html, /data-testid="region-error"/);
+  assert.match(html, /role="alert"/);
+  assert.match(html, /重试此区域/);
+  assert.match(html, /返回插件管理/);
+  assert.doesNotMatch(html, /original|stack trace/);
+});
+
+test("a rejected lazy import offers reload because React caches its failed promise", () => {
+  const boundary = new RegionBoundary({ children: null, onReload: () => {}, onRecover: () => {} });
+  boundary.state = RegionBoundary.getDerivedStateFromError(new TypeError("Failed to fetch dynamically imported module: /private-chunk.js"));
+  const html = renderToStaticMarkup(boundary.render());
+  assert.match(html, /重新加载界面/);
+  assert.match(html, /返回插件管理/);
+  assert.doesNotMatch(html, /重试此区域|private-chunk/);
+});
 
 test("Button: renders variants, sizes, and handles disabled attribute", () => {
   // Primary default size md

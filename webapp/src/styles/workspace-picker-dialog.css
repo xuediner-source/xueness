@@ -1,6 +1,6 @@
 .xn-workspace-picker-dialog__backdrop {
   position: fixed;
-  z-index: 3000;
+  z-index: var(--z-dialog);
   inset: 0;
   display: grid;
   place-items: center;

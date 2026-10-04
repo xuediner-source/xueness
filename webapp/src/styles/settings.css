@@ -79,6 +79,69 @@
   outline-offset: 2px;
 }
 
+.xn-settings-view__search {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 34px;
+  margin: 4px 12px 8px;
+  padding: 0 7px;
+  color: var(--fg-muted);
+  background: var(--bg-panel, var(--bg-card));
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+.xn-settings-view__search:focus-within {
+  border-color: var(--border-strong);
+  outline: 2px solid var(--border-focus);
+  outline-offset: 1px;
+}
+
+.xn-settings-view__search label {
+  display: flex;
+  flex: 1 1 auto;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+}
+
+.xn-settings-view__search label > svg { flex: 0 0 15px; }
+
+.xn-settings-view__search input {
+  width: 100%;
+  min-width: 0;
+  height: 32px;
+  padding: 0;
+  border: 0;
+  outline: 0;
+  color: var(--fg);
+  background: transparent;
+  font: inherit;
+  font-size: 12px;
+}
+
+.xn-settings-view__search input::placeholder { color: var(--fg-muted); }
+
+.xn-settings-view__search button {
+  display: grid;
+  flex: 0 0 24px;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  color: var(--fg-muted);
+  background: transparent;
+  cursor: pointer;
+}
+
+.xn-settings-view__search button:hover { color: var(--fg); background: var(--bg-hover); }
+.xn-settings-view__search button:focus-visible { outline: 2px solid var(--border-focus); outline-offset: 1px; }
+.xn-settings-view__search-empty { margin: 12px 10px; color: var(--fg-muted); font-size: 12px; }
+.xn-settings-view__visually-hidden { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
+
 .xn-settings-view__nav {
   flex: 1 1 auto;
   min-height: 0;
@@ -647,6 +710,19 @@
   .xn-settings-view__extensions > summary { justify-content: center; width: 40px; height: 40px; margin: 0 auto; padding: 0; }
   .xn-settings-view__nav-icon { flex-basis: 16px; }
   .xn-settings-view__extensions > ul { margin-top: 4px; }
+
+  /* A compact icon rail expands while searching so the query and result names
+     remain readable. Choosing a result clears the query and restores the rail. */
+  .xn-settings-view:is([data-searching="true"], :has(.xn-settings-view__search:focus-within)) {
+    grid-template-columns: min(268px, calc(100% - 60px)) minmax(0, 1fr);
+  }
+  .xn-settings-view:is([data-searching="true"], :has(.xn-settings-view__search:focus-within)) .xn-settings-view__nav-label,
+  .xn-settings-view:is([data-searching="true"], :has(.xn-settings-view__search:focus-within)) .xn-settings-view__extensions > summary > span { display: inline; }
+  .xn-settings-view:is([data-searching="true"], :has(.xn-settings-view__search:focus-within)) .xn-settings-view__group-label { display: block; }
+  .xn-settings-view:is([data-searching="true"], :has(.xn-settings-view__search:focus-within)) .xn-settings-view__nav-item,
+  .xn-settings-view:is([data-searching="true"], :has(.xn-settings-view__search:focus-within)) .xn-settings-view__extensions > summary {
+    width: 100%; justify-content: flex-start; padding-inline: 12px;
+  }
 }
 
 @media (max-width: 700px) {

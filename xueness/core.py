@@ -832,11 +832,13 @@ def evidence_aliases(session):
     aliases = session['evidence_aliases'] = {key: cid for key, cid in aliases.items()
         if isinstance(key, str) and re.fullmatch(r'E[1-9][0-9]*', key)
         and isinstance(cid, str) and isinstance(session.get('results', {}).get(cid), dict)
-        and session['results'][cid].get('ok') is True}
+        and session['results'][cid].get('ok') is True
+        and session['results'][cid].get('evidence_eligible') is not False}
     used = set(aliases.values())
     next_number = max([int(k[1:]) for k in aliases if re.fullmatch(r'E[1-9][0-9]*', k)] or [0]) + 1
     for cid, result in session.get('results', {}).items():
-        if cid not in used and isinstance(result, dict) and result.get('ok') is True:
+        if (cid not in used and isinstance(result, dict) and result.get('ok') is True
+                and result.get('evidence_eligible') is not False):
             aliases['E' + str(next_number)] = cid
             used.add(cid)
             next_number += 1
@@ -964,7 +966,8 @@ def assess(content: str, results: dict, aliases=None) -> dict:
         cid = ((aliases or {}).get(item.get("evidence_id")) if item.get("evidence_id")
                else item.get("tool_call_id"))
         result = results.get(cid) if isinstance(cid, str) else None
-        if not isinstance(result, dict) or result.get("ok") is not True:
+        if (not isinstance(result, dict) or result.get("ok") is not True
+                or result.get('evidence_eligible') is False):
             return {"verified": False, "summary": answer,
                     "error_code": "invalid_evidence_reference", "evidence": []}
         resolved.append({**item, "tool_call_id": cid})
@@ -1022,7 +1025,7 @@ def record_approval(session, action: str, kind: str, tool_call_id, subject) -> N
 def _run_subagent(gate: Gate, provider, agents, prompt, agent_name,
                   *, depth: int, max_depth: int, max_chars: int = 24000,
                   registry=None, parent_session=None, parent_should_stop=None,
-                  state_dir=None, parent_model_selection=None) -> dict:
+                  state_dir=None, parent_model_selection=None, task_id=None) -> dict:
     """Compatibility bridge to the subagents plugin's child-run executor."""
     from .plugin_runtime import entrypoint
     return entrypoint("subagents").run_task(
@@ -1030,6 +1033,7 @@ def _run_subagent(gate: Gate, provider, agents, prompt, agent_name,
         max_depth=max_depth, max_chars=max_chars, registry=registry,
         parent_session=parent_session, parent_should_stop=parent_should_stop,
         state_dir=state_dir, parent_model_selection=parent_model_selection,
+        task_id=task_id,
         Gate=Gate, run=run, system=SYSTEM, max_steps=SUBAGENT_MAX_STEPS,
         summary_max=SUBAGENT_SUMMARY_MAX)
 
@@ -1065,12 +1069,13 @@ def _bounded_provider_metadata(value, max_chars=4000):
     return {"truncated": True, "preview": encoded[:max_chars]}
 
 
-def run(session: dict, store: Store, provider, gate: Gate, max_steps=8, max_chars=24000,
+def _drive_run(session: dict, store: Store, provider, gate: Gate, max_steps=8, max_chars=24000,
         memory: str | None = None, max_tokens: int | None = None,
         skills: str | None = None, hooks=None, mcp_tools=None, mcp_call=None,
         subagents=None, depth: int = 0, max_depth: int = 1,
         should_stop=None, on_step=None, registry=None, max_wall_seconds: float | None = None,
-        on_event=None, skill_reader=None, policy_state_dir=None, runtime_profile=None) -> dict:
+        on_event=None, skill_reader=None, policy_state_dir=None, runtime_profile=None,
+        _subagent_coordinator=None) -> dict:
     """Drive one session to a stopping point.
 
     ``should_stop`` is polled at each step boundary; when it returns true the
@@ -1164,6 +1169,8 @@ def run(session: dict, store: Store, provider, gate: Gate, max_steps=8, max_char
     store.save(session)
 
     def save_session():
+        if _subagent_coordinator is not None:
+            _subagent_coordinator.sync()
         if plugin_enabled('providers'):
             from .bundled_plugins.providers.activity import settle_activity
             settle_activity(session)
@@ -1185,6 +1192,10 @@ def run(session: dict, store: Store, provider, gate: Gate, max_steps=8, max_char
     def stop_requested(*, check_deadline=True) -> bool:
         return bool((should_stop is not None and should_stop()) or
                     (check_deadline and deadline is not None and time.monotonic() >= deadline))
+
+    if _subagent_coordinator is not None:
+        _subagent_coordinator.configure(should_stop=stop_requested,
+                                       enabled=lambda: plugin_enabled('subagents') and plugin_enabled('providers'))
 
     def settle_stopped() -> dict:
         session["status"] = "stopped"
@@ -1243,6 +1254,9 @@ def run(session: dict, store: Store, provider, gate: Gate, max_steps=8, max_char
             return session
         guidance_loader = getattr(plugin_runtime, 'completion_instructions', None)
         host_guidance = guidance_loader(state_dir, session) if callable(guidance_loader) else []
+        if _subagent_coordinator is not None and plugin_enabled('subagents'):
+            from .bundled_plugins.subagents.coordinator import GUIDANCE
+            host_guidance = [*host_guidance, GUIDANCE]
         if not light:
             overhead = len(json.dumps(host_guidance, ensure_ascii=False)) if host_guidance else 0
             compact(session, max(256, max_chars - overhead), max_tokens)
@@ -1284,6 +1298,8 @@ def run(session: dict, store: Store, provider, gate: Gate, max_steps=8, max_char
             except Exception:
                 schemas = []
             active_tools = list(schemas)
+            if _subagent_coordinator is None:
+                active_tools = [s for s in active_tools if (s.get('function') or {}).get('name') != 'task_collect']
             remote_bound = bool(session.get("remote_connection"))
             if remote_bound:
                 from .tool_registry import REMOTE_ALLOWED_TOOL_NAMES
@@ -1549,6 +1565,20 @@ def run(session: dict, store: Store, provider, gate: Gate, max_steps=8, max_char
         final_assessment = None
         current_call_ids = _current_turn_tool_ids(session)
         if not calls:
+            if _subagent_coordinator is not None:
+                coordination_repair = _subagent_coordinator.completion_guidance()
+                if coordination_repair:
+                    repair = coordination_repair
+                    session['steps'] += 1
+                    record = session.pop('streaming', None)
+                    if isinstance(record, dict):
+                        record['status'] = 'incomplete'
+                        _archive_stream(session, record)
+                    session['completion'] = None
+                    session['pause_reason'] = '子代理结果尚未收集；主代理需要继续处理。'
+                    session['pause_code'] = 'subagent_results_uncollected'
+                    save_session()
+                    continue
             aliases = _current_turn_aliases(evidence_aliases(session), current_call_ids)
             final_assessment = assess(message["content"], session["results"], aliases)
             # Keep only the model's Markdown answer in the visible conversation.
@@ -1622,6 +1652,8 @@ def run(session: dict, store: Store, provider, gate: Gate, max_steps=8, max_char
                                              else 'passed' if assessed else 'not_assessed')
             completion['delivery_check_passed'] = completion['delivery_status'] == 'passed'
             session['completion'] = completion
+            session.pop('pause_reason', None)
+            session.pop('pause_code', None)
             session["status"] = ("completed" if completion['status'] in ('verified', 'not_applicable')
                                   and completion['delivery_status'] != 'failed' else "needs_review")
             _record_completion_history(session, completion)
@@ -1731,6 +1763,8 @@ def run(session: dict, store: Store, provider, gate: Gate, max_steps=8, max_char
                         arguments = None
                     if not isinstance(arguments, dict):
                         result = {"ok": False, "error": "invalid tool arguments"}
+                    elif tool_name in getattr(gate, 'disallow', ()):
+                        result = permission_result(gate, PermissionError('tool disallowed'))
                     elif (getattr(gate, "allowed_tool_names", None) is not None
                           and tool_name not in gate.allowed_tool_names):
                         result = permission_result(gate, PermissionError("tool denied by policy"))
@@ -1752,22 +1786,23 @@ def run(session: dict, store: Store, provider, gate: Gate, max_steps=8, max_char
                     elif tool_name.startswith(MCP_TOOL_PREFIX) and mcp_call is not None:
                         result = call_mcp(gate, mcp_call, tool_name, arguments, cid)
                     elif (tool_name == TASK_TOOL_NAME and subagents is not None
-                          and depth < max_depth):
-                        result = _run_subagent(gate, provider, subagents,
-                                               arguments.get("prompt"),
-                                               arguments.get("agent"),
-                                               depth=depth, max_depth=max_depth,
-                                               max_chars=max_chars,
-                                               registry=registry,
-                                               parent_session=session.get("id"), parent_should_stop=stop_requested,
-                                               state_dir=state_dir,
-                                               parent_model_selection=session.get("model_selection"))
+                          and depth < max_depth and _subagent_coordinator is not None):
+                        # Freeze per-call arguments: the worker outlives this dispatch iteration.
+                        def execute_child(task_id, child_stop, child_args=dict(arguments)):
+                            return _run_subagent(gate, provider, subagents,
+                                                 child_args.get('prompt'), child_args.get('agent'),
+                                                 depth=depth, max_depth=max_depth, max_chars=max_chars,
+                                                 registry=registry, parent_session=session.get('id'),
+                                                 parent_should_stop=child_stop, state_dir=state_dir,
+                                                 parent_model_selection=session.get('model_selection'), task_id=task_id)
+                        result = _subagent_coordinator.dispatch(cid, arguments, execute_child)
                     else:
                         if getattr(gate, "web_approval_gate", False):
                             arguments["_tool_call_id"] = cid
                         from .tool_contract import bind_execution
                         with bind_execution(store=store, state_dir=state_dir,
-                                            registry=registry, tool_catalog=tool_catalog):
+                                            registry=registry, tool_catalog=tool_catalog,
+                                            subagent_coordinator=_subagent_coordinator):
                             result = dispatch(root, gate, tool_name, arguments, session)
                     if not isinstance(result, dict):
                         result = {"ok": False, "error": "tool returned a malformed result"}
@@ -1840,3 +1875,38 @@ def run(session: dict, store: Store, provider, gate: Gate, max_steps=8, max_char
     save_session()
     _emit_event(on_event, "status", status="paused", steps=session.get("steps", 0))
     return session
+
+
+def run(session: dict, store: Store, provider, gate: Gate, max_steps=8, max_chars=24000,
+        memory: str | None = None, max_tokens: int | None = None,
+        skills: str | None = None, hooks=None, mcp_tools=None, mcp_call=None,
+        subagents=None, depth: int = 0, max_depth: int = 1,
+        should_stop=None, on_step=None, registry=None, max_wall_seconds: float | None = None,
+        on_event=None, skill_reader=None, policy_state_dir=None, runtime_profile=None) -> dict:
+    """Run the shared driver with plugin-owned ephemeral services and cleanup."""
+    from .plugin_runtime import entrypoint, is_enabled
+    state_dir = policy_state_dir if policy_state_dir is not None else getattr(store, 'directory', None)
+    coordinator = None
+    try:
+        delegation_enabled = is_enabled(state_dir, 'subagents')
+    except Exception:
+        delegation_enabled = False
+    if subagents is not None and depth < max_depth and not session.get('remote_connection') and delegation_enabled:
+        coordinator = entrypoint('subagents').create_coordinator(session, registry)
+        registry = coordinator.registry
+    returned = False
+    try:
+        result = _drive_run(session, store, provider, gate, max_steps=max_steps, max_chars=max_chars,
+                          memory=memory, max_tokens=max_tokens, skills=skills, hooks=hooks,
+                          mcp_tools=mcp_tools, mcp_call=mcp_call, subagents=subagents,
+                          depth=depth, max_depth=max_depth, should_stop=should_stop, on_step=on_step,
+                          registry=registry, max_wall_seconds=max_wall_seconds, on_event=on_event,
+                          skill_reader=skill_reader, policy_state_dir=policy_state_dir,
+                          runtime_profile=runtime_profile, _subagent_coordinator=coordinator)
+        returned = True
+        return result
+    finally:
+        if coordinator is not None:
+            coordinator.close()
+            if returned or coordinator.records:
+                store.save(session)

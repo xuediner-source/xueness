@@ -269,7 +269,8 @@ class RunUsesRegistryTests(unittest.TestCase):
         session = self.store.new("t", self.workspace)
         run(session, self.store, provider, Gate(self.workspace), max_steps=1)
         from xueness.plugin_runtime import tool_schemas as enabled_tool_schemas
-        self.assertEqual(provider.tools, enabled_tool_schemas(self.store.directory))
+        self.assertEqual(provider.tools, [s for s in enabled_tool_schemas(self.store.directory)
+                                        if s['function']['name'] != 'task_collect'])
 
     def test_run_denies_an_unregistered_tool_call(self):
         provider = _ScriptedProvider([_call("c1", "rm_rf", path="/")])

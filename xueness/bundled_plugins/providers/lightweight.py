@@ -105,6 +105,9 @@ def select_tools(catalog, session, gate, provider=None):
     if maximum == 0:
         base = base - {'tool_search'}
     names = base | frozenset(n for n in (discovered[-maximum:] if maximum else []) if isinstance(n, str))
+    if any(not row.get('collected') for row in session.get('subagent_coordination', {}).values()):
+        # A launched task must remain collectable even in a minimal tool window.
+        names = names | {'task_collect'}
     return catalog, [s for s in catalog if tool_name(s) in names]
 
 

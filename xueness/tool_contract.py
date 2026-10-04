@@ -19,6 +19,7 @@ class ToolContext:
     state_dir: Path
     registry: object = None
     tool_catalog: object = None
+    subagent_coordinator: object = None
 
 
 _EXECUTION = contextvars.ContextVar("xueness_tool_execution", default=None)
@@ -28,7 +29,8 @@ _EXECUTION = contextvars.ContextVar("xueness_tool_execution", default=None)
 def bind_context(context: ToolContext):
     """Compatibility adapter binding a :class:`ToolContext` for one dispatch."""
     token = _EXECUTION.set({"store": context.store, "state_dir": context.state_dir,
-                            "registry": context.registry, "tool_catalog": context.tool_catalog})
+                            "registry": context.registry, "tool_catalog": context.tool_catalog,
+                            "subagent_coordinator": context.subagent_coordinator})
     try:
         yield context
     finally:

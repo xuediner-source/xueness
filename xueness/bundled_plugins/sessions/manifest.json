@@ -85,6 +85,16 @@
       "id": "sessions.tui",
       "name": "多行 CLI、全屏 TUI 与中断恢复",
       "nameEn": "Multiline CLI, fullscreen TUI and interruption"
+    },
+    {
+      "id": "sessions.command_palette",
+      "name": "命令面板搜索与键盘导航",
+      "nameEn": "Command palette search and keyboard navigation"
+    },
+    {
+      "id": "sessions.timeline_follow",
+      "name": "时间线跟随与回到底部",
+      "nameEn": "Timeline following and return to bottom"
     }
   ],
   "frontendModules": [
@@ -101,6 +111,9 @@
     "plugins/sessions/composerCatalogLifecycle.ts",
     "plugins/sessions/ComposerWorkspaceSelect.tsx",
     "plugins/sessions/completionPresentation.ts",
-    "plugins/sessions/SessionQueue.tsx"
+    "plugins/sessions/SessionQueue.tsx",
+    "plugins/sessions/CommandPalette.tsx",
+    "plugins/sessions/ConversationTimelineViewport.tsx",
+    "plugins/sessions/SessionPolling.ts"
   ]
 }

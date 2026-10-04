@@ -42,6 +42,11 @@
       "id": "settings.agent",
       "name": "Agent 运行与能力偏好",
       "nameEn": "Agent runtime and capability preferences"
+    },
+    {
+      "id": "settings.destination_search",
+      "name": "设置项搜索",
+      "nameEn": "Search settings destinations"
     }
   ],
   "frontendModules": [
@@ -54,6 +59,7 @@
     "xuenessSettings.ts",
     "xuenessSettingsNavigation.ts",
     "xuenessShortcutCommands.ts",
-    "xuenessWorkspaces.ts"
+    "xuenessWorkspaces.ts",
+    "plugins/settings/themeBoot.ts"
   ]
 }

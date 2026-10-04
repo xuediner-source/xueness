@@ -100,6 +100,24 @@ class TaskRegistry:
                     continue
                 task[key] = value
 
+    def restore(self, task_id, *, parent_session, root, record) -> None:
+        """Restore a bounded persisted projection without inventing start times."""
+        with self._guard:
+            if task_id in self._tasks:
+                return
+            terminal = record.get('status') in (COMPLETED, FAILED, CANCELLED)
+            self._tasks[task_id] = {
+                'id': task_id, 'parent': parent_session, 'root': str(root),
+                'agent': record.get('agent') if isinstance(record.get('agent'), str) else None,
+                'status': record.get('status') if terminal else FAILED,
+                'steps': record.get('steps', 0), 'promptChars': record.get('promptChars', 0),
+                'startedAt': record.get('startedAt'), 'endedAt': record.get('endedAt'),
+                'summary': str(record.get('summary') or '')[:SUMMARY_MAX],
+                'error': (str(record.get('error') or '')[:ERROR_MAX] if terminal
+                          else 'interrupted before result collection'),
+                'workerActive': False,
+            }
+
     def finish(self, task_id, *, ok, summary="", error="", steps=None) -> dict:
         """Terminal transition. Returns the final record (or an empty dict)."""
         with self._guard:

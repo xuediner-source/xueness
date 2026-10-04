@@ -1,7 +1,40 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { createElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
 import { setLocale } from "../../i18n";
-import { cleanupConfirmMessage, createObjectUrlRevocationQueue, scheduleObjectUrlRevocation } from "./index";
+import { cleanupConfirmMessage, createObjectUrlRevocationQueue, DiagnosticsSessionsSummary, parseSessionStatusCounts, scheduleObjectUrlRevocation, totalSessionCount } from "./index";
+
+test("diagnostics validates session status counts and totals real session rows", () => {
+  const sessions = { completed: 3, running: 1, unknown: 2 };
+  assert.deepEqual(parseSessionStatusCounts(sessions), sessions);
+  assert.equal(totalSessionCount(sessions), 6);
+  assert.deepEqual(parseSessionStatusCounts({}), {});
+  assert.equal(totalSessionCount({}), 0);
+});
+
+test("diagnostics does not treat malformed session data as an empty count", () => {
+  assert.equal(parseSessionStatusCounts([]), null);
+  assert.equal(totalSessionCount([]), undefined);
+  assert.equal(totalSessionCount({ completed: -1 }), undefined);
+  assert.equal(totalSessionCount({ completed: 1.5 }), undefined);
+  assert.equal(totalSessionCount({ completed: Number.MAX_SAFE_INTEGER, running: 1 }), undefined);
+});
+
+test("diagnostics session summary displays the total represented by status counts", () => {
+  const html = renderToStaticMarkup(createElement(DiagnosticsSessionsSummary, {
+    sessions: { completed: 3, running: 1, unknown: 2 },
+  }));
+  assert.match(html, /\(6\)/);
+  assert.match(html, /&quot;completed&quot;: 3/);
+  assert.match(html, /&quot;running&quot;: 1/);
+});
+
+test("diagnostics session summary marks malformed counts instead of showing a false zero", () => {
+  const html = renderToStaticMarkup(createElement(DiagnosticsSessionsSummary, { sessions: [] }));
+  assert.match(html, /—/);
+  assert.doesNotMatch(html, /\(0\)/);
+});
 
 test("cleanupConfirmMessage formats days parameter properly in Chinese and English", () => {
   try {

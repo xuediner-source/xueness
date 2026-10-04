@@ -43,8 +43,9 @@ PROMPT_KEYS = ("systemPrompt", "prompt", "description")
 SUBAGENT_DENIED_TOOL_NAMES = frozenset({"workflow_create", "workflow_amend"})
 
 TASK_DESCRIPTION = (
-    "Delegate a focused sub-task to a sub-agent (read-only, bounded). "
-    "Returns a short summary."
+    "Start a focused read-only subagent in the background (up to 4 concurrent, 8 per turn). "
+    "Returns a task_id, not findings. Continue independent work yourself; collect all "
+    "results using task_collect and integrate them before finalizing."
 )
 
 # Persisted tool names are the same names used by the runtime tool registry.
@@ -85,16 +86,26 @@ class _ToolFilteredProvider:
 
     def __init__(self, provider, allowed: frozenset[str] | None,
                  denied: frozenset[str] = SUBAGENT_DENIED_TOOL_NAMES):
-        self._provider = provider
-        self._allowed = allowed
-        self._denied = denied
-        self.model = getattr(provider, "model", None)
+        object.__setattr__(self, "_provider", provider)
+        object.__setattr__(self, "_allowed", allowed)
+        object.__setattr__(self, "_denied", denied)
+        object.__setattr__(self, "model", getattr(provider, "model", None))
         protocol = getattr(provider, "protocol", None)
         if protocol not in ("openai", "anthropic"):
             name = type(provider).__name__
             protocol = ("anthropic" if name == "AnthropicMessages" else
                         "openai" if name == "OpenAICompatible" else None)
-        self.protocol = protocol
+        object.__setattr__(self, "protocol", protocol)
+
+    def __setattr__(self, name, value):
+        # The core attaches request-local runtime settings to the provider it
+        # receives. Keep the proxy transparent for those writes as well as
+        # reads, so lightweight request deadlines reach the real adapter.
+        if name not in {"_provider", "_allowed", "_denied", "model", "protocol"}:
+            provider = self.__dict__.get("_provider")
+            if provider is not None:
+                setattr(provider, name, value)
+        object.__setattr__(self, name, value)
 
     def __getattr__(self, name):
         return getattr(self._provider, name)
@@ -132,8 +143,28 @@ def provider_for_agent(agent, parent_provider, state_dir, parent_selection=None)
     override is present, the parent's saved selection supplies its base profile
     unless the sub-agent names a different ``providerId``.
     """
+    def isolated_parent_provider():
+        """Give an overlapping child its own real adapter instance.
+
+        Configured adapters keep request settings on the instance. Lightweight
+        runs, in particular, assign a per-run deadline there. Sharing one with
+        a parent that is still making progress would let the child overwrite
+        request state. Test doubles and third-party providers keep the historic
+        identity behavior unless they opt into one of our adapter classes.
+        """
+        from copy import copy
+        from ..providers.provider import AnthropicMessages, OpenAICompatible
+        if not isinstance(parent_provider, (AnthropicMessages, OpenAICompatible)):
+            return parent_provider
+        clone = copy(parent_provider)
+        for name in ("capabilities", "compatibility", "lightweight_options"):
+            value = getattr(parent_provider, name, None)
+            if isinstance(value, (dict, list, set)):
+                setattr(clone, name, copy(value))
+        return clone
+
     if not isinstance(agent, dict):
-        return parent_provider
+        return isolated_parent_provider()
     provider_id = agent.get("providerId")
     model = agent.get("model")
     effort = agent.get("reasoningEffort")
@@ -148,7 +179,7 @@ def provider_for_agent(agent, parent_provider, state_dir, parent_selection=None)
     model = model.strip() if isinstance(model, str) else ""
     effort = effort.strip() if isinstance(effort, str) else ""
     if not (provider_id or model or effort):
-        return parent_provider
+        return isolated_parent_provider()
 
     inherited = parent_selection if isinstance(parent_selection, dict) else {}
     if provider_id:
@@ -189,14 +220,20 @@ def provider_for_agent(agent, parent_provider, state_dir, parent_selection=None)
                    reasoning_effort=effort or None)
 
 
-def provider_with_agent_tools(provider, agent):
+def provider_with_agent_tools(provider, agent, *, denied=(), parent_allowed=None):
     """Apply the explicit allowlist and hard read-only exceptions to a child.
 
     Inherit-all and explicit-all keep their full dynamic tool set (such as
     task/MCP schemas), except for durable workflow creation and amendment.
     """
     allowed = agent_tool_allowlist(agent)
-    return _ToolFilteredProvider(provider, allowed)
+    if parent_allowed is not None:
+        inherited = frozenset(parent_allowed)
+        allowed = inherited if allowed is None else allowed.intersection(inherited)
+    return _ToolFilteredProvider(
+        provider, allowed,
+        SUBAGENT_DENIED_TOOL_NAMES | frozenset(denied or ()),
+    )
 
 
 def clip(text: str, max_chars: int) -> str:

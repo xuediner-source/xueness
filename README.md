@@ -14,7 +14,7 @@
     <a href="https://github.com/xuediner-source/xueness/actions/workflows/desktop-build.yml"><img src="https://github.com/xuediner-source/xueness/actions/workflows/desktop-build.yml/badge.svg?branch=main" alt="Desktop build"></a>
     <a href="https://github.com/xuediner-source/xueness/blob/main/LICENSE"><img src="https://img.shields.io/github/license/xuediner-source/xueness?label=license" alt="Apache 2.0 license"></a>
     <a href="https://github.com/xuediner-source/xueness/releases/latest"><img src="https://img.shields.io/github/v/release/xuediner-source/xueness?label=release" alt="Latest release"></a>
-    <img src="https://img.shields.io/badge/plugins-27%20%7C%2096-4263eb" alt="27 plugins and 96 features">
+    <img src="https://img.shields.io/badge/plugins-27%20%7C%20104-4263eb" alt="27 plugins and 104 features">
   </p>
 </div>
 
@@ -35,16 +35,16 @@ Xueness 面向个人本地开发，提供可从终端、浏览器或 Windows/mac
 
 | 系统 | 安装程序 / 磁盘映像 | 便携版 / 应用 ZIP |
 | --- | --- | --- |
-| Windows 10/11 · x64 | [安装程序 `.exe`](https://github.com/xuediner-source/xueness/releases/download/v0.1.0/Xueness-0.1.0-windows-x64-setup.exe) | [便携版 `.zip`](https://github.com/xuediner-source/xueness/releases/download/v0.1.0/Xueness-0.1.0-windows-x64-portable.zip) |
-| macOS · Apple Silicon | [arm64 `.dmg`](https://github.com/xuediner-source/xueness/releases/download/v0.1.0/Xueness-0.1.0-macos-arm64.dmg) | [arm64 应用 `.zip`](https://github.com/xuediner-source/xueness/releases/download/v0.1.0/Xueness-0.1.0-macos-arm64.zip) |
-| macOS · Intel | [x64 `.dmg`](https://github.com/xuediner-source/xueness/releases/download/v0.1.0/Xueness-0.1.0-macos-x64.dmg) | [x64 应用 `.zip`](https://github.com/xuediner-source/xueness/releases/download/v0.1.0/Xueness-0.1.0-macos-x64.zip) |
+| Windows 10/11 · x64 | [安装程序 `.exe`](https://github.com/xuediner-source/xueness/releases/download/v0.1.2/Xueness-0.1.2-windows-x64-setup.exe) | [便携版 `.zip`](https://github.com/xuediner-source/xueness/releases/download/v0.1.2/Xueness-0.1.2-windows-x64-portable.zip) |
+| macOS · Apple Silicon | [arm64 `.dmg`](https://github.com/xuediner-source/xueness/releases/download/v0.1.2/Xueness-0.1.2-macos-arm64.dmg) | [arm64 应用 `.zip`](https://github.com/xuediner-source/xueness/releases/download/v0.1.2/Xueness-0.1.2-macos-arm64.zip) |
+| macOS · Intel | [x64 `.dmg`](https://github.com/xuediner-source/xueness/releases/download/v0.1.2/Xueness-0.1.2-macos-x64.dmg) | [x64 应用 `.zip`](https://github.com/xuediner-source/xueness/releases/download/v0.1.2/Xueness-0.1.2-macos-x64.zip) |
 
-此版本所有平台的 SHA-256 校验值见 [`SHA256SUMS.txt`](https://github.com/xuediner-source/xueness/releases/download/v0.1.0/SHA256SUMS.txt)。桌面包内含 Electron 外壳、冻结 Python 后端、预构建工作台和浏览器驱动；不要求另外安装 Python 或 Node.js。Git、SSH、ffmpeg 等外部程序仍由使用到它们的插件按需调用；浏览器自动化需要本机 Chrome 或 Edge。当前产物未进行代码签名或 macOS 公证，首次启动可能出现系统信任提示，详情见[桌面端说明](docs/xueness-desktop.md)。
+此版本所有平台的 SHA-256 校验值见 [`SHA256SUMS.txt`](https://github.com/xuediner-source/xueness/releases/download/v0.1.2/SHA256SUMS.txt)。桌面包内含 Electron 外壳、冻结 Python 后端、预构建工作台和浏览器驱动；不要求另外安装 Python 或 Node.js。Git、SSH、ffmpeg 等外部程序仍由使用到它们的插件按需调用；浏览器自动化需要本机 Chrome 或 Edge。当前产物未进行代码签名或 macOS 公证，首次启动可能出现系统信任提示，详情见[桌面端说明](docs/xueness-desktop.md)。
 
 ## 功能概览
 
 - **本地小模型配置。** 选择「本地轻量」运行档，细调提示、工具集合、上下文与输出预算、采样和协议选项。资源面板报告运行 Xueness 的机器 CPU、内存及进程状态；模型输出面板展示请求阶段、工具调用和服务实际返回的用量。缺少的 Token 或显存数据会标为不可用，不会估算成真实测量值。
-- **27 个可信插件，100 项登记功能。** 会话、工作区文件、模型、Shell、Git、终端、工作流、记忆、Hooks、MCP、浏览器、远程连接、渠道、自动化、诊断、Office 预览等能力都有明确归属。插件管理页显示完整目录与依赖状态，CLI 也可查看和更改插件开关。会话支持运行中排队追加消息，桌面端支持确认导入 Chrome 资料到独立浏览器目录。
+- **27 个可信插件，104 项登记功能。** 会话、工作区文件、模型、Shell、Git、终端、工作流、记忆、Hooks、MCP、浏览器、远程连接、渠道、自动化、诊断、Office 预览等能力都有明确归属。插件管理页显示完整目录与依赖状态，CLI 也可查看和更改插件开关。会话支持运行中排队追加消息，桌面端支持确认导入 Chrome 资料到独立浏览器目录。
 - **三种入口，共用运行时。** 使用 Agent CLI 运行会话，通过 loopback Web 工作台查看和管理任务，或安装 Windows/macOS 桌面应用。桌面包自带运行时，跨平台差异留在对应插件适配中。
 
 轻量设置用于控制运行行为，不会下载模型、调整模型权重或自动改变推理服务的显存分配。Office 预览支持部分文档页面、图像、图表和缓存单元格数据；它不是 Microsoft Office 的完整排版或兼容实现。

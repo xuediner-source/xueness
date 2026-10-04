@@ -66,6 +66,7 @@ const COPY = {
   inheritModel: ["继承当前任务模型", "Inherit current task model"],
   modelOverride: ["模型 ID 覆盖（可选）", "Model ID override (optional)"],
   modelInheritHint: ["留空时使用当前任务的模型。选择配置后，留空使用该配置的模型。", "Leave blank to use the current task model. With a profile selected, blank uses that profile’s model."],
+  providersDisabled: ["供应商插件已停用；已保存的配置会保留，启用供应商插件后可重新选择。", "The providers plugin is disabled. Saved selections are preserved; enable it to choose a profile."],
   reasoning: ["推理等级", "Reasoning effort"],
   defaultReasoning: ["模型默认", "Model default"],
   tools: ["工具", "Tools"],
@@ -161,8 +162,37 @@ function knownReasoningLevels(model: string): string[] {
   return [];
 }
 
-export function XuenessSubagentSettings(): React.JSX.Element {
+type SubagentResourceList = Awaited<ReturnType<typeof listResources>>;
+type ProviderList = Awaited<ReturnType<typeof listProviders>>;
+type Settled<T> = PromiseSettledResult<T>;
+
+/** A latest-request loader whose provider read is omitted when that plugin is unavailable. */
+export function createSubagentSettingsLoader(
+  readResources: () => Promise<SubagentResourceList> = () => listResources("subagents"),
+  readProviders: () => Promise<ProviderList> = listProviders,
+) {
+  let generation = 0;
+  return {
+    invalidate() { generation += 1; },
+    async load(providersEnabled: boolean): Promise<{
+      resourcesResult: Settled<SubagentResourceList>;
+      providersResult: Settled<ProviderList | null>;
+    } | null> {
+      const request = ++generation;
+      const providerRead = providersEnabled ? readProviders() : Promise.resolve(null);
+      const [resourcesResult, providersResult] = await Promise.allSettled([
+        readResources(), providerRead,
+      ] as const);
+      if (request !== generation) return null;
+      return { resourcesResult, providersResult };
+    },
+  };
+}
+
+export function XuenessSubagentSettings({ providersEnabled }: { providersEnabled: boolean }): React.JSX.Element {
   const locale = useLocale();
+  const localeRef = useRef(locale);
+  localeRef.current = locale;
   const [items, setItems] = useState<SubagentResource[]>([]);
   const [query, setQuery] = useState("");
   const [providers, setProviders] = useState<ProviderSummary[]>([]);
@@ -173,16 +203,20 @@ export function XuenessSubagentSettings(): React.JSX.Element {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [draft, setDraft] = useState<SubagentDraft | null>(null);
   const [idTouched, setIdTouched] = useState(false);
-  const generation = useRef(0);
+  const loader = useRef<ReturnType<typeof createSubagentSettingsLoader> | null>(null);
+  if (!loader.current) loader.current = createSubagentSettingsLoader();
+  const mounted = useRef(false);
+  const providersEnabledRef = useRef(providersEnabled);
+  providersEnabledRef.current = providersEnabled;
 
   const refresh = useCallback(async () => {
-    const request = ++generation.current;
+    if (!mounted.current || !loader.current) return;
     setLoading(true);
     setError("");
-    const [resourcesResult, providersResult] = await Promise.allSettled([
-      listResources("subagents"), listProviders(),
-    ]);
-    if (request !== generation.current) return;
+    const enabledForRequest = providersEnabledRef.current;
+    const result = await loader.current.load(enabledForRequest);
+    if (!result || !mounted.current) return;
+    const { resourcesResult, providersResult } = result;
     if (resourcesResult.status === "fulfilled") {
       const rows = resourcesResult.value.items.filter((item): item is SubagentResource =>
         typeof item.id === "string" && item.id.trim().length > 0,
@@ -191,20 +225,38 @@ export function XuenessSubagentSettings(): React.JSX.Element {
     } else {
       setError(resourcesResult.reason instanceof Error ? resourcesResult.reason.message : String(resourcesResult.reason));
     }
-    if (providersResult.status === "fulfilled") {
+    if (!enabledForRequest) {
+      setProviders([]);
+      setProfileError("");
+    } else if (providersResult.status === "fulfilled" && providersResult.value) {
       setProviders(providersResult.value.providers);
       setProfileError("");
     } else {
       setProviders([]);
-      setProfileError(providersResult.reason instanceof Error ? providersResult.reason.message : String(providersResult.reason));
+      const reason = providersResult.status === "rejected" ? providersResult.reason : copy(localeRef.current, "profileUnavailable");
+      setProfileError(reason instanceof Error ? reason.message : String(reason));
     }
     setLoading(false);
   }, []);
 
   useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+      loader.current?.invalidate();
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!providersEnabled) {
+      setProviders([]);
+      setProfileError("");
+    }
     void refresh();
-    return () => { generation.current += 1; };
-  }, [refresh]);
+    return () => { loader.current?.invalidate(); };
+  }, [refresh, providersEnabled]);
+
+  const effectiveProviders = providersEnabled ? providers : [];
 
   const startCreate = () => {
     setEditingId(null);
@@ -219,7 +271,7 @@ export function XuenessSubagentSettings(): React.JSX.Element {
     setError("");
   };
   const cancel = () => { setDraft(null); setEditingId(null); setError(""); };
-  const selectedProvider = providers.find(provider => provider.id === draft?.providerId);
+  const selectedProvider = effectiveProviders.find(provider => provider.id === draft?.providerId);
   const reasoningLevels = selectedProvider
     ? selectedProvider.protocol === "anthropic"
       ? []
@@ -240,26 +292,28 @@ export function XuenessSubagentSettings(): React.JSX.Element {
       const payload = makeSubagentPayload(draft);
       if (editingId) await patchResource("subagents", editingId, payload);
       else await createResource("subagents", { id, ...payload, createOnly: true });
+      if (!mounted.current) return;
       await refresh();
+      if (!mounted.current) return;
       setDraft(null); setEditingId(null);
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : String(reason));
-    } finally { setBusy(false); }
+      if (mounted.current) setError(reason instanceof Error ? reason.message : String(reason));
+    } finally { if (mounted.current) setBusy(false); }
   };
 
   const toggleEnabled = async (item: SubagentResource, enabled: boolean) => {
     setBusy(true); setError("");
-    try { await patchResource("subagents", item.id, { enabled }); await refresh(); }
-    catch (reason) { setError(reason instanceof Error ? reason.message : String(reason)); }
-    finally { setBusy(false); }
+    try { await patchResource("subagents", item.id, { enabled }); if (mounted.current) await refresh(); }
+    catch (reason) { if (mounted.current) setError(reason instanceof Error ? reason.message : String(reason)); }
+    finally { if (mounted.current) setBusy(false); }
   };
 
   const remove = async (item: SubagentResource) => {
     if (!window.confirm(copy(locale, "deleteConfirm"))) return;
     setBusy(true); setError("");
-    try { await deleteResource("subagents", item.id); if (editingId === item.id) cancel(); await refresh(); }
-    catch (reason) { setError(reason instanceof Error ? reason.message : String(reason)); }
-    finally { setBusy(false); }
+    try { await deleteResource("subagents", item.id); if (!mounted.current) return; if (editingId === item.id) cancel(); await refresh(); }
+    catch (reason) { if (mounted.current) setError(reason instanceof Error ? reason.message : String(reason)); }
+    finally { if (mounted.current) setBusy(false); }
   };
 
   const setDraftField = <K extends keyof SubagentDraft>(key: K, value: SubagentDraft[K]) => {
@@ -272,7 +326,8 @@ export function XuenessSubagentSettings(): React.JSX.Element {
 
   return <div className="xn-subagent-settings xn-operations" data-testid="subagent-settings">
     {error && <div role="alert">{error}</div>}
-    {profileError && <div className="xn-subagent-settings__profile-error" role="status">{copy(locale, "profileUnavailable")}: {profileError}</div>}
+    {providersEnabled && profileError && <div className="xn-subagent-settings__profile-error" role="status">{copy(locale, "profileUnavailable")}: {profileError}</div>}
+    {!providersEnabled && <div className="xn-subagent-settings__profile-error" role="status">{copy(locale, "providersDisabled")}</div>}
 
     {draft ? <form className="xn-subagent-settings__form" onSubmit={save}>
       <header><div><h3>{editingId ? copy(locale, "edit") : copy(locale, "saveNew")}</h3>{editingId && <p>{editingId}</p>}</div></header>
@@ -286,8 +341,8 @@ export function XuenessSubagentSettings(): React.JSX.Element {
 
       <section className="xn-subagent-settings__section"><h4>{copy(locale, "model")}</h4><p>{copy(locale, "modelInheritHint")}</p>
         <div className="xn-subagent-settings__model-grid">
-          <label className="xn-subagent-settings__field"><span>{copy(locale, "model")}</span><Select aria-label={copy(locale, "model")} value={draft.providerId} disabled={busy || providers.length === 0} onChange={event => setDraft(current => current ? { ...current, providerId: event.target.value, model: "", reasoningEffort: "" } : current)}>
-            <option value="">{copy(locale, "inheritModel")}</option>{providers.map(provider => <option key={provider.id} value={provider.id} disabled={!provider.hasKey}>{provider.name} · {provider.model}{provider.hasKey ? "" : ` · ${copy(locale, "missingProfileKey")}`}</option>)}
+          <label className="xn-subagent-settings__field"><span>{copy(locale, "model")}</span><Select aria-label={copy(locale, "model")} value={draft.providerId} disabled={!providersEnabled || busy || effectiveProviders.length === 0} onChange={event => setDraft(current => current ? { ...current, providerId: event.target.value, model: "", reasoningEffort: "" } : current)}>
+            <option value="">{copy(locale, "inheritModel")}</option>{draft.providerId && !effectiveProviders.some(provider => provider.id === draft.providerId) && <option value={draft.providerId} disabled>{draft.providerId} · {copy(locale, providersEnabled ? "profileUnavailable" : "providersDisabled")}</option>}{effectiveProviders.map(provider => <option key={provider.id} value={provider.id} disabled={!provider.hasKey}>{provider.name} · {provider.model}{provider.hasKey ? "" : ` · ${copy(locale, "missingProfileKey")}`}</option>)}
           </Select></label>
           <label className="xn-subagent-settings__field"><span>{copy(locale, "modelOverride")}</span><input value={draft.model} placeholder={selectedProvider?.model || copy(locale, "inheritModel")} onChange={event => setDraftField("model", event.target.value)} /></label>
           <label className="xn-subagent-settings__field"><span>{copy(locale, "reasoning")}</span><Select aria-label={copy(locale, "reasoning")} value={draft.reasoningEffort} disabled={busy || !modelSupportsReasoning} onChange={event => setDraftField("reasoningEffort", event.target.value)}>
@@ -309,7 +364,7 @@ export function XuenessSubagentSettings(): React.JSX.Element {
       <div className="xn-subagent-settings__list-header"><div><strong>{visibleItems.length}</strong> {copy(locale, "title")}</div><div><button type="button" disabled={loading || busy} aria-label={copy(locale, "refresh")} title={copy(locale, "refresh")} onClick={() => void refresh()}><RefreshCw size={15} /></button><button type="button" className="xn-operation-primary" disabled={busy} onClick={startCreate}><Plus size={15} />{copy(locale, "add")}</button></div></div>
       {loading ? <div className="xn-subagent-settings__empty" role="status">{copy(locale, "loading")}</div> : visibleItems.length ? <div className="xn-subagent-settings__list">{visibleItems.map(item => {
         const itemDraft = draftFromResource(item);
-        const provider = providers.find(value => value.id === itemDraft.providerId);
+        const provider = effectiveProviders.find(value => value.id === itemDraft.providerId);
         const modelLabel = itemDraft.providerId
           ? `${provider?.name || itemDraft.providerId} · ${itemDraft.model || provider?.model || ""}`
           : itemDraft.model || copy(locale, "inheritModel");

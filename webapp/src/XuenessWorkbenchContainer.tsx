@@ -15,8 +15,7 @@ import { t as tr, tf, useLocale, setLocale } from './i18n';
  * is. Secondary views (files/diff/directory/providers/usage/memory/settings)
  * hang off the conversation header switcher and the sidebar footer, not tabs.
  */
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import "./styles/command.css";
+import React, { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import "./styles/batch10.css";
 import {
   approvePending,
@@ -60,13 +59,6 @@ import {
   type AgentCapabilities,
   type SettingsMap,
 } from "./xuenessSettings";
-import { FileBrowser } from "./plugins/files/FileBrowser";
-import { DiffView } from "./plugins/files/DiffView";
-import { DirectoryBrowser } from "./plugins/files/DirectoryBrowser";
-import { MemoryPanel } from "./plugins/memory/MemoryPanel";
-import { ProvidersPanel } from "./plugins/providers/ProvidersPanel";
-import { SettingsSections } from "./plugins/settings/SettingsSections";
-import { UsagePanel } from "./plugins/usage/UsagePanel";
 import {
   createFolder,
   loadDirectory,
@@ -84,27 +76,23 @@ import { effectiveRuntimeProfile, emptyComposerCatalog, prepareComposer, runtime
 import { createComposerCatalogLoader, clearWorkspaceComposerCatalog } from './plugins/sessions/composerCatalogLifecycle';
 import { ComposerWorkspaceSelect } from './plugins/sessions/ComposerWorkspaceSelect';
 import { XuenessComposerToolbar } from "./plugins/sessions/XuenessComposerToolbar";
-import { DesktopSettings } from "./plugins/desktop/DesktopSettings";
 import { DesktopTitlebar } from "./plugins/desktop/DesktopTitlebar";
 import { DesktopTrayBridge } from './plugins/desktop/DesktopTrayBridge';
-import { XuenessSettingsView } from "./plugins/settings/XuenessSettingsView";
 import { settingsNavigation } from "./xuenessSettingsNavigation";
 import { CompletionChecks } from './plugins/planning/CompletionChecks';
-import { NetworkSettings } from './plugins/network/NetworkSettings';
-import { DesktopUpdates } from './plugins/updates/DesktopUpdates';
-import { XuenessWorkspaceSettings } from "./plugins/settings/XuenessWorkspaceSettings";
-import { WorkflowPanel } from "./plugins/workflows";
-import { ModelManager } from "./plugins/providers";
 import { LocalRuntimeMonitor, RequestTiming, type LocalRuntimeSession } from "./plugins/providers/LocalRuntimeMonitor";
 import { ForkSessionDialog } from "./plugins/sessions";
 import { SessionQueue } from "./plugins/sessions/SessionQueue";
-import { TerminalPanel } from "./plugins/terminal";
-import { RemoteConnections } from "./plugins/remote";
 import { Approvals, Composer, WorkbenchHeader, heroGreeting, type ComposerDraftState } from "./plugins/sessions/XuenessWorkbenchView";
 import { IconBack, IconGear, IconNewTask, IconSearch, IconWorkflow, IconModel, IconXuenessMark } from "./ui/icons";
 import { CalendarClock, Archive, ArrowDownWideNarrow, ChevronsDownUp, Folder, Hash, MessageCirclePlus, UserRound, CircleHelp, ChevronDown, Blocks, GitBranch } from "lucide-react";
 import { Select } from "./ui/Select";
+import { RegionBoundary } from "./ui/primitives";
+import { XuenessWorkspaceSettings } from "./plugins/settings/XuenessWorkspaceSettings";
 import { XuenessTaskList, type SidebarPreferences } from "./plugins/sessions/XuenessTaskList";
+import { CommandPalette } from "./plugins/sessions/CommandPalette";
+import { ConversationTimelineViewport } from "./plugins/sessions/ConversationTimelineViewport";
+import { createSingleFlightRefresh, useSessionPolling } from "./plugins/sessions/SessionPolling";
 import { XuenessWorkspacePickerDialog } from "./plugins/settings/XuenessWorkspacePickerDialog";
 import { CodeDisplayProvider } from "./ui/CodeContent";
 import { SHORTCUT_COMMANDS, resolveShortcutBinding } from "./xuenessShortcutCommands";
@@ -124,18 +112,8 @@ import {
 } from "./xuenessCapabilities";
 import { CapabilitiesPanel, type CapabilitySectionProps } from "./XuenessCapabilitiesPanel";
 import { XuenessCapabilityDialog } from "./XuenessCapabilityDialog";
-import { fuzzyFilter } from "./xuenessFuzzy";
-import { XuenessGitView } from "./plugins/git/XuenessGitView";
-import { XuenessMarketplace } from "./plugins/extensions";
-import { XuenessAutomationsPanel } from "./plugins/automation";
-import { XuenessMcpTools } from "./plugins/mcp";
-import { XuenessDiagnosticsPanel } from "./plugins/diagnostics";
 import { shouldDismissModalOnEscape, useModalFocusScope } from "./plugins/shared";
-import { XuenessMemoryEditor } from "./plugins/memory";
-import { XuenessMemorySettings } from "./plugins/memory/MemorySettings";
-import { XuenessUsageSettings } from "./plugins/usage/XuenessUsageSettings";
-import { BrowserSettings } from "./plugins/browser/BrowserSettings";
-import { XuenessSubagentSettings } from "./plugins/subagents/SubagentSettings";
+import { applyDocumentTheme } from "./plugins/settings/themeBoot";
 import { FeatureUnavailable, XuenessPluginManager, XuenessPluginSettingsPanel } from "./XuenessPluginManager";
 import {
   CAPABILITY_PLUGIN_BY_KIND,
@@ -162,12 +140,30 @@ import {
   type GitCheckpoint,
 } from "./xuenessGit";
 
-/** Palette commands with honest descriptions; ids double as fuzzy keys. */
-const PALETTE_COMMANDS = (): { id: string; label: string; description: string }[] => ([
-  { id: "new-task", label: tr("新建任务"), description: tr("回到空态输入卡开始新任务") },
-  { id: "open-settings", label: tr("打开设置"), description: tr("运行参数与 Agent 能力开关") },
-  { id: "refresh", label: tr("刷新历史"), description: tr("重新加载任务列表与当前会话") },
-]);
+// Static plugin imports load only when their permitted view mounts.
+const FileBrowser = lazy(() => import("./plugins/files/FileBrowser").then(module => ({ default: module.FileBrowser })));
+const DiffView = lazy(() => import("./plugins/files/DiffView").then(module => ({ default: module.DiffView })));
+const DirectoryBrowser = lazy(() => import("./plugins/files/DirectoryBrowser").then(module => ({ default: module.DirectoryBrowser })));
+const MemoryPanel = lazy(() => import("./plugins/memory/MemoryPanel").then(module => ({ default: module.MemoryPanel })));
+const SettingsSections = lazy(() => import("./plugins/settings/SettingsSections").then(module => ({ default: module.SettingsSections })));
+const DesktopSettings = lazy(() => import("./plugins/desktop/DesktopSettings").then(module => ({ default: module.DesktopSettings })));
+const XuenessSettingsView = lazy(() => import("./plugins/settings/XuenessSettingsView").then(module => ({ default: module.XuenessSettingsView })));
+const NetworkSettings = lazy(() => import("./plugins/network/NetworkSettings").then(module => ({ default: module.NetworkSettings })));
+const DesktopUpdates = lazy(() => import("./plugins/updates/DesktopUpdates").then(module => ({ default: module.DesktopUpdates })));
+const WorkflowPanel = lazy(() => import("./plugins/workflows").then(module => ({ default: module.WorkflowPanel })));
+const ModelManager = lazy(() => import("./plugins/providers").then(module => ({ default: module.ModelManager })));
+const TerminalPanel = lazy(() => import("./plugins/terminal").then(module => ({ default: module.TerminalPanel })));
+const RemoteConnections = lazy(() => import("./plugins/remote").then(module => ({ default: module.RemoteConnections })));
+const XuenessGitView = lazy(() => import("./plugins/git/XuenessGitView").then(module => ({ default: module.XuenessGitView })));
+const XuenessMarketplace = lazy(() => import("./plugins/extensions").then(module => ({ default: module.XuenessMarketplace })));
+const XuenessAutomationsPanel = lazy(() => import("./plugins/automation").then(module => ({ default: module.XuenessAutomationsPanel })));
+const XuenessMcpTools = lazy(() => import("./plugins/mcp").then(module => ({ default: module.XuenessMcpTools })));
+const XuenessDiagnosticsPanel = lazy(() => import("./plugins/diagnostics").then(module => ({ default: module.XuenessDiagnosticsPanel })));
+const XuenessMemoryEditor = lazy(() => import("./plugins/memory").then(module => ({ default: module.XuenessMemoryEditor })));
+const XuenessMemorySettings = lazy(() => import("./plugins/memory/MemorySettings").then(module => ({ default: module.XuenessMemorySettings })));
+const XuenessUsageSettings = lazy(() => import("./plugins/usage/XuenessUsageSettings").then(module => ({ default: module.XuenessUsageSettings })));
+const BrowserSettings = lazy(() => import("./plugins/browser/BrowserSettings").then(module => ({ default: module.BrowserSettings })));
+const XuenessSubagentSettings = lazy(() => import("./plugins/subagents/SubagentSettings").then(module => ({ default: module.XuenessSubagentSettings })));
 
 /** Settings defaults. Capabilities default OFF and are read fail-closed. */
 const SETTINGS_DEFAULTS: SettingsMap = {
@@ -251,6 +247,9 @@ export function XuenessWorkbenchContainer() {
     (id: string) => pluginCatalogReady && pluginCatalog.some((plugin) => plugin.id === id && plugin.effective),
     [pluginCatalog, pluginCatalogReady],
   );
+  // In-flight and queued reads must consult the current catalog, not an old closure.
+  const pluginEffectiveRef = useRef(isPluginEffective);
+  pluginEffectiveRef.current = isPluginEffective;
   const refreshPluginCatalog = useCallback(async () => {
     setPluginCatalogLoading(true);
     try {
@@ -332,7 +331,6 @@ export function XuenessWorkbenchContainer() {
   }, [panel, pluginCatalogReady, pluginCatalog, isPluginEffective]);
   const [commandOpen, setCommandOpen] = useState(false);
   const [sidebarToggleToken, setSidebarToggleToken] = useState(0);
-  const [search, setSearch] = useState("");
   const [choices, setChoices] = useState<RunChoices>(getRunChoices);
   const [composerCatalog, setComposerCatalog] = useState<ComposerCatalog>(emptyComposerCatalog);
   const [composerCatalogLoading, setComposerCatalogLoading] = useState(false);
@@ -415,8 +413,6 @@ export function XuenessWorkbenchContainer() {
   const [settingsSection, setSettingsSection] = useState("general");
   const [settingsLoading, setSettingsLoading] = useState(false);
   const [settingsSaving, setSettingsSaving] = useState(false);
-  const timelineScrollRef = useRef<HTMLDivElement>(null);
-  const timelineFollowTailRef = useRef(true);
 
   // Directory panel (host-side browse; the browser shell has no native folder dialog)
   const [dirListing, setDirListing] = useState<XuenessDirectoryListing | null>(null);
@@ -438,25 +434,27 @@ export function XuenessWorkbenchContainer() {
   const commandRef = useRef<HTMLInputElement | null>(null);
   const commandDialogRef = useRef<HTMLDivElement | null>(null);
   const commandOpenerRef = useRef<HTMLElement | null>(null);
+  const commandPaletteEnabled = commandOpen && isPluginEffective("sessions");
   useModalFocusScope({
-    open: commandOpen,
+    open: commandPaletteEnabled,
     dialogRef: commandDialogRef,
     initialFocusRef: commandRef,
     returnFocusTo: commandOpenerRef.current,
   });
 
   const openCommandPalette = useCallback((returnFocusTo?: HTMLElement | null) => {
-    if (commandOpen) return;
+    if (!isPluginEffective("sessions") || commandOpen) return;
     commandOpenerRef.current = returnFocusTo ?? (document.activeElement instanceof HTMLElement ? document.activeElement : null);
     setCommandOpen(true);
-  }, [commandOpen]);
+  }, [commandOpen, isPluginEffective]);
 
-  const refreshList = useCallback(async () => {
-    if (!isPluginEffective("sessions")) {
+  const refreshListSnapshot = useCallback(async () => {
+    if (!pluginEffectiveRef.current("sessions")) {
       setSessions([]);
       return;
     }
     const res = await listSessions();
+    if (!pluginEffectiveRef.current("sessions")) return;
     if (res.ok) {
       setSessions(res.value);
       if (stoppingSessionsRef.current.size > 0) {
@@ -470,6 +468,9 @@ export function XuenessWorkbenchContainer() {
     }
     setDataErrors(previous => ({ ...previous, list: res.ok ? "" : res.error }));
   }, [isPluginEffective]);
+  const listLoaderRef = useRef(refreshListSnapshot);
+  listLoaderRef.current = refreshListSnapshot;
+  const refreshList = useMemo(() => createSingleFlightRefresh(() => listLoaderRef.current()), []);
 
   const beginFork = useCallback(() => {
     const isRunning = session?.status === "running" || session?.streaming?.status === "streaming";
@@ -505,8 +506,8 @@ export function XuenessWorkbenchContainer() {
     setActiveId(child.id);
   }, [forkSource, refreshList]);
 
-  const loadActive = useCallback(async (id: string, includeFiles = true) => {
-    if (!isPluginEffective("sessions")) return;
+  const loadActiveSnapshot = useCallback(async (id: string, includeFiles = true) => {
+    if (!pluginEffectiveRef.current("sessions")) return;
     // Detail carries pending/approved/changed_files; the timeline carries the
     // real tool_call/tool_result sequence. Both come from the server; neither is
     // reconstructed client-side.
@@ -515,7 +516,7 @@ export function XuenessWorkbenchContainer() {
       loadCompleteTimeline(id),
       loadJournal(id),
     ]);
-    if (activeIdRef.current !== id) return;
+    if (activeIdRef.current !== id || !pluginEffectiveRef.current("sessions")) return;
     if (detail.ok) {
       setSession(detail.value);
       if (detail.value.status !== "running" && detail.value.streaming?.status !== "streaming") {
@@ -525,22 +526,25 @@ export function XuenessWorkbenchContainer() {
     if (timeline.ok) setRows(withInitialUserMessage(hydrateTimelineJournalRows(hydrateTimelineTools(toTimelineRows(timeline.value.events), journal.ok ? journal.value : null), journal.ok ? journal.value : null, detail.ok ? detail.value.reasoning_history : []), journal.ok ? journal.value : null, detail.ok ? detail.value.task : undefined));
     setDataErrors(previous => ({ ...previous, active: !detail.ok ? detail.error : !timeline.ok ? timeline.error : "" }));
     // @ 文件提及候选：会话工作区文件列表（失败静默，composer 不出建议）。
-    if (includeFiles && isPluginEffective("files")) {
+    if (includeFiles && pluginEffectiveRef.current("files")) {
       const listing = await loadFiles(id);
-      if (activeIdRef.current !== id) return;
+      if (activeIdRef.current !== id || !pluginEffectiveRef.current("files")) return;
       if (listing.ok) {
         setFiles(listing.value.files);
         setFilesTruncated(listing.value.truncated);
       }
     }
   }, [isPluginEffective]);
+  const activeLoaderRef = useRef(loadActiveSnapshot);
+  activeLoaderRef.current = loadActiveSnapshot;
+  const loadActive = useMemo(() => createSingleFlightRefresh((id: string, includeFiles?: boolean) => activeLoaderRef.current(id, includeFiles)), []);
 
-  useEffect(() => {
-    if (!isPluginEffective("sessions") || !activeId || !(busy || stoppingSessions.has(activeId) || runRequestSessions.has(activeId) || session?.status === "running" || session?.streaming?.status === "streaming")) return;
-    const id = activeId;
-    const timer = window.setInterval(() => { void loadActive(id, false); }, 1000);
-    return () => window.clearInterval(timer);
-  }, [isPluginEffective, activeId, busy, stoppingSessions, runRequestSessions, session?.status, session?.streaming?.status, loadActive]);
+  const pollActiveSession = useCallback(() => activeId ? loadActive(activeId, false) : Promise.resolve(), [activeId, loadActive]);
+  const activeSessionNeedsPolling = Boolean(activeId && (
+    busy || stoppingSessions.has(activeId) || runRequestSessions.has(activeId)
+    || session?.status === "running" || session?.streaming?.status === "streaming"
+  ));
+  useSessionPolling(isPluginEffective("sessions") && activeSessionNeedsPolling, pollActiveSession);
   useEffect(() => {
     if (session?.id === activeId && session?.status !== "running" && session?.streaming?.status !== "streaming") {
       trackSessionId(stoppingSessionsRef, setStoppingSessions, activeId, false);
@@ -548,11 +552,7 @@ export function XuenessWorkbenchContainer() {
   }, [activeId, session?.id, session?.status, session?.streaming?.status]);
 
   const anySessionRunning = sessions.some(s => s.status === "running");
-  useEffect(() => {
-    if (!isPluginEffective("sessions") || (executingSessions.size === 0 && runRequestSessions.size === 0 && stoppingSessions.size === 0 && !anySessionRunning)) return;
-    const timer = window.setInterval(() => { void refreshList(); }, 2000);
-    return () => window.clearInterval(timer);
-  }, [isPluginEffective, executingSessions.size, runRequestSessions.size, stoppingSessions.size, anySessionRunning, refreshList]);
+  useSessionPolling(isPluginEffective("sessions") && (executingSessions.size > 0 || runRequestSessions.size > 0 || stoppingSessions.size > 0 || anySessionRunning), refreshList, 2000);
 
   useEffect(() => {
     void refreshPluginCatalog();
@@ -702,7 +702,7 @@ export function XuenessWorkbenchContainer() {
   }, [settingsValues.browserControlEnabled, isPluginEffective, updateChoices, composerRequests]);
 
   useEffect(() => {
-    if (!commandOpen) return;
+    if (!commandPaletteEnabled) return;
     const onEscape = (event: KeyboardEvent) => {
       if (event.key !== "Escape" || event.defaultPrevented) return;
       const dialog = commandDialogRef.current;
@@ -716,7 +716,10 @@ export function XuenessWorkbenchContainer() {
     };
     document.addEventListener("keydown", onEscape, true);
     return () => document.removeEventListener("keydown", onEscape, true);
-  }, [commandOpen]);
+  }, [commandPaletteEnabled]);
+  useEffect(() => {
+    if (commandOpen && !isPluginEffective("sessions")) setCommandOpen(false);
+  }, [commandOpen, isPluginEffective]);
   useEffect(() => {
     if (!activeId && !session) heroInputRef.current?.focus();
   }, [heroFocusTick, activeId, session]);
@@ -725,32 +728,29 @@ export function XuenessWorkbenchContainer() {
   useEffect(() => {
     if (settingsValues.language === "zh" || settingsValues.language === "en") setLocale(settingsValues.language);
   }, [settingsValues.language]);
-  useEffect(() => { timelineFollowTailRef.current = true; }, [activeId]);
-  useEffect(() => {
-    if (panel === "chat" && settingsValues.autoScroll !== false && timelineFollowTailRef.current && timelineScrollRef.current)
-      timelineScrollRef.current.scrollTop = timelineScrollRef.current.scrollHeight;
-  }, [rows, session?.streaming?.text, session?.queued_messages, panel, settingsValues.autoScroll]);
 
   useEffect(() => {
-    const theme = String(settingsValues.theme ?? "system");
-    const isDark = theme === "dark" || (theme === "system" && window.matchMedia?.("(prefers-color-scheme: dark)").matches);
-    document.documentElement.classList.toggle("dark", Boolean(isDark));
     document.documentElement.style.setProperty("--xn-ui-font-size", `${Math.min(24, Math.max(12, Number(settingsValues.fontSize) || 14))}px`);
     document.documentElement.dataset.xnTabSize = String([2, 4, 8].includes(Number(settingsValues.tabSize)) ? Number(settingsValues.tabSize) : 2);
     document.documentElement.dataset.xnWordWrap = settingsValues.wordWrap === false ? "off" : "on";
-  }, [settingsValues.theme, settingsValues.fontSize, settingsValues.tabSize, settingsValues.wordWrap]);
+  }, [settingsValues.fontSize, settingsValues.tabSize, settingsValues.wordWrap]);
 
   useEffect(() => {
-    if (settingsValues.theme !== "system" || !window.matchMedia) return;
+    if (!settingsHaveLoaded.current || settingsLoading) return;
+    applyDocumentTheme(settingsValues.theme);
+  }, [settingsValues.theme, settingsLoading]);
+
+  useEffect(() => {
+    if (!settingsHaveLoaded.current || settingsLoading || settingsValues.theme !== "system" || !window.matchMedia) return;
     const query = window.matchMedia("(prefers-color-scheme: dark)");
     const apply = (event: MediaQueryListEvent | MediaQueryList) => {
-      document.documentElement.classList.toggle("dark", event.matches);
+      applyDocumentTheme(settingsValues.theme);
       setSystemDark(event.matches);
     };
     apply(query);
     query.addEventListener?.("change", apply);
     return () => query.removeEventListener?.("change", apply);
-  }, [settingsValues.theme]);
+  }, [settingsValues.theme, settingsLoading]);
 
   useEffect(() => {
     setSession(null);
@@ -1541,7 +1541,7 @@ export function XuenessWorkbenchContainer() {
       resourceContent={isPluginEffective("extensions") ? <CapabilitiesPanel sections={capSections.filter(section => section.kind === "plugins")}
         onImportPlugin={async ({id,fields}) => { const result = await createCapabilityItem("plugins", {id,...fields,createOnly:true}); if(result.ok) await loadCapSlot("plugins"); return result; }}
         onRefreshPlugins={() => void loadCapSlot("plugins")} onBrowsePlugins={() => setSettingsSection("marketplace")} /> : undefined} />;
-    if (settingsSection === "subagents") return <XuenessSubagentSettings />;
+    if (settingsSection === "subagents") return <XuenessSubagentSettings providersEnabled={isPluginEffective("providers")} />;
     if (pluginAvailability.capabilityKinds.includes(settingsSection as CapabilityKind)) return <CapabilitiesPanel sections={capSections.filter(section => section.kind === settingsSection)} />;
     if (settingsSection === "modules") return <XuenessPluginManager plugins={pluginCatalog} loading={pluginCatalogLoading} error={pluginCatalogError} onRefresh={refreshPluginCatalog} onToggle={togglePlugin} />;
     if (settingsSection === "marketplace") return <XuenessMarketplace onInstalled={() => void refreshPluginCatalog()} />;
@@ -1580,7 +1580,7 @@ export function XuenessWorkbenchContainer() {
         onToggle={togglePlugin}
       />
     ),
-    workflows: <WorkflowPanel sessionId={activeId} />,
+    workflows: <WorkflowPanel sessionId={activeId} subagentsEnabled={isPluginEffective("subagents")} />,
     terminal: <TerminalPanel sessionId={activeId} fontSize={Number(settingsValues.terminalFontSize ?? 13)} fontFamily={String(settingsValues.terminalFontFamily ?? "system")} />,
     automations: <XuenessAutomationsPanel />,
     marketplace: <XuenessMarketplace onInstalled={() => void refreshPluginCatalog()} />,
@@ -1634,7 +1634,7 @@ export function XuenessWorkbenchContainer() {
     settings: <XuenessSettingsView sections={settingsSections} activeSection={settingsSection} onSelect={setSettingsSection}
       dirty={settingsDirty} saving={settingsSaving} loading={settingsLoading} error={settingsError}
       onBack={() => setPanel("chat")} onRetry={() => settingsDirty ? handleSaveSettings() : handleLoadAllSettings()}>
-      {settingsContent()}
+      <RegionBoundary resetKey={settingsSection} onReload={() => window.location.reload()} onRecover={() => setPanel("plugins")}><Suspense fallback={<p role="status" className="xn-view-loading">{tr("正在加载界面…")}</p>}>{settingsContent()}</Suspense></RegionBoundary>
     </XuenessSettingsView>,
   };
 
@@ -1757,65 +1757,17 @@ export function XuenessWorkbenchContainer() {
         </>
       }
     >
-      {commandOpen && (
-        <div ref={commandDialogRef} role="dialog" aria-modal="true" aria-label={tr("命令面板")} tabIndex={-1} className="xn-command-overlay" onClick={() => setCommandOpen(false)}>
-          <div className="xn-command-panel" onClick={(event) => event.stopPropagation()}>
-            <input
-              ref={commandRef}
-              aria-label={tr("搜索任务或命令")}
-              placeholder={tr("搜索任务或命令…")}
-              value={search}
-              onChange={(event) => setSearch(event.target.value)}
-            />
-            {(() => {
-              const needle = search.trim();
-              const visiblePaletteCommands = PALETTE_COMMANDS().filter((command) =>
-                (command.id !== "new-task" && command.id !== "refresh" || isPluginEffective("sessions")) &&
-                (command.id !== "open-settings" || isPluginEffective("settings")),
-              );
-              const commandHits = fuzzyFilter(visiblePaletteCommands, (c) => c.label, needle).map((h) => h.item);
-              const sessionHits = fuzzyFilter(
-                sessions,
-                (s) => `${s.title || ""} ${s.task || ""}`,
-                needle,
-              ).map((h) => h.item);
-              const empty = commandHits.length === 0 && sessionHits.length === 0;
-              return (
-                <>
-                  {commandHits.length > 0 && (
-                    <div className="xn-command-group" data-testid="palette-group-commands">
-                      <div className="xn-command-group__title">{tr("命令")}</div>
-                      {commandHits.map((command) => (
-                        <button type="button" key={command.id} data-testid={`palette-command-${command.id}`} onClick={() => runPaletteCommand(command.id)}>
-                          <span>{command.label}</span>
-                          <span className="xn-command-group__desc">{command.description}</span>
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                  {sessionHits.length > 0 && (
-                    <div className="xn-command-group" data-testid="palette-group-tasks">
-                      <div className="xn-command-group__title">{tr("任务")}</div>
-                      {sessionHits.map((item) => (
-                        <button
-                          type="button"
-                          key={item.id}
-                          disabled={busy}
-                          onClick={() => { setActiveId(item.id); setPanel("chat"); setCommandOpen(false); }}
-                        >
-                          <span>{item.title || item.task || tr("未命名任务")}</span>
-                          <span className="xn-command-group__desc">{item.status}</span>
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                  {empty && <div className="xn-command-empty">{tr("无匹配结果")}</div>}
-                </>
-              );
-            })()}
-          </div>
-        </div>
-      )}
+      {commandPaletteEnabled && <CommandPalette
+        dialogRef={commandDialogRef}
+        inputRef={commandRef}
+        sessions={sessions}
+        busy={busy}
+        sessionsEnabled={isPluginEffective("sessions")}
+        settingsEnabled={isPluginEffective("settings")}
+        onClose={() => setCommandOpen(false)}
+        onRunCommand={runPaletteCommand}
+        onSelectSession={selectSession}
+      />}
 
       {(error || dataErrors.active || dataErrors.list) && (
         <div role="alert" className="xn-error-banner">
@@ -1824,6 +1776,7 @@ export function XuenessWorkbenchContainer() {
         </div>
       )}
 
+      <RegionBoundary resetKey={`${panel}:${activeId ?? "hero"}`} onReload={() => window.location.reload()} onRecover={() => setPanel("plugins")}><Suspense fallback={<p role="status" className="xn-view-loading">{tr("正在加载界面…")}</p>}>
       {panel === "settings" ? secondaryPanels.settings : panel !== "chat" ? (
         <div className="xn-secondary-view">
           <div className="xn-secondary-view__bar">
@@ -1868,10 +1821,13 @@ export function XuenessWorkbenchContainer() {
               <Approvals pending={session.pending} onApprove={handleApprove} />
             </div>
           )}
-          <div ref={timelineScrollRef} className="xn-conversation__stream" onScroll={event => {
-            const scroller = event.currentTarget;
-            timelineFollowTailRef.current = scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight < 80;
-          }}>
+          <ConversationTimelineViewport
+            key={session.id}
+            autoScroll={settingsValues.autoScroll !== false}
+            rowsVersion={rows}
+            streamingText={session.streaming?.text}
+            queuedMessages={session.queued_messages}
+          >
             {settingsValues.showTodos !== false && <TaskTodos todos={session.todos ?? []} />}
             <TimelineStream rows={withAssistantStream(rows, session.streaming)} collapseTools={settingsValues.collapseTools !== false} messageStreamShowReasoning={settingsValues.messageStreamShowReasoning !== false}
               jsonToolProtocol={session.model_selection?.tool_calling === "json" && activeRuntimeProfile === "lightweight" && session.streaming?.text_format !== "markdown"}
@@ -1882,7 +1838,7 @@ export function XuenessWorkbenchContainer() {
               continuing={queueContinuingSessions.has(session.id)} onContinue={handleContinueQueuedMessages} />
             {queueError?.sessionId === session.id && <p className="xn-session-queue__error" role="alert">{queueError.message}</p>}
             {session.streaming?.status === "interrupted" && session.streaming.text && <p role="status" className="xn-run-error">{tr("输出已中断，已保留收到的内容。")}</p>}
-          </div>
+          </ConversationTimelineViewport>
           {(runError || session.status === "provider_error" || (!busy && session.status === "pending")) && (
             <div className="xn-run-error">
               {runError && <p role="alert">{runError}</p>}
@@ -1948,6 +1904,8 @@ export function XuenessWorkbenchContainer() {
           </div>
         </div>
       )}
+
+      </Suspense></RegionBoundary>
 
       <XuenessWorkspacePickerDialog open={workspacePicking} currentRoot={draftRoot ?? composerCatalog.root} returnFocusTo={workspacePickerOpener.current}
         mode={workspacePickerMode}

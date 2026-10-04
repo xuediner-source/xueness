@@ -1,5 +1,7 @@
 # Xueness 桌面端
 
+子代理的启用、并发派发、主代理继续工作及合理暂停条件见[子代理协作说明](xueness-subagent-coordination.md)。该能力属于 `subagents` 插件；安装包需要包含对应版本的后端与 Web 构建，源码变更不会自动改写已安装客户端。
+
 桌面端使用独立实现的 Electron 外壳，复用 Xueness 工作台与插件运行时。安装包内置平台原生的 Python 后端和预构建 Web 资产，用户不需要安装 Python、Node.js 或开发依赖。
 
 ## 平台与产物

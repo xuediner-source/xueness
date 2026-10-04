@@ -3,10 +3,40 @@
  *
  * Signatures are frozen by docs/xueness-batch6.md so the panel and workbench
  * lanes can build against them in parallel; the styling lane owns the visual
- * implementation. Every component is a pure function of its props (no IO, no
- * effects) so it renders under `renderToStaticMarkup`.
+ * implementation. Presentational components have no IO. RegionBoundary adds
+ * local render recovery without changing persisted state or permissions.
  */
 import React from "react";
+import { t as tr } from "../i18n";
+
+/** Local render recovery. It never changes persisted data or plugin permissions. */
+export class RegionBoundary extends React.Component<{
+  children: React.ReactNode;
+  resetKey?: string;
+  onRecover?: () => void;
+  onReload?: () => void;
+  recoverLabel?: string;
+}, { failed: boolean; loadFailure: boolean }> {
+  state = { failed: false, loadFailure: false };
+  static getDerivedStateFromError(error?: unknown): { failed: boolean; loadFailure: boolean } {
+    return { failed: true, loadFailure: error instanceof Error && /Failed to fetch dynamically imported module|Importing a module script failed|error loading dynamically imported module|Unable to preload CSS/i.test(error.message) };
+  }
+  componentDidUpdate(previous: Readonly<typeof this.props>): void {
+    if (previous.resetKey !== this.props.resetKey && this.state.failed) this.setState({ failed: false, loadFailure: false });
+  }
+  render(): React.ReactNode {
+    if (!this.state.failed) return this.props.children;
+    return <section role="alert" className="xn-region-error" data-testid="region-error">
+      <h2>{tr("此区域暂时无法显示")}</h2>
+      <p>{tr(this.state.loadFailure ? "界面资源加载失败，请重新加载界面。已保存的会话和配置不会被删除。" : "可以重试此区域。已保存的会话和配置不会被删除。")}</p>
+      <div>
+        {(!this.state.loadFailure || !this.props.onReload) && <Button onClick={() => this.setState({ failed: false, loadFailure: false })}>{tr("重试此区域")}</Button>}
+        {this.props.onReload && <Button onClick={this.props.onReload}>{tr("重新加载界面")}</Button>}
+        {this.props.onRecover && <Button onClick={this.props.onRecover}>{this.props.recoverLabel ?? tr("返回插件管理")}</Button>}
+      </div>
+    </section>;
+  }
+}
 
 export function Button({
   children,

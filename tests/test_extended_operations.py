@@ -402,4 +402,6 @@ class ParentStopTests(unittest.TestCase):
             result=run(s,store,provider,Gate(Path(tmp)),max_steps=3,subagents=[],registry=registry,should_stop=stopped.is_set)
             self.assertEqual(result['status'],'stopped')
             self.assertEqual(result['task_runs'][0]['status'],'cancelled')
-            self.assertEqual(provider.calls,2)
+            # Parent and child requests can overlap; neither may start another
+            # request after observing cancellation at a boundary.
+            self.assertIn(provider.calls, (2, 3))

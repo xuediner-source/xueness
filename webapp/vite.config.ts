@@ -1,10 +1,26 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import { resolve } from 'node:path';
+import { readFileSync } from 'node:fs';
+import { transformSync } from 'esbuild';
 
 export default defineConfig({
-  plugins: [react()],
-  build: { rollupOptions: { input: { workbench: resolve(import.meta.dirname, 'index.html'), tray: resolve(import.meta.dirname, 'tray.html') } } },
+  plugins: [react(), {
+    name: 'xueness-prepaint-theme',
+    transformIndexHtml(html, context) {
+      if (context.filename.endsWith('tray.html')) return html;
+      const source = readFileSync(resolve(import.meta.dirname, 'src/plugins/settings/themeBoot.ts'), 'utf8');
+      const { code } = transformSync(source, { loader: 'ts', format: 'iife', minify: true, target: 'es2020' });
+      return [{ tag: 'script', children: code, injectTo: 'head' }];
+    },
+  }],
+  build: { rollupOptions: {
+    input: { workbench: resolve(import.meta.dirname, 'index.html'), tray: resolve(import.meta.dirname, 'tray.html') },
+    output: { manualChunks(id) {
+      // Give the shared React runtime a stable cache identity across plugin chunks.
+      if (/node_modules\/(react|react-dom|scheduler)\//.test(id)) return 'react-vendor';
+    } },
+  } },
   // Keep ES workers enabled for the dynamically loaded Office/PPTX renderer.
   worker: {
     format: "es",

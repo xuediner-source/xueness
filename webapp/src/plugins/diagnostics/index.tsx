@@ -4,7 +4,40 @@ import { t as tr, tf } from "../../i18n";
 import { shouldDismissModalOnEscape, useModalFocusScope } from "../shared";
 import "../../styles/diagnostics.css";
 
-type Diagnostics = { runtime?: Record<string, unknown>; plugins?: unknown[]; sessions?: unknown[]; storage?: Record<string, unknown> };
+type Diagnostics = { runtime?: Record<string, unknown>; plugins?: unknown[]; sessions?: unknown; storage?: Record<string, unknown> };
+
+/** The diagnostics API reports sessions grouped by status, not as session rows. */
+export function parseSessionStatusCounts(value: unknown): Record<string, number> | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const prototype = Object.getPrototypeOf(value);
+  if (prototype !== Object.prototype && prototype !== null) return null;
+  const entries = Object.entries(value);
+  for (const [status, count] of entries) {
+    if (!status.trim() || typeof count !== "number" || !Number.isSafeInteger(count) || count < 0) return null;
+  }
+  return Object.fromEntries(entries) as Record<string, number>;
+}
+
+/** Return undefined for a malformed payload so the UI does not report a false zero. */
+export function totalSessionCount(value: unknown): number | undefined {
+  const counts = parseSessionStatusCounts(value);
+  if (!counts) return undefined;
+  let total = 0;
+  for (const count of Object.values(counts)) {
+    total += count;
+    if (!Number.isSafeInteger(total)) return undefined;
+  }
+  return total;
+}
+
+export function DiagnosticsSessionsSummary({ sessions }: { sessions: unknown }): React.JSX.Element {
+  const counts = parseSessionStatusCounts(sessions);
+  const count = totalSessionCount(sessions);
+  return <details data-testid="diagnostics-session-summary">
+    <summary>{tr("会话状态")} ({count ?? "—"})</summary>
+    <pre>{JSON.stringify(counts ?? sessions ?? {}, null, 2)}</pre>
+  </details>;
+}
 export function scheduleObjectUrlRevocation(
   url: string,
   delayMs = 1000,
@@ -120,7 +153,7 @@ export function XuenessDiagnosticsPanel(): React.JSX.Element {
       <div className="xn-diagnostics__cards">{Object.entries(counts).map(([key, value]) => <article key={key}><span>{key}</span><strong>{typeof value === "object" ? JSON.stringify(value) : String(value)}</strong></article>)}</div>
       <details><summary>{tr("运行环境")}</summary><pre>{JSON.stringify(snapshot.runtime ?? {}, null, 2)}</pre></details>
       <details><summary>{tr("插件状态")} ({snapshot.plugins?.length ?? 0})</summary><pre>{JSON.stringify(snapshot.plugins ?? [], null, 2)}</pre></details>
-      <details><summary>{tr("会话状态")} ({snapshot.sessions?.length ?? 0})</summary><pre>{JSON.stringify(snapshot.sessions ?? [], null, 2)}</pre></details>
+      <DiagnosticsSessionsSummary sessions={snapshot.sessions} />
       <section className="xn-diagnostics__cleanup"><h4>{tr("清理旧日志")}</h4><label>{tr("保留天数")}<input type="number" min={1} max={3650} value={days} onChange={e => setDays(Number(e.target.value))} /></label><button type="button" disabled={busy || !Number.isInteger(days) || days < 1 || days > 3650} onClick={() => setConfirmCleanup(true)}>{tr("查看清理确认")}</button></section>
     </>}
     {confirmCleanup && <div className="xn-diagnostics__backdrop"><section

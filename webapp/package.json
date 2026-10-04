@@ -9,8 +9,12 @@
     "preview": "vite preview",
     "typecheck": "tsc --noEmit -p tsconfig.typecheck.json",
     "test": "node run-tests.mjs",
+    "test:browser": "node verify-plugin-disclosures.mjs",
     "check:plugins": "python3 ../tools/check_plugin_architecture.py",
-    "prebuild": "npm run check:plugins"
+    "check:design": "node ../tools/check_frontend_design.mjs",
+    "check:bundle": "node ../tools/check_frontend_bundle.mjs",
+    "prebuild": "npm run check:plugins && npm run check:design",
+    "postbuild": "npm run check:bundle"
   },
   "dependencies": {
     "@aiden0z/pptx-renderer": "1.2.4",

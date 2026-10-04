@@ -393,6 +393,22 @@ def _is_loopback_literal(hostname):
         return False
 
 
+def _explicit_request_deadline(provider):
+    """Return a validated absolute monotonic deadline assigned by the run loop."""
+    run_deadline = getattr(provider, "request_deadline", None)
+    if run_deadline is None:
+        return None
+    if type(run_deadline) not in (int, float):
+        raise ValueError("invalid provider request deadline")
+    try:
+        run_deadline = float(run_deadline)
+    except (OverflowError, ValueError):
+        raise ValueError("invalid provider request deadline") from None
+    if not math.isfinite(run_deadline):
+        raise ValueError("invalid provider request deadline")
+    return run_deadline
+
+
 def _lightweight_request_settings(provider):
     """Resolve one lightweight inference's total deadline and retry count."""
     options = effective_options(
@@ -402,16 +418,8 @@ def _lightweight_request_settings(provider):
     )
     now = time.monotonic()
     deadline = now + options["requestTimeoutSeconds"]
-    run_deadline = getattr(provider, "request_deadline", None)
+    run_deadline = _explicit_request_deadline(provider)
     if run_deadline is not None:
-        if type(run_deadline) not in (int, float):
-            raise ValueError("invalid provider request deadline")
-        try:
-            run_deadline = float(run_deadline)
-        except (OverflowError, ValueError):
-            raise ValueError("invalid provider request deadline") from None
-        if not math.isfinite(run_deadline):
-            raise ValueError("invalid provider request deadline")
         deadline = min(deadline, run_deadline)
     if deadline <= now:
         raise TimeoutError("provider request deadline exceeded")
@@ -492,6 +500,10 @@ class OpenAICompatible:
                 body, "/chat/completions", attempts=attempts,
                 absolute_deadline=deadline, transport_only_retries=True,
             )
+        deadline = _explicit_request_deadline(self)
+        if deadline is not None:
+            return self._request_json(body, "/chat/completions",
+                                      absolute_deadline=deadline)
         return self._request_json(body, "/chat/completions")
 
     def _lightweight_request_settings(self):
@@ -799,6 +811,12 @@ class OpenAICompatible:
             deadline, attempts = self._lightweight_request_settings()
             return self._stream_lightweight(
                 body, deadline=deadline, attempts=attempts,
+                on_delta=on_delta, on_reasoning_delta=on_reasoning_delta,
+            )
+        deadline = _explicit_request_deadline(self)
+        if deadline is not None:
+            return self._stream_lightweight(
+                body, deadline=deadline, attempts=3,
                 on_delta=on_delta, on_reasoning_delta=on_reasoning_delta,
             )
         delivered = False
@@ -1569,6 +1587,10 @@ class AnthropicMessages:
             except (urllib.error.HTTPError, urllib.error.URLError, ValueError,
                     KeyError, OSError, TypeError, AttributeError):
                 raise RuntimeError("provider request failed (details suppressed)") from None
+        deadline = _explicit_request_deadline(self)
+        if deadline is not None:
+            request = self._request(messages, tools, False)
+            return self._complete_lightweight(request, deadline, attempts=1)
         try:
             with _provider_opener(self.base, _NoRedirect).open(self._request(messages, tools, False), timeout=40) as response:
                 raw = response.read(2_000_001)
@@ -1651,6 +1673,13 @@ class AnthropicMessages:
             deadline, attempts = _lightweight_request_settings(self)
             return self._stream_lightweight(
                 request, deadline=deadline, attempts=attempts,
+                on_delta=on_delta, on_reasoning_delta=on_reasoning_delta,
+            )
+        deadline = _explicit_request_deadline(self)
+        if deadline is not None:
+            request = self._request(messages, tools, True)
+            return self._stream_lightweight(
+                request, deadline=deadline, attempts=3,
                 on_delta=on_delta, on_reasoning_delta=on_reasoning_delta,
             )
         delivered = False

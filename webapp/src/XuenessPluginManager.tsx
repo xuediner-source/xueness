@@ -104,6 +104,16 @@ export function XuenessPluginManager({ plugins, loading, error, onRefresh, onTog
     return result;
   }, { all: 0, active: 0, disabled: 0, blocked: 0, unavailable: 0 }), [plugins]);
   const visiblePlugins = useMemo(() => filterPlugins(plugins, filter, query), [plugins, filter, query, locale]);
+  const [detailsExpanded, setDetailsExpanded] = useState(false);
+  const [detailsOverrides, setDetailsOverrides] = useState<Record<string, boolean>>({});
+  const visibleHasDetails = visiblePlugins.some((plugin) =>
+    pluginFeatures(plugin).length + pluginTools(plugin).length + pluginCommands(plugin).length > 0,
+  );
+
+  const toggleAllDetails = () => {
+    setDetailsExpanded((expanded) => !expanded);
+    setDetailsOverrides({});
+  };
 
   const toggle = async (plugin: XuenessPlugin) => {
     setBusyId(plugin.id);
@@ -124,9 +134,17 @@ export function XuenessPluginManager({ plugins, loading, error, onRefresh, onTog
           <h2>{tr("插件管理")}</h2>
           <p>{tr("启用或停用工作台模块。执行工具仍按每次运行的审批设置决定。")}</p>
         </div>
-        <button type="button" className="xn-plugins__refresh" onClick={() => void onRefresh()} disabled={loading}>
-          {loading ? tr("加载中…") : tr("刷新")}
-        </button>
+        <div className="xn-plugins__header-actions">
+          {visibleHasDetails && <button
+            type="button"
+            className="xn-plugins__details-toggle"
+            aria-pressed={detailsExpanded}
+            onClick={toggleAllDetails}
+          >{tr(detailsExpanded ? "折叠全部" : "展开全部")}</button>}
+          <button type="button" className="xn-plugins__refresh" onClick={() => void onRefresh()} disabled={loading}>
+            {loading ? tr("加载中…") : tr("刷新")}
+          </button>
+        </div>
       </header>
       {error && <p className="xn-plugins__error" role="alert">{tr("插件列表加载失败：")}{error}</p>}
       {actionError && <p className="xn-plugins__error" role="alert">{tr("插件设置失败：")}{actionError}</p>}
@@ -183,8 +201,28 @@ export function XuenessPluginManager({ plugins, loading, error, onRefresh, onTog
                   {blocked && <span className="xn-plugin-card__blocked">{tr("依赖未启用：")}{blocked}</span>}
                 </div>
                 {detailCount > 0 && <details className="xn-plugin-card__details" data-testid={`xn-plugin-details-${plugin.id}`}
-                  open={matchesFeatureDetails(plugin, query) || undefined}>
-                  <summary>{tf("功能与接口（{0}）", [detailCount])}</summary>
+                  open={matchesFeatureDetails(plugin, query) || (detailsOverrides[plugin.id] ?? detailsExpanded)}>
+                  <summary
+                    onClick={(event) => {
+                      // The native `toggle` event is deferred and also fires after
+                      // controlled, programmatic changes. Only this user action
+                      // should update per-card overrides.
+                      event.preventDefault();
+                      if (matchesFeatureDetails(plugin, query)) return;
+                      setDetailsOverrides((current) => ({
+                        ...current,
+                        [plugin.id]: !(current[plugin.id] ?? detailsExpanded),
+                      }));
+                    }}
+                    onKeyDown={(event) => {
+                      // Keep native Enter/Space activation. During IME composition
+                      // those keys commit text and must not toggle the disclosure.
+                      if ((event.key === "Enter" || event.key === " ") &&
+                        (event.nativeEvent.isComposing || event.nativeEvent.keyCode === 229)) {
+                        event.preventDefault();
+                      }
+                    }}
+                  >{tf("功能与接口（{0}）", [detailCount])}</summary>
                   <div className="xn-plugin-card__details-grid">
                     {features.length > 0 && <section>
                       <h4>{tr("插件功能")}</h4>
@@ -205,7 +243,7 @@ export function XuenessPluginManager({ plugins, loading, error, onRefresh, onTog
                 </details>}
               </div>
               <label className="xn-plugin-card__toggle">
-                <span>{plugin.enabled ? tr("已启用") : tr("已禁用")}</span>
+                <span className="xn-visually-hidden">{plugin.enabled ? tr("已启用") : tr("已禁用")}</span>
                 <input
                   type="checkbox"
                   aria-label={`${tr("启用插件")}: ${name}`}

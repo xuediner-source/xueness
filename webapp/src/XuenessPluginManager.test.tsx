@@ -136,6 +136,7 @@ test("plugin catalog searches bilingual feature metadata, tool names and command
       onRefresh={async () => {}} onToggle={async () => {}} />);
     assert.match(english, /data-testid="xn-plugin-details-sessions"/);
     assert.match(english, /Features &amp; interfaces \(3\)/);
+    assert.match(english, /aria-pressed="false">Expand all<\/button>/);
     assert.match(english, /sessions\.fork/);
     assert.match(english, /read_session_context/);
     assert.match(english, /sessions fork/);
@@ -145,6 +146,7 @@ test("plugin catalog searches bilingual feature metadata, tool names and command
       onRefresh={async () => {}} onToggle={async () => {}} />);
     assert.match(chinese, /历史分叉/);
     assert.match(chinese, /轻量运行/);
+    assert.match(chinese, /aria-pressed="false">展开全部<\/button>/);
   } finally {
     setLocale("zh");
   }

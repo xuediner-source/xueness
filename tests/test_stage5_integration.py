@@ -344,6 +344,10 @@ class SubagentLoopTests(unittest.TestCase):
                 {"id": "s1", "type": "function",
                  "function": {"name": "task",
                               "arguments": json.dumps({"prompt": "try to write"})}}]},
+            {"content": "", "tool_calls": [
+                {"id": "collected", "type": "function",
+                 "function": {"name": "task_collect", "arguments": json.dumps({
+                     "wait_seconds": 2, "reason": "dependency", "detail": "Inspect the denied write result."})}}]},
             {"content": json.dumps({"summary": "parent done", "evidence": []})},
         ])
         child_provider = WriteAttemptProvider()
@@ -368,7 +372,10 @@ class SubagentLoopTests(unittest.TestCase):
         self.assertEqual(child_provider.n, 1)
         result = out["results"]["s1"]
         self.assertTrue(result["ok"], result)
-        self.assertIn("权限策略禁止", result["summary"])
+        child_result = out['results']['collected']
+        self.assertFalse(child_result['ok'])
+        self.assertEqual(child_result['tasks'][0]['status'], 'failed')
+        self.assertIn("权限策略禁止", child_result['tasks'][0]['summary'])
 
     def test_depth_cap_hides_the_task_tool(self):
         from xueness.subagents import load as load_subagents
@@ -412,11 +419,13 @@ class DefaultsUnchangedTests(unittest.TestCase):
         provider = RecordingProvider([{"content": json.dumps({"summary": "ok"})}])
         session = self.store.new("t", self.workspace)
         run(session, self.store, provider, Gate(self.workspace), max_steps=1)
-        self.assertEqual(provider.tools[0], tool_schemas(self.store.directory))
+        expected = [s for s in tool_schemas(self.store.directory) if s['function']['name'] != 'task_collect']
+        self.assertEqual(provider.tools[0], expected)
         names = [t["function"]["name"] for t in provider.tools[0]]
         self.assertTrue({"read", "list", "glob", "grep", "write", "edit",
                          "exec", "todo_read", "todo_write", "ask_user"}.issubset(names))
         self.assertNotIn("task", names)
+        self.assertNotIn("task_collect", names)
         self.assertNotIn("skill_read", names)
         self.assertFalse(any(name.startswith("mcp__") for name in names))
 

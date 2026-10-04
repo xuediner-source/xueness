@@ -3,6 +3,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { renderToStaticMarkup } from "react-dom/server";
 import {
+  filterSettingsSections,
   groupSettingsSections,
   XuenessSettingsView,
   type XuenessSettingsSection,
@@ -40,8 +41,17 @@ test("settings shell marks the active route and hides the extension group until 
   assert.match(html, /aria-label="返回工作区"/);
   assert.match(html, /Plugin settings body/);
   assert.match(html, /<details class="xn-settings-view__extensions">/);
-  assert.doesNotMatch(html, /xn-settings-view__search|搜索设置/);
+  assert.match(html, /data-testid="xn-settings-search"/);
+  assert.match(html, /type="search"[^>]*aria-controls="xn-settings-nav-results"/);
   assert.doesNotMatch(html, /保存配置/);
+});
+
+test("settings search matches destination labels, descriptions, and ids case-insensitively", () => {
+  assert.deepEqual(filterSettingsSections(sections, "外观").map(({ id }) => id), ["appearance"]);
+  assert.deepEqual(filterSettingsSections(sections, "字体").map(({ id }) => id), ["appearance"]);
+  assert.deepEqual(filterSettingsSections(sections, "WORKSPACE").map(({ id }) => id), ["workspace"]);
+  assert.deepEqual(filterSettingsSections(sections, "   "), sections);
+  assert.deepEqual(filterSettingsSections(sections, "nothing here"), []);
 });
 
 test("navigating to a Xueness-only section expands the extension navigation", () => {

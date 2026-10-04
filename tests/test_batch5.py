@@ -132,10 +132,15 @@ class SubagentRegistryTests(unittest.TestCase):
         self.registry = TaskRegistry()
 
     def test_delegated_run_is_registered_and_finished(self):
+        class ChatProvider:
+            def complete(self, messages, tools):
+                return {"content": "Hello from the child."}
+
         gate = Gate(self.root)
-        result = _run_subagent(gate, FakeProvider(), [], "check the file", None,
+        result = _run_subagent(gate, ChatProvider(), [], "hello", None,
                                depth=0, max_depth=1, registry=self.registry,
-                               parent_session="parent-1")
+                               parent_session="parent-1",
+                               state_dir=self.root.parent / "state")
         self.assertTrue(result["ok"])
         task_id = result["task_id"]
         self.assertTrue(task_id.startswith("task-"))

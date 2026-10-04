@@ -2,8 +2,8 @@
  * Xueness theme parameters derived from the Apache-2.0 upstream UI (v3.14.3).
  * See NOTICE.md; product identity belongs to Xueness.
  * Supports both light mode and dark mode via CSS custom properties.
- * index.html declares <html class="dark">, so .dark tokens apply by default,
- * while :root provides the light-mode tokens.
+ * A single light/dark token source. Theme is resolved before the first paint;
+ * semantic aliases stay theme-aware and retain the neutral Xueness palette.
  */
 
 :root {
@@ -14,16 +14,52 @@
   --workbench-page-width: 896px;
   --sidebar-width: 270px;
 
+  color-scheme: light;
+  --bg-window: #ececee;
+  --bg-sidebar: #ececee;
+  --bg-surface: color-mix(in srgb, var(--fg) 3%, transparent);
+  --bg-panel: #ffffff;
+  --bg-input: #ffffff;
+  --bg-popover: #ffffff;
+
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-12: 48px;
+  --text-xs: 11px;
+  --text-sm: 12px;
+  --text-md: 14px;
+  --text-lg: 16px;
+  --text-xl: 20px;
+  --text-heading: 30px;
+  --dur-fast: 120ms;
+  --dur-normal: 150ms;
+  --dur-slow: 200ms;
+  --z-content: 10;
+  --z-header: 30;
+  --z-scrim: 35;
+  --z-sidebar: 40;
+  --z-menu: 60;
+  --z-modal: 1000;
+  --z-dialog: 1100;
+  --z-select: 1200;
+  --xn-tab-size: 2;
+  --xn-ui-font-size: 14px;
+
   /* Color tokens - Light */
-  --bg: #f8f8f8;
-  --bg-subtle: #f0f0f0;
+  --bg: #fafafa;
+  --bg-subtle: #f1f1f1;
   --bg-card: #ffffff;
   --bg-hover: rgba(13, 13, 13, 0.05);
   --bg-active: rgba(13, 13, 13, 0.05);
 
   --fg: #262626;
-  --fg-subtle: rgba(38, 38, 38, 0.6);
-  --fg-muted: rgba(38, 38, 38, 0.4);
+  --fg-subtle: #535353;
+  --fg-muted: #626262;
   --fg-inverted: #ffffff;
 
   --border: color-mix(in oklab, #0a0a0a 10%, transparent);
@@ -67,6 +103,30 @@
   --radius-lg: 12px;
   --radius-full: 9999px;
 
+  /* Text/fill aliases keep every legacy consumer on the same theme. */
+  --text-primary: var(--fg);
+  --text-secondary: var(--fg-subtle);
+  --text-tertiary: var(--fg-muted);
+  --fill-primary: var(--bg-card);
+  --fill-secondary: var(--bg-subtle);
+  --fill-hover: var(--bg-hover);
+  --muted: var(--fg-muted);
+  --accent: var(--info-fg);
+  --danger: var(--error-fg);
+  --danger-fg: var(--error-fg);
+  --danger-bg: var(--error-bg);
+  --danger-border: var(--error-border);
+  --success: var(--ok-fg);
+  --success-fg: var(--ok-fg);
+  --success-bg: var(--ok-bg);
+  --success-border: var(--ok-border);
+  --warning: var(--warn-fg);
+  --warning-fg: var(--warn-fg);
+  --warning-bg: var(--warn-bg);
+  --warning-border: var(--warn-border);
+  --surface: var(--bg);
+  --surface-raised: var(--bg-card);
+
   /* Aliases matching existing inline variables */
   --background: var(--bg);
   --foreground: var(--fg);
@@ -74,7 +134,7 @@
   --active-bg: var(--primary-light);
   --active-fg: var(--primary);
   --card-bg: var(--bg-card);
-  --sidebar-bg: var(--bg-subtle);
+  --sidebar-bg: var(--bg-sidebar);
   --tool-accent: #d97706;
   --tool-result-accent: #0284c7;
   --assistant-accent: var(--fg-subtle);
@@ -85,6 +145,13 @@
 }
 
 .dark {
+  color-scheme: dark;
+  --bg-window: #2b2b2b;
+  --bg-sidebar: #252525;
+  --bg-surface: color-mix(in srgb, var(--fg) 5%, transparent);
+  --bg-panel: #202020;
+  --bg-input: #2b2b2b;
+  --bg-popover: #2b2b2b;
   --primary-fg: #000000;
   /* Quiet neutral surfaces for the native workbench. Semantic status colors
    * are independent of the monochrome navigation and primary actions. */
@@ -96,8 +163,8 @@
   --bg-active: #404040;
 
   --fg: #d4d4d4;
-  --fg-subtle: rgba(212, 212, 212, 0.6);
-  --fg-muted: rgba(212, 212, 212, 0.3);
+  --fg-subtle: #c0c0c0;
+  --fg-muted: #b3b3b3;
   --fg-inverted: #0a0a0a;
 
   --border: color-mix(in oklab, #fafafa 10%, transparent);
@@ -142,26 +209,11 @@
   --active-fg: var(--fg);
   --card-bg: var(--bg-card);
   --header-bg: var(--bg);
-  --sidebar-bg: #161616;
+  --sidebar-bg: var(--bg-sidebar);
   --tool-accent: #f59e0b;
   --tool-result-accent: #38bdf8;
   --assistant-accent: var(--fg-subtle);
   --user-msg-bg: var(--bg-subtle);
   --assistant-msg-bg: var(--bg-card);
   --assistant-msg-fg: var(--fg);
-}
-
-
-/* Correspond to the upstream UI surface roles, including window chrome. */
-:root {
-  --bg-window: #ececee; --bg-sidebar: #f0f0f0; --bg-surface: rgba(13,13,13,.03);
-  --bg-panel: #ffffff; --bg-input: #ffffff; --bg-popover: #ffffff;
-  --header-bg: #ffffff; --primary: #000000; --primary-fg: #ffffff;
-}
-.dark {
-  --bg-window: #2b2b2b; --bg-sidebar: #161616; --bg-surface: rgba(255,255,255,.05);
-  --bg-panel: #202020; --bg-input: #2b2b2b; --bg-popover: #2b2b2b;
-  --bg-hover: rgba(255,255,255,.05); --bg-active: rgba(255,255,255,.1);
-  --border-strong: rgba(255,255,255,.15); --header-bg: #202020;
-  --primary: #ffffff; --primary-fg: #000000;
 }

@@ -55,8 +55,8 @@
     },
     {
       "id": "files.changes",
-      "name": "会话文件改动视图",
-      "nameEn": "Session file change view"
+      "name": "会话文件改动、逐行差异与上下文折叠",
+      "nameEn": "Session file changes, line diffs and folded context"
     },
     {
       "id": "files.instructions",

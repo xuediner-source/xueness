@@ -1,6 +1,4 @@
 import React, { useEffect, useState } from "react";
-import { createHighlighterCore } from "shiki/dist/core.mjs";
-import { createOnigurumaEngine } from "shiki/dist/engine-oniguruma.mjs";
 import { t as tr } from "../i18n";
 import "./code-preview.css";
 
@@ -39,7 +37,7 @@ const THEME_LOADERS = {
   "catppuccin-mocha": () => import("shiki/dist/themes/catppuccin-mocha.mjs"),
 } satisfies Record<CodePreviewTheme, () => Promise<{ default: unknown }>>;
 
-type PreviewHighlighter = Awaited<ReturnType<typeof createHighlighterCore>>;
+type PreviewHighlighter = Awaited<ReturnType<typeof import("shiki/dist/core.mjs").createHighlighterCore>>;
 const highlighterCache = new Map<string, Promise<PreviewHighlighter>>();
 
 const LANGUAGE_LOADERS = {
@@ -71,7 +69,9 @@ export function loadHighlighter(themes: readonly CodePreviewTheme[], language: C
     Promise.all(themeNames.map((theme) => THEME_LOADERS[theme]())),
     LANGUAGE_LOADERS[language](),
     import("shiki/dist/wasm.mjs"),
-  ]).then(([loadedThemes, language, wasm]) => createHighlighterCore({
+    import("shiki/dist/core.mjs"),
+    import("shiki/dist/engine-oniguruma.mjs"),
+  ]).then(([loadedThemes, language, wasm, { createHighlighterCore }, { createOnigurumaEngine }]) => createHighlighterCore({
     themes: loadedThemes.map(({ default: theme }) => theme),
     langs: [language.default],
     engine: createOnigurumaEngine(wasm.default),

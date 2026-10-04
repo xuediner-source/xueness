@@ -1,5 +1,17 @@
 @import "./styles/tokens.css";
 
+.xn-view-loading { padding: var(--space-6); color: var(--fg-muted); font-size: var(--text-md); }
+
+.xn-skip-link { z-index: var(--z-select); padding: 10px 16px; color: var(--fg); background: var(--bg-card); border: 1px solid var(--border-strong); border-radius: var(--radius-md); box-shadow: var(--shadow-md); }
+.xn-skip-link [lang="en"] { display: none; }
+html:lang(en) .xn-skip-link [lang="en"] { display: inline; }
+html:lang(en) .xn-skip-link [lang="zh-CN"] { display: none; }
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { scroll-behavior: auto !important; transition-duration: 0.01ms !important; animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; } }
+.xn-region-error { margin: var(--space-6); padding: var(--space-6); border: 1px solid var(--error-border); border-radius: var(--radius-lg); background: var(--bg-card); color: var(--fg); }
+.xn-region-error h2 { margin: 0 0 var(--space-2); font-size: var(--text-lg); }
+.xn-region-error p { margin: 0 0 var(--space-4); color: var(--fg-muted); font-size: var(--text-md); }
+.xn-region-error > div { display: flex; gap: var(--space-2); flex-wrap: wrap; }
+
 /* Base typography & resets */
 body {
   font-family: var(--font-sans);

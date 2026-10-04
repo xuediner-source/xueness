@@ -10,7 +10,8 @@
     "files"
   ],
   "tools": [
-    "task"
+    "task",
+    "task_collect"
   ],
   "commands": [],
   "panels": [
@@ -23,6 +24,8 @@
     "network"
   ],
   "modules": [
+    "coordinator",
+    "tools",
     "runner",
     "subagents",
     "task_registry"
@@ -37,6 +40,11 @@
       "id": "subagents.progress",
       "name": "子任务进度、结果与取消",
       "nameEn": "Subtask progress, results and cancellation"
+    },
+    {
+      "id": "subagents.parallel_coordination",
+      "name": "后台并发派发、主代理持续工作与结果收集",
+      "nameEn": "Background delegation, parent progress and result collection"
     },
     {
       "id": "subagents.settings",

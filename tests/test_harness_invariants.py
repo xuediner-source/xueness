@@ -139,12 +139,19 @@ class SubagentIsolationTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as holder:
             root = Path(holder)
             sentinel = "PARENT_SECRET_TRANSCRIPT_LINE"
-            result = _run_subagent(Gate(root), FakeProvider(), [], "child task", None,
-                                   depth=0, max_depth=1)
+            class ChildProvider:
+                def complete(self, messages, tools):
+                    self.prompt = json.loads(json.dumps(messages))
+                    return {'content': json.dumps({'summary': 'Hello', 'evidence': []})}
+            provider = ChildProvider()
+            result = _run_subagent(Gate(root), provider, [], "Say hello", None,
+                                   depth=0, max_depth=1, state_dir=root / 'state')
             self.assertTrue(result["ok"])
             # The child summary must not carry parent-only text; there is no
             # parent here, so the check is that the child ran in its own frame.
             self.assertNotIn(sentinel, json.dumps(result, ensure_ascii=False))
+            self.assertNotIn(sentinel, json.dumps(provider.prompt, ensure_ascii=False))
+            self.assertEqual([m['content'] for m in provider.prompt if m['role'] == 'user'], ['Say hello'])
 
 
 if __name__ == "__main__":

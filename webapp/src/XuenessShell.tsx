@@ -207,7 +207,7 @@ export function Shell({
 
       {sidebar && narrow && sidebarOpen && <button type="button" className="xn-shell-backdrop" aria-label={tr("收起侧栏")} tabIndex={-1} onClick={closeDrawer} />}
 
-      <main ref={mainRef} tabIndex={-1} inert={Boolean(sidebar && narrow && sidebarOpen)} className="xn-shell-main" data-testid="xn-shell-main">
+      <main id="xn-shell-main" ref={mainRef} tabIndex={-1} inert={Boolean(sidebar && narrow && sidebarOpen)} className="xn-shell-main" data-testid="xn-shell-main">
         {sidebar && !titlebar && (
           <button
             ref={toggleRef}

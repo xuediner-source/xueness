@@ -7,7 +7,43 @@ import '../../styles/operations.css';
 type NodeState = { status: string; attempts: number; error?: string; summary?: string; reused_from?: string; log_capped?: boolean };
 type Workflow = { id: string; status: string; root: string; concurrency: number; plan: { name: string; nodes: unknown[] }; nodes: Record<string, NodeState>; events: { seq: number; type: string; node?: string; status?: string }[] };
 type Summary = { id: string; name: string; status: string };
+type SubagentTask = { id: string; status: string; steps: number; summary: string; workerActive?: boolean };
+export function subagentTaskDisplayStatus(task: Pick<SubagentTask, 'status' | 'workerActive'>): string {
+  return task.status === 'cancelled' && task.workerActive ? 'stopping' : task.status;
+}
 const errorText = (error: unknown) => error instanceof Error ? error.message : String(error);
+
+type WorkflowPanelRefresh = {
+  active: string;
+  sessionId: string | null;
+  subagentsEnabled: boolean;
+  signal: AbortSignal;
+  isCurrent: () => boolean;
+  onWorkflows: (items: Summary[]) => void;
+  onWorkflow: (record: Workflow) => void;
+  onTasks: (tasks: SubagentTask[]) => void;
+};
+
+/** Refresh the workflow view while keeping subagent progress behind its owner plugin. */
+export async function refreshWorkflowPanel(options: WorkflowPanelRefresh): Promise<void> {
+  const { active, sessionId, subagentsEnabled, signal, isCurrent } = options;
+  if (!isCurrent()) return;
+  const list = await get<{ workflows: Summary[] }>("/api/workflows", signal);
+  if (!isCurrent()) return;
+  options.onWorkflows(list.workflows);
+  if (active) {
+    if (!isCurrent()) return;
+    const record = await get<Workflow>(`/api/workflows/${active}`, signal);
+    if (!isCurrent()) return;
+    options.onWorkflow(record);
+  }
+  if (sessionId && subagentsEnabled) {
+    if (!isCurrent()) return;
+    const result = await get<{ tasks: SubagentTask[] }>(`/api/sessions/${sessionId}/tasks`, signal);
+    if (!isCurrent()) return;
+    options.onTasks(result.tasks);
+  }
+}
 
 /** Parse the plan editor text, reporting the failure in place of the raw
  * JSON.parse message so the panel can show a readable, actionable hint. */
@@ -38,7 +74,7 @@ const INITIAL_PLAN = () => (JSON.stringify({ name: tr("检查与构建"), concur
   { id: 'check', kind: 'command', argv: ['python3', '-c', 'print("check")'] },
   { id: 'build', kind: 'command', needs: ['check'], argv: ['python3', '-c', 'print("build")'] },
 ]}, null, 2));
-export function WorkflowPanel({ sessionId }: { sessionId: string | null }) {
+export function WorkflowPanel({ sessionId, subagentsEnabled }: { sessionId: string | null; subagentsEnabled: boolean }) {
   const planEditor = useRef<HTMLDetailsElement>(null);
   const [items, setItems] = useState<Summary[]>([]);
   const [active, setActive] = useState('');
@@ -53,11 +89,13 @@ export function WorkflowPanel({ sessionId }: { sessionId: string | null }) {
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const [argv, setArgv] = useState(JSON.stringify(['python3', '-c', 'print("background job")']));
-  const [tasks, setTasks] = useState<{ id: string; status: string; steps: number; summary: string }[]>([]);
+  const [tasks, setTasks] = useState<SubagentTask[]>([]);
   const mounted = useRef(false);
   const lifecycleGeneration = useRef(0);
   const currentWorkflowId = useRef(active);
+  const refreshKey = useRef({ active, sessionId, subagentsEnabled });
   currentWorkflowId.current = active;
+  refreshKey.current = { active, sessionId, subagentsEnabled };
   const isCurrent = (generation: number) => mounted.current && lifecycleGeneration.current === generation;
   useEffect(() => {
     mounted.current = true;
@@ -72,28 +110,29 @@ export function WorkflowPanel({ sessionId }: { sessionId: string | null }) {
     return () => { live = false; };
   }, [sessionId]);
   useEffect(() => {
+    setTasks([]);
+  }, [sessionId, subagentsEnabled]);
+  useEffect(() => {
     let live = true;
+    let refreshing = false;
+    const controller = new AbortController();
     const refresh = async () => {
-      if (!live) return;
+      if (!live || refreshing) return;
+      refreshing = true;
       try {
-        const list = await get<{ workflows: Summary[] }>('/api/workflows');
-        if (!live) return;
-        if (live) setItems(list.workflows);
-        if (active) {
-          const r = await get<Workflow>(`/api/workflows/${active}`);
-          if (!live) return;
-          if (live) setRecord(r);
-        }
-        if (sessionId) {
-          const result = await get<{ tasks: typeof tasks }>(`/api/sessions/${sessionId}/tasks`);
-          if (live) setTasks(result.tasks);
-        }
-      } catch (e) { if (live) setError(errorText(e)); }
+        await refreshWorkflowPanel({ active, sessionId, subagentsEnabled, signal: controller.signal,
+          isCurrent: () => live && !controller.signal.aborted
+            && refreshKey.current.active === active
+            && refreshKey.current.sessionId === sessionId
+            && refreshKey.current.subagentsEnabled === subagentsEnabled,
+          onWorkflows: setItems, onWorkflow: setRecord, onTasks: setTasks });
+      } catch (e) { if (live && !controller.signal.aborted) setError(errorText(e)); }
+      finally { refreshing = false; }
     };
     void refresh();
     const timer = setInterval(() => { void refresh(); }, 1000);
-    return () => { live = false; clearInterval(timer); };
-  }, [active, sessionId]);
+    return () => { live = false; clearInterval(timer); controller.abort(); };
+  }, [active, sessionId, subagentsEnabled]);
   async function perform(fn: (generation: number) => Promise<unknown>) {
     const generation = lifecycleGeneration.current;
     if (!isCurrent(generation)) return;
@@ -161,6 +200,6 @@ export function WorkflowPanel({ sessionId }: { sessionId: string | null }) {
       {logNode && <div className="xn-run-log"><h4>{tr("运行日志")} <code>{logNode}</code></h4><pre aria-label={tr("运行日志")}>{log || tr("暂无输出")}</pre></div>}
       <details className="xn-run-events"><summary>{tr("运行事件")}<span>{record.events.length}</span></summary><pre>{JSON.stringify(record.events, null, 2)}</pre></details>
     </article> : <div className="xn-operation-empty"><IconWorkflow size={28} /><h3>{active ? tr("正在加载运行") : tr("选择或创建一个运行")}</h3><p>{tr("在这里跟踪节点状态、调整并发并查看日志。")}</p></div>}
-    <div className="xn-operation-card xn-subtask-card"><h3>{tr("当前会话的子任务")}</h3>{tasks.length ? tasks.map(task => <div className="xn-subtask-row" key={task.id}><code>{task.id}</code><OperationStatus status={task.status} /><span>{tf("{0} 步", [task.steps])}</span><p>{task.summary}</p></div>) : <p>{tr("暂无子任务")}</p>}</div>
+    {subagentsEnabled && <div className="xn-operation-card xn-subtask-card"><h3>{tr("当前会话的子任务")}</h3>{tasks.length ? tasks.map(task => <div className="xn-subtask-row" key={task.id}><code>{task.id}</code><OperationStatus status={subagentTaskDisplayStatus(task)} /><span>{tf("{0} 步", [task.steps])}</span><p>{task.summary}</p></div>) : <p>{tr("暂无子任务")}</p>}</div>}
   </section>;
 }

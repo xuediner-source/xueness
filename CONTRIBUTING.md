@@ -35,7 +35,9 @@ Xueness 的固定开发规则是：**每项产品功能归属于插件，并在�
 1. 运行 `python3 tools/check_plugin_architecture.py`。它检查包/allowlist/前端 ID、模块与前端归属、双语功能清单、依赖、唯一贡献和面板一致性。
 2. 运行 `python3 -m unittest tests.test_plugin_architecture -q`，其中还检查实际 CLI parser、工具归属及持久禁用的调用边界。
 3. 对功能行为运行适当回归；后端行为改动跑 `python3 -m unittest discover -s tests -q`。前端改动跑 `npm --prefix webapp test`、`npm --prefix webapp run typecheck`、`npm --prefix webapp run build`。
-4. 用隔离状态和最新构建，核验插件卡片及子功能可搜索、禁用/阻塞项仍可见、功能关闭后停止请求/服务；前端至少核验桌面与窄屏。
+4. 用隔离状态和最新构建，核验插件卡片及子功能可搜索、禁用/阻塞项仍可见、功能关闭后停止请求/服务；前端至少核验桌面与窄屏。构建会自动运行 `check:design`（未定义变量、主题单源及基础文本对比度）和 `check:bundle`（启动静态依赖图 gzip 文件预算）；后者不等于真实网络时延或运行性能测量。
+
+插件目录的原生折叠交互回归使用 `npm --prefix webapp run test:browser`。它在临时目录和随机 loopback 端口中渲染真实组件，禁止 API/外部请求，不读取用户状态。默认使用本机 Chrome；可通过 `PLAYWRIGHT_CHANNEL` 选择已安装的 Playwright 浏览器通道。
 5. 更新使用说明和功能清单，再准备本地发布包。`tools/prepare_release.py` 再次执行结构门禁并把开发约束一并打包。
 
 结构检查能发现漏登记或注册表漂移，不能替代对语义、权限、动态执行与生命周期的审查。不得只改检查白名单、填空壳功能名或添加卡片来宣称完成插件拆分。
