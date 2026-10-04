@@ -190,6 +190,34 @@ def _safe_input_context(session, prepared):
         })
 
 
+def _planning_entrypoint(ctx):
+    """planning owns the session goal; this plugin only asks it to record one."""
+    runtime = host.plugin_runtime
+    if ctx.get('state_dir') is None or not runtime.is_enabled(ctx['state_dir'], 'planning'):
+        return None
+    return runtime.entrypoint('planning')
+
+
+def _apply_prepared_goal(ctx, session, prepared, text):
+    """Register a composer input flagged as the goal as this session's objective.
+
+    The objective is the caller's own text: the prepared payload carries
+    expanded context and attachments, which is not what the user marked.
+    """
+    if prepared is None or prepared.get('goal') is not True:
+        return
+    planning = _planning_entrypoint(ctx)
+    apply_goal = getattr(planning, 'apply_session_goal', None) if planning else None
+    if callable(apply_goal):
+        apply_goal(session, text, state_dir=ctx['state_dir'], replace=True, source='composer')
+
+
+def _public_goal(ctx, session):
+    planning = _planning_entrypoint(ctx)
+    view = getattr(planning, 'session_goal_view', None) if planning else None
+    return view(session) if callable(view) else None
+
+
 def _record_prepared_commands(session, prepared):
     """Persist command invocation audit data from the trusted prepared cache.
 
@@ -247,6 +275,7 @@ def _append_queued_turn(ctx, queue, session, item):
         session['messages'][-1]['content'] = prepared['text']
         _safe_input_context(session, prepared)
         _record_prepared_commands(session, prepared)
+        _apply_prepared_goal(ctx, session, prepared, item['text'])
         ctx['store'].save(session)
     return session
 
@@ -425,6 +454,7 @@ def handle_GET(self, parts, path, data):
             'provider_usage': session.get('provider_usage', []),
             'completion': session.get('completion'), 'todos': session.get('todos', []),
             'delivery_requirements': session.get('delivery_requirements', []),
+            'goal': _public_goal(ctx, session),
             'tool_timings': session.get('tool_timings', [])[-200:],
             'pending_question': session.get('pending_question'),
             'pending': host.pending_denials(session), 'approved': approved,
@@ -575,8 +605,12 @@ def handle_POST(self, parts, path, data):
                     session['remote_connection'] = prepared_remote
                 _safe_input_context(session, prepared)
                 _record_prepared_commands(session, prepared)
+                _apply_prepared_goal(ctx, session, prepared, task.strip())
             ctx['store'].save(session)
             _remember_workspace(ctx, session['root'])
+        except ValueError as exc:
+            self._send(400, {'error': str(exc)})
+            return True
         except OSError:
             self._send(500, {'error': 'cannot create session'})
             return True
@@ -639,6 +673,7 @@ def handle_POST(self, parts, path, data):
                         session['messages'][-1]['content'] = prepared['text']
                         _safe_input_context(session, prepared)
                         _record_prepared_commands(session, prepared)
+                        _apply_prepared_goal(ctx, session, prepared, text)
                         ctx['store'].save(session)
             except LookupError:
                 self._send(409, {'error': 'session is not ready for a new turn'})

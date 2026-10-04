@@ -1,0 +1,65 @@
+.xn-session-goal {
+  box-sizing: border-box;
+  width: min(100% - 32px, 760px);
+  margin: 0 auto 6px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md, 9px);
+  background: var(--bg-panel, var(--bg-card));
+  color: var(--fg);
+  font-size: 12px;
+}
+
+.xn-session-goal > .xn-session-goal__bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 30px;
+  padding: 4px 11px;
+  list-style: none;
+  cursor: pointer;
+}
+
+.xn-session-goal > .xn-session-goal__bar::-webkit-details-marker { display: none; }
+.xn-session-goal > .xn-session-goal__bar:hover { background: var(--bg-hover); }
+.xn-session-goal > .xn-session-goal__bar:focus-visible {
+  border-radius: inherit;
+  outline: 2px solid var(--border-focus, var(--primary));
+  outline-offset: 2px;
+}
+
+.xn-session-goal__label { flex: 0 0 auto; font-weight: 650; }
+.xn-session-goal__text {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.xn-session-goal__status {
+  flex: 0 0 auto;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: var(--bg-hover);
+  color: var(--fg-muted);
+}
+.xn-session-goal[data-status="active"] > .xn-session-goal__bar .xn-session-goal__status { color: var(--primary); }
+.xn-session-goal[data-status="achieved"] > .xn-session-goal__bar .xn-session-goal__status { color: var(--success, var(--primary)); }
+
+.xn-session-goal__body { padding: 2px 11px 10px; border-top: 1px solid var(--border); }
+.xn-session-goal__full { margin: 8px 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+.xn-session-goal__history { margin: 0 0 8px; padding-left: 16px; color: var(--fg-muted); }
+.xn-session-goal__history li { display: flex; gap: 8px; }
+.xn-session-goal__scope { margin: 0 0 8px; color: var(--fg-muted); }
+.xn-session-goal__error { margin: 8px 0 0; color: var(--danger, var(--primary)); }
+
+.xn-session-goal__button {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm, 7px);
+  background: transparent;
+  color: var(--fg);
+  padding: 3px 9px;
+  font: inherit;
+  cursor: pointer;
+}
+.xn-session-goal__button:hover { background: var(--bg-hover); }
+.xn-session-goal__button:disabled { opacity: 0.55; cursor: not-allowed; }

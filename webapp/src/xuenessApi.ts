@@ -223,7 +223,7 @@ async function put<T>(path: string, body: object): Promise<T> {
   return send<T>("PUT", path, body);
 }
 
-async function del<T>(path: string): Promise<T> {
+export async function del<T>(path: string): Promise<T> {
   return send<T>("DELETE", path);
 }
 

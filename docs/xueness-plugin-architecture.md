@@ -278,3 +278,16 @@ manifest 新增三个可选数据字段：`provides`、`inject`（点分服务�
 `catalog()` 在既有 `enabled/effective/blockedBy` 之外补出 `activated` 与 `activationError`：启用且依赖齐备但服务注入无法满足的功能会显示原因（`service unavailable: …`、`provider cannot activate: …`、`dependency not effective: …`、`cyclic service injection: …`、`activation failed: …`），把「为什么这个功能没跑起来」放进目录而不是日志。前端目录类型是结构化的、按已知字段渲染，新增数据字段被忽略，因此本轮没有改动 webapp。
 
 验证：`python3 tools/check_plugin_architecture.py` 通过；`tests/test_plugin_scope.py` 21 项覆盖 disposer 逆序与容错、provide 属主冲突、inject 缺失与级联、依赖拓扑、循环注入、禁用后 dispose、再次启用重新激活、宿主替换服务后重取、以及真实 bundled 插件的 terminal/automation/browser 生命周期与目录字段；原有 plugin_runtime、plugins、HTTP 边界、web、terminal profiles、browser runtime 与架构门禁回归合并 296 项通过（20 条环境跳过）。
+
+## 会话目标、每轮注入与完成核验（2026-10-05）
+
+`planning.session_goal` 让一个会话持有一条跨轮生效的目标，完整目录现为 27 个插件、112 项登记功能。目标只写在会话 JSON 的 `goal` 字段：`text`（1..5000 字）、`status`（`active`/`achieved`/`cleared`）、`setAt`/`updatedAt` 与最多 20 条 `history`（`set`/`replace`/`clear`/`achieved` 及来源 `cli`/`http`/`composer`/`agent`）。读取按数据处理而非契约处理：文本非法、超长或状态未知都当作「该会话没有目标」，不会因为坏字段抛错；历史子项非法只丢弃该项，不牵连同一条可用目标。`cleared` 记录保留历史但从会话详情与目标接口中读作空位。
+
+每轮注入复用 planning 已有的 `completion_instructions` 通道，不新增内核入口：插件 `effective` 且目标为 `active` 时追加一段不超过 600 字的提示，目标文本按剩余预算截断并以省略号结束，提示本身要求模型在结束前对照目标自查并明确声明结论。轻量模式把这段 host guidance 作为 `prompt_view(host_instructions=…)` 的 system 前缀参与成本估算，因此自动受同一输入预算约束，`context_budget.py` 与可选上下文预算逻辑均未改动；非轻量模式沿用原有按 guidance 长度预留的做法。
+
+完成核验保持确定性与保守，不调用额外模型：planning 的 `completion_check` 把原有交付清单检查和目标核对合并成同一贡献项。运行总结未声明达成时给出「需要说明目标完成情况」的原因并以未通过呈现；只有总结明确写出「目标已完成」/“Goal achieved”（否定句除外）才把目标状态改为 `achieved` 并记录历史，该状态由外层运行循环在同一轮 `save_session()` 中持久化。合并取 `passed`/`not_assessed`/`failed` 中最差一项，因此仅有目标声明、没有交付清单时不会显示「交付检查通过」，未评估的普通聊天也不会被目标伪装成失败。
+
+三个入口共用 planning 的 `dispatch`，开关、确认与 lease 语义只存在一处：CLI 为 `xueness goal --session <id> [show|set <文本>|replace <文本>|clear]`，`xueness run/chat` 增加 `--target "<文本>"` 与 `--target-replace`（已有目标且未给 `--target-replace` 时拒绝覆盖并说明改用哪个入口，返回 409 语义）；HTTP 为 `GET|POST|DELETE /api/sessions/<sid>/goal`，由 planning manifest 的 `httpFamilies` 登记 `sessions/*/goal` 并经 `route_owner` 最深匹配归 planning，沿用 Host/Origin/CSRF 与插件生效检查，在会话 `lease` 下写入，会话正在运行时以 409 拒绝修改；Composer 把带 `goal: true` 的输入**原文**登记为该会话目标（预备文本含附件展开内容，不适合作为目标文本），写入时机仍由 sessions 决定，planning 只负责校验与构造记录，前端「+」菜单的「添加为目标」也改由 `isPluginEffective('planning')` 决定，与 workflows 入口同一约定。planning 关闭或依赖不生效时，CLI 与 HTTP 一律 403 拒绝、注入与核验都不发生，Composer 的 `goal` 标记同样 403；目标写入只发生在持有 lease 的路径内，插件不重复保存。
+
+前端 `plugins/planning/SessionGoal.tsx` 只在会话标题下方占一行：状态标记、省略号目标文本与点击查看/清除，`cleared` 或缺失时不渲染，清除走 `DELETE /api/sessions/<sid>/goal`。它登记在 planning manifest 的 `frontendModules`，容器仅在 `isPluginEffective('planning')` 时挂载，业务逻辑不进容器。回归见 `tests/test_session_goal.py` 与 `webapp/src/plugins/planning/SessionGoal.test.tsx`，使用隔离状态目录与本地假 provider/HTTP，不访问网络、不调用真实模型。
+

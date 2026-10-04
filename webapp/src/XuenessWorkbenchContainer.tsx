@@ -83,6 +83,7 @@ import { DesktopTitlebar } from "./plugins/desktop/DesktopTitlebar";
 import { DesktopTrayBridge } from './plugins/desktop/DesktopTrayBridge';
 import { settingsNavigation } from "./xuenessSettingsNavigation";
 import { CompletionChecks } from './plugins/planning/CompletionChecks';
+import { SessionGoal } from './plugins/planning/SessionGoal';
 import { LocalRuntimeMonitor, RequestTiming, type LocalRuntimeSession } from "./plugins/providers/LocalRuntimeMonitor";
 import { LightweightComposerControls, lightweightLayoutActive } from "./plugins/providers/LightweightWorkbench";
 import { ForkSessionDialog } from "./plugins/sessions";
@@ -1352,7 +1353,7 @@ export function XuenessWorkbenchContainer() {
     pauseReason={session?.id === activeId ? session.pause_reason : undefined}
   />;
   const composerStartActions = {
-    canGoal: !activeId, canWorkflow: isPluginEffective("workflows"),
+    canGoal: !activeId && isPluginEffective('planning'), canWorkflow: isPluginEffective("workflows"),
     onWorkflow: () => setPanel("workflows"), onPlugins: () => setPanel("plugins"),
   };
   const chooseWorkspace = (root: string, isolated = false, forceNew = false) => {
@@ -1846,6 +1847,8 @@ export function XuenessWorkbenchContainer() {
             onRename={() => activeId && requestRename(activeId)}
             onDelete={() => activeId && void deleteById(activeId)}
           />
+          {isPluginEffective('planning') && <SessionGoal sessionId={session.id} goal={session.goal}
+            disabled={busy || session.status === 'running'} onChanged={() => void handleRefreshAll()} />}
           {session.forkParent && <p className="xn-session-fork-provenance" data-testid="fork-session-provenance" role="note">
             {tf("从会话 {0} 的第 {1} 轮分叉", [session.forkParent.sourceId, session.forkParent.turn])}
             {session.forkParent.historyTruncated && <span>{tr(" · 较早的压缩归档未继承，仅保留当前可定位历史")}</span>}

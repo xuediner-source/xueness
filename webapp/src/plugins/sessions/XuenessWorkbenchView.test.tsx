@@ -488,6 +488,8 @@ test("Composer contexts: @ resolves files/plugins/sessions, $ resolves skills, g
     ["goal"],
   );
   assert.equal(contextComposerSuggestions("/", [], mentions, { canGoal: true, canWorkflow: true }).some((item) => item.kind === "workflow"), true);
+  // The container only offers the goal action while the planning plugin is effective.
+  assert.deepEqual(contextComposerSuggestions("/go", [], mentions, { canGoal: false, canWorkflow: true }), []);
 });
 
 test("Composer attachment payload sizing uses decoded base64 bytes and fixed limits", () => {

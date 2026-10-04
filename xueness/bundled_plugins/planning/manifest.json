@@ -12,16 +12,20 @@
     "ask_user",
     "delivery_plan"
   ],
-  "commands": [],
+  "commands": [
+    "goal"
+  ],
   "panels": [],
   "resources": [],
   "capabilities": [],
   "httpFamilies": [
-    "delivery"
+    "delivery",
+    "sessions/*/goal"
   ],
   "modules": [
     "tooling",
-    "delivery"
+    "delivery",
+    "session_goal"
   ],
   "features": [
     {
@@ -38,9 +42,15 @@
       "id": "planning.delivery",
       "name": "交付清单与内容完整性检查",
       "nameEn": "Delivery checklist and content completeness checks"
+    },
+    {
+      "id": "planning.session_goal",
+      "name": "会话目标设置、每轮注入与完成核验",
+      "nameEn": "Session goals with per-request reminders and completion checks"
     }
   ],
   "frontendModules": [
-    "plugins/planning/CompletionChecks.tsx"
+    "plugins/planning/CompletionChecks.tsx",
+    "plugins/planning/SessionGoal.tsx#SessionGoal"
   ]
 }

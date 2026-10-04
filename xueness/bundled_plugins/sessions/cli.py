@@ -120,6 +120,29 @@ def _add_agent_flags(parser):
                         choices=plugin_sdk.CAPABILITIES,
                         help="grant a stored plugin manifest the named power (repeatable): "
                              "command / network / filesystem-write")
+    parser.add_argument("--target", default=None, metavar="TEXT",
+                        help="persistent session goal owned by the planning plugin: injected before every "
+                             "model request and verified when the run claims completion")
+    parser.add_argument("--target-replace", action="store_true",
+                        help="replace the session's existing goal; without it --target refuses to overwrite")
+
+def _apply_cli_target(args, parser, store, session):
+    """Hand ``--target`` to planning, then persist it with the session."""
+    text = getattr(args, "target", None)
+    if text is None:
+        return
+    state_dir = getattr(args, "state", None)
+    planning = (plugin_runtime.entrypoint("planning")
+                if plugin_runtime.is_enabled(state_dir, "planning") else None)
+    apply_goal = getattr(planning, "apply_session_goal", None) if planning else None
+    if not callable(apply_goal):
+        parser.error("插件已禁用或依赖不可用: planning")
+    try:
+        apply_goal(session, text, state_dir=state_dir,
+                   replace=getattr(args, "target_replace", False), source="cli")
+    except ValueError as exc:
+        parser.error(str(exc))
+    store.save(session)
 
 def _model_selection_record(provider_id, model, reasoning_effort):
     selection = {"provider_id": provider_id, "model": model}
@@ -278,6 +301,7 @@ def _chat_loop_owned(args, parser, store, session, owned):
     else:
         print(f"Xueness · root {root} · mode {args.mode} · /help", file=sys.stderr)
     if s:
+        _apply_cli_target(args, parser, store, s)
         print(f"chat {s['id']} · {s['status']}", file=sys.stderr)
     provider = gate = names = memory_text = None
     attachments = []
@@ -423,6 +447,7 @@ def _chat_loop_owned(args, parser, store, session, owned):
                 content, invocation = commands_module.expand(command_items, text)
                 s = store.new(content, root, attachments=attachments)
                 owned.enter_context(lease(store, s["id"]))
+                _apply_cli_target(args, parser, store, s)
                 if args.provider_id or args.model or args.reasoning_effort:
                     s["model_selection"] = _model_selection_record(
                         args.provider_id, args.model, args.reasoning_effort)
@@ -618,6 +643,7 @@ def _execute_cli_impl(args, parser, store):
         try:
             with lease(store, s["id"]):
                 s = store.load(s["id"])
+                _apply_cli_target(args, parser, store, s)
                 if prepared_agent is None:
                     provider, gate, names, memory_text = _prepare_agent(args, parser, store, s)
                 else:

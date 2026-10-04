@@ -885,6 +885,8 @@ def _prepare(ctx: dict, data: dict) -> tuple[int, dict]:
     goal = body_input.get("goal", False)
     if type(goal) is not bool:
         raise _ComposerError(400, "invalid goal flag")
+    if goal:
+        _require_enabled(ctx, "planning")
     session_id = data.get("session_id")
     if session_id is not None and (not isinstance(session_id, str) or len(session_id) > 64):
         raise _ComposerError(400, "invalid session selection")

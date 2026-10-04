@@ -86,6 +86,7 @@ export type WorkbenchSession = {
   mode: string;
   completion?: import('./plugins/planning/CompletionChecks').CompletionAssessment & { summary?: string; evidence?: unknown[] } | null;
   delivery_requirements?: import('./plugins/planning/CompletionChecks').DeliveryRequirement[];
+  goal?: import('./plugins/planning/SessionGoal').SessionGoalRecord | null;
   queued_messages?: QueuedMessage[];
   todos?: unknown[];
   pending_question?: string | null;

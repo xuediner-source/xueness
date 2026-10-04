@@ -44,7 +44,8 @@ Xueness 面向个人本地开发，提供可从终端、浏览器或 Windows/mac
 ## 功能概览
 
 - **本地小模型配置。** 选择「本地轻量」运行档，细调提示、工具集合、上下文与输出预算、采样和协议选项。资源面板报告运行 Xueness 的机器 CPU、内存及进程状态；模型输出面板展示请求阶段、工具调用和服务实际返回的用量。缺少的 Token 或显存数据会标为不可用，不会估算成真实测量值。
-- **27 个可信插件，104 项登记功能。** 会话、工作区文件、模型、Shell、Git、终端、工作流、记忆、Hooks、MCP、浏览器、远程连接、渠道、自动化、诊断、Office 预览等能力都有明确归属。插件管理页显示完整目录与依赖状态，CLI 也可查看和更改插件开关。会话支持运行中排队追加消息，桌面端支持确认导入 Chrome 资料到独立浏览器目录。
+- **27 个可信插件，112 项登记功能。** 会话、工作区文件、模型、Shell、Git、终端、工作流、记忆、Hooks、MCP、浏览器、远程连接、渠道、自动化、诊断、Office 预览等能力都有明确归属。插件管理页显示完整目录与依赖状态，CLI 也可查看和更改插件开关。会话支持运行中排队追加消息，桌面端支持确认导入 Chrome 资料到独立浏览器目录。
+- **给会话设一条持续目标。** 开始新任务时在 Composer 的「+」菜单选择「添加为目标」，或用 CLI `--target` 设定；目标跨轮生效并每轮以短提示注入模型，会话标题下方一行徽标可查看或清除。运行结束时主机核对回答是否明确声明达成，未声明则进入需要复核状态。核对是确定性的规则判断，不额外调用模型，也不替用户证明目标真的完成。该能力归属规划插件，关闭后入口、注入与核对一并停止。
 - **三种入口，共用运行时。** 使用 Agent CLI 运行会话，通过 loopback Web 工作台查看和管理任务，或安装 Windows/macOS 桌面应用。桌面包自带运行时，跨平台差异留在对应插件适配中。
 
 轻量设置用于控制运行行为，不会下载模型、调整模型权重或自动改变推理服务的显存分配。Office 预览支持部分文档页面、图像、图表和缓存单元格数据；它不是 Microsoft Office 的完整排版或兼容实现。
@@ -69,6 +70,12 @@ python3 -m xueness.web --port 8138
 ./bin/xueness chat --continue --root /absolute/path/to/project
 # 指定独立私有状态目录（全局参数放在子命令之前）
 ./bin/xueness --state /absolute/path/to/private-state chat --root /absolute/path/to/project
+# 为会话设置跨轮持续生效的目标（已有目标时需加 --target-replace 才会覆盖）
+./bin/xueness run --root /absolute/path/to/project --prompt "补齐导出命令的测试" --target "让导出命令具备完整测试与使用说明"
+# 查看、替换或清除某个会话的目标
+./bin/xueness goal --session <会话ID> show
+./bin/xueness goal --session <会话ID> replace "新的目标文本"
+./bin/xueness goal --session <会话ID> clear
 ./bin/xueness --help
 ```
 
