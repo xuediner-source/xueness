@@ -33,6 +33,10 @@ export type ShellProps = {
   /** Navigation changes dismiss a narrow drawer, including keyboard actions. */
   navigationKey?: string;
   sidebarToggleToken?: number;
+  /** Start with the sidebar collapsed on wide screens (e.g. the lightweight
+   * profile's minimal layout); toggling still works and switching the request
+   * back to false restores the previously collapsed/expanded choice. */
+  initialSidebarCollapsed?: boolean;
   /** Task-history navigation, wired by the workbench container. */
   canGoBack?: boolean;
   canGoForward?: boolean;
@@ -47,6 +51,7 @@ export function Shell({
   sidebarFooter,
   navigationKey,
   sidebarToggleToken = 0,
+  initialSidebarCollapsed = false,
   canGoBack = false,
   canGoForward = false,
   onGoBack,
@@ -54,7 +59,8 @@ export function Shell({
   children,
 }: ShellProps): React.JSX.Element {
   const [sidebarOpen, setSidebarOpen] = React.useState(false);
-  const [sidebarCollapsed, setSidebarCollapsed] = React.useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = React.useState(initialSidebarCollapsed);
+  const requestedCollapsed = React.useRef(initialSidebarCollapsed);
   const [narrow, setNarrow] = React.useState(() => typeof window === "undefined" || window.matchMedia("(max-width: 900px)").matches);
   const asideRef = React.useRef<HTMLElement>(null);
   const mainRef = React.useRef<HTMLElement>(null);
@@ -69,6 +75,15 @@ export function Shell({
     }
     previousToggleToken.current = sidebarToggleToken;
   }, [sidebarToggleToken, narrow]);
+  React.useEffect(() => {
+    // A profile switch re-requests the starting sidebar state without wiping a
+    // collapse the user chose manually in the meantime.
+    const requested = Boolean(initialSidebarCollapsed);
+    if (requestedCollapsed.current === requested) return;
+    requestedCollapsed.current = requested;
+    if (narrow) setSidebarOpen(false);
+    else setSidebarCollapsed(requested);
+  }, [initialSidebarCollapsed, narrow]);
   const previousCollapsed = React.useRef(false);
   const previousDrawer = React.useRef(false);
   const drawerFocus = React.useRef<"main" | "toggle" | null>(null);

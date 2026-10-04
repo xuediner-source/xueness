@@ -70,6 +70,11 @@
       "nameEn": "Lightweight profile for local small models"
     },
     {
+      "id": "providers.lightweight_layout",
+      "name": "轻量档极简工作台布局",
+      "nameEn": "Lightweight minimal workbench layout"
+    },
+    {
       "id": "providers.budgets",
       "name": "上下文、输出与安全预算",
       "nameEn": "Context, output and safety budgets"
@@ -104,6 +109,7 @@
     "plugins/providers/ProvidersPanel.tsx",
     "plugins/providers/LocalRuntimeMonitor.tsx",
     "plugins/providers/runtimeSampling.ts",
-    "plugins/providers/index.tsx"
+    "plugins/providers/index.tsx",
+    "plugins/providers/LightweightWorkbench.tsx"
   ]
 }

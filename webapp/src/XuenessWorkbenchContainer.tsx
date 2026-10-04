@@ -84,6 +84,7 @@ import { DesktopTrayBridge } from './plugins/desktop/DesktopTrayBridge';
 import { settingsNavigation } from "./xuenessSettingsNavigation";
 import { CompletionChecks } from './plugins/planning/CompletionChecks';
 import { LocalRuntimeMonitor, RequestTiming, type LocalRuntimeSession } from "./plugins/providers/LocalRuntimeMonitor";
+import { LightweightComposerControls, lightweightLayoutActive } from "./plugins/providers/LightweightWorkbench";
 import { ForkSessionDialog } from "./plugins/sessions";
 import { SessionQueue } from "./plugins/sessions/SessionQueue";
 import { Approvals, Composer, WorkbenchHeader, heroGreeting, type ComposerDraftState } from "./plugins/sessions/XuenessWorkbenchView";
@@ -1319,13 +1320,24 @@ export function XuenessWorkbenchContainer() {
   const composerRunning = activeId !== null && session?.id === activeId && (
     session.status === "running" || session.streaming?.status === "streaming" || runRequestSessions.has(activeId)
   );
+  // 轻量档极简布局由 providers 插件拥有：档位生效且插件可用才切换挂载。
+  const lightweightLayout = lightweightLayoutActive(activeRuntimeProfile, isPluginEffective("providers"));
   const composerMentions = [
     ...composerCatalog.files.map(item => ({ ...item, kind: "file" as const })),
     ...composerCatalog.sessions.map(item => ({ ...item, kind: "session" as const })),
     ...composerCatalog.skills.map(item => ({ ...item, kind: "skill" as const })),
     ...composerCatalog.plugins.map(item => ({ ...item, kind: "plugin" as const })),
   ];
-  const composerControls = <XuenessComposerToolbar
+  const composerControls = lightweightLayout ? <LightweightComposerControls
+    enabled
+    choices={choices} onChange={updateChoices} models={composerCatalog.models}
+    loading={composerCatalogLoading} error={composerCatalogError}
+    onReload={() => void refreshComposerCatalog()}
+    onManageModels={() => setPanel(isPluginEffective("providers") ? "providers" : "plugins")}
+    runtimeBudget={session?.id === activeId ? session.runtime_budget : undefined}
+    pauseReason={session?.id === activeId ? session.pause_reason : undefined}
+    disabled={busy || branchBusy || composerRunning}
+  /> : <XuenessComposerToolbar
     choices={choices} onChange={updateChoices} models={composerCatalog.models}
     loading={composerCatalogLoading} error={composerCatalogError}
     onReload={() => void refreshComposerCatalog()}
@@ -1704,6 +1716,7 @@ export function XuenessWorkbenchContainer() {
       /> : undefined}
       navigationKey={`${panel}:${activeId ?? ""}:${commandOpen}:${workspacePicking}:${heroFocusTick}`}
       sidebarToggleToken={sidebarToggleToken}
+      initialSidebarCollapsed={lightweightLayout}
       canGoBack={!busy && historyPosition.cursor > 0}
       canGoForward={!busy && historyPosition.cursor < historyPosition.length - 1}
       onGoBack={() => navigateHistory(-1)} onGoForward={() => navigateHistory(1)}
@@ -1826,7 +1839,7 @@ export function XuenessWorkbenchContainer() {
         <div className="xn-conversation">
           <WorkbenchHeader
             session={session}
-            actions={<>{viewSwitcher}<button type="button" className="xn-conv-header__action xn-conv-header__fork" aria-label={tr("分叉会话")} title={tr("分叉会话")} disabled={busy || session.status === "running" || session.streaming?.status === "streaming"} onClick={beginFork}><GitBranch size={14} aria-hidden="true" /><span>{tr("分叉会话")}</span></button></>}
+            actions={!lightweightLayout && <>{viewSwitcher}<button type="button" className="xn-conv-header__action xn-conv-header__fork" aria-label={tr("分叉会话")} title={tr("分叉会话")} disabled={busy || session.status === "running" || session.streaming?.status === "streaming"} onClick={beginFork}><GitBranch size={14} aria-hidden="true" /><span>{tr("分叉会话")}</span></button></>}
             pinned={session.pinned === true}
             onTogglePin={() => activeId && void togglePin(activeId, session.pinned !== true)}
             onRefresh={() => void handleRefreshAll()}
@@ -1839,7 +1852,7 @@ export function XuenessWorkbenchContainer() {
             <button type="button" className="xn-session-fork-provenance__open" data-testid="fork-open-parent" disabled={busy} onClick={() => selectSession(session.forkParent!.sourceId)}>{tr("打开原会话")}</button>
           </p>}
           {session.pause_reason && ["paused", "needs_review"].includes(session.status) && <p role="status" className="xn-run-error">{tf("暂停原因：{0}", [session.pause_reason])}</p>}
-          {isPluginEffective('planning') && <CompletionChecks sessionId={session.id} completion={session.completion} items={session.delivery_requirements ?? []} disabled={busy || session.status === 'running'} onSaved={() => void handleRefreshAll()} />}
+          {isPluginEffective('planning') && !lightweightLayout && <CompletionChecks sessionId={session.id} completion={session.completion} items={session.delivery_requirements ?? []} disabled={busy || session.status === 'running'} onSaved={() => void handleRefreshAll()} />}
           {isPluginEffective('providers') && <RequestTiming session={session} />}
           {activeRuntimeProfile === "lightweight" && isPluginEffective("providers") && isPluginEffective("diagnostics") &&
             <LocalRuntimeMonitor lightweight session={runtimeMonitorSession} />}
@@ -1877,6 +1890,7 @@ export function XuenessWorkbenchContainer() {
             draftStore={composerDraftStore}
               sendShortcut={settingsValues.sendShortcut === "mod-enter" ? "mod-enter" : "enter"}
             onSend={handleSend}
+            minimal={lightweightLayout}
             disabled={composerDisabled || queueSubmittingSessions.has(session.id)}
             sendDisabled={!composerModelReady || composerCatalogLoading}
             running={composerRunning}
@@ -1894,7 +1908,7 @@ export function XuenessWorkbenchContainer() {
         </div>
       ) : (
         <div className="xn-hero" data-testid="xn-hero">
-          <div className="xn-hero__bar"><details className="xn-workbench-menu"><summary aria-label={tr("工作台")}><CircleHelp size={16} /></summary><div>{viewSwitcher}</div></details></div>
+          {!lightweightLayout && <div className="xn-hero__bar"><details className="xn-workbench-menu"><summary aria-label={tr("工作台")}><CircleHelp size={16} /></summary><div>{viewSwitcher}</div></details></div>}
           <div className="xn-hero__brand" aria-hidden="true">
             <IconXuenessMark size={34} className="xn-hero__brand-mark" />
           </div>
@@ -1910,6 +1924,7 @@ export function XuenessWorkbenchContainer() {
               draftStore={composerDraftStore}
               sendShortcut={settingsValues.sendShortcut === "mod-enter" ? "mod-enter" : "enter"}
               variant="hero"
+              minimal={lightweightLayout}
               topContent={workspaceContext}
               inputRef={heroInputRef}
               onSend={handleCreate}

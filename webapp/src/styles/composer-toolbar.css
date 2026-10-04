@@ -1115,3 +1115,8 @@
     width: 100%;
   }
 }
+
+/* 轻量档的上下文用量是估算读数，不打开用量面板，因此不是按钮。 */
+.xn-composer-toolbar__usage--static {
+  cursor: default;
+}

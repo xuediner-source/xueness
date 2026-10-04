@@ -478,6 +478,12 @@ export type ComposerProps = {
   commands?: { id: string; description?: string }[];
   /** Workspace file candidates for @-mentions (loaded by the container). */
   files?: string[];
+  /**
+   * Minimal input chrome (lightweight local profile, owned by the providers
+   * plugin): keep send/stop and the passed controls, hide the context "+" menu
+   * and the keyboard hint. Chips and @-mention suggestions stay available.
+   */
+  minimal?: boolean;
 };
 
 export type ComposerDraftState = {
@@ -591,6 +597,7 @@ export function Composer({
   mentions = [],
   commands = [],
   files = [],
+  minimal = false,
 }: ComposerProps) {
   const localDraftsRef = useRef<Map<string, ComposerDraftState>>(new Map());
   const draftsRef = draftStore ?? localDraftsRef;
@@ -1013,11 +1020,11 @@ export function Composer({
         aria-controls={suggestions.length ? suggestionListId : undefined}
         aria-expanded={suggestions.length > 0}
         aria-activedescendant={currentSuggestion >= 0 ? `${suggestionListId}-option-${currentSuggestion}` : undefined}
-        aria-describedby={`${suggestionListId}-keyboard-help`}
+        aria-describedby={minimal ? undefined : `${suggestionListId}-keyboard-help`}
       />
       <div className="xn-composer__row">
         <div className="xn-composer__tools">
-          <div className="xn-composer__actions" role="group" aria-label={tr("输入辅助")}>
+          {!minimal && <div className="xn-composer__actions" role="group" aria-label={tr("输入辅助")}>
             <div className="xn-composer__plus-wrap" ref={plusRef}>
               <button
                 ref={plusButtonRef}
@@ -1124,13 +1131,13 @@ export function Composer({
                 </div>
               )}
             </div>
-          </div>
+          </div>}
           {(controls || footer) && <div className="xn-composer__settings" role="group" aria-label={tr("运行选项")}>{controls ?? footer}</div>}
-          <span id={`${suggestionListId}-keyboard-help`} className="xn-composer__keyboard-help">
+          {!minimal && <span id={`${suggestionListId}-keyboard-help`} className="xn-composer__keyboard-help">
             {queueWhenRunning && running
               ? sendShortcut === "mod-enter" ? tr("⌘/Ctrl+Enter 排队 · Enter 换行") : tr("Enter 排队 · Shift+Enter 换行")
               : sendShortcut === "mod-enter" ? tr("⌘/Ctrl+Enter 发送 · Enter 换行") : tr("Enter 发送 · Shift+Enter 换行")}
-          </span>
+          </span>}
         </div>
         <div className="xn-composer__submit-actions">
           {running && queueWhenRunning && <button type="submit" disabled={isSendDisabled}

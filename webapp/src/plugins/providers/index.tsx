@@ -504,163 +504,10 @@ export function ProviderEditor({
 
   useEffect(() => { setKeyVisible(false); }, [draft.id, isNew]);
 
-  return <form className="xn-provider-editor" onSubmit={onSave} data-testid="model-provider-editor">
-    <header className="xn-provider-editor__header">
-      <div className="xn-provider-editor__title-row">
-        <span className="xn-provider-editor__icon"><Cpu size={19} aria-hidden="true" /></span>
-        <div className="xn-provider-editor__title-copy">
-          <h3>{isNew ? tr('新建配置') : (draft.name || original.name)}</h3>
-          <p>{isNew ? tr('配置一个可用于当前运行的模型服务商。') : `${tr('自定义模型服务商')} · ${original.id}`}</p>
-        </div>
-      </div>
-      {!isNew && <div className="xn-provider-editor__header-actions">
-        <button type="button" className="xn-provider-button" disabled={busy || testing || compatibilityTesting} onClick={onTest}>
-          {testing ? <LoaderCircle size={14} className="xn-provider-spin" aria-hidden="true" /> : <Radio size={14} aria-hidden="true" />}
-          {tr(testing ? '正在测试连接' : '测试对话')}
-        </button>
-        <button type="button" className="xn-provider-button" disabled={busy} onClick={onUse}>{tr('用于当前运行')}</button>
-        <button type="button" className="xn-provider-icon-button xn-provider-icon-button--danger" disabled={busy || testing} aria-label={tr('删除配置')} title={tr('删除配置')} onClick={onDelete}><Trash2 size={16} aria-hidden="true" /></button>
-      </div>}
-    </header>
-    {!isNew && <p className="xn-provider-test-note">{tr('对话测试只检查一次简短文本回复，不验证工具调用；服务商可能收取少量费用。')}</p>}
-    {testResult && <p className="xn-provider-test-feedback" role="status"><Check size={15} aria-hidden="true" />{tf('对话测试成功，响应时间 {0} ms（未验证工具）', [testResult.latencyMs])}</p>}
-    {testError && <p className="xn-provider-test-feedback xn-provider-test-feedback--error" role="alert"><Radio size={15} aria-hidden="true" />{tr('连接测试失败：')}{testError}</p>}
-
-    <section className="xn-provider-section">
-      <div className="xn-provider-section__heading"><h4>{tr('基本信息')}</h4><p>{tr('为配置指定稳定的 ID 和显示名称。')}</p></div>
-      <div className="xn-provider-fields xn-provider-fields--identity">
-        <label className="xn-provider-field">
-          <span>{tr('显示名称')}</span>
-          <input autoComplete="off" disabled={locked} value={draft.name} onChange={event => update('name', event.currentTarget.value)} required aria-label={tr('显示名称')} />
-        </label>
-        <label className="xn-provider-field">
-          <span>{tr('配置 ID')}</span>
-          <input autoComplete="off" disabled={locked || !isNew} value={draft.id} onChange={event => update('id', event.currentTarget.value)} required aria-label={tr('配置 ID')} spellCheck={false} />
-          <small>{tr(isNew ? '保存后不能修改此 ID。' : '配置 ID 不能修改。')}</small>
-        </label>
-      </div>
-    </section>
-
-    <section className="xn-provider-section">
-      <div className="xn-provider-section__heading"><h4>{tr('连接设置')}</h4><p>{tr('指定兼容协议和服务 API 地址。')}</p></div>
-      <div className="xn-provider-fields">
-        <label className="xn-provider-field">
-          <span>{tr('接口协议')}</span>
-          <Select aria-label={tr('接口协议')} disabled={locked} value={draft.protocol} onChange={event => onDraftChange({
-            ...draft,
-            protocol: event.currentTarget.value as ProviderDraft['protocol'],
-            reasoningLevels: [],
-            ...(event.currentTarget.value === 'anthropic' && draft.toolCalling === 'json' ? { toolCalling: 'native' as const } : {}),
-          })}>
-            <option value="openai">OpenAI-compatible</option>
-            <option value="anthropic">Anthropic Messages</option>
-          </Select>
-        </label>
-        <label className="xn-provider-field">
-          <span>{tr('API 地址')}</span>
-          <input autoComplete="off" disabled={locked} value={draft.baseUrl} onChange={event => update('baseUrl', event.currentTarget.value)} placeholder="https://api.example.com/v1" required aria-label={tr('API 地址')} spellCheck={false} />
-        </label>
-      </div>
-      <div className="xn-provider-local-endpoints" role="group" aria-label={tr('本地服务地址模板')}>
-        <span>{tr('本地服务地址模板')}</span>
-        <div>{LOCAL_ENDPOINTS.map(endpoint => <button key={endpoint.label} type="button" className="xn-provider-button" disabled={locked} onClick={() => chooseLocalEndpoint(endpoint.url)} title={endpoint.url}>{endpoint.label}</button>)}</div>
-        <small>{tr('只填入地址并切换到本地轻量；不会填写模型名称或发送请求。')}</small>
-      </div>
-    </section>
-
-    <section className="xn-provider-section">
-      <div className="xn-provider-section__heading xn-provider-section__heading--split">
-        <div><h4>{tr('API 密钥')}</h4><p>{tr('留空保留已有密钥；服务器不会返回或回显密钥。')}</p></div>
-        <span className="xn-provider-key-status" data-configured={hasKey}>
-          <span aria-hidden="true" />{hasKey ? tr('已配置密钥') : tr('未配置密钥')}
-        </span>
-      </div>
-      <div className="xn-provider-key-input">
-        <input
-          autoComplete="new-password"
-          disabled={locked}
-          type={keyVisible ? 'text' : 'password'}
-          value={draft.apiKey}
-          onChange={event => update('apiKey', event.currentTarget.value)}
-          placeholder={tr('留空保留已有密钥')}
-          aria-label={tr('API 密钥')}
-          spellCheck={false}
-        />
-        <button type="button" className="xn-provider-icon-button" disabled={locked} aria-label={tr(keyVisible ? '隐藏密钥' : '显示密钥')} title={tr(keyVisible ? '隐藏密钥' : '显示密钥')} onClick={() => setKeyVisible(value => !value)}>
-          {keyVisible ? <EyeOff size={16} aria-hidden="true" /> : <Eye size={16} aria-hidden="true" />}
-        </button>
-      </div>
-      {runtimeProfile === 'lightweight' && draft.protocol === 'openai' && isLoopbackLiteral(draft.baseUrl) && <p className="xn-provider-hint">{tr('本地 127.0.0.1 或 ::1 服务可将密钥留空；留空仍会保留已保存的密钥。')}</p>}
-    </section>
-
-    <section className="xn-provider-section">
-      <div className="xn-provider-section__heading"><h4>{tr('模型')}</h4><p>{tr('每个自定义配置对应一个模型 ID。')}</p></div>
-      <label className="xn-provider-field">
-        <span>{tr('模型名称')}</span>
-        <input autoComplete="off" disabled={locked} value={draft.model} onChange={event => update('model', event.currentTarget.value)} required aria-label={tr('模型名称')} spellCheck={false} />
-      </label>
-      <div className="xn-provider-discovery" data-testid="provider-model-discovery">
-        <div className="xn-provider-discovery__actions">
-          <button type="button" className="xn-provider-button" disabled={locked || discovering || !original || draft.protocol !== 'openai' || changed} onClick={onDiscover}>
-            {discovering ? <LoaderCircle size={14} className="xn-provider-spin" aria-hidden="true" /> : <RefreshCw size={14} aria-hidden="true" />}
-            {tr(discovering ? '正在发现模型' : '发现模型')}
-          </button>
-          <span>{tr('只读取已保存配置的模型列表，不会发送聊天请求。')}</span>
-        </div>
-        {!original && <p className="xn-provider-hint">{tr('请先保存配置，再发现模型。')}</p>}
-        {original && draft.protocol !== 'openai' && <p className="xn-provider-hint">{tr('模型发现暂不支持 Anthropic 配置。')}</p>}
-        {original && draft.protocol === 'openai' && changed && <p className="xn-provider-hint">{tr('当前更改尚未保存；请先保存配置，再发现模型。')}</p>}
-        {discovering && <p className="xn-provider-hint" role="status">{tr('正在读取服务商提供的模型列表…')}</p>}
-        {discoveryError && <p className="xn-provider-feedback xn-provider-feedback--error" role="alert">{discoveryError}</p>}
-        {!discovering && discoveredModels && discoveredModels.length === 0 && !discoveryError && <p className="xn-provider-hint" role="status">{tr('服务商没有返回可用模型。')}</p>}
-        {discoveredModels && discoveredModels.length > 0 && <ul className="xn-provider-discovery__list" aria-label={tr('发现的模型')}>
-          {discoveredModels.map(model => <li key={model.id}>
-            <button type="button" className="xn-provider-discovery__model" data-selected={draft.model === model.id} disabled={locked} onClick={() => onSelectDiscoveredModel(model.id)}>
-              <span>{model.id}</span>
-              {(model.ownedBy || model.created !== undefined) && <small>{[model.ownedBy, model.created !== undefined ? String(model.created) : ''].filter(Boolean).join(' · ')}</small>}
-            </button>
-          </li>)}
-        </ul>}
-      </div>
-    </section>
-
-    <section className="xn-provider-section" data-testid="provider-runtime-settings">
-      <div className="xn-provider-section__heading"><h4>{tr('运行配置')}</h4><p>{tr('轻量配置为本地或小上下文模型限制输入预算与输出长度。')}</p></div>
-      <fieldset className="xn-provider-option-list" disabled={locked}>
-        <legend>{tr('运行档位')}</legend>
-        <label>
-          <input type="radio" name={`provider-runtime-${draft.id || 'new'}`} value="standard" checked={runtimeProfile === 'standard'} disabled={draft.toolCalling === 'json'} onChange={() => changeRuntimeProfile('standard')} />
-          <span>{tr('标准')}</span>
-        </label>
-        <label>
-          <input type="radio" name={`provider-runtime-${draft.id || 'new'}`} value="lightweight" checked={runtimeProfile === 'lightweight'} onChange={() => changeRuntimeProfile('lightweight')} />
-          <span>{tr('本地轻量')}</span>
-        </label>
-      </fieldset>
-      {draft.toolCalling === 'json' && <p className="xn-provider-hint">{tr('JSON 工具模式仅适用于 OpenAI-compatible 本地轻量配置；先切回原生工具调用，才能选择标准。')}</p>}
-      <div className="xn-provider-fields xn-provider-runtime-fields">
-        <label className="xn-provider-field">
-          <span>{tr('上下文窗口（tokens）')}</span>
-          <input type="number" inputMode="numeric" min={2048} max={262144} step={1} disabled={locked} value={draft.contextWindow ?? ''} placeholder={runtimeProfile === 'lightweight' ? String(LIGHTWEIGHT_DEFAULT_CONTEXT) : tr('留空使用服务默认')}
-            onChange={event => changeContextWindow(event.currentTarget.value === '' ? undefined : event.currentTarget.valueAsNumber)} aria-label={tr('上下文窗口（tokens）')} />
-          <small>{tr('有效范围 2048–262144；轻量默认 8192。')}</small>
-        </label>
-        <label className="xn-provider-field">
-          <span>{tr('最大输出（tokens）')}</span>
-          <input type="number" inputMode="numeric" min={128} max={32768} step={1} disabled={locked} value={draft.maxOutputTokens ?? ''} placeholder={runtimeProfile === 'lightweight' ? String(LIGHTWEIGHT_DEFAULT_OUTPUT) : tr('留空不额外限制')}
-            onChange={event => update('maxOutputTokens', event.currentTarget.value === '' ? undefined : event.currentTarget.valueAsNumber)} aria-label={tr('最大输出（tokens）')} />
-          <small>{tr('有效范围 128–32768；轻量默认 1024，且不超过上下文的一半。')}</small>
-        </label>
-      </div>
+  // 轻量设置页的「高级」分组：只调整展示，字段、取值和保存行为保持不变。
+  const advancedRuntimeSettings = (
+    <>
       {draft.protocol === 'openai' && <>
-        <label className="xn-provider-field xn-provider-runtime-select">
-          <span>{tr('工具调用')}</span>
-          <Select aria-label={tr('工具调用')} disabled={locked} value={draft.toolCalling ?? 'native'} onChange={event => update('toolCalling', event.currentTarget.value as NonNullable<ProviderDraft['toolCalling']>)}>
-            <option value="native">{tr('原生工具调用')}</option>
-            <option value="json" disabled={runtimeProfile !== 'lightweight'}>{tr('JSON 工具模式')}</option>
-          </Select>
-        </label>
-        {runtimeProfile !== 'lightweight' && <p className="xn-provider-hint">{tr('JSON 工具模式仅适用于 OpenAI-compatible 本地轻量配置。')}</p>}
         <fieldset className="xn-provider-option-list" disabled={locked}>
           <legend>{tr('API 兼容设置')}</legend>
           <label>
@@ -849,6 +696,173 @@ export function ProviderEditor({
         <button type="button" className="xn-provider-button" disabled={locked || Object.keys(draft.lightweightOptions ?? {}).length === 0} onClick={() => onDraftChange({ ...draft, lightweightOptions: {} })}>{tr('恢复轻量配置默认值')}</button>
         {advancedOpen && runtimeMonitorEnabled && <LocalRuntimeMonitor lightweight={runtimeProfile === 'lightweight'} session={null} />}
       </details>}
+    </>
+  );
+
+  return <form className="xn-provider-editor" onSubmit={onSave} data-testid="model-provider-editor">
+    <header className="xn-provider-editor__header">
+      <div className="xn-provider-editor__title-row">
+        <span className="xn-provider-editor__icon"><Cpu size={19} aria-hidden="true" /></span>
+        <div className="xn-provider-editor__title-copy">
+          <h3>{isNew ? tr('新建配置') : (draft.name || original.name)}</h3>
+          <p>{isNew ? tr('配置一个可用于当前运行的模型服务商。') : `${tr('自定义模型服务商')} · ${original.id}`}</p>
+        </div>
+      </div>
+      {!isNew && <div className="xn-provider-editor__header-actions">
+        <button type="button" className="xn-provider-button" disabled={busy || testing || compatibilityTesting} onClick={onTest}>
+          {testing ? <LoaderCircle size={14} className="xn-provider-spin" aria-hidden="true" /> : <Radio size={14} aria-hidden="true" />}
+          {tr(testing ? '正在测试连接' : '测试对话')}
+        </button>
+        <button type="button" className="xn-provider-button" disabled={busy} onClick={onUse}>{tr('用于当前运行')}</button>
+        <button type="button" className="xn-provider-icon-button xn-provider-icon-button--danger" disabled={busy || testing} aria-label={tr('删除配置')} title={tr('删除配置')} onClick={onDelete}><Trash2 size={16} aria-hidden="true" /></button>
+      </div>}
+    </header>
+    {!isNew && <p className="xn-provider-test-note">{tr('对话测试只检查一次简短文本回复，不验证工具调用；服务商可能收取少量费用。')}</p>}
+    {testResult && <p className="xn-provider-test-feedback" role="status"><Check size={15} aria-hidden="true" />{tf('对话测试成功，响应时间 {0} ms（未验证工具）', [testResult.latencyMs])}</p>}
+    {testError && <p className="xn-provider-test-feedback xn-provider-test-feedback--error" role="alert"><Radio size={15} aria-hidden="true" />{tr('连接测试失败：')}{testError}</p>}
+
+    <section className="xn-provider-section">
+      <div className="xn-provider-section__heading"><h4>{tr('基本信息')}</h4><p>{tr('为配置指定稳定的 ID 和显示名称。')}</p></div>
+      <div className="xn-provider-fields xn-provider-fields--identity">
+        <label className="xn-provider-field">
+          <span>{tr('显示名称')}</span>
+          <input autoComplete="off" disabled={locked} value={draft.name} onChange={event => update('name', event.currentTarget.value)} required aria-label={tr('显示名称')} />
+        </label>
+        <label className="xn-provider-field">
+          <span>{tr('配置 ID')}</span>
+          <input autoComplete="off" disabled={locked || !isNew} value={draft.id} onChange={event => update('id', event.currentTarget.value)} required aria-label={tr('配置 ID')} spellCheck={false} />
+          <small>{tr(isNew ? '保存后不能修改此 ID。' : '配置 ID 不能修改。')}</small>
+        </label>
+      </div>
+    </section>
+
+    <section className="xn-provider-section">
+      <div className="xn-provider-section__heading"><h4>{tr('连接设置')}</h4><p>{tr('指定兼容协议和服务 API 地址。')}</p></div>
+      <div className="xn-provider-fields">
+        <label className="xn-provider-field">
+          <span>{tr('接口协议')}</span>
+          <Select aria-label={tr('接口协议')} disabled={locked} value={draft.protocol} onChange={event => onDraftChange({
+            ...draft,
+            protocol: event.currentTarget.value as ProviderDraft['protocol'],
+            reasoningLevels: [],
+            ...(event.currentTarget.value === 'anthropic' && draft.toolCalling === 'json' ? { toolCalling: 'native' as const } : {}),
+          })}>
+            <option value="openai">OpenAI-compatible</option>
+            <option value="anthropic">Anthropic Messages</option>
+          </Select>
+        </label>
+        <label className="xn-provider-field">
+          <span>{tr('API 地址')}</span>
+          <input autoComplete="off" disabled={locked} value={draft.baseUrl} onChange={event => update('baseUrl', event.currentTarget.value)} placeholder="https://api.example.com/v1" required aria-label={tr('API 地址')} spellCheck={false} />
+        </label>
+      </div>
+      <div className="xn-provider-local-endpoints" role="group" aria-label={tr('本地服务地址模板')}>
+        <span>{tr('本地服务地址模板')}</span>
+        <div>{LOCAL_ENDPOINTS.map(endpoint => <button key={endpoint.label} type="button" className="xn-provider-button" disabled={locked} onClick={() => chooseLocalEndpoint(endpoint.url)} title={endpoint.url}>{endpoint.label}</button>)}</div>
+        <small>{tr('只填入地址并切换到本地轻量；不会填写模型名称或发送请求。')}</small>
+      </div>
+    </section>
+
+    <section className="xn-provider-section">
+      <div className="xn-provider-section__heading xn-provider-section__heading--split">
+        <div><h4>{tr('API 密钥')}</h4><p>{tr('留空保留已有密钥；服务器不会返回或回显密钥。')}</p></div>
+        <span className="xn-provider-key-status" data-configured={hasKey}>
+          <span aria-hidden="true" />{hasKey ? tr('已配置密钥') : tr('未配置密钥')}
+        </span>
+      </div>
+      <div className="xn-provider-key-input">
+        <input
+          autoComplete="new-password"
+          disabled={locked}
+          type={keyVisible ? 'text' : 'password'}
+          value={draft.apiKey}
+          onChange={event => update('apiKey', event.currentTarget.value)}
+          placeholder={tr('留空保留已有密钥')}
+          aria-label={tr('API 密钥')}
+          spellCheck={false}
+        />
+        <button type="button" className="xn-provider-icon-button" disabled={locked} aria-label={tr(keyVisible ? '隐藏密钥' : '显示密钥')} title={tr(keyVisible ? '隐藏密钥' : '显示密钥')} onClick={() => setKeyVisible(value => !value)}>
+          {keyVisible ? <EyeOff size={16} aria-hidden="true" /> : <Eye size={16} aria-hidden="true" />}
+        </button>
+      </div>
+      {runtimeProfile === 'lightweight' && draft.protocol === 'openai' && isLoopbackLiteral(draft.baseUrl) && <p className="xn-provider-hint">{tr('本地 127.0.0.1 或 ::1 服务可将密钥留空；留空仍会保留已保存的密钥。')}</p>}
+    </section>
+
+    <section className="xn-provider-section">
+      <div className="xn-provider-section__heading"><h4>{tr('模型')}</h4><p>{tr('每个自定义配置对应一个模型 ID。')}</p></div>
+      <label className="xn-provider-field">
+        <span>{tr('模型名称')}</span>
+        <input autoComplete="off" disabled={locked} value={draft.model} onChange={event => update('model', event.currentTarget.value)} required aria-label={tr('模型名称')} spellCheck={false} />
+      </label>
+      <div className="xn-provider-discovery" data-testid="provider-model-discovery">
+        <div className="xn-provider-discovery__actions">
+          <button type="button" className="xn-provider-button" disabled={locked || discovering || !original || draft.protocol !== 'openai' || changed} onClick={onDiscover}>
+            {discovering ? <LoaderCircle size={14} className="xn-provider-spin" aria-hidden="true" /> : <RefreshCw size={14} aria-hidden="true" />}
+            {tr(discovering ? '正在发现模型' : '发现模型')}
+          </button>
+          <span>{tr('只读取已保存配置的模型列表，不会发送聊天请求。')}</span>
+        </div>
+        {!original && <p className="xn-provider-hint">{tr('请先保存配置，再发现模型。')}</p>}
+        {original && draft.protocol !== 'openai' && <p className="xn-provider-hint">{tr('模型发现暂不支持 Anthropic 配置。')}</p>}
+        {original && draft.protocol === 'openai' && changed && <p className="xn-provider-hint">{tr('当前更改尚未保存；请先保存配置，再发现模型。')}</p>}
+        {discovering && <p className="xn-provider-hint" role="status">{tr('正在读取服务商提供的模型列表…')}</p>}
+        {discoveryError && <p className="xn-provider-feedback xn-provider-feedback--error" role="alert">{discoveryError}</p>}
+        {!discovering && discoveredModels && discoveredModels.length === 0 && !discoveryError && <p className="xn-provider-hint" role="status">{tr('服务商没有返回可用模型。')}</p>}
+        {discoveredModels && discoveredModels.length > 0 && <ul className="xn-provider-discovery__list" aria-label={tr('发现的模型')}>
+          {discoveredModels.map(model => <li key={model.id}>
+            <button type="button" className="xn-provider-discovery__model" data-selected={draft.model === model.id} disabled={locked} onClick={() => onSelectDiscoveredModel(model.id)}>
+              <span>{model.id}</span>
+              {(model.ownedBy || model.created !== undefined) && <small>{[model.ownedBy, model.created !== undefined ? String(model.created) : ''].filter(Boolean).join(' · ')}</small>}
+            </button>
+          </li>)}
+        </ul>}
+      </div>
+    </section>
+
+    <section className="xn-provider-section" data-testid="provider-runtime-settings">
+      <div className="xn-provider-section__heading"><h4>{tr('运行配置')}</h4><p>{tr('轻量配置为本地或小上下文模型限制输入预算与输出长度。')}</p></div>
+      {runtimeProfile === 'lightweight' && <p className="xn-provider-common__label">{tr('常用')}</p>}
+      <fieldset className="xn-provider-option-list" disabled={locked}>
+        <legend>{tr('运行档位')}</legend>
+        <label>
+          <input type="radio" name={`provider-runtime-${draft.id || 'new'}`} value="standard" checked={runtimeProfile === 'standard'} disabled={draft.toolCalling === 'json'} onChange={() => changeRuntimeProfile('standard')} />
+          <span>{tr('标准')}</span>
+        </label>
+        <label>
+          <input type="radio" name={`provider-runtime-${draft.id || 'new'}`} value="lightweight" checked={runtimeProfile === 'lightweight'} onChange={() => changeRuntimeProfile('lightweight')} />
+          <span>{tr('本地轻量')}</span>
+        </label>
+      </fieldset>
+      {draft.toolCalling === 'json' && <p className="xn-provider-hint">{tr('JSON 工具模式仅适用于 OpenAI-compatible 本地轻量配置；先切回原生工具调用，才能选择标准。')}</p>}
+      <div className="xn-provider-fields xn-provider-runtime-fields">
+        <label className="xn-provider-field">
+          <span>{tr('上下文窗口（tokens）')}</span>
+          <input type="number" inputMode="numeric" min={2048} max={262144} step={1} disabled={locked} value={draft.contextWindow ?? ''} placeholder={runtimeProfile === 'lightweight' ? String(LIGHTWEIGHT_DEFAULT_CONTEXT) : tr('留空使用服务默认')}
+            onChange={event => changeContextWindow(event.currentTarget.value === '' ? undefined : event.currentTarget.valueAsNumber)} aria-label={tr('上下文窗口（tokens）')} />
+          <small>{tr('有效范围 2048–262144；轻量默认 8192。')}</small>
+        </label>
+        <label className="xn-provider-field">
+          <span>{tr('最大输出（tokens）')}</span>
+          <input type="number" inputMode="numeric" min={128} max={32768} step={1} disabled={locked} value={draft.maxOutputTokens ?? ''} placeholder={runtimeProfile === 'lightweight' ? String(LIGHTWEIGHT_DEFAULT_OUTPUT) : tr('留空不额外限制')}
+            onChange={event => update('maxOutputTokens', event.currentTarget.value === '' ? undefined : event.currentTarget.valueAsNumber)} aria-label={tr('最大输出（tokens）')} />
+          <small>{tr('有效范围 128–32768；轻量默认 1024，且不超过上下文的一半。')}</small>
+        </label>
+      </div>
+      {draft.protocol === 'openai' && <>
+        <label className="xn-provider-field xn-provider-runtime-select">
+          <span>{tr('工具调用')}</span>
+          <Select aria-label={tr('工具调用')} disabled={locked} value={draft.toolCalling ?? 'native'} onChange={event => update('toolCalling', event.currentTarget.value as NonNullable<ProviderDraft['toolCalling']>)}>
+            <option value="native">{tr('原生工具调用')}</option>
+            <option value="json" disabled={runtimeProfile !== 'lightweight'}>{tr('JSON 工具模式')}</option>
+          </Select>
+        </label>
+        {runtimeProfile !== 'lightweight' && <p className="xn-provider-hint">{tr('JSON 工具模式仅适用于 OpenAI-compatible 本地轻量配置。')}</p>}
+      </>}
+      {runtimeProfile === 'lightweight' ? <details className="xn-provider-advanced" data-testid="provider-advanced-settings">
+        <summary>{tr('高级')}</summary>
+        <p className="xn-provider-advanced__intro">{tr('高级项默认折叠；展开后的字段、取值和保存行为保持不变。')}</p>
+        {advancedRuntimeSettings}
+      </details> : advancedRuntimeSettings}
       {runtimeProfile !== 'lightweight' && Boolean(draft.lightweightOptions && Object.keys(draft.lightweightOptions).length > 0) && <p className="xn-provider-hint">{tr('已保存的轻量选项会保留；标准运行配置不会应用这些选项。')}</p>}
     </section>
 

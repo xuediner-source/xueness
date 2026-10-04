@@ -25,6 +25,13 @@ export type ComposerToolbarProps = {
   pauseReason?: string | null;
   onOpenUsage?: () => void;
   disabled?: boolean;
+  /**
+   * Minimal chrome for the lightweight local profile (owned by the providers
+   * plugin): the model trigger (with its runtime-profile menu) and the context
+   * usage readout only. Permission, browser, background and reasoning controls
+   * are left out; the model menu itself is unchanged.
+   */
+  minimal?: boolean;
 };
 
 const permissionChoices = [
@@ -81,6 +88,7 @@ export function XuenessComposerToolbar({
   pauseReason,
   onOpenUsage,
   disabled = false,
+  minimal = false,
 }: ComposerToolbarProps) {
   const [modeMenuOpen, setModeMenuOpen] = useState(false);
   const [modelMenuOpen, setModelMenuOpen] = useState(false);
@@ -99,8 +107,7 @@ export function XuenessComposerToolbar({
     Number.isFinite(contextUsage.used) &&
     Number.isFinite(contextUsage.max) &&
     contextUsage.used > 0 &&
-    contextUsage.max > 0 &&
-    onOpenUsage,
+    contextUsage.max > 0,
   );
   const usagePercent = hasUsage && contextUsage
     ? Math.min(100, Math.max(0, (contextUsage.used / contextUsage.max) * 100))
@@ -193,8 +200,8 @@ export function XuenessComposerToolbar({
   };
 
   return (
-    <div className="xn-composer-toolbar" data-testid="composer-toolbar">
-      <div className="xn-composer-toolbar__left" role="group" aria-label={tr("权限与工具")}>
+    <div className="xn-composer-toolbar" data-testid="composer-toolbar" data-minimal={minimal || undefined}>
+      {!minimal && <div className="xn-composer-toolbar__left" role="group" aria-label={tr("权限与工具")}>
         <div className="xn-composer-toolbar__mode-control" ref={modeWrapRef}>
           <button
             ref={modeTriggerRef}
@@ -305,7 +312,7 @@ export function XuenessComposerToolbar({
             {tr("后台任务")} <span className="xn-composer-toolbar__count">{backgroundCount}</span>
           </button>
         )}
-      </div>
+      </div>}
 
       <div className="xn-composer-toolbar__right" role="group" aria-label={tr("模型与上下文")}>
         <div className="xn-composer-toolbar__model" ref={modelWrapRef}>
@@ -434,7 +441,7 @@ export function XuenessComposerToolbar({
             </div>
           )}
         </div>
-        {selectedModel && selectedModel.reasoningLevels.length > 1 && (
+        {!minimal && selectedModel && selectedModel.reasoningLevels.length > 1 && (
           <Select
             className="xn-composer-toolbar__reasoning-select"
             aria-label={tr("思考强度")}
@@ -447,7 +454,7 @@ export function XuenessComposerToolbar({
             {selectedModel.reasoningLevels.map((level) => <option key={level} value={level}>{level}</option>)}
           </Select>
         )}
-        {hasUsage && contextUsage && (
+        {hasUsage && contextUsage && (onOpenUsage ? (
           <button
             type="button"
             className="xn-composer-toolbar__usage"
@@ -461,7 +468,18 @@ export function XuenessComposerToolbar({
             </span>
             <span>{Math.round(usagePercent)}%</span>
           </button>
-        )}
+        ) : (
+          <span
+            className="xn-composer-toolbar__usage xn-composer-toolbar__usage--static"
+            aria-label={tr("上下文用量")}
+            title={contextUsage.used.toLocaleString() + " / " + contextUsage.max.toLocaleString()}
+          >
+            <span className="xn-composer-toolbar__usage-track" aria-hidden="true">
+              <span style={{ width: usagePercent + "%" }} />
+            </span>
+            <span>{Math.round(usagePercent)}%</span>
+          </span>
+        ))}
       </div>
     </div>
   );
