@@ -1544,6 +1544,22 @@ export function XuenessWorkbenchContainer() {
 
   const settingsSections = settingsNavigation(pluginAvailability.effectiveIds, new Set(pluginCatalog.map(plugin => plugin.id)));
   const settingsSectionIds = settingsSections.map(section => section.id).join(",");
+  // The settings sidebar card reuses data the workbench already loads; no extra request.
+  const settingsRoot = session?.root ?? draftRoot ?? composerCatalog.root ?? undefined;
+  const settingsPluginVersion = pluginCatalog.find(plugin => plugin.id === "settings")?.version;
+  const settingsAccount = {
+    name: settingsRoot
+      ? composerCatalog.roots.find(item => item.path === settingsRoot)?.name
+        ?? settingsRoot.split(/[/\\]+/u).filter(Boolean).pop()
+        ?? settingsRoot
+      : tr("未选择工作区"),
+    path: settingsRoot,
+    subtitle: settingsRoot ? undefined : tr("选择项目目录后显示在这里"),
+    badges: [
+      composerCatalog.git?.branch ? { label: composerCatalog.git.branch, title: tr("当前 Git 分支") } : null,
+      settingsPluginVersion ? { label: `v${settingsPluginVersion}`, title: tr("配置设置插件版本") } : null,
+    ].filter((badge): badge is { label: string; title: string } => badge !== null),
+  };
   useEffect(() => {
     if (!settingsSections.some(section => section.id === settingsSection)) setSettingsSection(settingsSections[0]?.id ?? "general");
   }, [settingsSectionIds, settingsSection]);
@@ -1665,7 +1681,7 @@ export function XuenessWorkbenchContainer() {
     memory: <><MemoryPanel tracks={tracks} error={tracksError} loading={tracksLoading} /><XuenessMemoryEditor /></>,
     capabilities: <><CapabilitiesPanel sections={capSections} />{isPluginEffective("mcp") && <XuenessMcpTools />}</>,
     settings: <XuenessSettingsView sections={settingsSections} activeSection={settingsSection} onSelect={setSettingsSection}
-      dirty={settingsDirty} saving={settingsSaving} loading={settingsLoading} error={settingsError}
+      dirty={settingsDirty} saving={settingsSaving} loading={settingsLoading} error={settingsError} account={settingsAccount}
       onBack={() => setPanel("chat")} onRetry={() => settingsDirty ? handleSaveSettings() : handleLoadAllSettings()}>
       <RegionBoundary resetKey={settingsSection} onReload={() => window.location.reload()} onRecover={() => setPanel("plugins")}><Suspense fallback={<p role="status" className="xn-view-loading">{tr("正在加载界面…")}</p>}>{settingsContent()}</Suspense></RegionBoundary>
     </XuenessSettingsView>,

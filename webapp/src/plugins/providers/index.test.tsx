@@ -8,6 +8,7 @@ import {
   ModelManager,
   ModelProviderNavigation,
   ProviderEditor,
+  ProviderEmptyState,
   adjustedLightweightOutput,
   canAdoptProviderCompatibility,
   canTestProviderCompatibility,
@@ -520,4 +521,20 @@ test('split panel follows the upstream 224px desktop and 36rem detail dimensions
   assert.match(css, /grid-template-columns:\s*224px minmax\(0, 1fr\)/);
   assert.match(css, /min-height:\s*36rem/);
   assert.match(css, /grid-template-columns:\s*56px minmax\(0, 1fr\)/);
+});
+
+test('an empty custom model list offers adding one without a dead relative docs link', () => {
+  const html = renderToStaticMarkup(<ProviderEmptyState onAdd={() => undefined} />);
+  assert.match(html, /data-testid="xn-settings-empty"/);
+  assert.match(html, /<p class="xn-settings-empty__title">还没有自定义模型配置<\/p>/);
+  assert.match(html, /<button type="button" class="xn-btn xn-btn--primary xn-btn--md">添加配置<\/button>/);
+  // 工作台由本地 loopback 服务提供，相对 docs/ 路径并不存在，故不渲染文档链接。
+  assert.doesNotMatch(html, /xn-settings-empty__link/);
+  assert.match(renderToStaticMarkup(<ProviderEmptyState onAdd={() => undefined} busy />), /disabled="">添加配置/);
+});
+
+test('the model list empty state appears only after the catalog resolves as empty', async () => {
+  const source = await readFile(resolve(process.cwd(), 'src/plugins/providers/index.tsx'), 'utf8');
+  assert.match(source, /!loading && items\.length === 0 && <ProviderEmptyState/);
+  assert.doesNotMatch(renderToStaticMarkup(<ModelManager onSelect={() => undefined} />), /xn-settings-empty/);
 });

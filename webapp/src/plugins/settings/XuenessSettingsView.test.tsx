@@ -99,3 +99,35 @@ test("saving is a compact status indicator instead of an unsupported global save
   assert.match(saving, /正在保存/);
   assert.doesNotMatch(saving, /xn-settings-view__save-button|有未保存的更改|保存配置/);
 });
+
+test("the sidebar leads with the workspace card and the pane names the section", () => {
+  const html = renderToStaticMarkup(
+    <XuenessSettingsView
+      sections={sections}
+      activeSection="general"
+      onSelect={() => undefined}
+      account={{
+        name: "xueness",
+        path: "/home/box/projects/xueness",
+        badges: [{ label: "main", title: "当前 Git 分支" }],
+      }}
+    >
+      <div>General body</div>
+    </XuenessSettingsView>,
+  );
+  assert.match(html, /data-testid="xn-settings-account"/);
+  assert.match(html, /title="\/home\/box\/projects\/xueness">…\/projects\/xueness</);
+  assert.match(html, /<span class="xn-settings-account__badge" title="当前 Git 分支">main<\/span>/);
+  assert.match(html, /<h1>通用<\/h1><p class="xn-settings-view__description">常用设置<\/p>/);
+  assert.ok(html.indexOf("xn-settings-account") < html.indexOf("xn-settings-view__search"));
+});
+
+test("the workspace card stays out of the shell when the host has no identity data", () => {
+  const html = renderToStaticMarkup(
+    <XuenessSettingsView sections={sections} activeSection="general" onSelect={() => undefined}>
+      <div>General body</div>
+    </XuenessSettingsView>,
+  );
+  assert.doesNotMatch(html, /xn-settings-account/);
+  assert.match(html, /data-testid="xn-settings-search"/);
+});

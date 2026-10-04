@@ -56,6 +56,7 @@
   "frontendModules": [
     "plugins/settings/SettingsSections.tsx",
     "plugins/settings/SettingsPanel.tsx",
+    "plugins/settings/SettingsPrimitives.tsx",
     "plugins/settings/XuenessSettingsView.tsx",
     "plugins/settings/XuenessShortcutsPanel.tsx",
     "plugins/settings/XuenessWorkspacePickerDialog.tsx",

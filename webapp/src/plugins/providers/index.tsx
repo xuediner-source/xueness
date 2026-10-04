@@ -19,6 +19,7 @@ import type { ProviderCompatibilityCheckRecord, ProviderCompatibilityDiagnosticG
 import { Select } from '../../ui/Select';
 import { t as tr, tf } from '../../i18n';
 import { OperationHeader } from '../shared';
+import { SettingsEmptyState } from '../settings/SettingsPrimitives';
 import { LocalRuntimeMonitor } from './LocalRuntimeMonitor';
 import '../../styles/operations.css';
 import '../../styles/model-parity.css';
@@ -345,6 +346,18 @@ export function ModelProviderNavigation({
       </button>
     </div>
   </nav>;
+}
+
+/** First-run state for the model list; the settings plugin owns the presentation. */
+export function ProviderEmptyState({ onAdd, busy = false }: { onAdd: () => void; busy?: boolean }) {
+  return <SettingsEmptyState
+    icon={<Cpu size={22} strokeWidth={1.6} />}
+    title={tr('还没有自定义模型配置')}
+    description={tr('添加一个 API 配置后，可随时切换当前运行使用的模型。')}
+    actionLabel={tr('添加配置')}
+    actionDisabled={busy}
+    onAction={onAdd}
+  />;
 }
 
 function EnvironmentProviderDetail({ onSelect }: { onSelect: () => void }) {
@@ -1185,7 +1198,10 @@ export function ModelManager({ onSelect, runtimeMonitorEnabled = false }: {
           <div><strong>{tr('有未保存的更改')}</strong><p>{tr('切换配置会放弃当前表单中的更改。')}</p></div>
           <div><button type="button" className="xn-provider-button" onClick={() => setPendingSelection(null)}>{tr('继续编辑')}</button><button type="button" className="xn-provider-button xn-provider-button--danger" disabled={busy} onClick={() => commitNavigationItem(pendingSelection)}>{tr('放弃更改并切换')}</button></div>
         </div>}
-        {selectedKey === ENVIRONMENT_KEY ? <EnvironmentProviderDetail onSelect={() => chooseForRun('', tr('环境模型'))} /> : <ProviderEditor
+        {selectedKey === ENVIRONMENT_KEY ? <>
+          {!loading && items.length === 0 && <ProviderEmptyState onAdd={addProvider} busy={busy} />}
+          <EnvironmentProviderDetail onSelect={() => chooseForRun('', tr('环境模型'))} />
+        </> : <ProviderEditor
           key={selectedKey}
           draft={draft}
           original={currentProvider}

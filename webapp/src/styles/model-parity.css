@@ -377,6 +377,9 @@
   padding-top: 3px;
 }
 
+/* First-run guidance sits above the server default profile in the detail pane. */
+.xn-provider-detail > .xn-settings-empty { margin-bottom: 22px; }
+
 .xn-provider-detail__eyebrow {
   display: flex;
   align-items: center;

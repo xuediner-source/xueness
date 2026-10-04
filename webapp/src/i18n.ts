@@ -1491,3 +1491,13 @@ Object.assign(messages, {
   "OAuth URL 必须使用 HTTPS": "OAuth URL must use HTTPS",
   "将删除早于 {0} 天的日志文件。其他存储数据不会更改。": "Log files older than {0} days will be deleted. Other stored data will not change.",
 });
+
+Object.assign(messages, {
+  "未选择工作区": "No workspace selected",
+  "选择项目目录后显示在这里": "Shown here once you choose a project folder",
+  "当前 Git 分支": "Current Git branch",
+  "配置设置插件版本": "Config settings plugin version",
+  "还没有自定义模型配置": "No custom model profiles yet",
+  "添加一个 API 配置后，可随时切换当前运行使用的模型。": "Add an API profile to switch the model used by the current run at any time.",
+  "查看文档": "View docs",
+});
