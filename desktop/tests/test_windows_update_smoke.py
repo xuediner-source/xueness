@@ -226,6 +226,47 @@ class WindowsUpdateSmokeTests(unittest.TestCase):
             self.assertEqual(unknown_file.read_bytes(), b'preserve this unrecognized cache data')
             self.assertTrue(cache.is_dir())
 
+    def test_cleanup_installer_cache_preserves_reparse_point_installer_cross_platform(self):
+        fixture_id = '12345678-1234-4abc-8def-1234567890ab'
+        installer_bytes = b'this run synthetic setup package'
+        with tempfile.TemporaryDirectory() as temporary:
+            work = Path(temporary)
+            package_dir = work / 'base-build'
+            package_dir.mkdir()
+            (package_dir / 'Xueness-0.1.2-windows-x64-setup.exe').write_bytes(installer_bytes)
+            cache = work / 'native-local-appdata' / f'xueness-update-smoke-{fixture_id}-updater'
+            cache.mkdir(parents=True)
+            installer = cache / 'installer.exe'
+            installer.write_bytes(installer_bytes)
+
+            original_stat = Path.stat
+
+            class StatWithReparseAttribute:
+                def __init__(self, original):
+                    self.original = original
+                    self.st_file_attributes = 0x400  # FILE_ATTRIBUTE_REPARSE_POINT
+
+                def __getattr__(self, name):
+                    return getattr(self.original, name)
+
+            def stat_with_reparse_attribute(path, *args, **kwargs):
+                result = original_stat(path, *args, **kwargs)
+                if path == installer:
+                    # Keep real st_mode so exists() and is_symlink() continue
+                    # to observe an ordinary file while Windows metadata is mocked.
+                    return StatWithReparseAttribute(result)
+                return result
+
+            with patch('desktop.scripts.check_windows_update.native_installer_cache', return_value=cache):
+                with patch.object(Path, 'stat', new=stat_with_reparse_attribute):
+                    self.assertTrue(installer.exists())
+                    self.assertFalse(installer.is_symlink())
+                    with self.assertRaisesRegex(RuntimeError, 'redirected fixture cached installer'):
+                        cleanup_installer_cache(work, fixture_id)
+
+            self.assertEqual(installer.read_bytes(), installer_bytes)
+            self.assertTrue(cache.is_dir())
+
     def test_loopback_feed_serves_allowlisted_assets_and_byte_ranges_only(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)

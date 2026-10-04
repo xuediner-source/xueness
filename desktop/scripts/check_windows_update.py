@@ -278,7 +278,7 @@ def native_installer_cache(fixture_id: str) -> Path:
     # descendant. Require containment and the exact run name in either view.
     if cache.is_symlink() or parent not in resolved.parents or resolved.name != cache.name:
         raise RuntimeError('Refusing a redirected fixture installer cache.')
-    if cache.exists() and cache.stat().st_file_attributes & 0x400:  # FILE_ATTRIBUTE_REPARSE_POINT
+    if cache.exists() and getattr(cache.stat(), 'st_file_attributes', 0) & 0x400:  # FILE_ATTRIBUTE_REPARSE_POINT
         raise RuntimeError('Refusing a reparse point fixture installer cache.')
     return resolved
 
@@ -291,7 +291,7 @@ def cleanup_installer_cache(work: Path, fixture_id: str) -> None:
     # recursively remove a directory in the user's actual LocalAppData.
     installer = cache / 'installer.exe'
     if installer.exists():
-        if installer.is_symlink() or installer.stat().st_file_attributes & 0x400:
+        if installer.is_symlink() or getattr(installer.stat(), 'st_file_attributes', 0) & 0x400:
             raise RuntimeError('Refusing a redirected fixture cached installer.')
         digest = hashlib.sha256(installer.read_bytes()).digest()
         packages = [path for folder in ('base-build', 'loopback-feed')
