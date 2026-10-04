@@ -128,19 +128,33 @@ class AggregateTests(unittest.TestCase):
 
     def test_junk_rows_are_skipped_not_fatal(self):
         now = _ts()
+        negative_mtime_supported = True
+        try:
+            _dt.datetime.fromtimestamp(-1)
+        except (OSError, OverflowError, ValueError):
+            negative_mtime_supported = False
         sessions = [
             None,
             "not-a-session",
             {},
             {"id": "x", "status": "completed", "steps": "nan", "mtime": "not-a-time"},
             {"id": "y", "status": "completed", "steps": -4, "mtime": -1},
+            {"id": "nan", "status": "completed", "steps": 1, "mtime": "nan"},
+            {"id": "inf", "status": "completed", "steps": 1, "mtime": float("inf")},
+            {"id": "int-overflow", "status": "completed", "steps": 1, "mtime": 10**400},
+            {"id": "far", "status": "completed", "steps": 1, "mtime": 1e300},
             {"id": "z", "status": "completed", "steps": 2, "mtime": now},
         ]
         result = usage_api.aggregate(sessions, "all", now=now)
-        # Only the two rows with a usable mtime survive; steps are clamped at 0.
-        self.assertEqual(result["totals"]["sessions"], 2)
-        self.assertEqual(result["totals"]["steps"], 2)
-        self.assertEqual(result["totals"]["completed"], 2)
+        # The negative timestamp is retained only when this platform's local
+        # timestamp conversion supports it. All malformed/non-finite values
+        # are skipped without making aggregate() fail.
+        expected_sessions = 1 + int(negative_mtime_supported)
+        expected_steps = 2
+        expected_completed = expected_sessions
+        self.assertEqual(result["totals"]["sessions"], expected_sessions)
+        self.assertEqual(result["totals"]["steps"], expected_steps)
+        self.assertEqual(result["totals"]["completed"], expected_completed)
 
 
 class DispatchTests(unittest.TestCase):

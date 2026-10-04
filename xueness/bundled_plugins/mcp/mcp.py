@@ -43,6 +43,7 @@ import subprocess
 import threading
 import time
 from pathlib import Path
+from ...resources import _is_link, _kind_dir
 
 MCP_PREFIX = "mcp__"
 DEFAULT_TIMEOUT = 10
@@ -142,7 +143,7 @@ def _safe_read_json(path: Path):
     not an object all yield ``None`` so a single broken entry can never take
     down the list or pull in a foreign file.
     """
-    if path.is_symlink():
+    if _is_link(path):
         return None
     flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0)
     try:
@@ -167,15 +168,18 @@ def load(state_dir) -> list:
     legal ``id``, disabled entries, and entries whose ``command`` is not a
     non-blank string. One bad entry only costs that entry.
     """
-    mcp_dir = _mcp_dir(state_dir)
+    try:
+        mcp_dir = _kind_dir({"state_dir": state_dir}, "mcp")
+    except (OSError, ValueError):
+        return []
     # A symlinked directory would relocate the whole jail; refuse it outright.
-    if mcp_dir.is_symlink():
+    if _is_link(mcp_dir):
         return []
     if not mcp_dir.is_dir():
         return []
     servers = []
     for path in sorted(mcp_dir.glob("*.json")):
-        if path.is_symlink():
+        if _is_link(path):
             continue
         item = _safe_read_json(path)
         if item is None:
@@ -293,6 +297,9 @@ class McpClient:
         self.timeout = self._resolve_timeout(timeout)
         self.output_cap = _as_positive_int(output_cap, DEFAULT_OUTPUT_CAP)
         self.proc = None
+        self._process_job = None
+        self._process_cleanup_failed = False
+        self._process_cleanup_error = None
         self.error = None
         self.tools = []
         #: What the server actually agreed to in ``initialize`` (None until then).
@@ -319,6 +326,13 @@ class McpClient:
         if seconds is None:
             seconds = float(DEFAULT_TIMEOUT)
         return min(seconds, float(self.timeout_cap))
+
+    def _error_with_cleanup(self, message: str) -> str:
+        """Keep a process-tree cleanup failure visible in later errors."""
+        cleanup_error = self._process_cleanup_error
+        if cleanup_error and cleanup_error not in message:
+            return message + "; " + cleanup_error
+        return message
 
     @property
     def active(self) -> bool:
@@ -455,7 +469,22 @@ class McpClient:
                         if key.upper() in ('SYSTEMROOT', 'WINDIR', 'TEMP', 'TMP', 'COMSPEC', 'PATHEXT', 'USERPROFILE')})
         try:
             from ...process_runtime import spawn_external
-            self.proc = spawn_external(subprocess.Popen,
+            process_factory = subprocess.Popen
+            creationflags = getattr(subprocess, 'CREATE_NO_WINDOW', 0) if os.name == 'nt' else 0
+            if os.name == 'nt':
+                from .windows_process import ProcessTreeJob, windows_creationflags
+
+                self._process_job = ProcessTreeJob()
+                creationflags = windows_creationflags()
+
+                def process_factory(*args, **kwargs):
+                    proc = subprocess.Popen(*args, **kwargs)
+                    # Retain the suspended Popen if spawn_external later fails
+                    # while restoring the frozen app's DLL search directory.
+                    self.proc = proc
+                    return proc
+
+            self.proc = spawn_external(process_factory,
                 argv,
                 shell=False,
                 stdin=subprocess.PIPE,
@@ -466,11 +495,15 @@ class McpClient:
                 encoding='utf-8',
                 bufsize=1,
                 env=env,
-                creationflags=getattr(subprocess, 'CREATE_NO_WINDOW', 0) if os.name == 'nt' else 0,
+                creationflags=creationflags,
             )
+            if os.name == 'nt':
+                # CREATE_SUSPENDED keeps the process inert while
+                # spawn_external restores PyInstaller's process-wide DLL path.
+                self._process_job.assign_and_resume(self.proc)
         except Exception as exc:  # noqa: BLE001 - a bad command is data, not a crash
-            self.proc = None
             self.error = _fail_text(exc)
+            self._kill_proc()
             return False
         self._queue = queue.Queue()
         self._threads = []
@@ -519,6 +552,19 @@ class McpClient:
         with self._lock:
             if self.active:
                 return
+            # A launcher can exit while its server child remains alive. Keep
+            # ownership of that tree until it is explicitly reaped, including
+            # before a restart replaces the old Popen handle.
+            if self.proc is not None or self._process_job is not None:
+                if not self._kill_proc():
+                    return
+            # A failed tree cleanup is sticky: the Job handle has already been
+            # relinquished, so a later start cannot prove the old descendants
+            # are gone and must not silently forget the failure.
+            if self._process_cleanup_failed:
+                if self.error is None:
+                    self.error = self._process_cleanup_error
+                return
             self.error = None
             self.negotiated_protocol_version = None
             self.server_info = {}
@@ -549,19 +595,21 @@ class McpClient:
                 except _McpTransportError as exc:
                     # The connection itself is unusable; another version will
                     # not help.
-                    self.error = _fail_text(exc)
+                    self.error = self._error_with_cleanup(_fail_text(exc))
                     self._kill_proc()
                     return
                 except _McpError as exc:
                     # The server answered with an error. An unacceptable
                     # version is the plausible cause, so try the next one.
-                    self._kill_proc()
+                    self.error = self._error_with_cleanup(_fail_text(exc))
+                    if not self._kill_proc():
+                        return
                     if index + 1 < len(ladder):
+                        self.error = None
                         continue
-                    self.error = _fail_text(exc)
                     return
                 except Exception as exc:  # noqa: BLE001
-                    self.error = _fail_text(exc)
+                    self.error = self._error_with_cleanup(_fail_text(exc))
                     self._kill_proc()
                     return
 
@@ -584,11 +632,11 @@ class McpClient:
         try:
             result = self._request("tools/list", {}, 2)
         except _McpTransportError as exc:
-            self.error = _fail_text(exc)
+            self.error = self._error_with_cleanup(_fail_text(exc))
             self._kill_proc()
             return []
         except Exception as exc:  # noqa: BLE001
-            self.error = _fail_text(exc)
+            self.error = self._error_with_cleanup(_fail_text(exc))
             return []
         tools = result.get("tools")
         if not isinstance(tools, list):
@@ -613,11 +661,11 @@ class McpClient:
             }
             result = self._request("tools/call", params, request_id)
         except _McpTransportError as exc:
-            self.error = _fail_text(exc)
+            self.error = self._error_with_cleanup(_fail_text(exc))
             self._kill_proc()
             return {"ok": False, "content": "", "error": self.error}
         except Exception as exc:  # noqa: BLE001 - a failed call must not break a run
-            self.error = _fail_text(exc)
+            self.error = self._error_with_cleanup(_fail_text(exc))
             return {"ok": False, "content": "", "error": self.error}
         text = clip(_extract_text(result.get("content")), self.output_cap)
         if result.get("isError") is True:
@@ -626,22 +674,35 @@ class McpClient:
 
     # --- shutdown -----------------------------------------------------------
 
-    def _kill_proc(self) -> None:
-        """Terminate the child (SIGKILL when it ignores SIGTERM) and reap it."""
+    def _kill_proc(self) -> bool:
+        """Terminate and reap the process tree; report whether that was proven."""
         with self._lock:
             proc = self.proc
+            process_job = self._process_job
             self.proc = None
+            self._process_job = None
             self._started = False
+            cleanup_failure = None
+            if process_job is not None:
+                try:
+                    process_job.terminate_and_close()
+                except Exception as exc:  # noqa: BLE001
+                    cleanup_failure = exc
+                    try:
+                        process_job.close()
+                    except Exception:  # noqa: BLE001
+                        pass
             if proc is not None:
                 try:
                     if proc.stdin is not None:
                         proc.stdin.close()
                 except Exception:  # noqa: BLE001
                     pass
-                try:
-                    proc.terminate()
-                except Exception:  # noqa: BLE001
-                    pass
+                if proc.poll() is None:
+                    try:
+                        proc.terminate()
+                    except Exception:  # noqa: BLE001
+                        pass
                 try:
                     proc.wait(timeout=CLOSE_GRACE)
                 except Exception:  # noqa: BLE001
@@ -662,6 +723,15 @@ class McpClient:
             for thread in list(self._threads):
                 thread.join(timeout=CLOSE_GRACE)
             self._threads = []
+            if cleanup_failure is not None:
+                message = "process-tree cleanup failed (%s)" % type(cleanup_failure).__name__
+                self._process_cleanup_failed = True
+                self._process_cleanup_error = message
+                if self.error is None:
+                    self.error = message
+                elif message not in self.error:
+                    self.error = self.error + "; " + message
+            return not self._process_cleanup_failed
 
     def close(self) -> None:
         """Kill the child and reap it. Idempotent, and never raises."""

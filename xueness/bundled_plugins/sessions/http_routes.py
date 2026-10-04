@@ -5,6 +5,7 @@ surface; no copied module globals can bypass a patched runner or provider.
 """
 from ... import web as host
 from pathlib import Path
+from contextlib import contextmanager
 import re
 
 
@@ -12,8 +13,11 @@ def _public_model_selection(session):
     selection = session.get('model_selection')
     if not isinstance(selection, dict):
         return {}
-    return {key: selection[key] for key in ('provider_id', 'model', 'reasoning_effort')
-            if key in selection and isinstance(selection[key], (str, type(None)))}
+    public = {key: selection[key] for key in ('provider_id', 'model', 'reasoning_effort')
+              if key in selection and isinstance(selection[key], (str, type(None)))}
+    if session.get('tool_calling') in ('native', 'json'):
+        public['tool_calling'] = session['tool_calling']
+    return public
 
 
 def _public_runtime_budget(session):
@@ -197,6 +201,67 @@ def _record_prepared_commands(session, prepared):
         del log[:-50]
 
 
+def _message_queue(ctx):
+    from .queue import MessageQueue
+    return MessageQueue(ctx['store'])
+
+
+@contextmanager
+def _queue_run_lease(ctx, queue, session_id):
+    # Close/pause the FIFO before releasing the session's cross-process lease.
+    # A rejected competing run must never pause a different worker's queue.
+    with host.lease(ctx['store'], session_id):
+        try:
+            yield
+        finally:
+            try:
+                queue.pause_pending(session_id)
+            except (OSError, ValueError):
+                pass
+
+
+def _append_queued_turn(ctx, queue, session, item):
+    """Append one claimed FIFO item as an ordinary, independently journaled turn."""
+    from ...commands import load as load_commands
+    prepared = item.get('prepared')
+    commands = (None if prepared is not None else
+                load_commands(ctx['state_dir'])
+                if host.plugin_runtime.is_enabled(ctx['state_dir'], 'commands') else [])
+    session = host.append_user_turn(
+        session, ctx['store'], item['text'], commands,
+        queue_message_id=item['id'], persist=prepared is None)
+    if prepared is not None:
+        session['messages'][-1]['content'] = prepared['text']
+        _safe_input_context(session, prepared)
+        _record_prepared_commands(session, prepared)
+        ctx['store'].save(session)
+    return session
+
+
+def _queue_completion(session):
+    completion = session.get('completion')
+    if not isinstance(completion, dict):
+        return None
+    return {key: completion[key] for key in (
+        'status', 'verified', 'tool_execution_status', 'delivery_status') if key in completion}
+
+
+def _queued_context_matches(ctx, session, item):
+    prepared = item.get('prepared')
+    if not isinstance(prepared, dict):
+        return True
+    metadata = prepared.get('metadata') or {}
+    cached = metadata.get('modelSelection') or {}
+    current = session.get('model_selection') or {}
+    if any(cached.get(key) != current.get(key)
+           for key in ('provider_id', 'model', 'reasoning_effort')):
+        return False
+    try:
+        return _prepared_remote(ctx, prepared) == session.get('remote_connection')
+    except ValueError:
+        return False
+
+
 def _remote_connection(ctx, remote_id, expected_digest=None):
     """Resolve a saved SSH target and bind it to its current configuration digest."""
     if not isinstance(remote_id, str) or not remote_id or len(remote_id) > 64:
@@ -319,6 +384,14 @@ def handle_GET(self, parts, path, data):
         with ctx['lock']:
             buckets = ctx['approvals'].get(parts[2], {})
             approved = {'write': sorted(buckets.get('write', {}).values()), 'edit': sorted(buckets.get('edit', {}).values()), 'exec': sorted(buckets.get('exec', {}).values()), 'mcp': sorted(buckets.get('mcp', {}).values())}
+        try:
+            from .queue import reconcile_inactive
+            queue = _message_queue(ctx)
+            reconcile_inactive(ctx, queue, parts[2])
+            queue_snapshot = queue.snapshot(parts[2])
+        except (OSError, ValueError):
+            queue_snapshot = {'queued_messages': [], 'queue_history': [],
+                              'queue_error': 'cannot read message queue'}
         self._send(200, {
             'id': session['id'], 'task': session['task'],
             'title': session.get('title') or session['task'], 'root': session['root'],
@@ -342,6 +415,7 @@ def handle_GET(self, parts, path, data):
             'tool_timings': session.get('tool_timings', [])[-200:],
             'pending_question': session.get('pending_question'),
             'pending': host.pending_denials(session), 'approved': approved,
+            **queue_snapshot,
             'changed_files': host.changed_paths(session),
             'forkParent': _public_fork_parent(session),
         })
@@ -521,6 +595,14 @@ def handle_POST(self, parts, path, data):
                 self._send(409, {'error': 'resolve pending approvals before a new turn'})
                 return True
             try:
+                queued = _message_queue(ctx).snapshot(parts[2])['queued_messages']
+            except (OSError, ValueError):
+                self._send(500, {'error': 'cannot read message queue'})
+                return True
+            if queued:
+                self._send(409, {'error': 'run queued messages before sending a new turn'})
+                return True
+            try:
                 from ...commands import load as load_commands
                 with host.lease(ctx['store'], parts[2]):
                     session = ctx['store'].load(parts[2])
@@ -538,7 +620,8 @@ def handle_POST(self, parts, path, data):
                     session = host.append_user_turn(
                         session, ctx['store'], text,
                         (None if prepared is not None else
-                         load_commands(ctx['state_dir']) if host.plugin_runtime.is_enabled(ctx['state_dir'], 'commands') else []))
+                         load_commands(ctx['state_dir']) if host.plugin_runtime.is_enabled(ctx['state_dir'], 'commands') else []),
+                        persist=prepared is None)
                     if prepared is not None:
                         session['messages'][-1]['content'] = prepared['text']
                         _safe_input_context(session, prepared)
@@ -566,6 +649,10 @@ def handle_POST(self, parts, path, data):
         self._send(200, {'id': session['id'], 'status': session['status'], 'steps': session['steps']})
         return True
     if len(parts) == 4 and parts[0] == 'api' and (parts[1] == 'sessions') and (parts[3] == 'run') and host._valid_sid(parts[2]):
+        continue_queue = data.get('continue_queue', False)
+        if type(continue_queue) is not bool:
+            self._send(400, {'error': 'continue_queue must be a boolean'})
+            return True
         if any((k in data for k in ('allow_write', 'allowWrite', 'allow_exec', 'allowExec',
                                     'allow_edit', 'allowEdit', 'allow_network', 'allowNetwork',
                                     'approve_all', 'approveAll'))):
@@ -644,6 +731,7 @@ def handle_POST(self, parts, path, data):
                 or (reasoning_effort is not None and not isinstance(reasoning_effort, str))):
             self._send(400, {'error': 'invalid model selection'})
             return True
+        queue = _message_queue(ctx)
         with ctx['lock']:
             if parts[2] in ctx['running']:
                 self._send(409, {'error': 'session run already in progress'})
@@ -658,6 +746,24 @@ def handle_POST(self, parts, path, data):
             except ValueError as exc:
                 self._send(409, {'error': str(exc)})
                 return True
+            if continue_queue and not session.get('current_queue_item_id'):
+                try:
+                    queued = queue.snapshot(parts[2])['queued_messages']
+                except (OSError, ValueError):
+                    self._send(500, {'error': 'cannot read message queue'})
+                    return True
+                if not queued:
+                    self._send(409, {'error': 'no queued messages to continue'})
+                    return True
+            if session.get('status') == 'needs_review' and not continue_queue:
+                try:
+                    queued = queue.snapshot(parts[2])['queued_messages']
+                except (OSError, ValueError):
+                    self._send(500, {'error': 'cannot read message queue'})
+                    return True
+                if queued:
+                    self._send(409, {'error': 'review the previous result and explicitly continue queued messages'})
+                    return True
             saved_remote = session.get('remote_connection')
             if saved_remote is not None:
                 if (not isinstance(saved_remote, dict) or not isinstance(saved_remote.get('id'), str)
@@ -685,6 +791,13 @@ def handle_POST(self, parts, path, data):
             if permission_mode not in ('build', 'edit', 'yolo'):
                 self._send(400, {'error': 'saved permission mode is invalid'})
                 return True
+            ctx.setdefault('running_context', {})[parts[2]] = {
+                'model_selection': _selection_record({
+                    'provider_id': pid, 'model': model,
+                    'reasoning_effort': reasoning_effort,
+                }),
+                'remote_connection': saved_remote,
+            }
             ctx['running'].add(parts[2])
         try:
             provider = host.provider_config.resolve(ctx['state_dir'], pid, model,
@@ -701,14 +814,21 @@ def handle_POST(self, parts, path, data):
         except ValueError as exc:
             with ctx['lock']:
                 ctx['running'].discard(parts[2])
+                ctx.setdefault('running_context', {}).pop(parts[2], None)
             self._send(400, {'error': host.provider_config.configuration_error(exc)})
             return True
         try:
-            with host.lease(ctx['store'], session['id']):
+            with _queue_run_lease(ctx, queue, session['id']):
                 selection = session.get('model_selection')
                 session = ctx['store'].load(parts[2])
                 if selection is not None:
                     session['model_selection'] = selection
+                current_queue_id = session.get('current_queue_item_id')
+                if (continue_queue and current_queue_id is None
+                        and not queue.snapshot(parts[2])['queued_messages']):
+                    self._send(409, {'error': 'no queued messages to continue'})
+                    return True
+                queue.resume_pending(parts[2], current_queue_id)
                 previous_permission_mode = session.get('permission_mode', 'build')
                 if previous_permission_mode != permission_mode:
                     history = session.setdefault('permission_mode_history', [])
@@ -735,9 +855,95 @@ def handle_POST(self, parts, path, data):
                 names = plugin_plan.load
                 session['skill_catalog'] = data.get('skill_catalog') is True
                 with host.activate(names, ctx['state_dir'], host.Path(session['root']), session) as ext:
-                    host.replay_approved(session, ctx['store'], gate, ctx['approvals'], ctx['lock'], mcp_call=ext.kwargs.get('mcp_call'))
                     from ..memory.catalog import load_run_memory
-                    out = host.run(session, ctx['store'], provider, gate, steps, max_chars, memory=load_run_memory(ctx, session['root']), max_tokens=max_tokens, skills=ext.kwargs.get('skills'), skill_reader=ext.kwargs.get('skill_reader'), hooks=ext.kwargs.get('hooks'), mcp_tools=ext.kwargs.get('mcp_tools'), mcp_call=ext.kwargs.get('mcp_call'), subagents=ext.kwargs.get('subagents'), registry=ctx['task_registry'], should_stop=lambda sid=parts[2]: sid in ctx['stop_requested'], max_wall_seconds=max_wall_seconds, runtime_profile=requested_profile)
+                    run_memory = load_run_memory(ctx, session['root'])
+                    out = session
+                    queue_warning = None
+                    current_queue_id = out.get('current_queue_item_id')
+
+                    # A crash after a completed queue turn but before its sidecar
+                    # update must not execute the same user turn twice.
+                    if (current_queue_id and out.get('status') in ('completed', 'needs_review')
+                            and isinstance(out.get('completion'), dict)):
+                        queue.update(parts[2], current_queue_id, out['status'], out['completion'])
+                        out.pop('current_queue_item_id', None)
+                        ctx['store'].save(out)
+                        current_queue_id = None
+
+                    # A completed session with pending queue work starts at the
+                    # next queued user message; it never asks the model to repeat
+                    # the already completed active turn.
+                    if current_queue_id is None and (out.get('status') == 'completed'
+                            or (out.get('status') == 'needs_review' and continue_queue)):
+                        item = queue.claim_next(parts[2])
+                        if item is None and continue_queue:
+                            self._send(409, {'error': 'no queued messages to continue'})
+                            return True
+                        if item is not None:
+                            if not _queued_context_matches(ctx, out, item):
+                                queue.update(parts[2], item['id'], 'paused')
+                                queue.pause_pending(parts[2], 'Prepared model or remote selection changed; prepare this turn again.')
+                                queue_warning = 'queued turn context no longer matches the active session selection'
+                            else:
+                                out = _append_queued_turn(ctx, queue, out, item)
+                                gate.session = out
+                                current_queue_id = item['id']
+
+                    from .queue import MAX_PENDING_ITEMS
+                    drained = 0
+                    while queue_warning is None:
+                        host.replay_approved(out, ctx['store'], gate, ctx['approvals'], ctx['lock'],
+                                             mcp_call=ext.kwargs.get('mcp_call'))
+                        out = host.run(
+                            out, ctx['store'], provider, gate, steps, max_chars,
+                            memory=run_memory, max_tokens=max_tokens,
+                            skills=ext.kwargs.get('skills'), skill_reader=ext.kwargs.get('skill_reader'),
+                            hooks=ext.kwargs.get('hooks'), mcp_tools=ext.kwargs.get('mcp_tools'),
+                            mcp_call=ext.kwargs.get('mcp_call'), subagents=ext.kwargs.get('subagents'),
+                            registry=ctx['task_registry'],
+                            should_stop=lambda sid=parts[2]: sid in ctx['stop_requested'],
+                            max_wall_seconds=max_wall_seconds, runtime_profile=requested_profile)
+                        gate.session = out
+                        current_queue_id = out.get('current_queue_item_id')
+                        if current_queue_id and out.get('status') in ('completed', 'needs_review'):
+                            queue.update(parts[2], current_queue_id, out['status'], out.get('completion'))
+                            out.pop('current_queue_item_id', None)
+                            ctx['store'].save(out)
+                            current_queue_id = None
+                        if out.get('status') != 'completed':
+                            reason = out.get('pause_reason') or out.get('status') or 'run paused'
+                            queue.pause_pending(parts[2], str(reason))
+                            break
+
+                        # Finish the current run at approval/question/stop and
+                        # plugin-disable boundaries. The queue is resumed only by
+                        # a later explicit /run request.
+                        if (host.pending_denials(out) or out.get('pending_question')
+                                or parts[2] in ctx.get('stop_requested', set())
+                                or not host.plugin_runtime.is_enabled(ctx['state_dir'], 'sessions')):
+                            queue.pause_pending(parts[2], 'Waiting for user action or sessions plugin availability.')
+                            break
+                        if drained >= MAX_PENDING_ITEMS:
+                            queue.pause_pending(parts[2], 'Run limit reached; continue to process remaining queued messages.')
+                            break
+                        if not queue.close_if_empty(parts[2]):
+                            break
+                        item = queue.claim_next(parts[2])
+                        if item is None:
+                            # A concurrent cancel may have removed the last item
+                            # after close_if_empty saw it; repeat the atomic close.
+                            if not queue.close_if_empty(parts[2]):
+                                break
+                            continue
+                        if not _queued_context_matches(ctx, out, item):
+                            queue.update(parts[2], item['id'], 'paused')
+                            queue.pause_pending(parts[2], 'Prepared model or remote selection changed; prepare this turn again.')
+                            queue_warning = 'queued turn context no longer matches the active session selection'
+                            break
+                        out = _append_queued_turn(ctx, queue, out, item)
+                        gate.session = out
+                        current_queue_id = item['id']
+                        drained += 1
         except BlockingIOError:
             self._send(409, {'error': 'session is in use by another process'})
             return True
@@ -754,6 +960,7 @@ def handle_POST(self, parts, path, data):
             with ctx['lock']:
                 ctx['running'].discard(parts[2])
                 ctx['stop_requested'].discard(parts[2])
+                ctx.setdefault('running_context', {}).pop(parts[2], None)
         self._send(200, {'id': out['id'], 'status': out['status'], 'steps': out['steps'], 'mode': out.get('mode', mode), 'completion': out['completion'], 'pending': host.pending_denials(out), 'pending_question': out.get('pending_question'), 'todos': out.get('todos', []), 'hook_log': out.get('hook_log', []), 'plugin_refused': plugin_plan.refused, 'tasks': host.task_registry.mirror(ctx['task_registry'], out['id'])})
         return True
     if len(parts) == 4 and parts[0] == 'api' and (parts[1] == 'sessions') and (parts[3] == 'stop') and host._valid_sid(parts[2]):

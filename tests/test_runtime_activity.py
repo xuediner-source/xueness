@@ -59,7 +59,7 @@ class ActivityTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             base = Path(directory)
             store = Store(base / 'state')
-            session = store.new('inspect', base)
+            session = store.new('Read README.md in this workspace and summarize it.', base)
             observations = []
             class Provider:
                 runtime_profile = 'lightweight'
@@ -71,6 +71,8 @@ class ActivityTests(unittest.TestCase):
             result = run(session, store, Provider(), Gate(base), max_steps=1)
             self.assertEqual(observations, ['waiting_model', 'generating'])
             self.assertEqual(result['runtime_activity']['phase'], 'needs_review')
+            self.assertEqual(result['completion']['status'], 'unverified')
+            self.assertEqual(result['completion']['tool_execution_status'], 'not_applicable')
             self.assertFalse(result['completion']['verified'])
             self.assertEqual(result['runtime_activity']['reportedOutputTokens'], 4)
 

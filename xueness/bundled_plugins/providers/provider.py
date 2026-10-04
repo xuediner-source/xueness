@@ -27,7 +27,7 @@ MAX_DISCOVERED_MODELS = 500
 MAX_DISCOVERED_MODEL_ID_CHARS = 256
 MAX_MODEL_OWNER_CHARS = 128
 MODEL_DISCOVERY_MAX_TIMEOUT_SECONDS = 8.0
-COMPATIBILITY_TEST_MAX_OUTPUT_TOKENS = 96
+COMPATIBILITY_TEST_MAX_OUTPUT_TOKENS = 128
 COMPATIBILITY_TEST_MODES = frozenset({
     "conversation", "native_tool_call", "json_tool_call", "stream", "tool_roundtrip",
 })
@@ -246,8 +246,10 @@ class _DeadlineConnectionMixin:
 
     def _connect_tcp(self):
         # Nonblocking connect plus select uses the same absolute deadline for
-        # every resolved address. Register before connect so expiry can also
-        # interrupt a slow TCP handshake.
+        # every resolved address. Duplicate only after connect: on Windows a
+        # duplicate made before connect remains unconnected, so shutting it
+        # down cannot interrupt the original socket's header reads. The TCP
+        # handshake itself is bounded by the nonblocking select below.
         errors = []
         # The stdlib's synchronous resolver cannot be interrupted by the
         # socket watchdog; DNS lookup keeps the operating system's resolver
@@ -255,7 +257,6 @@ class _DeadlineConnectionMixin:
         addresses = socket.getaddrinfo(self.host, self.port, 0, socket.SOCK_STREAM)
         for family, socktype, proto, _canonname, address in addresses:
             sock = socket.socket(family, socktype, proto)
-            self._deadline_guard.register(sock)
             try:
                 if self.source_address:
                     sock.bind(self.source_address)
@@ -281,6 +282,7 @@ class _DeadlineConnectionMixin:
                         raise OSError(error, os.strerror(error))
                 sock.setblocking(True)
                 sock.settimeout(self._remaining())
+                self._deadline_guard.register(sock)
                 self.sock = sock
                 try:
                     self.sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)

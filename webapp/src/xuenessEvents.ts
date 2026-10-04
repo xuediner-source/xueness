@@ -62,6 +62,11 @@ export interface XuenessSessionCompletionEvent extends XuenessEventBase {
   verified: boolean;
   summary: string;
   evidenceCount: number;
+  /** Assessment state; optional to keep older v1 event journals valid. */
+  status?: "verified" | "unverified" | "not_applicable";
+  toolExecutionStatus?: "succeeded" | "failed" | "incomplete" | "not_applicable";
+  deliveryStatus?: "passed" | "failed" | "not_assessed";
+  turnId?: string;
 }
 
 export interface XuenessSessionPendingQuestionEvent extends XuenessEventBase {
@@ -117,6 +122,10 @@ function isNonNegativeInteger(value: unknown): value is number {
   return typeof value === "number" && Number.isInteger(value) && value >= 0;
 }
 
+function isOptionalEnum(value: unknown, allowed: readonly string[]): boolean {
+  return value === undefined || typeof value === "string" && allowed.includes(value);
+}
+
 /**
  * 校验给定对象是否为合法的 XuenessEventV1。
  * 严格检查 schema、seq（正整数）、sessionId 及 7 种 type 的专属字段。未知或不符返回 false，不 throw。
@@ -166,7 +175,11 @@ export function isXuenessEventV1(value: unknown): value is XuenessEventV1 {
         typeof value.verified === "boolean" &&
         typeof value.summary === "string" &&
         Number.isInteger(value.evidenceCount) &&
-        (value.evidenceCount as number) >= 0
+        (value.evidenceCount as number) >= 0 &&
+        isOptionalEnum(value.status, ["verified", "unverified", "not_applicable"]) &&
+        isOptionalEnum(value.toolExecutionStatus, ["succeeded", "failed", "incomplete", "not_applicable"]) &&
+        isOptionalEnum(value.deliveryStatus, ["passed", "failed", "not_assessed"]) &&
+        (value.turnId === undefined || typeof value.turnId === "string")
       );
 
     case "session.pending_question":

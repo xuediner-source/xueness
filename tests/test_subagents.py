@@ -17,6 +17,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
+from tests.fs_link_helpers import make_directory_boundary_link, make_symlink
 from xueness.subagents import (PROMPT_MAX_CHARS, SUBAGENT_DENIED_TOOL_NAMES, TASK_TOOL_NAME,
                                TRUNCATION_SUFFIX, agent_tool_allowlist,
                                build_system_prompt,
@@ -405,7 +406,7 @@ class SubagentsTests(unittest.TestCase):
         secret = self.root / "outside-secret.json"
         secret.write_text(json.dumps({"id": "evil", "name": "Evil",
                                       "systemPrompt": "SECRET-OUTSIDE"}), encoding="utf-8")
-        (self.subagents_dir / "evil.json").symlink_to(secret)
+        make_symlink(self.subagents_dir / "evil.json", secret)
         self.write_agent("ok.json", {"id": "ok", "name": "Legit"})
         agents = load(self.state_dir)
         self.assertEqual([a["id"] for a in agents], ["ok"])
@@ -418,11 +419,11 @@ class SubagentsTests(unittest.TestCase):
             json.dumps({"id": "a", "name": "Outside", "systemPrompt": "SECRET-DIR"}),
             encoding="utf-8")
         shutil.rmtree(self.subagents_dir)
-        self.subagents_dir.symlink_to(outside, target_is_directory=True)
+        make_directory_boundary_link(self.subagents_dir, outside)
         self.assertEqual(load(self.state_dir), [])
 
     def test_broken_symlink_entry_is_skipped(self):
-        (self.subagents_dir / "dangling.json").symlink_to(self.root / "nope.json")
+        make_symlink(self.subagents_dir / "dangling.json", self.root / "nope.json")
         self.write_agent("ok.json", {"id": "ok", "name": "Legit"})
         self.assertEqual([a["id"] for a in load(self.state_dir)], ["ok"])
 
@@ -434,7 +435,7 @@ class SubagentsTests(unittest.TestCase):
         secret = self.root / "secret.json"
         secret.write_text(json.dumps({"id": "x", "name": "X", "systemPrompt": "SECRET-VALUE"}),
                           encoding="utf-8")
-        (self.subagents_dir / "link.json").symlink_to(secret)
+        make_symlink(self.subagents_dir / "link.json", secret)
 
         before = self.snapshot()
         agents = load(self.state_dir)

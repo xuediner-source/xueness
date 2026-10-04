@@ -13,6 +13,7 @@ import subprocess
 import threading
 
 from ...tool_contract import BuiltinTool, execution_context
+from ...resources import _protect_private_directory
 
 MAX_REQUEST = 100_000
 MAX_RESPONSE = 1_000_000
@@ -28,31 +29,27 @@ def _subject(args):
 def _worker_environment():
     # The browser renderer receives no common API credentials. The explicit
     # executable override is retained so operators can choose installed Chrome.
-    return {key: value for key, value in os.environ.items()
-            if not re.search(r"KEY|TOKEN|SECRET|PASSWORD|CREDENTIAL", key, re.I)}
+    from .runtime import worker_environment
+    return worker_environment()
 
 
 class _BrowserBroker:
     def __init__(self, state, root):
-        self.state = Path(state).resolve()
         self.root = Path(root).resolve()
-        self.profile = self.state / f"browser-profile-{os.getpid()}"
-        if self.profile.is_symlink():
-            raise ValueError("browser profile cannot be a symlink")
+        from .profiles import managed_profile, _link
+        self.profile = managed_profile(state)
+        self.state = self.profile.parent
         self.profile.mkdir(mode=0o700, parents=True, exist_ok=True)
-        if self.profile.is_symlink() or not self.profile.is_dir():
+        if _link(self.profile) or not self.profile.is_dir() or self.profile.resolve().parent != self.state:
             raise ValueError("browser profile path is unsafe")
-        os.chmod(self.profile, 0o700)
+        _protect_private_directory(self.profile)
         self.lock = threading.RLock()
         self.responses = queue.Queue()
-        script = Path(__file__).with_name("bridge.mjs")
         env = _worker_environment()
-        executable = os.environ.get('XUENESS_DESKTOP_NODE') or 'node'
-        if os.environ.get('XUENESS_DESKTOP_NODE'):
-            env['ELECTRON_RUN_AS_NODE'] = '1'
+        from .runtime import worker_command
         from ...process_runtime import spawn_external
         self.process = spawn_external(subprocess.Popen,
-            [executable, str(script), str(self.profile)], cwd=self.root,
+            worker_command(self.profile), cwd=self.root,
             env=env, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
             stderr=subprocess.DEVNULL, text=True, encoding="utf-8", bufsize=1,
             creationflags=getattr(subprocess, 'CREATE_NO_WINDOW', 0) if os.name == 'nt' else 0,
@@ -72,7 +69,8 @@ class _BrowserBroker:
                 ready = None
         if not isinstance(ready, dict) or not ready.get("ready"):
             self.close()
-            raise RuntimeError("browser worker returned an invalid startup response")
+            reason = ready.get('reason') if isinstance(ready, dict) else None
+            raise RuntimeError('browser worker could not start: ' + (reason if reason in ('driver_missing', 'browser_missing', 'launch_failed') else 'invalid_response'))
 
     def _read_output(self):
         try:
@@ -205,6 +203,10 @@ def tools():
 
 
 def dispatch(method, parts, query, data, ctx):
+    from .profiles import dispatch as profile_dispatch
+    result = profile_dispatch(method, parts, query, data, ctx)
+    if result is not None:
+        return result
     from .settings_api import dispatch as settings_dispatch
     return settings_dispatch(method, parts, query, data, ctx)
 

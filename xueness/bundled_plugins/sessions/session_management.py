@@ -12,6 +12,7 @@ from pathlib import Path
 
 from ...core import Store
 from ...session_lease import lease
+from ...resources import _is_link
 
 MAX_TITLE = 120
 TASK_AUTO_ARCHIVE_DAY_OPTIONS = (3, 7, 14, 30)
@@ -31,7 +32,7 @@ def validate_title(value: object) -> str:
 
 def _live_path(store: Store, sid: str) -> Path:
     path = store._path(sid)  # validates the identifier before any filesystem access
-    if path.is_symlink():
+    if _is_link(path):
         raise ValueError("session file is a symbolic link")
     return path
 
@@ -55,7 +56,7 @@ def _read_state_lock(store: Store, sid: str):
 def _read_state_path(store: Store, sid: str, *, create: bool = False) -> Path:
     store._path(sid)
     directory = store.directory / _READ_STATE_DIR
-    if directory.is_symlink():
+    if _is_link(directory):
         raise ValueError("session read state directory is a symbolic link")
     if create:
         directory.mkdir(mode=0o700, exist_ok=True)
@@ -65,7 +66,7 @@ def _read_state_path(store: Store, sid: str, *, create: bool = False) -> Path:
 def _load_read_state(store: Store, sid: str) -> dict | None:
     try:
         path = _read_state_path(store, sid)
-        if path.is_symlink() or not path.is_file():
+        if _is_link(path) or not path.is_file():
             return None
         value = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, ValueError, TypeError, json.JSONDecodeError):
@@ -98,12 +99,15 @@ def mark_viewed(store: Store, sid: str) -> None:
                     and now - previous["viewedAt"] < 60):
                 return
             path = _read_state_path(store, sid, create=True)
-            if path.is_symlink():
+            if _is_link(path):
                 raise ValueError("session read state is a symbolic link")
             fd, temporary = tempfile.mkstemp(prefix=f".{sid}.", dir=path.parent)
             try:
-                os.fchmod(fd, 0o600)
                 with os.fdopen(fd, "w", encoding="utf-8") as stream:
+                    if hasattr(os, "fchmod"):
+                        os.fchmod(stream.fileno(), 0o600)
+                    else:
+                        os.chmod(temporary, 0o600)
                     json.dump({"readThroughMtimeNs": observed_mtime_ns, "viewedAt": now}, stream)
                     stream.flush()
                     os.fsync(stream.fileno())
@@ -154,7 +158,7 @@ def archive_stale(store: Store, older_than_days: int, *, running_ids=(), has_pen
         return archived
     for source in paths:
         sid = source.stem
-        if source.is_symlink() or not re.fullmatch(r"[0-9a-f]{32}", sid):
+        if _is_link(source) or not re.fullmatch(r"[0-9a-f]{32}", sid):
             continue
         try:
             mtime_ns = source.stat().st_mtime_ns
@@ -179,7 +183,7 @@ def archive_stale(store: Store, older_than_days: int, *, running_ids=(), has_pen
                 archive(store, sid)
                 archived.append(sid)
                 marker = _read_state_path(store, sid)
-                if not marker.is_symlink():
+                if not _is_link(marker):
                     marker.unlink(missing_ok=True)
         except (BlockingIOError, FileExistsError, FileNotFoundError, OSError, ValueError,
                 json.JSONDecodeError):
@@ -215,27 +219,45 @@ def archive(store: Store, sid: str) -> dict:
     """Hide the session from active history without deleting its audit or workspace.
 
     The archive is outside Store.list's live glob. The caller must hold the
-    context lock and reject running sessions before invoking this function.
+    context lock, session lease, and reject running sessions before invoking
+    this function. The queue lock serializes the move and sidecar deletion with
+    concurrent enqueue requests.
     """
-    source = _live_path(store, sid)
-    session = store.load(sid)
-    archive_dir = store.directory / "deleted-sessions"
-    if archive_dir.is_symlink():
-        raise ValueError("archive directory is a symbolic link")
-    archive_dir.mkdir(mode=0o700, exist_ok=True)
-    destination = archive_dir / source.name
-    if destination.exists() or destination.is_symlink():
-        raise FileExistsError("session archive already exists")
-    _audit(session, "deleted")
-    # Save the audit before the atomic move; neither the workspace nor the
-    # archived JSON is removed. A move error leaves the live session intact.
-    store.save(session)
-    os.rename(source, destination)
+    from .queue import MessageQueue
+
+    queue = MessageQueue(store)
+    with queue.session_lock(sid):
+        source = _live_path(store, sid)
+        session = store.load(sid)
+        archive_dir = store.directory / "deleted-sessions"
+        if _is_link(archive_dir):
+            raise ValueError("archive directory is a symbolic link")
+        archive_dir.mkdir(mode=0o700, exist_ok=True)
+        destination = archive_dir / source.name
+        if destination.exists() or _is_link(destination):
+            raise FileExistsError("session archive already exists")
+        # Validate the sidecar before changing the session journal. A malformed
+        # or redirected entry must not be followed or silently orphaned.
+        queue._check_discardable_locked(sid)
+        _audit(session, "deleted")
+        # Save the audit before the atomic move; neither the workspace nor the
+        # archived JSON is removed. A move error leaves the live session intact.
+        store.save(session)
+        os.rename(source, destination)
+        try:
+            queue._discard_locked(sid)
+        except (OSError, ValueError):
+            # Keep the queue and live session paired if sidecar removal fails.
+            try:
+                os.rename(destination, source)
+            except OSError as rollback_error:
+                raise OSError("queue cleanup failed and session archive rollback failed") from rollback_error
+            raise
     # A later restore starts a fresh retention period. Do not let a stale
     # pre-archive read watermark make the restored task disappear immediately.
     try:
         marker = _read_state_path(store, sid)
-        if not marker.is_symlink():
+        if not _is_link(marker):
             marker.unlink(missing_ok=True)
     except (OSError, ValueError):
         # Read markers are auxiliary. Never turn a completed atomic archive
@@ -262,11 +284,11 @@ def list_archived(store: Store) -> list[dict]:
     skipped rather than raised over.
     """
     archive_dir = store.directory / "deleted-sessions"
-    if archive_dir.is_symlink() or not archive_dir.exists():
+    if _is_link(archive_dir) or not archive_dir.exists():
         return []
     entries: list[dict] = []
     for path in sorted(archive_dir.glob("*.json")):
-        if path.is_symlink():
+        if _is_link(path):
             continue
         stem = path.stem
         if not re.fullmatch(r"[0-9a-f]{32}", stem):
@@ -304,12 +326,16 @@ def restore(store: Store, sid: str) -> dict:
     except ValueError as exc:
         raise ValueError("invalid session id") from exc
     archive_dir = store.directory / "deleted-sessions"
+    if _is_link(archive_dir):
+        raise ValueError("archive directory is a symbolic link or reparse point")
     source = archive_dir / live.name
-    if source.is_symlink() or not source.exists():
+    if _is_link(source) or not source.exists():
         raise ValueError("session is not archived")
-    if live.exists() or live.is_symlink():
+    if live.exists() or _is_link(live):
         raise ValueError("a live session with this id already exists")
     session = json.loads(source.read_text(encoding="utf-8"))
+    if not isinstance(session, dict) or session.get("id") != sid:
+        raise ValueError("invalid archived session identity")
     _audit(session, "restored")
     # Write the audit back into the archived copy before the atomic move, so
     # the record survives a crash between the two steps. The archive directory

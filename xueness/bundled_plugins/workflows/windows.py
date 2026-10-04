@@ -23,10 +23,6 @@ def terminate_tree(proc):
 def execute_command(store, record, spec, cwd, logpath, env, start):
     # Windows selectors only handle sockets. A bounded reader queue drains a
     # real pipe while the owner independently observes cancel and timeout.
-    proc = spawn_external(subprocess.Popen, spec['argv'], cwd=cwd, env=env, stdin=subprocess.DEVNULL,
-                            stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-                            creationflags=subprocess.CREATE_NO_WINDOW)
-    store.update(record['id'], lambda r: r['nodes'][spec['id']].update(pid=proc.pid))
     chunks = queue.Queue(maxsize=32)
     stopped = threading.Event()
 
@@ -48,10 +44,16 @@ def execute_command(store, record, spec, cwd, logpath, env, start):
         finally:
             put(None)
 
-    reader = threading.Thread(target=read, daemon=True)
-    reader.start()
+    reader = None
     reason, total, exited_at = None, 0, None
+    proc = spawn_external(subprocess.Popen, spec['argv'], cwd=cwd, env=env, stdin=subprocess.DEVNULL,
+                            stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                            creationflags=subprocess.CREATE_NO_WINDOW)
     try:
+        # A failed PID write still owns this process and must clean it up.
+        store.update(record['id'], lambda r: r['nodes'][spec['id']].update(pid=proc.pid))
+        reader = threading.Thread(target=read, daemon=True)
+        reader.start()
         with logpath.open('wb') as stream:
             while True:
                 if store.load(record['id'])['control'] == 'cancel':
@@ -84,6 +86,9 @@ def execute_command(store, record, spec, cwd, logpath, env, start):
                 'duration': time.monotonic()-start, 'log_capped': total > 2_000_000}
     finally:
         stopped.set()
-        terminate_tree(proc)
-        reader.join(timeout=3)
-        proc.stdout.close()
+        try:
+            terminate_tree(proc)
+        finally:
+            if reader is not None and reader.ident is not None:
+                reader.join(timeout=3)
+            proc.stdout.close()

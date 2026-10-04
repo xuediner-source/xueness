@@ -39,6 +39,7 @@ Standard library only.
 from __future__ import annotations
 
 import os
+import ntpath
 import posixpath
 from pathlib import Path
 
@@ -63,12 +64,15 @@ class DirectoryError(Exception):
 def fully_qualified(path: str) -> bool:
     """True when ``path`` names one fixed location regardless of process state.
 
-    POSIX-absolute only. A rooted drive-less Windows form (``\\foo``) passes
+    Use the host's path syntax. A rooted drive-less Windows form (``\\foo``) passes
     ``isabs`` yet still resolves against the process's current drive, so it is
     not treated as fully qualified here.
     """
     if not isinstance(path, str) or not path:
         return False
+    if os.name == 'nt':
+        drive, tail = ntpath.splitdrive(path)
+        return bool(drive) and ntpath.isabs(path) and tail.startswith(('\\', '/'))
     return posixpath.isabs(path) and not path.startswith("//")
 
 

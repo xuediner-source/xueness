@@ -300,12 +300,12 @@ export function LocalRuntimeMonitor({ lightweight, session }: { lightweight: boo
   const id = React.useId();
   if (!lightweight) return null;
   const phase = session?.runtime_activity?.phase;
-  return <section className="xn-runtime-monitor" aria-label={t('本机运行状态')}>
+  return <section className="xn-runtime-monitor" aria-label={t('本机运行状态')} data-expanded={expanded}>
     <button type="button" className="xn-runtime-monitor__toggle" aria-expanded={expanded} aria-controls={id}
       onClick={() => setExpanded(value => !value)}>
-      <Activity size={15} aria-hidden="true" /><span>{t('本机资源')}</span>
+      <Activity size={14} aria-hidden="true" /><span>{t('本机资源')}</span>
       <span className="xn-runtime-monitor__compact-status">{phase ? t(PHASE_LABELS[phase] ?? phase) : t('资源与运行详情')}</span>
-      <ChevronDown size={15} aria-hidden="true" className={expanded ? 'xn-runtime-monitor__chevron--expanded' : ''} />
+      <ChevronDown size={14} aria-hidden="true" className={expanded ? 'xn-runtime-monitor__chevron--expanded' : ''} />
     </button>
     <div id={id} hidden={!expanded}>
       {expanded && <RuntimeMonitorDetails lightweight session={session} />}

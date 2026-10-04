@@ -16,6 +16,8 @@ import {
   renameSession,
   runSession,
   sendTurn,
+  queueTurn,
+  cancelQueuedTurn,
   toTimelineRows,
   hydrateTimelineTools,
   hydrateTimelineJournalRows,
@@ -98,7 +100,11 @@ describe("durable assistant text", () => {
     assert.equal(withAssistantStream([], stream)[0].kind, "assistant");
     assert.equal(withAssistantStream([], { ...stream, status: "interrupted" })[0].kind, "assistant");
     const completed = [{ kind: "assistant" as const, seq: 3, turnId: "stream", text: stream.text }];
-    assert.equal(withAssistantStream(completed, stream), completed);
+    const liveRefresh = withAssistantStream(completed, stream);
+    assert.equal(liveRefresh.length, 1);
+    assert.equal(liveRefresh[0]?.kind === "assistant" && liveRefresh[0].streaming, true);
+    const interruptedRefresh = withAssistantStream(liveRefresh, { ...stream, status: "interrupted" });
+    assert.equal(interruptedRefresh[0]?.kind === "assistant" ? interruptedRefresh[0].streaming : undefined, false);
     assert.equal(withAssistantStream([...completed, { kind: "user", seq: 4, turnId: "next", text: "repeat" }], stream).length, 3);
     assert.deepEqual(withAssistantStream([], null), []);
   });
@@ -324,6 +330,10 @@ describe("xuenessWorkbench reads", () => {
         ],
         approved: { write: [], edit: [], exec: [], mcp: [] },
         changed_files: ["src/a.ts"],
+        queued_messages: [
+          { id: "q-1", text: "follow-up", status: "queued", position: 1, created_at: "2026-10-02T00:00:00Z" },
+          { id: "q-2", text: "review later", status: "paused", position: 2, pause_reason: "needs review" },
+        ],
       },
     });
 
@@ -337,7 +347,35 @@ describe("xuenessWorkbench reads", () => {
     assert.equal(result.value.pause_reason, "provider paused");
     assert.equal(result.value.pending.length, 1);
     assert.equal(result.value.pending[0].tool_call_id, "call-1");
+    assert.deepEqual(result.value.queued_messages, [
+      { id: "q-1", text: "follow-up", status: "queued", position: 1, created_at: "2026-10-02T00:00:00Z" },
+      { id: "q-2", text: "review later", status: "paused", position: 2, pause_reason: "needs review" },
+    ]);
     assert.equal(recorded[0].url, "/api/sessions/s1");
+  });
+
+  it("loadSession rejects a queue row with a non-string status instead of trusting it in the view", async () => {
+    stubStandardFetch({ "/api/sessions/s1": { id: "s1", task: "task", queued_messages: [
+      { id: "q-1", text: "follow-up", status: ["queued"], position: 1 },
+    ] } });
+    const result = await loadSession(SESSION);
+    assert.equal(result.ok, false);
+    if (!result.ok) assert.match(result.error, /queued messages/i);
+  });
+
+  it("loadSession rejects a malformed queue pause reason and preserves valid reasons", async () => {
+    stubStandardFetch({ "/api/sessions/s1": { id: "s1", task: "task", queued_messages: [
+      { id: "q-1", text: "follow-up", status: "paused", pause_reason: ["needs review"] },
+    ] } });
+    const malformed = await loadSession(SESSION);
+    assert.equal(malformed.ok, false);
+    if (!malformed.ok) assert.match(malformed.error, /queued messages/i);
+    stubStandardFetch({ "/api/sessions/s1": { id: "s1", task: "task", queued_messages: [
+      { id: "q-1", text: "follow-up", status: "paused", pause_reason: "needs review" },
+    ] } });
+    const valid = await loadSession(SESSION);
+    if (!valid.ok) assert.fail(valid.error);
+    assert.equal(valid.value.queued_messages?.[0]?.pause_reason, "needs review");
   });
 
   it("loadTimeline parses a valid events.v1 envelope with default paging", async () => {
@@ -780,6 +818,51 @@ describe("xuenessWorkbench run orchestration", () => {
     assert.equal(callsTo("/api/sessions/s9/run").length, 0);
   });
 
+  it("queueTurn posts one-use prepared input and validates the returned queued item identity", async () => {
+    stubStandardFetch({ "/api/sessions/s9/queue": { id: "q-1", item: {
+      id: "q-1", text: "follow-up", status: "queued", position: 2, created_at: "2026-10-02T00:00:00Z",
+    } } });
+    const result = await queueTurn("s9", "follow-up", "prepared-once");
+    assert.deepEqual(result, { ok: true, value: {
+      id: "q-1", text: "follow-up", status: "queued", position: 2, created_at: "2026-10-02T00:00:00Z",
+    } });
+    assert.deepEqual(recorded.map(call => call.url), ["/api/csrf", "/api/sessions/s9/queue"]);
+    assert.equal(recorded[1].init.method, "POST");
+    assert.equal(headerOf(recorded[1], "X-CSRF-Token"), "test-csrf-token");
+    assert.deepEqual(bodyOf(recorded[1]), { text: "follow-up", prepared_token: "prepared-once" });
+  });
+
+  it("queueTurn accepts a paused 202 response without treating the submitted turn as failed", async () => {
+    stubStandardFetch({ "/api/sessions/s9/queue": { id: "q-paused", item: {
+      id: "q-paused", text: "follow-up", status: "paused", position: 1, pause_reason: "needs review",
+      created_at: "2026-10-02T00:00:00Z",
+    } } });
+    const result = await queueTurn("s9", "follow-up");
+    assert.deepEqual(result, { ok: true, value: {
+      id: "q-paused", text: "follow-up", status: "paused", position: 1, pause_reason: "needs review", created_at: "2026-10-02T00:00:00Z",
+    } });
+    assert.deepEqual(recorded.map(call => call.url), ["/api/csrf", "/api/sessions/s9/queue"]);
+    assert.equal(recorded.filter(call => call.url === "/api/sessions/s9/queue").length, 1);
+  });
+
+  it("queueTurn rejects malformed status enums even when an array contains a valid label", async () => {
+    stubStandardFetch({ "/api/sessions/s9/queue": { id: "q-1", item: {
+      id: "q-1", text: "follow-up", status: ["queued"], position: 1,
+    } } });
+    const result = await queueTurn("s9", "follow-up");
+    assert.equal(result.ok, false);
+    if (!result.ok) assert.match(result.error, /invalid queue response/i);
+  });
+
+  it("cancelQueuedTurn sends an authenticated DELETE for only the selected queue ID", async () => {
+    stubStandardFetch({ "/api/sessions/s9/queue/q%2F1": { removed: true, id: "q/1", remaining: 0 } });
+    const result = await cancelQueuedTurn("s9", "q/1");
+    assert.deepEqual(result, { ok: true, value: undefined });
+    assert.deepEqual(recorded.map(call => call.url), ["/api/csrf", "/api/sessions/s9/queue/q%2F1"]);
+    assert.equal(recorded[1].init.method, "DELETE");
+    assert.equal(headerOf(recorded[1], "X-CSRF-Token"), "test-csrf-token");
+  });
+
   it("answerQuestion posts {answer}", async () => {
     stubStandardFetch({ "/api/sessions/s7/answer": {} });
 
@@ -829,6 +912,26 @@ describe("xuenessWorkbench run orchestration", () => {
 
     const result = await runSession("s5");
     assert.deepEqual(result, { ok: false, error: "provider gate" });
+  });
+
+  it("runSession sends continue_queue only for an explicit paused-queue continuation", async () => {
+    stubStandardFetch({ "/api/sessions/s5/run": {} });
+
+    const result = await runSession("s5", undefined, { continueQueue: true });
+    assert.deepEqual(result, { ok: true, value: undefined });
+    const runCall = recorded.find(call => call.url === "/api/sessions/s5/run");
+    assert.ok(runCall);
+    assert.deepEqual(bodyOf(runCall), {
+      provider: "real",
+      mode: "build",
+      permission_mode: "build",
+      browser: false,
+      steps: 8,
+      allow_mcp: true,
+      allow_subagents: false,
+      allow_hooks: false,
+      continue_queue: true,
+    });
   });
 });
 
@@ -1077,6 +1180,14 @@ describe("toTimelineRows", () => {
       { kind: "user", seq: 2, turnId: "t1", text: "earlier" },
       { kind: "assistant", seq: 5, turnId: "t1", text: "later" },
     ]);
+  });
+
+  it("projects optional completion status metadata without changing legacy v1 rows", () => {
+    const event: XuenessEventV1 = { ...base, seq: 2, type: "session.completion", verified: false,
+      summary: "hello", evidenceCount: 0, status: "not_applicable", toolExecutionStatus: "not_applicable",
+      deliveryStatus: "not_assessed", turnId: "t1" };
+    assert.deepEqual(toTimelineRows([event]), [{ kind: "completion", seq: 2, verified: false, summary: "hello",
+      status: "not_applicable", toolExecutionStatus: "not_applicable", deliveryStatus: "not_assessed", turnId: "t1" }]);
   });
 
   it("never mutates the input events", () => {

@@ -274,7 +274,7 @@ export function SidebarActions({ actions, platform }: { actions: SidebarAction[]
 
 /** Status dot: ZCode uses small coloured dots, not glyphs. */
 function StatusDot({ status }: { status?: string }): React.JSX.Element | null {
-  if (status === "running" || status === "paused" || status === "stopping" || status === "stalled") {
+  if (status === "running" || status === "stopping") {
     return (
       <span className="xn-sidebar-status xn-sidebar-status--busy" data-status={status} aria-hidden="true">
         <IconLoader size={13} className="xn-spin" />
@@ -288,7 +288,7 @@ function StatusDot({ status }: { status?: string }): React.JSX.Element | null {
       </span>
     );
   }
-  if (status === "needs_review" || status === "awaiting_user") {
+  if (status === "needs_review" || status === "awaiting_user" || status === "paused" || status === "stalled") {
     return <span className="xn-sidebar-status xn-sidebar-status--warn" data-status={status} aria-hidden="true" />;
   }
   return null;
@@ -506,6 +506,8 @@ function ToolStatusIcon({ status, terminal = false }: { status?: string; termina
         <IconCheck size={13} />
       ) : status === "error" ? (
         <IconX size={13} />
+      ) : status === "cancelled" ? (
+        <span style={{ display: "inline-block", width: 8, height: 2, background: "currentColor", borderRadius: 1 }} />
       ) : terminal ? (
         <TriangleAlert size={13} />
       ) : (

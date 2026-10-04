@@ -213,6 +213,14 @@ describe("xuenessEvents", () => {
       // unknown event type
       assert.equal(isXuenessEventV1({ ...sampleEvents[0], type: "unknown.type" }), false);
     });
+
+    it("accepts optional completion metadata while rejecting non-string enum payloads", () => {
+      const completion = { ...sampleEvents[5], status: "not_applicable", toolExecutionStatus: "not_applicable", deliveryStatus: "not_assessed", turnId: "t1" };
+      assert.equal(isXuenessEventV1(completion), true);
+      assert.equal(isXuenessEventV1({ ...completion, status: ["verified"] }), false);
+      assert.equal(isXuenessEventV1({ ...completion, toolExecutionStatus: ["succeeded"] }), false);
+      assert.equal(isXuenessEventV1({ ...completion, deliveryStatus: ["passed"] }), false);
+    });
   });
 
   describe("parseEventsEnvelope", () => {

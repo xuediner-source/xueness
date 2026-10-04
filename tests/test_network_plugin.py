@@ -8,6 +8,7 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
+from tests.secret_permissions import assert_secret_file_private
 from xueness import plugin_runtime
 from xueness.bundled_plugins.network import search_model, search_settings, settings_api, tooling, transport
 from xueness.tool_contract import bind_execution
@@ -228,6 +229,15 @@ class NetworkTransportTests(unittest.TestCase):
 
 
 class NetworkSettingsTests(unittest.TestCase):
+    def test_settings_save_without_fchmod_closes_and_replaces_temp_file(self):
+        with tempfile.TemporaryDirectory() as state, patch.dict(os.__dict__):
+            os.__dict__.pop("fchmod", None)
+            search_settings.update_settings(state, {"dohEndpoint": "https://1.1.1.1/dns-query"})
+            directory = Path(state) / "network"
+            saved = json.loads((directory / "settings.json").read_text())
+            self.assertEqual(saved["dohEndpoint"], "https://1.1.1.1/dns-query")
+            self.assertEqual(list(directory.glob(".network-*")), [])
+
     def test_secret_is_separate_private_and_never_returned(self):
         with tempfile.TemporaryDirectory() as state:
             returned = search_settings.update_settings(state, {
@@ -242,8 +252,9 @@ class NetworkSettingsTests(unittest.TestCase):
             secret_path = directory / "search-key.json"
             secret = json.loads(secret_path.read_text())
             self.assertEqual(secret["apiKey"], "never-return-this-secret")
-            self.assertEqual(stat.S_IMODE(secret_path.stat().st_mode), 0o600)
-            self.assertEqual(stat.S_IMODE(directory.stat().st_mode), 0o700)
+            assert_secret_file_private(self, secret_path)
+            if os.name != "nt":
+                self.assertEqual(stat.S_IMODE(directory.stat().st_mode), 0o700)
             self.assertNotIn("apiKey", json.loads((directory / "settings.json").read_text()))
 
     def test_secret_keeps_existing_key_on_blank_save_and_explicit_clear_removes_it(self):
@@ -326,7 +337,9 @@ class NetworkSettingsTests(unittest.TestCase):
                              {"apiKey": "main-model-secret", "model": "primary"})
             key_path = Path(state) / "network" / "search-model-key.json"
             self.assertEqual(json.loads(key_path.read_text())["apiKey"], "search-model-secret")
-            self.assertEqual(stat.S_IMODE(key_path.stat().st_mode), 0o600)
+            assert_secret_file_private(self, key_path)
+            if os.name != "nt":
+                self.assertEqual(stat.S_IMODE((Path(state) / "network").stat().st_mode), 0o700)
             search_settings.update_settings(state, {"searchModelKey": ""})
             self.assertEqual(search_settings.resolve_search_model_config(state)[2], "search-model-secret")
             search_settings.update_settings(state, {"clearSearchModelKey": True})

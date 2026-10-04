@@ -3,8 +3,10 @@
 import json
 import sys
 import tempfile
+import threading
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parent.parent
 if str(ROOT) not in sys.path:
@@ -27,6 +29,52 @@ class SettingsStoreTest(unittest.TestCase):
 
     def settings_file(self):
         return self.state_dir / "settings.json"
+
+    def test_settings_reader_waits_for_atomic_update_and_preserves_sections(self):
+        ss.save_settings(self.state_dir, {"general": {"language": "en"}, "workspace": {"defaultRoot": "before"}})
+        entered, release, reading, done = (threading.Event() for _ in range(4))
+        result, errors = [], []
+        import os
+        original_replace = os.replace
+
+        def replace(source, destination):
+            entered.set()
+            if not release.wait(3):
+                raise RuntimeError("test did not release writer")
+            original_replace(source, destination)
+
+        def write():
+            try:
+                ss.update_settings(self.state_dir, lambda row: row["workspace"].update(defaultRoot="after"))
+            except Exception as error:
+                errors.append(error)
+
+        def read():
+            reading.set()
+            try:
+                result.append(ss.load_settings(self.state_dir))
+            except Exception as error:
+                errors.append(error)
+            finally:
+                done.set()
+
+        writer, reader = threading.Thread(target=write), threading.Thread(target=read)
+        with patch.object(ss.os, "replace", side_effect=replace):
+            writer.start()
+            try:
+                self.assertTrue(entered.wait(2))
+                reader.start()
+                self.assertTrue(reading.wait(2))
+                self.assertFalse(done.wait(.1), "reader must wait until writer commits")
+            finally:
+                release.set()
+                writer.join(3)
+                if reader.ident is not None:
+                    reader.join(3)
+        self.assertFalse(writer.is_alive())
+        self.assertFalse(reader.is_alive())
+        self.assertEqual(errors, [])
+        self.assertEqual(result, [{"general": {"language": "en"}, "workspace": {"defaultRoot": "after"}}])
 
     # -- normal paths ----------------------------------------------------
     def test_section_ids_whitelist(self):

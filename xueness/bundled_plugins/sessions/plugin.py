@@ -14,6 +14,10 @@ def execute_cli(args, deps=None):
 
 
 def dispatch(method, parts, query, data, ctx):
+    from .queue import dispatch as queue_dispatch
+    result = queue_dispatch(method, parts, query, data, ctx)
+    if result is not None:
+        return result
     from .composer_api import dispatch as composer_dispatch
     result = composer_dispatch(method, parts, query, data, ctx)
     if result is not None:
@@ -33,3 +37,8 @@ def dispatch(method, parts, query, data, ctx):
 def tools():
     from .tooling import REGISTRY
     return REGISTRY
+
+
+def completion_requires_evidence(session, call_ids=()):
+    from .completion_policy import requires_evidence
+    return requires_evidence(session, call_ids)

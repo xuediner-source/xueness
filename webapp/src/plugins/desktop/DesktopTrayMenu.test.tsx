@@ -1,3 +1,7 @@
+import { readFileSync } from 'node:fs';
+
+import { join } from 'node:path';
+
 import React from 'react';
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -51,4 +55,24 @@ test('main workbench bridge rejects disabled, busy and malformed commands and al
   applyDesktopTrayCommand({ kind: 'session', id: id(0) }, { ...actions, busy: true });
   applyDesktopTrayCommand({ kind: 'session', id: id(1) }, actions); applyDesktopTrayCommand({ kind: 'new' }, actions);
   assert.deepEqual(called, [id(0), id(1), 'new']);
+});
+
+
+
+test("tray stylesheet uniformly uses 13px font-size without 11px or 12px", () => {
+
+  const css = readFileSync(join(process.cwd(), 'src/plugins/desktop/desktop-tray-menu.css'), 'utf-8');
+
+  const fontSizes = [...css.matchAll(/font-size:\s*([^;]+);/g)].map(m => m[1].trim());
+
+  assert.ok(fontSizes.length > 0);
+
+  for (const size of fontSizes) {
+
+    assert.equal(size, '13px');
+
+  }
+
+  assert.doesNotMatch(css, /font-size:\s*1[124]px/);
+
 });

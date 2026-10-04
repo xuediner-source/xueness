@@ -55,6 +55,7 @@
 .xn-delivery-checks__badge[data-status="passed"] { border-color: var(--ok-border); background: var(--ok-bg); color: var(--ok-fg); }
 .xn-delivery-checks__badge[data-status="failed"] { border-color: var(--error-border); background: var(--error-bg); color: var(--error-fg); }
 .xn-delivery-checks__badge[data-status="unchecked"] { color: var(--fg-muted); }
+.xn-delivery-checks__badge[data-status="not-applicable"] { color: var(--fg-muted); }
 
 .xn-delivery-checks__body {
   display: grid;
@@ -114,6 +115,26 @@
 .xn-delivery-checks__button--primary { border-color: var(--primary); background: var(--primary); color: var(--primary-fg); }
 .xn-delivery-checks__button--primary:hover:not(:disabled) { filter: brightness(1.08); }
 .xn-delivery-checks__button--quiet { justify-self: start; color: var(--error-fg); }
+.xn-delivery-checks__compact-entry {
+  display: inline-flex;
+  align-self: center;
+  margin: 0 auto 6px;
+  min-height: 24px;
+  height: 24px;
+  padding: 0 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-full, 9999px);
+  background: transparent;
+  color: var(--fg-muted);
+  font-size: 11px;
+  line-height: 22px;
+  transition: all 120ms ease;
+}
+.xn-delivery-checks__compact-entry:hover:not(:disabled) {
+  border-color: var(--border-strong, var(--border));
+  background: var(--bg-hover);
+  color: var(--fg);
+}
 .xn-delivery-checks__editor { display: grid; gap: 8px; }
 .xn-delivery-checks__requirement {
   display: grid;

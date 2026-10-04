@@ -10,6 +10,7 @@ from contextlib import redirect_stderr, redirect_stdout
 from pathlib import Path
 from unittest import mock
 
+from tests.fs_link_helpers import make_symlink
 from xueness.cli import main
 from xueness.cli_input import capture_clipboard_image, enqueue, multiline, snapshot, with_attachments
 from xueness.core import Store
@@ -70,7 +71,9 @@ class InputTests(unittest.TestCase):
     def test_attachment_is_explicit_untrusted_snapshot_with_audit(self):
         path = self.root / "my code.py"
         data = "print('hello')\n"
-        path.write_text(data)
+        # Keep the attachment bytes stable on Windows, where text-mode writes
+        # otherwise translate LF to CRLF before the snapshot hashes the file.
+        path.write_bytes(data.encode("utf-8"))
         code, out, err = self.chat('/attach "my code.py"\n/attachments\nReview this\n/exit\n')
         self.assertEqual(code, 0, err)
         s = self.session(out)
@@ -108,7 +111,7 @@ class InputTests(unittest.TestCase):
 
     def test_path_escape_binary_and_special_files_are_rejected(self):
         (self.base / "outside").write_text("private")
-        (self.root / "escape").symlink_to(self.base / "outside")
+        make_symlink(self.root / "escape", self.base / "outside")
         (self.root / "binary").write_bytes(b"\x00\xff")
         (self.root / "nul").write_bytes(b"abc\0")
         os.mkfifo(self.root / "pipe")

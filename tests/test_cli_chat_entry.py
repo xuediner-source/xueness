@@ -3,12 +3,14 @@ import io
 import json
 import os
 import subprocess
+import sys
 import tempfile
 import unittest
 from contextlib import redirect_stderr, redirect_stdout
 from pathlib import Path
 from unittest import mock
 
+from tests.fs_link_helpers import make_symlink
 from xueness.cli import main
 from xueness.core import Store
 
@@ -82,7 +84,7 @@ class ChatEntryTests(unittest.TestCase):
         os.utime(self.store._path(other["id"]), ns=(30, 30))
         # Broken/symlinked state must not hijack the continuation selector.
         (self.state / ("a" * 32 + ".json")).write_text("[]")
-        (self.state / ("b" * 32 + ".json")).symlink_to(self.store._path(other["id"]))
+        make_symlink(self.state / ("b" * 32 + ".json"), self.store._path(other["id"]))
         code, out, err = self.chat("--continue", text="/retry\n/exit\n")
         self.assertEqual(code, 0, err)
         self.assertEqual(json.loads(out)["id"], newest["id"])
@@ -144,9 +146,9 @@ class ChatEntryTests(unittest.TestCase):
 
     def test_launcher_uses_callers_workspace_from_outside_checkout(self):
         launcher = Path(__file__).resolve().parents[1] / "bin" / "xueness"
-        proc = subprocess.run([str(launcher), "--state", str(self.state), "chat"],
+        proc = subprocess.run([sys.executable, str(launcher), "--state", str(self.state), "chat"],
                               cwd=self.root, input="/status\n/exit\n", text=True,
-                              capture_output=True, timeout=10)
+                              encoding="utf-8", capture_output=True, timeout=10)
         self.assertEqual(proc.returncode, 0, proc.stderr)
         self.assertIn(str(self.root.resolve()), proc.stderr)
         self.assertEqual(self.store.list(), [])

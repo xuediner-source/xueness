@@ -11,6 +11,7 @@ Skips (not fails) when node or the SDK is unavailable, so the suite still runs
 on a machine without them.
 """
 import json
+import os
 import shutil
 import subprocess
 import sys
@@ -21,7 +22,17 @@ from xueness.mcp import McpClient, tool_schema
 
 ROOT = Path(__file__).resolve().parent.parent
 SERVER = ROOT / "webapp" / "tools" / "real_mcp_server.mjs"
-SDK = ROOT / "webapp" / "node_modules" / "@modelcontextprotocol" / "sdk"
+
+
+def _node_modules() -> Path:
+    """Use an isolated test install when configured; otherwise use webapp deps."""
+    configured = os.environ.get("XUENESS_MCP_TEST_NODE_MODULES")
+    if configured:
+        return Path(configured).expanduser().resolve()
+    return ROOT / "webapp" / "node_modules"
+
+
+SDK = _node_modules() / "@modelcontextprotocol" / "sdk"
 
 
 def _node() -> str | None:
@@ -51,7 +62,8 @@ class RealMcpInteropTests(unittest.TestCase):
     def setUp(self):
         self.work = Path(self._tmpdir())
         self.client = McpClient(
-            {"id": "real", "command": _node(), "args": [str(SERVER)]},
+            {"id": "real", "command": _node(),
+             "args": [str(SERVER), str(_node_modules())]},
             cwd=ROOT / "webapp",
         )
         self.addCleanup(self.client.close)
@@ -89,7 +101,8 @@ class RealMcpInteropTests(unittest.TestCase):
         for version in SUPPORTED_PROTOCOL_VERSIONS:
             with self.subTest(version=version):
                 client = McpClient(
-                    {"id": "real", "command": _node(), "args": [str(SERVER)],
+                    {"id": "real", "command": _node(),
+                     "args": [str(SERVER), str(_node_modules())],
                      "protocolVersion": version},
                     cwd=ROOT / "webapp", timeout=30,
                 )
@@ -205,14 +218,16 @@ class RealMcpOverHttpSurfaceTests(unittest.TestCase):
             mcp_dir.mkdir(parents=True)
             (mcp_dir / "real.json").write_text(json.dumps({
                 "id": "real", "enabled": True, "command": _node(),
-                "args": [str(SERVER)]}), encoding="utf-8")
+                "args": [str(SERVER), str(_node_modules())]}), encoding="utf-8")
 
             ctx = web.build_context(state, base / "runs", project,
                                     allow_real=False, csrf="t")
             server = web.create_server(0, ctx)
-            threading.Thread(target=server.serve_forever, daemon=True).start()
-            self.addCleanup(server.shutdown)
+            server_thread = threading.Thread(target=server.serve_forever, daemon=True)
+            server_thread.start()
             self.addCleanup(server.server_close)
+            self.addCleanup(server_thread.join, 5)
+            self.addCleanup(server.shutdown)
             url = "http://127.0.0.1:%d" % server.server_address[1]
 
             def post(path, payload):

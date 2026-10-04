@@ -11,7 +11,7 @@ ROOT = Path(__file__).resolve().parents[2]
 RELEASE = ROOT/'desktop/release'
 from sys import path as module_path
 module_path.insert(0, str(ROOT))
-from xueness.bundled_plugins import PLUGIN_IDS
+from xueness.plugin_runtime import PLUGIN_IDS
 expected_plugins = len(PLUGIN_IDS)
 expected_features = sum(len(json.loads((ROOT/'xueness/bundled_plugins'/ident/'manifest.json').read_text(encoding='utf-8'))['features']) for ident in PLUGIN_IDS)
 if os.name == 'nt':
@@ -28,9 +28,9 @@ with tempfile.TemporaryDirectory(prefix='xueness-app-check-') as temporary:
            'XUENESS_DESKTOP_SMOKE_FILE': str(report), 'XUENESS_ALLOW_REAL': '0'}
     result = subprocess.run([str(executable)], env=env, capture_output=True, timeout=90)
     if result.returncode or not report.exists():
-        detail = json.loads(report.read_text()).get('reason', '') if report.exists() else ''
+        detail = json.loads(report.read_text(encoding='utf-8')).get('reason', '') if report.exists() else ''
         raise SystemExit('Packaged desktop did not complete its UI startup check. '+detail)
-    state = json.loads(report.read_text())
+    state = json.loads(report.read_text(encoding='utf-8'))
     assert state.get('plugins') == expected_plugins and state.get('features') == expected_features, state
     assert state.get('installedCards') == expected_plugins and state.get('desktopSettingsReady') is True, state
     assert state.get('clipWriteGranted') is True and state.get('clipReadDenied') is True, state

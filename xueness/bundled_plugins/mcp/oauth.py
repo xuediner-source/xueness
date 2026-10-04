@@ -1,7 +1,8 @@
 """MCP OAuth authorization-code/PKCE and refresh-token persistence.
 
 Endpoints/client/redirect URI are operator-configured. Redirects never receive
-credentials; tokens live in mode-0600 files and public status omits them.
+credentials; tokens live in owner-private files (POSIX mode 0600 or a
+protected Windows DACL) and public status omits them.
 """
 from __future__ import annotations
 import base64
@@ -14,7 +15,7 @@ import time
 import urllib.request
 from urllib.parse import urlsplit, urlencode
 from ...provider import _NoRedirect
-from ...resources import _atomic_write_json
+from ...resources import _atomic_write_json, _is_link
 from ...plugin_runtime import _config_lock
 
 ID=re.compile(r'[A-Za-z0-9_-]{1,64}')
@@ -35,11 +36,14 @@ def _config(server):
 
 def _path(state,sid):
     if not isinstance(sid,str) or not ID.fullmatch(sid): raise ValueError('invalid OAuth server id')
-    directory=Path(state)/'mcp-oauth'
-    if directory.is_symlink(): raise ValueError('OAuth directory cannot be a symlink')
+    state_path=Path(state)
+    if _is_link(state_path): raise ValueError('OAuth state root cannot be a symlink, junction, or reparse point')
+    directory=state_path/'mcp-oauth'
+    if _is_link(directory): raise ValueError('OAuth directory cannot be a symlink, junction, or reparse point')
     directory.mkdir(parents=True,exist_ok=True,mode=0o700)
+    if _is_link(directory): raise ValueError('OAuth directory cannot be a symlink, junction, or reparse point')
     path=directory/(sid+'.json')
-    if path.is_symlink(): raise ValueError('OAuth state cannot be a symlink')
+    if _is_link(path): raise ValueError('OAuth state cannot be a symlink, junction, or reparse point')
     return path
 
 def _read(state,sid):
@@ -59,7 +63,7 @@ def begin(state,server):
     c=_config(server);sid=server['id'];verifier=secrets.token_urlsafe(48);nonce=secrets.token_urlsafe(32)
     challenge=base64.urlsafe_b64encode(hashlib.sha256(verifier.encode()).digest()).decode().rstrip('=')
     with _config_lock(state):
-        _atomic_write_json(_path(state,sid),{'verifier':verifier,'state':nonce,'pending_until':time.time()+600})
+        _atomic_write_json(_path(state,sid),{'verifier':verifier,'state':nonce,'pending_until':time.time()+600},private=True)
     params={'response_type':'code','client_id':c['clientId'],'redirect_uri':c['redirectUri'],'code_challenge':challenge,'code_challenge_method':'S256','state':nonce,'resource':server['url']}
     if c.get('scope'): params['scope']=str(c['scope'])[:2000]
     return {'authorizationUrl':c['authorizationEndpoint']+'?'+urlencode(params),'state':nonce,'expiresIn':600}
@@ -88,9 +92,9 @@ def finish(state,server,code,nonce):
         if row.get('pending_until',0)<time.time() or not secrets.compare_digest(row.get('state',''),nonce): raise ValueError('OAuth state expired or mismatched')
         # Consume the one-time attempt before sending. An ambiguous network
         # failure cannot replay a code; start a fresh authorization instead.
-        _atomic_write_json(_path(state,sid),{})
+        _atomic_write_json(_path(state,sid),{},private=True)
         token=_post(c,{'grant_type':'authorization_code','code':code,'client_id':c['clientId'],'redirect_uri':c['redirectUri'],'code_verifier':row['verifier'],'resource':server['url']})
-        _atomic_write_json(_path(state,sid),token)
+        _atomic_write_json(_path(state,sid),token,private=True)
     return status(state,sid)
 
 def bearer(state,server):
@@ -102,9 +106,9 @@ def bearer(state,server):
             if not row.get('refresh_token'): raise ValueError('OAuth authorization expired')
             token=_post(c,{'grant_type':'refresh_token','refresh_token':row['refresh_token'],'client_id':c['clientId'],'resource':server['url']})
             token['refresh_token']=token.get('refresh_token') or row['refresh_token'];row=token
-            _atomic_write_json(_path(state,sid),row)
+            _atomic_write_json(_path(state,sid),row,private=True)
         return row['access_token']
 
 def revoke(state,sid):
-    with _config_lock(state): _atomic_write_json(_path(state,sid),{})
+    with _config_lock(state): _atomic_write_json(_path(state,sid),{},private=True)
     return status(state,sid)

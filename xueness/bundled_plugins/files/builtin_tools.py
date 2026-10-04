@@ -70,7 +70,8 @@ def _walk_files(root: Path, base: Path):
             continue
         for entry in entries:
             try:
-                if entry.is_symlink():
+                if (entry.is_symlink()
+                        or getattr(entry.lstat(), "st_file_attributes", 0) & 0x400):
                     resolved = entry.resolve()
                     if not resolved.is_relative_to(resolved_root):
                         continue
@@ -89,9 +90,14 @@ def _walk_files(root: Path, base: Path):
 
 def glob_search(root: Path, pattern: str, base: str = ".") -> dict:
     from fnmatch import fnmatch as _fnmatch
+    from pathlib import PureWindowsPath
     if not isinstance(pattern, str) or not pattern.strip() or len(pattern) > 1024:
         raise ValueError("pattern must be a nonempty string")
-    if Path(pattern).is_absolute() or pattern.strip() == ".." or "/../" in pattern.replace("\\", "/"):
+    normalized_pattern = pattern.replace("\\", "/")
+    windows_pattern = PureWindowsPath(pattern)
+    if (Path(pattern).is_absolute() or normalized_pattern.startswith("/")
+            or windows_pattern.drive
+            or any(part == ".." for part in normalized_pattern.split("/"))):
         raise ValueError("pattern must be relative")
     target = path_in(root, base)
     if not target.is_dir():

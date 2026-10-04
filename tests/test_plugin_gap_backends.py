@@ -8,6 +8,8 @@ import tempfile
 import time
 import unittest
 from unittest.mock import patch
+from tests.fs_link_helpers import make_directory_boundary_link, make_symlink
+from tests.secret_permissions import assert_secret_file_private
 from xueness.bundled_plugins.automation.scheduler import Automations, next_run
 from xueness.bundled_plugins.extensions.marketplace import catalog, install
 from xueness.bundled_plugins.git.actions import checkpoint, restore, action, checkpoints
@@ -82,7 +84,7 @@ class GapTests(unittest.TestCase):
             self.assertNotIn('private-token',json.dumps(public))
             self.assertEqual(oauth.bearer(self.state,server),'private-token')
             self.assertEqual(exchange.call_count,2)
-        self.assertEqual((self.state/'mcp-oauth/test.json').stat().st_mode & 0o777,0o600)
+        assert_secret_file_private(self,self.state/'mcp-oauth/test.json')
         self.assertFalse(oauth.revoke(self.state,'test')['authorized'])
     def test_memory_conflict_prevents_overwrite_and_symlink_is_denied(self):
         memory=self.root/'memory';memory.mkdir();ctx={'state_dir':self.state,'project_dir':self.root}
@@ -90,7 +92,7 @@ class GapTests(unittest.TestCase):
             before=editor.read(ctx,'memory')
             editor.write(ctx,'memory',{'confirmed':True,'digest':before['digest'],'content':'curated'})
             with self.assertRaises(LookupError): editor.write(ctx,'memory',{'confirmed':True,'digest':before['digest'],'content':'stale'})
-            (memory/'USER.md').symlink_to(self.root/'outside.txt')
+            make_symlink(memory/'USER.md', self.root/'outside.txt')
             with self.assertRaises(ValueError): editor.read(ctx,'user')
     def test_automation_persisted_grant_cannot_bypass_host_provider_policy(self):
         store=Automations(self.state)
@@ -103,7 +105,7 @@ class GapTests(unittest.TestCase):
     def test_marketplace_cannot_write_through_resources_parent_symlink(self):
         from xueness import plugin_sdk
         outside=self.root/'outside';outside.mkdir();self.state.mkdir()
-        (self.state/'resources').symlink_to(outside)
+        make_directory_boundary_link(self.state/'resources', outside)
         row={'id':'test','version':'1.0.0','apiVersion':1,'builtin':'skills','enabled':False,'capabilities':[]}
         self.assertFalse(plugin_sdk.install_all(self.state,[row])['ok'])
         self.assertFalse(list(outside.iterdir()))

@@ -18,6 +18,7 @@ import urllib.request
 from http.server import ThreadingHTTPServer
 from pathlib import Path
 
+from tests.fs_link_helpers import make_symlink
 from xueness import web
 
 
@@ -47,8 +48,10 @@ class WebTests(unittest.TestCase):
         (dist / "xueness-mark.svg").write_text('<svg xmlns="http://www.w3.org/2000/svg"><title>Xueness</title></svg>', encoding="utf-8")
         (dist / "apple-touch-icon.png").write_bytes(b"\\x89PNG\\r\\n")
         (dist / "icon_512@2x.png").write_bytes(b"\\x89PNG\\r\\n")
-        (dist / "third-party-notices.txt").write_text(
-            "Third-party license notices fixture\n", encoding="utf-8")
+        # This static-file route serves the source bytes unchanged. Keep the
+        # fixture LF-only on Windows too, where text-mode writes add CRLF.
+        (dist / "third-party-notices.txt").write_bytes(
+            b"Third-party license notices fixture\n")
         self.ctx = web.build_context(base / "state", base / "runs", self.project_dir,
                                      allow_real=False, csrf="test-csrf-token")
         self.server = _start(self.ctx)
@@ -814,7 +817,7 @@ class SearchEditModeWebTests(WebTests):
         outside = root.parent / "secret.txt"
         outside.write_text("nope", encoding="utf-8")
         link = root / "escape.txt"
-        link.symlink_to(outside)
+        make_symlink(link, outside)
         code, body, _ = self._req(f"/api/sessions/{sid}/files")
         self.assertEqual(code, 200, body)
         names = [item["path"] for item in json.loads(body)["files"]]
@@ -1037,7 +1040,7 @@ class WorkspaceImagePreviewTest(WebTests):
         root = Path(self.ctx["store"].load(sid)["root"])
         outside = root.parent / "outside.png"
         outside.write_bytes(b"\x89PNG\r\n\x1a\noutside")
-        (root / "escape.png").symlink_to(outside)
+        make_symlink(root / "escape.png", outside)
         code, body, _ = self._req("/api/sessions/" + sid + "/file?path=escape.png")
         self.assertEqual(code, 400, body)
         self.assertIn("path outside workspace", body)
@@ -1331,7 +1334,7 @@ class SessionPinArchiveWebTest(WebTests):
             store._path(bare["id"]).rename(archive_dir / (bare["id"] + ".json"))
             (archive_dir / "nothex.json").write_text("{}", encoding="utf-8")
             (archive_dir / ("z" * 32 + ".json")).write_text("{broken", encoding="utf-8")
-            (archive_dir / ("e" * 32 + ".json")).symlink_to(archive_dir / "nothex.json")
+            make_symlink(archive_dir / ("e" * 32 + ".json"), archive_dir / "nothex.json")
             entries = {e["id"]: e for e in session_management.list_archived(store)}
             self.assertEqual(set(entries), {other["id"], bare["id"]})
             self.assertIn("T", entries[bare["id"]]["archivedAt"])  # mtime ISO fallback

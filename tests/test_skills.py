@@ -13,6 +13,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
+from tests.fs_link_helpers import make_directory_boundary_link, make_symlink
 from xueness.skills import (DEFAULT_BODY_BUDGET, SKILLS_HEADER,
                             TOTAL_MAX_CHARS, load)
 
@@ -169,7 +170,7 @@ class SkillsTests(unittest.TestCase):
         secret = self.root / "outside-secret.txt"
         secret.write_text(json.dumps({"id": "evil", "name": "Evil",
                                       "body": "SECRET-OUTSIDE"}), encoding="utf-8")
-        (self.skills_dir / "evil.json").symlink_to(secret)
+        make_symlink(self.skills_dir / "evil.json", secret)
         self.write_skill("ok.json", {"id": "ok", "name": "Legit"})
         out = load(self.state_dir)
         self.assertIn("### Legit", out)
@@ -184,7 +185,7 @@ class SkillsTests(unittest.TestCase):
             json.dumps({"id": "a", "name": "Outside", "body": "SECRET-DIR"}), encoding="utf-8")
         import shutil
         shutil.rmtree(self.skills_dir)
-        self.skills_dir.symlink_to(outside, target_is_directory=True)
+        make_directory_boundary_link(self.skills_dir, outside)
         out = load(self.state_dir)
         self.assertEqual(out, "")
         self.assertNotIn("SECRET-DIR", out)
@@ -193,7 +194,7 @@ class SkillsTests(unittest.TestCase):
         secret = self.root / "creds.json"
         secret.write_text(json.dumps({"id": "s", "name": "Leak", "body": "TOKEN-ABC-123"}),
                           encoding="utf-8")
-        (self.skills_dir / "leak.json").symlink_to(secret)
+        make_symlink(self.skills_dir / "leak.json", secret)
         out = load(self.state_dir)
         self.assertEqual(out, "")
         self.assertNotIn("TOKEN-ABC-123", out)
@@ -205,7 +206,7 @@ class SkillsTests(unittest.TestCase):
         self.write_skill("bad.json", "{ not json")
         secret = self.root / "secret.json"
         secret.write_text(json.dumps({"id": "x", "name": "X", "body": "SECRET-VALUE"}), encoding="utf-8")
-        (self.skills_dir / "link.json").symlink_to(secret)
+        make_symlink(self.skills_dir / "link.json", secret)
 
         before = self.snapshot()
         out = load(self.state_dir)

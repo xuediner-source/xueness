@@ -5,6 +5,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
+from tests.fs_link_helpers import make_directory_boundary_link, make_symlink
 from xueness.bundled_plugins.files.instructions import load_workspace_instructions
 
 
@@ -89,7 +90,7 @@ class WorkspaceInstructionTests(unittest.TestCase):
             }],
         )
 
-        _, sources = load_workspace_instructions(self.root, session, _Gate())
+        text, sources = load_workspace_instructions(self.root, session, _Gate())
 
         self.assertEqual(sources, [
             "edit-dir/AGENTS.md", "read-dir/AGENTS.md", "write-dir/AGENTS.md",
@@ -133,20 +134,32 @@ class WorkspaceInstructionTests(unittest.TestCase):
         self.assertIn("workspace only", text)
         self.assertNotIn("outside secret", text)
 
-    def test_symlink_instruction_and_symlink_parent_are_not_followed(self):
-        outside = self.root.parent / "outside"
+    def test_symlink_instruction_is_not_followed(self):
+        outside = self.root.parent / "outside-file-link"
         outside.mkdir()
         (outside / "AGENTS.md").write_text("outside secret", encoding="utf-8")
-        (self.root / "AGENTS.md").symlink_to(outside / "AGENTS.md")
-        (self.root / "linked-dir").symlink_to(outside, target_is_directory=True)
+        make_symlink(self.root / "AGENTS.md", outside / "AGENTS.md")
+
+        text, sources = load_workspace_instructions(
+            self.root, self._session([], {}), _Gate())
+
+        self.assertEqual(sources, [])
+        self.assertNotIn("outside secret", text)
+
+    def test_symlink_parent_is_not_followed(self):
+        outside = self.root.parent / "outside-directory-link"
+        outside.mkdir()
+        (outside / "AGENTS.md").write_text("outside secret", encoding="utf-8")
+        make_directory_boundary_link(self.root / "linked-dir", outside)
         session = self._session(
             [_call("read-1", "read", "linked-dir/file.txt")],
             {"read-1": {"ok": True, "path": "linked-dir/file.txt"}},
         )
 
-        _, sources = load_workspace_instructions(self.root, session, _Gate())
+        text, sources = load_workspace_instructions(self.root, session, _Gate())
 
         self.assertEqual(sources, [])
+        self.assertNotIn("outside secret", text)
 
     def test_caps_files_per_file_chars_and_total_chars(self):
         (self.root / "AGENTS.md").write_text("x" * 20_000, encoding="utf-8")

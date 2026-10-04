@@ -77,6 +77,17 @@
   line-height: 22.75px;
 }
 
+.xn-browser-settings__control-heading { display: flex; align-items: center; justify-content: flex-start; gap: 16px; margin-bottom: 2px; }
+.xn-browser-settings__control-heading h5 { flex: 0 1 auto; }
+.xn-browser-settings .xn-browser-settings__switch { flex: 0 0 38px; width: 38px; height: 22px; min-height: 22px !important; padding: 2px !important; justify-content: flex-start; }
+.xn-browser-settings .xn-browser-settings__switch span { flex: 0 0 16px; width: 16px; height: 16px; }
+.xn-browser-settings .xn-browser-settings__switch.is-on span { transform: translateX(16px); }
+.xn-browser-settings .xn-browser-settings__runtime { margin-top: 4px; font-size: 12px; }
+.xn-browser-settings__profile-select { display: flex; flex-direction: column; gap: 8px; }
+.xn-browser-settings__profile-select select { width: 100%; padding: 7px 10px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--bg-card); color: var(--fg); font: inherit; }
+.xn-browser-settings__import-confirm { display: flex; gap: 8px; align-items: flex-start; line-height: 22px; }
+.xn-browser-settings__import-confirm input { flex: none; margin-top: 4px; }
+
 .xn-browser-settings button {
   display: inline-flex;
   min-height: 32px;

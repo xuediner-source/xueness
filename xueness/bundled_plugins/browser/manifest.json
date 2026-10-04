@@ -20,7 +20,9 @@
   "resources": [],
   "capabilities": [],
   "modules": [
-    "settings_api"
+    "settings_api",
+    "profiles",
+    "runtime"
   ],
   "backendAssets": ["bridge.mjs"],
   "features": [
@@ -38,9 +40,15 @@
       "id": "browser.settings",
       "name": "浏览器控制配置与生命周期清理",
       "nameEn": "Browser control settings and lifecycle cleanup"
+    },
+    {
+      "id": "browser.desktop_import",
+      "name": "桌面 Chrome 资料选择、确认导入与持久浏览器环境检测",
+      "nameEn": "Desktop Chrome profile selection, confirmed import and persistent browser runtime detection"
     }
   ],
   "frontendModules": [
-    "plugins/browser/BrowserSettings.tsx"
+    "plugins/browser/BrowserSettings.tsx",
+    "plugins/browser/DesktopBrowserImport.tsx"
   ]
 }

@@ -6,6 +6,9 @@ import './CompletionChecks.css';
 export type DeliveryRequirement = { id: string; label: string; path?: string | null; contains: string[]; min_links: number };
 export type CompletionAssessment = {
   verified?: boolean; tool_execution_success?: boolean; delivery_status?: string;
+  status?: "verified" | "unverified" | "not_applicable";
+  verification_status?: "verified" | "unverified" | "not_applicable";
+  tool_execution_status?: "succeeded" | "failed" | "incomplete" | "not_applicable";
   delivery_checks?: Record<string, { status: string; reason?: string; scope?: string; items?: (DeliveryRequirement & { passed: boolean; missing: string[] })[] }>;
 };
 
@@ -27,7 +30,19 @@ export function CompletionChecks({ sessionId, completion, items, disabled, onSav
     setError('');
   }, [sessionId, itemsSignature]);
   const check = completion?.delivery_checks?.planning;
-  const toolOk = completion?.tool_execution_success ?? completion?.verified;
+  const verificationStatus = completion?.status ?? completion?.verification_status;
+  const toolFailed = completion?.tool_execution_status === 'failed' || completion?.tool_execution_status === 'incomplete';
+  const toolNotApplicable = !toolFailed && (verificationStatus === 'not_applicable'
+    || (verificationStatus === undefined && completion?.tool_execution_status === 'not_applicable'));
+  const toolOk = toolNotApplicable ? undefined
+    : toolFailed ? false
+      : completion?.tool_execution_status === 'succeeded' ? true
+        : completion?.tool_execution_status === 'not_applicable' && verificationStatus === 'unverified' ? false
+          : completion?.tool_execution_success ?? completion?.verified;
+  const toolBadgeStatus = toolNotApplicable ? 'not-applicable' : toolOk === true ? 'passed' : toolOk === false ? 'failed' : 'unchecked';
+  const toolBadgeText = toolNotApplicable
+    ? t('无需工具验证')
+    : toolOk === true ? t('工具执行成功') : toolOk === false ? t('工具成功证据未通过') : t('工具证据尚未检查');
   const update = (index: number, patch: Partial<DeliveryRequirement>) => setDraft(current => current.map((item, i) => i === index ? { ...item, ...patch } : item));
   const save = async () => {
     setSaving(true); setError('');
@@ -36,13 +51,20 @@ export function CompletionChecks({ sessionId, completion, items, disabled, onSav
     finally { setSaving(false); }
   };
   const deliveryStatus = completion?.delivery_status ?? 'unchecked';
+  const compactChat = verificationStatus === 'not_applicable' && !toolFailed && deliveryStatus === 'not_assessed'
+    && items.length === 0 && !check?.reason && !check?.items?.length && !editing;
+  if (compactChat) return <button className="xn-delivery-checks__button xn-delivery-checks__compact-entry"
+    type="button" disabled={disabled || saving} aria-expanded={editing}
+    onClick={() => { setDraft(items); setEditing(true); }}>
+    {t('编辑交付清单')}
+  </button>;
   return <details className="xn-delivery-checks" data-delivery-status={deliveryStatus}
-    open={deliveryStatus === 'failed'}>
+    open={editing || deliveryStatus === 'failed'}>
     <summary className="xn-delivery-checks__summary">
       <span className="xn-delivery-checks__title">{t('交付检查')}</span>
       <span className="xn-delivery-checks__badges">
-        <span className="xn-delivery-checks__badge" data-status={toolOk === true ? 'passed' : toolOk === false ? 'failed' : 'unchecked'}>
-          {toolOk === true ? t('工具执行成功') : toolOk === false ? t('工具成功证据未通过') : t('工具证据尚未检查')}
+        <span className="xn-delivery-checks__badge" data-status={toolBadgeStatus}>
+          {toolBadgeText}
         </span>
         <span className="xn-delivery-checks__badge" data-status={deliveryStatus === 'passed' ? 'passed' : deliveryStatus === 'failed' ? 'failed' : 'unchecked'}>
           {deliveryStatus === 'passed' ? t('交付检查通过') : deliveryStatus === 'failed' ? t('交付检查未通过') : t('交付内容尚未检查')}
@@ -54,7 +76,7 @@ export function CompletionChecks({ sessionId, completion, items, disabled, onSav
       {check?.reason && <p className="xn-delivery-checks__reason" role="status">{check.reason}</p>}
       {check?.items?.map(item => <div className="xn-delivery-checks__item" data-status={item.passed ? 'passed' : 'failed'} key={item.id}>
         <strong>{item.passed ? '✓ ' : '○ '}{item.label}</strong>
-        {item.missing.length > 0 && <ul>{item.missing.map(reason => <li key={reason}>{reason}</li>)}</ul>}
+        {(item.missing ?? []).length > 0 && <ul>{(item.missing ?? []).map(reason => <li key={reason}>{reason}</li>)}</ul>}
       </div>)}
       {check?.scope && <small className="xn-delivery-checks__scope">{check.scope}</small>}
       {!completion && items.map(item => <p className="xn-delivery-checks__listed-item" key={item.id}>
@@ -69,7 +91,7 @@ export function CompletionChecks({ sessionId, completion, items, disabled, onSav
           <legend>{item.label || t('交付项目')}</legend>
           <label>{t('交付项目')}<input value={item.label} maxLength={500} onChange={event => update(index, { label: event.target.value })} /></label>
           <label>{t('目标文件（可选）')}<input value={item.path ?? ''} onChange={event => update(index, { path: event.target.value || null })} /></label>
-          <label>{t('必需人物或内容（每行一项）')}<textarea value={item.contains.join('\n')} onChange={event => update(index, { contains: event.target.value.split('\n').filter(Boolean) })} /></label>
+          <label>{t('必需人物或内容（每行一项）')}<textarea value={(item.contains ?? []).join('\n')} onChange={event => update(index, { contains: event.target.value.split('\n').filter(Boolean) })} /></label>
           <label>{t('最少来源链接')}<input type="number" min={0} max={100} value={item.min_links} onChange={event => update(index, { min_links: Number(event.target.value) })} /></label>
           <button className="xn-delivery-checks__button xn-delivery-checks__button--quiet" type="button"
             onClick={() => setDraft(current => current.filter((_, i) => i !== index))}>{t('移除')}</button>

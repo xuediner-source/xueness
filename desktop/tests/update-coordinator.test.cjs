@@ -93,10 +93,11 @@ function makeCoordinator(overrides = {}) {
   return { coordinator: new UpdateCoordinator(options), updater, timers };
 }
 
-async function waitUntil(predicate, tries = 100) {
-  for (let index = 0; index < tries; index += 1) {
+async function waitUntil(predicate, timeoutMs = 5000) {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
     if (predicate()) return;
-    await new Promise(resolve => setImmediate(resolve));
+    await new Promise(resolve => setTimeout(resolve, 10));
   }
   assert.fail('condition did not become true');
 }

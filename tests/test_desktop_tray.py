@@ -6,6 +6,7 @@ import urllib.error
 import urllib.request
 from pathlib import Path
 
+from tests.fs_link_helpers import make_symlink
 from xueness import plugin_runtime, web
 
 
@@ -66,8 +67,5 @@ class DesktopTrayTests(unittest.TestCase):
         outside.write_text('must not expose', encoding='utf-8')
         target = self.assets/'tray.html'
         target.unlink()
-        try:
-            target.symlink_to(outside)
-        except OSError:
-            self.skipTest('symlink creation unavailable on this host')
+        make_symlink(target, outside)
         self.assert_status(404)

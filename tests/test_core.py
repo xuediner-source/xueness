@@ -1,4 +1,5 @@
 import json
+import os
 import tempfile
 import unittest
 import urllib.request
@@ -6,6 +7,8 @@ from contextlib import redirect_stdout
 from io import StringIO
 from unittest.mock import patch
 from pathlib import Path
+from tests.fs_link_helpers import make_directory_boundary_link, make_symlink
+from tests.secret_permissions import assert_secret_file_private
 from xueness.core import Gate, Store, answer_session, assess, compact, execute, normalize_todos, run, session_events
 from xueness.provider import FakeProvider, OpenAICompatible, _NoRedirect
 
@@ -64,6 +67,76 @@ class HarnessTests(unittest.TestCase):
             OpenAICompatible(base="http://localhost:1/v1", model="m", key="secret")
         p = OpenAICompatible(base="https://example.org/v1", model="m", key="secret")
         self.assertEqual(p.model, "m")
+
+    def test_load_and_list_reject_symlinked_session_file(self):
+        sid = "0123456789abcdef0123456789abcdef"
+        outside = self.root / "outside-session.json"
+        outside.write_text(json.dumps({
+            "id": sid, "task": "outside sentinel", "status": "completed",
+        }), encoding="utf-8")
+        make_symlink(self.store.directory / f"{sid}.json", outside)
+
+        with self.assertRaisesRegex(ValueError, "session file"):
+            self.store.load(sid)
+        self.assertEqual(self.store.list(), [])
+
+    def test_load_and_list_skip_entry_when_link_guard_reports_reparse_point(self):
+        """Exercise the guard branch without claiming this is a real file-link fixture.
+
+        Windows file symbolic-link privilege may be unavailable. The companion
+        test above uses a real link where supported; this mock only verifies
+        Store's response when the platform guard identifies a reparse entry.
+        """
+        sid = "fedcba9876543210fedcba9876543210"
+        entry = self.store.directory / f"{sid}.json"
+        entry.write_text(json.dumps({
+            "id": sid, "task": "guarded sentinel", "status": "completed",
+        }), encoding="utf-8")
+
+        def reports_reparse(path):
+            return Path(path) == entry
+
+        with patch("xueness.core._is_link", side_effect=reports_reparse):
+            with self.assertRaisesRegex(ValueError, "session file"):
+                self.store.load(sid)
+            self.assertEqual(self.store.list(), [])
+
+    def test_list_skips_corrupt_session_journal_and_keeps_valid_sessions(self):
+        valid = self.store.new("valid history", self.root)
+        corrupt = self.store.directory / "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.json"
+        corrupt.write_text("{not valid JSON", encoding="utf-8")
+
+        self.assertEqual(self.store.list(), [{
+            "id": valid["id"], "task": "valid history", "status": "pending",
+        }])
+
+    def test_store_save_journal_is_private(self):
+        session = self.store.new("sensitive journal content", self.root)
+
+        # Checks mode 0600 on POSIX and the actual protected native DACL on Windows.
+        assert_secret_file_private(self, self.store._path(session["id"]))
+
+    def test_store_save_protection_failure_preserves_old_journal_and_cleans_temp_fd(self):
+        session = self.store.new("original journal", self.root)
+        journal = self.store._path(session["id"])
+        original = journal.read_bytes()
+        session["task"] = "updated journal must not be written"
+        captured = {}
+
+        def fail_private_protection(fd):
+            captured["fd"] = fd
+            self.assertEqual(os.fstat(fd).st_size, 0,
+                             "journal bytes were written before private protection")
+            raise OSError("simulated private-file protection failure")
+
+        with patch("xueness.core._protect_private_file", side_effect=fail_private_protection):
+            with self.assertRaisesRegex(OSError, "protection failure"):
+                self.store.save(session)
+
+        self.assertEqual(journal.read_bytes(), original)
+        self.assertEqual(list(self.store.directory.glob(".session-*")), [])
+        with self.assertRaises(OSError):
+            os.fstat(captured["fd"])
 
     def test_provider_refuses_bearer_redirect(self):
         p = OpenAICompatible(base="https://example.org/v1", model="m", key="secret")
@@ -194,13 +267,15 @@ class HarnessTests(unittest.TestCase):
         self.assertNotIn("\"messages\"", out2.getvalue())
 
     def test_unverified_completion(self):
-        s = self.store.new("demo", self.root)
+        s = self.store.new("Read README.md in this workspace and summarize it.", self.root)
         class UnsupportedFinal:
             def complete(self, messages, tools):
                 return {"content": json.dumps({"summary": "No tool evidence", "evidence": []})}
 
         out = run(s, self.store, UnsupportedFinal(), Gate(self.root))
         self.assertEqual(out["status"], "needs_review")
+        self.assertEqual(out["completion"]["status"], "unverified")
+        self.assertEqual(out["completion"]["tool_execution_status"], "not_applicable")
         self.assertFalse(out["completion"]["verified"])
 
 
@@ -227,25 +302,23 @@ class SearchEditModeTests(unittest.TestCase):
         self.assertIn("sub/b.txt", r["output"])
         bad = execute(self.root, gate, "glob", {"path": "../outside", "pattern": "*.txt"})
         self.assertFalse(bad["ok"])
-        bad2 = execute(self.root, gate, "glob", {"pattern": "/abs/*.txt"})
-        self.assertFalse(bad2["ok"])
+        for absolute_pattern in ("/abs/*.txt", r"C:\abs\*.txt", r"\\server\share\*.txt"):
+            with self.subTest(pattern=absolute_pattern):
+                bad2 = execute(self.root, gate, "glob", {"pattern": absolute_pattern})
+                self.assertFalse(bad2["ok"])
         self.assertIn("glob", [t["function"]["name"] for t in __import__("xueness.core", fromlist=["TOOLS"]).TOOLS])
 
     def test_glob_symlink_escape(self):
-        import tempfile as _tf, os as _os
+        import tempfile as _tf
         outside = _tf.NamedTemporaryFile(delete=False, suffix=".txt")
         outside.write(b"secret"); outside.close()
-        try:
-            (self.root / "linkdir").symlink_to(Path(outside.name).parent, target_is_directory=True)
-        except OSError:
-            _os.unlink(outside.name); self.skipTest("symlink not permitted")
-            return
+        self.addCleanup(Path(outside.name).unlink, missing_ok=True)
+        make_directory_boundary_link(self.root / "linkdir", Path(outside.name).parent)
         gate = Gate(self.root)
         r = execute(self.root, gate, "glob", {"pattern": "*.txt"})
         self.assertTrue(r["ok"])
         # must not descend through symlinked dirs: no outside basename leak via linkdir
         self.assertFalse(any(x.startswith("linkdir/") for x in r["output"]))
-        _os.unlink(outside.name)
 
     def test_grep_jailed_sorted_bounded(self):
         (self.root / "f1.txt").write_text("hello\nhello again\n")

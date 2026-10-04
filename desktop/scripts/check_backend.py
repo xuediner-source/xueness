@@ -350,7 +350,13 @@ def main():
         errors = []
         threading.Thread(target=lambda: errors.extend(proc.stderr.read().splitlines()), daemon=True).start()
         try:
-            ready = json.loads(output.get(timeout=45))
+            ready_deadline = time.monotonic() + 45
+            while True:
+                ready = json.loads(output.get(timeout=max(0.01, ready_deadline - time.monotonic())))
+                if ready.get('type') != 'update-policy':
+                    break
+                if time.monotonic() >= ready_deadline:
+                    raise TimeoutError('backend ready deadline exceeded')
             assert ready['type'] == 'ready', ready
             url = ready['url']
 

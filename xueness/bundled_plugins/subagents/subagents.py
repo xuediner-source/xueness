@@ -23,6 +23,7 @@ from __future__ import annotations
 import json
 import os
 from pathlib import Path
+from ...resources import _is_link, _kind_dir
 
 #: Hard cap (characters) on a composed system prompt.
 PROMPT_MAX_CHARS = 4000
@@ -220,7 +221,7 @@ def _safe_read_json(path: Path):
     a JSON document that is not an object all yield ``None`` so one broken
     entry can never take down the rest of the list or echo back a foreign file.
     """
-    if path.is_symlink():
+    if _is_link(path):
         return None
     flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0)
     try:
@@ -245,15 +246,18 @@ def load(state_dir) -> list:
     non-empty string. The returned dicts carry whitespace-normalized ``id``
     and ``name`` so :func:`select` can match them exactly.
     """
-    subagents_dir = _subagents_dir(state_dir)
+    try:
+        subagents_dir = _kind_dir({"state_dir": state_dir}, "subagents")
+    except (OSError, ValueError):
+        return []
     # A symlinked directory would relocate the whole jail; refuse it outright.
-    if subagents_dir.is_symlink():
+    if _is_link(subagents_dir):
         return []
     if not subagents_dir.is_dir():
         return []
     items = []
     for path in sorted(subagents_dir.glob("*.json")):
-        if path.is_symlink():
+        if _is_link(path):
             continue
         item = _safe_read_json(path)
         if item is None:

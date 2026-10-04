@@ -1,8 +1,9 @@
 """State-scoped search and optional DoH settings for the network plugin.
 
-Search credentials are stored separately from non-secret settings, mode 0600,
-and are never included in API responses. Environment variables remain a
-backward-compatible fallback for operator-managed deployments.
+Search credentials are stored separately from non-secret settings in
+owner-private files (POSIX mode 0600 or a protected Windows DACL) and are never
+included in API responses. Environment variables remain a backward-compatible
+fallback for operator-managed deployments.
 """
 from __future__ import annotations
 
@@ -15,6 +16,7 @@ import threading
 from urllib.parse import urlsplit
 
 from .transport import NetworkError, _parse_https_url
+from ...resources import _is_link, _protect_private_file
 
 _LOCK = threading.RLock()
 _DEFAULT_SEARCH_ENDPOINT = "https://api.search.brave.com/res/v1/web/search"
@@ -30,11 +32,11 @@ def _network_dir(state_dir, *, create=False) -> Path | None:
         return None
     root = Path(state_dir).expanduser().resolve()
     directory = root / "network"
-    if directory.is_symlink() or not directory.resolve().is_relative_to(root):
+    if _is_link(directory) or not directory.resolve().is_relative_to(root):
         raise ValueError("network settings path denied")
     if create:
         directory.mkdir(mode=0o700, parents=True, exist_ok=True)
-        if directory.is_symlink() or not directory.resolve().is_relative_to(root):
+        if _is_link(directory) or not directory.resolve().is_relative_to(root):
             raise ValueError("network settings path denied")
         try:
             os.chmod(directory, 0o700)
@@ -48,8 +50,8 @@ def _network_dir(state_dir, *, create=False) -> Path | None:
 
 
 def _read_json(path: Path, *, allow_missing=True):
-    if path.is_symlink():
-        raise ValueError("network settings file must not be a symlink")
+    if _is_link(path):
+        raise ValueError("network settings file must not be a symlink, junction, or reparse point")
     flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0)
     try:
         fd = os.open(path, flags)
@@ -77,17 +79,23 @@ def _read_json(path: Path, *, allow_missing=True):
 
 def _write_json(path: Path, value):
     path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
-    if path.parent.is_symlink() or path.is_symlink():
+    if _is_link(path.parent) or _is_link(path):
         raise ValueError("network settings path denied")
     fd, temporary = tempfile.mkstemp(prefix=".network-", dir=str(path.parent))
     try:
-        os.fchmod(fd, 0o600)
+        try:
+            _protect_private_file(fd)
+        except BaseException:
+            try:
+                os.close(fd)
+            except OSError:
+                pass
+            raise
         with os.fdopen(fd, "w", encoding="utf-8") as stream:
             json.dump(value, stream, ensure_ascii=False, separators=(",", ":"))
             stream.flush()
             os.fsync(stream.fileno())
         os.replace(temporary, path)
-        os.chmod(path, 0o600)
     finally:
         if os.path.exists(temporary):
             os.unlink(temporary)
@@ -305,7 +313,7 @@ def update_settings(state_dir, data: dict) -> dict:
 
         if data.get("clearSearchKey") is True:
             secret_path = _secret_path(state_dir, create=True)
-            if secret_path.is_symlink():
+            if _is_link(secret_path):
                 raise ValueError("network credential path denied")
             try:
                 secret_path.unlink()
@@ -313,13 +321,13 @@ def update_settings(state_dir, data: dict) -> dict:
                 pass
         elif data.get("searchKey"):
             secret_path = _secret_path(state_dir, create=True)
-            if secret_path.is_symlink():
+            if _is_link(secret_path):
                 raise ValueError("network credential path denied")
             _write_json(secret_path, {"apiKey": data["searchKey"]})
 
         if data.get("clearSearchModelKey") is True:
             secret_path = _model_secret_path(state_dir, create=True)
-            if secret_path.is_symlink():
+            if _is_link(secret_path):
                 raise ValueError("network credential path denied")
             try:
                 secret_path.unlink()
@@ -327,7 +335,7 @@ def update_settings(state_dir, data: dict) -> dict:
                 pass
         elif data.get("searchModelKey"):
             secret_path = _model_secret_path(state_dir, create=True)
-            if secret_path.is_symlink():
+            if _is_link(secret_path):
                 raise ValueError("network credential path denied")
             _write_json(secret_path, {"apiKey": data["searchModelKey"]})
 

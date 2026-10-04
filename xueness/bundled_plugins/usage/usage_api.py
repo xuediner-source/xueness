@@ -63,21 +63,27 @@ def _coerce_mtime(value):
     if isinstance(value, bool) or value is None:
         return None
     if isinstance(value, (int, float)):
-        candidate = float(value)
+        try:
+            candidate = float(value)
+        except (OverflowError, ValueError):
+            return None
         return candidate if math.isfinite(candidate) else None
     if isinstance(value, str):
         text = value.strip()
         if not text:
             return None
         try:
-            return float(text)
+            candidate = float(text)
         except ValueError:
-            pass
+            candidate = None
+        if candidate is not None:
+            return candidate if math.isfinite(candidate) else None
         try:
             parsed = _dt.datetime.fromisoformat(text.replace("Z", "+00:00"))
-        except ValueError:
+            candidate = parsed.timestamp()
+        except (OSError, OverflowError, ValueError):
             return None
-        return parsed.timestamp()
+        return candidate if math.isfinite(candidate) else None
     return None
 
 
@@ -93,7 +99,8 @@ def _coerce_steps(value) -> int:
 
 
 def _day(mtime: float) -> str:
-    return _dt.datetime.fromtimestamp(mtime).strftime("%Y-%m-%d")
+    stamp = _dt.datetime.fromtimestamp(mtime)
+    return stamp.strftime("%Y-%m-%d")
 
 
 def _iso(ts: float) -> str:
@@ -125,12 +132,17 @@ def aggregate(sessions, range_key=None, now=None) -> dict:
             continue
         if cutoff is not None and mtime < cutoff:
             continue
+        try:
+            day = _day(mtime)
+        except (OSError, OverflowError, ValueError):
+            # A finite float can still be outside this platform's datetime
+            # range. Bad stored rows must not take down the usage response.
+            continue
         steps = _coerce_steps(session.get("steps"))
         totals["sessions"] += 1
         totals["steps"] += steps
         if session.get("status") == "completed":
             totals["completed"] += 1
-        day = _day(mtime)
         bucket = buckets.get(day)
         if bucket is None:
             bucket = {"date": day, "sessions": 0, "steps": 0}

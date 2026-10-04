@@ -27,10 +27,14 @@ def _find_entry() -> str | None:
     """Locate the cached package entry point without installing anything."""
     if shutil.which("node") is None:
         return None
-    roots = [
+    configured = os.environ.get("XUENESS_MCP_TEST_NODE_MODULES")
+    roots = []
+    if configured:
+        roots.append(str(Path(configured).expanduser().resolve()))
+    roots.extend([
         os.path.expanduser("~/.npm/_npx/*/node_modules"),
         str(Path(__file__).resolve().parent.parent / "webapp" / "node_modules"),
-    ]
+    ])
     for root in roots:
         for candidate in glob.glob(os.path.join(root, PACKAGE, "dist", "index.js")):
             return candidate

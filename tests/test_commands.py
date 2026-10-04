@@ -18,6 +18,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
+from tests.fs_link_helpers import make_directory_boundary_link, make_symlink
 from xueness.commands import (ARGUMENTS_PLACEHOLDER, EXPAND_MAX_CHARS,
                               TRUNCATION_SUFFIX, expand, load)
 
@@ -69,7 +70,7 @@ class CommandsTests(unittest.TestCase):
         (outside / "a.json").write_text(
             json.dumps({"id": "a", "prompt": "SECRET-DIR"}), encoding="utf-8")
         shutil.rmtree(self.commands_dir)
-        self.commands_dir.symlink_to(outside, target_is_directory=True)
+        make_directory_boundary_link(self.commands_dir, outside)
         self.assertEqual(load(self.state_dir), [])
 
     # --- load: happy path ---------------------------------------------------
@@ -156,7 +157,7 @@ class CommandsTests(unittest.TestCase):
         secret = self.root / "outside-secret.json"
         secret.write_text(json.dumps({"id": "evil", "prompt": "SECRET-OUTSIDE"}),
                           encoding="utf-8")
-        (self.commands_dir / "evil.json").symlink_to(secret)
+        make_symlink(self.commands_dir / "evil.json", secret)
         self.write_command("ok.json", {"id": "ok", "prompt": "Legit"})
         items = load(self.state_dir)
         self.assertEqual([c["id"] for c in items], ["ok"])
@@ -166,7 +167,7 @@ class CommandsTests(unittest.TestCase):
         secret = self.root / "creds.json"
         secret.write_text(json.dumps({"id": "s", "prompt": "TOKEN-ABC-123"}),
                           encoding="utf-8")
-        (self.commands_dir / "leak.json").symlink_to(secret)
+        make_symlink(self.commands_dir / "leak.json", secret)
         items = load(self.state_dir)
         self.assertEqual(items, [])
         self.assertNotIn("TOKEN-ABC-123", json.dumps(items))
@@ -305,7 +306,7 @@ class CommandsTests(unittest.TestCase):
         secret = self.root / "secret.json"
         secret.write_text(json.dumps({"id": "x", "prompt": "SECRET-VALUE"}),
                           encoding="utf-8")
-        (self.commands_dir / "link.json").symlink_to(secret)
+        make_symlink(self.commands_dir / "link.json", secret)
 
         before = self.snapshot()
         commands = load(self.state_dir)

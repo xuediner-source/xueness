@@ -16,6 +16,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
+from tests.fs_link_helpers import make_directory_boundary_link, make_symlink
 from xueness import plugin_sdk as sdk
 
 
@@ -135,14 +136,14 @@ class LoadManifestsTests(unittest.TestCase):
         real.mkdir(parents=True)
         (real / "a.json").write_text(json.dumps(_manifest(id="a")), encoding="utf-8")
         self.dir.parent.mkdir(parents=True, exist_ok=True)
-        os.symlink(real, self.dir)
+        make_directory_boundary_link(self.dir, real)
         self.assertEqual(sdk.load_manifests(self.state), [])
 
     def test_symlinked_entry_is_skipped(self):
         self.dir.mkdir(parents=True, exist_ok=True)
         outside = self.state / "outside.json"
         outside.write_text(json.dumps(_manifest(id="evil")), encoding="utf-8")
-        os.symlink(outside, self.dir / "evil.json")
+        make_symlink(self.dir / "evil.json", outside)
         self.assertEqual(sdk.load_manifests(self.state), [])
 
     def test_broken_json_and_non_objects_are_skipped(self):
@@ -305,7 +306,9 @@ class InstallTests(unittest.TestCase):
 
     def test_install_refuses_symlinked_directory(self):
         self.dir.parent.mkdir(parents=True, exist_ok=True)
-        os.symlink(self.state / "elsewhere", self.dir)
+        outside = self.state / "elsewhere"
+        outside.mkdir()
+        make_directory_boundary_link(self.dir, outside)
         result = sdk.install_all(self.state, [_manifest(id="a")])
         self.assertFalse(result["ok"])
 

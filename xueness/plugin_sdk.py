@@ -29,7 +29,7 @@ import re
 from pathlib import Path
 
 from . import plugins as _plugins
-from .resources import _LOCK, _atomic_write_json, _load_item, _valid_id
+from .resources import _LOCK, _atomic_write_json, _is_link, _kind_dir, _load_item, _valid_id
 
 #: Manifest API level this build understands.
 API_VERSION = 1
@@ -63,9 +63,11 @@ class Plan:
 
 
 def _safe_plugins_parent(state_dir):
-    root = Path(state_dir)
-    directory = root / 'resources' / _PLUGINS_KIND
-    return all(not path.is_symlink() for path in (root, root / 'resources', directory)) and directory.resolve().is_relative_to(root.resolve())
+    try:
+        _kind_dir({"state_dir": state_dir}, _PLUGINS_KIND)
+    except (OSError, ValueError):
+        return False
+    return True
 
 
 def _plugins_dir(state_dir) -> Path:
@@ -150,7 +152,7 @@ def _load_entries(state_dir) -> list:
         return []
     entries = []
     for path in sorted(directory.glob("*.json")):
-        if path.is_symlink():
+        if _is_link(path):
             continue
         item = _load_item(path)
         if item is None:
@@ -304,7 +306,7 @@ def install_all(state_dir, items) -> dict:
             directory.mkdir(parents=True, exist_ok=True)
             for rid, item in planned:
                 path = directory / (rid + ".json")
-                if path.is_symlink():
+                if _is_link(path):
                     raise ValueError("plugin id must not be a symlink: %s" % rid)
                 snapshots[rid] = path.read_bytes() if path.exists() else None
                 record = {"id": rid}
@@ -346,7 +348,7 @@ def uninstall(state_dir, plugin_id) -> dict:
                 "error": "plugins directory must not be a symlink"}
     path = directory / (plugin_id + ".json")
     with _LOCK:
-        if path.is_symlink():
+        if _is_link(path):
             return {"ok": False, "removed": False, "manifest": None,
                     "error": "plugin id must not be a symlink"}
         if not path.exists() or not path.is_file():

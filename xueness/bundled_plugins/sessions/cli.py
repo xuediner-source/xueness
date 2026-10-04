@@ -75,7 +75,8 @@ def _render_event(ev, file=None, language="zh", stream_state=None) -> None:
         line = (f"== {ev.get('status')} ({ev.get('steps', 0)} steps)" if language == "en"
                 else f"== {ev.get('status')} (\u5171 {ev.get('steps', 0)} \u6b65)")
         if ev.get("question"):
-            line += f"\n   {'Question' if language == 'en' else '\u95ee\u9898'}: {ev['question']}"
+            question_label = 'Question' if language == 'en' else '\u95ee\u9898'
+            line += f"\n   {question_label}: {ev['question']}"
         print(line, file=out)
 
 def _add_agent_flags(parser):

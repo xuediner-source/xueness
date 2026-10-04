@@ -3,6 +3,7 @@ import io
 import json
 import os
 from pathlib import Path
+import re
 import tempfile
 import threading
 import time
@@ -210,21 +211,67 @@ class ExtendedOperationsTests(unittest.TestCase):
         broker = Broker(); self.addCleanup(broker.close)
         term = broker.open(self.root, 'test')
         term.resize(90, 30)
-        term.write("printf 'PTY_%s\\n' READY\nstty size\n")
         def wait_for(text):
             end = time.monotonic()+5
+            output = ''
             while time.monotonic() < end:
                 output = base64.b64decode(term.read(0)['data']).decode(errors='replace')
                 if text in output: return output
                 time.sleep(.03)
             self.fail('PTY did not return expected output: '+output)
-        wait_for('PTY_READY')
-        wait_for('30 90')
-        term.write('sleep 30\n'); time.sleep(.1); term.write('\x03')
-        term.write("printf 'AFTER_%s\\n' INTERRUPT\n")
+
+        def wait_for_prompt_after(text):
+            end = time.monotonic()+5
+            output = ''
+            while time.monotonic() < end:
+                output = base64.b64decode(term.read(0)['data']).decode(errors='replace')
+                plain = re.sub(r'\x1b(?:\[[0-?]*[ -/]*[@-~]|\][^\x07]*(?:\x07|\x1b\\\\))', '', output)
+                marker = plain.rfind(text)
+                if marker >= 0 and re.search(r'(?:PS )?[A-Za-z]:\\[^>\r\n]*>', plain[marker+len(text):]):
+                    return output
+                time.sleep(.03)
+            self.fail('PTY did not return to its prompt after interrupt: '+output)
+
+        if os.name == 'nt':
+            shell_name = Path(term.shell).name.casefold()
+            if shell_name == 'cmd.exe':
+                term.write('set ready=READY & call echo PTY_%%ready%%\r\n')
+                wait_for('PTY_READY')
+                term.write('echo SIZE_BEGIN & mode con & echo SIZE_END\r\n')
+                output = wait_for('SIZE_END')
+                size_report = output.split('SIZE_BEGIN', 1)[-1].split('SIZE_END', 1)[0]
+                dimensions = re.findall(r'\b\d+\b', size_report)
+                self.assertIn('30', dimensions)
+                self.assertIn('90', dimensions)
+                running = 'set status=RUNNING & call echo PTY_%%status%% & ping -n 31 127.0.0.1 >NUL\r\n'
+                after_interrupt = 'set suffix=INTERRUPT & call echo AFTER_%%suffix%%\r\n'
+            else:
+                term.write("$r='PTY'; Write-Output ($r+'_READY')\r\n")
+                wait_for('PTY_READY')
+                term.write('Write-Output "SIZE=$($Host.UI.RawUI.WindowSize.Height)x$($Host.UI.RawUI.WindowSize.Width)"\r\n')
+                wait_for('SIZE=30x90')
+                running = "$r='PTY'; Write-Output ($r+'_RUNNING'); Start-Sleep -Seconds 30\r\n"
+                after_interrupt = "$r='AFTER'; Write-Output ($r+'_INTERRUPT')\r\n"
+        else:
+            term.write("printf 'PTY_%s\\n' READY; stty size\n")
+            wait_for('PTY_READY')
+            output = wait_for('30 90')
+            self.assertIn('30 90', output)
+            running = "printf 'PTY_%s\\n' RUNNING; sleep 30\n"
+            after_interrupt = "printf 'AFTER_%s\\n' INTERRUPT\n"
+
+        term.write(running)
+        wait_for('PTY_RUNNING')
+        term.write('\x03')
+        if os.name == 'nt':
+            wait_for_prompt_after('PTY_RUNNING')
+        term.write(after_interrupt)
         wait_for('AFTER_INTERRUPT')
         broker.close()
-        self.assertIsNotNone(term.proc.poll())
+        if os.name == 'nt':
+            self.assertFalse(term.proc.isalive())
+        else:
+            self.assertIsNotNone(term.proc.poll())
         self.assertTrue(term.closed)
         self.assertFalse(term.reader.is_alive())
 

@@ -21,6 +21,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
+from tests.fs_link_helpers import make_directory_boundary_link, make_symlink
 from xueness import providers_api, resources
 
 
@@ -41,7 +42,7 @@ class ProviderSymlinkJailTests(unittest.TestCase):
             json.dumps({"id": "escaped", "apiKey": "SENTINEL_KEY"}), encoding="utf-8"
         )
         # The attack: replace the providers directory with a symlink outside.
-        (self.state / "providers").symlink_to(self.outside, target_is_directory=True)
+        make_directory_boundary_link(self.state / "providers", self.outside)
         self.ctx = _ctx(self.state)
 
     def tearDown(self):
@@ -96,7 +97,7 @@ class ResourceSymlinkReadThroughTests(unittest.TestCase):
         secret.write_text(
             json.dumps({"id": "outside", "note": "SENTINEL_READTHROUGH"}), encoding="utf-8"
         )
-        (self.skills / "leak.json").symlink_to(secret)
+        make_symlink(self.skills / "leak.json", secret)
 
         status, payload = resources.dispatch("GET", ["api", "resources", "skills"], {}, {}, self.ctx)
         self.assertEqual(status, 200)
@@ -107,7 +108,7 @@ class ResourceSymlinkReadThroughTests(unittest.TestCase):
         secret = Path(self._tmp.name) / "secret.json"
         secret.write_text(json.dumps({"id": "outside"}), encoding="utf-8")
         link = self.skills / "leak.json"
-        link.symlink_to(secret)
+        make_symlink(link, secret)
 
         status, _ = resources.dispatch(
             "DELETE", ["api", "resources", "skills", "leak"], {}, {}, self.ctx
@@ -124,7 +125,7 @@ class ResourceSymlinkReadThroughTests(unittest.TestCase):
         import shutil
 
         shutil.rmtree(self.skills)
-        self.skills.symlink_to(outside, target_is_directory=True)
+        make_directory_boundary_link(self.skills, outside)
 
         status, _ = resources.dispatch("GET", ["api", "resources", "skills"], {}, {}, self.ctx)
         self.assertEqual(status, 400)

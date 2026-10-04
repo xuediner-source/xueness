@@ -1,8 +1,9 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { get, post } from "../../xuenessApi";
 import { t as tr } from "../../i18n";
 import "../../styles/browser.css";
 import { shouldDismissModalOnEscape, useModalFocusScope } from "../shared";
+import { DesktopBrowserImport, browserRuntimeLabel, readBrowserRuntime, type BrowserRuntime } from './DesktopBrowserImport';
 
 export type BrowserDataOperation = "cache" | "all";
 
@@ -34,6 +35,8 @@ export interface BrowserSettingsProps {
 
 export function BrowserSettings({ enabled, onEnabledChange, disabled = false }: BrowserSettingsProps): React.JSX.Element {
   const [togglePending, setTogglePending] = useState(false);
+  const [importPending, setImportPending] = useState(false);
+  const [runtime, setRuntime] = useState<BrowserRuntime | null>(null);
   const [operationPending, setOperationPending] = useState<BrowserDataOperation | null>(null);
   const [profilePresent, setProfilePresent] = useState<boolean | null>(null);
   const [profileLoading, setProfileLoading] = useState(enabled);
@@ -46,6 +49,18 @@ export function BrowserSettings({ enabled, onEnabledChange, disabled = false }: 
   const cancelButtonRef = useRef<HTMLButtonElement | null>(null);
   const confirmButtonRef = useRef<HTMLButtonElement | null>(null);
   const profileRequestId = useRef(0);
+  useEffect(() => {
+    setRuntime(null);
+    if (!enabled) return;
+    const controller = new AbortController();
+    void readBrowserRuntime(controller.signal).then(value => { if (!controller.signal.aborted) setRuntime(value); })
+      .catch(() => { if (!controller.signal.aborted) setRuntime({ available: false, browser: null, reason: 'runtime_missing', desktop: false, importEnabled: false }); });
+    return () => controller.abort();
+  }, [enabled]);
+  const imported = useCallback((cleanupPending: boolean) => {
+    profileRequestId.current += 1; setProfilePresent(true); setProfileLoading(false);
+    setNotice(tr(cleanupPending ? 'Chrome 资料已导入，但旧资料暂未清理，请在浏览器数据中清除。' : 'Chrome 资料已导入。部分站点可能需要重新登录。')); setError('');
+  }, []);
 
   useEffect(() => {
     const requestId = ++profileRequestId.current;
@@ -67,7 +82,7 @@ export function BrowserSettings({ enabled, onEnabledChange, disabled = false }: 
   useModalFocusScope({ open: confirmClearAll, dialogRef, initialFocusRef: cancelButtonRef, returnFocusTo: focusReturnRef.current });
 
   const changeEnabled = async () => {
-    if (disabled || togglePending) return;
+    if (disabled || togglePending || importPending || operationPending !== null) return;
     setTogglePending(true);
     setError("");
     setNotice("");
@@ -81,7 +96,7 @@ export function BrowserSettings({ enabled, onEnabledChange, disabled = false }: 
   };
 
   const runDataOperation = async (operation: BrowserDataOperation) => {
-    if (!enabled || disabled || togglePending || operationPending !== null) return;
+    if (!enabled || disabled || togglePending || importPending || operationPending !== null) return;
     setOperationPending(operation);
     setError("");
     setNotice("");
@@ -100,7 +115,7 @@ export function BrowserSettings({ enabled, onEnabledChange, disabled = false }: 
   };
 
   const openClearAll = () => {
-    if (!enabled || disabled || togglePending || operationPending !== null) return;
+    if (!enabled || disabled || togglePending || importPending || operationPending !== null) return;
     focusReturnRef.current = allDataButtonRef.current;
     setConfirmClearAll(true);
   };
@@ -129,28 +144,25 @@ export function BrowserSettings({ enabled, onEnabledChange, disabled = false }: 
         <div className="xn-browser-settings__card">
           <div className="xn-browser-settings__row">
             <div className="xn-browser-settings__row-copy">
-              <h5>{tr("启用浏览器控制")}</h5>
+              <div className="xn-browser-settings__control-heading">
+                <h5>{tr("启用浏览器控制")}</h5>
+                <button
+                  type="button"
+                  role="switch"
+                  aria-label={tr("启用浏览器控制")}
+                  aria-describedby="xn-browser-control-description"
+                  aria-checked={enabled}
+                  aria-busy={togglePending}
+                  className={`xn-browser-settings__switch${enabled ? " is-on" : ""}`}
+                  disabled={disabled || togglePending || importPending || operationPending !== null}
+                  onClick={() => void changeEnabled()}
+                ><span /></button>
+              </div>
               <p id="xn-browser-control-description">{tr("允许任务使用浏览器控制工具。")}</p>
+              {enabled && <p className="xn-browser-settings__runtime" role="status" data-testid="browser-runtime-status">{browserRuntimeLabel(runtime, enabled)}</p>}
             </div>
-            <button
-              type="button"
-              role="switch"
-              aria-label={tr("启用浏览器控制")}
-              aria-describedby="xn-browser-control-description"
-              aria-checked={enabled}
-              aria-busy={togglePending}
-              className={`xn-browser-settings__switch${enabled ? " is-on" : ""}`}
-              disabled={disabled || togglePending}
-              onClick={() => void changeEnabled()}
-            ><span /></button>
           </div>
-          <div className="xn-browser-settings__row is-import">
-            <div className="xn-browser-settings__row-copy">
-              <h5>{tr("导入 Chrome 浏览器资料")}</h5>
-              <p>{tr("网页版本不支持导入个人 Chrome 资料；此功能仅在桌面应用中提供。")}</p>
-            </div>
-            <button type="button" disabled aria-disabled="true">{tr("桌面应用可用")}</button>
-          </div>
+          <DesktopBrowserImport enabled={enabled} disabled={disabled || togglePending || operationPending !== null} runtime={runtime} onImported={imported} onPendingChange={setImportPending} />
         </div>
       </section>
 
@@ -175,7 +187,7 @@ export function BrowserSettings({ enabled, onEnabledChange, disabled = false }: 
             <button
               type="button"
               data-testid="browser-clear-cache"
-              disabled={disabled || !enabled || togglePending || operationPending !== null}
+              disabled={disabled || !enabled || togglePending || importPending || operationPending !== null}
               aria-busy={operationPending === "cache"}
               onClick={() => void runDataOperation("cache")}
             >{operationPending === "cache" ? tr("正在清理…") : tr("清理缓存")}</button>
@@ -189,7 +201,7 @@ export function BrowserSettings({ enabled, onEnabledChange, disabled = false }: 
               ref={allDataButtonRef}
               type="button"
               data-testid="browser-clear-all"
-              disabled={disabled || !enabled || togglePending}
+              disabled={disabled || !enabled || togglePending || importPending}
               aria-disabled={operationPending !== null}
               aria-busy={operationPending === "all"}
               className="is-destructive"

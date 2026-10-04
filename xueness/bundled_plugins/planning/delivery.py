@@ -79,7 +79,8 @@ def seed(session):
     task = session.get('task', '')
     if not isinstance(task, str) or not re.search(r'报告|资料|写入|保存|生成|整理|report|research|save|write', task, re.I):
         return
-    paths = re.findall(r'(?:[\w.-]+/)*[\w.-]+\.(?:md|txt|csv|json|html)\b', task)
+    local_targets = re.sub(r'https?://[^\s<>"\'，。；、（）)\]]+', ' ', task, flags=re.I)
+    paths = re.findall(r'(?:[\w.-]+/)*[\w.-]+\.(?:md|txt|csv|json|html)\b', local_targets)
     current = session.setdefault('delivery_requirements', [])
     if not isinstance(current, list):
         return

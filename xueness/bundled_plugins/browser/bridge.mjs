@@ -9,21 +9,31 @@ import { randomUUID } from 'node:crypto';
 import { lookup } from 'node:dns/promises';
 import { isIP } from 'node:net';
 
-const profile = resolve(process.argv[2]);
 const driver = process.env.XUENESS_DESKTOP_PLAYWRIGHT
   ? pathToFileURL(process.env.XUENESS_DESKTOP_PLAYWRIGHT)
   : new URL('../../../webapp/node_modules/playwright/index.mjs', import.meta.url);
-const { chromium } = await import(driver);
-await mkdir(profile, { recursive: true, mode: 0o700 });
+let chromium;
+try { ({ chromium } = await import(driver)); }
+catch { process.stdout.write(JSON.stringify({ available: false, ready: false, reason: 'driver_missing' }) + '\n'); process.exit(1); }
 const candidates = process.platform === 'darwin' ? ['/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
     '/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge']
   : process.platform === 'win32' ? [process.env.PROGRAMFILES, process.env['PROGRAMFILES(X86)'], process.env.LOCALAPPDATA]
       .filter(Boolean).flatMap(root => [resolve(root, 'Google/Chrome/Application/chrome.exe'), resolve(root, 'Microsoft/Edge/Application/msedge.exe')]) : [];
-const executablePath = process.env.XUENESS_BROWSER_EXECUTABLE || candidates.find(path => existsSync(path));
-const context = await chromium.launchPersistentContext(profile, {
-  headless: true, viewport: { width: 1280, height: 800 },
-  ...(executablePath ? { executablePath } : {}),
-});
+const executablePath = process.env.XUENESS_BROWSER_EXECUTABLE || candidates.find(path => existsSync(path)) || chromium.executablePath();
+const available = existsSync(executablePath);
+const browser = /msedge/i.test(executablePath) ? 'Edge' : /Google[\\/]Chrome|Google Chrome\.app/i.test(executablePath) ? 'Chrome' : 'Chromium';
+if (process.argv[2] === '--probe') {
+  process.stdout.write(JSON.stringify({ available, browser: available ? browser : null, reason: available ? null : 'browser_missing' }) + '\n');
+  process.exit(0);
+}
+if (!available) { process.stdout.write(JSON.stringify({ ready: false, reason: 'browser_missing' }) + '\n'); process.exit(1); }
+const profile = resolve(process.argv[2]);
+await mkdir(profile, { recursive: true, mode: 0o700 });
+let context;
+try { context = await chromium.launchPersistentContext(profile, {
+  headless: true, viewport: { width: 1280, height: 800 }, executablePath,
+}); }
+catch { process.stdout.write(JSON.stringify({ ready: false, reason: 'launch_failed' }) + '\n'); process.exit(1); }
 const page = context.pages()[0] || await context.newPage();
 page.setDefaultTimeout(15000);
 

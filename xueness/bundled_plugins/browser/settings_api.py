@@ -1,30 +1,27 @@
 """Settings for this server process's managed browser profile."""
 from __future__ import annotations
 
-import os
-from pathlib import Path
 import shutil
+import re
+
+from .profiles import _link
 
 _CACHE_PATHS = ('Cache', 'Code Cache', 'GPUCache', 'ShaderCache', 'GrShaderCache',
                 'Default/Cache', 'Default/Code Cache', 'Default/GPUCache')
 
 
 def _profile(ctx):
-    state = Path(ctx['state_dir']).resolve()
-    profile = state / f'browser-profile-{os.getpid()}'
-    if profile.is_symlink() or not profile.resolve().is_relative_to(state):
-        raise ValueError('managed browser profile path denied')
-    if profile.exists() and not profile.is_dir():
-        raise ValueError('managed browser profile path denied')
-    return profile
+    from .profiles import managed_profile
+    return managed_profile(ctx['state_dir'])
 
 
 def _cache_targets(profile):
     targets = []
     for name in _CACHE_PATHS:
         target = profile / name
-        if (target.is_symlink() or any(parent.is_symlink() for parent in target.parents
-                                     if parent.is_relative_to(profile))
+        if ((target.exists() or target.is_symlink()) and _link(target)
+                or any((parent.exists() or parent.is_symlink()) and _link(parent) for parent in target.parents
+                       if parent.is_relative_to(profile))
                 or not target.resolve().is_relative_to(profile)):
             raise ValueError('managed browser cache path denied')
         if target.exists():
@@ -33,6 +30,14 @@ def _cache_targets(profile):
 
 
 def dispatch(method, parts, query, data, ctx):
+    if parts == ['api', 'browser', 'runtime']:
+        if method != 'GET':
+            return 405, {'error': 'method not allowed'}
+        from .runtime import browser_runtime
+        from ... import plugin_runtime
+        desktop = bool(ctx.get('desktop_token'))
+        return 200, {**browser_runtime(), 'desktop': desktop,
+                     'importEnabled': desktop and plugin_runtime.is_enabled(ctx['state_dir'], 'desktop')}
     if parts != ['api', 'browser', 'data']:
         return None
     if method not in ('GET', 'POST'):
@@ -53,6 +58,14 @@ def dispatch(method, parts, query, data, ctx):
             if ctx.get('running'):
                 return 409, {'error': 'stop running tasks before clearing browser data'}
             targets = _cache_targets(profile) if operation == 'cache' else [profile]
+            if operation == 'all':
+                # Only generated, direct-child backups from a successful import
+                # may be cleared along with the explicitly confirmed profile.
+                for candidate in profile.parent.iterdir():
+                    if re.fullmatch(r'browser-import-old-[0-9a-f]{32}', candidate.name):
+                        if _link(candidate) or candidate.resolve().parent != profile.parent or not candidate.is_dir():
+                            raise ValueError('managed browser backup path denied')
+                        targets.append(candidate)
             plugin.shutdown(ctx['state_dir'])
             for target in targets:
                 if target.is_dir():

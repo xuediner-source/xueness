@@ -4,6 +4,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
+from tests.fs_link_helpers import make_symlink
 from xueness.core import Store
 from xueness.memory import track_paths
 from xueness.bundled_plugins.memory import catalog, editor
@@ -64,7 +65,7 @@ class MemoryCatalogTests(unittest.TestCase):
     def test_catalog_does_not_report_out_of_root_symlinks(self):
         outside = self.base / 'outside.md'
         outside.write_text('private outside')
-        (self.memory / 'MEMORY.md').symlink_to(outside)
+        make_symlink(self.memory / 'MEMORY.md', outside)
         self.assertEqual(catalog.dispatch('GET', ['api', 'memory', 'workspaces'], {}, {}, self.ctx)[1]['workspaces'], [])
 
     def test_injection_preference_and_plugin_gate_are_consumed(self):

@@ -3,6 +3,7 @@ import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import patch
+from tests.fs_link_helpers import make_symlink
 from xueness.core import Store, Gate, run, assess, evidence_aliases
 from xueness.plugin_runtime import set_enabled
 from xueness.bundled_plugins.planning.delivery import check, plan, seed, normalize
@@ -41,7 +42,7 @@ class DeliveryReliabilityTests(unittest.TestCase):
         self.assertFalse(assess(json.dumps({'summary': 'read', 'evidence': [{'evidence_id': 'E999', 'observation': 'read file'}]}), session['results'], aliases)['verified'])
 
     def test_invalid_reference_gets_one_repair_and_no_tool_is_reexecuted(self):
-        (self.root / 'input.txt').write_text('known')
+        (self.root / 'input.txt').write_text('known', encoding='utf-8')
         session = self.store.new('inspect', self.root)
         bad = {'content': json.dumps({'summary': 'read', 'evidence': [{'tool_call_id': 'invented', 'observation': 'read'}]})}
         good = {'content': json.dumps({'summary': 'read', 'evidence': [{'evidence_id': 'E1', 'observation': 'read'}]})}
@@ -88,12 +89,12 @@ class DeliveryReliabilityTests(unittest.TestCase):
     def test_tool_success_does_not_certify_missing_person_links_or_file(self):
         session = self.store.new('report', self.root)
         plan(self.root, self.gate, {'items': [{'id': 'report', 'label': '人物资料', 'path': 'report.md', 'contains': ['甲', '乙'], 'min_links': 2}]}, session, None)
-        (self.root / 'report.md').write_text('甲 https://example.com/a')
+        (self.root / 'report.md').write_text('甲 https://example.com/a', encoding='utf-8')
         result = check(self.root, self.gate, session, 'all done', state_dir=self.store.directory)
         self.assertEqual(result['status'], 'failed')
         self.assertIn('缺少内容：乙', result['items'][0]['missing'])
         self.assertTrue(any('链接不足' in text for text in result['items'][0]['missing']))
-        (self.root / 'report.md').write_text('甲 乙 https://example.com/a https://example.com/b')
+        (self.root / 'report.md').write_text('甲 乙 https://example.com/a https://example.com/b', encoding='utf-8')
         self.assertEqual(check(self.root, self.gate, session, '', state_dir=self.store.directory)['status'], 'passed')
         set_enabled(self.store.directory, 'files', False)
         self.assertEqual(check(self.root, self.gate, session, '', state_dir=self.store.directory)['status'], 'failed')
@@ -130,10 +131,7 @@ class DeliveryReliabilityTests(unittest.TestCase):
         outside.write_text('private content', encoding='utf-8')
         self.addCleanup(lambda: outside.unlink(missing_ok=True))
         link = self.root / 'linked-report.md'
-        try:
-            link.symlink_to(outside)
-        except (OSError, NotImplementedError) as exc:
-            self.skipTest(f'symlink creation is unavailable: {exc}')
+        make_symlink(link, outside)
         session = self.store.new('Write a report to linked-report.md', self.root)
         plan(self.root, self.gate, {'items': [{
             'id': 'linked-report', 'label': 'Report output', 'path': 'linked-report.md',
@@ -154,6 +152,16 @@ class DeliveryReliabilityTests(unittest.TestCase):
         self.assertEqual(3, len(normalize(seeded)))
         seed(session)
         self.assertEqual(seeded, session['delivery_requirements'])
+
+    def test_web_document_url_is_not_seeded_as_a_local_output(self):
+        session = self.store.new('请读取 https://example.com/docs/guide.md 并报告设置。', self.root)
+        seed(session)
+        self.assertEqual(session.get('delivery_requirements'), [])
+
+    def test_url_and_local_report_only_seed_the_requested_local_file(self):
+        session = self.store.new('Read [source](https://example.com/guide.md), write report.md', self.root)
+        seed(session)
+        self.assertEqual([item['path'] for item in session['delivery_requirements']], ['report.md'])
 
     def test_actual_usage_and_observed_phase_times_are_distinct(self):
         now = [0.0]

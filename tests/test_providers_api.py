@@ -7,16 +7,19 @@ The emphasis is on the security properties, not just the happy path:
 * ``hasKey`` reflects whether a key is on disk;
 * hostile ``baseUrl`` / ``id`` values are rejected with 400;
 * an upsert without ``apiKey`` preserves the stored key;
-* the on-disk key file is ``0o600``.
+* the on-disk key file is owner-private on POSIX and Windows.
 """
 import json
 import os
-import stat
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
+from tests.secret_permissions import assert_secret_file_private
+from xueness.bundled_plugins.providers import providers_api
 from xueness.providers_api import dispatch
+from xueness.resources import _protect_private_file
 
 SECRET = "sk-test-only-placeholder-secret-key"
 
@@ -75,6 +78,50 @@ class ProviderApiTest(unittest.TestCase):
         status, payload = self.call("GET", "/api/providers")
         self.assertEqual(200, status)
         self.assertEqual({"providers": []}, payload)
+
+    def test_private_temp_file_is_protected_before_secret_write(self):
+        fd, raw_path = tempfile.mkstemp(prefix="private-test-", dir=self.state_dir)
+        path = Path(raw_path)
+        open_fd = fd
+        try:
+            _protect_private_file(open_fd)
+            # Inspect the native DACL while the temp handle is still open and
+            # before putting credential bytes into the file.
+            assert_secret_file_private(self, path)
+            stream = os.fdopen(open_fd, "wb")
+            open_fd = -1
+            with stream:
+                stream.write(SECRET.encode("utf-8"))
+                stream.flush()
+                os.fsync(stream.fileno())
+            assert_secret_file_private(self, path)
+        finally:
+            if open_fd >= 0:
+                os.close(open_fd)
+            path.unlink(missing_ok=True)
+
+    def test_acl_setup_failure_preserves_old_provider_and_cleans_temp_fd(self):
+        path = self.key_path("openai")
+        path.parent.mkdir(parents=True, exist_ok=True)
+        original = b'{"apiKey":"old-secret"}\n'
+        path.write_bytes(original)
+        opened_fds = []
+
+        def reject_private_file(fd):
+            opened_fds.append(fd)
+            raise OSError("simulated ACL setup failure")
+
+        with mock.patch.object(providers_api, "_protect_private_file",
+                               side_effect=reject_private_file):
+            with self.assertRaisesRegex(OSError, "simulated ACL setup failure"):
+                providers_api._atomic_write(path, {"apiKey": SECRET})
+
+        self.assertEqual(path.read_bytes(), original)
+        self.assertEqual(list(path.parent.glob(".provider-*")), [])
+        self.assertNotIn(SECRET.encode(), b"".join(item.read_bytes() for item in path.parent.iterdir()))
+        self.assertEqual(len(opened_fds), 1)
+        with self.assertRaises(OSError):
+            os.fstat(opened_fds[0])
 
     # -- happy path ------------------------------------------------------
     def test_post_then_list_and_delete(self):
@@ -236,15 +283,13 @@ class ProviderApiTest(unittest.TestCase):
         self.assertIn("error", payload)
 
     # -- atomic write + permissions --------------------------------------
-    def test_key_file_mode_is_0600(self):
+    def test_key_file_is_private_after_atomic_upsert(self):
         self.assertEqual(200, self.post(self.base(apiKey=SECRET))[0])
-        mode = stat.S_IMODE(os.stat(self.key_path("openai")).st_mode)
-        self.assertEqual(0o600, mode)
+        assert_secret_file_private(self, self.key_path("openai"))
 
         # survives an upsert too
         self.assertEqual(200, self.post(self.base(apiKey="sk-next"))[0])
-        mode = stat.S_IMODE(os.stat(self.key_path("openai")).st_mode)
-        self.assertEqual(0o600, mode)
+        assert_secret_file_private(self, self.key_path("openai"))
 
     def test_readback_after_atomic_write(self):
         self.assertEqual(200, self.post(self.base(apiKey=SECRET))[0])

@@ -18,9 +18,10 @@ test("browser settings gates profile controls by the managed browser toggle", ()
   assert.match(off, /data-testid="browser-clear-cache" disabled=""/);
   assert.match(off, /data-testid="browser-clear-all" disabled=""/);
   assert.match(off, /管理此服务的受管理浏览器资料；不会访问个人 Chrome 资料/);
-  assert.match(off, /网页版本不支持导入个人 Chrome 资料/);
+  assert.match(off, /启用浏览器控制后，可选择本机 Chrome 资料/);
   assert.match(off, /导入 Chrome 浏览器资料/);
-  assert.match(off, /<button type="button" disabled="" aria-disabled="true">桌面应用可用<\/button>/);
+  assert.match(off, /data-testid="browser-import-profile" disabled="">选择资料…<\/button>/);
+  assert.match(off, /xn-browser-settings__control-heading"><h5>启用浏览器控制<\/h5><button/);
   assert.doesNotMatch(off, /api\/browser\/data/);
   assert.doesNotMatch(off, /role="alertdialog"/);
 
@@ -77,7 +78,7 @@ test("browser settings display the supported web behavior in English", () => {
     assert.match(html, /Browser control/);
     assert.match(html, /Import Chrome profile/);
     assert.match(html, /this service&#x27;s managed browser profile; personal Chrome data is not accessed/);
-    assert.match(html, /web app cannot import personal Chrome profile data/);
+    assert.match(html, /Enable browser control to select a local Chrome profile/);
     assert.match(html, /Clear all browser data/);
     assert.doesNotMatch(html, /backend/);
   } finally {

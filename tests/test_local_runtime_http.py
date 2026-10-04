@@ -314,9 +314,11 @@ class LocalRuntimeHttpTests(unittest.TestCase):
                 "--root", str(cli_workspace), "--lightweight", "--steps", "1",
                 "--output-format", "json",
             ])
-        self.assertEqual(2, code, stderr.getvalue())
+        self.assertEqual(0, code, stderr.getvalue())
         result = json.loads(stdout.getvalue())
-        self.assertEqual("needs_review", result["status"])
+        self.assertEqual("completed", result["status"])
+        self.assertEqual("not_applicable", result["completion"]["status"])
+        self.assertFalse(result["completion"]["verified"])
         self.assertEqual(1, len(fixture.requests))
         body = fixture.requests[0]["body"]
         self.assertEqual(1024, body["max_tokens"])

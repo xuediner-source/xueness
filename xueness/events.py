@@ -18,6 +18,7 @@ See ``docs/xueness-event-protocol-v1.md`` for the frozen contract.
 """
 
 from __future__ import annotations
+import re
 
 SCHEMA_EVENT = "xueness.event.v1"
 SCHEMA_ENVELOPE = "xueness.events.v1"
@@ -124,6 +125,36 @@ def derive_events(session: dict) -> list[dict]:
     names: dict = {}
     messages = session.get("messages") or []
     turn = 1
+    completion_history = session.get('completion_history')
+    by_turn = {}
+    if isinstance(completion_history, list):
+        for record in completion_history[-200:]:
+            if (isinstance(record, dict) and isinstance(record.get('turn_id'), str)
+                    and re.fullmatch(r'turn-[1-9][0-9]*', record['turn_id'])):
+                by_turn.setdefault(record['turn_id'], []).append(record)
+
+    def emit_completion(record):
+        evidence = record.get('evidence')
+        count = record.get('evidence_count')
+        fields = dict(verified=record.get('verified') is True,
+                      summary=str(record.get('summary', ''))[:500],
+                      evidenceCount=count if type(count) is int and count >= 0 else
+                      len(evidence) if isinstance(evidence, list) else 0)
+        optional = (
+            ('status', 'status', ('verified', 'unverified', 'not_applicable')),
+            ('tool_execution_status', 'toolExecutionStatus', ('succeeded', 'failed', 'incomplete', 'not_applicable')),
+            ('delivery_status', 'deliveryStatus', ('passed', 'failed', 'not_assessed')),
+        )
+        for source, target, allowed in optional:
+            if isinstance(record.get(source), str) and record[source] in allowed:
+                fields[target] = record[source]
+        if isinstance(record.get('turn_id'), str) and re.fullmatch(r'turn-[1-9][0-9]*', record['turn_id']):
+            fields['turnId'] = record['turn_id']
+        emit('session.completion', **fields)
+
+    def settle_turn():
+        for record in by_turn.get(f'turn-{turn}', ()):
+            emit_completion(record)
     # The first user message is the task itself and is rendered separately, so
     # it never becomes a turn.user event; later user turns do.
     first_user_seen = False
@@ -169,22 +200,23 @@ def derive_events(session: dict) -> list[dict]:
                 errorCode=error_code(ok, error),
                 error=error,
             )
-        elif role == "user" and isinstance(message.get("content"), str):
+        elif role == "user":
             if not first_user_seen:
                 first_user_seen = True
                 continue
+            settle_turn()
             turn += 1
-            emit("turn.user", turnId=f"turn-{turn}", preview=message["content"][:500])
+            content = message.get('content', '')
+            if isinstance(content, list):
+                content = '\n'.join(item['text'] for item in content
+                                    if isinstance(item, dict) and item.get('type') == 'text'
+                                    and isinstance(item.get('text'), str))
+            emit("turn.user", turnId=f"turn-{turn}", preview=str(content)[:500])
 
     completion = session.get("completion")
-    if isinstance(completion, dict) and completion:
-        evidence = completion.get("evidence")
-        emit(
-            "session.completion",
-            verified=bool(completion.get("verified")),
-            summary=str(completion.get("summary", ""))[:500],
-            evidenceCount=len(evidence) if isinstance(evidence, list) else 0,
-        )
+    settle_turn()
+    if isinstance(completion, dict) and completion and completion.get('turn_id') not in by_turn:
+        emit_completion(completion)
     if session.get("pending_question"):
         emit("session.pending_question", question=str(session["pending_question"])[:1000])
 

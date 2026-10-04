@@ -130,6 +130,7 @@
   min-width: 0;
   height: 40px;
   overflow: visible;
+  background: var(--bg-window, #171717);
 }
 .xn-shell-layout--desktop-titlebar .xn-shell-main {
   grid-row: 2;

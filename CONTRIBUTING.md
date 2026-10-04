@@ -42,6 +42,12 @@ Xueness 的固定开发规则是：**每项产品功能归属于插件，并在�
 
 共享基础设施的允许范围见 [AGENTS.md](AGENTS.md)。添加共享例外必须记录理由并经架构审查；默认应放进业务插件。
 
+资源存储边界继续由既有共享 `resources.py` 维护：检查状态目录、resources 父目录与各 kind 目录的实际文件条目，拒绝符号链接及 Windows reparse point（包括 junction），不能先 resolve 再把重定向后的目录当成新的安全根。各资源插件仍实现加载、渲染与执行，并先检查原有 Gate 和插件开关；共享辅助函数不提供新用户能力或授权。
+
+资源存储的原子 JSON 写入默认私有：POSIX 使用 0600；Windows 在临时文件写入任何数据前，对同一已打开文件对象设置 protected DACL，只允许文件 owner、SYSTEM 与本地 Administrators 访问，拒绝继承父目录的宽松权限。提供者、OAuth、搜索凭据、共享会话 journal 与导出复用这一存储保护，权限设置失败必须停止写入并清理临时文件。该保护属于已有共享存储，不是新的授权或业务入口，也不修改系统安全策略。
+
+会话队列同样在写入前复用私有文件保护。浏览器导入资料及持久 profile 使用既有共享存储中的私有目录保护：POSIX 对无链接目录句柄设置 0700，Windows 对实际已打开且非 reparse point 的目录设置 protected DACL，并为后续 Chromium/Node 文件提供仅 owner、SYSTEM、Administrators 可继承的权限。资料复制先保护空 staging 目录及文件，再写入个人数据；权限失败不启动浏览器或替换既有资料。目录与文件复用同一 Windows ACL 实现，属于已有存储保护，不新增用户能力或共享白名单。继承行为参考 [Windows SetSecurityInfo](https://learn.microsoft.com/en-us/windows/win32/api/aclapi/nf-aclapi-setsecurityinfo)。
+
 ## 桌面宿主与平台适配
 
 桌面产品集成属于 `desktop` 插件。Electron 业务模块在 `desktop/src/`，由 desktop manifest 的 `desktopModules` 精确登记；Python 对应实现位于 `xueness/bundled_plugins/desktop/`，界面位于 `webapp/src/plugins/desktop/`。结构门禁同样检查 Electron 模块归属。

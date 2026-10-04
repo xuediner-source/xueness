@@ -452,8 +452,14 @@ export type ComposerProps = {
   /** Disable sending while keeping the prompt editable (for model/permission gates). */
   sendDisabled?: boolean;
   running?: boolean;
+  queueWhenRunning?: boolean;
+  queueBusy?: boolean;
   stopping?: boolean;
   onStop?: () => void;
+  /** Isolate and retain draft contents for each session without remounting the composer. */
+  draftKey?: string;
+  /** Parent-owned store retains per-session drafts while loading or changing views. */
+  draftStore?: React.MutableRefObject<Map<string, ComposerDraftState>>;
   placeholder?: string;
   defaultValue?: string;
   /** "hero" renders the centered new-task card; "docked" the bottom composer. */
@@ -474,11 +480,56 @@ export type ComposerProps = {
   files?: string[];
 };
 
+export type ComposerDraftState = {
+  text: string;
+  attachments: ComposerInput["attachments"];
+  goal: boolean;
+  selectedContext: Pick<ComposerInput, "files" | "sessions" | "skills" | "plugins">;
+  submissionError: string;
+  attachmentError: string;
+  revision: number;
+};
+
+function emptyComposerDraft(text = ""): ComposerDraftState {
+  return {
+    text,
+    attachments: [],
+    goal: false,
+    selectedContext: { files: [], sessions: [], skills: [], plugins: [] },
+    submissionError: "",
+    attachmentError: "",
+    revision: 0,
+  };
+}
+
+/** Clear only the submitted session's draft, and only if nobody edited it since submission. */
+export function clearSubmittedComposerDraft(
+  drafts: Map<string, ComposerDraftState>,
+  draftKey: string,
+  submittedRevision: number,
+): Map<string, ComposerDraftState> {
+  const current = drafts.get(draftKey);
+  if (!current || current.revision !== submittedRevision) return drafts;
+  const next = new Map(drafts);
+  next.set(draftKey, { ...emptyComposerDraft(), revision: current.revision + 1 });
+  return next;
+}
+
 export function isImeCompositionKey(e: {
   nativeEvent?: { isComposing?: boolean };
   keyCode?: number;
 }): boolean {
   return Boolean(e.nativeEvent?.isComposing || e.keyCode === 229);
+}
+
+export function composerEnterIntent(e: {
+  key: string; shiftKey?: boolean; altKey?: boolean; ctrlKey?: boolean; metaKey?: boolean;
+  nativeEvent?: { isComposing?: boolean }; keyCode?: number;
+}, sendShortcut: "enter" | "mod-enter", hasSuggestions: boolean): "accept-suggestion" | "send" | null {
+  if (e.key !== "Enter" || isImeCompositionKey(e)) return null;
+  if (hasSuggestions && !e.shiftKey && !e.altKey) return "accept-suggestion";
+  if (e.shiftKey || e.altKey) return null;
+  return sendShortcut === "enter" || e.metaKey || e.ctrlKey ? "send" : null;
 }
 
 export function handleComposerEscapeAction(
@@ -522,8 +573,12 @@ export function Composer({
   disabled = false,
   sendDisabled = false,
   running = false,
+  queueWhenRunning = false,
+  queueBusy = false,
   stopping = false,
   onStop,
+  draftKey = "default",
+  draftStore,
   placeholder = tr("输入消息或指令..."),
   defaultValue = "",
   variant = "docked",
@@ -537,17 +592,43 @@ export function Composer({
   commands = [],
   files = [],
 }: ComposerProps) {
-  const [text, setText] = useState(defaultValue);
-  const [attachments, setAttachments] = useState<ComposerInput["attachments"]>([]);
-  const attachmentsRef = useRef<ComposerInput["attachments"]>([]);
+  const localDraftsRef = useRef<Map<string, ComposerDraftState>>(new Map());
+  const draftsRef = draftStore ?? localDraftsRef;
+  const [draftRenderVersion, setDraftRenderVersion] = useState(0);
+  if (!draftsRef.current.has(draftKey)) draftsRef.current.set(draftKey, emptyComposerDraft(defaultValue));
+  const draft = draftsRef.current.get(draftKey)!;
+  // State lives in a per-scope map so late handlers keep writing to the draft
+  // they submitted, even after this component has switched to another session.
+  void draftRenderVersion;
+  const updateDraftFor = (
+    scope: string,
+    update: (current: ComposerDraftState) => ComposerDraftState,
+    contentChanged = true,
+  ): ComposerDraftState => {
+    const current = draftsRef.current.get(scope) ?? emptyComposerDraft();
+    const updated = update(current);
+    if (updated === current) return current;
+    const nextDraft = { ...updated, revision: current.revision + (contentChanged ? 1 : 0) };
+    const nextDrafts = new Map(draftsRef.current);
+    nextDrafts.set(scope, nextDraft);
+    draftsRef.current = nextDrafts;
+    setDraftRenderVersion(version => version + 1);
+    return nextDraft;
+  };
+  const updateCurrentDraft = (update: (current: ComposerDraftState) => ComposerDraftState, contentChanged = true) =>
+    updateDraftFor(draftKey, update, contentChanged);
+  const { text, attachments, goal, selectedContext, submissionError, attachmentError } = draft;
+  const setText = (value: string | ((previous: string) => string)) => updateCurrentDraft(current => {
+    const nextText = typeof value === "function" ? value(current.text) : value;
+    if (nextText === current.text && !current.submissionError) return current;
+    return { ...current, text: nextText, submissionError: "" };
+  });
+  const setGoal = (value: boolean | ((previous: boolean) => boolean)) => updateCurrentDraft(current => {
+    const nextGoal = typeof value === "function" ? value(current.goal) : value;
+    return nextGoal === current.goal ? current : { ...current, goal: nextGoal };
+  });
   const attachmentBusyRef = useRef(false);
   const [attachmentBusy, setAttachmentBusy] = useState(false);
-  const [attachmentError, setAttachmentError] = useState("");
-  const [submissionError, setSubmissionError] = useState("");
-  const [goal, setGoal] = useState(false);
-  const [selectedContext, setSelectedContext] = useState<Pick<ComposerInput, "files" | "sessions" | "skills" | "plugins">>({
-    files: [], sessions: [], skills: [], plugins: [],
-  });
   const [plusOpen, setPlusOpen] = useState(false);
   const plusRef = useRef<HTMLDivElement | null>(null);
   const plusButtonRef = useRef<HTMLButtonElement | null>(null);
@@ -562,17 +643,21 @@ export function Composer({
       (inputRef as React.MutableRefObject<HTMLTextAreaElement | null>).current = el;
     }
   };
-  const updateAttachments = (next: ComposerInput["attachments"]) => {
-    attachmentsRef.current = next;
-    setAttachments(next);
-  };
+  const updateAttachments = (next: ComposerInput["attachments"]) => updateCurrentDraft(current =>
+    current.attachments === next ? current : { ...current, attachments: next });
+  const setAttachmentError = (message: string) => updateCurrentDraft(current =>
+    current.attachmentError === message ? current : { ...current, attachmentError: message }, false);
+  const setSubmissionError = (message: string) => updateCurrentDraft(current =>
+    current.submissionError === message ? current : { ...current, submissionError: message }, false);
   const addAttachmentFiles = async (filesToAdd: FileList | File[]) => {
     const incoming = Array.from(filesToAdd);
     if (incoming.length === 0 || disabled || running || attachmentBusyRef.current) return;
     attachmentBusyRef.current = true;
     setAttachmentBusy(true);
     setAttachmentError("");
-    let next = [...attachmentsRef.current];
+    const currentAttachments = (draftsRef.current.get(draftKey) ?? emptyComposerDraft()).attachments;
+    let next = [...currentAttachments];
+    const initialCount = next.length;
     let totalBytes = next.reduce((sum, item) => sum + composerAttachmentBytes(item.data), 0);
     let rejected = false;
     let failed = false;
@@ -593,7 +678,8 @@ export function Composer({
         failed = true;
       }
     }
-    updateAttachments(next);
+    const added = next.slice(initialCount);
+    if (added.length > 0) updateCurrentDraft(current => ({ ...current, attachments: [...current.attachments, ...added] }));
     if (rejected) setAttachmentError(tr("附件最多 4 个，单个不超过 2 MiB，总量不超过 4 MiB。"));
     else if (failed) setAttachmentError(tr("读取附件失败，请重新选择。"));
     attachmentBusyRef.current = false;
@@ -601,21 +687,20 @@ export function Composer({
   };
   const toggleContext = (mention: ComposerMention) => {
     const field = mention.kind === "file" ? "files" : mention.kind === "session" ? "sessions" : mention.kind === "skill" ? "skills" : "plugins";
-    setSelectedContext((current) => {
-      const values = current[field];
-      return {
-        ...current,
-        [field]: values.includes(mention.id)
-          ? values.filter((id) => id !== mention.id)
-          : [...values, mention.id],
-      };
+    updateCurrentDraft(current => {
+      const values = current.selectedContext[field];
+      const next = values.includes(mention.id)
+        ? values.filter((id) => id !== mention.id)
+        : [...values, mention.id];
+      if (next === values) return current;
+      return { ...current, selectedContext: { ...current.selectedContext, [field]: next } };
     });
   };
   const addContext = (mention: ComposerMention) => {
     const field = mention.kind === "file" ? "files" : mention.kind === "session" ? "sessions" : mention.kind === "skill" ? "skills" : "plugins";
-    setSelectedContext((current) => current[field].includes(mention.id)
+    updateCurrentDraft(current => current.selectedContext[field].includes(mention.id)
       ? current
-      : { ...current, [field]: [...current[field], mention.id] });
+      : { ...current, selectedContext: { ...current.selectedContext, [field]: [...current.selectedContext[field], mention.id] } });
   };
   const closePlusMenu = (restoreFocus = false) => {
     setPlusOpen(false);
@@ -676,7 +761,7 @@ export function Composer({
   const canOfferGoal = Boolean(startActions?.canGoal && (goal || emptyStartDraft));
   const canOfferWorkflow = Boolean(startActions?.canWorkflow && emptyStartDraft);
   const hasSendableContent = trimmed.length > 0 || attachments.length > 0 || selectedContextCount > 0;
-  const isSendDisabled = disabled || sendDisabled || running || attachmentBusy || !hasSendableContent;
+  const isSendDisabled = disabled || sendDisabled || queueBusy || (running && !queueWhenRunning) || attachmentBusy || !hasSendableContent;
   const suggestions = !disabled && !suggestDismissed
     ? contextComposerSuggestions(text, commands, availableMentions, {
       canGoal: canOfferGoal,
@@ -746,30 +831,40 @@ export function Composer({
   const handleSend = async () => {
     if (isSendDisabled || !onSend) return;
     setSubmissionError("");
+    const submittedDraft = draftsRef.current.get(draftKey) ?? emptyComposerDraft(defaultValue);
+    const submittedRevision = submittedDraft.revision;
     const draft: ComposerInput = {
-      attachments,
-      files: selectedContext.files,
-      sessions: selectedContext.sessions,
-      skills: selectedContext.skills,
-      plugins: selectedContext.plugins,
-      goal,
+      attachments: submittedDraft.attachments,
+      files: submittedDraft.selectedContext.files,
+      sessions: submittedDraft.selectedContext.sessions,
+      skills: submittedDraft.selectedContext.skills,
+      plugins: submittedDraft.selectedContext.plugins,
+      goal: submittedDraft.goal,
     };
     try {
-      const sent = await onSend(trimmed, draft);
+      const sent = await onSend(submittedDraft.text.trim(), draft);
       if (sent !== false) {
-        setText("");
-        setGoal(false);
-        setSelectedContext({ files: [], sessions: [], skills: [], plugins: [] });
-        updateAttachments([]);
+        const currentDrafts = draftsRef.current;
+        const nextDrafts = clearSubmittedComposerDraft(currentDrafts, draftKey, submittedRevision);
+        if (nextDrafts !== currentDrafts) {
+          draftsRef.current = nextDrafts;
+          setDraftRenderVersion(version => version + 1);
+        }
       }
     } catch (error) {
-      setSubmissionError(error instanceof Error ? error.message : tr("发送失败，草稿已保留。"));
+      const current = draftsRef.current.get(draftKey) ?? emptyComposerDraft();
+      if (current.revision === submittedRevision) {
+        updateDraftFor(draftKey, state => ({
+          ...state,
+          submissionError: error instanceof Error ? error.message : tr("发送失败，草稿已保留。"),
+        }), false);
+      }
     }
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === "Escape") {
-      if (e.nativeEvent.isComposing || e.keyCode === 229) return;
+      if (isImeCompositionKey(e)) return;
       e.preventDefault();
       if (suggestions.length > 0) {
         setSuggestDismissed(true);
@@ -781,19 +876,22 @@ export function Composer({
       }
       if (running && onStop && !stopping) onStop();
     } else if (e.key === "ArrowDown" && suggestions.length > 0) {
-      if (e.nativeEvent.isComposing || e.keyCode === 229) return;
+      if (isImeCompositionKey(e)) return;
       e.preventDefault();
       setActiveSuggestion((currentSuggestion + 1) % suggestions.length);
     } else if (e.key === "ArrowUp" && suggestions.length > 0) {
-      if (e.nativeEvent.isComposing || e.keyCode === 229) return;
+      if (isImeCompositionKey(e)) return;
       e.preventDefault();
       setActiveSuggestion((currentSuggestion - 1 + suggestions.length) % suggestions.length);
-    } else if (e.key === "Enter" && suggestions.length > 0 && currentSuggestion >= 0 && !e.shiftKey && !e.nativeEvent.isComposing) {
-      e.preventDefault();
-      acceptSuggestion(suggestions[currentSuggestion]);
-    } else if (e.key === "Enter" && !e.shiftKey && !e.altKey && !e.nativeEvent.isComposing && (sendShortcut === "enter" || e.metaKey || e.ctrlKey)) {
-      e.preventDefault();
-      void handleSend();
+    } else {
+      const intent = composerEnterIntent(e, sendShortcut, suggestions.length > 0 && currentSuggestion >= 0);
+      if (intent === "accept-suggestion") {
+        e.preventDefault();
+        acceptSuggestion(suggestions[currentSuggestion]);
+      } else if (intent === "send") {
+        e.preventDefault();
+        void handleSend();
+      }
     }
   };
 
@@ -1029,32 +1127,41 @@ export function Composer({
           </div>
           {(controls || footer) && <div className="xn-composer__settings" role="group" aria-label={tr("运行选项")}>{controls ?? footer}</div>}
           <span id={`${suggestionListId}-keyboard-help`} className="xn-composer__keyboard-help">
-            {sendShortcut === "mod-enter" ? tr("⌘/Ctrl+Enter 发送 · Enter 换行") : tr("Enter 发送 · Shift+Enter 换行")}
+            {queueWhenRunning && running
+              ? sendShortcut === "mod-enter" ? tr("⌘/Ctrl+Enter 排队 · Enter 换行") : tr("Enter 排队 · Shift+Enter 换行")
+              : sendShortcut === "mod-enter" ? tr("⌘/Ctrl+Enter 发送 · Enter 换行") : tr("Enter 发送 · Shift+Enter 换行")}
           </span>
         </div>
-        {running && onStop ? (
-          <button
-            type="button"
-            disabled={stopping}
-            className="xn-composer__send xn-composer__stop"
-            aria-label={stopping ? tr("正在停止") : tr("停止")}
-            title={stopping ? tr("正在停止") : tr("停止当前任务")}
-            data-testid="composer-stop"
-            onClick={onStop}
-          >
-            {stopping ? <IconLoader size={16} /> : <IconX size={16} />}
-          </button>
-        ) : (
-          <button
-            type="submit"
-            disabled={isSendDisabled}
-            className="xn-composer__send"
-            aria-label={tr("发送")}
-            title={tr("发送")}
-          >
-            <IconArrowUp size={16} />
-          </button>
-        )}
+        <div className="xn-composer__submit-actions">
+          {running && queueWhenRunning && <button type="submit" disabled={isSendDisabled}
+            className="xn-composer__send xn-composer__queue" aria-label={tr(queueBusy ? "正在排队…" : "加入队列")}
+            title={tr(queueBusy ? "正在排队…" : "加入队列")} data-testid="composer-queue">
+            {queueBusy ? <IconLoader size={16} /> : <IconArrowUp size={16} />}
+          </button>}
+          {running && onStop ? (
+            <button
+              type="button"
+              disabled={stopping}
+              className="xn-composer__send xn-composer__stop"
+              aria-label={stopping ? tr("正在停止") : tr("停止")}
+              title={stopping ? tr("正在停止") : tr("停止当前任务")}
+              data-testid="composer-stop"
+              onClick={onStop}
+            >
+              {stopping ? <IconLoader size={16} /> : <IconX size={16} />}
+            </button>
+          ) : !running && (
+            <button
+              type="submit"
+              disabled={isSendDisabled}
+              className="xn-composer__send"
+              aria-label={tr("发送")}
+              title={tr("发送")}
+            >
+              <IconArrowUp size={16} />
+            </button>
+          )}
+        </div>
       </div>
       </form>
     </div>

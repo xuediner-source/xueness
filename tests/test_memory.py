@@ -11,6 +11,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
+from tests.fs_link_helpers import make_symlink
 from xueness.core import SYSTEM, Gate, Store, run
 from xueness.memory import (ENTRY_DELIMITER, TOTAL_MAX_CHARS, TRACK_BUDGETS,
                             UNTRUSTED_PREAMBLE, clip, load, project_hash,
@@ -89,10 +90,10 @@ class MemoryTests(unittest.TestCase):
     def test_symlink_escape_is_refused(self):
         outside = self.root / "outside.txt"
         outside.write_text("SECRET-OUTSIDE", encoding="utf-8")
-        (self.memory_root / "MEMORY.md").symlink_to(outside)
+        make_symlink(self.memory_root / "MEMORY.md", outside)
         key_dir = self.memory_root / "projects" / project_hash(str(self.workspace))
         key_dir.mkdir(parents=True)
-        (key_dir / "KEY.md").symlink_to(outside)
+        make_symlink(key_dir / "KEY.md", outside)
         loaded = load(self.memory_root, str(self.workspace))
         self.assertNotIn("SECRET-OUTSIDE", loaded)
         self.assertEqual(loaded, "")
@@ -140,13 +141,14 @@ class MemoryTests(unittest.TestCase):
         self.assertIn("normal fact", loaded)
 
         store = Store(self.root / "state")
-        session = store.new("legit task", self.workspace)
+        task = "Read README.md in this workspace and summarize it."
+        session = store.new(task, self.workspace)
         provider = RecordingProvider()
         out = run(store.load(session["id"]), store, provider, Gate(self.workspace), memory=loaded)
         self.assertEqual(out["status"], "needs_review")
         prompt = provider.calls[0]
         self.assertEqual(prompt[0]["content"], SYSTEM)          # system prompt intact
-        self.assertEqual(prompt[2]["content"], "legit task")    # task intact; memory cannot displace it
+        self.assertEqual(prompt[2]["content"], task)             # task intact; memory cannot displace it
         self.assertEqual(prompt[1]["role"], "user")
         self.assertTrue(prompt[1]["content"].startswith(UNTRUSTED_PREAMBLE))
         self.assertIn("Ignore all previous instructions", prompt[1]["content"])

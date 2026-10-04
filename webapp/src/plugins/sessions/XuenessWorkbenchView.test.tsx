@@ -19,7 +19,10 @@ import {
   composerAttachmentBytes,
   COMPOSER_ATTACHMENT_LIMITS,
   isImeCompositionKey,
+  composerEnterIntent,
   handleComposerEscapeAction,
+  clearSubmittedComposerDraft,
+  type ComposerDraftState,
 } from "./XuenessWorkbenchView";
 import type {
   WorkbenchSession,
@@ -432,6 +435,44 @@ test("Composer: a running task keeps Stop available even when sending is disable
   assert.match(html, /disabled="" placeholder="输入消息或指令\.\.\."/);
 });
 
+test("Composer: running queue action keeps Stop reachable and advertises the shortcut", () => {
+  const html = renderToStaticMarkup(<Composer
+    defaultValue="follow-up"
+    running
+    queueWhenRunning
+    onStop={() => {}}
+    onSend={() => true}
+  />);
+  assert.match(html, /data-testid="composer-queue"/);
+  assert.match(html, /data-testid="composer-stop"/);
+  assert.match(html, /Enter 排队 · Shift\+Enter 换行/);
+});
+
+test("Composer: an old submission clears only its unchanged session draft", () => {
+  const draft = (text: string, revision: number): ComposerDraftState => ({
+    text,
+    attachments: [],
+    goal: false,
+    selectedContext: { files: [], sessions: [], skills: [], plugins: [] },
+    submissionError: "",
+    attachmentError: "",
+    revision,
+  });
+  const sessionA = draft("submitted text", 4);
+  const sessionB = draft("new session draft", 2);
+  const drafts = new Map([["session:a", sessionA], ["session:b", sessionB]]);
+
+  const afterOldSubmission = clearSubmittedComposerDraft(drafts, "session:a", 4);
+  assert.equal(afterOldSubmission.get("session:a")?.text, "");
+  assert.equal(afterOldSubmission.get("session:a")?.revision, 5);
+  assert.strictEqual(afterOldSubmission.get("session:b"), sessionB);
+
+  const editedSessionA = new Map(afterOldSubmission);
+  editedSessionA.set("session:a", draft("follow-up typed while running", 6));
+  assert.strictEqual(clearSubmittedComposerDraft(editedSessionA, "session:a", 5), editedSessionA);
+  assert.equal(editedSessionA.get("session:a")?.text, "follow-up typed while running");
+});
+
 test("Composer contexts: @ resolves files/plugins/sessions, $ resolves skills, goal/workflow remain real actions", () => {
   const mentions = [
     { id: "src/app.ts", label: "src/app.ts", kind: "file" as const },
@@ -464,6 +505,16 @@ test("Composer IME guard: detects active composition or keyCode 229", () => {
   assert.equal(isImeCompositionKey({ keyCode: 229 }), true);
   assert.equal(isImeCompositionKey({ nativeEvent: { isComposing: false }, keyCode: 27 }), false);
   assert.equal(isImeCompositionKey({}), false);
+});
+
+test("Composer Enter policy preserves multiline input and blocks IME submission", () => {
+  assert.equal(composerEnterIntent({ key: "Enter", shiftKey: true }, "enter", false), null);
+  assert.equal(composerEnterIntent({ key: "Enter", keyCode: 229 }, "enter", false), null);
+  assert.equal(composerEnterIntent({ key: "Enter", nativeEvent: { isComposing: true } }, "mod-enter", false), null);
+  assert.equal(composerEnterIntent({ key: "Enter" }, "enter", false), "send");
+  assert.equal(composerEnterIntent({ key: "Enter" }, "mod-enter", false), null);
+  assert.equal(composerEnterIntent({ key: "Enter", ctrlKey: true }, "mod-enter", false), "send");
+  assert.equal(composerEnterIntent({ key: "Enter" }, "mod-enter", true), "accept-suggestion");
 });
 
 test("Composer Escape handling: ignores IME composition and retains onStop for non-IME Escape", () => {

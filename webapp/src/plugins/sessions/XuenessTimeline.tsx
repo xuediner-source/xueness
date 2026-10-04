@@ -2,11 +2,20 @@ import { t as tr, tf } from '../../i18n';
 import React from "react";
 import { Plug, SquareTerminal } from "lucide-react";
 import type { TimelineRow } from "../../xuenessWorkbench";
-import { TimelineCard } from "../../XuenessShell";
+import { SimpleMarkdown, TimelineCard } from "../../XuenessShell";
 import { EmptyState } from "../../ui/primitives";
 import { IconGear, IconPencil, IconSearch } from "../../ui/icons";
 import { XuenessConversationHistoryRail } from "./XuenessConversationHistoryRail";
-import { completionPresentation } from './completionPresentation';
+import {
+  completionPresentation,
+  isDuplicateCompletionAnswer,
+  isRecord,
+  protocolAnswerEnvelope,
+  decodeJsonStringFragment,
+  unwrapProtocolEnvelopeText,
+  type CompletionPresentationInput,
+} from './completionPresentation';
+import "./sessions.css";
 import "../../styles/conversation-history-rail.css";
 
 export type TimelineStreamProps = {
@@ -16,10 +25,62 @@ export type TimelineStreamProps = {
   collapseTools?: boolean;
   messageStreamShowReasoning?: boolean;
   grouping?: Partial<Record<ToolGroupKind, boolean>>;
+  /** Only enabled for the local runtime configured to stream JSON tool envelopes. */
+  jsonToolProtocol?: boolean;
+  /** Wait briefly for the session's authoritative tool-calling metadata before showing protocol-looking JSON. */
+  protocolModePending?: boolean;
+  /** Shows that a turn is active before its first text or reasoning delta arrives. */
+  streamingPending?: boolean;
 };
 
 type ToolGroupKind = "explore" | "terminal" | "changes";
 type TimelineEntry = TimelineRow | { kind: "tool-group"; category: ToolGroupKind; rows: TimelineRow[] };
+type AssistantRow = Extract<TimelineRow, { kind: "assistant" }>;
+type CompletionRow = Extract<TimelineRow, { kind: "completion" }>;
+
+type ConversationIndexes = {
+  completionByAssistantSeq: Map<number, CompletionRow>;
+  assistantByCompletionSeq: Map<number, AssistantRow>;
+};
+
+/** Resolve turn relationships in one pass so long streaming histories stay linear. */
+function indexConversationRows(rows: TimelineRow[]): ConversationIndexes {
+  const segmentByAssistantSeq = new Map<number, number>();
+  const assistantBySegment = new Map<number, AssistantRow>();
+  const assistantByTurn = new Map<string, AssistantRow>();
+  const completionBySegment = new Map<number, CompletionRow>();
+  const completionByTurn = new Map<string, CompletionRow>();
+  const assistantByCompletionSeq = new Map<number, AssistantRow>();
+  let segment = -1;
+
+  for (const row of rows) {
+    if (row.kind === "user") {
+      segment += 1;
+    } else if (row.kind === "assistant") {
+      segmentByAssistantSeq.set(row.seq, segment);
+      assistantBySegment.set(segment, row);
+      assistantByTurn.set(row.turnId, row);
+    } else if (row.kind === "completion") {
+      completionBySegment.set(segment, row);
+      if (row.turnId) completionByTurn.set(row.turnId, row);
+      const answer = row.turnId ? assistantByTurn.get(row.turnId) : undefined;
+      const fallback = assistantBySegment.get(segment);
+      const selected = answer && answer.seq < row.seq ? answer : fallback && fallback.seq < row.seq ? fallback : undefined;
+      if (selected) assistantByCompletionSeq.set(row.seq, selected);
+    }
+  }
+
+  const completionByAssistantSeq = new Map<number, CompletionRow>();
+  for (const row of rows) {
+    if (row.kind !== "assistant") continue;
+    const segment = segmentByAssistantSeq.get(row.seq);
+    const byTurn = completionByTurn.get(row.turnId);
+    const bySegment = segment === undefined ? undefined : completionBySegment.get(segment);
+    const completion = byTurn && byTurn.seq > row.seq ? byTurn : bySegment && bySegment.seq > row.seq ? bySegment : undefined;
+    if (completion) completionByAssistantSeq.set(row.seq, completion);
+  }
+  return { completionByAssistantSeq, assistantByCompletionSeq };
+}
 
 function toolCategory(row: TimelineRow): ToolGroupKind | null {
   if (row.kind !== "tool") return null;
@@ -67,8 +128,115 @@ type ToolPayloadRow = Extract<TimelineRow, { kind: "tool" }> & {
   output?: unknown;
 };
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
+function isProtocolToolEnvelope(value: unknown): boolean {
+  return isRecord(value) && Object.keys(value).length === 2
+    && typeof value.tool === "string" && isRecord(value.arguments);
+}
+
+function protocolJsonBody(text: string): { body?: string; knownFence: boolean } {
+  const source = text.trimStart();
+  if (!source.startsWith("```json")) return { body: source, knownFence: false };
+  if (source.length === 7) return { knownFence: true };
+  const rest = source.slice(7);
+  if (!rest.startsWith("\n") && !rest.startsWith("\r\n")) return { body: source, knownFence: false };
+  const body = rest.replace(/^\r?\n/u, "");
+  return { body: body.replace(/\r?\n```\s*$/u, "").trimEnd(), knownFence: true };
+}
+
+function isKnownAnswerEnvelopePrefix(text: string): boolean {
+  const normalized = protocolJsonBody(text);
+  if (normalized.knownFence && normalized.body === undefined) return true;
+  const source = normalized.body ?? "";
+  if (!source.startsWith("{")) return false;
+  let index = 1;
+  while (/\s/u.test(source[index] ?? " ") && index < source.length) index += 1;
+  if (index >= source.length) return true;
+  if (source[index] !== '"') return false;
+  index += 1;
+  let key = "";
+  while (index < source.length && source[index] !== '"') {
+    if (source[index] === "\\") return false;
+    key += source[index]!;
+    index += 1;
+    if (!("summary".startsWith(key) || "answer".startsWith(key) || "tool".startsWith(key))) return false;
+  }
+  if (index >= source.length) return "summary".startsWith(key) || "answer".startsWith(key) || "tool".startsWith(key);
+  if (key !== "summary" && key !== "answer" && key !== "tool") return false;
+  index += 1;
+  while (/\s/u.test(source[index] ?? " ") && index < source.length) index += 1;
+  if (index >= source.length) return true;
+  if (source[index] !== ":") return false;
+  if (key === "tool") return true;
+  index += 1;
+  while (/\s/u.test(source[index] ?? " ") && index < source.length) index += 1;
+  return index >= source.length || source[index] === '"';
+}
+
+/** Decode the visible prefix of a JSON string without leaking its syntax. */
+function extractProtocolAnswerPrefix(text: string): string | undefined {
+  const source = protocolJsonBody(text).body ?? "";
+  const prefix = /^\{\s*"(?:summary|answer)"\s*:\s*"/u.exec(source);
+  if (!prefix) return undefined;
+  const content = source.slice(prefix[0].length);
+  let end = 0;
+  let inEscape = false;
+  while (end < content.length) {
+    if (inEscape) {
+      inEscape = false;
+      end += 1;
+    } else if (content[end] === "\\") {
+      inEscape = true;
+      end += 1;
+    } else if (content[end] === '"') {
+      break;
+    } else {
+      end += 1;
+    }
+  }
+  return decodeJsonStringFragment(content.slice(0, end));
+}
+
+function comparableText(value: string): string {
+  return value.trim().replace(/\s+/gu, " ");
+}
+
+/** Keep ordinary JSON intact; unwrap only a server-confirmed or live protocol answer envelope. */
+export function assistantTextForDisplay(text: string, streaming = false, completionSummary?: string, jsonToolProtocol = false, protocolModePending = false): string {
+  const trimmed = text.trim();
+  if (!trimmed) return text;
+  if (streaming && protocolModePending && isKnownAnswerEnvelopePrefix(text)) return "";
+  try {
+    const protocolText = protocolJsonBody(trimmed).body ?? trimmed;
+    const parsed: unknown = JSON.parse(protocolText);
+    const envelope = protocolAnswerEnvelope(parsed);
+    const matchesSummary = completionSummary !== undefined && Boolean(
+      envelope?.answer && comparableText(envelope.answer) === comparableText(completionSummary)
+    );
+    if (envelope && (jsonToolProtocol || matchesSummary || (streaming && jsonToolProtocol))) return envelope.answer;
+    if ((streaming || jsonToolProtocol) && isProtocolToolEnvelope(parsed)) return "";
+    // A complete, valid but differently shaped JSON value is user content.
+    // Only incomplete recognized prefixes are held back while the stream grows.
+    if (streaming && jsonToolProtocol) return text;
+  } catch {
+    // A live JSON protocol response can be incomplete; the prefix parser below
+    // extracts only its user-facing answer field.
+  }
+  if (streaming && jsonToolProtocol) {
+    const answer = extractProtocolAnswerPrefix(text);
+    if (answer !== undefined) return answer;
+    if (isKnownAnswerEnvelopePrefix(text)) return "";
+  }
+  if (!streaming && jsonToolProtocol) {
+    const unwrapped = unwrapProtocolEnvelopeText(text, true);
+    if (unwrapped !== text) return unwrapped;
+  }
+  return text;
+}
+
+type ToolDisplayStatus = "running" | "ok" | "error" | "cancelled";
+
+function toolDisplayStatus(row: Extract<TimelineRow, { kind: "tool" }>): ToolDisplayStatus {
+  return row.status === "error" && row.errorCode === "xueness.error.cancelled" ? "cancelled" : row.status;
 }
 
 function readString(value: Record<string, unknown>, keys: readonly string[]): string | undefined {
@@ -229,14 +397,15 @@ function ToolTimelineCard({
   const inputText = parsedInput ? stringifyPayload(parsedInput) : undefined;
   const outputText = stringifyPayload(row.output);
   const hasDetails = Boolean(inputText || outputText);
-  const tone = row.status === "error" ? "error" : row.status === "ok" ? "ok" : "warn";
-  const statusLabel = row.status === "running" ? tr("运行中") : row.status === "error" ? tr("失败") : "";
+  const status = toolDisplayStatus(row);
+  const tone = status === "error" ? "error" : status === "ok" ? "ok" : status === "cancelled" ? "neutral" : "warn";
+  const statusLabel = status === "running" ? tr("运行中") : status === "error" ? tr("失败") : status === "cancelled" ? tr("已取消") : tr("已完成");
   const toolKind = ["read", "write", "edit", "exec", "mcp"].find((kind) =>
     row.name.toLowerCase() === kind || row.name.toLowerCase().startsWith(`${kind}_`) || row.name.toLowerCase().startsWith(`${kind}__`),
   ) ?? "other";
   const errorText = row.error
     ? `${row.errorCode ? `[${row.errorCode}] ` : ""}${row.error}`
-    : row.status === "error" ? tr("工具执行失败") : "";
+    : row.status === "error" && status !== "cancelled" ? tr("工具执行失败") : "";
   const kindLabel = toolKind === "mcp" ? "MCP" : row.name;
 
   const summaryRow = (
@@ -257,7 +426,7 @@ function ToolTimelineCard({
       className={`xn-toolcall xn-toolcall--${toolKind} xn-msg xn-msg--tool xn-msg--status-${tone}`}
       data-testid={`xn-toolcall-${row.seq}`}
       data-role="tool"
-      data-status={row.status}
+      data-status={status}
       data-tone={tone}
       data-tool-name={row.name}
     >
@@ -284,14 +453,18 @@ function ToolTimelineCard({
       ) : (
         <div className="xn-msg__tool-line xn-toolcall__summary">{summaryRow}</div>
       )}
-      {errorText && <div className="xn-msg__tool-error" data-testid="xn-card-body">{errorText}</div>}
+      {errorText && <div className={status === "cancelled" ? "xn-toolcall__cancel-note" : "xn-msg__tool-error"} data-testid="xn-card-body">{errorText}</div>}
     </div>
   );
 }
 
-export function TimelineStream({ rows, emptyText = tr("暂无事件"), collapseTools = true, grouping, messageStreamShowReasoning = true }: TimelineStreamProps): React.JSX.Element {
+export function TimelineStream({ rows, emptyText = tr("暂无事件"), collapseTools = true, grouping, messageStreamShowReasoning = true, jsonToolProtocol = false, protocolModePending = false, streamingPending = false }: TimelineStreamProps): React.JSX.Element {
   const timelineRootRef = React.useRef<HTMLDivElement>(null);
+  const conversationIndexes = React.useMemo(() => indexConversationRows(rows ?? []), [rows]);
   if (!rows || rows.length === 0) {
+    if (streamingPending) return <div className="xn-timeline-empty xn-timeline-empty--streaming" data-testid="timeline-stream-loading">
+      <p className="xn-assistant-stream-status" role="status">{tr("正在生成回复…")}</p>
+    </div>;
     return (
       <div data-testid="timeline-stream-empty" className="xn-timeline-empty">
         <EmptyState title={emptyText} />
@@ -308,8 +481,8 @@ export function TimelineStream({ rows, emptyText = tr("暂无事件"), collapseT
       {groupTimelineRows(rows, grouping).map((r, idx) => {
         if (r.kind === "tool-group") {
           const label = r.category === "explore" ? tr("探索工作区") : r.category === "terminal" ? tr("终端操作") : tr("文件修改");
-          const errors = r.rows.filter(row => row.kind === "tool" && row.status === "error").length;
-          return <details className="xn-tool-group" key={`group-${r.rows[0].seq}-${idx}`} open>
+          const errors = r.rows.filter(row => row.kind === "tool" && toolDisplayStatus(row) === "error").length;
+          return <details className="xn-tool-group" key={`group-${r.rows[0].seq}-${idx}`} open={!collapseTools}>
             <summary>{label}<span>{r.rows.length}</span>{errors > 0 && <strong>{tf("{0} 项失败", [errors])}</strong>}</summary>
             <TimelineStream rows={r.rows} collapseTools={collapseTools} />
           </details>;
@@ -331,6 +504,8 @@ export function TimelineStream({ rows, emptyText = tr("暂无事件"), collapseT
         }
 
         if (r.kind === "assistant") {
+          const terminal = conversationIndexes.completionByAssistantSeq.get(r.seq);
+          const displayText = assistantTextForDisplay(r.text, r.streaming, terminal?.summary, jsonToolProtocol, protocolModePending);
           return (
             <div
               key={key}
@@ -338,8 +513,10 @@ export function TimelineStream({ rows, emptyText = tr("暂无事件"), collapseT
               data-role="assistant"
               className="xn-timeline-item xn-timeline-item--assistant"
             >
-              {messageStreamShowReasoning && r.reasoning && <details className="xn-reasoning"><summary>{r.streaming ? tr("思考中…") : tr("思考过程")}</summary><div>{r.reasoning}</div></details>}
-              <TimelineCard role="assistant" body={r.text} markdown seq={r.seq} />
+              {messageStreamShowReasoning && r.reasoning && <details className="xn-reasoning"><summary>{r.streaming ? tr("思考中…") : tr("思考过程")}</summary><pre className="xn-reasoning__text">{r.reasoning}</pre></details>}
+              {displayText.trim()
+                ? <TimelineCard role="assistant" body={displayText} markdown seq={r.seq} />
+                : r.streaming && <p className="xn-assistant-stream-status" role="status">{tr("正在生成回复…")}</p>}
             </div>
           );
         }
@@ -350,8 +527,8 @@ export function TimelineStream({ rows, emptyText = tr("暂无事件"), collapseT
               key={key}
               data-testid={`timeline-item-tool-${r.seq}`}
               data-role="tool"
-              data-tool-status={r.status}
-              className={`xn-timeline-item xn-timeline-item--tool xn-timeline-item--${r.status}`}
+              data-tool-status={toolDisplayStatus(r)}
+              className={`xn-timeline-item xn-timeline-item--tool xn-timeline-item--${toolDisplayStatus(r)}`}
             >
               <ToolTimelineCard row={r as ToolPayloadRow} collapseTools={collapseTools} />
             </div>
@@ -359,7 +536,12 @@ export function TimelineStream({ rows, emptyText = tr("暂无事件"), collapseT
         }
 
         if (r.kind === "completion") {
-          const completion = completionPresentation(r);
+          const typedCompletion = r as typeof r & CompletionPresentationInput;
+          const completion = completionPresentation(typedCompletion, jsonToolProtocol);
+          const assistantRow = conversationIndexes.assistantByCompletionSeq.get(r.seq);
+          const assistantAnswer = assistantTextForDisplay(assistantRow?.text ?? "", false, typedCompletion.summary, jsonToolProtocol, protocolModePending);
+          const duplicateSummary = isDuplicateCompletionAnswer(completion.summary, assistantAnswer, jsonToolProtocol);
+          const completionDetails = duplicateSummary ? "" : completion.summary;
           return (
             <div
               key={key}
@@ -372,10 +554,14 @@ export function TimelineStream({ rows, emptyText = tr("暂无事件"), collapseT
                 title={completion.title}
                 status={completion.status}
                 statusLabel={completion.label}
-                body={completion.summary}
+                body=""
                 markdown
                 seq={r.seq}
               />
+              {completionDetails && <details className="xn-completion-details" open={completion.detailsOpen}>
+                <summary>{tr("查看完成详情")}</summary>
+                <div className="xn-completion-details__body"><SimpleMarkdown text={completionDetails} /></div>
+              </details>}
             </div>
           );
         }
@@ -401,6 +587,9 @@ export function TimelineStream({ rows, emptyText = tr("暂无事件"), collapseT
 
         return null;
       })}
+      {streamingPending && !rows.some(row => row.kind === "assistant" && row.streaming) && <div className="xn-timeline-item xn-timeline-item--assistant xn-assistant-stream-pending" data-testid="timeline-stream-loading">
+        <p className="xn-assistant-stream-status" role="status">{tr("正在生成回复…")}</p>
+      </div>}
     </div>
   );
 

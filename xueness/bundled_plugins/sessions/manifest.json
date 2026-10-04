@@ -30,10 +30,12 @@
     "cli_interrupt",
     "cli_tui",
     "composer_api",
+    "completion_policy",
     "deltas",
     "forking",
     "http_routes",
     "operator_cli",
+    "queue",
     "session_management",
     "sessions_api",
     "tooling"
@@ -75,6 +77,11 @@
       "nameEn": "Attachments, context mentions and input"
     },
     {
+      "id": "sessions.message_queue",
+      "name": "运行期间排队发送后续消息",
+      "nameEn": "Queue follow-up messages during a run"
+    },
+    {
       "id": "sessions.tui",
       "name": "多行 CLI、全屏 TUI 与中断恢复",
       "nameEn": "Multiline CLI, fullscreen TUI and interruption"
@@ -93,6 +100,7 @@
     "plugins/sessions/index.ts",
     "plugins/sessions/composerCatalogLifecycle.ts",
     "plugins/sessions/ComposerWorkspaceSelect.tsx",
-    "plugins/sessions/completionPresentation.ts"
+    "plugins/sessions/completionPresentation.ts",
+    "plugins/sessions/SessionQueue.tsx"
   ]
 }

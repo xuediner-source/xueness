@@ -25,6 +25,7 @@ import json
 import os
 import re
 from pathlib import Path
+from ...resources import _is_link, _kind_dir
 
 # Bound (characters) on the expanded text spliced into the prompt.
 EXPAND_MAX_CHARS = 8000
@@ -62,7 +63,7 @@ def _safe_read_json(path: Path):
     JSON document that is not an object all yield ``None`` so one broken entry
     can never take down the rest of the list or echo back a foreign file.
     """
-    if path.is_symlink():
+    if _is_link(path):
         return None
     flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0)
     try:
@@ -106,15 +107,18 @@ def _body(item: dict):
 
 def load(state_dir) -> list:
     """Every usable command under ``state_dir``, sorted by id ascending."""
-    commands_dir = _commands_dir(state_dir)
+    try:
+        commands_dir = _kind_dir({"state_dir": state_dir}, "commands")
+    except (OSError, ValueError):
+        return []
     # A symlinked directory would relocate the whole jail; refuse it outright.
-    if commands_dir.is_symlink():
+    if _is_link(commands_dir):
         return []
     if not commands_dir.is_dir():
         return []
     items = []
     for path in sorted(commands_dir.glob("*.json")):
-        if path.is_symlink():
+        if _is_link(path):
             continue
         item = _safe_read_json(path)
         if item is None:

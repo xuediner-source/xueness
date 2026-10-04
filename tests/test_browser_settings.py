@@ -16,7 +16,7 @@ class BrowserSettingsTests(unittest.TestCase):
         self.base = Path(temporary.name).resolve()
         self.state = self.base / 'state'
         self.state.mkdir()
-        self.profile = self.state / f'browser-profile-{os.getpid()}'
+        self.profile = self.state / 'browser-profile'
         self.ctx = {'state_dir': self.state, 'running': set(), 'lock': threading.Lock()}
         self.shutdown = patch('xueness.bundled_plugins.browser.plugin.shutdown')
         self.stopped = self.shutdown.start()
@@ -64,14 +64,42 @@ class BrowserSettingsTests(unittest.TestCase):
         outside.mkdir()
         (outside / 'Cache').mkdir()
         (outside / 'Cache' / 'keep').write_text('outside fixture')
-        self.profile.symlink_to(outside, target_is_directory=True)
-        self.assertEqual(self.call('POST', {'operation':'all','confirmed':True})[0], 400)
-        self.profile.unlink()
         self.profile.mkdir()
-        (self.profile / 'Default').symlink_to(outside, target_is_directory=True)
-        self.assertEqual(self.call('POST', {'operation':'cache'})[0], 400)
+        with patch('xueness.bundled_plugins.browser.profiles._link', side_effect=lambda path: path == self.profile):
+            self.assertEqual(self.call('POST', {'operation':'all','confirmed':True})[0], 400)
+        (self.profile / 'Default').mkdir()
+        with patch.object(settings_api, '_link', side_effect=lambda path: path == self.profile/'Default'):
+            self.assertEqual(self.call('POST', {'operation':'cache'})[0], 400)
         self.assertEqual((outside / 'Cache' / 'keep').read_text(), 'outside fixture')
         self.stopped.assert_not_called()
+
+    def test_clear_all_removes_only_generated_import_backups(self):
+        self.seed()
+        backup = self.state / ('browser-import-old-' + 'a'*32)
+        backup.mkdir()
+        (backup/'Cookies').write_text('old fixture')
+        unrelated = self.state/'browser-import-old-personal'
+        unrelated.mkdir()
+        self.assertEqual(self.call('POST', {'operation':'all','confirmed':True}), (200, {'ok': True}))
+        self.assertFalse(backup.exists())
+        self.assertTrue(unrelated.exists())
+
+    def test_runtime_reports_actual_host_and_desktop_plugin_state(self):
+        set_enabled(self.state, 'browser', True)
+        with patch('xueness.bundled_plugins.browser.runtime.browser_runtime', return_value={'available':True,'browser':'Chrome','reason':None}) as probe:
+            route = ['api','browser','runtime']
+            status, value = dispatch_http('GET', route, {}, {}, self.ctx)
+            self.assertEqual(status, 200)
+            self.assertFalse(value['desktop'])
+            self.assertFalse(value['importEnabled'])
+            self.ctx['desktop_token'] = 'fixture-token'
+            self.assertTrue(dispatch_http('GET', route, {}, {}, self.ctx)[1]['importEnabled'])
+            set_enabled(self.state, 'desktop', False)
+            self.assertFalse(dispatch_http('GET', route, {}, {}, self.ctx)[1]['importEnabled'])
+            set_enabled(self.state, 'browser', False)
+            probe.reset_mock()
+            self.assertEqual(dispatch_http('GET', route, {}, {}, self.ctx)[0], 403)
+            probe.assert_not_called()
 
     def test_runtime_route_obeys_plugin_gate(self):
         self.assertEqual(dispatch_http('GET', ['api','browser','data'], {}, {}, self.ctx)[0], 403)

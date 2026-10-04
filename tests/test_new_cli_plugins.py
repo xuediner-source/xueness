@@ -11,6 +11,7 @@ from contextlib import redirect_stderr, redirect_stdout
 from pathlib import Path
 from unittest import mock
 
+from tests.secret_permissions import assert_secret_file_private
 from xueness.bundled_plugins.onboarding import plugin as onboarding
 from xueness.bundled_plugins.browser import plugin as browser
 from xueness.bundled_plugins.remote import plugin as remote
@@ -110,7 +111,7 @@ class NewCliPluginTests(unittest.TestCase):
             self.assertTrue(result['provider']['hasKey'])
             profile = Path(tmp) / 'providers' / 'local.json'
             self.assertIn('do-not-print-key', profile.read_text())
-            self.assertEqual(0o600, profile.stat().st_mode & 0o777)
+            assert_secret_file_private(self, profile)
 
     def test_remote_cli_keeps_host_verification_and_uses_exact_approval(self):
         with tempfile.TemporaryDirectory() as tmp:

@@ -67,7 +67,7 @@ export function DesktopTrayMenu({ snapshot, api }: { snapshot: TraySnapshot; api
       {section(text('已固定', 'Pinned'), groups.pinned)}
       <div className="xn-tray-menu__recent">{section(text('最近', 'Recent'), groups.recent)}
         <button type="button" role="menuitem" className="xn-tray-menu__more" disabled={!groups.more.length || !snapshot.sessionsEnabled} onClick={() => setMore(true)}>
-          <span>{text('更多', 'More')}</span><ChevronRight size={15} />
+          <span>{text('更多', 'More')}</span><ChevronRight size={14} />
         </button>
       </div>
     </>}

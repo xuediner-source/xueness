@@ -17,8 +17,6 @@ export type ComposerToolbarProps = {
   onManageModels(): void;
   onBackground?: () => void;
   backgroundCount?: number;
-  /** Open browser settings; this does not launch a browser window. */
-  onBrowser?: () => void;
   /** Kept for callers that still pass it; the actual selected state comes from choices.browser. */
   browserEnabled?: boolean;
   onToggleBrowser?(enabled: boolean): void;
@@ -76,7 +74,6 @@ export function XuenessComposerToolbar({
   onManageModels,
   onBackground,
   backgroundCount = 0,
-  onBrowser,
   onToggleBrowser,
   contextUsage,
   runtimeBudget,
@@ -301,11 +298,6 @@ export function XuenessComposerToolbar({
             disabled={disabled}
             onClick={() => onToggleBrowser(!browserIsEnabled)}
           >{browserIsEnabled ? tr("浏览器已启用") : tr("启用浏览器")}</button>
-        )}
-        {onBrowser && (
-          <button type="button" className="xn-composer-toolbar__tool" disabled={disabled} onClick={onBrowser}>
-            {tr("浏览器设置")}
-          </button>
         )}
         {onBackground && backgroundCount > 0 && (
           <button type="button" className="xn-composer-toolbar__tool" disabled={disabled} onClick={onBackground}>

@@ -185,7 +185,7 @@ class ProviderCompatibilityTests(unittest.TestCase):
         self.assertNotIn("parallel_tool_calls", body)
         self.assertIs(body["think"], False)
         self.assertEqual("user-selected-local-model", body["model"])
-        self.assertEqual(96, body["max_tokens"])
+        self.assertEqual(128, body["max_tokens"])
         self.assertNotIn(SECRET, json.dumps(result))
 
     def test_native_tool_call_requires_exact_name_and_argument_schema(self):

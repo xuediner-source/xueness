@@ -8,7 +8,8 @@ Security properties enforced here:
   explicit field whitelist, so ``apiKey`` cannot leak by accident; clients
   only ever see ``hasKey: bool``.
 * Keys land in ``<state_dir>/providers/<id>.json`` written atomically
-  (``tempfile.mkstemp`` + ``fsync`` + ``os.replace``) with mode ``0o600``.
+  (``tempfile.mkstemp`` + ``fsync`` + ``os.replace``) with POSIX mode
+  ``0o600`` or a protected Windows DACL limited to trusted system principals.
 * Every user-supplied identifier is regex-whitelisted and the resolved target
   must stay inside ``<state_dir>/providers`` (path jail).
 * Symlinks are refused outright: a symlinked ``providers`` directory would
@@ -33,11 +34,11 @@ from urllib.parse import urlsplit
 
 from .runtime_options import public_runtime_options, resolve_runtime_options, validate_compatibility
 from .lightweight_config import validate_options
+from ...resources import _is_link, _protect_private_file
 
 ID_RE = re.compile(r"^[A-Za-z0-9._-]{1,64}$")
 # Dot-only names are legal for the regex but are traversal/parent markers.
 RESERVED_IDS = frozenset({".", ".."})
-FILE_MODE = 0o600
 DIR_MODE = 0o700
 SUBDIR = "providers"
 REQUIRED_TEXT_FIELDS = ("name", "baseUrl", "model")
@@ -112,8 +113,8 @@ def _providers_dir(ctx: dict) -> Path:
     """
     state_dir = Path(ctx["state_dir"]).resolve()
     directory = state_dir / SUBDIR
-    if directory.is_symlink():
-        raise ValueError("providers directory must not be a symlink")
+    if _is_link(directory):
+        raise ValueError("providers directory must not be a symlink, junction, or reparse point")
     if not _within(directory, state_dir):
         raise ValueError("providers directory escapes state dir")
     return directory
@@ -126,7 +127,7 @@ def _path_for(directory: Path, pid: str) -> Path | None:
     the only remaining escape hatch is an existing symlink at that name.
     """
     candidate = directory / f"{pid}.json"
-    if candidate.is_symlink():
+    if _is_link(candidate):
         return None
     if candidate.parent != directory or candidate.name != f"{pid}.json":
         return None
@@ -421,8 +422,8 @@ def _stored_check(mode, result, tested_at):
 
 
 def _read_record(path: Path) -> dict | None:
-    """Read one provider record, refusing symlinks (``O_NOFOLLOW``)."""
-    if path.is_symlink():
+    """Read a provider record, refusing symlinks/reparse points and nofollow."""
+    if _is_link(path):
         return None
     flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0)
     try:
@@ -452,13 +453,19 @@ def _atomic_write(path: Path, payload: dict) -> None:
         pass
     fd, tmp = tempfile.mkstemp(prefix=".provider-", dir=str(directory))
     try:
+        try:
+            _protect_private_file(fd)
+        except BaseException:
+            try:
+                os.close(fd)
+            except OSError:
+                pass
+            raise
         with os.fdopen(fd, "w", encoding="utf-8") as stream:
             json.dump(payload, stream, ensure_ascii=False, indent=2, sort_keys=True)
             stream.flush()
             os.fsync(stream.fileno())
-        os.chmod(tmp, FILE_MODE)
         os.replace(tmp, path)
-        os.chmod(path, FILE_MODE)
     finally:
         if os.path.exists(tmp):
             os.unlink(tmp)
@@ -470,7 +477,7 @@ def _list(ctx: dict) -> list:
     if not directory.is_dir():
         return out
     for entry in sorted(directory.glob("*.json")):
-        if entry.is_symlink():
+        if _is_link(entry):
             continue
         record = _read_record(entry)
         if record is None:

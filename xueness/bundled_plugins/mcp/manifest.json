@@ -29,7 +29,8 @@
     "mcp_http",
     "oauth",
     "operator_cli",
-    "sse"
+    "sse",
+    "windows_process"
   ],
   "features": [
     {

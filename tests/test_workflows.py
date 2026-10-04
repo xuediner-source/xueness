@@ -1,15 +1,17 @@
 import json
+import os
 import sys
 import tempfile
 import threading
 import time
 import unittest
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 from pathlib import Path
 from xueness.workflows import WorkflowStore, ProviderGovernor, drive, validate_plan, ACTIVE
 from xueness.bundled_plugins.workflows import tools as workflow_tools
 from xueness.bundled_plugins.workflows.dsl import compile_workflow_script
 from xueness.tool_contract import bind_execution
+from xueness.bundled_plugins.workflows import workflows, windows
 
 
 class WorkflowTests(unittest.TestCase):
@@ -385,6 +387,158 @@ pipeline([reviews, agent("implement the findings"), agent("verify the change")])
         r = self.store.create({'nodes': [self.node('a', code), self.node('b', code)]}, self.root)
         self.store.launch(r['id'], approved=True)
         self.assertEqual(self.wait(r['id'])['status'], 'completed')
+
+
+class WorkflowStatePersistenceTests(unittest.TestCase):
+    def test_reader_waits_for_atomic_update_and_observes_committed_record(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            store = WorkflowStore(temporary)
+            record = {'id': '0' * 32, 'value': 'before'}
+            store.save(record)
+            updating, release, reading, done = (threading.Event() for _ in range(4))
+            result, errors = [], []
+
+            def change(row):
+                row['value'] = 'after'
+                updating.set()
+                if not release.wait(3):
+                    raise RuntimeError('test did not release writer')
+
+            def write():
+                try:
+                    store.update(record['id'], change)
+                except Exception as error:
+                    errors.append(error)
+
+            def read():
+                reading.set()
+                try:
+                    result.append(store.load(record['id']))
+                except Exception as error:
+                    errors.append(error)
+                finally:
+                    done.set()
+
+            writer = threading.Thread(target=write)
+            reader = threading.Thread(target=read)
+            writer.start()
+            try:
+                self.assertTrue(updating.wait(2))
+                reader.start()
+                self.assertTrue(reading.wait(2))
+                self.assertFalse(done.wait(.1), 'read must wait for the in-progress writer')
+            finally:
+                release.set()
+                writer.join(3)
+                if reader.ident is not None:
+                    reader.join(3)
+            self.assertFalse(writer.is_alive())
+            self.assertFalse(reader.is_alive())
+            self.assertEqual(errors, [])
+            self.assertEqual(result[0]['value'], 'after')
+
+    def test_workflow_records_are_utf8_independent_of_host_encoding(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            store = WorkflowStore(temporary)
+            record = {'id': '0' * 32, 'name': '工作流 🧪'}
+            store.save(record)
+            self.assertIn('工作流 🧪'.encode('utf-8'), store.path(record['id']).read_bytes())
+            self.assertEqual(store.load(record['id']), record)
+
+    def test_atomic_replace_retries_only_bounded_windows_sharing_errors(self):
+        for code in (5, 32, 33, 87):
+            with self.subTest(winerror=code), patch.object(workflows, 'os') as host, \
+                    patch.object(workflows.time, 'sleep') as sleep:
+                host.name = 'nt'
+                error = OSError('replace denied')
+                error.winerror = code
+                host.replace.side_effect = [error, None]
+                if code == 87:
+                    with self.assertRaises(OSError):
+                        workflows._replace_state_file('new', 'old')
+                    self.assertEqual(host.replace.call_count, 1)
+                    sleep.assert_not_called()
+                else:
+                    workflows._replace_state_file('new', 'old')
+                    self.assertEqual(host.replace.call_count, 2)
+                    sleep.assert_called_once()
+        with patch.object(workflows, 'os') as host, \
+                patch.object(workflows.time, 'monotonic', side_effect=[0, .1, .6]), \
+                patch.object(workflows.time, 'sleep'):
+            host.name = 'nt'
+            error = PermissionError('permanent denial')
+            error.winerror = 5
+            host.replace.side_effect = error
+            with self.assertRaises(PermissionError):
+                workflows._replace_state_file('new', 'old')
+            self.assertEqual(host.replace.call_count, 2)
+        with patch.object(workflows, 'os') as host, patch.object(workflows.time, 'sleep') as sleep:
+            host.name = 'posix'
+            host.replace.side_effect = error
+            with self.assertRaises(PermissionError):
+                workflows._replace_state_file('new', 'old')
+            self.assertEqual(host.replace.call_count, 1)
+            sleep.assert_not_called()
+
+    def test_failed_atomic_save_preserves_previous_record_and_removes_temp(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            store = WorkflowStore(temporary)
+            record = {'id': '0' * 32, 'value': 'before'}
+            store.save(record)
+            with patch.object(workflows, '_replace_state_file', side_effect=PermissionError('denied')):
+                with self.assertRaises(PermissionError):
+                    store.save({**record, 'value': 'after'})
+            self.assertEqual(store.load(record['id']), record)
+            self.assertEqual(list(store.directory.glob('.workflow-*')), [])
+
+    @unittest.skipUnless(os.name == 'nt', 'Windows file sharing semantics')
+    def test_windows_save_recovers_after_reader_releases_file(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            store = WorkflowStore(temporary)
+            record = {'id': '0' * 32, 'value': 'before'}
+            store.save(record)
+            reader = store.path(record['id']).open('rb')
+            denied = threading.Event()
+            original_replace = os.replace
+
+            def replace(source, destination):
+                try:
+                    return original_replace(source, destination)
+                except OSError as error:
+                    if getattr(error, 'winerror', None) in (5, 32, 33):
+                        denied.set()
+                    raise
+
+            def release_reader():
+                denied.wait(2)
+                reader.close()
+
+            thread = threading.Thread(target=release_reader)
+            thread.start()
+            try:
+                with patch.object(workflows.os, 'replace', side_effect=replace):
+                    store.save({**record, 'value': 'after'})
+                self.assertTrue(denied.is_set(), 'the real open handle must block the first replace')
+                self.assertEqual(store.load(record['id'])['value'], 'after')
+            finally:
+                denied.set()
+                thread.join(3)
+                reader.close()
+
+    def test_windows_command_pid_save_failure_terminates_process_and_closes_pipe(self):
+        store, proc = Mock(), Mock()
+        store.update.side_effect = PermissionError('pid save failed')
+        with patch.object(windows, 'spawn_external', return_value=proc), \
+                patch.object(windows, 'terminate_tree') as terminate, \
+                patch.object(windows.subprocess, 'CREATE_NO_WINDOW', 0, create=True), \
+                patch.object(windows.threading, 'Thread') as reader:
+            with self.assertRaisesRegex(PermissionError, 'pid save failed'):
+                windows.execute_command(store, {'id': '0' * 32},
+                                        {'id': 'node', 'argv': ['command'], 'timeout': 1},
+                                        Path('.'), Path('unused.log'), {}, time.monotonic())
+            terminate.assert_called_once_with(proc)
+            proc.stdout.close.assert_called_once()
+            reader.assert_not_called()
 
 
 if __name__ == '__main__': unittest.main()

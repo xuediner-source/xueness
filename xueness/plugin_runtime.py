@@ -31,7 +31,7 @@ class PluginDisabled(ValueError):
 def _manifests():
     result = {}
     for pid in PLUGIN_IDS:
-        item = json.loads((PACKAGE_ROOT / pid / 'manifest.json').read_text())
+        item = json.loads((PACKAGE_ROOT / pid / 'manifest.json').read_text(encoding='utf-8'))
         if item.get('id') != pid or item.get('apiVersion') != API_VERSION:
             raise ValueError('incompatible bundled plugin manifest')
         if type(item.get('defaultEnabled')) is not bool:
@@ -168,6 +168,23 @@ def completion_checks(state_dir, root, gate, session, summary):
             if callable(callback):
                 checks[item['id']] = callback(root, gate, session, summary, state_dir=state_dir)
     return checks
+
+
+def completion_requires_evidence(state_dir, session, call_ids=()):
+    """Ask enabled plugins whether this turn has evidence-bearing obligations.
+
+    The kernel keeps a conservative fallback when the sessions policy is
+    disabled; this hook only allows an enabled product feature to add a
+    requirement, never to erase a requirement from another plugin.
+    """
+    required = False
+    for item in catalog(state_dir):
+        if not item['effective']:
+            continue
+        callback = getattr(entrypoint(item['id']), 'completion_requires_evidence', None)
+        if callable(callback) and callback(session, call_ids):
+            required = True
+    return required
 
 
 def active_tool_names(state_dir):

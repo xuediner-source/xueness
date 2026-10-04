@@ -15,7 +15,7 @@ import { t as tr, tf, useLocale, setLocale } from './i18n';
  * is. Secondary views (files/diff/directory/providers/usage/memory/settings)
  * hang off the conversation header switcher and the sidebar footer, not tabs.
  */
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import "./styles/command.css";
 import "./styles/batch10.css";
 import {
@@ -34,6 +34,8 @@ import {
   loadSession,
   runSession,
   sendTurn,
+  queueTurn,
+  cancelQueuedTurn,
   toTimelineRows,
   hydrateTimelineTools,
   hydrateTimelineJournalRows,
@@ -95,9 +97,10 @@ import { WorkflowPanel } from "./plugins/workflows";
 import { ModelManager } from "./plugins/providers";
 import { LocalRuntimeMonitor, RequestTiming, type LocalRuntimeSession } from "./plugins/providers/LocalRuntimeMonitor";
 import { ForkSessionDialog } from "./plugins/sessions";
+import { SessionQueue } from "./plugins/sessions/SessionQueue";
 import { TerminalPanel } from "./plugins/terminal";
 import { RemoteConnections } from "./plugins/remote";
-import { Approvals, Composer, WorkbenchHeader, heroGreeting } from "./plugins/sessions/XuenessWorkbenchView";
+import { Approvals, Composer, WorkbenchHeader, heroGreeting, type ComposerDraftState } from "./plugins/sessions/XuenessWorkbenchView";
 import { IconBack, IconGear, IconNewTask, IconSearch, IconWorkflow, IconModel, IconXuenessMark } from "./ui/icons";
 import { CalendarClock, Archive, ArrowDownWideNarrow, ChevronsDownUp, Folder, Hash, MessageCirclePlus, UserRound, CircleHelp, ChevronDown, Blocks, GitBranch } from "lucide-react";
 import { Select } from "./ui/Select";
@@ -223,6 +226,20 @@ const PANEL_LABELS = (): Record<Panel, string> => ({
   plugins: tr("插件管理"),
 });
 
+function trackSessionId(
+  ref: React.MutableRefObject<Set<string>>,
+  setValue: (value: Set<string>) => void,
+  id: string,
+  present: boolean,
+): void {
+  if (!id || ref.current.has(id) === present) return;
+  const next = new Set(ref.current);
+  if (present) next.add(id);
+  else next.delete(id);
+  ref.current = next;
+  setValue(next);
+}
+
 export function XuenessWorkbenchContainer() {
   const locale = useLocale();
   useEffect(() => { document.documentElement.lang = locale === "zh" ? "zh-CN" : "en"; }, [locale]);
@@ -263,6 +280,7 @@ export function XuenessWorkbenchContainer() {
   const [activeId, setActiveId] = useState<string | null>(null);
   const activeIdRef = useRef<string | null>(activeId);
   activeIdRef.current = activeId;
+  const composerDraftStore = useRef(new Map<string, ComposerDraftState>());
   const [session, setSession] = useState<WorkbenchSession | null>(null);
   const [rows, setRows] = useState<TimelineRow[]>([]);
   const [forkSource, setForkSource] = useState<{ id: string; title: string } | null>(null);
@@ -270,8 +288,21 @@ export function XuenessWorkbenchContainer() {
   const [dataErrors, setDataErrors] = useState({ list: "", active: "" });
   const [runError, setRunError] = useState("");
   const [busy, setBusy] = useState(false);
-  const [executing, setExecuting] = useState(false);
-  const [stopping, setStopping] = useState(false);
+  const [executingSessions, setExecutingSessions] = useState<Set<string>>(() => new Set());
+  const executingSessionsRef = useRef(new Set<string>());
+  const [runRequestSessions, setRunRequestSessions] = useState<Set<string>>(() => new Set());
+  const runRequestSessionsRef = useRef(new Set<string>());
+  const [creatingSession, setCreatingSession] = useState(false);
+  const createGenerationRef = useRef(0);
+  const activeCreateRef = useRef<number | null>(null);
+  const [stoppingSessions, setStoppingSessions] = useState<Set<string>>(() => new Set());
+  const stoppingSessionsRef = useRef(new Set<string>());
+  const [queueSubmittingSessions, setQueueSubmittingSessions] = useState<Set<string>>(() => new Set());
+  const queueSubmittingSessionsRef = useRef(new Set<string>());
+  const [queueContinuingSessions, setQueueContinuingSessions] = useState<Set<string>>(() => new Set());
+  const queueContinuingSessionsRef = useRef(new Set<string>());
+  const [queueCancelling, setQueueCancelling] = useState<{ sessionId: string; queueId: string } | null>(null);
+  const [queueError, setQueueError] = useState<{ sessionId: string; message: string } | null>(null);
   const [panel, setPanel] = useState<Panel>("chat");
   const history = useRef<{ panel: Panel; activeId: string | null }[]>([{ panel: "chat", activeId: null }]);
   const historyCursor = useRef(0);
@@ -426,7 +457,17 @@ export function XuenessWorkbenchContainer() {
       return;
     }
     const res = await listSessions();
-    if (res.ok) setSessions(res.value);
+    if (res.ok) {
+      setSessions(res.value);
+      if (stoppingSessionsRef.current.size > 0) {
+        const runningIds = new Set(res.value.filter(s => s.status === "running").map(s => s.id));
+        for (const id of Array.from(stoppingSessionsRef.current)) {
+          if (!runningIds.has(id)) {
+            trackSessionId(stoppingSessionsRef, setStoppingSessions, id, false);
+          }
+        }
+      }
+    }
     setDataErrors(previous => ({ ...previous, list: res.ok ? "" : res.error }));
   }, [isPluginEffective]);
 
@@ -437,10 +478,10 @@ export function XuenessWorkbenchContainer() {
   }, [activeId, session, busy, isPluginEffective]);
 
   const selectSession = useCallback((id: string) => {
-    if (busy) return;
+    setRunError("");
     setPanel("chat");
     setActiveId(id);
-  }, [busy]);
+  }, []);
 
   const selectTraySession = useCallback((id: string) => {
     if (id === activeId) setPanel('chat');
@@ -460,7 +501,6 @@ export function XuenessWorkbenchContainer() {
     if (activeIdRef.current !== source.id) return;
     loadedSessionChoices.current = null;
     setRunError("");
-    setStopping(false);
     setPanel("chat");
     setActiveId(child.id);
   }, [forkSource, refreshList]);
@@ -476,7 +516,12 @@ export function XuenessWorkbenchContainer() {
       loadJournal(id),
     ]);
     if (activeIdRef.current !== id) return;
-    if (detail.ok) setSession(detail.value);
+    if (detail.ok) {
+      setSession(detail.value);
+      if (detail.value.status !== "running" && detail.value.streaming?.status !== "streaming") {
+        trackSessionId(stoppingSessionsRef, setStoppingSessions, id, false);
+      }
+    }
     if (timeline.ok) setRows(withInitialUserMessage(hydrateTimelineJournalRows(hydrateTimelineTools(toTimelineRows(timeline.value.events), journal.ok ? journal.value : null), journal.ok ? journal.value : null, detail.ok ? detail.value.reasoning_history : []), journal.ok ? journal.value : null, detail.ok ? detail.value.task : undefined));
     setDataErrors(previous => ({ ...previous, active: !detail.ok ? detail.error : !timeline.ok ? timeline.error : "" }));
     // @ 文件提及候选：会话工作区文件列表（失败静默，composer 不出建议）。
@@ -491,14 +536,23 @@ export function XuenessWorkbenchContainer() {
   }, [isPluginEffective]);
 
   useEffect(() => {
-    if (!activeId || !(busy || stopping || session?.status === "running" || session?.streaming?.status === "streaming")) return;
+    if (!isPluginEffective("sessions") || !activeId || !(busy || stoppingSessions.has(activeId) || runRequestSessions.has(activeId) || session?.status === "running" || session?.streaming?.status === "streaming")) return;
     const id = activeId;
     const timer = window.setInterval(() => { void loadActive(id, false); }, 1000);
     return () => window.clearInterval(timer);
-  }, [activeId, busy, stopping, session?.status, session?.streaming?.status, loadActive]);
+  }, [isPluginEffective, activeId, busy, stoppingSessions, runRequestSessions, session?.status, session?.streaming?.status, loadActive]);
   useEffect(() => {
-    if (session?.id === activeId && session?.status !== "running" && session?.streaming?.status !== "streaming") setStopping(false);
+    if (session?.id === activeId && session?.status !== "running" && session?.streaming?.status !== "streaming") {
+      trackSessionId(stoppingSessionsRef, setStoppingSessions, activeId, false);
+    }
   }, [activeId, session?.id, session?.status, session?.streaming?.status]);
+
+  const anySessionRunning = sessions.some(s => s.status === "running");
+  useEffect(() => {
+    if (!isPluginEffective("sessions") || (executingSessions.size === 0 && runRequestSessions.size === 0 && stoppingSessions.size === 0 && !anySessionRunning)) return;
+    const timer = window.setInterval(() => { void refreshList(); }, 2000);
+    return () => window.clearInterval(timer);
+  }, [isPluginEffective, executingSessions.size, runRequestSessions.size, stoppingSessions.size, anySessionRunning, refreshList]);
 
   useEffect(() => {
     void refreshPluginCatalog();
@@ -536,6 +590,29 @@ export function XuenessWorkbenchContainer() {
       return true;
     } finally {
       setBusy(false);
+    }
+  }, []);
+
+  /** Session runs are long-lived and must not lock navigation for other chats. */
+  const runSessionRequest = useCallback(async (id: string, action: () => Promise<Result<unknown>>) => {
+    trackSessionId(runRequestSessionsRef, setRunRequestSessions, id, true);
+    trackSessionId(executingSessionsRef, setExecutingSessions, id, true);
+    if (activeIdRef.current === id) setRunError("");
+    try {
+      const result = await action();
+      if (!result.ok) {
+        if (activeIdRef.current === id) setRunError(result.error);
+        const accepted = Boolean((result as Result<unknown> & { accepted?: boolean }).accepted);
+        return { ok: accepted, accepted, error: result.error };
+      }
+      return { ok: true };
+    } catch (reason) {
+      const error = reason instanceof Error ? reason.message : String(reason);
+      if (activeIdRef.current === id) setRunError(error);
+      return { ok: false, error };
+    } finally {
+      trackSessionId(runRequestSessionsRef, setRunRequestSessions, id, false);
+      trackSessionId(executingSessionsRef, setExecutingSessions, id, false);
     }
   }, []);
 
@@ -589,7 +666,7 @@ export function XuenessWorkbenchContainer() {
   }, [activeId, draftRoot, isPluginEffective, updateChoices, composerRequests]);
   useEffect(() => { void refreshComposerCatalog(); return () => composerRequests.cancel(); }, [refreshComposerCatalog, composerRequests, composerRefreshTick]);
   useEffect(() => {
-    if (!session || session.id !== activeId || executing || loadedSessionChoices.current === session.id) return;
+    if (!session || session.id !== activeId || executingSessions.has(session.id) || loadedSessionChoices.current === session.id) return;
     loadedSessionChoices.current = session.id;
     updateChoices({
       remote: session.remote_connection?.id,
@@ -603,12 +680,11 @@ export function XuenessWorkbenchContainer() {
       ...(session.permission_mode ? { permission_mode: session.permission_mode } : {}),
       mode: session.mode === "plan" ? "plan" : "build",
     });
-  }, [session, activeId, executing, updateChoices, isPluginEffective]);
+  }, [session, activeId, executingSessions, updateChoices, isPluginEffective]);
 
   const startNewTask = useCallback(() => {
-    if (busy) return;
     setCommandOpen(false);
-    setStopping(false);
+    setRunError("");
     setActiveId(null);
     setSession(null);
     setDraftRoot(undefined);
@@ -623,7 +699,7 @@ export function XuenessWorkbenchContainer() {
     setDataErrors(previous => ({ ...previous, active: "" }));
     setPanel("chat");
     setHeroFocusTick((tick) => tick + 1);
-  }, [busy, settingsValues.browserControlEnabled, isPluginEffective, updateChoices, composerRequests]);
+  }, [settingsValues.browserControlEnabled, isPluginEffective, updateChoices, composerRequests]);
 
   useEffect(() => {
     if (!commandOpen) return;
@@ -653,7 +729,7 @@ export function XuenessWorkbenchContainer() {
   useEffect(() => {
     if (panel === "chat" && settingsValues.autoScroll !== false && timelineFollowTailRef.current && timelineScrollRef.current)
       timelineScrollRef.current.scrollTop = timelineScrollRef.current.scrollHeight;
-  }, [rows, session?.streaming?.text, panel, settingsValues.autoScroll]);
+  }, [rows, session?.streaming?.text, session?.queued_messages, panel, settingsValues.autoScroll]);
 
   useEffect(() => {
     const theme = String(settingsValues.theme ?? "system");
@@ -680,6 +756,8 @@ export function XuenessWorkbenchContainer() {
     setSession(null);
     setRows([]);
     setDataErrors(previous => ({ ...previous, active: "" }));
+    setQueueError(null);
+    setQueueCancelling(null);
   }, [activeId]);
   useEffect(() => {
     if (activeId) void loadActive(activeId);
@@ -687,98 +765,183 @@ export function XuenessWorkbenchContainer() {
 
   const handleApprove = useCallback(
     async (pending: PendingApproval) => {
-      if (!activeId || !isPluginEffective("sessions")) return;
+      const targetSessionId = activeId;
+      if (!targetSessionId || runRequestSessionsRef.current.has(targetSessionId) || !isPluginEffective("sessions")) return;
       // Approving only records the grant; the denied call is replayed on the
       // next run. The button says "approve and retry", so actually retry here —
       // otherwise the pending item never clears and the promise is hollow.
-      const granted = await run(() => approvePending(activeId, pending));
+      const granted = await run(() => approvePending(targetSessionId, pending));
       if (!granted) return;
-      setExecuting(true);
-      try { await run(() => runSession(activeId, getRunChoices())); }
-      finally { setExecuting(false); setStopping(false); }
-      await loadActive(activeId);
+      await runSessionRequest(targetSessionId, () => runSession(targetSessionId, getRunChoices()));
+      await loadActive(targetSessionId);
       await refreshList();
     },
-    [activeId, isPluginEffective, run, loadActive, refreshList],
+    [activeId, isPluginEffective, run, runSessionRequest, loadActive, refreshList],
   );
 
   const handleSend = useCallback(
     async (text: string, input?: ComposerInput) => {
-      if (!activeId || session?.id !== activeId || busy || !isPluginEffective("sessions")) return false;
+      const targetSessionId = activeId;
+      const running = Boolean(targetSessionId && session?.id === targetSessionId && (
+        session.status === "running" || session.streaming?.status === "streaming" || runRequestSessions.has(targetSessionId)
+      ));
+      if (!targetSessionId || session?.id !== targetSessionId || (busy && !running) || !isPluginEffective("sessions")) return false;
       const value = text.trim() || tr("附件与上下文");
-      let accepted = false;
-      setExecuting(true);
-      const ok = await run(async () => {
-        const selected = getRunChoices();
+      if (running) {
+        if (queueSubmittingSessionsRef.current.has(targetSessionId)) return false;
+        queueSubmittingSessionsRef.current.add(targetSessionId);
+        setQueueSubmittingSessions(new Set(queueSubmittingSessionsRef.current));
+        setQueueError(previous => previous?.sessionId === targetSessionId ? null : previous);
         try {
-          const prepared = await prepareComposer(text, input && { ...input, remote: selected.remote }, { session_id: activeId, provider_id: selected.provider_id, model: selected.model, reasoning_effort: selected.reasoning_effort });
-          const result = await sendTurn(activeId, value, { ...selected, goal: prepared.goal }, prepared.token);
-          accepted = result.ok || result.accepted === true;
-          return result;
-        } catch (reason) { return { ok: false, error: reason instanceof Error ? reason.message : String(reason) }; }
+          const selected = getRunChoices();
+          const prepared = await prepareComposer(text, input && { ...input, remote: selected.remote }, {
+            session_id: targetSessionId,
+            provider_id: selected.provider_id,
+            model: selected.model,
+            reasoning_effort: selected.reasoning_effort,
+          });
+          const queued = await queueTurn(targetSessionId, value, prepared.token);
+          if (!queued.ok) {
+            await loadActive(targetSessionId, false);
+            throw new Error(queued.error);
+          }
+          await loadActive(targetSessionId, false);
+          await refreshList();
+          return true;
+        } finally {
+          queueSubmittingSessionsRef.current.delete(targetSessionId);
+          setQueueSubmittingSessions(new Set(queueSubmittingSessionsRef.current));
+        }
+      }
+      if (busy) return false;
+      const selected = getRunChoices();
+      const requestResult = await runSessionRequest(targetSessionId, async () => {
+        const prepared = await prepareComposer(text, input && { ...input, remote: selected.remote }, { session_id: targetSessionId, provider_id: selected.provider_id, model: selected.model, reasoning_effort: selected.reasoning_effort });
+        return sendTurn(targetSessionId, value, { ...selected, goal: prepared.goal }, prepared.token);
       });
-      setExecuting(false);
-      setStopping(false);
-      if (ok || accepted) {
-        await loadActive(activeId);
+      if (requestResult.ok) {
+        await loadActive(targetSessionId);
         await refreshList();
       }
-      return ok || accepted;
+      return requestResult.ok;
     },
-    [activeId, session?.id, busy, isPluginEffective, run, loadActive, refreshList],
+    [activeId, session, busy, runRequestSessions, isPluginEffective, run, runSessionRequest, loadActive, refreshList],
   );
+
+  const handleCancelQueuedTurn = useCallback(async (queueId: string) => {
+    const targetSessionId = activeId;
+    if (!targetSessionId || queueCancelling?.sessionId === targetSessionId) return;
+    setQueueCancelling({ sessionId: targetSessionId, queueId });
+    setQueueError(previous => previous?.sessionId === targetSessionId ? null : previous);
+    const result = await cancelQueuedTurn(targetSessionId, queueId);
+    // Reload even on 409: the queue item may already have been claimed, and the
+    // timeline detail is the authoritative state shown after that race.
+    await loadActive(targetSessionId, false);
+    if (!result.ok && activeIdRef.current === targetSessionId) setQueueError({ sessionId: targetSessionId, message: result.error });
+    await refreshList();
+    setQueueCancelling(current => current?.sessionId === targetSessionId && current.queueId === queueId ? null : current);
+  }, [activeId, queueCancelling, loadActive, refreshList]);
+
+  const handleContinueQueuedMessages = useCallback(async () => {
+    const targetSessionId = activeId;
+    if (!targetSessionId || session?.id !== targetSessionId || session.status === "running" || session.streaming?.status === "streaming"
+      || !(session.queued_messages ?? []).some(item => item.status === "paused")
+      || !isPluginEffective("sessions") || queueContinuingSessionsRef.current.has(targetSessionId)) return;
+    queueContinuingSessionsRef.current.add(targetSessionId);
+    setQueueContinuingSessions(new Set(queueContinuingSessionsRef.current));
+    setQueueError(previous => previous?.sessionId === targetSessionId ? null : previous);
+    try {
+      const continued = await runSessionRequest(targetSessionId, () => runSession(targetSessionId, getRunChoices(), { continueQueue: true }));
+      if (!continued.ok) {
+        if (activeIdRef.current === targetSessionId) setQueueError({ sessionId: targetSessionId, message: continued.error ?? tr("运行失败，请检查服务器配置与任务状态") });
+      } else {
+        await refreshList();
+      }
+      await loadActive(targetSessionId, false);
+    } finally {
+      queueContinuingSessionsRef.current.delete(targetSessionId);
+      setQueueContinuingSessions(new Set(queueContinuingSessionsRef.current));
+    }
+  }, [activeId, session, isPluginEffective, runSessionRequest, refreshList, loadActive]);
 
   /** Hero composer: create the task and run it in one round trip pair. */
   const handleCreate = useCallback(
     async (text: string, input?: ComposerInput) => {
       const value = text.trim() || tr("附件与上下文");
       if (!isPluginEffective("sessions")) return false;
+      if (activeCreateRef.current !== null) return false;
+      const createTicket = ++createGenerationRef.current;
+      activeCreateRef.current = createTicket;
+      setCreatingSession(true);
+      const releaseCreateLock = () => {
+        if (activeCreateRef.current !== createTicket) return;
+        activeCreateRef.current = null;
+        setCreatingSession(false);
+      };
       let createdId = "";
-      setExecuting(true);
-      const ok = await run(async () => {
-        try {
-          const selected = getRunChoices();
-          const prepared = await prepareComposer(text, input && { ...input, remote: selected.remote }, { root: draftRoot ?? composerCatalog.root ?? undefined, provider_id: selected.provider_id, model: selected.model, reasoning_effort: selected.reasoning_effort });
-          const res = await createSession(value, { ...selected, goal: prepared.goal }, { ...(isolatedWorkspace ? {} : { root: prepared.root }), prepared_token: prepared.token }, id => {
-            loadedSessionChoices.current = id;
+      const originSessionId = activeIdRef.current;
+      const selected = getRunChoices();
+      try {
+        const prepared = await prepareComposer(text, input && { ...input, remote: selected.remote }, { root: draftRoot ?? composerCatalog.root ?? undefined, provider_id: selected.provider_id, model: selected.model, reasoning_effort: selected.reasoning_effort });
+        const result = await createSession(value, { ...selected, goal: prepared.goal }, { ...(isolatedWorkspace ? {} : { root: prepared.root }), prepared_token: prepared.token }, id => {
+          createdId = id;
+          releaseCreateLock();
+          trackSessionId(runRequestSessionsRef, setRunRequestSessions, id, true);
+          trackSessionId(executingSessionsRef, setExecutingSessions, id, true);
+          loadedSessionChoices.current = id;
+          if (activeIdRef.current === originSessionId) {
+            setRunError("");
             setActiveId(id);
-          });
-          if (res.ok) createdId = res.value;
-          else if (res.accepted && res.id) createdId = res.id;
-          return res;
-        } catch (reason) { return { ok: false, error: reason instanceof Error ? reason.message : String(reason) }; }
-      });
-      setExecuting(false);
-      setStopping(false);
-      if (createdId) {
-        setActiveId(createdId);
-        await refreshList();
-        await loadActive(createdId);
-        return true;
+          }
+        });
+        if (result.ok) createdId = result.value;
+        else if (result.accepted && result.id) createdId = result.id;
+        const createError = result.ok ? "" : result.error;
+        if (createdId) {
+          await refreshList();
+          await loadActive(createdId);
+          if (createError && activeIdRef.current === createdId) setRunError(createError);
+          return true;
+        }
+        if (createError && activeIdRef.current === originSessionId) setRunError(createError);
+        return false;
+      } catch (reason) {
+        const message = reason instanceof Error ? reason.message : String(reason);
+        if (activeIdRef.current === createdId && createdId) setRunError(message);
+        else if (activeIdRef.current === originSessionId) setRunError(message);
+        return Boolean(createdId);
+      } finally {
+        releaseCreateLock();
+        if (createdId) {
+          trackSessionId(runRequestSessionsRef, setRunRequestSessions, createdId, false);
+          trackSessionId(executingSessionsRef, setExecutingSessions, createdId, false);
+        }
       }
-      return false;
     },
-    [isPluginEffective, run, refreshList, loadActive, draftRoot, composerCatalog.root, isolatedWorkspace],
+    [isPluginEffective, refreshList, loadActive, draftRoot, composerCatalog.root, isolatedWorkspace],
   );
 
   const handleStop = useCallback(async () => {
-    if (!activeId || stopping) return;
-    setStopping(true);
+    const targetSessionId = activeId;
+    if (!targetSessionId || stoppingSessionsRef.current.has(targetSessionId)) return;
+    trackSessionId(stoppingSessionsRef, setStoppingSessions, targetSessionId, true);
     try {
-      const result = await post<{ stopping: boolean }>(`/api/sessions/${encodeURIComponent(activeId)}/stop`, {});
-      if (!result.stopping) { setStopping(false); await loadActive(activeId, false); }
+      const result = await post<{ stopping: boolean }>(`/api/sessions/${encodeURIComponent(targetSessionId)}/stop`, {});
+      if (!result.stopping) { trackSessionId(stoppingSessionsRef, setStoppingSessions, targetSessionId, false); await loadActive(targetSessionId, false); }
     }
-    catch (reason) { setRunError(reason instanceof Error ? reason.message : String(reason)); setStopping(false); }
-  }, [activeId, stopping, loadActive]);
+    catch (reason) {
+      if (activeIdRef.current === targetSessionId) setRunError(reason instanceof Error ? reason.message : String(reason));
+      trackSessionId(stoppingSessionsRef, setStoppingSessions, targetSessionId, false);
+    }
+  }, [activeId, loadActive]);
 
   const handleRetryRun = useCallback(async () => {
-    if (!activeId || session?.id !== activeId || busy) return;
-    setExecuting(true);
-    try { await run(() => runSession(activeId, getRunChoices())); }
-    finally { setExecuting(false); setStopping(false); }
-    await loadActive(activeId);
+    if (!activeId || session?.id !== activeId || busy || runRequestSessionsRef.current.has(activeId)) return;
+    const targetSessionId = activeId;
+    await runSessionRequest(targetSessionId, () => runSession(targetSessionId, getRunChoices()));
+    await loadActive(targetSessionId);
     await refreshList();
-  }, [activeId, session?.id, busy, run, loadActive, refreshList]);
+  }, [activeId, session?.id, busy, runSessionRequest, loadActive, refreshList]);
 
   const renameById = useCallback(
     async (id: string, value: string) => {
@@ -859,7 +1022,10 @@ export function XuenessWorkbenchContainer() {
     [activeId, busy, run, refreshList],
   );
 
-  const composerDisabled = busy || !activeId || session?.id !== activeId || !isPluginEffective("sessions");
+  const activeSessionRunning = activeId !== null && session?.id === activeId && (
+    session.status === "running" || session.streaming?.status === "streaming" || runRequestSessions.has(activeId)
+  );
+  const composerDisabled = (busy && !activeSessionRunning) || !activeId || session?.id !== activeId || !isPluginEffective("sessions");
 
   const handleRefreshAll = useCallback(async () => {
     if (!isPluginEffective("sessions")) return;
@@ -1130,7 +1296,9 @@ export function XuenessWorkbenchContainer() {
     runtime_activity: activeMonitorSource.runtime_activity,
     runtime_activity_history: activeMonitorSource.runtime_activity_history,
   } : null;
-  const composerRunning = session?.id === activeId && (session?.status === "running" || session?.streaming?.status === "streaming");
+  const composerRunning = activeId !== null && session?.id === activeId && (
+    session.status === "running" || session.streaming?.status === "streaming" || runRequestSessions.has(activeId)
+  );
   const composerMentions = [
     ...composerCatalog.files.map(item => ({ ...item, kind: "file" as const })),
     ...composerCatalog.sessions.map(item => ({ ...item, kind: "session" as const })),
@@ -1144,9 +1312,8 @@ export function XuenessWorkbenchContainer() {
     onManageModels={() => setPanel(isPluginEffective("providers") ? "providers" : "plugins")}
     onBackground={isPluginEffective("workflows") ? () => setPanel("workflows") : undefined}
     backgroundCount={composerCatalog.backgroundCount ?? 0}
-    onBrowser={isPluginEffective("browser") && isPluginEffective("settings") ? () => { setSettingsSection("browser"); setPanel("settings"); } : undefined}
     browserEnabled={choices.browser === true}
-    onToggleBrowser={isPluginEffective("browser") ? enabled => updateChoices({ browser: enabled }) : undefined}
+    onToggleBrowser={activeId !== null && isPluginEffective("browser") ? enabled => updateChoices({ browser: enabled }) : undefined}
     disabled={busy || branchBusy || composerRunning}
     onOpenUsage={isPluginEffective("usage") ? () => setPanel("usage") : undefined}
     runtimeBudget={session?.id === activeId ? session.runtime_budget : undefined}
@@ -1157,7 +1324,7 @@ export function XuenessWorkbenchContainer() {
     onWorkflow: () => setPanel("workflows"), onPlugins: () => setPanel("plugins"),
   };
   const chooseWorkspace = (root: string, isolated = false, forceNew = false) => {
-    if (busy || branchBusy) return;
+    if (branchBusy) return;
     if (root === (draftRoot ?? composerCatalog.root) && isolated === isolatedWorkspace && !choices.remote && !forceNew && !(workspacePicking && workspacePickerMode === 'project')) {
       setWorkspacePicking(false);
       return;
@@ -1478,6 +1645,18 @@ export function XuenessWorkbenchContainer() {
     else if (id === "refresh") void handleRefreshAll();
   }, [startNewTask, handleRefreshAll, isPluginEffective]);
 
+  const liveSessions = useMemo(() => {
+    return sessions.map(item => {
+      let status = item.status;
+      if (stoppingSessions.has(item.id)) status = "stopping";
+      else if (runRequestSessions.has(item.id)) status = "running";
+      else if (activeId === item.id && session?.id === item.id) {
+        if (session.status === "running" || session.streaming?.status === "streaming") status = "running";
+      }
+      return status === item.status ? item : { ...item, status };
+    });
+  }, [sessions, stoppingSessions, runRequestSessions, activeId, session?.id, session?.status, session?.streaming?.status]);
+
   return (
     <CodeDisplayProvider settings={settingsValues.codePreviewSettings} dark={String(settingsValues.theme) === "dark" || (settingsValues.theme === "system" && systemDark)}>
     <DesktopTrayBridge enabled={isPluginEffective('desktop')} sessionsEnabled={isPluginEffective('sessions')} busy={busy}
@@ -1514,7 +1693,7 @@ export function XuenessWorkbenchContainer() {
             ]}
           />
           {isPluginEffective("sessions") && <>
-          <XuenessTaskList sessions={sessions} activeId={activeId} busy={busy}
+          <XuenessTaskList sessions={liveSessions} activeId={activeId} busy={busy}
             projectRoots={composerCatalog.roots.filter(root => root.path !== composerCatalog.isolatedRoot)}
             onAddProject={isPluginEffective("files") && isPluginEffective("settings") ? trigger => {
               if (busy) return;
@@ -1522,7 +1701,7 @@ export function XuenessWorkbenchContainer() {
               setWorkspacePickerMode("project");
               setWorkspacePicking(true);
             } : undefined}
-            onStartProject={root => { if (busy) return; chooseWorkspace(root, false, true); }}
+            onStartProject={root => { chooseWorkspace(root, false, true); }}
             preferences={settingsValues.sidebarPreferences as SidebarPreferences | undefined}
             onPreferences={value => { void handleUpdateSetting("sidebarPreferences", value); }}
             onSelect={selectSession}
@@ -1694,22 +1873,33 @@ export function XuenessWorkbenchContainer() {
             timelineFollowTailRef.current = scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight < 80;
           }}>
             {settingsValues.showTodos !== false && <TaskTodos todos={session.todos ?? []} />}
-            <TimelineStream rows={withAssistantStream(rows, session.streaming)} collapseTools={settingsValues.collapseTools !== false} messageStreamShowReasoning={settingsValues.messageStreamShowReasoning !== false} grouping={{ explore: settingsValues.toolGroupingExploreEnabled !== false, terminal: settingsValues.toolGroupingTerminalEnabled !== false, changes: settingsValues.toolGroupingChangesEnabled === true }} />
+            <TimelineStream rows={withAssistantStream(rows, session.streaming)} collapseTools={settingsValues.collapseTools !== false} messageStreamShowReasoning={settingsValues.messageStreamShowReasoning !== false}
+              jsonToolProtocol={session.model_selection?.tool_calling === "json" && activeRuntimeProfile === "lightweight" && session.streaming?.text_format !== "markdown"}
+              protocolModePending={activeSessionRunning && activeRuntimeProfile === "lightweight" && session.streaming?.text_format !== "markdown" && session.model_selection?.tool_calling === "json" && false}
+              streamingPending={activeSessionRunning} grouping={{ explore: settingsValues.toolGroupingExploreEnabled !== false, terminal: settingsValues.toolGroupingTerminalEnabled !== false, changes: settingsValues.toolGroupingChangesEnabled === true }} />
+            <SessionQueue items={session.queued_messages ?? []} cancellingId={queueCancelling?.sessionId === session.id ? queueCancelling.queueId : null} onCancel={handleCancelQueuedTurn}
+              canContinue={session.status !== "running" && session.streaming?.status !== "streaming" && (session.queued_messages ?? []).some(item => item.status === "paused")}
+              continuing={queueContinuingSessions.has(session.id)} onContinue={handleContinueQueuedMessages} />
+            {queueError?.sessionId === session.id && <p className="xn-session-queue__error" role="alert">{queueError.message}</p>}
             {session.streaming?.status === "interrupted" && session.streaming.text && <p role="status" className="xn-run-error">{tr("输出已中断，已保留收到的内容。")}</p>}
           </div>
           {(runError || session.status === "provider_error" || (!busy && session.status === "pending")) && (
             <div className="xn-run-error">
               {runError && <p role="alert">{runError}</p>}
-              <button type="button" disabled={busy} onClick={() => void handleRetryRun()}>{tr("重试运行")}</button>
+              <button type="button" disabled={busy || runRequestSessions.has(session.id)} onClick={() => void handleRetryRun()}>{tr("重试运行")}</button>
             </div>
           )}
           <Composer
+            draftKey={`session:${session.id}`}
+            draftStore={composerDraftStore}
               sendShortcut={settingsValues.sendShortcut === "mod-enter" ? "mod-enter" : "enter"}
             onSend={handleSend}
-            disabled={composerDisabled}
+            disabled={composerDisabled || queueSubmittingSessions.has(session.id)}
             sendDisabled={!composerModelReady || composerCatalogLoading}
             running={composerRunning}
-            stopping={stopping}
+            queueWhenRunning
+            queueBusy={queueSubmittingSessions.has(session.id)}
+            stopping={stoppingSessions.has(session.id)}
             onStop={handleStop}
             placeholder={tr("继续描述任务（/ 命令，@ 上下文，$ 技能）")}
             controls={composerControls}
@@ -1733,15 +1923,17 @@ export function XuenessWorkbenchContainer() {
               <p role="alert" className="xn-run-error">{runError}</p>
             )}
             <Composer
+              draftKey="new-task"
+              draftStore={composerDraftStore}
               sendShortcut={settingsValues.sendShortcut === "mod-enter" ? "mod-enter" : "enter"}
               variant="hero"
               topContent={workspaceContext}
               inputRef={heroInputRef}
               onSend={handleCreate}
-              disabled={busy || !isPluginEffective("sessions")}
+              disabled={busy || creatingSession || !isPluginEffective("sessions")}
               sendDisabled={!composerModelReady || composerCatalogLoading}
               running={composerRunning}
-              stopping={stopping}
+              stopping={activeId ? stoppingSessions.has(activeId) : false}
               onStop={activeId ? handleStop : undefined}
               placeholder={tr("向 Xueness 提问，使用 @ 添加上下文，使用 / 选择命令或能力")}
               controls={composerControls}

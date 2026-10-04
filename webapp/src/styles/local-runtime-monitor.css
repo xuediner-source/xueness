@@ -4,17 +4,70 @@
 .xn-runtime-monitor__timings summary { cursor: pointer; color: var(--fg-muted, #999); }
 .xn-runtime-monitor__timings th, .xn-runtime-monitor__timings td { text-align: left; padding: 7px 10px; white-space: nowrap; border-bottom: 1px solid var(--border, #5555); }
 
-.xn-runtime-monitor { padding: 0; gap: 0; }
-.xn-runtime-monitor__toggle {
-  display: flex; align-items: center; gap: 8px; width: 100%; min-height: 40px;
-  border: 0; padding: 9px 12px; background: transparent; color: var(--fg);
-  font: inherit; font-size: 12px; text-align: start; cursor: pointer;
+.xn-runtime-monitor {
+  display: flex;
+  flex-direction: column;
+  margin: 4px 20px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm, 6px);
+  background: var(--bg-card);
+  color: var(--fg);
+  min-width: 0;
+  padding: 0;
+  gap: 0;
+  transition: border-color 0.15s ease;
 }
-.xn-runtime-monitor__toggle:hover { background: var(--bg-hover); }
-.xn-runtime-monitor__toggle:focus-visible { outline: 2px solid var(--border-focus); outline-offset: -2px; }
-.xn-runtime-monitor__toggle > svg { flex: 0 0 auto; color: var(--fg-muted); }
-.xn-runtime-monitor__compact-status { margin-inline-start: auto; min-width: 0; color: var(--fg-muted); font-size: 11px; }
-.xn-runtime-monitor__chevron--expanded { transform: rotate(180deg); }
-.xn-runtime-monitor__body { display: flex; flex-direction: column; gap: 12px; padding: 12px; border-top: 1px solid var(--border); max-height: min(32vh, 300px); overflow: auto; }
+.xn-runtime-monitor:not([data-expanded="true"]) {
+  border-color: transparent;
+  background: transparent;
+}
+.xn-runtime-monitor:not([data-expanded="true"]):hover {
+  background: var(--bg-hover);
+}
+.xn-runtime-monitor__toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  min-height: 28px;
+  border: 0;
+  padding: 4px 8px;
+  background: transparent;
+  color: var(--fg-muted);
+  font: inherit;
+  font-size: 11px;
+  text-align: start;
+  cursor: pointer;
+  border-radius: inherit;
+}
+.xn-runtime-monitor__toggle:hover {
+  color: var(--fg);
+}
+.xn-runtime-monitor__toggle:focus-visible {
+  outline: 2px solid var(--border-focus);
+  outline-offset: -2px;
+}
+.xn-runtime-monitor__toggle > svg {
+  flex: 0 0 auto;
+  color: var(--fg-muted);
+}
+.xn-runtime-monitor__compact-status {
+  margin-inline-start: auto;
+  min-width: 0;
+  color: var(--fg-muted);
+  font-size: 11px;
+}
+.xn-runtime-monitor__chevron--expanded {
+  transform: rotate(180deg);
+}
+.xn-runtime-monitor__body {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 10px 12px;
+  border-top: 1px solid var(--border);
+  max-height: min(32vh, 300px);
+  overflow: auto;
+}
 .xn-runtime-monitor__header > div:first-child { min-width: 0; }
 .xn-runtime-monitor__actions { flex: 0 0 auto; }

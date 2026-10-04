@@ -539,14 +539,6 @@ def dispatch(method: str, parts: list, query: dict, data: dict, ctx: dict):
     except ValueError as exc:
         return 400, {"error": str(exc)}
     try:
-        if parts[2] == "default":
-            settings = settings_store.load_settings(ctx["state_dir"])
-            config = settings.get(_WORKSPACE_SECTION, {})
-            if not isinstance(config, dict):
-                config = {}
-            config["defaultRoot"] = str(root)
-            settings[_WORKSPACE_SECTION] = config
-            settings_store.save_settings(ctx["state_dir"], settings)
         # Confirmation records use only; it never alters allowedRoots.
         if parts[2] == "default":
             def update_default(settings):

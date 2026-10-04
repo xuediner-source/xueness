@@ -50,6 +50,13 @@ def load_settings(state_dir) -> dict:
     Missing file -> ``{}``. Corrupt JSON (or a non-object top level) -> ``{}``.
     Never raises for I/O or parse problems; only returns a plain dict.
     """
+    # Workspace discovery reads settings outside update_settings. Coordinate
+    # those readers too: Windows may deny replace while a reader is open.
+    with _settings_lock(state_dir):
+        return _load_settings_unlocked(state_dir)
+
+
+def _load_settings_unlocked(state_dir) -> dict:
     path = _settings_path(state_dir)
     try:
         raw = path.read_text(encoding="utf-8")
@@ -70,6 +77,11 @@ def save_settings(state_dir, settings) -> None:
     Mirrors ``core.Store.save``: tempfile.mkstemp in the target directory,
     flush + fsync, then ``os.replace``. The temp file is always cleaned up.
     """
+    with _settings_lock(state_dir):
+        _save_settings_unlocked(state_dir, settings)
+
+
+def _save_settings_unlocked(state_dir, settings) -> None:
     directory = Path(state_dir)
     directory.mkdir(parents=True, exist_ok=True)
     path = directory / SETTINGS_FILENAME

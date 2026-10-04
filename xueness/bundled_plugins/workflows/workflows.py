@@ -29,6 +29,27 @@ _FINGERPRINT_FILE_LIMIT = 10000
 _FINGERPRINT_BYTE_LIMIT = 256 * 1024 * 1024
 
 
+def _replace_state_file(temporary, destination):
+    """Keep atomic writes despite brief Windows read/scan handles.
+
+    A normal Windows file reader can deny deletion while it is open, making
+    replace fail even though the complete new record is ready. Retry only
+    those sharing/access errors, for at most half a second; do not truncate
+    the previous record or conceal persistent write failures.
+    """
+    deadline = time.monotonic() + .5
+    while True:
+        try:
+            os.replace(temporary, destination)
+            return
+        except OSError as error:
+            remaining = deadline - time.monotonic()
+            if (os.name != 'nt' or getattr(error, 'winerror', None) not in (5, 32, 33)
+                    or remaining <= 0):
+                raise
+            time.sleep(min(.01, remaining))
+
+
 def workspace_fingerprint(root, state_dir=None):
     """Hash workspace files for conservative cross-run result reuse.
 
@@ -127,10 +148,10 @@ class ProviderGovernor:
     def _save(self, data):
         fd, temporary = tempfile.mkstemp(dir=self.state, prefix='.provider-governor-')
         try:
-            with os.fdopen(fd, 'w') as stream:
+            with os.fdopen(fd, 'w', encoding='utf-8') as stream:
                 json.dump(data, stream, ensure_ascii=False)
                 stream.flush(); os.fsync(stream.fileno())
-            os.replace(temporary, self.path)
+            _replace_state_file(temporary, self.path)
         finally:
             if os.path.exists(temporary): os.unlink(temporary)
 
@@ -263,36 +284,47 @@ class WorkflowStore:
         return path
 
     @contextmanager
-    def lock(self, wid, suffix='.lock', blocking=True):
+    def lock(self, wid, suffix='.lock', blocking=True, *, shared=False):
         fd = os.open(self.path(wid, suffix), os.O_CREAT | os.O_RDWR | getattr(os, 'O_NOFOLLOW', 0), 0o600)
         try:
-            fcntl.flock(fd, fcntl.LOCK_EX | (0 if blocking else fcntl.LOCK_NB))
+            mode = fcntl.LOCK_SH if shared else fcntl.LOCK_EX
+            fcntl.flock(fd, mode | (0 if blocking else fcntl.LOCK_NB))
             yield
         finally:
             os.close(fd)
 
     def load(self, wid):
-        return json.loads(self.path(wid).read_text())
+        # Coordinate API/worker readers with replacements. Windows can also
+        # reject a new open while an old destination is being replaced.
+        with self.lock(wid, shared=True):
+            return self._load_unlocked(wid)
+
+    def _load_unlocked(self, wid):
+        return json.loads(self.path(wid).read_text(encoding='utf-8'))
 
     def save(self, record):
+        with self.lock(record['id']):
+            self._save_unlocked(record)
+
+    def _save_unlocked(self, record):
         path = self.path(record['id'])
         fd, temporary = tempfile.mkstemp(dir=self.directory, prefix='.workflow-')
         try:
-            with os.fdopen(fd, 'w') as stream:
+            with os.fdopen(fd, 'w', encoding='utf-8') as stream:
                 json.dump(record, stream, ensure_ascii=False)
                 stream.flush()
                 os.fsync(stream.fileno())
-            os.replace(temporary, path)
+            _replace_state_file(temporary, path)
         finally:
             if os.path.exists(temporary):
                 os.unlink(temporary)
 
     def update(self, wid, change):
         with self.lock(wid):
-            record = self.load(wid)
+            record = self._load_unlocked(wid)
             change(record)
             record['updated_at'] = time.time()
-            self.save(record)
+            self._save_unlocked(record)
             return record
 
     def event(self, record, kind, **fields):

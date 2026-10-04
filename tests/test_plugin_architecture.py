@@ -33,9 +33,9 @@ class ArchitectureTests(unittest.TestCase):
 
     def rewrite(self, root, pid, change):
         path = root / 'xueness/bundled_plugins' / pid / 'manifest.json'
-        item = json.loads(path.read_text())
+        item = json.loads(path.read_text(encoding='utf-8'))
         change(item)
-        path.write_text(json.dumps(item))
+        path.write_text(json.dumps(item), encoding='utf-8')
 
     def test_current_tree_has_complete_ownership(self):
         self.assertEqual(guard.audit(ROOT), [])
@@ -56,8 +56,8 @@ class ArchitectureTests(unittest.TestCase):
     def test_missing_ui_registry_entry_and_orphan_ui_module_fail(self):
         root = self.fixture()
         path = root / 'webapp/src/xuenessPluginRegistry.ts'
-        path.write_text(path.read_text().replace('  providers: { name:', '  omitted: { name:'))
-        (root / 'webapp/src/plugins/providers/NewFeature.tsx').write_text('export function NewFeature() {}')
+        path.write_text(path.read_text(encoding='utf-8').replace('  providers: { name:', '  omitted: { name:'), encoding='utf-8')
+        (root / 'webapp/src/plugins/providers/NewFeature.tsx').write_text('export function NewFeature() {}', encoding='utf-8')
         errors = guard.audit(root)
         self.assertTrue(any('frontend registry/allowlist mismatch' in e for e in errors), errors)
         self.assertTrue(any('unowned frontend feature module' in e for e in errors), errors)
@@ -65,7 +65,7 @@ class ArchitectureTests(unittest.TestCase):
     def test_static_frontend_metadata_can_use_multiline_formatting(self):
         root = self.fixture()
         path = root / 'webapp/src/xuenessPluginRegistry.ts'
-        path.write_text(path.read_text().replace('  providers: { name:', '  providers: {\n    name:'))
+        path.write_text(path.read_text(encoding='utf-8').replace('  providers: { name:', '  providers: {\n    name:'), encoding='utf-8')
         self.assertEqual(guard.audit(root), [])
 
     def test_stale_frontend_export_and_duplicate_contributions_fail(self):
@@ -102,7 +102,7 @@ class ArchitectureTests(unittest.TestCase):
     def test_cli_host_cannot_take_back_feature_implementation(self):
         root = self.fixture()
         path = root / 'xueness/cli.py'
-        path.write_text(path.read_text() + '\ndef _register_git_cli(commands):\n    commands.add_parser("new-product")\n')
+        path.write_text(path.read_text(encoding='utf-8') + '\ndef _register_git_cli(commands):\n    commands.add_parser("new-product")\n', encoding='utf-8')
         self.assertIn('CLI parser must be owned by its plugin: _register_git_cli', guard.audit(root))
 
     def test_registered_cli_commands_and_manifest_owners_agree(self):

@@ -7,6 +7,7 @@ import tempfile
 from pathlib import Path
 from ... import session_management as sessions
 from ...session_lease import lease
+from ...resources import _is_link, _protect_private_file
 
 EXPORT_FORMAT = "xueness-session-portable"
 EXPORT_VERSION = 1
@@ -80,7 +81,7 @@ def _redact_text(value):
 
 def _portable_payload(store, sid):
     path = store._path(sid)
-    if path.is_symlink() or not path.is_file():
+    if _is_link(path) or not path.is_file():
         raise ValueError('session not found or unsafe')
     if path.stat().st_size > MAX_PORTABLE_BYTES:
         raise ValueError('session is too large to export')
@@ -113,15 +114,19 @@ def _write_new(path, content):
         os.chmod(path.parent, 0o700)
     except OSError:
         pass
-    if path.is_symlink() or path.exists():
+    if _is_link(path) or path.exists():
         raise ValueError('export destination already exists or is unsafe')
     fd, temporary = tempfile.mkstemp(prefix='.xueness-export-', dir=path.parent)
     try:
+        try:
+            _protect_private_file(fd)
+        except BaseException:
+            os.close(fd)
+            raise
         with os.fdopen(fd, 'wb') as stream:
             stream.write(content)
             stream.flush()
             os.fsync(stream.fileno())
-        os.chmod(temporary, 0o600)
         # Hard-link publishes atomically without replacing a file created in
         # the meantime; the temporary is removed in the finally block.
         os.link(temporary, path)
@@ -145,7 +150,7 @@ def export_session(store, sid, state_dir, filename=None):
     if len(encoded) > MAX_PORTABLE_BYTES:
         raise ValueError('redacted export exceeds size limit')
     directory = Path(state_dir).resolve() / 'exports'
-    if directory.is_symlink():
+    if _is_link(directory):
         raise ValueError('exports directory must not be a symlink')
     destination = directory / name
     _write_new(destination, encoded)
@@ -154,7 +159,7 @@ def export_session(store, sid, state_dir, filename=None):
 
 def _read_portable(path):
     path = Path(path)
-    if path.is_symlink():
+    if _is_link(path):
         raise ValueError('import file must not be a symlink')
     flags = os.O_RDONLY | getattr(os, 'O_NOFOLLOW', 0)
     try:

@@ -5,9 +5,13 @@ from datetime import datetime, timezone
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
+from tests.fs_link_helpers import make_symlink
+from tests.secret_permissions import assert_secret_file_private
 from xueness.core import Store
 from xueness.bundled_plugins.sessions.operator_cli import export_session, import_session
+from xueness.bundled_plugins.sessions import session_management
 from xueness.bundled_plugins.sessions.sessions_api import dispatch
 
 
@@ -56,6 +60,60 @@ class SessionPortabilityTests(unittest.TestCase):
         payload = json.loads(encoded)
         self.assertEqual(["user", "user", "assistant"], [m["role"] for m in payload["messages"]])
 
+    def test_export_uses_private_file_permissions(self):
+        result = export_session(self.store, self.session["id"], self.state)
+
+        # Checks mode 0600 on POSIX and the actual protected native DACL on Windows.
+        assert_secret_file_private(self, Path(result["file"]))
+
+    def test_export_protection_failure_preserves_racing_target_and_cleans_temp(self):
+        exports = self.state / "exports"
+        exports.mkdir()
+        target = exports / "raced.json"
+        original = b"created by a competing exporter"
+        captured = {}
+
+        def fail_after_competing_writer(fd):
+            captured["fd"] = fd
+            self.assertEqual(os.fstat(fd).st_size, 0,
+                             "secret transcript bytes were written before private protection")
+            target.write_bytes(original)
+            raise OSError("simulated private-file protection failure")
+
+        with patch("xueness.bundled_plugins.sessions.operator_cli._protect_private_file",
+                   side_effect=fail_after_competing_writer):
+            with self.assertRaisesRegex(OSError, "protection failure"):
+                export_session(self.store, self.session["id"], self.state, "raced.json")
+
+        self.assertEqual(target.read_bytes(), original)
+        self.assertEqual(list(exports.glob(".xueness-export-*")), [])
+        with self.assertRaises(OSError):
+            os.fstat(captured["fd"])
+
+    def test_restore_rejects_malformed_and_mismatched_archives_without_mutation(self):
+        archive_dir = self.store.directory / "deleted-sessions"
+        archive_dir.mkdir()
+        cases = [
+            ("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", b"{malformed JSON"),
+            ("bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", json.dumps({
+                "id": "cccccccccccccccccccccccccccccccc",
+                "task": "mismatched archive sentinel",
+                "status": "completed",
+                "management_history": [],
+            }).encode("utf-8")),
+        ]
+        for sid, contents in cases:
+            (archive_dir / f"{sid}.json").write_bytes(contents)
+        before = {path.name: path.read_bytes() for path in archive_dir.iterdir()}
+
+        for sid, _contents in cases:
+            with self.subTest(sid=sid):
+                with self.assertRaises(ValueError):
+                    session_management.restore(self.store, sid)
+                after = {path.name: path.read_bytes() for path in archive_dir.iterdir()}
+                self.assertEqual(after, before)
+                self.assertFalse(self.store._path(sid).exists())
+
     def test_import_creates_new_pending_session_without_side_effect_state(self):
         export = export_session(self.store, self.session["id"], self.state)
         imported = import_session(self.store, export["file"], self.root)
@@ -76,7 +134,7 @@ class SessionPortabilityTests(unittest.TestCase):
     def test_import_rejects_symlink_and_nonexistent_workspace(self):
         export = export_session(self.store, self.session["id"], self.state)
         link = self.base / "link.json"
-        link.symlink_to(export["file"])
+        make_symlink(link, export["file"])
         with self.assertRaisesRegex(ValueError, "symlink"):
             import_session(self.store, link, self.root)
         with self.assertRaisesRegex(ValueError, "existing directory"):

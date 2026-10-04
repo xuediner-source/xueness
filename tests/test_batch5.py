@@ -14,6 +14,7 @@ import unittest
 from unittest.mock import patch
 from pathlib import Path
 
+from tests.fs_link_helpers import make_symlink
 from xueness.core import Gate, Store, _run_subagent, compact, run
 from xueness.provider import FakeProvider
 from xueness.task_registry import (
@@ -311,7 +312,7 @@ class WriteLockTests(unittest.TestCase):
         target = base / "real.txt"
         target.write_text("x", encoding="utf-8")
         link = base / "link.txt"
-        os.symlink(target, link)
+        make_symlink(link, target)
         self.assertTrue(self.locks.acquire(target, "s1"))
         self.assertFalse(self.locks.acquire(link, "s2"))
 

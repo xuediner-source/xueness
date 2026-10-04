@@ -78,7 +78,7 @@ class RuntimeMetricParsing(unittest.TestCase):
         with patch.object(runtime_metrics.platform, "system", return_value="Linux"), \
              patch.object(runtime_metrics, "_read_linux_meminfo", return_value=(8 * 1024**3, 3 * 1024**3, "kernel_estimate")), \
              patch.object(runtime_metrics, "_read_linux_rss", return_value=256 * 1024**2) as rss_probe, \
-             patch.object(runtime_metrics.os, "sysconf", return_value=4096):
+             patch.object(runtime_metrics.os, "sysconf", return_value=4096, create=True):
             values = runtime_metrics._memory()
         self.assertEqual(values, (8 * 1024**3, 3 * 1024**3, "kernel_estimate", 256 * 1024**2))
         rss_probe.assert_called_once_with(4096)

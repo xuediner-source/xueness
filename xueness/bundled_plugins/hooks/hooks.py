@@ -39,6 +39,7 @@ import re
 import subprocess
 import time
 from pathlib import Path
+from ...resources import _is_link, _kind_dir
 
 from ...process_runtime import run_external
 
@@ -85,7 +86,7 @@ def _safe_read_json(path: Path):
     is not an object all yield ``None`` so one broken entry can never take
     down the list or echo back a foreign file.
     """
-    if path.is_symlink():
+    if _is_link(path):
         return None
     flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0)
     try:
@@ -110,15 +111,18 @@ def load(state_dir) -> list:
     entries, unknown events, and non-string or blank commands. One bad entry
     only costs that entry.
     """
-    hooks_dir = _hooks_dir(state_dir)
+    try:
+        hooks_dir = _kind_dir({"state_dir": state_dir}, "hooks")
+    except (OSError, ValueError):
+        return []
     # A symlinked directory would relocate the whole jail; refuse it outright.
-    if hooks_dir.is_symlink():
+    if _is_link(hooks_dir):
         return []
     if not hooks_dir.is_dir():
         return []
     hooks = []
     for path in sorted(hooks_dir.glob("*.json")):
-        if path.is_symlink():
+        if _is_link(path):
             continue
         item = _safe_read_json(path)
         if item is None:

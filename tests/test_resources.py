@@ -1,5 +1,6 @@
 """Tests for the generic resource repository (Stage 2 contract, section 2)."""
 import json
+import os
 import re
 import tempfile
 import threading
@@ -8,6 +9,13 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
+from tests.fs_link_helpers import (
+    is_reparse_point, make_directory_junction, make_symlink,
+    remove_directory_junction,
+)
+from tests.secret_permissions import (
+    assert_secret_directory_private, assert_secret_file_private,
+)
 from xueness import plugin_sdk, resources
 from xueness.resources import KINDS, dispatch
 
@@ -207,6 +215,113 @@ class ResourceTests(unittest.TestCase):
         self.assertEqual(loaded["when"], "save")
         self.assertIn("createdAt", loaded)
         self.assertIn("updatedAt", loaded)
+        assert_secret_file_private(self, path)
+
+    def test_private_directory_is_protected(self):
+        directory = self.state / "browser-profile"
+        directory.mkdir()
+
+        resources._protect_private_directory(directory)
+
+        assert_secret_directory_private(self, directory)
+
+    def test_private_directory_does_not_create_missing_path(self):
+        directory = self.state / "missing-profile"
+        with self.assertRaises(OSError):
+            resources._protect_private_directory(directory)
+        self.assertFalse(directory.exists())
+
+    def test_private_directory_rejects_symlink_or_junction(self):
+        target = self.state / "profile-target"
+        target.mkdir()
+        link = self.state / "profile-link"
+        if os.name == "nt":
+            make_directory_junction(link, target)
+        else:
+            make_symlink(link, target, target_is_directory=True)
+        try:
+            with self.assertRaises(OSError):
+                resources._protect_private_directory(link)
+            self.assertTrue(target.is_dir())
+        finally:
+            if os.name == "nt" and is_reparse_point(link):
+                remove_directory_junction(link)
+
+    def test_private_directory_failure_is_propagated_and_closes_handle(self):
+        directory = self.state / "failed-profile"
+        directory.mkdir()
+        if os.name == "nt":
+            with patch.object(resources, "_protect_private_windows_handle",
+                              side_effect=OSError("simulated ACL setup failure")):
+                with self.assertRaisesRegex(OSError, "simulated ACL setup failure"):
+                    resources._protect_private_directory(directory)
+            return
+
+        opened_fds = []
+        original_open = os.open
+
+        def track_open(path, flags):
+            fd = original_open(path, flags)
+            opened_fds.append(fd)
+            return fd
+
+        with patch.object(os, "open", side_effect=track_open), \
+             patch.object(os, "fchmod", side_effect=OSError("simulated chmod failure")):
+            with self.assertRaisesRegex(OSError, "simulated chmod failure"):
+                resources._protect_private_directory(directory)
+
+        self.assertEqual(len(opened_fds), 1)
+        with self.assertRaises(OSError):
+            os.fstat(opened_fds[0])
+
+    @unittest.skipUnless(os.name == "nt", "Windows inherited directory ACL coverage")
+    def test_private_directory_acl_is_inherited_by_new_files(self):
+        directory = self.state / "browser-profile"
+        directory.mkdir()
+        resources._protect_private_directory(directory)
+
+        child = directory / "Preferences"
+        child.write_text("private profile data", encoding="utf-8")
+
+        assert_secret_file_private(self, child, require_protected=False)
+
+    @unittest.skipUnless(os.name == "nt", "Windows existing-child ACL propagation")
+    def test_private_directory_acl_repairs_existing_unprotected_children(self):
+        directory = self.state / "browser-profile"
+        child_directory = directory / "Default"
+        child_directory.mkdir(parents=True)
+        child_file = child_directory / "Preferences"
+        child_file.write_text("old profile data", encoding="utf-8")
+
+        resources._protect_private_directory(directory)
+
+        assert_secret_directory_private(self, directory)
+        assert_secret_directory_private(
+            self, child_directory, require_protected=False)
+        assert_secret_file_private(self, child_file, require_protected=False)
+
+    def test_private_acl_failure_preserves_old_record_and_cleans_temp_fd(self):
+        path = self.state / "resources" / "hooks" / "existing.json"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        original = b'{"id":"existing","apiKey":"old-secret"}\n'
+        path.write_bytes(original)
+        opened_fds = []
+
+        def reject_private_file(fd):
+            opened_fds.append(fd)
+            raise OSError("simulated ACL setup failure")
+
+        with patch.object(resources, "_protect_private_file",
+                          side_effect=reject_private_file):
+            with self.assertRaisesRegex(OSError, "simulated ACL setup failure"):
+                resources._atomic_write_json(path, {"id": "existing", "apiKey": "new-secret"})
+
+        self.assertEqual(path.read_bytes(), original)
+        self.assertEqual(list(path.parent.glob(".resource-*")), [])
+        self.assertNotIn(b"new-secret", b"".join(item.read_bytes() for item in path.parent.iterdir()))
+        self.assertEqual(len(opened_fds), 1)
+        with self.assertRaises(OSError):
+            os.fstat(opened_fds[0])
         # no temp leftovers after an atomic write
         leftovers = [p.name for p in path.parent.iterdir() if p.name.startswith(".resource-")]
         self.assertEqual(leftovers, [])
@@ -361,7 +476,7 @@ class PutReplaceTests(unittest.TestCase):
         outside = Path(self._tmp.name) / "outside.json"
         outside.write_text(json.dumps({"id": "outside"}), encoding="utf-8")
         link = kind_dir / "sneaky.json"
-        link.symlink_to(outside)
+        make_symlink(link, outside)
 
         status, _ = self.call("PUT", ["api", "resources", "hooks"], {"items": []})
         self.assertEqual(status, 200)

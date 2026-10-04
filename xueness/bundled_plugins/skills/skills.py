@@ -27,6 +27,7 @@ from __future__ import annotations
 import json
 import os
 from pathlib import Path
+from ...resources import _is_link, _kind_dir
 
 SKILLS_HEADER = "# Enabled skills"
 
@@ -58,7 +59,7 @@ def _safe_read_json(path: Path):
     a JSON document that is not an object all yield ``None`` so one broken
     entry can never take down the rest of the list or echo back a foreign file.
     """
-    if path.is_symlink():
+    if _is_link(path):
         return None
     flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0)
     try:
@@ -77,15 +78,18 @@ def _safe_read_json(path: Path):
 
 def _load_items(state_dir) -> list:
     """Every usable skill under the skills directory, in id order."""
-    skills_dir = _skills_dir(state_dir)
+    try:
+        skills_dir = _kind_dir({"state_dir": state_dir}, "skills")
+    except (OSError, ValueError):
+        return []
     # A symlinked directory would relocate the whole jail; refuse it outright.
-    if skills_dir.is_symlink():
+    if _is_link(skills_dir):
         return []
     if not skills_dir.is_dir():
         return []
     items = []
     for path in sorted(skills_dir.glob("*.json")):
-        if path.is_symlink():
+        if _is_link(path):
             continue
         item = _safe_read_json(path)
         if item is None:

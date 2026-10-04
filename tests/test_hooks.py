@@ -20,6 +20,7 @@ import time
 import unittest
 from pathlib import Path
 
+from tests.fs_link_helpers import make_directory_boundary_link, make_symlink
 from xueness.hooks import (DEFAULT_OUTPUT_CAP, DEFAULT_TIMEOUT_CAP, EXIT_BLOCK,
                            HOOK_EVENTS, HookRunner, load, select)
 
@@ -186,7 +187,7 @@ class HooksTestCase(unittest.TestCase):
     def test_symlinked_entry_is_skipped(self):
         secret = self.root / "outside.json"
         secret.write_text(json.dumps(self.hook_item("evil", "Stop")), encoding="utf-8")
-        (self.hooks_dir / "evil.json").symlink_to(secret)
+        make_symlink(self.hooks_dir / "evil.json", secret)
         self.write_hook("ok.json", self.hook_item("ok", "Stop"))
         self.assertEqual([h["id"] for h in load(self.state_dir)], ["ok"])
 
@@ -196,7 +197,7 @@ class HooksTestCase(unittest.TestCase):
         (outside / "a.json").write_text(
             json.dumps(self.hook_item("outside", "Stop")), encoding="utf-8")
         shutil.rmtree(self.hooks_dir)
-        self.hooks_dir.symlink_to(outside, target_is_directory=True)
+        make_directory_boundary_link(self.hooks_dir, outside)
         self.assertEqual(load(self.state_dir), [])
 
     def test_symlink_to_state_dir_returns_empty(self):
@@ -207,7 +208,7 @@ class HooksTestCase(unittest.TestCase):
         link = self.root / "link-state"
         link.mkdir()
         (link / "resources").mkdir()
-        (link / "resources" / "hooks").symlink_to(outside, target_is_directory=True)
+        make_directory_boundary_link(link / "resources" / "hooks", outside)
         self.assertEqual(load(link), [])
 
     # --- load is read-only --------------------------------------------------
@@ -217,7 +218,7 @@ class HooksTestCase(unittest.TestCase):
         self.write_hook("broken.json", "{ not json")
         secret = self.root / "secret.json"
         secret.write_text(json.dumps(self.hook_item("evil", "Stop")), encoding="utf-8")
-        (self.hooks_dir / "link.json").symlink_to(secret)
+        make_symlink(self.hooks_dir / "link.json", secret)
 
         before = self.snapshot()
         load(self.state_dir)

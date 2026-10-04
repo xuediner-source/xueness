@@ -23,6 +23,44 @@ export type PendingApproval = {
   preview: string;
 };
 
+export type QueuedMessage = {
+  id: string;
+  text: string;
+  status: "queued" | "running" | "paused" | "completed" | "needs_review" | "failed" | "cancelled";
+  position?: number;
+  created_at?: string;
+  updated_at?: string;
+  pause_reason?: string;
+};
+
+const QUEUED_MESSAGE_STATUSES = ["queued", "running", "paused", "completed", "needs_review", "failed", "cancelled"] as const;
+
+function parseQueuedMessages(value: unknown): QueuedMessage[] | undefined {
+  if (value === undefined) return undefined;
+  if (!Array.isArray(value)) throw new Error("invalid queued messages response");
+  return value.map(item => {
+    if (!item || typeof item !== "object" || Array.isArray(item)) throw new Error("invalid queued messages response");
+    const record = item as Record<string, unknown>;
+    if (typeof record.id !== "string" || !record.id || typeof record.text !== "string"
+      || typeof record.status !== "string" || !QUEUED_MESSAGE_STATUSES.includes(record.status as typeof QUEUED_MESSAGE_STATUSES[number])
+      || (record.position !== undefined && (!Number.isInteger(record.position) || (record.position as number) < 0))
+      || (record.created_at !== undefined && typeof record.created_at !== "string")
+      || (record.updated_at !== undefined && typeof record.updated_at !== "string")
+      || (record.pause_reason !== undefined && typeof record.pause_reason !== "string")) {
+      throw new Error("invalid queued messages response");
+    }
+    return {
+      id: record.id,
+      text: record.text,
+      status: record.status as QueuedMessage["status"],
+      ...(typeof record.position === "number" ? { position: record.position } : {}),
+      ...(typeof record.created_at === "string" ? { created_at: record.created_at } : {}),
+      ...(typeof record.updated_at === "string" ? { updated_at: record.updated_at } : {}),
+      ...(typeof record.pause_reason === "string" ? { pause_reason: record.pause_reason } : {}),
+    };
+  });
+}
+
 export type WorkbenchRuntimeActivity = import('./plugins/providers/LocalRuntimeMonitor').RuntimeActivity & {
   phase: string;
   startedAt?: string;
@@ -48,6 +86,7 @@ export type WorkbenchSession = {
   mode: string;
   completion?: import('./plugins/planning/CompletionChecks').CompletionAssessment & { summary?: string; evidence?: unknown[] } | null;
   delivery_requirements?: import('./plugins/planning/CompletionChecks').DeliveryRequirement[];
+  queued_messages?: QueuedMessage[];
   todos?: unknown[];
   pending_question?: string | null;
   /** Bounded provider reasoning, keyed by the assistant message's journal index. */
@@ -55,9 +94,9 @@ export type WorkbenchSession = {
   pending: PendingApproval[];
   approved: { write: string[]; edit: string[]; exec: string[]; mcp: string[] };
   changed_files: string[];
-  streaming?: { id: string; text: string; reasoning?: string; status: "streaming" | "interrupted" } | null;
+  streaming?: { id: string; text: string; reasoning?: string; status: "streaming" | "interrupted"; text_format?: "markdown" } | null;
   provider_usage?: Record<string, number>;
-  model_selection?: { provider_id?: string | null; model?: string | null; reasoning_effort?: string | null };
+  model_selection?: { provider_id?: string | null; model?: string | null; reasoning_effort?: string | null; tool_calling?: "native" | "json" };
   runtime_profile?: "standard" | "lightweight";
   runtime_budget?: {
     profile?: "standard" | "lightweight";
@@ -179,7 +218,7 @@ export type TimelineRow =
       input?: Record<string, unknown>;
       output?: unknown;
     }
-  | { kind: "completion"; seq: number; verified: boolean; summary: string }
+  | { kind: "completion"; seq: number; verified: boolean; summary: string; status?: "verified" | "unverified" | "not_applicable"; toolExecutionStatus?: "succeeded" | "failed" | "incomplete" | "not_applicable"; deliveryStatus?: "passed" | "failed" | "not_assessed"; turnId?: string }
   | { kind: "pending_question"; seq: number; question: string };
 
 /** Show durable text during generation and after an interrupted request. */
@@ -187,8 +226,9 @@ export function withAssistantStream(rows: TimelineRow[], stream: WorkbenchSessio
   if (!stream || (!stream.text && !stream.reasoning) || !["streaming", "interrupted"].includes(stream.status)) return rows;
   const latest = rows[rows.length - 1];
   if (latest?.kind === "assistant" && latest.text === stream.text) {
-    if (!stream.reasoning || latest.reasoning === stream.reasoning) return rows;
-    return [...rows.slice(0, -1), { ...latest, reasoning: stream.reasoning, streaming: stream.status === "streaming" }];
+    const streaming = stream.status === "streaming";
+    if (latest.streaming === streaming && (!stream.reasoning || latest.reasoning === stream.reasoning)) return rows;
+    return [...rows.slice(0, -1), { ...latest, ...(stream.reasoning ? { reasoning: stream.reasoning } : {}), streaming }];
   }
   return [...rows, { kind: "assistant", seq: rows.reduce((max, row) => Math.max(max, row.seq), 0) + 1,
     turnId: stream.id, text: stream.text,
@@ -262,8 +302,11 @@ export async function listSessions(): Promise<Result<SessionSummary[]>> {
 
 export async function loadSession(id: string): Promise<Result<WorkbenchSession>> {
   try {
-    const value = await requestGet<WorkbenchSession>(sessionPath(id));
-    return { ok: true, value };
+    const payload = await requestGet<unknown>(sessionPath(id));
+    if (!payload || typeof payload !== "object" || Array.isArray(payload)) throw new Error("invalid session response");
+    const value = payload as WorkbenchSession;
+    const queuedMessages = parseQueuedMessages((payload as Record<string, unknown>).queued_messages);
+    return { ok: true, value: { ...value, ...(queuedMessages ? { queued_messages: queuedMessages } : {}) } };
   } catch (error) {
     return { ok: false, error: toErrorMessage(error) };
   }
@@ -558,10 +601,15 @@ export async function approvePending(
  * Shared run body: user choices + fixed step budget + server opt-ins.
  * readRunOptIns fails closed to {} and must never enable a capability.
  */
-async function runSessionWith(id: string, choices?: RunChoices): Promise<void> {
+async function runSessionWith(id: string, choices?: RunChoices, options?: { continueQueue?: boolean }): Promise<void> {
   const effectiveChoices = choices ?? getRunChoices();
   const optIns = await readRunOptIns();
-  await requestPost(sessionPath(id, "/run"), { ...effectiveChoices, steps: effectiveChoices.goal ? 20 : 8, ...optIns });
+  await requestPost(sessionPath(id, "/run"), {
+    ...effectiveChoices,
+    steps: effectiveChoices.goal ? 20 : 8,
+    ...optIns,
+    ...(options?.continueQueue ? { continue_queue: true } : {}),
+  });
 }
 
 export async function createSession(
@@ -602,6 +650,47 @@ export async function sendTurn(
   }
 }
 
+/** Add a user turn to the active run's FIFO queue. The prepared token is one-use. */
+export async function queueTurn(id: string, text: string, preparedToken?: string): Promise<Result<QueuedMessage>> {
+  try {
+    const payload = await requestPost<unknown>(sessionPath(id, "/queue"), {
+      text,
+      ...(preparedToken ? { prepared_token: preparedToken } : {}),
+    });
+    if (!payload || typeof payload !== "object" || Array.isArray(payload)) throw new Error("invalid queue response");
+    const record = payload as Record<string, unknown>;
+    const item = record.item && typeof record.item === "object" && !Array.isArray(record.item)
+      ? record.item as Record<string, unknown>
+      : null;
+    if (typeof record.id !== "string" || !record.id || !item || typeof item.id !== "string" || item.id !== record.id || typeof item.text !== "string"
+      || typeof item.status !== "string" || (item.status !== "queued" && item.status !== "paused") || !Number.isInteger(item.position) || (item.position as number) < 0
+      || (item.created_at !== undefined && typeof item.created_at !== "string")
+      || (item.updated_at !== undefined && typeof item.updated_at !== "string")) throw new Error("invalid queue response");
+    return { ok: true, value: {
+      id: record.id,
+      text: item.text,
+      status: item.status,
+      position: item.position as number,
+      ...(typeof item.created_at === "string" ? { created_at: item.created_at } : {}),
+      ...(typeof item.updated_at === "string" ? { updated_at: item.updated_at } : {}),
+      ...(typeof item.pause_reason === "string" ? { pause_reason: item.pause_reason } : {}),
+    } };
+  } catch (error) {
+    return { ok: false, error: toErrorMessage(error) };
+  }
+}
+
+/** Cancel a queued turn; the server rejects removal after the worker claims it. */
+export async function cancelQueuedTurn(id: string, queueId: string): Promise<Result<void>> {
+  try {
+    const payload = await requestMutation<{ removed?: unknown }>("DELETE", `${sessionPath(id, "/queue")}/${encodeURIComponent(queueId)}`, undefined);
+    if (payload?.removed !== true) throw new Error("invalid queue cancellation response");
+    return { ok: true, value: undefined };
+  } catch (error) {
+    return { ok: false, error: toErrorMessage(error) };
+  }
+}
+
 export async function answerQuestion(id: string, answer: string): Promise<Result<void>> {
   try {
     await requestPost(sessionPath(id, "/answer"), { answer });
@@ -611,9 +700,9 @@ export async function answerQuestion(id: string, answer: string): Promise<Result
   }
 }
 
-export async function runSession(id: string, choices?: RunChoices): Promise<Result<void>> {
+export async function runSession(id: string, choices?: RunChoices, options?: { continueQueue?: boolean }): Promise<Result<void>> {
   try {
-    await runSessionWith(id, choices);
+    await runSessionWith(id, choices, options);
     return { ok: true, value: undefined };
   } catch (error) {
     return { ok: false, error: toErrorMessage(error) };
@@ -803,6 +892,10 @@ export function toTimelineRows(events: XuenessEventV1[]): TimelineRow[] {
           seq: event.seq,
           verified: event.verified,
           summary: event.summary,
+          ...(event.status ? { status: event.status } : {}),
+          ...(event.toolExecutionStatus ? { toolExecutionStatus: event.toolExecutionStatus } : {}),
+          ...(event.deliveryStatus ? { deliveryStatus: event.deliveryStatus } : {}),
+          ...(event.turnId ? { turnId: event.turnId } : {}),
         });
         break;
       case "session.pending_question":
