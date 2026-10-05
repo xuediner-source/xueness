@@ -93,9 +93,26 @@ def register_cli(commands):
     run.add_argument('id'); run.add_argument('--root',type=Path,default=Path.cwd())
     run.add_argument('--allow-exec',action='store_true',help='approve this remote execution for the invocation')
     run.add_argument('argv',nargs=argparse.REMAINDER,help='remote argv after --')
+    server=commands.add_parser('app-server',
+        help='serve JSON-RPC 2.0 over stdio for an IDE or external frontend (never opens a network port)')
+    server.add_argument('--web-runs',type=Path,default=None,metavar='PATH',
+                        help='server-owned workspace parent (default the repository .web-runs)')
+    server.add_argument('--workspace-root',action='append',type=Path,default=[],metavar='PATH',
+                        help='allow an existing host workspace directory (repeatable)')
+    server.add_argument('--allow-real-provider',dest='allow_real',action='store_true',default=None,
+                        help='allow online provider runs (default follows XUENESS_ALLOW_REAL)')
+    server.add_argument('--no-real-provider',dest='allow_real',action='store_false',
+                        help='refuse online provider runs for this server')
 
 
 def execute_cli(args):
+    # The stdio server owns its own loop, streams and exit code; it must not be
+    # wrapped in the connection-store lock or the JSON summary print below.
+    if getattr(args,'cmd',None)=='app-server':
+        from . import app_server
+        return app_server.run(Path(args.state),web_runs=getattr(args,'web_runs',None),
+                              workspace_roots=getattr(args,'workspace_root',()),
+                              allow_real=getattr(args,'allow_real',None))
     state=Path(args.state)
     try:
         with _config_lock(state):

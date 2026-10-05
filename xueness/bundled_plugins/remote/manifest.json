@@ -1,7 +1,7 @@
 {
   "id": "remote",
   "name": "Remote",
-  "description": "Explicitly approved remote operations.",
+  "description": "Explicitly approved remote operations and the local stdio app-server.",
   "apiVersion": 1,
   "version": "1.0.0",
   "defaultEnabled": false,
@@ -10,7 +10,8 @@
     "remote_exec"
   ],
   "commands": [
-    "remote"
+    "remote",
+    "app-server"
   ],
   "panels": [
     "remote"
@@ -20,8 +21,15 @@
   "httpFamilies": [
     "remote"
   ],
-  "modules": [],
+  "modules": [
+    "app_server"
+  ],
   "features": [
+    {
+      "id": "remote.app_server",
+      "name": "stdio JSON-RPC app-server 入口",
+      "nameEn": "Stdio JSON-RPC app-server entry point"
+    },
     {
       "id": "remote.connections",
       "name": "命名 SSH 主机连接配置",

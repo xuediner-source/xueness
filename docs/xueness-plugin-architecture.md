@@ -163,15 +163,15 @@ providers 的 CLI parser/handler 已迁入 `xueness/bundled_plugins/providers/op
 
 ## 功能逐项归属清单
 
-下表概述当前 27 份 manifest 中的 121 项用户能力。命令/工具/依赖和实际实现文件以同一份 manifest 为准；前端卡片直接展示该功能清单，不维护第二份隐藏列表。纯安全内核与通用布局的边界如前文所述。
+下表概述当前 27 份 manifest 中的 124 项用户能力。命令/工具/依赖和实际实现文件以同一份 manifest 为准；前端卡片直接展示该功能清单，不维护第二份隐藏列表。纯安全内核与通用布局的边界如前文所述。
 
 | 插件 | 已实现的用户能力 |
 |---|---|
-| sessions | 会话创建与 Agent 对话；选择、搜索、重命名、固定与归档；历史导航与跨会话上下文检索；闭合历史轮次分叉与来源链接；从轮次检查点分叉并记录来源快照；脱敏导出、导入与恢复；文本、思考与工具调用增量流；附件、上下文引用与会话输入；计划权限模式与会话计划草稿；多行 CLI、全屏 TUI 与中断恢复 |
+| sessions | 会话创建与 Agent 对话；选择、搜索、重命名、固定与归档；历史导航与跨会话上下文检索；闭合历史轮次分叉与来源链接；从轮次检查点分叉并记录来源快照；脱敏导出、导入与恢复；文本、思考与工具调用增量流；附件、上下文引用与会话输入；计划权限模式与会话计划草稿；多行 CLI、全屏 TUI 与中断恢复；运行中切换模型与推理档位（/model、/effort） |
 | files | 文件列表、搜索与分页读取；批准后的文件写入与编辑；目录浏览、新建与本机目录选择；文本、图像、PDF 与媒体预览；会话文件改动视图；工作区 AGENTS 指导文件加载 |
 | shell | 批准后的 argv 命令执行 |
 | planning | 待办计划读取与更新；提问、用户回答与继续；持久交付清单与内容完成检查 |
-| providers | 模型配置保存、选择与切换；OpenAI 兼容与 Anthropic 协议；显式模型发现；本地小模型轻量档位；轻量档极简工作台布局；上下文、输出与安全预算；精简工具、按需发现与结果分页；JSON 工具协议与有限修复；兼容参数、超时与有限重试；本地接口对话、原生/JSON 工具、SSE 与工具续轮诊断；输出阶段、延迟、计数与速率趋势 |
+| providers | 模型配置保存、选择与切换；OpenAI 兼容与 Anthropic 协议；显式模型发现；本地小模型轻量档位；轻量档极简工作台布局；上下文、输出与安全预算；精简工具、按需发现与结果分页；JSON 工具协议与有限修复；兼容参数、超时与有限重试；本地接口对话、原生/JSON 工具、SSE 与工具续轮诊断；输出阶段、延迟、计数与速率趋势；默认模型与推理档位保存 |
 | memory | 只读记忆轨道与上下文注入；手动编辑与版本冲突检测；记忆能力与工作区配置 |
 | settings | 工作区登记、项目选择与默认目录；主题、语言、字体与代码显示；快捷键配置、验证与冲突检测；Agent 运行与能力偏好 |
 | usage | 会话、步骤与日期统计；供应商实际报告的 Token 统计；实际报告成本与模型维度统计 |
@@ -189,7 +189,7 @@ providers 的 CLI parser/handler 已迁入 `xueness/bundled_plugins/providers/op
 | extensions | 可信资源清单市场浏览；数据 manifest 安装、升级与移除 |
 | diagnostics | 脱敏支持诊断导出；状态存储统计与限定日志清理；实时本机 CPU、内存与磁盘采样 |
 | browser | 受审批约束的页面导航与检查；精确点击、输入与内存截图；浏览器控制配置与生命周期清理 |
-| remote | 命名 SSH 主机连接配置；明确批准的远程 argv 执行 |
+| remote | 命名 SSH 主机连接配置；明确批准的远程 argv 执行；stdio JSON-RPC app-server 入口 |
 | bots | Telegram 白名单收件箱；明确批准的消息回复 |
 | onboarding | 模型与工作区初次配置向导；隐藏密钥输入与配置保存 |
 | updates | 源仓库版本与更新检查；明确批准的干净仓库快进更新；桌面客户端检查、下载、取消与安装控制 |
@@ -359,3 +359,39 @@ profile 是 Cordis/DeepSeek 那种「组合配置档」的最小安全版本：�
 调度实现在共享运行内核 `core.py` 的单轮工具执行循环内（与 Gate、预算、完成验证同层的调度基础设施，不是新的产品入口；用户能力归 sessions 插件登记）：按调用顺序做静态预检后，连续通过的调用切成批次，批次上限读取环境变量 `XUENESS_MAX_TOOL_CONCURRENCY`（默认 10；非法值回退默认；设 1 即完全串行），批次内用线程池并发执行注册表 dispatch，每个 worker 自行绑定执行上下文。可入批的充要条件之一是工具的 gate kind 属于 `Gate.check` 中无需交互审批的只读集合，因此审批交互永远不会与其它调用并发弹出；需要审批的调用、被 disallow/策略名单拒绝、轻量档未激活、远程绑定受限或所属插件被禁用的调用都单独串行，其暂停/短路语义与串行完全一致。PreToolUse 钩子 veto 与参数校验仍在主线程按调用顺序串行进行（外部钩子命令可能有副作用，不并发）；PostToolUse/PostToolUseFailure/PermissionRequest 钩子、证据别名、activity 统计与逐调用 save 均在主线程按原顺序执行；`before_tool_execution` 观察钩子只对可变工具触发，而可变工具从不入批，轮次检查点时机因此不变。取消/中断语义不变：stop 仍在步骤与批次边界生效，运行中不重放。
 
 结果严格按原调用顺序回填：`tool_call`/`tool_result` 事件逐调用成对出现，journal 的消息与结果顺序和串行一致；单个批内成员异常只降级为该调用的结构化失败结果，不影响同批其他调用。与串行的唯一已知差异是诊断性的：批内某成员在 handler 内部才产生的暂停类拒绝（例如只读工具的工作区路径逃逸被 Gate 拒绝）发生时，同批其余只读成员仍会完成并记录真实结果——它们没有副作用，批间短路与暂停状态仍与串行完全一致。计划模式下写/执行/网络工具照旧在 Gate 被拒且从不入批，行为与串行完全一致。回归见 `tests/test_tool_concurrency.py`（屏障/区间验证并发与串行、批次切分、结果顺序、上限=1、异常隔离、审批不并发、plan 模式不变），全部使用隔离状态目录与注入的假 handler，不访问网络、不调用真实模型。
+
+
+## app-server stdio 入口与运行中切换模型/推理档位（2026-10-05）
+
+目录新增三项能力：`remote.app_server`（stdio 上的 JSON-RPC 2.0 入口）、`sessions.runtime_model_switch`（`/model`、`/effort` 与运行中切换）、`providers.default_selection`（把模型与推理档位存为默认）。与同日先行合入的插件档位 profile、工具并发合计，完整目录现为 **27 个插件、124 项登记功能**。
+
+### app-server：给 IDE 用的 stdio 协议入口
+
+实现全部留在 `remote/app_server.py`（remote manifest 的 `modules` 与 `commands` 同时登记 `app_server` / `app-server`），CLI 入口是 `xueness --state DIR app-server [--web-runs PATH] [--workspace-root PATH]... [--allow-real-provider|--no-real-provider]`。remote 未启用时启动即以退出码 2 结束并在 stderr 说明如何开启，不写任何 stdout 帧。
+
+**帧格式（二选一里选行分隔）**：一条消息 = 一行 UTF-8 JSON-RPC 2.0，LF 结束，单行上限 `MAX_FRAME_BYTES = 1 MiB`；超限的行被读完并丢弃，只回一条 `-32700` 错误，绝不把超长输入缓冲进内存。**stdout 只输出协议帧**：整个请求周期在 `contextlib.redirect_stdout` 下运行，功能代码里残留的 `print` 落到 `_LogStream` 并进 stderr，帧写入器自己持有真实 stdout buffer；所有日志与异常说明都走 stderr。**从不监听任何网络端口**，`initialize` 的 `capabilities.networkListener` 因此固定为 `false`（回归用替换 `socket.socket` 的方式断言整段服务过程一次都没有建过 socket）。
+
+方法集合是最小的一套：`initialize`（协议名/版本、Xueness 版本、`plugin_runtime.catalog()` 的 `enabled/effective/blockedBy` 与每个插件的功能 ID）、`session/list`（`archived` 可选）、`session/get`、`session/create`、`turn/start`、`turn/cancel`、`session/setModel`、`session/setEffort`、`shutdown`/`exit`。`turn/start` 立刻回 `{accepted, sessionId, cursor}`，随后以 JSON-RPC notification 推流：`turn/started`、`session/event`（逐条转发 journal 事件协议 `events.page_events` 的光标窗口）、`turn/finished`（带 HTTP 侧同款 result 与最终状态）。通知方法名与帧上限都写进 `initialize.limits`，客户端不需要猜。`shutdown` 先对每个在跑的轮次发 `/stop` 再 join（5 秒上限），然后结束服务循环。
+
+**权限语义与 HTTP 完全一致**：所有会话与运行操作都经 `plugin_runtime.dispatch_http` 走 sessions 既有路由，因此插件生效检查、Gate 与逐次批准、`permission_mode`、工作区根边界、单写者 lease 一个都没少——`--workspace-root` 只把既有的允许根传进 `host.build_context`，越界根仍按 400 拒绝（stdio 不构成豁免）。remote 没有声明 sessions 依赖，所以 `turn/start` 里只有 `permissionMode` 的取值枚举在协议边界做一次词表检查（非法即 `-32602`，不开轮也不发通知），真正的权威判定仍在 sessions 的 run 路由：插件关闭返回 403、`plan` 不可用、lease 冲突等一律按该路由的状态码反映到 `turn/finished.error`。
+
+**信任模型**：没有 HTTP 就没有 `Handler._guard` 的 Host/Origin/CSRF 层，这不是被绕过的检查，而是根本不存在的前置条件；唯一的信任对象是启动本进程的父进程。`initialize.capabilities.trustModel` 与 `hostOriginCsrf: false` 把这点写进协议，IDE 侧必须自行保证只把子进程的管道交给自己。桥接对象 `_Bridge` 只实现路由真正用到的 `_ctx`/`path`/`headers`/`client_address`/`_send`/`write`，`client_address` 固定为 `127.0.0.1:0`，不伪造 Cookie 与请求行。
+
+**错误码**：`-32700` 解析/超限、`-32600` 不是合法 Request 对象（缺 `jsonrpc:"2.0"`、`id` 类型非法、`method` 为空）、`-32601` 未知方法（`data.known` 给出已知集合）、`-32602` 参数非法（未知键、`sessionId` 格式、`params` 不是对象）、`-32603` 内部异常（`data.exception` 只给类型名，细节进 stderr）、以及 `-32000` 「被 Xueness 拒绝」：请求合法但被策略挡下，`data.status` 就是同一调用在 Web API 上会得到的 HTTP 状态码（400/403/404/405/409/500/501/503 一一映射），拒绝原因沿用路由的 `error` 文本。通知（无 `id`）只执行不回帧，服务端异常不会杀死循环。
+
+### 运行中切换模型与推理档位
+
+`sessions/model_switch.py` 是唯一实现，三个入口共用：chat 循环的 `/model`、`/effort`，`POST|GET /api/sessions/<sid>/model`（sessions manifest 的 `httpFamilies` 登记 `sessions/*/model`，`route_owner` 最深匹配归 sessions，未改匹配逻辑），以及 app-server 的 `session/setModel` / `session/setEffort`（转投同一 HTTP 路由）。
+
+- `/effort`、`/effort list` 显示当前档位与可选档位；档位来源是服务商 profile 声明的 `reasoningLevels`，未声明时回落到 `providers_api.known_reasoning_levels` 的已知家族，再回落共享 `REASONING_LEVELS` 白名单（`declared_reasoning_levels` 只用于「Offer」，**校验**仍走 `_validate_reasoning_effort`：没有声明就等于没有证据，照旧拒绝）。
+- `/effort <level>` 切换本会话档位并写入 `model_selection`；`/model list` 给出当前选择与已存 profile；`/model provider/model` 是新写法，同时兼容既有 `/model ID [MODEL]` 与 `env`；换模型即清空档位，使用该模型自己的默认档位（旧档位属于别的 profile，留着会在下一次请求处失败）。
+- 会话正在运行时切换**不打断当前请求**：`SwitchableProvider` 门面把待切换选择挂起，只有 run 下一次向 provider 取 `complete`/`stream` 时才换掉背后的适配器，因此留痕 `model_history` 的 `effect` 为 `next_request`；空闲时直接落盘，`effect` 为 `immediate`。`request_deadline` 属于这一轮而不是某个模型，切换时随之带走；`copy.copy`（轻量模式的私有副本）共享同一个挂起状态。运行档位（`runtime_profile`）不同的模型不能中途替换——工具协议在半轮里会半新半旧——一律 409，请用户先停这一轮。CLI 的切换在下一轮生效（`effect: next_run`）。
+- `model_history` 与 `permission_mode_history` 同构：`from`/`to`/`at`/`source`/`effect`，最多 50 条。运行中切换写的是 run 正在持有的那份会话（不绕过单写者 lease），同时把 `ctx['running_context'][sid].model_selection` 更正，好让排队中的下一轮不再用旧模型；会话详情 GET 顺带返回 `model_history`。
+
+### 保存为默认
+
+`providers/default_selection.py` 把选择存进 settings 文档的 `modelDefault` 段——纯数据、走 settings store 既有原子写、未知键保留。该段**故意不在** `settings_store.SECTION_IDS` 里，设置接口的通用分区写不进去也读不到，唯一写路径是 providers API 的 `GET|POST /api/providers/default`（POST 复用 profile 路由同一把锁与同一套校验：Anthropic 协议拒绝 reasoning-effort、档位必须被该模型声明、指向已删除 profile 的默认在读回时自动失效）。入口有三处：chat 里 `/model save-default`、`/effort save-default`；HTTP `POST /api/sessions/<sid>/model` 带 `saveDefault: true`（同一调用里校验并写入，写失败则会话不动）；Web 端模型弹层页脚的「设为默认」小按钮。`provider_config.resolve` 的优先级是：请求里显式给出的任何一项 > 保存的默认（只在完全不指定时生效，避免把部分选择悄悄指向另一个 profile）> `XUENESS_PROVIDER`/`XUENESS_API_BASE`/`XUENESS_MODEL` 环境回落——从未保存默认的部署行为不变。
+
+前端只加了一个入口：`ComposerModelMenu` 页脚的 `onSaveDefault`（未接线或没有选中模型时整个按钮不渲染），容器仅在 `isPluginEffective("providers")` 时接线，走 `xuenessApi.saveDefaultModelSelection` 的 CSRF 上行；保存成功后按钮改口「已设为默认」并带确认标记，切换选择后标记自动复位。校验一律由服务端判定，400 的 `error` 文案直接呈现。
+
+验证：`tests/test_app_server.py` 21 项（真实管道驱动协议环：initialize 描述与信任模型、`-32601`、坏 JSON `-32700`、1 MiB 超限行、信封校验、create/list/get 往返、`setModel`/`setEffort` 与非法档位、假 provider 的 `turn/start` 通知流与 `turn/finished`、取消、同会话二次开轮 409、stdout 只含协议帧（provider 里的 `print` 出现在 stderr）、插件禁用退出码 2 与 CLI 非零退出、全程零 socket、工作区越界仍 400、逐次批准不被 stdio 放宽、sessions 中途禁用后 403）；`tests/test_runtime_model_switch.py` 24 项（`/effort list` 与非法档位、`/model provider/model` 与旧写法与 `env`、换模型使用其默认档位、save-default 驱动后续未指定请求、默认随 profile 删除失效、HTTP 空闲与运行中切换、只影响下一次请求、轻量副本共享挂起切换、运行档位不兼容 409、路由归属与禁用 403、历史封顶）；前端 2 项新增用例覆盖按钮接线/未接线与 CSRF POST 路径。均使用隔离状态目录与本地 fixture provider，不访问网络、不调用真实模型。
