@@ -502,9 +502,33 @@ def handle_GET(self, parts, path, data):
         except (OSError, ValueError):
             self._send(404, {'error': 'session not found'})
             return True
+        query = host.urllib.parse.parse_qs(host.urllib.parse.urlparse(self.path).query)
+        from . import events_cursor
         try:
-            query = host.urllib.parse.urlparse(self.path).query
-            limit = int(host.urllib.parse.parse_qs(query).get('limit', ['200'])[0])
+            cursor = events_cursor.requested_cursor(query)
+        except events_cursor.CursorError as exc:
+            self._send(400, {'error': str(exc), 'errorCode': host.events_protocol.ERROR_INVALID_ARGUMENT})
+            return True
+        if cursor is not None:
+            # sessions.events_cursor is experimental and default-off; a cursor
+            # request is honoured only while the operator enabled the flag.
+            if not events_cursor.enabled(ctx):
+                self._send(400, {'error': events_cursor.NOT_ENABLED_ERROR,
+                                 'feature': events_cursor.FEATURE_ID})
+                return True
+            try:
+                envelope = events_cursor.page(session, cursor,
+                                              events_cursor.requested_limit(query))
+            except events_cursor.CursorError as exc:
+                self._send(400, {'error': str(exc), 'errorCode': host.events_protocol.ERROR_INVALID_ARGUMENT})
+                return True
+            if 'text/event-stream' in (self.headers.get('Accept') or ''):
+                self._send(200, host.events_protocol.sse_body(envelope['events']), 'text/event-stream')
+                return True
+            self._send(200, envelope)
+            return True
+        try:
+            limit = int(query.get('limit', ['200'])[0])
         except (ValueError, TypeError):
             limit = 200
         limit = max(1, min(limit, 500))

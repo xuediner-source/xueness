@@ -90,7 +90,8 @@ def validate(section,values):
         for key in ('autoScroll', 'showTodos', 'collapseTools',
                     'toolGroupingExploreEnabled', 'toolGroupingTerminalEnabled',
                     'toolGroupingChangesEnabled', 'taskAutoArchiveEnabled',
-                    'messageStreamShowReasoning', 'memoryEnabled'):
+                    'messageStreamShowReasoning', 'memoryEnabled',
+                    'sessionsEventsCursorEnabled'):
             if key in values and type(values[key]) is not bool:
                 raise ValueError(f'{key} must be boolean')
         if ('taskAutoArchiveOlderThanDays' in values

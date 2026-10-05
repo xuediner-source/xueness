@@ -37,6 +37,7 @@
     "composer_api",
     "completion_policy",
     "deltas",
+    "events_cursor",
     "forking",
     "http_routes",
     "manual_compact",
@@ -138,6 +139,11 @@
       "id": "sessions.model_picker",
       "name": "模型选择分档、目录标签与详情卡",
       "nameEn": "Model picker presets, catalog tabs and detail card"
+    },
+    {
+      "id": "sessions.events_cursor",
+      "name": "会话事件增量游标拉取（实验，默认关闭）",
+      "nameEn": "Incremental session event cursor polling (experimental, off by default)"
     }
   ],
   "frontendModules": [
