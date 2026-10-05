@@ -38,16 +38,24 @@ def _bounded_result(result) -> dict:
     return {"truncated": True, "preview": encoded[:RESULT_PAYLOAD_CAP]}
 
 
-def fire_pipeline(root, state_dir, event: str, payload: dict) -> list:
+def fire_pipeline(root, state_dir, event: str, payload: dict, session=None) -> list:
     """Run the pipeline-declared hooks for ``event``; never raises.
 
     Uses the same paranoid runner as every other hook (argv-only, stdin
-    payload, sandboxed environment, per-hook timeout). A broken loader or an
+    payload, sandboxed environment, per-hook timeout). Trusted workspace hooks
+    join the user's pipeline hooks here through the same admission seam; with
+    the workspace feature off (the default) no workspace file is read and the
+    behaviour is exactly the user-hook pipeline. A broken loader or an
     unreadable hooks directory costs the firing, never the run.
     """
     try:
         from ...hooks import HookRunner, load
         hooks = load(state_dir)
+        try:
+            from . import workspace_hooks
+            hooks = workspace_hooks.extend_for_runner(state_dir, root, hooks, session)
+        except Exception:  # noqa: BLE001 - admission must degrade, not fail a run
+            pass
         if not any(isinstance(hook, dict) and hook.get(PIPELINE_FLAG)
                    for hook in hooks):
             return []
@@ -81,4 +89,4 @@ def after_tool_execution(payload: dict) -> None:
         "tool_call_id": payload.get("tool_call_id") or "",
         "ok": ok,
         "result": _bounded_result(result),
-    })
+    }, session=session)

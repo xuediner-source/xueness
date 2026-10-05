@@ -176,7 +176,7 @@ providers 的 CLI parser/handler 已迁入 `xueness/bundled_plugins/providers/op
 
 ## 功能逐项归属清单
 
-下表概述当前 27 份 manifest 中的 130 项用户能力。命令/工具/依赖和实际实现文件以同一份 manifest 为准；前端卡片直接展示该功能清单，不维护第二份隐藏列表。纯安全内核与通用布局的边界如前文所述。
+下表概述当前 27 份 manifest 中的 131 项用户能力。命令/工具/依赖和实际实现文件以同一份 manifest 为准；前端卡片直接展示该功能清单，不维护第二份隐藏列表。纯安全内核与通用布局的边界如前文所述。
 
 | 插件 | 已实现的用户能力 |
 |---|---|
@@ -194,7 +194,7 @@ providers 的 CLI parser/handler 已迁入 `xueness/bundled_plugins/providers/op
 | office | DOCX 页面与嵌入图片预览；PPTX 幻灯片、图片与缓存图表；XLSX 工作表与缓存单元格值 |
 | commands | 自定义斜杠提示模板；命令资源创建、编辑与开关；目录型 Markdown 命令发现与位置参数展开；commands list/inspect 命令与聊天 /commands |
 | skills | 技能资源与按需目录摘要；有界技能正文读取；目录型技能发现与来源覆盖；skills list/inspect 命令与聊天 /skills |
-| hooks | 明确启用的生命周期事件钩子；钩子命令审批与运行记录；工具执行前后事件管线接入（PostToolUse 可选） |
+| hooks | 明确启用的生命周期事件钩子；钩子命令审批与运行记录；工具执行前后事件管线接入（PostToolUse 可选）；工作区钩子发现与按摘要信任（hooks trust 命令） |
 | mcp | stdio、HTTP 与旧 SSE 连接；OAuth PKCE、凭据刷新与隔离；外部工具、资源与提示词（支持工具名特殊字符清洗与结构化内容解析）；连接诊断、失效恢复与设置 |
 | subagents | 只读子任务与嵌套代理（内置 general-purpose 与 explore 探索代理支持、支持 disallowedTools 工具黑名单过滤）；后台并发派发、主代理持续工作、结果收集与完成检查；子任务进度、结果与协作取消；子代理资源与能力配置 |
 | network | 受限公网 HTTPS 页面读取；显式配置的网页搜索服务；独立 OpenAI-compatible 搜索模型；搜索地址、模型 ID 与密钥管理；按需 DNS/服务诊断；FakeIP 环境下可选的公开 DoH |
@@ -516,3 +516,28 @@ hooks 插件新增 `tool_events.py` 模块并从入口导出 `after_tool_executi
 
 验证：`tests/test_file_commands.py` 119 项，全部使用 tempfile 隔离的状态目录与工作区，不访问网络、不调用真实模型——frontmatter 正常/缺失围栏/未闭合/非法与块标量、`name:`/`allowed-tools:`/`model:` 的三种待遇、描述与 hint 的长度、命名空间与第二层拒绝、非 Markdown 与隐藏项忽略、project > project-compat > user > resource 覆盖及 `shadowed`/`shadowedBy`、`/help` 与 `/commands` 这类内置名冲突后不展开、`$ARGUMENTS` 与 `$1..$9`（引号成组、缺失位置为空、`$10` 字面、值不再扫描）、无占位符时追加、8000 字符裁剪、`` !`…` ``/围栏 shell 与 `@file` 原样保留且不读目标、64 KiB 与每根 64 条上限、四类链接拒绝（命令文件、命名空间内文件、命名空间目录、整个 `.xueness` 根与用户根，均断言重定向目标私有内容不泄露）、陈旧行读取重校验、发现与展开不写字节（whole-tree mtime/size 快照一致）、CLI 的 list/inspect/`--json`/无子命令走 cwd/用法错误 stdout 为空/禁用后非零退出、`dispatch_slash` 的 `/commands` 三态与禁用文案、`sessions_cli.load_commands` 与 Composer 准备阶段确实吃到文件命令（含禁用后的原始轮次）、HTTP 的归属与 200/400/405/403 以及 `['api','resources','commands']` 仍是 200。既有 JSON 命令回归 `tests/test_commands.py` 37 项一字未改仍通过。
 
+
+## 工作区钩子与按摘要信任（hooks.workspace_trust，2026-10-05）
+
+hooks 插件登记新功能 `hooks.workspace_trust`（工作区钩子发现与按摘要信任），对齐 ZCode 的「工作区（项目级）钩子 + 按摘要信任」能力：仓库可以随代码提交钩子，但仓库里的钩子会执行命令，所以必须先经用户按摘要显式信任才能运行。完整目录现为 27 个插件、131 项登记功能。实现全部位于 hooks 包内（`workspace_hooks.py` 发现/摘要/信任存储/准入、`hooks_cli.py` CLI、`trust_api.py` 只读 HTTP），manifest 登记 `commands: ["hooks"]`，`httpFamilies` 沿用既有 `resources/hooks`；没有任何动态加载，钩子命令只经既有 HookRunner 的既有执行路径运行。
+
+### 发现（只读，默认关闭）
+
+发现逻辑只读两个文件：`<workspace>/.xueness/hooks.json`（原生扁平格式，`{"hooks": [...]}` 或裸数组，条目与用户钩子资源同构：`id`（可省略，按 `workspace-hook-<源序号>-<条目序号>` 派生）、`event`、`matcher`、`command`、`args`、`timeout`、`enabled`、`pipeline`）与 `<workspace>/.zcode/config.json`（**只读兼容** ZCode 的嵌套 `hooks` 键格式：`{enabled, timeoutMs, events: {事件: [{matcher, hooks: [{type, command, args, enabled, timeoutMs}]}]}}`）。ZCode 的 `command` 型声明是 shell 字符串，argv-only 执行器绝不运行 shell 字符串，因此以 `hook_unsupported_type` 诊断报出而不是变成条目；`process` 型正常解析。整个功能默认关闭：`<状态目录>/workspace-hooks.json` 必须显式写 `{"enabled": true}`（`xueness hooks workspace on|off|show` 切换），关闭时运行缝、CLI 与 HTTP 完全不读工作区文件。规模上限是显式常量（单文件 256 KiB、每源 64 条、整个工作区 128 条、每事件 32 个 matcher 组）。链接拒绝复用 `resources._is_link`（符号链接与 Windows reparse point 同一判定），作用于 `.xueness`/`.zcode` 目录、配置文件本体，且 resolve 后必须仍在工作区内；坏条目（未知事件、空命令、坏 args/timeout/enabled/pipeline、重复 id、坏 JSON、超限、越界）各自产出结构化诊断，一次坏条目只损失该条目，绝不抛错。发现从不写任何文件。
+
+### 按摘要信任
+
+对每条声明计算稳定 sha256 声明摘要：规范化载荷为 `["xueness-workspace-hook-declaration", 版本, 源相对路径, 条目序号, id, event, matcher, command, args, 解析后超时(整毫秒或 null), pipeline]`；任何影响执行的内容一变（含位置移动、id 变化），摘要就变，必须重新信任。整份 bundle 也有摘要（`["xueness-workspace-hook-bundle", 版本, [源列表], [[声明摘要, enabled], ...]]`），供 `--all-current` 全量授权时校验「审查之后文件没有被改过」。`enabled` 不进声明摘要（信任跟随命令内容，开关只控制是否生效），但进 bundle 摘要。信任记录存 `<状态目录>/hook-trust.json`（`{"schemaVersion": 1, "records": [...]}`，按「工作区规范路径 + 摘要」记 `decision: trusted` 与授予时间、当时的 event/展示命令/来源路径；沿用 `resources._atomic_write_json` 原子私有写、符号链接拒绝、256 KiB 读取上限、最多 512 条）。信任存储是权限边界，读取按封闭字段集严格校验：未知字段、坏类型、坏摘要形状、重复键、链接、超限一律整体判 **corrupt**（fail-closed，不存在部分可信），corrupt 文件在读取时改名为 `hook-trust.json.corrupt-<时间戳>` 隔离；status 明确报 `trust_store_corrupt`，grant/revoke 以同一原因拒绝（绝不把恢复副作用伪装成一次成功授权），删除遗留文件或从备份恢复后即重建全新存储。
+
+### 运行时准入
+
+`HooksPlugin.load` 与 hooks 管线缝（`tool_events.fire_pipeline`）都经同一条准入缝合并钩子：**用户钩子在前，已准入的工作区钩子在后**（与 ZCode 的插入规则一致）。只有「已信任且 enabled」的工作区条目进入 HookRunner；未信任的一律不运行，并按摘要去重后在会话的 `hook_diagnostics`（限 50 条）记录一条 `pending_trust` 提示——不阻断本轮。工作区条目声明的 `"pipeline": true` 与用户钩子同一语义：仅 PostToolUse/PostToolUseFailure 两个事件改走管线触发，任何钩子都恰好触发一次；功能关闭时该缝是恒等函数，用户钩子的加载、审批、默认关闭状态分毫未动。启用插件不代表授权执行：会话仍须既有 `allow_hooks` 通道显式激活 hooks 插件，Gate、批准与工作区边界照旧。
+
+### 入口
+
+- **CLI**：`xueness hooks trust status|review [--workspace PATH] [--json]`、`grant --workspace PATH (--hook-digest <sha256> ... | --all-current --bundle-digest <sha256>)`、`revoke --workspace PATH (--hook-digest <sha256> ... | --all)`，以及功能开关 `xueness hooks workspace on|off|show`。grant 校验顺序对齐 ZCode：`--hook-digest` 与 `--all-current` 恰选其一，`--all-current` 必须带 `--bundle-digest` 且与当前发现不一致即拒绝（`bundle_changed`），摘要不在当前发现中即 `digest_mismatch`；信任存储 corrupt 时 grant/revoke 一致失败。人类可读与 `--json` 出自同一份文档；`--json` 的拒绝是 stdout 上的 `{"accepted": false, "reason": ...}` 且退出码 1。功能关闭时 status/review 只报 `feature_disabled`（不读工作区），grant 拒绝，revoke 允许（撤权是安全操作，且不读任何工作区文件）。hooks 插件未生效时由 CLI 宿主的既有检查拒绝：退出码非零、stdout 为空。
+- **HTTP**：只有只读的 `GET /api/resources/hooks/trust?root=…`（`trust_api.py`，落在 hooks 既有的 `resources/hooks` 家族内），走 `_allowed_root` 工作区围栏，越界一律 400 且不泄露围栏外信息；非 GET 的 `trust` 子路径返回 None 交回通用资源路由，既有 CRUD 行为不变。**授权/撤权没有 HTTP 写入口**：授信是看过摘要之后的操作者决定，走 CLI。
+
+### 门禁与回归
+
+`tools/check_plugin_architecture.py` 以纯 JSON 校验新增 manifest 数据（`commands` 唯一属主、`modules` 与实际文件一致、双语 feature 条目）。回归见 `tests/test_workspace_hook_trust.py`：功能默认关闭时不读工作区文件（含符号链接文件不产生诊断的强证明）、发现与坏条目诊断、四类链接拒绝（目录链接、文件链接、越界 resolve、信任存储链接判 corrupt）、摘要稳定性与内容一改即变（命令/matcher/位置）、未信任钩子不运行且记录 pending_trust、已信任才运行（`sys.executable -c` 写 tempfile 标记的真实子进程）、grant 单条与 `--all-current`（bundle 摘要不匹配被拒）、revoke 单条与 `--all`、信任存储损坏时 status/grant/revoke 一致报告且隔离文件可重建、CLI `--json` 输出与插件关闭时非零退出且 stdout 为空、用户钩子行为回归不变（合并顺序用户在前、管线缝兼容）。全部使用 tempfile 隔离的状态目录与工作区，不访问网络、不调用真实模型。
