@@ -34,11 +34,11 @@ Visit [GitHub Releases](https://github.com/xuediner-source/xueness/releases/late
 
 | System | Installer / disk image | Portable / app ZIP |
 | --- | --- | --- |
-| Windows 10/11 · x64 | [Installer `.exe`](https://github.com/xuediner-source/xueness/releases/download/v0.1.3/Xueness-0.1.3-windows-x64-setup.exe) | [Portable `.zip`](https://github.com/xuediner-source/xueness/releases/download/v0.1.3/Xueness-0.1.3-windows-x64-portable.zip) |
-| macOS · Apple Silicon | [arm64 `.dmg`](https://github.com/xuediner-source/xueness/releases/download/v0.1.3/Xueness-0.1.3-macos-arm64.dmg) | [arm64 app `.zip`](https://github.com/xuediner-source/xueness/releases/download/v0.1.3/Xueness-0.1.3-macos-arm64.zip) |
-| macOS · Intel | [x64 `.dmg`](https://github.com/xuediner-source/xueness/releases/download/v0.1.3/Xueness-0.1.3-macos-x64.dmg) | [x64 app `.zip`](https://github.com/xuediner-source/xueness/releases/download/v0.1.3/Xueness-0.1.3-macos-x64.zip) |
+| Windows 10/11 · x64 | [Installer `.exe`](https://github.com/xuediner-source/xueness/releases/download/v0.1.4/Xueness-0.1.4-windows-x64-setup.exe) | [Portable `.zip`](https://github.com/xuediner-source/xueness/releases/download/v0.1.4/Xueness-0.1.4-windows-x64-portable.zip) |
+| macOS · Apple Silicon | [arm64 `.dmg`](https://github.com/xuediner-source/xueness/releases/download/v0.1.4/Xueness-0.1.4-macos-arm64.dmg) | [arm64 app `.zip`](https://github.com/xuediner-source/xueness/releases/download/v0.1.4/Xueness-0.1.4-macos-arm64.zip) |
+| macOS · Intel | [x64 `.dmg`](https://github.com/xuediner-source/xueness/releases/download/v0.1.4/Xueness-0.1.4-macos-x64.dmg) | [x64 app `.zip`](https://github.com/xuediner-source/xueness/releases/download/v0.1.4/Xueness-0.1.4-macos-x64.zip) |
 
-SHA-256 checksums for this release are in [`SHA256SUMS.txt`](https://github.com/xuediner-source/xueness/releases/download/v0.1.3/SHA256SUMS.txt). Desktop packages include Electron, a frozen Python backend, the built workbench, and browser drivers; Python and Node.js do not need to be installed separately. Git, SSH, ffmpeg, and other external programs are still required by the plugins that use them. Browser automation requires Chrome or Edge on the machine. Current builds are not code-signed or notarized; see the [desktop guide](docs/xueness-desktop.md) for first-launch and data-location details.
+SHA-256 checksums for this release are in [`SHA256SUMS.txt`](https://github.com/xuediner-source/xueness/releases/download/v0.1.4/SHA256SUMS.txt). Desktop packages include Electron, a frozen Python backend, the built workbench, and browser drivers; Python and Node.js do not need to be installed separately. Git, SSH, ffmpeg, and other external programs are still required by the plugins that use them. Browser automation requires Chrome or Edge on the machine. Current builds are not code-signed or notarized; see the [desktop guide](docs/xueness-desktop.md) for first-launch and data-location details.
 
 ## What you can do
 
