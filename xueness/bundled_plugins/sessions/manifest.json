@@ -153,6 +153,7 @@
     "plugins/sessions/CommandPalette.tsx",
     "plugins/sessions/ConversationTimelineViewport.tsx",
     "plugins/sessions/SessionPolling.ts",
-    "plugins/sessions/XuenessStartPage.tsx"
+    "plugins/sessions/XuenessStartPage.tsx",
+    "plugins/sessions/permissionModes.ts"
   ]
 }

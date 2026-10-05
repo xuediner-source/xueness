@@ -799,10 +799,10 @@ def handle_POST(self, parts, path, data):
             from ...tool_registry import BUILTIN_TOOL_NAMES
             disallowed = frozenset(disallowed) | frozenset(
                 name for name in BUILTIN_TOOL_NAMES if name.startswith('browser_'))
-        from .plan_mode import draft_policy, is_permission_mode
+        from .plan_mode import draft_policy, is_permission_mode, permission_mode_error
         permission_mode = data.get('permission_mode', data.get('permissionMode'))
         if permission_mode is not None and not is_permission_mode(permission_mode):
-            self._send(400, {'error': "permission_mode must be 'build', 'edit', 'yolo', or 'plan'"})
+            self._send(400, {'error': permission_mode_error()})
             return True
         # ``plan`` belongs to this plugin, so its availability is decided by the
         # persisted sessions switch rather than by the request body alone.

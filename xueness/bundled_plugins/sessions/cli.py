@@ -15,6 +15,7 @@ from types import FunctionType
 
 from ...core import MODES, Gate, Store, answer_session, run, session_events, append_user_turn
 from ...core import parse_disallow_list
+from .plan_mode import PERMISSION_MODES, is_permission_mode, permission_mode_error
 from ...plugins import activate
 from ... import plugin_sdk
 from ... import commands as commands_module
@@ -96,7 +97,14 @@ def _add_agent_flags(parser):
     parser.add_argument("--allow-edit", action="store_true", help="approve all edits in workspace for this invocation (default follows --allow-write)")
     parser.add_argument("--interactive", action="store_true", help="prompt for each write/edit/exec")
     parser.add_argument("--mode", choices=list(MODES), default=None,
-                        help="plan denies write/edit/exec before any approval lookup; build keeps deny-by-default")
+                        help="kernel ceiling: plan denies write/edit/exec before any approval lookup, including the plan draft; build keeps deny-by-default")
+    parser.add_argument("--permission-mode", choices=list(PERMISSION_MODES), default=None,
+                        help="build asks; edit auto-approves workspace writes; "
+                             "yolo auto-approves writes, local commands and network "
+                             "but still asks for remote SSH; "
+                             "plan is read-only plus this session's plan draft. "
+                             "Legacy --allow-* flags stay in force for build. "
+                             "--mode plan is a hard ceiling over every permission mode")
     parser.add_argument("--disallow-tools", default="",
                         help="comma-separated tool deny list, e.g. 'exec,edit'; denied even with --allow-write/--allow-exec")
     parser.add_argument("--steps", type=int, default=8)
@@ -205,13 +213,134 @@ def _prepare_agent(args, parser, store, session):
     for refusal in plugin_plan.refused:
         print("PLUGIN REFUSED: %s (%s)" % (refusal["name"], refusal["reason"]), file=sys.stderr)
     allow_edit = args.allow_edit if args.allow_edit else args.allow_write
+    permission_mode = _effective_permission_mode(args, session)
+    if permission_mode is not None and not is_permission_mode(permission_mode):
+        parser.error(permission_mode_error())
+    # Named modes are enforced inside Gate. Do not also flip allow_* here:
+    # /mode build must fall back to the flags the operator actually passed,
+    # and plan must keep denying a blanket --allow-write.
     gate = Gate(Path(session["root"]), args.allow_write, args.allow_exec,
                 getattr(args, "interactive", False), mode=args.mode or "build",
                 allow_edit=allow_edit, disallow=disallowed,
                 allow_mcp=bool(getattr(args, "allow_mcp", False)),
                 allow_network=bool(getattr(args, "allow_network", False)),
-                approval_prompt=_approval_prompt)
+                approval_prompt=_approval_prompt,
+                permission_mode=permission_mode,
+                hold_remote_exec=permission_mode == "yolo")
     return provider, gate, plugin_plan.load, memory_text
+
+
+def _effective_permission_mode(args, session):
+    """Explicit ``--permission-mode`` wins. A saved ``plan`` is a ceiling.
+
+    Saved ``edit`` / ``yolo`` are not applied silently: a CLI resume stays
+    deny-by-default unless the operator passes the flag or ``/mode``. The
+    stored web mode is left untouched until that explicit switch.
+    """
+    selected = getattr(args, "permission_mode", None)
+    if selected is not None:
+        return selected
+    saved = session.get("permission_mode") if isinstance(session, dict) else None
+    if saved == "plan":
+        return "plan"
+    return None
+
+
+def _bind_cli_plan_draft(args, gate, session):
+    """Attach the session draft once the id exists. Kernel plan still denies it."""
+    if gate is None or not isinstance(session, dict) or not session.get("id"):
+        return
+    if getattr(gate, "mode", "build") == "plan":
+        gate.plan_draft = None
+        return
+    if getattr(gate, "permission_mode", None) != "plan":
+        return
+    if getattr(gate, "plan_draft", None) is not None:
+        return
+    from .plan_mode import draft_policy
+    try:
+        gate.plan_draft = draft_policy(args.state, session["id"])
+    except ValueError:
+        return
+
+
+def _persist_cli_permission_mode(store, session, mode):
+    """Record an explicit mode switch. Same shape as the HTTP history, cap 50."""
+    if mode is None or not isinstance(session, dict) or not session.get("id"):
+        return
+    if not is_permission_mode(mode):
+        return
+    previous = session.get("permission_mode", "build")
+    if previous != mode:
+        from datetime import datetime, timezone
+        history = session.setdefault("permission_mode_history", [])
+        history.append({"from": previous, "to": mode,
+                        "at": datetime.now(timezone.utc).isoformat()})
+        if len(history) > 50:
+            del history[:-50]
+    session["permission_mode"] = mode
+
+
+def _apply_chat_permission_mode(args, gate, store, session, selected, language):
+    """``/mode`` for the four permission modes.
+
+    ``plan`` keeps the historical kernel ceiling (it denies even the draft).
+    ``--permission-mode plan`` is the read-only-plus-draft mapping. ``edit``
+    and ``yolo`` cannot lift a kernel plan ceiling; ``/mode build`` can,
+    because that was already the way out of ``/mode plan``.
+    """
+    if not is_permission_mode(selected):
+        usage = ("usage: /mode build|edit|yolo|plan" if language == "en"
+                 else "用法: /mode build|edit|yolo|plan")
+        print(usage, file=sys.stderr)
+        return
+    kernel_plan = (getattr(args, "mode", None) == "plan"
+                   or (gate is not None and getattr(gate, "mode", None) == "plan")
+                   or (isinstance(session, dict) and session.get("mode") == "plan"))
+    if selected in ("edit", "yolo") and kernel_plan:
+        message = ("plan ceiling is still on; use /mode build before edit or yolo"
+                   if language == "en" else
+                   "计划模式的内核上限仍在；请先 /mode build，再切换到 edit 或 yolo")
+        print(message, file=sys.stderr)
+        return
+    if selected == "plan":
+        args.mode = "plan"
+        args.permission_mode = "plan"
+        if gate is not None:
+            gate.mode = "plan"
+            gate.permission_mode = "plan"
+            gate.hold_remote_exec = False
+            gate.plan_draft = None
+        if isinstance(session, dict) and session.get("id"):
+            session["mode"] = "plan"
+            session.setdefault("mode_history", []).append(
+                {"mode": "plan", "steps": session.get("steps", 0)})
+            _persist_cli_permission_mode(store, session, "plan")
+            store.save(session)
+    elif selected == "build":
+        args.mode = "build"
+        args.permission_mode = "build"
+        if gate is not None:
+            gate.mode = "build"
+            gate.permission_mode = "build"
+            gate.hold_remote_exec = False
+            gate.plan_draft = None
+        if isinstance(session, dict) and session.get("id"):
+            session["mode"] = "build"
+            session.setdefault("mode_history", []).append(
+                {"mode": "build", "steps": session.get("steps", 0)})
+            _persist_cli_permission_mode(store, session, "build")
+            store.save(session)
+    else:
+        args.permission_mode = selected
+        if gate is not None:
+            gate.permission_mode = selected
+            gate.hold_remote_exec = selected == "yolo"
+            gate.plan_draft = None
+        if isinstance(session, dict) and session.get("id"):
+            _persist_cli_permission_mode(store, session, selected)
+            store.save(session)
+    print(f"mode: {getattr(args, 'mode', 'build')} · permission: {selected}", file=sys.stderr)
 
 def _load_commands(state_dir, root=None):
     """Custom chat commands are an optional plugin and vanish when disabled.
@@ -241,7 +370,8 @@ def _approval_prompt(label: str) -> str:
 
 CHAT_HELP = """/help               显示帮助与自定义命令
 /status             当前会话、工作区、模式与状态
-/mode plan|build    切换模式（plan 禁止写入和执行）
+/mode plan|build|edit|yolo
+                    切换模式（plan 为内核上限，禁止写入和执行；edit 自动编辑；yolo 放行本地变更但仍询问远程执行）
 /retry              继续当前运行，不添加用户消息
 /paste              多行输入，单独一行 /end 提交，/cancel 取消
 /attach PATH        暂存工作区 UTF-8 文本文件快照，随下一条输入发送
@@ -267,7 +397,8 @@ CHAT_HELP = """/help               显示帮助与自定义命令
 
 CHAT_HELP_EN = """/help               Show help and custom commands
 /status             Show session, workspace, mode and status
-/mode plan|build    Change mode (plan denies writes and execution)
+/mode plan|build|edit|yolo
+                    Change mode (plan is the kernel ceiling and denies writes and execution; edit auto-edits files; yolo allows local changes but still asks before remote execution)
 /retry              Continue the current run without adding a user message
 /paste              Enter multiline input; /end submits and /cancel discards
 /attach PATH        Queue a workspace UTF-8 text file for the next input
@@ -501,21 +632,17 @@ def _chat_loop_owned(args, parser, store, session, owned):
             continue
         if command == "/status":
             print(json.dumps({"id": s["id"] if s else None, "root": str(root),
-                              "mode": args.mode, "status": s["status"] if s else "new",
+                              "mode": args.mode,
+                              "permission_mode": (getattr(gate, "permission_mode", None)
+                                                  or (s.get("permission_mode") if s else None)
+                                                  or getattr(args, "permission_mode", None)
+                                                  or "build"),
+                              "status": s["status"] if s else "new",
                               "steps": s.get("steps", 0) if s else 0}, ensure_ascii=False), file=sys.stderr)
             continue
         if command == "/mode":
-            if argument.strip() not in MODES:
-                print("用法: /mode plan|build", file=sys.stderr)
-                continue
-            args.mode = argument.strip()
-            if gate:
-                gate.mode = args.mode
-            if s:
-                s["mode"] = args.mode
-                s.setdefault("mode_history", []).append({"mode": args.mode, "steps": s.get("steps", 0)})
-                store.save(s)
-            print(f"mode: {args.mode}", file=sys.stderr)
+            _apply_chat_permission_mode(args, gate, store, s, argument.strip(),
+                                        getattr(args, "language", "zh"))
             continue
         if command == "/dwf":
             _report_dynamic_runs(args, store, s, argument)
@@ -577,6 +704,9 @@ def _chat_loop_owned(args, parser, store, session, owned):
             print(f"! 无法提交输入: {exc}", file=sys.stderr)
             continue
         attachments.clear()
+        _bind_cli_plan_draft(args, gate, s)
+        if getattr(args, "permission_mode", None) is not None:
+            _persist_cli_permission_mode(store, s, args.permission_mode)
         s["skill_catalog"] = args.skill_catalog
         store.save(s)
         with RunInterrupt(gate) as interrupt, activate(names, args.state, root, s) as ext:
@@ -756,6 +886,10 @@ def _execute_cli_impl(args, parser, store):
             if not args.id:
                 parser.error("run needs a session id (or --prompt TASK --root DIR)")
             s = store.load(args.id)
+        # A saved kernel plan must not be lifted just because run omitted --mode.
+        if (prepared_agent is None and getattr(args, "mode", None) is None
+                and s.get("mode") == "plan"):
+            args.mode = "plan"
         if args.steps < 1 or args.max_chars < 1000:
             parser.error("--steps must be positive and --max-chars >= 1000")
         if args.max_tokens is not None and args.max_tokens < 1:
@@ -770,6 +904,9 @@ def _execute_cli_impl(args, parser, store):
                     provider, gate, names, memory_text = prepared_agent
                     if prepared_session.get("model_selection"):
                         s["model_selection"] = prepared_session["model_selection"]
+                _bind_cli_plan_draft(args, gate, s)
+                if getattr(args, "permission_mode", None) is not None:
+                    _persist_cli_permission_mode(store, s, args.permission_mode)
                 s["skill_catalog"] = args.skill_catalog
                 store.save(s)
                 with RunInterrupt(gate) as interrupt, activate(names, args.state, Path(s["root"]), s) as ext:

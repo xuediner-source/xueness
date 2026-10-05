@@ -11,8 +11,10 @@ phase is a writable actor only when the bound session's ``permission_mode``
 allows session writes without per-call approval (``yolo``; ``edit`` allows
 write/edit but not exec, which is exactly the writable actor's reach). In
 ``build``/``plan`` the implement phase stays read-only and reports the intended
-changes instead. This mirrors ZCode, where ``/expert <task>`` starts the
-durable expert workflow in yolo mode.
+changes instead. ZCode starts ``/expert`` in yolo; Xueness does not copy that.
+A session-bound run stamps ``owner_session`` so a later switch to plan (or a
+kernel ``mode`` of plan) forces every child back to read-only, including a
+node that was created writable. Children never receive exec.
 """
 from __future__ import annotations
 
@@ -26,13 +28,13 @@ from contextlib import contextmanager
 from pathlib import Path
 
 from ... import file_lock as fcntl
+from ..sessions.plan_mode import PERMISSION_MODES, is_permission_mode
 from .workflows import ID, WorkflowStore, _replace_state_file
 
 SID = re.compile(r'^[0-9a-f]{32}$')
 TASK_MAX = 5000
 SUMMARY_MAX = 4000
 ERROR_MAX = 500
-PERMISSION_MODES = ('build', 'edit', 'yolo', 'plan')
 #: Expert-level status vocabulary: running | paused | done | stopped | failed.
 ACTIVE_EXPERT = frozenset(('running', 'paused'))
 TERMINAL_EXPERT = frozenset(('done', 'stopped', 'failed'))
@@ -125,7 +127,7 @@ def phase_prompt(phase, task, writable):
 
 def expert_plan(task, permission_mode):
     """Build the fixed four-node agent DAG for one expert run."""
-    if permission_mode not in PERMISSION_MODES:
+    if not is_permission_mode(permission_mode):
         raise ValueError("permission_mode must be one of %s" % ', '.join(PERMISSION_MODES))
     writable = permission_mode in ('yolo', 'edit')
     nodes, previous = [], None
@@ -291,7 +293,7 @@ def start(state_dir, task, root, *, session_id=None, permission_mode=None,
     plan = expert_plan(task, permission_mode)
     with experts.mutex():
         _assert_no_active(experts, session_id)
-        record = _workflow_store(experts).create(plan, root)
+        record = _workflow_store(experts).create(plan, root, owner_session=session_id)
         run_id = uuid.uuid4().hex
         experts.save(_new_record(run_id, record['id'], task, root,
                                  session_id, permission_mode))

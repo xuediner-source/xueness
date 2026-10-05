@@ -6,6 +6,7 @@ import { Select } from "../../ui/Select";
 import { canUseRuntimeProfile, effectiveRuntimeProfile, runtimeProfileSelection, type ComposerModel, type RuntimeProfile } from "../../xuenessComposer";
 import type { RunChoices } from "../../xuenessBridge";
 import type { WorkbenchSession } from "../../xuenessWorkbench";
+import type { PermissionMode } from "./permissionModes";
 
 export type ComposerToolbarProps = {
   choices: RunChoices;
@@ -37,17 +38,27 @@ export type ComposerToolbarProps = {
   minimal?: boolean;
 };
 
-const permissionChoices = [
-  { value: "plan", label: "计划", description: "只读并先出计划。", Icon: ClipboardList },
-  { value: "build", label: "变更前确认", description: "改文件前先问我。", Icon: Hand },
-  { value: "edit", label: "自动编辑", description: "自动编辑文件。", Icon: ShieldCheck },
-  { value: "yolo", label: "完全访问", description: "减少确认次数。", Icon: ShieldAlert },
-] as const satisfies {
-  value: NonNullable<RunChoices["permission_mode"]>;
+const permissionChoiceMeta: Record<PermissionMode, {
   label: string;
   description: string;
   Icon: React.ComponentType<{ size?: number; className?: string }>;
-}[];
+}> = {
+  plan: { label: "计划", description: "只读并先出计划。", Icon: ClipboardList },
+  build: { label: "变更前确认", description: "改文件前先问我。", Icon: Hand },
+  edit: { label: "自动编辑", description: "自动编辑文件。", Icon: ShieldCheck },
+  yolo: { label: "完全访问", description: "减少确认次数。", Icon: ShieldAlert },
+};
+
+/** 展示顺序。缺任一 PermissionMode 时下面的赋值无法通过类型检查。 */
+const PERMISSION_DISPLAY_ORDER = ["plan", "build", "edit", "yolo"] as const satisfies readonly PermissionMode[];
+type _MissingPermissionMode = Exclude<PermissionMode, (typeof PERMISSION_DISPLAY_ORDER)[number]>;
+const _permissionModesCovered: [_MissingPermissionMode] extends [never] ? true : never = true;
+void _permissionModesCovered;
+
+const permissionChoices = PERMISSION_DISPLAY_ORDER.map((value) => ({
+  value,
+  ...permissionChoiceMeta[value],
+}));
 
 function focusComposerInput(): void {
   document.querySelector<HTMLTextAreaElement>("textarea.xn-composer__input")?.focus();

@@ -875,6 +875,13 @@ def _prepare(ctx: dict, data: dict) -> tuple[int, dict]:
     allowed_top = {"text", "root", "session_id", "provider_id", "model",
                    "reasoning_effort", "permission_mode", "input"}
     _check_keys(data, allowed_top, "request")
+    # The field is accepted so clients are not rejected for sending it, but
+    # prepare does not authorize anything. The run route remains the authority.
+    permission_mode = data.get("permission_mode")
+    if permission_mode is not None:
+        from .plan_mode import is_permission_mode, permission_mode_error
+        if not is_permission_mode(permission_mode):
+            raise _ComposerError(400, permission_mode_error())
     text = data.get("text")
     if not isinstance(text, str) or len(text) > _MAX_TEXT_CHARS:
         raise _ComposerError(400, "text must be at most 5000 characters")

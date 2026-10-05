@@ -445,9 +445,14 @@ def validate_message(message) -> dict:
 class Gate:
     def __init__(self, root: Path, allow_write=False, allow_exec=False, interactive=False,
                  mode: str = "build", allow_edit=None, disallow=(), allow_mcp=False,
-                 approval_prompt=None, allow_network=False):
+                 approval_prompt=None, allow_network=False, *,
+                 permission_mode=None, plan_draft=None, hold_remote_exec=False):
         if mode not in MODES:
             raise ValueError("mode must be 'plan' or 'build'")
+        if permission_mode is not None:
+            from .bundled_plugins.sessions.plan_mode import is_permission_mode, permission_mode_error
+            if not is_permission_mode(permission_mode):
+                raise ValueError(permission_mode_error())
         self.root = root.resolve()
         self.allow_write, self.allow_exec, self.interactive = allow_write, allow_exec, interactive
         self.mode = mode
@@ -459,21 +464,57 @@ class Gate:
         self.allow_mcp = allow_mcp
         self.allow_network = allow_network
         self.approval_prompt = approval_prompt
+        # None keeps the historical allow_* policy. A named mode is the same
+        # vocabulary WebGate uses; it never lifts ``mode == "plan"``.
+        self.permission_mode = permission_mode
+        self.plan_draft = plan_draft
+        # yolo (and read-only children) still ask before a remote SSH command.
+        self.hold_remote_exec = bool(hold_remote_exec)
+
+    def plan_draft_target(self, subject) -> Path | None:
+        """计划模式下工作区外唯一可写目标。内核 ``mode == "plan"`` 仍在 check 里先拒绝。"""
+        if self.permission_mode != "plan" or self.plan_draft is None:
+            return None
+        return Path(self.plan_draft.path) if self.plan_draft.matches(subject) else None
 
     def check(self, kind: str, subject: str, tool_call_id: str | None = None) -> None:
         del tool_call_id  # base gate is stateless; WebGate binds approvals to IDs.
+        from .bundled_plugins.sessions.plan_mode import is_remote_exec_subject
         from .tool_registry import REGISTRY
         path_kinds = {"read", "list", "write", "edit", "glob", "grep"}
         known_kinds = {tool.gate_kind for tool in REGISTRY} | path_kinds | {
                     "todo_read", "todo_write", "ask_user", "exec", "mcp", "planning", "tool_search", "tool_result_read",
             "read_session_context", "web_fetch", "web_search",
         }
+        draft = self.plan_draft_target(subject) if kind in ("write", "edit") else None
         if kind in path_kinds:
-            path_in(self.root, subject)
+            # The session plan draft lives outside the workspace on purpose.
+            if draft is None:
+                path_in(self.root, subject)
         elif kind not in known_kinds:
             raise PermissionError(f"{kind} is not a known tool")
         if kind in self.disallow:
             raise PermissionError(f"{kind} is disallowed for this run")
+        mutating = kind in ("write", "edit", "exec", "mcp", "web_fetch", "web_search")
+        # Named modes are applied before allow_* so plan cannot be lifted by a
+        # blanket flag, and so yolo cannot swallow a remote SSH subject.
+        # ``permission_mode is None`` leaves every historical branch below.
+        if mutating and self.permission_mode is not None:
+            if self.mode == "plan":
+                raise PermissionError(f"{kind} denied in plan mode")
+            if self.permission_mode == "plan":
+                if draft is not None:
+                    return
+                from .tool_contract import PlanModeDenied
+                policy = self.plan_draft
+                raise PlanModeDenied(
+                    policy.denial(kind) if policy is not None else f"{kind} denied in plan mode",
+                    str(policy.path) if policy is not None else None)
+            remote_exec = kind == "exec" and self.permission_mode == "yolo" and is_remote_exec_subject(subject)
+            if self.permission_mode == "yolo" and not remote_exec:
+                return
+            if self.permission_mode == "edit" and kind in ("write", "edit"):
+                return
         if kind in ("web_fetch", "web_search"):
             if self.mode == "plan":
                 raise PermissionError(f"{kind} denied in plan mode")
@@ -488,8 +529,10 @@ class Gate:
                 raise PermissionError(f"{kind} denied in plan mode")
             if kind == "mcp" and self.allow_mcp:
                 return
-            if (kind == "write" and self.allow_write) or (kind == "exec" and self.allow_exec) \
-                    or (kind == "edit" and self.allow_edit):
+            remote_held = (kind == "exec" and is_remote_exec_subject(subject)
+                           and (self.hold_remote_exec or self.permission_mode == "yolo"))
+            if not remote_held and ((kind == "write" and self.allow_write) or (kind == "exec" and self.allow_exec)
+                    or (kind == "edit" and self.allow_edit)):
                 return
             if self.interactive and (self.approval_prompt or input)(f"Approve {kind} {subject[:160]}? [y/N] ").strip().lower() == "y":
                 return

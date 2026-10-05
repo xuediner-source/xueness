@@ -143,7 +143,11 @@ def run_subagent(gate, provider, agents, prompt, agent_name, *, depth: int,
         "results": {}, "compactions": [], "archived_messages": [], "steps": 0,
         "completion": None, "todos": [], "pending_question": None,
         # Output offloading writes files, so child bookkeeping is mutation-free.
+        # Children stay on the plan ceiling. They do not inherit edit/yolo,
+        # and they do not receive the parent's plan draft.
         "read_only": True,
+        "permission_mode": "plan",
+        "mode": "plan",
     }
     # Keep the delegation id distinct from the internal child session id.
     if task_id is None:
@@ -168,6 +172,7 @@ def run_subagent(gate, provider, agents, prompt, agent_name, *, depth: int,
         read_only = gate_class(
             Path(gate.root), allow_write=False, allow_exec=False, mode="plan",
             disallow=getattr(gate, "disallow", ()),
+            permission_mode="plan", hold_remote_exec=True,
         )
         # Keep exact tool names separate from gate operation kinds such as `exec`.
         read_only.allowed_tool_names = agent_tool_allowlist(agent)

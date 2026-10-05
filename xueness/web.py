@@ -25,6 +25,9 @@ from datetime import datetime, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
+from .bundled_plugins.sessions.plan_mode import (
+    is_permission_mode, is_remote_exec_subject, permission_mode_error,
+)
 from .core import (
     BINARY_PREVIEW_SUFFIXES, Store, answer_session, append_user_turn, call_mcp, execute,
     mcp_subject, path_in, record_approval, run, session_events, workspace_files,
@@ -164,8 +167,8 @@ class WebGate:
                  permission_mode: str = "build", plan_draft=None):
         if mode not in ("plan", "build"):
             raise ValueError("mode must be 'plan' or 'build'")
-        if permission_mode not in ("build", "edit", "yolo", "plan"):
-            raise ValueError("permission_mode must be 'build', 'edit', 'yolo', or 'plan'")
+        if not is_permission_mode(permission_mode):
+            raise ValueError(permission_mode_error())
         self.root = Path(root).resolve()
         self.session_id = session_id
         self.approvals = approvals
@@ -207,16 +210,7 @@ class WebGate:
                     self.plan_draft.denial(kind) if self.plan_draft is not None
                     else f"{kind} denied in plan mode",
                     str(self.plan_draft.path) if self.plan_draft is not None else None)
-            remote_exec = False
-            if kind == "exec" and isinstance(subject, str):
-                try:
-                    details = json.loads(subject)
-                    remote_exec = (isinstance(details, dict)
-                                   and isinstance(details.get("connection"), str)
-                                   and isinstance(details.get("connection_digest"), str)
-                                   and isinstance(details.get("argv"), list))
-                except (ValueError, TypeError):
-                    remote_exec = False
+            remote_exec = kind == "exec" and is_remote_exec_subject(subject)
             # Even yolo remains one-shot for a remote SSH command. The action
             # is separately tied to a configured connection and must be visible.
             if self.permission_mode == "yolo" and not remote_exec:

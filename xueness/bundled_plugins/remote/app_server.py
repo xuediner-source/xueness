@@ -25,6 +25,7 @@ from urllib.parse import parse_qs, urlparse
 from ... import events as events_protocol
 from ... import plugin_runtime
 from ... import web as host
+from ..sessions.plan_mode import PERMISSION_MODES as _PERMISSION_MODES
 
 PROTOCOL_NAME = "xueness.app-server.v1"
 PROTOCOL_VERSION = 1
@@ -68,7 +69,7 @@ _TURN_KEYS = {
 #: Checked here only as a parameter vocabulary so ``turn/start`` answers
 #: -32602 immediately; the sessions run route stays the authority that also
 #: weighs plugin availability and the session's own stored mode.
-_PERMISSION_MODES = ("build", "edit", "yolo", "plan")
+#: The tuple itself lives in sessions.plan_mode.PERMISSION_MODES.
 _MODEL_KEYS = {"providerId": "provider_id", "provider_id": "provider_id",
                "model": "model", "reasoningEffort": "reasoning_effort",
                "reasoning_effort": "reasoning_effort", "selection": "selection",
