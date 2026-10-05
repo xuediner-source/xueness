@@ -70,7 +70,7 @@ flowchart LR
 | workflows | DAG/DSL、模型编排、actor、后台命令、复用/并发 | sessions, files, shell | 开 |
 | terminal | 真实 POSIX PTY | sessions, shell | 开 |
 | office | DOCX 页面、PPTX 图片/图表、XLSX 缓存值预览 | files | 开 |
-| commands | 斜杠命令资源 | — | 开 |
+| commands | 斜杠命令资源与自定义模板、目录型 Markdown 命令发现与来源覆盖、`commands` 命令与 `/commands` | — | 开 |
 | skills | 技能资源与按需目录/正文读取、目录型技能发现与来源覆盖、`skills` 命令与 `/skills` | — | 开 |
 | hooks | 明确启用的事件钩子 | — | 开 |
 | mcp | stdio/HTTP/旧 SSE、OAuth、resources/prompts、连接恢复 | — | 开 |
@@ -176,7 +176,7 @@ providers 的 CLI parser/handler 已迁入 `xueness/bundled_plugins/providers/op
 
 ## 功能逐项归属清单
 
-下表概述当前 27 份 manifest 中的 128 项用户能力。命令/工具/依赖和实际实现文件以同一份 manifest 为准；前端卡片直接展示该功能清单，不维护第二份隐藏列表。纯安全内核与通用布局的边界如前文所述。
+下表概述当前 27 份 manifest 中的 130 项用户能力。命令/工具/依赖和实际实现文件以同一份 manifest 为准；前端卡片直接展示该功能清单，不维护第二份隐藏列表。纯安全内核与通用布局的边界如前文所述。
 
 | 插件 | 已实现的用户能力 |
 |---|---|
@@ -192,7 +192,7 @@ providers 的 CLI parser/handler 已迁入 `xueness/bundled_plugins/providers/op
 | workflows | DAG、声明式 DSL 与模型编排；只读及已批准可写 actor 与问答；持久恢复、结果复用与文件校验；动态并发、限流退避与跨运行调度；后台命令、日志、状态与取消；专家工作流（调研、计划、实现、审查）；按会话列出、取消与恢复动态工作流运行 |
 | terminal | 工作区交互式 POSIX PTY 与 Windows ConPTY；终端尺寸、日志、关闭与服务清理；默认 Shell 与终端偏好 |
 | office | DOCX 页面与嵌入图片预览；PPTX 幻灯片、图片与缓存图表；XLSX 工作表与缓存单元格值 |
-| commands | 自定义斜杠提示模板；命令资源创建、编辑与开关 |
+| commands | 自定义斜杠提示模板；命令资源创建、编辑与开关；目录型 Markdown 命令发现与位置参数展开；commands list/inspect 命令与聊天 /commands |
 | skills | 技能资源与按需目录摘要；有界技能正文读取；目录型技能发现与来源覆盖；skills list/inspect 命令与聊天 /skills |
 | hooks | 明确启用的生命周期事件钩子；钩子命令审批与运行记录；工具执行前后事件管线接入（PostToolUse 可选） |
 | mcp | stdio、HTTP 与旧 SSE 连接；OAuth PKCE、凭据刷新与隔离；外部工具、资源与提示词；连接诊断、失效恢复与设置 |
@@ -480,3 +480,39 @@ hooks 插件新增 `tool_events.py` 模块并从入口导出 `after_tool_executi
 ### 门禁与回归
 
 `plugin_contract.tool_events_field_errors` 在 manifest 载入时拒收坏声明（未知/重复/空事件名、非整数或越界 priority、未知字段），`tools/check_plugin_architecture.py` 以纯 JSON 静态校验同一形状（不导入插件代码）；`tests/test_plugin_architecture.py` 新增 8 组坏形状断言。回归见 `tests/test_tool_events.py`（22 项）：after 观察与声明后改写、未声明改写被拒、`ok` 双向翻转与身份伪造/非 JSON 改写被拒、声明后 deny 与原因回填、未声明 deny 被忽略且 allow 惰性、缺 reason 的 deny 逐类忽略、plan 模式下管线不能放宽 Gate、回调异常隔离（git 崩溃不影响 hooks 与本轮）、超时封顶、插件禁用立即失效、拓扑+优先级排序、plan 授权读取、并发批次的逐调用事件/回调串行（重叠检测）/结果顺序、批次内 deny 保序不伤同批、以及 hooks 管线接入的真实子进程端到端（legacy 载荷不变、管线载荷含 result、failure 事件、关闭即停、无钩子零开销），另含契约校验与载入期 fail-closed。全部使用隔离状态目录与注入的假 handler 或 `sys.executable` 子进程，不访问网络、不调用真实模型。
+
+## 目录型自定义命令与 commands 命令（commands.file_commands，2026-10-05）
+
+参照 ZCode 的自定义命令（工作区里一个 `<name>.md` 就是一条斜杠命令）能力，按 Xueness 结构重写为 commands 插件内的 `file_commands.py`；新增两项稳定功能 `commands.file_commands`（目录型 Markdown 命令发现与位置参数展开）与 `commands.cli`（commands list/inspect 命令与聊天 `/commands`）。manifest 只增加数据——`commands: ["commands"]`、`httpFamilies` 增 `resources/commands/files`、`modules` 增 `file_commands`/`commands_cli`/`files_api`、`description` 与 `features` 更新，`tools`/`panels`/`frontendModules`/`resources` 不变，依赖仍为空（没有 import skills 插件的模块，因此不存在跨插件启用阻塞）。完整目录现为 **27 个插件、130 项登记功能**，README 与本文清单同批更正，没有新增共享内核例外。
+
+### 扫描布局与来源覆盖
+
+优先级从高到低：`<workspace>/.xueness/commands/<name>.md`（`project`）> `<workspace>/.zcode/commands/…`（`project-compat`，为外来布局提供的**只读**兼容根，调用侧可用 `include_compat=False` 排除）> `<state_dir>/commands/<name>.md`（`user`）> 既有 JSON 资源库 `<state_dir>/resources/commands/<id>.json`（`resource`，Stage 5 契约一字未改）。每根只读一层目录，那一层目录名成为命名空间：`git/pr.md` 的调用名是 `/git:pr`，第二层目录报 `command_namespace_too_deep` 而不是悄悄扩大名字空间。合并只有一处：`commands.list_all(state_dir, root)` 把资源行与文件行交给 `file_commands.merge`，按（id、来源优先级）排序后**先认领者为胜**，被覆盖的行保留在列表里带 `shadowed: true` 与 `shadowedBy: <胜出来源>`。整名另有两条硬约束：段名 `[A-Za-z0-9._-]{1,64}` 且整名（含命名空间）≤64 字符，与聊天匹配器 `INVOCATION_RE` 同源，因此清单里存在的名字不可能在展开时认不出来。
+
+**内置名优先**：`merge` 先查 `is_reserved(name)`——宿主自己回答的斜杠名（`help`/`model`/`skills`/`retry`…）或任何 manifest `commands` 已登记的名字（答案取自 `plugin_runtime.slash_owner`，与 CLI/聊天同一路由来源，并按名记忆化，与内核记忆化 HTTP 路由索引同一先例）。冲突的**文件**命令标为 `shadowedBy: "builtin"` 且永不展开；资源行不受此标记，其既有 store 契约比本清单更早。
+
+### frontmatter 是纯文本，不是配置
+
+`---` 围栏内的顶层 `key: value` 行按文本解析：支持引号剥离、CRLF、折叠（`>`，含 `>-`/`>+`）与字面（`|`，含 `|-`/`|+`）块标量；**没有引入 PyYAML**。`description` 与 `argument-hint` 生效，`model` 只回显（附 `command_model_not_applied` info），其余键——`allowed-tools`、`skills`、`name`、`disable-noninteractive` 之类——一律只作为 `frontmatterKeys` 报回并附 `command_unsupported_frontmatter` 警告：**一个不受信任的命令文件不能给自己发工具、挂技能或改权限模式**。没有围栏是合法的（描述回落到正文第一行，剥掉 `#`/`>`/`-`/`*` 前缀），未闭合围栏与整块不可读才是一次丢弃。**规模上限是显式常量**：单个命令文件 64 KiB（`MAX_COMMAND_FILE_BYTES`）、每个来源 64 条（`MAX_COMMANDS_PER_ROOT`）、描述 ≤1024、hint ≤128、`inspect` 正文预览 2000 字符。坏条目是一次回答，不是一次异常：`diagnostic(code, severity, message, path)` 产出的码有 `command_root_symlink`、`command_root_unreadable`、`command_root_escapes`、`command_entry_symlink`、`command_file_symlink`、`command_escapes_root`、`command_unreadable`、`command_file_too_large`、`command_invalid_encoding`、`command_unclosed_frontmatter`、`command_invalid_frontmatter`、`command_empty_body`、`command_invalid_name`、`command_invalid_namespace`、`command_namespace_too_deep`、`command_root_limit`、`command_unsupported_frontmatter`、`command_model_not_applied`、`command_shell_expansion_unsupported`，CLI/聊天/HTTP 三个入口原样带出。
+
+### 展开只有文本，没有 shell
+
+`commands.expand(commands, text)` 仍是 Stage 5 的单命令匹配 + `EXPAND_MAX_CHARS = 8000` 裁剪，正文来源换成合并后的胜出行；替换由 `substitute_arguments` 一趟 `re.sub` 完成：`$ARGUMENTS` 替换为原始参数串，`$1`..`$9` 取 `split_arguments` 的空白切分结果（双引号成对时把空格并进同一参数，没有 shell、没有转义、缺失的位置成为空串，`$10` 因负向预查保持字面文本）。**一趟**很关键：用户提供的值不会再次扫描占位符。正文不含任何占位符且参数非空时，照旧在正文下方空一行追加参数。
+
+**这里刻意不实现 shell 展开**：ZCode 的 `` !`cmd` `` 与 ```` ```! ```` 围栏在 Xueness 里原样保留为文本，绝不被执行，并在诊断里标出「不支持 shell 展开」（`command_shell_expansion_unsupported`）；`@file` 引用同样原样保留，展开**不读任何额外文件**。命令目录里的东西永不被 import、执行或以任何方式运行。
+
+### 只读与不逃逸
+
+发现与读取全程只读，链接拒绝复用 `resources._is_link`（符号链接与 Windows reparse point 同一判定），作用于三个层级：命令根（`.xueness` 被重定向出工作区即 `command_root_escapes`、用户根自身是链接即 `command_root_symlink`）、命名空间目录与 `.md` 文件；每个解析后的真实路径还必须仍落在它自己的命令根内（`_contained`）。文本读取用 `os.open(..., O_RDONLY | O_NOFOLLOW)` 并读 `max_bytes + 1`。`read_body` 在**读取时**重新校验链接与包含关系，因此拿一份旧 listing 的行（`path`/`rootPath` 由调用方持有）不构成绕过手段。JSON 资源库仍走既有 `_kind_dir` + 目录链接拒绝 + `O_NOFOLLOW` 那条路，没有因为新增来源而放宽。
+
+### 四个入口与聊天路径
+
+- **CLI**：`xueness [--state DIR] commands [list|inspect NAME] [--root PATH] [--json]`，`--root` 默认当前工作目录、无子命令等同 `list`；解析与执行由 `commands_cli.add_parsers`/`execute` 经 `plugin.register_cli`/`execute_cli` 贡献，人类可读与 `--json` 出自同一份数据。commands 未 `effective` 时由 CLI 宿主既有插件检查拒绝：退出码非零、stdout 为空。`inspect` 未命中同样退出码 1。
+- **聊天**：`commands` 登记进 manifest `commands`，`plugin.execute_slash` **只**认领 `commands`（其余名字返回 `None`），`/commands`、`/commands list`、`/commands inspect <name>` 经 `plugin_runtime.dispatch_slash` 路由；工作区取 `ctx['root']`，回落到 `session['root']`；插件禁用就是既有的 `plugin disabled or dependency unavailable: commands`。格式化与 CLI 共用 `format_listing`/`format_inspection`。`/help` 的一行索引不在此轮改动内，建议合入方补：`/commands [list|inspect <名称>]  列出或查看文件型与存储的自定义命令`。
+- **HTTP**：`GET /api/resources/commands/files?root=…`（`files_api.py`，`httpFamilies` 登记，最长匹配自然归 commands，`route_owner` 与匹配逻辑未改），返回 `{root, stateDir, commands, diagnostics, limits}`；`root` 必须先过既有工作区围栏 `web._allowed_root(...)`，越界一律 400 `workspace root not permitted`，非 GET 405，插件禁用 403，Host/Origin/CSRF 一层未动；不匹配该四段路径的请求返回 `None`，`GET/POST /api/resources/commands` 的既有 JSON 资源 CRUD 照旧。
+- **运行缝**：会话聊天宿主与 Web Composer 读的是同一份合并清单。sessions 侧只是将既有 seam 补上工作区参数——`_load_commands(state_dir, root=None)` 调 `commands_module.load(state_dir, root)`，聊天循环、`/help`、排队轮次与追问轮次把已解析的 `root` 传进去，composer 的准备阶段同样传 `root`；`load_commands(state_dir, root=None, deps=None)` 保持通用 wrapper 形状，因此 `xueness/cli.py` 里那份历史兼容 wrapper 只需接住并转发多出来的可选参数（`_load_commands(state_dir, root=None)`），此前它把工作区丢掉、文件命令在兼容路径上根本看不见。调用形状、`CHAT_HELP` 文案与 sessions 业务逻辑均未改动。
+
+前端本轮不新增实现：`设置 → 插件 → 已安装功能插件` 的能力卡片按 manifest `features` 泛型渲染，两项新功能自动出现在 commands 卡片内，`panels`/`frontendModules` 不变；新端点是只读展示用，没有 UI 接线时不产生任何请求、轮询或后台任务。
+
+验证：`tests/test_file_commands.py` 119 项，全部使用 tempfile 隔离的状态目录与工作区，不访问网络、不调用真实模型——frontmatter 正常/缺失围栏/未闭合/非法与块标量、`name:`/`allowed-tools:`/`model:` 的三种待遇、描述与 hint 的长度、命名空间与第二层拒绝、非 Markdown 与隐藏项忽略、project > project-compat > user > resource 覆盖及 `shadowed`/`shadowedBy`、`/help` 与 `/commands` 这类内置名冲突后不展开、`$ARGUMENTS` 与 `$1..$9`（引号成组、缺失位置为空、`$10` 字面、值不再扫描）、无占位符时追加、8000 字符裁剪、`` !`…` ``/围栏 shell 与 `@file` 原样保留且不读目标、64 KiB 与每根 64 条上限、四类链接拒绝（命令文件、命名空间内文件、命名空间目录、整个 `.xueness` 根与用户根，均断言重定向目标私有内容不泄露）、陈旧行读取重校验、发现与展开不写字节（whole-tree mtime/size 快照一致）、CLI 的 list/inspect/`--json`/无子命令走 cwd/用法错误 stdout 为空/禁用后非零退出、`dispatch_slash` 的 `/commands` 三态与禁用文案、`sessions_cli.load_commands` 与 Composer 准备阶段确实吃到文件命令（含禁用后的原始轮次）、HTTP 的归属与 200/400/405/403 以及 `['api','resources','commands']` 仍是 200。既有 JSON 命令回归 `tests/test_commands.py` 37 项一字未改仍通过。
+

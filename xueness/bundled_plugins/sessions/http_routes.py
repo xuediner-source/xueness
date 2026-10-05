@@ -298,7 +298,7 @@ def _append_queued_turn(ctx, queue, session, item):
     from ...commands import load as load_commands
     prepared = item.get('prepared')
     commands = (None if prepared is not None else
-                load_commands(ctx['state_dir'])
+                load_commands(ctx['state_dir'], session.get('root'))
                 if host.plugin_runtime.is_enabled(ctx['state_dir'], 'commands') else [])
     session = host.append_user_turn(
         session, ctx['store'], item['text'], commands,
@@ -712,7 +712,8 @@ def handle_POST(self, parts, path, data):
                     session = host.append_user_turn(
                         session, ctx['store'], text,
                         (None if prepared is not None else
-                         load_commands(ctx['state_dir']) if host.plugin_runtime.is_enabled(ctx['state_dir'], 'commands') else []),
+                         load_commands(ctx['state_dir'], session.get('root'))
+                         if host.plugin_runtime.is_enabled(ctx['state_dir'], 'commands') else []),
                         persist=prepared is None)
                     if prepared is not None:
                         session['messages'][-1]['content'] = prepared['text']

@@ -1,13 +1,15 @@
 {
   "id": "commands",
   "name": "自定义命令",
-  "description": "自定义斜杠提示模板与资源管理。",
+  "description": "自定义斜杠提示模板、目录型 Markdown 命令与资源管理。",
   "version": "1.0.0",
   "apiVersion": 1,
   "defaultEnabled": true,
   "dependencies": [],
   "tools": [],
-  "commands": [],
+  "commands": [
+    "commands"
+  ],
   "panels": [
     "capabilities"
   ],
@@ -16,10 +18,14 @@
   ],
   "capabilities": [],
   "httpFamilies": [
-    "resources/commands"
+    "resources/commands",
+    "resources/commands/files"
   ],
   "modules": [
-    "commands"
+    "commands",
+    "file_commands",
+    "commands_cli",
+    "files_api"
   ],
   "features": [
     {
@@ -31,6 +37,16 @@
       "id": "commands.resources",
       "name": "命令资源创建、编辑与开关",
       "nameEn": "Command resource creation, editing and switches"
+    },
+    {
+      "id": "commands.file_commands",
+      "name": "目录型 Markdown 命令发现与位置参数展开",
+      "nameEn": "File-shaped Markdown commands with positional argument expansion"
+    },
+    {
+      "id": "commands.cli",
+      "name": "commands list/inspect 命令与聊天 /commands",
+      "nameEn": "commands list/inspect commands and in-chat /commands"
     }
   ],
   "frontendModules": []

@@ -213,11 +213,15 @@ def _prepare_agent(args, parser, store, session):
                 approval_prompt=_approval_prompt)
     return provider, gate, plugin_plan.load, memory_text
 
-def _load_commands(state_dir):
-    """Custom chat commands are an optional plugin and vanish when disabled."""
+def _load_commands(state_dir, root=None):
+    """Custom chat commands are an optional plugin and vanish when disabled.
+
+    ``root`` is the session workspace: the commands plugin adds the file-shaped
+    commands found under it and falls back to user and stored commands without.
+    """
     if not plugin_runtime.is_enabled(state_dir, "commands"):
         return []
-    return commands_module.load(state_dir)
+    return commands_module.load(state_dir, root)
 
 def _prompt(label: str) -> str:
     """Read one line with the prompt on stderr — stdout stays JSON-only."""
@@ -255,6 +259,8 @@ CHAT_HELP = """/help               显示帮助与自定义命令
                     专家工作流：调研→计划→实现→审查
 /skills [list|inspect <名称>]
                     列出或查看目录型技能（SKILL.md）
+/commands [list|inspect <名称>]
+                    列出或查看文件型与存储的自定义命令
 /exit 或 /quit      保存会话并退出
 运行中 Ctrl+C 请求停止；停止后 /retry 继续，或输入新方向。
 输入提示处 Ctrl+C 退出；写入/编辑/执行默认逐次询问。"""
@@ -279,6 +285,8 @@ CHAT_HELP_EN = """/help               Show help and custom commands
                     Expert workflow: research → plan → implement → review
 /skills [list|inspect <name>]
                     List or inspect directory skills (SKILL.md)
+/commands [list|inspect <name>]
+                    List or inspect file and stored custom commands
 /exit or /quit      Save the session and exit
 Ctrl+C requests a stop while running; use /retry or enter a new direction afterward."""
 
@@ -477,7 +485,7 @@ def _chat_loop_owned(args, parser, store, session, owned):
             continue
         if command == "/help":
             print(CHAT_HELP_EN if getattr(args, "language", "zh") == "en" else CHAT_HELP, file=sys.stderr)
-            for item in _load_commands(args.state):
+            for item in _load_commands(args.state, root):
                 print(f"/{item['id']}  {item.get('description', '')}", file=sys.stderr)
             continue
         if command in ("/models", "/model", "/effort"):
@@ -544,7 +552,7 @@ def _chat_loop_owned(args, parser, store, session, owned):
             # Validate provider/options before writing the first journal.
             provider, gate, names, memory_text = _prepare_agent(
                 args, parser, store, s or {"root": str(root)})
-        command_items = [] if literal else _load_commands(args.state)
+        command_items = [] if literal else _load_commands(args.state, root)
         try:
             if awaiting:
                 s = answer_session(store.load(s["id"]), store, text, attachments=attachments, preserve_whitespace=literal)
@@ -895,8 +903,8 @@ def prepare_agent(args, parser, store, session, deps=None):
     return _invoke_helper("_prepare_agent", args, parser, store, session, deps=deps)
 
 
-def load_commands(state_dir, deps=None):
-    return _invoke_helper("_load_commands", state_dir, deps=deps)
+def load_commands(state_dir, root=None, deps=None):
+    return _invoke_helper("_load_commands", state_dir, root, deps=deps)
 
 
 def prompt(label, deps=None):

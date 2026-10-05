@@ -907,7 +907,7 @@ def _prepare(ctx: dict, data: dict) -> tuple[int, dict]:
         try:
             from ..commands import commands as command_api
             prompt_text, invocation = command_api.expand(
-                command_api.load(ctx["state_dir"]), text,
+                command_api.load(ctx["state_dir"], root), text,
             )
         except (ImportError, KeyError, OSError, ValueError):
             raise _ComposerError(403, "plugin disabled or dependency unavailable: commands") from None
