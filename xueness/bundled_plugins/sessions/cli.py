@@ -342,15 +342,17 @@ def _apply_chat_permission_mode(args, gate, store, session, selected, language):
             store.save(session)
     print(f"mode: {getattr(args, 'mode', 'build')} · permission: {selected}", file=sys.stderr)
 
-def _load_commands(state_dir, root=None):
+def _load_commands(state_dir, root=None, *, language=None):
     """Custom chat commands are an optional plugin and vanish when disabled.
 
     ``root`` is the session workspace: the commands plugin adds the file-shaped
     commands found under it and falls back to user and stored commands without.
+    ``language`` only picks which shipped text a built-in command (``/init``)
+    expands to; the disabled check above is what decides whether it exists.
     """
     if not plugin_runtime.is_enabled(state_dir, "commands"):
         return []
-    return commands_module.load(state_dir, root)
+    return commands_module.load(state_dir, root, language=language)
 
 def _prompt(label: str) -> str:
     """Read one line with the prompt on stderr — stdout stays JSON-only."""
@@ -391,6 +393,7 @@ CHAT_HELP = """/help               显示帮助与自定义命令
                     列出或查看目录型技能（SKILL.md）
 /commands [list|inspect <名称>]
                     列出或查看文件型与存储的自定义命令
+/init [说明]        调研工作区并生成或更新 AGENTS.md（commands 插件的内建提示命令）
 /exit 或 /quit      保存会话并退出
 运行中 Ctrl+C 请求停止；停止后 /retry 继续，或输入新方向。
 输入提示处 Ctrl+C 退出；写入/编辑/执行默认逐次询问。"""
@@ -418,6 +421,7 @@ CHAT_HELP_EN = """/help               Show help and custom commands
                     List or inspect directory skills (SKILL.md)
 /commands [list|inspect <name>]
                     List or inspect file and stored custom commands
+/init [notes]       Study the workspace and create or update AGENTS.md (built-in commands prompt)
 /exit or /quit      Save the session and exit
 Ctrl+C requests a stop while running; use /retry or enter a new direction afterward."""
 
@@ -616,7 +620,8 @@ def _chat_loop_owned(args, parser, store, session, owned):
             continue
         if command == "/help":
             print(CHAT_HELP_EN if getattr(args, "language", "zh") == "en" else CHAT_HELP, file=sys.stderr)
-            for item in _load_commands(args.state, root):
+            for item in _load_commands(args.state, root,
+                                       language=getattr(args, "language", None)):
                 print(f"/{item['id']}  {item.get('description', '')}", file=sys.stderr)
             continue
         if command in ("/models", "/model", "/effort"):
@@ -658,7 +663,8 @@ def _chat_loop_owned(args, parser, store, session, owned):
             try:
                 reply = plugin_runtime.dispatch_slash(
                     text, {"state_dir": args.state, "session": s,
-                           "store": store, "root": str(root)})
+                           "store": store, "root": str(root),
+                           "language": getattr(args, "language", None)})
             except (LookupError, OSError, ValueError) as exc:
                 print(f"! {exc}", file=sys.stderr)
                 continue
@@ -679,7 +685,8 @@ def _chat_loop_owned(args, parser, store, session, owned):
             # Validate provider/options before writing the first journal.
             provider, gate, names, memory_text = _prepare_agent(
                 args, parser, store, s or {"root": str(root)})
-        command_items = [] if literal else _load_commands(args.state, root)
+        command_items = [] if literal else _load_commands(
+            args.state, root, language=getattr(args, "language", None))
         try:
             if awaiting:
                 s = answer_session(store.load(s["id"]), store, text, attachments=attachments, preserve_whitespace=literal)
@@ -1040,8 +1047,8 @@ def prepare_agent(args, parser, store, session, deps=None):
     return _invoke_helper("_prepare_agent", args, parser, store, session, deps=deps)
 
 
-def load_commands(state_dir, root=None, deps=None):
-    return _invoke_helper("_load_commands", state_dir, root, deps=deps)
+def load_commands(state_dir, root=None, *, language=None, deps=None):
+    return _invoke_helper("_load_commands", state_dir, root, deps=deps, language=language)
 
 
 def prompt(label, deps=None):

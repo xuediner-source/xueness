@@ -873,7 +873,7 @@ def _plugin_context(ctx: dict, plugin_ids: list[str]) -> tuple[str, list[dict]]:
 
 def _prepare(ctx: dict, data: dict) -> tuple[int, dict]:
     allowed_top = {"text", "root", "session_id", "provider_id", "model",
-                   "reasoning_effort", "permission_mode", "input"}
+                   "reasoning_effort", "permission_mode", "input", "language"}
     _check_keys(data, allowed_top, "request")
     # The field is accepted so clients are not rejected for sending it, but
     # prepare does not authorize anything. The run route remains the authority.
@@ -913,8 +913,10 @@ def _prepare(ctx: dict, data: dict) -> tuple[int, dict]:
     if _enabled(ctx, "commands"):
         try:
             from ..commands import commands as command_api
+            # ``language`` is display data for built-in prompt commands only; an
+            # unknown value falls back to the plugin's default, never a refusal.
             prompt_text, invocation = command_api.expand(
-                command_api.load(ctx["state_dir"], root), text,
+                command_api.load(ctx["state_dir"], root, language=data.get("language")), text,
             )
         except (ImportError, KeyError, OSError, ValueError):
             raise _ComposerError(403, "plugin disabled or dependency unavailable: commands") from None

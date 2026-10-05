@@ -4,6 +4,9 @@ One formatter serves the terminal, the chat reply and the plugin panel data, so
 a listing cannot read differently in two places. Bodies only ever appear in
 ``inspect`` and stay clipped: ``list`` is a summary of sources and shadowing.
 Nothing here decides permissions or reads a path the caller invented.
+
+A built-in prompt command (``/init``) is listed and inspected from the same
+rows, tagged with its source so the answer says where the text came from.
 """
 from __future__ import annotations
 
@@ -11,6 +14,7 @@ import json
 import sys
 from pathlib import Path
 
+from . import builtin_prompts
 from . import file_commands
 from . import commands as store
 
@@ -18,6 +22,13 @@ USAGE = "Usage: xueness commands [list|inspect <name>] [--root PATH] [--json]"
 
 EXPANSION_NOTE = ("expansion: $ARGUMENTS and $1..$9 only; no shell expansion, "
                   "no @file reads and no model switch")
+
+BUILTIN_EXPANSION_NOTE = (
+    "expansion: the arguments are appended below the shipped prompt as quoted data; "
+    "$ARGUMENTS, $1..$9, shell and @file expansion do not apply here, and no workspace "
+    "file can override this text")
+
+BUILTIN_ORIGIN_NOTE = "(built-in prompt shipped with the commands plugin)"
 
 
 def add_parsers(commands):
@@ -45,8 +56,8 @@ def _workspace(value) -> Path:
         return Path.cwd()
 
 
-def listing(state_dir, root) -> dict:
-    document = store.list_all(state_dir, root)
+def listing(state_dir, root, language=None) -> dict:
+    document = store.list_all(state_dir, root, language=language)
     return {"root": str(root), "stateDir": str(state_dir),
             "commands": document["commands"], "diagnostics": document["diagnostics"],
             "limits": {"expandChars": store.EXPAND_MAX_CHARS,
@@ -62,8 +73,10 @@ def _line(row: dict) -> str:
         label += " [shadowed-by-builtin]"
     elif row.get("shadowedBy"):
         label += " [shadowed by %s]" % row["shadowedBy"]
-    return "\n".join([label, "  " + (row["description"] or "(no description)"),
-                      "  " + str(row["path"])])
+    origin = str(row["path"])
+    if row.get("source") == builtin_prompts.BUILTIN_SOURCE:
+        origin += "  " + BUILTIN_ORIGIN_NOTE
+    return "\n".join([label, "  " + (row["description"] or "(no description)"), "  " + origin])
 
 
 def _diagnostic_lines(diagnostics) -> list:
@@ -109,8 +122,12 @@ def format_inspection(result: dict) -> str:
         lines.append("shadowed: %s" % row["shadowedBy"])
     else:
         lines.append("shadowed: no")
+    if row.get("source") == builtin_prompts.BUILTIN_SOURCE:
+        lines.append("language: %s (the interface language this prompt was rendered in)"
+                     % row.get("language"))
     lines.append("size: %d bytes" % int(result.get("sizeBytes") or row.get("bytes") or 0))
-    lines.append(EXPANSION_NOTE)
+    lines.append(BUILTIN_EXPANSION_NOTE
+                 if row.get("source") == builtin_prompts.BUILTIN_SOURCE else EXPANSION_NOTE)
     lines += ["", "Content", result["content"] or "(empty)"]
     if result.get("truncated"):
         lines.append("(body clipped to %d characters)" % file_commands.BODY_PREVIEW_CHARS)
@@ -120,16 +137,17 @@ def format_inspection(result: dict) -> str:
 def execute(args) -> int:
     """``xueness commands ...``; the plugin switch is enforced by the CLI host."""
     root = _workspace(getattr(args, "root", None))
+    language = getattr(args, "language", None)
     action = getattr(args, "commands_action", None) or "list"
     json_mode = bool(getattr(args, "json", False))
     try:
         if action == "list":
-            document = listing(args.state, root)
+            document = listing(args.state, root, language)
             print(json.dumps(document, ensure_ascii=False, indent=2) if json_mode
                   else format_listing(document))
             return 0
         if action == "inspect":
-            result = store.inspect_command(args.state, args.name, root)
+            result = store.inspect_command(args.state, args.name, root, language=language)
             print(json.dumps({**result, "root": str(root), "stateDir": str(args.state)},
                              ensure_ascii=False, indent=2) if json_mode
                   else format_inspection(result))
@@ -149,14 +167,15 @@ def handle_slash(argument, ctx) -> str:
     session = ctx.get("session")
     root = _workspace(ctx.get("root")
                       or (session.get("root") if isinstance(session, dict) else None))
+    language = ctx.get("language")
     verb, _, rest = (argument or "").strip().partition(" ")
     verb, rest = verb.lower(), rest.strip()
     if verb in ("", "list"):
         if rest:
             return "commands list takes no arguments.\n%s" % USAGE
-        return format_listing(listing(state_dir, root))
+        return format_listing(listing(state_dir, root, language))
     if verb == "inspect":
         if not rest:
             return "commands inspect needs a name.\n%s" % USAGE
-        return format_inspection(store.inspect_command(state_dir, rest, root))
+        return format_inspection(store.inspect_command(state_dir, rest, root, language=language))
     return "Unknown commands command: %s\n%s" % (verb, USAGE)

@@ -27,6 +27,9 @@ def dispatch(method, parts, query, data, ctx):
     if method.upper() != "GET":
         return 405, {"error": "method not allowed"}
     raw = (query or {}).get("root", [""])[0]
+    # The interface language only chooses which shipped prompt text a built-in
+    # row carries; an unknown value is data and falls back to the default.
+    language = (query or {}).get("language", [""])[0]
     state_dir = ctx.get("state_dir")
     if state_dir is None:
         return 400, {"error": "state_dir missing from context"}
@@ -40,7 +43,7 @@ def dispatch(method, parts, query, data, ctx):
             # no hint about what exists outside the fence.
             return 400, {"error": "workspace root not permitted"}
     try:
-        document = store.list_all(state_dir, root)
+        document = store.list_all(state_dir, root, language=language)
     except OSError:
         return 500, {"error": "command roots could not be read"}
     return 200, {"root": str(root) if root is not None else None,

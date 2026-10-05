@@ -1,4 +1,5 @@
 import { post } from "./xuenessApi";
+import { getLocale } from "./i18n";
 
 export type ComposerInput = {
   attachments: { name: string; mimeType: string; data: string }[];
@@ -93,8 +94,10 @@ export async function loadComposerCatalog(root?: string, sessionId?: string, sig
 }
 export async function prepareComposer(text: string, input: ComposerInput | undefined, selection: {
   root?: string; session_id?: string; provider_id?: string; model?: string; reasoning_effort?: string;
+  language?: string;
 }): Promise<{ text: string; token: string; root: string; metadata: Record<string, unknown>; goal: boolean }> {
-  return post("/api/composer/prepare", { text, ...selection, ...(input ? { input } : {}) });
+  // 界面语言只是展示数据：服务端用它渲染内建提示命令，不改变任何权限判断。
+  return post("/api/composer/prepare", { text, language: getLocale(), ...selection, ...(input ? { input } : {}) });
 }
 export async function switchComposerBranch(root: string, branch: string): Promise<void> {
   await post("/api/composer/branch", { root, branch });

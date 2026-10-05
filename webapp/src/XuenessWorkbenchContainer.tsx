@@ -1,4 +1,4 @@
-import { listPlugins, listResources, setPluginEnabled, post, saveDefaultModelSelection, type XuenessPlugin } from "./xuenessApi";
+import { listPlugins, listResources, listCommandCatalog, setPluginEnabled, post, saveDefaultModelSelection, type XuenessPlugin } from "./xuenessApi";
 import { t as tr, tf, useLocale, setLocale } from './i18n';
 /**
  * Xueness workbench container — chat-first.
@@ -611,14 +611,30 @@ export function XuenessWorkbenchContainer() {
       setRows([]);
       setDataErrors({ list: "", active: "" });
     }
-    if (isPluginEffective("commands")) {
-      void (async () => {
-        const res = await loadCapabilitySection("commands");
-        if (res.ok) setCommandItems(res.value.items.map((item) => ({ id: item.id, description: item.description })));
-        else setCommandItems([]);
-      })();
-    } else setCommandItems([]);
   }, [pluginCatalogReady, pluginCatalog, isPluginEffective, refreshList]);
+
+  // 斜杠命令候选取自 `xueness commands list` 的同一份合并清单：内建提示命令、文件命令与
+  // 资源条目在后端一次汇合，被遮蔽或已停用的行不列出，所以界面不需要维护第二份命令名单。
+  // 工作区决定内建命令能否出现（它们必须有写入目标），界面语言决定其描述文案。
+  const commandRoot = session?.root ?? draftRoot ?? composerCatalog.root ?? "";
+  useEffect(() => {
+    if (!pluginCatalogReady || !isPluginEffective("commands")) {
+      setCommandItems([]);
+      return;
+    }
+    let settled = false;
+    void (async () => {
+      try {
+        const rows = await listCommandCatalog(commandRoot || undefined, locale);
+        if (settled) return;
+        setCommandItems(rows.filter(row => !row.shadowed && row.enabled !== false)
+          .map(row => ({ id: row.id, description: row.description })));
+      } catch {
+        if (!settled) setCommandItems([]);
+      }
+    })();
+    return () => { settled = true; };
+  }, [pluginCatalogReady, pluginCatalog, isPluginEffective, commandRoot, locale]);
 
   /** Run an action, surface its error on failure, and report whether to reload. */
   const run = useCallback(async (action: () => Promise<Result<unknown>>) => {

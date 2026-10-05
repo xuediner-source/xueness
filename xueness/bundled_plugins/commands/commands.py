@@ -7,13 +7,18 @@ here, every file is opened with ``O_NOFOLLOW`` so a symlink can never pull in an
 unrelated file, and every loaded value is untrusted data that must never
 override system, task, or safety instructions.
 
-Two families are published through this one module:
+Three families are published through this one module:
 
 * **resource commands** — the settings-page store, one JSON document per
   command, at ``<state_dir>/resources/commands/<id>.json``;
 * **file commands** — ``<name>.md`` (with one optional namespace directory)
   found by ``file_commands``, which shadow a resource command of the same
-  invocation name (project over compat over user over resource).
+  invocation name (project over compat over user over resource);
+* **built-in prompt commands** — ``builtin_prompts``, shipped with the plugin
+  (currently ``/init``). They ride in the same listing so every entry point sees
+  the same names, they own their invocation name outright, and they need a
+  workspace root before there is anything to point a prompt at: without a root
+  the built-in rows are simply absent.
 
 Each JSON file is an object with ``id``, an optional ``name``/``description``,
 a body in ``prompt`` (preferred) or ``content``, and an optional ``enabled``
@@ -23,9 +28,10 @@ display-only ``model``.
 
 Expansion is pure text: no external command is executed, no file is written,
 no ``@file`` reference is resolved and ``!`cmd``` stays literal, while
-``$ARGUMENTS`` and the positional ``$1``..``$9`` are substituted. The result is
-clipped to ``EXPAND_MAX_CHARS`` so a hostile command body can never blow up the
-prompt.
+``$ARGUMENTS`` and the positional ``$1``..``$9`` are substituted. A built-in
+command appends the arguments below its own fixed prompt instead, as data. The
+result is clipped to ``EXPAND_MAX_CHARS`` so a hostile command body can never
+blow up the prompt.
 """
 from __future__ import annotations
 
@@ -34,6 +40,7 @@ import os
 import re
 from pathlib import Path
 from ...resources import _is_link, _kind_dir
+from . import builtin_prompts
 from . import file_commands
 
 # Bound (characters) on the expanded text spliced into the prompt.
@@ -224,21 +231,24 @@ def resource_rows(state_dir) -> list:
     return _json_rows(commands_dir)
 
 
-def _merged(state_dir, root=None, *, include_compat: bool = True) -> dict:
-    """Both families in one list, bodies attached, shadowing already resolved."""
+def _merged(state_dir, root=None, *, include_compat: bool = True,
+            language=None) -> dict:
+    """Every family in one list, bodies attached, shadowing already resolved."""
     found = file_commands.discover(state_dir, root, include_compat=include_compat)
-    return {"rows": file_commands.merge(resource_rows(state_dir), found["commands"]),
+    builtins = builtin_prompts.rows(language, root)
+    return {"rows": file_commands.merge(resource_rows(state_dir), [*builtins, *found["commands"]]),
             "diagnostics": found["diagnostics"]}
 
 
-def list_all(state_dir, root=None, *, include_compat: bool = True) -> dict:
+def list_all(state_dir, root=None, *, include_compat: bool = True, language=None) -> dict:
     """Every command with its source, position and diagnostics — no bodies.
 
     Shadowed rows stay in the answer: which file overrode which command, and
-    which name a builtin slash command already owns, is data the user needs in
-    order to understand why a command did not expand.
+    which name a builtin slash command or a built-in prompt command already
+    owns, is data the user needs in order to understand why a command did not
+    expand.
     """
-    merged = _merged(state_dir, root, include_compat=include_compat)
+    merged = _merged(state_dir, root, include_compat=include_compat, language=language)
     return {"commands": [file_commands.public_row(row) for row in merged["rows"]],
             "diagnostics": merged["diagnostics"]}
 
@@ -252,14 +262,15 @@ def _expandable(row: dict) -> bool:
     return bool(str(row.get("body") or "").strip())
 
 
-def load(state_dir, root=None, *, include_compat: bool = True) -> list:
+def load(state_dir, root=None, *, include_compat: bool = True, language=None) -> list:
     """Every usable command under ``state_dir`` (and ``root``), sorted by id.
 
     ``root`` is optional: without a workspace only the user file root and the
     JSON store are read, so a state-directory-only caller keeps the old answer
-    plus any ``<state_dir>/commands/*.md`` the user placed there.
+    plus any ``<state_dir>/commands/*.md`` the user placed there. Built-in
+    prompt commands name a target path, so they appear only once a root exists.
     """
-    merged = _merged(state_dir, root, include_compat=include_compat)
+    merged = _merged(state_dir, root, include_compat=include_compat, language=language)
     entries = []
     for row in merged["rows"]:
         if not _expandable(row):
@@ -287,6 +298,20 @@ def _find(commands, name: str):
     return None
 
 
+def _expand_body(command: dict, args: str):
+    """The text a turn becomes: a built-in prompt, or a substituted body.
+
+    A built-in command's own text is fixed and shipped, so the arguments are
+    appended to it as data instead of replacing placeholders inside it; the
+    template is never re-scanned for anything the user typed.
+    """
+    if command.get("source") == builtin_prompts.BUILTIN_SOURCE:
+        return builtin_prompts.render(command.get("builtinName") or command.get("id"),
+                                      args, command.get("language"),
+                                      command.get("rootPath"))
+    return substitute_arguments(_body(command), args)
+
+
 def expand(commands, text) -> tuple:
     """Expand a single slash invocation, or pass the turn through untouched.
 
@@ -303,22 +328,26 @@ def expand(commands, text) -> tuple:
     command = _find(commands, name)
     if command is None:
         return (text, None)
-    body = _body(command)
-    if body is None:
+    if _body(command) is None:
         return (text, None)
-    expanded = substitute_arguments(body, args)
+    expanded = _expand_body(command, args)
+    if expanded is None:
+        return (text, None)
     return (clip(expanded, EXPAND_MAX_CHARS), {"command": name, "args": args})
 
 
-def inspect_command(state_dir, key, root=None, *, include_compat: bool = True) -> dict:
+def inspect_command(state_dir, key, root=None, *, include_compat: bool = True,
+                    language=None) -> dict:
     """One command in full: source, frontmatter, position and a bounded body."""
-    merged = _merged(state_dir, root, include_compat=include_compat)
+    merged = _merged(state_dir, root, include_compat=include_compat, language=language)
     row = file_commands.find(merged["rows"], key)
     if row is None:
         return {"ok": False, "error": "command not found: %s" % key,
                 "available": [item["id"] for item in merged["rows"] if not item["shadowed"]],
                 "diagnostics": merged["diagnostics"]}
-    if row["source"] == "resource":
+    if row["source"] in ("resource", builtin_prompts.BUILTIN_SOURCE):
+        # Both bodies are already in hand: a stored prompt and a shipped template
+        # are read the same way, and neither is re-read from a workspace path.
         content, size = row["body"], row["bytes"]
     else:
         found = file_commands.read_body(row)
@@ -328,14 +357,29 @@ def inspect_command(state_dir, key, root=None, *, include_compat: bool = True) -
                     "diagnostics": merged["diagnostics"]}
         content, size = found["content"], found["sizeBytes"]
     body = str(content or "")
-    preview = clip(body, file_commands.BODY_PREVIEW_CHARS)
+    # BODY_PREVIEW_CHARS bounds a hostile workspace file. A built-in prompt is
+    # shipped, finite and reviewed like any other source file, so it is shown
+    # whole instead of cutting off the rules the user is about to read.
+    budget = (len(body) if row["source"] == builtin_prompts.BUILTIN_SOURCE
+              else file_commands.BODY_PREVIEW_CHARS)
+    preview = clip(body, budget)
     findings = list(merged["diagnostics"])
     if row["source"] == "resource":
         # A file command already reported this during discovery; a stored JSON
         # prompt has no such pass yet, so the refusal is named here instead.
         findings.extend(file_commands.shell_expansion_findings(body, Path(str(row["path"]))))
+    if row["source"] == builtin_prompts.BUILTIN_SOURCE:
+        # The name is owned by the build, so say which workspace file lost to it
+        # rather than leaving the user to diff two listings.
+        for loser in merged["rows"]:
+            if loser.get("id") != row.get("id") or not loser.get("shadowed"):
+                continue
+            findings.append(file_commands.diagnostic(
+                "command_shadowed_by_builtin", "info",
+                "%s is not run: the built-in command /%s ships its own prompt"
+                % (loser.get("path"), row.get("id")), Path(str(loser.get("path") or ""))))
     return {"ok": True, "command": file_commands.public_row(row), "sizeBytes": int(size),
-            "truncated": len(body) > file_commands.BODY_PREVIEW_CHARS,
+            "truncated": len(body) > budget,
             "content": preview, "diagnostics": findings,
             "limits": {"expandChars": EXPAND_MAX_CHARS,
                        "previewChars": file_commands.BODY_PREVIEW_CHARS,

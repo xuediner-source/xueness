@@ -36,8 +36,22 @@ from xueness.bundled_plugins.sessions import cli as sessions_cli
 from xueness.bundled_plugins.sessions import plugin as sessions_plugin
 from xueness.cli import main as cli_main
 
+BUILTIN_ORIGIN = "built-in prompt shipped with the commands plugin"
+
 
 DEFAULT_ROOT = object()
+
+BUILTIN_SOURCE = "builtin"
+
+
+def custom(items) -> list:
+    """Only the rows someone placed in a command root or the JSON store.
+
+    The built-in prompt commands ship with the plugin and appear in every
+    listing that has a workspace, so this file tests discovery, shadowing and
+    budgets without them; ``tests.test_init_command`` owns the built-in rows.
+    """
+    return [item for item in items if item.get("source") != BUILTIN_SOURCE]
 
 
 def command_text(description="What it does", body="Do the thing.", *, hint=None,
@@ -110,11 +124,22 @@ class CommandFixture(unittest.TestCase):
 
     # -- readers ------------------------------------------------------------
 
-    def listing(self, root=DEFAULT_ROOT, **kwargs) -> dict:
-        return store.list_all(self.state, self.ws if root is DEFAULT_ROOT else root, **kwargs)
+    def listing(self, root=DEFAULT_ROOT, *, include_builtin: bool = False, **kwargs) -> dict:
+        document = store.list_all(self.state, self.ws if root is DEFAULT_ROOT else root, **kwargs)
+        if include_builtin:
+            return document
+        return {**document, "commands": custom(document["commands"])}
 
     def rows(self, root=DEFAULT_ROOT, **kwargs) -> list:
         return self.listing(root, **kwargs)["commands"]
+
+    def builtins(self, root=DEFAULT_ROOT, **kwargs) -> list:
+        """The shipped rows alone: /init and anything the plugin adds later."""
+        return [row for row in self.listing(root, include_builtin=True, **kwargs)["commands"]
+                if row["source"] == BUILTIN_SOURCE]
+
+    def entries(self, root=DEFAULT_ROOT, **kwargs) -> list:
+        return custom(store.load(self.state, self.ws if root is DEFAULT_ROOT else root, **kwargs))
 
     def diagnostics(self, root=DEFAULT_ROOT, **kwargs) -> list:
         return self.listing(root, **kwargs)["diagnostics"]
@@ -183,7 +208,7 @@ class FrontmatterTests(CommandFixture):
 
     def test_uppercase_and_dashes_are_kept_as_written(self):
         self.project_command("Release-Notes")
-        self.assertEqual(self.ids(store.load(self.state, self.ws)), ["Release-Notes"])
+        self.assertEqual(self.ids(self.entries()), ["Release-Notes"])
 
     def test_unclosed_fence_is_reported(self):
         self.project_command("open", text="---\ndescription: no end\n")
@@ -224,7 +249,7 @@ class FrontmatterTests(CommandFixture):
 
     def test_bodies_keep_inner_blank_lines_but_lose_the_fences(self):
         path = self.project_command("shape", text="---\ndescription: d\n---\n\n  one\n\n  two\n\n")
-        entry = store.load(self.state, self.ws)[0]
+        entry = self.entries()[0]
         self.assertEqual(entry["prompt"], "one\n\n  two")
         self.assertTrue(path.exists())
 
@@ -415,7 +440,7 @@ class SourceTests(CommandFixture):
         self.project_command("winner", body="WINNER-BODY")
         self.user_command("loser", body="LOSER-BODY")
         self.project_command("loser", body="LOSER-TOO")
-        entries = store.load(self.state, self.ws)
+        entries = self.entries()
         self.assertEqual([entry["id"] for entry in entries], ["loser", "winner"])
         self.assertEqual(entries[0]["prompt"], "LOSER-TOO")
         self.assertNotIn("LOSER-BODY", json.dumps(entries, ensure_ascii=False))
@@ -434,8 +459,7 @@ class SourceTests(CommandFixture):
         self.assertEqual(self.ids(self.rows(root=None)), [])
         self.user_command("off", body="FILE-BODY")
         self.assertEqual(self.ids(self.rows()), ["off"])
-        self.assertEqual([entry["prompt"] for entry in store.load(self.state, self.ws)],
-                         ["FILE-BODY"])
+        self.assertEqual([entry["prompt"] for entry in self.entries()], ["FILE-BODY"])
 
 
 # -- builtin name conflicts ---------------------------------------------------
@@ -446,7 +470,7 @@ class BuiltinConflictTests(CommandFixture):
         row = self.row("help")
         self.assertTrue(row["shadowed"])
         self.assertEqual(row["shadowedBy"], "builtin")
-        self.assertEqual(store.load(self.state, self.ws), [])
+        self.assertEqual(self.entries(), [])
         self.assertEqual(self.expanded("/help me"), ("/help me", None))
 
     def test_manifest_commands_are_reserved_too(self):
@@ -456,7 +480,7 @@ class BuiltinConflictTests(CommandFixture):
         self.assertEqual(self.row("commands")["shadowedBy"], "builtin")
         self.assertEqual(self.row("skills")["shadowedBy"], "builtin")
         self.assertFalse(self.row("ghost")["shadowed"])
-        self.assertEqual(self.ids(store.load(self.state, self.ws)), ["ghost"])
+        self.assertEqual(self.ids(self.entries()), ["ghost"])
 
     def test_reserved_is_answered_from_the_real_registry(self):
         self.assertTrue(file_commands.is_reserved("help"))
@@ -526,7 +550,8 @@ class ListingTests(CommandFixture):
         result = store.inspect_command(self.state, "ghost", self.ws)
         self.assertFalse(result["ok"])
         self.assertIn("command not found: ghost", result["error"])
-        self.assertEqual(result["available"], ["here"])
+        self.assertEqual(result["available"], ["here", "init"],
+                         "the built-in prompt command is an available name too")
 
     def test_inspect_tolerates_a_leading_slash_and_refuses_a_path(self):
         self.project_command("safe")
@@ -749,9 +774,11 @@ class CliTests(CommandFixture):
         self.project_command("alpha", description="Project alpha", hint="<n>")
         code, out, err = _cli(self.state, ["commands", "list", "--root", str(self.ws)])
         self.assertEqual(code, 0, err)
-        self.assertIn("Custom commands (1)", out)
+        self.assertIn("Custom commands (2)", out)
         self.assertIn("- /alpha <n> (project)", out)
         self.assertIn("Project alpha", out)
+        self.assertIn("- /init [补充说明] (builtin)", out)
+        self.assertIn(BUILTIN_ORIGIN, out)
 
     def test_list_marks_who_shadowed_what(self):
         self.project_command("help")
@@ -766,7 +793,9 @@ class CliTests(CommandFixture):
         self.project_command("bad!name")
         code, out, err = _cli(self.state, ["commands", "list", "--root", str(self.ws)])
         self.assertEqual(code, 0, err)
-        self.assertIn("No custom commands found.", out)
+        self.assertIn("Custom commands (1)", out)
+        self.assertIn("- /init", out)
+        self.assertNotIn("- /bad!name", out)
         self.assertIn("Diagnostics (1)", out)
         self.assertIn("[error] command_invalid_name", out)
 
@@ -789,9 +818,9 @@ class CliTests(CommandFixture):
         document = json.loads(out)
         self.assertEqual(document["root"], str(self.ws))
         self.assertEqual(document["stateDir"], str(self.state))
-        self.assertEqual(self.ids(document["commands"]), ["alpha", "res"])
+        self.assertEqual(self.ids(document["commands"]), ["alpha", "init", "res"])
         self.assertEqual({row["source"] for row in document["commands"]},
-                         {"project", "resource"})
+                         {"project", "builtin", "resource"})
         self.assertEqual(document["limits"]["commandsPerRoot"],
                          file_commands.MAX_COMMANDS_PER_ROOT)
         self.assertNotIn("body", document["commands"][0])
@@ -831,7 +860,7 @@ class CliTests(CommandFixture):
                                            "--root", str(self.ws)])
         self.assertEqual(code, 1)
         self.assertIn("ERROR: command not found: ghost", out)
-        self.assertIn("Available: (none)", out)
+        self.assertIn("Available: /init", out)
 
     def test_usage_error_writes_nothing_to_stdout(self):
         code, out, err = _cli(self.state, ["commands", "frobnicate"])
@@ -908,7 +937,7 @@ class ChatPathTests(CommandFixture):
         self.project_command("pr", body="Review $1 with $ARGUMENTS")
         self.user_command("daily")
         self.resource_command("stored", prompt="STORE")
-        entries = sessions_cli.load_commands(self.state, self.ws)
+        entries = custom(sessions_cli.load_commands(self.state, self.ws))
         self.assertEqual(sorted(entry["id"] for entry in entries), ["daily", "pr", "stored"])
         expanded, meta = store.expand(entries, "/pr main")
         self.assertEqual(expanded, "Review main with main")
@@ -928,7 +957,7 @@ class ChatPathTests(CommandFixture):
     def test_a_shadowed_builtin_name_never_reaches_the_model(self):
         self.project_command("help", body="MUST-NOT-EXPAND")
         self.user_command("model", body="MUST-NOT-EXPAND-EITHER")
-        self.assertEqual(sessions_cli.load_commands(self.state, self.ws), [])
+        self.assertEqual(custom(sessions_cli.load_commands(self.state, self.ws)), [])
 
 
 class ComposerParityTests(unittest.TestCase):
@@ -1012,7 +1041,8 @@ class HttpTests(CommandFixture):
         self.user_command("bad!name")
         status, body = self.get({"root": [str(self.ws)]})
         self.assertEqual(status, 200)
-        self.assertEqual(self.ids(body["commands"]), ["alpha"])
+        self.assertEqual(self.ids(body["commands"]), ["alpha", "init"])
+        self.assertEqual({row["source"] for row in body["commands"]}, {"project", "builtin"})
         self.assertEqual(body["root"], str(self.ws.resolve()))
         self.assertIn("command_invalid_name", self.codes(body["diagnostics"]))
         self.assertEqual(body["limits"]["commandFileBytes"],
@@ -1026,7 +1056,7 @@ class HttpTests(CommandFixture):
         status, body = self.get({"root": [str(self.ws)]})
         self.assertEqual(status, 200)
         self.assertEqual([(row["id"], row["shadowedBy"]) for row in body["commands"]],
-                         [("dup", None), ("dup", "project"), ("same", None)])
+                         [("dup", None), ("dup", "project"), ("init", None), ("same", None)])
 
     def test_a_root_without_a_workspace_only_lists_user_and_stored(self):
         self.project_command("project-only")

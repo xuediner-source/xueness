@@ -70,7 +70,7 @@ flowchart LR
 | workflows | DAG/DSL、模型编排、actor、后台命令、复用/并发 | sessions, files, shell | 开 |
 | terminal | 真实 POSIX PTY | sessions, shell | 开 |
 | office | DOCX 页面、PPTX 图片/图表、XLSX 缓存值预览 | files | 开 |
-| commands | 斜杠命令资源与自定义模板、目录型 Markdown 命令发现与来源覆盖、`commands` 命令与 `/commands` | — | 开 |
+| commands | 斜杠命令资源与自定义模板、内建 `/init` 提示命令、目录型 Markdown 命令发现与来源覆盖、`commands` 命令与 `/commands` | — | 开 |
 | skills | 技能资源与按需目录/正文读取、目录型技能发现与来源覆盖、`skills` 命令与 `/skills` | — | 开 |
 | hooks | 明确启用的事件钩子 | — | 开 |
 | mcp | stdio/HTTP/旧 SSE、OAuth、resources/prompts、连接恢复 | — | 开 |
@@ -176,7 +176,7 @@ providers 的 CLI parser/handler 已迁入 `xueness/bundled_plugins/providers/op
 
 ## 功能逐项归属清单
 
-下表概述当前 27 份 manifest 中的 138 项用户能力。命令/工具/依赖和实际实现文件以同一份 manifest 为准；前端卡片直接展示该功能清单，不维护第二份隐藏列表。纯安全内核与通用布局的边界如前文所述。
+下表概述当前 27 份 manifest 中的 139 项用户能力。命令/工具/依赖和实际实现文件以同一份 manifest 为准；前端卡片直接展示该功能清单，不维护第二份隐藏列表。纯安全内核与通用布局的边界如前文所述。
 
 | 插件 | 已实现的用户能力 |
 |---|---|
@@ -192,7 +192,7 @@ providers 的 CLI parser/handler 已迁入 `xueness/bundled_plugins/providers/op
 | workflows | DAG、声明式 DSL 与模型编排；只读及已批准可写 actor 与问答；持久恢复、结果复用与文件校验；动态并发、限流退避与跨运行调度；后台命令、日志、状态与取消；专家工作流（调研、计划、实现、审查）；按会话列出、取消与恢复动态工作流运行 |
 | terminal | 工作区交互式 POSIX PTY 与 Windows ConPTY；终端尺寸、日志、关闭与服务清理；默认 Shell 与终端偏好 |
 | office | DOCX 页面与嵌入图片预览；PPTX 幻灯片、图片与缓存图表；XLSX 工作表与缓存单元格值 |
-| commands | 自定义斜杠提示模板；命令资源创建、编辑与开关；目录型 Markdown 命令发现与位置参数展开；commands list/inspect 命令与聊天 /commands |
+| commands | 自定义斜杠提示模板；内建 /init（生成或更新 AGENTS.md）；命令资源创建、编辑与开关；目录型 Markdown 命令发现与位置参数展开；commands list/inspect 命令与聊天 /commands |
 | skills | 技能资源与按需目录摘要；有界技能正文读取；目录型技能发现与来源覆盖；skills list/inspect 命令与聊天 /skills |
 | hooks | 明确启用的生命周期事件钩子；钩子命令审批与运行记录；工具执行前后事件管线接入（PostToolUse 可选）；工作区钩子发现与按摘要信任（hooks trust 命令） |
 | mcp | stdio、HTTP 与旧 SSE 连接；OAuth PKCE、凭据刷新与隔离；外部工具、资源与提示词（支持工具名特殊字符清洗与结构化内容解析）；连接诊断、失效恢复与设置；结构化询问（默认关闭） |
@@ -583,7 +583,7 @@ git 插件登记新功能 `git.clone`（克隆远程仓库到已授权目录）�
 
 ## MCP 结构化询问（mcp.elicitation，2026-10-05）
 
-mcp 插件登记 `mcp.elicitation`。完整目录现为 **27 个插件、138 项登记功能**，工作台组件表为 **70** 个。外部 MCP 服务器在工具调用过程中可以发 JSON-RPC `elicitation/create`，请操作者填一份扁平表单；客户端回 `accept`、`decline` 或 `cancel`。
+mcp 插件登记 `mcp.elicitation`。完整目录现为 **27 个插件、139 项登记功能**，工作台组件表为 **70** 个。外部 MCP 服务器在工具调用过程中可以发 JSON-RPC `elicitation/create`，请操作者填一份扁平表单；客户端回 `accept`、`decline` 或 `cancel`。
 
 开关是服务器配置里的布尔字段 `elicitation`，只有精确的 `true` 才打开，缺省、`false` 和其他类型都关闭。关闭时 `initialize` 不声明 elicitation 能力，stdio 仍首选协议 `2024-11-05`，HTTP 仍首选 `2025-03-26`；此时收到 `elicitation/create` 直接回 JSON-RPC `-32601`，不挂起。打开后能力为 `{"elicitation": {}}`，未钉死 `protocolVersion` 时首选 `2025-06-18`。能力编辑对话框里的「允许 MCP 询问少量信息」写入同一个字段，未勾选就是 `false`。
 
@@ -610,9 +610,21 @@ stdio、Streamable HTTP 的 SSE 响应体、以及旧 SSE 的消息队列，都�
 - 不新增 eval、动态导入、监听套接字或 shell。测试用临时目录里的假 stdio 服务器（`sys.executable` 固定 argv）和内存中的假 SSE 响应，不访问网络、不调用真实模型。
 ## 轻量模式紧凑时间线与状态行（providers.lightweight_compact_timeline，2026-10-05）
 
-providers 插件登记新功能 `providers.lightweight_compact_timeline`（轻量紧凑时间线与极简输入状态），完整目录现为 **27 个插件、138 项登记功能**。对标 Pi coding agent 进行前端打磨：
+providers 插件登记新功能 `providers.lightweight_compact_timeline`（轻量紧凑时间线与极简输入状态），完整目录现为 **27 个插件、139 项登记功能**。对标 Pi coding agent 进行前端打磨：
 1. **紧凑时间线**：工具调用默认折叠为单行（工具名 + 关键参数摘要 + 状态 + 耗时），点击/回车展开详情；连续只读工具自动合并为折叠组；思考过程默认折叠。
 2. **极简状态行（Pi Footer）**：单行底部 footer 仅展示前端已有真实数据——当前模型名、工作区路径缩写、已报告 Token 用量（无数据显示「—」，不估算）与运行状态指示，不发起额外后端请求。
 3. **输入区交互**：单行起步自动增高、Enter 发送 / Shift+Enter 换行、Esc 中断运行中的回合（复用原有中断接口）、运行中输入排队追加；去除轻量档下非必要按钮与徽标。
 4. **键盘优先**：Ctrl/Cmd+L 清屏式滚到底、上下键在空输入框中调出本会话历史输入，所有快捷键不与系统或应用注册表冲突。
 
+## 内建 /init 提示命令（commands.init，2026-10-05）
+
+commands 插件登记新功能 `commands.init`，完整目录现为 **27 个插件、139 项登记功能**。对齐 ZCode 的 `/init`：一条斜杠命令展开成固定的内建提示，让代理只读调研当前工作区，然后生成或增量更新工作区根目录的 `AGENTS.md`。
+
+- **提示词来源**：中英两版都写在插件内 `builtin_prompts.py` 的常量里，随界面语言选择（显式 `language` 参数优先，其次 `XUENESS_LANGUAGE`，默认中文；未知值回落默认，不报错）。工作区文件不能覆盖它：同名的 `.xueness/commands/init.md` 或 `.zcode/commands/init.md` 在清单里标为 `shadowedBy: "builtin"`，`inspect` 会说明是哪个文件被内建命令遮蔽。
+- **提示内容**：先只读浏览目录结构、脚本定义、CI 配置、README/CONTRIBUTING/docs；只写在仓库里核实过的命令，找不到出处的放进「未确认」；已有 `AGENTS.md` 时先读再增量编辑，不整篇覆盖；`CLAUDE.md`、`.zcode/AGENTS.md`、`.agents/AGENTS.md` 只读参考；写文件必须走会话已有的写入/编辑工具和 Gate 逐次批准；plan 权限模式下只输出草稿。
+- **参数**：`/init` 后面的补充说明作为数据追加在固定提示下方的代码块里（最多 3000 字符），不做 `$ARGUMENTS` 替换，模板不会被用户文本再扫描。
+- **需要工作区**：提示里写的是绝对目标路径，所以没有工作区时清单里不出现内建行。
+- **入口**：CLI 聊天 `/init [说明]`（`/help` 中英各补一行）、Web Composer 斜杠候选（改为读取 `GET /api/resources/commands/files` 的同一份合并清单，过滤掉被遮蔽和已停用的行，不在 UI 维护第二份名单）、`xueness commands list/inspect`（标注为内建，inspect 显示完整提示与渲染语言）。commands 插件关闭时 `/init` 不出现也不展开。
+- **安全**：纯文本展开，没有新增 eval、动态导入、子进程、监听套接字或 shell；本命令不授予任何写权限。
+
+验证：`tests/test_init_command.py`（展开关键约束、参数追加、语言切换、插件关闭拒绝、与同名文件命令的优先级、plan 模式草稿要求、CLI list/inspect），`tests/test_file_commands.py` 与 `tests/test_commands.py` 回归通过。

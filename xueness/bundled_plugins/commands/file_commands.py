@@ -2,9 +2,11 @@
 
 Layout, highest precedence first. A row whose invocation name was already
 claimed by a higher source is reported as ``shadowed`` instead of silently
-dropped, and a name a builtin slash command already answers is reported as
+dropped, and a name a builtin slash command or a built-in prompt command
+(``builtin_prompts``, shipped with the plugin) already answers is reported as
 ``shadowedBy: "builtin"``::
 
+    built-in prompt command                       shipped text, wins outright
     <workspace>/.xueness/commands/<name>.md         project
     <workspace>/.zcode/commands/<name>.md           project-compat (read-only)
     <state_dir>/commands/<name>.md                  user
@@ -35,6 +37,7 @@ import re
 from pathlib import Path
 
 from ...resources import _is_link
+from . import builtin_prompts
 
 COMMAND_EXTENSION = ".md"
 NAMESPACE_SEPARATOR = ":"
@@ -61,8 +64,8 @@ BODY_PREVIEW_CHARS = 2000
 #: Frontmatter keys that change nothing but are still worth showing the user.
 SUPPORTED_KEYS = ("description", "argument-hint", "model")
 
-SOURCE_PRIORITY = {"project": 0, "project-compat": 1, "user": 2, "resource": 3}
-SCOPE_BY_SOURCE = {"project": "project", "project-compat": "project",
+SOURCE_PRIORITY = {"builtin": -1, "project": 0, "project-compat": 1, "user": 2, "resource": 3}
+SCOPE_BY_SOURCE = {"builtin": "builtin", "project": "project", "project-compat": "project",
                    "user": "user", "resource": "resource"}
 
 #: Slash names the chat host answers itself, before any custom command runs.
@@ -73,6 +76,7 @@ CHAT_BUILTIN_NAMES = frozenset({
 })
 
 BUILTIN_SHADOW = "builtin"
+BUILTIN_SOURCE = builtin_prompts.BUILTIN_SOURCE
 
 #: ``/!`cmd``` and a fenced ```` ```! ```` block are ZCode's shell expansion.
 INLINE_SHELL_RE = re.compile(r"!`[^`\n]*`")
@@ -143,8 +147,15 @@ def manifest_command_name(name) -> str | None:
 
 
 def is_reserved(name) -> bool:
-    """Whether a builtin chat command or another plugin already owns ``name``."""
-    return invocation_name(name) in CHAT_BUILTIN_NAMES or manifest_command_name(name) is not None
+    """Whether a builtin chat command, a built-in prompt command or another
+    plugin already owns ``name``.
+
+    ``/init`` is shipped text rather than a host answer, but the rule is the
+    same: the name belongs to the build, so a workspace file cannot take it.
+    """
+    plain = invocation_name(name)
+    return (plain in CHAT_BUILTIN_NAMES or builtin_prompts.is_builtin_name(plain)
+            or manifest_command_name(plain) is not None)
 
 
 # -- frontmatter ---------------------------------------------------------------
@@ -489,8 +500,10 @@ def merge(resource_rows: list, file_rows: list) -> list:
 
     A builtin slash command owns its name outright, so a file command that
     collides with one is listed as ``shadowedBy: "builtin"`` and never expands.
-    Resource rows are never shadowed by a builtin here: their store contract is
-    older than this listing and stays exactly as it was.
+    A resource row is not shadowed by such a host answer: their store contract
+    is older than this listing and stays exactly as it was. A built-in prompt
+    command is different — its row is part of the very list being merged, so one
+    name can only have one winner there, and the store row loses to it.
     """
     claimed: dict = {}
     rows = []
@@ -498,14 +511,15 @@ def merge(resource_rows: list, file_rows: list) -> list:
         name = str(row.get("id") or "")
         if not name:
             continue
-        if row.get("source") != "resource" and is_reserved(name):
+        source = row.get("source")
+        if source not in ("resource", BUILTIN_SOURCE) and is_reserved(name):
             rows.append({**row, "body": None, "shadowed": True, "shadowedBy": BUILTIN_SHADOW})
             continue
         winner = claimed.get(name)
         if winner is not None:
             rows.append({**row, "body": None, "shadowed": True, "shadowedBy": winner})
             continue
-        claimed[name] = row.get("source")
+        claimed[name] = source
         rows.append(row)
     return rows
 

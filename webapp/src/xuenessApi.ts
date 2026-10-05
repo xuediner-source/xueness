@@ -145,6 +145,18 @@ export type ResourceList = {
   items: ResourceItem[];
   capability: { userScopeAvailable: boolean; userScopeReason?: string };
 };
+/** 合并命令清单的一行：内建提示命令、工作区/用户 .md 文件与资源存储同表呈现。 */
+export type CommandCatalogRow = {
+  id: string;
+  name: string;
+  description?: string;
+  argumentHint?: string;
+  source: string;
+  scope?: string;
+  shadowed?: boolean;
+  shadowedBy?: string | null;
+  [k: string]: unknown;
+};
 export type MemoryTracks = { tracks: MemoryTrack[] };
 
 export type XuenessPluginFeature = {
@@ -306,6 +318,22 @@ export async function listResources(kind: string): Promise<ResourceList> {
     items: payload.items ?? [],
     capability: payload.capability ?? { userScopeAvailable: true },
   };
+}
+
+/**
+ * GET /api/resources/commands/files → `xueness commands list` 打印的同一份合并清单。
+ *
+ * 内建提示命令、文件命令与资源条目在这里汇合，所以斜杠候选不需要 UI 侧第二份名单；
+ * 被遮蔽的行仍返回（`shadowed`），由调用方决定展示与否。`root` 缺省时只有状态目录
+ * 的条目（内建命令要求工作区，故不出现）。
+ */
+export async function listCommandCatalog(root?: string, language?: string): Promise<CommandCatalogRow[]> {
+  const query = new URLSearchParams();
+  if (root) query.set("root", root);
+  if (language) query.set("language", language);
+  const payload = await get<{ commands: CommandCatalogRow[] }>(
+    `/api/resources/commands/files${query.size ? `?${query}` : ""}`);
+  return payload.commands ?? [];
 }
 
 /** POST /api/resources/<kind>，body 至少含 `id`。 */

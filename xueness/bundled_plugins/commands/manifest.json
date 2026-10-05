@@ -22,6 +22,7 @@
     "resources/commands/files"
   ],
   "modules": [
+    "builtin_prompts",
     "commands",
     "file_commands",
     "commands_cli",
@@ -32,6 +33,11 @@
       "id": "commands.templates",
       "name": "自定义斜杠提示模板",
       "nameEn": "Custom slash prompt templates"
+    },
+    {
+      "id": "commands.init",
+      "name": "内建 /init：调研工作区并生成或更新 AGENTS.md",
+      "nameEn": "Built-in /init: study the workspace and create or update AGENTS.md"
     },
     {
       "id": "commands.resources",
