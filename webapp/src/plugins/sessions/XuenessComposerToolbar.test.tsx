@@ -2,13 +2,19 @@ import React from "react";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { renderToStaticMarkup } from "react-dom/server";
+import { setLocale, t } from "../../i18n";
 import {
   XuenessComposerToolbar,
   handlePopoverEscape,
   ComposerModelMenu,
   ComposerModelDetailCard,
   formatContextWindow,
+  formatCostMultiplier,
   modelReasoningSummary,
+  modelThinkingText,
+  modelDetailSentence,
+  modelMatchesPreset,
+  nextCatalogTab,
   modelDetailCardStyle,
   nextIndex,
 } from "./XuenessComposerToolbar";
@@ -148,19 +154,22 @@ test("Toolbar: profile tiers lead the popover and model rows keep menu keyboard 
   assert.match(renderToStaticMarkup(<ComposerModelMenu {...menuProps} error="HTTP 502" />), /重试/);
 });
 
-test("Toolbar: model rows show reported context window and reasoning tiers, and nothing when absent", () => {
+test("Toolbar: model rows show a reported cost multiplier and hide it when the catalog has none", () => {
   const reported = renderToStaticMarkup(
-    <ComposerModelMenu {...menuProps} models={[{ ...model, contextWindow: 200000 }]} />,
+    <ComposerModelMenu {...menuProps} models={[{ ...model, costMultiplier: 1.5 }]} />,
   );
-  assert.match(reported, /xn-composer-toolbar__model-meta/);
-  assert.match(reported, /<small title="上下文窗口">200K<\/small>/);
-  assert.match(reported, /<small title="推理档位">low\/medium\/high<\/small>/);
+  assert.match(reported, /data-testid="model-row-cost"/);
+  assert.match(reported, /1\.5×/);
+  // 上下文和推理档位留在详情卡，不编进行内倍率。
+  assert.doesNotMatch(reported, /xn-composer-toolbar__model-meta/);
 
   const absent = renderToStaticMarkup(
-    <ComposerModelMenu {...menuProps} models={[{ ...model, reasoningLevels: [] }]} />,
+    <ComposerModelMenu {...menuProps} models={[{ ...model, reasoningLevels: [], contextWindow: 200000 }]} />,
   );
-  assert.doesNotMatch(absent, /xn-composer-toolbar__model-meta/);
-  assert.doesNotMatch(absent, /200K/);
+  assert.doesNotMatch(absent, /data-testid="model-row-cost"/);
+  assert.doesNotMatch(absent, /×/);
+  // 分档预设没有独立倍率字段，即使模型声明了上下文也不编造预设倍率。
+  assert.doesNotMatch(absent, /data-preset="auto"[^>]*>[\s\S]*×/);
 });
 
 test("Toolbar: the model menu offers 「设为默认」only when the host wires it", () => {
@@ -200,34 +209,191 @@ test("formatContextWindow and modelReasoningSummary: compact facts or null when 
   assert.equal(modelReasoningSummary({ reasoningLevels: ["a", "b", "c", "d"] }), "a/b/c+");
 });
 
-test("ComposerModelDetailCard: identity, protocol, context, output, reasoning levels and the edit entry", () => {
+test("ComposerModelDetailCard: context, thinking, cost, a factual sentence and Edit", () => {
   const html = renderToStaticMarkup(
     <ComposerModelDetailCard
-      model={{ ...model, protocol: "anthropic", contextWindow: 200000, maxOutputTokens: 8192 }}
+      model={{ ...model, protocol: "anthropic", contextWindow: 200000, maxOutputTokens: 8192, costMultiplier: 2 }}
       anchor={{ top: 100, left: 400, right: 640 }}
       onEdit={() => {}}
     />,
   );
   assert.match(html, /data-testid="composer-model-detail"/);
+  assert.match(html, /tabindex="0"/);
+  assert.match(html, /role="group"/);
+  assert.match(html, /aria-label="模型详情：Default model"/);
   assert.match(html, /Default model/);
-  assert.match(html, /模型 ID/);
-  assert.match(html, /model-default/);
-  assert.match(html, /协议/);
-  assert.match(html, /Anthropic/);
-  assert.match(html, /上下文窗口/);
-  assert.match(html, /200K/);
-  assert.match(html, /最大输出/);
-  assert.match(html, /8\.2K/);
-  assert.match(html, /推理档位/);
-  assert.match(html, /low\/medium\/high/);
+  assert.match(html, /<dt>上下文<\/dt><dd>200K<\/dd>/);
+  assert.match(html, /<dt>推理<\/dt><dd>支持 · low\/medium\/high<\/dd>/);
+  assert.match(html, /<dt>成本<\/dt><dd>2×<\/dd>/);
+  assert.match(html, /Anthropic 协议 · 上下文 200K · 推理档位 low\/medium\/high/);
+  assert.match(html, /data-testid="composer-model-detail-edit"/);
   assert.match(html, /编辑/);
   // 详情卡固定定位在锚点行左侧（SSR 视口 1280）：right = 1280 - 400 + 10。
   assert.match(html, /top:100px;right:890px;width:248px/);
+  const missing = renderToStaticMarkup(
+    <ComposerModelDetailCard
+      model={{ ...model, reasoningLevels: [], description: "" }}
+      anchor={{ top: 100, left: 400, right: 640 }}
+      onEdit={() => {}}
+    />,
+  );
+  assert.match(missing, /<dt>上下文<\/dt><dd>—<\/dd>/);
+  assert.match(missing, /<dt>推理<\/dt><dd>—<\/dd>/);
+  assert.match(missing, /<dt>成本<\/dt><dd>—<\/dd>/);
+  assert.doesNotMatch(missing, /×/);
   // 没有模型就不渲染卡片，也不编造内容。
   assert.equal(
     renderToStaticMarkup(<ComposerModelDetailCard model={undefined} anchor={{ top: 0, left: 0, right: 0 }} onEdit={() => {}} />),
     "",
   );
+});
+
+function clickByTestId(node: React.ReactNode, testId: string): Array<() => void> {
+  const found: Array<() => void> = [];
+  const visit = (child: React.ReactNode): void => {
+    if (child == null || typeof child === "boolean" || typeof child === "string" || typeof child === "number") return;
+    if (Array.isArray(child)) {
+      child.forEach(visit);
+      return;
+    }
+    if (typeof child !== "object" || !("props" in child)) return;
+    const element = child as React.ReactElement<{ "data-testid"?: string; onClick?: () => void; children?: React.ReactNode }>;
+    if (element.props?.["data-testid"] === testId && typeof element.props.onClick === "function") found.push(element.props.onClick);
+    visit(element.props?.children);
+  };
+  visit(node);
+  return found;
+}
+
+test("ComposerModelDetailCard: Edit calls the settings callback", () => {
+  let edits = 0;
+  const tree = ComposerModelDetailCard({
+    model,
+    anchor: { top: 10, left: 400, right: 640 },
+    onEdit: () => { edits += 1; },
+  });
+  const clicks = clickByTestId(tree, "composer-model-detail-edit");
+  assert.equal(clicks.length, 1);
+  clicks[0]();
+  assert.equal(edits, 1);
+});
+
+test("Toolbar: New and Custom tabs keep environment models and saved profiles apart", () => {
+  const env = { ...model, id: "", name: "Environment", model: "env-model" };
+  const custom = { ...model, id: "provider-a", name: "Default model", model: "model-default" };
+  const models = [env, custom];
+  const customHtml = renderToStaticMarkup(
+    <ComposerModelMenu {...menuProps} models={models} catalogTab="custom" />,
+  );
+  assert.match(customHtml, /role="tablist"/);
+  const newTab = customHtml.match(/<button[^>]*data-testid="composer-model-tab-new"[^>]*>/)?.[0] ?? "";
+  const customTab = customHtml.match(/<button[^>]*data-testid="composer-model-tab-custom"[^>]*>/)?.[0] ?? "";
+  assert.match(newTab, /aria-selected="false"/);
+  assert.match(customTab, /aria-selected="true"/);
+  assert.match(customHtml, /aria-controls="composer-model-tabpanel"/);
+  assert.match(customHtml, /data-model-row="provider-a:model-default"/);
+  assert.doesNotMatch(customHtml, /data-model-row=":env-model"/);
+
+  const newHtml = renderToStaticMarkup(
+    <ComposerModelMenu {...menuProps} models={models} catalogTab="new" selectedModel={env} isSelected={() => false} />,
+  );
+  const newTabOn = newHtml.match(/<button[^>]*data-testid="composer-model-tab-new"[^>]*>/)?.[0] ?? "";
+  const customTabOff = newHtml.match(/<button[^>]*data-testid="composer-model-tab-custom"[^>]*>/)?.[0] ?? "";
+  assert.match(newTabOn, /aria-selected="true"/);
+  assert.match(customTabOff, /aria-selected="false"/);
+  assert.match(newHtml, /data-model-row=":env-model"/);
+  assert.doesNotMatch(newHtml, /data-model-row="provider-a:model-default"/);
+  assert.equal(nextCatalogTab("new", "ArrowRight"), "custom");
+  assert.equal(nextCatalogTab("custom", "ArrowLeft"), "new");
+  assert.equal(nextCatalogTab("new", "ArrowLeft"), "custom");
+});
+
+test("Toolbar: presets filter on reported fields and the detail card follows detailKey", () => {
+  const big = {
+    ...model,
+    id: "big",
+    name: "Big context",
+    model: "big-model",
+    contextWindow: 200000,
+    reasoningLevels: [] as string[],
+    runtimeProfile: "standard" as const,
+  };
+  const small = {
+    ...model,
+    id: "small",
+    name: "Small reasoner",
+    model: "small-model",
+    contextWindow: 8192,
+    reasoningLevels: ["low"],
+    runtimeProfile: "lightweight" as const,
+  };
+  const peers = [big, small];
+  assert.equal(modelMatchesPreset(big, "ultimate", peers), true);
+  assert.equal(modelMatchesPreset(small, "ultimate", peers), false);
+  assert.equal(modelMatchesPreset(small, "performance", peers), true);
+  assert.equal(modelMatchesPreset(big, "performance", peers), false);
+  assert.equal(modelMatchesPreset(small, "efficient", peers), true);
+  assert.equal(modelMatchesPreset(big, "efficient", peers), false);
+  assert.equal(modelMatchesPreset(big, "auto", peers), true);
+
+  const ultimate = renderToStaticMarkup(
+    <ComposerModelMenu {...menuProps} models={peers} catalogTab="custom" preset="ultimate" />,
+  );
+  const ultimateButton = ultimate.match(/<button[^>]*data-preset="ultimate"[^>]*>/)?.[0] ?? "";
+  assert.match(ultimateButton, /aria-checked="true"/);
+  assert.match(ultimate, /Big context/);
+  assert.doesNotMatch(ultimate, /Small reasoner/);
+  assert.doesNotMatch(ultimate, /×/);
+
+  const efficient = renderToStaticMarkup(
+    <ComposerModelMenu {...menuProps} models={peers} catalogTab="custom" preset="efficient" />,
+  );
+  assert.match(efficient, /Small reasoner/);
+  assert.doesNotMatch(efficient, /Big context/);
+
+  const card = renderToStaticMarkup(
+    <ComposerModelMenu
+      {...menuProps}
+      models={[{ ...big, description: "已有说明" }]}
+      catalogTab="custom"
+      detailKey="big:big-model"
+    />,
+  );
+  assert.match(card, /data-testid="composer-model-detail"/);
+  assert.match(card, /aria-describedby="composer-model-detail"/);
+  assert.match(card, /已有说明/);
+  assert.match(card, /<dt>上下文<\/dt><dd>200K<\/dd>/);
+  assert.match(card, /<dt>推理<\/dt><dd>—<\/dd>/);
+  assert.match(card, /编辑/);
+});
+
+test("model picker strings exist in English", () => {
+  try {
+    setLocale("en");
+    assert.equal(t("自动"), "Auto");
+    assert.equal(t("旗舰"), "Ultimate");
+    assert.equal(t("性能"), "Performance");
+    assert.equal(t("高效"), "Efficient");
+    assert.equal(t("新模型"), "New");
+    assert.equal(t("自定义"), "Custom");
+    assert.equal(t("上下文"), "Context");
+    assert.equal(t("推理"), "Thinking");
+    assert.equal(t("成本"), "Cost");
+    assert.equal(t("支持"), "Supported");
+    assert.equal(t("成本倍率"), "Cost multiplier");
+    assert.equal(t("查看模型文档"), "View Docs");
+    assert.equal(t("+ 添加"), "+ Add");
+    assert.equal(t("添加"), "Add");
+    assert.equal(formatCostMultiplier(undefined), null);
+    assert.equal(formatCostMultiplier(0), null);
+    assert.equal(formatCostMultiplier(1), "1×");
+    assert.equal(formatCostMultiplier(1.5), "1.5×");
+    assert.equal(modelThinkingText({ reasoningLevels: [] }), null);
+    assert.equal(modelThinkingText({ reasoningLevels: ["high"] }), "Supported · high");
+    assert.match(modelDetailSentence({ ...model, protocol: "openai", reasoningLevels: [], runtimeProfile: "standard" }) ?? "", /OpenAI-compatible protocol/);
+  } finally {
+    setLocale("zh");
+  }
 });
 
 test("modelDetailCardStyle: flips to the row's right when the left side has no room and clamps into the viewport", () => {

@@ -133,6 +133,11 @@
       "id": "sessions.runtime_model_switch",
       "name": "运行中切换模型与推理档位（/model、/effort）",
       "nameEn": "Switch model and reasoning level mid-run via /model and /effort"
+    },
+    {
+      "id": "sessions.model_picker",
+      "name": "模型选择分档、目录标签与详情卡",
+      "nameEn": "Model picker presets, catalog tabs and detail card"
     }
   ],
   "frontendModules": [

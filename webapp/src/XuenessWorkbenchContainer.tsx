@@ -694,6 +694,12 @@ export function XuenessWorkbenchContainer() {
   // 「设为默认」属于 providers.default_selection：容器只在插件生效时把菜单里的
   // 当前选择转发到既有后端接口，校验与存储都在服务端完成。
   const [defaultSaved, setDefaultSaved] = useState(false);
+  // Edit on a model row opens provider settings focused on that saved profile.
+  const [providerFocusId, setProviderFocusId] = useState<string | undefined>(undefined);
+  const openModelSettings = useCallback((model?: ComposerModel) => {
+    setProviderFocusId(model?.id || undefined);
+    setPanel(isPluginEffective("providers") ? "providers" : "plugins");
+  }, [isPluginEffective]);
   const saveDefaultModel = useCallback(async (model: ComposerModel) => {
     if (!isPluginEffective("providers")) return;
     try {
@@ -1363,7 +1369,7 @@ export function XuenessWorkbenchContainer() {
       choices={choices} onChange={updateChoices} models={composerCatalog.models}
       loading={composerCatalogLoading} error={composerCatalogError}
       onReload={() => void refreshComposerCatalog()}
-      onManageModels={() => setPanel(isPluginEffective("providers") ? "providers" : "plugins")}
+      onManageModels={openModelSettings}
       runtimeBudget={session?.id === activeId ? session.runtime_budget : undefined}
       pauseReason={session?.id === activeId ? session.pause_reason : undefined}
       disabled={busy || branchBusy || composerRunning}
@@ -1374,7 +1380,7 @@ export function XuenessWorkbenchContainer() {
       choices={choices} onChange={updateChoices} models={composerCatalog.models}
       loading={composerCatalogLoading} error={composerCatalogError}
       onReload={() => void refreshComposerCatalog()}
-      onManageModels={() => setPanel(isPluginEffective("providers") ? "providers" : "plugins")}
+      onManageModels={openModelSettings}
       onSaveDefault={isPluginEffective("providers") ? model => void saveDefaultModel(model) : undefined}
       defaultSaved={defaultSaved}
       onBackground={isPluginEffective("workflows") ? () => setPanel("workflows") : undefined}
@@ -1649,7 +1655,7 @@ export function XuenessWorkbenchContainer() {
       onDefaultChanged={() => { if (!activeId) { setDraftRoot(undefined); setIsolatedWorkspace(false); updateChoices({remote:undefined}); } void refreshComposerCatalog(); }} /><SettingsSections embedded sections={[]} activeSection="workspace-display" values={settingsValues} capabilities={capabilities} onUpdateSetting={handleUpdateSetting} saving={settingsSaving} /></>;
     if (settingsSection === "providers") return <>
       <PluginProfilePicker enabled={isPluginEffective("extensions")} onCatalogChanged={() => void refreshPluginCatalog()} />
-      <ModelManager runtimeMonitorEnabled={isPluginEffective("providers") && isPluginEffective("diagnostics")} onSelect={id => { updateChoices({ provider: "real", provider_id: id || undefined, model: undefined, reasoning_effort: undefined }); void refreshComposerCatalog(); }} />
+      <ModelManager focusProviderId={providerFocusId} runtimeMonitorEnabled={isPluginEffective("providers") && isPluginEffective("diagnostics")} onSelect={id => { updateChoices({ provider: "real", provider_id: id || undefined, model: undefined, reasoning_effort: undefined }); void refreshComposerCatalog(); }} />
     </>;
     if (settingsSection === "mcp") return <><CapabilitiesPanel sections={capSections.filter(section => section.kind === "mcp")} /><XuenessMcpTools /></>;
     if (settingsSection === "plugins") return <XuenessPluginSettingsPanel
@@ -1744,7 +1750,7 @@ export function XuenessWorkbenchContainer() {
         error={dirError} truncated={dirListing?.truncated ?? false} loading={dirLoading}
         onNavigate={browseDirectory} onOpenFile={handleSelectFile} onCreateDir={handleCreateDir} />,
     providers: (
-      <ModelManager runtimeMonitorEnabled={isPluginEffective("providers") && isPluginEffective("diagnostics")} onSelect={id => { updateChoices({ provider: "real", provider_id: id || undefined, model: undefined, reasoning_effort: undefined }); setPanel("chat"); }} />
+      <ModelManager focusProviderId={providerFocusId} runtimeMonitorEnabled={isPluginEffective("providers") && isPluginEffective("diagnostics")} onSelect={id => { updateChoices({ provider: "real", provider_id: id || undefined, model: undefined, reasoning_effort: undefined }); setPanel("chat"); }} />
     ),
     usage: <XuenessUsageSettings />,
     memory: <><MemoryPanel tracks={tracks} error={tracksError} loading={tracksLoading} /><XuenessMemoryEditor /></>,

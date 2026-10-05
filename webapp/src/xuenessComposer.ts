@@ -21,6 +21,13 @@ export type ComposerModel = {
   contextWindow?: number;
   maxOutputTokens?: number;
   toolCalling?: "native" | "json";
+  /**
+   * Provider-reported cost multiplier, when the catalog already includes one.
+   * Absent, zero, or non-finite values must stay hidden — the UI does not invent a rate.
+   */
+  costMultiplier?: number;
+  /** Optional one-line description already stored with the profile. */
+  description?: string;
   compatibility?: {
     streamUsage?: boolean;
     parallelToolCalls?: boolean;

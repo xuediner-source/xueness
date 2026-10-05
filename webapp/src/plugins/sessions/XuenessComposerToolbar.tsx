@@ -15,7 +15,8 @@ export type ComposerToolbarProps = {
   loading: boolean;
   error: string;
   onReload(): void;
-  onManageModels(): void;
+  /** Opens provider settings. A model argument focuses that saved profile. */
+  onManageModels(model?: ComposerModel): void;
   /** 「设为默认」：宿主把入口接到 providers.default_selection 的后端接口。 */
   onSaveDefault?(model: ComposerModel): void;
   defaultSaved?: boolean;
@@ -135,6 +136,114 @@ export function modelDetailCardStyle(
 
 const MODEL_DETAIL_CARD = { width: 248, maxHeight: 340 } as const;
 
+/** Qoder-style catalog tabs. Custom profiles have a saved id; the environment model does not. */
+export type ModelCatalogTab = "new" | "custom";
+
+/** Local filters over fields the catalog already reports. They do not call a provider. */
+export type ModelPresetId = "auto" | "ultimate" | "performance" | "efficient";
+
+export const MODEL_PRESET_ORDER = ["auto", "ultimate", "performance", "efficient"] as const;
+
+export const MODEL_PRESET_LABEL: Record<ModelPresetId, string> = {
+  auto: "自动",
+  ultimate: "旗舰",
+  performance: "性能",
+  efficient: "高效",
+};
+
+export const MODEL_PRESET_HINT: Record<ModelPresetId, string> = {
+  auto: "显示当前标签下的全部模型，不改已选模型。",
+  ultimate: "只列出当前标签里已声明最大上下文窗口的模型。",
+  performance: "只列出已声明推理档位的模型。",
+  efficient: "只列出本地轻量档模型。",
+};
+
+export function modelCatalogTab(model: Pick<ComposerModel, "id">): ModelCatalogTab {
+  return model.id ? "custom" : "new";
+}
+
+export function modelsInCatalogTab(models: readonly ComposerModel[], tab: ModelCatalogTab): ComposerModel[] {
+  return models.filter(model => modelCatalogTab(model) === tab);
+}
+
+/** Largest positive context window actually declared by these models. */
+export function maxReportedContext(models: readonly Pick<ComposerModel, "contextWindow">[]): number | null {
+  let max: number | null = null;
+  for (const model of models) {
+    const value = model.contextWindow;
+    if (typeof value === "number" && Number.isFinite(value) && value > 0 && (max === null || value > max)) max = value;
+  }
+  return max;
+}
+
+/**
+ * Preset membership uses only reported fields.
+ * Ultimate needs a declared context window; performance needs reasoning levels;
+ * efficient needs an explicit lightweight profile. Missing data does not match.
+ */
+export function modelMatchesPreset(
+  model: ComposerModel,
+  preset: ModelPresetId,
+  peers: readonly ComposerModel[],
+): boolean {
+  if (preset === "auto") return true;
+  if (preset === "ultimate") {
+    const max = maxReportedContext(peers);
+    return max !== null && model.contextWindow === max;
+  }
+  if (preset === "performance") {
+    return (model.reasoningLevels ?? []).some(level => typeof level === "string" && level.length > 0);
+  }
+  return model.runtimeProfile === "lightweight";
+}
+
+/** A reported cost multiplier, or null when the catalog did not provide one. */
+export function reportedCostMultiplier(model: { costMultiplier?: number | null }): number | null {
+  const value = model.costMultiplier;
+  if (typeof value !== "number" || !Number.isFinite(value) || value <= 0) return null;
+  return value;
+}
+
+/** Compact multiplier such as 1× or 1.5×. Returns null instead of inventing a rate. */
+export function formatCostMultiplier(value: number | null | undefined): string | null {
+  if (typeof value !== "number" || !Number.isFinite(value) || value <= 0) return null;
+  const rounded = Math.round(value * 100) / 100;
+  const text = Number.isInteger(rounded) ? String(rounded) : rounded.toFixed(2).replace(/\.?0+$/, "");
+  return `${text}×`;
+}
+
+export function nextCatalogTab(current: ModelCatalogTab, key: "ArrowLeft" | "ArrowRight"): ModelCatalogTab {
+  const order: ModelCatalogTab[] = ["new", "custom"];
+  const index = order.indexOf(current);
+  const delta = key === "ArrowRight" ? 1 : -1;
+  return order[(index + delta + order.length) % order.length];
+}
+
+/** Thinking line: declared reasoning levels, or null when the profile did not report any. */
+export function modelThinkingText(model: Pick<ComposerModel, "reasoningLevels">): string | null {
+  const levels = (model.reasoningLevels ?? []).filter(level => typeof level === "string" && level.length > 0);
+  if (levels.length === 0) return null;
+  return `${tr("支持")} · ${levels.join("/")}`;
+}
+
+/**
+ * One factual sentence from fields the profile already has.
+ * An authored description wins. Otherwise the sentence lists only reported facts.
+ */
+export function modelDetailSentence(model: ComposerModel): string | null {
+  const authored = typeof model.description === "string" ? model.description.trim() : "";
+  if (authored) return authored;
+  const parts: string[] = [];
+  parts.push(tr(model.protocol === "anthropic" ? "Anthropic 协议" : "OpenAI 兼容协议"));
+  const context = formatContextWindow(model.contextWindow);
+  if (context) parts.push(tf("上下文 {0}", [context]));
+  const levels = (model.reasoningLevels ?? []).filter(level => typeof level === "string" && level.length > 0);
+  if (levels.length > 0) parts.push(tf("推理档位 {0}", [levels.join("/")]));
+  if (model.runtimeProfile === "lightweight") parts.push(tr("本地轻量档"));
+  else if (model.runtimeProfile === "standard") parts.push(tr("标准档"));
+  return parts.length > 0 ? parts.join(" · ") : null;
+}
+
 export type ComposerModelDetailCardProps = {
   model: ComposerModel | undefined;
   anchor: ModelDetailAnchor;
@@ -146,9 +255,9 @@ export type ComposerModelDetailCardProps = {
 };
 
 /**
- * Hover/focus detail card for one model row: identity, protocol, context and
- * output limits, reasoning levels, plus the edit entry into model settings.
- * Renders nothing without a model — the rows are the source of truth.
+ * Hover/focus detail card: context length, thinking support, cost, one factual
+ * sentence, and Edit into that provider's settings. Missing facts render 「—」.
+ * Cost stays 「—」 when the catalog did not report a multiplier.
  */
 export function ComposerModelDetailCard({
   model,
@@ -161,8 +270,9 @@ export function ComposerModelDetailCard({
 }: ComposerModelDetailCardProps): React.JSX.Element | null {
   if (!model) return null;
   const context = formatContextWindow(model.contextWindow);
-  const maxOutput = formatContextWindow(model.maxOutputTokens);
-  const levels = (model.reasoningLevels ?? []).filter(level => typeof level === "string" && level.length > 0);
+  const thinking = modelThinkingText(model);
+  const cost = formatCostMultiplier(reportedCostMultiplier(model));
+  const sentence = modelDetailSentence(model);
   return (
     <div
       ref={cardRef}
@@ -171,7 +281,9 @@ export function ComposerModelDetailCard({
         width: typeof window === "undefined" ? 1280 : window.innerWidth,
         height: typeof window === "undefined" ? 800 : window.innerHeight,
       }, MODEL_DETAIL_CARD)}
+      id="composer-model-detail"
       role="group"
+      tabIndex={0}
       aria-label={tf("模型详情：{0}", [model.name])}
       data-testid="composer-model-detail"
       onMouseEnter={onPointerEnter}
@@ -181,13 +293,12 @@ export function ComposerModelDetailCard({
       <div className="xn-composer-toolbar__model-detail-name" title={model.name}>{model.name}</div>
       {!model.configured && <div className="xn-composer-toolbar__model-detail-unconfigured">{tr("未配置")}</div>}
       <dl className="xn-composer-toolbar__model-detail-facts">
-        <div><dt>{tr("模型 ID")}</dt><dd title={model.model}>{model.model || "—"}</dd></div>
-        <div><dt>{tr("协议")}</dt><dd>{model.protocol === "anthropic" ? "Anthropic" : "OpenAI"}</dd></div>
-        <div><dt>{tr("上下文窗口")}</dt><dd>{context ?? "—"}</dd></div>
-        <div><dt>{tr("最大输出")}</dt><dd>{maxOutput ?? "—"}</dd></div>
-        <div><dt>{tr("推理档位")}</dt><dd>{levels.length > 0 ? levels.join("/") : "—"}</dd></div>
+        <div><dt>{tr("上下文")}</dt><dd>{context ?? "—"}</dd></div>
+        <div><dt>{tr("推理")}</dt><dd>{thinking ?? "—"}</dd></div>
+        <div><dt>{tr("成本")}</dt><dd>{cost ?? "—"}</dd></div>
       </dl>
-      <button type="button" className="xn-composer-toolbar__model-detail-edit" onClick={onEdit}>
+      <p className="xn-composer-toolbar__model-detail-note">{sentence ?? "—"}</p>
+      <button type="button" className="xn-composer-toolbar__model-detail-edit" data-testid="composer-model-detail-edit" onClick={onEdit}>
         <IconPencil size={12} aria-hidden="true" />
         <span>{tr("编辑")}</span>
       </button>
@@ -211,19 +322,26 @@ export type ComposerModelMenuProps = {
   onChooseModel(model: ComposerModel): void;
   onChooseProfile(profile: RuntimeProfile): void;
   onReload(): void;
-  onManageModels(): void;
+  /** Opens provider settings. A model argument focuses that saved profile. */
+  onManageModels(model?: ComposerModel): void;
   /** 「设为默认」小操作（providers.default_selection）；宿主不接线时整个入口不渲染。 */
   onSaveDefault?(model: ComposerModel): void;
   defaultSaved?: boolean;
   /** Close the popover; a truthy argument re-focuses the composer input. */
   onRequestClose(restoreInput?: boolean): void;
+  /** Controlled catalog tab. Omitted: the menu keeps its own tab. */
+  catalogTab?: ModelCatalogTab;
+  /** Controlled preset filter. Omitted: the menu keeps its own preset. */
+  preset?: ModelPresetId;
+  /** Renders the detail card for this row key without a pointer event (tests). */
+  detailKey?: string;
 };
 
 /**
- * Qoder 式模型弹层：顶部「标准 / 本地轻量」档位行，模型行右侧显示上下文窗口
- * 与推理档位，悬停或键盘聚焦某行时弹出详情卡（含编辑入口）。只做展示与本地
- * 详情卡状态；数据、选择与关闭回调全部来自宿主，键盘上下选择与 Esc 关闭
- * 在这里统一处理。
+ * 模型弹层：分档预设（自动 / 旗舰 / 性能 / 高效）只过滤已有字段，不调用服务商，
+ * 也没有目录倍率时不显示倍率。New / Custom 标签区分环境模型与已保存配置。
+ * 模型行只在目录给出成本倍率时显示它。悬停或键盘聚焦弹出详情卡。
+ * 「标准 / 本地轻量」仍是既有运行档位开关。Esc 关闭并把焦点还给触发按钮。
  */
 export function ComposerModelMenu({
   menuRef,
@@ -245,7 +363,14 @@ export function ComposerModelMenu({
   onSaveDefault,
   defaultSaved = false,
   onRequestClose,
+  catalogTab,
+  preset,
+  detailKey,
 }: ComposerModelMenuProps): React.JSX.Element {
+  const [catalogTabState, setCatalogTabState] = useState<ModelCatalogTab>(selectedModel?.id ? "custom" : "new");
+  const [presetState, setPresetState] = useState<ModelPresetId>("auto");
+  const activeTab = catalogTab ?? catalogTabState;
+  const activePreset = preset ?? presetState;
   /** Row the detail card is anchored to; set on hover or keyboard focus. */
   const [modelDetail, setModelDetail] = useState<{ key: string; anchor: ModelDetailAnchor } | null>(null);
   const detailCardRef = useRef<HTMLDivElement | null>(null);
@@ -279,9 +404,30 @@ export function ComposerModelMenu({
     const current = items.indexOf(document.activeElement as HTMLButtonElement);
     items[nextIndex(current, items.length, event.key as "ArrowDown" | "ArrowUp" | "Home" | "End")]?.focus();
   };
-  const detailModel = modelDetail
-    ? models.find((model) => model.id + ":" + model.model === modelDetail.key)
+  const shownDetailKey = modelDetail?.key ?? detailKey;
+  const shownAnchor = modelDetail?.anchor ?? (detailKey ? { top: 96, left: 520, right: 760 } : null);
+  const detailModel = shownDetailKey
+    ? models.find((model) => model.id + ":" + model.model === shownDetailKey)
     : undefined;
+  const chooseTab = (tab: ModelCatalogTab) => {
+    setModelDetail(null);
+    if (catalogTab === undefined) setCatalogTabState(tab);
+  };
+  const choosePreset = (next: ModelPresetId) => {
+    setModelDetail(null);
+    if (preset === undefined) setPresetState(next);
+  };
+  const onTabKeyDown = (event: React.KeyboardEvent<HTMLButtonElement>) => {
+    if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
+    event.preventDefault();
+    event.stopPropagation();
+    const next = nextCatalogTab(activeTab, event.key);
+    chooseTab(next);
+    const tablist = event.currentTarget.parentElement;
+    queueMicrotask(() => tablist?.querySelector<HTMLButtonElement>(`[data-testid="composer-model-tab-${next}"]`)?.focus());
+  };
+  const tabModels = modelsInCatalogTab(models, activeTab);
+  const visibleModels = tabModels.filter(model => modelMatchesPreset(model, activePreset, tabModels));
 
   return (
     <div
@@ -294,6 +440,34 @@ export function ComposerModelMenu({
         if (!event.currentTarget.contains(event.relatedTarget as Node | null)) onRequestClose();
       }}
     >
+      <div
+        className="xn-composer-toolbar__model-presets"
+        role="group"
+        aria-label={tr("分档预设")}
+        data-testid="composer-model-presets"
+      >
+        {MODEL_PRESET_ORDER.map(id => {
+          const selected = activePreset === id;
+          return (
+            <button
+              type="button"
+              role="menuitemradio"
+              aria-checked={selected}
+              key={id}
+              data-preset={id}
+              className="xn-composer-toolbar__profile-option"
+              disabled={disabled}
+              title={tr(MODEL_PRESET_HINT[id])}
+              onClick={() => choosePreset(id)}
+            >
+              <span>{tr(MODEL_PRESET_LABEL[id])}</span>
+              <span className="xn-composer-toolbar__menu-indicator" aria-hidden="true">
+                {selected && <IconCheck />}
+              </span>
+            </button>
+          );
+        })}
+      </div>
       <div
         className="xn-composer-toolbar__runtime-profile"
         role="group"
@@ -322,6 +496,27 @@ export function ComposerModelMenu({
         })}
         {!canSelectStandard && <p className="xn-composer-toolbar__profile-note">{tr("JSON 工具模式只能使用本地轻量档位。")}</p>}
       </div>
+      <div className="xn-composer-toolbar__model-tabs" role="tablist" aria-label={tr("模型目录")} data-testid="composer-model-tabs">
+        {(["new", "custom"] as const).map(tab => {
+          const selected = activeTab === tab;
+          const tabId = `composer-model-tab-${tab}`;
+          return (
+            <button
+              type="button"
+              role="tab"
+              id={tabId}
+              key={tab}
+              data-testid={tabId}
+              aria-selected={selected}
+              aria-controls="composer-model-tabpanel"
+              tabIndex={selected ? 0 : -1}
+              className="xn-composer-toolbar__model-tab"
+              onClick={() => chooseTab(tab)}
+              onKeyDown={onTabKeyDown}
+            >{tr(tab === "new" ? "新模型" : "自定义")}</button>
+          );
+        })}
+      </div>
       {loading && <div className="xn-composer-toolbar__message">{tr("正在读取模型...")}</div>}
       {error && (
         <div role="alert" className="xn-composer-toolbar__error">
@@ -336,21 +531,28 @@ export function ComposerModelMenu({
       )}
       {!loading && !error && models.length > 0 && (
         <div
+          id="composer-model-tabpanel"
+          role="tabpanel"
+          aria-labelledby={`composer-model-tab-${activeTab}`}
           className="xn-composer-toolbar__model-options"
-          role="group"
-          aria-label={tr("可用模型")}
+          data-testid="composer-model-tabpanel"
           onScroll={() => setModelDetail(null)}
         >
-          {models.map((model) => {
+          {visibleModels.length === 0 && (
+            <div className="xn-composer-toolbar__message" data-testid="composer-model-tab-empty">
+              {tr(tabModels.length === 0 ? "此标签下暂无模型" : "没有模型符合这个分档。")}
+            </div>
+          )}
+          {visibleModels.map((model) => {
             const selected = isSelected(model);
             const rowKey = model.id + ":" + model.model;
-            const contextLabel = formatContextWindow(model.contextWindow);
-            const reasoningLabel = modelReasoningSummary(model);
+            const costLabel = formatCostMultiplier(reportedCostMultiplier(model));
             return (
               <button
                 type="button"
                 role="menuitemradio"
                 aria-checked={selected}
+                aria-describedby={shownDetailKey === rowKey ? "composer-model-detail" : undefined}
                 key={rowKey}
                 data-model-row={rowKey}
                 className="xn-composer-toolbar__model-option"
@@ -375,11 +577,8 @@ export function ComposerModelMenu({
               >
                 <span className="xn-composer-toolbar__model-name">{model.name}</span>
                 {!model.configured && <small>{tr("未配置")}</small>}
-                {(contextLabel || reasoningLabel) && (
-                  <span className="xn-composer-toolbar__model-meta">
-                    {contextLabel && <small title={tr("上下文窗口")}>{contextLabel}</small>}
-                    {reasoningLabel && <small title={tr("推理档位")}>{reasoningLabel}</small>}
-                  </span>
+                {costLabel && (
+                  <span className="xn-composer-toolbar__model-cost" data-testid="model-row-cost" title={tr("成本倍率")}>{costLabel}</span>
                 )}
                 <span className="xn-composer-toolbar__menu-indicator" aria-hidden="true">
                   {selected && <IconCheck />}
@@ -430,17 +629,17 @@ export function ComposerModelMenu({
           }}
         >{tr("管理模型")}</button>
       </div>
-      {modelDetail && (
+      {shownAnchor && detailModel && (
         <ComposerModelDetailCard
           model={detailModel}
-          anchor={modelDetail.anchor}
+          anchor={shownAnchor}
           cardRef={detailCardRef}
           onPointerEnter={cancelDetailClose}
           onPointerLeave={scheduleDetailClose}
           onKeyDown={(event) => { handlePopoverEscape(event, onRequestClose, triggerRef?.current ?? null); }}
           onEdit={() => {
             onRequestClose();
-            onManageModels();
+            onManageModels(detailModel);
           }}
         />
       )}

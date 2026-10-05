@@ -112,6 +112,11 @@
       "id": "providers.activity",
       "name": "输出阶段、延迟、计数与速率趋势",
       "nameEn": "Output phase, latency, counts and rate trends"
+    },
+    {
+      "id": "providers.custom_empty",
+      "name": "自定义模型空状态",
+      "nameEn": "Custom model empty state"
     }
   ],
   "frontendModules": [

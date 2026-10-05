@@ -4,6 +4,7 @@ import { resolve } from 'node:path';
 import test from 'node:test';
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
+import { setLocale, t } from '../../i18n';
 import {
   ModelManager,
   ModelProviderNavigation,
@@ -545,18 +546,68 @@ test('split panel follows the upstream 224px desktop and 36rem detail dimensions
   assert.match(css, /grid-template-columns:\s*56px minmax\(0, 1fr\)/);
 });
 
-test('an empty custom model list offers adding one without a dead relative docs link', () => {
-  const html = renderToStaticMarkup(<ProviderEmptyState onAdd={() => undefined} />);
-  assert.match(html, /data-testid="xn-settings-empty"/);
-  assert.match(html, /<p class="xn-settings-empty__title">还没有自定义模型配置<\/p>/);
-  assert.match(html, /<button type="button" class="xn-btn xn-btn--primary xn-btn--md">添加配置<\/button>/);
-  // 工作台由本地 loopback 服务提供，相对 docs/ 路径并不存在，故不渲染文档链接。
-  assert.doesNotMatch(html, /xn-settings-empty__link/);
-  assert.match(renderToStaticMarkup(<ProviderEmptyState onAdd={() => undefined} busy />), /disabled="">添加配置/);
+function clickByTestId(node: React.ReactNode, testId: string): Array<() => void> {
+  const found: Array<() => void> = [];
+  const visit = (child: React.ReactNode): void => {
+    if (child == null || typeof child === 'boolean' || typeof child === 'string' || typeof child === 'number') return;
+    if (Array.isArray(child)) {
+      child.forEach(visit);
+      return;
+    }
+    if (typeof child !== 'object' || !('props' in child)) return;
+    const element = child as React.ReactElement<{ 'data-testid'?: string; onClick?: () => void; children?: React.ReactNode }>;
+    if (element.props?.['data-testid'] === testId && typeof element.props.onClick === 'function') found.push(element.props.onClick);
+    visit(element.props?.children);
+  };
+  visit(node);
+  return found;
+}
+
+test('an empty custom model list shows the illustration, both Add actions, and the repo doc', () => {
+  let adds = 0;
+  const tree = ProviderEmptyState({ onAdd: () => { adds += 1; } });
+  const html = renderToStaticMarkup(tree);
+  assert.match(html, /data-testid="provider-custom-empty"/);
+  assert.match(html, /<svg class="xn-provider-empty__art"/);
+  assert.doesNotMatch(html, /<img /);
+  assert.match(html, /还没有自定义模型配置/);
+  assert.match(html, /添加一个 API 配置后，可随时切换当前运行使用的模型。/);
+  assert.match(html, /data-testid="provider-custom-empty-add"/);
+  assert.match(html, /\+ 添加/);
+  assert.match(html, /data-testid="provider-custom-empty-action"/);
+  assert.match(html, />添加</);
+  assert.match(html, /data-testid="provider-custom-empty-docs"/);
+  assert.match(html, /查看模型文档/);
+  assert.match(html, /href="https:\/\/github.com\/xuediner-source\/xueness\/blob\/main\/docs\/xueness-local-lightweight-mode\.md"/);
+  assert.match(html, /rel="noopener noreferrer"/);
+  // 工作台源站没有 docs/，不能使用打不开的相对路径。
+  assert.doesNotMatch(html, /href="docs\//);
+  for (const click of [
+    ...clickByTestId(tree, 'provider-custom-empty-add'),
+    ...clickByTestId(tree, 'provider-custom-empty-action'),
+  ]) click();
+  assert.equal(adds, 2);
+  const busy = renderToStaticMarkup(<ProviderEmptyState onAdd={() => undefined} busy />);
+  const addButton = busy.match(/<button[^>]*data-testid="provider-custom-empty-add"[^>]*>/)?.[0] ?? "";
+  const actionButton = busy.match(/<button[^>]*data-testid="provider-custom-empty-action"[^>]*>/)?.[0] ?? "";
+  assert.match(addButton, /disabled/);
+  assert.match(actionButton, /disabled/);
+});
+
+test('custom model empty-state strings exist in English', () => {
+  try {
+    setLocale('en');
+    assert.equal(t('还没有自定义模型配置'), 'No custom model profiles yet');
+    assert.equal(t('+ 添加'), '+ Add');
+    assert.equal(t('添加'), 'Add');
+    assert.equal(t('查看模型文档'), 'View Docs');
+  } finally {
+    setLocale('zh');
+  }
 });
 
 test('the model list empty state appears only after the catalog resolves as empty', async () => {
   const source = await readFile(resolve(process.cwd(), 'src/plugins/providers/index.tsx'), 'utf8');
   assert.match(source, /!loading && items\.length === 0 && <ProviderEmptyState/);
-  assert.doesNotMatch(renderToStaticMarkup(<ModelManager onSelect={() => undefined} />), /xn-settings-empty/);
+  assert.doesNotMatch(renderToStaticMarkup(<ModelManager onSelect={() => undefined} />), /provider-custom-empty/);
 });

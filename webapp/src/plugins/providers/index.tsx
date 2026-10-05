@@ -19,7 +19,6 @@ import type { ProviderCompatibilityCheckRecord, ProviderCompatibilityDiagnosticG
 import { Select } from '../../ui/Select';
 import { t as tr, tf } from '../../i18n';
 import { OperationHeader } from '../shared';
-import { SettingsEmptyState } from '../settings/SettingsPrimitives';
 import { LocalRuntimeMonitor } from './LocalRuntimeMonitor';
 import '../../styles/operations.css';
 import '../../styles/model-parity.css';
@@ -348,16 +347,45 @@ export function ModelProviderNavigation({
   </nav>;
 }
 
-/** First-run state for the model list; the settings plugin owns the presentation. */
+/** In-repo model guide. The workbench origin does not serve `docs/`, so this is the public copy of that file. */
+export const CUSTOM_MODEL_DOCS_HREF = 'https://github.com/xuediner-source/xueness/blob/main/docs/xueness-local-lightweight-mode.md';
+
+/** Inline illustration for the empty custom-model list. No image asset. */
+function CustomModelEmptyArt(): React.JSX.Element {
+  return <svg className="xn-provider-empty__art" viewBox="0 0 160 112" aria-hidden="true">
+    <rect x="28" y="22" width="104" height="70" rx="12" fill="none" stroke="currentColor" strokeWidth="1.5" />
+    <rect x="44" y="38" width="56" height="8" rx="4" fill="currentColor" opacity="0.35" />
+    <rect x="44" y="54" width="36" height="6" rx="3" fill="currentColor" opacity="0.22" />
+    <circle cx="112" cy="70" r="14" fill="none" stroke="currentColor" strokeWidth="1.5" />
+    <path d="M112 64v12M106 70h12" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+  </svg>;
+}
+
+/**
+ * Empty custom-model list. Shown only when the saved-provider catalog is empty.
+ * Both Add buttons call the same existing create flow; View Docs opens the repo guide.
+ */
 export function ProviderEmptyState({ onAdd, busy = false }: { onAdd: () => void; busy?: boolean }) {
-  return <SettingsEmptyState
-    icon={<Cpu size={22} strokeWidth={1.6} />}
-    title={tr('还没有自定义模型配置')}
-    description={tr('添加一个 API 配置后，可随时切换当前运行使用的模型。')}
-    actionLabel={tr('添加配置')}
-    actionDisabled={busy}
-    onAction={onAdd}
-  />;
+  return <div className="xn-provider-empty" data-testid="provider-custom-empty">
+    <div className="xn-provider-empty__toolbar">
+      <button type="button" className="xn-provider-button" data-testid="provider-custom-empty-add" disabled={busy} onClick={onAdd}>
+        <Plus size={15} aria-hidden="true" /><span>{tr('+ 添加')}</span>
+      </button>
+      <a
+        className="xn-provider-empty__docs"
+        data-testid="provider-custom-empty-docs"
+        href={CUSTOM_MODEL_DOCS_HREF}
+        target="_blank"
+        rel="noopener noreferrer"
+      >{tr('查看模型文档')}</a>
+    </div>
+    <CustomModelEmptyArt />
+    <p className="xn-provider-empty__title">{tr('还没有自定义模型配置')}</p>
+    <p className="xn-provider-empty__description">{tr('添加一个 API 配置后，可随时切换当前运行使用的模型。')}</p>
+    <button type="button" className="xn-provider-button xn-provider-button--primary" data-testid="provider-custom-empty-action" disabled={busy} onClick={onAdd}>
+      {tr('添加')}
+    </button>
+  </div>;
 }
 
 function EnvironmentProviderDetail({ onSelect }: { onSelect: () => void }) {
@@ -916,9 +944,11 @@ export function ProviderEditor({
   </form>;
 }
 
-export function ModelManager({ onSelect, runtimeMonitorEnabled = false }: {
+export function ModelManager({ onSelect, runtimeMonitorEnabled = false, focusProviderId }: {
   onSelect: (id: string) => void;
   runtimeMonitorEnabled?: boolean;
+  /** When set, select this saved profile once the catalog includes it. */
+  focusProviderId?: string;
 }) {
   const [items, setItems] = useState<ProviderSummary[]>([]);
   const [selectedKey, setSelectedKey] = useState(ENVIRONMENT_KEY);
@@ -990,6 +1020,23 @@ export function ModelManager({ onSelect, runtimeMonitorEnabled = false }: {
   };
 
   useEffect(() => { void refresh(); }, []);
+
+  useEffect(() => {
+    if (!focusProviderId || selectedKey === focusProviderId || pendingSelection === focusProviderId) return;
+    const provider = items.find(item => item.id === focusProviderId);
+    if (!provider) return;
+    if (currentDraftChanged) {
+      setPendingSelection(focusProviderId);
+      return;
+    }
+    setSelectedKey(provider.id);
+    setDraft(providerDraftFromSummary(provider));
+    setError('');
+    setNotice('');
+    setConfirmDelete(false);
+    setConnectionTest(null);
+    setDiscovery(null);
+  }, [focusProviderId, items, selectedKey, pendingSelection, currentDraftChanged]);
 
   const commitNavigationItem = (key: string) => {
     setPendingSelection(null);
