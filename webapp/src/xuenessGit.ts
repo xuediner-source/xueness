@@ -135,3 +135,20 @@ export async function restoreGitCheckpoint(id: string, checkpointId: string): Pr
     return { ok: true, value: await requestPost(path, { confirmed: true }) };
   } catch (error) { return { ok: false, error: toErrorMessage(error) }; }
 }
+
+// -- clone -------------------------------------------------------------------
+
+export type GitCloneResult = { root: string; url: string };
+
+/**
+ * `POST /api/git/clone` with the same explicit confirmation every other write
+ * uses. The host refuses local transports and destinations outside the
+ * authorized workspace roots; its `error` text is surfaced verbatim.
+ */
+export async function cloneGitRepository(url: string, dest: string): Promise<Result<GitCloneResult>> {
+  try {
+    const payload = await requestPost<Partial<GitCloneResult>>("/api/git/clone", { url, dest, confirmed: true });
+    if (typeof payload.root !== "string" || !payload.root) throw new Error("克隆响应缺少目标目录");
+    return { ok: true, value: { root: payload.root, url: typeof payload.url === "string" ? payload.url : url } };
+  } catch (error) { return { ok: false, error: toErrorMessage(error) }; }
+}

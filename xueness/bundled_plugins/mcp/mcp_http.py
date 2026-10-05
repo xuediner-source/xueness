@@ -39,16 +39,70 @@ class HttpMcpClient(McpClient):
             headers['MCP-Protocol-Version'] = self.negotiated_protocol_version
         return headers
 
+    def _checked_url(self):
+        url = self.server.get('url', '')
+        parts = urlsplit(url)
+        if parts.username or parts.password or parts.query or parts.fragment or not parts.hostname:
+            raise ValueError()
+        if parts.scheme != 'https' and not (parts.scheme == 'http' and self.server.get('allowLoopbackHttp') is True and _is_loopback_literal(parts.hostname)):
+            raise ValueError()
+        return url
+
+    def _transport_timeout(self):
+        """Ordinary calls keep ``self.timeout``. An opted-in server may pause inside one read."""
+        from .elicitation import USER_WAIT_SECONDS, elicitation_enabled
+        if not elicitation_enabled(self.server):
+            return self.timeout
+        return max(float(self.timeout), float(USER_WAIT_SECONDS) + float(self.timeout))
+
+    def _post_result(self, response):
+        """POST a JSON-RPC response without taking ``_request``'s lock or reading a result.
+
+        The body is drained and discarded. It is not logged: it can echo the answer.
+        """
+        request = urllib.request.Request(self._checked_url(), data=json.dumps(response).encode(), headers=self._headers())
+        with urllib.request.build_opener(_NoRedirect).open(request, timeout=self.timeout) as reply:
+            status = getattr(reply, 'status', None)
+            if status not in (None, 200, 202, 204):
+                raise ValueError()
+            reply.read(65536)
+
+    def _read_sse(self, response, request_id):
+        from .elicitation import is_server_request
+        total, data = 0, []
+        while True:
+            line = response.readline(65537)
+            total += len(line)
+            if not line or total > 1_000_000 or len(line) > 65536:
+                raise ValueError()
+            text = line.decode('utf-8').rstrip('\r\n')
+            if text.startswith('data:'):
+                data.append(text[5:].lstrip())
+            elif not text and data:
+                message = json.loads('\n'.join(data))
+                data = []
+                if not isinstance(message, dict):
+                    continue
+                if is_server_request(message):
+                    self._answer_server_request(message)
+                    continue
+                if message.get('id') == request_id:
+                    return self._result(message, request_id)
+
+    def _read_response(self, response, request_id):
+        headers = getattr(response, 'headers', None)
+        content_type = headers.get('Content-Type', '') if headers is not None and hasattr(headers, 'get') else ''
+        if 'text/event-stream' in content_type:
+            return self._read_sse(response, request_id)
+        data = response.read(1_000_001)
+        if len(data) > 1_000_000:
+            raise ValueError()
+        return self._result(json.loads(data), request_id)
+
     def _exchange(self, payload):
         try:
-            url = self.server.get('url', '')
-            parts = urlsplit(url)
-            if parts.username or parts.password or parts.query or parts.fragment or not parts.hostname:
-                raise ValueError()
-            if parts.scheme != 'https' and not (parts.scheme == 'http' and self.server.get('allowLoopbackHttp') is True and _is_loopback_literal(parts.hostname)):
-                raise ValueError()
-            request = urllib.request.Request(url, data=json.dumps(payload).encode(), headers=self._headers())
-            with urllib.request.build_opener(_NoRedirect).open(request, timeout=self.timeout) as response:
+            request = urllib.request.Request(self._checked_url(), data=json.dumps(payload).encode(), headers=self._headers())
+            with urllib.request.build_opener(_NoRedirect).open(request, timeout=self._transport_timeout()) as response:
                 session_id = response.headers.get('Mcp-Session-Id')
                 if session_id:
                     if len(session_id) > 256 or any(ord(c) < 33 or ord(c) > 126 for c in session_id):
@@ -56,24 +110,7 @@ class HttpMcpClient(McpClient):
                     self.session_id = session_id
                 if 'id' not in payload:
                     return {}
-                if 'text/event-stream' in response.headers.get('Content-Type', ''):
-                    total, data = 0, []
-                    while True:
-                        line = response.readline(65537)
-                        total += len(line)
-                        if not line or total > 1_000_000 or len(line) > 65536:
-                            raise ValueError()
-                        text = line.decode('utf-8').rstrip('\r\n')
-                        if text.startswith('data:'):
-                            data.append(text[5:].lstrip())
-                        elif not text and data:
-                            result = json.loads('\n'.join(data)); data = []
-                            if isinstance(result, dict) and result.get('id') == payload['id']:
-                                return self._result(result, payload['id'])
-                data = response.read(1_000_001)
-                if len(data) > 1_000_000:
-                    raise ValueError()
-                return self._result(json.loads(data), payload['id'])
+                return self._read_response(response, payload['id'])
         except _McpTransportError:
             raise
         except Exception:
@@ -94,9 +131,24 @@ class HttpMcpClient(McpClient):
     def _notify(self, method):
         self._exchange({'jsonrpc': '2.0', 'method': method})
 
+    def _initialize_version(self):
+        from .elicitation import ELICITATION_PROTOCOL, elicitation_enabled
+        from .mcp import SUPPORTED_PROTOCOL_VERSIONS
+        pinned = self.server.get('protocolVersion')
+        if isinstance(pinned, str) and pinned in SUPPORTED_PROTOCOL_VERSIONS:
+            return pinned
+        if elicitation_enabled(self.server):
+            return ELICITATION_PROTOCOL
+        return '2025-03-26'
+
     def start(self):
         try:
-            result = self._request('initialize', {'protocolVersion': '2025-03-26', 'capabilities': {}, 'clientInfo': CLIENT_INFO}, 1)
+            from .elicitation import initialize_capabilities
+            result = self._request('initialize', {
+                'protocolVersion': self._initialize_version(),
+                'capabilities': initialize_capabilities(self.server),
+                'clientInfo': CLIENT_INFO,
+            }, 1)
             error = self._record_handshake(result)
             if error:
                 raise _McpTransportError(error)

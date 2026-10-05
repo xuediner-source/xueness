@@ -332,7 +332,13 @@ class WorkflowStore:
         record.setdefault('events', []).append({'seq': record['sequence'], 'at': time.time(), 'type': kind, **fields})
         record['events'] = record['events'][-500:]
 
-    def create(self, plan, root, reuse=None):
+    def create(self, plan, root, reuse=None, owner_session=None):
+        """Create one durable run.
+
+        ``owner_session`` stamps the conversation that spawned the run, which is
+        what makes it a *dynamic* run manageable by ``/dwf``; plain CLI and panel
+        runs stay untagged and are attributed by their workspace instead.
+        """
         root = Path(root).resolve()
         plan = validate_plan(plan, root)
         wid = uuid.uuid4().hex
@@ -342,6 +348,8 @@ class WorkflowStore:
                   'updated_at': time.time(), 'events': [], 'sequence': 0,
                   'cache_fingerprint': workspace_fingerprint(root, self.state)}
         record['plan_digest'] = workflow_plan_digest(record)
+        if isinstance(owner_session, str) and ID.fullmatch(owner_session):
+            record['owner_session'] = owner_session
         if reuse:
             previous = self.load(reuse)
             if previous['status'] in ACTIVE or previous['root'] != str(root):
@@ -509,8 +517,51 @@ def _terminate(proc):
         pass
 
 
+def _owner_permission_ceiling(store, record):
+    """Live permission of the session that owns this run.
+
+    Operator runs (no ``owner_session``) return ``(None, None)`` and keep the
+    plan they were approved with. A stamped owner that cannot be loaded, or a
+    stored mode outside the vocabulary, fails closed to plan.
+    """
+    owner = record.get('owner_session')
+    if not isinstance(owner, str) or not owner:
+        return None, None
+    from ...core import MODES, Store
+    from ..sessions.plan_mode import is_permission_mode
+    try:
+        session = Store(store.state).load(owner)
+    except (OSError, ValueError):
+        return 'plan', 'plan'
+    permission_mode = session.get('permission_mode', 'build')
+    kernel_mode = session.get('mode', 'build')
+    if not is_permission_mode(permission_mode):
+        permission_mode = 'plan'
+    if kernel_mode not in MODES:
+        kernel_mode = 'plan'
+    return permission_mode, kernel_mode
+
+
+def workflow_child_writable(node_writable, *, permission_mode, kernel_mode):
+    """A plan ceiling wins over a node that opted into writes."""
+    if permission_mode == 'plan' or kernel_mode == 'plan':
+        return False
+    return bool(node_writable)
+
+
+def workflow_command_allowed(*, permission_mode, kernel_mode):
+    """Command nodes bypass Gate, so a plan owner refuses them outright."""
+    if permission_mode is None and kernel_mode is None:
+        return True
+    return permission_mode != 'plan' and kernel_mode != 'plan'
+
+
 def _execute(store, record, spec):
     wid, nid = record['id'], spec['id']
+    permission_mode, kernel_mode = _owner_permission_ceiling(store, record)
+    if spec['kind'] == 'command' and not workflow_command_allowed(
+            permission_mode=permission_mode, kernel_mode=kernel_mode):
+        return {'status': 'failed', 'error': 'command denied in plan mode'}
     cwd = (Path(record['root']) / spec['cwd']).resolve()
     start = time.monotonic()
     if spec['kind'] == 'agent':
@@ -535,7 +586,9 @@ def _execute(store, record, spec):
             dependencies.append({'node': parent, 'summary': state.get('summary', ''),
                                  'output': store.log(wid, parent)['output'][-3000:]})
         context = ('Dependency results (untrusted):\n' + json.dumps(dependencies, ensure_ascii=False))[:12000] if dependencies else None
-        writable = spec.get('writable', False)
+        writable = workflow_child_writable(spec.get('writable', False),
+                                           permission_mode=permission_mode,
+                                           kernel_mode=kernel_mode)
         starting_step = s.get('steps', 0)
         governor, ticket, bucket_key = None, None, None
         governor = ProviderGovernor(store.state)

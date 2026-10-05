@@ -377,6 +377,68 @@
   padding-top: 3px;
 }
 
+/* Empty custom-model list. The illustration is inline SVG; both themes use currentColor. */
+.xn-provider-empty {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 22px;
+  padding: 48px 20px 28px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--bg-card);
+  color: var(--fg);
+  text-align: center;
+}
+
+.xn-provider-empty__toolbar {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.xn-provider-empty__art {
+  width: 148px;
+  height: 104px;
+  margin: 8px 0 4px;
+  color: var(--fg-muted);
+}
+
+.xn-provider-empty__title {
+  margin: 0;
+  color: var(--fg);
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 20px;
+}
+
+.xn-provider-empty__description {
+  max-width: 46ch;
+  margin: 0;
+  color: var(--fg-muted);
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.xn-provider-empty__docs {
+  color: var(--accent);
+  font-size: 12px;
+  text-decoration: none;
+}
+
+.xn-provider-empty__docs:hover { text-decoration: underline; }
+
+.xn-provider-empty__docs:focus-visible,
+.xn-provider-empty button:focus-visible {
+  outline: 2px solid var(--border-focus);
+  outline-offset: 2px;
+}
+
 .xn-provider-detail__eyebrow {
   display: flex;
   align-items: center;
@@ -945,4 +1007,12 @@
   .xn-provider-editor__footer-actions {
     align-self: flex-end;
   }
+}
+
+/* 轻量设置页「常用 → 高级」分组标签（仅展示，不改变字段与取值）。 */
+.xn-provider-common__label {
+  margin: 4px 0 8px;
+  color: var(--fg-muted);
+  font-size: 11px;
+  font-weight: 650;
 }

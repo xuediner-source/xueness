@@ -1,0 +1,146 @@
+/* Clone-repository dialog (git plugin, git.clone). Colours come from the shared
+ * theme tokens so the dialog follows the workbench light/dark state. */
+.xn-clone-dialog__backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-dialog);
+  display: grid;
+  place-items: center;
+  padding: 16px;
+  background: rgba(0, 0, 0, 0.45);
+}
+
+.xn-clone-dialog__surface {
+  display: grid;
+  gap: 12px;
+  width: min(520px, 100%);
+  padding: 20px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--bg-card);
+  color: var(--fg);
+  box-shadow: var(--shadow-lg);
+}
+
+.xn-clone-dialog__header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--fg-muted);
+}
+
+.xn-clone-dialog__header h2 {
+  margin: 0;
+  color: var(--fg);
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.xn-clone-dialog__body {
+  display: grid;
+  gap: 6px;
+}
+
+.xn-clone-dialog__body label {
+  color: var(--fg-muted);
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.xn-clone-dialog__body input[type="text"],
+.xn-clone-dialog__body input:not([type]) {
+  width: 100%;
+  min-height: 34px;
+  padding: 6px 9px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--bg-input);
+  color: var(--fg);
+  font: inherit;
+  font-size: 13px;
+}
+
+.xn-clone-dialog__body input:focus-visible {
+  outline: 2px solid var(--border-focus);
+  outline-offset: 1px;
+}
+
+.xn-clone-dialog__body input:disabled {
+  color: var(--fg-muted);
+}
+
+.xn-clone-dialog__hint {
+  margin: 0 0 8px;
+  color: var(--fg-muted);
+  font-size: 11px;
+  line-height: 17px;
+}
+
+.xn-clone-dialog__dest {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.xn-clone-dialog__dest input {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.xn-clone-dialog__dest button {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.xn-clone-dialog__confirm {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin-top: 4px;
+  color: var(--fg);
+  font-size: 12px;
+  line-height: 19px;
+  cursor: pointer;
+}
+
+.xn-clone-dialog__confirm input {
+  flex: 0 0 auto;
+  margin-top: 2px;
+}
+
+.xn-clone-dialog__error {
+  margin: 4px 0 0;
+  color: var(--danger);
+  font-size: 12px;
+  line-height: 19px;
+  overflow-wrap: anywhere;
+}
+
+.xn-clone-dialog__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.xn-clone-dialog__actions button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.xn-clone-dialog__actions .is-spinning {
+  animation: xn-clone-dialog-spin 900ms linear infinite;
+}
+
+@keyframes xn-clone-dialog-spin {
+  to { transform: rotate(360deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .xn-clone-dialog__actions .is-spinning {
+    animation: none;
+  }
+}

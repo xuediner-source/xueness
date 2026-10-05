@@ -174,3 +174,15 @@
   /* Keep the close control outside the drawer, above its stacking layer. */
   .xn-shell-layout--sidebar-open .xn-shell-sidebar-toggle { left:calc(min(300px,84vw) + 10px); z-index:45; }
 }
+
+.xn-expert-card { padding:20px; }
+.xn-expert-intro { margin-top:8px!important; font-size:12px; }
+.xn-expert-start { display:flex; gap:12px; align-items:flex-end; margin-top:14px; }
+.xn-expert-start label { flex:1; flex-direction:column; align-items:stretch; gap:6px; font-size:12px; }
+.xn-expert-run { margin-top:16px; display:flex; flex-direction:column; gap:12px; }
+.xn-expert-run .xn-subtask-row:first-child { margin-top:0; padding-top:0; border-top:0; }
+.xn-expert-task { color:var(--fg)!important; overflow-wrap:anywhere; }
+.xn-expert-phases { display:flex; flex-wrap:wrap; gap:8px; }
+.xn-expert-phase { display:flex; align-items:center; gap:8px; border:1px solid var(--border); border-radius:8px; padding:5px 10px; font-size:12px; color:var(--fg-subtle); }
+.xn-expert-phase-detail summary { font-size:12px; color:var(--fg-muted); }
+.xn-expert-run pre { max-height:220px; }

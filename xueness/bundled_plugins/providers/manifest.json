@@ -20,9 +20,13 @@
   "capabilities": [
     "network"
   ],
+  "httpFamilies": [
+    "providers"
+  ],
   "modules": [
     "activity",
     "context_budget",
+    "default_selection",
     "lightweight",
     "lightweight_config",
     "operator_cli",
@@ -60,6 +64,11 @@
       "nameEn": "OpenAI-compatible and Anthropic protocols"
     },
     {
+      "id": "providers.default_selection",
+      "name": "默认模型与推理档位保存",
+      "nameEn": "Saved default model and reasoning level"
+    },
+    {
       "id": "providers.discovery",
       "name": "显式模型发现",
       "nameEn": "Explicit model discovery"
@@ -68,6 +77,16 @@
       "id": "providers.lightweight",
       "name": "本地小模型轻量档位",
       "nameEn": "Lightweight profile for local small models"
+    },
+    {
+      "id": "providers.lightweight_layout",
+      "name": "轻量档极简工作台布局",
+      "nameEn": "Lightweight minimal workbench layout"
+    },
+    {
+      "id": "providers.lightweight_compact_timeline",
+      "name": "轻量紧凑时间线与极简输入状态",
+      "nameEn": "Lightweight compact timeline and minimal input status"
     },
     {
       "id": "providers.budgets",
@@ -98,12 +117,18 @@
       "id": "providers.activity",
       "name": "输出阶段、延迟、计数与速率趋势",
       "nameEn": "Output phase, latency, counts and rate trends"
+    },
+    {
+      "id": "providers.custom_empty",
+      "name": "自定义模型空状态",
+      "nameEn": "Custom model empty state"
     }
   ],
   "frontendModules": [
     "plugins/providers/ProvidersPanel.tsx",
     "plugins/providers/LocalRuntimeMonitor.tsx",
     "plugins/providers/runtimeSampling.ts",
-    "plugins/providers/index.tsx"
+    "plugins/providers/index.tsx",
+    "plugins/providers/LightweightWorkbench.tsx"
   ]
 }

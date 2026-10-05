@@ -40,7 +40,7 @@ class SseMcpClient(HttpMcpClient):
             u=urlsplit(self.server.get('url',''))
             if not u.hostname or u.username or u.password or u.fragment or u.query or not (u.scheme=='https' or u.scheme=='http' and self.server.get('allowLoopbackHttp') is True and _is_loopback_literal(u.hostname)): raise ValueError('invalid SSE URL')
             request=urllib.request.Request(self.server['url'],headers={**self._headers(),'Accept':'text/event-stream'})
-            self.response=urllib.request.build_opener(_NoRedirect).open(request,timeout=self.timeout)
+            self.response=urllib.request.build_opener(_NoRedirect).open(request,timeout=self._transport_timeout())
             if 'text/event-stream' not in self.response.headers.get('Content-Type',''): raise ValueError('SSE content required')
             self.reader=threading.Thread(target=self._read,daemon=True);self.reader.start()
             if not self.ready.wait(self.timeout) or not self.endpoint: raise ValueError('SSE endpoint missing')
@@ -48,6 +48,21 @@ class SseMcpClient(HttpMcpClient):
             if not self.active: self.close()
         except Exception:
             self.error='SSE MCP initialization failed';self.close()
+    def _post_result(self,response):
+        # Reply on the message endpoint, not the SSE URL, and do not log the body.
+        if not self.endpoint or self.closed.is_set(): raise _McpTransportError('SSE MCP disconnected')
+        req=urllib.request.Request(self.endpoint,data=json.dumps(response).encode(),headers=self._headers())
+        with urllib.request.build_opener(_NoRedirect).open(req,timeout=self.timeout) as ack:
+            if ack.status not in (200,202,204): raise ValueError()
+            ack.read(65536)
+    def _wait_sse_result(self,request_id):
+        from .elicitation import is_server_request
+        while True:
+            row=self.responses.get(timeout=self.timeout)
+            if isinstance(row,dict) and is_server_request(row):
+                self._answer_server_request(row)
+                continue
+            if isinstance(row,dict) and row.get('id')==request_id: return self._result(row,request_id)
     def _exchange(self,payload):
         if not self.endpoint or self.closed.is_set(): raise _McpTransportError('SSE MCP disconnected')
         try:
@@ -56,9 +71,7 @@ class SseMcpClient(HttpMcpClient):
                 if ack.status not in (200,202,204): raise ValueError()
                 # POST is acknowledgement only; response comes on the SSE stream.
             if 'id' not in payload: return {}
-            while True:
-                row=self.responses.get(timeout=self.timeout)
-                if isinstance(row,dict) and row.get('id')==payload['id']: return self._result(row,payload['id'])
+            return self._wait_sse_result(payload['id'])
         except Exception:
             self.close();raise _McpTransportError('SSE MCP request failed (details suppressed)') from None
     def close(self):

@@ -15,6 +15,7 @@ from types import FunctionType
 
 from ...core import MODES, Gate, Store, answer_session, run, session_events, append_user_turn
 from ...core import parse_disallow_list
+from .plan_mode import PERMISSION_MODES, is_permission_mode, permission_mode_error
 from ...plugins import activate
 from ... import plugin_sdk
 from ... import commands as commands_module
@@ -96,7 +97,14 @@ def _add_agent_flags(parser):
     parser.add_argument("--allow-edit", action="store_true", help="approve all edits in workspace for this invocation (default follows --allow-write)")
     parser.add_argument("--interactive", action="store_true", help="prompt for each write/edit/exec")
     parser.add_argument("--mode", choices=list(MODES), default=None,
-                        help="plan denies write/edit/exec before any approval lookup; build keeps deny-by-default")
+                        help="kernel ceiling: plan denies write/edit/exec before any approval lookup, including the plan draft; build keeps deny-by-default")
+    parser.add_argument("--permission-mode", choices=list(PERMISSION_MODES), default=None,
+                        help="build asks; edit auto-approves workspace writes; "
+                             "yolo auto-approves writes, local commands and network "
+                             "but still asks for remote SSH; "
+                             "plan is read-only plus this session's plan draft. "
+                             "Legacy --allow-* flags stay in force for build. "
+                             "--mode plan is a hard ceiling over every permission mode")
     parser.add_argument("--disallow-tools", default="",
                         help="comma-separated tool deny list, e.g. 'exec,edit'; denied even with --allow-write/--allow-exec")
     parser.add_argument("--steps", type=int, default=8)
@@ -120,6 +128,29 @@ def _add_agent_flags(parser):
                         choices=plugin_sdk.CAPABILITIES,
                         help="grant a stored plugin manifest the named power (repeatable): "
                              "command / network / filesystem-write")
+    parser.add_argument("--target", default=None, metavar="TEXT",
+                        help="persistent session goal owned by the planning plugin: injected before every "
+                             "model request and verified when the run claims completion")
+    parser.add_argument("--target-replace", action="store_true",
+                        help="replace the session's existing goal; without it --target refuses to overwrite")
+
+def _apply_cli_target(args, parser, store, session):
+    """Hand ``--target`` to planning, then persist it with the session."""
+    text = getattr(args, "target", None)
+    if text is None:
+        return
+    state_dir = getattr(args, "state", None)
+    planning = (plugin_runtime.entrypoint("planning")
+                if plugin_runtime.is_enabled(state_dir, "planning") else None)
+    apply_goal = getattr(planning, "apply_session_goal", None) if planning else None
+    if not callable(apply_goal):
+        parser.error("插件已禁用或依赖不可用: planning")
+    try:
+        apply_goal(session, text, state_dir=state_dir,
+                   replace=getattr(args, "target_replace", False), source="cli")
+    except ValueError as exc:
+        parser.error(str(exc))
+    store.save(session)
 
 def _model_selection_record(provider_id, model, reasoning_effort):
     selection = {"provider_id": provider_id, "model": model}
@@ -182,19 +213,146 @@ def _prepare_agent(args, parser, store, session):
     for refusal in plugin_plan.refused:
         print("PLUGIN REFUSED: %s (%s)" % (refusal["name"], refusal["reason"]), file=sys.stderr)
     allow_edit = args.allow_edit if args.allow_edit else args.allow_write
+    permission_mode = _effective_permission_mode(args, session)
+    if permission_mode is not None and not is_permission_mode(permission_mode):
+        parser.error(permission_mode_error())
+    # Named modes are enforced inside Gate. Do not also flip allow_* here:
+    # /mode build must fall back to the flags the operator actually passed,
+    # and plan must keep denying a blanket --allow-write.
     gate = Gate(Path(session["root"]), args.allow_write, args.allow_exec,
                 getattr(args, "interactive", False), mode=args.mode or "build",
                 allow_edit=allow_edit, disallow=disallowed,
                 allow_mcp=bool(getattr(args, "allow_mcp", False)),
                 allow_network=bool(getattr(args, "allow_network", False)),
-                approval_prompt=_approval_prompt)
+                approval_prompt=_approval_prompt,
+                permission_mode=permission_mode,
+                hold_remote_exec=permission_mode == "yolo")
     return provider, gate, plugin_plan.load, memory_text
 
-def _load_commands(state_dir):
-    """Custom chat commands are an optional plugin and vanish when disabled."""
+
+def _effective_permission_mode(args, session):
+    """Explicit ``--permission-mode`` wins. A saved ``plan`` is a ceiling.
+
+    Saved ``edit`` / ``yolo`` are not applied silently: a CLI resume stays
+    deny-by-default unless the operator passes the flag or ``/mode``. The
+    stored web mode is left untouched until that explicit switch.
+    """
+    selected = getattr(args, "permission_mode", None)
+    if selected is not None:
+        return selected
+    saved = session.get("permission_mode") if isinstance(session, dict) else None
+    if saved == "plan":
+        return "plan"
+    return None
+
+
+def _bind_cli_plan_draft(args, gate, session):
+    """Attach the session draft once the id exists. Kernel plan still denies it."""
+    if gate is None or not isinstance(session, dict) or not session.get("id"):
+        return
+    if getattr(gate, "mode", "build") == "plan":
+        gate.plan_draft = None
+        return
+    if getattr(gate, "permission_mode", None) != "plan":
+        return
+    if getattr(gate, "plan_draft", None) is not None:
+        return
+    from .plan_mode import draft_policy
+    try:
+        gate.plan_draft = draft_policy(args.state, session["id"])
+    except ValueError:
+        return
+
+
+def _persist_cli_permission_mode(store, session, mode):
+    """Record an explicit mode switch. Same shape as the HTTP history, cap 50."""
+    if mode is None or not isinstance(session, dict) or not session.get("id"):
+        return
+    if not is_permission_mode(mode):
+        return
+    previous = session.get("permission_mode", "build")
+    if previous != mode:
+        from datetime import datetime, timezone
+        history = session.setdefault("permission_mode_history", [])
+        history.append({"from": previous, "to": mode,
+                        "at": datetime.now(timezone.utc).isoformat()})
+        if len(history) > 50:
+            del history[:-50]
+    session["permission_mode"] = mode
+
+
+def _apply_chat_permission_mode(args, gate, store, session, selected, language):
+    """``/mode`` for the four permission modes.
+
+    ``plan`` keeps the historical kernel ceiling (it denies even the draft).
+    ``--permission-mode plan`` is the read-only-plus-draft mapping. ``edit``
+    and ``yolo`` cannot lift a kernel plan ceiling; ``/mode build`` can,
+    because that was already the way out of ``/mode plan``.
+    """
+    if not is_permission_mode(selected):
+        usage = ("usage: /mode build|edit|yolo|plan" if language == "en"
+                 else "用法: /mode build|edit|yolo|plan")
+        print(usage, file=sys.stderr)
+        return
+    kernel_plan = (getattr(args, "mode", None) == "plan"
+                   or (gate is not None and getattr(gate, "mode", None) == "plan")
+                   or (isinstance(session, dict) and session.get("mode") == "plan"))
+    if selected in ("edit", "yolo") and kernel_plan:
+        message = ("plan ceiling is still on; use /mode build before edit or yolo"
+                   if language == "en" else
+                   "计划模式的内核上限仍在；请先 /mode build，再切换到 edit 或 yolo")
+        print(message, file=sys.stderr)
+        return
+    if selected == "plan":
+        args.mode = "plan"
+        args.permission_mode = "plan"
+        if gate is not None:
+            gate.mode = "plan"
+            gate.permission_mode = "plan"
+            gate.hold_remote_exec = False
+            gate.plan_draft = None
+        if isinstance(session, dict) and session.get("id"):
+            session["mode"] = "plan"
+            session.setdefault("mode_history", []).append(
+                {"mode": "plan", "steps": session.get("steps", 0)})
+            _persist_cli_permission_mode(store, session, "plan")
+            store.save(session)
+    elif selected == "build":
+        args.mode = "build"
+        args.permission_mode = "build"
+        if gate is not None:
+            gate.mode = "build"
+            gate.permission_mode = "build"
+            gate.hold_remote_exec = False
+            gate.plan_draft = None
+        if isinstance(session, dict) and session.get("id"):
+            session["mode"] = "build"
+            session.setdefault("mode_history", []).append(
+                {"mode": "build", "steps": session.get("steps", 0)})
+            _persist_cli_permission_mode(store, session, "build")
+            store.save(session)
+    else:
+        args.permission_mode = selected
+        if gate is not None:
+            gate.permission_mode = selected
+            gate.hold_remote_exec = selected == "yolo"
+            gate.plan_draft = None
+        if isinstance(session, dict) and session.get("id"):
+            _persist_cli_permission_mode(store, session, selected)
+            store.save(session)
+    print(f"mode: {getattr(args, 'mode', 'build')} · permission: {selected}", file=sys.stderr)
+
+def _load_commands(state_dir, root=None, *, language=None):
+    """Custom chat commands are an optional plugin and vanish when disabled.
+
+    ``root`` is the session workspace: the commands plugin adds the file-shaped
+    commands found under it and falls back to user and stored commands without.
+    ``language`` only picks which shipped text a built-in command (``/init``)
+    expands to; the disabled check above is what decides whether it exists.
+    """
     if not plugin_runtime.is_enabled(state_dir, "commands"):
         return []
-    return commands_module.load(state_dir)
+    return commands_module.load(state_dir, root, language=language)
 
 def _prompt(label: str) -> str:
     """Read one line with the prompt on stderr — stdout stays JSON-only."""
@@ -214,30 +372,56 @@ def _approval_prompt(label: str) -> str:
 
 CHAT_HELP = """/help               显示帮助与自定义命令
 /status             当前会话、工作区、模式与状态
-/mode plan|build    切换模式（plan 禁止写入和执行）
+/mode plan|build|edit|yolo
+                    切换模式（plan 为内核上限，禁止写入和执行；edit 自动编辑；yolo 放行本地变更但仍询问远程执行）
 /retry              继续当前运行，不添加用户消息
 /paste              多行输入，单独一行 /end 提交，/cancel 取消
 /attach PATH        暂存工作区 UTF-8 文本文件快照，随下一条输入发送
 /paste-image        显式捕获剪贴板 PNG，随下一条输入发送（不会自动读取剪贴板）
 /attachments        查看待发送附件
 /detach N|all       移除第 N 个或所有待发送附件
-/models             列出已保存的模型配置
-/model ID [MODEL]   切换供应商/模型；env 使用环境配置
+/models             列出已保存的模型配置与当前选择
+/model <ID> [MODEL] 切换供应商/模型；亦支持 /model provider/model，env 使用环境配置
+/model save-default 把当前模型与推理档位存为默认
+/effort list|<档位> 查看或切换推理档位，save-default 存为默认
+/dwf [list|cancel [runId]|resume <runId>]
+                    本会话启动的动态工作流运行
+/compact [说明]     立即按预算压缩上下文（不调用模型，原始日志保留）
+/expert [status|resume|stop|任务]
+                    专家工作流：调研→计划→实现→审查
+/skills [list|inspect <名称>]
+                    列出或查看目录型技能（SKILL.md）
+/commands [list|inspect <名称>]
+                    列出或查看文件型与存储的自定义命令
+/init [说明]        调研工作区并生成或更新 AGENTS.md（commands 插件的内建提示命令）
 /exit 或 /quit      保存会话并退出
 运行中 Ctrl+C 请求停止；停止后 /retry 继续，或输入新方向。
 输入提示处 Ctrl+C 退出；写入/编辑/执行默认逐次询问。"""
 
 CHAT_HELP_EN = """/help               Show help and custom commands
 /status             Show session, workspace, mode and status
-/mode plan|build    Change mode (plan denies writes and execution)
+/mode plan|build|edit|yolo
+                    Change mode (plan is the kernel ceiling and denies writes and execution; edit auto-edits files; yolo allows local changes but still asks before remote execution)
 /retry              Continue the current run without adding a user message
 /paste              Enter multiline input; /end submits and /cancel discards
 /attach PATH        Queue a workspace UTF-8 text file for the next input
 /paste-image        Explicitly capture a clipboard PNG for the next input
 /attachments        List queued attachments
 /detach N|all       Remove one or all queued attachments
-/models             List saved model profiles
-/model ID [MODEL]   Switch provider/model; env uses environment config
+/models             List saved model profiles and the current choice
+/model <ID> [MODEL] Switch provider/model; /model provider/model and env also work
+/model save-default Store the current model and reasoning level as the default
+/effort list|<level> Show or change the reasoning level; save-default stores it
+/dwf [list|cancel [runId]|resume <runId>]
+                    Dynamic workflow runs started by this session
+/compact [notes]    Compact the context to budget now (no model call; journal kept)
+/expert [status|resume|stop|task]
+                    Expert workflow: research → plan → implement → review
+/skills [list|inspect <name>]
+                    List or inspect directory skills (SKILL.md)
+/commands [list|inspect <name>]
+                    List or inspect file and stored custom commands
+/init [notes]       Study the workspace and create or update AGENTS.md (built-in commands prompt)
 /exit or /quit      Save the session and exit
 Ctrl+C requests a stop while running; use /retry or enter a new direction afterward."""
 
@@ -254,6 +438,86 @@ def _latest_chat(store, root):
         except (OSError, ValueError, KeyError, TypeError):
             continue
     return max(candidates, key=lambda item: item[:2])[2] if candidates else None
+
+def _report_dynamic_runs(args, store, session, argument):
+    """Render the workflows plugin's answer to ``/dwf``; the host decides nothing.
+
+    Listing, cancelling and resuming all live in ``workflows.dynamic_runs``, so
+    the chat loop only turns that one payload into lines a human can read.
+    """
+    language = getattr(args, "language", "zh")
+    if not plugin_runtime.is_enabled(args.state, "workflows"):
+        print("! " + ("workflows plugin is not enabled" if language == "en"
+                      else "插件已禁用或依赖不可用: workflows"), file=sys.stderr)
+        return
+    handler = getattr(plugin_runtime.entrypoint("workflows"), "dynamic_runs_command", None)
+    if not callable(handler):
+        return
+    try:
+        result = handler(args.state, store, session, argument)
+    except ValueError as exc:
+        # A refusal is an answer: reason plus detail, the same pair CLI and HTTP give.
+        payload = exc.payload() if hasattr(exc, "payload") else None
+        refusal = (payload or {}).get("refusal") or {"reason": "invalid", "detail": str(exc)}
+        print(f"! {refusal['reason']}: {refusal['detail']}", file=sys.stderr)
+        return
+    runs = result.get("runs")
+    if runs is None:
+        run = result.get("run") or {}
+        if result.get("action") == "cancel":
+            label = "Cancelled" if language == "en" else "已取消"
+        else:
+            label = "Resumed" if language == "en" else "已恢复"
+        print(f"{label} {run.get('name', '')} · {run.get('status', '')}".rstrip(" ·"), file=sys.stderr)
+        return
+    if not runs:
+        print("（该会话没有动态工作流运行）" if language == "zh" else "(no dynamic workflow runs)", file=sys.stderr)
+        return
+    for run in runs:
+        state = run.get("resumeRefusal") or {}
+        mark = "✓" if run.get("resumable") else "✗"
+        line = (f"- {run['id'][:8]} {run.get('name', '')} · {run.get('status')}"
+                f" · {run.get('startedAt')} → {run.get('updatedAt')} · {mark}")
+        if not run.get("resumable") and state.get("reason"):
+            line += f" ({state['reason']})"
+        print(line, file=sys.stderr)
+    summary = (f"{len(runs)} runs · {result.get('inFlight', 0)} in flight · "
+               f"{result.get('resumable', 0)} resumable" if language == "en" else
+               f"共 {len(runs)} 个运行 · 进行中 {result.get('inFlight', 0)} · 可恢复 {result.get('resumable', 0)}")
+    print(summary + " · /dwf cancel [runId] · /dwf resume <runId>", file=sys.stderr)
+
+def _report_compaction(args, store, session, argument):
+    """Hand ``/compact`` to this plugin's compaction face and render the answer.
+
+    Returns the reloaded session, because the compaction rewrote the journal this
+    loop is holding; ``None`` when there was nothing to reload.
+    """
+    language = getattr(args, "language", "zh")
+    if not isinstance(session, dict):
+        print("! " + ("no session to compact yet" if language == "en"
+                      else "还没有可压缩的会话"), file=sys.stderr)
+        return None
+    from .manual_compact import CompactError, chat
+    try:
+        report = chat(store, session, argument, state_dir=args.state)
+    except CompactError as exc:
+        print(f"! {exc.reason}: {exc.detail}", file=sys.stderr)
+        return store.load(session["id"])
+    if not report.get("compacted"):
+        note = ("nothing to compact: the window is already inside its budget"
+                if language == "en" else "上下文已在预算内，无需压缩")
+        print(f"== {note}", file=sys.stderr)
+    else:
+        before, after = report["before"], report["after"]
+        print((f"Compacted: {before['messages']} → {after['messages']} messages, "
+               f"{before['chars']} → {after['chars']} chars, budget {report['budget']}, "
+               f"dropped {report['dropped']}, masked {report['masked']}" if language == "en" else
+               f"已压缩：消息 {before['messages']} → {after['messages']} 条，"
+               f"{before['chars']} → {after['chars']} 字符，预算 {report['budget']}，"
+               f"归档 {report['dropped']} 条、遮蔽 {report['masked']} 条（原始日志与全部用户发言保留）"),
+              file=sys.stderr)
+    return store.load(session["id"])
+
 
 def _chat_loop(args, parser, store, session):
     try:
@@ -278,6 +542,7 @@ def _chat_loop_owned(args, parser, store, session, owned):
     else:
         print(f"Xueness · root {root} · mode {args.mode} · /help", file=sys.stderr)
     if s:
+        _apply_cli_target(args, parser, store, s)
         print(f"chat {s['id']} · {s['status']}", file=sys.stderr)
     provider = gate = names = memory_text = None
     attachments = []
@@ -355,51 +620,57 @@ def _chat_loop_owned(args, parser, store, session, owned):
             continue
         if command == "/help":
             print(CHAT_HELP_EN if getattr(args, "language", "zh") == "en" else CHAT_HELP, file=sys.stderr)
-            for item in _load_commands(args.state):
+            for item in _load_commands(args.state, root,
+                                       language=getattr(args, "language", None)):
                 print(f"/{item['id']}  {item.get('description', '')}", file=sys.stderr)
             continue
-        if command in ("/models", "/model"):
-            if not argument:
-                print(json.dumps(providers_api._list({"state_dir": args.state}), ensure_ascii=False), file=sys.stderr)
-                continue
+        if command in ("/models", "/model", "/effort"):
+            from . import model_switch
             try:
-                values = shlex.split(argument)
-                if len(values) not in (1, 2):
-                    raise ValueError("用法: /model ID [MODEL]")
-                pid = None if values[0] == "env" else values[0]
-                model = values[1] if len(values) == 2 else None
-                next_provider = provider_config.resolve(args.state, pid, model,
-                                                        reasoning_effort=args.reasoning_effort,
-                                                        **({'runtime_profile': args.runtime_profile} if args.runtime_profile is not None else {}))
-                args.provider_id, args.model = pid, model
-                if s:
-                    s["model_selection"] = _model_selection_record(
-                        pid, model, args.reasoning_effort)
-                    s['runtime_profile'] = args.runtime_profile or getattr(next_provider, 'runtime_profile', 'standard')
-                    store.save(s)
-                provider = next_provider if gate else None
-                print(f"模型已切换: {values[0]} {model or ''}", file=sys.stderr)
-            except ValueError as exc:
-                print(f"! {exc}", file=sys.stderr)
+                status_text, next_provider = model_switch.chat_switch(
+                    args.state, command, argument, store, s, args)
+                print(status_text, file=sys.stderr)
+                if next_provider is not None:
+                    provider = next_provider if gate else None
+            except (OSError, ValueError) as exc:
+                print(f"! 无法切换模型: {exc}", file=sys.stderr)
             continue
         if command == "/status":
             print(json.dumps({"id": s["id"] if s else None, "root": str(root),
-                              "mode": args.mode, "status": s["status"] if s else "new",
+                              "mode": args.mode,
+                              "permission_mode": (getattr(gate, "permission_mode", None)
+                                                  or (s.get("permission_mode") if s else None)
+                                                  or getattr(args, "permission_mode", None)
+                                                  or "build"),
+                              "status": s["status"] if s else "new",
                               "steps": s.get("steps", 0) if s else 0}, ensure_ascii=False), file=sys.stderr)
             continue
         if command == "/mode":
-            if argument.strip() not in MODES:
-                print("用法: /mode plan|build", file=sys.stderr)
-                continue
-            args.mode = argument.strip()
-            if gate:
-                gate.mode = args.mode
-            if s:
-                s["mode"] = args.mode
-                s.setdefault("mode_history", []).append({"mode": args.mode, "steps": s.get("steps", 0)})
-                store.save(s)
-            print(f"mode: {args.mode}", file=sys.stderr)
+            _apply_chat_permission_mode(args, gate, store, s, argument.strip(),
+                                        getattr(args, "language", "zh"))
             continue
+        if command == "/dwf":
+            _report_dynamic_runs(args, store, s, argument)
+            continue
+        if command == "/compact":
+            refreshed = _report_compaction(args, store, s, argument)
+            if refreshed is not None:
+                s = refreshed
+            continue
+        if command.startswith('/') and not literal:
+            # Generic plugin-owned slash routing (same manifest commands as the
+            # CLI). None means no plugin claims the name; text then flows on.
+            try:
+                reply = plugin_runtime.dispatch_slash(
+                    text, {"state_dir": args.state, "session": s,
+                           "store": store, "root": str(root),
+                           "language": getattr(args, "language", None)})
+            except (LookupError, OSError, ValueError) as exc:
+                print(f"! {exc}", file=sys.stderr)
+                continue
+            if reply is not None:
+                print(reply, file=sys.stderr)
+                continue
         retry = not literal and text == "/retry"
         if retry and attachments:
             print("! 附件尚未发送：请输入任务/回答，或 /detach all 后重试", file=sys.stderr)
@@ -414,7 +685,8 @@ def _chat_loop_owned(args, parser, store, session, owned):
             # Validate provider/options before writing the first journal.
             provider, gate, names, memory_text = _prepare_agent(
                 args, parser, store, s or {"root": str(root)})
-        command_items = [] if literal else _load_commands(args.state)
+        command_items = [] if literal else _load_commands(
+            args.state, root, language=getattr(args, "language", None))
         try:
             if awaiting:
                 s = answer_session(store.load(s["id"]), store, text, attachments=attachments, preserve_whitespace=literal)
@@ -423,6 +695,7 @@ def _chat_loop_owned(args, parser, store, session, owned):
                 content, invocation = commands_module.expand(command_items, text)
                 s = store.new(content, root, attachments=attachments)
                 owned.enter_context(lease(store, s["id"]))
+                _apply_cli_target(args, parser, store, s)
                 if args.provider_id or args.model or args.reasoning_effort:
                     s["model_selection"] = _model_selection_record(
                         args.provider_id, args.model, args.reasoning_effort)
@@ -438,6 +711,9 @@ def _chat_loop_owned(args, parser, store, session, owned):
             print(f"! 无法提交输入: {exc}", file=sys.stderr)
             continue
         attachments.clear()
+        _bind_cli_plan_draft(args, gate, s)
+        if getattr(args, "permission_mode", None) is not None:
+            _persist_cli_permission_mode(store, s, args.permission_mode)
         s["skill_catalog"] = args.skill_catalog
         store.save(s)
         with RunInterrupt(gate) as interrupt, activate(names, args.state, root, s) as ext:
@@ -526,10 +802,16 @@ def _register_session_cli(commands):
 
 def _execute_cli_impl(args, parser, store):
     if args.cmd == "sessions":
+        from .manual_compact import CompactError
         try:
             result = operator_cli.execute(args, store)
             print(json.dumps(result, ensure_ascii=False, indent=2))
             return 0
+        except CompactError as exc:
+            # A refusal keeps its reason and status on stdout, like every other
+            # machine-readable answer; the exit code still says "refused".
+            print(json.dumps(exc.payload(), ensure_ascii=False, indent=2))
+            return 1
         except (OSError, ValueError) as exc:
             print(f"ERROR: {exc}", file=sys.stderr)
             return 1
@@ -611,6 +893,10 @@ def _execute_cli_impl(args, parser, store):
             if not args.id:
                 parser.error("run needs a session id (or --prompt TASK --root DIR)")
             s = store.load(args.id)
+        # A saved kernel plan must not be lifted just because run omitted --mode.
+        if (prepared_agent is None and getattr(args, "mode", None) is None
+                and s.get("mode") == "plan"):
+            args.mode = "plan"
         if args.steps < 1 or args.max_chars < 1000:
             parser.error("--steps must be positive and --max-chars >= 1000")
         if args.max_tokens is not None and args.max_tokens < 1:
@@ -618,12 +904,16 @@ def _execute_cli_impl(args, parser, store):
         try:
             with lease(store, s["id"]):
                 s = store.load(s["id"])
+                _apply_cli_target(args, parser, store, s)
                 if prepared_agent is None:
                     provider, gate, names, memory_text = _prepare_agent(args, parser, store, s)
                 else:
                     provider, gate, names, memory_text = prepared_agent
                     if prepared_session.get("model_selection"):
                         s["model_selection"] = prepared_session["model_selection"]
+                _bind_cli_plan_draft(args, gate, s)
+                if getattr(args, "permission_mode", None) is not None:
+                    _persist_cli_permission_mode(store, s, args.permission_mode)
                 s["skill_catalog"] = args.skill_catalog
                 store.save(s)
                 with RunInterrupt(gate) as interrupt, activate(names, args.state, Path(s["root"]), s) as ext:
@@ -757,8 +1047,8 @@ def prepare_agent(args, parser, store, session, deps=None):
     return _invoke_helper("_prepare_agent", args, parser, store, session, deps=deps)
 
 
-def load_commands(state_dir, deps=None):
-    return _invoke_helper("_load_commands", state_dir, deps=deps)
+def load_commands(state_dir, root=None, *, language=None, deps=None):
+    return _invoke_helper("_load_commands", state_dir, root, deps=deps, language=language)
 
 
 def prompt(label, deps=None):

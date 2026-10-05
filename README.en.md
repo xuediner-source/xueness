@@ -14,7 +14,7 @@
     <a href="https://github.com/xuediner-source/xueness/actions/workflows/desktop-build.yml"><img src="https://github.com/xuediner-source/xueness/actions/workflows/desktop-build.yml/badge.svg?branch=main" alt="Desktop build"></a>
     <a href="https://github.com/xuediner-source/xueness/blob/main/LICENSE"><img src="https://img.shields.io/github/license/xuediner-source/xueness?label=license" alt="Apache 2.0 license"></a>
     <a href="https://github.com/xuediner-source/xueness/releases/latest"><img src="https://img.shields.io/github/v/release/xuediner-source/xueness?label=release" alt="Latest release"></a>
-    <img src="https://img.shields.io/badge/plugins-27%20%7C%20104-4263eb" alt="27 plugins and 104 features">
+    <img src="https://img.shields.io/badge/plugins-27%20%7C%20139-4263eb" alt="27 plugins and 139 features">
   </p>
 </div>
 
@@ -43,7 +43,9 @@ SHA-256 checksums for this release are in [`SHA256SUMS.txt`](https://github.com/
 ## What you can do
 
 - **Tune local-model runs.** Choose the “Local lightweight” profile and adjust prompts, tool selection, context and output budgets, sampling, and protocol options. The resource panel reports CPU, memory, and process activity on the machine running Xueness. The output view shows request phases, tool activity, and usage reported by the model service. Missing token or GPU-memory measurements are shown as unavailable instead of being estimated.
-- **Use 27 trusted plugins and 104 registered features.** Capabilities include sessions, workspace files, providers, shell, Git, terminals, workflows, memory, hooks, MCP, browser automation, remote connections, channels, automations, diagnostics, and Office previews. The plugin manager shows the full catalog and dependency state; the CLI can inspect and change plugin switches.
+- **Use 27 trusted plugins and 139 registered features.** Capabilities include sessions, workspace files, providers, shell, Git, terminals, workflows, memory, hooks, MCP, browser automation, remote connections, channels, automations, diagnostics, and Office previews. The plugin manager shows the full catalog and dependency state; the CLI can inspect and change plugin switches.
+- **Switch the plugin mix in one click.** Pick the minimal, lightweight, or standard tier at the top of “Settings → Providers”, or run `xueness plugins profile list|show|apply` in the CLI. A tier is only a data list of plugin ids and booleans: your own explicit switches always win, and switching never changes the workspace, approval rules, or the permission mode. Audit marketplace manifests read-only with `xueness plugins validate <path>`, and upgrade already-installed manifests atomically with `xueness plugins update <id>|--all`, which only accepts listings that pass the same validation.
+- **Give a session one durable goal.** Choose “Add goal” in the composer’s “+” menu when starting a task, or pass `--target` in the CLI, and the objective stays in force across turns: a short reminder is injected before every model request, and a one-line badge under the session title shows or clears it. When a run claims completion, the host checks whether the answer explicitly states the goal was achieved and otherwise marks the session for review. The check is deterministic: it makes no extra model call and does not prove on the user's behalf that the goal really was met. The feature belongs to the planning plugin; disabling it stops the entry points, injection, and the check together.
 - **Keep one local runtime across three entry points.** Run sessions in the Agent CLI, manage them in the loopback Web workbench, or install the Windows/macOS desktop app. Platform-specific support stays with the plugin that owns the feature.
 
 The lightweight profile tunes runtime behavior; it does not download models, change model weights, or automatically alter the inference server’s GPU allocation. Office previews cover selected document pages, images, charts, and cached spreadsheet values. They are not a complete Microsoft Office layout or compatibility engine.
@@ -68,6 +70,12 @@ python3 -m xueness.web --port 8138
 ./bin/xueness chat --continue --root /absolute/path/to/project
 # Choose a separate private state directory (global option before subcommand)
 ./bin/xueness --state /absolute/path/to/private-state chat --root /absolute/path/to/project
+# Set a durable session goal; --target-replace is required to overwrite an existing goal
+./bin/xueness run --root /absolute/path/to/project --prompt "Add tests for the export command" --target "The export command has full tests and usage docs"
+# Show, replace, or clear the goal of a session
+./bin/xueness goal --session <session-id> show
+./bin/xueness goal --session <session-id> replace "A new objective"
+./bin/xueness goal --session <session-id> clear
 ./bin/xueness --help
 ```
 

@@ -40,6 +40,24 @@ def dispatch(method, parts, query, data, ctx):
             return exc.status, {'error': str(exc)}
         except (OSError, ValueError):
             return 500, {'error': 'cannot fork session'}
+    if len(parts) == 4 and parts[3] == 'fork-from-checkpoint' and method == 'POST':
+        from .forking import ForkError, fork_at_checkpoint
+        try:
+            store._path(parts[2])
+        except ValueError:
+            return 404, {'error': 'session not found'}
+        if (not isinstance(data, dict)
+                or set(data) - {'checkpoint', 'latest', 'turn', 'title'}
+                or ('title' in data and not isinstance(data['title'], str))):
+            return 400, {'error': 'expected checkpoint or latest, and optional title'}
+        try:
+            return 201, fork_at_checkpoint(ctx, parts[2], checkpoint=data.get('checkpoint'),
+                                           latest=bool(data.get('latest', False)),
+                                           turn=data.get('turn'), title=data.get('title'))
+        except ForkError as exc:
+            return exc.status, {'error': str(exc)}
+        except (OSError, ValueError):
+            return 500, {'error': 'cannot fork session from checkpoint'}
     if method == 'GET' and len(parts) == 4 and parts[3] == 'export':
         try:
             payload = _portable_payload(store, parts[2])

@@ -70,9 +70,19 @@ def _public_fork_parent(session):
             or type(truncated) is not bool
             or (reason is not None and (not isinstance(reason, str) or len(reason) > 500))):
         return None
-    return {'sourceId': source_id, 'sourceRevision': revision, 'turn': turn,
-            'endIndex': end_index, 'historyTruncated': truncated,
-            'truncationReason': reason}
+    public = {'sourceId': source_id, 'sourceRevision': revision, 'turn': turn,
+              'endIndex': end_index, 'historyTruncated': truncated,
+              'truncationReason': reason}
+    checkpoint_id = parent.get('checkpointId')
+    checkpoint_turn = parent.get('checkpointTurn')
+    if (isinstance(checkpoint_id, str) and re.fullmatch(r'[0-9a-f]{32}', checkpoint_id)
+            and type(checkpoint_turn) is int and checkpoint_turn >= 1):
+        # Set only by sessions.fork_from_checkpoint: which workspace snapshot the
+        # fork was derived from. git.rewind remains the only thing that touches
+        # the shared workspace itself.
+        public['checkpointId'] = checkpoint_id
+        public['checkpointTurn'] = checkpoint_turn
+    return public
 
 
 def _public_reasoning_history(session):
@@ -180,6 +190,66 @@ def _safe_input_context(session, prepared):
         })
 
 
+def _planning_entrypoint(ctx):
+    """planning owns the session goal; this plugin only asks it to record one."""
+    runtime = host.plugin_runtime
+    if ctx.get('state_dir') is None or not runtime.is_enabled(ctx['state_dir'], 'planning'):
+        return None
+    return runtime.entrypoint('planning')
+
+
+def _apply_prepared_goal(ctx, session, prepared, text):
+    """Register a composer input flagged as the goal as this session's objective.
+
+    The objective is the caller's own text: the prepared payload carries
+    expanded context and attachments, which is not what the user marked.
+    """
+    if prepared is None or prepared.get('goal') is not True:
+        return
+    planning = _planning_entrypoint(ctx)
+    apply_goal = getattr(planning, 'apply_session_goal', None) if planning else None
+    if callable(apply_goal):
+        apply_goal(session, text, state_dir=ctx['state_dir'], replace=True, source='composer')
+
+
+class _GoalRefusal(ValueError):
+    """A goal planning refused, carrying the answer its HTTP route must send."""
+
+    def __init__(self, message, status=400, plugin=None):
+        super().__init__(message)
+        self.status = status
+        self.body = {'error': message, **({'plugin': plugin} if plugin else {})}
+
+
+def _apply_submitted_goal(ctx, session, prepared, text):
+    """Apply a flagged submission's goal, or refuse with planning's own status.
+
+    Dropping the goal silently would answer 200 for a turn whose objective was
+    never recorded, and letting planning's GoalError escape reaches the generic
+    500 or another route's unrelated ``ValueError`` branch. planning signals an
+    expected refusal as a ``ValueError`` carrying an HTTP status, so the status
+    is read structurally instead of importing another plugin's exception.
+    """
+    if prepared is None or prepared.get('goal') is not True:
+        return
+    if _planning_entrypoint(ctx) is None:
+        raise _GoalRefusal('plugin disabled or dependency unavailable: planning', 403,
+                           plugin='planning')
+    try:
+        _apply_prepared_goal(ctx, session, prepared, text)
+    except ValueError as exc:
+        status = getattr(exc, 'status', None)
+        if type(status) is not int:
+            raise
+        raise _GoalRefusal(str(exc), status) from None
+
+
+def _public_goal(ctx, session):
+    planning = _planning_entrypoint(ctx)
+    view = getattr(planning, 'session_goal_view', None) if planning else None
+    return view(session) if callable(view) else None
+
+
 def _record_prepared_commands(session, prepared):
     """Persist command invocation audit data from the trusted prepared cache.
 
@@ -228,7 +298,7 @@ def _append_queued_turn(ctx, queue, session, item):
     from ...commands import load as load_commands
     prepared = item.get('prepared')
     commands = (None if prepared is not None else
-                load_commands(ctx['state_dir'])
+                load_commands(ctx['state_dir'], session.get('root'))
                 if host.plugin_runtime.is_enabled(ctx['state_dir'], 'commands') else [])
     session = host.append_user_turn(
         session, ctx['store'], item['text'], commands,
@@ -237,6 +307,7 @@ def _append_queued_turn(ctx, queue, session, item):
         session['messages'][-1]['content'] = prepared['text']
         _safe_input_context(session, prepared)
         _record_prepared_commands(session, prepared)
+        _apply_submitted_goal(ctx, session, prepared, item['text'])
         ctx['store'].save(session)
     return session
 
@@ -403,6 +474,7 @@ def handle_GET(self, parts, path, data):
             'permission_mode': session.get('permission_mode', 'build'),
             'permission_mode_history': session.get('permission_mode_history', []),
             'model_selection': _public_model_selection(session),
+            'model_history': session.get('model_history', []),
             'runtime_profile': session.get('runtime_profile'),
             'runtime_budget': _public_runtime_budget(session),
             'runtime_activity': _public_runtime_activity(session),
@@ -415,6 +487,7 @@ def handle_GET(self, parts, path, data):
             'provider_usage': session.get('provider_usage', []),
             'completion': session.get('completion'), 'todos': session.get('todos', []),
             'delivery_requirements': session.get('delivery_requirements', []),
+            'goal': _public_goal(ctx, session),
             'tool_timings': session.get('tool_timings', [])[-200:],
             'pending_question': session.get('pending_question'),
             'pending': host.pending_denials(session), 'approved': approved,
@@ -480,6 +553,11 @@ def handle_GET(self, parts, path, data):
             self._send(200, host.events_protocol.sse_body(envelope['events']), 'text/event-stream')
             return True
         self._send(200, envelope)
+        return True
+    if len(parts) == 4 and parts[0] == 'api' and (parts[1] == 'sessions') and (parts[3] == 'model') and host._valid_sid(parts[2]):
+        from . import model_switch
+        status, payload = model_switch.describe_http(ctx, parts[2])
+        self._send(status, payload)
         return True
     if len(parts) == 4 and parts[0] == 'api' and (parts[1] == 'sessions') and (parts[3] == 'journal') and host._valid_sid(parts[2]):
         try:
@@ -548,6 +626,10 @@ def handle_POST(self, parts, path, data):
                 self._send(400, {'error': host.provider_config.configuration_error(exc)})
             return True
         try:
+            if prepared is not None:
+                # Ask the owning plugin before anything exists on disk: a refused
+                # goal must not leave a session with a half-written first turn.
+                _apply_submitted_goal(ctx, {}, prepared, task.strip())
             root.mkdir(parents=True, exist_ok=True)
             if data.get('root') is None and root == ctx['web_runs'].resolve():
                 session = ctx['store'].new(task.strip(), root)
@@ -565,8 +647,15 @@ def handle_POST(self, parts, path, data):
                     session['remote_connection'] = prepared_remote
                 _safe_input_context(session, prepared)
                 _record_prepared_commands(session, prepared)
+                _apply_submitted_goal(ctx, session, prepared, task.strip())
             ctx['store'].save(session)
             _remember_workspace(ctx, session['root'])
+        except _GoalRefusal as exc:
+            self._send(exc.status, exc.body)
+            return True
+        except ValueError as exc:
+            self._send(400, {'error': str(exc)})
+            return True
         except OSError:
             self._send(500, {'error': 'cannot create session'})
             return True
@@ -623,15 +712,20 @@ def handle_POST(self, parts, path, data):
                     session = host.append_user_turn(
                         session, ctx['store'], text,
                         (None if prepared is not None else
-                         load_commands(ctx['state_dir']) if host.plugin_runtime.is_enabled(ctx['state_dir'], 'commands') else []),
+                         load_commands(ctx['state_dir'], session.get('root'))
+                         if host.plugin_runtime.is_enabled(ctx['state_dir'], 'commands') else []),
                         persist=prepared is None)
                     if prepared is not None:
                         session['messages'][-1]['content'] = prepared['text']
                         _safe_input_context(session, prepared)
                         _record_prepared_commands(session, prepared)
+                        _apply_submitted_goal(ctx, session, prepared, text)
                         ctx['store'].save(session)
             except LookupError:
                 self._send(409, {'error': 'session is not ready for a new turn'})
+                return True
+            except _GoalRefusal as exc:
+                self._send(exc.status, exc.body)
                 return True
             except ValueError as exc:
                 message = str(exc)
@@ -650,6 +744,13 @@ def handle_POST(self, parts, path, data):
                 return True
         _remember_workspace(ctx, session['root'])
         self._send(200, {'id': session['id'], 'status': session['status'], 'steps': session['steps']})
+        return True
+    if len(parts) == 4 and parts[0] == 'api' and (parts[1] == 'sessions') and (parts[3] == 'model') and host._valid_sid(parts[2]):
+        # sessions.runtime_model_switch: validate and store the choice. A running
+        # turn applies it to its next model request only; see model_switch.
+        from . import model_switch
+        status, payload = model_switch.apply_http(ctx, parts[2], data)
+        self._send(status, payload)
         return True
     if len(parts) == 4 and parts[0] == 'api' and (parts[1] == 'sessions') and (parts[3] == 'run') and host._valid_sid(parts[2]):
         continue_queue = data.get('continue_queue', False)
@@ -698,10 +799,27 @@ def handle_POST(self, parts, path, data):
             from ...tool_registry import BUILTIN_TOOL_NAMES
             disallowed = frozenset(disallowed) | frozenset(
                 name for name in BUILTIN_TOOL_NAMES if name.startswith('browser_'))
+        from .plan_mode import draft_policy, is_permission_mode, permission_mode_error
         permission_mode = data.get('permission_mode', data.get('permissionMode'))
-        if permission_mode is not None and permission_mode not in ('build', 'edit', 'yolo'):
-            self._send(400, {'error': "permission_mode must be 'build', 'edit', or 'yolo'"})
+        if permission_mode is not None and not is_permission_mode(permission_mode):
+            self._send(400, {'error': permission_mode_error()})
             return True
+        # ``plan`` belongs to this plugin, so its availability is decided by the
+        # persisted sessions switch rather than by the request body alone.
+        plan_available = host.plugin_runtime.is_enabled(ctx['state_dir'], 'sessions')
+        if permission_mode == 'plan' and not plan_available:
+            self._send(403, {'error': 'plugin disabled or dependency unavailable: sessions',
+                             'plugin': 'sessions'})
+            return True
+        # Inert unless the run actually uses plan mode; bound to this session id
+        # so one session's draft can never be the writable exception for another.
+        plan_draft = None
+        if plan_available:
+            try:
+                plan_draft = draft_policy(ctx['state_dir'], parts[2])
+            except ValueError as exc:
+                self._send(400, {'error': str(exc)})
+                return True
         remote_choice = data.get('remote')
         if remote_choice is not None and (not isinstance(remote_choice, str) or not remote_choice):
             self._send(400, {'error': 'remote must be a configured connection id'})
@@ -791,7 +909,8 @@ def handle_POST(self, parts, path, data):
                 reasoning_effort = selection.get('reasoning_effort')
             if permission_mode is None:
                 permission_mode = session.get('permission_mode', 'build')
-            if permission_mode not in ('build', 'edit', 'yolo'):
+            if (not is_permission_mode(permission_mode)
+                    or (permission_mode == 'plan' and not plan_available)):
                 self._send(400, {'error': 'saved permission mode is invalid'})
                 return True
             ctx.setdefault('running_context', {})[parts[2]] = {
@@ -843,8 +962,12 @@ def handle_POST(self, parts, path, data):
                 if browser is not None:
                     session['browser_enabled'] = browser
                 ctx['store'].save(session)
-                gate = host.WebGate(host.Path(session['root']), parts[2], ctx['approvals'], ctx['lock'], mode=mode, disallow=disallowed, session=session, permission_mode=permission_mode)
+                gate = host.WebGate(host.Path(session['root']), parts[2], ctx['approvals'], ctx['lock'], mode=mode, disallow=disallowed, session=session, permission_mode=permission_mode, plan_draft=plan_draft)
                 gate.allow_real = ctx['allow_real']
+                # /model, /effort and the app-server can retarget this run, but
+                # only from its next model request: see sessions/model_switch.py.
+                from . import model_switch
+                provider = model_switch.register(ctx, parts[2], provider, gate)
                 if session.get('remote_connection'):
                     from ...tool_registry import REMOTE_LOCAL_TOOL_NAMES
                     gate.disallow_tool_names = REMOTE_LOCAL_TOOL_NAMES
@@ -950,6 +1073,11 @@ def handle_POST(self, parts, path, data):
         except BlockingIOError:
             self._send(409, {'error': 'session is in use by another process'})
             return True
+        except _GoalRefusal as exc:
+            # A queued turn whose goal planning refused must not read as the
+            # workspace mismatch that the generic ValueError branch reports.
+            self._send(exc.status, exc.body)
+            return True
         except ValueError:
             self._send(400, {'error': 'session workspace mismatch'})
             return True
@@ -960,6 +1088,8 @@ def handle_POST(self, parts, path, data):
             self._send(500, {'error': 'run failed'})
             return True
         finally:
+            from . import model_switch
+            model_switch.unregister(ctx, parts[2])
             with ctx['lock']:
                 ctx['running'].discard(parts[2])
                 ctx['stop_requested'].discard(parts[2])

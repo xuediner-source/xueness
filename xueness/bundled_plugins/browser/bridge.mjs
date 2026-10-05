@@ -37,6 +37,96 @@ catch { process.stdout.write(JSON.stringify({ ready: false, reason: 'launch_fail
 const page = context.pages()[0] || await context.newPage();
 page.setDefaultTimeout(15000);
 
+// Numeric caps match snapshot.py. The worker only narrows the aria JSON; Python
+// applies the same node/depth/name caps again and the character budget.
+const SNAPSHOT_MAX_NODES = 200;
+const SNAPSHOT_MAX_DEPTH = 24;
+const SNAPSHOT_MAX_NAME = 120;
+const SNAPSHOT_SCAN = 5000;
+const SNAPSHOT_REF = /^(?:f\d+)?e\d+$/;
+const SNAPSHOT_ROLE = /^[A-Za-z][A-Za-z0-9_-]{0,63}$/;
+
+function snapshotClipName(value) {
+  if (typeof value !== 'string' || !value) return '';
+  const sliced = value.length > 2000 ? value.slice(0, 2000) : value;
+  const text = sliced.replace(/\s+/g, ' ').trim();
+  return text.length > SNAPSHOT_MAX_NAME ? text.slice(0, SNAPSHOT_MAX_NAME) : text;
+}
+
+function limitAccessibilityTree(input) {
+  const nodes = [];
+  let nodeCount = 0;
+  let totalNodes = 0;
+  let walked = 0;
+  let truncated = false;
+  const stack = [];
+  if (!Array.isArray(input)) truncated = true;
+  else {
+    for (let index = input.length - 1; index >= 0; index -= 1) stack.push([input[index], 0, nodes]);
+  }
+  while (stack.length) {
+    if (walked >= SNAPSHOT_SCAN) {
+      truncated = true;
+      break;
+    }
+    const [raw, depth, bucket] = stack.pop();
+    walked += 1;
+    let source = raw;
+    if (typeof raw === 'string') {
+      if (!raw.trim()) continue;
+      source = { role: 'text', name: raw };
+    }
+    if (!source || typeof source !== 'object' || Array.isArray(source)) continue;
+    const role = typeof source.role === 'string' && SNAPSHOT_ROLE.test(source.role) ? source.role : '';
+    const name = snapshotClipName(source.name || (role === 'text' ? source.text : ''));
+    const children = Array.isArray(source.children) ? source.children : [];
+    if (!role || (role === 'text' && !name)) {
+      if (children.length && depth < SNAPSHOT_MAX_DEPTH) {
+        for (let index = children.length - 1; index >= 0; index -= 1) {
+          stack.push([children[index], depth, bucket]);
+        }
+      } else if (children.length) truncated = true;
+      continue;
+    }
+    totalNodes += 1;
+    const emit = bucket && depth <= SNAPSHOT_MAX_DEPTH && nodeCount < SNAPSHOT_MAX_NODES;
+    let childBucket = null;
+    if (!emit) truncated = true;
+    if (emit) {
+      const slim = { role };
+      if (name) slim.name = name;
+      if (typeof source.ref === 'string' && SNAPSHOT_REF.test(source.ref)) slim.ref = source.ref;
+      if (source.disabled === true) slim.disabled = true;
+      if (source.checked === true || source.checked === 'mixed') slim.checked = source.checked;
+      if (Number.isInteger(source.level) && source.level >= 1 && source.level <= 9) slim.level = source.level;
+      slim._children = [];
+      bucket.push(slim);
+      nodeCount += 1;
+      childBucket = slim._children;
+    }
+    if (depth >= SNAPSHOT_MAX_DEPTH) {
+      if (children.length) truncated = true;
+      continue;
+    }
+    const nextBucket = emit ? childBucket : null;
+    for (let index = children.length - 1; index >= 0; index -= 1) {
+      stack.push([children[index], depth + 1, nextBucket]);
+    }
+  }
+  function attach(list) {
+    for (const item of list) {
+      const kids = item._children;
+      delete item._children;
+      if (kids && kids.length) {
+        item.children = kids;
+        attach(kids);
+      }
+    }
+  }
+  attach(nodes);
+  return { nodes, nodeCount, totalNodes, truncated };
+}
+
 function inCidr4(address, prefix) {
   const parts = address.split('.').map(Number);
   if (parts.length !== 4 || parts.some(x => !Number.isInteger(x) || x < 0 || x > 255)) return true;
@@ -95,7 +185,7 @@ process.stdout.write(JSON.stringify({ ready: true }) + '\n');
 const input = createInterface({ input: process.stdin, crlfDelay: Infinity });
 
 async function act(command) {
-  const actions = new Set(['navigate', 'inspect', 'click', 'fill', 'screenshot']);
+  const actions = new Set(['navigate', 'inspect', 'snapshot', 'click', 'fill', 'screenshot']);
   if (!command || !actions.has(command.action)) throw new Error('invalid action');
   if (command.action === 'navigate') {
     if (!await publicHttps(command.url)) throw new Error('public HTTPS URL required');
@@ -107,7 +197,9 @@ async function act(command) {
   } else if (command.action === 'fill') {
     await page.locator(command.selector).first().fill(command.text);
   } else if (command.action === 'screenshot') {
-    await page.screenshot({ path: command.output, fullPage: false });
+    if (command.output) {
+      await page.screenshot({ path: command.output, fullPage: false });
+    }
   }
   const current = page.url();
   if (await publicHttps(current)) {
@@ -123,6 +215,15 @@ async function act(command) {
     return { ok: true, url: current.slice(0, 4096), title: (await page.title()).slice(0, 500),
       mimeType: 'image/png', imageDataUrl: `data:image/png;base64,${bytes.toString('base64')}`,
       untrusted: true };
+  }
+  if (command.action === 'snapshot') {
+    // Static Playwright aria snapshot. Model script is never sent to the page.
+    // mode "ai" registers interactable refs for the existing locator('aria-ref=…') path.
+    const raw = await page.ariaSnapshotJSON({ mode: 'ai', timeout: 15000 });
+    const limited = limitAccessibilityTree(raw);
+    return { ok: true, url: current.slice(0, 4096), title: (await page.title()).slice(0, 500),
+      nodes: limited.nodes, nodeCount: limited.nodeCount, totalNodes: limited.totalNodes,
+      truncated: limited.truncated, untrusted: true };
   }
   const text = (await page.locator('body').innerText()).slice(0, 16000);
   const anchors = await page.locator('a[href]').all();

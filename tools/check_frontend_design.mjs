@@ -27,7 +27,7 @@ for (const selector of [':root', '.dark']) {
   const escaped = selector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   const matches = [...tokens.matchAll(new RegExp(`${escaped}\\s*\\{([^}]+)\\}`, 'g'))];
   if (matches.length !== 1) errors.push(`tokens.css: expected one ${selector} token block, got ${matches.length}`);
-  blocks[selector] = Object.fromEntries((matches[0]?.[1] ?? '').matchAll(/(--[\w-]+)\s*:\s*([^;]+);/g).map(m => [m[1], m[2].trim()]));
+  blocks[selector] = Object.fromEntries([...(matches[0]?.[1] ?? '').matchAll(/(--[\w-]+)\s*:\s*([^;]+);/g)].map(m => [m[1], m[2].trim()]));
 }
 function luminance(hex) {
   if (!/^#[0-9a-f]{6}$/i.test(hex)) throw new Error(`contrast color must be an opaque hex value: ${hex}`);

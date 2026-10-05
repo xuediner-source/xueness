@@ -15,6 +15,9 @@
   ],
   "resources": [],
   "capabilities": [],
+  "httpFamilies": [
+    "usage"
+  ],
   "modules": [
     "operator_cli",
     "usage_api"
@@ -34,10 +37,16 @@
       "id": "usage.costs",
       "name": "实际报告成本与模型维度统计",
       "nameEn": "Reported costs and per-model statistics"
+    },
+    {
+      "id": "usage.quick_card",
+      "name": "工作台用量速览卡片",
+      "nameEn": "Workbench usage quick card"
     }
   ],
   "frontendModules": [
     "plugins/usage/UsagePanel.tsx",
-    "plugins/usage/XuenessUsageSettings.tsx"
+    "plugins/usage/XuenessUsageSettings.tsx",
+    "plugins/usage/XuenessUsageQuickCard.tsx"
   ]
 }

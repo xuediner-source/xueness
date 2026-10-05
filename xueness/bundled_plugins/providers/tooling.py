@@ -58,5 +58,6 @@ REGISTRY = (
                 {'query': {'type': 'string'}}, ('query',), 'tool_search', False, _search),
     BuiltinTool('tool_result_read', 'Read a bounded page of a full recorded tool result in the current session.',
                 {'tool_call_id': {'type': 'string'}, 'offset': {'type': 'integer'}, 'limit': {'type': 'integer'}},
-                ('tool_call_id',), 'tool_result_read', False, _read_result),
+                ('tool_call_id',), 'tool_result_read', False, _read_result,
+                concurrency_safe=True),
 )

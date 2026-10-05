@@ -385,6 +385,17 @@ test("appearance uses accessible theme, font and code-preview controls", () => {
   assert.doesNotMatch(out, /aria-label="终端字号"/);
 });
 
+test("general settings group their rows into labelled cards", () => {
+  const out = renderToStaticMarkup(<SettingsSections
+    embedded sections={[]} activeSection="general"
+    values={{}} capabilities={noCapabilities} onUpdateSetting={() => {}}
+  />);
+  assert.match(out, /<header class="xn-settings-card-group__header"><h2>对话行为<\/h2><p>控制消息到达时的显示方式。<\/p><\/header>/);
+  assert.match(out, /<div class="xn-settings-group"><div class="xn-setting-row"><div class="xn-setting-row__copy"><h3>新消息自动滚动<\/h3>/);
+  assert.ok((out.match(/class="xn-settings-group"/g) ?? []).length >= 5);
+  assert.ok((out.match(/class="xn-setting-row"/g) ?? []).length >= 13);
+});
+
 test("general and browser settings only expose their live backend controls", () => {
   const general = renderToStaticMarkup(<SettingsSections embedded sections={[]} activeSection="general"
     values={{ language: "en", autoScroll: false, toolGroupingTerminalEnabled: true }}

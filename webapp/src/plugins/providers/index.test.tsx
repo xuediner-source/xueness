@@ -4,10 +4,12 @@ import { resolve } from 'node:path';
 import test from 'node:test';
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
+import { setLocale, t } from '../../i18n';
 import {
   ModelManager,
   ModelProviderNavigation,
   ProviderEditor,
+  ProviderEmptyState,
   adjustedLightweightOutput,
   canAdoptProviderCompatibility,
   canTestProviderCompatibility,
@@ -18,7 +20,7 @@ import {
   providerSavePayload,
   validateProviderDraft,
 } from './index';
-import { adoptProviderCompatibility, testProviderCompatibility, testProviderConnection } from '../../xuenessApi';
+import { adoptProviderCompatibility, saveDefaultModelSelection, testProviderCompatibility, testProviderConnection } from '../../xuenessApi';
 import type { ProviderCompatibilityTest, ProviderConnectionTest, ProviderSummary } from '../../xuenessApi';
 
 const provider = (overrides: Partial<ProviderSummary> = {}): ProviderSummary => ({
@@ -408,6 +410,28 @@ test('compatibility diagnostics send only the saved ID, selected mode and candid
   });
 });
 
+test('default model selection is stored through the providers default route', async () => {
+  const originalFetch = globalThis.fetch;
+  const calls: { url: string; init?: RequestInit }[] = [];
+  const saved = { providerId: 'local-openai', model: 'gpt-test', reasoningEffort: 'high' };
+  globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = String(input);
+    calls.push({ url, init });
+    if (url === '/api/csrf') return new Response(JSON.stringify({ csrfToken: 'csrf-fixture' }), { status: 200 });
+    return new Response(JSON.stringify({ default: saved }), { status: 200 });
+  }) as typeof fetch;
+  try {
+    assert.deepEqual(await saveDefaultModelSelection(saved), saved);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+  assert.equal(calls[0].url, '/api/csrf');
+  assert.equal(calls[1].url, '/api/providers/default');
+  assert.equal(calls[1].init?.method, 'POST');
+  assert.equal(new Headers(calls[1].init?.headers).get('X-CSRF-Token'), 'csrf-fixture');
+  assert.deepEqual(JSON.parse(String(calls[1].init?.body)), saved);
+});
+
 test('compatibility diagnostics require an unchanged saved connection and never save candidates', () => {
   const original = provider();
   const saved = providerDraftFromSummary(original);
@@ -520,4 +544,70 @@ test('split panel follows the upstream 224px desktop and 36rem detail dimensions
   assert.match(css, /grid-template-columns:\s*224px minmax\(0, 1fr\)/);
   assert.match(css, /min-height:\s*36rem/);
   assert.match(css, /grid-template-columns:\s*56px minmax\(0, 1fr\)/);
+});
+
+function clickByTestId(node: React.ReactNode, testId: string): Array<() => void> {
+  const found: Array<() => void> = [];
+  const visit = (child: React.ReactNode): void => {
+    if (child == null || typeof child === 'boolean' || typeof child === 'string' || typeof child === 'number') return;
+    if (Array.isArray(child)) {
+      child.forEach(visit);
+      return;
+    }
+    if (typeof child !== 'object' || !('props' in child)) return;
+    const element = child as React.ReactElement<{ 'data-testid'?: string; onClick?: () => void; children?: React.ReactNode }>;
+    if (element.props?.['data-testid'] === testId && typeof element.props.onClick === 'function') found.push(element.props.onClick);
+    visit(element.props?.children);
+  };
+  visit(node);
+  return found;
+}
+
+test('an empty custom model list shows the illustration, both Add actions, and the repo doc', () => {
+  let adds = 0;
+  const tree = ProviderEmptyState({ onAdd: () => { adds += 1; } });
+  const html = renderToStaticMarkup(tree);
+  assert.match(html, /data-testid="provider-custom-empty"/);
+  assert.match(html, /<svg class="xn-provider-empty__art"/);
+  assert.doesNotMatch(html, /<img /);
+  assert.match(html, /还没有自定义模型配置/);
+  assert.match(html, /添加一个 API 配置后，可随时切换当前运行使用的模型。/);
+  assert.match(html, /data-testid="provider-custom-empty-add"/);
+  assert.match(html, /\+ 添加/);
+  assert.match(html, /data-testid="provider-custom-empty-action"/);
+  assert.match(html, />添加</);
+  assert.match(html, /data-testid="provider-custom-empty-docs"/);
+  assert.match(html, /查看模型文档/);
+  assert.match(html, /href="https:\/\/github.com\/xuediner-source\/xueness\/blob\/main\/docs\/xueness-local-lightweight-mode\.md"/);
+  assert.match(html, /rel="noopener noreferrer"/);
+  // 工作台源站没有 docs/，不能使用打不开的相对路径。
+  assert.doesNotMatch(html, /href="docs\//);
+  for (const click of [
+    ...clickByTestId(tree, 'provider-custom-empty-add'),
+    ...clickByTestId(tree, 'provider-custom-empty-action'),
+  ]) click();
+  assert.equal(adds, 2);
+  const busy = renderToStaticMarkup(<ProviderEmptyState onAdd={() => undefined} busy />);
+  const addButton = busy.match(/<button[^>]*data-testid="provider-custom-empty-add"[^>]*>/)?.[0] ?? "";
+  const actionButton = busy.match(/<button[^>]*data-testid="provider-custom-empty-action"[^>]*>/)?.[0] ?? "";
+  assert.match(addButton, /disabled/);
+  assert.match(actionButton, /disabled/);
+});
+
+test('custom model empty-state strings exist in English', () => {
+  try {
+    setLocale('en');
+    assert.equal(t('还没有自定义模型配置'), 'No custom model profiles yet');
+    assert.equal(t('+ 添加'), '+ Add');
+    assert.equal(t('添加'), 'Add');
+    assert.equal(t('查看模型文档'), 'View Docs');
+  } finally {
+    setLocale('zh');
+  }
+});
+
+test('the model list empty state appears only after the catalog resolves as empty', async () => {
+  const source = await readFile(resolve(process.cwd(), 'src/plugins/providers/index.tsx'), 'utf8');
+  assert.match(source, /!loading && items\.length === 0 && <ProviderEmptyState/);
+  assert.doesNotMatch(renderToStaticMarkup(<ModelManager onSelect={() => undefined} />), /provider-custom-empty/);
 });

@@ -237,6 +237,17 @@ def parse_namespaced(name):
     return None
 
 
+def sanitize_mcp_name_part(name: str) -> str:
+    """Sanitize name to match [A-Za-z0-9._-]{1,64}, matching ZCode toModelVisibleMcpNamePart."""
+    if not isinstance(name, str) or not name.strip():
+        return "unnamed"
+    sanitized = re.sub(r"[^A-Za-z0-9._-]", "_", name.strip())
+    sanitized = re.sub(r"_+", "_", sanitized)
+    if not sanitized or sanitized in RESERVED_NAMES:
+        return "tool"
+    return sanitized[:64]
+
+
 def tool_schema(server_id, tool) -> dict:
     """An OpenAI function schema for one tool of ``server_id``.
 
@@ -248,6 +259,8 @@ def tool_schema(server_id, tool) -> dict:
     name = item.get("name")
     if not isinstance(name, str) or not name.strip():
         name = "unnamed"
+    else:
+        name = sanitize_mcp_name_part(name)
     description = item.get("description")
     if not isinstance(description, str):
         description = ""
@@ -265,16 +278,28 @@ def tool_schema(server_id, tool) -> dict:
 
 
 def _extract_text(content) -> str:
-    """Join the ``text`` of every ``type == "text"`` content item."""
+    """Join the text of content items."""
+    if isinstance(content, str):
+        return content
     if not isinstance(content, list):
         return ""
     parts = []
     for item in content:
-        if not isinstance(item, dict) or item.get("type") != "text":
+        if not isinstance(item, dict):
             continue
-        text = item.get("text")
-        if isinstance(text, str):
-            parts.append(text)
+        itype = item.get("type")
+        if itype == "text":
+            text = item.get("text")
+            if isinstance(text, str):
+                parts.append(text)
+        elif itype == "resource":
+            res = item.get("resource")
+            if isinstance(res, dict):
+                res_text = res.get("text")
+                if isinstance(res_text, str):
+                    parts.append(res_text)
+                else:
+                    parts.append("MCP resource: " + json.dumps(res, ensure_ascii=False))
     return "\n".join(parts)
 
 
@@ -399,8 +424,30 @@ class McpClient:
             message["params"] = params
         self._write(message)
 
+    def _post_result(self, response: dict) -> None:
+        """Send one JSON-RPC response to the server. Stdio writes it to stdin."""
+        self._write(response)
+
+    def _answer_server_request(self, message: dict) -> None:
+        """Answer a server-initiated request without treating it as our result.
+
+        The reply is the only place an elicitation answer is written. A
+        transport failure names the exception type and does not include that
+        answer.
+        """
+        from .elicitation import response_for
+        reply = response_for(self, message)
+        if reply is not None:
+            self._post_result(reply)
+
     def _await(self, request_id, deadline: float) -> dict:
-        """The response whose ``id`` matches, or a transport error."""
+        """The response whose ``id`` matches, or a transport error.
+
+        A server request is answered before it can be mistaken for our result.
+        Time spent waiting for the operator is added back onto the deadline so
+        the tool-call timeout does not expire during that wait.
+        """
+        from .elicitation import is_server_request
         while True:
             remaining = deadline - time.monotonic()
             if remaining <= 0:
@@ -416,10 +463,14 @@ class McpClient:
                 raise _McpTransportError("server closed stdout before replying")
             if not isinstance(message, dict):
                 continue
+            if is_server_request(message):
+                started = time.monotonic()
+                self._answer_server_request(message)
+                deadline += time.monotonic() - started
+                continue
             if message.get("id") == request_id:
                 return message
-            # Notifications and unrelated ids (server-initiated requests) are
-            # simply ignored: nothing here may block or raise.
+            # Notifications and unrelated ids are ignored.
 
     def _request(self, method: str, params, request_id: int) -> dict:
         message = {"jsonrpc": "2.0", "id": request_id, "method": method}
@@ -445,6 +496,9 @@ class McpClient:
         pinned = self.server.get("protocolVersion")
         if isinstance(pinned, str) and pinned in SUPPORTED_PROTOCOL_VERSIONS:
             return pinned
+        from .elicitation import ELICITATION_PROTOCOL, elicitation_enabled
+        if elicitation_enabled(self.server):
+            return ELICITATION_PROTOCOL
         return PROTOCOL_VERSION
 
     def _version_ladder(self) -> list:
@@ -578,6 +632,8 @@ class McpClient:
             if isinstance(extra, list):
                 argv.extend(str(part) for part in extra)
 
+            from .elicitation import initialize_capabilities
+            capabilities = initialize_capabilities(self.server)
             ladder = self._version_ladder()
             for index, version in enumerate(ladder):
                 if not self._spawn(argv):
@@ -587,7 +643,7 @@ class McpClient:
                         "initialize",
                         {
                             "protocolVersion": version,
-                            "capabilities": {},
+                            "capabilities": capabilities,
                             "clientInfo": dict(CLIENT_INFO),
                         },
                         1,
@@ -667,7 +723,14 @@ class McpClient:
         except Exception as exc:  # noqa: BLE001 - a failed call must not break a run
             self.error = self._error_with_cleanup(_fail_text(exc))
             return {"ok": False, "content": "", "error": self.error}
-        text = clip(_extract_text(result.get("content")), self.output_cap)
+        raw_text = _extract_text(result.get("content"))
+        structured = result.get("structuredContent")
+        if structured is not None and isinstance(structured, (dict, list)) and len(structured) > 0:
+            structured_text = "Structured content:\n" + json.dumps(structured, ensure_ascii=False, indent=2)
+            text = (raw_text + "\n\n" + structured_text) if raw_text else structured_text
+        else:
+            text = raw_text
+        text = clip(text, self.output_cap)
         if result.get("isError") is True:
             return {"ok": False, "content": "", "error": text}
         return {"ok": True, "content": text, "error": None}

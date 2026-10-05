@@ -24,6 +24,11 @@
   ],
   "resources": [],
   "capabilities": [],
+  "httpFamilies": [
+    "composer",
+    "sessions",
+    "sessions/*/model"
+  ],
   "modules": [
     "cli",
     "cli_input",
@@ -34,7 +39,10 @@
     "deltas",
     "forking",
     "http_routes",
+    "manual_compact",
+    "model_switch",
     "operator_cli",
+    "plan_mode",
     "queue",
     "session_management",
     "sessions_api",
@@ -45,6 +53,11 @@
       "id": "sessions.conversation",
       "name": "会话创建与 Agent 对话",
       "nameEn": "Sessions and agent conversations"
+    },
+    {
+      "id": "sessions.plan_mode",
+      "name": "计划权限模式（只读并先出计划）",
+      "nameEn": "Plan permission mode (read-only, plan first)"
     },
     {
       "id": "sessions.management",
@@ -60,6 +73,11 @@
       "id": "sessions.fork",
       "name": "闭合历史轮次分叉与来源链接",
       "nameEn": "Safe history forks and parent links"
+    },
+    {
+      "id": "sessions.fork_from_checkpoint",
+      "name": "从轮次检查点派生新会话",
+      "nameEn": "Fork a session from a turn checkpoint"
     },
     {
       "id": "sessions.portable",
@@ -95,6 +113,31 @@
       "id": "sessions.timeline_follow",
       "name": "时间线跟随与回到底部",
       "nameEn": "Timeline following and return to bottom"
+    },
+    {
+      "id": "sessions.start_page",
+      "name": "空会话起始页快捷动作与最近会话",
+      "nameEn": "Empty-session start page actions and recent sessions"
+    },
+    {
+      "id": "sessions.manual_compact",
+      "name": "手动压缩上下文（/compact 与说明）",
+      "nameEn": "Manual context compaction (/compact with instructions)"
+    },
+    {
+      "id": "sessions.tool_concurrency",
+      "name": "依赖感知的工具并发调度",
+      "nameEn": "Dependency-aware tool concurrency"
+    },
+    {
+      "id": "sessions.runtime_model_switch",
+      "name": "运行中切换模型与推理档位（/model、/effort）",
+      "nameEn": "Switch model and reasoning level mid-run via /model and /effort"
+    },
+    {
+      "id": "sessions.model_picker",
+      "name": "模型选择分档、目录标签与详情卡",
+      "nameEn": "Model picker presets, catalog tabs and detail card"
     }
   ],
   "frontendModules": [
@@ -114,6 +157,8 @@
     "plugins/sessions/SessionQueue.tsx",
     "plugins/sessions/CommandPalette.tsx",
     "plugins/sessions/ConversationTimelineViewport.tsx",
-    "plugins/sessions/SessionPolling.ts"
+    "plugins/sessions/SessionPolling.ts",
+    "plugins/sessions/XuenessStartPage.tsx",
+    "plugins/sessions/permissionModes.ts"
   ]
 }

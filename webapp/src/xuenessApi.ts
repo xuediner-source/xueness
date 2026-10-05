@@ -145,6 +145,18 @@ export type ResourceList = {
   items: ResourceItem[];
   capability: { userScopeAvailable: boolean; userScopeReason?: string };
 };
+/** 合并命令清单的一行：内建提示命令、工作区/用户 .md 文件与资源存储同表呈现。 */
+export type CommandCatalogRow = {
+  id: string;
+  name: string;
+  description?: string;
+  argumentHint?: string;
+  source: string;
+  scope?: string;
+  shadowed?: boolean;
+  shadowedBy?: string | null;
+  [k: string]: unknown;
+};
 export type MemoryTracks = { tracks: MemoryTrack[] };
 
 export type XuenessPluginFeature = {
@@ -179,11 +191,56 @@ export type MarketplaceItem = {
   id: string; name: string; description: string; version: string; sha256: string;
   installedVersion: string | null; manifest: Record<string, unknown>; source: string;
 };
+/** One selectable composition profile: allowlisted plugin ids, booleans only. */
+export type PluginProfileRow = {
+  name: string;
+  source: string;
+  extends: string[];
+  description: string;
+  descriptionEn: string;
+  enabled: string[];
+  disabled: string[];
+  active: boolean;
+};
+export type PluginProfileCatalog = { active: string | null; profiles: PluginProfileRow[] };
+/** What applying a profile switches, and what the host kept ahead of it. */
+export type PluginProfileApplyResult = {
+  ok: boolean;
+  dryRun: boolean;
+  profile: string;
+  changes: { id: string; enabled: boolean; wasEnabled: boolean; effective: boolean; wasEffective: boolean }[];
+  blocked: { id: string; blockedBy: string[] }[];
+  warnings: { code: string; id?: string; message: string }[];
+};
+
 export type AutomationRecord = {
   id: string; name: string; schedule: string; timezone: string; enabled: boolean;
   workflow: { root: string; name: string; nodes: unknown[]; concurrency?: number };
   approvalRequired: true; approved?: boolean; allowReal?: boolean; nextRunAt: number;
   history: { id: string; at: number; status: string; workflowId?: string; error?: string }[];
+};
+
+/** One queued 闲时任务 and its bounded per-attempt history. */
+export type OffPeakTaskRecord = {
+  id: string; name: string; prompt: string; root: string;
+  model: string | null; provider_id: string | null; deadlineSeconds: number;
+  onlyWhenIdle: boolean; window: { start: string; end: string } | null; timezone: string | null;
+  status: string; createdAt: number; nextEligibleAt: number; holdUntil: number | null;
+  approved: boolean; allowReal: boolean; runId: string | null; workflowId: string | null;
+  claimedAt: number | null; finishedAt: number | null; digest: string;
+  history: { id: string; at: number; status: string; workflowId?: string; error?: string }[];
+};
+
+export type OffPeakSettings = {
+  window: { start: string; end: string };
+  timezone: string | null;
+};
+
+export type OffPeakOverview = {
+  tasks: OffPeakTaskRecord[];
+  settings: OffPeakSettings;
+  windowOpen: boolean;
+  nextWindowAt: number;
 };
 
 /* ------------------------------------------------------------------ */
@@ -223,7 +280,7 @@ async function put<T>(path: string, body: object): Promise<T> {
   return send<T>("PUT", path, body);
 }
 
-async function del<T>(path: string): Promise<T> {
+export async function del<T>(path: string): Promise<T> {
   return send<T>("DELETE", path);
 }
 
@@ -261,6 +318,22 @@ export async function listResources(kind: string): Promise<ResourceList> {
     items: payload.items ?? [],
     capability: payload.capability ?? { userScopeAvailable: true },
   };
+}
+
+/**
+ * GET /api/resources/commands/files → `xueness commands list` 打印的同一份合并清单。
+ *
+ * 内建提示命令、文件命令与资源条目在这里汇合，所以斜杠候选不需要 UI 侧第二份名单；
+ * 被遮蔽的行仍返回（`shadowed`），由调用方决定展示与否。`root` 缺省时只有状态目录
+ * 的条目（内建命令要求工作区，故不出现）。
+ */
+export async function listCommandCatalog(root?: string, language?: string): Promise<CommandCatalogRow[]> {
+  const query = new URLSearchParams();
+  if (root) query.set("root", root);
+  if (language) query.set("language", language);
+  const payload = await get<{ commands: CommandCatalogRow[] }>(
+    `/api/resources/commands/files${query.size ? `?${query}` : ""}`);
+  return payload.commands ?? [];
 }
 
 /** POST /api/resources/<kind>，body 至少含 `id`。 */
@@ -398,6 +471,31 @@ export async function adoptProviderCompatibility(id: string, optionsHash: string
   return post<{ provider: ProviderSummary }>("/api/providers/compatibility-adopt", { id, optionsHash });
 }
 
+/** providers.default_selection: the stored default model and reasoning level. */
+export type DefaultModelSelection = {
+  providerId?: string | null;
+  model?: string | null;
+  reasoningEffort?: string | null;
+};
+
+/** GET /api/providers/default; ``null`` when nothing was saved or it no longer resolves. */
+export async function loadDefaultModelSelection(): Promise<DefaultModelSelection | null> {
+  const payload = await get<{ default: DefaultModelSelection | null }>("/api/providers/default");
+  return payload.default ?? null;
+}
+
+/** POST /api/providers/default; the server validates before storing and answers 400 otherwise. */
+export async function saveDefaultModelSelection(
+  selection: DefaultModelSelection,
+): Promise<DefaultModelSelection | null> {
+  const payload = await post<{ default: DefaultModelSelection | null }>("/api/providers/default", {
+    providerId: selection.providerId ?? null,
+    model: selection.model ?? null,
+    reasoningEffort: selection.reasoningEffort ?? null,
+  });
+  return payload.default ?? null;
+}
+
 /** POST /api/providers/discover; reads the saved OpenAI profile without sending a chat request. */
 export async function discoverProviderModels(id: string): Promise<ProviderModelDiscovery> {
   const payload = await post<unknown>("/api/providers/discover", { id });
@@ -484,6 +582,47 @@ export async function installMarketplaceItem(id: string, sha256: string, update 
   return { marketplace: payload.marketplace };
 }
 
+function profileNames(value: unknown): string[] {
+  return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : [];
+}
+
+/** GET /api/plugins/profiles — the selectable pure-data plugin tiers. */
+export async function listPluginProfiles(): Promise<PluginProfileCatalog> {
+  const payload = await get<{ active?: unknown; profiles?: unknown }>("/api/plugins/profiles");
+  if (!Array.isArray(payload.profiles)) throw new Error("Invalid plugin profile response");
+  const profiles = payload.profiles.map((item): PluginProfileRow => {
+    const row = item as Record<string, unknown>;
+    if (!row || typeof row.name !== "string" || !row.name) throw new Error("Invalid plugin profile response");
+    return {
+      name: row.name,
+      source: typeof row.source === "string" ? row.source : "built-in",
+      extends: profileNames(row.extends),
+      description: typeof row.description === "string" ? row.description : "",
+      descriptionEn: typeof row.descriptionEn === "string" ? row.descriptionEn : "",
+      enabled: profileNames(row.enabled),
+      disabled: profileNames(row.disabled),
+      active: row.active === true,
+    };
+  });
+  return { active: typeof payload.active === "string" ? payload.active : null, profiles };
+}
+
+/** POST /api/plugins/profiles/apply — choose a tier; explicit user switches stay ahead of it. */
+export async function applyPluginProfile(name: string, dryRun = false): Promise<PluginProfileApplyResult> {
+  const payload = await post<Record<string, unknown>>("/api/plugins/profiles/apply", { name, dryRun });
+  if (payload.ok !== true || !Array.isArray(payload.changes) || !Array.isArray(payload.blocked) || !Array.isArray(payload.warnings)) {
+    throw new Error("Invalid plugin profile response");
+  }
+  return {
+    ok: true,
+    dryRun: payload.dryRun === true,
+    profile: typeof payload.profile === "string" ? payload.profile : name,
+    changes: payload.changes as PluginProfileApplyResult["changes"],
+    blocked: payload.blocked as PluginProfileApplyResult["blocked"],
+    warnings: payload.warnings as PluginProfileApplyResult["warnings"],
+  };
+}
+
 export async function listAutomations(): Promise<{ automations: AutomationRecord[] }> {
   const payload = await get<{ automations: AutomationRecord[] }>("/api/automations");
   if (!Array.isArray(payload.automations)) throw new Error("Invalid automations response");
@@ -503,6 +642,32 @@ export async function runAutomation(id: string): Promise<{ run: AutomationRecord
 }
 export async function approveAutomation(id: string, allowReal: boolean): Promise<{ automation: AutomationRecord }> {
   return post<{ automation: AutomationRecord }>(`/api/automations/${encodeURIComponent(id)}/approve`, { confirmed: true, allowReal });
+}
+
+/* 闲时任务（automation.off_peak）：本地低峰窗口队列，纯数据，不引入可执行配置。 */
+export async function listOffPeakTasks(): Promise<OffPeakOverview> {
+  const payload = await get<OffPeakOverview>("/api/automation/offpeak");
+  if (!Array.isArray(payload.tasks)) throw new Error("Invalid off-peak queue response");
+  return payload;
+}
+export async function createOffPeakTask(data: Record<string, unknown>): Promise<{ task: OffPeakTaskRecord }> {
+  return post<{ task: OffPeakTaskRecord }>("/api/automation/offpeak", data);
+}
+export async function cancelOffPeakTask(id: string): Promise<{ cancelled: string }> {
+  return del<{ cancelled: string }>(`/api/automation/offpeak/${encodeURIComponent(id)}`);
+}
+export async function runOffPeakTask(id: string): Promise<{ result: { id: string; status: string; error?: string; workflowId?: string } }> {
+  return post<{ result: { id: string; status: string; error?: string; workflowId?: string } }>(`/api/automation/offpeak/${encodeURIComponent(id)}/run`, {});
+}
+/** 批准绑定已保存计划的摘要；真实服务商仍由主机决定是否放行。 */
+export async function approveOffPeakTask(id: string, allowReal: boolean): Promise<{ task: OffPeakTaskRecord }> {
+  return post<{ task: OffPeakTaskRecord }>(`/api/automation/offpeak/${encodeURIComponent(id)}/approve`, { confirmed: true, allowReal });
+}
+export async function getOffPeakSettings(): Promise<{ settings: OffPeakSettings }> {
+  return get<{ settings: OffPeakSettings }>("/api/automation/offpeak/settings");
+}
+export async function saveOffPeakSettings(window: OffPeakSettings["window"], timezone: string | null): Promise<{ settings: OffPeakSettings }> {
+  return post<{ settings: OffPeakSettings }>("/api/automation/offpeak/settings", { window, timezone });
 }
 
 /* ------------------------------------------------------------------ */

@@ -1,7 +1,7 @@
 {
   "id": "git",
   "name": "Git 审查",
-  "description": "只读仓库状态、工作树 diff 与提交记录。",
+  "description": "只读仓库状态、工作树 diff 与提交记录，并把远程仓库克隆到已授权目录。",
   "version": "1.0.0",
   "apiVersion": 1,
   "defaultEnabled": true,
@@ -17,16 +17,32 @@
   "capabilities": [
     "command"
   ],
+  "toolEvents": {
+    "events": [
+      "after_tool_authorization"
+    ]
+  },
+  "httpFamilies": [
+    "sessions/*/git",
+    "git/clone"
+  ],
   "modules": [
     "actions",
+    "clone",
     "git_api",
-    "operator_cli"
+    "operator_cli",
+    "turn_checkpoints"
   ],
   "features": [
     {
       "id": "git.inspect",
       "name": "状态、差异、日志与分支查看",
       "nameEn": "Status, diffs, logs and branches"
+    },
+    {
+      "id": "git.clone",
+      "name": "克隆远程仓库到已授权目录",
+      "nameEn": "Clone a remote repository into an authorized directory"
     },
     {
       "id": "git.actions",
@@ -37,10 +53,21 @@
       "id": "git.checkpoint",
       "name": "检查点、恢复预览与恢复前备份",
       "nameEn": "Checkpoints, restore review and recovery backups"
+    },
+    {
+      "id": "git.turn_checkpoints",
+      "name": "轮次首个写入前自动检查点",
+      "nameEn": "Automatic checkpoints before a turn's first change"
+    },
+    {
+      "id": "git.rewind",
+      "name": "回退工作区到轮次检查点",
+      "nameEn": "Rewind the workspace to a turn checkpoint"
     }
   ],
   "frontendModules": [
     "plugins/git/XuenessGitView.tsx",
+    "plugins/git/XuenessCloneDialog.tsx",
     "xuenessGit.ts"
   ]
 }

@@ -1,13 +1,15 @@
 {
   "id": "hooks",
   "name": "生命周期钩子",
-  "description": "按调用授权执行生命周期钩子。",
+  "description": "按调用授权执行生命周期钩子；工作区钩子经摘要审查与显式信任后并入同一执行器。",
   "version": "1.0.0",
   "apiVersion": 1,
   "defaultEnabled": true,
   "dependencies": [],
   "tools": [],
-  "commands": [],
+  "commands": [
+    "hooks"
+  ],
   "panels": [
     "capabilities"
   ],
@@ -17,8 +19,15 @@
   "capabilities": [
     "command"
   ],
+  "httpFamilies": [
+    "resources/hooks"
+  ],
   "modules": [
-    "hooks"
+    "hooks",
+    "tool_events",
+    "workspace_hooks",
+    "hooks_cli",
+    "trust_api"
   ],
   "features": [
     {
@@ -30,6 +39,16 @@
       "id": "hooks.approval",
       "name": "钩子命令审批与运行记录",
       "nameEn": "Hook command approval and run records"
+    },
+    {
+      "id": "hooks.tool_events",
+      "name": "工具执行事件管线接入",
+      "nameEn": "Tool event pipeline integration"
+    },
+    {
+      "id": "hooks.workspace_trust",
+      "name": "工作区钩子发现与按摘要信任",
+      "nameEn": "Workspace hook discovery and digest trust"
     }
   ],
   "frontendModules": []

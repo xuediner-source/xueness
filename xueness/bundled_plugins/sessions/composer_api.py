@@ -873,8 +873,15 @@ def _plugin_context(ctx: dict, plugin_ids: list[str]) -> tuple[str, list[dict]]:
 
 def _prepare(ctx: dict, data: dict) -> tuple[int, dict]:
     allowed_top = {"text", "root", "session_id", "provider_id", "model",
-                   "reasoning_effort", "permission_mode", "input"}
+                   "reasoning_effort", "permission_mode", "input", "language"}
     _check_keys(data, allowed_top, "request")
+    # The field is accepted so clients are not rejected for sending it, but
+    # prepare does not authorize anything. The run route remains the authority.
+    permission_mode = data.get("permission_mode")
+    if permission_mode is not None:
+        from .plan_mode import is_permission_mode, permission_mode_error
+        if not is_permission_mode(permission_mode):
+            raise _ComposerError(400, permission_mode_error())
     text = data.get("text")
     if not isinstance(text, str) or len(text) > _MAX_TEXT_CHARS:
         raise _ComposerError(400, "text must be at most 5000 characters")
@@ -885,6 +892,8 @@ def _prepare(ctx: dict, data: dict) -> tuple[int, dict]:
     goal = body_input.get("goal", False)
     if type(goal) is not bool:
         raise _ComposerError(400, "invalid goal flag")
+    if goal:
+        _require_enabled(ctx, "planning")
     session_id = data.get("session_id")
     if session_id is not None and (not isinstance(session_id, str) or len(session_id) > 64):
         raise _ComposerError(400, "invalid session selection")
@@ -904,8 +913,10 @@ def _prepare(ctx: dict, data: dict) -> tuple[int, dict]:
     if _enabled(ctx, "commands"):
         try:
             from ..commands import commands as command_api
+            # ``language`` is display data for built-in prompt commands only; an
+            # unknown value falls back to the plugin's default, never a refusal.
             prompt_text, invocation = command_api.expand(
-                command_api.load(ctx["state_dir"]), text,
+                command_api.load(ctx["state_dir"], root, language=data.get("language")), text,
             )
         except (ImportError, KeyError, OSError, ValueError):
             raise _ComposerError(403, "plugin disabled or dependency unavailable: commands") from None

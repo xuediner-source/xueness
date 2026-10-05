@@ -10,6 +10,18 @@ def execute_cli(args, deps=None):
 
 
 def dispatch(method, parts, query, data, ctx):
-    from . import git_api, actions
+    from . import actions, clone, git_api, turn_checkpoints
+    result = clone.dispatch(method, parts, query, data, ctx)
+    if result is not None:
+        return result
     result = actions.dispatch(method, parts, query, data, ctx)
+    if result is not None:
+        return result
+    result = turn_checkpoints.dispatch(method, parts, query, data, ctx)
     return result if result is not None else git_api.dispatch(method, parts, query, data, ctx)
+
+
+def after_tool_authorization(payload):
+    """Kernel seam: snapshot only after the tool handler's Gate allows it."""
+    from . import turn_checkpoints
+    turn_checkpoints.after_tool_authorization(payload)

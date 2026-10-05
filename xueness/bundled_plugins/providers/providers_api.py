@@ -95,6 +95,36 @@ def known_reasoning_levels(model):
     return ()
 
 
+def profile_record(state_dir, provider_id):
+    """One saved profile record, under the same jail as every other profile read."""
+    if not isinstance(provider_id, str) or not _valid_id(provider_id):
+        return None
+    try:
+        with PROVIDER_STORE_LOCK:
+            path = _path_for(_providers_dir({"state_dir": state_dir}), provider_id)
+            return _read_record(path) if path else None
+    except (OSError, ValueError):
+        return None
+
+
+def declared_reasoning_levels(state_dir, provider_id=None, model=None):
+    """Levels to offer for a choice: profile declaration, known family, full whitelist.
+
+    Callers that *validate* a request must not use this: an undeclared profile
+    means "no evidence", and ``_validate_reasoning_effort`` deliberately refuses
+    a level it cannot point at. Offering is allowed to fall back to the shared
+    whitelist so ``/effort list`` still shows what can be typed.
+    """
+    record = profile_record(state_dir, provider_id) if provider_id else None
+    declared = (record or {}).get("reasoningLevels")
+    if isinstance(declared, list) and declared:
+        return tuple(item for item in declared if isinstance(item, str))
+    known = known_reasoning_levels(model or (record or {}).get("model"))
+    if known:
+        return known
+    return REASONING_LEVELS
+
+
 # --------------------------------------------------------------------------
 # helpers
 # --------------------------------------------------------------------------
@@ -963,6 +993,12 @@ def dispatch(method: str, parts: list, query: dict, data: dict, ctx: dict):
 
         if method == "POST" and rest == ["compatibility-adopt"]:
             return _handle_compatibility_adopt(ctx, data)
+
+        if rest == ["default"]:
+            from . import default_selection
+            handled = default_selection.dispatch(method, rest, data, ctx)
+            if handled is not None:
+                return handled
 
         if method == "DELETE" and len(rest) == 1:
             return _handle_delete(ctx, rest[0])

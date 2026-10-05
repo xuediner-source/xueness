@@ -58,6 +58,13 @@ EXIT_BLOCK = 2
 DEFAULT_TIMEOUT_CAP = 30
 DEFAULT_OUTPUT_CAP = 2000
 
+#: The two Post events a hook may move onto the kernel tool event pipeline
+#: with an explicit ``"pipeline": true`` declaration. For these events the
+#: legacy fire point skips pipeline hooks and the pipeline fires only them,
+#: so a hook runs exactly once whichever way it is wired. For every other
+#: event the flag is ignored and behaviour is unchanged.
+POST_PIPELINE_EVENTS = ("PostToolUse", "PostToolUseFailure")
+
 TRUNCATION_SUFFIX = "…(truncated)"
 
 # Characters of a hook's output echoed back as a pre_tool_use summary.
@@ -279,13 +286,19 @@ class HookRunner:
             return []
         return select(self.hooks, event, subject)
 
-    def fire(self, event, payload) -> list:
+    def fire(self, event, payload, *, pipeline: bool = False) -> list:
         """Run every hook selected for ``event``; ``[]`` when disabled/unmatched.
 
         ``matcher`` is driven by the tool name for the tool-scoped events. The
         run loop labels it ``tool_name`` on the Pre hook and ``tool`` on the
         Post hooks, so both keys are accepted — otherwise a matcher on
         ``PostToolUse`` could never match and the hook would silently never run.
+
+        For the two Post events, ``pipeline`` selects which wiring runs: the
+        default legacy fire point skips hooks that declared ``"pipeline": true``
+        (the kernel tool event pipeline fires those instead, with the tool
+        result in the payload), and ``pipeline=True`` fires only those. Every
+        other event ignores the flag entirely, so existing hooks are unchanged.
         """
         subject = None
         if isinstance(payload, dict) and event in (
@@ -293,6 +306,9 @@ class HookRunner:
         ):
             subject = payload.get("tool_name") or payload.get("tool")
         matches = self._matches(event, subject)
+        if event in POST_PIPELINE_EVENTS:
+            matches = [hook for hook in matches
+                       if bool(hook.get("pipeline")) is pipeline]
         if not matches:
             return []
         data = payload if isinstance(payload, dict) else {"payload": payload}

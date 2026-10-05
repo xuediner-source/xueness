@@ -33,6 +33,7 @@ MAX_ARGUMENT_CHARS = 250_000
 MAX_PREFIX_BYTES = 4 * 1024 * 1024
 MAX_PREVIEW_CHARS = 240
 _REVISION_RE = re.compile(r"sha256:[0-9a-f]{64}\Z")
+_CHECKPOINT_RE = re.compile(r"[0-9a-f]{32}\Z")
 
 
 class ForkError(ValueError):
@@ -404,7 +405,7 @@ def _safe_model_config(source: dict) -> dict:
 
 
 def _make_fork(store: Store, source: dict, revision: str, boundary: dict,
-               *, title: str | None, root: Path) -> dict:
+               *, title: str | None, root: Path, checkpoint: dict | None = None) -> dict:
     end_index = boundary["endIndex"]
     messages = source["messages"]
     copied_messages = []
@@ -447,6 +448,19 @@ def _make_fork(store: Store, source: dict, revision: str, boundary: dict,
     else:
         title = validate_title(title)
     fork_id = uuid.uuid4().hex
+    parent = {
+        "sourceId": source["id"],
+        "sourceRevision": revision,
+        "turn": boundary["turn"],
+        "endIndex": boundary["endIndex"],
+        "historyTruncated": truncated,
+        "truncationReason": reason,
+    }
+    if checkpoint:
+        # The workspace snapshot this fork was derived from; rewinding the
+        # shared workspace to it stays an explicit git.rewind action.
+        parent["checkpointId"] = checkpoint["checkpointId"]
+        parent["checkpointTurn"] = checkpoint["turn"]
     child = {
         "id": fork_id,
         "task": source["task"],
@@ -461,25 +475,17 @@ def _make_fork(store: Store, source: dict, revision: str, boundary: dict,
         "completion": None,
         "todos": [],
         "pending_question": None,
-        "fork_parent": {
-            "sourceId": source["id"],
-            "sourceRevision": revision,
-            "turn": boundary["turn"],
-            "endIndex": boundary["endIndex"],
-            "historyTruncated": truncated,
-            "truncationReason": reason,
-        },
+        "fork_parent": parent,
     }
     child.update(_safe_model_config(source))
     store.save(child)
-    parent = dict(child["fork_parent"])
     return {"session": {"id": fork_id, "status": "pending", "root": child["root"],
                          "title": title},
             "sourceId": source["id"],
             "boundary": {"turn": boundary["turn"], "preview": boundary["preview"]},
             "historyTruncated": truncated,
             "truncationReason": reason,
-            "forkParent": parent}
+            "forkParent": dict(parent)}
 
 
 def get_boundaries(ctx: dict, sid: str) -> dict:
@@ -512,6 +518,64 @@ def fork_at(ctx: dict, sid: str, *, revision: str, boundary_token: str,
             raise ForkError("fork boundary is no longer safe or was not offered", 409)
         return _make_fork(ctx["store"], source, current_revision, boundary,
                           title=title, root=Path(source["root"]).resolve())
+
+
+def fork_at_checkpoint(ctx: dict, sid: str, *, checkpoint: str | None = None,
+                       latest: bool = False, turn: int | None = None,
+                       title: str | None = None, enforce_workspace: bool = False) -> dict:
+    """Fork the closed turns before one automatic per-turn workspace snapshot.
+
+    ``git.turn_checkpoints`` snapshots the workspace *before* turn N changes
+    anything, so the matching transcript is every turn up to N-1. Files are not
+    touched here: the source and the fork share one workspace, and restoring it
+    is ``git.rewind``'s job. The chosen snapshot is recorded on the fork so the
+    two stay linked.
+    """
+    if type(latest) is not bool:
+        raise ForkError("latest must be a boolean")
+    if checkpoint is not None and latest:
+        raise ForkError("choose either a checkpoint id or --latest, not both")
+    if checkpoint is not None and not _valid_text(checkpoint, 32):
+        raise ForkError("invalid checkpoint id")
+    if turn is not None and (type(turn) is not int or turn < 1):
+        raise ForkError("turn must be a positive integer")
+    if title is not None:
+        try:
+            title = validate_title(title)
+        except ValueError as exc:
+            raise ForkError(str(exc)) from None
+    with _locked_source(ctx, sid) as (source, revision):
+        root = Path(source["root"]).resolve(strict=True)
+        if not root.is_dir():
+            raise ForkError("session workspace is unavailable", 409)
+        if enforce_workspace:
+            root = _validate_workspace(ctx, source)
+        from ..git.turn_checkpoints import RewindError, records, resolve
+        try:
+            if turn is not None:
+                chosen = next((item for item in records(source) if item.get("turn") == turn), None)
+                if chosen is None:
+                    raise ForkError("requested turn has no workspace checkpoint", 409)
+            else:
+                chosen = resolve(source, checkpoint=checkpoint, latest=latest)
+        except RewindError as exc:
+            raise ForkError(str(exc), exc.status) from None
+        snapshot_turn = chosen.get("turn")
+        checkpoint_id = chosen.get("checkpointId")
+        if not isinstance(checkpoint_id, str) or not _CHECKPOINT_RE.fullmatch(checkpoint_id):
+            raise ForkError("checkpoint record is invalid", 409)
+        if type(snapshot_turn) is not int or snapshot_turn < 2:
+            raise ForkError("that checkpoint has no earlier turn to fork from", 409)
+        index = _boundaries(source, revision)
+        boundary = next((item for item in index["boundaries"]
+                         if item["turn"] == snapshot_turn - 1), None)
+        if boundary is None:
+            raise ForkError("the turn before that checkpoint is not a safe closed boundary", 409)
+        linked = {"checkpointId": checkpoint_id, "turn": snapshot_turn}
+        result = _make_fork(ctx["store"], source, revision, boundary,
+                            title=title, root=root, checkpoint=linked)
+        result["checkpoint"] = linked
+        return result
 
 
 def fork_turn(ctx: dict, sid: str, *, turn: int | None = None,

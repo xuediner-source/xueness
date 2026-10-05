@@ -248,7 +248,8 @@ class LightweightTransportBudgetTests(unittest.TestCase):
             self.assertEqual("ok", result["content"])
             self.assertEqual(3, state["calls"])
             self.assertEqual({"prompt_tokens": 3, "completion_tokens": 2,
-                              "total_tokens": 5}, result["_usage"])
+                              "total_tokens": 5, "input_tokens": 3,
+                              "output_tokens": 2}, result["_usage"])
         finally:
             self.stop(server)
 

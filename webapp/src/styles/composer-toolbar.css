@@ -308,18 +308,11 @@
   gap: 3px;
 }
 
-.xn-composer-toolbar__popover-heading,
-.xn-composer-toolbar__permission-heading {
-  padding: 5px 7px 7px;
-  color: var(--fg-subtle);
-  font-size: 10px;
-  font-weight: 600;
-}
-
 .xn-composer-toolbar__plan-toggle,
 .xn-composer-toolbar__permission-option,
 .xn-composer-toolbar__model-option,
 .xn-composer-toolbar__manage,
+.xn-composer-toolbar__default,
 .xn-composer-toolbar__error button {
   display: flex;
   align-items: center;
@@ -390,6 +383,7 @@
 .xn-composer-toolbar__model-option:hover:not(:disabled),
 .xn-composer-toolbar__model-option[aria-pressed="true"],
 .xn-composer-toolbar__manage:hover:not(:disabled),
+.xn-composer-toolbar__default:hover:not(:disabled),
 .xn-composer-toolbar__error button:hover:not(:disabled) {
   background: var(--bg-hover);
 }
@@ -479,11 +473,57 @@
   font-size: 10px;
 }
 
+/* Preset filters sit above the runtime-profile switch. No rate is shown here:
+   the catalog does not report a preset multiplier. */
+.xn-composer-toolbar__model-presets {
+  display: grid;
+  gap: 2px;
+  padding: 2px 0 6px;
+  border-bottom: 1px solid var(--border);
+}
+
+.xn-composer-toolbar__model-tabs {
+  display: flex;
+  gap: 4px;
+  padding: 6px 2px;
+  border-bottom: 1px solid var(--border);
+}
+
+.xn-composer-toolbar__model-tab {
+  flex: 1 1 0;
+  min-height: 28px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--fg-muted);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.xn-composer-toolbar__model-tab:hover {
+  background: var(--bg-hover);
+  color: var(--fg);
+}
+
+.xn-composer-toolbar__model-tab[aria-selected="true"] {
+  background: var(--bg-active);
+  color: var(--fg);
+}
+
+.xn-composer-toolbar__model-cost {
+  flex: 0 0 auto;
+  color: var(--fg-muted);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Runtime profile rows sit under the preset filters. */
 .xn-composer-toolbar__runtime-profile {
   display: grid;
   gap: 2px;
-  padding: 4px 0;
-  border-top: 1px solid var(--border);
+  padding: 2px 0 6px;
+  border-bottom: 1px solid var(--border);
 }
 
 .xn-composer-toolbar__profile-option {
@@ -707,7 +747,8 @@
 
 .xn-shell-layout .xn-composer-toolbar__model-popover {
   right: 0;
-  width: min(192px, calc(100vw - 32px));
+  width: min(280px, calc(100vw - 32px));
+  max-height: min(440px, 72vh);
 }
 
 .xn-shell-layout .xn-composer-toolbar__menu-row {
@@ -729,6 +770,7 @@
 .xn-shell-layout .xn-composer-toolbar__menu-row:hover:not(:disabled),
 .xn-shell-layout .xn-composer-toolbar__model-option:hover:not(:disabled),
 .xn-shell-layout .xn-composer-toolbar__manage:hover:not(:disabled),
+.xn-shell-layout .xn-composer-toolbar__default:hover:not(:disabled),
 .xn-shell-layout .xn-composer-toolbar__error button:hover:not(:disabled) {
   background: var(--bg-hover);
 }
@@ -879,6 +921,118 @@
   font-size: 10px;
 }
 
+/* Right-side row facts: context window and reasoning levels, when reported. */
+.xn-composer-toolbar__model-meta {
+  display: inline-flex;
+  flex: 0 1 auto;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.xn-composer-toolbar__model-meta small {
+  overflow: hidden;
+  color: var(--fg-subtle);
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Hover/focus detail card. Fixed positioning escapes the popover's scroll
+ * clipping; geometry comes from modelDetailCardStyle(). */
+.xn-composer-toolbar__model-detail {
+  position: fixed;
+  z-index: 101;
+  display: grid;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid var(--border-strong);
+  border-radius: 12px;
+  background: var(--bg-popover, var(--bg-card));
+  color: var(--fg);
+  box-shadow: var(--shadow-lg);
+  overflow-y: auto;
+}
+
+.xn-composer-toolbar__model-detail-name {
+  overflow: hidden;
+  font-size: 13px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.xn-composer-toolbar__model-detail-unconfigured {
+  margin-top: -4px;
+  color: var(--fg-muted);
+  font-size: 10px;
+}
+
+.xn-composer-toolbar__model-detail-note {
+  margin: 0;
+  color: var(--fg-muted);
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.xn-composer-toolbar__model-detail-facts {
+  display: grid;
+  gap: 5px;
+  margin: 0;
+}
+
+.xn-composer-toolbar__model-detail-facts > div {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.xn-composer-toolbar__model-detail-facts dt {
+  flex: 0 0 auto;
+  color: var(--fg-muted);
+  font-size: 11px;
+}
+
+.xn-composer-toolbar__model-detail-facts dd {
+  min-width: 0;
+  margin: 0;
+  overflow: hidden;
+  color: var(--fg);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  text-align: right;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.xn-composer-toolbar__model-detail-edit {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  min-height: 26px;
+  padding: 3px 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--fg);
+  font: inherit;
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.xn-composer-toolbar__model-detail-edit:hover {
+  background: var(--bg-hover);
+}
+
+.xn-composer-toolbar__model-detail button:focus-visible {
+  outline: 2px solid var(--border-focus);
+  outline-offset: 1px;
+}
+
 .xn-shell-layout .xn-composer-toolbar__model-footer {
   position: sticky;
   bottom: -4px;
@@ -888,7 +1042,8 @@
   background: var(--bg-popover, var(--bg-card));
 }
 
-.xn-shell-layout .xn-composer-toolbar__manage {
+.xn-shell-layout .xn-composer-toolbar__manage,
+.xn-shell-layout .xn-composer-toolbar__default {
   display: flex;
   width: 100%;
   min-height: 32px;
@@ -901,6 +1056,15 @@
   text-align: left;
   font: inherit;
   cursor: pointer;
+}
+
+.xn-composer-toolbar__default span {
+  flex: 1;
+  text-align: left;
+}
+
+.xn-composer-toolbar__default[disabled] {
+  opacity: 0.55;
 }
 
 .xn-shell-layout .xn-composer-toolbar__message {
@@ -1114,4 +1278,9 @@
   .xn-shell-layout .xn-composer-toolbar {
     width: 100%;
   }
+}
+
+/* 轻量档的上下文用量是估算读数，不打开用量面板，因此不是按钮。 */
+.xn-composer-toolbar__usage--static {
+  cursor: default;
 }

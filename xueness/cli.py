@@ -51,9 +51,10 @@ def _prepare_agent(args, parser, store, session):
                                deps=_compat_cli_dependencies(parser))
 
 
-def _load_commands(state_dir):
+def _load_commands(state_dir, root=None, *, language=None):
     from .bundled_plugins.sessions import cli as owned
-    return owned.load_commands(state_dir, deps=_compat_cli_dependencies(None))
+    return owned.load_commands(state_dir, root, language=language,
+                               deps=_compat_cli_dependencies(None))
 
 
 def _require_cli_plugins(args) -> str | None:
@@ -291,7 +292,7 @@ def main(argv=None):
     args = parser.parse_args(argv)
     if args.cmd is None:
         args = parser.parse_args(["--state", str(args.state), "--language", args.language, "chat"])
-    if args.cmd == "plugins":
+    if args.cmd in plugin_cli.GROUP_NAMES:
         return plugin_cli.execute(args)
     refusal = _require_cli_plugins(args)
     if refusal:

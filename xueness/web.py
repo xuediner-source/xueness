@@ -25,6 +25,9 @@ from datetime import datetime, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
+from .bundled_plugins.sessions.plan_mode import (
+    is_permission_mode, is_remote_exec_subject, permission_mode_error,
+)
 from .core import (
     BINARY_PREVIEW_SUFFIXES, Store, answer_session, append_user_turn, call_mcp, execute,
     mcp_subject, path_in, record_approval, run, session_events, workspace_files,
@@ -146,6 +149,12 @@ class WebGate:
     IDs. Plan mode denies write/edit/exec/mcp before any approval lookup; build
     keeps deny-by-default.
 
+    ``permission_mode`` adds the operator-facing modes: ``edit`` and ``yolo``
+    widen the named kinds, while ``plan`` is read-only except for the session's
+    own plan draft file. ``plan_draft`` is that policy -- contributed by the
+    sessions plugin, exposing ``matches(subject)``, ``denial(kind)`` and
+    ``path`` -- so the host gate holds no plan business logic of its own.
+
     ``session`` is optional and used only to audit the decision: consuming an
     approval without a trace makes it impossible to answer "who authorised
     this?" after the fact.
@@ -155,11 +164,11 @@ class WebGate:
 
     def __init__(self, root: Path, session_id: str, approvals: dict, lock: threading.Lock,
                  mode: str = "build", disallow=(), session: dict | None = None,
-                 permission_mode: str = "build"):
+                 permission_mode: str = "build", plan_draft=None):
         if mode not in ("plan", "build"):
             raise ValueError("mode must be 'plan' or 'build'")
-        if permission_mode not in ("build", "edit", "yolo"):
-            raise ValueError("permission_mode must be 'build', 'edit', or 'yolo'")
+        if not is_permission_mode(permission_mode):
+            raise ValueError(permission_mode_error())
         self.root = Path(root).resolve()
         self.session_id = session_id
         self.approvals = approvals
@@ -168,10 +177,26 @@ class WebGate:
         self.disallow = frozenset(disallow or ())
         self.session = session
         self.permission_mode = permission_mode
+        self.plan_draft = plan_draft
+
+    def plan_draft_target(self, subject) -> Path | None:
+        """计划模式下工作区外唯一可写目标：本会话绑定的计划草稿文件。"""
+        if self.permission_mode != "plan" or self.plan_draft is None:
+            return None
+        return Path(self.plan_draft.path) if self.plan_draft.matches(subject) else None
 
     def check(self, kind: str, subject: str, tool_call_id: str | None = None) -> None:
+        self._check(kind, subject, tool_call_id)
+        from .tool_contract import notify_tool_authorized
+        notify_tool_authorized(kind, subject, tool_call_id)
+
+    def _check(self, kind: str, subject: str, tool_call_id: str | None = None) -> None:
+        draft = self.plan_draft_target(subject) if kind in ("write", "edit") else None
         if kind in ("read", "list", "write", "edit", "glob", "grep"):
-            path_in(self.root, subject)
+            # The session plan draft lives in the state directory by design, so
+            # the workspace jail cannot contain it; only plan mode may name it.
+            if draft is None:
+                path_in(self.root, subject)
         else:
             from .tool_registry import REGISTRY
             known = {tool.gate_kind for tool in REGISTRY} | {"mcp", "planning"}
@@ -182,16 +207,15 @@ class WebGate:
         if kind in ("write", "edit", "exec", "mcp", "web_fetch", "web_search"):
             if self.mode == "plan":
                 raise PermissionError(f"{kind} denied in plan mode")
-            remote_exec = False
-            if kind == "exec" and isinstance(subject, str):
-                try:
-                    details = json.loads(subject)
-                    remote_exec = (isinstance(details, dict)
-                                   and isinstance(details.get("connection"), str)
-                                   and isinstance(details.get("connection_digest"), str)
-                                   and isinstance(details.get("argv"), list))
-                except (ValueError, TypeError):
-                    remote_exec = False
+            if self.permission_mode == "plan":
+                if draft is not None:
+                    return
+                from .tool_contract import PlanModeDenied
+                raise PlanModeDenied(
+                    self.plan_draft.denial(kind) if self.plan_draft is not None
+                    else f"{kind} denied in plan mode",
+                    str(self.plan_draft.path) if self.plan_draft is not None else None)
+            remote_exec = kind == "exec" and is_remote_exec_subject(subject)
             # Even yolo remains one-shot for a remote SSH command. The action
             # is separately tied to a configured connection and must be visible.
             if self.permission_mode == "yolo" and not remote_exec:
@@ -709,13 +733,10 @@ def create_server(port: int, ctx: dict, host: str | None = None) -> ThreadingHTT
     handler = type("XuenessHandler", (Handler,), {"_ctx": ctx})
     class ManagedServer(ThreadingHTTPServer):
         def server_close(self):
-            if ctx.get('terminals') is not None:
-                ctx["terminals"].close()
-            if ctx.get("automation_service") is not None:
-                ctx["automation_service"].close()
-            shutdown = getattr(plugin_runtime.entrypoint("browser"), "shutdown", None)
-            if shutdown:
-                shutdown(ctx["state_dir"])
+            # Plugin scopes release exactly what their activate() acquired.
+            registry = ctx.get('plugin_scopes')
+            if registry is not None:
+                registry.dispose()
             super().server_close()
     server = ManagedServer((bind_host, port), handler)
     ctx["serve_plugins"] = True

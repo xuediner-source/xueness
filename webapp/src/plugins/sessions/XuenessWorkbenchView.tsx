@@ -370,6 +370,7 @@ export type ContextComposerSuggestion = {
 export type ComposerStartActions = {
   canGoal: boolean;
   canWorkflow: boolean;
+  canCompact?: boolean;
   onWorkflow: () => void;
   onPlugins: () => void;
 };
@@ -379,7 +380,7 @@ export function contextComposerSuggestions(
   text: string,
   commands: { id: string; description?: string }[],
   mentions: ComposerMention[],
-  actions?: Pick<ComposerStartActions, "canGoal" | "canWorkflow">,
+  actions?: Pick<ComposerStartActions, "canGoal" | "canWorkflow" | "canCompact">,
 ): ContextComposerSuggestion[] {
   const slash = /(?:^|\s)\/([A-Za-z0-9._-]*)$/.exec(text);
   if (slash) {
@@ -390,6 +391,11 @@ export function contextComposerSuggestions(
       .map((command) => ({ kind: "command", token: command.id, description: command.description }));
     if (actions?.canGoal && "goal".startsWith(prefix)) items.push({ kind: "goal", token: "goal", description: tr("标记为目标任务") });
     if (actions?.canWorkflow && "workflow".startsWith(prefix)) items.push({ kind: "workflow", token: "workflow", description: tr("创建工作流") });
+    // /compact is a host command, not a user-defined one: it only appears while
+    // the sessions plugin that implements it is effective.
+    if (actions?.canCompact && "compact".startsWith(prefix) && !items.some((item) => item.token === "compact")) {
+      items.push({ kind: "command", token: "compact", description: tr("按预算压缩当前上下文") });
+    }
     return items.slice(0, 8);
   }
   const trigger = /(?:^|\s)([@$])([^\s@#$]*)$/.exec(text);
@@ -478,6 +484,12 @@ export type ComposerProps = {
   commands?: { id: string; description?: string }[];
   /** Workspace file candidates for @-mentions (loaded by the container). */
   files?: string[];
+  /**
+   * Minimal input chrome (lightweight local profile, owned by the providers
+   * plugin): keep send/stop and the passed controls, hide the context "+" menu
+   * and the keyboard hint. Chips and @-mention suggestions stay available.
+   */
+  minimal?: boolean;
 };
 
 export type ComposerDraftState = {
@@ -591,6 +603,7 @@ export function Composer({
   mentions = [],
   commands = [],
   files = [],
+  minimal = false,
 }: ComposerProps) {
   const localDraftsRef = useRef<Map<string, ComposerDraftState>>(new Map());
   const draftsRef = draftStore ?? localDraftsRef;
@@ -766,6 +779,7 @@ export function Composer({
     ? contextComposerSuggestions(text, commands, availableMentions, {
       canGoal: canOfferGoal,
       canWorkflow: canOfferWorkflow,
+      canCompact: Boolean(startActions?.canCompact),
     })
     : [];
   const [activeSuggestion, setActiveSuggestion] = useState(0);
@@ -1013,11 +1027,11 @@ export function Composer({
         aria-controls={suggestions.length ? suggestionListId : undefined}
         aria-expanded={suggestions.length > 0}
         aria-activedescendant={currentSuggestion >= 0 ? `${suggestionListId}-option-${currentSuggestion}` : undefined}
-        aria-describedby={`${suggestionListId}-keyboard-help`}
+        aria-describedby={minimal ? undefined : `${suggestionListId}-keyboard-help`}
       />
       <div className="xn-composer__row">
         <div className="xn-composer__tools">
-          <div className="xn-composer__actions" role="group" aria-label={tr("输入辅助")}>
+          {!minimal && <div className="xn-composer__actions" role="group" aria-label={tr("输入辅助")}>
             <div className="xn-composer__plus-wrap" ref={plusRef}>
               <button
                 ref={plusButtonRef}
@@ -1124,13 +1138,13 @@ export function Composer({
                 </div>
               )}
             </div>
-          </div>
+          </div>}
           {(controls || footer) && <div className="xn-composer__settings" role="group" aria-label={tr("运行选项")}>{controls ?? footer}</div>}
-          <span id={`${suggestionListId}-keyboard-help`} className="xn-composer__keyboard-help">
+          {!minimal && <span id={`${suggestionListId}-keyboard-help`} className="xn-composer__keyboard-help">
             {queueWhenRunning && running
               ? sendShortcut === "mod-enter" ? tr("⌘/Ctrl+Enter 排队 · Enter 换行") : tr("Enter 排队 · Shift+Enter 换行")
               : sendShortcut === "mod-enter" ? tr("⌘/Ctrl+Enter 发送 · Enter 换行") : tr("Enter 发送 · Shift+Enter 换行")}
-          </span>
+          </span>}
         </div>
         <div className="xn-composer__submit-actions">
           {running && queueWhenRunning && <button type="submit" disabled={isSendDisabled}

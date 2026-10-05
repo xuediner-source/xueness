@@ -7,19 +7,53 @@ def tools():
     return REGISTRY + TOOLS
 
 
+def register_cli(commands):
+    from .session_goal import add_parsers
+    add_parsers(commands)
+
+
+def execute_cli(args, deps=None):
+    from .session_goal import execute_cli as execute
+    return execute(args, deps)
+
+
+def apply_session_goal(session, text, *, state_dir, replace=False, source='composer'):
+    """Validate and stage a goal on an unsaved session; the caller persists it.
+
+    Sessions owns when a session is written, so goal ownership stops at the
+    in-memory record instead of duplicating a second save inside this plugin.
+    """
+    from .session_goal import set_goal
+    return set_goal(session, text, state_dir=state_dir, replace=replace, source=source)
+
+
+def session_goal_view(session):
+    """Read-only goal view for the session payload; None when unusable."""
+    from .session_goal import public
+    return public(session)
+
+
 def completion_instructions(session):
     from .delivery import GUIDANCE, seed
+    from .session_goal import reminder
     seed(session)
     import re
-    return GUIDANCE if session.get('delivery_requirements') or re.search(r'报告|资料|research|report', session.get('task', ''), re.I) else ''
+    guidance = GUIDANCE if session.get('delivery_requirements') or re.search(r'报告|资料|research|report', session.get('task', ''), re.I) else ''
+    return '\n'.join(block for block in (guidance, reminder(session)) if block)
 
 
 def completion_check(root, gate, session, summary, *, state_dir=None):
     from .delivery import check
-    return check(root, gate, session, summary, state_dir=state_dir)
+    from .session_goal import merge_completion_check, verify
+    return merge_completion_check(check(root, gate, session, summary, state_dir=state_dir),
+                                 verify(session, summary))
 
 
 def dispatch(method, parts, query, data, ctx):
+    from .session_goal import dispatch as goal_dispatch
+    result = goal_dispatch(method, parts, query, data, ctx)
+    if result is not None:
+        return result
     if len(parts) != 3 or parts[:2] != ['api', 'delivery']:
         return None
     try:

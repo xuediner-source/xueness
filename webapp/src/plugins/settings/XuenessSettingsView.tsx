@@ -26,6 +26,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { t as tr } from "../../i18n";
+import { SettingsAccountCard, type SettingsAccountCardProps } from "./SettingsPrimitives";
 import "../../styles/settings.css";
 
 export type XuenessSettingsSection = {
@@ -47,6 +48,7 @@ export type XuenessSettingsViewProps = {
   error?: string;
   onRetry?: () => void | Promise<void>;
   loading?: boolean;
+  account?: SettingsAccountCardProps;
 };
 
 type SettingsGroup = {
@@ -148,6 +150,7 @@ export function XuenessSettingsView({
   error,
   onRetry,
   loading = false,
+  account,
 }: XuenessSettingsViewProps): React.JSX.Element {
   const scrollRef = useRef<HTMLDivElement>(null);
   const active = sections.find((section) => section.id === activeSection);
@@ -187,6 +190,12 @@ export function XuenessSettingsView({
               <ArrowLeft size={16} strokeWidth={1.8} aria-hidden="true" />
               <span>{tr("返回工作区")}</span>
             </button>
+          </div>
+        )}
+
+        {account && (
+          <div className="xn-settings-view__account">
+            <SettingsAccountCard {...account} />
           </div>
         )}
 
@@ -285,7 +294,10 @@ export function XuenessSettingsView({
           <div className="xn-settings-view__frame">
             {active ? (
               <header className="xn-settings-view__header">
-                <h1>{active.label}</h1>
+                <div className="xn-settings-view__heading">
+                  <h1>{active.label}</h1>
+                  {active.description && <p className="xn-settings-view__description">{active.description}</p>}
+                </div>
                 {saving && (
                   <span className="xn-settings-view__saving" role="status" aria-live="polite">
                     <span className="xn-settings-view__saving-mark" aria-hidden="true" />

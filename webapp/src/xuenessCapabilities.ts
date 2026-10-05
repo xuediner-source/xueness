@@ -245,6 +245,7 @@ export const CAPABILITY_FIELD_SPECS: Record<CapabilityKind, CapabilityFieldSpec[
     { key: "url", label: "HTTP URL", kind: "text", placeholder: "https://example.com/mcp" },
     { key: "headersEnv", label: "认证环境变量 JSON", kind: "json", placeholder: '{"Authorization":"MCP_AUTH"}' },
     { key: "allowLoopbackHttp", label: "允许本机 HTTP", kind: "boolean" },
+    { key: "elicitation", label: "允许 MCP 询问少量信息", kind: "boolean" },
     { key: "description", label: "描述", kind: "text", placeholder: "这个服务器做什么（可选）" },
     { key: "enabled", label: "启用", kind: "boolean" },
   ],

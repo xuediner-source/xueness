@@ -15,6 +15,9 @@
   "panels": [],
   "resources": [],
   "capabilities": [],
+  "httpFamilies": [
+    "bots"
+  ],
   "modules": [],
   "features": [
     {

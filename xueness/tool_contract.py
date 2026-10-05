@@ -63,6 +63,14 @@ class BuiltinTool:
     mutating: bool
     handler: Handler
     approval_subject: Callable[[dict], str] | None = None
+    #: Declarative concurrency hint; pure data, default False. True asserts the
+    #: handler is a pure read with no side effects and no shared mutable state,
+    #: so one model turn's consecutive safe calls may run concurrently. The run
+    #: loop independently re-checks the gate policy: only tools whose gate kind
+    #: never needs interactive approval can actually join a batch, and write,
+    #: edit, exec, terminal, network-write, subagent and MCP tools stay serial
+    #: regardless of this flag.
+    concurrency_safe: bool = False
 
     def schema(self) -> dict:
         return {"type": "function", "function": {
@@ -81,8 +89,53 @@ def execution_context():
     return value
 
 
+def notify_tool_authorized(kind: str, subject: str,
+                          tool_call_id: str | None = None) -> None:
+    """Notify declared plugin observers after the active handler passes Gate.
+
+    The registry binds the current tool and session around the handler. This
+    seam intentionally runs only after ``Gate.check`` returns successfully, so
+    a denied or approval-pending call cannot trigger product work such as a Git
+    checkpoint. Callbacks are best-effort and never change the Gate result.
+    """
+    try:
+        context = execution_context()
+    except ValueError:
+        return  # Historical low-level Gate callers have no product event context.
+    tool_name = context.get('tool_name')
+    session = context.get('session')
+    store = context.get('store')
+    state_dir = context.get('state_dir')
+    if state_dir is None and store is not None:
+        state_dir = getattr(store, 'directory', None)
+    if (not isinstance(tool_name, str) or not tool_name
+            or not isinstance(session, dict) or store is None
+            or state_dir is None
+            or context.get('tool_gate_kind') != kind):
+        return
+    try:
+        from .plugin_runtime import after_tool_authorization
+        after_tool_authorization(state_dir, session, store, tool_name, kind,
+                                 subject, tool_call_id)
+    except Exception:  # noqa: BLE001 - observation cannot change authorization.
+        return
+
+
+class PlanModeDenied(PermissionError):
+    """计划模式的政策性拒绝：原因要回传给模型，而不是只报 ``denied``。"""
+
+    def __init__(self, message: str, plan_draft_path: str | None = None):
+        super().__init__(message)
+        self.plan_draft_path = plan_draft_path
+
+
 def permission_result(gate, exc):
     """Distinguish a host approval pause from a policy refusal, without echoing data."""
+    if isinstance(exc, PlanModeDenied):
+        return {'ok': False, 'error': 'denied',
+                'error_code': 'plan_mode_denied', 'awaiting_approval': False,
+                'retryable': False, 'user_reason': str(exc),
+                **({'plan_draft_path': exc.plan_draft_path} if exc.plan_draft_path else {})}
     waiting = bool(getattr(gate, 'web_approval_gate', False)
                    and str(exc).endswith('requires explicit approval'))
     return {'ok': False, 'error': 'denied',

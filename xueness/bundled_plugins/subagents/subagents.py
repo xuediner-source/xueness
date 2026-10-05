@@ -72,8 +72,19 @@ def agent_tool_allowlist(agent):
     if any(isinstance(value, str) and value.strip() == "*" for value in values):
         return None
     known = available_tool_names()
-    return frozenset(value.strip() for value in values
-                     if isinstance(value, str) and value.strip() in known)
+    known_lower = {k.lower(): k for k in known}
+    result = set()
+    for value in values:
+        if not isinstance(value, str):
+            continue
+        v = value.strip()
+        if v in known:
+            result.add(v)
+        elif v.lower() in known_lower:
+            result.add(known_lower[v.lower()])
+        elif v.lower() == "websearch" and "web_search" in known:
+            result.add("web_search")
+    return frozenset(result)
 
 
 class _ToolFilteredProvider:
@@ -220,6 +231,27 @@ def provider_for_agent(agent, parent_provider, state_dir, parent_selection=None)
                    reasoning_effort=effort or None)
 
 
+def normalize_disallowed_tools(disallowed) -> set[str]:
+    """Extract and normalize disallowed tool names, stripping rule arguments and normalizing case."""
+    if not disallowed or not isinstance(disallowed, (list, tuple, set, frozenset)):
+        return set()
+    normalized = set()
+    for item in disallowed:
+        if not isinstance(item, str):
+            continue
+        trimmed = item.strip()
+        if not trimmed:
+            continue
+        paren_idx = trimmed.find("(")
+        base = trimmed[:paren_idx].strip() if paren_idx > 0 else trimmed
+        if base:
+            normalized.add(base)
+            normalized.add(base.lower())
+            if base.lower() == "websearch":
+                normalized.add("web_search")
+    return normalized
+
+
 def provider_with_agent_tools(provider, agent, *, denied=(), parent_allowed=None):
     """Apply the explicit allowlist and hard read-only exceptions to a child.
 
@@ -227,12 +259,18 @@ def provider_with_agent_tools(provider, agent, *, denied=(), parent_allowed=None
     task/MCP schemas), except for durable workflow creation and amendment.
     """
     allowed = agent_tool_allowlist(agent)
+    agent_denied = set(denied or ())
+    if isinstance(agent, dict):
+        disallowed = agent.get("disallowedTools") or agent.get("disallowed_tools") or ()
+        agent_denied.update(normalize_disallowed_tools(disallowed))
     if parent_allowed is not None:
         inherited = frozenset(parent_allowed)
         allowed = inherited if allowed is None else allowed.intersection(inherited)
+    if allowed is not None and agent_denied:
+        allowed = allowed - agent_denied
     return _ToolFilteredProvider(
         provider, allowed,
-        SUBAGENT_DENIED_TOOL_NAMES | frozenset(denied or ()),
+        SUBAGENT_DENIED_TOOL_NAMES | frozenset(agent_denied),
     )
 
 
@@ -319,17 +357,35 @@ def select(agents, name):
     """Return the agent whose ``id`` or ``name`` equals ``name``, else ``None``.
 
     A non-string or blank ``name`` never matches. The first hit wins, so the
-    caller's ordering (see :func:`load`) decides ties.
+    caller's ordering (see :func:`load`) decides ties. Fallback to built-in
+    profiles matches ZCode built-in profiles.
     """
     if not isinstance(name, str) or not name.strip():
         return None
     if not isinstance(agents, (list, tuple)):
-        return None
+        agents = ()
+    clean = name.strip().lower()
     for agent in agents:
         if not isinstance(agent, dict):
             continue
-        if agent.get("id") == name or agent.get("name") == name:
+        aid = str(agent.get("id") or "").strip()
+        aname = str(agent.get("name") or "").strip()
+        if aid == name or aname == name or aid.lower() == clean or aname.lower() == clean:
             return agent
+    if clean in ("general-purpose", "general_purpose"):
+        return {
+            "id": "general-purpose",
+            "name": "general-purpose",
+            "description": "General-purpose agent for researching complex questions, searching for code, and executing multi-step tasks.",
+            "tools": ["*"],
+        }
+    if clean == "explore":
+        return {
+            "id": "explore",
+            "name": "explore",
+            "description": "Read-only exploration agent for fast code search and directory inspection.",
+            "tools": ["read", "list", "glob", "grep", "web_fetch", "web_search", "todo_read", "todo_write"],
+        }
     return None
 
 

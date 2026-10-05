@@ -1,0 +1,174 @@
+/* Empty-session start page (sessions plugin): three large action blocks on the
+ * left, recent projects above recent sessions on the right. Colours inherit the
+ * shared theme tokens, so both themes come from the same declarations. */
+.xn-start-page {
+  display: grid;
+  grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr);
+  gap: 14px;
+  align-items: start;
+  width: min(760px, 100%);
+  margin-top: 10px;
+  text-align: left;
+}
+
+.xn-start-page__actions {
+  display: grid;
+  gap: 10px;
+}
+
+.xn-start-page__action {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-height: 66px;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--bg-card);
+  color: var(--fg);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.xn-start-page__action:hover {
+  border-color: var(--border-strong);
+  background: var(--bg-hover);
+}
+
+.xn-start-page__action:focus-visible {
+  outline: 2px solid var(--border-focus);
+  outline-offset: 1px;
+}
+
+.xn-start-page__action-icon {
+  display: grid;
+  flex: 0 0 auto;
+  width: 38px;
+  height: 38px;
+  place-items: center;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg-subtle);
+  color: var(--fg-muted);
+}
+
+.xn-start-page__action-copy {
+  display: grid;
+  flex: 1 1 auto;
+  min-width: 0;
+  gap: 2px;
+}
+
+.xn-start-page__action-copy strong {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.xn-start-page__action-copy small {
+  overflow: hidden;
+  color: var(--fg-muted);
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.xn-start-page__action-chevron {
+  flex: 0 0 auto;
+  color: var(--fg-subtle);
+}
+
+.xn-start-page__side {
+  display: grid;
+  gap: 14px;
+  align-content: start;
+  min-width: 0;
+}
+
+.xn-start-page__recent {
+  display: grid;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--bg-card);
+}
+
+.xn-start-page__recent h2 {
+  margin: 0;
+  color: var(--fg);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.xn-start-page__recent-empty {
+  margin: 0;
+  color: var(--fg-muted);
+  font-size: 12px;
+}
+
+.xn-start-page__recent-list {
+  display: grid;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.xn-start-page__recent-item {
+  display: grid;
+  gap: 2px;
+  width: 100%;
+  min-height: 44px;
+  padding: 6px 8px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--fg);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.xn-start-page__recent-item:hover {
+  background: var(--bg-hover);
+}
+
+.xn-start-page__recent-item:focus-visible {
+  outline: 2px solid var(--border-focus);
+  outline-offset: 1px;
+}
+
+.xn-start-page__recent-title {
+  overflow: hidden;
+  font-size: 12px;
+  font-weight: 500;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.xn-start-page__recent-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--fg-muted);
+  font-size: 10px;
+}
+
+.xn-start-page__recent-meta time {
+  margin-left: auto;
+  font-variant-numeric: tabular-nums;
+}
+
+.xn-start-page__project-path {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@media (max-width: 680px) {
+  .xn-start-page {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

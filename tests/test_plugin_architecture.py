@@ -83,6 +83,116 @@ class ArchitectureTests(unittest.TestCase):
         for part in ['features must describe', 'frontend/backend panel mismatch', 'cyclic plugin dependency']:
             self.assertTrue(any(part in e for e in errors), errors)
 
+    def test_http_family_cannot_be_claimed_by_two_plugins(self):
+        root = self.fixture()
+        self.rewrite(root, 'usage', lambda m: m.update(httpFamilies=['terminals']))
+        self.assertIn('http family: multiple owners for terminals', guard.audit(root))
+
+    def test_overlapping_http_family_patterns_need_one_owner(self):
+        root = self.fixture()
+        self.rewrite(root, 'memory', lambda m: m.update(httpFamilies=['resources/*']))
+        errors = guard.audit(root)
+        self.assertTrue(any('http family overlap' in e and 'resources/*' in e and 'memory' in e
+                            for e in errors), errors)
+
+    def test_provides_needs_an_activate_hook_and_inject_needs_a_provider(self):
+        root = self.fixture()
+        self.rewrite(root, 'usage', lambda m: m.update(provides=['usage.collector']))
+        self.assertIn('usage: declares provides without activate(scope, ctx)', guard.audit(root))
+        self.rewrite(root, 'usage', lambda m: m.update(provides=[], inject=['ghost.service']))
+        self.assertIn('usage: injects a service no plugin provides: ghost.service', guard.audit(root))
+
+    def test_lifecycle_field_shapes_are_data_only(self):
+        root = self.fixture()
+        self.rewrite(root, 'usage', lambda m: m.update(httpFamilies=['*', 'Sessions'], provides=['Usage Service']))
+        errors = guard.audit(root)
+        for expected in ['usage: invalid httpFamilies pattern *',
+                         'usage: invalid httpFamilies pattern Sessions',
+                         'usage: invalid provides name Usage Service']:
+            self.assertIn(expected, errors)
+
+    def test_a_plugins_subaction_has_one_owner_and_needs_the_seam(self):
+        root = self.fixture()
+        self.rewrite(root, 'usage', lambda m: m.update(pluginsActions=['validate']))
+        self.assertIn('plugins action: multiple owners for validate', guard.audit(root))
+        self.rewrite(root, 'usage', lambda m: m.update(pluginsActions=['Not An Action']))
+        self.assertIn('usage: invalid pluginsActions name Not An Action', guard.audit(root))
+        self.rewrite(root, 'usage', lambda m: m.update(pluginsActions=['audit']))
+        self.assertIn('usage: declares pluginsActions without execute_cli(args)', guard.audit(root))
+
+    def test_tool_events_declaration_is_pure_data_with_known_events(self):
+        root = self.fixture()
+        self.rewrite(root, 'usage', lambda m: m.update(
+            toolEvents={'events': ['before_tool_execution', 'after_tool_execution',
+                                   'after_tool_authorization'],
+                        'priority': 10}))
+        self.assertEqual(guard.audit(root), [])
+        for bad in ([],
+                    {'events': []},
+                    {'events': ['not_an_event']},
+                    {'events': ['before_tool_execution', 'before_tool_execution']},
+                    {'events': ['before_tool_execution'], 'extra': 1},
+                    {'events': ['before_tool_execution'], 'priority': 'high'},
+                    {'events': ['before_tool_execution'], 'priority': True},
+                    {'events': ['before_tool_execution'], 'priority': 1001}):
+            self.rewrite(root, 'usage', lambda m, bad=bad: m.update(toolEvents=bad))
+            errors = guard.audit(root)
+            self.assertTrue(any('usage: toolEvents' in e for e in errors), bad)
+
+    def test_package_data_files_need_an_explicit_owner_and_a_safe_path(self):
+        root = self.fixture()
+        (root / 'xueness/bundled_plugins/usage/extra.json').write_text('{}\n', encoding='utf-8')
+        self.assertIn('usage: package data files need an explicit owner: extra.json', guard.audit(root))
+        self.rewrite(root, 'usage', lambda m: m.update(dataFiles=['../escape.json']))
+        self.assertIn('usage: invalid dataFiles path ../escape.json', guard.audit(root))
+        self.rewrite(root, 'usage', lambda m: m.update(dataFiles=['never-written.json']))
+        self.assertTrue(any('usage:' in e and 'never-written.json' in e for e in guard.audit(root)))
+
+    def rewrite_profiles(self, root, document):
+        path = root / 'xueness/bundled_plugins/usage/profiles.json'
+        path.write_text(json.dumps(document), encoding='utf-8')
+        self.rewrite(root, 'usage', lambda m: m.update(dataFiles=['profiles.json']))
+        return guard.audit(root)
+
+    def test_composition_data_may_only_pick_allowlisted_plugins_with_booleans(self):
+        root = self.fixture()
+        cases = (
+            ({'apiVersion': 1, 'profiles': [{'name': 'alpha', 'plugins': {'ghost': True}}]},
+             'usage: profile alpha selects an unknown plugin: ghost'),
+            ({'apiVersion': 1, 'profiles': [{'name': 'alpha', 'plugins': {'git': 'yes'}}]},
+             'usage: profile alpha switch for git must be boolean'),
+            ({'apiVersion': 1, 'profiles': [{'name': 'alpha', 'plugins': {'git': True}, 'command': 'git push'}]},
+             'usage: profile alpha uses unsupported fields: command'),
+            ({'apiVersion': 1, 'profiles': [{'name': 'alpha', 'plugins': {}}]},
+             'usage: profile alpha lists no plugin switches'),
+            ({'apiVersion': 2, 'profiles': [{'name': 'alpha', 'plugins': {'git': True}}]},
+             'usage: profile data profiles.json needs apiVersion 1'),
+            ({'apiVersion': 1, 'profiles': [{'name': 'alpha', 'extends': 'alpha', 'plugins': {'git': True}}]},
+             'usage: cyclic profile inheritance: alpha -> alpha'),
+            ({'apiVersion': 1, 'profiles': [{'name': 'alpha', 'extends': 'nowhere', 'plugins': {'git': True}}]},
+             'usage: profile alpha extends an unknown profile: nowhere'),
+        )
+        for document, expected in cases:
+            self.assertIn(expected, self.rewrite_profiles(root, document), json.dumps(document))
+
+    def test_composition_data_refuses_deep_and_oversized_documents(self):
+        root = self.fixture()
+        depth = guard.MAX_EXTENDS_DEPTH + 2
+        rows = [{'name': 'chain%d' % index,
+                 'extends': None if index == 0 else 'chain%d' % (index - 1),
+                 'plugins': {'git': True}} for index in range(depth)]
+        self.assertIn('usage: profile inheritance deeper than %d levels: chain%d'
+                      % (guard.MAX_EXTENDS_DEPTH, depth - 1), self.rewrite_profiles(root, {'apiVersion': 1, 'profiles': rows}))
+
+    def test_a_declared_data_file_must_be_readable_json(self):
+        root = self.fixture()
+        self.rewrite_profiles(root, {'apiVersion': 1, 'profiles': [{'name': 'alpha', 'plugins': {'git': True}}]})
+        (root / 'xueness/bundled_plugins/usage/profiles.json').write_text('{not json', encoding='utf-8')
+        self.assertIn('usage: data file is not valid JSON: profiles.json', guard.audit(root))
+
+    def test_shipped_profile_data_passes_the_gate(self):
+        self.assertEqual(guard.audit(self.fixture()), [])
+
     def test_business_module_cannot_be_added_to_host(self):
         root = self.fixture()
         (root / 'xueness/new_feature.py').write_text('def run_feature(): pass\n')

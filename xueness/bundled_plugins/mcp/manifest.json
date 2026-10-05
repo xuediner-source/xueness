@@ -22,8 +22,14 @@
     "command",
     "network"
   ],
+  "httpFamilies": [
+    "mcp",
+    "resources/mcp",
+    "sessions/*/elicitation"
+  ],
   "modules": [
     "diagnostics",
+    "elicitation",
     "lifecycle",
     "mcp",
     "mcp_http",
@@ -52,10 +58,16 @@
       "id": "mcp.recovery",
       "name": "连接诊断、失效恢复与设置",
       "nameEn": "Connection diagnostics, recovery and settings"
+    },
+    {
+      "id": "mcp.elicitation",
+      "name": "结构化询问",
+      "nameEn": "Structured elicitation"
     }
   ],
   "frontendModules": [
     "plugins/mcp/index.tsx",
-    "plugins/mcp/McpDiagnostics.tsx"
+    "plugins/mcp/McpDiagnostics.tsx",
+    "plugins/mcp/ElicitationForm.tsx"
   ]
 }

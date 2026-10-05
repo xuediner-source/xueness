@@ -286,8 +286,27 @@ class ExtendedOperationsTests(unittest.TestCase):
         listed = dispatch('GET', ['api','workflows'], {}, {}, ctx)[1]['workflows']
         self.assertEqual([i['id'] for i in listed], [r['id']])
         self.assertEqual(dispatch('GET', ['api','workflows',hidden['id']], {}, {}, ctx)[0], 400)
-        s = self.store.new('task', self.root); s['task_runs'] = [{'id':'child','status':'completed'}]; self.store.save(s)
+        s = self.store.new('task', self.root); s['task_runs'] = [{'id':'child','status':'completed','startedAt':100}]; self.store.save(s)
         self.assertEqual(dispatch('GET', ['api','sessions',s['id'],'tasks'], {}, {}, ctx)[1]['tasks'], s['task_runs'])
+        # Merging with live task registry
+        ctx['task_registry'].record('task-live-1', parent_session=s['id'], agent='explorer', prompt='test prompt', root=self.root)
+        tasks = dispatch('GET', ['api','sessions',s['id'],'tasks'], {}, {}, ctx)[1]['tasks']
+        self.assertEqual(len(tasks), 2)
+        self.assertEqual(tasks[0]['id'], 'child')
+        self.assertEqual(tasks[1]['id'], 'task-live-1')
+        self.assertEqual(tasks[1]['status'], 'running')
+        # Live status overrides persisted status if same id
+        s['task_runs'] = [{'id':'task-live-1','status':'pending','startedAt':50}]
+        self.store.save(s)
+        tasks_override = dispatch('GET', ['api','sessions',s['id'],'tasks'], {}, {}, ctx)[1]['tasks']
+        self.assertEqual(len(tasks_override), 1)
+        self.assertEqual(tasks_override[0]['status'], 'running')
+        # Tolerates task_runs being None
+        s['task_runs'] = None
+        self.store.save(s)
+        tasks_none = dispatch('GET', ['api','sessions',s['id'],'tasks'], {}, {}, ctx)[1]['tasks']
+        self.assertEqual(len(tasks_none), 1)
+        self.assertEqual(tasks_none[0]['id'], 'task-live-1')
 
 
 class HttpMcpTests(unittest.TestCase):

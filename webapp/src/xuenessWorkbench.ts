@@ -9,6 +9,7 @@
  * function signatures are the interface the UI layer builds against — changing
  * them is a contract change, not a refactor.
  */
+import type { PermissionMode } from "./plugins/sessions/permissionModes";
 import type { RunChoices } from "./xuenessBridge";
 import type { XuenessEventV1 } from "./xuenessEvents";
 import { getRunChoices, readRunOptIns } from "./xuenessBridge";
@@ -86,6 +87,7 @@ export type WorkbenchSession = {
   mode: string;
   completion?: import('./plugins/planning/CompletionChecks').CompletionAssessment & { summary?: string; evidence?: unknown[] } | null;
   delivery_requirements?: import('./plugins/planning/CompletionChecks').DeliveryRequirement[];
+  goal?: import('./plugins/planning/SessionGoal').SessionGoalRecord | null;
   queued_messages?: QueuedMessage[];
   todos?: unknown[];
   pending_question?: string | null;
@@ -115,7 +117,7 @@ export type WorkbenchSession = {
   runtime_activity_history?: WorkbenchRuntimeActivity[] | null;
   tool_timings?: { step: number; name: string; tool_call_id: string; seconds: number; ok: boolean }[];
   pause_reason?: string | null;
-  permission_mode?: "build" | "edit" | "yolo";
+  permission_mode?: PermissionMode;
   browser_enabled?: boolean;
   remote_connection?: { id: string; digest: string } | null;
   forkParent?: ForkParentInfo | null;

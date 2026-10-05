@@ -30,6 +30,10 @@ def dispatch(method, parts, query, data, ctx):
     result = session_dispatch(method, parts, query, data, ctx)
     if result is not None:
         return result
+    from .manual_compact import dispatch as compact_dispatch
+    result = compact_dispatch(method, parts, query, data, ctx)
+    if result is not None:
+        return result
     from .http_routes import dispatch as http_dispatch
     return http_dispatch(method, parts, query, data, ctx)
 

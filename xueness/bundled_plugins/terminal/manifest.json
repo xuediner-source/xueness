@@ -18,6 +18,12 @@
   "capabilities": [
     "command"
   ],
+  "httpFamilies": [
+    "terminals"
+  ],
+  "provides": [
+    "terminal.broker"
+  ],
   "modules": [
     "shells",
     "terminal_worker",

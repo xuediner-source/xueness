@@ -1,3 +1,5 @@
+import { isPermissionMode, type PermissionMode } from "./plugins/sessions/permissionModes";
+
 export type XuenessSession = {
   id: string;
   task: string;
@@ -23,7 +25,7 @@ export type XuenessEvent =
 export type RunChoices = {
   provider: "real";
   mode: "build" | "plan";
-  permission_mode?: "build" | "edit" | "yolo";
+  permission_mode?: PermissionMode;
   provider_id?: string;
   model?: string;
   runtime_profile?: "standard" | "lightweight";
@@ -46,7 +48,7 @@ export function mergeRunChoices(current: RunChoices, patch: Partial<RunChoices>)
 
 export function setRunChoices(choices: RunChoices): void {
   if (choices.provider !== "real" || !(["build", "plan"] as string[]).includes(choices.mode) ||
-      (choices.permission_mode !== undefined && !["build", "edit", "yolo"].includes(choices.permission_mode))) {
+      (choices.permission_mode !== undefined && !isPermissionMode(choices.permission_mode))) {
     throw new Error("invalid run choices");
   }
   if (choices.runtime_profile !== undefined &&

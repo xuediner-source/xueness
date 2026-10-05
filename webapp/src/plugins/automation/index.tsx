@@ -9,6 +9,7 @@ import {
   type AutomationRecord,
 } from "../../xuenessApi";
 import { t as tr, tf } from "../../i18n";
+import { OffPeakTasks } from "./OffPeakTasks";
 import {
   automationDraftFromRecord,
   cronFromScheduleDraft,
@@ -49,7 +50,12 @@ function runStatusLabel(status: string): string {
   }
 }
 
-export function XuenessAutomationsPanel(): React.JSX.Element {
+export function XuenessAutomationsPanel({
+  offPeakEnabled = false,
+}: {
+  /** 闲时任务区块只在 automation 插件生效时渲染；默认关闭，容器传入实际归属。 */
+  offPeakEnabled?: boolean;
+}): React.JSX.Element {
   const [items, setItems] = useState<AutomationRecord[]>([]);
   const [form, setForm] = useState<AutomationDraft>(() => emptyAutomationDraft());
   const [editing, setEditing] = useState<string | null>(null);
@@ -189,6 +195,7 @@ export function XuenessAutomationsPanel(): React.JSX.Element {
           onDelete={() => setConfirm({ kind: "delete", record: selected })}
         />
       ) : (
+        <>
         <section className="xn-automation__list-section" aria-labelledby="xn-automation-list-title">
           <div className="xn-automation__section-heading">
             <h4 id="xn-automation-list-title">{tr("定时计划")} <span>{items.length}</span></h4>
@@ -217,6 +224,8 @@ export function XuenessAutomationsPanel(): React.JSX.Element {
             </div>
           )}
         </section>
+        <OffPeakTasks enabled={offPeakEnabled} />
+        </>
       )}
 
       {confirm && (

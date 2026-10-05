@@ -1,4 +1,4 @@
-import { listPlugins, listResources, setPluginEnabled, post, type XuenessPlugin } from "./xuenessApi";
+import { listPlugins, listResources, listCommandCatalog, setPluginEnabled, post, saveDefaultModelSelection, type XuenessPlugin } from "./xuenessApi";
 import { t as tr, tf, useLocale, setLocale } from './i18n';
 /**
  * Xueness workbench container — chat-first.
@@ -75,7 +75,7 @@ import {
   type XuenessDirectoryListing,
 } from "./xuenessWorkspace";
 import { getRunChoices, mergeRunChoices, setRunChoices, type RunChoices } from "./xuenessBridge";
-import { effectiveRuntimeProfile, emptyComposerCatalog, prepareComposer, runtimeProfileFromSession, switchComposerBranch, type ComposerCatalog, type ComposerInput } from "./xuenessComposer";
+import { effectiveRuntimeProfile, emptyComposerCatalog, prepareComposer, runtimeProfileFromSession, switchComposerBranch, type ComposerCatalog, type ComposerInput, type ComposerModel } from "./xuenessComposer";
 import { createComposerCatalogLoader, clearWorkspaceComposerCatalog } from './plugins/sessions/composerCatalogLifecycle';
 import { ComposerWorkspaceSelect } from './plugins/sessions/ComposerWorkspaceSelect';
 import { XuenessComposerToolbar } from "./plugins/sessions/XuenessComposerToolbar";
@@ -83,12 +83,26 @@ import { DesktopTitlebar } from "./plugins/desktop/DesktopTitlebar";
 import { DesktopTrayBridge } from './plugins/desktop/DesktopTrayBridge';
 import { settingsNavigation } from "./xuenessSettingsNavigation";
 import { CompletionChecks } from './plugins/planning/CompletionChecks';
+import { SessionGoal } from './plugins/planning/SessionGoal';
 import { LocalRuntimeMonitor, RequestTiming, type LocalRuntimeSession } from "./plugins/providers/LocalRuntimeMonitor";
+import {
+  LightweightComposer,
+  LightweightComposerControls,
+  LightweightStatusBar,
+  LightweightTimeline,
+  extractReportedUsage,
+  lightweightLayoutActive,
+  scrollToTimelineBottom,
+} from "./plugins/providers/LightweightWorkbench";
 import { ForkSessionDialog } from "./plugins/sessions";
 import { SessionQueue } from "./plugins/sessions/SessionQueue";
 import { Approvals, Composer, WorkbenchHeader, heroGreeting, type ComposerDraftState } from "./plugins/sessions/XuenessWorkbenchView";
+import { XuenessStartPage, type StartPageAction } from "./plugins/sessions/XuenessStartPage";
+import { XuenessCloneDialog } from "./plugins/git/XuenessCloneDialog";
+import { loadWorkspaceCatalog, type RecentWorkspaceDirectory } from "./xuenessWorkspaces";
+import { XuenessUsageQuickCard } from "./plugins/usage/XuenessUsageQuickCard";
 import { IconBack, IconGear, IconNewTask, IconSearch, IconWorkflow, IconModel, IconXuenessMark } from "./ui/icons";
-import { CalendarClock, Archive, ArrowDownWideNarrow, ChevronsDownUp, Folder, Hash, MessageCirclePlus, UserRound, CircleHelp, ChevronDown, Blocks, GitBranch } from "lucide-react";
+import { CalendarClock, Archive, ArrowDownWideNarrow, ChevronsDownUp, Folder, FolderOpen, Hash, MessageCirclePlus, UserRound, CircleHelp, ChevronDown, Blocks, GitBranch, Bot, Server } from "lucide-react";
 import { Select } from "./ui/Select";
 import { RegionBoundary } from "./ui/primitives";
 import { XuenessWorkspaceSettings } from "./plugins/settings/XuenessWorkspaceSettings";
@@ -101,6 +115,7 @@ import { CodeDisplayProvider } from "./ui/CodeContent";
 import { SHORTCUT_COMMANDS, resolveShortcutBinding } from "./xuenessShortcutCommands";
 import { Shell, SidebarActions, SidebarNav } from "./XuenessShell";
 import { TimelineStream, TaskTodos } from "./plugins/sessions/XuenessTimeline";
+import { McpElicitation } from "./plugins/mcp/ElicitationForm";
 import { XuenessRenameDialog } from "./plugins/sessions/XuenessRenameDialog";
 import {
   CAPABILITY_KINDS,
@@ -155,6 +170,8 @@ const NetworkSettings = lazy(() => import("./plugins/network/NetworkSettings").t
 const DesktopUpdates = lazy(() => import("./plugins/updates/DesktopUpdates").then(module => ({ default: module.DesktopUpdates })));
 const WorkflowPanel = lazy(() => import("./plugins/workflows").then(module => ({ default: module.WorkflowPanel })));
 const ModelManager = lazy(() => import("./plugins/providers").then(module => ({ default: module.ModelManager })));
+const PluginProfilePicker = lazy(() => import("./plugins/extensions/PluginProfilePicker")
+  .then(module => ({ default: module.PluginProfilePicker })));
 const TerminalPanel = lazy(() => import("./plugins/terminal").then(module => ({ default: module.TerminalPanel })));
 const RemoteConnections = lazy(() => import("./plugins/remote").then(module => ({ default: module.RemoteConnections })));
 const XuenessGitView = lazy(() => import("./plugins/git/XuenessGitView").then(module => ({ default: module.XuenessGitView })));
@@ -167,6 +184,7 @@ const XuenessMemorySettings = lazy(() => import("./plugins/memory/MemorySettings
 const XuenessUsageSettings = lazy(() => import("./plugins/usage/XuenessUsageSettings").then(module => ({ default: module.XuenessUsageSettings })));
 const BrowserSettings = lazy(() => import("./plugins/browser/BrowserSettings").then(module => ({ default: module.BrowserSettings })));
 const XuenessSubagentSettings = lazy(() => import("./plugins/subagents/SubagentSettings").then(module => ({ default: module.XuenessSubagentSettings })));
+const SubagentSidePane = lazy(() => import("./plugins/subagents/SubagentSidePane").then(module => ({ default: module.SubagentSidePane })));
 
 /** Settings defaults. Capabilities default OFF and are read fail-closed. */
 const SETTINGS_DEFAULTS: SettingsMap = {
@@ -218,6 +236,7 @@ type Panel =
   | "automations"
   | "marketplace"
   | "diagnostics"
+  | "subagents"
   | "plugins";
 
 const PANEL_LABELS = (): Record<Panel, string> => ({
@@ -343,6 +362,9 @@ export function XuenessWorkbenchContainer() {
   const [workspacePicking, setWorkspacePicking] = useState(false);
   const [workspacePickerMode, setWorkspacePickerMode] = useState<"workspace" | "project">("workspace");
   const workspacePickerOpener = useRef<HTMLElement | null>(null);
+  const [cloneOpen, setCloneOpen] = useState(false);
+  const cloneOpener = useRef<HTMLElement | null>(null);
+  const [recentProjects, setRecentProjects] = useState<RecentWorkspaceDirectory[] | null>(null);
   const [branchBusy, setBranchBusy] = useState(false);
   const [composerRequests] = useState(() => createComposerCatalogLoader());
   const [composerRefreshTick, setComposerRefreshTick] = useState(0);
@@ -355,6 +377,7 @@ export function XuenessWorkbenchContainer() {
   const [grouped, setGrouped] = useState(false);
   // 斜杠命令候选：与能力面板同源的 commands 资源。
   const [commandItems, setCommandItems] = useState<{ id: string; description?: string }[]>([]);
+  const [subagentsSidepaneOpen, setSubagentsSidepaneOpen] = useState(false);
 
   const pluginAvailability = derivePluginAvailability(pluginCatalog, pluginCatalogReady);
   const allowedPanels: Panel[] = ["plugins", ...pluginAvailability.panels];
@@ -588,14 +611,30 @@ export function XuenessWorkbenchContainer() {
       setRows([]);
       setDataErrors({ list: "", active: "" });
     }
-    if (isPluginEffective("commands")) {
-      void (async () => {
-        const res = await loadCapabilitySection("commands");
-        if (res.ok) setCommandItems(res.value.items.map((item) => ({ id: item.id, description: item.description })));
-        else setCommandItems([]);
-      })();
-    } else setCommandItems([]);
   }, [pluginCatalogReady, pluginCatalog, isPluginEffective, refreshList]);
+
+  // 斜杠命令候选取自 `xueness commands list` 的同一份合并清单：内建提示命令、文件命令与
+  // 资源条目在后端一次汇合，被遮蔽或已停用的行不列出，所以界面不需要维护第二份命令名单。
+  // 工作区决定内建命令能否出现（它们必须有写入目标），界面语言决定其描述文案。
+  const commandRoot = session?.root ?? draftRoot ?? composerCatalog.root ?? "";
+  useEffect(() => {
+    if (!pluginCatalogReady || !isPluginEffective("commands")) {
+      setCommandItems([]);
+      return;
+    }
+    let settled = false;
+    void (async () => {
+      try {
+        const rows = await listCommandCatalog(commandRoot || undefined, locale);
+        if (settled) return;
+        setCommandItems(rows.filter(row => !row.shadowed && row.enabled !== false)
+          .map(row => ({ id: row.id, description: row.description })));
+      } catch {
+        if (!settled) setCommandItems([]);
+      }
+    })();
+    return () => { settled = true; };
+  }, [pluginCatalogReady, pluginCatalog, isPluginEffective, commandRoot, locale]);
 
   /** Run an action, surface its error on failure, and report whether to reload. */
   const run = useCallback(async (action: () => Promise<Result<unknown>>) => {
@@ -685,6 +724,30 @@ export function XuenessWorkbenchContainer() {
     });
   }, [activeId, draftRoot, isPluginEffective, updateChoices, composerRequests]);
   useEffect(() => { void refreshComposerCatalog(); return () => composerRequests.cancel(); }, [refreshComposerCatalog, composerRequests, composerRefreshTick]);
+  // 「设为默认」属于 providers.default_selection：容器只在插件生效时把菜单里的
+  // 当前选择转发到既有后端接口，校验与存储都在服务端完成。
+  const [defaultSaved, setDefaultSaved] = useState(false);
+  // Edit on a model row opens provider settings focused on that saved profile.
+  const [providerFocusId, setProviderFocusId] = useState<string | undefined>(undefined);
+  const openModelSettings = useCallback((model?: ComposerModel) => {
+    setProviderFocusId(model?.id || undefined);
+    setPanel(isPluginEffective("providers") ? "providers" : "plugins");
+  }, [isPluginEffective]);
+  const saveDefaultModel = useCallback(async (model: ComposerModel) => {
+    if (!isPluginEffective("providers")) return;
+    try {
+      const saved = await saveDefaultModelSelection({
+        providerId: model.id || null,
+        model: choices.model || model.model || null,
+        reasoningEffort: choices.reasoning_effort ?? null,
+      });
+      setDefaultSaved(saved !== null);
+    } catch (reason) {
+      setDefaultSaved(false);
+      setError(reason instanceof Error ? reason.message : String(reason));
+    }
+  }, [choices.model, choices.reasoning_effort, isPluginEffective]);
+  useEffect(() => setDefaultSaved(false), [choices.provider_id, choices.model, choices.reasoning_effort]);
   useEffect(() => {
     if (!session || session.id !== activeId || executingSessions.has(session.id) || loadedSessionChoices.current === session.id) return;
     loadedSessionChoices.current = session.id;
@@ -1319,28 +1382,140 @@ export function XuenessWorkbenchContainer() {
   const composerRunning = activeId !== null && session?.id === activeId && (
     session.status === "running" || session.streaming?.status === "streaming" || runRequestSessions.has(activeId)
   );
+  // 轻量档极简布局由 providers 插件拥有：档位生效且插件可用才切换挂载。
+  const lightweightLayout = lightweightLayoutActive(activeRuntimeProfile, isPluginEffective("providers"));
+  useEffect(() => {
+    if (lightweightLayout && panel === "subagents") {
+      setPanel(isPluginEffective("sessions") ? "chat" : "plugins");
+    }
+  }, [lightweightLayout, panel, isPluginEffective]);
+  useEffect(() => {
+    if (!lightweightLayout) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && (e.key === "l" || e.key === "L")) {
+        e.preventDefault();
+        scrollToTimelineBottom();
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [lightweightLayout]);
+  const sessionUserMessages = useMemo(() => {
+    const list: string[] = [];
+    if (session?.task && typeof session.task === "string" && session.task.trim().length > 0) {
+      list.push(session.task.trim());
+    }
+    for (const r of rows ?? []) {
+      if (r.kind === "user" && typeof r.text === "string" && r.text.trim().length > 0) {
+        const trimmed = r.text.trim();
+        if (!list.includes(trimmed)) {
+          list.push(trimmed);
+        }
+      }
+    }
+    return list;
+  }, [rows, session?.task]);
   const composerMentions = [
     ...composerCatalog.files.map(item => ({ ...item, kind: "file" as const })),
     ...composerCatalog.sessions.map(item => ({ ...item, kind: "session" as const })),
     ...composerCatalog.skills.map(item => ({ ...item, kind: "skill" as const })),
     ...composerCatalog.plugins.map(item => ({ ...item, kind: "plugin" as const })),
   ];
-  const composerControls = <XuenessComposerToolbar
-    choices={choices} onChange={updateChoices} models={composerCatalog.models}
-    loading={composerCatalogLoading} error={composerCatalogError}
-    onReload={() => void refreshComposerCatalog()}
-    onManageModels={() => setPanel(isPluginEffective("providers") ? "providers" : "plugins")}
-    onBackground={isPluginEffective("workflows") ? () => setPanel("workflows") : undefined}
-    backgroundCount={composerCatalog.backgroundCount ?? 0}
-    browserEnabled={choices.browser === true}
-    onToggleBrowser={activeId !== null && isPluginEffective("browser") ? enabled => updateChoices({ browser: enabled }) : undefined}
-    disabled={busy || branchBusy || composerRunning}
-    onOpenUsage={isPluginEffective("usage") ? () => setPanel("usage") : undefined}
-    runtimeBudget={session?.id === activeId ? session.runtime_budget : undefined}
-    pauseReason={session?.id === activeId ? session.pause_reason : undefined}
+  // 用量速览属于 usage 插件：插件生效才挂载入口，会话数据由容器透传。
+  const usageQuickCard = <XuenessUsageQuickCard
+    enabled={isPluginEffective("usage")}
+    sessionProviderUsage={session?.id === activeId ? session.provider_usage : undefined}
+    onOpenPanel={isPluginEffective("usage") ? () => setPanel("usage") : undefined}
   />;
+  const composerControls = lightweightLayout ? (
+    <LightweightComposerControls
+      enabled
+      inputRef={heroInputRef}
+      choices={choices} onChange={updateChoices} models={composerCatalog.models}
+      loading={composerCatalogLoading} error={composerCatalogError}
+      onReload={() => void refreshComposerCatalog()}
+      onManageModels={openModelSettings}
+      runtimeBudget={session?.id === activeId ? session.runtime_budget : undefined}
+      pauseReason={session?.id === activeId ? session.pause_reason : undefined}
+      disabled={busy || branchBusy || composerRunning}
+    />
+  ) : <>
+    <XuenessComposerToolbar
+      choices={choices} onChange={updateChoices} models={composerCatalog.models}
+      loading={composerCatalogLoading} error={composerCatalogError}
+      onReload={() => void refreshComposerCatalog()}
+      onManageModels={openModelSettings}
+      onSaveDefault={isPluginEffective("providers") ? model => void saveDefaultModel(model) : undefined}
+      defaultSaved={defaultSaved}
+      onBackground={isPluginEffective("workflows") ? () => setPanel("workflows") : undefined}
+      backgroundCount={composerCatalog.backgroundCount ?? 0}
+      browserEnabled={choices.browser === true}
+      onToggleBrowser={activeId !== null && isPluginEffective("browser") ? enabled => updateChoices({ browser: enabled }) : undefined}
+      disabled={busy || branchBusy || composerRunning}
+      onOpenUsage={isPluginEffective("usage") ? () => setPanel("usage") : undefined}
+      runtimeBudget={session?.id === activeId ? session.runtime_budget : undefined}
+      pauseReason={session?.id === activeId ? session.pause_reason : undefined}
+    />
+    {usageQuickCard}
+  </>;
+  // 起始页右侧「最近项目」来自 settings 已登记的工作区（带 lastUsed）。插件未生效
+  // 或起始页不可见时既不请求也不保留数据，禁用后不会再发起轮询。
+  const startPageVisible = panel === "chat" && !lightweightLayout && !activeId && !session;
+  const refreshRecentProjects = useCallback(async () => {
+    if (!pluginEffectiveRef.current("settings") || !pluginEffectiveRef.current("sessions")) {
+      setRecentProjects(null);
+      return;
+    }
+    try {
+      setRecentProjects((await loadWorkspaceCatalog()).recentDirectories ?? []);
+    } catch {
+      setRecentProjects(null);
+    }
+  }, []);
+  useEffect(() => {
+    if (!startPageVisible || !isPluginEffective("settings") || !isPluginEffective("sessions")) {
+      setRecentProjects(null);
+      return;
+    }
+    void refreshRecentProjects();
+  }, [startPageVisible, isPluginEffective, refreshRecentProjects]);
+  // 起始页三个动作块只接已有能力：工作区选择（sessions/settings）、克隆仓库（git）
+  // 与 SSH 连接（remote）；插件未生效时对应的块不出现。
+  const startPageActions: StartPageAction[] = [
+    ...(isPluginEffective("settings") && isPluginEffective("sessions") ? [{
+      id: "open-project",
+      label: tr("打开项目"),
+      description: tr("选择一个文件夹，在其中执行任务。"),
+      Icon: FolderOpen,
+      onSelect: (trigger: HTMLElement) => {
+        if (busy || branchBusy || !isPluginEffective("settings") || !isPluginEffective("sessions")) return;
+        workspacePickerOpener.current = trigger;
+        setWorkspacePickerMode("workspace");
+        setWorkspacePicking(true);
+      },
+    }] : []),
+    ...(isPluginEffective("git") ? [{
+      id: "clone-repository",
+      label: tr("克隆仓库"),
+      description: tr("把远程仓库下载到已授权目录，并登记为项目。"),
+      Icon: GitBranch,
+      onSelect: (trigger: HTMLElement) => {
+        if (busy || branchBusy) return;
+        cloneOpener.current = trigger;
+        setCloneOpen(true);
+      },
+    }] : []),
+    ...(isPluginEffective("remote") ? [{
+      id: "connect-ssh",
+      label: tr("通过 SSH 连接"),
+      description: tr("使用已配置的主机连接远程工作区。"),
+      Icon: Server,
+      onSelect: () => setPanel("remote"),
+    }] : []),
+  ];
   const composerStartActions = {
-    canGoal: !activeId, canWorkflow: isPluginEffective("workflows"),
+    canGoal: !activeId && isPluginEffective('planning'), canWorkflow: isPluginEffective("workflows"),
+    canCompact: isPluginEffective('sessions'),
     onWorkflow: () => setPanel("workflows"), onPlugins: () => setPanel("plugins"),
   };
   const chooseWorkspace = (root: string, isolated = false, forceNew = false) => {
@@ -1531,6 +1706,22 @@ export function XuenessWorkbenchContainer() {
 
   const settingsSections = settingsNavigation(pluginAvailability.effectiveIds, new Set(pluginCatalog.map(plugin => plugin.id)));
   const settingsSectionIds = settingsSections.map(section => section.id).join(",");
+  // The settings sidebar card reuses data the workbench already loads; no extra request.
+  const settingsRoot = session?.root ?? draftRoot ?? composerCatalog.root ?? undefined;
+  const settingsPluginVersion = pluginCatalog.find(plugin => plugin.id === "settings")?.version;
+  const settingsAccount = {
+    name: settingsRoot
+      ? composerCatalog.roots.find(item => item.path === settingsRoot)?.name
+        ?? settingsRoot.split(/[/\\]+/u).filter(Boolean).pop()
+        ?? settingsRoot
+      : tr("未选择工作区"),
+    path: settingsRoot,
+    subtitle: settingsRoot ? undefined : tr("选择项目目录后显示在这里"),
+    badges: [
+      composerCatalog.git?.branch ? { label: composerCatalog.git.branch, title: tr("当前 Git 分支") } : null,
+      settingsPluginVersion ? { label: `v${settingsPluginVersion}`, title: tr("配置设置插件版本") } : null,
+    ].filter((badge): badge is { label: string; title: string } => badge !== null),
+  };
   useEffect(() => {
     if (!settingsSections.some(section => section.id === settingsSection)) setSettingsSection(settingsSections[0]?.id ?? "general");
   }, [settingsSectionIds, settingsSection]);
@@ -1552,7 +1743,10 @@ export function XuenessWorkbenchContainer() {
       onToggleCapability={handleToggleCapability} onUpdateSetting={handleUpdateSetting} saving={settingsSaving} />;
     if (settingsSection === "workspace") return <><XuenessWorkspaceSettings currentRoot={session?.root ?? draftRoot ?? composerCatalog.root}
       onDefaultChanged={() => { if (!activeId) { setDraftRoot(undefined); setIsolatedWorkspace(false); updateChoices({remote:undefined}); } void refreshComposerCatalog(); }} /><SettingsSections embedded sections={[]} activeSection="workspace-display" values={settingsValues} capabilities={capabilities} onUpdateSetting={handleUpdateSetting} saving={settingsSaving} /></>;
-    if (settingsSection === "providers") return <ModelManager runtimeMonitorEnabled={isPluginEffective("providers") && isPluginEffective("diagnostics")} onSelect={id => { updateChoices({ provider: "real", provider_id: id || undefined, model: undefined, reasoning_effort: undefined }); void refreshComposerCatalog(); }} />;
+    if (settingsSection === "providers") return <>
+      <PluginProfilePicker enabled={isPluginEffective("extensions")} onCatalogChanged={() => void refreshPluginCatalog()} />
+      <ModelManager focusProviderId={providerFocusId} runtimeMonitorEnabled={isPluginEffective("providers") && isPluginEffective("diagnostics")} onSelect={id => { updateChoices({ provider: "real", provider_id: id || undefined, model: undefined, reasoning_effort: undefined }); void refreshComposerCatalog(); }} />
+    </>;
     if (settingsSection === "mcp") return <><CapabilitiesPanel sections={capSections.filter(section => section.kind === "mcp")} /><XuenessMcpTools /></>;
     if (settingsSection === "plugins") return <XuenessPluginSettingsPanel
       plugins={pluginCatalog} loading={pluginCatalogLoading} error={pluginCatalogError}
@@ -1567,7 +1761,7 @@ export function XuenessWorkbenchContainer() {
     if (settingsSection === "marketplace") return <XuenessMarketplace onInstalled={() => void refreshPluginCatalog()} />;
     if (settingsSection === "memory") return <XuenessMemorySettings enabled={settingsValues.memoryEnabled !== false} onEnabledChange={value => void handleUpdateSetting("memoryEnabled", value)} />;
     if (settingsSection === "usage") return <XuenessUsageSettings />;
-    if (settingsSection === "automations") return <XuenessAutomationsPanel />;
+    if (settingsSection === "automations") return <XuenessAutomationsPanel offPeakEnabled={isPluginEffective("automation")} />;
     if (settingsSection === "diagnostics") return <XuenessDiagnosticsPanel />;
     if (settingsSection === "remote") return <RemoteConnections onUse={id => { chooseWorkspace(composerCatalog.isolatedRoot, true); updateChoices({remote:id}); }} />;
     return null;
@@ -1581,7 +1775,7 @@ export function XuenessWorkbenchContainer() {
       value={panel === "chat" ? "chat" : panel}
       onChange={(e) => setPanel(e.target.value as Panel)}
     >
-      {allowedPanels.map((id) => (
+      {allowedPanels.filter(id => !lightweightLayout || id !== "subagents").map((id) => (
         <option key={id} value={id}>
           {PANEL_LABELS()[id]}
         </option>
@@ -1591,6 +1785,19 @@ export function XuenessWorkbenchContainer() {
 
   const secondaryPanels: Record<Exclude<Panel, "chat">, React.ReactNode> = {
     remote: <RemoteConnections onUse={id => { chooseWorkspace(composerCatalog.isolatedRoot, true); updateChoices({ remote: id }); }} />,
+    subagents: (
+      <Suspense fallback={<div className="p-4 text-xs text-[var(--fg-muted)]">{tr("正在加载…")}</div>}>
+        <SubagentSidePane
+          sessionId={activeId}
+          isOpen={true}
+          onClose={() => setPanel("chat")}
+          activeRuntimeProfile={activeRuntimeProfile}
+          subagentsEnabled={isPluginEffective("subagents")}
+          lightweight={lightweightLayout}
+          mode="panel"
+        />
+      </Suspense>
+    ),
     plugins: (
       <XuenessPluginManager
         plugins={pluginCatalog}
@@ -1602,7 +1809,7 @@ export function XuenessWorkbenchContainer() {
     ),
     workflows: <WorkflowPanel sessionId={activeId} subagentsEnabled={isPluginEffective("subagents")} />,
     terminal: <TerminalPanel sessionId={activeId} fontSize={Number(settingsValues.terminalFontSize ?? 13)} fontFamily={String(settingsValues.terminalFontFamily ?? "system")} />,
-    automations: <XuenessAutomationsPanel />,
+    automations: <XuenessAutomationsPanel offPeakEnabled={isPluginEffective("automation")} />,
     marketplace: <XuenessMarketplace onInstalled={() => void refreshPluginCatalog()} />,
     diagnostics: <XuenessDiagnosticsPanel />,
     files: (
@@ -1646,13 +1853,13 @@ export function XuenessWorkbenchContainer() {
         error={dirError} truncated={dirListing?.truncated ?? false} loading={dirLoading}
         onNavigate={browseDirectory} onOpenFile={handleSelectFile} onCreateDir={handleCreateDir} />,
     providers: (
-      <ModelManager runtimeMonitorEnabled={isPluginEffective("providers") && isPluginEffective("diagnostics")} onSelect={id => { updateChoices({ provider: "real", provider_id: id || undefined, model: undefined, reasoning_effort: undefined }); setPanel("chat"); }} />
+      <ModelManager focusProviderId={providerFocusId} runtimeMonitorEnabled={isPluginEffective("providers") && isPluginEffective("diagnostics")} onSelect={id => { updateChoices({ provider: "real", provider_id: id || undefined, model: undefined, reasoning_effort: undefined }); setPanel("chat"); }} />
     ),
     usage: <XuenessUsageSettings />,
     memory: <><MemoryPanel tracks={tracks} error={tracksError} loading={tracksLoading} /><XuenessMemoryEditor /></>,
     capabilities: <><CapabilitiesPanel sections={capSections} />{isPluginEffective("mcp") && <XuenessMcpTools />}</>,
     settings: <XuenessSettingsView sections={settingsSections} activeSection={settingsSection} onSelect={setSettingsSection}
-      dirty={settingsDirty} saving={settingsSaving} loading={settingsLoading} error={settingsError}
+      dirty={settingsDirty} saving={settingsSaving} loading={settingsLoading} error={settingsError} account={settingsAccount}
       onBack={() => setPanel("chat")} onRetry={() => settingsDirty ? handleSaveSettings() : handleLoadAllSettings()}>
       <RegionBoundary resetKey={settingsSection} onReload={() => window.location.reload()} onRecover={() => setPanel("plugins")}><Suspense fallback={<p role="status" className="xn-view-loading">{tr("正在加载界面…")}</p>}>{settingsContent()}</Suspense></RegionBoundary>
     </XuenessSettingsView>,
@@ -1704,6 +1911,7 @@ export function XuenessWorkbenchContainer() {
       /> : undefined}
       navigationKey={`${panel}:${activeId ?? ""}:${commandOpen}:${workspacePicking}:${heroFocusTick}`}
       sidebarToggleToken={sidebarToggleToken}
+      initialSidebarCollapsed={lightweightLayout}
       canGoBack={!busy && historyPosition.cursor > 0}
       canGoForward={!busy && historyPosition.cursor < historyPosition.length - 1}
       onGoBack={() => navigateHistory(-1)} onGoForward={() => navigateHistory(1)}
@@ -1813,7 +2021,7 @@ export function XuenessWorkbenchContainer() {
             <div className="xn-secondary-view__switcher">{viewSwitcher}</div>
           </div>
           <div className="xn-secondary-view__body">
-            {canShowPanel(panel)
+            {canShowPanel(panel) && (!lightweightLayout || panel !== "subagents")
               ? secondaryPanels[panel]
               : <FeatureUnavailable feature={PANEL_LABELS()[panel]} onManage={() => setPanel("plugins")} />}
           </div>
@@ -1823,24 +2031,45 @@ export function XuenessWorkbenchContainer() {
       ) : activeId && session?.id !== activeId ? (
         <div role="status" className="xn-hero"><p>{tr("正在加载任务…")}</p></div>
       ) : session ? (
-        <div className="xn-conversation">
-          <WorkbenchHeader
-            session={session}
-            actions={<>{viewSwitcher}<button type="button" className="xn-conv-header__action xn-conv-header__fork" aria-label={tr("分叉会话")} title={tr("分叉会话")} disabled={busy || session.status === "running" || session.streaming?.status === "streaming"} onClick={beginFork}><GitBranch size={14} aria-hidden="true" /><span>{tr("分叉会话")}</span></button></>}
+        <div className="xn-conversation-container">
+          <div className="xn-conversation">
+            <WorkbenchHeader
+              session={session}
+              actions={!lightweightLayout && (
+                <>
+                  {viewSwitcher}
+                  {isPluginEffective("subagents") && (
+                    <button
+                      type="button"
+                      className={`xn-conv-header__action xn-conv-header__subagents ${subagentsSidepaneOpen ? "xn-conv-header__action--active" : ""}`}
+                      aria-label={tr("子代理运行态侧栏")}
+                      title={tr("子代理运行态侧栏")}
+                      aria-pressed={subagentsSidepaneOpen}
+                      onClick={() => setSubagentsSidepaneOpen(prev => !prev)}
+                    >
+                      <Bot size={14} aria-hidden="true" />
+                      <span>{tr("子代理")}</span>
+                    </button>
+                  )}
+                  <button type="button" className="xn-conv-header__action xn-conv-header__fork" aria-label={tr("分叉会话")} title={tr("分叉会话")} disabled={busy || session.status === "running" || session.streaming?.status === "streaming"} onClick={beginFork}><GitBranch size={14} aria-hidden="true" /><span>{tr("分叉会话")}</span></button>
+                </>
+              )}
             pinned={session.pinned === true}
             onTogglePin={() => activeId && void togglePin(activeId, session.pinned !== true)}
             onRefresh={() => void handleRefreshAll()}
             onRename={() => activeId && requestRename(activeId)}
             onDelete={() => activeId && void deleteById(activeId)}
           />
+          {isPluginEffective('planning') && !lightweightLayout && <SessionGoal sessionId={session.id} goal={session.goal}
+            disabled={busy || session.status === 'running'} onChanged={() => void handleRefreshAll()} />}
           {session.forkParent && <p className="xn-session-fork-provenance" data-testid="fork-session-provenance" role="note">
             {tf("从会话 {0} 的第 {1} 轮分叉", [session.forkParent.sourceId, session.forkParent.turn])}
             {session.forkParent.historyTruncated && <span>{tr(" · 较早的压缩归档未继承，仅保留当前可定位历史")}</span>}
             <button type="button" className="xn-session-fork-provenance__open" data-testid="fork-open-parent" disabled={busy} onClick={() => selectSession(session.forkParent!.sourceId)}>{tr("打开原会话")}</button>
           </p>}
           {session.pause_reason && ["paused", "needs_review"].includes(session.status) && <p role="status" className="xn-run-error">{tf("暂停原因：{0}", [session.pause_reason])}</p>}
-          {isPluginEffective('planning') && <CompletionChecks sessionId={session.id} completion={session.completion} items={session.delivery_requirements ?? []} disabled={busy || session.status === 'running'} onSaved={() => void handleRefreshAll()} />}
-          {isPluginEffective('providers') && <RequestTiming session={session} />}
+          {isPluginEffective('planning') && !lightweightLayout && <CompletionChecks sessionId={session.id} completion={session.completion} items={session.delivery_requirements ?? []} disabled={busy || session.status === 'running'} onSaved={() => void handleRefreshAll()} />}
+          {isPluginEffective('providers') && !lightweightLayout && <RequestTiming session={session} />}
           {activeRuntimeProfile === "lightweight" && isPluginEffective("providers") && isPluginEffective("diagnostics") &&
             <LocalRuntimeMonitor lightweight session={runtimeMonitorSession} />}
           {session.pending && session.pending.length > 0 && (
@@ -1848,6 +2077,7 @@ export function XuenessWorkbenchContainer() {
               <Approvals pending={session.pending} onApprove={handleApprove} />
             </div>
           )}
+          {isPluginEffective("mcp") && <McpElicitation sessionId={session.id} />}
           <ConversationTimelineViewport
             key={session.id}
             autoScroll={settingsValues.autoScroll !== false}
@@ -1855,11 +2085,18 @@ export function XuenessWorkbenchContainer() {
             streamingText={session.streaming?.text}
             queuedMessages={session.queued_messages}
           >
-            {settingsValues.showTodos !== false && <TaskTodos todos={session.todos ?? []} />}
-            <TimelineStream rows={displayTimelineRows} collapseTools={settingsValues.collapseTools !== false} messageStreamShowReasoning={settingsValues.messageStreamShowReasoning !== false}
-              jsonToolProtocol={session.model_selection?.tool_calling === "json" && activeRuntimeProfile === "lightweight" && session.streaming?.text_format !== "markdown"}
-              protocolModePending={activeSessionRunning && activeRuntimeProfile === "lightweight" && session.streaming?.text_format !== "markdown" && session.model_selection?.tool_calling === "json" && false}
-              streamingPending={activeSessionRunning} grouping={timelineGrouping} />
+            {settingsValues.showTodos !== false && !lightweightLayout && <TaskTodos todos={session.todos ?? []} />}
+            {lightweightLayout ? (
+              <LightweightTimeline
+                rows={displayTimelineRows}
+                streamingPending={activeSessionRunning}
+              />
+            ) : (
+              <TimelineStream rows={displayTimelineRows} collapseTools={settingsValues.collapseTools !== false} messageStreamShowReasoning={settingsValues.messageStreamShowReasoning !== false}
+                jsonToolProtocol={session.model_selection?.tool_calling === "json" && activeRuntimeProfile === "lightweight" && session.streaming?.text_format !== "markdown"}
+                protocolModePending={activeSessionRunning && activeRuntimeProfile === "lightweight" && session.streaming?.text_format !== "markdown" && session.model_selection?.tool_calling === "json" && false}
+                streamingPending={activeSessionRunning} grouping={timelineGrouping} />
+            )}
             <SessionQueue items={session.queued_messages ?? []} cancellingId={queueCancelling?.sessionId === session.id ? queueCancelling.queueId : null} onCancel={handleCancelQueuedTurn}
               canContinue={session.status !== "running" && session.streaming?.status !== "streaming" && (session.queued_messages ?? []).some(item => item.status === "paused")}
               continuing={queueContinuingSessions.has(session.id)} onContinue={handleContinueQueuedMessages} />
@@ -1872,29 +2109,72 @@ export function XuenessWorkbenchContainer() {
               <button type="button" disabled={busy || runRequestSessions.has(session.id)} onClick={() => void handleRetryRun()}>{tr("重试运行")}</button>
             </div>
           )}
-          <Composer
-            draftKey={`session:${session.id}`}
-            draftStore={composerDraftStore}
+          {lightweightLayout ? (
+            <>
+              <LightweightComposer
+                draftKey={`session:${session.id}`}
+                draftStore={composerDraftStore}
+                inputRef={heroInputRef}
+                onSend={handleSend}
+                disabled={composerDisabled || queueSubmittingSessions.has(session.id)}
+                sendDisabled={!composerModelReady || composerCatalogLoading}
+                running={composerRunning}
+                queueWhenRunning
+                queueBusy={queueSubmittingSessions.has(session.id)}
+                stopping={stoppingSessions.has(session.id)}
+                onStop={handleStop}
+                historyMessages={sessionUserMessages}
+                placeholder={tr("输入消息（Enter 发送，Shift+Enter 换行，Esc 中断）")}
+                controls={composerControls}
+              />
+              <LightweightStatusBar
+                modelName={session.model_selection?.model ?? choices.model}
+                workspaceRoot={draftRoot ?? composerCatalog.root}
+                reportedUsage={extractReportedUsage(session.provider_usage)}
+                status={composerRunning ? "running" : (runError || session.status === "provider_error") ? "error" : session.status}
+              />
+            </>
+          ) : (
+            <Composer
+              draftKey={`session:${session.id}`}
+              draftStore={composerDraftStore}
+              inputRef={heroInputRef}
               sendShortcut={settingsValues.sendShortcut === "mod-enter" ? "mod-enter" : "enter"}
-            onSend={handleSend}
-            disabled={composerDisabled || queueSubmittingSessions.has(session.id)}
-            sendDisabled={!composerModelReady || composerCatalogLoading}
-            running={composerRunning}
-            queueWhenRunning
-            queueBusy={queueSubmittingSessions.has(session.id)}
-            stopping={stoppingSessions.has(session.id)}
-            onStop={handleStop}
-            placeholder={tr("继续描述任务（/ 命令，@ 上下文，$ 技能）")}
-            controls={composerControls}
-            startActions={composerStartActions}
-            mentions={composerMentions}
-            commands={isPluginEffective("commands") ? commandItems : []}
-            files={files.map((f) => f.path)}
-          />
+              onSend={handleSend}
+              minimal={lightweightLayout}
+              disabled={composerDisabled || queueSubmittingSessions.has(session.id)}
+              sendDisabled={!composerModelReady || composerCatalogLoading}
+              running={composerRunning}
+              queueWhenRunning
+              queueBusy={queueSubmittingSessions.has(session.id)}
+              stopping={stoppingSessions.has(session.id)}
+              onStop={handleStop}
+              placeholder={tr("继续描述任务（/ 命令，@ 上下文，$ 技能）")}
+              controls={composerControls}
+              startActions={composerStartActions}
+              mentions={composerMentions}
+              commands={isPluginEffective("commands") ? commandItems : []}
+              files={files.map((f) => f.path)}
+            />
+          )}
+          </div>
+          {subagentsSidepaneOpen && isPluginEffective("subagents") && !lightweightLayout && (
+            <Suspense fallback={null}>
+              <SubagentSidePane
+                sessionId={session.id}
+                isOpen={subagentsSidepaneOpen}
+                onClose={() => setSubagentsSidepaneOpen(false)}
+                activeRuntimeProfile={activeRuntimeProfile}
+                subagentsEnabled={isPluginEffective("subagents")}
+                lightweight={lightweightLayout}
+                mode="sidepane"
+              />
+            </Suspense>
+          )}
         </div>
       ) : (
         <div className="xn-hero" data-testid="xn-hero">
-          <div className="xn-hero__bar"><details className="xn-workbench-menu"><summary aria-label={tr("工作台")}><CircleHelp size={16} /></summary><div>{viewSwitcher}</div></details></div>
+          {!lightweightLayout && <div className="xn-hero__bar"><details className="xn-workbench-menu"><summary aria-label={tr("工作台")}><CircleHelp size={16} /></summary><div>{viewSwitcher}</div></details></div>}
           <div className="xn-hero__brand" aria-hidden="true">
             <IconXuenessMark size={34} className="xn-hero__brand-mark" />
           </div>
@@ -1905,30 +2185,64 @@ export function XuenessWorkbenchContainer() {
             {runError && (
               <p role="alert" className="xn-run-error">{runError}</p>
             )}
-            <Composer
-              draftKey="new-task"
-              draftStore={composerDraftStore}
-              sendShortcut={settingsValues.sendShortcut === "mod-enter" ? "mod-enter" : "enter"}
-              variant="hero"
-              topContent={workspaceContext}
-              inputRef={heroInputRef}
-              onSend={handleCreate}
-              disabled={busy || creatingSession || !isPluginEffective("sessions")}
-              sendDisabled={!composerModelReady || composerCatalogLoading}
-              running={composerRunning}
-              stopping={activeId ? stoppingSessions.has(activeId) : false}
-              onStop={activeId ? handleStop : undefined}
-              placeholder={tr("向 Xueness 提问，使用 @ 添加上下文，使用 / 选择命令或能力")}
-              controls={composerControls}
-              startActions={composerStartActions}
-              mentions={composerMentions}
-              commands={isPluginEffective("commands") ? commandItems : []}
-            />
+            {lightweightLayout ? (
+              <>
+                {workspaceContext}
+                <LightweightComposer
+                  draftKey="new-task"
+                  draftStore={composerDraftStore}
+                  inputRef={heroInputRef}
+                  onSend={handleCreate}
+                  disabled={busy || creatingSession || !isPluginEffective("sessions")}
+                  sendDisabled={!composerModelReady || composerCatalogLoading}
+                  running={composerRunning}
+                  stopping={activeId ? stoppingSessions.has(activeId) : false}
+                  onStop={activeId ? handleStop : undefined}
+                  historyMessages={sessionUserMessages}
+                  placeholder={tr("向 Xueness 提问（Enter 发送，Shift+Enter 换行）")}
+                  controls={composerControls}
+                />
+                <LightweightStatusBar
+                  modelName={choices.model}
+                  workspaceRoot={draftRoot ?? composerCatalog.root}
+                  status={composerRunning ? "running" : runError ? "error" : "idle"}
+                />
+              </>
+            ) : (
+              <Composer
+                draftKey="new-task"
+                draftStore={composerDraftStore}
+                sendShortcut={settingsValues.sendShortcut === "mod-enter" ? "mod-enter" : "enter"}
+                variant="hero"
+                minimal={lightweightLayout}
+                topContent={workspaceContext}
+                inputRef={heroInputRef}
+                onSend={handleCreate}
+                disabled={busy || creatingSession || !isPluginEffective("sessions")}
+                sendDisabled={!composerModelReady || composerCatalogLoading}
+                running={composerRunning}
+                stopping={activeId ? stoppingSessions.has(activeId) : false}
+                onStop={activeId ? handleStop : undefined}
+                placeholder={tr("向 Xueness 提问，使用 @ 添加上下文，使用 / 选择命令或能力")}
+                controls={composerControls}
+                startActions={composerStartActions}
+                mentions={composerMentions}
+                commands={isPluginEffective("commands") ? commandItems : []}
+              />
+            )}
             {!composerCatalogLoading && !composerModelReady && (composerCatalogError || composerCatalog.models.some(model => model.configured) && !composerCatalog.allowReal) && <div className="xn-composer-model-setup" role="status">
               <span>{tr(composerCatalogError ? "模型列表加载失败，请重试。" : composerCatalog.models.some(model => model.configured) && !composerCatalog.allowReal ? "服务端已关闭模型请求。" : "配置一个模型即可开始对话。")}</span>
               <button type="button" onClick={() => composerCatalogError ? void refreshComposerCatalog() : setPanel(isPluginEffective("providers") ? "providers" : "plugins")}>{tr(composerCatalogError ? "重试" : "配置模型")}</button>
             </div>}
           </div>
+          {!lightweightLayout && <XuenessStartPage
+            actions={startPageActions}
+            projects={recentProjects}
+            sessions={liveSessions}
+            locale={locale}
+            onSelectSession={selectSession}
+            onSelectProject={root => chooseWorkspace(root)}
+          />}
         </div>
       )}
 
@@ -1937,6 +2251,12 @@ export function XuenessWorkbenchContainer() {
       <XuenessWorkspacePickerDialog open={workspacePicking} currentRoot={draftRoot ?? composerCatalog.root} returnFocusTo={workspacePickerOpener.current}
         mode={workspacePickerMode}
         onChoose={chooseWorkspace} onCancel={() => setWorkspacePicking(false)} />
+
+      <XuenessCloneDialog open={cloneOpen && isPluginEffective("git")}
+        defaultParent={(draftRoot ?? composerCatalog.root) ?? null}
+        returnFocusTo={cloneOpener.current}
+        onCancel={() => setCloneOpen(false)}
+        onCloned={(root) => { setCloneOpen(false); void refreshRecentProjects(); chooseWorkspace(root); }} />
 
       <XuenessRenameDialog
         open={renameRequest !== null}

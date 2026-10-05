@@ -23,4 +23,4 @@ def _read(root,gate,args,session,call_id):
         if len(rows)>=10: break
     return {'ok':True,'matches':rows,'untrusted':True}
 
-REGISTRY=(BuiltinTool('read_session_context','Find relevant user/assistant history in sessions belonging to this workspace',{'query':{'type':'string'},'session_id':{'type':'string'}},(), 'read_session_context',False,_read),)
+REGISTRY=(BuiltinTool('read_session_context','Find relevant user/assistant history in sessions belonging to this workspace',{'query':{'type':'string'},'session_id':{'type':'string'}},(), 'read_session_context',False,_read,concurrency_safe=True),)

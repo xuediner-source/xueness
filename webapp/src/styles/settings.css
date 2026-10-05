@@ -42,6 +42,85 @@
   padding: 12px 8px 8px;
 }
 
+/* Workspace identity card above the section navigation. */
+.xn-settings-view__account {
+  padding: 4px 12px 10px;
+}
+
+.xn-settings-account {
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr);
+  align-items: center;
+  column-gap: 10px;
+  row-gap: 6px;
+  min-width: 0;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--bg-panel, var(--bg-card));
+}
+
+.xn-settings-account__avatar {
+  display: grid;
+  grid-row: span 2;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  color: var(--fg);
+  background: var(--bg-active, var(--bg-hover));
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1;
+}
+
+.xn-settings-account__copy {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+}
+
+.xn-settings-account__name {
+  overflow: hidden;
+  color: var(--fg);
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 20px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.xn-settings-account__path {
+  overflow: hidden;
+  color: var(--fg-muted);
+  font-size: 12px;
+  line-height: 18px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.xn-settings-account__badges {
+  display: flex;
+  grid-column: 2;
+  flex-wrap: wrap;
+  gap: 4px;
+  min-width: 0;
+}
+
+.xn-settings-account__badge {
+  max-width: 100%;
+  overflow: hidden;
+  padding: 1px 6px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  color: var(--fg-subtle);
+  background: var(--bg-surface, var(--bg-hover));
+  font-size: 11px;
+  line-height: 16px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .xn-settings-view__back {
   display: flex;
   align-items: center;
@@ -271,12 +350,14 @@
 
 .xn-settings-view__header {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
   gap: 16px;
   min-height: 38px;
   margin: 0 0 28px;
 }
+
+.xn-settings-view__heading { min-width: 0; }
 
 .xn-settings-view__header h1 {
   min-width: 0;
@@ -288,11 +369,19 @@
   letter-spacing: -0.035em;
 }
 
+.xn-settings-view__description {
+  margin: 6px 0 0;
+  color: var(--fg-muted);
+  font-size: 13px;
+  line-height: 1.55;
+}
+
 .xn-settings-view__saving {
   display: inline-flex;
   flex: 0 0 auto;
   align-items: center;
   gap: 7px;
+  margin-top: 8px;
   color: var(--fg-muted);
   font-size: 12px;
   white-space: nowrap;
@@ -373,31 +462,34 @@
 .xn-settings-card-group {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 10px;
   min-width: 0;
 }
 
 .xn-settings-card-group__header h2 {
   margin: 0;
   color: var(--fg);
-  font-size: 17px;
-  line-height: 24px;
+  font-size: 15px;
+  line-height: 22px;
   font-weight: 600;
+  letter-spacing: -0.01em;
 }
 
 .xn-settings-card-group__header p {
-  margin: 4px 0 0;
-  color: var(--fg-subtle);
+  margin: 3px 0 0;
+  color: var(--fg-muted);
   font-size: 13px;
   line-height: 1.55;
 }
 
+/* Quiet card surface: the same overlay token reads as a lifted panel in the
+   light theme and a lighter block in the dark theme. */
 .xn-settings-group {
   min-width: 0;
   overflow: hidden;
   border: 1px solid var(--border);
   border-radius: 12px;
-  background: var(--bg-card);
+  background: var(--bg-surface, var(--bg-card));
 }
 
 .xn-settings-group > [data-testid^="capability-"] {
@@ -410,7 +502,8 @@
   align-items: center;
   gap: 16px;
   min-width: 0;
-  padding: 12px 16px;
+  min-height: 60px;
+  padding: 13px 16px;
   border-top: 1px solid var(--border);
 }
 
@@ -424,14 +517,14 @@
   color: var(--fg);
   font-size: 13px;
   line-height: 20px;
-  font-weight: 500;
+  font-weight: 550;
 }
 
 .xn-setting-row p {
-  margin: 3px 0 0;
-  color: var(--fg-subtle);
-  font-size: 13px;
-  line-height: 1.55;
+  margin: 2px 0 0;
+  color: var(--fg-muted);
+  font-size: 12.5px;
+  line-height: 1.5;
 }
 
 .xn-setting-control {
@@ -616,7 +709,7 @@
   overflow: hidden;
   border: 1px solid var(--border);
   border-radius: 12px;
-  background: var(--bg-card);
+  background: var(--bg-surface, var(--bg-card));
 }
 
 .xn-settings-shortcut-hints > div {
@@ -633,6 +726,66 @@
 
 .xn-settings-shortcut-hints > div:first-child { border-top: 0; }
 .xn-settings-shortcut-hints kbd { font: inherit; }
+
+/* Empty state for a settings section with nothing configured yet. */
+.xn-settings-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  padding: 44px 24px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--bg-surface, var(--bg-card));
+  text-align: center;
+}
+
+.xn-settings-empty__icon {
+  display: grid;
+  place-items: center;
+  width: 56px;
+  height: 56px;
+  margin-bottom: 10px;
+  border: 1px solid var(--border);
+  border-radius: 50%;
+  color: var(--fg-muted);
+  background: var(--bg-panel, var(--bg-card));
+}
+
+.xn-settings-empty__title {
+  margin: 0;
+  color: var(--fg);
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 20px;
+}
+
+.xn-settings-empty__description {
+  max-width: 46ch;
+  margin: 0;
+  color: var(--fg-muted);
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.xn-settings-empty__actions {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 14px;
+  margin-top: 12px;
+}
+
+.xn-settings-empty__link {
+  color: var(--accent);
+  font-size: 13px;
+  text-decoration: none;
+}
+
+.xn-settings-empty__link:hover { text-decoration: underline; }
+.xn-settings-empty__link:focus-visible { outline: 2px solid var(--border-focus); outline-offset: 2px; border-radius: 4px; }
 
 /* Keyboard shortcut registry: one real action per row, with in-place recording. */
 .xn-shortcuts { display: flex; flex-direction: column; gap: 16px; width: 100%; min-width: 0; }
@@ -700,6 +853,17 @@
   .xn-settings-view__group-label,
   .xn-settings-view__extensions > summary > span { display: none; }
   .xn-settings-view__nav { padding-right: 4px; padding-left: 4px; }
+  .xn-settings-view__account { padding: 4px 4px 10px; }
+  .xn-settings-account {
+    grid-template-columns: minmax(0, 1fr);
+    justify-items: center;
+    padding: 4px;
+    border-color: transparent;
+    background: transparent;
+  }
+  .xn-settings-account__copy,
+  .xn-settings-account__badges { display: none; }
+  .xn-settings-account__avatar { grid-row: auto; }
   .xn-settings-view__nav-group.is-separated,
   .xn-settings-view__extensions { padding-top: 10px; }
   .xn-settings-view__nav-group.is-separated,
@@ -723,6 +887,17 @@
   .xn-settings-view:is([data-searching="true"], :has(.xn-settings-view__search:focus-within)) .xn-settings-view__extensions > summary {
     width: 100%; justify-content: flex-start; padding-inline: 12px;
   }
+  .xn-settings-view:is([data-searching="true"], :has(.xn-settings-view__search:focus-within)) .xn-settings-view__account { padding: 4px 12px 10px; }
+  .xn-settings-view:is([data-searching="true"], :has(.xn-settings-view__search:focus-within)) .xn-settings-account {
+    grid-template-columns: 34px minmax(0, 1fr);
+    justify-items: stretch;
+    padding: 10px;
+    border-color: var(--border);
+    background: var(--bg-panel, var(--bg-card));
+  }
+  .xn-settings-view:is([data-searching="true"], :has(.xn-settings-view__search:focus-within)) .xn-settings-account__copy { display: flex; }
+  .xn-settings-view:is([data-searching="true"], :has(.xn-settings-view__search:focus-within)) .xn-settings-account__badges { display: flex; }
+  .xn-settings-view:is([data-searching="true"], :has(.xn-settings-view__search:focus-within)) .xn-settings-account__avatar { grid-row: span 2; }
 }
 
 @media (max-width: 700px) {

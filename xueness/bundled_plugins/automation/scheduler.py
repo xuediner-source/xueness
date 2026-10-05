@@ -16,6 +16,7 @@ import uuid
 from ...resources import _atomic_write_json
 from ...plugin_runtime import _config_lock, require_enabled, is_enabled
 from ..workflows.workflows import WorkflowStore, validate_plan
+from .off_peak import OffPeakQueue
 
 
 def _field(text,lo,hi):
@@ -122,9 +123,11 @@ class Automations:
         return self.mutate(settle)
 
 class Scheduler:
-    def __init__(self,state,allow_real=False):
+    def __init__(self,state,allow_real=False,clock=time.time,idle_check=None):
         self.allow_real = allow_real
-        self.state=state;self.stop=threading.Event();self.thread=threading.Thread(target=self._loop,daemon=True,name='xueness-cron');self.thread.start()
+        self.state=state;self.clock=clock
+        self.queue=OffPeakQueue(state,clock=clock,allow_real_host=allow_real,idle_check=idle_check)
+        self.stop=threading.Event();self.thread=threading.Thread(target=self._loop,daemon=True,name='xueness-cron');self.thread.start()
     def _loop(self):
         while not self.stop.is_set():
             try:
@@ -132,6 +135,7 @@ class Scheduler:
                     store=Automations(self.state)
                     for row in store.list():
                         if row['enabled'] and row['nextRunAt']<=time.time(): store.run(row['id'],due=True,allow_real_host=self.allow_real)
+                    self.queue.tick()
             except (ValueError,OSError,KeyError): pass
             self.stop.wait(15)
     def close(self): self.stop.set();self.thread.join(timeout=1)

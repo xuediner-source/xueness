@@ -17,16 +17,29 @@ def dispatch(method, parts, query, data, ctx):
         from ..settings.workspaces_api import allowed_roots
         return _allowed_root(Path(value), ctx['web_runs'], ctx['project_dir'], allowed_roots(ctx))
     try:
+        if workflow and len(parts) >= 3 and parts[2] == 'expert':
+            from . import expert
+            return expert.dispatch_http(method, parts, query, data, ctx)
         if tasks and method == 'GET':
             session = ctx['store'].load(parts[2])
+            raw_runs = session.get('task_runs')
+            runs_list = raw_runs if isinstance(raw_runs, list) else []
             live = ctx['task_registry'].list(parts[2])
-            return 200, {'tasks': live or session.get('task_runs', [])}
+            live_list = live if isinstance(live, list) else []
+            tasks_by_id = {t['id']: t for t in runs_list if isinstance(t, dict) and 'id' in t}
+            tasks_by_id.update({t['id']: t for t in live_list if isinstance(t, dict) and 'id' in t})
+            merged = list(tasks_by_id.values())
+            merged.sort(key=lambda t: (t.get('startedAt') or 0, t.get('id') or ''))
+            return 200, {'tasks': merged}
         if diagnostic and method == 'POST':
             if data.get('connect') is not True:
                 return 400, {'error': 'explicit connect approval required'}
             return 200, check_mcp(ctx['state_dir'], data.get('id'), root_for(data.get('root')))
         if not workflow:
             return 405, {'error': 'method not allowed'}
+        if len(parts) >= 3 and parts[2] == 'dwf':
+            from . import dynamic_runs
+            return dynamic_runs.dispatch(method, parts, query, data, ctx)
         store = WorkflowStore(ctx['state_dir'])
         def submitted_plan(payload, root):
             has_plan, has_script = 'plan' in payload, 'script' in payload

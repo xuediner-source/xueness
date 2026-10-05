@@ -11,6 +11,7 @@
   "tools": [
     "browser_navigate",
     "browser_inspect",
+    "browser_snapshot",
     "browser_click",
     "browser_fill",
     "browser_screenshot"
@@ -19,10 +20,17 @@
   "panels": [],
   "resources": [],
   "capabilities": [],
+  "httpFamilies": [
+    "browser"
+  ],
+  "provides": [
+    "browser.worker"
+  ],
   "modules": [
     "settings_api",
     "profiles",
-    "runtime"
+    "runtime",
+    "snapshot"
   ],
   "backendAssets": ["bridge.mjs"],
   "features": [
@@ -45,6 +53,11 @@
       "id": "browser.desktop_import",
       "name": "桌面 Chrome 资料选择、确认导入与持久浏览器环境检测",
       "nameEn": "Desktop Chrome profile selection, confirmed import and persistent browser runtime detection"
+    },
+    {
+      "id": "browser.snapshot",
+      "name": "页面无障碍树快照",
+      "nameEn": "Page accessibility tree snapshot"
     }
   ],
   "frontendModules": [

@@ -11,7 +11,7 @@ from ... import plugin_sdk
 from ..network.tooling import fetch
 
 
-def _digest(manifest): return hashlib.sha256(json.dumps(manifest,sort_keys=True,separators=(',',':')).encode()).hexdigest()
+def digest(manifest): return hashlib.sha256(json.dumps(manifest,sort_keys=True,separators=(',',':')).encode()).hexdigest()
 
 def catalog(state):
     url=os.environ.get('XUENESS_MARKETPLACE_URL','')
@@ -28,10 +28,10 @@ def catalog(state):
         if not isinstance(row,dict): raise ValueError('invalid marketplace item')
         manifest,errors=plugin_sdk.validate_manifest(row.get('manifest'))
         if errors or manifest is None or row.get('id')!=manifest['id'] or manifest['id'] in seen: raise ValueError('invalid marketplace manifest')
-        seen.add(manifest['id']);digest=_digest(row['manifest'])
-        if row.get('sha256',digest)!=digest: raise ValueError('marketplace digest mismatch')
+        seen.add(manifest['id']);item_digest=digest(row['manifest'])
+        if row.get('sha256',item_digest)!=item_digest: raise ValueError('marketplace digest mismatch')
         current=installed.get(manifest['id'])
-        output.append({'id':manifest['id'],'name':str(row.get('name',manifest['id']))[:120],'description':str(row.get('description',''))[:500],'version':manifest['version'],'sha256':digest,'installedVersion':current.get('version') if current else None,'manifest':row['manifest'],'source':url or 'bundled'})
+        output.append({'id':manifest['id'],'name':str(row.get('name',manifest['id']))[:120],'description':str(row.get('description',''))[:500],'version':manifest['version'],'sha256':item_digest,'installedVersion':current.get('version') if current else None,'manifest':row['manifest'],'source':url or 'bundled'})
     return output
 
 def install(state,pid,expected,update=False):

@@ -14,7 +14,7 @@ import re
 KERNEL_BACKEND = {
     '__init__.py', '__main__.py', 'cli.py', 'core.py', 'events.py',
     'http_contract.py', 'file_lock.py', 'process_runtime.py', 'plugin_cli.py', 'plugin_contract.py', 'plugin_runtime.py',
-    'plugin_sdk.py', 'plugins.py', 'resources.py', 'session_lease.py',
+    'plugin_scope.py', 'plugin_sdk.py', 'plugins.py', 'resources.py', 'session_lease.py',
     'tool_contract.py', 'tool_registry.py', 'builtin_tools.py', 'web.py', 'write_lock.py',
 }
 SHARED_FRONTEND = {
@@ -27,6 +27,23 @@ SHARED_FRONTEND = {
     'ui/CodeContent.tsx', 'ui/CodePreview.tsx', 'ui/Select.tsx',
     'ui/icons.tsx', 'ui/primitives.tsx',
 }
+
+SERVICE_NAME = re.compile(r'[a-z][a-z0-9_]*(?:\.[a-z][a-z0-9_]*)*\Z')
+ROUTE_SEGMENT = re.compile(r'\*|[a-z][a-z0-9_]*\Z')
+ACTION_NAME = re.compile(r'[a-z][a-z0-9_]*\Z')
+DATA_PATH = re.compile(r'[A-Za-z0-9._-]+(?:/[A-Za-z0-9._-]+)*\Z')
+
+#: A package data file that composes plugins is audited as data here too: it may
+#: only name allowlisted plugins with booleans, and its inheritance must resolve.
+PROFILE_NAME = re.compile(r'[a-z][a-z0-9_-]{0,63}\Z')
+PROFILE_DOCUMENT_FIELDS = {'apiVersion', 'profiles'}
+PROFILE_FIELDS = {'name', 'nameEn', 'description', 'descriptionEn', 'extends', 'plugins'}
+MAX_EXTENDS_DEPTH = 8
+
+
+def _strings(manifest, field) -> list[str]:
+    values = manifest.get(field)
+    return [value for value in values if isinstance(value, str)] if isinstance(values, list) else []
 
 
 def _read(root: Path, relative: str) -> str:
@@ -52,6 +69,70 @@ def _ids(root: Path) -> tuple[str, ...]:
     if len(value) != len(set(value)):
         raise ValueError('duplicate PLUGIN_IDS')
     return tuple(value)
+
+
+def _profile_document_errors(pid: str, ref: str, document, ids: tuple[str, ...]) -> list[str]:
+    """Audit composition data shipped inside a package: ids, booleans, parents.
+
+    The gate never imports the plugin that reads such a file, so the same rules
+    its runtime applies are checked statically here: a profile may only pick
+    allowlisted plugins with booleans, and an ``extends`` chain must resolve
+    without a cycle or unbounded depth.
+    """
+    if not isinstance(document, dict) or set(document) - PROFILE_DOCUMENT_FIELDS:
+        return [pid + ': profile data ' + ref + ' uses unsupported fields']
+    if type(document.get('apiVersion')) is not int or document['apiVersion'] != 1:
+        return [pid + ': profile data ' + ref + ' needs apiVersion 1']
+    rows = document.get('profiles')
+    if not isinstance(rows, list) or not rows:
+        return [pid + ': profile data ' + ref + ' lists no usable profiles']
+
+    errors: list[str] = []
+    parents: dict[str, str | None] = {}
+    for row in rows:
+        if not isinstance(row, dict) or not PROFILE_NAME.match(str(row.get('name') or '')):
+            errors.append(pid + ': profile data ' + ref + ' has an invalid profile name')
+            continue
+        name = row['name']
+        if name in parents:
+            errors.append(pid + ': duplicate profile ' + name + ' in ' + ref)
+            continue
+        parents[name] = None
+        unsupported = sorted(set(row) - PROFILE_FIELDS)
+        parent, switches = row.get('extends'), row.get('plugins')
+        if unsupported:
+            errors.append(pid + ': profile ' + name + ' uses unsupported fields: ' + ', '.join(unsupported))
+            continue
+        if parent is not None and (not isinstance(parent, str) or not PROFILE_NAME.match(parent)):
+            errors.append(pid + ': profile ' + name + ' extends an invalid profile name')
+        elif isinstance(parent, str):
+            parents[name] = parent
+        if not isinstance(switches, dict) or not switches:
+            errors.append(pid + ': profile ' + name + ' lists no plugin switches')
+            continue
+        for plugin_id, value in switches.items():
+            if plugin_id not in ids:
+                errors.append(pid + ': profile ' + name + ' selects an unknown plugin: ' + str(plugin_id))
+            elif type(value) is not bool:
+                errors.append(pid + ': profile ' + name + ' switch for ' + plugin_id + ' must be boolean')
+    for name in parents:
+        chain: list[str] = []
+        current: str | None = name
+        while current is not None:
+            if current in chain:
+                errors.append(pid + ': cyclic profile inheritance: ' + ' -> '.join((*chain, current)))
+                break
+            if len(chain) >= MAX_EXTENDS_DEPTH:
+                errors.append(pid + ': profile inheritance deeper than %d levels: %s'
+                              % (MAX_EXTENDS_DEPTH, name))
+                break
+            chain.append(current)
+            parent = parents.get(current)
+            if parent is not None and parent not in parents:
+                errors.append(pid + ': profile ' + current + ' extends an unknown profile: ' + parent)
+                break
+            current = parent
+    return errors
 
 
 def audit(root: Path) -> list[str]:
@@ -114,6 +195,51 @@ def audit(root: Path) -> list[str]:
                             errors.append(field + ': multiple owners for ' + value)
             if any(dep not in ids or dep == pid for dep in manifest['dependencies']):
                 errors.append(pid + ': unknown or self dependency')
+            for field in ('provides', 'inject', 'httpFamilies', 'pluginsActions', 'dataFiles'):
+                if field not in manifest:
+                    continue
+                values = manifest[field]
+                if not isinstance(values, list) or any(not isinstance(x, str) or not x for x in values):
+                    errors.append(pid + ': ' + field + ' must be a string array')
+                    manifest[field] = []
+                    continue
+                if len(values) != len(set(values)):
+                    errors.append(pid + ': duplicate ' + field)
+                for value in values:
+                    if field == 'httpFamilies':
+                        segments = value.split('/')
+                        if segments[0] == '*' or any(not ROUTE_SEGMENT.match(segment) for segment in segments):
+                            errors.append(pid + ': invalid httpFamilies pattern ' + value)
+                    elif field == 'dataFiles':
+                        if value.startswith('/') or '..' in Path(value).parts or not DATA_PATH.match(value):
+                            errors.append(pid + ': invalid dataFiles path ' + value)
+                    elif field == 'pluginsActions':
+                        if not ACTION_NAME.match(value):
+                            errors.append(pid + ': invalid pluginsActions name ' + value)
+                    elif not SERVICE_NAME.match(value):
+                        errors.append(pid + ': invalid ' + field + ' name ' + value)
+            tool_events = manifest.get('toolEvents')
+            if tool_events is not None:
+                # Pure data: which pipeline events this plugin may intervene in
+                # (deny before / rewrite after), plus an optional dispatch
+                # priority. The same shapes are checked at manifest load time.
+                if not isinstance(tool_events, dict) or set(tool_events) - {'events', 'priority'}:
+                    errors.append(pid + ': toolEvents must be an object with events and an optional priority')
+                else:
+                    events = tool_events.get('events')
+                    if (not isinstance(events, list) or not events
+                            or len(events) != len(set(events))
+                            or any(not isinstance(item, str) or item not in (
+                                'before_tool_execution', 'after_tool_execution',
+                                'after_tool_authorization')
+                                for item in events)):
+                        errors.append(pid + ': toolEvents events must list unique names from '
+                                      'before_tool_execution, after_tool_execution, '
+                                      'after_tool_authorization')
+                    priority = tool_events.get('priority')
+                    if priority is not None and (type(priority) is not int
+                                                 or not -1000 <= priority <= 1000):
+                        errors.append(pid + ': toolEvents priority must be an int within [-1000, 1000]')
             actual = {p.relative_to(package_root / pid).with_suffix('').as_posix().replace('/', '.')
                       for p in (package_root / pid).rglob('*.py')
                       if p.name != '__init__.py' and p.relative_to(package_root / pid).as_posix() != 'plugin.py'}
@@ -168,8 +294,75 @@ def audit(root: Path) -> list[str]:
                 actual = {p.relative_to(package_root / pid).as_posix() for p in (package_root / pid).rglob('*') if p.suffix in ('.js', '.mjs', '.cjs')}
                 if actual != set(assets):
                     errors.append(pid + ': backend worker assets must all have an explicit owner')
+            data_files = manifest.get('dataFiles', [])
+            if not isinstance(data_files, list) or any(not isinstance(ref, str) or not DATA_PATH.match(ref)
+                                                       or '..' in Path(ref).parts or ref == 'manifest.json'
+                                                       for ref in data_files):
+                errors.append(pid + ': invalid data file declaration')
+            else:
+                for ref in data_files:
+                    text = _read(root, prefix + ref)
+                    if Path(ref).suffix == '.json':
+                        try:
+                            document = json.loads(text)
+                        except ValueError:
+                            errors.append(pid + ': data file is not valid JSON: ' + ref)
+                            continue
+                        if isinstance(document, dict) and 'profiles' in document:
+                            errors.extend(_profile_document_errors(pid, ref, document, ids))
+                undeclared = sorted({p.relative_to(package_root / pid).as_posix()
+                                     for p in (package_root / pid).rglob('*.json')}
+                                    - set(data_files) - {'manifest.json'})
+                if undeclared:
+                    errors.append(pid + ': package data files need an explicit owner: ' + ', '.join(undeclared))
         except (OSError, ValueError, SyntaxError, KeyError) as exc:
             errors.append(pid + ': ' + str(exc))
+
+    # Lifecycle declarations are data, but they must stay unambiguous: one HTTP
+    # family, one service name and one ``plugins`` sub-action can only have one
+    # owner, and a declared provider or injected service has to exist in the
+    # build allowlist.
+    family_owners: dict[tuple[str, ...], str] = {}
+    service_owners: dict[str, str] = {}
+    action_owners: dict[str, str] = {}
+    for pid in ids:
+        manifest = manifests.get(pid) or {}
+        for value in _strings(manifest, 'httpFamilies'):
+            pattern = tuple(value.split('/'))
+            previous = family_owners.get(pattern)
+            if previous is not None and previous != pid:
+                errors.append('http family: multiple owners for ' + value)
+            family_owners[pattern] = pid
+        for name in _strings(manifest, 'provides'):
+            previous = service_owners.get(name)
+            if previous is not None and previous != pid:
+                errors.append('service: multiple providers for ' + name)
+            service_owners[name] = pid
+        for name in _strings(manifest, 'pluginsActions'):
+            previous = action_owners.get(name)
+            if previous is not None and previous != pid:
+                errors.append('plugins action: multiple owners for ' + name)
+            action_owners[name] = pid
+        try:
+            entry = _read(root, 'xueness/bundled_plugins/' + pid + '/plugin.py')
+        except (OSError, ValueError):
+            continue  # the package audit above already reported the missing entry point
+        if _strings(manifest, 'provides') and not re.search(r'^def activate\(scope, ctx\)', entry, re.M):
+            errors.append(pid + ': declares provides without activate(scope, ctx)')
+        if _strings(manifest, 'pluginsActions') and not re.search(r'^def execute_cli\(args\)', entry, re.M):
+            errors.append(pid + ': declares pluginsActions without execute_cli(args)')
+    for pid in ids:
+        for name in _strings(manifests.get(pid) or {}, 'inject'):
+            if name not in service_owners:
+                errors.append(pid + ': injects a service no plugin provides: ' + name)
+    claims = sorted(family_owners.items())
+    for index, (pattern, owner) in enumerate(claims):
+        for other, other_owner in claims[index + 1:]:
+            if owner == other_owner or len(pattern) != len(other):
+                continue
+            if all(left == right or left == '*' or right == '*' for left, right in zip(pattern, other)):
+                errors.append('http family overlap: %s (%s) and %s (%s)'
+                              % ('/'.join(pattern), owner, '/'.join(other), other_owner))
 
     def visit(pid, chain):
         if pid in chain:

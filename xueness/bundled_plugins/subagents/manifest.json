@@ -15,13 +15,18 @@
   ],
   "commands": [],
   "panels": [
-    "capabilities"
+    "capabilities",
+    "subagents"
   ],
   "resources": [
     "subagents"
   ],
   "capabilities": [
     "network"
+  ],
+  "httpFamilies": [
+    "sessions/*/tasks",
+    "resources/subagents"
   ],
   "modules": [
     "coordinator",
@@ -50,9 +55,15 @@
       "id": "subagents.settings",
       "name": "子代理资源与能力配置",
       "nameEn": "Subagent resources and capability settings"
+    },
+    {
+      "id": "subagents.sidepane",
+      "name": "Web 端子代理运行态侧栏",
+      "nameEn": "Web subagent runtime sidepane"
     }
   ],
   "frontendModules": [
-    "plugins/subagents/SubagentSettings.tsx"
+    "plugins/subagents/SubagentSettings.tsx",
+    "plugins/subagents/SubagentSidePane.tsx"
   ]
 }

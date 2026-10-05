@@ -12,4 +12,27 @@ class HooksPlugin(Plugin):
 
     def load(self, state_dir, root, session) -> dict:
         from ...hooks import HookRunner, load
-        return {"hooks": HookRunner(load(state_dir), Path(root))}
+        from . import workspace_hooks
+        hooks = workspace_hooks.extend_for_runner(state_dir, root, load(state_dir), session)
+        return {"hooks": HookRunner(hooks, Path(root))}
+
+
+def dispatch(method, parts, query, data, ctx):
+    from . import trust_api
+    return trust_api.dispatch(method, parts, query, data, ctx)
+
+
+def register_cli(commands):
+    from .hooks_cli import add_parsers
+    add_parsers(commands)
+
+
+def execute_cli(args):
+    from .hooks_cli import execute
+    return execute(args)
+
+
+def after_tool_execution(payload):
+    """Kernel tool-event seam: pipeline PostToolUse hooks for one tool result."""
+    from . import tool_events
+    tool_events.after_tool_execution(payload)

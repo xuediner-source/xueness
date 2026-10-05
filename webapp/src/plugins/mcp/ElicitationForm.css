@@ -1,0 +1,115 @@
+.xn-mcp-elicitation {
+  box-sizing: border-box;
+  width: min(100% - var(--space-8), var(--workbench-content-width));
+  margin: 0 auto var(--space-2);
+  padding: var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--bg-panel);
+  color: var(--fg);
+  font-size: var(--text-sm);
+}
+
+.xn-mcp-elicitation__title {
+  margin: 0 0 var(--space-2);
+  font-size: var(--text-md);
+  font-weight: 650;
+}
+
+.xn-mcp-elicitation__source,
+.xn-mcp-elicitation__message,
+.xn-mcp-elicitation__hint,
+.xn-mcp-elicitation__error {
+  margin: 0 0 var(--space-2);
+}
+
+.xn-mcp-elicitation__source-label {
+  margin-right: var(--space-2);
+  color: var(--fg-muted);
+}
+
+.xn-mcp-elicitation__warning {
+  margin: 0 0 var(--space-2);
+  padding: var(--space-2);
+  border: 1px solid var(--warn-border);
+  border-radius: var(--radius-sm);
+  background: var(--warn-bg);
+  color: var(--warn-fg);
+}
+
+.xn-mcp-elicitation__message { white-space: pre-wrap; overflow-wrap: anywhere; }
+.xn-mcp-elicitation__hint { color: var(--fg-muted); }
+
+.xn-mcp-elicitation__fields {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  margin-bottom: var(--space-3);
+}
+
+.xn-mcp-elicitation__field {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.xn-mcp-elicitation__field label { flex: 1 1 8rem; }
+
+.xn-mcp-elicitation input:not([type="checkbox"]),
+.xn-mcp-elicitation select {
+  flex: 2 1 12rem;
+  min-width: 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg-input);
+  color: var(--fg);
+  font: inherit;
+  padding: var(--space-1) var(--space-2);
+}
+
+.xn-mcp-elicitation__switch {
+  width: 2.25rem;
+  height: 1.25rem;
+  accent-color: var(--primary);
+}
+
+.xn-mcp-elicitation button,
+.xn-mcp-elicitation input,
+.xn-mcp-elicitation select {
+  font: inherit;
+}
+
+.xn-mcp-elicitation button:focus-visible,
+.xn-mcp-elicitation input:focus-visible,
+.xn-mcp-elicitation select:focus-visible {
+  outline: 2px solid var(--border-focus);
+  outline-offset: 2px;
+}
+
+.xn-mcp-elicitation__error { color: var(--error-fg); }
+
+.xn-mcp-elicitation__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.xn-mcp-elicitation__actions button {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--fg);
+  padding: var(--space-1) var(--space-3);
+  cursor: pointer;
+}
+
+.xn-mcp-elicitation__actions button:hover { background: var(--bg-hover); }
+
+.xn-mcp-elicitation__submit {
+  background: var(--primary);
+  border-color: var(--primary);
+  color: var(--primary-fg);
+}
+
+.xn-mcp-elicitation__submit:hover { background: var(--primary-hover); }
