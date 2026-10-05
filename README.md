@@ -35,11 +35,11 @@ Xueness 面向个人本地开发，提供可从终端、浏览器或 Windows/mac
 
 | 系统 | 安装程序 / 磁盘映像 | 便携版 / 应用 ZIP |
 | --- | --- | --- |
-| Windows 10/11 · x64 | [安装程序 `.exe`](https://github.com/xuediner-source/xueness/releases/download/v0.1.2/Xueness-0.1.2-windows-x64-setup.exe) | [便携版 `.zip`](https://github.com/xuediner-source/xueness/releases/download/v0.1.2/Xueness-0.1.2-windows-x64-portable.zip) |
-| macOS · Apple Silicon | [arm64 `.dmg`](https://github.com/xuediner-source/xueness/releases/download/v0.1.2/Xueness-0.1.2-macos-arm64.dmg) | [arm64 应用 `.zip`](https://github.com/xuediner-source/xueness/releases/download/v0.1.2/Xueness-0.1.2-macos-arm64.zip) |
-| macOS · Intel | [x64 `.dmg`](https://github.com/xuediner-source/xueness/releases/download/v0.1.2/Xueness-0.1.2-macos-x64.dmg) | [x64 应用 `.zip`](https://github.com/xuediner-source/xueness/releases/download/v0.1.2/Xueness-0.1.2-macos-x64.zip) |
+| Windows 10/11 · x64 | [安装程序 `.exe`](https://github.com/xuediner-source/xueness/releases/download/v0.1.3/Xueness-0.1.3-windows-x64-setup.exe) | [便携版 `.zip`](https://github.com/xuediner-source/xueness/releases/download/v0.1.3/Xueness-0.1.3-windows-x64-portable.zip) |
+| macOS · Apple Silicon | [arm64 `.dmg`](https://github.com/xuediner-source/xueness/releases/download/v0.1.3/Xueness-0.1.3-macos-arm64.dmg) | [arm64 应用 `.zip`](https://github.com/xuediner-source/xueness/releases/download/v0.1.3/Xueness-0.1.3-macos-arm64.zip) |
+| macOS · Intel | [x64 `.dmg`](https://github.com/xuediner-source/xueness/releases/download/v0.1.3/Xueness-0.1.3-macos-x64.dmg) | [x64 应用 `.zip`](https://github.com/xuediner-source/xueness/releases/download/v0.1.3/Xueness-0.1.3-macos-x64.zip) |
 
-此版本所有平台的 SHA-256 校验值见 [`SHA256SUMS.txt`](https://github.com/xuediner-source/xueness/releases/download/v0.1.2/SHA256SUMS.txt)。桌面包内含 Electron 外壳、冻结 Python 后端、预构建工作台和浏览器驱动；不要求另外安装 Python 或 Node.js。Git、SSH、ffmpeg 等外部程序仍由使用到它们的插件按需调用；浏览器自动化需要本机 Chrome 或 Edge。当前产物未进行代码签名或 macOS 公证，首次启动可能出现系统信任提示，详情见[桌面端说明](docs/xueness-desktop.md)。
+此版本所有平台的 SHA-256 校验值见 [`SHA256SUMS.txt`](https://github.com/xuediner-source/xueness/releases/download/v0.1.3/SHA256SUMS.txt)。桌面包内含 Electron 外壳、冻结 Python 后端、预构建工作台和浏览器驱动；不要求另外安装 Python 或 Node.js。Git、SSH、ffmpeg 等外部程序仍由使用到它们的插件按需调用；浏览器自动化需要本机 Chrome 或 Edge。当前产物未进行代码签名或 macOS 公证，首次启动可能出现系统信任提示，详情见[桌面端说明](docs/xueness-desktop.md)。
 
 ## 功能概览
 

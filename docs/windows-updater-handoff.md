@@ -1,6 +1,8 @@
 # Windows desktop update handoff
 
-Copy the following prompt to the agent running on your Windows computer.
+Update (2026-10-05): [v0.1.3](https://github.com/xuediner-source/xueness/releases/tag/v0.1.3) is published. [Native build 37301500839](https://github.com/xuediner-source/xueness/actions/runs/37301500839) ran the installed NSIS update step without skipping it and produced `stage=verified`, fixture version `0.1.4`, and `preserved=true` from an isolated `0.1.3` baseline. The public Windows feed now points to the verified `0.1.3` installer. See [publishing evidence](github-publishing.md). This resolves the historical CI rehearsal gap below; a user's own Windows update still needs confirmation on that machine.
+
+The following prompt is the historical 0.1.2 repair handoff. Use it as background if investigating a new Windows issue; its outstanding-rehearsal statements describe the earlier release.
 
 ---
 
