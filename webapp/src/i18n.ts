@@ -1550,6 +1550,19 @@ Object.assign(messages, {
 // 插件市场 validate/update 与插件组合 profile：档位选择、轻量档联动提示与结果读数。
 Object.assign(messages, {
   "插件组合档位": "Plugin composition profiles",
+  "精简": "Minimal",
+  "本地轻量": "Local lightweight",
+  "完整功能": "Full features",
+  "保留会话、文件与命令行，专注基础任务。": "Sessions, files and shell tools for essential tasks.",
+  "在精简档位上加入 Git、记忆、命令与技能。": "Adds Git, memory, commands and skills to the minimal profile.",
+  "开启默认功能，包含工作流、子代理与联网工具。": "Default features, including workflows, subagents and network tools.",
+  "本地模型推荐": "For local models",
+  "{0} 个插件": "{0} plugins",
+  "使用{0}档位": "Use the {0} profile",
+  "已选择": "Selected",
+  "使用此档位": "Use profile",
+  "按使用场景选择功能组合，模型连接与推理参数保持不变。": "Choose a feature set for your workflow. Model connections and inference settings stay unchanged.",
+  "手动设置的插件开关优先；切换不会改动工作区或审批权限。": "Manual plugin switches take precedence. Workspaces and approval permissions stay unchanged.",
   "profile 只是一张插件开关的数据清单：显式开关优先于档位，档位优先于默认值；切换不会改动工作区、审批或权限模式。":
     "A profile is only a data list of plugin switches: your explicit switch wins, then the profile, then the default. Switching never changes a workspace, an approval rule or a permission mode.",
   "当前档位：{0}": "Current profile: {0}",

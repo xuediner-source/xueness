@@ -49,7 +49,7 @@ class ParityBrowserTests(unittest.TestCase):
             state = Path(tmp) / "state"
             state.mkdir()
             profile = managed_profile(state)
-            self.assertEqual(profile, state / "browser-profile")
+            self.assertEqual(profile, state.resolve() / "browser-profile")
 
     def test_managed_profile_rejects_symlink_state(self):
         with tempfile.TemporaryDirectory() as tmp:

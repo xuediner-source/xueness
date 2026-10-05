@@ -103,3 +103,31 @@ test("validation rejects bad values and the submit callback receives only a clea
   assert.deepEqual(seen[2], { id: 7, action: "cancel" });
   assert.equal(JSON.stringify(seen.slice(1)).includes("secret-value"), false);
 });
+
+test("string length limits count Unicode code points like Python and allow an emoji through the native input", () => {
+  const emojiSchema = {
+    type: "object" as const,
+    required: ["answer"],
+    properties: { answer: { type: "string" as const, maxLength: 1 } },
+  };
+  assert.deepEqual(validateElicitationContent(emojiSchema, { answer: "😀" }), {
+    ok: true,
+    content: { answer: "😀" },
+  });
+  assert.deepEqual(validateElicitationContent(emojiSchema, { answer: "ab" }), {
+    ok: false,
+    code: "length",
+    field: "answer",
+  });
+
+  const html = renderToStaticMarkup(
+    <ElicitationForm
+      pending={{ ...pending, requestedSchema: emojiSchema }}
+      values={{}}
+      onChange={() => undefined}
+      onResolve={() => undefined}
+    />,
+  );
+  // maxlength is in UTF-16 units; 2 units admit one supplementary-plane code point.
+  assert.match(html, /id="xn-mcp-elicitation-answer"[^>]*maxLength="2"/);
+});

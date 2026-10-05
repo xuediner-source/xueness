@@ -210,6 +210,8 @@ providers 的 CLI parser/handler 已迁入 `xueness/bundled_plugins/providers/op
 
 计划权限模式 `sessions.plan_mode` 在 build/edit/yolo 之外补上第四种模式。四种取值的单一来源是 `sessions/plan_mode.PERMISSION_MODES`（前端为 `plugins/sessions/permissionModes.ts`）；WebGate、专家工作流、app-server 与 CLI 都引用它。`plan` 下读取、搜索类工具照常，写/编辑/执行/网页工具一律拒绝，唯一例外是本会话专属的计划草稿 `<状态目录>/plan-drafts/<会话 id>.md`（在状态目录内按会话划分，不在工作区内）。草稿路径布局与中英双语拒绝文案都由 `sessions/plan_mode.py` 决定，WebGate 与 CLI 使用的内核 Gate 只按该插件给出的凭据精确匹配放行一次写入，files 的写/编辑解析也先问 Gate，因此工作区 jail 未被放宽、没有新增内建工具。拒绝结果带 `plan_mode_denied`，不会伪装成可批准的等待项；sessions 禁用或依赖不可用时 `plan` 值被拒绝，从 plan 切回 build/edit/yolo 沿用既有 `permission_mode_history` 审计。内核 `mode=plan` 仍是更硬的天花，连草稿一并拒绝，也压过 `permission_mode=yolo`。CLI `run`/`chat` 增加 `--permission-mode build|edit|yolo|plan`：plan 映射为只读加草稿，yolo 仍不自动放行远程 SSH，旧的 `--allow-*` 与 `--mode` 保持兼容；省略该参数时只继承已保存的 plan，不把已保存的 edit/yolo 静默套到 CLI 上。聊天 `/mode plan` 继续设置内核天花。完整格子见 `docs/xueness-permission-modes.md`。
 
+`extensions.plugin_profiles` 的设置入口采用「精简 / 本地轻量 / 完整功能」三个统一卡片，分别对应稳定的 `minimal / lightweight / standard` 数据 ID；自定义档位继续使用其名称与中英文说明。每个档位只提供一个切换入口，选中卡片显示当前状态，加载或切换期间禁用操作，窄屏改为单列。卡片上的数量表示组合中声明开启的插件数；手动插件开关仍优先，实际可用状态以完整插件目录为准。切换组合不会更改模型连接、推理参数、工作区或审批权限；这也不等同于切换模型运行时的轻量模式。
+
 ## 第二十九批复核结果（2026-10-01）
 
 这次复核纠正了“开关已登记，但部分 CLI 行为仍在宿主实现”的遗漏。会话 parser/聊天/运行器已迁入 `sessions/cli.py`；settings、usage、memory、git、MCP 的 parser/执行在各自 `operator_cli.py`，workflows 也提供自己的 CLI 执行入口。主 CLI 只保留公共解析、归属检查、分发和兼容包装，旧提示输入/剪贴板/运行器 patch 接口继续有效。子代理专属的选择、只读子任务构造、进度/取消及结果处理迁入 `subagents/runner.py`，内核仅保留桥接和共享运行引擎。
@@ -268,11 +270,11 @@ sessions 的时间线展示自然回复和 Markdown，识别协议封装后显�
 
 目录新增三项能力：`git.turn_checkpoints`（轮次首个改动前自动检查点）、`git.rewind`（回退工作区到轮次检查点）、`sessions.fork_from_checkpoint`（从轮次检查点派生新会话）。完整目录现为 27 个插件、110 项登记功能。
 
-自动快照归 git 插件的 `turn_checkpoints.py`：当 git 插件 `effective` 且会话工作区是 git 仓库时，本轮第一个真正会改动文件或执行命令的工具（Gate 类别 `write`/`edit`/`exec`）运行前复用既有 `actions.checkpoint()`，把会话 id、轮次序号、检查点 id、commit、触发工具与时间写入会话记录的 `turn_checkpoints`，每轮只记一次，最多保留 200 条。只读工具、非 git 工作区、还没有任何提交的新仓库、远程绑定会话以及插件关闭都只是不记录，原有工具流程与结果不变；快照自身的异常也降级为「没有检查点」，不会破坏该次工具调用。
+自动快照归 git 插件的 `turn_checkpoints.py`：当 git 插件 `effective` 且会话工作区是 git 仓库时，本轮第一个真正会改动文件或执行命令的工具（Gate 类别 `write`/`edit`/`exec`）在 Gate 成功放行后、handler 继续执行前复用既有 `actions.checkpoint()`，把会话 id、轮次序号、检查点 id、commit、触发工具与时间写入会话记录的 `turn_checkpoints`，每轮只记一次，最多保留 200 条。计划拒绝、策略拒绝、未批准的调用都不会创建 Git ref；等待批准期间的工作区变化会在重放并获批时进入快照。只读工具、非 git 工作区、还没有任何提交的新仓库、远程绑定会话以及插件关闭都只是不记录，原有工具结果不变；快照自身的异常也降级为「没有检查点」，不会破坏该次工具调用。
 
-共享内核只增加了一个通用观察钩子：`tool_registry.dispatch` 在可变工具真正执行前调用 `plugin_runtime.before_tool_execution(state_dir, session, store, tool, gate_kind)`，遍历 `effective` 插件的同名回调，丢弃一切异常且不透传返回值。理由是该时机必须发生在内建工具共同的分发边界上，而 hooks 插件的 PreToolUse 只能运行用户配置的外部命令，无法承载内建插件逻辑；该钩子不授予任何权限，Gate、批准与工作区边界仍由原路径决定，快照业务全部留在 git 插件，没有把产品逻辑写进 `core.py`。
+共享内核为此登记了 `after_tool_authorization` 通用观察事件：Gate/WebGate 的 `check()` 成功返回前调用 `plugin_runtime.after_tool_authorization(...)`，仅分发给 manifest 声明该事件的 effective 插件，并同步等候回调完成后才继续 handler。它不透传返回值、不改变 Gate 决策；同步等待保证快照不会在实际写入后才落盘，回调应使用有界操作。hooks 插件既有的 PreToolUse 仍在 registry 分发前运行，不受此时序调整影响。快照业务全部留在 git 插件，没有把产品逻辑写进 `core.py`。
 
-回退复用 `actions.restore()`，因此与现有恢复具有同一授权语义：需要 `confirmed is true`，先写 `Recovery before restoring …` 恢复快照再还原，会话没有检查点返回 409、检查点未知返回 404，`checkpoint` 与 `latest` 必须二选一，插件关闭时 CLI/HTTP 一律 403。`restore()` 只还原它认识的文件，检查点之后新增的未跟踪文件保持原样，需要彻底清理仍由用户显式处理。CLI 为 `git turn-checkpoints --session`、`git rewind --session --checkpoint|--latest [--root DIR] --confirmed`；HTTP 为 `GET /api/sessions/<sid>/git/turn-checkpoints`、`POST /api/sessions/<sid>/git/turn-checkpoints/rewind`，经 `route_owner` 归 git，沿用 Host/Origin/CSRF 与插件生效检查，并在会话 lease 下执行；CLI 与 HTTP 走同一 `dispatch`，因此开关、确认与 lease 语义一致。`--root` 是防误用护栏：与会话工作区解析结果不同即 403，绝不按命令行走别处。
+回退复用 `actions.restore()`，因此与现有恢复具有同一授权语义：需要 `confirmed is true`，先写 `Recovery before restoring …` 工作区范围快照再还原，会话没有检查点返回 409、检查点未知返回 404，`checkpoint` 与 `latest` 必须二选一，插件关闭时 CLI/HTTP 一律 403。检查点和恢复都以会话工作区为 Git pathspec；嵌套在仓库中的工作区不会改写外部路径或真实 index。恢复前若目标涉及当前被忽略且恢复快照无法保存的文件，操作返回 409 并保留文件；工作区内不属于检查点路径的未知未跟踪文件不会被删除。CLI 为 `git turn-checkpoints --session`、`git rewind --session --checkpoint|--latest [--root DIR] --confirmed`；HTTP 为 `GET /api/sessions/<sid>/git/turn-checkpoints`、`POST /api/sessions/<sid>/git/turn-checkpoints/rewind`，经 `route_owner` 归 git，沿用 Host/Origin/CSRF 与插件生效检查，并在会话 lease 下执行；CLI 与 HTTP 走同一 `dispatch`，因此开关、确认与 lease 语义一致。`--root` 是防误用护栏：与会话工作区解析结果不同即 403，绝不按命令行走别处。
 
 `sessions.fork_from_checkpoint` 择优复用既有安全轮次分叉实现（`forking._boundaries` + `_make_fork`）：按检查点的轮次序号取「该轮之前」的闭合边界，只复制更早轮次的规范化消息与结果，剥离执行状态，并在 `fork_parent` 中同时记录来源会话/轮次与 `checkpointId`/`checkpointTurn`。它不改写共享工作区——那是 `git.rewind` 的职责；第 1 轮的检查点没有更早的可分叉闭合轮次，返回 409。CLI 为 `sessions fork-checkpoint <sid> [--checkpoint ID|--latest|--turn N] [--title …]`，HTTP 为 `POST /api/sessions/<sid>/fork-from-checkpoint`。回归见 `tests/test_turn_checkpoints.py`（临时仓库 + 隔离状态目录，不访问网络）。
 
@@ -382,6 +384,8 @@ profile 是 Cordis/DeepSeek 那种「组合配置档」的最小安全版本：�
 
 实现全部留在 `remote/app_server.py`（remote manifest 的 `modules` 与 `commands` 同时登记 `app_server` / `app-server`），CLI 入口是 `xueness --state DIR app-server [--web-runs PATH] [--workspace-root PATH]... [--allow-real-provider|--no-real-provider]`。remote 未启用时启动即以退出码 2 结束并在 stderr 说明如何开启，不写任何 stdout 帧。
 
+运行中的服务也检查 remote 的 effective 状态：协议请求与 worker 执行边界均拒绝禁用后的新工作，关闭与取消入口只用于清理。stdin 读取使用容量为 1 的队列，主循环可以在空闲或半帧输入期间发现插件禁用，停止活动轮次并释放插件 scope；不依赖 Windows 不支持的 stdin select。
+
 **帧格式（二选一里选行分隔）**：一条消息 = 一行 UTF-8 JSON-RPC 2.0，LF 结束，单行上限 `MAX_FRAME_BYTES = 1 MiB`；超限的行被读完并丢弃，只回一条 `-32700` 错误，绝不把超长输入缓冲进内存。**stdout 只输出协议帧**：整个请求周期在 `contextlib.redirect_stdout` 下运行，功能代码里残留的 `print` 落到 `_LogStream` 并进 stderr，帧写入器自己持有真实 stdout buffer；所有日志与异常说明都走 stderr。**从不监听任何网络端口**，`initialize` 的 `capabilities.networkListener` 因此固定为 `false`（回归用替换 `socket.socket` 的方式断言整段服务过程一次都没有建过 socket）。
 
 方法集合是最小的一套：`initialize`（协议名/版本、Xueness 版本、`plugin_runtime.catalog()` 的 `enabled/effective/blockedBy` 与每个插件的功能 ID）、`session/list`（`archived` 可选）、`session/get`、`session/create`、`turn/start`、`turn/cancel`、`session/setModel`、`session/setEffort`、`shutdown`/`exit`。`turn/start` 立刻回 `{accepted, sessionId, cursor}`，随后以 JSON-RPC notification 推流：`turn/started`、`session/event`（逐条转发 journal 事件协议 `events.page_events` 的光标窗口）、`turn/finished`（带 HTTP 侧同款 result 与最终状态）。通知方法名与帧上限都写进 `initialize.limits`，客户端不需要猜。`shutdown` 先对每个在跑的轮次发 `/stop` 再 join（5 秒上限），然后结束服务循环。
@@ -418,6 +422,8 @@ automation 插件内的新功能，登记为 `automation.off_peak`（中英双�
 真正的执行仍走 workflows 的既有契约：`validate_plan` 生成单节点 agent 计划（`prompt`/`cwd`/`timeout`，可选 `model`/`provider_id`），队列项存下该计划的 sha256 摘要，启动前重算——摘要变了就以 `plan changed after approval` 失败并 hold 到下一个窗口开启，随后 `WorkflowStore.create` + `launch(approved=True, allow_real=row['allowReal'])`。无人值守的前提是三个条件同时成立：任务已批准、任务允许真实服务商、**主机**允许真实服务商；缺任何一条都记 `awaiting_approval` 并把任务留在队列里、`holdUntil` 推到下一次窗口开启，绝不静默降级或放宽任何限制。`run-now` 只跳过窗口与 `onlyWhenIdle`，不跳过这三道闸门；`cancel` 在队列锁内落终态，再在锁外尽力 `control(workflowId,'cancel')`，取消的任务不可能被后续 tick 复活。`onlyWhenIdle` 的「空闲」默认取 `host_is_idle`（本机没有 ACTIVE 的 workflow 运行），可注入替换以便测试。
 
 入口与归属：模型侧只有一个 `offpeak_create` 内置工具（gate kind 复用 `exec`，计划模式与未批准状态照旧拒绝；工具创建的项固定 `confirm=False`，因此必须由操作员在面板或 CLI 批准，返回里明确写「操作员批准后才会无人值守执行」）；CLI 是 `xueness automation offpeak list|add|approve|run-now|cancel|settings`（`approve` 必须带 `--approve-execution`）；HTTP 家族登记进 automation 的 `httpFamilies`（`automation/offpeak`），`route_owner` 的匹配逻辑一字未改，Host/Origin/CSRF 沿用 web 层既有防护，`GET` 概览/`POST` 入队/`POST <id>/approve`（`confirmed` 必须为 true，否则 400）/`POST <id>/run`/`DELETE <id>`/`GET|POST settings`；`dispatch_http` 的属主effective检查与模块内 `require_enabled` 双保险，插件关闭时 HTTP 为 403（body 带 `plugin: automation`）、CLI 退出码 1、工具返回 `plugin disabled`。
+
+取消与启动交接：workflow 创建后、launch 前先把 ID 写入同一 runId 的队列项，并重新检查取消与插件开关。创建期间取消的任务不进入 launch；launch 期间取消的任务在返回后再次停止底层 workflow，延迟成功或失败不会把取消项重新排队。回归使用屏障复现这两种竞态，全程不调用真实模型。
 
 前端新增 `webapp/src/plugins/automation/offPeakModel.ts` 与 `OffPeakTasks.tsx`（登记进 manifest 的 `frontendModules`），面板 `XuenessAutomationsPanel({ offPeakEnabled })` 由工作台容器两处挂载点传入 `isPluginEffective("automation")`：`offPeakEnabled` 为 false 时组件直接 `return null`，不发请求、不起轮询，既有「定时计划」列表与静态注册表面貌不变（`XuenessPluginFeaturePanels.test.tsx` 里「不出现闲时任务」的断言在缺省 props 下继续成立）。面板提供队列列表、入队表单、窗口设置与完成通知：表单校验镜像后端上限（提示词 1–5000、名称 ≤120、绝对路径、超时 60–14400 秒、允许真实服务商必须先批准计划），通知按尝试 ID 逐个出现一次且首屏只登记已有历史（不把旧运行当新通知回放），已完成/已取消的任务不再提供运行与取消按钮。i18n 只在 `webapp/src/i18n.ts` 末尾追加一个独立 `Object.assign(messages, {...})` 块。
 
@@ -459,17 +465,19 @@ automation 插件内的新功能，登记为 `automation.off_peak`（中英双�
 
 hooks 插件登记新功能 `hooks.tool_events`（工具执行事件管线接入），共享内核把原先单一的 `before_tool_execution` 观察缝补齐为与 DeepSeek harness（Cordis 风格）capability seams、ZCode call-runner pre/post hooks 对齐的「工具执行前后可拦截事件管线」。完整目录现为 27 个插件、128 项登记功能。
 
-### 两个事件与声明式授权
+### 三个事件与声明式授权
 
-`before_tool_execution`（registry 工具调用执行前、任何副作用发生前）与新增的 `after_tool_execution`（handler 结算出结果之后、`_record_outcome` 记账与回填模型之前）在 `tool_registry.dispatch` 的同一条 seam 上触发，因此串行调用、并发批次成员、以及 web 审批重放（`replay_approved` 走 `core.execute` → dispatch）走的都是同一份事件语义；MCP、子代理与 skill_read 仍走各自既有 seam，不入本管线。凡绑定策略存储（`session` 与 `state_dir` 均在）的 registry 工具调用都触发前后事件——包括只读调用；git 轮次检查点对只读 gate kind 本来就空操作，时机语义不变。
+`before_tool_execution`（registry 工具调用执行前、任何副作用发生前）与 `after_tool_execution`（handler 结算出结果之后、`_record_outcome` 记账与回填模型之前）仍在 `tool_registry.dispatch` 的同一条 seam 上触发，因此串行调用、并发批次成员、以及 web 审批重放（`replay_approved` 走 `core.execute` → dispatch）走的都是同一份事件语义；MCP、子代理与 skill_read 仍走各自既有 seam，不入本管线。凡绑定策略存储（`session` 与 `state_dir` 均在）的 registry 工具调用都触发前后事件——包括只读调用。
 
-参与门槛与授权分级：任何 effective 插件只要在入口模块定义了回调就自动获得**只读观察**；`manifest.json` 新增可选纯数据字段 `toolEvents`（`{"events": [...], "priority": int}`，`events` 取 `before_tool_execution`/`after_tool_execution` 的唯一非空子集，`priority` 为 [-1000, 1000] 内整数）才授予**干预能力**——声明 before 才可返回 `{"decision": "deny", "reason": ...}` 阻止调用（未声明或缺可用 reason 的 deny 记为 `deny_ignored` 诊断后忽略），声明 after 才可返回 `{"decision": "rewrite", "result": {...}}` 改写结果（未声明记 `rewrite_rejected`）。管线只有"收紧"这一种方向：没有 allow 通道，Gate、审批、permission_mode、工作区边界仍完全由 handler 内的既有检查决定；显式 `{"decision": "allow"}` 与返回 None 等价。deny 结果以 `{"ok": false, "error": "denied by plugin <id>", "error_code": "plugin_denied", "plugin": <id>, "user_reason": <截断到 500 字的原因>}` 作为工具错误回填，不带 `retryable: false`，因此运行不暂停、模型在下一步看到原因并自行调整——既不进入审批队列（与 `error: "denied"` 的审批语义区分），也不触发 PermissionRequest 钩子。
+新增的 `after_tool_authorization` 由 `Gate.check`/`WebGate.check` 在授权成功后、handler 继续前调用。它只通知 manifest 声明该事件的 effective 插件，忽略返回值，不可批准、拒绝或改写工具结果。这个边界让 Git 轮次快照落在实际权限决定之后：计划拒绝、策略拒绝、待批准调用不创建检查点，审批重放会在 handler 写入前快照；调用同步完成后才返回 handler，因此不能复用允许超时后脱离工具继续运行的观察回调执行器。该观察者自身必须使用有界操作。Hooks 插件的 PreToolUse 仍在 registry 分发前拦截，顺序保持原样。
+
+参与门槛与授权分级：`before_tool_execution`/`after_tool_execution` 保持现有观察与声明式干预；`manifest.json` 的可选纯数据字段 `toolEvents` 采用 `{"events": [...], "priority": int}`，`events` 是三个已知名称（含 `after_tool_authorization`）的唯一非空子集，`priority` 为 [-1000, 1000] 内整数。声明 before 才可返回 `{"decision": "deny", "reason": ...}` 阻止调用（未声明或缺可用 reason 的 deny 记为 `deny_ignored` 诊断后忽略），声明 after 才可返回 `{"decision": "rewrite", "result": {...}}` 改写结果；`after_tool_authorization` 只能观察，不授予 Gate 干预能力。管线没有 allow 通道，Gate、审批、permission_mode、工作区边界仍完全由 handler 内的既有检查决定；显式 `{"decision": "allow"}` 与返回 None 等价。deny 结果以 `{"ok": false, "error": "denied by plugin <id>", "error_code": "plugin_denied", "plugin": <id>, "user_reason": <截断到 500 字的原因>}` 作为工具错误回填，不带 `retryable: false`，因此运行不暂停、模型在下一步看到原因并自行调整——既不进入审批队列（与 `error: "denied"` 的审批语义区分），也不触发 PermissionRequest 钩子。
 
 改写验证（`_rewrite_problem`）保证结果结构合法：替换体必须是对象、JSON 可序列化；`ok` 必须与原值完全一致（`is` 判定，失败不能改成成功、成功也不能改成失败，杜绝伪造证据别名）；`tool_call_id`/`_tool_call_id` 若存在则必须原样保留。工具名与调用 ID 从不进入改写载荷——它们由内核持有（journal 消息结构与 `results` 键），改写在结构上不可能改变结果归属。每个回调看到的是上一个插件已接受的改写结果，链式脱敏/截断可行。
 
 ### 分发顺序、隔离与超时
 
-分发顺序由 `tool_event_plan(state_dir)` 决定：先按插件依赖拓扑（依赖一定先于依赖者分发），拓扑留出的自由度内按 manifest 声明的 `priority` 降序，再按 `PLUGIN_IDS` 构建顺序破平；结果对同一状态目录确定。单个回调在全局锁内执行（`_TOOL_EVENT_LOCK`），因此并发批次里各调用各自触发前后事件、而**事件回调本身串行**——工具 handler 在线程池并发、回调串行、结果由既有记账循环按原调用顺序回填，三件事互不干扰。回调异常按类型名隔离记录（异常文本可能携带不可信数据，不回显），超时上限 `TOOL_EVENT_TIMEOUT_SECONDS`（默认 10 秒）内未返回即丢弃结果继续运行——回调跑在辅助线程里，超时后线程只能协作收敛，这是 Python 的既有现实，与 hooks 子进程超时的取舍一致。所有干预与异常写入会话的 `tool_event_diagnostics`（限 50 条、detail 截断 200 字），`tool_event_plan`/catalog 自身损坏时 seam 整体降级为"无事件"，绝不弄坏它只观察的工具调用。需要说明的边界：回调不得经由 dispatch 同步执行其它工具（同线程重入由 RLock 化解，跨线程会死锁），这与"回调观察并报告、不执行工具"的定位一致。
+分发顺序由 `tool_event_plan(state_dir)` 决定：先按插件依赖拓扑（依赖一定先于依赖者分发），拓扑留出的自由度内按 manifest 声明的 `priority` 降序，再按 `PLUGIN_IDS` 构建顺序破平；结果对同一状态目录确定。before/after 回调在全局锁内串行执行（`_TOOL_EVENT_LOCK`），在 `TOOL_EVENT_TIMEOUT_SECONDS`（默认 10 秒）内未返回即丢弃观察结果并继续工具调用。`after_tool_authorization` 也持有同一锁但直接同步调用，不使用会在超时后继续运行的辅助线程；它必须完成后 handler 才能继续，Git 的命令调用自身有 15 秒上限。回调异常按类型名隔离记录（异常文本可能携带不可信数据，不回显），诊断限 50 条、detail 截断 200 字；`tool_event_plan`/catalog 自身损坏时 seam 整体降级为"无事件"。观察回调不得经由 dispatch 同步执行其它工具（跨线程事件锁可能造成死锁）。
 
 运行循环还把 `_dispatch_registry_tool` 的 `_tool_call_id` 注入从仅 web 审批门扩展为无条件注入（dispatch 在调用 handler 前剥离该键，handler 参数不受影响），使事件载荷与诊断在 CLI/HTTP/批次里都携带宿主签发的调用 ID，与 legacy hooks 载荷的 `tool_call_id` 语义一致。
 

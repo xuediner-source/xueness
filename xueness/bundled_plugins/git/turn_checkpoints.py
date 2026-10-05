@@ -1,14 +1,14 @@
 """Automatic per-turn workspace checkpoints and turn-based rewind.
 
-ZCode-style safety net: before the first write/exec capability of a conversation
-turn actually runs, the workspace is snapshotted once, so the turn can be undone
-without losing the files it did not touch.
+ZCode-style safety net: after the first write/exec capability of a conversation
+turn passes Gate and before its handler continues, the workspace is snapshotted
+once, so the turn can be undone without losing files it did not touch.
 
 Everything here is deliberately inert outside its own conditions: a disabled
 plugin, a non-git workspace, a remote-bound session or a missing policy store
 each return without touching the run. The snapshot itself is the existing
 ``actions.checkpoint`` (temporary index, real index preserved), and rewind is
-``actions.restore``, which already writes a recovery snapshot first.
+``actions.restore``, which writes a scoped recovery snapshot first.
 """
 from __future__ import annotations
 
@@ -84,7 +84,7 @@ def enabled(state_dir) -> bool:
 def record_turn(state_dir, session, store, *, tool_name="", gate_kind="") -> dict | None:
     """Snapshot the workspace once for the current turn; never breaks a run.
 
-    Called from the kernel's before-tool seam, so a failure here must degrade to
+    Called from the kernel's post-Gate seam, so a failure here must degrade to
     "no checkpoint" rather than propagate into a tool result.
     """
     try:
@@ -177,8 +177,8 @@ def rewind(ctx: dict, sid: str, *, checkpoint: str | None = None, latest: bool =
     return result
 
 
-def before_tool_execution(payload: dict) -> None:
-    """Kernel seam contribution: snapshot before this turn's first real change."""
+def after_tool_authorization(payload: dict) -> None:
+    """Kernel seam contribution: snapshot after Gate and before handler effects."""
     record_turn(payload.get("state_dir"), payload.get("session"), payload.get("store"),
                 tool_name=payload.get("tool") or "", gate_kind=payload.get("gate_kind") or "")
 

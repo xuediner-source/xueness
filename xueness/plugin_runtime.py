@@ -316,13 +316,14 @@ def completion_requires_evidence(state_dir, session, call_ids=()):
 
 
 #: Tool event pipeline (Cordis-style pre/post seams, aligned with the DeepSeek
-#: harness capability seams and ZCode's call runner): every effective plugin may
-#: observe a registry tool call before and after execution, and a manifest
-#: ``toolEvents`` declaration additionally grants a structured deny (before) or
-#: a restricted result rewrite (after). Declarations are pure data; callbacks
-#: come only from build-allowlist entrypoints. The pipeline can only ever
-#: tighten a decision -- the Gate, approvals, permission_mode and workspace
-#: boundaries still decide inside the handler, and it never grants anything.
+#: harness capability seams and ZCode's call runner): effective plugins may
+#: observe registry calls before and after execution, and a manifest declaration
+#: grants a structured deny (before) or restricted result rewrite (after). A
+#: declared ``after_tool_authorization`` observer runs only after the handler's
+#: Gate check succeeds. Declarations are pure data; callbacks come only from
+#: build-allowlist entrypoints. The pipeline can only tighten a decision -- Gate,
+#: approvals, permission modes and workspace boundaries still decide inside the
+#: handler, and it never grants access.
 #:
 #: Upper bound for one plugin callback, in seconds. Callbacks run in a helper
 #: thread; on timeout the result is discarded and the run continues, so a
@@ -388,10 +389,10 @@ def tool_event_order(items) -> list[str]:
 def tool_event_plan(state_dir) -> list[dict]:
     """Effective plugins in tool-event dispatch order, with their grants.
 
-    Returns one ``{'id', 'priority', 'before', 'after'}`` row per effective
-    plugin; ``before``/``after`` say whether the manifest's ``toolEvents``
-    declaration grants the intervention for that event. Pure data, resolved
-    from the trusted build manifests and the persisted switches.
+    Returns one row per effective plugin; ``before``/``after`` say whether the
+    manifest's ``toolEvents`` declaration grants intervention and ``authorized``
+    records its observer-only post-Gate event. Pure data, resolved from trusted
+    build manifests and persisted switches.
     """
     items = [item for item in catalog(state_dir) if item['effective']]
     by_id = {item['id']: item for item in items}
@@ -400,7 +401,8 @@ def tool_event_plan(state_dir) -> list[dict]:
         events = _tool_event_declaration(by_id[pid]).get('events') or ()
         plan.append({'id': pid, 'priority': _tool_event_priority(by_id[pid]),
                      'before': 'before_tool_execution' in events,
-                     'after': 'after_tool_execution' in events})
+                     'after': 'after_tool_execution' in events,
+                     'authorized': 'after_tool_authorization' in events})
     return plan
 
 
@@ -506,6 +508,42 @@ def before_tool_execution(state_dir, session, store, tool_name, gate_kind,
     except Exception:  # noqa: BLE001 - the seam must degrade, not fail the call
         return None
     return None
+
+
+def after_tool_authorization(state_dir, session, store, tool_name, gate_kind,
+                             subject, tool_call_id=None):
+    """Notify declared observers immediately after a handler's Gate succeeds.
+
+    This event is observation-only: return values are ignored, so it cannot
+    grant, deny, or rewrite a tool call. It gives effective plugins a precise
+    point to capture state before the authorized handler continues. Gate
+    failures and pending approvals never reach this seam.
+    """
+    if session is None or state_dir is None:
+        return
+    try:
+        payload = {'state_dir': state_dir, 'session': session, 'store': store,
+                   'tool': tool_name, 'gate_kind': gate_kind, 'subject': subject,
+                   'tool_call_id': tool_call_id}
+        for participant in tool_event_plan(state_dir):
+            if not participant['authorized']:
+                continue
+            callback = getattr(entrypoint(participant['id']),
+                               'after_tool_authorization', None)
+            if not callable(callback):
+                continue
+            # The handler must not start while a checkpoint observer is still
+            # running. Unlike observational before/after hooks, this seam is
+            # synchronous; each trusted callback must bound its own work.
+            with _TOOL_EVENT_LOCK:
+                try:
+                    callback(payload)
+                except Exception as exc:  # noqa: BLE001 - do not alter Gate result.
+                    _tool_event_diagnostics(session, 'after_tool_authorization',
+                                            participant['id'], 'error',
+                                            type(exc).__name__)
+    except Exception:  # noqa: BLE001 - the seam must degrade, not fail the call.
+        return
 
 
 def _rewrite_problem(original, rewritten):

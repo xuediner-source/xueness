@@ -17,12 +17,41 @@ from .git_api import GitApiError
 ID_RE=re.compile(r'[0-9a-f]{32}')
 LOCKED=('stage','unstage','commit','branch','stash','checkpoints','init')
 
-def _git(root,argv,env=None,stdin=None):
+def _git(root,argv,env=None,stdin=None,raw=False):
     try:
         proc=run_external(subprocess.run,['git',*argv],cwd=root,env={**os.environ,**(env or {}),'GIT_TERMINAL_PROMPT':'0'},input=stdin,text=True,capture_output=True,timeout=15,creationflags=getattr(subprocess,'CREATE_NO_WINDOW',0) if os.name=='nt' else 0)
     except (OSError,subprocess.TimeoutExpired): raise GitApiError(400,'Git operation failed') from None
     if proc.returncode: raise GitApiError(409,'Git operation failed; review repository state')
-    return proc.stdout.strip()
+    return proc.stdout if raw else proc.stdout.strip()
+
+def _nul_paths(root,argv):
+    return {item for item in _git(root,argv,raw=True).split('\0') if item}
+
+def _path_overlap(left,right):
+    return (left == right or left.startswith(right.rstrip('/') + '/')
+            or right.startswith(left.rstrip('/') + '/'))
+
+def _refuse_ignored_restore_conflicts(root,head,commit):
+    """Do not overwrite ignored workspace data absent from recovery snapshots.
+
+    A non-ignored untracked file is captured by ``checkpoint``. An ignored file
+    is not, so if it occupies a path the restore would write or remove, refuse
+    before changing either the worktree or Git refs.
+    """
+    affected = _nul_paths(root,['ls-tree','-r','--name-only','-z',head,'--','.'])
+    affected.update(_nul_paths(root,['ls-tree','-r','--name-only','-z',commit,'--','.']))
+    index_paths = _nul_paths(root,['ls-files','--cached','-z','--','.'])
+    affected.update(index_paths)
+    ignored = _nul_paths(root,['ls-files','--others','--ignored','--exclude-standard',
+                               '-z','--','.'])
+    # ``--others`` omits paths force-added to the real index even when an
+    # ignore rule matches. They still will not be present in our HEAD-based
+    # temporary recovery index, so identify ignored cached entries separately.
+    ignored.update(_nul_paths(root,['ls-files','--cached','--ignored',
+                                    '--exclude-standard','-z','--','.']))
+    if any(_path_overlap(path, candidate)
+           for path in ignored for candidate in affected):
+        raise GitApiError(409,'Ignored files overlap the checkpoint; move them before restoring')
 
 def checkpoints(root):
     raw=_git(root,['for-each-ref','--format=%(refname:short)%09%(objectname)%09%(contents:subject)','refs/xueness/checkpoints/'])
@@ -48,18 +77,19 @@ def checkpoint(root,message='Workspace checkpoint'):
 def restore(root,cid):
     if not ID_RE.fullmatch(cid): raise ValueError('invalid checkpoint')
     commit=_git(root,['rev-parse','refs/xueness/checkpoints/'+cid+'^{commit}'])
+    head=_git(root,['rev-parse','HEAD'])
+    _refuse_ignored_restore_conflicts(root,head,commit)
     backup=checkpoint(root,'Recovery before restoring '+cid[:8])
-    # Leave the user's real index untouched; refused untracked conflicts remain
-    # intact. Recovery snapshot includes tracked and nonignored new files.
-    fd,name=tempfile.mkstemp(prefix='xueness-restore-index-');os.close(fd);os.unlink(name)
-    try:
-        env={'GIT_INDEX_FILE':name}
-        _git(root,['read-tree','HEAD'],env)
-        _git(root,['read-tree','--reset','-u',commit],env)
-    finally:
-        for path in (name,name+'.lock'):
-            try: os.unlink(path)
-            except FileNotFoundError: pass
+    # Checkpoints are created from this cwd with ``git add --all -- .``. Keep
+    # the inverse equally scoped: read-tree --reset -u would write the entire
+    # repository tree, even when this is only a nested session workspace.
+    # --worktree leaves the real index (including staged changes elsewhere)
+    # untouched. Untracked files outside the checkpoint's known paths are not
+    # selected by Git's restore pathspec.
+    # Recheck after creating the recovery snapshot; an ignored conflict is not
+    # represented there and must never be overwritten by this restore.
+    _refuse_ignored_restore_conflicts(root,head,commit)
+    _git(root,['restore','--source='+commit,'--worktree','--','.'])
     return {'restored':cid,'recovery':backup}
 
 def _paths(root,values):

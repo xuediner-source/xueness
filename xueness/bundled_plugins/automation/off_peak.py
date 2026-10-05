@@ -337,11 +337,23 @@ class OffPeakQueue:
             payload['result'] = row
         if payload.get('cancelRun'):
             # A cancelled task must not keep occupying the provider budget.
-            try:
-                WorkflowStore(self.state).control(payload['cancelRun'], 'cancel')
-            except (OSError, ValueError, KeyError):
-                pass
+            self._stop_workflow(payload['cancelRun'])
         return payload['result']
+
+    def _stop_workflow(self, workflow_id):
+        store = WorkflowStore(self.state)
+        try:
+            store.control(workflow_id, 'cancel')
+        except ValueError:
+            # Cancellation may reach the workflow before launch has changed
+            # its created state. Preserve that decision without starting it.
+            def cancel_created(record):
+                if record.get('status') == 'created':
+                    record.update(status='cancelled', control='cancel')
+                    store.event(record, 'cancel')
+            store.update(workflow_id, cancel_created)
+        except (OSError, KeyError):
+            pass
 
     def save_settings(self, data):
         require_enabled(self.state, 'automation')
@@ -398,12 +410,25 @@ class OffPeakQueue:
     def _launch(self, row, now):
         """Create and start the workflow behind an already claimed task."""
         try:
+            if (self.get(row['id']) or {}).get('status') == 'cancelled':
+                return self._settle(row['id'], now, 'cancelled')
             plan, digest = plan_for(row)
             if digest != row['digest']:
                 return self._settle(row['id'], now, 'awaiting_approval',
                                     error='plan changed after approval', hold=True)
             store = WorkflowStore(self.state)
             run = store.create(plan, row['root'])
+            # Publish the workflow identity before launch. A concurrent cancel
+            # can now reach it; a cancel during create prevents launch entirely.
+            with self._mutate() as payload:
+                current = next((r for r in payload['rows'] if r.get('id') == row['id']), None)
+                permitted = current is not None and current.get('runId') == row.get('runId') and current['status'] == RUNNING
+                if current is not None and current.get('runId') == row.get('runId'):
+                    current['workflowId'] = run['id']
+            if not permitted:
+                self._stop_workflow(run['id'])
+                return self._settle(row['id'], now, 'cancelled', workflow_id=run['id'])
+            require_enabled(self.state, 'automation')
             run = store.launch(run['id'], approved=True, allow_real=row['allowReal'])
             return self._settle(row['id'], now, 'started', workflow_id=run['id'])
         except (OSError, ValueError, KeyError, PermissionError) as error:
@@ -411,11 +436,13 @@ class OffPeakQueue:
         return self._settle(row['id'], now, 'failed', error=reason, hold=True)
 
     def _settle(self, task_id, now, status, error=None, workflow_id=None, hold=False):
+        cancel_workflow_id = None
         with self._mutate() as payload:
             row = next((r for r in payload['rows'] if r.get('id') == task_id), None)
             if row is None:
                 return {'id': task_id, 'status': status, 'error': 'task removed'}
-            record = {'id': row.get('runId'), 'at': row.get('claimedAt') or now, 'status': status,
+            cancelled = row['status'] == 'cancelled'
+            record = {'id': row.get('runId'), 'at': row.get('claimedAt') or now, 'status': 'cancelled' if cancelled else status,
                       'workflowId': workflow_id or row.get('workflowId')}
             if error:
                 record['error'] = str(error)[:500]
@@ -424,17 +451,29 @@ class OffPeakQueue:
                 row['history'] = [record if item is entry else item for item in row['history']]
             else:
                 _append_history(row, record)
-            if status == 'started':
+            if cancelled:
+                # Launch/failure must not overwrite a cancellation or put the
+                # task back in the queue. Launch can race the first stop, so
+                # stop again after it returns, outside the queue file lock.
+                if workflow_id:
+                    row['workflowId'] = workflow_id
+                cancel_workflow_id = row.get('workflowId')
+                result = {'id': row['id'], 'status': 'cancelled', 'workflowId': cancel_workflow_id}
+            elif status == 'started':
                 row['workflowId'] = workflow_id
-                return {'id': row['id'], 'status': 'started', 'workflowId': workflow_id}
-            if status in ('completed', 'failed', 'cancelled'):
-                row['status'] = status
-                row['finishedAt'] = now
-            if hold:
-                window, zone = self._window_of(row)
-                row['status'] = QUEUED
-                row['holdUntil'] = next_window_open(now, window, zone)
-            return {'id': row['id'], 'status': status, 'error': record.get('error')}
+                result = {'id': row['id'], 'status': 'started', 'workflowId': workflow_id}
+            else:
+                if status in ('completed', 'failed', 'cancelled'):
+                    row['status'] = status
+                    row['finishedAt'] = now
+                if hold:
+                    window, zone = self._window_of(row)
+                    row['status'] = QUEUED
+                    row['holdUntil'] = next_window_open(now, window, zone)
+                result = {'id': row['id'], 'status': status, 'error': record.get('error')}
+        if cancel_workflow_id:
+            self._stop_workflow(cancel_workflow_id)
+        return result
 
     def _reconcile(self, row, now):
         """Fold one running task's workflow outcome back into the automation history."""
@@ -640,4 +679,3 @@ def cli(args):
         return {'settings': queue.save_settings({'window': {'start': args.start, 'end': args.end},
                                                  'timezone': args.timezone})}
     raise ValueError('unknown off-peak command')
-

@@ -19,6 +19,8 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import threading
+import time
 import unittest
 from contextlib import redirect_stderr, redirect_stdout
 from io import StringIO
@@ -26,11 +28,13 @@ from pathlib import Path
 
 from xueness import plugin_runtime
 from xueness.bundled_plugins.git import actions, turn_checkpoints
+from xueness.bundled_plugins.git.git_api import GitApiError
 from xueness.bundled_plugins.sessions import forking
 from xueness.bundled_plugins.sessions.sessions_api import dispatch as sessions_dispatch
 from xueness.core import Gate, Store, append_user_turn, run
 from xueness.tool_contract import bind_execution
 from xueness.tool_registry import dispatch
+from xueness.web import WebGate
 
 # 身份只用 -c 内联注入，避免依赖（或污染）本机全局 git 配置。
 GIT_IDENT = ("-c", "user.name=Test", "-c", "user.email=test@example.com")
@@ -198,6 +202,143 @@ class TurnCheckpointTests(unittest.TestCase):
             self.store.directory, session, self.store, tool_name="write", gate_kind="write"))
         self.assertEqual([], self._ref_subjects())
 
+    def test_denied_plan_write_does_not_create_a_checkpoint(self):
+        self._repo_with_history()
+        session = self.store.load(self.sid)
+        gate = Gate(self.repo, allow_write=True, permission_mode="plan")
+        with bind_execution(store=self.store, state_dir=self.store.directory):
+            result = dispatch(self.repo, gate, "write",
+                              {"path": "a.txt", "content": "two\n"}, session)
+        self.assertFalse(result["ok"])
+        self.assertEqual("plan_mode_denied", result["error_code"])
+        self.assertEqual([], self._records())
+        self.assertEqual([], self._ref_subjects())
+        self.assertEqual("one\n", (self.repo / "a.txt").read_text(encoding="utf-8"))
+
+    def test_pending_approval_snapshots_the_workspace_when_approved(self):
+        self._repo_with_history()
+        session = self.store.load(self.sid)
+        approvals = {}
+        gate = WebGate(self.repo, self.sid, approvals, threading.Lock(), session=session)
+
+        def invoke():
+            with bind_execution(store=self.store, state_dir=self.store.directory):
+                return dispatch(self.repo, gate, "write",
+                                {"path": "a.txt", "content": "written\n",
+                                 "_tool_call_id": "approval-call"}, session)
+
+        pending = invoke()
+        self.assertEqual("approval_required", pending["error_code"])
+        self.assertTrue(pending["awaiting_approval"])
+        self.assertEqual([], self._records())
+        self.assertEqual([], self._ref_subjects())
+
+        # These edits occur while approval is pending. The snapshot taken on
+        # approval must include them, immediately before the handler writes.
+        (self.repo / "a.txt").write_text("edited while waiting\n", encoding="utf-8")
+        approvals[self.sid] = {"write": {"approval-call": "a.txt"}}
+        approved = invoke()
+        self.assertTrue(approved["ok"], approved)
+        self.assertEqual("written\n", (self.repo / "a.txt").read_text(encoding="utf-8"))
+        self.assertEqual(1, len(self._records()))
+        self.assertEqual("edited while waiting\n",
+                         self._blob(self._hash_of(1), "a.txt"))
+
+    def test_post_authorization_observer_finishes_before_handler_mutates(self):
+        self._repo_with_history()
+        entered, release = threading.Event(), threading.Event()
+        git_plugin = plugin_runtime.entrypoint("git")
+        original = git_plugin.after_tool_authorization
+        original_timeout = plugin_runtime.TOOL_EVENT_TIMEOUT_SECONDS
+        result = []
+
+        def delayed(payload):
+            entered.set()
+            release.wait(2)
+            original(payload)
+
+        def invoke():
+            result.append(self._tool("write", {"path": "a.txt", "content": "two\n"}))
+
+        git_plugin.after_tool_authorization = delayed
+        plugin_runtime.TOOL_EVENT_TIMEOUT_SECONDS = 0.01
+        worker = threading.Thread(target=invoke)
+        try:
+            worker.start()
+            self.assertTrue(entered.wait(1), "the authorized observer did not run")
+            time.sleep(0.05)  # Longer than the observational event timeout.
+            self.assertEqual("one\n", (self.repo / "a.txt").read_text(encoding="utf-8"),
+                             "the handler ran before its checkpoint observer finished")
+        finally:
+            release.set()
+            worker.join(3)
+            git_plugin.after_tool_authorization = original
+            plugin_runtime.TOOL_EVENT_TIMEOUT_SECONDS = original_timeout
+        self.assertFalse(worker.is_alive(), "tool dispatch did not finish")
+        self.assertTrue(result[0]["ok"], result)
+        self.assertEqual("one\n", self._blob(self._hash_of(1), "a.txt"))
+
+    def test_nested_workspace_rewind_preserves_outer_staged_and_unstaged_changes(self):
+        nested = self.repo / "project"
+        nested.mkdir()
+        (self.repo / "outside.txt").write_text("outside base\n", encoding="utf-8")
+        (nested / "inside.txt").write_text("inside base\n", encoding="utf-8")
+        (nested / "delete-at-checkpoint.txt").write_text("tracked\n", encoding="utf-8")
+        self._git("init", "-q")
+        self._git("add", "-A")
+        self._git(*GIT_IDENT, "commit", "-qm", "initial")
+
+        sid = self.store.new("change nested workspace", nested)["id"]
+        (nested / "snapshot-new.txt").write_text("snapshot new\n", encoding="utf-8")
+        (nested / "delete-at-checkpoint.txt").unlink()
+        (self.repo / "outside.txt").write_text("outside staged\n", encoding="utf-8")
+        self._git("add", "outside.txt")
+        (self.repo / "outside.txt").write_text("outside unstaged\n", encoding="utf-8")
+
+        # The first authorized write creates a checkpoint of the nested root.
+        self.assertTrue(self._tool("write", {"path": "inside.txt", "content": "turn write\n"},
+                                   sid=sid)["ok"])
+        checkpoint = turn_checkpoints.records(self.store.load(sid))[0]
+        self.assertEqual("inside base\n", self._blob(checkpoint["hash"], "project/inside.txt"))
+        self.assertEqual("snapshot new\n",
+                         self._blob(checkpoint["hash"], "project/snapshot-new.txt"))
+        absent = subprocess.run(["git", *GIT_IDENT, "cat-file", "-e",
+                                 checkpoint["hash"] + ":project/delete-at-checkpoint.txt"],
+                                cwd=self.repo, capture_output=True)
+        self.assertNotEqual(0, absent.returncode)
+
+        # Mutate the scoped tree after the snapshot. Include a file unknown to
+        # the checkpoint; restore must leave it in place.
+        (nested / "inside.txt").write_text("before rewind\n", encoding="utf-8")
+        (nested / "snapshot-new.txt").write_text("new changed later\n", encoding="utf-8")
+        (nested / "delete-at-checkpoint.txt").write_text("recreated later\n", encoding="utf-8")
+        (nested / "unknown.txt").write_text("unknown\n", encoding="utf-8")
+
+        status, result = self._rewind({"latest": True, "confirmed": True}, sid)
+        self.assertEqual(200, status, result)
+        self.assertEqual("inside base\n", (nested / "inside.txt").read_text(encoding="utf-8"))
+        self.assertEqual("snapshot new\n",
+                         (nested / "snapshot-new.txt").read_text(encoding="utf-8"))
+        self.assertFalse((nested / "delete-at-checkpoint.txt").exists())
+        self.assertEqual("unknown\n", (nested / "unknown.txt").read_text(encoding="utf-8"))
+        self.assertEqual("outside unstaged\n",
+                         (self.repo / "outside.txt").read_text(encoding="utf-8"))
+        self.assertEqual("outside staged", self._git("show", ":outside.txt"))
+        self.assertIn("MM outside.txt", self._git("status", "--short"))
+
+        # The recovery checkpoint can replay the entire pre-rewind workspace
+        # state while still leaving the outer index and worktree untouched.
+        actions.restore(nested, result["recovery"]["id"])
+        self.assertEqual("before rewind\n", (nested / "inside.txt").read_text(encoding="utf-8"))
+        self.assertEqual("new changed later\n",
+                         (nested / "snapshot-new.txt").read_text(encoding="utf-8"))
+        self.assertEqual("recreated later\n",
+                         (nested / "delete-at-checkpoint.txt").read_text(encoding="utf-8"))
+        self.assertEqual("unknown\n", (nested / "unknown.txt").read_text(encoding="utf-8"))
+        self.assertEqual("outside unstaged\n",
+                         (self.repo / "outside.txt").read_text(encoding="utf-8"))
+        self.assertEqual("outside staged", self._git("show", ":outside.txt"))
+
     # -- disabling the plugin ---------------------------------------------
     def test_disabled_plugin_snapshots_nothing_and_refuses_cli_and_http(self):
         self._repo_with_history()
@@ -249,6 +390,42 @@ class TurnCheckpointTests(unittest.TestCase):
         self.assertEqual(first, result["restored"])
         self.assertEqual(1, result["turn"])
         self.assertEqual("one\n", (self.repo / "a.txt").read_text(encoding="utf-8"))
+
+    def test_restore_refuses_ignored_checkpoint_path_missing_from_recovery(self):
+        self._repo_with_history()
+        extra = self.repo / "extra.txt"
+        extra.write_text("checkpoint value\n", encoding="utf-8")
+        target = actions.checkpoint(self.repo, "Target with a new file")
+
+        # This path was added to the checkpoint but is absent from HEAD. Once
+        # ignored, a recovery checkpoint cannot capture edits to it.
+        (self.repo / ".gitignore").write_text("extra.txt\n", encoding="utf-8")
+        extra.write_text("ignored user data\n", encoding="utf-8")
+        refs_before = self._ref_subjects()
+        with self.assertRaises(GitApiError) as refused:
+            actions.restore(self.repo, target["id"])
+        self.assertEqual(409, refused.exception.status)
+        self.assertIn("Ignored files overlap", refused.exception.message)
+        self.assertEqual("ignored user data\n", extra.read_text(encoding="utf-8"))
+        self.assertEqual(refs_before, self._ref_subjects(),
+                         "a refused restore must not create a recovery ref")
+
+    def test_restore_refuses_ignored_file_force_added_after_checkpoint(self):
+        self._repo_with_history()
+        (self.repo / ".gitignore").write_text("extra.txt\n", encoding="utf-8")
+        target = actions.checkpoint(self.repo, "Target before ignored file")
+        extra = self.repo / "extra.txt"
+        extra.write_text("staged ignored value\n", encoding="utf-8")
+        self._git("add", "-f", "extra.txt")
+        extra.write_text("unstaged ignored value\n", encoding="utf-8")
+        refs_before = self._ref_subjects()
+
+        with self.assertRaises(GitApiError) as refused:
+            actions.restore(self.repo, target["id"])
+        self.assertEqual(409, refused.exception.status)
+        self.assertEqual("unstaged ignored value\n", extra.read_text(encoding="utf-8"))
+        self.assertEqual("staged ignored value", self._git("show", ":extra.txt"))
+        self.assertEqual(refs_before, self._ref_subjects())
 
     def test_rewind_refuses_without_confirmation_or_a_real_target(self):
         self._repo_with_history()

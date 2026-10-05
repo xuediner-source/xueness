@@ -48,6 +48,7 @@ export type LightweightComposerControlsProps = {
   error: string;
   onReload(): void;
   onManageModels(): void;
+  inputRef?: React.RefObject<HTMLTextAreaElement | null>;
   runtimeBudget?: WorkbenchSession['runtime_budget'];
   pauseReason?: string | null;
   disabled?: boolean;
@@ -67,6 +68,7 @@ export function LightweightComposerControls({
   error,
   onReload,
   onManageModels,
+  inputRef,
   runtimeBudget,
   pauseReason,
   disabled = false,
@@ -81,6 +83,7 @@ export function LightweightComposerControls({
     error={error}
     onReload={onReload}
     onManageModels={onManageModels}
+    inputRef={inputRef}
     contextUsage={lightweightContextUsage(runtimeBudget)}
     runtimeBudget={runtimeBudget}
     pauseReason={pauseReason}
@@ -795,6 +798,9 @@ export function LightweightComposer({
 }: LightweightComposerProps): React.JSX.Element {
   const initialText = draftStore?.current.get(draftKey)?.text ?? '';
   const [text, setTextState] = useState(initialText);
+  const [sending, setSending] = useState(false);
+  const textRevisionRef = useRef(0);
+  const sendingRef = useRef(false);
   const localInputRef = useRef<HTMLTextAreaElement | null>(null);
 
   // 历史浏览游标：null 表示不在浏览历史，数字表示浏览中的历史索引
@@ -816,6 +822,7 @@ export function LightweightComposer({
   }, [inputRef]);
 
   const updateText = useCallback((nextText: string) => {
+    textRevisionRef.current += 1;
     setTextState(nextText);
     if (draftStore && draftKey) {
       const current = draftStore.current.get(draftKey);
@@ -849,12 +856,17 @@ export function LightweightComposer({
   const isSendDisabled =
     disabled ||
     sendDisabled ||
+    sending ||
     (running ? (!queueWhenRunning || queueBusy) : false) ||
     !text.trim();
 
   const handleSend = useCallback(async () => {
     const trimmed = text.trim();
-    if (!trimmed || isSendDisabled || stopping || !onSend) return;
+    if (sendingRef.current || !trimmed || isSendDisabled || stopping || !onSend) return;
+
+    const submittedRevision = textRevisionRef.current;
+    sendingRef.current = true;
+    setSending(true);
 
     const inputData: ComposerInput = {
       attachments: [],
@@ -865,15 +877,18 @@ export function LightweightComposer({
       goal: false,
     };
 
-    updateText('');
-    setHistoryIndex(null);
-    draftBeforeHistoryRef.current = '';
-
     try {
-      await onSend(trimmed, inputData);
+      const accepted = await onSend(trimmed, inputData);
+      if (accepted !== false && textRevisionRef.current === submittedRevision) {
+        updateText('');
+        setHistoryIndex(null);
+        draftBeforeHistoryRef.current = '';
+      }
     } catch {
-      // 失败时恢复草稿
-      updateText(trimmed);
+      // Keep the exact draft as typed, including whitespace around the submitted text.
+    } finally {
+      sendingRef.current = false;
+      setSending(false);
     }
   }, [text, isSendDisabled, stopping, onSend, updateText]);
 

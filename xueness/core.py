@@ -478,6 +478,11 @@ class Gate:
         return Path(self.plan_draft.path) if self.plan_draft.matches(subject) else None
 
     def check(self, kind: str, subject: str, tool_call_id: str | None = None) -> None:
+        self._check(kind, subject, tool_call_id)
+        from .tool_contract import notify_tool_authorized
+        notify_tool_authorized(kind, subject, tool_call_id)
+
+    def _check(self, kind: str, subject: str, tool_call_id: str | None = None) -> None:
         del tool_call_id  # base gate is stateless; WebGate binds approvals to IDs.
         from .bundled_plugins.sessions.plan_mode import is_remote_exec_subject
         from .tool_registry import REGISTRY

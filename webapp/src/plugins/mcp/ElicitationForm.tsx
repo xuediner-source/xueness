@@ -66,6 +66,11 @@ function finiteNumber(value: unknown): number | null {
   return value;
 }
 
+/** Python's len(str) counts Unicode code points, while JavaScript string.length counts UTF-16 units. */
+function codePointLength(value: string): number {
+  return Array.from(value).length;
+}
+
 /** Flat 2025-06-18 schema, or null when the form must not be shown. */
 export function normalizeRequestedSchema(value: unknown): ElicitationSchema | null {
   if (!value || typeof value !== "object" || Array.isArray(value)) return null;
@@ -283,7 +288,7 @@ export function validateElicitationContent(schema: ElicitationSchema, content: u
     }
     if (spec.type === "string") {
       if (typeof value !== "string" || value.includes("\u0000")) return { ok: false, code: "type", field: name };
-      if (value.length < (spec.minLength ?? 0) || value.length > (spec.maxLength ?? MAX_STRING)) return { ok: false, code: "length", field: name };
+      if (codePointLength(value) < (spec.minLength ?? 0) || codePointLength(value) > (spec.maxLength ?? MAX_STRING)) return { ok: false, code: "length", field: name };
       if (spec.format && !formatOk(spec.format, value)) return { ok: false, code: "format", field: name };
       clean[name] = value;
       continue;
@@ -399,10 +404,16 @@ export function ElicitationForm({
           }
           const current = typeof values[name] === "string" ? values[name] : "";
           const inputType = spec.format === "email" ? "email" : spec.format === "uri" ? "url" : spec.format === "date" ? "date" : "text";
+          // Native maxlength is measured in UTF-16 units. Allow two units per code point
+          // so a valid supplementary-plane character (for example an emoji) can be entered;
+          // submit validation above enforces the exact code-point limit.
+          const nativeMaxLength = spec.maxLength === undefined
+            ? undefined
+            : Math.min(spec.maxLength * 2, 32767);
           return (
             <div key={name} className="xn-mcp-elicitation__field">
               <label htmlFor={fieldId}>{label}</label>
-              <input id={fieldId} type={inputType} inputMode={spec.type === "string" ? "text" : "decimal"} autoComplete="off" spellCheck={false} value={current} aria-required={required} aria-invalid={invalid || undefined} aria-describedby={describedBy} onChange={event => onChange(name, event.target.value)} />
+              <input id={fieldId} type={inputType} inputMode={spec.type === "string" ? "text" : "decimal"} autoComplete="off" spellCheck={false} value={current} maxLength={nativeMaxLength} aria-required={required} aria-invalid={invalid || undefined} aria-describedby={describedBy} onChange={event => onChange(name, event.target.value)} />
               {spec.description && <span id={`${fieldId}-hint`} className="xn-mcp-elicitation__hint">{spec.description}</span>}
             </div>
           );

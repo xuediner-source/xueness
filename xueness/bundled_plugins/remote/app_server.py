@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import contextlib
 import json
+import queue
 import sys
 import threading
 from pathlib import Path
@@ -260,7 +261,17 @@ class AppServer:
         }
 
     # -- the HTTP-equivalent call path --------------------------------------
+    def _owner_enabled(self):
+        try:
+            return plugin_runtime.is_enabled(self.ctx["state_dir"], "remote")
+        except (OSError, ValueError, KeyError):
+            return False
+
     def _call(self, method, path, data=None):
+        # Recheck at the execution boundary too: a turn worker can start after
+        # its request was accepted. Stop remains available for cleanup.
+        if not (method == "POST" and path.endswith("/stop")) and not self._owner_enabled():
+            return 403, {"error": "plugin disabled or dependency unavailable: remote", "plugin": "remote"}
         bridge = _Bridge(self.ctx, path)
         parts = [p for p in urlparse(path).path.split("/") if p]
         result = plugin_runtime.dispatch_http(method, parts, bridge.query,
@@ -412,16 +423,57 @@ class AppServer:
 
     # -- loop ---------------------------------------------------------------
     def serve(self, source):
-        while not self._stopping.is_set():
-            line, oversized = read_frame(source)
-            if oversized:
-                self.frames.error(None, PARSE_ERROR, _METHOD_STATUS[PARSE_ERROR],
-                                  {"reason": "frame exceeds %d bytes" % MAX_FRAME_BYTES})
-                continue
-            if not line:
-                break
-            self.handle_line(line)
-        return 0
+        # A bounded reader keeps the owner loop responsive even while a pipe
+        # has no input (including on Windows, where select cannot poll stdin).
+        # The CLI exits after serve returns; the reader never dispatches work.
+        inbox = queue.Queue(maxsize=1)
+        reader_stop = threading.Event()
+
+        def read_input():
+            while not reader_stop.is_set():
+                try:
+                    frame = (*read_frame(source), None)
+                except (OSError, ValueError) as error:
+                    frame = (b"", False, error)
+                while not reader_stop.is_set():
+                    try:
+                        inbox.put(frame, timeout=POLL_SECONDS)
+                        break
+                    except queue.Full:
+                        pass
+                if not frame[0] and not frame[1]:
+                    return
+
+        reader = threading.Thread(target=read_input, daemon=True, name="xueness-app-server-input")
+        reader.start()
+        try:
+            while not self._stopping.is_set():
+                if not self._owner_enabled():
+                    self.log("app-server: remote disabled; stopping service")
+                    self._shutdown({})
+                    break
+                try:
+                    line, oversized, error = inbox.get(timeout=POLL_SECONDS)
+                except queue.Empty:
+                    continue
+                if error is not None:
+                    self.log("app-server: input closed")
+                    break
+                if oversized:
+                    self.frames.error(None, PARSE_ERROR, _METHOD_STATUS[PARSE_ERROR],
+                                      {"reason": "frame exceeds %d bytes" % MAX_FRAME_BYTES})
+                    continue
+                if not line:
+                    break
+                self.handle_line(line)
+            return 0
+        finally:
+            reader_stop.set()
+            if not self._stopping.is_set():
+                self._shutdown({})
+            registry = self.ctx.get("plugin_scopes")
+            if registry is not None:
+                registry.dispose()
 
     def handle_line(self, line):
         try:
@@ -459,6 +511,13 @@ class AppServer:
         if handler is None:
             self.frames.error(request_id, METHOD_NOT_FOUND, _METHOD_STATUS[METHOD_NOT_FOUND],
                               {"method": method, "known": sorted(self._methods)})
+            return
+        if method not in ("shutdown", "exit", "turn/cancel") and (
+                self._stopping.is_set() or not self._owner_enabled()):
+            if not self._stopping.is_set():
+                self._shutdown({})
+            self.frames.error(request_id, REFUSED, "plugin disabled or dependency unavailable: remote",
+                              {"status": 403, "plugin": "remote"})
             return
         try:
             result = handler(params)

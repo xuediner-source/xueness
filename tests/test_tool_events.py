@@ -487,6 +487,8 @@ class ToolEventTests(unittest.TestCase):
         self.assertTrue(hooks["after"])
         self.assertFalse(git["before"])
         self.assertFalse(git["after"], "no declaration means observation only")
+        self.assertFalse(hooks["authorized"])
+        self.assertTrue(git["authorized"], "Git declares the post-Gate checkpoint observer")
         # Every effective plugin appears exactly once.
         effective = {p["id"] for p in plugin_runtime.catalog(self.store.directory)
                      if p["effective"]}
@@ -659,7 +661,8 @@ class ToolEventTests(unittest.TestCase):
                                      "priority": 3}}))
         self.assertEqual([], tool_events_field_errors(
             "hooks", {"toolEvents": {"events": ["before_tool_execution",
-                                                "after_tool_execution"]}}))
+                                                "after_tool_execution",
+                                                "after_tool_authorization"]}}))
         for bad in ({"toolEvents": []},
                     {"toolEvents": {"events": []}},
                     {"toolEvents": {"events": ["before_tool_execution"], "extra": 1}},

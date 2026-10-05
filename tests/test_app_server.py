@@ -453,6 +453,41 @@ class AppServerTests(unittest.TestCase):
         self.assertIn("remote", text)
         self.assertEqual(err.getvalue().count(b"{"), 0)
 
+    def test_existing_server_refuses_requests_after_remote_is_disabled(self):
+        output = io.BytesIO()
+        server = app_server.AppServer(self.ctx, app_server._Frames(output))
+        set_enabled(self.state, "remote", False)
+        with patch.object(app_server.plugin_runtime, 'dispatch_http') as dispatch:
+            server.handle_line(json.dumps({"jsonrpc": "2.0", "id": 601,
+                "method": "session/create", "params": {"task": "must not start", "root": str(self.root)}}).encode())
+            dispatch.assert_not_called()
+        frame = json.loads(output.getvalue())
+        self.assertEqual(frame['error']['data'], {'status': 403, 'plugin': 'remote'})
+        self.assertTrue(server._stopping.is_set())
+        self.assertEqual(server._call('POST', '/api/sessions', {'task': 'must not start'})[0], 403)
+
+    def test_disabling_remote_stops_an_idle_stdio_server(self):
+        peer = self.start()
+        peer.request('initialize', request_id=602)
+        peer.response(602)
+        set_enabled(self.state, 'remote', False)
+        self.assertFalse(peer.wait_until_stopped(), 'idle stdin prevented plugin shutdown')
+        self.assertEqual(peer.exit_code, 0)
+        self.assertIsNone(peer.error)
+
+    def test_disabling_remote_requests_stop_for_an_active_turn(self):
+        peer = self.start()
+        sid = self.create(peer, 'cancel when remote stops', 603)
+        with patch('xueness.provider_config.resolve', return_value=StallingProvider()):
+            peer.request('turn/start', {'sessionId': sid, 'text': 'read file'}, request_id=604)
+            self.assertTrue(peer.response(604)['result']['accepted'])
+            peer.collect(['turn/started'])
+            set_enabled(self.state, 'remote', False)
+            self.assertFalse(peer.wait_until_stopped(), 'active turn kept disabled server alive')
+        self.assertIsNone(peer.error)
+        session = self.ctx['store'].load(sid)
+        self.assertNotEqual(session['status'], 'running')
+
     def test_cli_exits_nonzero_when_the_plugin_is_disabled(self):
         set_enabled(self.state, "remote", False)
         env = dict(os.environ)

@@ -1430,6 +1430,7 @@ export function XuenessWorkbenchContainer() {
   const composerControls = lightweightLayout ? (
     <LightweightComposerControls
       enabled
+      inputRef={heroInputRef}
       choices={choices} onChange={updateChoices} models={composerCatalog.models}
       loading={composerCatalogLoading} error={composerCatalogError}
       onReload={() => void refreshComposerCatalog()}
@@ -1481,18 +1482,18 @@ export function XuenessWorkbenchContainer() {
   // 起始页三个动作块只接已有能力：工作区选择（sessions/settings）、克隆仓库（git）
   // 与 SSH 连接（remote）；插件未生效时对应的块不出现。
   const startPageActions: StartPageAction[] = [
-    {
+    ...(isPluginEffective("settings") && isPluginEffective("sessions") ? [{
       id: "open-project",
       label: tr("打开项目"),
       description: tr("选择一个文件夹，在其中执行任务。"),
       Icon: FolderOpen,
-      onSelect: (trigger) => {
-        if (busy || branchBusy) return;
+      onSelect: (trigger: HTMLElement) => {
+        if (busy || branchBusy || !isPluginEffective("settings") || !isPluginEffective("sessions")) return;
         workspacePickerOpener.current = trigger;
         setWorkspacePickerMode("workspace");
         setWorkspacePicking(true);
       },
-    },
+    }] : []),
     ...(isPluginEffective("git") ? [{
       id: "clone-repository",
       label: tr("克隆仓库"),
@@ -2113,6 +2114,7 @@ export function XuenessWorkbenchContainer() {
               <LightweightComposer
                 draftKey={`session:${session.id}`}
                 draftStore={composerDraftStore}
+                inputRef={heroInputRef}
                 onSend={handleSend}
                 disabled={composerDisabled || queueSubmittingSessions.has(session.id)}
                 sendDisabled={!composerModelReady || composerCatalogLoading}
@@ -2136,6 +2138,7 @@ export function XuenessWorkbenchContainer() {
             <Composer
               draftKey={`session:${session.id}`}
               draftStore={composerDraftStore}
+              inputRef={heroInputRef}
               sendShortcut={settingsValues.sendShortcut === "mod-enter" ? "mod-enter" : "enter"}
               onSend={handleSend}
               minimal={lightweightLayout}

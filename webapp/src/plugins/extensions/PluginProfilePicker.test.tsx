@@ -3,11 +3,11 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { renderToStaticMarkup } from "react-dom/server";
 import type { PluginProfileApplyResult, PluginProfileRow } from "../../xuenessApi";
+import { setLocale } from "../../i18n";
 import {
   LIGHTWEIGHT_TIER,
   PluginProfileList,
   PluginProfilePicker,
-  lightweightTierHint,
   profileChangeSummary,
 } from "./PluginProfilePicker";
 
@@ -20,25 +20,37 @@ const rows: PluginProfileRow[] = [
     enabled: ["sessions"], disabled: [], active: true },
 ];
 
-test("the lightweight hint only offers the tier while another one is selected", () => {
-  assert.equal(lightweightTierHint(rows, "standard")?.name, LIGHTWEIGHT_TIER);
-  assert.equal(lightweightTierHint(rows, LIGHTWEIGHT_TIER), null);
-  assert.equal(lightweightTierHint(rows.filter(row => row.name !== LIGHTWEIGHT_TIER), null), null);
-});
-
 test("profile rows render one affordance each and keep the selected tier inert", () => {
   const disabledCount = (markup: string) => (markup.match(/disabled=""/g) ?? []).length;
   const html = renderToStaticMarkup(<PluginProfileList profiles={rows} active="standard" busy={null} onApply={() => {}} />);
-  assert.match(html, /minimal/);
-  assert.match(html, /lightweight/);
-  assert.match(html, /继承 minimal/);
-  assert.match(html, /切换到 lightweight/);
-  assert.match(html, /未提供说明。/);
-  assert.equal((html.match(/切换到此档位/g) ?? []).length, 2);
+  assert.match(html, /精简/);
+  assert.match(html, /本地轻量/);
+  assert.match(html, /完整功能/);
+  assert.match(html, /本地模型推荐/);
+  assert.equal((html.match(/<button/g) ?? []).length, 3);
+  assert.equal((html.match(/使用此档位/g) ?? []).length, 2);
   assert.equal((html.match(/当前档位/g) ?? []).length, 1);
   assert.equal(disabledCount(html), 1);
   const loading = renderToStaticMarkup(<PluginProfileList profiles={rows} active="standard" busy={null} disabled onApply={() => {}} />);
-  assert.equal(disabledCount(loading), 4);
+  assert.equal(disabledCount(loading), 3);
+  const busy = renderToStaticMarkup(<PluginProfileList profiles={rows} active="standard" busy="minimal" onApply={() => {}} />);
+  assert.equal(disabledCount(busy), 3);
+});
+
+test("the profile selection uses the current response and custom descriptions follow the locale", () => {
+  const html = renderToStaticMarkup(<PluginProfileList profiles={rows} active="minimal" busy={null} onApply={() => {}} />);
+  assert.match(html, /class="xn-plugin-profiles__card is-current" data-profile="minimal"/);
+  assert.doesNotMatch(html, /is-current" data-profile="standard"/);
+  try {
+    setLocale("en");
+    const custom = { ...rows[0], name: "custom", source: "custom", description: "自定义说明", descriptionEn: "Custom description" };
+    const english = renderToStaticMarkup(<PluginProfileList profiles={[custom, ...rows]} active={null} busy={null} onApply={() => {}} />);
+    assert.match(english, /Custom description/);
+    assert.match(english, /Local lightweight/);
+    assert.doesNotMatch(english, /自定义说明|本地轻量|使用此档位/);
+  } finally {
+    setLocale("zh");
+  }
 });
 
 test("an applied profile reports only how many switches moved", () => {

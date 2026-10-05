@@ -21,7 +21,7 @@ def dispatch(method, parts, query, data, ctx):
     return result if result is not None else git_api.dispatch(method, parts, query, data, ctx)
 
 
-def before_tool_execution(payload):
-    """Kernel seam: snapshot the workspace once before a turn's first change."""
+def after_tool_authorization(payload):
+    """Kernel seam: snapshot only after the tool handler's Gate allows it."""
     from . import turn_checkpoints
-    turn_checkpoints.before_tool_execution(payload)
+    turn_checkpoints.after_tool_authorization(payload)

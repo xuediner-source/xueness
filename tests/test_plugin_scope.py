@@ -311,7 +311,7 @@ class RuntimeWiringTests(unittest.TestCase):
             stopped.assert_not_called()
             plugin_runtime.set_enabled(self.state, 'browser', False)
             plugin_runtime.sync_services(self.ctx)
-            stopped.assert_called_once_with(self.state)
+            stopped.assert_called_once_with(self.state.resolve())
 
     def test_catalog_separates_effective_from_activated(self):
         rows = {item['id']: item for item in plugin_runtime.catalog(self.state)}

@@ -522,7 +522,7 @@ class ListingTests(CommandFixture):
         row = self.row("shaped")
         self.assertEqual(row["source"], "project")
         self.assertEqual(row["scope"], "project")
-        self.assertEqual(Path(row["path"]), path)
+        self.assertEqual(Path(row["path"]), path.resolve())
         self.assertEqual(Path(row["rootPath"]), self.root("project").resolve())
         self.assertGreater(row["bytes"], 0)
 

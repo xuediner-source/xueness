@@ -17,6 +17,11 @@
   "capabilities": [
     "command"
   ],
+  "toolEvents": {
+    "events": [
+      "after_tool_authorization"
+    ]
+  },
   "httpFamilies": [
     "sessions/*/git",
     "git/clone"

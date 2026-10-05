@@ -89,6 +89,38 @@ def execution_context():
     return value
 
 
+def notify_tool_authorized(kind: str, subject: str,
+                          tool_call_id: str | None = None) -> None:
+    """Notify declared plugin observers after the active handler passes Gate.
+
+    The registry binds the current tool and session around the handler. This
+    seam intentionally runs only after ``Gate.check`` returns successfully, so
+    a denied or approval-pending call cannot trigger product work such as a Git
+    checkpoint. Callbacks are best-effort and never change the Gate result.
+    """
+    try:
+        context = execution_context()
+    except ValueError:
+        return  # Historical low-level Gate callers have no product event context.
+    tool_name = context.get('tool_name')
+    session = context.get('session')
+    store = context.get('store')
+    state_dir = context.get('state_dir')
+    if state_dir is None and store is not None:
+        state_dir = getattr(store, 'directory', None)
+    if (not isinstance(tool_name, str) or not tool_name
+            or not isinstance(session, dict) or store is None
+            or state_dir is None
+            or context.get('tool_gate_kind') != kind):
+        return
+    try:
+        from .plugin_runtime import after_tool_authorization
+        after_tool_authorization(state_dir, session, store, tool_name, kind,
+                                 subject, tool_call_id)
+    except Exception:  # noqa: BLE001 - observation cannot change authorization.
+        return
+
+
 class PlanModeDenied(PermissionError):
     """计划模式的政策性拒绝：原因要回传给模型，而不是只报 ``denied``。"""
 

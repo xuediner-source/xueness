@@ -186,6 +186,11 @@ class WebGate:
         return Path(self.plan_draft.path) if self.plan_draft.matches(subject) else None
 
     def check(self, kind: str, subject: str, tool_call_id: str | None = None) -> None:
+        self._check(kind, subject, tool_call_id)
+        from .tool_contract import notify_tool_authorized
+        notify_tool_authorized(kind, subject, tool_call_id)
+
+    def _check(self, kind: str, subject: str, tool_call_id: str | None = None) -> None:
         draft = self.plan_draft_target(subject) if kind in ("write", "edit") else None
         if kind in ("read", "list", "write", "edit", "glob", "grep"):
             # The session plan draft lives in the state directory by design, so

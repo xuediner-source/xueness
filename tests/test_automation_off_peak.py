@@ -10,6 +10,7 @@ import contextlib
 import json
 from pathlib import Path
 import tempfile
+import threading
 import unittest
 from unittest.mock import patch
 from zoneinfo import ZoneInfo
@@ -292,6 +293,72 @@ class OffPeakTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             self.queue().approve(row['id'], confirmed=True)
 
+    def test_cancel_during_launch_stops_the_published_workflow(self):
+        row = self.task()
+        entered, release = threading.Event(), threading.Event()
+        outcomes, errors = [], []
+
+        def blocked_launch(store, workflow_id, **kwargs):
+            entered.set()
+            if not release.wait(5):
+                raise AssertionError('launch barrier timed out')
+            return FakeLaunch(self.state)(workflow_id, **kwargs)
+
+        def tick():
+            try:
+                outcomes.extend(self.queue().tick())
+            except BaseException as error:
+                errors.append(error)
+
+        with patch.object(WorkflowStore, 'launch', blocked_launch):
+            worker = threading.Thread(target=tick)
+            worker.start()
+            try:
+                self.assertTrue(entered.wait(5))
+                cancelled = self.queue().cancel(row['id'])
+                self.assertEqual(cancelled['status'], 'cancelled')
+                self.assertIsNotNone(cancelled['workflowId'])
+            finally:
+                release.set()
+                worker.join(5)
+        self.assertFalse(worker.is_alive())
+        self.assertEqual(errors, [])
+        self.assertEqual(self.statuses(outcomes), ['cancelled'])
+        final = self.queue().get(row['id'])
+        self.assertEqual(final['status'], 'cancelled')
+        self.assertEqual(WorkflowStore(self.state).load(final['workflowId'])['status'], 'stopping')
+        self.assertEqual(self.queue().tick(), [])
+
+    def test_cancel_during_create_never_launches_the_workflow(self):
+        row = self.task()
+        create = WorkflowStore.create
+
+        def cancelling_create(store, *args, **kwargs):
+            run = create(store, *args, **kwargs)
+            self.queue().cancel(row['id'])
+            return run
+
+        with patch.object(WorkflowStore, 'create', cancelling_create), patch.object(WorkflowStore, 'launch') as launch:
+            self.assertEqual(self.statuses(self.queue().tick()), ['cancelled'])
+            launch.assert_not_called()
+        final = self.queue().get(row['id'])
+        self.assertEqual(final['status'], 'cancelled')
+        self.assertEqual(WorkflowStore(self.state).load(final['workflowId'])['status'], 'cancelled')
+
+    def test_launch_failure_cannot_requeue_a_cancelled_task(self):
+        row = self.task()
+
+        def cancelled_failure(store, workflow_id, **kwargs):
+            self.queue().cancel(row['id'])
+            raise OSError('launch failed after cancellation')
+
+        with patch.object(WorkflowStore, 'launch', cancelled_failure):
+            self.assertEqual(self.statuses(self.queue().tick()), ['cancelled'])
+        final = self.queue().get(row['id'])
+        self.assertEqual(final['status'], 'cancelled')
+        self.assertIsNone(final['holdUntil'])
+        self.assertEqual(self.queue().tick(), [])
+
     def test_run_now_skips_the_window_but_never_the_gates(self):
         waiting = self.task(confirm=False)
         held = self.queue(now=at(15)).run_now(waiting['id'])
@@ -430,7 +497,7 @@ class OffPeakTests(unittest.TestCase):
             self.assertTrue(queued['ok'], queued)
             self.assertEqual(queued['queuePosition'], 1)
         row = self.queue().list()[0]
-        self.assertEqual(row['root'], str(self.root))
+        self.assertEqual(row['root'], str(self.root.resolve()))
         self.assertEqual(row['prompt'], '整理日志')
         self.assertFalse(row['approved'])
         self.assertEqual(row['status'], 'queued')

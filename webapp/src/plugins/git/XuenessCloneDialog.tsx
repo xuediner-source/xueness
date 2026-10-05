@@ -67,6 +67,7 @@ export function XuenessCloneDialog({
   const urlRef = useRef<HTMLInputElement | null>(null);
   const [url, setUrl] = useState("");
   const [dest, setDest] = useState("");
+  const [parentDirectory, setParentDirectory] = useState(defaultParent ?? "");
   const [pinnedDest, setPinnedDest] = useState(false);
   const [confirmed, setConfirmed] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -81,7 +82,7 @@ export function XuenessCloneDialog({
     current.mounted = true;
     const generation = ++current.generation;
     if (!open) return () => { current.mounted = false; current.generation += 1; };
-    setUrl(""); setDest(""); setPinnedDest(false); setConfirmed(false);
+    setUrl(""); setDest(""); setParentDirectory(defaultParent ?? ""); setPinnedDest(false); setConfirmed(false);
     setBusy(false); setError(""); setPickerAvailable(false);
     void loadNativeWorkspacePicker().then(capability => {
       if (current.mounted && current.generation === generation) setPickerAvailable(capability.available);
@@ -92,8 +93,8 @@ export function XuenessCloneDialog({
   // The suggested destination follows the remote until the operator edits it.
   useEffect(() => {
     if (pinnedDest) return;
-    setDest(cloneDestination(defaultParent, url));
-  }, [defaultParent, pinnedDest, url]);
+    setDest(cloneDestination(parentDirectory, url));
+  }, [parentDirectory, pinnedDest, url]);
 
   if (!open) return null;
 
@@ -103,21 +104,25 @@ export function XuenessCloneDialog({
     setBusy(true); setError("");
     const generation = lifecycle.current.generation;
     try {
-      const picked = await chooseNativeWorkspace(defaultParent);
+      const picked = await chooseNativeWorkspace(parentDirectory || defaultParent);
       if (isCurrent() && lifecycle.current.generation === generation && !picked.cancelled) {
-        const name = repositoryNameFromUrl(url);
-        setPinnedDest(true);
-        setDest(name ? joinWorkspacePath(picked.root, name) : picked.root);
+        setPinnedDest(false);
+        setParentDirectory(picked.root);
       }
     } catch (reason) {
-      if (isCurrent()) setError(reason instanceof Error ? reason.message : String(reason));
-    } finally { setBusy(false); }
+      if (isCurrent() && lifecycle.current.generation === generation) {
+        setError(reason instanceof Error ? reason.message : String(reason));
+      }
+    } finally {
+      if (isCurrent() && lifecycle.current.generation === generation) setBusy(false);
+    }
   };
   const submit = async () => {
     if (busy) return;
     setBusy(true); setError("");
+    const generation = lifecycle.current.generation;
     const result = await cloneGitRepository(url.trim(), dest.trim());
-    if (!isCurrent()) return;
+    if (!isCurrent() || lifecycle.current.generation !== generation) return;
     if (!result.ok) { setBusy(false); setError(result.error); return; }
     onCloned(result.value.root);
   };

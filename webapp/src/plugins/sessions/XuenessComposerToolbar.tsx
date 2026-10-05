@@ -30,6 +30,8 @@ export type ComposerToolbarProps = {
   pauseReason?: string | null;
   onOpenUsage?: () => void;
   disabled?: boolean;
+  /** Actual composer input to focus after a menu selection, when the caller has one. */
+  inputRef?: React.RefObject<HTMLTextAreaElement | null>;
   /**
    * Minimal chrome for the lightweight local profile (owned by the providers
    * plugin): the model trigger (with its runtime-profile menu) and the context
@@ -60,10 +62,6 @@ const permissionChoices = PERMISSION_DISPLAY_ORDER.map((value) => ({
   value,
   ...permissionChoiceMeta[value],
 }));
-
-function focusComposerInput(): void {
-  document.querySelector<HTMLTextAreaElement>("textarea.xn-composer__input")?.focus();
-}
 
 /** Wrap-aware movement for menu rows; exported so SSR tests can assert it. */
 export function nextIndex(current: number, length: number, key: "ArrowDown" | "ArrowUp" | "Home" | "End"): number {
@@ -666,6 +664,7 @@ export function XuenessComposerToolbar({
   onOpenUsage,
   disabled = false,
   minimal = false,
+  inputRef,
 }: ComposerToolbarProps) {
   const [modeMenuOpen, setModeMenuOpen] = useState(false);
   const [modelMenuOpen, setModelMenuOpen] = useState(false);
@@ -675,6 +674,24 @@ export function XuenessComposerToolbar({
   const modelMenuRef = useRef<HTMLDivElement | null>(null);
   const modeTriggerRef = useRef<HTMLButtonElement | null>(null);
   const modelTriggerRef = useRef<HTMLButtonElement | null>(null);
+  const focusFrameRef = useRef<number | null>(null);
+
+  useEffect(() => () => {
+    if (focusFrameRef.current !== null) cancelAnimationFrame(focusFrameRef.current);
+  }, []);
+
+  const focusComposerInput = () => {
+    if (focusFrameRef.current !== null) cancelAnimationFrame(focusFrameRef.current);
+    focusFrameRef.current = requestAnimationFrame(() => {
+      focusFrameRef.current = null;
+      if (inputRef) {
+        const input = inputRef.current;
+        if (input?.isConnected) input.focus();
+        return;
+      }
+      document.querySelector<HTMLTextAreaElement>("textarea.xn-composer__input")?.focus();
+    });
+  };
 
   const selectedModel = models.find((model) => model.id === (choices.provider_id ?? ""))
     ?? (choices.model ? models.find((model) => model.model === choices.model) : undefined);
@@ -695,11 +712,11 @@ export function XuenessComposerToolbar({
 
   const closeModeMenu = (restoreInput = false) => {
     setModeMenuOpen(false);
-    if (restoreInput) requestAnimationFrame(focusComposerInput);
+    if (restoreInput) focusComposerInput();
   };
   const closeModelMenu = (restoreInput = false) => {
     setModelMenuOpen(false);
-    if (restoreInput) requestAnimationFrame(focusComposerInput);
+    if (restoreInput) focusComposerInput();
   };
   const chooseModel = (model: ComposerModel) => {
     onChange({

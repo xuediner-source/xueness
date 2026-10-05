@@ -36,6 +36,12 @@ export type SubagentSidePaneProps = {
   fetchTasksFn?: (sessionId: string, signal?: AbortSignal) => Promise<{ tasks: SubagentTaskItem[] }>;
 };
 
+type SubagentRequestScope = {
+  sessionId: string;
+  controller: AbortController;
+  requestGeneration: number;
+};
+
 export function formatTaskDuration(startedAt?: number | null, endedAt?: number | null): string {
   if (!startedAt || typeof startedAt !== "number" || startedAt <= 0) return "-";
   const end = typeof endedAt === "number" && endedAt > 0 ? endedAt : Date.now() / 1000;
@@ -83,6 +89,19 @@ export function SubagentSidePane({
   const [cancellingId, setCancellingId] = useState<string | null>(null);
   const [expandedIds, setExpandedIds] = useState<Set<string>>(() => new Set());
   const initialLoadDone = useRef(false);
+  const requestScope = useRef<SubagentRequestScope | null>(null);
+  const latestProps = useRef({ sessionId, isOpen, isLightweight, subagentsEnabled });
+  latestProps.current = { sessionId, isOpen, isLightweight, subagentsEnabled };
+
+  const isScopeCurrent = useCallback((scope: SubagentRequestScope) => {
+    const latest = latestProps.current;
+    return requestScope.current === scope
+      && !scope.controller.signal.aborted
+      && latest.sessionId === scope.sessionId
+      && latest.isOpen
+      && !latest.isLightweight
+      && latest.subagentsEnabled;
+  }, []);
 
   const toggleExpand = useCallback((id: string) => {
     setExpandedIds(prev => {
@@ -94,67 +113,87 @@ export function SubagentSidePane({
   }, []);
 
   const loadTasks = useCallback(
-    async (showLoadingSpinner = false, signal?: AbortSignal) => {
-      if (!sessionId || isLightweight || !subagentsEnabled) return;
+    async (showLoadingSpinner = false) => {
+      const scope = requestScope.current;
+      if (!scope || !isScopeCurrent(scope)) return;
+      // A newer refresh in the same session supersedes this response too.
+      const requestGeneration = ++scope.requestGeneration;
+      const requestSignal = scope.controller.signal;
       try {
         if (showLoadingSpinner) {
           setLoading(true);
         }
         setError(null);
         const data = fetchTasksFn
-          ? await fetchTasksFn(sessionId, signal)
-          : await get<{ tasks: SubagentTaskItem[] }>(`/api/sessions/${encodeURIComponent(sessionId)}/tasks`, signal);
-        setTasks(Array.isArray(data.tasks) ? data.tasks : []);
+          ? await fetchTasksFn(scope.sessionId, requestSignal)
+          : await get<{ tasks: SubagentTaskItem[] }>(`/api/sessions/${encodeURIComponent(scope.sessionId)}/tasks`, requestSignal);
+        if (isScopeCurrent(scope) && scope.requestGeneration === requestGeneration) {
+          setTasks(Array.isArray(data.tasks) ? data.tasks : []);
+        }
       } catch (err: unknown) {
-        if (signal?.aborted) return;
-        const msg = err instanceof Error ? err.message : String(err);
-        setError(msg);
+        if (isScopeCurrent(scope) && scope.requestGeneration === requestGeneration) {
+          const msg = err instanceof Error ? err.message : String(err);
+          setError(msg);
+        }
       } finally {
-        if (!signal?.aborted && showLoadingSpinner) {
+        if (isScopeCurrent(scope) && scope.requestGeneration === requestGeneration) {
           setLoading(false);
         }
       }
     },
-    [sessionId, isLightweight, subagentsEnabled, fetchTasksFn],
+    [fetchTasksFn, isScopeCurrent],
   );
 
   const handleCancel = useCallback(
     async (taskId: string) => {
-      if (!sessionId) return;
+      const scope = requestScope.current;
+      if (!scope || !isScopeCurrent(scope)) return;
       setCancellingId(taskId);
       try {
         if (onCancel) {
           await onCancel(taskId);
         } else {
-          await post<{ stopping: boolean }>(`/api/sessions/${encodeURIComponent(sessionId)}/stop`, {});
+          await post<{ stopping: boolean }>(`/api/sessions/${encodeURIComponent(scope.sessionId)}/stop`, {});
         }
-        await loadTasks(false);
+        if (isScopeCurrent(scope)) await loadTasks(false);
       } catch (err: unknown) {
-        const msg = err instanceof Error ? err.message : String(err);
-        setError(msg);
+        if (isScopeCurrent(scope)) {
+          const msg = err instanceof Error ? err.message : String(err);
+          setError(msg);
+        }
       } finally {
-        setCancellingId(null);
+        if (isScopeCurrent(scope)) setCancellingId(null);
       }
     },
-    [sessionId, onCancel, loadTasks],
+    [isScopeCurrent, onCancel, loadTasks],
   );
 
   useEffect(() => {
     setTasks(initialTasks ?? []);
     setError(null);
+    setLoading(false);
+    setCancellingId(null);
     setExpandedIds(new Set());
     initialLoadDone.current = false;
   }, [sessionId, initialTasks]);
 
   useEffect(() => {
     if (isLightweight || !isOpen || !sessionId || !subagentsEnabled) {
+      initialLoadDone.current = false;
+      setLoading(false);
+      setCancellingId(null);
       return;
     }
 
-    const controller = new AbortController();
+    const scope: SubagentRequestScope = {
+      sessionId,
+      controller: new AbortController(),
+      requestGeneration: 0,
+    };
+    requestScope.current = scope;
     const shouldShowSpinner = !initialLoadDone.current;
     initialLoadDone.current = true;
-    void loadTasks(shouldShowSpinner, controller.signal);
+    void loadTasks(shouldShowSpinner);
 
     const stop = startSessionPolling({
       refresh: () => loadTasks(false),
@@ -163,7 +202,8 @@ export function SubagentSidePane({
     });
 
     return () => {
-      controller.abort();
+      if (requestScope.current === scope) requestScope.current = null;
+      scope.controller.abort();
       stop();
     };
   }, [isLightweight, isOpen, sessionId, subagentsEnabled, pollIntervalMs, loadTasks]);
