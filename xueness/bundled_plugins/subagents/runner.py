@@ -71,6 +71,7 @@ def run_subagent(gate, provider, agents, prompt, agent_name, *, depth: int,
         SUBAGENT_DENIED_TOOL_NAMES,
         agent_tool_allowlist,
         build_system_prompt,
+        normalize_disallowed_tools,
         provider_for_agent,
         provider_with_agent_tools,
         select as select_agent,
@@ -124,8 +125,12 @@ def run_subagent(gate, provider, agents, prompt, agent_name, *, depth: int,
                 parent_disallowed.update(values)
             except TypeError:
                 pass
+    agent_disallowed = set()
+    if isinstance(agent, dict):
+        disallowed = agent.get("disallowedTools") or agent.get("disallowed_tools") or ()
+        agent_disallowed = normalize_disallowed_tools(disallowed)
     child_provider = provider_with_agent_tools(
-        child_provider, agent, denied=parent_disallowed,
+        child_provider, agent, denied=parent_disallowed | agent_disallowed,
         parent_allowed=getattr(gate, "allowed_tool_names", None),
     )
     _assign_subagent_request_deadline(provider, child_provider)
@@ -183,8 +188,12 @@ def run_subagent(gate, provider, agents, prompt, agent_name, *, depth: int,
                 parent_allowed if read_only.allowed_tool_names is None
                 else read_only.allowed_tool_names.intersection(parent_allowed)
             )
+        if read_only.allowed_tool_names is not None and agent_disallowed:
+            read_only.allowed_tool_names = read_only.allowed_tool_names - agent_disallowed
         # These planning tools persist workflow state; exclude them for child runs.
-        read_only.denied_tool_names = SUBAGENT_DENIED_TOOL_NAMES | frozenset(parent_disallowed)
+        read_only.denied_tool_names = (
+            SUBAGENT_DENIED_TOOL_NAMES | frozenset(parent_disallowed) | frozenset(agent_disallowed)
+        )
         if not _cancelled():
             run_fn(child, _NullStore(state_dir), child_provider, read_only,
                    max_steps=max_steps, max_chars=max_chars, depth=depth + 1,

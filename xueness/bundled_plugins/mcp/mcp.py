@@ -237,6 +237,17 @@ def parse_namespaced(name):
     return None
 
 
+def sanitize_mcp_name_part(name: str) -> str:
+    """Sanitize name to match [A-Za-z0-9._-]{1,64}, matching ZCode toModelVisibleMcpNamePart."""
+    if not isinstance(name, str) or not name.strip():
+        return "unnamed"
+    sanitized = re.sub(r"[^A-Za-z0-9._-]", "_", name.strip())
+    sanitized = re.sub(r"_+", "_", sanitized)
+    if not sanitized or sanitized in RESERVED_NAMES:
+        return "tool"
+    return sanitized[:64]
+
+
 def tool_schema(server_id, tool) -> dict:
     """An OpenAI function schema for one tool of ``server_id``.
 
@@ -248,6 +259,8 @@ def tool_schema(server_id, tool) -> dict:
     name = item.get("name")
     if not isinstance(name, str) or not name.strip():
         name = "unnamed"
+    else:
+        name = sanitize_mcp_name_part(name)
     description = item.get("description")
     if not isinstance(description, str):
         description = ""
@@ -265,16 +278,28 @@ def tool_schema(server_id, tool) -> dict:
 
 
 def _extract_text(content) -> str:
-    """Join the ``text`` of every ``type == "text"`` content item."""
+    """Join the text of content items."""
+    if isinstance(content, str):
+        return content
     if not isinstance(content, list):
         return ""
     parts = []
     for item in content:
-        if not isinstance(item, dict) or item.get("type") != "text":
+        if not isinstance(item, dict):
             continue
-        text = item.get("text")
-        if isinstance(text, str):
-            parts.append(text)
+        itype = item.get("type")
+        if itype == "text":
+            text = item.get("text")
+            if isinstance(text, str):
+                parts.append(text)
+        elif itype == "resource":
+            res = item.get("resource")
+            if isinstance(res, dict):
+                res_text = res.get("text")
+                if isinstance(res_text, str):
+                    parts.append(res_text)
+                else:
+                    parts.append("MCP resource: " + json.dumps(res, ensure_ascii=False))
     return "\n".join(parts)
 
 
@@ -667,7 +692,14 @@ class McpClient:
         except Exception as exc:  # noqa: BLE001 - a failed call must not break a run
             self.error = self._error_with_cleanup(_fail_text(exc))
             return {"ok": False, "content": "", "error": self.error}
-        text = clip(_extract_text(result.get("content")), self.output_cap)
+        raw_text = _extract_text(result.get("content"))
+        structured = result.get("structuredContent")
+        if structured is not None and isinstance(structured, (dict, list)) and len(structured) > 0:
+            structured_text = "Structured content:\n" + json.dumps(structured, ensure_ascii=False, indent=2)
+            text = (raw_text + "\n\n" + structured_text) if raw_text else structured_text
+        else:
+            text = raw_text
+        text = clip(text, self.output_cap)
         if result.get("isError") is True:
             return {"ok": False, "content": "", "error": text}
         return {"ok": True, "content": text, "error": None}

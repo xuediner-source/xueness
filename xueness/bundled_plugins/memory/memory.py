@@ -54,6 +54,8 @@ _TIME_PREFIX = re.compile(r"^\[(\d{4}-\d{2}-\d{2})\]\s*")
 _GIT_PREFIX = re.compile(r"^\[git ([^\]]+)\]\s*")
 _BRANCH_PREFIX = re.compile(r"^\[branch:[^\]]*\]\s*")
 _BULLET_PREFIX = re.compile(r"^\s*[-*]\s+")
+_FRONTMATTER_PATTERN = re.compile(r"^---\s*\r?\n[\s\S]*?---\s*\r?\n?")
+_HTML_COMMENT_PATTERN = re.compile(r"<!--[\s\S]*?-->")
 
 
 def project_hash(cwd: str) -> str:
@@ -71,6 +73,8 @@ def clip(text: str, max_chars: int) -> str:
 
 def _strip_entry_head(entry: str) -> str:
     rest = entry.strip()
+    rest = _FRONTMATTER_PATTERN.sub("", rest).strip()
+    rest = _HTML_COMMENT_PATTERN.sub("", rest).strip()
     for pattern in (_ID_PREFIX, _TIME_PREFIX, _BRANCH_PREFIX):
         match = pattern.match(rest)
         if match:

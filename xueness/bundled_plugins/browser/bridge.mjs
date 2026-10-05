@@ -107,7 +107,9 @@ async function act(command) {
   } else if (command.action === 'fill') {
     await page.locator(command.selector).first().fill(command.text);
   } else if (command.action === 'screenshot') {
-    await page.screenshot({ path: command.output, fullPage: false });
+    if (command.output) {
+      await page.screenshot({ path: command.output, fullPage: false });
+    }
   }
   const current = page.url();
   if (await publicHttps(current)) {

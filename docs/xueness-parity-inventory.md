@@ -2,6 +2,8 @@
 
 > **当前实现入口（2026-09-30）**：[设置、工作区与旧壳移除](xueness-settings-workspaces.md) 和 [插件架构说明](xueness-plugin-architecture.md)。下文引用的 vendor 路径与旧表数字为历史审查快照；旧机壳已移除，不再作为当前代码路径或完整对齐声明。
 
+> 2026-10-05：四大核心能力（#21 记忆、#11 MCP、#22 浏览器、#18 子代理）对照 ZCode 开源版已完成回归审查与安全微补齐，详见 [审查报告](xueness-parity-audit-memory-mcp-browser-subagents.md) 与文末 §10。
+
 > 2026-09-30：第十八批已补本轮四项与扩展界面，当前范围及限制见 [四项功能说明](xueness-four-workstreams.md)。
 
 > 2026-09-29：本表是旧版本的 Web 能力快照，后续补齐情况见文末各批次与路线图，不能将旧行直接当成现状。产品主线已明确为自用 Agent CLI；上游 `29628c9a` 的新增差距及 CLI 验收维度另见 `zcode-upstream-2026-09-29.md`。此前「CLI 与 Web 全部拉平」仅是当批命令覆盖总结，不代表完整功能对齐。
@@ -242,3 +244,36 @@ typecheck 0 错、`vite build` 通过、线上容器 healthy，全部实跑。
 
 证据：`xueness-ui-comparison.md` §九（`native-batch10-*.png`）；验收 Python **791 OK**、
 前端 **217 pass**、typecheck 0 错、容器 healthy（内置 git 2.47.3）。
+
+## 10. 2026-10-05 回归一致性复查：记忆、MCP、浏览器、子代理（四大核心插件）深度对齐
+
+本轮对照 ZCode 开源版（`apps/zcode-cli/packages/core/src/`）对四大核心插件（#21 记忆、#11 MCP、#22 浏览器、#18 子代理）进行了完整回归审查与安全微补齐，详见 [四大核心能力回归一致性审查报告](xueness-parity-audit-memory-mcp-browser-subagents.md)。
+
+本次在遵循 AGENTS.md 插件架构、不放松安全边界、不侵入内核的前提下，在对应插件内直接完成 4 项微补齐：
+
+1. **#21 记忆（Memory）**：
+   - 对齐 ZCode `stripTopLevelMarkdownHtmlComments` 与 `formatProjectMemoryIndexContent` 规范，在 `xueness/bundled_plugins/memory/memory.py` 的 `_strip_entry_head` 中补齐了 YAML frontmatter（`^---\s*\r?\n[\s\S]*?---\s*\r?\n?`，支持 LF 与 CRLF）和 HTML 注释（`<!-- ... -->`）的过滤清洗。
+   - 保证带元数据或注释的 Markdown 记忆条目被安全载入，纯注释/空项自动丢弃，不污染模型上下文并不浪费上下文预算。
+   - 对应测试：`tests/test_parity_memory.py`（6 项测试全部通过）。
+
+2. **#11 MCP 管理（MCP）**：
+   - 对齐 ZCode `toModelVisibleMcpNamePart` 命名规范，在 `xueness/bundled_plugins/mcp/mcp.py` 中引入 `sanitize_mcp_name_part`，将包含冒号 `:`、斜杠 `/`、空格等非字母数字字符规范化为下划线并保留合法下划线防止命名碰撞，并在 `McpPlugin` 中维护 `tool_name_map` 映射字典，派发工具调用时准确还原为 MCP 服务端原始工具名称；增强重连类型防卫。
+   - 对齐 ZCode `formatContentBlock` 与 `formatMcpToolResult`，在 `_extract_text` 中支持 `type == "resource"` 内嵌文本提取与非文本元数据序列化，并在 `call_tool` 中支持结果附带的 `structuredContent` 自动 JSON 序列化并追加至返回文本。
+   - 对应测试：`tests/test_parity_mcp.py`（5 项测试全部通过）。
+
+3. **#18 子代理与 Agent 策略（Subagents）**：
+   - 对齐 ZCode `createBuiltInGeneralPurposeAgentProfile` 与 `createBuiltInExploreAgentProfile`，在 `xueness/bundled_plugins/subagents/subagents.py` 的 `select()` 中加入内置 `general-purpose`（全工具可用）与 `explore`（只读代码检索工具）回退 Profile，用户自定义 Profile 具备最高优先级覆盖（支持大小写无缝命中），无需额外配置即可开箱即用派发标准子代理任务。
+   - 对齐 ZCode `filterSubagentChildToolNames` 的 `disallowedTools` 机制，在 `provider_with_agent_tools` 及 `runner.py` 的 Gate 门禁中支持 `disallowedTools` / `disallowed_tools` 黑名单，支持参数剥离（`Bash(git *)` 等）及大小写/别名归一化，支持 PascalCase 工具白名单匹配，从模型 Provider 工具注入与运行时执行门禁两层严格拦截禁用工具。
+   - 对应测试：`tests/test_parity_subagents.py`（8 项测试全部通过）。
+
+4. **#22 浏览器与 CUA（Browser-Use）**：
+   - 针对 Playwright 桥接脚本 `xueness/bundled_plugins/browser/bridge.mjs`，对 `browser_screenshot` 命令中写入文件的逻辑追加 `if (command.output)` 卫兵，消除未指定输出路径时的冗余截图动作与开销。
+   - 明确 Xueness 与 ZCode 在浏览器自动化上的差异：Xueness 坚持基于语义选择器的 Web 审查与受限 HTTPS 导航（Gate 逐动作审批 + SSRF 防御），有意不做 ZCode 的低级像素拖拽/坐标点击（CUA），保持稳健性与安全性。
+   - 对应测试：`tests/test_parity_browser.py`（5 项测试全部通过）。
+
+### 自动化验证与门禁
+- 架构完整性门禁：`python3 tools/check_plugin_architecture.py` 通过。
+- 架构单测：`python3 -m unittest tests.test_plugin_architecture -q` 通过。
+- 四大专项测试：`python3 -m unittest tests.test_parity_memory tests.test_parity_mcp tests.test_parity_subagents tests.test_parity_browser -q` (24 OK)。
+- 四大领域既有测试回归：`python3 -m unittest tests.test_memory tests.test_mcp tests.test_subagents tests.test_browser -q` (206 OK, 7 skipped)。
+
