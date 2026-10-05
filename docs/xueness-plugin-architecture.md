@@ -79,7 +79,7 @@ flowchart LR
 | automation | 时区 cron、批准后的无人值守计划、历史 | workflows | 开 |
 | extensions | manifest 市场浏览/安装/升级 | — | 开 |
 | diagnostics | 脱敏诊断导出、状态存储统计、限定日志清理 | — | 开 |
-| browser | Playwright 持久页面与精确动作批准 | files | **关** |
+| browser | Playwright 持久页面、精确动作批准与只读无障碍树快照 | files | **关** |
 | remote | 命名 SSH 连接和字面 argv 执行 | — | **关** |
 | bots | Telegram 白名单收件箱和明确回复 | sessions | **关** |
 | onboarding | 隐藏密钥输入的配置向导 | providers | 开 |
@@ -176,7 +176,7 @@ providers 的 CLI parser/handler 已迁入 `xueness/bundled_plugins/providers/op
 
 ## 功能逐项归属清单
 
-下表概述当前 27 份 manifest 中的 131 项用户能力。命令/工具/依赖和实际实现文件以同一份 manifest 为准；前端卡片直接展示该功能清单，不维护第二份隐藏列表。纯安全内核与通用布局的边界如前文所述。
+下表概述当前 27 份 manifest 中的 132 项用户能力。命令/工具/依赖和实际实现文件以同一份 manifest 为准；前端卡片直接展示该功能清单，不维护第二份隐藏列表。纯安全内核与通用布局的边界如前文所述。
 
 | 插件 | 已实现的用户能力 |
 |---|---|
@@ -201,7 +201,7 @@ providers 的 CLI parser/handler 已迁入 `xueness/bundled_plugins/providers/op
 | automation | 五字段 cron、时区与下次执行；计划审批与无人值守触发；持久认领、运行历史与暂停；闲时队列：本地低峰窗口排队执行、仅在空闲时与完成通知 |
 | extensions | 可信资源清单市场浏览；数据 manifest 安装、升级与移除；插件市场清单只读校验与原子升级；插件组合 profile 档位 |
 | diagnostics | 脱敏支持诊断导出；状态存储统计与限定日志清理；实时本机 CPU、内存与磁盘采样 |
-| browser | 受审批约束的页面导航与检查；精确点击、输入与内存截图（冗余输出动作裁剪）；浏览器控制配置与生命周期清理；桌面 Chrome 资料选择、确认导入与持久浏览器环境检测 |
+| browser | 受审批约束的页面导航与检查；页面无障碍树快照（role、name、可交互元素 ref、层级缩进，超限标注截断）；精确点击、输入与内存截图（冗余输出动作裁剪）；浏览器控制配置与生命周期清理；桌面 Chrome 资料选择、确认导入与持久浏览器环境检测 |
 | remote | 命名 SSH 主机连接配置；明确批准的远程 argv 执行；stdio JSON-RPC app-server 入口 |
 | bots | Telegram 白名单收件箱；明确批准的消息回复 |
 | onboarding | 模型与工作区初次配置向导；隐藏密钥输入与配置保存 |
@@ -541,3 +541,11 @@ hooks 插件登记新功能 `hooks.workspace_trust`（工作区钩子发现与�
 ### 门禁与回归
 
 `tools/check_plugin_architecture.py` 以纯 JSON 校验新增 manifest 数据（`commands` 唯一属主、`modules` 与实际文件一致、双语 feature 条目）。回归见 `tests/test_workspace_hook_trust.py`：功能默认关闭时不读工作区文件（含符号链接文件不产生诊断的强证明）、发现与坏条目诊断、四类链接拒绝（目录链接、文件链接、越界 resolve、信任存储链接判 corrupt）、摘要稳定性与内容一改即变（命令/matcher/位置）、未信任钩子不运行且记录 pending_trust、已信任才运行（`sys.executable -c` 写 tempfile 标记的真实子进程）、grant 单条与 `--all-current`（bundle 摘要不匹配被拒）、revoke 单条与 `--all`、信任存储损坏时 status/grant/revoke 一致报告且隔离文件可重建、CLI `--json` 输出与插件关闭时非零退出且 stdout 为空、用户钩子行为回归不变（合并顺序用户在前、管线缝兼容）。全部使用 tempfile 隔离的状态目录与工作区，不访问网络、不调用真实模型。
+
+## 页面无障碍树快照（2026-10-05）
+
+browser 插件新增 `browser.snapshot`，完整目录现为 **27 个插件、132 项登记功能**。只读工具 `browser_snapshot` 与 `browser_inspect` 同为 `exec` 门、`mutating=false`：计划模式与其它既有 exec 策略对二者一视同仁，没有新的权限种类，也没有改计划模式或轻量档的提示词和工具上限。
+
+实现留在 browser 包内。`bridge.mjs` 对当前公网 HTTPS 页调用 Playwright `ariaSnapshotJSON({ mode: "ai" })`，不执行模型提供的脚本，也不新增 `eval`、动态导入或子进程。返回前按与 `snapshot.py` 相同的上限裁剪节点（最多 200 个、深度 24、名称 120 字符，扫描不超过 5000）。`snapshot.py` 再格式化为缩进树：每行是 role、可访问名称，可交互元素带稳定 ref（`eN`，iframe 内为 `f<序号>eN`），并在超出节点或 12000 字符上限时于树末标注截断。页面内容标为 `untrusted`。
+
+既有 `browser_click` / `browser_fill` 仍只收 `selector`。Playwright 在 AI 快照时把可交互元素登记到 `aria-ref` 选择器，因此 selector 写 `aria-ref=<ref>` 就能点到或填入该节点，直到下一次快照或导航。这不是新的动作参数，也不放宽选择器长度、批准或公网 HTTPS 限制。ZCode 快照里的整页 DOM、xpath、矩形和属性清单没有做。

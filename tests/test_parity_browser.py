@@ -1,7 +1,7 @@
 """Parity regression tests for browser-use plugin (matching ZCode core/src/browser-client).
 
 Tests that:
-1. Tool registry exposes exactly the 5 approved tools with correct approval subjects.
+1. Tool registry exposes exactly the approved browser tools with correct approval subjects.
 2. Bridge script checks command actions and guards file screenshots.
 3. Managed profile adheres to filesystem jail and link rejection.
 """
@@ -22,6 +22,7 @@ class ParityBrowserTests(unittest.TestCase):
             [
                 "browser_navigate",
                 "browser_inspect",
+                "browser_snapshot",
                 "browser_click",
                 "browser_fill",
                 "browser_screenshot",
@@ -33,6 +34,9 @@ class ParityBrowserTests(unittest.TestCase):
             # click and fill require approval on the prompt and are mutating
             if tool.name in ("browser_click", "browser_fill"):
                 self.assertTrue(tool.mutating)
+            if tool.name in ("browser_inspect", "browser_snapshot"):
+                self.assertFalse(tool.mutating)
+                self.assertEqual(tool.gate_kind, "exec")
 
     def test_subject_canonical_json(self):
         subj = _subject({"action": "navigate", "url": "https://example.com"})

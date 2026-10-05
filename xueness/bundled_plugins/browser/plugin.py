@@ -14,6 +14,7 @@ import threading
 
 from ...tool_contract import BuiltinTool, execution_context
 from ...resources import _protect_private_directory
+from .snapshot import format_snapshot
 
 MAX_REQUEST = 100_000
 MAX_RESPONSE = 1_000_000
@@ -211,6 +212,28 @@ def _call(action, root, gate, args, session, call_id):
         if len(image) > MAX_SCREENSHOT_PNG or not image.startswith(b"\x89PNG\r\n\x1a\n"):
             raise RuntimeError("browser worker returned an invalid screenshot")
         result["imageDataUrl"] = prefix + base64.b64encode(image).decode("ascii")
+    if action == "snapshot" and result.get("ok"):
+        try:
+            formatted = format_snapshot(
+                result.get("nodes"),
+                reported_total=result.get("totalNodes"),
+                reported_truncated=result.get("truncated") is True,
+            )
+        except ValueError:
+            raise RuntimeError("browser worker returned an invalid snapshot") from None
+        url = result.get("url")
+        title = result.get("title")
+        return {
+            "ok": True,
+            "url": url[:4096] if isinstance(url, str) else "",
+            "title": title[:500] if isinstance(title, str) else "",
+            "tree": formatted["tree"],
+            "nodeCount": formatted["nodeCount"],
+            "totalNodes": formatted["totalNodes"],
+            "truncated": formatted["truncated"],
+            "charTruncated": formatted["charTruncated"],
+            "untrusted": True,
+        }
     return result
 
 
@@ -227,8 +250,25 @@ def dispatch(method, parts, query, data, ctx):
     return settings_dispatch(method, parts, query, data, ctx)
 
 
+def _tool_description(action):
+    if action == "snapshot":
+        return (
+            "Read-only accessibility tree of the current public HTTPS page: role, "
+            "accessible name, indentation, and stable refs on interactable elements. "
+            "browser_click and browser_fill accept selector aria-ref=<ref> from this "
+            "snapshot until the next snapshot or navigation. Does not change the page. "
+            "Node and character limits are marked when truncated. Exact action approval required."
+        )
+    if action in ("click", "fill"):
+        return (
+            "Browser " + action + "; selector is a Playwright locator and may be "
+            "aria-ref=<ref> from the latest browser_snapshot; exact action approval required"
+        )
+    return "Browser " + action + "; exact action approval required"
+
+
 REGISTRY = tuple(
-    BuiltinTool("browser_" + action, "Browser " + action + "; exact action approval required",
+    BuiltinTool("browser_" + action, _tool_description(action),
                 parameters, required, "exec", action in ("click", "fill"),
                 lambda root, gate, args, session, cid, action=action:
                     _call(action, root, gate, args, session, cid),
@@ -236,6 +276,7 @@ REGISTRY = tuple(
     for action, parameters, required in (
         ("navigate", {"url": {"type": "string"}}, ("url",)),
         ("inspect", {}, ()),
+        ("snapshot", {}, ()),
         ("click", {"selector": {"type": "string"}}, ("selector",)),
         ("fill", {"selector": {"type": "string"}, "text": {"type": "string"}},
          ("selector", "text")),

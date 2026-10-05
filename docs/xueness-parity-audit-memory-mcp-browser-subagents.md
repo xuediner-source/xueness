@@ -50,9 +50,9 @@
 |---|---|---|---|---|---|
 | 3.1 | 页面导航 | `browser-client/facade.ts:Tab.goto`, `Tab.navigate` | `xueness/bundled_plugins/browser/plugin.py:_call`, `bridge.mjs:act` (`browser_navigate`) | **一致** | 均使用 Playwright CDP/Chromium 导航；Xueness 严格限制只能导航至公网 HTTPS，并在服务端通过 DNS 解析进行私有地址和内网 SSRF 防御拦截。 |
 | 3.2 | 页面截图 | `browser-client/facade.ts:Tab.screenshot` | `xueness/bundled_plugins/browser/plugin.py:_call`, `bridge.mjs:act` (`browser_screenshot`) | **一致**（已补齐） | Xueness 返回纯内存 base64 PNG data URL，并在 Python 侧校验 PNG 文件头及不超过 450KB 内存上限。本次对 `bridge.mjs` 中的文件截图指令加装了 `if (command.output)` 防护，消除了未指定文件路径时的冗余截图开销。 |
-| 3.3 | 精确点击与输入 | `browser-client/facade.ts:Tab.click`, `Tab.fill`, `Tab.type` | `xueness/bundled_plugins/browser/plugin.py:REGISTRY`, `bridge.mjs:act` (`browser_click`, `browser_fill`) | **一致** | 均支持按 selector 执行 `click()` 和 `fill()`。Xueness 对 selector 施加 1000 字符限制，文本施加 5000 字符限制，执行前触发 Gate 严格逐操作批准。 |
+| 3.3 | 精确点击与输入 | `browser-client/facade.ts:Tab.click`, `Tab.fill`, `Tab.type` | `xueness/bundled_plugins/browser/plugin.py:REGISTRY`, `bridge.mjs:act` (`browser_click`, `browser_fill`) | **一致** | 均支持按 selector 执行 `click()` 和 `fill()`。Xueness 对 selector 施加 1000 字符限制，文本施加 5000 字符限制，执行前触发 Gate 严格逐操作批准。`browser_snapshot` 给出的 ref 沿用同一 selector 参数，写成 `aria-ref=<ref>`，不新增动作参数。 |
 | 3.4 | 会话复用与持久环境 | `browser-client/facade.ts:Tab`, `selection.ts:selectTabForUrl` | `xueness/bundled_plugins/browser/profiles.py:managed_profile`, `bridge.mjs:launchPersistentContext`, `bridge.mjs:current.json` | **一致** | Xueness 在状态目录下维护专用持久目录 `<state_dir>/browser-profile`（应用 POSIX 0700 / Windows protected DACL 保护），启动时自动恢复 `current.json` 记录的上次活跃 URL，同一个状态目录共享持久运行进程。 |
-| 3.5 | 页面检查与内容感知 | `browser-client/facade.ts:Tab.snapshot`（提取无障碍树） | `xueness/bundled_plugins/browser/plugin.py:REGISTRY`, `bridge.mjs:act` (`browser_inspect`) | **部分** | ZCode 支持完整 DOM 树与快照元素解析；Xueness 通过 `browser_inspect` 提取主体文本（前 16,000 字符）与前 40 个链接（文本与 href），在 navigate/click/fill 后亦自动返回摘要文本，轻量且低 Token 占用。 |
+| 3.5 | 页面检查与内容感知 | `browser-client/facade.ts:Tab.snapshot`（提取无障碍树） | `xueness/bundled_plugins/browser/plugin.py:REGISTRY` (`browser_snapshot`)、`snapshot.py:format_snapshot`、`bridge.mjs:act` (`snapshot`)；`browser_inspect` 仍保留 | **部分** | 已补齐只读无障碍树：Playwright `ariaSnapshotJSON({mode:"ai"})` 输出 role、accessible name、层级缩进，以及可交互元素的稳定 ref（`eN`，iframe 为 `f<序号>eN`）。节点上限 200、深度 24、正文 12000 字符，超限在树末标注截断。ref 不新增点击参数；既有 `browser_click` / `browser_fill` 的 selector 可写 `aria-ref=<ref>`，定位最近一次快照登记且仍连接的元素，再次快照或导航后失效。`browser_inspect` 仍返回主体文本（前 16000 字符）与前 40 个链接。与 ZCode 的差异：没有完整 DOM 元素记录（selector、xpath、rect、属性、parentRef）和单独的 dom 列表，也没有 `maxElements` / `includeHidden` 参数或 `selection.ts` 的多标签选择。 |
 | 3.6 | 复杂人机动作（Hover, Drag, Press, Viewport） | `browser-client/facade.ts:Tab.{hover, drag, press, setViewportSize}` | —（未在工具暴露） | **有意不做** | ZCode 为 CUA 与通用桌面交互提供了低级鼠标键盘坐标操作；Xueness 侧重于稳健的 Web 任务操作与自动化审查，坚持基于语义选择器的 `click`/`fill`/`navigate`，不引入非确定性的像素级拖拽与坐标点击。 |
 
 ---
@@ -85,11 +85,14 @@
    - 支持 `disallowedTools` / `disallowed_tools` 配置项，引入 `normalize_disallowed_tools` 自动剥离参数括号（如 `Bash(git *)` -> `bash`）并统一大小写与别名；在 `agent_tool_allowlist` 中支持对齐 ZCode 的 PascalCase 工具名映射，并在 Provider 过滤层和 `Gate.denied_tool_names` 双层予以强制执行。
 6. **浏览器截图冗余消除**（`xueness/bundled_plugins/browser/bridge.mjs`）：
    - 对文件截图调用加设 `if (command.output)` 判定，消除无文件输出时的多余截图动作，优化了执行时延。
+7. **浏览器无障碍树快照**（`browser/plugin.py`、`browser/snapshot.py`、`browser/bridge.mjs`）：
+   - 新增只读工具 `browser_snapshot`（功能 `browser.snapshot`）。用 Playwright AI 模式无障碍树返回 role、name、缩进和可交互 ref，并施加节点与字符上限。ref 通过既有 selector `aria-ref=<ref>` 交给点击和输入，不新增动作参数，不放宽 Gate、选择器长度或公网 HTTPS 限制。
 
 ### 2. 后续演进规划（列为大项，不硬做）
 1. **记忆后台自动提取 Subagent（Large）**：
    - 依赖会话结束钩子、后台 Token 预算调度与长程事实分类模型，计划在未来的长会话演化版本中统一评估引入。
-2. **浏览器 DOM 无障碍树快照（Medium）**：
-   - 当前的文本与链接提取已能满足大部分网页信息检索与表单填写；后续如需引入复杂的视觉与无障碍树结构化审查，可作为 `browser_snapshot` 工具拓展。
+2. **浏览器 DOM 无障碍树快照（Medium，精简树已落地）**：
+   - 只读工具 `browser_snapshot` 已提供精简无障碍树（role、name、可交互 ref、缩进、节点与字符截断）。既有点击和输入用 selector `aria-ref=<ref>` 引用最近一次快照，没有新增动作参数。
+   - 仍不做 ZCode 的完整 DOM 元素记录（selector、xpath、rect、属性、parentRef）、隐藏节点开关和 `maxElements` 参数。`browser_inspect` 的轻量文本与链接摘要保留。
 3. **子代理图形化侧栏面板（Large）**：
    - 对应 ZCode 的 `SubagentSidePane`，需设计完整的前端运行态组件与实时日志 WebSocket 推送，属于后续前端体验批次。
