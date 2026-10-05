@@ -60,7 +60,7 @@ flowchart LR
 | terminal | 真实 POSIX PTY | sessions, shell | 开 |
 | office | DOCX 页面、PPTX 图片/图表、XLSX 缓存值预览 | files | 开 |
 | commands | 斜杠命令资源 | — | 开 |
-| skills | 按需技能目录/读取 | — | 开 |
+| skills | 技能资源与按需目录/正文读取、目录型技能发现与来源覆盖、`skills` 命令与 `/skills` | — | 开 |
 | hooks | 明确启用的事件钩子 | — | 开 |
 | mcp | stdio/HTTP/旧 SSE、OAuth、resources/prompts、连接恢复 | — | 开 |
 | subagents | 嵌套 Agent、进度/取消 | sessions, files | 开 |
@@ -98,6 +98,8 @@ python3 -m xueness update check
 python3 -m xueness git turn-checkpoints --session SESSION
 python3 -m xueness git rewind --session SESSION --latest --root DIR --confirmed
 python3 -m xueness sessions fork-checkpoint SESSION --latest
+python3 -m xueness skills list [--root DIR] [--json]
+python3 -m xueness skills inspect NAME [--root DIR] [--json]
 ```
 
 `--state DIR` 放在子命令之前；CLI 与该状态目录的 Web 服务共用开关。Web「设置 → 插件」默认展示全部 27 个实际功能插件及其启用/依赖状态；「资源清单」另列扩展 manifest，不能将其等同于功能插件。功能插件管理始终可访问；settings 关闭时通过账户菜单中的「插件管理」直达恢复入口，extensions/sessions 关闭也不影响目录。损坏的开关文件会关闭全部功能，并在目录中显示配置错误；修复 `plugin-state.json` 后恢复。它只允许 `apiVersion:1` 与已知 ID 的布尔 `enabled` 字典，不能提供 import 路径或命令。
@@ -163,7 +165,7 @@ providers 的 CLI parser/handler 已迁入 `xueness/bundled_plugins/providers/op
 
 ## 功能逐项归属清单
 
-下表概述当前 27 份 manifest 中的 125 项用户能力。命令/工具/依赖和实际实现文件以同一份 manifest 为准；前端卡片直接展示该功能清单，不维护第二份隐藏列表。纯安全内核与通用布局的边界如前文所述。
+下表概述当前 27 份 manifest 中的 127 项用户能力。命令/工具/依赖和实际实现文件以同一份 manifest 为准；前端卡片直接展示该功能清单，不维护第二份隐藏列表。纯安全内核与通用布局的边界如前文所述。
 
 | 插件 | 已实现的用户能力 |
 |---|---|
@@ -180,7 +182,7 @@ providers 的 CLI parser/handler 已迁入 `xueness/bundled_plugins/providers/op
 | terminal | 工作区交互式 POSIX PTY；终端尺寸、日志、关闭与服务清理；默认 Shell 与终端偏好 |
 | office | DOCX 页面与嵌入图片预览；PPTX 幻灯片、图片与缓存图表；XLSX 工作表与缓存单元格值 |
 | commands | 自定义斜杠提示模板；命令资源创建、编辑与开关 |
-| skills | 技能资源与按需目录摘要；有界技能正文读取 |
+| skills | 技能资源与按需目录摘要；有界技能正文读取；目录型技能发现与来源覆盖；skills list/inspect 命令与聊天 /skills |
 | hooks | 明确启用的生命周期事件钩子；钩子命令审批与运行记录 |
 | mcp | stdio、HTTP 与旧 SSE 连接；OAuth PKCE、凭据刷新与隔离；外部工具、资源与提示词；连接诊断、失效恢复与设置 |
 | subagents | 只读子任务与嵌套代理；后台并发派发、主代理持续工作、结果收集与完成检查；子任务进度、结果与协作取消；子代理资源与能力配置 |
@@ -398,7 +400,7 @@ profile 是 Cordis/DeepSeek 那种「组合配置档」的最小安全版本：�
 
 ## 闲时任务 automation.off_peak（2026-10-05）
 
-automation 插件内的新功能，登记为 `automation.off_peak`（中英双语 feature），完整目录现为 27 个插件、125 项登记功能。它把「不急的任务」排进一个本地闲时队列：一条队列项只是数据——提示词、工作区绝对路径、可选模型、单次运行超时、`onlyWhenIdle`、窗口/时区覆盖，以及两个独立开关 `approved`（批准这份不可变计划无人值守执行）与 `allowReal`（允许调用真实服务商）。队列落在 `<状态目录>/offpeak.json`（JSON 数组，沿用 `resources._atomic_write_json` 的原子写、符号链接拒绝、2 MiB 读取预算、最多 50 项、每条任务保留 20 条按尝试的历史），窗口设置落在 `<状态目录>/offpeak-settings.json`（只允许 `window`/`timezone`，64 KiB 上限）。两份文件都只可能是数据：状态目录里的任何内容都不会被当作代码加载，本功能没有 `importlib`、`eval` 或动态模块名。
+automation 插件内的新功能，登记为 `automation.off_peak`（中英双语 feature），完整目录现为 27 个插件、127 项登记功能。它把「不急的任务」排进一个本地闲时队列：一条队列项只是数据——提示词、工作区绝对路径、可选模型、单次运行超时、`onlyWhenIdle`、窗口/时区覆盖，以及两个独立开关 `approved`（批准这份不可变计划无人值守执行）与 `allowReal`（允许调用真实服务商）。队列落在 `<状态目录>/offpeak.json`（JSON 数组，沿用 `resources._atomic_write_json` 的原子写、符号链接拒绝、2 MiB 读取预算、最多 50 项、每条任务保留 20 条按尝试的历史），窗口设置落在 `<状态目录>/offpeak-settings.json`（只允许 `window`/`timezone`，64 KiB 上限）。两份文件都只可能是数据：状态目录里的任何内容都不会被当作代码加载，本功能没有 `importlib`、`eval` 或动态模块名。
 
 窗口判定按**本地墙钟分钟**而不是 UTC，`start > end` 即跨午夜；`in_window`/`next_window_open` 都接受时区名与时钟注入，因此回归用固定 epoch 断言而从不读运行机时间。触发完全复用既有 automation 调度器：`Scheduler._loop` 里 cron 那一行之后追加一次 `queue.tick()`，仍在 `is_enabled(state,'automation')` 判断之内、共用同一把异常吞掉与 15 秒等待，**没有新线程、新进程或新轮询循环**；禁用插件后调度线程照旧不再产生任何队列工作。每次 tick 先把 `running` 项按其 workflow 结果收敛（completed → `completed`；仍在 ACTIVE 且超过 `deadlineSeconds` → 取消该运行并记 `timed out after Ns`；其他终态 → `workflow <status>`），再认领到期项。认领是 at-most-once：`queued → running` 的迁移与新的 `runId` 在同一次队列锁（`.offpeak.lock`，flock）内写出，同一窗口里的后续 tick 只会看见 `running`，因此重复执行在结构上不可能；一次尝试只有一条历史记录，随结果就地更新，与 cron 侧 `Automations.run` 的写法一致。
 
@@ -409,3 +411,36 @@ automation 插件内的新功能，登记为 `automation.off_peak`（中英双�
 前端新增 `webapp/src/plugins/automation/offPeakModel.ts` 与 `OffPeakTasks.tsx`（登记进 manifest 的 `frontendModules`），面板 `XuenessAutomationsPanel({ offPeakEnabled })` 由工作台容器两处挂载点传入 `isPluginEffective("automation")`：`offPeakEnabled` 为 false 时组件直接 `return null`，不发请求、不起轮询，既有「定时计划」列表与静态注册表面貌不变（`XuenessPluginFeaturePanels.test.tsx` 里「不出现闲时任务」的断言在缺省 props 下继续成立）。面板提供队列列表、入队表单、窗口设置与完成通知：表单校验镜像后端上限（提示词 1–5000、名称 ≤120、绝对路径、超时 60–14400 秒、允许真实服务商必须先批准计划），通知按尝试 ID 逐个出现一次且首屏只登记已有历史（不把旧运行当新通知回放），已完成/已取消的任务不再提供运行与取消按钮。i18n 只在 `webapp/src/i18n.ts` 末尾追加一个独立 `Object.assign(messages, {...})` 块。
 
 门禁与回归：`tools/check_plugin_architecture.py` 通过（`modules` 增加 `off_peak`、`tools` 增加 `offpeak_create`、`httpFamilies` 增加 `automation/offpeak`、双语 feature 与前端归属一致，队列状态文件不在包内故不涉及 `dataFiles`）；`tests/test_automation_off_peak.py` 21 项覆盖队列增删查与输入拒绝、容量与超限/损坏/符号链接状态文件被拒、历史有界、跨午夜窗口与下一次开启、本地墙钟与 UTC 的区别、到点只认领一次、审批与主机服务商闸门、`onlyWhenIdle`、启动失败与超时写史、完成收敛、取消停止运行、`run-now` 不放宽闸门、插件关闭后的 HTTP/CLI/工具与依赖阻塞、CLI 组与 HTTP 全矩阵、以及 cron 计划与队列并存；`webapp/src/plugins/automation/offPeakPanel.test.tsx` 8 项覆盖关闭即空渲染、窗口文案与审批缺口可见、终态按钮收敛、通知一次一尝试与表单校验。全部测试使用隔离状态目录、注入时钟与假 workflow launch，不访问网络、不调用真实模型，也不改动 `core.py`、`tool_registry.py` 调度、`plugin_runtime.py` hook 分发或任何其他插件。
+
+## 目录型技能与 skills 命令（skills.file_skills，2026-10-05）
+
+参照 ZCode 的目录型技能（每个技能是 `<name>/SKILL.md` 一个目录）能力，按 Xueness 结构重写为 skills 插件内的 `file_skills.py`；新增两项稳定功能 `skills.file_skills`（目录型技能发现与来源覆盖）与 `skills.cli`（skills list/inspect 命令与聊天 /skills）。manifest 只增加数据——`commands: ["skills"]`、`httpFamilies` 增 `resources/skills/files`、`modules` 增 `file_skills`/`files_api`/`skills_cli`、`description` 与 `features` 更新，`tools`/`panels`/`frontendModules`/`resources` 不变，依赖仍为空。完整目录现为 **27 个插件、127 项登记功能**，README 与本文清单同批更正，没有新增共享内核例外。
+
+### 扫描布局与来源覆盖
+
+优先级从高到低：`<workspace>/.xueness/skills/<name>/SKILL.md`（`project`）> `<workspace>/.zcode/skills/…`（`project-compat`，为外来布局提供的**只读**兼容根，调用侧可用 `include_compat=False` 排除）> `<state_dir>/skills/…`（`user`）> 既有 JSON 资源库 `<state_dir>/resources/skills/<id>.json`（`resource`）。每根只读一层目录，不做递归。行身份 `id` 为 `file:<source>:<name>`（资源行保持原 JSON 资源 id）。合并只有一处：`skills.list_all(state_dir, root)` 把资源行与文件行交给 `file_skills.merge`，按（小写 name、来源优先级、id）排序后由 `_claim_keys` 认领名称——资源行同时以 name 与 id 认领，因此外来目录不会悄悄顶掉用户已经存下的资源技能。**被覆盖的行不删除**，而是带 `shadowed: true` 与 `shadowedBy: <胜出来源>` 一起出现在列表里，来源、`scope`、路径、字节数与诊断都是可见数据。
+
+### frontmatter 是纯文本，不是配置
+
+`---` 围栏内的顶层 `key: value` 行按文本解析：支持引号剥离与真实技能文件常用的折叠（`>`，含 `>-`/`>+`）和字面（`|`，含 `|-`/`|+`）块标量；**没有引入 PyYAML**，键名限定 `[A-Za-z0-9_-]{1,64}`，未识别的键只作为 `frontmatterKeys` 报出来。必填 `name`、`description`，可选 `tags`。校验规则：`name` 匹配 `[a-z0-9](?:[a-z0-9-]{0,62}[a-z0-9])?` 且 ≤64 字符，`description` ≤1024 字符，单个 tag ≤32 且最多 16 个。规模上限是显式常量：单个 `SKILL.md` 256 KiB（`MAX_SKILL_FILE_BYTES`）、每个来源 128 条（`MAX_SKILLS_PER_ROOT`）、每个技能最多列出 32 个同级附件名（`MAX_ATTACHMENTS_PER_SKILL`，超出置 `attachmentsTruncated`）。附件**只报名与字节数，字节内容从不读取**，`inspect` 默认不打印它们。
+
+坏条目是一次回答，不是一次异常：`file_skills.diagnostic(code, severity, message, path)` 产出结构化诊断，缺失/未闭合/非法 frontmatter、名字与描述违规、超限、编码失败、不可读、根不可读、根越界都走这条路，CLI/聊天/HTTP 三个入口都原样带出。当前代码会发出的码：`skill_root_symlink`、`skill_root_unreadable`、`skill_root_escapes`、`skill_directory_symlink`、`skill_file_symlink`、`skill_escapes_root`、`skill_unreadable`、`skill_file_too_large`、`skill_invalid_encoding`、`skill_missing_frontmatter`、`skill_unclosed_frontmatter`、`skill_invalid_frontmatter`、`skill_missing_name`、`skill_invalid_name`、`skill_missing_description`、`skill_description_too_long`、`skill_root_limit`。
+
+### 只读与不逃逸
+
+发现与读取全程只读，从不 import、执行或以任何方式运行技能内容。链接拒绝复用 `resources._is_link`（符号链接与 Windows reparse point 同一判定），作用于三个层级：技能根本身、技能目录、`SKILL.md`；此外每个解析后的真实路径必须仍落在它自己的技能根内（`_contained`），否则 `skill_escapes_root`——被重定向的目录不能把围栏搬到别处，围栏外的链接不跟随。文本读取用 `os.open(..., O_RDONLY | O_NOFOLLOW)` 并读 `max_bytes + 1` 以区分「正好等于上限」与「超限」。状态目录自身是链接时只跳过 `user` 根，`project` 根不受影响。`read_body` 在**读取时**重新校验链接与包含关系，因此拿一份旧 listing 的行（`path`/`rootPath` 由调用方持有）不构成绕过手段。
+
+### 提示注入沿用既有预算
+
+会话带 `skill_catalog` 时，`SkillsPlugin.load` 注入 `skills.catalog(state_dir, workspace)`——目录现在同时含文件技能（非资源行多一个 `source` 字段），但总预算仍是原来的 `TOTAL_MAX_CHARS = 4000`、封顶仍写 `(catalog truncated)`、被覆盖的行照旧不进目录；按需读取仍是 `skills.read_skill(state_dir, sid, workspace)`，正文 `READ_BODY_BUDGET = 12000`、总量 `READ_TOTAL_BUDGET = 14000`，返回内容仍以 `memory.UNTRUSTED_PREAMBLE` 开头，`skill_read` 的 schema 与「按精确目录 id 读取」契约一字未改（`file_skills.find` 保持精确、大小写敏感匹配，查找值永不当作路径或 glob）。**一个刻意的不对称**：`skill_catalog` 关闭时的急切 `load()` 仍只渲染资源库技能——工作区里的文件不该悄悄扩大每一轮的提示上下文，目录型技能只能经「有界目录 + 按需读取」进入模型视野。
+
+### 三个入口
+
+- **CLI**：`xueness [--state DIR] skills [list|inspect NAME] [--root PATH] [--json]`，`--root` 默认当前工作目录、无子命令等同 `list`；解析与执行由 `skills_cli.add_parsers`/`execute` 经 `plugin.register_cli`/`execute_cli` 贡献，人类可读与 `--json` 出自同一份数据。skills 未 `effective` 时由 CLI 宿主的既有插件检查拒绝：stderr 给出开启方式、退出码非零、stdout 为空。`inspect` 未命中同样退出码 1，并列出当前可用名字与诊断。
+- **聊天**：`skills` 登记进 manifest `commands`，`plugin.execute_slash` **只**认领 `skills`（其余名字返回 `None`，chat 循环既有行为不变），`/skills`、`/skills list`、`/skills inspect <name>` 经 `plugin_runtime.dispatch_slash` 路由；工作区取 `ctx['root']`，回落到 `session['root']`；插件禁用就是既有的 `plugin disabled or dependency unavailable: skills`。格式化与 CLI 共用 `format_listing`/`format_inspection`，因此同一份清单不可能在两个地方读出不同结果。`/help` 的一行索引不在此轮改动内（由合入方在 sessions 的聊天宿主里补）。
+- **HTTP**：`GET /api/resources/skills/files?root=…`（`files_api.py`，`httpFamilies` 登记，最长匹配自然归 skills，`route_owner` 与匹配逻辑未改），返回 `{root, stateDir, skills, diagnostics, limits}`。`root` 必须先过既有工作区围栏 `web._allowed_root(candidate, ctx['web_runs'], ctx['project_dir'], settings.workspaces_api.allowed_roots(ctx))`——越界一律 400 `workspace root not permitted`，不给出围栏外存在什么的任何线索；缺少 web 上下文的 ctx 同样失败关闭。非 GET 该路径 405，插件禁用 403（`dispatch_http` 既有生效检查），Host/Origin/CSRF 一层未动。不匹配该前缀的请求返回 `None`，`GET /api/resources/skills` 的既有 JSON 资源行为与通用资源 CRUD 照旧。
+
+前端本轮不新增实现：`设置 → 插件 → 已安装功能插件` 的能力卡片按 manifest `features` 泛型渲染，两项新功能自动出现在 skills 卡片内，`panels`/`frontendModules` 因此保持不变、结构门禁的前后端一致性不受影响；新端点是只读展示用，没有 UI 接线时不产生任何请求、轮询或后台任务。
+
+验证：`tests/test_file_skills.py` 66 项，全部使用 tempfile 隔离的状态目录与工作区，不访问网络、不调用真实模型——frontmatter 正常/缺失/未闭合/非法与块标量、名字规则与长度、描述长度、tag 数量与长度、单文件字节与每根条数上限、project > project-compat > user > resource 的覆盖及 `shadowed`/`shadowedBy`、四类链接拒绝（技能目录、`SKILL.md`、整个 `.xueness` 根、用户根，均断言重定向目标的私有内容不泄露）、陈旧行的读取时重校验、`catalog` 与 `skill_read` 的预算与截断标记、`SkillsPlugin.load` 的两种运行缝（目录模式与急切模式）、CLI 的 list/inspect/`--json`/无子命令走 cwd/禁用后非零退出且 stdout 空、`dispatch_slash` 的 `/skills` 三态与禁用文案、HTTP 的归属与 400/405/403 以及 `['api','resources','skills']` 仍是 200。
+
