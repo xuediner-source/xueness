@@ -117,7 +117,10 @@ export function XuenessStartPage({
 }: XuenessStartPageProps): React.JSX.Element | null {
   const recent = recentSessionSummaries(sessions, 5);
   const recentProjects = projects === undefined || projects === null ? null : recentStartPageProjects(projects, 5);
-  if (actions.length === 0 && recent.length === 0 && recentProjects === null) return null;
+  const hasRecentProjects = (recentProjects?.length ?? 0) > 0;
+  const hasRecentSessions = recent.length > 0;
+  const recentGroupCount = Number(hasRecentProjects) + Number(hasRecentSessions);
+  if (actions.length === 0 && recentGroupCount === 0) return null;
   return (
     <div className="xn-start-page" data-testid="xn-start-page">
       {actions.length > 0 && (
@@ -142,17 +145,15 @@ export function XuenessStartPage({
           ))}
         </div>
       )}
-      <div className="xn-start-page__side">
-        {recentProjects !== null && (
-          <section
-            className="xn-start-page__recent"
-            aria-labelledby="xn-start-page-projects-title"
-            data-testid="xn-start-page-projects"
-          >
-            <h2 id="xn-start-page-projects-title">{tr("最近项目")}</h2>
-            {recentProjects.length === 0 ? (
-              <p className="xn-start-page__recent-empty">{tr("暂无最近项目")}</p>
-            ) : (
+      {recentGroupCount > 0 && (
+        <div className="xn-start-page__side" data-group-count={recentGroupCount}>
+          {hasRecentProjects && recentProjects !== null && (
+            <section
+              className="xn-start-page__recent"
+              aria-labelledby="xn-start-page-projects-title"
+              data-testid="xn-start-page-projects"
+            >
+              <h2 id="xn-start-page-projects-title">{tr("最近项目")}</h2>
               <ul className="xn-start-page__recent-list">
                 {recentProjects.map((project) => (
                   <li key={project.path}>
@@ -171,40 +172,38 @@ export function XuenessStartPage({
                   </li>
                 ))}
               </ul>
-            )}
-          </section>
-        )}
-        <section className="xn-start-page__recent" aria-labelledby="xn-start-page-recent-title" data-testid="xn-start-page-recent">
-          <h2 id="xn-start-page-recent-title">{tr("最近会话")}</h2>
-          {recent.length === 0 ? (
-            <p className="xn-start-page__recent-empty">{tr("暂无最近会话")}</p>
-          ) : (
-            <ul className="xn-start-page__recent-list">
-              {recent.map((session) => {
-                const label = session.title || session.task || tr("未命名任务");
-                const updatedAt = formatPaletteUpdatedAt(session.updatedAt, locale);
-                return (
-                  <li key={session.id}>
-                    <button
-                      type="button"
-                      className="xn-start-page__recent-item"
-                      data-testid={`start-recent-${session.id}`}
-                      title={label}
-                      onClick={() => onSelectSession(session.id)}
-                    >
-                      <span className="xn-start-page__recent-title">{label}</span>
-                      <span className="xn-start-page__recent-meta">
-                        <span>{commandPaletteStatusLabel(session.status)}</span>
-                        {updatedAt && <time dateTime={session.updatedAt}>{updatedAt}</time>}
-                      </span>
-                    </button>
-                  </li>
-                );
-              })}
-            </ul>
+            </section>
           )}
-        </section>
-      </div>
+          {hasRecentSessions && (
+            <section className="xn-start-page__recent" aria-labelledby="xn-start-page-recent-title" data-testid="xn-start-page-recent">
+              <h2 id="xn-start-page-recent-title">{tr("最近会话")}</h2>
+              <ul className="xn-start-page__recent-list">
+                {recent.map((session) => {
+                  const label = session.title || session.task || tr("未命名任务");
+                  const updatedAt = formatPaletteUpdatedAt(session.updatedAt, locale);
+                  return (
+                    <li key={session.id}>
+                      <button
+                        type="button"
+                        className="xn-start-page__recent-item"
+                        data-testid={`start-recent-${session.id}`}
+                        title={label}
+                        onClick={() => onSelectSession(session.id)}
+                      >
+                        <span className="xn-start-page__recent-title">{label}</span>
+                        <span className="xn-start-page__recent-meta">
+                          <span>{commandPaletteStatusLabel(session.status)}</span>
+                          {updatedAt && <time dateTime={session.updatedAt}>{updatedAt}</time>}
+                        </span>
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+            </section>
+          )}
+        </div>
+      )}
     </div>
   );
 }

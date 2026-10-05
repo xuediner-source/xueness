@@ -90,3 +90,5 @@ Mac 更新下载使用 Electron `net.request`，在每次重定向事件中同�
 源码构建还需运行 `node desktop/scripts/check_electron_update_transport.cjs`，该检查启动真实 Electron，在隔离 loopback 服务中验证重定向下载、取消与禁止跳转目标；不请求模型或读取用户状态。完整公网下载的验证结果记录在发布说明中，loopback 回归不等于公网更新验证。
 
 Windows 更新页显示实际传输字节、下载速度和预计剩余时间，缺失测量时明确保持未知。GitHub 线路影响下载速度，不能保证各地网络相同；这些指标不表示安装器已经运行。原生 Windows CI 另运行 `node desktop/scripts/check_windows_github_download.cjs`，通过真正的 NSIS 网络执行器下载公开稳定版并完成内置 SHA-512 校验，使用隔离旧版本与缓存且不执行安装器；安装、重启和数据保留由独立 loopback NSIS 验证负责。
+
+起始页没有历史记录时仅显示快捷操作；最近项目和会话有实际记录后才显示，单组铺满、双组并排并在窄屏堆叠。

@@ -58,7 +58,7 @@ const actions: StartPageAction[] = [
   { id: "new-session", label: "新建会话", Icon: MessageCirclePlus, onSelect: () => undefined },
 ];
 
-test("起始页：渲染容器提供的快捷动作，并保留动作说明的可访问名称", () => {
+test("起始页空历史时只渲染居中的快捷动作，并保留动作说明的可访问名称", () => {
   const html = renderToStaticMarkup(
     <XuenessStartPage actions={actions} sessions={[]} onSelectSession={() => undefined} />,
   );
@@ -70,9 +70,7 @@ test("起始页：渲染容器提供的快捷动作，并保留动作说明的�
   assert.match(html, /data-testid="start-action-new-session"/);
   assert.match(html, /新建会话/);
   assert.doesNotMatch(html, /start-action-skills-commands/);
-  // 没有会话时右侧明确显示空态。
-  assert.match(html, /最近会话/);
-  assert.match(html, /暂无最近会话/);
+  assert.doesNotMatch(html, /xn-start-page__side|最近项目|最近会话|暂无最近/);
 });
 
 test("起始页：最近会话最多渲染 5 条，每条都是可点击的打开按钮", () => {
@@ -93,6 +91,8 @@ test("起始页：最近会话最多渲染 5 条，每条都是可点击的打�
     assert.match(html, new RegExp(`data-testid="start-recent-${id}"`));
   }
   assert.doesNotMatch(html, /start-recent-s1/);
+  assert.match(html, /class="xn-start-page__side" data-group-count="1"/);
+  assert.doesNotMatch(html, /xn-start-page-projects|最近项目/);
   // 状态与时间来自会话数据。
   assert.match(html, /已完成/);
   assert.match(html, /<time dateTime="2026-10-05T15:00:00Z"/);
@@ -165,7 +165,7 @@ test("起始页：右侧渲染最近项目卡片，最多 5 条且每条可点�
     <XuenessStartPage
       actions={[]}
       projects={projects}
-      sessions={[]}
+      sessions={[session("recent", "2026-10-06T10:00:00Z")]}
       onSelectSession={() => undefined}
       onSelectProject={() => undefined}
     />,
@@ -181,11 +181,13 @@ test("起始页：右侧渲染最近项目卡片，最多 5 条且每条可点�
   // 卡片里显示缩写路径（两段以内原样显示），完整路径留在 title 上。
   assert.match(html, /title="\/w\/six"/);
   assert.match(html, /xn-start-page__project-path">\/w\/six</);
-  // 最近会话仍是第二个分组。
+  // 两个有内容的分组在桌面端以 balanced columns 布局。
+  assert.match(html, /class="xn-start-page__side" data-group-count="2"/);
+  assert.match(html, /data-testid="start-recent-recent"/);
   assert.match(html, /data-testid="xn-start-page-recent"/);
 });
 
-test("起始页：容器没有提供项目数据时不渲染最近项目卡片；空目录显示空态", () => {
+test("起始页：没有任何历史时不渲染项目或会话分组，也不显示空态占位", () => {
   const withoutProjects = renderToStaticMarkup(
     <XuenessStartPage actions={actions} sessions={[]} onSelectSession={() => undefined} />,
   );
@@ -194,8 +196,12 @@ test("起始页：容器没有提供项目数据时不渲染最近项目卡片�
   const emptyProjects = renderToStaticMarkup(
     <XuenessStartPage actions={[]} projects={[]} sessions={[]} onSelectSession={() => undefined} />,
   );
-  assert.match(emptyProjects, /xn-start-page-projects/);
-  assert.match(emptyProjects, /暂无最近项目/);
+  assert.equal(emptyProjects, "");
+
+  const noSessions = renderToStaticMarkup(
+    <XuenessStartPage actions={actions} projects={[]} sessions={[]} onSelectSession={() => undefined} />,
+  );
+  assert.doesNotMatch(noSessions, /xn-start-page__side|xn-start-page-projects|xn-start-page-recent|暂无最近/);
 });
 
 test("起始页：三个动作块由容器按插件生效状态给出；git/remote 未生效时对应块不出现", () => {
@@ -205,7 +211,7 @@ test("起始页：三个动作块由容器按插件生效状态给出；git/remo
     { id: "connect-ssh", label: "通过 SSH 连接", Icon: Server, onSelect: () => undefined },
   ];
   const all = renderToStaticMarkup(
-    <XuenessStartPage actions={qoderActions} projects={[]} sessions={[]} onSelectSession={() => undefined} />,
+    <XuenessStartPage actions={qoderActions} sessions={[]} onSelectSession={() => undefined} />,
   );
   for (const id of ["open-project", "clone-repository", "connect-ssh"]) {
     assert.match(all, new RegExp(`data-testid="start-action-${id}"`));
