@@ -14,7 +14,7 @@
     <a href="https://github.com/xuediner-source/xueness/actions/workflows/desktop-build.yml"><img src="https://github.com/xuediner-source/xueness/actions/workflows/desktop-build.yml/badge.svg?branch=main" alt="Desktop build"></a>
     <a href="https://github.com/xuediner-source/xueness/blob/main/LICENSE"><img src="https://img.shields.io/github/license/xuediner-source/xueness?label=license" alt="Apache 2.0 license"></a>
     <a href="https://github.com/xuediner-source/xueness/releases/latest"><img src="https://img.shields.io/github/v/release/xuediner-source/xueness?label=release" alt="Latest release"></a>
-    <img src="https://img.shields.io/badge/plugins-27%20%7C%20122-4263eb" alt="27 plugins and 122 features">
+    <img src="https://img.shields.io/badge/plugins-27%20%7C%20128-4263eb" alt="27 plugins and 128 features">
   </p>
 </div>
 

@@ -212,6 +212,38 @@ def _apply_prepared_goal(ctx, session, prepared, text):
         apply_goal(session, text, state_dir=ctx['state_dir'], replace=True, source='composer')
 
 
+class _GoalRefusal(ValueError):
+    """A goal planning refused, carrying the answer its HTTP route must send."""
+
+    def __init__(self, message, status=400, plugin=None):
+        super().__init__(message)
+        self.status = status
+        self.body = {'error': message, **({'plugin': plugin} if plugin else {})}
+
+
+def _apply_submitted_goal(ctx, session, prepared, text):
+    """Apply a flagged submission's goal, or refuse with planning's own status.
+
+    Dropping the goal silently would answer 200 for a turn whose objective was
+    never recorded, and letting planning's GoalError escape reaches the generic
+    500 or another route's unrelated ``ValueError`` branch. planning signals an
+    expected refusal as a ``ValueError`` carrying an HTTP status, so the status
+    is read structurally instead of importing another plugin's exception.
+    """
+    if prepared is None or prepared.get('goal') is not True:
+        return
+    if _planning_entrypoint(ctx) is None:
+        raise _GoalRefusal('plugin disabled or dependency unavailable: planning', 403,
+                           plugin='planning')
+    try:
+        _apply_prepared_goal(ctx, session, prepared, text)
+    except ValueError as exc:
+        status = getattr(exc, 'status', None)
+        if type(status) is not int:
+            raise
+        raise _GoalRefusal(str(exc), status) from None
+
+
 def _public_goal(ctx, session):
     planning = _planning_entrypoint(ctx)
     view = getattr(planning, 'session_goal_view', None) if planning else None
@@ -275,7 +307,7 @@ def _append_queued_turn(ctx, queue, session, item):
         session['messages'][-1]['content'] = prepared['text']
         _safe_input_context(session, prepared)
         _record_prepared_commands(session, prepared)
-        _apply_prepared_goal(ctx, session, prepared, item['text'])
+        _apply_submitted_goal(ctx, session, prepared, item['text'])
         ctx['store'].save(session)
     return session
 
@@ -594,6 +626,10 @@ def handle_POST(self, parts, path, data):
                 self._send(400, {'error': host.provider_config.configuration_error(exc)})
             return True
         try:
+            if prepared is not None:
+                # Ask the owning plugin before anything exists on disk: a refused
+                # goal must not leave a session with a half-written first turn.
+                _apply_submitted_goal(ctx, {}, prepared, task.strip())
             root.mkdir(parents=True, exist_ok=True)
             if data.get('root') is None and root == ctx['web_runs'].resolve():
                 session = ctx['store'].new(task.strip(), root)
@@ -611,9 +647,12 @@ def handle_POST(self, parts, path, data):
                     session['remote_connection'] = prepared_remote
                 _safe_input_context(session, prepared)
                 _record_prepared_commands(session, prepared)
-                _apply_prepared_goal(ctx, session, prepared, task.strip())
+                _apply_submitted_goal(ctx, session, prepared, task.strip())
             ctx['store'].save(session)
             _remember_workspace(ctx, session['root'])
+        except _GoalRefusal as exc:
+            self._send(exc.status, exc.body)
+            return True
         except ValueError as exc:
             self._send(400, {'error': str(exc)})
             return True
@@ -679,10 +718,13 @@ def handle_POST(self, parts, path, data):
                         session['messages'][-1]['content'] = prepared['text']
                         _safe_input_context(session, prepared)
                         _record_prepared_commands(session, prepared)
-                        _apply_prepared_goal(ctx, session, prepared, text)
+                        _apply_submitted_goal(ctx, session, prepared, text)
                         ctx['store'].save(session)
             except LookupError:
                 self._send(409, {'error': 'session is not ready for a new turn'})
+                return True
+            except _GoalRefusal as exc:
+                self._send(exc.status, exc.body)
                 return True
             except ValueError as exc:
                 message = str(exc)
@@ -1029,6 +1071,11 @@ def handle_POST(self, parts, path, data):
                         drained += 1
         except BlockingIOError:
             self._send(409, {'error': 'session is in use by another process'})
+            return True
+        except _GoalRefusal as exc:
+            # A queued turn whose goal planning refused must not read as the
+            # workspace mismatch that the generic ValueError branch reports.
+            self._send(exc.status, exc.body)
             return True
         except ValueError:
             self._send(400, {'error': 'session workspace mismatch'})

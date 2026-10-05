@@ -28,20 +28,31 @@ flowchart LR
 
 `plugin_runtime.py` 是共同注册表：根据包内 manifest 处理依赖和命令/API 所属关系，调用 `register_cli`、`execute_cli`、`dispatch`、`tools` 等贡献。`tool_contract.py` 定义 `BuiltinTool` 和只在调用期间存在的 `ContextVar` 执行上下文；`tool_registry.py` 合并稳定工具对象，schema 和实际 dispatch 使用相同对象。执行批准所需的规范化 subject 由工具自身提供，防止 UI 与 handler 对同一调用产生不同批准内容。
 
-前端产品组件放在 `webapp/src/plugins/<id>/`，容器从所属插件入口挂载；静态 `xuenessPluginRegistry.ts` 根据后端 `effective` 状态选择已知视图，目录数据不能注入 JavaScript 或任意路由。宿主恢复入口、工作台布局和跨资源的能力编辑界面属于共享基础设施。下表列出已迁入插件目录的 24 个工作台组件；完整声明以各插件 manifest 的 `frontendModules` 为准。共享理由只有一处的纯展示文件除外：settings 的 `SettingsPrimitives.tsx` 渲染分组卡片、行、空状态与工作区信息卡，不读取状态、不发请求也不判断权限，因此其它插件的设置分区可复用它保持同一布局。
+前端产品组件放在 `webapp/src/plugins/<id>/`，容器从所属插件入口挂载；静态 `xuenessPluginRegistry.ts` 根据后端 `effective` 状态选择已知视图，目录数据不能注入 JavaScript 或任意路由。宿主恢复入口、工作台布局和跨资源的能力编辑界面属于共享基础设施。下表列出已迁入插件目录的 67 个工作台组件与登记模块（21 个插件目录）；完整声明以各插件 manifest 的 `frontendModules` 为准。共享理由只有一处的纯展示文件除外：settings 的 `SettingsPrimitives.tsx` 渲染分组卡片、行、空状态与工作区信息卡，不读取状态、不发请求也不判断权限，因此其它插件的设置分区可复用它保持同一布局。
 
 | 插件 | 插件目录下的前端组件 |
 |---|---|
-| sessions | `XuenessComposerToolbar.tsx`、`XuenessConversationHistoryRail.tsx`、`XuenessRenameDialog.tsx`、`XuenessStartPage.tsx`、`XuenessTaskList.tsx`、`XuenessTimeline.tsx`、`XuenessWorkbenchView.tsx` |
+| sessions | `XuenessComposerToolbar.tsx`、`XuenessConversationHistoryRail.tsx`、`XuenessRenameDialog.tsx`、`XuenessStartPage.tsx`、`XuenessTaskList.tsx`、`XuenessTimeline.tsx`、`XuenessWorkbenchView.tsx`、`CommandPalette.tsx`、`ComposerWorkspaceSelect.tsx`、`ConversationTimelineViewport.tsx`、`ForkSessionDialog.tsx`、`SessionPolling.ts`、`SessionQueue.tsx`、`completionPresentation.ts`、`composerCatalogLifecycle.ts`、`index.ts` |
 | files | `DirectoryBrowser.tsx`、`FileBrowser.tsx`、`DiffView.tsx` |
-| settings | `SettingsPanel.tsx`、`SettingsSections.tsx`、`SettingsPrimitives.tsx`、`XuenessSettingsView.tsx`、`XuenessShortcutsPanel.tsx`、`XuenessWorkspacePickerDialog.tsx`、`XuenessWorkspaceSettings.tsx` |
-| providers | `ProvidersPanel.tsx` |
-| mcp | `McpDiagnostics.tsx` |
+| settings | `SettingsPanel.tsx`、`SettingsSections.tsx`、`SettingsPrimitives.tsx`、`XuenessSettingsView.tsx`、`XuenessShortcutsPanel.tsx`、`XuenessWorkspacePickerDialog.tsx`、`XuenessWorkspaceSettings.tsx`、`themeBoot.ts` |
+| providers | `ProvidersPanel.tsx`、`LightweightWorkbench.tsx`、`LocalRuntimeMonitor.tsx`、`index.tsx`、`runtimeSampling.ts` |
+| mcp | `McpDiagnostics.tsx`、`index.tsx` |
 | usage | `UsagePanel.tsx`、`XuenessUsageQuickCard.tsx`、`XuenessUsageSettings.tsx` |
-| memory | `MemoryPanel.tsx` |
-| terminal | `XuenessTerminalPreferences.tsx` |
+| memory | `MemoryPanel.tsx`、`MemorySettings.tsx`、`index.tsx` |
+| terminal | `XuenessTerminalPreferences.tsx`、`index.tsx` |
 | git | `XuenessGitView.tsx` |
 | office | `OfficeDocumentRenderer.tsx` |
+| automation | `OffPeakTasks.tsx`、`automationModel.ts`、`index.tsx`、`offPeakModel.ts` |
+| browser | `BrowserSettings.tsx`、`DesktopBrowserImport.tsx` |
+| desktop | `DesktopSettings.tsx`、`DesktopTitlebar.tsx`、`DesktopTrayBridge.tsx`、`DesktopTrayMenu.tsx`、`tray-main.tsx` |
+| diagnostics | `index.tsx` |
+| extensions | `PluginProfilePicker.tsx`、`index.tsx` |
+| network | `NetworkSettings.tsx` |
+| planning | `CompletionChecks.tsx`、`SessionGoal.tsx` |
+| remote | `index.tsx` |
+| subagents | `SubagentSettings.tsx` |
+| updates | `DesktopUpdates.tsx`、`updateLifecycle.ts` |
+| workflows | `ExpertPanel.tsx`、`index.tsx` |
 
 ## 27 个插件
 
@@ -169,17 +180,17 @@ providers 的 CLI parser/handler 已迁入 `xueness/bundled_plugins/providers/op
 
 | 插件 | 已实现的用户能力 |
 |---|---|
-| sessions | 会话创建与 Agent 对话；选择、搜索、重命名、固定与归档；历史导航与跨会话上下文检索；闭合历史轮次分叉与来源链接；从轮次检查点分叉并记录来源快照；脱敏导出、导入与恢复；文本、思考与工具调用增量流；附件、上下文引用与会话输入；计划权限模式与会话计划草稿；多行 CLI、全屏 TUI 与中断恢复；运行中切换模型与推理档位（/model、/effort） |
+| sessions | 会话创建与 Agent 对话；选择、搜索、重命名、固定与归档；历史导航与跨会话上下文检索；闭合历史轮次分叉与来源链接；从轮次检查点分叉并记录来源快照；脱敏导出、导入与恢复；文本、思考与工具调用增量流；附件、上下文引用与会话输入；计划权限模式与会话计划草稿；多行 CLI、全屏 TUI 与中断恢复；运行中切换模型与推理档位（/model、/effort）；运行期间排队发送后续消息；命令面板搜索与键盘导航；时间线跟随与回到底部；空会话起始页快捷动作与最近会话；手动压缩上下文（/compact 与说明）；依赖感知的工具并发调度 |
 | files | 文件列表、搜索与分页读取；批准后的文件写入与编辑；目录浏览、新建与本机目录选择；文本、图像、PDF 与媒体预览；会话文件改动视图；工作区 AGENTS 指导文件加载 |
 | shell | 批准后的 argv 命令执行 |
-| planning | 待办计划读取与更新；提问、用户回答与继续；持久交付清单与内容完成检查 |
-| providers | 模型配置保存、选择与切换；OpenAI 兼容与 Anthropic 协议；显式模型发现；本地小模型轻量档位；轻量档极简工作台布局；上下文、输出与安全预算；精简工具、按需发现与结果分页；JSON 工具协议与有限修复；兼容参数、超时与有限重试；本地接口对话、原生/JSON 工具、SSE 与工具续轮诊断；输出阶段、延迟、计数与速率趋势；默认模型与推理档位保存 |
+| planning | 待办计划读取与更新；提问、用户回答与继续；持久交付清单与内容完成检查；会话目标设置、每轮注入与完成核验 |
+| providers | 模型配置保存、选择与切换；OpenAI 兼容与 Anthropic 协议；显式模型发现；本地小模型轻量档位；轻量档极简工作台布局；上下文、输出与安全预算；精简工具、按需发现与结果分页；JSON 工具协议与有限修复；兼容参数、超时与有限重试；本地接口对话、原生/JSON 工具、SSE 与工具续轮诊断；输出阶段、延迟、计数与速率趋势；默认模型与推理档位保存；生成结束原因与截断安全暂停；实际用量校准与缓存容量计入；用户要求保留与可追溯历史摘要 |
 | memory | 只读记忆轨道与上下文注入；手动编辑与版本冲突检测；记忆能力与工作区配置 |
-| settings | 工作区登记、项目选择与默认目录；主题、语言、字体与代码显示；快捷键配置、验证与冲突检测；Agent 运行与能力偏好 |
-| usage | 会话、步骤与日期统计；供应商实际报告的 Token 统计；实际报告成本与模型维度统计 |
+| settings | 工作区登记、项目选择与默认目录；主题、语言、字体与代码显示；快捷键配置、验证与冲突检测；Agent 运行与能力偏好；设置项搜索 |
+| usage | 会话、步骤与日期统计；供应商实际报告的 Token 统计；实际报告成本与模型维度统计；工作台用量速览卡片 |
 | git | 状态、差异、日志与分支查看；批准后的暂存、提交、分支与 stash；检查点、恢复预览与恢复前备份；轮次首个改动前自动检查点；回退工作区到指定轮次检查点 |
-| workflows | DAG、声明式 DSL 与模型编排；只读及已批准可写 actor 与问答；持久恢复、结果复用与文件校验；动态并发、限流退避与跨运行调度；后台命令、日志、状态与取消；专家工作流（调研、计划、实现、审查） |
-| terminal | 工作区交互式 POSIX PTY；终端尺寸、日志、关闭与服务清理；默认 Shell 与终端偏好 |
+| workflows | DAG、声明式 DSL 与模型编排；只读及已批准可写 actor 与问答；持久恢复、结果复用与文件校验；动态并发、限流退避与跨运行调度；后台命令、日志、状态与取消；专家工作流（调研、计划、实现、审查）；按会话列出、取消与恢复动态工作流运行 |
+| terminal | 工作区交互式 POSIX PTY 与 Windows ConPTY；终端尺寸、日志、关闭与服务清理；默认 Shell 与终端偏好 |
 | office | DOCX 页面与嵌入图片预览；PPTX 幻灯片、图片与缓存图表；XLSX 工作表与缓存单元格值 |
 | commands | 自定义斜杠提示模板；命令资源创建、编辑与开关 |
 | skills | 技能资源与按需目录摘要；有界技能正文读取；目录型技能发现与来源覆盖；skills list/inspect 命令与聊天 /skills |
@@ -188,14 +199,14 @@ providers 的 CLI parser/handler 已迁入 `xueness/bundled_plugins/providers/op
 | subagents | 只读子任务与嵌套代理；后台并发派发、主代理持续工作、结果收集与完成检查；子任务进度、结果与协作取消；子代理资源与能力配置 |
 | network | 受限公网 HTTPS 页面读取；显式配置的网页搜索服务；独立 OpenAI-compatible 搜索模型；搜索地址、模型 ID 与密钥管理；按需 DNS/服务诊断；FakeIP 环境下可选的公开 DoH |
 | automation | 五字段 cron、时区与下次执行；计划审批与无人值守触发；持久认领、运行历史与暂停；闲时队列：本地低峰窗口排队执行、仅在空闲时与完成通知 |
-| extensions | 可信资源清单市场浏览；数据 manifest 安装、升级与移除 |
+| extensions | 可信资源清单市场浏览；数据 manifest 安装、升级与移除；插件市场清单只读校验与原子升级；插件组合 profile 档位 |
 | diagnostics | 脱敏支持诊断导出；状态存储统计与限定日志清理；实时本机 CPU、内存与磁盘采样 |
-| browser | 受审批约束的页面导航与检查；精确点击、输入与内存截图；浏览器控制配置与生命周期清理 |
+| browser | 受审批约束的页面导航与检查；精确点击、输入与内存截图；浏览器控制配置与生命周期清理；桌面 Chrome 资料选择、确认导入与持久浏览器环境检测 |
 | remote | 命名 SSH 主机连接配置；明确批准的远程 argv 执行；stdio JSON-RPC app-server 入口 |
 | bots | Telegram 白名单收件箱；明确批准的消息回复 |
 | onboarding | 模型与工作区初次配置向导；隐藏密钥输入与配置保存 |
 | updates | 源仓库版本与更新检查；明确批准的干净仓库快进更新；桌面客户端检查、下载、取消与安装控制 |
-| desktop | Windows/macOS 桌面宿主集成；原生目录选择与平台状态；集成标题栏与窗口控制 |
+| desktop | Windows/macOS 桌面宿主集成；原生目录选择与平台状态；集成标题栏与窗口控制；单实例、启动恢复与后台进程清理；Windows 系统托盘与关闭窗口后后台运行；托盘会话分组、快速打开、新建与反馈入口 |
 
 计划权限模式 `sessions.plan_mode` 在 build/edit/yolo 之外补上第四种模式，实现只落在 sessions 包内：`plan` 下读取、搜索类工具照常，写/编辑/执行/网页工具一律拒绝，唯一例外是本会话专属的计划草稿 `<状态目录>/plan-drafts/<会话 id>.md`（在状态目录内按会话划分，不在工作区内）。草稿路径布局与中英双语拒绝文案都由 `sessions/plan_mode.py` 决定，WebGate 只按该插件给出的凭据精确匹配放行一次写入，files 的写/编辑解析也先问 Gate，因此工作区 jail 未被放宽、没有新增内建工具或共享内核例外。拒绝结果带 `plan_mode_denied`，不会伪装成可批准的等待项；sessions 禁用或依赖不可用时 `plan` 值被拒绝，从 plan 切回 build/edit/yolo 沿用既有 `permission_mode_history` 审计。CLI 没有 `--permission-mode` 参数，故该模式仅经 HTTP 与工作台权限选择器提供。
 
