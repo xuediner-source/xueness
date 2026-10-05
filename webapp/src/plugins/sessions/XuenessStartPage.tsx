@@ -1,9 +1,10 @@
 /**
  * 空会话起始页（sessions 插件功能）。
  *
- * Qoder 式的起始布局：左侧是现有能力的快捷动作块（打开工作区、新建会话、
- * 从模板或技能开始——动作本身由容器按插件生效状态提供），右侧是「最近会话」
- * 卡片，最多 5 条，点一下打开。组件只做展示与选择回调，不发起请求。
+ * Qoder 式的起始布局：左侧三个大动作块（打开项目 / 克隆仓库 / 通过 SSH 连接），
+ * 右侧「最近项目」卡片置顶、「最近会话」为第二个分组。动作块与项目数据都由容器
+ * 按插件生效状态提供——克隆属于 git 插件、SSH 属于 remote 插件，插件未生效时容器
+ * 根本不会把该动作传进来，因此本组件不发起任何请求，只做展示与回调。
  */
 import React from "react";
 import { ChevronRight } from "lucide-react";
@@ -22,6 +23,13 @@ export type StartPageAction = {
   description?: string;
   Icon: React.ComponentType<{ size?: number | string; className?: string }>;
   onSelect(trigger: HTMLElement): void;
+};
+
+/** 最近项目：已登记工作区的一条记录（与 settings 的 recentDirectories 同形）。 */
+export type StartPageProject = {
+  path: string;
+  label?: string;
+  lastUsed?: string | number;
 };
 
 /**
@@ -48,21 +56,70 @@ export function recentSessionSummaries(
   return keyed.slice(0, Math.max(0, limit)).map(({ session }) => session);
 }
 
+/**
+ * 最近项目：按最后使用时间降序；没有可用时间戳时保持登记顺序并排在最后，
+ * 最多 limit 条（默认 5）。同一目录重复出现只保留最先出现的那条。
+ */
+export function recentStartPageProjects(
+  projects: readonly StartPageProject[] | null | undefined,
+  limit = 5,
+): StartPageProject[] {
+  if (!projects || projects.length === 0) return [];
+  const seen = new Set<string>();
+  const keyed: { project: StartPageProject; index: number; used: number }[] = [];
+  projects.forEach((project, index) => {
+    const path = typeof project?.path === "string" ? project.path.trim() : "";
+    if (!path || seen.has(path)) return;
+    seen.add(path);
+    const stamp = typeof project.lastUsed === "number" ? project.lastUsed : Date.parse(String(project.lastUsed ?? ""));
+    keyed.push({ project: { ...project, path }, index, used: Number.isFinite(stamp) ? stamp : Number.NEGATIVE_INFINITY });
+  });
+  keyed.sort((left, right) => {
+    if (left.used !== right.used) return right.used - left.used;
+    return left.index - right.index;
+  });
+  return keyed.slice(0, Math.max(0, limit)).map(({ project }) => project);
+}
+
+/** 项目名：优先用登记时的标签，否则取路径最后一段。 */
+export function startPageProjectName(project: StartPageProject): string {
+  const label = (project.label ?? "").trim();
+  if (label) return label;
+  const segments = project.path.replace(/\\/g, "/").split("/").filter(Boolean);
+  return segments[segments.length - 1] ?? project.path;
+}
+
+/** 缩写路径：只保留末尾 keep 段，前面的层级用 …/ 表示，完整路径放 title。 */
+export function abbreviatedWorkspacePath(path: string, keep = 2): string {
+  const normalized = (path ?? "").trim().replace(/\\/g, "/");
+  if (!normalized) return "";
+  const segments = normalized.split("/").filter(Boolean);
+  if (segments.length <= keep) return normalized;
+  const leading = normalized.startsWith("/") ? "/" : "";
+  return `${leading}…/${segments.slice(-keep).join("/")}`;
+}
+
 export type XuenessStartPageProps = {
   actions: StartPageAction[];
+  /** 已登记工作区；容器只在 settings+sessions 生效时取到，未提供时不渲染该卡片。 */
+  projects?: readonly StartPageProject[] | null;
   sessions: SessionSummary[];
   locale?: "zh" | "en";
   onSelectSession(id: string): void;
+  onSelectProject?(path: string): void;
 };
 
 export function XuenessStartPage({
   actions,
+  projects,
   sessions,
   locale = "zh",
   onSelectSession,
+  onSelectProject,
 }: XuenessStartPageProps): React.JSX.Element | null {
   const recent = recentSessionSummaries(sessions, 5);
-  if (actions.length === 0 && recent.length === 0) return null;
+  const recentProjects = projects === undefined || projects === null ? null : recentStartPageProjects(projects, 5);
+  if (actions.length === 0 && recent.length === 0 && recentProjects === null) return null;
   return (
     <div className="xn-start-page" data-testid="xn-start-page">
       {actions.length > 0 && (
@@ -87,36 +144,69 @@ export function XuenessStartPage({
           ))}
         </div>
       )}
-      <section className="xn-start-page__recent" aria-labelledby="xn-start-page-recent-title" data-testid="xn-start-page-recent">
-        <h2 id="xn-start-page-recent-title">{tr("最近会话")}</h2>
-        {recent.length === 0 ? (
-          <p className="xn-start-page__recent-empty">{tr("暂无最近会话")}</p>
-        ) : (
-          <ul className="xn-start-page__recent-list">
-            {recent.map((session) => {
-              const label = session.title || session.task || tr("未命名任务");
-              const updatedAt = formatPaletteUpdatedAt(session.updatedAt, locale);
-              return (
-                <li key={session.id}>
-                  <button
-                    type="button"
-                    className="xn-start-page__recent-item"
-                    data-testid={`start-recent-${session.id}`}
-                    title={label}
-                    onClick={() => onSelectSession(session.id)}
-                  >
-                    <span className="xn-start-page__recent-title">{label}</span>
-                    <span className="xn-start-page__recent-meta">
-                      <span>{commandPaletteStatusLabel(session.status)}</span>
-                      {updatedAt && <time dateTime={session.updatedAt}>{updatedAt}</time>}
-                    </span>
-                  </button>
-                </li>
-              );
-            })}
-          </ul>
+      <div className="xn-start-page__side">
+        {recentProjects !== null && (
+          <section
+            className="xn-start-page__recent"
+            aria-labelledby="xn-start-page-projects-title"
+            data-testid="xn-start-page-projects"
+          >
+            <h2 id="xn-start-page-projects-title">{tr("最近项目")}</h2>
+            {recentProjects.length === 0 ? (
+              <p className="xn-start-page__recent-empty">{tr("暂无最近项目")}</p>
+            ) : (
+              <ul className="xn-start-page__recent-list">
+                {recentProjects.map((project) => (
+                  <li key={project.path}>
+                    <button
+                      type="button"
+                      className="xn-start-page__recent-item"
+                      data-testid={`start-project-${project.path}`}
+                      title={project.path}
+                      onClick={() => onSelectProject?.(project.path)}
+                    >
+                      <span className="xn-start-page__recent-title">{startPageProjectName(project)}</span>
+                      <span className="xn-start-page__recent-meta">
+                        <span className="xn-start-page__project-path">{abbreviatedWorkspacePath(project.path)}</span>
+                      </span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
         )}
-      </section>
+        <section className="xn-start-page__recent" aria-labelledby="xn-start-page-recent-title" data-testid="xn-start-page-recent">
+          <h2 id="xn-start-page-recent-title">{tr("最近会话")}</h2>
+          {recent.length === 0 ? (
+            <p className="xn-start-page__recent-empty">{tr("暂无最近会话")}</p>
+          ) : (
+            <ul className="xn-start-page__recent-list">
+              {recent.map((session) => {
+                const label = session.title || session.task || tr("未命名任务");
+                const updatedAt = formatPaletteUpdatedAt(session.updatedAt, locale);
+                return (
+                  <li key={session.id}>
+                    <button
+                      type="button"
+                      className="xn-start-page__recent-item"
+                      data-testid={`start-recent-${session.id}`}
+                      title={label}
+                      onClick={() => onSelectSession(session.id)}
+                    >
+                      <span className="xn-start-page__recent-title">{label}</span>
+                      <span className="xn-start-page__recent-meta">
+                        <span>{commandPaletteStatusLabel(session.status)}</span>
+                        {updatedAt && <time dateTime={session.updatedAt}>{updatedAt}</time>}
+                      </span>
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </section>
+      </div>
     </div>
   );
 }

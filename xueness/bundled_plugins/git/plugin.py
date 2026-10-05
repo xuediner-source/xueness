@@ -10,7 +10,10 @@ def execute_cli(args, deps=None):
 
 
 def dispatch(method, parts, query, data, ctx):
-    from . import git_api, actions, turn_checkpoints
+    from . import actions, clone, git_api, turn_checkpoints
+    result = clone.dispatch(method, parts, query, data, ctx)
+    if result is not None:
+        return result
     result = actions.dispatch(method, parts, query, data, ctx)
     if result is not None:
         return result

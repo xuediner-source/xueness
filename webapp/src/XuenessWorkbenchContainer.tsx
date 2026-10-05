@@ -90,9 +90,11 @@ import { ForkSessionDialog } from "./plugins/sessions";
 import { SessionQueue } from "./plugins/sessions/SessionQueue";
 import { Approvals, Composer, WorkbenchHeader, heroGreeting, type ComposerDraftState } from "./plugins/sessions/XuenessWorkbenchView";
 import { XuenessStartPage, type StartPageAction } from "./plugins/sessions/XuenessStartPage";
+import { XuenessCloneDialog } from "./plugins/git/XuenessCloneDialog";
+import { loadWorkspaceCatalog, type RecentWorkspaceDirectory } from "./xuenessWorkspaces";
 import { XuenessUsageQuickCard } from "./plugins/usage/XuenessUsageQuickCard";
 import { IconBack, IconGear, IconNewTask, IconSearch, IconWorkflow, IconModel, IconXuenessMark } from "./ui/icons";
-import { CalendarClock, Archive, ArrowDownWideNarrow, ChevronsDownUp, Folder, FolderOpen, Hash, MessageCirclePlus, Sparkles, UserRound, CircleHelp, ChevronDown, Blocks, GitBranch, Bot } from "lucide-react";
+import { CalendarClock, Archive, ArrowDownWideNarrow, ChevronsDownUp, Folder, FolderOpen, Hash, MessageCirclePlus, UserRound, CircleHelp, ChevronDown, Blocks, GitBranch, Bot, Server } from "lucide-react";
 import { Select } from "./ui/Select";
 import { RegionBoundary } from "./ui/primitives";
 import { XuenessWorkspaceSettings } from "./plugins/settings/XuenessWorkspaceSettings";
@@ -351,6 +353,9 @@ export function XuenessWorkbenchContainer() {
   const [workspacePicking, setWorkspacePicking] = useState(false);
   const [workspacePickerMode, setWorkspacePickerMode] = useState<"workspace" | "project">("workspace");
   const workspacePickerOpener = useRef<HTMLElement | null>(null);
+  const [cloneOpen, setCloneOpen] = useState(false);
+  const cloneOpener = useRef<HTMLElement | null>(null);
+  const [recentProjects, setRecentProjects] = useState<RecentWorkspaceDirectory[] | null>(null);
   const [branchBusy, setBranchBusy] = useState(false);
   const [composerRequests] = useState(() => createComposerCatalogLoader());
   const [composerRefreshTick, setComposerRefreshTick] = useState(0);
@@ -1402,11 +1407,33 @@ export function XuenessWorkbenchContainer() {
     />
     {usageQuickCard}
   </>;
-  // 起始页动作块只接已有能力：工作区选择、新建任务与命令模板/技能资源视图。
+  // 起始页右侧「最近项目」来自 settings 已登记的工作区（带 lastUsed）。插件未生效
+  // 或起始页不可见时既不请求也不保留数据，禁用后不会再发起轮询。
+  const startPageVisible = panel === "chat" && !lightweightLayout && !activeId && !session;
+  const refreshRecentProjects = useCallback(async () => {
+    if (!pluginEffectiveRef.current("settings") || !pluginEffectiveRef.current("sessions")) {
+      setRecentProjects(null);
+      return;
+    }
+    try {
+      setRecentProjects((await loadWorkspaceCatalog()).recentDirectories ?? []);
+    } catch {
+      setRecentProjects(null);
+    }
+  }, []);
+  useEffect(() => {
+    if (!startPageVisible || !isPluginEffective("settings") || !isPluginEffective("sessions")) {
+      setRecentProjects(null);
+      return;
+    }
+    void refreshRecentProjects();
+  }, [startPageVisible, isPluginEffective, refreshRecentProjects]);
+  // 起始页三个动作块只接已有能力：工作区选择（sessions/settings）、克隆仓库（git）
+  // 与 SSH 连接（remote）；插件未生效时对应的块不出现。
   const startPageActions: StartPageAction[] = [
     {
-      id: "open-workspace",
-      label: tr("打开工作区"),
+      id: "open-project",
+      label: tr("打开项目"),
       description: tr("选择一个文件夹，在其中执行任务。"),
       Icon: FolderOpen,
       onSelect: (trigger) => {
@@ -1416,19 +1443,23 @@ export function XuenessWorkbenchContainer() {
         setWorkspacePicking(true);
       },
     },
-    {
-      id: "new-session",
-      label: tr("新建会话"),
-      description: tr("回到空白输入卡，立即开始新任务。"),
-      Icon: MessageCirclePlus,
-      onSelect: () => startNewTask(),
-    },
-    ...(pluginAvailability.capabilityKinds.length > 0 ? [{
-      id: "skills-commands",
-      label: tr("从模板或技能开始"),
-      description: tr("浏览命令模板与技能资源，在输入框中引用。"),
-      Icon: Sparkles,
-      onSelect: () => setPanel("capabilities"),
+    ...(isPluginEffective("git") ? [{
+      id: "clone-repository",
+      label: tr("克隆仓库"),
+      description: tr("把远程仓库下载到已授权目录，并登记为项目。"),
+      Icon: GitBranch,
+      onSelect: (trigger: HTMLElement) => {
+        if (busy || branchBusy) return;
+        cloneOpener.current = trigger;
+        setCloneOpen(true);
+      },
+    }] : []),
+    ...(isPluginEffective("remote") ? [{
+      id: "connect-ssh",
+      label: tr("通过 SSH 连接"),
+      description: tr("使用已配置的主机连接远程工作区。"),
+      Icon: Server,
+      onSelect: () => setPanel("remote"),
     }] : []),
   ];
   const composerStartActions = {
@@ -2094,9 +2125,11 @@ export function XuenessWorkbenchContainer() {
           </div>
           {!lightweightLayout && <XuenessStartPage
             actions={startPageActions}
+            projects={recentProjects}
             sessions={liveSessions}
             locale={locale}
             onSelectSession={selectSession}
+            onSelectProject={root => chooseWorkspace(root)}
           />}
         </div>
       )}
@@ -2106,6 +2139,12 @@ export function XuenessWorkbenchContainer() {
       <XuenessWorkspacePickerDialog open={workspacePicking} currentRoot={draftRoot ?? composerCatalog.root} returnFocusTo={workspacePickerOpener.current}
         mode={workspacePickerMode}
         onChoose={chooseWorkspace} onCancel={() => setWorkspacePicking(false)} />
+
+      <XuenessCloneDialog open={cloneOpen && isPluginEffective("git")}
+        defaultParent={(draftRoot ?? composerCatalog.root) ?? null}
+        returnFocusTo={cloneOpener.current}
+        onCancel={() => setCloneOpen(false)}
+        onCloned={(root) => { setCloneOpen(false); void refreshRecentProjects(); chooseWorkspace(root); }} />
 
       <XuenessRenameDialog
         open={renameRequest !== null}

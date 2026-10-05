@@ -1,7 +1,7 @@
 {
   "id": "git",
   "name": "Git 审查",
-  "description": "只读仓库状态、工作树 diff 与提交记录。",
+  "description": "只读仓库状态、工作树 diff 与提交记录，并把远程仓库克隆到已授权目录。",
   "version": "1.0.0",
   "apiVersion": 1,
   "defaultEnabled": true,
@@ -18,10 +18,12 @@
     "command"
   ],
   "httpFamilies": [
-    "sessions/*/git"
+    "sessions/*/git",
+    "git/clone"
   ],
   "modules": [
     "actions",
+    "clone",
     "git_api",
     "operator_cli",
     "turn_checkpoints"
@@ -31,6 +33,11 @@
       "id": "git.inspect",
       "name": "状态、差异、日志与分支查看",
       "nameEn": "Status, diffs, logs and branches"
+    },
+    {
+      "id": "git.clone",
+      "name": "克隆远程仓库到已授权目录",
+      "nameEn": "Clone a remote repository into an authorized directory"
     },
     {
       "id": "git.actions",
@@ -55,6 +62,7 @@
   ],
   "frontendModules": [
     "plugins/git/XuenessGitView.tsx",
+    "plugins/git/XuenessCloneDialog.tsx",
     "xuenessGit.ts"
   ]
 }

@@ -28,7 +28,7 @@ flowchart LR
 
 `plugin_runtime.py` 是共同注册表：根据包内 manifest 处理依赖和命令/API 所属关系，调用 `register_cli`、`execute_cli`、`dispatch`、`tools` 等贡献。`tool_contract.py` 定义 `BuiltinTool` 和只在调用期间存在的 `ContextVar` 执行上下文；`tool_registry.py` 合并稳定工具对象，schema 和实际 dispatch 使用相同对象。执行批准所需的规范化 subject 由工具自身提供，防止 UI 与 handler 对同一调用产生不同批准内容。
 
-前端产品组件放在 `webapp/src/plugins/<id>/`，容器从所属插件入口挂载；静态 `xuenessPluginRegistry.ts` 根据后端 `effective` 状态选择已知视图，目录数据不能注入 JavaScript 或任意路由。宿主恢复入口、工作台布局和跨资源的能力编辑界面属于共享基础设施。下表列出已迁入插件目录的 68 个工作台组件与登记模块（21 个插件目录）；完整声明以各插件 manifest 的 `frontendModules` 为准。共享理由只有一处的纯展示文件除外：settings 的 `SettingsPrimitives.tsx` 渲染分组卡片、行、空状态与工作区信息卡，不读取状态、不发请求也不判断权限，因此其它插件的设置分区可复用它保持同一布局。
+前端产品组件放在 `webapp/src/plugins/<id>/`，容器从所属插件入口挂载；静态 `xuenessPluginRegistry.ts` 根据后端 `effective` 状态选择已知视图，目录数据不能注入 JavaScript 或任意路由。宿主恢复入口、工作台布局和跨资源的能力编辑界面属于共享基础设施。下表列出已迁入插件目录的 69 个工作台组件与登记模块（21 个插件目录）；完整声明以各插件 manifest 的 `frontendModules` 为准。共享理由只有一处的纯展示文件除外：settings 的 `SettingsPrimitives.tsx` 渲染分组卡片、行、空状态与工作区信息卡，不读取状态、不发请求也不判断权限，因此其它插件的设置分区可复用它保持同一布局。
 
 | 插件 | 插件目录下的前端组件 |
 |---|---|
@@ -40,7 +40,7 @@ flowchart LR
 | usage | `UsagePanel.tsx`、`XuenessUsageQuickCard.tsx`、`XuenessUsageSettings.tsx` |
 | memory | `MemoryPanel.tsx`、`MemorySettings.tsx`、`index.tsx` |
 | terminal | `XuenessTerminalPreferences.tsx`、`index.tsx` |
-| git | `XuenessGitView.tsx` |
+| git | `XuenessCloneDialog.tsx`、`XuenessGitView.tsx` |
 | office | `OfficeDocumentRenderer.tsx` |
 | automation | `OffPeakTasks.tsx`、`automationModel.ts`、`index.tsx`、`offPeakModel.ts` |
 | browser | `BrowserSettings.tsx`、`DesktopBrowserImport.tsx` |
@@ -66,7 +66,7 @@ flowchart LR
 | memory | 记忆注入、轨道、手动编辑/冲突检测 | — | 开 |
 | settings | 配置、主题/编辑器、快捷键验证 | — | 开 |
 | usage | 会话/步骤统计、厂商报告 token 与成本 | — | 开 |
-| git | 状态/diff/log、暂存/提交/分支/stash、检查点/恢复 | — | 开 |
+| git | 状态/diff/log、暂存/提交/分支/stash、检查点/恢复、克隆仓库 | — | 开 |
 | workflows | DAG/DSL、模型编排、actor、后台命令、复用/并发 | sessions, files, shell | 开 |
 | terminal | 真实 POSIX PTY | sessions, shell | 开 |
 | office | DOCX 页面、PPTX 图片/图表、XLSX 缓存值预览 | files | 开 |
@@ -176,7 +176,7 @@ providers 的 CLI parser/handler 已迁入 `xueness/bundled_plugins/providers/op
 
 ## 功能逐项归属清单
 
-下表概述当前 27 份 manifest 中的 135 项用户能力。命令/工具/依赖和实际实现文件以同一份 manifest 为准；前端卡片直接展示该功能清单，不维护第二份隐藏列表。纯安全内核与通用布局的边界如前文所述。
+下表概述当前 27 份 manifest 中的 136 项用户能力。命令/工具/依赖和实际实现文件以同一份 manifest 为准；前端卡片直接展示该功能清单，不维护第二份隐藏列表。纯安全内核与通用布局的边界如前文所述。
 
 | 插件 | 已实现的用户能力 |
 |---|---|
@@ -188,7 +188,7 @@ providers 的 CLI parser/handler 已迁入 `xueness/bundled_plugins/providers/op
 | memory | 只读记忆轨道与上下文注入（支持 YAML frontmatter 与 HTML 注释自动清洗）；手动编辑与版本冲突检测；记忆能力与工作区配置 |
 | settings | 工作区登记、项目选择与默认目录；主题、语言、字体与代码显示；快捷键配置、验证与冲突检测；Agent 运行与能力偏好；设置项搜索 |
 | usage | 会话、步骤与日期统计；供应商实际报告的 Token 统计；实际报告成本与模型维度统计；工作台用量速览卡片 |
-| git | 状态、差异、日志与分支查看；批准后的暂存、提交、分支与 stash；检查点、恢复预览与恢复前备份；轮次首个改动前自动检查点；回退工作区到指定轮次检查点 |
+| git | 状态、差异、日志与分支查看；克隆远程仓库到已授权目录；批准后的暂存、提交、分支与 stash；检查点、恢复预览与恢复前备份；轮次首个改动前自动检查点；回退工作区到指定轮次检查点 |
 | workflows | DAG、声明式 DSL 与模型编排；只读及已批准可写 actor 与问答；持久恢复、结果复用与文件校验；动态并发、限流退避与跨运行调度；后台命令、日志、状态与取消；专家工作流（调研、计划、实现、审查）；按会话列出、取消与恢复动态工作流运行 |
 | terminal | 工作区交互式 POSIX PTY 与 Windows ConPTY；终端尺寸、日志、关闭与服务清理；默认 Shell 与终端偏好 |
 | office | DOCX 页面与嵌入图片预览；PPTX 幻灯片、图片与缓存图表；XLSX 工作表与缓存单元格值 |
@@ -568,3 +568,15 @@ subagents 插件登记新功能 `subagents.sidepane`（Web 端子代理运行态
 2. **零请求与轻量档保护**：侧栏在未打开（`isOpen=false`）、会话未选中、插件禁用或轻量模式（`lightweightLayout` / `activeRuntimeProfile === "lightweight"`）下直接返回 `null`，且不启动任何 HTTP 轮询；仅在面板打开且页面可见（`document.visibilityState === "visible"`）时按 2s 间隔通过既有只读接口 `GET /api/sessions/<id>/tasks` 刷新。
 3. **协作取消**：对运行中的子任务提供「停止会话（取消全部子任务）」按钮，调用既有会话停止接口 `POST /api/sessions/<id>/stop`，主代理与子代理协同优雅退出；已结束任务不显示该按钮。目前没有单个子任务的取消接口，因此按钮文案明确写作「停止会话（取消全部子任务）」，不会假装只取消一项。
 4. **历史合并**：后端 `operations_api.py` 的任务列表接口合并会话持久历史中的 `task_runs` 与内存中正在运行的活跃注册表 `task_registry`，确保多轮对话后历史子任务记录完整呈现。
+## 起始页与克隆仓库（git.clone，2026-10-05）
+
+git 插件登记新功能 `git.clone`（克隆远程仓库到已授权目录），完整目录现为 **27 个插件、136 项登记功能**。对齐 Qoder 欢迎页：空会话起始页左侧三个动作块「打开项目」（复用既有工作区选择，sessions/settings 生效时出现）、「克隆仓库」（git 生效时出现）、「通过 SSH 连接」（remote 生效时出现，只打开既有远程连接面板，不新造 SSH 实现）；右侧「最近项目」取 settings 已登记的 `recentDirectories`，按 lastUsed 降序最多 5 个，点击切换工作区；起始页不可见或插件未生效时不请求。
+
+### 克隆的安全边界
+
+- 入口：`POST /api/git/clone`（httpFamilies `git/clone`，沿用宿主的 Host/Origin/CSRF 防护与插件开关）与 CLI `xueness git clone <url> <dest> --confirmed [--root <父目录>]`。两者都走 `clone.clone_repository`，每次重新读取 git 开关；缺少 `confirmed: true` 一律 400。
+- 远程地址只接受 `https://`（不允许内嵌凭据）、`ssh://` 与 scp 式 `[user@]host:path`；主机名必须以字母或数字开头，scp 路径不能以 `-` 开头。`file://`、`ext::`、`git://`、`http://`、本地路径、以 `-` 开头的值和含空白/控制字符的值在启动子进程前就被拒绝。
+- 命令是固定 argv：`git -c protocol.ext.allow=never clone -- <url> <dest>`，不经 shell，带 300 秒超时；环境设 `GIT_TERMINAL_PROMPT=0`、清空 askpass，ssh 默认 `BatchMode=yes`，不会卡在交互提示上。git 的 stderr 只进服务端日志，返回给浏览器的是固定文案。
+- 目标目录必须是绝对路径、不含 `.`/`..`、末段是合法项目名；上级目录必须已存在、可写、不是根目录/家目录/临时目录等宽泛位置，且位于已授权工作区内（HTTP 用 operator 配置与原生选择器授权的根；CLI 以命令行给出的上级目录为授权，可用 `--root` 钉住）。目标不能是符号链接，已存在时必须是空目录。
+- 成功后通过 settings 插件既有的 `remember_directory` 登记为最近项目，不新增第二份授权列表、不扩大 allowlist。
+- 回归见 `tests/test_git_clone.py`：危险 URL 形式逐条拒绝且不触达子进程、固定 argv 与 `--`、目录约束（越界、非空、文件、符号链接、`..`、相对路径、宽泛目录）、`root` 钉住、确认必需、插件关闭 403、真实克隆本地裸仓库（经测试专用 `URL_TRANSPORT` 把已通过校验的 https 地址改指本地仓库，而不是放开 `file://`）并登记最近项目、CLI 确认与参数校验。

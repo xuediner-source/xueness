@@ -1689,3 +1689,24 @@ Object.assign(messages, {
   "添加": "Add",
   "查看模型文档": "View Docs",
 });
+
+Object.assign(messages, {
+  "打开项目": "Open project",
+  "克隆仓库": "Clone repository",
+  "把远程仓库下载到已授权目录，并登记为项目。": "Download a remote repository into an authorized directory and register it as a project.",
+  "通过 SSH 连接": "Connect via SSH",
+  "使用已配置的主机连接远程工作区。": "Reach a remote workspace with a host you already configured.",
+  "最近项目": "Recent projects",
+  "暂无最近项目": "No recent projects",
+  "仓库地址": "Repository URL",
+  "支持 https://、ssh:// 与 git@host:path 形式；本地路径与其他协议会被拒绝。":
+    "Accepts https://, ssh:// and git@host:path; local paths and other protocols are refused.",
+  "目标目录": "Target directory",
+  "绝对路径，且该目录需为空": "Absolute path; the directory must be empty",
+  "选择上级文件夹": "Choose a parent folder",
+  "此连接不支持系统文件夹选择窗口": "This connection cannot open the system folder picker",
+  "选择目录": "Choose directory",
+  "我确认在本机新建目录并克隆这个仓库。": "I confirm this creates a new directory on this machine and clones the repository into it.",
+  "开始克隆": "Start clone",
+  "正在克隆…": "Cloning…",
+});
