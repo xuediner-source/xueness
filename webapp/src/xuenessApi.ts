@@ -420,6 +420,31 @@ export async function adoptProviderCompatibility(id: string, optionsHash: string
   return post<{ provider: ProviderSummary }>("/api/providers/compatibility-adopt", { id, optionsHash });
 }
 
+/** providers.default_selection: the stored default model and reasoning level. */
+export type DefaultModelSelection = {
+  providerId?: string | null;
+  model?: string | null;
+  reasoningEffort?: string | null;
+};
+
+/** GET /api/providers/default; ``null`` when nothing was saved or it no longer resolves. */
+export async function loadDefaultModelSelection(): Promise<DefaultModelSelection | null> {
+  const payload = await get<{ default: DefaultModelSelection | null }>("/api/providers/default");
+  return payload.default ?? null;
+}
+
+/** POST /api/providers/default; the server validates before storing and answers 400 otherwise. */
+export async function saveDefaultModelSelection(
+  selection: DefaultModelSelection,
+): Promise<DefaultModelSelection | null> {
+  const payload = await post<{ default: DefaultModelSelection | null }>("/api/providers/default", {
+    providerId: selection.providerId ?? null,
+    model: selection.model ?? null,
+    reasoningEffort: selection.reasoningEffort ?? null,
+  });
+  return payload.default ?? null;
+}
+
 /** POST /api/providers/discover; reads the saved OpenAI profile without sending a chat request. */
 export async function discoverProviderModels(id: string): Promise<ProviderModelDiscovery> {
   const payload = await post<unknown>("/api/providers/discover", { id });

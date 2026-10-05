@@ -19,7 +19,7 @@ import {
   providerSavePayload,
   validateProviderDraft,
 } from './index';
-import { adoptProviderCompatibility, testProviderCompatibility, testProviderConnection } from '../../xuenessApi';
+import { adoptProviderCompatibility, saveDefaultModelSelection, testProviderCompatibility, testProviderConnection } from '../../xuenessApi';
 import type { ProviderCompatibilityTest, ProviderConnectionTest, ProviderSummary } from '../../xuenessApi';
 
 const provider = (overrides: Partial<ProviderSummary> = {}): ProviderSummary => ({
@@ -407,6 +407,28 @@ test('compatibility diagnostics send only the saved ID, selected mode and candid
     id: 'local-openai', mode: 'native_tool_call',
     compatibility: { toolChoice: 'required', parallelToolCalls: false, think: false },
   });
+});
+
+test('default model selection is stored through the providers default route', async () => {
+  const originalFetch = globalThis.fetch;
+  const calls: { url: string; init?: RequestInit }[] = [];
+  const saved = { providerId: 'local-openai', model: 'gpt-test', reasoningEffort: 'high' };
+  globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = String(input);
+    calls.push({ url, init });
+    if (url === '/api/csrf') return new Response(JSON.stringify({ csrfToken: 'csrf-fixture' }), { status: 200 });
+    return new Response(JSON.stringify({ default: saved }), { status: 200 });
+  }) as typeof fetch;
+  try {
+    assert.deepEqual(await saveDefaultModelSelection(saved), saved);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+  assert.equal(calls[0].url, '/api/csrf');
+  assert.equal(calls[1].url, '/api/providers/default');
+  assert.equal(calls[1].init?.method, 'POST');
+  assert.equal(new Headers(calls[1].init?.headers).get('X-CSRF-Token'), 'csrf-fixture');
+  assert.deepEqual(JSON.parse(String(calls[1].init?.body)), saved);
 });
 
 test('compatibility diagnostics require an unchanged saved connection and never save candidates', () => {

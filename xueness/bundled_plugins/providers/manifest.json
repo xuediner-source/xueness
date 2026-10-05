@@ -26,6 +26,7 @@
   "modules": [
     "activity",
     "context_budget",
+    "default_selection",
     "lightweight",
     "lightweight_config",
     "operator_cli",
@@ -61,6 +62,11 @@
       "id": "providers.protocols",
       "name": "OpenAI 兼容与 Anthropic 协议",
       "nameEn": "OpenAI-compatible and Anthropic protocols"
+    },
+    {
+      "id": "providers.default_selection",
+      "name": "默认模型与推理档位保存",
+      "nameEn": "Saved default model and reasoning level"
     },
     {
       "id": "providers.discovery",

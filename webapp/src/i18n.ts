@@ -1569,3 +1569,10 @@ Object.assign(messages, {
   "已切换 {0} 个插件开关": "Changed {0} plugin switches",
   "；{0} 项提示": "; {0} notices",
 });
+
+// app-server 之外的运行中切换：模型菜单里的「设为默认」。
+Object.assign(messages, {
+  "设为默认": "Set as default",
+  "已设为默认": "Default saved",
+  "把当前模型与推理档位存为默认，之后的新会话与未指定模型的运行都使用它。": "Save the current model and reasoning level as the default for later sessions and runs without an explicit model.",
+});

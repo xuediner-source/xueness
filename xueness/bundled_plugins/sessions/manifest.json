@@ -26,7 +26,8 @@
   "capabilities": [],
   "httpFamilies": [
     "composer",
-    "sessions"
+    "sessions",
+    "sessions/*/model"
   ],
   "modules": [
     "cli",
@@ -39,6 +40,7 @@
     "forking",
     "http_routes",
     "manual_compact",
+    "model_switch",
     "operator_cli",
     "plan_mode",
     "queue",
@@ -126,6 +128,11 @@
       "id": "sessions.tool_concurrency",
       "name": "依赖感知的工具并发调度",
       "nameEn": "Dependency-aware tool concurrency"
+    },
+    {
+      "id": "sessions.runtime_model_switch",
+      "name": "运行中切换模型与推理档位（/model、/effort）",
+      "nameEn": "Switch model and reasoning level mid-run via /model and /effort"
     }
   ],
   "frontendModules": [

@@ -244,8 +244,10 @@ CHAT_HELP = """/help               显示帮助与自定义命令
 /paste-image        显式捕获剪贴板 PNG，随下一条输入发送（不会自动读取剪贴板）
 /attachments        查看待发送附件
 /detach N|all       移除第 N 个或所有待发送附件
-/models             列出已保存的模型配置
-/model ID [MODEL]   切换供应商/模型；env 使用环境配置
+/models             列出已保存的模型配置与当前选择
+/model <ID> [MODEL] 切换供应商/模型；亦支持 /model provider/model，env 使用环境配置
+/model save-default 把当前模型与推理档位存为默认
+/effort list|<档位> 查看或切换推理档位，save-default 存为默认
 /dwf [list|cancel [runId]|resume <runId>]
                     本会话启动的动态工作流运行
 /compact [说明]     立即按预算压缩上下文（不调用模型，原始日志保留）
@@ -264,8 +266,10 @@ CHAT_HELP_EN = """/help               Show help and custom commands
 /paste-image        Explicitly capture a clipboard PNG for the next input
 /attachments        List queued attachments
 /detach N|all       Remove one or all queued attachments
-/models             List saved model profiles
-/model ID [MODEL]   Switch provider/model; env uses environment config
+/models             List saved model profiles and the current choice
+/model <ID> [MODEL] Switch provider/model; /model provider/model and env also work
+/model save-default Store the current model and reasoning level as the default
+/effort list|<level> Show or change the reasoning level; save-default stores it
 /dwf [list|cancel [runId]|resume <runId>]
                     Dynamic workflow runs started by this session
 /compact [notes]    Compact the context to budget now (no model call; journal kept)
@@ -472,29 +476,16 @@ def _chat_loop_owned(args, parser, store, session, owned):
             for item in _load_commands(args.state):
                 print(f"/{item['id']}  {item.get('description', '')}", file=sys.stderr)
             continue
-        if command in ("/models", "/model"):
-            if not argument:
-                print(json.dumps(providers_api._list({"state_dir": args.state}), ensure_ascii=False), file=sys.stderr)
-                continue
+        if command in ("/models", "/model", "/effort"):
+            from . import model_switch
             try:
-                values = shlex.split(argument)
-                if len(values) not in (1, 2):
-                    raise ValueError("用法: /model ID [MODEL]")
-                pid = None if values[0] == "env" else values[0]
-                model = values[1] if len(values) == 2 else None
-                next_provider = provider_config.resolve(args.state, pid, model,
-                                                        reasoning_effort=args.reasoning_effort,
-                                                        **({'runtime_profile': args.runtime_profile} if args.runtime_profile is not None else {}))
-                args.provider_id, args.model = pid, model
-                if s:
-                    s["model_selection"] = _model_selection_record(
-                        pid, model, args.reasoning_effort)
-                    s['runtime_profile'] = args.runtime_profile or getattr(next_provider, 'runtime_profile', 'standard')
-                    store.save(s)
-                provider = next_provider if gate else None
-                print(f"模型已切换: {values[0]} {model or ''}", file=sys.stderr)
-            except ValueError as exc:
-                print(f"! {exc}", file=sys.stderr)
+                status_text, next_provider = model_switch.chat_switch(
+                    args.state, command, argument, store, s, args)
+                print(status_text, file=sys.stderr)
+                if next_provider is not None:
+                    provider = next_provider if gate else None
+            except (OSError, ValueError) as exc:
+                print(f"! 无法切换模型: {exc}", file=sys.stderr)
             continue
         if command == "/status":
             print(json.dumps({"id": s["id"] if s else None, "root": str(root),

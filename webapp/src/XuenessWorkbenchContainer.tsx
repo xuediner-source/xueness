@@ -1,4 +1,4 @@
-import { listPlugins, listResources, setPluginEnabled, post, type XuenessPlugin } from "./xuenessApi";
+import { listPlugins, listResources, setPluginEnabled, post, saveDefaultModelSelection, type XuenessPlugin } from "./xuenessApi";
 import { t as tr, tf, useLocale, setLocale } from './i18n';
 /**
  * Xueness workbench container — chat-first.
@@ -75,7 +75,7 @@ import {
   type XuenessDirectoryListing,
 } from "./xuenessWorkspace";
 import { getRunChoices, mergeRunChoices, setRunChoices, type RunChoices } from "./xuenessBridge";
-import { effectiveRuntimeProfile, emptyComposerCatalog, prepareComposer, runtimeProfileFromSession, switchComposerBranch, type ComposerCatalog, type ComposerInput } from "./xuenessComposer";
+import { effectiveRuntimeProfile, emptyComposerCatalog, prepareComposer, runtimeProfileFromSession, switchComposerBranch, type ComposerCatalog, type ComposerInput, type ComposerModel } from "./xuenessComposer";
 import { createComposerCatalogLoader, clearWorkspaceComposerCatalog } from './plugins/sessions/composerCatalogLifecycle';
 import { ComposerWorkspaceSelect } from './plugins/sessions/ComposerWorkspaceSelect';
 import { XuenessComposerToolbar } from "./plugins/sessions/XuenessComposerToolbar";
@@ -691,6 +691,24 @@ export function XuenessWorkbenchContainer() {
     });
   }, [activeId, draftRoot, isPluginEffective, updateChoices, composerRequests]);
   useEffect(() => { void refreshComposerCatalog(); return () => composerRequests.cancel(); }, [refreshComposerCatalog, composerRequests, composerRefreshTick]);
+  // 「设为默认」属于 providers.default_selection：容器只在插件生效时把菜单里的
+  // 当前选择转发到既有后端接口，校验与存储都在服务端完成。
+  const [defaultSaved, setDefaultSaved] = useState(false);
+  const saveDefaultModel = useCallback(async (model: ComposerModel) => {
+    if (!isPluginEffective("providers")) return;
+    try {
+      const saved = await saveDefaultModelSelection({
+        providerId: model.id || null,
+        model: choices.model || model.model || null,
+        reasoningEffort: choices.reasoning_effort ?? null,
+      });
+      setDefaultSaved(saved !== null);
+    } catch (reason) {
+      setDefaultSaved(false);
+      setError(reason instanceof Error ? reason.message : String(reason));
+    }
+  }, [choices.model, choices.reasoning_effort, isPluginEffective]);
+  useEffect(() => setDefaultSaved(false), [choices.provider_id, choices.model, choices.reasoning_effort]);
   useEffect(() => {
     if (!session || session.id !== activeId || executingSessions.has(session.id) || loadedSessionChoices.current === session.id) return;
     loadedSessionChoices.current = session.id;
@@ -1357,6 +1375,8 @@ export function XuenessWorkbenchContainer() {
       loading={composerCatalogLoading} error={composerCatalogError}
       onReload={() => void refreshComposerCatalog()}
       onManageModels={() => setPanel(isPluginEffective("providers") ? "providers" : "plugins")}
+      onSaveDefault={isPluginEffective("providers") ? model => void saveDefaultModel(model) : undefined}
+      defaultSaved={defaultSaved}
       onBackground={isPluginEffective("workflows") ? () => setPanel("workflows") : undefined}
       backgroundCount={composerCatalog.backgroundCount ?? 0}
       browserEnabled={choices.browser === true}

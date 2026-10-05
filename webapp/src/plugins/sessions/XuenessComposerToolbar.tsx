@@ -15,6 +15,9 @@ export type ComposerToolbarProps = {
   error: string;
   onReload(): void;
   onManageModels(): void;
+  /** 「设为默认」：宿主把入口接到 providers.default_selection 的后端接口。 */
+  onSaveDefault?(model: ComposerModel): void;
+  defaultSaved?: boolean;
   onBackground?: () => void;
   backgroundCount?: number;
   /** Kept for callers that still pass it; the actual selected state comes from choices.browser. */
@@ -198,6 +201,9 @@ export type ComposerModelMenuProps = {
   onChooseProfile(profile: RuntimeProfile): void;
   onReload(): void;
   onManageModels(): void;
+  /** 「设为默认」小操作（providers.default_selection）；宿主不接线时整个入口不渲染。 */
+  onSaveDefault?(model: ComposerModel): void;
+  defaultSaved?: boolean;
   /** Close the popover; a truthy argument re-focuses the composer input. */
   onRequestClose(restoreInput?: boolean): void;
 };
@@ -225,6 +231,8 @@ export function ComposerModelMenu({
   onChooseProfile,
   onReload,
   onManageModels,
+  onSaveDefault,
+  defaultSaved = false,
   onRequestClose,
 }: ComposerModelMenuProps): React.JSX.Element {
   /** Row the detail card is anchored to; set on hover or keyboard focus. */
@@ -389,6 +397,17 @@ export function ComposerModelMenu({
         {pauseReason && <span className="xn-composer-toolbar__pause-reason">{tf("暂停原因：{0}", [pauseReason])}</span>}
       </div>}
       <div className="xn-composer-toolbar__model-footer">
+        {onSaveDefault && selectedModel && (
+          <button
+            type="button"
+            role="menuitem"
+            className="xn-composer-toolbar__default"
+            data-testid="composer-save-default"
+            disabled={disabled || !selectedModel.configured}
+            title={tr("把当前模型与推理档位存为默认，之后的新会话与未指定模型的运行都使用它。")}
+            onClick={() => onSaveDefault(selectedModel)}
+          >{defaultSaved && <span className="xn-composer-toolbar__menu-indicator" aria-hidden="true"><IconCheck /></span>}<span>{tr(defaultSaved ? "已设为默认" : "设为默认")}</span></button>
+        )}
         <button
           type="button"
           role="menuitem"
@@ -426,6 +445,8 @@ export function XuenessComposerToolbar({
   error,
   onReload,
   onManageModels,
+  onSaveDefault,
+  defaultSaved = false,
   onBackground,
   backgroundCount = 0,
   onToggleBrowser,
@@ -695,6 +716,8 @@ export function XuenessComposerToolbar({
               onChooseProfile={chooseRuntimeProfile}
               onReload={onReload}
               onManageModels={onManageModels}
+              onSaveDefault={onSaveDefault}
+              defaultSaved={defaultSaved}
               onRequestClose={closeModelMenu}
             />
           )}

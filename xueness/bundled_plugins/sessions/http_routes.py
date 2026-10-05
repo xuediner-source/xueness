@@ -442,6 +442,7 @@ def handle_GET(self, parts, path, data):
             'permission_mode': session.get('permission_mode', 'build'),
             'permission_mode_history': session.get('permission_mode_history', []),
             'model_selection': _public_model_selection(session),
+            'model_history': session.get('model_history', []),
             'runtime_profile': session.get('runtime_profile'),
             'runtime_budget': _public_runtime_budget(session),
             'runtime_activity': _public_runtime_activity(session),
@@ -520,6 +521,11 @@ def handle_GET(self, parts, path, data):
             self._send(200, host.events_protocol.sse_body(envelope['events']), 'text/event-stream')
             return True
         self._send(200, envelope)
+        return True
+    if len(parts) == 4 and parts[0] == 'api' and (parts[1] == 'sessions') and (parts[3] == 'model') and host._valid_sid(parts[2]):
+        from . import model_switch
+        status, payload = model_switch.describe_http(ctx, parts[2])
+        self._send(status, payload)
         return True
     if len(parts) == 4 and parts[0] == 'api' and (parts[1] == 'sessions') and (parts[3] == 'journal') and host._valid_sid(parts[2]):
         try:
@@ -695,6 +701,13 @@ def handle_POST(self, parts, path, data):
                 return True
         _remember_workspace(ctx, session['root'])
         self._send(200, {'id': session['id'], 'status': session['status'], 'steps': session['steps']})
+        return True
+    if len(parts) == 4 and parts[0] == 'api' and (parts[1] == 'sessions') and (parts[3] == 'model') and host._valid_sid(parts[2]):
+        # sessions.runtime_model_switch: validate and store the choice. A running
+        # turn applies it to its next model request only; see model_switch.
+        from . import model_switch
+        status, payload = model_switch.apply_http(ctx, parts[2], data)
+        self._send(status, payload)
         return True
     if len(parts) == 4 and parts[0] == 'api' and (parts[1] == 'sessions') and (parts[3] == 'run') and host._valid_sid(parts[2]):
         continue_queue = data.get('continue_queue', False)
@@ -908,6 +921,10 @@ def handle_POST(self, parts, path, data):
                 ctx['store'].save(session)
                 gate = host.WebGate(host.Path(session['root']), parts[2], ctx['approvals'], ctx['lock'], mode=mode, disallow=disallowed, session=session, permission_mode=permission_mode, plan_draft=plan_draft)
                 gate.allow_real = ctx['allow_real']
+                # /model, /effort and the app-server can retarget this run, but
+                # only from its next model request: see sessions/model_switch.py.
+                from . import model_switch
+                provider = model_switch.register(ctx, parts[2], provider, gate)
                 if session.get('remote_connection'):
                     from ...tool_registry import REMOTE_LOCAL_TOOL_NAMES
                     gate.disallow_tool_names = REMOTE_LOCAL_TOOL_NAMES
@@ -1023,6 +1040,8 @@ def handle_POST(self, parts, path, data):
             self._send(500, {'error': 'run failed'})
             return True
         finally:
+            from . import model_switch
+            model_switch.unregister(ctx, parts[2])
             with ctx['lock']:
                 ctx['running'].discard(parts[2])
                 ctx['stop_requested'].discard(parts[2])

@@ -312,6 +312,7 @@
 .xn-composer-toolbar__permission-option,
 .xn-composer-toolbar__model-option,
 .xn-composer-toolbar__manage,
+.xn-composer-toolbar__default,
 .xn-composer-toolbar__error button {
   display: flex;
   align-items: center;
@@ -382,6 +383,7 @@
 .xn-composer-toolbar__model-option:hover:not(:disabled),
 .xn-composer-toolbar__model-option[aria-pressed="true"],
 .xn-composer-toolbar__manage:hover:not(:disabled),
+.xn-composer-toolbar__default:hover:not(:disabled),
 .xn-composer-toolbar__error button:hover:not(:disabled) {
   background: var(--bg-hover);
 }
@@ -722,6 +724,7 @@
 .xn-shell-layout .xn-composer-toolbar__menu-row:hover:not(:disabled),
 .xn-shell-layout .xn-composer-toolbar__model-option:hover:not(:disabled),
 .xn-shell-layout .xn-composer-toolbar__manage:hover:not(:disabled),
+.xn-shell-layout .xn-composer-toolbar__default:hover:not(:disabled),
 .xn-shell-layout .xn-composer-toolbar__error button:hover:not(:disabled) {
   background: var(--bg-hover);
 }
@@ -986,7 +989,8 @@
   background: var(--bg-popover, var(--bg-card));
 }
 
-.xn-shell-layout .xn-composer-toolbar__manage {
+.xn-shell-layout .xn-composer-toolbar__manage,
+.xn-shell-layout .xn-composer-toolbar__default {
   display: flex;
   width: 100%;
   min-height: 32px;
@@ -999,6 +1003,15 @@
   text-align: left;
   font: inherit;
   cursor: pointer;
+}
+
+.xn-composer-toolbar__default span {
+  flex: 1;
+  text-align: left;
+}
+
+.xn-composer-toolbar__default[disabled] {
+  opacity: 0.55;
 }
 
 .xn-shell-layout .xn-composer-toolbar__message {

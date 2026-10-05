@@ -70,6 +70,17 @@ def _validate_reasoning_effort(model, configured, effort):
 
 
 def resolve(state_dir, provider_id=None, model=None, reasoning_effort=None, runtime_profile=None):
+    if (provider_id is None and model is None and reasoning_effort is None):
+        # An unqualified request honours the saved default (providers
+        # .default_selection) before falling back to the host environment.
+        # Any explicit part keeps its own meaning, so partial selections never
+        # get silently re-pointed at another profile.
+        from .default_selection import load as _load_default
+        saved = _load_default(state_dir)
+        if saved:
+            provider_id = saved.get('providerId')
+            model = saved.get('model')
+            reasoning_effort = saved.get('reasoningEffort')
     if provider_id:
         with providers_api.PROVIDER_STORE_LOCK:
             if not providers_api._valid_id(provider_id):

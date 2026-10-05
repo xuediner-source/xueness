@@ -163,6 +163,29 @@ test("Toolbar: model rows show reported context window and reasoning tiers, and 
   assert.doesNotMatch(absent, /200K/);
 });
 
+test("Toolbar: the model menu offers 「设为默认」only when the host wires it", () => {
+  const buttonMarkup = (html: string) =>
+    html.match(/data-testid="composer-save-default"[\s\S]*?<\/button>/)?.[0] ?? "";
+  const wired = renderToStaticMarkup(<ComposerModelMenu {...menuProps} onSaveDefault={() => {}} />);
+  assert.match(wired, /data-testid="composer-save-default"/);
+  assert.match(buttonMarkup(wired), /设为默认/);
+  assert.doesNotMatch(buttonMarkup(wired), /xn-composer-toolbar__menu-indicator/);
+  assert.match(wired, /管理模型/);
+  // 已保存过就改口并给出确认标记。
+  const saved = renderToStaticMarkup(
+    <ComposerModelMenu {...menuProps} onSaveDefault={() => {}} defaultSaved />,
+  );
+  assert.match(buttonMarkup(saved), /已设为默认/);
+  assert.match(buttonMarkup(saved), /xn-composer-toolbar__menu-indicator/);
+  // providers 未生效时宿主不接线，整个入口不渲染。
+  assert.doesNotMatch(renderToStaticMarkup(<ComposerModelMenu {...menuProps} />), /composer-save-default/);
+  // 没有选中模型时也没有可保存的默认值。
+  assert.doesNotMatch(
+    renderToStaticMarkup(<ComposerModelMenu {...menuProps} onSaveDefault={() => {}} selectedModel={undefined} />),
+    /composer-save-default/,
+  );
+});
+
 test("formatContextWindow and modelReasoningSummary: compact facts or null when unreported", () => {
   assert.equal(formatContextWindow(undefined), null);
   assert.equal(formatContextWindow(0), null);
