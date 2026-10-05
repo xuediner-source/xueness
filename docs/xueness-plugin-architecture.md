@@ -636,3 +636,7 @@ commands 插件登记新功能 `commands.init`，完整目录现为 **27 个插�
 - **安全**：纯文本展开，没有新增 eval、动态导入、子进程、监听套接字或 shell；本命令不授予任何写权限。
 
 验证：`tests/test_init_command.py`（展开关键约束、参数追加、语言切换、插件关闭拒绝、与同名文件命令的优先级、plan 模式草稿要求、CLI list/inspect），`tests/test_file_commands.py` 与 `tests/test_commands.py` 回归通过。
+
+## 2026-10-06 起始页与桌面更新修复
+
+起始页继续归属 `sessions.start_page`：快捷入口改为紧凑按钮，最近项目和会话改为轻量列表，沿用容器按插件生效状态传入的既有能力。更新传输适配器 `desktop/src/electron-net-asset.cjs` 登记在 updates 的 `desktopModules`，属于既有 `updates.desktop`：逐跳校验可信下载地址，保留系统代理、取消、流式写入与校验。主进程只注入适配器，不实现下载业务。未新增插件、功能 ID 或共享例外；完整目录仍为 27 个插件、139 项功能。

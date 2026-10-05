@@ -1,13 +1,11 @@
 /**
  * 空会话起始页（sessions 插件功能）。
  *
- * Qoder 式的起始布局：左侧三个大动作块（打开项目 / 克隆仓库 / 通过 SSH 连接），
- * 右侧「最近项目」卡片置顶、「最近会话」为第二个分组。动作块与项目数据都由容器
+ * 轻量起始布局：紧凑快捷动作置于上方，最近项目与会话以列表分组展示。动作与项目数据都由容器
  * 按插件生效状态提供——克隆属于 git 插件、SSH 属于 remote 插件，插件未生效时容器
  * 根本不会把该动作传进来，因此本组件不发起任何请求，只做展示与回调。
  */
 import React from "react";
-import { ChevronRight } from "lucide-react";
 import { t as tr } from "../../i18n";
 import {
   commandPaletteStatusLabel,
@@ -130,6 +128,8 @@ export function XuenessStartPage({
               key={action.id}
               className="xn-start-page__action"
               data-testid={`start-action-${action.id}`}
+              aria-label={action.description ? `${action.label}. ${action.description}` : action.label}
+              title={action.description}
               onClick={(event) => action.onSelect(event.currentTarget)}
             >
               <span className="xn-start-page__action-icon" aria-hidden="true">
@@ -137,9 +137,7 @@ export function XuenessStartPage({
               </span>
               <span className="xn-start-page__action-copy">
                 <strong>{action.label}</strong>
-                {action.description && <small>{action.description}</small>}
               </span>
-              <ChevronRight size={14} className="xn-start-page__action-chevron" aria-hidden="true" />
             </button>
           ))}
         </div>

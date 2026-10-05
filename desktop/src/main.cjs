@@ -6,6 +6,7 @@ const { isOwnedUrl, isExternalUrl, installPermissionPolicy } = require('./securi
 const { getWindowChromeOptions, installWindowThemeSync } = require('./window-chrome.cjs');
 const { createDesktopBackground, handleSecondInstance } = require('./desktop-background.cjs');
 const { UpdateCoordinator } = require('./update-coordinator.cjs');
+const { createElectronAssetRequest } = require('./electron-net-asset.cjs');
 const { autoUpdater } = require('electron-updater');
 
 let window, backend, updater, background, quitting = false;
@@ -50,7 +51,7 @@ async function start() {
     playwright: app.isPackaged ? join(process.resourcesPath, 'browser-runtime/node_modules/playwright/index.mjs') : join(root, 'webapp/node_modules/playwright/index.mjs'),
     assets: app.isPackaged ? join(process.resourcesPath, 'webapp') : join(root, 'webapp/dist') });
   updater = new UpdateCoordinator({ app, autoUpdater, shell, signedMac: false,
-    fetchImpl: (...args) => net.fetch(...args),
+    assetRequestImpl: createElectronAssetRequest(net),
     isEnabled: () => updatePolicy,
     autoDownload: () => autoDownloadUpdates,
     beforeInstall: async () => {

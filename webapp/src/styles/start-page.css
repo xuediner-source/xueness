@@ -1,35 +1,36 @@
-/* Empty-session start page (sessions plugin): three large action blocks on the
- * left, recent projects above recent sessions on the right. Colours inherit the
- * shared theme tokens, so both themes come from the same declarations. */
+/* Sessions start page: concise entry points followed by plain recent lists. */
 .xn-start-page {
   display: grid;
-  grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr);
-  gap: 14px;
-  align-items: start;
-  width: min(760px, 100%);
-  margin-top: 10px;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 18px;
+  width: min(720px, 100%);
+  margin-top: 12px;
   text-align: left;
 }
 
 .xn-start-page__actions {
-  display: grid;
-  gap: 10px;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
 }
 
 .xn-start-page__action {
-  display: flex;
+  display: inline-flex;
+  min-width: 0;
+  max-width: 100%;
+  min-height: 36px;
   align-items: center;
-  gap: 12px;
-  width: 100%;
-  min-height: 66px;
-  padding: 12px 14px;
+  gap: 8px;
+  padding: 6px 10px;
   border: 1px solid var(--border);
-  border-radius: var(--radius-md);
-  background: var(--bg-card);
+  border-radius: 9px;
+  background: transparent;
   color: var(--fg);
   font: inherit;
   text-align: left;
   cursor: pointer;
+  transition: background-color .15s ease, border-color .15s ease;
 }
 
 .xn-start-page__action:hover {
@@ -39,78 +40,65 @@
 
 .xn-start-page__action:focus-visible {
   outline: 2px solid var(--border-focus);
-  outline-offset: 1px;
+  outline-offset: 2px;
 }
 
 .xn-start-page__action-icon {
   display: grid;
   flex: 0 0 auto;
-  width: 38px;
-  height: 38px;
   place-items: center;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  background: var(--bg-subtle);
   color: var(--fg-muted);
 }
 
 .xn-start-page__action-copy {
-  display: grid;
+  display: flex;
   flex: 1 1 auto;
   min-width: 0;
-  gap: 2px;
+  align-items: baseline;
 }
 
 .xn-start-page__action-copy strong {
-  font-size: 13px;
-  font-weight: 600;
-}
-
-.xn-start-page__action-copy small {
   overflow: hidden;
-  color: var(--fg-muted);
-  font-size: 11px;
+  font-size: 12px;
+  font-weight: 600;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.xn-start-page__action-chevron {
-  flex: 0 0 auto;
-  color: var(--fg-subtle);
-}
-
 .xn-start-page__side {
   display: grid;
-  gap: 14px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 24px;
   align-content: start;
   min-width: 0;
 }
 
 .xn-start-page__recent {
   display: grid;
-  gap: 8px;
-  padding: 12px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-md);
-  background: var(--bg-card);
+  min-width: 0;
+  align-content: start;
+  gap: 6px;
 }
 
 .xn-start-page__recent h2 {
   margin: 0;
-  color: var(--fg);
-  font-size: 12px;
+  color: var(--fg-muted);
+  font-size: 11px;
   font-weight: 600;
+  line-height: 16px;
 }
 
 .xn-start-page__recent-empty {
   margin: 0;
-  color: var(--fg-muted);
-  font-size: 12px;
+  padding: 2px 8px;
+  color: var(--fg-subtle, var(--fg-muted));
+  font-size: 11px;
+  line-height: 34px;
 }
 
 .xn-start-page__recent-list {
   display: grid;
-  gap: 2px;
+  gap: 1px;
   margin: 0;
   padding: 0;
   list-style: none;
@@ -120,10 +108,11 @@
   display: grid;
   gap: 2px;
   width: 100%;
-  min-height: 44px;
-  padding: 6px 8px;
+  min-width: 0;
+  min-height: 38px;
+  padding: 5px 8px;
   border: 0;
-  border-radius: var(--radius-sm);
+  border-radius: 7px;
   background: transparent;
   color: var(--fg);
   font: inherit;
@@ -144,20 +133,32 @@
   overflow: hidden;
   font-size: 12px;
   font-weight: 500;
+  line-height: 17px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .xn-start-page__recent-meta {
   display: flex;
+  min-width: 0;
   align-items: center;
   gap: 8px;
+  overflow: hidden;
   color: var(--fg-muted);
   font-size: 10px;
+  line-height: 14px;
+}
+
+.xn-start-page__recent-meta > span,
+.xn-start-page__recent-meta time {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .xn-start-page__recent-meta time {
   margin-left: auto;
+  flex: 0 0 auto;
   font-variant-numeric: tabular-nums;
 }
 
@@ -167,8 +168,10 @@
   white-space: nowrap;
 }
 
-@media (max-width: 680px) {
-  .xn-start-page {
+@media (max-width: 560px) {
+  .xn-start-page__side {
     grid-template-columns: minmax(0, 1fr);
+    gap: 16px;
   }
+
 }

@@ -14,3 +14,7 @@
 .xn-update-indicator__spinner { animation: xn-update-spin 1s linear infinite; }
 @keyframes xn-update-spin { to { transform: rotate(360deg); } }
 @media (prefers-reduced-motion: reduce) { .xn-update-indicator__spinner { animation: none; } }
+
+.xn-desktop-updates > .xn-desktop-updates__download { display: grid; gap: 8px; }
+.xn-desktop-updates__download progress { width: 100%; height: 6px; accent-color: var(--fg); }
+.xn-desktop-updates__metrics { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 6px 16px; color: var(--fg-muted); font-size: 12px; font-variant-numeric: tabular-nums; }

@@ -2,7 +2,8 @@ import React from 'react';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { DesktopUpdates, DesktopUpdateIndicator } from './DesktopUpdates';
+import { setLocale, t } from '../../i18n';
+import { DesktopUpdates, DesktopUpdateIndicator, UpdateDownloadProgress } from './DesktopUpdates';
 import { startUpdateStatusPolling, updateActionAvailability } from './updateLifecycle';
 test('disabled updates mount no controls and do not claim an installation', () => {
   assert.equal(renderToStaticMarkup(<DesktopUpdates enabled={false} />), '');
@@ -82,4 +83,41 @@ test('update action affordances distinguish unsupported, downloading, install-re
   assert.equal(updateActionAvailability({ phase: 'downloading' }, true).cancelDisabled, true);
   assert.equal(updateActionAvailability({ phase: 'ready', installMode: 'open-dmg' }, false).installDisabled, false);
   assert.equal(updateActionAvailability({ phase: 'available', canDownload: true }, true).downloadDisabled, true);
+});
+
+
+test('download metrics show observed bytes, rate and an explicitly estimated remaining time', () => {
+  const html = renderToStaticMarkup(<UpdateDownloadProgress state={{ phase: 'downloading', percent: 25, transferredBytes: 1024 * 1024, totalBytes: 4 * 1024 * 1024, bytesPerSecond: 512 * 1024, etaSeconds: 6 }} />);
+  assert.match(html, /1.0 MB \/ 4.0 MB/);
+  assert.match(html, /512.0 KB\/s/);
+  assert.match(html, /预计剩余 6 秒/);
+  assert.match(html, /25.0%/);
+});
+
+test('unknown or invalid metrics never invent zero speed or remaining time', () => {
+  const html = renderToStaticMarkup(<UpdateDownloadProgress state={{ phase: 'downloading', percent: Number.NaN, transferredBytes: -1, totalBytes: Infinity, bytesPerSecond: null, etaSeconds: 0 }} />);
+  assert.match(html, /正在测量下载速度/);
+  assert.match(html, /剩余时间待估算/);
+  assert.doesNotMatch(html, /value=|NaN|Infinity|0 B\/s|预计剩余/);
+  assert.equal(renderToStaticMarkup(<UpdateDownloadProgress state={{ phase: 'cancelled', bytesPerSecond: 1, etaSeconds: 0 }} />), '');
+});
+
+
+test('a reported zero download rate is displayed without claiming any remaining time', () => {
+  const html = renderToStaticMarkup(<UpdateDownloadProgress state={{ phase: 'downloading', transferredBytes: 0, totalBytes: 1024, bytesPerSecond: 0, etaSeconds: 0 }} />);
+  assert.match(html, /0 B\/s/);
+  assert.match(html, /剩余时间待估算/);
+  assert.doesNotMatch(html, /预计剩余|正在测量下载速度/);
+});
+
+
+test('English update controls and known backend status messages are translated', () => {
+  setLocale('en');
+  try {
+    const html = renderToStaticMarkup(<DesktopUpdates enabled />);
+    assert.match(html, /Application updates|Automatically download stable updates/);
+    assert.doesNotMatch(html, /[\u3400-\u9fff]/);
+    assert.equal(t('正在下载更新。'), 'Downloading update.');
+    assert.equal(t('当前已是最新稳定版。'), 'You are on the latest stable version.');
+  } finally { setLocale('zh'); }
 });

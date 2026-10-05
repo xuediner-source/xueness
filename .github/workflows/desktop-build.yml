@@ -50,6 +50,7 @@ jobs:
       - name: Check feature ownership and portable backend behavior
         run: |
           python tools/check_plugin_architecture.py
+          node desktop/scripts/check_electron_update_transport.cjs
           python -m unittest tests.test_desktop tests.test_desktop_updates tests.test_plugin_architecture tests.test_workspace_instructions -q
           python -m unittest tests.test_workflows.WorkflowTests.test_real_background_dag_failure_then_resume_without_replaying_success tests.test_mcp.McpTestCase.test_start_performs_the_initialize_handshake -q
           python -m unittest tests.test_desktop_subagents tests.test_subagent_coordination tests.test_subagents tests.test_subagent_deadlines -q
@@ -58,6 +59,9 @@ jobs:
           npm --prefix webapp test
           npm --prefix webapp run typecheck
           npm --prefix webapp run build
+      - name: Verify public GitHub Windows installer download
+        if: runner.os == 'Windows'
+        run: node desktop/scripts/check_windows_github_download.cjs
       - name: Freeze and exercise the actual backend
         run: |
           python desktop/scripts/build_backend.py

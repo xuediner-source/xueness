@@ -6,6 +6,7 @@ const { createHash, randomUUID } = require('node:crypto');
 const { Transform, Readable } = require('node:stream');
 const { pipeline } = require('node:stream/promises');
 const { join } = require('node:path');
+const { performance } = require('node:perf_hooks');
 
 const OWNER = 'xuediner-source';
 const REPO = 'xueness';
@@ -51,8 +52,24 @@ function supportsRedirect(url) {
     && !url.username && !url.password && (!url.port || url.port === '443');
 }
 
+function nonNegativeSafeInteger(value) {
+  return Number.isSafeInteger(value) && value >= 0 ? value : null;
+}
+
+function positiveSafeInteger(value) {
+  return Number.isSafeInteger(value) && value > 0 ? value : null;
+}
+
+function nonNegativeFiniteNumber(value) {
+  return typeof value === 'number' && Number.isFinite(value) && value >= 0 ? value : null;
+}
+
 function responseError(response, operation) {
   return new Error(operation + ' failed (' + response.status + ')');
+}
+
+async function cancelResponseBody(response) {
+  try { await response?.body?.cancel?.(); } catch {}
 }
 
 class UpdateCoordinator {
@@ -72,6 +89,8 @@ class UpdateCoordinator {
       packaged = app?.isPackaged === true,
       shell,
       fetchImpl = globalThis.fetch,
+      assetRequestImpl,
+      monotonicNow = () => performance.now(),
       createCancellationToken,
       checkIntervalMs = AUTO_CHECK_MS,
       setIntervalFn = setInterval,
@@ -94,6 +113,8 @@ class UpdateCoordinator {
     this.packaged = packaged === true;
     this.shell = shell;
     this.fetchImpl = fetchImpl;
+    this.assetRequestImpl = assetRequestImpl;
+    this.monotonicNow = monotonicNow;
     this.createCancellationToken = createCancellationToken || (() => {
       const { CancellationToken } = require('electron-updater');
       return new CancellationToken();
@@ -126,6 +147,9 @@ class UpdateCoordinator {
       phase: 'disabled',
       version: null,
       percent: 0,
+      transferredBytes: null,
+      totalBytes: null,
+      bytesPerSecond: null,
       reason: '更新功能已关闭。',
     };
     this.updaterListeners = [];
@@ -182,11 +206,26 @@ class UpdateCoordinator {
     const canDownload = active && supported && Boolean(this.latestVersion)
       && !['downloading', 'ready', 'installing', 'opening-installer', 'installer_opened'].includes(this.state.phase);
     const canInstall = active && supported && mode === 'restart' && Boolean(ready);
+    const progressActive = active && supported && this.state.phase === 'downloading';
+    const transferredBytes = progressActive ? nonNegativeSafeInteger(this.state.transferredBytes) : null;
+    const totalBytes = progressActive ? positiveSafeInteger(this.state.totalBytes) : null;
+    const bytesPerSecond = progressActive ? nonNegativeFiniteNumber(this.state.bytesPerSecond) : null;
+    const remainingBytes = totalBytes !== null && transferredBytes !== null && totalBytes >= transferredBytes
+      ? totalBytes - transferredBytes
+      : null;
+    const etaEstimate = remainingBytes !== null && bytesPerSecond !== null && bytesPerSecond > 0
+      ? remainingBytes / bytesPerSecond
+      : null;
+    const etaSeconds = Number.isFinite(etaEstimate) ? etaEstimate : null;
     return {
       phase: supported ? (active ? this.state.phase : 'disabled') : 'unsupported',
       version: this.state.version || this.latestVersion || null,
       currentVersion: this.currentVersion,
       percent: Number.isFinite(this.state.percent) ? this.state.percent : 0,
+      transferredBytes,
+      totalBytes,
+      bytesPerSecond,
+      etaSeconds,
       reason: supported
         ? (active ? this.state.reason : '更新功能已关闭。')
         : this.unsupportedReason(),
@@ -243,6 +282,9 @@ class UpdateCoordinator {
           phase: 'downloading',
           version: active.version,
           percent: Number.isFinite(percent) ? Math.max(0, Math.min(100, percent)) : 0,
+          transferredBytes: nonNegativeSafeInteger(info?.transferred),
+          totalBytes: positiveSafeInteger(info?.total),
+          bytesPerSecond: nonNegativeFiniteNumber(info?.bytesPerSecond),
           reason: '正在下载更新。',
         });
       });
@@ -458,7 +500,10 @@ class UpdateCoordinator {
       accept: 'application/vnd.github+json',
       'x-github-api-version': '2022-11-28',
     });
-    if (!response.ok || !response.body) throw responseError(response, 'GitHub release check');
+    if (!response.ok || !response.body) {
+      await cancelResponseBody(response);
+      throw responseError(response, 'GitHub release check');
+    }
     const metadataLength = Number(response.headers?.get?.('content-length'));
     if (Number.isFinite(metadataLength) && metadataLength > MAX_RELEASE_METADATA_BYTES) {
       await response.body.cancel().catch(() => {});
@@ -641,10 +686,32 @@ class UpdateCoordinator {
   startMacDmgDownload(version) {
     const generation = ++this.downloadGeneration;
     const controller = new AbortController();
+    let previousSampleAt = null;
+    let previousTransferredBytes = null;
     this.manualDownloadController = controller;
-    this.manualDownloadPromise = this.downloadTrustedDmg(version, controller.signal, percent => {
+    this.manualDownloadPromise = this.downloadTrustedDmg(version, controller.signal, progress => {
       if (generation !== this.downloadGeneration || !this.enabled) return;
-      this.setState({ phase: 'downloading', version, percent, reason: '正在下载 DMG 安装器。' });
+      const sampledAt = progress.sampledAt;
+      const elapsedMs = Number.isFinite(sampledAt) && Number.isFinite(previousSampleAt)
+        ? sampledAt - previousSampleAt
+        : 0;
+      const deltaBytes = previousTransferredBytes !== null
+        ? progress.transferredBytes - previousTransferredBytes
+        : 0;
+      const bytesPerSecond = elapsedMs > 0 && deltaBytes >= 0 ? deltaBytes / (elapsedMs / 1000) : null;
+      if (Number.isFinite(sampledAt) && Number.isSafeInteger(progress.transferredBytes)) {
+        previousSampleAt = sampledAt;
+        previousTransferredBytes = progress.transferredBytes;
+      }
+      this.setState({
+        phase: 'downloading',
+        version,
+        percent: Math.max(0, Math.min(99, progress.transferredBytes / progress.totalBytes * 100)),
+        transferredBytes: progress.transferredBytes,
+        totalBytes: progress.totalBytes,
+        bytesPerSecond: nonNegativeFiniteNumber(bytesPerSecond),
+        reason: '正在下载 DMG 安装器。',
+      });
     })
       .then(async path => {
         if (generation !== this.downloadGeneration || !this.enabled || this.disposed) {
@@ -683,7 +750,7 @@ class UpdateCoordinator {
     }
     const response = await this.fetchAllowedAsset(release.url, signal);
     if (!response.ok || !response.body) {
-      await response.body?.cancel?.().catch?.(() => {});
+      await cancelResponseBody(response);
       throw responseError(response, 'DMG 下载');
     }
     const expectedLength = Number(response.headers?.get?.('content-length')) || 0;
@@ -691,12 +758,10 @@ class UpdateCoordinator {
       await response.body.cancel().catch(() => {});
       throw new Error('DMG 文件大小与发布记录不符。');
     }
-    const folder = join(this.userDataPath(), 'updates');
-    await fs.mkdir(folder, { recursive: true, mode: 0o700 });
-    const finalPath = join(folder, 'Xueness-' + version + '-macos-' + this.arch + '-' + randomUUID() + '.dmg');
-    const tempPath = finalPath + '.partial';
+    let tempPath = null;
     let transferred = 0;
     const sha256 = createHash('sha256');
+    const monotonicNow = this.monotonicNow;
     const meter = new Transform({
       transform(chunk, _encoding, callback) {
         transferred += chunk.length;
@@ -705,11 +770,20 @@ class UpdateCoordinator {
           return;
         }
         sha256.update(chunk);
-        if (expectedLength > 0) onProgress(Math.max(0, Math.min(99, transferred / expectedLength * 100)));
+        let sampledAt = null;
+        try {
+          const value = monotonicNow();
+          if (Number.isFinite(value)) sampledAt = value;
+        } catch {}
+        onProgress({ transferredBytes: transferred, totalBytes: release.size, sampledAt });
         callback(null, chunk);
       },
     });
     try {
+      const folder = join(this.userDataPath(), 'updates');
+      await fs.mkdir(folder, { recursive: true, mode: 0o700 });
+      const finalPath = join(folder, 'Xueness-' + version + '-macos-' + this.arch + '-' + randomUUID() + '.dmg');
+      tempPath = finalPath + '.partial';
       await pipeline(
         Readable.fromWeb(response.body),
         meter,
@@ -721,18 +795,29 @@ class UpdateCoordinator {
       await fs.rename(tempPath, finalPath);
       return finalPath;
     } catch (error) {
-      await fs.rm(tempPath, { force: true }).catch(() => {});
+      await cancelResponseBody(response);
+      if (tempPath) await fs.rm(tempPath, { force: true }).catch(() => {});
       throw error;
     }
   }
 
   async fetchAllowedAsset(initialUrl, signal, headers = {}) {
     let current = new URL(initialUrl);
+    if (!supportsRedirect(current)) throw new Error('更新资产下载地址不可信。');
+    const requestHeaders = { 'user-agent': 'Xueness-desktop-updater', ...headers };
+    if (this.assetRequestImpl) {
+      return this.assetRequestImpl(current, {
+        headers: requestHeaders,
+        signal,
+        isAllowedUrl: supportsRedirect,
+        maxRedirects: 5,
+      });
+    }
     for (let redirects = 0; redirects <= 5; redirects += 1) {
       if (!supportsRedirect(current)) throw new Error('更新资产下载地址不可信。');
       const response = await this.fetchImpl(current, {
         redirect: 'manual',
-        headers: { 'user-agent': 'Xueness-desktop-updater', ...headers },
+        headers: requestHeaders,
         signal,
       });
       if (![301, 302, 303, 307, 308].includes(response.status)) return response;
@@ -943,7 +1028,16 @@ class UpdateCoordinator {
 
   setState(state) {
     if (this.disposed) return;
-    this.state = { ...this.state, ...state };
+    const nextState = { ...this.state, ...state };
+    const progressFields = ['transferredBytes', 'totalBytes', 'bytesPerSecond'];
+    if (state.phase === 'downloading') {
+      for (const field of progressFields) {
+        if (!Object.prototype.hasOwnProperty.call(state, field)) nextState[field] = null;
+      }
+    } else if (state.phase) {
+      for (const field of progressFields) nextState[field] = null;
+    }
+    this.state = nextState;
     try { void Promise.resolve(this.publish(this.status())).catch(() => {}); } catch {}
   }
 

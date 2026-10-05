@@ -2,7 +2,7 @@
  * 空会话起始页（sessions.start_page）的前端回归。
  *
  * 全部走 renderToStaticMarkup：断言最近会话按更新时间排序且最多 5 条、最近项目
- * 按最后使用时间排序且最多 5 条、动作块只渲染容器提供的能力（git/remote 禁用时
+ * 按最后使用时间排序且最多 5 条、快捷动作只渲染容器提供的能力（git/remote 禁用时
  * 克隆与 SSH 块不出现），没有数据时不渲染占位组件。
  */
 import React from "react";
@@ -58,13 +58,15 @@ const actions: StartPageAction[] = [
   { id: "new-session", label: "新建会话", Icon: MessageCirclePlus, onSelect: () => undefined },
 ];
 
-test("起始页：左侧渲染动作块，只显示容器传入的已有能力", () => {
+test("起始页：渲染容器提供的快捷动作，并保留动作说明的可访问名称", () => {
   const html = renderToStaticMarkup(
     <XuenessStartPage actions={actions} sessions={[]} onSelectSession={() => undefined} />,
   );
   assert.match(html, /data-testid="xn-start-page"/);
   assert.match(html, /data-testid="start-action-open-workspace"/);
   assert.match(html, /打开工作区/);
+  assert.match(html, /aria-label="打开工作区\. 选择一个文件夹。"/);
+  assert.match(html, /title="选择一个文件夹。"/);
   assert.match(html, /data-testid="start-action-new-session"/);
   assert.match(html, /新建会话/);
   assert.doesNotMatch(html, /start-action-skills-commands/);

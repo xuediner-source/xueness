@@ -126,8 +126,10 @@ test('status error text does not expose update URLs or local filesystem paths', 
 test('Windows uses a fixed stable updater configuration, downloads in background, and acknowledges before install cleanup', async () => {
   const order = [];
   const token = makeToken();
+  const progressStates = [];
   const { coordinator, updater, timers } = makeCoordinator({
     createCancellationToken: () => token,
+    publish: state => progressStates.push(state),
     beforeInstall: async version => {
       assert.equal(version, '1.2.0');
       order.push('prepare');
@@ -142,15 +144,52 @@ test('Windows uses a fixed stable updater configuration, downloads in background
   await coordinator.setEnabled(true);
   await waitUntil(() => updater.downloads === 1);
 
-  updater.emit('download-progress', { percent: 47.5 });
+  updater.emit('download-progress', { percent: 47.5, transferred: 4096, total: 8192, bytesPerSecond: 1024 });
   await waitUntil(() => coordinator.status().percent === 47.5);
   assert.equal(coordinator.status().percent, 47.5);
+  assert.equal(coordinator.status().transferredBytes, 4096);
+  assert.equal(coordinator.status().totalBytes, 8192);
+  assert.equal(coordinator.status().bytesPerSecond, 1024);
+  assert.equal(coordinator.status().etaSeconds, 4);
+
+  updater.emit('download-progress', {
+    percent: 49,
+    transferred: 0,
+    total: Number.MAX_SAFE_INTEGER,
+    bytesPerSecond: Number.MIN_VALUE,
+  });
+  await waitUntil(() => coordinator.status().percent === 49);
+  assert.equal(coordinator.status().etaSeconds, null, 'overflowing ETA estimates must remain unknown');
+
+  updater.emit('download-progress', { percent: 48, transferred: -1, total: 0, bytesPerSecond: 0 });
+  await waitUntil(() => coordinator.status().percent === 48 && coordinator.status().transferredBytes === null);
+  assert.equal(coordinator.status().totalBytes, null);
+  assert.equal(coordinator.status().bytesPerSecond, 0, 'an observed zero-byte-per-second stall stays visible');
+  assert.equal(coordinator.status().etaSeconds, null);
+
+  updater.emit('download-progress', { percent: 47, transferred: NaN, total: undefined, bytesPerSecond: undefined });
+  await waitUntil(() => coordinator.status().percent === 47);
+  assert.equal(coordinator.status().transferredBytes, null);
+  assert.equal(coordinator.status().totalBytes, null);
+  assert.equal(coordinator.status().bytesPerSecond, null);
+  assert.equal(coordinator.status().etaSeconds, null);
+  updater.emit('download-progress', { percent: 90, transferred: 7168, total: 8192, bytesPerSecond: 1024 });
+  await waitUntil(() => coordinator.status().percent === 90);
+  assert.equal(coordinator.status().etaSeconds, 1);
   updater.emit('update-downloaded', { version: '1.2.0' });
   updater.finishDownload();
   await waitUntil(() => token.disposed);
   await waitUntil(() => coordinator.state.phase === 'ready');
   assert.equal(coordinator.status().phase, 'ready');
+  assert.equal(coordinator.status().transferredBytes, null);
+  assert.equal(coordinator.status().totalBytes, null);
+  assert.equal(coordinator.status().bytesPerSecond, null);
+  assert.equal(coordinator.status().etaSeconds, null);
   assert.equal(coordinator.status().canInstall, true);
+  const readyStateCount = progressStates.length;
+  updater.emit('download-progress', { percent: 10, transferred: 1, total: 2, bytesPerSecond: 1 });
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(progressStates.length, readyStateCount, 'late progress events after completion must be ignored');
 
   const responses = [];
   await coordinator.handleRequest({
@@ -213,6 +252,10 @@ test('disabling updates cancels an active download and prevents future network c
   updater.emit('update-downloaded', { version: '1.2.0' });
   assert.equal(coordinator.status().phase, 'disabled');
   assert.equal(coordinator.status().canInstall, false);
+  assert.equal(coordinator.status().transferredBytes, null);
+  assert.equal(coordinator.status().totalBytes, null);
+  assert.equal(coordinator.status().bytesPerSecond, null);
+  assert.equal(coordinator.status().etaSeconds, null);
   await coordinator.check();
   assert.equal(updater.checks, 1);
   assert.equal(updater.downloads, 1);
@@ -238,6 +281,10 @@ test('late updater events are rejected when the live plugin policy turns off', a
 
   assert.equal(coordinator.status().phase, 'disabled');
   assert.equal(coordinator.status().canInstall, false);
+  assert.equal(coordinator.status().transferredBytes, null);
+  assert.equal(coordinator.status().totalBytes, null);
+  assert.equal(coordinator.status().bytesPerSecond, null);
+  assert.equal(coordinator.status().etaSeconds, null);
   assert.equal(coordinator.downloadedVersion, null);
   updater.finishDownload();
   await waitUntil(() => token.disposed);
@@ -293,8 +340,10 @@ test('unsigned macOS downloads only the fixed trusted DMG and opens it without c
   t.after(() => fs.rm(userData, { recursive: true, force: true }));
   const opened = [];
   const calls = [];
+  const progressStates = [];
+  const monotonicTimes = [1000, 2000];
   const assetName = 'Xueness-1.2.0-macos-arm64.dmg';
-  const dmgBytes = Buffer.from('verified-dmg-bytes');
+  const dmgBytes = Buffer.alloc(32 * 1024, 0x61);
   const dmgDigest = createHash('sha256').update(dmgBytes).digest('hex');
   const release = {
     draft: false,
@@ -312,7 +361,17 @@ test('unsigned macOS downloads only the fixed trusted DMG and opens it without c
     if (String(url) === RELEASES_API) {
       return new Response(JSON.stringify(release), { status: 200, headers: { 'content-type': 'application/json' } });
     }
-    return new Response(dmgBytes, {
+    const midpoint = dmgBytes.length / 2;
+    const body = new ReadableStream({
+      start(controller) {
+        controller.enqueue(dmgBytes.subarray(0, midpoint));
+        setTimeout(() => {
+          controller.enqueue(dmgBytes.subarray(midpoint));
+          controller.close();
+        }, 10);
+      },
+    });
+    return new Response(body, {
       status: 200,
       headers: { 'content-length': String(dmgBytes.length) },
     });
@@ -327,6 +386,8 @@ test('unsigned macOS downloads only the fixed trusted DMG and opens it without c
     packaged: true,
     shell: { openPath: async filePath => { opened.push(filePath); return ''; } },
     fetchImpl,
+    publish: state => progressStates.push(state),
+    monotonicNow: () => monotonicTimes.shift() ?? 2000,
     isEnabled: () => true,
     beforeInstall: async () => ({ ok: true }),
     checkIntervalMs: 0,
@@ -340,6 +401,19 @@ test('unsigned macOS downloads only the fixed trusted DMG and opens it without c
   assert.equal(ready.canDownload, false);
   assert.equal(ready.canInstall, false);
   assert.match(ready.reason, /Finder/);
+  const downloadSamples = progressStates.filter(state => state.phase === 'downloading' && state.transferredBytes !== null);
+  assert.equal(downloadSamples.length, 2);
+  assert.equal(downloadSamples[0].transferredBytes, dmgBytes.length / 2);
+  assert.equal(downloadSamples[0].totalBytes, dmgBytes.length);
+  assert.equal(downloadSamples[0].bytesPerSecond, null);
+  assert.equal(downloadSamples[0].etaSeconds, null);
+  assert.equal(downloadSamples[1].transferredBytes, dmgBytes.length);
+  assert.equal(downloadSamples[1].bytesPerSecond, dmgBytes.length / 2);
+  assert.equal(downloadSamples[1].etaSeconds, 0);
+  assert.equal(ready.transferredBytes, null);
+  assert.equal(ready.totalBytes, null);
+  assert.equal(ready.bytesPerSecond, null);
+  assert.equal(ready.etaSeconds, null);
   assert.equal(calls[0].url, RELEASES_API);
   assert.equal(calls[1].options.redirect, 'manual');
   assert.equal(calls.filter(call => call.url === RELEASES_API).length, 1);
@@ -400,6 +474,101 @@ test('unsigned macOS release metadata follows only allowlisted redirects and has
     await tooLarge.dispose();
   } finally {
     await fs.rm(userData, { recursive: true, force: true });
+  }
+});
+
+test('Electron asset transport receives the production host policy for the initial URL and every redirect', async () => {
+  const controller = new AbortController();
+  let captured;
+  const response = { status: 200, ok: true, headers: { get: () => null }, body: null };
+  const coordinator = new UpdateCoordinator({
+    app: { isPackaged: true, getVersion: () => '1.0.0', getPath: () => '/unused' },
+    currentVersion: '1.0.0',
+    platform: 'darwin', arch: 'arm64', signedMac: false, packaged: true,
+    assetRequestImpl: async (...args) => { captured = args; return response; },
+  });
+
+  assert.equal(await coordinator.fetchAllowedAsset(RELEASES_API, controller.signal, { accept: 'application/json' }), response);
+  assert.equal(captured[0].href, RELEASES_API);
+  assert.equal(captured[1].signal, controller.signal);
+  assert.equal(captured[1].headers['user-agent'], 'Xueness-desktop-updater');
+  assert.equal(captured[1].headers.accept, 'application/json');
+  const isAllowed = captured[1].isAllowedUrl;
+  assert.equal(isAllowed(new URL('https://api.github.com/repos/xuediner-source/xueness')), true);
+  assert.equal(isAllowed(new URL('https://github.com/xuediner-source/xueness/releases')), true);
+  assert.equal(isAllowed(new URL('https://release-assets.githubusercontent.com/payload')), true);
+  assert.equal(isAllowed(new URL('https://objects.githubusercontent.com/payload')), true);
+  assert.equal(isAllowed(new URL('http://api.github.com/payload')), false);
+  assert.equal(isAllowed(new URL('https://api.github.com:444/payload')), false);
+  assert.equal(isAllowed(new URL('https://user@api.github.com/payload')), false);
+  assert.equal(isAllowed(new URL('https://attacker.invalid/payload')), false);
+  await assert.rejects(coordinator.fetchAllowedAsset('https://attacker.invalid/payload'), /不可信/);
+  await coordinator.dispose();
+});
+
+test('Mac updater cancels rejected response bodies and body setup failures', async t => {
+  const userData = await fs.mkdtemp(path.join(os.tmpdir(), 'xueness-electron-response-cleanup-'));
+  t.after(() => fs.rm(userData, { recursive: true, force: true }));
+  const fileParent = path.join(userData, 'not-a-directory');
+  await fs.writeFile(fileParent, 'fixture');
+  const bytes = Buffer.from('verified-dmg-bytes');
+  const release = {
+    version: '1.2.0',
+    tag: 'v1.2.0',
+    name: 'Xueness-1.2.0-macos-arm64.dmg',
+    url: 'https://github.com/xuediner-source/xueness/releases/download/v1.2.0/Xueness-1.2.0-macos-arm64.dmg',
+    size: bytes.length,
+    sha256: createHash('sha256').update(bytes).digest('hex'),
+  };
+  const cases = [
+    {
+      label: 'non-success status',
+      response: cancelled => ({
+        status: 503,
+        ok: false,
+        headers: { get: () => null },
+        body: new ReadableStream({ cancel() { cancelled.count += 1; } }),
+      }),
+      userDataPath: () => userData,
+      error: /DMG 下载 failed \(503\)/,
+    },
+    {
+      label: 'declared length mismatch',
+      response: cancelled => ({
+        status: 200,
+        ok: true,
+        headers: { get: () => String(bytes.length + 1) },
+        body: new ReadableStream({ cancel() { cancelled.count += 1; } }),
+      }),
+      userDataPath: () => userData,
+      error: /大小与发布记录不符/,
+    },
+    {
+      label: 'staging directory failure',
+      response: cancelled => ({
+        status: 200,
+        ok: true,
+        headers: { get: () => String(bytes.length) },
+        body: new ReadableStream({ cancel() { cancelled.count += 1; } }),
+      }),
+      userDataPath: () => fileParent,
+      error: /ENOTDIR/,
+    },
+  ];
+
+  for (const item of cases) {
+    const cancelled = { count: 0 };
+    const coordinator = new UpdateCoordinator({
+      app: { isPackaged: true, getVersion: () => '1.0.0', getPath: () => userData },
+      currentVersion: '1.0.0',
+      platform: 'darwin', arch: 'arm64', signedMac: false, packaged: true,
+      userDataPath: item.userDataPath,
+      assetRequestImpl: async () => item.response(cancelled),
+    });
+    coordinator.macReleaseAsset = release;
+    await assert.rejects(coordinator.downloadTrustedDmg('1.2.0', new AbortController().signal, () => {}), item.error, item.label);
+    assert.equal(cancelled.count, 1, item.label + ' must close its upstream response body');
+    await coordinator.dispose();
   }
 });
 

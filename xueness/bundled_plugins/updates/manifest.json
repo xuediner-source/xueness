@@ -41,6 +41,7 @@
     "plugins/updates/updateLifecycle.ts"
   ],
   "desktopModules": [
-    "src/update-coordinator.cjs"
+    "src/update-coordinator.cjs",
+    "src/electron-net-asset.cjs"
   ]
 }
