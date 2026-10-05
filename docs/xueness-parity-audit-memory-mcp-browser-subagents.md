@@ -67,6 +67,7 @@
 | 4.4 | 并发控制与调度 | `subagent/runner.ts`, `contracts/subagent.port.ts` | `xueness/bundled_plugins/subagents/coordinator.py:TaskCoordinator`, `coordinator.py:_WORKER_SLOTS` | **一致** | Xueness 严格施加资源上限：全局信号量 `_WORKER_SLOTS = 4` 限制并发子任务数，每人类轮次限 8 个任务预算，防止上下文与资源打爆。 |
 | 4.5 | 结果回传与状态管理 | `tool/handlers/task-output.ts`, `tool/handlers/respond-to-coordinator.ts` | `xueness/bundled_plugins/subagents/tools.py:collect`, `coordinator.py:TaskCoordinator.collect`, `runner.py:run_subagent` | **一致** | `task` 工具派发后立即返回 `task_id`，主代理继续工作；通过 `task_collect` 工具收集结果，`TaskRegistry` 记录完整执行状态（`pending`, `running`, `completed`, `failed`, `cancelled`）、步数与摘要，父会话完成检查确保所有派发任务在结算前均已收集。 |
 | 4.6 | 递归与嵌套限制 | `tool/handlers/agent.ts` (子代理不可再次调用 Agent 工具) | `xueness/core.py:line 1442` (`depth < max_depth`), `runner.py:run_subagent` | **一致** | 子任务运行于独立只读会话，传递 `depth = depth + 1`；当 `depth >= max_depth`（默认 1）时核心调度层直接拒绝 `task` 派发，子任务也未挂载 `task` 工具，彻底杜绝递归嵌套爆炸。 |
+| 4.7 | 运行态侧栏与卡片面板 | `subagent/ui/SubagentSidePane.tsx`, `SubagentDirectorySidePane.tsx` | `webapp/src/plugins/subagents/SubagentSidePane.tsx` | **一致**（已补齐） | 对齐 ZCode SubagentSidePane；提供运行态子代理列表、步骤进度、耗时统计、结果/错误卡片展开与运行中任务取消；复用 `/api/sessions/<id>/tasks`，轻量模式零请求。 |
 
 ---
 
@@ -87,6 +88,8 @@
    - 对文件截图调用加设 `if (command.output)` 判定，消除无文件输出时的多余截图动作，优化了执行时延。
 7. **浏览器无障碍树快照**（`browser/plugin.py`、`browser/snapshot.py`、`browser/bridge.mjs`）：
    - 新增只读工具 `browser_snapshot`（功能 `browser.snapshot`）。用 Playwright AI 模式无障碍树返回 role、name、缩进和可交互 ref，并施加节点与字符上限。ref 通过既有 selector `aria-ref=<ref>` 交给点击和输入，不新增动作参数，不放宽 Gate、选择器长度或公网 HTTPS 限制。
+8. **子代理运行态侧栏面板**（`webapp/src/plugins/subagents/SubagentSidePane.tsx`）：
+   - 对齐 ZCode 的 `SubagentSidePane`，实现可折叠运行态侧栏、实时子任务卡片列表、进度/耗时监控、结果详情展开与「停止会话（取消全部子任务）」按钮（尚无单任务取消接口）；在轻量模式与关闭状态下保持零网络请求。
 
 ### 2. 后续演进规划（列为大项，不硬做）
 1. **记忆后台自动提取 Subagent（Large）**：
@@ -94,5 +97,5 @@
 2. **浏览器 DOM 无障碍树快照（Medium，精简树已落地）**：
    - 只读工具 `browser_snapshot` 已提供精简无障碍树（role、name、可交互 ref、缩进、节点与字符截断）。既有点击和输入用 selector `aria-ref=<ref>` 引用最近一次快照，没有新增动作参数。
    - 仍不做 ZCode 的完整 DOM 元素记录（selector、xpath、rect、属性、parentRef）、隐藏节点开关和 `maxElements` 参数。`browser_inspect` 的轻量文本与链接摘要保留。
-3. **子代理图形化侧栏面板（Large）**：
-   - 对应 ZCode 的 `SubagentSidePane`，需设计完整的前端运行态组件与实时日志 WebSocket 推送，属于后续前端体验批次。
+3. **子代理图形化侧栏面板（已完成）**：
+   - 对应 ZCode 的 `SubagentSidePane`，已于本次作为 `subagents.sidepane` 功能实现并挂载到 Web 工作台。

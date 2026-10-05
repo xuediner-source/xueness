@@ -92,7 +92,7 @@ import { Approvals, Composer, WorkbenchHeader, heroGreeting, type ComposerDraftS
 import { XuenessStartPage, type StartPageAction } from "./plugins/sessions/XuenessStartPage";
 import { XuenessUsageQuickCard } from "./plugins/usage/XuenessUsageQuickCard";
 import { IconBack, IconGear, IconNewTask, IconSearch, IconWorkflow, IconModel, IconXuenessMark } from "./ui/icons";
-import { CalendarClock, Archive, ArrowDownWideNarrow, ChevronsDownUp, Folder, FolderOpen, Hash, MessageCirclePlus, Sparkles, UserRound, CircleHelp, ChevronDown, Blocks, GitBranch } from "lucide-react";
+import { CalendarClock, Archive, ArrowDownWideNarrow, ChevronsDownUp, Folder, FolderOpen, Hash, MessageCirclePlus, Sparkles, UserRound, CircleHelp, ChevronDown, Blocks, GitBranch, Bot } from "lucide-react";
 import { Select } from "./ui/Select";
 import { RegionBoundary } from "./ui/primitives";
 import { XuenessWorkspaceSettings } from "./plugins/settings/XuenessWorkspaceSettings";
@@ -173,6 +173,7 @@ const XuenessMemorySettings = lazy(() => import("./plugins/memory/MemorySettings
 const XuenessUsageSettings = lazy(() => import("./plugins/usage/XuenessUsageSettings").then(module => ({ default: module.XuenessUsageSettings })));
 const BrowserSettings = lazy(() => import("./plugins/browser/BrowserSettings").then(module => ({ default: module.BrowserSettings })));
 const XuenessSubagentSettings = lazy(() => import("./plugins/subagents/SubagentSettings").then(module => ({ default: module.XuenessSubagentSettings })));
+const SubagentSidePane = lazy(() => import("./plugins/subagents/SubagentSidePane").then(module => ({ default: module.SubagentSidePane })));
 
 /** Settings defaults. Capabilities default OFF and are read fail-closed. */
 const SETTINGS_DEFAULTS: SettingsMap = {
@@ -224,6 +225,7 @@ type Panel =
   | "automations"
   | "marketplace"
   | "diagnostics"
+  | "subagents"
   | "plugins";
 
 const PANEL_LABELS = (): Record<Panel, string> => ({
@@ -361,6 +363,7 @@ export function XuenessWorkbenchContainer() {
   const [grouped, setGrouped] = useState(false);
   // 斜杠命令候选：与能力面板同源的 commands 资源。
   const [commandItems, setCommandItems] = useState<{ id: string; description?: string }[]>([]);
+  const [subagentsSidepaneOpen, setSubagentsSidepaneOpen] = useState(false);
 
   const pluginAvailability = derivePluginAvailability(pluginCatalog, pluginCatalogReady);
   const allowedPanels: Panel[] = ["plugins", ...pluginAvailability.panels];
@@ -1351,6 +1354,11 @@ export function XuenessWorkbenchContainer() {
   );
   // 轻量档极简布局由 providers 插件拥有：档位生效且插件可用才切换挂载。
   const lightweightLayout = lightweightLayoutActive(activeRuntimeProfile, isPluginEffective("providers"));
+  useEffect(() => {
+    if (lightweightLayout && panel === "subagents") {
+      setPanel(isPluginEffective("sessions") ? "chat" : "plugins");
+    }
+  }, [lightweightLayout, panel, isPluginEffective]);
   const composerMentions = [
     ...composerCatalog.files.map(item => ({ ...item, kind: "file" as const })),
     ...composerCatalog.sessions.map(item => ({ ...item, kind: "session" as const })),
@@ -1685,7 +1693,7 @@ export function XuenessWorkbenchContainer() {
       value={panel === "chat" ? "chat" : panel}
       onChange={(e) => setPanel(e.target.value as Panel)}
     >
-      {allowedPanels.map((id) => (
+      {allowedPanels.filter(id => !lightweightLayout || id !== "subagents").map((id) => (
         <option key={id} value={id}>
           {PANEL_LABELS()[id]}
         </option>
@@ -1695,6 +1703,19 @@ export function XuenessWorkbenchContainer() {
 
   const secondaryPanels: Record<Exclude<Panel, "chat">, React.ReactNode> = {
     remote: <RemoteConnections onUse={id => { chooseWorkspace(composerCatalog.isolatedRoot, true); updateChoices({ remote: id }); }} />,
+    subagents: (
+      <Suspense fallback={<div className="p-4 text-xs text-[var(--fg-muted)]">{tr("正在加载…")}</div>}>
+        <SubagentSidePane
+          sessionId={activeId}
+          isOpen={true}
+          onClose={() => setPanel("chat")}
+          activeRuntimeProfile={activeRuntimeProfile}
+          subagentsEnabled={isPluginEffective("subagents")}
+          lightweight={lightweightLayout}
+          mode="panel"
+        />
+      </Suspense>
+    ),
     plugins: (
       <XuenessPluginManager
         plugins={pluginCatalog}
@@ -1918,7 +1939,7 @@ export function XuenessWorkbenchContainer() {
             <div className="xn-secondary-view__switcher">{viewSwitcher}</div>
           </div>
           <div className="xn-secondary-view__body">
-            {canShowPanel(panel)
+            {canShowPanel(panel) && (!lightweightLayout || panel !== "subagents")
               ? secondaryPanels[panel]
               : <FeatureUnavailable feature={PANEL_LABELS()[panel]} onManage={() => setPanel("plugins")} />}
           </div>
@@ -1928,10 +1949,29 @@ export function XuenessWorkbenchContainer() {
       ) : activeId && session?.id !== activeId ? (
         <div role="status" className="xn-hero"><p>{tr("正在加载任务…")}</p></div>
       ) : session ? (
-        <div className="xn-conversation">
-          <WorkbenchHeader
-            session={session}
-            actions={!lightweightLayout && <>{viewSwitcher}<button type="button" className="xn-conv-header__action xn-conv-header__fork" aria-label={tr("分叉会话")} title={tr("分叉会话")} disabled={busy || session.status === "running" || session.streaming?.status === "streaming"} onClick={beginFork}><GitBranch size={14} aria-hidden="true" /><span>{tr("分叉会话")}</span></button></>}
+        <div className="xn-conversation-container">
+          <div className="xn-conversation">
+            <WorkbenchHeader
+              session={session}
+              actions={!lightweightLayout && (
+                <>
+                  {viewSwitcher}
+                  {isPluginEffective("subagents") && (
+                    <button
+                      type="button"
+                      className={`xn-conv-header__action xn-conv-header__subagents ${subagentsSidepaneOpen ? "xn-conv-header__action--active" : ""}`}
+                      aria-label={tr("子代理运行态侧栏")}
+                      title={tr("子代理运行态侧栏")}
+                      aria-pressed={subagentsSidepaneOpen}
+                      onClick={() => setSubagentsSidepaneOpen(prev => !prev)}
+                    >
+                      <Bot size={14} aria-hidden="true" />
+                      <span>{tr("子代理")}</span>
+                    </button>
+                  )}
+                  <button type="button" className="xn-conv-header__action xn-conv-header__fork" aria-label={tr("分叉会话")} title={tr("分叉会话")} disabled={busy || session.status === "running" || session.streaming?.status === "streaming"} onClick={beginFork}><GitBranch size={14} aria-hidden="true" /><span>{tr("分叉会话")}</span></button>
+                </>
+              )}
             pinned={session.pinned === true}
             onTogglePin={() => activeId && void togglePin(activeId, session.pinned !== true)}
             onRefresh={() => void handleRefreshAll()}
@@ -1999,6 +2039,20 @@ export function XuenessWorkbenchContainer() {
             commands={isPluginEffective("commands") ? commandItems : []}
             files={files.map((f) => f.path)}
           />
+          </div>
+          {subagentsSidepaneOpen && isPluginEffective("subagents") && !lightweightLayout && (
+            <Suspense fallback={null}>
+              <SubagentSidePane
+                sessionId={session.id}
+                isOpen={subagentsSidepaneOpen}
+                onClose={() => setSubagentsSidepaneOpen(false)}
+                activeRuntimeProfile={activeRuntimeProfile}
+                subagentsEnabled={isPluginEffective("subagents")}
+                lightweight={lightweightLayout}
+                mode="sidepane"
+              />
+            </Suspense>
+          )}
         </div>
       ) : (
         <div className="xn-hero" data-testid="xn-hero">

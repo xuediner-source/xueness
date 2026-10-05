@@ -28,7 +28,7 @@ flowchart LR
 
 `plugin_runtime.py` 是共同注册表：根据包内 manifest 处理依赖和命令/API 所属关系，调用 `register_cli`、`execute_cli`、`dispatch`、`tools` 等贡献。`tool_contract.py` 定义 `BuiltinTool` 和只在调用期间存在的 `ContextVar` 执行上下文；`tool_registry.py` 合并稳定工具对象，schema 和实际 dispatch 使用相同对象。执行批准所需的规范化 subject 由工具自身提供，防止 UI 与 handler 对同一调用产生不同批准内容。
 
-前端产品组件放在 `webapp/src/plugins/<id>/`，容器从所属插件入口挂载；静态 `xuenessPluginRegistry.ts` 根据后端 `effective` 状态选择已知视图，目录数据不能注入 JavaScript 或任意路由。宿主恢复入口、工作台布局和跨资源的能力编辑界面属于共享基础设施。下表列出已迁入插件目录的 67 个工作台组件与登记模块（21 个插件目录）；完整声明以各插件 manifest 的 `frontendModules` 为准。共享理由只有一处的纯展示文件除外：settings 的 `SettingsPrimitives.tsx` 渲染分组卡片、行、空状态与工作区信息卡，不读取状态、不发请求也不判断权限，因此其它插件的设置分区可复用它保持同一布局。
+前端产品组件放在 `webapp/src/plugins/<id>/`，容器从所属插件入口挂载；静态 `xuenessPluginRegistry.ts` 根据后端 `effective` 状态选择已知视图，目录数据不能注入 JavaScript 或任意路由。宿主恢复入口、工作台布局和跨资源的能力编辑界面属于共享基础设施。下表列出已迁入插件目录的 68 个工作台组件与登记模块（21 个插件目录）；完整声明以各插件 manifest 的 `frontendModules` 为准。共享理由只有一处的纯展示文件除外：settings 的 `SettingsPrimitives.tsx` 渲染分组卡片、行、空状态与工作区信息卡，不读取状态、不发请求也不判断权限，因此其它插件的设置分区可复用它保持同一布局。
 
 | 插件 | 插件目录下的前端组件 |
 |---|---|
@@ -50,7 +50,7 @@ flowchart LR
 | network | `NetworkSettings.tsx` |
 | planning | `CompletionChecks.tsx`、`SessionGoal.tsx` |
 | remote | `index.tsx` |
-| subagents | `SubagentSettings.tsx` |
+| subagents | `SubagentSettings.tsx`、`SubagentSidePane.tsx` |
 | updates | `DesktopUpdates.tsx`、`updateLifecycle.ts` |
 | workflows | `ExpertPanel.tsx`、`index.tsx` |
 
@@ -176,7 +176,7 @@ providers 的 CLI parser/handler 已迁入 `xueness/bundled_plugins/providers/op
 
 ## 功能逐项归属清单
 
-下表概述当前 27 份 manifest 中的 134 项用户能力。命令/工具/依赖和实际实现文件以同一份 manifest 为准；前端卡片直接展示该功能清单，不维护第二份隐藏列表。纯安全内核与通用布局的边界如前文所述。
+下表概述当前 27 份 manifest 中的 135 项用户能力。命令/工具/依赖和实际实现文件以同一份 manifest 为准；前端卡片直接展示该功能清单，不维护第二份隐藏列表。纯安全内核与通用布局的边界如前文所述。
 
 | 插件 | 已实现的用户能力 |
 |---|---|
@@ -196,7 +196,7 @@ providers 的 CLI parser/handler 已迁入 `xueness/bundled_plugins/providers/op
 | skills | 技能资源与按需目录摘要；有界技能正文读取；目录型技能发现与来源覆盖；skills list/inspect 命令与聊天 /skills |
 | hooks | 明确启用的生命周期事件钩子；钩子命令审批与运行记录；工具执行前后事件管线接入（PostToolUse 可选）；工作区钩子发现与按摘要信任（hooks trust 命令） |
 | mcp | stdio、HTTP 与旧 SSE 连接；OAuth PKCE、凭据刷新与隔离；外部工具、资源与提示词（支持工具名特殊字符清洗与结构化内容解析）；连接诊断、失效恢复与设置 |
-| subagents | 只读子任务与嵌套代理（内置 general-purpose 与 explore 探索代理支持、支持 disallowedTools 工具黑名单过滤）；后台并发派发、主代理持续工作、结果收集与完成检查；子任务进度、结果与协作取消；子代理资源与能力配置 |
+| subagents | 只读子任务与嵌套代理（内置 general-purpose 与 explore 探索代理支持、支持 disallowedTools 工具黑名单过滤）；后台并发派发、主代理持续工作、结果收集与完成检查；子任务进度、结果与协作取消；子代理资源与能力配置；Web 端子代理运行态侧栏与卡片详情展开 |
 | network | 受限公网 HTTPS 页面读取；显式配置的网页搜索服务；独立 OpenAI-compatible 搜索模型；搜索地址、模型 ID 与密钥管理；按需 DNS/服务诊断；FakeIP 环境下可选的公开 DoH |
 | automation | 五字段 cron、时区与下次执行；计划审批与无人值守触发；持久认领、运行历史与暂停；闲时队列：本地低峰窗口排队执行、仅在空闲时与完成通知 |
 | extensions | 可信资源清单市场浏览；数据 manifest 安装、升级与移除；插件市场清单只读校验与原子升级；插件组合 profile 档位 |
@@ -544,7 +544,7 @@ hooks 插件登记新功能 `hooks.workspace_trust`（工作区钩子发现与�
 
 ## 页面无障碍树快照（2026-10-05）
 
-browser 插件新增 `browser.snapshot`，完整目录现为 **27 个插件、132 项登记功能**。只读工具 `browser_snapshot` 与 `browser_inspect` 同为 `exec` 门、`mutating=false`：计划模式与其它既有 exec 策略对二者一视同仁，没有新的权限种类，也没有改计划模式或轻量档的提示词和工具上限。
+browser 插件新增 `browser.snapshot`，完整目录现为 **27 个插件、135 项登记功能**。只读工具 `browser_snapshot` 与 `browser_inspect` 同为 `exec` 门、`mutating=false`：计划模式与其它既有 exec 策略对二者一视同仁，没有新的权限种类，也没有改计划模式或轻量档的提示词和工具上限。
 
 实现留在 browser 包内。`bridge.mjs` 对当前公网 HTTPS 页调用 Playwright `ariaSnapshotJSON({ mode: "ai" })`，不执行模型提供的脚本，也不新增 `eval`、动态导入或子进程。返回前按与 `snapshot.py` 相同的上限裁剪节点（最多 200 个、深度 24、名称 120 字符，扫描不超过 5000）。`snapshot.py` 再格式化为缩进树：每行是 role、可访问名称，可交互元素带稳定 ref（`eN`，iframe 内为 `f<序号>eN`），并在超出节点或 12000 字符上限时于树末标注截断。页面内容标为 `untrusted`。
 
@@ -552,8 +552,19 @@ browser 插件新增 `browser.snapshot`，完整目录现为 **27 个插件、13
 
 ## 模型选择弹层与自定义模型空状态（2026-10-05）
 
-sessions 登记 `sessions.model_picker`，providers 登记 `providers.custom_empty`。完整目录现为 **27 个插件、134 项登记功能**。两者都只组织前端已经拿到的模型字段，不新增后端请求，也不调用真实服务商。
+sessions 登记 `sessions.model_picker`，providers 登记 `providers.custom_empty`。完整目录现为 **27 个插件、135 项登记功能**。两者都只组织前端已经拿到的模型字段，不新增后端请求，也不调用真实服务商。
 
 模型弹层仍在 `plugins/sessions/XuenessComposerToolbar.tsx`。顶部四个分档（自动 / 旗舰 / 性能 / 高效）按当前 New 或 Custom 标签过滤：旗舰只保留已声明的最大上下文窗口，性能只保留已声明推理档位的模型，高效只保留显式本地轻量档，自动不做额外过滤。分档本身没有成本倍率字段，因此右侧不显示倍率。New 是环境模型（空 id），Custom 是已保存的服务商配置。模型行仅在目录给出正数 `costMultiplier` 时显示倍率。悬停或键盘聚焦打开详情卡，列出上下文、推理（已声明档位，否则「—」）、成本（否则「—」）和一句由已有字段拼出的说明；Edit 关闭弹层并打开该服务商设置。Esc 仍关闭弹层。既有「标准 / 本地轻量」运行档位开关保留，不改轻量档的提示词或工具上限。
 
 自定义模型列表为空时，`ProviderEmptyState` 显示内联 SVG、说明、主按钮「添加」，以及右上角「+ 添加」和「查看模型文档」。文档指向仓库已有的 `docs/xueness-local-lightweight-mode.md` 的公开副本，因为工作台源站不提供 `docs/`。列表有数据时这一空状态不渲染。
+
+## Web 端子代理运行态侧栏（subagents.sidepane，2026-10-05）
+
+subagents 插件登记新功能 `subagents.sidepane`（Web 端子代理运行态侧栏），对齐 ZCode 的 `SubagentSidePane` / `SubagentDirectorySidePane` 运行态侧栏面板。完整功能插件目录现为 27 个插件、135 项登记功能。
+
+### 能力与架构边界
+
+1. **组件与样式归属**：实现位于 `webapp/src/plugins/subagents/SubagentSidePane.tsx` 与 `webapp/src/styles/subagent-sidepane.css`，在 manifest 登记 `frontendModules: ["plugins/subagents/SubagentSidePane.tsx"]`，并在 `panels` 与 `xuenessPluginRegistry.ts` 中声明 `subagents` 面板。工作台容器 `XuenessWorkbenchContainer.tsx` 仅负责受控状态开关、会话头部按钮及抽屉/分栏布局挂载，不包含子代理具体业务逻辑。
+2. **零请求与轻量档保护**：侧栏在未打开（`isOpen=false`）、会话未选中、插件禁用或轻量模式（`lightweightLayout` / `activeRuntimeProfile === "lightweight"`）下直接返回 `null`，且不启动任何 HTTP 轮询；仅在面板打开且页面可见（`document.visibilityState === "visible"`）时按 2s 间隔通过既有只读接口 `GET /api/sessions/<id>/tasks` 刷新。
+3. **协作取消**：对运行中的子任务提供「停止会话（取消全部子任务）」按钮，调用既有会话停止接口 `POST /api/sessions/<id>/stop`，主代理与子代理协同优雅退出；已结束任务不显示该按钮。目前没有单个子任务的取消接口，因此按钮文案明确写作「停止会话（取消全部子任务）」，不会假装只取消一项。
+4. **历史合并**：后端 `operations_api.py` 的任务列表接口合并会话持久历史中的 `task_runs` 与内存中正在运行的活跃注册表 `task_registry`，确保多轮对话后历史子任务记录完整呈现。

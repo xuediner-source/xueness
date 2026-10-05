@@ -19,7 +19,8 @@ export type PluginPanel =
   | "automations"
   | "marketplace"
   | "diagnostics"
-  | "remote";
+  | "remote"
+  | "subagents";
 
 export const XUENESS_PLUGIN_REGISTRY = {
   sessions: { name: "会话", description: "会话列表、Agent 对话与历史分叉", panels: ["chat"] },
@@ -46,7 +47,7 @@ export const XUENESS_PLUGIN_REGISTRY = {
   skills: { name: "技能", description: "技能资源", panels: ["capabilities"] },
   hooks: { name: "Hooks", description: "工具调用前后钩子", panels: ["capabilities"] },
   mcp: { name: "MCP", description: "外部 MCP 服务配置", panels: ["capabilities"] },
-  subagents: { name: "子代理", description: "子代理资源", panels: ["capabilities"] },
+  subagents: { name: "子代理", description: "子代理资源与运行态", panels: ["capabilities", "subagents"] },
   shell: { name: "Shell 工具", description: "执行命令工具", panels: [] },
   planning: { name: "规划工具", description: "待办、提问和交付完整性检查", panels: [] },
 } as const satisfies Record<string, { name: string; description: string; panels: readonly PluginPanel[] }>;
@@ -71,6 +72,7 @@ export const PLUGIN_PANEL_LABELS: Record<PluginPanel, string> = {
   marketplace: "扩展市场",
   diagnostics: "诊断与维护",
   remote: "SSH 工作区",
+  subagents: "子代理",
 };
 
 export const CAPABILITY_PLUGIN_BY_KIND: Partial<Record<CapabilityKind, XuenessPluginId>> = {
