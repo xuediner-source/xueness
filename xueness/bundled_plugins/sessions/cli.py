@@ -253,6 +253,8 @@ CHAT_HELP = """/help               显示帮助与自定义命令
 /compact [说明]     立即按预算压缩上下文（不调用模型，原始日志保留）
 /expert [status|resume|stop|任务]
                     专家工作流：调研→计划→实现→审查
+/skills [list|inspect <名称>]
+                    列出或查看目录型技能（SKILL.md）
 /exit 或 /quit      保存会话并退出
 运行中 Ctrl+C 请求停止；停止后 /retry 继续，或输入新方向。
 输入提示处 Ctrl+C 退出；写入/编辑/执行默认逐次询问。"""
@@ -275,6 +277,8 @@ CHAT_HELP_EN = """/help               Show help and custom commands
 /compact [notes]    Compact the context to budget now (no model call; journal kept)
 /expert [status|resume|stop|task]
                     Expert workflow: research → plan → implement → review
+/skills [list|inspect <name>]
+                    List or inspect directory skills (SKILL.md)
 /exit or /quit      Save the session and exit
 Ctrl+C requests a stop while running; use /retry or enter a new direction afterward."""
 
