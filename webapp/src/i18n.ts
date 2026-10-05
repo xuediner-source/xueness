@@ -1710,3 +1710,19 @@ Object.assign(messages, {
   "开始克隆": "Start clone",
   "正在克隆…": "Cloning…",
 });
+
+// MCP elicitation. Answers stay in the form state and are not logged.
+Object.assign(messages, {
+  "MCP 询问": "MCP question",
+  "来源服务器": "Source server",
+  "不要在这里填写密码或密钥。": "Do not enter a password or secret here.",
+  "提交": "Submit",
+  "拒绝": "Decline",
+  "请选择": "Choose",
+  "请填写必填项": "This field is required",
+  "请填写「{0}」": "Fill in “{0}”",
+  "这一项不符合要求": "This value does not match the field",
+  "「{0}」不符合要求": "“{0}” does not match the field",
+  "允许 MCP 询问少量信息": "Allow MCP to ask for a few details",
+  "没能提交这次回答，请重试。": "Could not submit this answer. Try again.",
+});

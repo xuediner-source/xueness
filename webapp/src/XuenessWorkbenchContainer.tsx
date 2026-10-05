@@ -107,6 +107,7 @@ import { CodeDisplayProvider } from "./ui/CodeContent";
 import { SHORTCUT_COMMANDS, resolveShortcutBinding } from "./xuenessShortcutCommands";
 import { Shell, SidebarActions, SidebarNav } from "./XuenessShell";
 import { TimelineStream, TaskTodos } from "./plugins/sessions/XuenessTimeline";
+import { McpElicitation } from "./plugins/mcp/ElicitationForm";
 import { XuenessRenameDialog } from "./plugins/sessions/XuenessRenameDialog";
 import {
   CAPABILITY_KINDS,
@@ -2026,6 +2027,7 @@ export function XuenessWorkbenchContainer() {
               <Approvals pending={session.pending} onApprove={handleApprove} />
             </div>
           )}
+          {isPluginEffective("mcp") && <McpElicitation sessionId={session.id} />}
           <ConversationTimelineViewport
             key={session.id}
             autoScroll={settingsValues.autoScroll !== false}

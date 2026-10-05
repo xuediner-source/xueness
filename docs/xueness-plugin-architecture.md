@@ -28,7 +28,7 @@ flowchart LR
 
 `plugin_runtime.py` 是共同注册表：根据包内 manifest 处理依赖和命令/API 所属关系，调用 `register_cli`、`execute_cli`、`dispatch`、`tools` 等贡献。`tool_contract.py` 定义 `BuiltinTool` 和只在调用期间存在的 `ContextVar` 执行上下文；`tool_registry.py` 合并稳定工具对象，schema 和实际 dispatch 使用相同对象。执行批准所需的规范化 subject 由工具自身提供，防止 UI 与 handler 对同一调用产生不同批准内容。
 
-前端产品组件放在 `webapp/src/plugins/<id>/`，容器从所属插件入口挂载；静态 `xuenessPluginRegistry.ts` 根据后端 `effective` 状态选择已知视图，目录数据不能注入 JavaScript 或任意路由。宿主恢复入口、工作台布局和跨资源的能力编辑界面属于共享基础设施。下表列出已迁入插件目录的 69 个工作台组件与登记模块（21 个插件目录）；完整声明以各插件 manifest 的 `frontendModules` 为准。共享理由只有一处的纯展示文件除外：settings 的 `SettingsPrimitives.tsx` 渲染分组卡片、行、空状态与工作区信息卡，不读取状态、不发请求也不判断权限，因此其它插件的设置分区可复用它保持同一布局。
+前端产品组件放在 `webapp/src/plugins/<id>/`，容器从所属插件入口挂载；静态 `xuenessPluginRegistry.ts` 根据后端 `effective` 状态选择已知视图，目录数据不能注入 JavaScript 或任意路由。宿主恢复入口、工作台布局和跨资源的能力编辑界面属于共享基础设施。下表列出已迁入插件目录的 70 个工作台组件与登记模块（21 个插件目录）；完整声明以各插件 manifest 的 `frontendModules` 为准。共享理由只有一处的纯展示文件除外：settings 的 `SettingsPrimitives.tsx` 渲染分组卡片、行、空状态与工作区信息卡，不读取状态、不发请求也不判断权限，因此其它插件的设置分区可复用它保持同一布局。
 
 | 插件 | 插件目录下的前端组件 |
 |---|---|
@@ -36,7 +36,7 @@ flowchart LR
 | files | `DirectoryBrowser.tsx`、`FileBrowser.tsx`、`DiffView.tsx` |
 | settings | `SettingsPanel.tsx`、`SettingsSections.tsx`、`SettingsPrimitives.tsx`、`XuenessSettingsView.tsx`、`XuenessShortcutsPanel.tsx`、`XuenessWorkspacePickerDialog.tsx`、`XuenessWorkspaceSettings.tsx`、`themeBoot.ts` |
 | providers | `ProvidersPanel.tsx`、`LightweightWorkbench.tsx`、`LocalRuntimeMonitor.tsx`、`index.tsx`、`runtimeSampling.ts` |
-| mcp | `McpDiagnostics.tsx`、`index.tsx` |
+| mcp | `McpDiagnostics.tsx`、`index.tsx`、`ElicitationForm.tsx` |
 | usage | `UsagePanel.tsx`、`XuenessUsageQuickCard.tsx`、`XuenessUsageSettings.tsx` |
 | memory | `MemoryPanel.tsx`、`MemorySettings.tsx`、`index.tsx` |
 | terminal | `XuenessTerminalPreferences.tsx`、`index.tsx` |
@@ -176,7 +176,7 @@ providers 的 CLI parser/handler 已迁入 `xueness/bundled_plugins/providers/op
 
 ## 功能逐项归属清单
 
-下表概述当前 27 份 manifest 中的 136 项用户能力。命令/工具/依赖和实际实现文件以同一份 manifest 为准；前端卡片直接展示该功能清单，不维护第二份隐藏列表。纯安全内核与通用布局的边界如前文所述。
+下表概述当前 27 份 manifest 中的 137 项用户能力。命令/工具/依赖和实际实现文件以同一份 manifest 为准；前端卡片直接展示该功能清单，不维护第二份隐藏列表。纯安全内核与通用布局的边界如前文所述。
 
 | 插件 | 已实现的用户能力 |
 |---|---|
@@ -195,7 +195,7 @@ providers 的 CLI parser/handler 已迁入 `xueness/bundled_plugins/providers/op
 | commands | 自定义斜杠提示模板；命令资源创建、编辑与开关；目录型 Markdown 命令发现与位置参数展开；commands list/inspect 命令与聊天 /commands |
 | skills | 技能资源与按需目录摘要；有界技能正文读取；目录型技能发现与来源覆盖；skills list/inspect 命令与聊天 /skills |
 | hooks | 明确启用的生命周期事件钩子；钩子命令审批与运行记录；工具执行前后事件管线接入（PostToolUse 可选）；工作区钩子发现与按摘要信任（hooks trust 命令） |
-| mcp | stdio、HTTP 与旧 SSE 连接；OAuth PKCE、凭据刷新与隔离；外部工具、资源与提示词（支持工具名特殊字符清洗与结构化内容解析）；连接诊断、失效恢复与设置 |
+| mcp | stdio、HTTP 与旧 SSE 连接；OAuth PKCE、凭据刷新与隔离；外部工具、资源与提示词（支持工具名特殊字符清洗与结构化内容解析）；连接诊断、失效恢复与设置；结构化询问（默认关闭） |
 | subagents | 只读子任务与嵌套代理（内置 general-purpose 与 explore 探索代理支持、支持 disallowedTools 工具黑名单过滤）；后台并发派发、主代理持续工作、结果收集与完成检查；子任务进度、结果与协作取消；子代理资源与能力配置；Web 端子代理运行态侧栏与卡片详情展开 |
 | network | 受限公网 HTTPS 页面读取；显式配置的网页搜索服务；独立 OpenAI-compatible 搜索模型；搜索地址、模型 ID 与密钥管理；按需 DNS/服务诊断；FakeIP 环境下可选的公开 DoH |
 | automation | 五字段 cron、时区与下次执行；计划审批与无人值守触发；持久认领、运行历史与暂停；闲时队列：本地低峰窗口排队执行、仅在空闲时与完成通知 |
@@ -580,3 +580,31 @@ git 插件登记新功能 `git.clone`（克隆远程仓库到已授权目录）�
 - 目标目录必须是绝对路径、不含 `.`/`..`、末段是合法项目名；上级目录必须已存在、可写、不是根目录/家目录/临时目录等宽泛位置，且位于已授权工作区内（HTTP 用 operator 配置与原生选择器授权的根；CLI 以命令行给出的上级目录为授权，可用 `--root` 钉住）。目标不能是符号链接，已存在时必须是空目录。
 - 成功后通过 settings 插件既有的 `remember_directory` 登记为最近项目，不新增第二份授权列表、不扩大 allowlist。
 - 回归见 `tests/test_git_clone.py`：危险 URL 形式逐条拒绝且不触达子进程、固定 argv 与 `--`、目录约束（越界、非空、文件、符号链接、`..`、相对路径、宽泛目录）、`root` 钉住、确认必需、插件关闭 403、真实克隆本地裸仓库（经测试专用 `URL_TRANSPORT` 把已通过校验的 https 地址改指本地仓库，而不是放开 `file://`）并登记最近项目、CLI 确认与参数校验。
+
+## MCP 结构化询问（mcp.elicitation，2026-10-05）
+
+mcp 插件登记 `mcp.elicitation`。完整目录现为 **27 个插件、137 项登记功能**，工作台组件表为 **70** 个。外部 MCP 服务器在工具调用过程中可以发 JSON-RPC `elicitation/create`，请操作者填一份扁平表单；客户端回 `accept`、`decline` 或 `cancel`。
+
+开关是服务器配置里的布尔字段 `elicitation`，只有精确的 `true` 才打开，缺省、`false` 和其他类型都关闭。关闭时 `initialize` 不声明 elicitation 能力，stdio 仍首选协议 `2024-11-05`，HTTP 仍首选 `2025-03-26`；此时收到 `elicitation/create` 直接回 JSON-RPC `-32601`，不挂起。打开后能力为 `{"elicitation": {}}`，未钉死 `protocolVersion` 时首选 `2025-06-18`。能力编辑对话框里的「允许 MCP 询问少量信息」写入同一个字段，未勾选就是 `false`。
+
+### 请求与回答
+
+stdio、Streamable HTTP 的 SSE 响应体、以及旧 SSE 的消息队列，都在等待工具结果时识别带 `id` 的服务器请求。`elicitation/create` 之外的请求回 method not found，避免把服务器挂住；通知仍然忽略。用户等待不计入工具调用超时：stdio 把等待时长加回截止时间；打开该开关的 HTTP/SSE 连接使用更长的读超时，避免等待期间把连接读断。默认关闭的服务器仍用原来的短超时。
+
+`requestedSchema` 只接受 2025-06-18 的扁平对象：string（format 仅 email/uri/date/date-time，可带 minLength/maxLength）、number/integer（minimum/maximum）、boolean，以及 string 上的 enum/enumNames。属性最多 16 个，说明最长 2000，enum 最多 32 项，字符串最长 4000。嵌套对象、数组、组合 schema、未知关键字和超限都 decline，并记一条只有代码和服务器 id 的诊断。format、属性名或标题像 password/secret/token/credential/api-key 时直接 decline，表单不会渲染。
+
+通过校验的请求挂在本会话上，来源显示服务器名。`GET/POST /api/sessions/<id>/elicitation` 归 mcp（httpFamilies `sessions/*/elicitation`），沿用宿主的 Host、Origin 与 CSRF。POST 成功体只有 `{ok, action}`。内容不合格时返回 400 并保留这次等待，操作者可以改完再提交。10 分钟没有回答则自动 `cancel`。同一会话同时只挂一条；第二条直接 decline。
+
+### 无人值守与命令行
+
+计划权限模式、子代理、工作流与专家工作流、automation 计划与闲时任务、app-server，以及没有可交互客户端的调用，一律立即 decline，不写待回答文件、不读标准输入。判定只看会话字段、线程名和调用栈里的插件模块，不改这些插件本身。
+
+多行 CLI（调用栈里是 `sessions.cli` 且 stdin 是 TTY）逐项提示，可输入 `/decline` 或 `/cancel`；提示写到 stderr，不回显输入。连续 5 次不合格则 cancel。curses TUI（`sessions.cli_tui`）和非 TTY 的 CLI 自动 decline。
+
+### 隐私与安全边界
+
+- 回答只出现在回给该 MCP 服务器的 JSON-RPC result 里。若服务器把回答放进工具结果，模型才会看见；会话、待回答文件、诊断、日志和 HTTP 响应都不保存回答。
+- 待回答文件只含服务器名、说明、schema 和过期时间，放在状态目录 `mcp-elicitations/` 下，回答后删除。符号链接路径不写。
+- 界面固定提示「不要在这里填写密码或密钥。」前端按同一 schema 再校验一遍，控件是文本、数字、开关和下拉，没有密码框。
+- 工作台容器只挂载 `McpElicitation`。表单、样式和轮询在 `webapp/src/plugins/mcp/ElicitationForm.tsx`。页面隐藏时暂停轮询。
+- 不新增 eval、动态导入、监听套接字或 shell。测试用临时目录里的假 stdio 服务器（`sys.executable` 固定 argv）和内存中的假 SSE 响应，不访问网络、不调用真实模型。

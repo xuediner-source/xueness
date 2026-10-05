@@ -17,6 +17,8 @@ class McpPlugin(Plugin):
     def load(self, state_dir, root, session) -> dict:
         from ...mcp import load, parse_namespaced, tool_schema, sanitize_mcp_name_part
         from .lifecycle import Pool
+        self._session = session if isinstance(session, dict) else None
+        self._state_dir = state_dir
         self.pool = Pool(Path(root))
         collected = []
         self.servers = {}
@@ -28,6 +30,7 @@ class McpPlugin(Plugin):
                 from ...mcp import client_for
                 server = {**server, "_state_dir": str(state_dir)}
                 client = self.pool.get(server)
+                self._bind(client)
                 tools = client.list_tools()
                 for tool in tools:
                     raw_name = tool.get("name") if isinstance(tool, dict) else None
@@ -73,6 +76,7 @@ class McpPlugin(Plugin):
             try:
                 if not getattr(client, "active", True):
                     client = self.pool.get(self.servers[parsed[0]])
+                    self._bind(client)
                     names = {tool.get("name") for tool in client.list_tools() if isinstance(tool, dict)}
                     target_name = self.tool_name_map.get(parsed, parsed[1])
                     if target_name not in names and parsed not in self.special_tools:
@@ -92,7 +96,14 @@ class McpPlugin(Plugin):
 
         return {"mcp_tools": collected, "mcp_call": mcp_call}
 
+    def _bind(self, client) -> None:
+        """Reconnects replace the client, so every live client is bound again."""
+        from .elicitation import bind_client
+        bind_client(client, getattr(self, "_session", None), getattr(self, "_state_dir", None))
+
     def teardown(self) -> None:
+        from .elicitation import reset_state
+        reset_state()
         if getattr(self, "pool", None) is not None:
             self.pool.close()
         else:
@@ -116,6 +127,10 @@ def execute_cli(args, deps=None):
 
 
 def dispatch(method, parts, query, data, ctx):
+    from .elicitation import dispatch as elicitation_dispatch
+    result = elicitation_dispatch(method, parts, query, data, ctx)
+    if result is not None:
+        return result
     from .lifecycle import dispatch as lifecycle
     result = lifecycle(method, parts, query, data, ctx)
     if result is not None:
