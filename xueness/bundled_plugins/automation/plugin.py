@@ -1,4 +1,7 @@
 """Automation HTTP and scheduler contributions."""
+from ...plugin_runtime import PluginDisabled
+from .off_peak import cli as off_peak_cli, http as off_peak_http
+from .off_peak import register_cli as register_off_peak_cli
 from .scheduler import Automations, Scheduler
 
 def create_service(state,allow_real=False): return Scheduler(state,allow_real=allow_real)
@@ -33,6 +36,12 @@ def activate(scope, ctx):
 
 
 def dispatch(method,parts,query,data,ctx):
+    if parts[:3]==['api','automation','offpeak']:
+        try:
+            return off_peak_http(method,parts,data,ctx)
+        except PluginDisabled as error: return 403,{'error':str(error),'plugin':'automation'}
+        except (ValueError,KeyError) as error: return 400,{'error':str(error)[:300]}
+        except OSError: return 400,{'error':'off-peak state unavailable'}
     if parts[:2]!=['api','automations']: return None
     try:
         store=Automations(ctx['state_dir'])
@@ -60,6 +69,12 @@ def register_cli(commands):
         if name=='approve': parser.add_argument('--allow-real-provider',action='store_true');parser.add_argument('--approve-execution',action='store_true')
         if name=='run': parser.add_argument('--allow-real-provider',action='store_true')
     daemon=sub.add_parser('daemon');daemon.add_argument('--allow-real-provider',action='store_true')
+    register_off_peak_cli(sub)
+
+
+def tools():
+    from .off_peak import TOOLS
+    return TOOLS
 
 
 def execute_cli(args):
@@ -69,7 +84,8 @@ def execute_cli(args):
     try:
         require_enabled(args.state,'automation');store=Automations(args.state)
         action=args.automation_action
-        if action=='list': result={'automations':store.list()}
+        if action=='offpeak': result=off_peak_cli(args)
+        elif action=='list': result={'automations':store.list()}
         elif action=='create':
             raw=Path(args.file).read_bytes()
             if len(raw)>100000: raise ValueError('automation document too large')

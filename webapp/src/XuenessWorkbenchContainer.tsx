@@ -1665,7 +1665,7 @@ export function XuenessWorkbenchContainer() {
     if (settingsSection === "marketplace") return <XuenessMarketplace onInstalled={() => void refreshPluginCatalog()} />;
     if (settingsSection === "memory") return <XuenessMemorySettings enabled={settingsValues.memoryEnabled !== false} onEnabledChange={value => void handleUpdateSetting("memoryEnabled", value)} />;
     if (settingsSection === "usage") return <XuenessUsageSettings />;
-    if (settingsSection === "automations") return <XuenessAutomationsPanel />;
+    if (settingsSection === "automations") return <XuenessAutomationsPanel offPeakEnabled={isPluginEffective("automation")} />;
     if (settingsSection === "diagnostics") return <XuenessDiagnosticsPanel />;
     if (settingsSection === "remote") return <RemoteConnections onUse={id => { chooseWorkspace(composerCatalog.isolatedRoot, true); updateChoices({remote:id}); }} />;
     return null;
@@ -1700,7 +1700,7 @@ export function XuenessWorkbenchContainer() {
     ),
     workflows: <WorkflowPanel sessionId={activeId} subagentsEnabled={isPluginEffective("subagents")} />,
     terminal: <TerminalPanel sessionId={activeId} fontSize={Number(settingsValues.terminalFontSize ?? 13)} fontFamily={String(settingsValues.terminalFontFamily ?? "system")} />,
-    automations: <XuenessAutomationsPanel />,
+    automations: <XuenessAutomationsPanel offPeakEnabled={isPluginEffective("automation")} />,
     marketplace: <XuenessMarketplace onInstalled={() => void refreshPluginCatalog()} />,
     diagnostics: <XuenessDiagnosticsPanel />,
     files: (

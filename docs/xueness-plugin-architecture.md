@@ -163,7 +163,7 @@ providers 的 CLI parser/handler 已迁入 `xueness/bundled_plugins/providers/op
 
 ## 功能逐项归属清单
 
-下表概述当前 27 份 manifest 中的 124 项用户能力。命令/工具/依赖和实际实现文件以同一份 manifest 为准；前端卡片直接展示该功能清单，不维护第二份隐藏列表。纯安全内核与通用布局的边界如前文所述。
+下表概述当前 27 份 manifest 中的 125 项用户能力。命令/工具/依赖和实际实现文件以同一份 manifest 为准；前端卡片直接展示该功能清单，不维护第二份隐藏列表。纯安全内核与通用布局的边界如前文所述。
 
 | 插件 | 已实现的用户能力 |
 |---|---|
@@ -185,7 +185,7 @@ providers 的 CLI parser/handler 已迁入 `xueness/bundled_plugins/providers/op
 | mcp | stdio、HTTP 与旧 SSE 连接；OAuth PKCE、凭据刷新与隔离；外部工具、资源与提示词；连接诊断、失效恢复与设置 |
 | subagents | 只读子任务与嵌套代理；后台并发派发、主代理持续工作、结果收集与完成检查；子任务进度、结果与协作取消；子代理资源与能力配置 |
 | network | 受限公网 HTTPS 页面读取；显式配置的网页搜索服务；独立 OpenAI-compatible 搜索模型；搜索地址、模型 ID 与密钥管理；按需 DNS/服务诊断；FakeIP 环境下可选的公开 DoH |
-| automation | 五字段 cron、时区与下次执行；计划审批与无人值守触发；持久认领、运行历史与暂停 |
+| automation | 五字段 cron、时区与下次执行；计划审批与无人值守触发；持久认领、运行历史与暂停；闲时队列：本地低峰窗口排队执行、仅在空闲时与完成通知 |
 | extensions | 可信资源清单市场浏览；数据 manifest 安装、升级与移除 |
 | diagnostics | 脱敏支持诊断导出；状态存储统计与限定日志清理；实时本机 CPU、内存与磁盘采样 |
 | browser | 受审批约束的页面导航与检查；精确点击、输入与内存截图；浏览器控制配置与生命周期清理 |
@@ -395,3 +395,17 @@ profile 是 Cordis/DeepSeek 那种「组合配置档」的最小安全版本：�
 前端只加了一个入口：`ComposerModelMenu` 页脚的 `onSaveDefault`（未接线或没有选中模型时整个按钮不渲染），容器仅在 `isPluginEffective("providers")` 时接线，走 `xuenessApi.saveDefaultModelSelection` 的 CSRF 上行；保存成功后按钮改口「已设为默认」并带确认标记，切换选择后标记自动复位。校验一律由服务端判定，400 的 `error` 文案直接呈现。
 
 验证：`tests/test_app_server.py` 21 项（真实管道驱动协议环：initialize 描述与信任模型、`-32601`、坏 JSON `-32700`、1 MiB 超限行、信封校验、create/list/get 往返、`setModel`/`setEffort` 与非法档位、假 provider 的 `turn/start` 通知流与 `turn/finished`、取消、同会话二次开轮 409、stdout 只含协议帧（provider 里的 `print` 出现在 stderr）、插件禁用退出码 2 与 CLI 非零退出、全程零 socket、工作区越界仍 400、逐次批准不被 stdio 放宽、sessions 中途禁用后 403）；`tests/test_runtime_model_switch.py` 24 项（`/effort list` 与非法档位、`/model provider/model` 与旧写法与 `env`、换模型使用其默认档位、save-default 驱动后续未指定请求、默认随 profile 删除失效、HTTP 空闲与运行中切换、只影响下一次请求、轻量副本共享挂起切换、运行档位不兼容 409、路由归属与禁用 403、历史封顶）；前端 2 项新增用例覆盖按钮接线/未接线与 CSRF POST 路径。均使用隔离状态目录与本地 fixture provider，不访问网络、不调用真实模型。
+
+## 闲时任务 automation.off_peak（2026-10-05）
+
+automation 插件内的新功能，登记为 `automation.off_peak`（中英双语 feature），完整目录现为 27 个插件、125 项登记功能。它把「不急的任务」排进一个本地闲时队列：一条队列项只是数据——提示词、工作区绝对路径、可选模型、单次运行超时、`onlyWhenIdle`、窗口/时区覆盖，以及两个独立开关 `approved`（批准这份不可变计划无人值守执行）与 `allowReal`（允许调用真实服务商）。队列落在 `<状态目录>/offpeak.json`（JSON 数组，沿用 `resources._atomic_write_json` 的原子写、符号链接拒绝、2 MiB 读取预算、最多 50 项、每条任务保留 20 条按尝试的历史），窗口设置落在 `<状态目录>/offpeak-settings.json`（只允许 `window`/`timezone`，64 KiB 上限）。两份文件都只可能是数据：状态目录里的任何内容都不会被当作代码加载，本功能没有 `importlib`、`eval` 或动态模块名。
+
+窗口判定按**本地墙钟分钟**而不是 UTC，`start > end` 即跨午夜；`in_window`/`next_window_open` 都接受时区名与时钟注入，因此回归用固定 epoch 断言而从不读运行机时间。触发完全复用既有 automation 调度器：`Scheduler._loop` 里 cron 那一行之后追加一次 `queue.tick()`，仍在 `is_enabled(state,'automation')` 判断之内、共用同一把异常吞掉与 15 秒等待，**没有新线程、新进程或新轮询循环**；禁用插件后调度线程照旧不再产生任何队列工作。每次 tick 先把 `running` 项按其 workflow 结果收敛（completed → `completed`；仍在 ACTIVE 且超过 `deadlineSeconds` → 取消该运行并记 `timed out after Ns`；其他终态 → `workflow <status>`），再认领到期项。认领是 at-most-once：`queued → running` 的迁移与新的 `runId` 在同一次队列锁（`.offpeak.lock`，flock）内写出，同一窗口里的后续 tick 只会看见 `running`，因此重复执行在结构上不可能；一次尝试只有一条历史记录，随结果就地更新，与 cron 侧 `Automations.run` 的写法一致。
+
+真正的执行仍走 workflows 的既有契约：`validate_plan` 生成单节点 agent 计划（`prompt`/`cwd`/`timeout`，可选 `model`/`provider_id`），队列项存下该计划的 sha256 摘要，启动前重算——摘要变了就以 `plan changed after approval` 失败并 hold 到下一个窗口开启，随后 `WorkflowStore.create` + `launch(approved=True, allow_real=row['allowReal'])`。无人值守的前提是三个条件同时成立：任务已批准、任务允许真实服务商、**主机**允许真实服务商；缺任何一条都记 `awaiting_approval` 并把任务留在队列里、`holdUntil` 推到下一次窗口开启，绝不静默降级或放宽任何限制。`run-now` 只跳过窗口与 `onlyWhenIdle`，不跳过这三道闸门；`cancel` 在队列锁内落终态，再在锁外尽力 `control(workflowId,'cancel')`，取消的任务不可能被后续 tick 复活。`onlyWhenIdle` 的「空闲」默认取 `host_is_idle`（本机没有 ACTIVE 的 workflow 运行），可注入替换以便测试。
+
+入口与归属：模型侧只有一个 `offpeak_create` 内置工具（gate kind 复用 `exec`，计划模式与未批准状态照旧拒绝；工具创建的项固定 `confirm=False`，因此必须由操作员在面板或 CLI 批准，返回里明确写「操作员批准后才会无人值守执行」）；CLI 是 `xueness automation offpeak list|add|approve|run-now|cancel|settings`（`approve` 必须带 `--approve-execution`）；HTTP 家族登记进 automation 的 `httpFamilies`（`automation/offpeak`），`route_owner` 的匹配逻辑一字未改，Host/Origin/CSRF 沿用 web 层既有防护，`GET` 概览/`POST` 入队/`POST <id>/approve`（`confirmed` 必须为 true，否则 400）/`POST <id>/run`/`DELETE <id>`/`GET|POST settings`；`dispatch_http` 的属主effective检查与模块内 `require_enabled` 双保险，插件关闭时 HTTP 为 403（body 带 `plugin: automation`）、CLI 退出码 1、工具返回 `plugin disabled`。
+
+前端新增 `webapp/src/plugins/automation/offPeakModel.ts` 与 `OffPeakTasks.tsx`（登记进 manifest 的 `frontendModules`），面板 `XuenessAutomationsPanel({ offPeakEnabled })` 由工作台容器两处挂载点传入 `isPluginEffective("automation")`：`offPeakEnabled` 为 false 时组件直接 `return null`，不发请求、不起轮询，既有「定时计划」列表与静态注册表面貌不变（`XuenessPluginFeaturePanels.test.tsx` 里「不出现闲时任务」的断言在缺省 props 下继续成立）。面板提供队列列表、入队表单、窗口设置与完成通知：表单校验镜像后端上限（提示词 1–5000、名称 ≤120、绝对路径、超时 60–14400 秒、允许真实服务商必须先批准计划），通知按尝试 ID 逐个出现一次且首屏只登记已有历史（不把旧运行当新通知回放），已完成/已取消的任务不再提供运行与取消按钮。i18n 只在 `webapp/src/i18n.ts` 末尾追加一个独立 `Object.assign(messages, {...})` 块。
+
+门禁与回归：`tools/check_plugin_architecture.py` 通过（`modules` 增加 `off_peak`、`tools` 增加 `offpeak_create`、`httpFamilies` 增加 `automation/offpeak`、双语 feature 与前端归属一致，队列状态文件不在包内故不涉及 `dataFiles`）；`tests/test_automation_off_peak.py` 21 项覆盖队列增删查与输入拒绝、容量与超限/损坏/符号链接状态文件被拒、历史有界、跨午夜窗口与下一次开启、本地墙钟与 UTC 的区别、到点只认领一次、审批与主机服务商闸门、`onlyWhenIdle`、启动失败与超时写史、完成收敛、取消停止运行、`run-now` 不放宽闸门、插件关闭后的 HTTP/CLI/工具与依赖阻塞、CLI 组与 HTTP 全矩阵、以及 cron 计划与队列并存；`webapp/src/plugins/automation/offPeakPanel.test.tsx` 8 项覆盖关闭即空渲染、窗口文案与审批缺口可见、终态按钮收敛、通知一次一尝试与表单校验。全部测试使用隔离状态目录、注入时钟与假 workflow launch，不访问网络、不调用真实模型，也不改动 `core.py`、`tool_registry.py` 调度、`plugin_runtime.py` hook 分发或任何其他插件。

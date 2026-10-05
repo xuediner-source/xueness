@@ -8,7 +8,9 @@
   "dependencies": [
     "workflows"
   ],
-  "tools": [],
+  "tools": [
+    "offpeak_create"
+  ],
   "commands": [
     "automation"
   ],
@@ -18,13 +20,15 @@
   "resources": [],
   "capabilities": [],
   "httpFamilies": [
-    "automations"
+    "automations",
+    "automation/offpeak"
   ],
   "provides": [
     "automation.scheduler"
   ],
   "modules": [
-    "scheduler"
+    "scheduler",
+    "off_peak"
   ],
   "features": [
     {
@@ -41,10 +45,17 @@
       "id": "automation.history",
       "name": "持久认领、运行历史与暂停",
       "nameEn": "Persistent claims, run history and pause"
+    },
+    {
+      "id": "automation.off_peak",
+      "name": "闲时队列：本地低峰窗口排队执行、仅在空闲时与完成通知",
+      "nameEn": "Off-peak queue: local idle-window runs, idle-only tasks and completion notices"
     }
   ],
   "frontendModules": [
     "plugins/automation/automationModel.ts",
+    "plugins/automation/offPeakModel.ts",
+    "plugins/automation/OffPeakTasks.tsx",
     "plugins/automation/index.tsx"
   ]
 }
