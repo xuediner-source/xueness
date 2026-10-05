@@ -85,7 +85,15 @@ import { settingsNavigation } from "./xuenessSettingsNavigation";
 import { CompletionChecks } from './plugins/planning/CompletionChecks';
 import { SessionGoal } from './plugins/planning/SessionGoal';
 import { LocalRuntimeMonitor, RequestTiming, type LocalRuntimeSession } from "./plugins/providers/LocalRuntimeMonitor";
-import { LightweightComposerControls, lightweightLayoutActive } from "./plugins/providers/LightweightWorkbench";
+import {
+  LightweightComposer,
+  LightweightComposerControls,
+  LightweightStatusBar,
+  LightweightTimeline,
+  extractReportedUsage,
+  lightweightLayoutActive,
+  scrollToTimelineBottom,
+} from "./plugins/providers/LightweightWorkbench";
 import { ForkSessionDialog } from "./plugins/sessions";
 import { SessionQueue } from "./plugins/sessions/SessionQueue";
 import { Approvals, Composer, WorkbenchHeader, heroGreeting, type ComposerDraftState } from "./plugins/sessions/XuenessWorkbenchView";
@@ -1365,6 +1373,32 @@ export function XuenessWorkbenchContainer() {
       setPanel(isPluginEffective("sessions") ? "chat" : "plugins");
     }
   }, [lightweightLayout, panel, isPluginEffective]);
+  useEffect(() => {
+    if (!lightweightLayout) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && (e.key === "l" || e.key === "L")) {
+        e.preventDefault();
+        scrollToTimelineBottom();
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [lightweightLayout]);
+  const sessionUserMessages = useMemo(() => {
+    const list: string[] = [];
+    if (session?.task && typeof session.task === "string" && session.task.trim().length > 0) {
+      list.push(session.task.trim());
+    }
+    for (const r of rows ?? []) {
+      if (r.kind === "user" && typeof r.text === "string" && r.text.trim().length > 0) {
+        const trimmed = r.text.trim();
+        if (!list.includes(trimmed)) {
+          list.push(trimmed);
+        }
+      }
+    }
+    return list;
+  }, [rows, session?.task]);
   const composerMentions = [
     ...composerCatalog.files.map(item => ({ ...item, kind: "file" as const })),
     ...composerCatalog.sessions.map(item => ({ ...item, kind: "session" as const })),
@@ -1377,7 +1411,7 @@ export function XuenessWorkbenchContainer() {
     sessionProviderUsage={session?.id === activeId ? session.provider_usage : undefined}
     onOpenPanel={isPluginEffective("usage") ? () => setPanel("usage") : undefined}
   />;
-  const composerControls = lightweightLayout ? <>
+  const composerControls = lightweightLayout ? (
     <LightweightComposerControls
       enabled
       choices={choices} onChange={updateChoices} models={composerCatalog.models}
@@ -1388,8 +1422,7 @@ export function XuenessWorkbenchContainer() {
       pauseReason={session?.id === activeId ? session.pause_reason : undefined}
       disabled={busy || branchBusy || composerRunning}
     />
-    {usageQuickCard}
-  </> : <>
+  ) : <>
     <XuenessComposerToolbar
       choices={choices} onChange={updateChoices} models={composerCatalog.models}
       loading={composerCatalogLoading} error={composerCatalogError}
@@ -2010,7 +2043,7 @@ export function XuenessWorkbenchContainer() {
             onRename={() => activeId && requestRename(activeId)}
             onDelete={() => activeId && void deleteById(activeId)}
           />
-          {isPluginEffective('planning') && <SessionGoal sessionId={session.id} goal={session.goal}
+          {isPluginEffective('planning') && !lightweightLayout && <SessionGoal sessionId={session.id} goal={session.goal}
             disabled={busy || session.status === 'running'} onChanged={() => void handleRefreshAll()} />}
           {session.forkParent && <p className="xn-session-fork-provenance" data-testid="fork-session-provenance" role="note">
             {tf("从会话 {0} 的第 {1} 轮分叉", [session.forkParent.sourceId, session.forkParent.turn])}
@@ -2019,7 +2052,7 @@ export function XuenessWorkbenchContainer() {
           </p>}
           {session.pause_reason && ["paused", "needs_review"].includes(session.status) && <p role="status" className="xn-run-error">{tf("暂停原因：{0}", [session.pause_reason])}</p>}
           {isPluginEffective('planning') && !lightweightLayout && <CompletionChecks sessionId={session.id} completion={session.completion} items={session.delivery_requirements ?? []} disabled={busy || session.status === 'running'} onSaved={() => void handleRefreshAll()} />}
-          {isPluginEffective('providers') && <RequestTiming session={session} />}
+          {isPluginEffective('providers') && !lightweightLayout && <RequestTiming session={session} />}
           {activeRuntimeProfile === "lightweight" && isPluginEffective("providers") && isPluginEffective("diagnostics") &&
             <LocalRuntimeMonitor lightweight session={runtimeMonitorSession} />}
           {session.pending && session.pending.length > 0 && (
@@ -2035,11 +2068,18 @@ export function XuenessWorkbenchContainer() {
             streamingText={session.streaming?.text}
             queuedMessages={session.queued_messages}
           >
-            {settingsValues.showTodos !== false && <TaskTodos todos={session.todos ?? []} />}
-            <TimelineStream rows={displayTimelineRows} collapseTools={settingsValues.collapseTools !== false} messageStreamShowReasoning={settingsValues.messageStreamShowReasoning !== false}
-              jsonToolProtocol={session.model_selection?.tool_calling === "json" && activeRuntimeProfile === "lightweight" && session.streaming?.text_format !== "markdown"}
-              protocolModePending={activeSessionRunning && activeRuntimeProfile === "lightweight" && session.streaming?.text_format !== "markdown" && session.model_selection?.tool_calling === "json" && false}
-              streamingPending={activeSessionRunning} grouping={timelineGrouping} />
+            {settingsValues.showTodos !== false && !lightweightLayout && <TaskTodos todos={session.todos ?? []} />}
+            {lightweightLayout ? (
+              <LightweightTimeline
+                rows={displayTimelineRows}
+                streamingPending={activeSessionRunning}
+              />
+            ) : (
+              <TimelineStream rows={displayTimelineRows} collapseTools={settingsValues.collapseTools !== false} messageStreamShowReasoning={settingsValues.messageStreamShowReasoning !== false}
+                jsonToolProtocol={session.model_selection?.tool_calling === "json" && activeRuntimeProfile === "lightweight" && session.streaming?.text_format !== "markdown"}
+                protocolModePending={activeSessionRunning && activeRuntimeProfile === "lightweight" && session.streaming?.text_format !== "markdown" && session.model_selection?.tool_calling === "json" && false}
+                streamingPending={activeSessionRunning} grouping={timelineGrouping} />
+            )}
             <SessionQueue items={session.queued_messages ?? []} cancellingId={queueCancelling?.sessionId === session.id ? queueCancelling.queueId : null} onCancel={handleCancelQueuedTurn}
               canContinue={session.status !== "running" && session.streaming?.status !== "streaming" && (session.queued_messages ?? []).some(item => item.status === "paused")}
               continuing={queueContinuingSessions.has(session.id)} onContinue={handleContinueQueuedMessages} />
@@ -2052,26 +2092,52 @@ export function XuenessWorkbenchContainer() {
               <button type="button" disabled={busy || runRequestSessions.has(session.id)} onClick={() => void handleRetryRun()}>{tr("重试运行")}</button>
             </div>
           )}
-          <Composer
-            draftKey={`session:${session.id}`}
-            draftStore={composerDraftStore}
+          {lightweightLayout ? (
+            <>
+              <LightweightComposer
+                draftKey={`session:${session.id}`}
+                draftStore={composerDraftStore}
+                onSend={handleSend}
+                disabled={composerDisabled || queueSubmittingSessions.has(session.id)}
+                sendDisabled={!composerModelReady || composerCatalogLoading}
+                running={composerRunning}
+                queueWhenRunning
+                queueBusy={queueSubmittingSessions.has(session.id)}
+                stopping={stoppingSessions.has(session.id)}
+                onStop={handleStop}
+                historyMessages={sessionUserMessages}
+                placeholder={tr("输入消息（Enter 发送，Shift+Enter 换行，Esc 中断）")}
+                controls={composerControls}
+              />
+              <LightweightStatusBar
+                modelName={session.model_selection?.model ?? choices.model}
+                workspaceRoot={draftRoot ?? composerCatalog.root}
+                reportedUsage={extractReportedUsage(session.provider_usage)}
+                status={composerRunning ? "running" : (runError || session.status === "provider_error") ? "error" : session.status}
+              />
+            </>
+          ) : (
+            <Composer
+              draftKey={`session:${session.id}`}
+              draftStore={composerDraftStore}
               sendShortcut={settingsValues.sendShortcut === "mod-enter" ? "mod-enter" : "enter"}
-            onSend={handleSend}
-            minimal={lightweightLayout}
-            disabled={composerDisabled || queueSubmittingSessions.has(session.id)}
-            sendDisabled={!composerModelReady || composerCatalogLoading}
-            running={composerRunning}
-            queueWhenRunning
-            queueBusy={queueSubmittingSessions.has(session.id)}
-            stopping={stoppingSessions.has(session.id)}
-            onStop={handleStop}
-            placeholder={tr("继续描述任务（/ 命令，@ 上下文，$ 技能）")}
-            controls={composerControls}
-            startActions={composerStartActions}
-            mentions={composerMentions}
-            commands={isPluginEffective("commands") ? commandItems : []}
-            files={files.map((f) => f.path)}
-          />
+              onSend={handleSend}
+              minimal={lightweightLayout}
+              disabled={composerDisabled || queueSubmittingSessions.has(session.id)}
+              sendDisabled={!composerModelReady || composerCatalogLoading}
+              running={composerRunning}
+              queueWhenRunning
+              queueBusy={queueSubmittingSessions.has(session.id)}
+              stopping={stoppingSessions.has(session.id)}
+              onStop={handleStop}
+              placeholder={tr("继续描述任务（/ 命令，@ 上下文，$ 技能）")}
+              controls={composerControls}
+              startActions={composerStartActions}
+              mentions={composerMentions}
+              commands={isPluginEffective("commands") ? commandItems : []}
+              files={files.map((f) => f.path)}
+            />
+          )}
           </div>
           {subagentsSidepaneOpen && isPluginEffective("subagents") && !lightweightLayout && (
             <Suspense fallback={null}>
@@ -2100,26 +2166,51 @@ export function XuenessWorkbenchContainer() {
             {runError && (
               <p role="alert" className="xn-run-error">{runError}</p>
             )}
-            <Composer
-              draftKey="new-task"
-              draftStore={composerDraftStore}
-              sendShortcut={settingsValues.sendShortcut === "mod-enter" ? "mod-enter" : "enter"}
-              variant="hero"
-              minimal={lightweightLayout}
-              topContent={workspaceContext}
-              inputRef={heroInputRef}
-              onSend={handleCreate}
-              disabled={busy || creatingSession || !isPluginEffective("sessions")}
-              sendDisabled={!composerModelReady || composerCatalogLoading}
-              running={composerRunning}
-              stopping={activeId ? stoppingSessions.has(activeId) : false}
-              onStop={activeId ? handleStop : undefined}
-              placeholder={tr("向 Xueness 提问，使用 @ 添加上下文，使用 / 选择命令或能力")}
-              controls={composerControls}
-              startActions={composerStartActions}
-              mentions={composerMentions}
-              commands={isPluginEffective("commands") ? commandItems : []}
-            />
+            {lightweightLayout ? (
+              <>
+                {workspaceContext}
+                <LightweightComposer
+                  draftKey="new-task"
+                  draftStore={composerDraftStore}
+                  inputRef={heroInputRef}
+                  onSend={handleCreate}
+                  disabled={busy || creatingSession || !isPluginEffective("sessions")}
+                  sendDisabled={!composerModelReady || composerCatalogLoading}
+                  running={composerRunning}
+                  stopping={activeId ? stoppingSessions.has(activeId) : false}
+                  onStop={activeId ? handleStop : undefined}
+                  historyMessages={sessionUserMessages}
+                  placeholder={tr("向 Xueness 提问（Enter 发送，Shift+Enter 换行）")}
+                  controls={composerControls}
+                />
+                <LightweightStatusBar
+                  modelName={choices.model}
+                  workspaceRoot={draftRoot ?? composerCatalog.root}
+                  status={composerRunning ? "running" : runError ? "error" : "idle"}
+                />
+              </>
+            ) : (
+              <Composer
+                draftKey="new-task"
+                draftStore={composerDraftStore}
+                sendShortcut={settingsValues.sendShortcut === "mod-enter" ? "mod-enter" : "enter"}
+                variant="hero"
+                minimal={lightweightLayout}
+                topContent={workspaceContext}
+                inputRef={heroInputRef}
+                onSend={handleCreate}
+                disabled={busy || creatingSession || !isPluginEffective("sessions")}
+                sendDisabled={!composerModelReady || composerCatalogLoading}
+                running={composerRunning}
+                stopping={activeId ? stoppingSessions.has(activeId) : false}
+                onStop={activeId ? handleStop : undefined}
+                placeholder={tr("向 Xueness 提问，使用 @ 添加上下文，使用 / 选择命令或能力")}
+                controls={composerControls}
+                startActions={composerStartActions}
+                mentions={composerMentions}
+                commands={isPluginEffective("commands") ? commandItems : []}
+              />
+            )}
             {!composerCatalogLoading && !composerModelReady && (composerCatalogError || composerCatalog.models.some(model => model.configured) && !composerCatalog.allowReal) && <div className="xn-composer-model-setup" role="status">
               <span>{tr(composerCatalogError ? "模型列表加载失败，请重试。" : composerCatalog.models.some(model => model.configured) && !composerCatalog.allowReal ? "服务端已关闭模型请求。" : "配置一个模型即可开始对话。")}</span>
               <button type="button" onClick={() => composerCatalogError ? void refreshComposerCatalog() : setPanel(isPluginEffective("providers") ? "providers" : "plugins")}>{tr(composerCatalogError ? "重试" : "配置模型")}</button>

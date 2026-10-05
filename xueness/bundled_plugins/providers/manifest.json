@@ -84,6 +84,11 @@
       "nameEn": "Lightweight minimal workbench layout"
     },
     {
+      "id": "providers.lightweight_compact_timeline",
+      "name": "轻量紧凑时间线与极简输入状态",
+      "nameEn": "Lightweight compact timeline and minimal input status"
+    },
+    {
       "id": "providers.budgets",
       "name": "上下文、输出与安全预算",
       "nameEn": "Context, output and safety budgets"

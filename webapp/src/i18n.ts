@@ -1709,6 +1709,14 @@ Object.assign(messages, {
   "我确认在本机新建目录并克隆这个仓库。": "I confirm this creates a new directory on this machine and clones the repository into it.",
   "开始克隆": "Start clone",
   "正在克隆…": "Cloning…",
+  "只读操作 ({0})": "Read-only operations ({0})",
+  "只读操作": "Read-only operations",
+  "轻量模式状态行": "Lightweight mode status bar",
+  "输入消息（Enter 发送，Shift+Enter 换行，Esc 中断）": "Enter a message (Enter to send, Shift+Enter for newline, Esc to interrupt)",
+  "向 Xueness 提问（Enter 发送，Shift+Enter 换行）": "Ask Xueness (Enter to send, Shift+Enter for newline)",
+  "紧凑时间线": "Compact timeline",
+  "空闲": "Idle",
+  "出错了": "Error",
 });
 
 // MCP elicitation. Answers stay in the form state and are not logged.
