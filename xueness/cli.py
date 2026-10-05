@@ -51,9 +51,10 @@ def _prepare_agent(args, parser, store, session):
                                deps=_compat_cli_dependencies(parser))
 
 
-def _load_commands(state_dir, root=None):
+def _load_commands(state_dir, root=None, *, language=None):
     from .bundled_plugins.sessions import cli as owned
-    return owned.load_commands(state_dir, root, deps=_compat_cli_dependencies(None))
+    return owned.load_commands(state_dir, root, language=language,
+                               deps=_compat_cli_dependencies(None))
 
 
 def _require_cli_plugins(args) -> str | None:
