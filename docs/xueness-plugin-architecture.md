@@ -165,7 +165,7 @@ providers 的 CLI parser/handler 已迁入 `xueness/bundled_plugins/providers/op
 
 ## 功能逐项归属清单
 
-下表概述当前 27 份 manifest 中的 127 项用户能力。命令/工具/依赖和实际实现文件以同一份 manifest 为准；前端卡片直接展示该功能清单，不维护第二份隐藏列表。纯安全内核与通用布局的边界如前文所述。
+下表概述当前 27 份 manifest 中的 128 项用户能力。命令/工具/依赖和实际实现文件以同一份 manifest 为准；前端卡片直接展示该功能清单，不维护第二份隐藏列表。纯安全内核与通用布局的边界如前文所述。
 
 | 插件 | 已实现的用户能力 |
 |---|---|
@@ -183,7 +183,7 @@ providers 的 CLI parser/handler 已迁入 `xueness/bundled_plugins/providers/op
 | office | DOCX 页面与嵌入图片预览；PPTX 幻灯片、图片与缓存图表；XLSX 工作表与缓存单元格值 |
 | commands | 自定义斜杠提示模板；命令资源创建、编辑与开关 |
 | skills | 技能资源与按需目录摘要；有界技能正文读取；目录型技能发现与来源覆盖；skills list/inspect 命令与聊天 /skills |
-| hooks | 明确启用的生命周期事件钩子；钩子命令审批与运行记录 |
+| hooks | 明确启用的生命周期事件钩子；钩子命令审批与运行记录；工具执行前后事件管线接入（PostToolUse 可选） |
 | mcp | stdio、HTTP 与旧 SSE 连接；OAuth PKCE、凭据刷新与隔离；外部工具、资源与提示词；连接诊断、失效恢复与设置 |
 | subagents | 只读子任务与嵌套代理；后台并发派发、主代理持续工作、结果收集与完成检查；子任务进度、结果与协作取消；子代理资源与能力配置 |
 | network | 受限公网 HTTPS 页面读取；显式配置的网页搜索服务；独立 OpenAI-compatible 搜索模型；搜索地址、模型 ID 与密钥管理；按需 DNS/服务诊断；FakeIP 环境下可选的公开 DoH |
@@ -400,7 +400,7 @@ profile 是 Cordis/DeepSeek 那种「组合配置档」的最小安全版本：�
 
 ## 闲时任务 automation.off_peak（2026-10-05）
 
-automation 插件内的新功能，登记为 `automation.off_peak`（中英双语 feature），完整目录现为 27 个插件、127 项登记功能。它把「不急的任务」排进一个本地闲时队列：一条队列项只是数据——提示词、工作区绝对路径、可选模型、单次运行超时、`onlyWhenIdle`、窗口/时区覆盖，以及两个独立开关 `approved`（批准这份不可变计划无人值守执行）与 `allowReal`（允许调用真实服务商）。队列落在 `<状态目录>/offpeak.json`（JSON 数组，沿用 `resources._atomic_write_json` 的原子写、符号链接拒绝、2 MiB 读取预算、最多 50 项、每条任务保留 20 条按尝试的历史），窗口设置落在 `<状态目录>/offpeak-settings.json`（只允许 `window`/`timezone`，64 KiB 上限）。两份文件都只可能是数据：状态目录里的任何内容都不会被当作代码加载，本功能没有 `importlib`、`eval` 或动态模块名。
+automation 插件内的新功能，登记为 `automation.off_peak`（中英双语 feature），完整目录现为 27 个插件、128 项登记功能。它把「不急的任务」排进一个本地闲时队列：一条队列项只是数据——提示词、工作区绝对路径、可选模型、单次运行超时、`onlyWhenIdle`、窗口/时区覆盖，以及两个独立开关 `approved`（批准这份不可变计划无人值守执行）与 `allowReal`（允许调用真实服务商）。队列落在 `<状态目录>/offpeak.json`（JSON 数组，沿用 `resources._atomic_write_json` 的原子写、符号链接拒绝、2 MiB 读取预算、最多 50 项、每条任务保留 20 条按尝试的历史），窗口设置落在 `<状态目录>/offpeak-settings.json`（只允许 `window`/`timezone`，64 KiB 上限）。两份文件都只可能是数据：状态目录里的任何内容都不会被当作代码加载，本功能没有 `importlib`、`eval` 或动态模块名。
 
 窗口判定按**本地墙钟分钟**而不是 UTC，`start > end` 即跨午夜；`in_window`/`next_window_open` 都接受时区名与时钟注入，因此回归用固定 epoch 断言而从不读运行机时间。触发完全复用既有 automation 调度器：`Scheduler._loop` 里 cron 那一行之后追加一次 `queue.tick()`，仍在 `is_enabled(state,'automation')` 判断之内、共用同一把异常吞掉与 15 秒等待，**没有新线程、新进程或新轮询循环**；禁用插件后调度线程照旧不再产生任何队列工作。每次 tick 先把 `running` 项按其 workflow 结果收敛（completed → `completed`；仍在 ACTIVE 且超过 `deadlineSeconds` → 取消该运行并记 `timed out after Ns`；其他终态 → `workflow <status>`），再认领到期项。认领是 at-most-once：`queued → running` 的迁移与新的 `runId` 在同一次队列锁（`.offpeak.lock`，flock）内写出，同一窗口里的后续 tick 只会看见 `running`，因此重复执行在结构上不可能；一次尝试只有一条历史记录，随结果就地更新，与 cron 侧 `Automations.run` 的写法一致。
 
@@ -444,3 +444,28 @@ automation 插件内的新功能，登记为 `automation.off_peak`（中英双�
 
 验证：`tests/test_file_skills.py` 66 项，全部使用 tempfile 隔离的状态目录与工作区，不访问网络、不调用真实模型——frontmatter 正常/缺失/未闭合/非法与块标量、名字规则与长度、描述长度、tag 数量与长度、单文件字节与每根条数上限、project > project-compat > user > resource 的覆盖及 `shadowed`/`shadowedBy`、四类链接拒绝（技能目录、`SKILL.md`、整个 `.xueness` 根、用户根，均断言重定向目标的私有内容不泄露）、陈旧行的读取时重校验、`catalog` 与 `skill_read` 的预算与截断标记、`SkillsPlugin.load` 的两种运行缝（目录模式与急切模式）、CLI 的 list/inspect/`--json`/无子命令走 cwd/禁用后非零退出且 stdout 空、`dispatch_slash` 的 `/skills` 三态与禁用文案、HTTP 的归属与 400/405/403 以及 `['api','resources','skills']` 仍是 200。
 
+## 工具执行事件管线（2026-10-05）
+
+hooks 插件登记新功能 `hooks.tool_events`（工具执行事件管线接入），共享内核把原先单一的 `before_tool_execution` 观察缝补齐为与 DeepSeek harness（Cordis 风格）capability seams、ZCode call-runner pre/post hooks 对齐的「工具执行前后可拦截事件管线」。完整目录现为 27 个插件、128 项登记功能。
+
+### 两个事件与声明式授权
+
+`before_tool_execution`（registry 工具调用执行前、任何副作用发生前）与新增的 `after_tool_execution`（handler 结算出结果之后、`_record_outcome` 记账与回填模型之前）在 `tool_registry.dispatch` 的同一条 seam 上触发，因此串行调用、并发批次成员、以及 web 审批重放（`replay_approved` 走 `core.execute` → dispatch）走的都是同一份事件语义；MCP、子代理与 skill_read 仍走各自既有 seam，不入本管线。凡绑定策略存储（`session` 与 `state_dir` 均在）的 registry 工具调用都触发前后事件——包括只读调用；git 轮次检查点对只读 gate kind 本来就空操作，时机语义不变。
+
+参与门槛与授权分级：任何 effective 插件只要在入口模块定义了回调就自动获得**只读观察**；`manifest.json` 新增可选纯数据字段 `toolEvents`（`{"events": [...], "priority": int}`，`events` 取 `before_tool_execution`/`after_tool_execution` 的唯一非空子集，`priority` 为 [-1000, 1000] 内整数）才授予**干预能力**——声明 before 才可返回 `{"decision": "deny", "reason": ...}` 阻止调用（未声明或缺可用 reason 的 deny 记为 `deny_ignored` 诊断后忽略），声明 after 才可返回 `{"decision": "rewrite", "result": {...}}` 改写结果（未声明记 `rewrite_rejected`）。管线只有"收紧"这一种方向：没有 allow 通道，Gate、审批、permission_mode、工作区边界仍完全由 handler 内的既有检查决定；显式 `{"decision": "allow"}` 与返回 None 等价。deny 结果以 `{"ok": false, "error": "denied by plugin <id>", "error_code": "plugin_denied", "plugin": <id>, "user_reason": <截断到 500 字的原因>}` 作为工具错误回填，不带 `retryable: false`，因此运行不暂停、模型在下一步看到原因并自行调整——既不进入审批队列（与 `error: "denied"` 的审批语义区分），也不触发 PermissionRequest 钩子。
+
+改写验证（`_rewrite_problem`）保证结果结构合法：替换体必须是对象、JSON 可序列化；`ok` 必须与原值完全一致（`is` 判定，失败不能改成成功、成功也不能改成失败，杜绝伪造证据别名）；`tool_call_id`/`_tool_call_id` 若存在则必须原样保留。工具名与调用 ID 从不进入改写载荷——它们由内核持有（journal 消息结构与 `results` 键），改写在结构上不可能改变结果归属。每个回调看到的是上一个插件已接受的改写结果，链式脱敏/截断可行。
+
+### 分发顺序、隔离与超时
+
+分发顺序由 `tool_event_plan(state_dir)` 决定：先按插件依赖拓扑（依赖一定先于依赖者分发），拓扑留出的自由度内按 manifest 声明的 `priority` 降序，再按 `PLUGIN_IDS` 构建顺序破平；结果对同一状态目录确定。单个回调在全局锁内执行（`_TOOL_EVENT_LOCK`），因此并发批次里各调用各自触发前后事件、而**事件回调本身串行**——工具 handler 在线程池并发、回调串行、结果由既有记账循环按原调用顺序回填，三件事互不干扰。回调异常按类型名隔离记录（异常文本可能携带不可信数据，不回显），超时上限 `TOOL_EVENT_TIMEOUT_SECONDS`（默认 10 秒）内未返回即丢弃结果继续运行——回调跑在辅助线程里，超时后线程只能协作收敛，这是 Python 的既有现实，与 hooks 子进程超时的取舍一致。所有干预与异常写入会话的 `tool_event_diagnostics`（限 50 条、detail 截断 200 字），`tool_event_plan`/catalog 自身损坏时 seam 整体降级为"无事件"，绝不弄坏它只观察的工具调用。需要说明的边界：回调不得经由 dispatch 同步执行其它工具（同线程重入由 RLock 化解，跨线程会死锁），这与"回调观察并报告、不执行工具"的定位一致。
+
+运行循环还把 `_dispatch_registry_tool` 的 `_tool_call_id` 注入从仅 web 审批门扩展为无条件注入（dispatch 在调用 handler 前剥离该键，handler 参数不受影响），使事件载荷与诊断在 CLI/HTTP/批次里都携带宿主签发的调用 ID，与 legacy hooks 载荷的 `tool_call_id` 语义一致。
+
+### hooks 插件的 PostToolUse 接入（默认关闭）
+
+hooks 插件新增 `tool_events.py` 模块并从入口导出 `after_tool_execution`，把用户显式启用的生命周期钩子**可选**接入同一管线：钩子资源 JSON 只有显式声明 `"pipeline": true` 才改走管线（仅 `PostToolUse`/`PostToolUseFailure` 两个事件），stdin 载荷在既有字段之外增加 `result`（超 8000 字节降级为 `{"truncated": true, "preview": ...}`）；未声明该标志的钩子仍在运行循环原位置以原载荷触发、行为与默认关闭状态分毫未动，`HookRunner.fire` 对这两个 Post 事件按标志二分、其余事件忽略标志，任何钩子都恰好触发一次。管线钩子沿用同一"偏执"执行器（argv-only、stdin 载荷、最小环境、单钩超时、退出码语义），观察者身份返回 None，永不改写已记录的结果。hooks 插件自身不声明 `toolEvents`——它只观察，不 deny、不改写。
+
+### 门禁与回归
+
+`plugin_contract.tool_events_field_errors` 在 manifest 载入时拒收坏声明（未知/重复/空事件名、非整数或越界 priority、未知字段），`tools/check_plugin_architecture.py` 以纯 JSON 静态校验同一形状（不导入插件代码）；`tests/test_plugin_architecture.py` 新增 8 组坏形状断言。回归见 `tests/test_tool_events.py`（22 项）：after 观察与声明后改写、未声明改写被拒、`ok` 双向翻转与身份伪造/非 JSON 改写被拒、声明后 deny 与原因回填、未声明 deny 被忽略且 allow 惰性、缺 reason 的 deny 逐类忽略、plan 模式下管线不能放宽 Gate、回调异常隔离（git 崩溃不影响 hooks 与本轮）、超时封顶、插件禁用立即失效、拓扑+优先级排序、plan 授权读取、并发批次的逐调用事件/回调串行（重叠检测）/结果顺序、批次内 deny 保序不伤同批、以及 hooks 管线接入的真实子进程端到端（legacy 载荷不变、管线载荷含 result、failure 事件、关闭即停、无钩子零开销），另含契约校验与载入期 fail-closed。全部使用隔离状态目录与注入的假 handler 或 `sys.executable` 子进程，不访问网络、不调用真实模型。

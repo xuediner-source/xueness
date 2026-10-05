@@ -218,6 +218,26 @@ def audit(root: Path) -> list[str]:
                             errors.append(pid + ': invalid pluginsActions name ' + value)
                     elif not SERVICE_NAME.match(value):
                         errors.append(pid + ': invalid ' + field + ' name ' + value)
+            tool_events = manifest.get('toolEvents')
+            if tool_events is not None:
+                # Pure data: which pipeline events this plugin may intervene in
+                # (deny before / rewrite after), plus an optional dispatch
+                # priority. The same shapes are checked at manifest load time.
+                if not isinstance(tool_events, dict) or set(tool_events) - {'events', 'priority'}:
+                    errors.append(pid + ': toolEvents must be an object with events and an optional priority')
+                else:
+                    events = tool_events.get('events')
+                    if (not isinstance(events, list) or not events
+                            or len(events) != len(set(events))
+                            or any(not isinstance(item, str) or item not in (
+                                'before_tool_execution', 'after_tool_execution')
+                                for item in events)):
+                        errors.append(pid + ': toolEvents events must list unique names from '
+                                      'before_tool_execution, after_tool_execution')
+                    priority = tool_events.get('priority')
+                    if priority is not None and (type(priority) is not int
+                                                 or not -1000 <= priority <= 1000):
+                        errors.append(pid + ': toolEvents priority must be an int within [-1000, 1000]')
             actual = {p.relative_to(package_root / pid).with_suffix('').as_posix().replace('/', '.')
                       for p in (package_root / pid).rglob('*.py')
                       if p.name != '__init__.py' and p.relative_to(package_root / pid).as_posix() != 'plugin.py'}

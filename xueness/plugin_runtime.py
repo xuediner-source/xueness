@@ -16,10 +16,12 @@ from __future__ import annotations
 import importlib
 import json
 import threading
+from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import TimeoutError as FutureTimeoutError
 from contextlib import contextmanager
 from pathlib import Path
 
-from .plugin_contract import lifecycle_field_errors
+from .plugin_contract import lifecycle_field_errors, tool_events_field_errors
 from .plugin_scope import ScopeRegistry, activation_plan
 from .resources import _atomic_write_json, _is_link
 
@@ -51,6 +53,7 @@ def _manifests():
         if any(dep not in PLUGIN_IDS for dep in item['dependencies']):
             raise ValueError('unknown bundled plugin dependency')
         errors = lifecycle_field_errors(pid, item)
+        errors.extend(tool_events_field_errors(pid, item))
         if errors:
             raise ValueError('; '.join(errors))
         result[pid] = item
@@ -312,28 +315,265 @@ def completion_requires_evidence(state_dir, session, call_ids=()):
     return required
 
 
-def before_tool_execution(state_dir, session, store, tool_name, gate_kind):
-    """Tell effective plugins that a mutating tool is about to run.
+#: Tool event pipeline (Cordis-style pre/post seams, aligned with the DeepSeek
+#: harness capability seams and ZCode's call runner): every effective plugin may
+#: observe a registry tool call before and after execution, and a manifest
+#: ``toolEvents`` declaration additionally grants a structured deny (before) or
+#: a restricted result rewrite (after). Declarations are pure data; callbacks
+#: come only from build-allowlist entrypoints. The pipeline can only ever
+#: tighten a decision -- the Gate, approvals, permission_mode and workspace
+#: boundaries still decide inside the handler, and it never grants anything.
+#:
+#: Upper bound for one plugin callback, in seconds. Callbacks run in a helper
+#: thread; on timeout the result is discarded and the run continues, so a
+#: stalled observer can never stall the tool it watches. The thread itself
+#: cannot be killed and keeps running cooperatively.
+TOOL_EVENT_TIMEOUT_SECONDS = 10.0
+#: Bounds for one deny reason and one diagnostic detail line.
+TOOL_EVENT_REASON_MAX = 500
+TOOL_EVENT_DETAIL_MAX = 200
+TOOL_EVENT_DIAGNOSTICS_MAX = 50
+#: Result fields that identify a call. They are kernel-owned, and a rewrite
+#: may keep them exactly as they were or leave them out -- never change them.
+_TOOL_RESULT_IDENTITY_KEYS = ('tool_call_id', '_tool_call_id')
 
-    Generic kernel seam, resolved by the same ownership rules as the completion
-    callbacks above: it grants nothing, denies nothing, and carries no product
-    behaviour of its own. A plugin that fails here must never break the tool
-    call it was only observing, so errors are dropped.
+#: Serialises callback execution across threads: concurrent read batches fire
+#: one before/after pair per call from worker threads, and the event callbacks
+#: themselves must stay serial even though the tool handlers they surround do
+#: not. Re-entrant for the same thread only; a callback that synchronously
+#: executed another tool through dispatch from a helper thread would deadlock,
+#: so callbacks observe and report, they do not run tools.
+_TOOL_EVENT_LOCK = threading.RLock()
+
+
+def _tool_event_declaration(item) -> dict:
+    declaration = item.get('toolEvents')
+    return declaration if isinstance(declaration, dict) else {}
+
+
+def _tool_event_priority(item) -> int:
+    priority = _tool_event_declaration(item).get('priority')
+    return priority if type(priority) is int else 0
+
+
+def tool_event_order(items) -> list[str]:
+    """Order plugin catalog rows for event dispatch: topology, then priority.
+
+    A dependency always dispatches before its dependents, whatever the declared
+    priorities; among plugins the topology leaves unordered, the higher
+    manifest-declared priority goes first and PLUGIN_IDS order breaks ties.
+    Cycles cannot survive catalog resolution, but the order degrades to the
+    declaration order rather than looping if one ever appears here.
+    """
+    by_id = {item['id']: item for item in items if isinstance(item, dict) and item.get('id')}
+    emitted: set = set()
+    remaining = set(by_id)
+
+    def sort_key(pid):
+        return (-_tool_event_priority(by_id[pid]), PLUGIN_IDS.index(pid))
+
+    order: list[str] = []
+    while remaining:
+        ready = sorted((pid for pid in remaining
+                        if all(dep in emitted for dep in by_id[pid]['dependencies']
+                               if dep in by_id)), key=sort_key)
+        if not ready:
+            ready = sorted(remaining, key=sort_key)
+        emitted.add(ready[0])
+        order.append(ready[0])
+        remaining.discard(ready[0])
+    return order
+
+
+def tool_event_plan(state_dir) -> list[dict]:
+    """Effective plugins in tool-event dispatch order, with their grants.
+
+    Returns one ``{'id', 'priority', 'before', 'after'}`` row per effective
+    plugin; ``before``/``after`` say whether the manifest's ``toolEvents``
+    declaration grants the intervention for that event. Pure data, resolved
+    from the trusted build manifests and the persisted switches.
+    """
+    items = [item for item in catalog(state_dir) if item['effective']]
+    by_id = {item['id']: item for item in items}
+    plan = []
+    for pid in tool_event_order(items):
+        events = _tool_event_declaration(by_id[pid]).get('events') or ()
+        plan.append({'id': pid, 'priority': _tool_event_priority(by_id[pid]),
+                     'before': 'before_tool_execution' in events,
+                     'after': 'after_tool_execution' in events})
+    return plan
+
+
+def _tool_event_diagnostics(session, event, plugin_id, kind, detail) -> None:
+    """Append one bounded diagnostic to the session journal; never raises.
+
+    Records every intervention (deny, rewrite) and every anomaly (error,
+    timeout, rejected attempt) so a misbehaving plugin stays visible without
+    breaking the run it only observes.
+    """
+    if not isinstance(session, dict):
+        return
+    try:
+        log = session.setdefault('tool_event_diagnostics', [])
+        log.append({'event': event, 'plugin': plugin_id, 'kind': kind,
+                    'detail': str(detail or '')[:TOOL_EVENT_DETAIL_MAX]})
+        if len(log) > TOOL_EVENT_DIAGNOSTICS_MAX:
+            del log[:-TOOL_EVENT_DIAGNOSTICS_MAX]
+    except Exception:  # noqa: BLE001 - diagnostics must never break a run
+        pass
+
+
+def _run_tool_event_callback(plugin_id, event, callback, payload, session):
+    """Run one callback isolated: lock-serialised, time-bounded, never raises.
+
+    Returns the callback's return value, or ``None`` when it raised or timed
+    out. An exception is recorded by type name only -- callback text may carry
+    untrusted data and must not be echoed into the journal.
+    """
+    with _TOOL_EVENT_LOCK:
+        timeout = TOOL_EVENT_TIMEOUT_SECONDS
+        try:
+            if isinstance(timeout, (int, float)) and timeout > 0:
+                pool = ThreadPoolExecutor(max_workers=1,
+                                          thread_name_prefix='xueness-tool-event')
+                try:
+                    future = pool.submit(callback, payload)
+                    try:
+                        return future.result(timeout=timeout)
+                    except FutureTimeoutError:
+                        future.cancel()
+                        _tool_event_diagnostics(session, event, plugin_id, 'timeout',
+                                                'callback exceeded %ss' % (timeout,))
+                        return None
+                finally:
+                    pool.shutdown(wait=False)
+            return callback(payload)
+        except Exception as exc:  # noqa: BLE001 - one callback must not fail the run
+            _tool_event_diagnostics(session, event, plugin_id, 'error',
+                                    type(exc).__name__)
+            return None
+
+
+def before_tool_execution(state_dir, session, store, tool_name, gate_kind,
+                          tool_call_id=None):
+    """Tell effective plugins that a tool call is about to run; honour a deny.
+
+    Every effective plugin with a ``before_tool_execution`` callback observes
+    the call, in :func:`tool_event_plan` order. A plugin whose manifest
+    declares ``before_tool_execution`` in ``toolEvents`` may additionally
+    return ``{'decision': 'deny', 'reason': ...}`` to stop the call before any
+    side effect; the deny travels back as a structured tool error carrying the
+    reason. A deny from an undeclared plugin, or one without a usable reason,
+    is ignored as an observation and recorded as a diagnostic. The pipeline
+    can only tighten: it never grants, and the handler's own Gate, approval
+    and workspace checks still decide whatever it lets through.
+
+    Returns ``None`` to proceed, or the structured denial result.
     """
     if session is None or state_dir is None:
-        return
-    payload = {'state_dir': state_dir, 'session': session, 'store': store,
-               'tool': tool_name, 'gate_kind': gate_kind}
-    for item in catalog(state_dir):
-        if not item['effective']:
-            continue
-        callback = getattr(entrypoint(item['id']), 'before_tool_execution', None)
-        if not callable(callback):
-            continue
-        try:
-            callback(payload)
-        except Exception:
-            continue
+        return None
+    try:
+        payload = {'state_dir': state_dir, 'session': session, 'store': store,
+                   'tool': tool_name, 'gate_kind': gate_kind,
+                   'tool_call_id': tool_call_id}
+        for participant in tool_event_plan(state_dir):
+            callback = getattr(entrypoint(participant['id']),
+                               'before_tool_execution', None)
+            if not callable(callback):
+                continue
+            outcome = _run_tool_event_callback(participant['id'],
+                                               'before_tool_execution',
+                                               callback, payload, session)
+            if not isinstance(outcome, dict) or outcome.get('decision') != 'deny':
+                continue
+            if not participant['before']:
+                _tool_event_diagnostics(session, 'before_tool_execution',
+                                        participant['id'], 'deny_ignored',
+                                        'toolEvents does not declare this event')
+                continue
+            reason = outcome.get('reason')
+            if not isinstance(reason, str) or not reason.strip():
+                _tool_event_diagnostics(session, 'before_tool_execution',
+                                        participant['id'], 'deny_ignored',
+                                        'deny without a usable reason')
+                continue
+            reason = reason.strip()[:TOOL_EVENT_REASON_MAX]
+            _tool_event_diagnostics(session, 'before_tool_execution',
+                                    participant['id'], 'deny', reason)
+            return {'ok': False, 'error': 'denied by plugin ' + participant['id'],
+                    'error_code': 'plugin_denied', 'plugin': participant['id'],
+                    'user_reason': reason}
+    except Exception:  # noqa: BLE001 - the seam must degrade, not fail the call
+        return None
+    return None
+
+
+def _rewrite_problem(original, rewritten):
+    """Why a proposed result rewrite cannot be accepted, or ``None``.
+
+    The replacement must stay a JSON-serialisable object, keep ``ok`` exactly
+    as it was -- a failure can never become a success, nor the reverse -- and
+    leave the call-identity fields untouched. Tool name and call id live
+    outside the rewritten payload (the kernel owns them), so the rewrite
+    cannot change which call a result belongs to.
+    """
+    if not isinstance(rewritten, dict):
+        return 'rewritten result must be an object'
+    if rewritten.get('ok') is not original.get('ok'):
+        return 'ok must stay unchanged'
+    for key in _TOOL_RESULT_IDENTITY_KEYS:
+        if original.get(key) != rewritten.get(key):
+            return 'call identity must stay unchanged'
+    try:
+        json.dumps(rewritten, ensure_ascii=False)
+    except (TypeError, ValueError, OverflowError):
+        return 'rewritten result must stay JSON-serialisable'
+    return None
+
+
+def after_tool_execution(state_dir, session, store, tool_name, tool_call_id, result):
+    """Let effective plugins observe, and if declared rewrite, a tool result.
+
+    Fired once per registry tool call after the handler settled and before the
+    result is recorded for the model, in :func:`tool_event_plan` order. Each
+    callback sees the previously accepted rewrite. A plugin whose manifest
+    declares ``after_tool_execution`` in ``toolEvents`` may return
+    ``{'decision': 'rewrite', 'result': {...}}``; the kernel validates the
+    replacement with :func:`_rewrite_problem` and rejects it otherwise,
+    recording a diagnostic. Returns the result to record.
+    """
+    if session is None or state_dir is None or not isinstance(result, dict):
+        return result
+    try:
+        payload = {'state_dir': state_dir, 'session': session, 'store': store,
+                   'tool': tool_name, 'tool_call_id': tool_call_id, 'result': result}
+        for participant in tool_event_plan(state_dir):
+            callback = getattr(entrypoint(participant['id']),
+                               'after_tool_execution', None)
+            if not callable(callback):
+                continue
+            outcome = _run_tool_event_callback(participant['id'],
+                                               'after_tool_execution',
+                                               callback, {**payload, 'result': result},
+                                               session)
+            if not isinstance(outcome, dict) or outcome.get('decision') != 'rewrite':
+                continue
+            if not participant['after']:
+                _tool_event_diagnostics(session, 'after_tool_execution',
+                                        participant['id'], 'rewrite_rejected',
+                                        'toolEvents does not declare this event')
+                continue
+            problem = _rewrite_problem(result, outcome.get('result'))
+            if problem is not None:
+                _tool_event_diagnostics(session, 'after_tool_execution',
+                                        participant['id'], 'rewrite_rejected', problem)
+                continue
+            result = outcome['result']
+            _tool_event_diagnostics(session, 'after_tool_execution',
+                                    participant['id'], 'rewrite', '')
+        return result
+    except Exception:  # noqa: BLE001 - the seam must degrade, not fail the call
+        return result
 
 
 def active_tool_names(state_dir):

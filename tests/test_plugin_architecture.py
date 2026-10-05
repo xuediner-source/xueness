@@ -120,6 +120,24 @@ class ArchitectureTests(unittest.TestCase):
         self.rewrite(root, 'usage', lambda m: m.update(pluginsActions=['audit']))
         self.assertIn('usage: declares pluginsActions without execute_cli(args)', guard.audit(root))
 
+    def test_tool_events_declaration_is_pure_data_with_known_events(self):
+        root = self.fixture()
+        self.rewrite(root, 'usage', lambda m: m.update(
+            toolEvents={'events': ['before_tool_execution', 'after_tool_execution'],
+                        'priority': 10}))
+        self.assertEqual(guard.audit(root), [])
+        for bad in ([],
+                    {'events': []},
+                    {'events': ['not_an_event']},
+                    {'events': ['before_tool_execution', 'before_tool_execution']},
+                    {'events': ['before_tool_execution'], 'extra': 1},
+                    {'events': ['before_tool_execution'], 'priority': 'high'},
+                    {'events': ['before_tool_execution'], 'priority': True},
+                    {'events': ['before_tool_execution'], 'priority': 1001}):
+            self.rewrite(root, 'usage', lambda m, bad=bad: m.update(toolEvents=bad))
+            errors = guard.audit(root)
+            self.assertTrue(any('usage: toolEvents' in e for e in errors), bad)
+
     def test_package_data_files_need_an_explicit_owner_and_a_safe_path(self):
         root = self.fixture()
         (root / 'xueness/bundled_plugins/usage/extra.json').write_text('{}\n', encoding='utf-8')

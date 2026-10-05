@@ -21,7 +21,8 @@
     "resources/hooks"
   ],
   "modules": [
-    "hooks"
+    "hooks",
+    "tool_events"
   ],
   "features": [
     {
@@ -33,6 +34,11 @@
       "id": "hooks.approval",
       "name": "钩子命令审批与运行记录",
       "nameEn": "Hook command approval and run records"
+    },
+    {
+      "id": "hooks.tool_events",
+      "name": "工具执行事件管线接入",
+      "nameEn": "Tool event pipeline integration"
     }
   ],
   "frontendModules": []

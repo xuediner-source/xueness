@@ -83,14 +83,31 @@ def dispatch(root: Path, gate, name: str, args: dict, session: dict | None = Non
             owner = tool_owner(name)
             if owner is None or not is_enabled(state_dir, owner):
                 return {"ok": False, "error": "plugin disabled"}
-        if tool.mutating and session is not None:
-            # Generic observation seam: plugins that snapshot a workspace run
-            # before the first real change of a turn. Grants nothing; the Gate
-            # checks inside the handler still decide this call.
-            from .plugin_runtime import before_tool_execution
-            before_tool_execution(state_dir, session,
-                                  (context or {}).get("store") if context else None,
-                                  name, tool.gate_kind)
+        if session is not None and state_dir is not None:
+            # Tool event pipeline seam: effective plugins observe (and, when
+            # their manifest declares it, may deny or restrictively rewrite)
+            # every registry tool call with a bound policy store -- serial or
+            # batched alike. It grants nothing: the Gate checks inside the
+            # handler still decide this call, and a deny can only tighten it.
+            from .plugin_runtime import after_tool_execution, before_tool_execution
+            store = (context or {}).get("store") if context else None
+            denial = before_tool_execution(state_dir, session, store,
+                                           name, tool.gate_kind, tool_call_id=call_id)
+            if denial is not None:
+                return denial
+            try:
+                result = tool.handler(root, gate, args, session, call_id)
+            except (OSError, ValueError, KeyError, PermissionError,
+                    subprocess.TimeoutExpired) as exc:
+                # Exceptions may contain command output/environment from
+                # untrusted processes: do not echo them.
+                result = (permission_result(gate, exc)
+                          if isinstance(exc, PermissionError)
+                          else {"ok": False, "error": type(exc).__name__})
+            # The after event also sees handler failures, mirroring the
+            # PostToolUse/PostToolUseFailure split of the hooks plugin.
+            return after_tool_execution(state_dir, session, store,
+                                        name, call_id, result)
         return tool.handler(root, gate, args, session, call_id)
     except (OSError, ValueError, KeyError, PermissionError, subprocess.TimeoutExpired) as exc:
         # Exceptions may contain command output/environment from untrusted

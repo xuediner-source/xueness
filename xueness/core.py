@@ -1391,8 +1391,10 @@ def _drive_run(session: dict, store: Store, provider, gate: Gate, max_steps=8, m
 
     def _dispatch_registry_tool(cid, tool_name, arguments):
         """Plain registry dispatch with the per-call execution context bound."""
-        if getattr(gate, "web_approval_gate", False):
-            arguments["_tool_call_id"] = cid
+        # Dispatch derives the host-issued call id from this key (tool event
+        # payloads, one-shot web approval binding) and strips it before any
+        # handler runs, so the injected value never reaches tool arguments.
+        arguments["_tool_call_id"] = cid
         from .tool_contract import bind_execution
         with bind_execution(store=store, state_dir=state_dir,
                             registry=registry, tool_catalog=tool_catalog,
