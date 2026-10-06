@@ -3,7 +3,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { renderToStaticMarkup } from "react-dom/server";
 
-import { TimelineStream, TaskTodos, groupTimelineRows, assistantTextForDisplay } from "./XuenessTimeline";
+import { TimelineStream, TaskTodos, groupTimelineRows, assistantTextForDisplay, StreamingCommitGate, STREAM_COMMIT_INTERVAL_MS } from "./XuenessTimeline";
 import { unwrapProtocolEnvelopeText, isDuplicateCompletionAnswer, completionPresentation } from "./completionPresentation";
 import type { TimelineRow } from "../../xuenessWorkbench";
 
@@ -635,4 +635,33 @@ test("未启用 virtualize 的长会话保持完整渲染", () => {
   assert.equal(countRenderedTimelineItems(html), 120);
   assert.doesNotMatch(html, /timeline-window-top-spacer|timeline-window-bottom-spacer/);
   assert.doesNotMatch(html, /data-window-index/);
+});
+
+test("StreamingCommitGate: 流式文本按间隔量化提交，间隔内仅保留待提交，到期放行", () => {
+  const gate = new StreamingCommitGate();
+  assert.equal(STREAM_COMMIT_INTERVAL_MS > 0, true);
+  // 首次推送立即提交（首个增量必须尽快上屏）。
+  assert.equal(gate.push("第一段", 0), "第一段");
+  // 间隔内的后续推送被扣住，不触发重渲染。
+  assert.equal(gate.push("第一段第二", 40), null);
+  assert.equal(gate.push("第一段第二三", 120), null);
+  // 到期时间 = 上次提交 + 间隔，供调用方安排兜底提交。
+  assert.equal(gate.dueAt(), STREAM_COMMIT_INTERVAL_MS);
+  // 间隔一到即放行最新文本。
+  assert.equal(gate.push("第一段第二三终", STREAM_COMMIT_INTERVAL_MS), "第一段第二三终");
+  // 放行后无待提交。
+  assert.equal(gate.dueAt(), Number.POSITIVE_INFINITY);
+});
+
+test("StreamingCommitGate: 自定义间隔与慢流（超过间隔的稀疏推送）始终立即提交", () => {
+  const gate = new StreamingCommitGate(500);
+  assert.equal(gate.push("a", 0), "a");
+  assert.equal(gate.push("ab", 499), null);
+  assert.equal(gate.dueAt(), 500);
+  assert.equal(gate.push("abc", 500), "abc");
+  // 1s 会话轮询节奏下（远大于默认间隔）不会被扣住，行为与旧渲染一致。
+  const polled = new StreamingCommitGate();
+  assert.equal(polled.push("tick-1", 0), "tick-1");
+  assert.equal(polled.push("tick-2", 1000), "tick-2");
+  assert.equal(polled.push("tick-3", 2500), "tick-3");
 });

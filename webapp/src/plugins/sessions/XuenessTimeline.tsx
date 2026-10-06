@@ -468,6 +468,80 @@ const ToolTimelineCard = React.memo(function ToolTimelineCard({
  * bail out every unchanged entry instead of recomputing the whole timeline. */
 type TimelineWindowIndex = number | undefined;
 
+/** Screen-refresh floor for streaming markdown re-parses: commits are capped
+ * at one per interval, so token bursts never re-render per token. With the
+ * default 1 s session poll this never holds text back; it only protects
+ * against faster streaming sources. */
+export const STREAM_COMMIT_INTERVAL_MS = 150;
+
+/** Quantization planner for growing streaming text: `push` answers whether the
+ * latest text may re-render now (>= interval since the last commit) or must be
+ * held back, and `dueAt` says when the held-back text is due so the caller can
+ * schedule the trailing commit and slow trickles still land. */
+export class StreamingCommitGate {
+  private readonly intervalMs: number;
+  private lastCommitAt = Number.NEGATIVE_INFINITY;
+  private pending = false;
+
+  constructor(intervalMs = STREAM_COMMIT_INTERVAL_MS) {
+    this.intervalMs = intervalMs;
+  }
+
+  /** Text to commit now, or null to keep showing the previous commit. */
+  push(text: string, now: number): string | null {
+    if (now - this.lastCommitAt >= this.intervalMs) {
+      this.lastCommitAt = now;
+      this.pending = false;
+      return text;
+    }
+    this.pending = true;
+    return null;
+  }
+
+  /** Earliest time the held-back text may be committed (Infinity when none). */
+  dueAt(): number {
+    return this.pending ? this.lastCommitAt + this.intervalMs : Number.POSITIVE_INFINITY;
+  }
+}
+
+/** Quantizes re-renders of a growing streaming text. While `streaming`, the
+ * returned value advances at most once per `STREAM_COMMIT_INTERVAL_MS` (with a
+ * trailing commit so the newest text always lands); the moment streaming ends,
+ * the exact final text is returned. Server rendering and non-streaming rows
+ * return `text` unchanged. */
+function useQuantizedStreamingText(text: string, streaming: boolean): string {
+  const [committed, setCommitted] = React.useState(text);
+  const latestRef = React.useRef(text);
+  latestRef.current = text;
+  const gateRef = React.useRef<StreamingCommitGate | null>(null);
+  const timerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+  React.useEffect(() => {
+    if (!streaming) {
+      if (timerRef.current !== null) { clearTimeout(timerRef.current); timerRef.current = null; }
+      setCommitted(text);
+      return;
+    }
+    if (gateRef.current === null) gateRef.current = new StreamingCommitGate();
+    const commit = () => {
+      timerRef.current = null;
+      setCommitted(latestRef.current);
+    };
+    const decision = gateRef.current.push(text, Date.now());
+    if (decision !== null) {
+      if (timerRef.current !== null) { clearTimeout(timerRef.current); timerRef.current = null; }
+      setCommitted(decision);
+      return;
+    }
+    if (timerRef.current === null) {
+      timerRef.current = setTimeout(commit, Math.max(0, gateRef.current.dueAt() - Date.now()));
+    }
+    return () => {
+      if (timerRef.current !== null) { clearTimeout(timerRef.current); timerRef.current = null; }
+    };
+  }, [text, streaming]);
+  return streaming ? committed : text;
+}
+
 const UserTimelineItem = React.memo(function UserTimelineItem({ row, windowIndex }: {
   row: Extract<TimelineRow, { kind: "user" }>;
   windowIndex: TimelineWindowIndex;
@@ -493,7 +567,8 @@ const AssistantTimelineItem = React.memo(function AssistantTimelineItem({ row, w
   protocolModePending: boolean;
   completionSummary?: string;
 }): React.JSX.Element {
-  const displayText = assistantTextForDisplay(row.text, row.streaming, completionSummary, jsonToolProtocol, protocolModePending);
+  const sourceText = useQuantizedStreamingText(row.text, Boolean(row.streaming));
+  const displayText = assistantTextForDisplay(sourceText, row.streaming, completionSummary, jsonToolProtocol, protocolModePending);
   return (
     <div
       data-testid={`timeline-item-assistant-${row.seq}`}
