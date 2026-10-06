@@ -25,8 +25,17 @@ function StatusDot({ status }: { status?: string }): React.JSX.Element | null {
   return null;
 }
 
+export type SidebarNavItemData = {
+  id: string;
+  label: string;
+  active: boolean;
+  status?: string;
+  pinned?: boolean;
+  timeLabel?: string;
+};
+
 export type SidebarNavProps = {
-  items: { id: string; label: string; active: boolean; status?: string; pinned?: boolean; timeLabel?: string }[];
+  items: SidebarNavItemData[];
   onSelect?: (id: string) => void;
   onRename?: (id: string, returnFocusTo?: HTMLElement | null) => void;
   onDelete?: (id: string) => void;
@@ -43,6 +52,124 @@ export function nextSidebarCursorIndex(key: string, current: number, count: numb
   if (current < 0) return key === "ArrowDown" ? 0 : count - 1;
   return key === "ArrowDown" ? Math.min(count - 1, current + 1) : Math.max(0, current - 1);
 }
+
+type SidebarNavItemProps = {
+  item: SidebarNavItemData;
+  /** listbox 模式下的选项 id；非 listbox 时不使用。 */
+  optionId: string;
+  listbox: boolean;
+  /** 键盘光标落在该行上。 */
+  cursor: boolean;
+  onSelect?: (id: string) => void;
+  onRename?: (id: string, returnFocusTo?: HTMLElement | null) => void;
+  onDelete?: (id: string) => void;
+  /** 行被点击后回调（把焦点交回列表容器，键盘导航得以继续）。 */
+  onActivated?: () => void;
+};
+
+/** 行属性按值比较：外层重渲染时 items 数组与行对象总是新身份，
+ * 字段未变的行必须命中 memo 才能保证「切换选中会话不重渲染整列表」。 */
+export function sidebarNavItemPropsEqual(a: SidebarNavItemProps, b: SidebarNavItemProps): boolean {
+  return a.item.id === b.item.id
+    && a.item.label === b.item.label
+    && a.item.active === b.item.active
+    && a.item.status === b.item.status
+    && a.item.pinned === b.item.pinned
+    && a.item.timeLabel === b.item.timeLabel
+    && a.optionId === b.optionId
+    && a.listbox === b.listbox
+    && a.cursor === b.cursor
+    && a.onSelect === b.onSelect
+    && a.onRename === b.onRename
+    && a.onDelete === b.onDelete
+    && a.onActivated === b.onActivated;
+}
+
+function SidebarNavItemBase({
+  item,
+  optionId,
+  listbox,
+  cursor,
+  onSelect,
+  onRename,
+  onDelete,
+  onActivated,
+}: SidebarNavItemProps): React.JSX.Element {
+  const isCurrent = item.active;
+  return (
+    <li draggable role={listbox ? "none" : undefined} className={`xn-shell-nav__item ${isCurrent ? "xn-shell-nav__item--active" : ""}`}>
+      {onSelect ? (
+        <button
+          type="button"
+          id={listbox ? optionId : undefined}
+          role={listbox ? "option" : undefined}
+          aria-selected={listbox ? (isCurrent ? "true" : "false") : undefined}
+          className={`xn-shell-nav__link ${isCurrent ? "xn-shell-nav__link--active" : ""}`}
+          aria-current={isCurrent ? "true" : undefined}
+          aria-haspopup="menu"
+          aria-keyshortcuts="Shift+F10"
+          data-active={isCurrent ? "true" : undefined}
+          data-cursor={listbox && cursor ? "true" : undefined}
+          data-testid={`xn-sidebar-item-${item.id}`}
+          tabIndex={listbox ? -1 : undefined}
+          onClick={() => { onSelect(item.id); onActivated?.(); }}
+          data-sidebar-navigate="true"
+        >
+          <span className="xn-shell-nav__leading" aria-hidden="true">
+            {item.pinned ? <IconPin size={12} /> : <StatusDot status={item.status} />}
+          </span>
+          <span className="xn-shell-nav__label">{item.label}</span>
+          {item.timeLabel && <time className="xn-shell-nav__time">{item.timeLabel}</time>}
+        </button>
+      ) : (
+        <div
+          className={`xn-shell-nav__link ${isCurrent ? "xn-shell-nav__link--active" : ""}`}
+          aria-current={isCurrent ? "true" : undefined}
+          aria-haspopup="menu"
+          aria-keyshortcuts="Shift+F10"
+          data-active={isCurrent ? "true" : undefined}
+          data-testid={`xn-sidebar-item-${item.id}`}
+        >
+          <span className="xn-shell-nav__leading" aria-hidden="true">
+            {item.pinned ? <IconPin size={12} /> : <StatusDot status={item.status} />}
+          </span>
+          <span className="xn-shell-nav__label">{item.label}</span>
+          {item.timeLabel && <time className="xn-shell-nav__time">{item.timeLabel}</time>}
+        </div>
+      )}
+      {(onRename || onDelete) && (
+        <span className="xn-shell-nav__item-actions">
+          {onRename && (
+            <button
+              type="button"
+              className="xn-shell-nav__action"
+              aria-label={tr("重命名任务")}
+              title={tr("重命名")}
+              data-testid={`xn-sidebar-rename-${item.id}`}
+              onClick={(event) => onRename(item.id, event.currentTarget)}
+            >
+              <IconPencil size={13} />
+            </button>
+          )}
+          {onDelete && (
+            <button
+              type="button"
+              className="xn-shell-nav__action"
+              aria-label={tr("删除任务")}
+              title={tr("删除")}
+              data-testid={`xn-sidebar-delete-${item.id}`}
+              onClick={() => onDelete(item.id)}
+            >
+              <IconTrash size={13} />
+            </button>
+          )}
+        </span>
+      )}
+    </li>
+  );
+}
+
+const SidebarNavItem = React.memo(SidebarNavItemBase, sidebarNavItemPropsEqual);
 
 /** 会话列表窗口化参数：行高约 33px（32px 行 + 1px 间隔），滚动后自动实测。 */
 const SIDEBAR_WINDOW_PAGE_SIZE = 48;
@@ -91,6 +218,20 @@ export function SidebarNav({
     pinned: cursor === null ? [] : [cursor],
   });
 
+  // 行处理器经 latest-ref 保持身份稳定，行 memo 不因外层重渲染而失效。
+  const onSelectRef = useRef(onSelect);
+  onSelectRef.current = onSelect;
+  const onRenameRef = useRef(onRename);
+  onRenameRef.current = onRename;
+  const onDeleteRef = useRef(onDelete);
+  onDeleteRef.current = onDelete;
+  const handleSelect = useCallback((id: string) => onSelectRef.current?.(id), []);
+  const handleRename = useCallback((id: string, returnFocusTo?: HTMLElement | null) => onRenameRef.current?.(id, returnFocusTo), []);
+  const handleDelete = useCallback((id: string) => onDeleteRef.current?.(id), []);
+  const handleActivated = useCallback(() => {
+    listRef.current?.focus({ preventScroll: true });
+  }, []);
+
   const optionIdAt = useCallback((index: number) => `${navId}-${orderedItems[index]?.id ?? ""}`, [navId, orderedItems]);
 
   const moveCursor = useCallback((index: number) => {
@@ -109,7 +250,7 @@ export function SidebarNav({
       const item = orderedItems[cursor];
       if (!item) return;
       event.preventDefault();
-      onSelect?.(item.id);
+      handleSelect(item.id);
       return;
     }
     const next = nextSidebarCursorIndex(event.key, cursor ?? -1, orderedItems.length);
@@ -120,10 +261,6 @@ export function SidebarNav({
 
   const onFocus = () => {
     setCursor((current) => current ?? (orderedItems.length > 0 ? Math.max(0, activeIndex) : null));
-  };
-
-  const refocusList = () => {
-    listRef.current?.focus({ preventScroll: true });
   };
 
   const visibleItems = snapshot.windowed ? orderedItems.slice(snapshot.start, snapshot.end) : orderedItems;
@@ -146,81 +283,19 @@ export function SidebarNav({
         onFocus={listbox ? onFocus : undefined}
         style={snapshot.windowed ? { paddingTop: `${snapshot.topPad}px`, paddingBottom: `${snapshot.bottomPad}px` } : undefined}
       >
-        {visibleItems.map((item, offset) => {
-          const index = snapshot.start + offset;
-          const isCurrent = item.active;
-          return (
-            <li key={item.id} draggable role={listbox ? "none" : undefined} className={`xn-shell-nav__item ${isCurrent ? "xn-shell-nav__item--active" : ""}`}>
-              {onSelect ? (
-                <button
-                  type="button"
-                  id={optionIdAt(index)}
-                  role={listbox ? "option" : undefined}
-                  aria-selected={listbox ? (isCurrent ? "true" : "false") : undefined}
-                  className={`xn-shell-nav__link ${isCurrent ? "xn-shell-nav__link--active" : ""}`}
-                  aria-current={isCurrent ? "true" : undefined}
-                  aria-haspopup="menu"
-                  aria-keyshortcuts="Shift+F10"
-                  data-active={isCurrent ? "true" : undefined}
-                  data-cursor={listbox && index === cursor ? "true" : undefined}
-                  data-testid={`xn-sidebar-item-${item.id}`}
-                  tabIndex={listbox ? -1 : undefined}
-                  onClick={() => { onSelect(item.id); refocusList(); }}
-                  data-sidebar-navigate="true"
-                >
-                  <span className="xn-shell-nav__leading" aria-hidden="true">
-                    {item.pinned ? <IconPin size={12} /> : <StatusDot status={item.status} />}
-                  </span>
-                  <span className="xn-shell-nav__label">{item.label}</span>
-                  {item.timeLabel && <time className="xn-shell-nav__time">{item.timeLabel}</time>}
-                </button>
-              ) : (
-                <div
-                  className={`xn-shell-nav__link ${isCurrent ? "xn-shell-nav__link--active" : ""}`}
-                  aria-current={isCurrent ? "true" : undefined}
-                  aria-haspopup="menu"
-                  aria-keyshortcuts="Shift+F10"
-                  data-active={isCurrent ? "true" : undefined}
-                  data-testid={`xn-sidebar-item-${item.id}`}
-                >
-                  <span className="xn-shell-nav__leading" aria-hidden="true">
-                    {item.pinned ? <IconPin size={12} /> : <StatusDot status={item.status} />}
-                  </span>
-                  <span className="xn-shell-nav__label">{item.label}</span>
-                  {item.timeLabel && <time className="xn-shell-nav__time">{item.timeLabel}</time>}
-                </div>
-              )}
-              {(onRename || onDelete) && (
-                <span className="xn-shell-nav__item-actions">
-                  {onRename && (
-                    <button
-                      type="button"
-                      className="xn-shell-nav__action"
-                      aria-label={tr("重命名任务")}
-                      title={tr("重命名")}
-                      data-testid={`xn-sidebar-rename-${item.id}`}
-                      onClick={(event) => onRename(item.id, event.currentTarget)}
-                    >
-                      <IconPencil size={13} />
-                    </button>
-                  )}
-                  {onDelete && (
-                    <button
-                      type="button"
-                      className="xn-shell-nav__action"
-                      aria-label={tr("删除任务")}
-                      title={tr("删除")}
-                      data-testid={`xn-sidebar-delete-${item.id}`}
-                      onClick={() => onDelete(item.id)}
-                    >
-                      <IconTrash size={13} />
-                    </button>
-                  )}
-                </span>
-              )}
-            </li>
-          );
-        })}
+        {visibleItems.map((item, offset) => (
+          <SidebarNavItem
+            key={item.id}
+            item={item}
+            optionId={optionIdAt(snapshot.start + offset)}
+            listbox={listbox}
+            cursor={listbox && snapshot.start + offset === cursor}
+            onSelect={listbox ? handleSelect : undefined}
+            onRename={onRename ? handleRename : undefined}
+            onDelete={onDelete ? handleDelete : undefined}
+            onActivated={handleActivated}
+          />
+        ))}
       </ul>
     </nav>
   );

@@ -3,7 +3,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { renderToStaticMarkup } from "react-dom/server";
 
-import { SidebarNav, nextSidebarCursorIndex } from "./SidebarNav";
+import { SidebarNav, nextSidebarCursorIndex, sidebarNavItemPropsEqual } from "./SidebarNav";
 
 test("SidebarNav: active 项有 aria-current 与 data-active，完成项不再显示状态徽标", () => {
   const items = [
@@ -148,6 +148,30 @@ test("SidebarNav: 无 onSelect 时不启用 listbox", () => {
   assert.doesNotMatch(html, /role="listbox"/);
   assert.doesNotMatch(html, /aria-activedescendant/);
   assert.match(html, /<div class="xn-shell-nav__link/);
+});
+
+test("SidebarNav: 行属性比较器按值命中 memo——外层重渲染不重渲染未变化的行", () => {
+  const stable = () => {};
+  const base = {
+    item: { id: "task-1", label: "任务一", active: true, status: "running", pinned: false, timeLabel: "2 分钟前" },
+    optionId: "nav-task-1",
+    listbox: true,
+    cursor: false,
+    onSelect: stable,
+    onRename: stable,
+    onDelete: stable,
+    onActivated: stable,
+  };
+  // 对象身份不同但字段一致：切换选中会话引发的外层重渲染应命中 memo。
+  assert.equal(sidebarNavItemPropsEqual(base, { ...base, item: { ...base.item } }), true);
+  // 只有 active 翻转的两行需要重渲染。
+  assert.equal(sidebarNavItemPropsEqual(base, { ...base, item: { ...base.item, active: false } }), false);
+  // 时间标签随时间刷新、光标移动、选项 id 或处理器身份变化都要重渲染。
+  assert.equal(sidebarNavItemPropsEqual(base, { ...base, item: { ...base.item, timeLabel: "3 分钟前" } }), false);
+  assert.equal(sidebarNavItemPropsEqual(base, { ...base, cursor: true }), false);
+  assert.equal(sidebarNavItemPropsEqual(base, { ...base, optionId: "nav-task-2" }), false);
+  assert.equal(sidebarNavItemPropsEqual(base, { ...base, onSelect: () => {} }), false);
+  assert.equal(sidebarNavItemPropsEqual(base, { ...base, onDelete: undefined }), false);
 });
 
 test("SidebarNav: 空输入不抛", () => {
