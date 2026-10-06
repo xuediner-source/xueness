@@ -580,3 +580,59 @@ test("Windows paths with backslash escapes are correctly preserved without corru
     "Accessing C:\\models\\apps"
   );
 });
+
+function buildLongTimelineRows(turns: number): TimelineRow[] {
+  const rows: TimelineRow[] = [];
+  for (let index = 0; index < turns; index += 1) {
+    rows.push({ kind: "user", seq: index * 2 + 1, turnId: `turn-${index}`, text: `第 ${index + 1} 条用户消息` });
+    rows.push({ kind: "assistant", seq: index * 2 + 2, turnId: `turn-${index}`, text: `第 ${index + 1} 条助手回复` });
+  }
+  return rows;
+}
+
+function countRenderedTimelineItems(html: string): number {
+  return (html.match(/class="xn-timeline-item /g) ?? []).length;
+}
+
+test("virtualize: 短会话仍完整渲染且不出现窗口垫片", () => {
+  const html = renderToStaticMarkup(<TimelineStream rows={buildLongTimelineRows(20)} virtualize />);
+  assert.equal(countRenderedTimelineItems(html), 40);
+  assert.match(html, /data-testid="timeline-item-user-1"/);
+  assert.match(html, /data-testid="timeline-item-assistant-40"/);
+  assert.doesNotMatch(html, /timeline-window-top-spacer/);
+  assert.doesNotMatch(html, /timeline-window-bottom-spacer/);
+  assert.doesNotMatch(html, /data-window-index/);
+});
+
+test("virtualize: 长会话只渲染头部窗口并以后部垫片补齐高度", () => {
+  const html = renderToStaticMarkup(<TimelineStream rows={buildLongTimelineRows(60)} virtualize />);
+  const rendered = countRenderedTimelineItems(html);
+  assert.ok(rendered > 0 && rendered < 120, `长会话应只渲染部分节点，实际 ${rendered}`);
+  assert.ok(html.includes('data-testid="timeline-item-user-1"'), "首条用户消息应渲染");
+  assert.ok(!html.includes('data-testid="timeline-item-user-119"'), "尾部消息不应渲染");
+  assert.doesNotMatch(html, /timeline-window-top-spacer/);
+  assert.match(html, /data-testid="timeline-window-bottom-spacer" style="height:\d+px"/);
+  assert.match(html, /data-window-index="0"/);
+  assert.match(html, /data-window-index="31"/);
+  assert.doesNotMatch(html, /data-window-index="32"/);
+});
+
+test("virtualize: 从尾部打开的长会话渲染末尾窗口并以顶部垫片补齐", () => {
+  const html = renderToStaticMarkup(<TimelineStream rows={buildLongTimelineRows(60)} virtualize virtualizeFromTail />);
+  const rendered = countRenderedTimelineItems(html);
+  assert.ok(rendered > 0 && rendered < 120, `长会话应只渲染部分节点，实际 ${rendered}`);
+  assert.ok(!html.includes('data-testid="timeline-item-user-1"'), "头部消息不应渲染");
+  assert.ok(html.includes('data-testid="timeline-item-assistant-120"'), "最后一条应渲染");
+  // 窗口 [88, 120)：首条渲染的用户消息为 seq 89，垫片按估计高度补齐前 88 个条目。
+  assert.ok(html.includes('data-testid="timeline-item-user-89"'), "窗口内首条用户消息应渲染");
+  assert.ok(!html.includes('data-testid="timeline-item-user-87"'), "窗口前一条不应渲染");
+  assert.match(html, /data-testid="timeline-window-top-spacer" style="height:12320px"/);
+  assert.doesNotMatch(html, /timeline-window-bottom-spacer/);
+});
+
+test("未启用 virtualize 的长会话保持完整渲染", () => {
+  const html = renderToStaticMarkup(<TimelineStream rows={buildLongTimelineRows(60)} />);
+  assert.equal(countRenderedTimelineItems(html), 120);
+  assert.doesNotMatch(html, /timeline-window-top-spacer|timeline-window-bottom-spacer/);
+  assert.doesNotMatch(html, /data-window-index/);
+});

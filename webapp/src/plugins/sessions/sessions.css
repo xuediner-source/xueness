@@ -150,7 +150,10 @@
 
 /* Session timeline viewport and return-to-tail control. */
 .xn-session-timeline-viewport { position: relative; flex: 1 1 auto; min-height: 0; }
-.xn-session-timeline-viewport__scroll { width: 100%; height: 100%; }
+/* overflow-anchor 关闭浏览器原生滚动锚定，滚动位置由时间线窗口补偿逻辑维护。 */
+.xn-session-timeline-viewport__scroll { width: 100%; height: 100%; overflow-anchor: none; }
+/* 窗口化时间线的上下垫片：占据未渲染条目的高度，且不可被 flex 压缩。 */
+.xn-timeline-window-spacer { flex: none; }
 .xn-session-back-to-bottom {
   position: absolute;
   z-index: 8;

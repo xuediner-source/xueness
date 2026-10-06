@@ -6,6 +6,7 @@ import { SimpleMarkdown, TimelineCard } from "../../XuenessShell";
 import { EmptyState } from "../../ui/primitives";
 import { IconGear, IconPencil, IconSearch } from "../../ui/icons";
 import { XuenessConversationHistoryRail } from "./XuenessConversationHistoryRail";
+import { useTimelineVirtualWindow } from "./TimelineVirtualWindow";
 import {
   completionPresentation,
   isDuplicateCompletionAnswer,
@@ -31,6 +32,10 @@ export type TimelineStreamProps = {
   protocolModePending?: boolean;
   /** Shows that a turn is active before its first text or reasoning delta arrives. */
   streamingPending?: boolean;
+  /** 长会话窗口化渲染：只挂载可视区附近的节点（仅顶层时间线启用，工具分组递归不启用）。 */
+  virtualize?: boolean;
+  /** 窗口初始定位在末尾（自动滚动开启的会话从底部呈现）。 */
+  virtualizeFromTail?: boolean;
 };
 
 type ToolGroupKind = "explore" | "terminal" | "changes";
@@ -458,10 +463,28 @@ const ToolTimelineCard = React.memo(function ToolTimelineCard({
   );
 });
 
-export function TimelineStream({ rows, emptyText = tr("暂无事件"), collapseTools = true, grouping, messageStreamShowReasoning = true, jsonToolProtocol = false, protocolModePending = false, streamingPending = false }: TimelineStreamProps): React.JSX.Element {
+export function TimelineStream({ rows, emptyText = tr("暂无事件"), collapseTools = true, grouping, messageStreamShowReasoning = true, jsonToolProtocol = false, protocolModePending = false, streamingPending = false, virtualize = false, virtualizeFromTail = false }: TimelineStreamProps): React.JSX.Element {
   const timelineRootRef = React.useRef<HTMLDivElement>(null);
   const conversationIndexes = React.useMemo(() => indexConversationRows(rows ?? []), [rows]);
   const groupedTimeline = React.useMemo(() => groupTimelineRows(rows ?? [], grouping), [rows, grouping]);
+  const { snapshot: windowState, streamRef, reveal } = useTimelineVirtualWindow({
+    count: groupedTimeline.length,
+    enabled: virtualize,
+    initialTail: virtualizeFromTail,
+  });
+  const userEntryIndexBySeq = React.useMemo(() => {
+    const indexes = new Map<number, number>();
+    groupedTimeline.forEach((entry, index) => {
+      if (entry.kind === "user") indexes.set(entry.seq, index);
+    });
+    return indexes;
+  }, [groupedTimeline]);
+  const requestReveal = React.useCallback((seq: number) => {
+    const index = userEntryIndexBySeq.get(seq);
+    if (index === undefined) return;
+    if (index >= windowState.start && index < windowState.end) return;
+    reveal(index);
+  }, [reveal, userEntryIndexBySeq, windowState.start, windowState.end]);
   if (!rows || rows.length === 0) {
     if (streamingPending) return <div className="xn-timeline-empty xn-timeline-empty--streaming" data-testid="timeline-stream-loading">
       <p className="xn-assistant-stream-status" role="status">{tr("正在生成回复…")}</p>
@@ -473,22 +496,33 @@ export function TimelineStream({ rows, emptyText = tr("暂无事件"), collapseT
     );
   }
 
+  const windowed = windowState.windowed;
+  const rangeStart = windowed ? Math.min(windowState.start, groupedTimeline.length) : 0;
+  const rangeEnd = windowed ? Math.min(Math.max(rangeStart + 1, windowState.end), groupedTimeline.length) : groupedTimeline.length;
+  const visibleEntries = groupedTimeline.slice(rangeStart, rangeEnd);
+  const windowIndexAttribute = (entryIndex: number) => (windowed ? entryIndex : undefined);
+
   const stream = (
     <div
+      ref={streamRef}
       aria-label={tr("时间线卡片流")}
       data-testid="timeline-stream"
       className="xn-timeline-stream"
     >
-      {groupedTimeline.map((r, idx) => {
+      {windowed && windowState.topPad > 0 && (
+        <div aria-hidden="true" className="xn-timeline-window-spacer" data-testid="timeline-window-top-spacer" style={{ height: windowState.topPad }} />
+      )}
+      {visibleEntries.map((r, idx) => {
+        const entryIndex = rangeStart + idx;
         if (r.kind === "tool-group") {
           const label = r.category === "explore" ? tr("探索工作区") : r.category === "terminal" ? tr("终端操作") : tr("文件修改");
           const errors = r.rows.filter(row => row.kind === "tool" && toolDisplayStatus(row) === "error").length;
-          return <details className="xn-tool-group" key={`group-${r.rows[0].seq}-${idx}`} open={!collapseTools}>
+          return <details className="xn-tool-group" key={`group-${r.rows[0].seq}-${entryIndex}`} data-window-index={windowIndexAttribute(entryIndex)} open={!collapseTools}>
             <summary>{label}<span>{r.rows.length}</span>{errors > 0 && <strong>{tf("{0} 项失败", [errors])}</strong>}</summary>
             <TimelineStream rows={r.rows} collapseTools={collapseTools} />
           </details>;
         }
-        const key = `${r.kind}-${r.seq}-${idx}`;
+        const key = `${r.kind}-${r.seq}-${entryIndex}`;
 
         if (r.kind === "user") {
           return (
@@ -497,6 +531,7 @@ export function TimelineStream({ rows, emptyText = tr("暂无事件"), collapseT
               data-testid={`timeline-item-user-${r.seq}`}
               data-role="user"
               data-history-user-seq={r.seq}
+              data-window-index={windowIndexAttribute(entryIndex)}
               className="xn-timeline-item xn-timeline-item--user"
             >
               <TimelineCard role="user" body={r.text} seq={r.seq} />
@@ -512,6 +547,7 @@ export function TimelineStream({ rows, emptyText = tr("暂无事件"), collapseT
               key={key}
               data-testid={`timeline-item-assistant-${r.seq}`}
               data-role="assistant"
+              data-window-index={windowIndexAttribute(entryIndex)}
               className="xn-timeline-item xn-timeline-item--assistant"
             >
               {messageStreamShowReasoning && r.reasoning && <details className="xn-reasoning"><summary>{r.streaming ? tr("思考中…") : tr("思考过程")}</summary><pre className="xn-reasoning__text">{r.reasoning}</pre></details>}
@@ -529,6 +565,7 @@ export function TimelineStream({ rows, emptyText = tr("暂无事件"), collapseT
               data-testid={`timeline-item-tool-${r.seq}`}
               data-role="tool"
               data-tool-status={toolDisplayStatus(r)}
+              data-window-index={windowIndexAttribute(entryIndex)}
               className={`xn-timeline-item xn-timeline-item--tool xn-timeline-item--${toolDisplayStatus(r)}`}
             >
               <ToolTimelineCard row={r as ToolPayloadRow} collapseTools={collapseTools} />
@@ -548,6 +585,7 @@ export function TimelineStream({ rows, emptyText = tr("暂无事件"), collapseT
               key={key}
               data-testid={`timeline-item-completion-${r.seq}`}
               data-role="completion"
+              data-window-index={windowIndexAttribute(entryIndex)}
               className="xn-timeline-item xn-timeline-item--completion"
             >
               <TimelineCard
@@ -573,6 +611,7 @@ export function TimelineStream({ rows, emptyText = tr("暂无事件"), collapseT
               key={key}
               data-testid={`timeline-item-question-${r.seq}`}
               data-role="pending_question"
+              data-window-index={windowIndexAttribute(entryIndex)}
               className="xn-timeline-item xn-timeline-item--question"
             >
               <TimelineCard
@@ -588,6 +627,9 @@ export function TimelineStream({ rows, emptyText = tr("暂无事件"), collapseT
 
         return null;
       })}
+      {windowed && windowState.bottomPad > 0 && (
+        <div aria-hidden="true" className="xn-timeline-window-spacer" data-testid="timeline-window-bottom-spacer" style={{ height: windowState.bottomPad }} />
+      )}
       {streamingPending && !rows.some(row => row.kind === "assistant" && row.streaming) && <div className="xn-timeline-item xn-timeline-item--assistant xn-assistant-stream-pending" data-testid="timeline-stream-loading">
         <p className="xn-assistant-stream-status" role="status">{tr("正在生成回复…")}</p>
       </div>}
@@ -598,7 +640,7 @@ export function TimelineStream({ rows, emptyText = tr("暂无事件"), collapseT
 
   return (
     <div className="xn-timeline-history-layout" data-testid="timeline-history-layout">
-      <XuenessConversationHistoryRail rows={rows} timelineRootRef={timelineRootRef} />
+      <XuenessConversationHistoryRail rows={rows} timelineRootRef={timelineRootRef} requestReveal={requestReveal} />
       <div ref={timelineRootRef} className="xn-timeline-history-layout__content">
         {stream}
       </div>

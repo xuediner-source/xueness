@@ -2101,6 +2101,7 @@ export function XuenessWorkbenchContainer() {
               />
             ) : (
               <TimelineStream rows={displayTimelineRows} collapseTools={settingsValues.collapseTools !== false} messageStreamShowReasoning={settingsValues.messageStreamShowReasoning !== false}
+                virtualize virtualizeFromTail={settingsValues.autoScroll !== false}
                 jsonToolProtocol={session.model_selection?.tool_calling === "json" && activeRuntimeProfile === "lightweight" && session.streaming?.text_format !== "markdown"}
                 protocolModePending={activeSessionRunning && activeRuntimeProfile === "lightweight" && session.streaming?.text_format !== "markdown" && session.model_selection?.tool_calling === "json" && false}
                 streamingPending={activeSessionRunning} grouping={timelineGrouping} />

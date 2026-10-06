@@ -165,6 +165,8 @@
     "plugins/sessions/ConversationTimelineViewport.tsx",
     "plugins/sessions/SessionPolling.ts",
     "plugins/sessions/XuenessStartPage.tsx",
-    "plugins/sessions/permissionModes.ts"
+    "plugins/sessions/permissionModes.ts",
+    "plugins/sessions/TimelineVirtualWindow.ts#TimelineWindowModel",
+    "plugins/sessions/TimelineVirtualWindow.ts#useTimelineVirtualWindow"
   ]
 }

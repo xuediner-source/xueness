@@ -75,13 +75,15 @@ export function getHistoryRailScrollTop(
 export type XuenessConversationHistoryRailProps = {
   rows: TimelineRow[];
   timelineRootRef: React.RefObject<HTMLDivElement | null>;
+  /** 目标用户消息尚未渲染时，请求时间线把窗口展开到该消息（长会话虚拟化）。 */
+  requestReveal?: (seq: number) => void;
 };
 
 function findConversationScroller(root: HTMLElement): HTMLElement | null {
   return root.closest<HTMLElement>(".xn-conversation__stream");
 }
 
-export function XuenessConversationHistoryRail({ rows, timelineRootRef }: XuenessConversationHistoryRailProps): React.JSX.Element | null {
+export function XuenessConversationHistoryRail({ rows, timelineRootRef, requestReveal }: XuenessConversationHistoryRailProps): React.JSX.Element | null {
   const items = React.useMemo(() => buildConversationHistoryItems(rows), [rows]);
   const [activeSeq, setActiveSeq] = React.useState<number | null>(items[0]?.seq ?? null);
   const [rovingSeq, setRovingSeq] = React.useState<number | null>(items[0]?.seq ?? null);
@@ -143,7 +145,12 @@ export function XuenessConversationHistoryRail({ rows, timelineRootRef }: Xuenes
   const revealItem = (seq: number) => {
     const root = timelineRootRef.current;
     const scroller = root ? findConversationScroller(root) : null;
-    const target = root?.querySelector<HTMLElement>(`[data-history-user-seq="${seq}"]`);
+    let target = root?.querySelector<HTMLElement>(`[data-history-user-seq="${seq}"]`);
+    if (!target && requestReveal) {
+      // 虚拟化时间线：先把窗口展开到目标消息（同步重渲染），再定位滚动。
+      requestReveal(seq);
+      target = root?.querySelector<HTMLElement>(`[data-history-user-seq="${seq}"]`);
+    }
     if (!scroller || !target) return;
     const nextTop = getConversationHistoryScrollTop(
       scroller.getBoundingClientRect().top,
