@@ -11,6 +11,8 @@ import {
   SimpleMarkdown,
   copyTextToClipboard,
   shouldCloseNarrowSidebarOnEscape,
+  cachedMarkdownElements,
+  MARKDOWN_ELEMENT_CACHE_LIMIT,
 } from "./XuenessShell";
 
 test("Shell drawer Escape closes normally, while composition or a handled nested Escape stays local", () => {
@@ -414,4 +416,32 @@ test("全部组件最小输入不抛", () => {
   assert.doesNotThrow(() => {
     renderToStaticMarkup(<SimpleMarkdown text="" />);
   });
+});
+
+test("SimpleMarkdown: identical content reuses the cached element tree (memo hit)", () => {
+  const text = "# 缓存命中\n\n同一段 markdown 只解析一次。";
+  const first = cachedMarkdownElements(text);
+  const second = cachedMarkdownElements(text);
+  assert.equal(second, first);
+  // Different content must never share a cached tree.
+  const other = cachedMarkdownElements("# 另一段内容");
+  assert.notEqual(other, first);
+  // Cached trees still render the full expected markup.
+  const html = renderToStaticMarkup(<SimpleMarkdown text={text} />);
+  assert.match(html, /class="xn-md"/);
+  assert.match(html, /<h1 class="xn-md__heading xn-md__heading--1">缓存命中<\/h1>/);
+});
+
+test("SimpleMarkdown: content cache is LRU-bounded and re-parses evicted entries", () => {
+  const evicted = cachedMarkdownElements("将被挤出的旧条目");
+  let survivor: React.JSX.Element | undefined;
+  for (let i = 0; i < MARKDOWN_ELEMENT_CACHE_LIMIT + 10; i++) {
+    const entry = cachedMarkdownElements(`洪流条目 ${i}`);
+    if (i === MARKDOWN_ELEMENT_CACHE_LIMIT) survivor = entry;
+  }
+  // The oldest entry was evicted: it parses again into a fresh tree.
+  assert.notEqual(cachedMarkdownElements("将被挤出的旧条目"), evicted);
+  // Recent entries stay cached and return the very same tree.
+  assert.notEqual(survivor, undefined, "survivor must be captured");
+  assert.equal(cachedMarkdownElements(`洪流条目 ${MARKDOWN_ELEMENT_CACHE_LIMIT}`), survivor);
 });

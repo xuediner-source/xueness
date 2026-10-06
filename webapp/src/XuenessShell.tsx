@@ -780,13 +780,45 @@ const markdownComponents: Components = {
 
 const REMARK_PLUGINS = [remarkGfm];
 
+/** Entries kept in the content-keyed markdown element cache before the oldest is evicted. */
+export const MARKDOWN_ELEMENT_CACHE_LIMIT = 240;
+const markdownElementCache = new Map<string, React.JSX.Element>();
+
+/**
+ * ReactMarkdown element tree for `text`, memoized by exact content: identical
+ * markdown (virtual-window remounts, session switches, repeated renders of
+ * unchanged history) parses and compiles once. `ReactMarkdown` is a pure
+ * function without hooks (react-markdown v10 `Markdown`), so calling it
+ * directly here yields the same element tree the JSX path would render.
+ */
+export function cachedMarkdownElements(text: string): React.JSX.Element {
+  const cached = markdownElementCache.get(text);
+  if (cached) {
+    // Re-insert so Map insertion order keeps this entry as most-recently used.
+    markdownElementCache.delete(text);
+    markdownElementCache.set(text, cached);
+    return cached;
+  }
+  const elements = ReactMarkdown({
+    children: text,
+    remarkPlugins: REMARK_PLUGINS,
+    components: markdownComponents,
+    skipHtml: true,
+    urlTransform: safeMarkdownUrl,
+  });
+  markdownElementCache.set(text, elements);
+  if (markdownElementCache.size > MARKDOWN_ELEMENT_CACHE_LIMIT) {
+    const oldest = markdownElementCache.keys().next().value;
+    if (oldest !== undefined) markdownElementCache.delete(oldest);
+  }
+  return elements;
+}
+
 /** Markdown renderer for transcript prose. Raw HTML stays disabled; unsafe URL schemes are omitted. */
 export const SimpleMarkdown = React.memo(function SimpleMarkdown({ text }: { text: string }): React.JSX.Element {
   return (
     <div className="xn-md" data-testid="xn-simple-markdown">
-      <ReactMarkdown remarkPlugins={REMARK_PLUGINS} components={markdownComponents} skipHtml urlTransform={safeMarkdownUrl}>
-        {text}
-      </ReactMarkdown>
+      {cachedMarkdownElements(text)}
     </div>
   );
 });
