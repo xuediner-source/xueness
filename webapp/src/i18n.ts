@@ -1273,6 +1273,8 @@ Object.assign(messages, {
   "Chrome 资料已导入，但旧资料暂未清理，请在浏览器数据中清除。": "Chrome profile imported, but old data could not be removed. Clear it in Browser data.",
   "无需工具验证": "No tool verification needed",
   "查看完成详情": "View completion details",
+  "展开全部（{0} 字符）": "Show all ({0} characters)",
+  "收起": "Collapse",
   "正在生成回复…": "Generating reply…",
   "运行失败": "Run failed",
   "排队消息": "Queued messages",

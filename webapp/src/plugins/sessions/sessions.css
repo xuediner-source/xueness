@@ -334,3 +334,25 @@
   .xn-reasoning > summary::before,
   .xn-completion-details > summary::before { transition: none; }
 }
+
+.xn-toolcall__fold-toggle {
+  justify-self: start;
+  padding: 2px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--fg-muted);
+  font-size: 11px;
+  line-height: 16px;
+  cursor: pointer;
+}
+
+.xn-toolcall__fold-toggle:hover {
+  background: var(--bg-active);
+  color: var(--fg);
+}
+
+.xn-toolcall__fold-toggle:focus-visible {
+  outline: 1px solid var(--accent);
+  outline-offset: 1px;
+}

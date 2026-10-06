@@ -389,6 +389,51 @@ function ToolKindIcon({ name }: { name: string }): React.JSX.Element {
   return <IconGear size={16} />;
 }
 
+/** Tool payloads larger than this render a preview plus an explicit expand
+ * toggle instead of the whole text, so a huge diff or exec log never lands in
+ * the DOM uninvited. */
+export const TOOL_PAYLOAD_FOLD_THRESHOLD = 1600;
+const TOOL_PAYLOAD_FOLD_PREVIEW_CHARS = 1200;
+
+function payloadPreview(text: string): string {
+  const slice = text.slice(0, TOOL_PAYLOAD_FOLD_PREVIEW_CHARS);
+  const lastLineBreak = slice.lastIndexOf("\n");
+  const bounded = lastLineBreak > TOOL_PAYLOAD_FOLD_PREVIEW_CHARS / 2 ? slice.slice(0, lastLineBreak) : slice;
+  return bounded.trimEnd();
+}
+
+/** Presentational fold/expand view for one large tool payload section. */
+export function FoldablePayloadTextView({ text, expanded, onToggle }: {
+  text: string;
+  expanded: boolean;
+  onToggle?: () => void;
+}): React.JSX.Element {
+  if (expanded) {
+    return (
+      <>
+        <pre className="xn-toolcall__body" data-testid="xn-toolcall-fold-body" data-folded="false">{text}</pre>
+        <button type="button" className="xn-toolcall__fold-toggle" aria-expanded="true" data-testid="xn-toolcall-fold-toggle" onClick={onToggle}>
+          {tr("收起")}
+        </button>
+      </>
+    );
+  }
+  return (
+    <>
+      <pre className="xn-toolcall__body xn-toolcall__body--folded" data-testid="xn-toolcall-fold-body" data-folded="true">{payloadPreview(text)}{"\n…"}</pre>
+      <button type="button" className="xn-toolcall__fold-toggle" aria-expanded="false" data-testid="xn-toolcall-fold-toggle" onClick={onToggle}>
+        {tf("展开全部（{0} 字符）", [text.length])}
+      </button>
+    </>
+  );
+}
+
+function FoldablePayloadText({ text }: { text: string }): React.JSX.Element {
+  const [expanded, setExpanded] = React.useState(false);
+  if (text.length <= TOOL_PAYLOAD_FOLD_THRESHOLD) return <pre className="xn-toolcall__body">{text}</pre>;
+  return <FoldablePayloadTextView text={text} expanded={expanded} onToggle={() => setExpanded((value) => !value)} />;
+}
+
 const ToolTimelineCard = React.memo(function ToolTimelineCard({
   row,
   collapseTools,
@@ -444,13 +489,13 @@ const ToolTimelineCard = React.memo(function ToolTimelineCard({
             {inputText && (
               <section className="xn-toolcall__section">
                 <span className="xn-toolcall__section-label">{tr("输入参数")}</span>
-                <pre className="xn-toolcall__body">{inputText}</pre>
+                <FoldablePayloadText text={inputText} />
               </section>
             )}
             {outputText && (
               <section className="xn-toolcall__section">
                 <span className="xn-toolcall__section-label">{tr("工具结果")}</span>
-                <pre className="xn-toolcall__body">{outputText}</pre>
+                <FoldablePayloadText text={outputText} />
               </section>
             )}
           </div>

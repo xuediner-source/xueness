@@ -3,7 +3,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { renderToStaticMarkup } from "react-dom/server";
 
-import { TimelineStream, TaskTodos, groupTimelineRows, assistantTextForDisplay, StreamingCommitGate, STREAM_COMMIT_INTERVAL_MS } from "./XuenessTimeline";
+import { TimelineStream, TaskTodos, groupTimelineRows, assistantTextForDisplay, StreamingCommitGate, STREAM_COMMIT_INTERVAL_MS, FoldablePayloadTextView, TOOL_PAYLOAD_FOLD_THRESHOLD } from "./XuenessTimeline";
 import { unwrapProtocolEnvelopeText, isDuplicateCompletionAnswer, completionPresentation } from "./completionPresentation";
 import type { TimelineRow } from "../../xuenessWorkbench";
 
@@ -679,4 +679,37 @@ test("TimelineStream: 流式助手消息代码块推迟高亮（after-stream）�
   );
   assert.match(settledHtml, /data-highlight="on-visible"/);
   assert.doesNotMatch(settledHtml, /data-highlight="after-stream"/);
+});
+
+test("ToolTimelineCard: 短工具输出保持单个 pre，无折叠控件", () => {
+  const html = renderToStaticMarkup(
+    <TimelineStream rows={[{ kind: "tool", seq: 4, turnId: "t", toolCallId: "c", name: "read", subject: "", status: "ok", error: "", errorCode: "", input: { file_path: "a.ts" }, output: "简短输出" }]} />,
+  );
+  assert.match(html, /<pre class="xn-toolcall__body">简短输出<\/pre>/);
+  assert.doesNotMatch(html, /xn-toolcall__fold-toggle/);
+});
+
+test("ToolTimelineCard: 超长工具输出默认折叠为预览，全文不入 DOM，按钮按需展开", () => {
+  const longOutput = `${"x".repeat(300)}\n${"y".repeat(300)}\n${"z".repeat(300)}\n${"tail-marker-9".repeat(80)}`;
+  const rows: TimelineRow[] = [
+    { kind: "tool", seq: 5, turnId: "t", toolCallId: "c", name: "exec", subject: "", status: "ok", error: "", errorCode: "", input: { command: "npm test" }, output: longOutput },
+  ];
+  assert.equal(longOutput.length > TOOL_PAYLOAD_FOLD_THRESHOLD, true);
+  const html = renderToStaticMarkup(<TimelineStream rows={rows} />);
+  assert.match(html, /data-testid="xn-toolcall-fold-body" data-folded="true"/);
+  assert.doesNotMatch(html, /tail-marker-9/); // 超出预览的尾部内容不进 DOM
+  assert.match(html, /<button[^>]*xn-toolcall__fold-toggle[^>]*aria-expanded="false"/);
+  assert.match(html, new RegExp(`展开全部（${longOutput.length} 字符）`));
+  // 展开视图由受控组件承载：全文可见并可收起
+  const expandedHtml = renderToStaticMarkup(
+    <FoldablePayloadTextView text={longOutput} expanded={true} onToggle={() => {}} />,
+  );
+  assert.match(expandedHtml, /tail-marker-9/);
+  assert.match(expandedHtml, /data-folded="false"/);
+  assert.match(expandedHtml, /<button[^>]*xn-toolcall__fold-toggle[^>]*aria-expanded="true"/);
+  assert.match(expandedHtml, />收起<\/button>/);
+  const expandedOriginal = renderToStaticMarkup(
+    <FoldablePayloadTextView text={longOutput} expanded={false} onToggle={() => {}} />,
+  );
+  assert.doesNotMatch(expandedOriginal, /tail-marker-9/);
 });
