@@ -105,3 +105,30 @@ test("SidebarNav: 空输入不抛", () => {
     renderToStaticMarkup(<SidebarNav items={[]} />);
   });
 });
+
+test("SidebarNav: 上千条会话只挂载部分行，垫片补齐剩余高度；短列表完整渲染", () => {
+  const many = Array.from({ length: 400 }, (_, index) => ({
+    id: `task-${index + 1}`,
+    label: `任务 ${index + 1}`,
+    active: index === 0,
+    status: "completed",
+  }));
+  const html = renderToStaticMarkup(<SidebarNav items={many} onSelect={() => {}} />);
+  const rowCount = (html.match(/data-testid="xn-sidebar-item-/g) ?? []).length;
+  assert.ok(rowCount > 0, "窗口内应至少挂载一行");
+  assert.ok(rowCount < 400, `长列表应只挂载部分行，实际 ${rowCount}`);
+  assert.match(html, /data-testid="xn-sidebar-item-task-1"/, "窗口应从第一行开始");
+  assert.match(html, /class="xn-shell-nav__list"[^>]*style="padding-top:0px;padding-bottom:\d+px"/, "未挂载行应由底部垫片补齐");
+
+  const shortHtml = renderToStaticMarkup(
+    <SidebarNav
+      items={[
+        { id: "task-1", label: "任务一", active: false },
+        { id: "task-2", label: "任务二", active: true },
+      ]}
+      onSelect={() => {}}
+    />,
+  );
+  assert.equal((shortHtml.match(/data-testid="xn-sidebar-item-/g) ?? []).length, 2, "短列表应完整渲染");
+  assert.doesNotMatch(shortHtml, /padding-top/, "短列表不应引入垫片样式");
+});

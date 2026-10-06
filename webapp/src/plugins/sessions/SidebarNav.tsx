@@ -1,6 +1,7 @@
-import React from "react";
+import React, { useRef } from "react";
 import { IconLoader, IconPencil, IconPin, IconTrash, IconX } from "../../ui/icons";
 import { t as tr } from "../../i18n";
+import { useUniformListWindow } from "./ListVirtualWindow";
 
 /** 状态圆点：ZCode 用小彩色圆点而非字形。 */
 function StatusDot({ status }: { status?: string }): React.JSX.Element | null {
@@ -33,6 +34,11 @@ export type SidebarNavProps = {
   width?: number;
 };
 
+/** 会话列表窗口化参数：行高约 33px（32px 行 + 1px 间隔），滚动后自动实测。 */
+const SIDEBAR_WINDOW_PAGE_SIZE = 48;
+const SIDEBAR_WINDOW_OVERSCAN_PX = 600;
+const SIDEBAR_STRIDE_ESTIMATE_PX = 33;
+
 /** 会话列表。悬停时仅在每个条目上显示重命名/删除操作（存在对应处理器时）。 */
 export function SidebarNav({
   items,
@@ -45,6 +51,17 @@ export function SidebarNav({
   // pinned the header is omitted and the list order is exactly as given.
   const pinnedItems = items.filter((item) => item.pinned);
   const orderedItems = [...pinnedItems, ...items.filter((item) => !item.pinned)];
+  const listRef = useRef<HTMLUListElement>(null);
+  // 上千条会话时只挂载滚动可视区附近的行；垫片精确补齐，列表滚动总高不变。
+  const { snapshot } = useUniformListWindow({
+    count: orderedItems.length,
+    listRef,
+    findScroller: (list) => list.closest<HTMLElement>(".xn-shell-sidebar__body"),
+    pageSize: SIDEBAR_WINDOW_PAGE_SIZE,
+    overscanPx: SIDEBAR_WINDOW_OVERSCAN_PX,
+    estimateStridePx: SIDEBAR_STRIDE_ESTIMATE_PX,
+  });
+  const visibleItems = snapshot.windowed ? orderedItems.slice(snapshot.start, snapshot.end) : orderedItems;
   return (
     <nav
       className="xn-shell-nav"
@@ -53,8 +70,12 @@ export function SidebarNav({
       aria-label={tr("任务导航")}
     >
       {pinnedItems.length > 0 && <div className="xn-shell-nav__group">{tr("已置顶")}</div>}
-      <ul className="xn-shell-nav__list">
-        {orderedItems.map((item) => {
+      <ul
+        ref={listRef}
+        className="xn-shell-nav__list"
+        style={snapshot.windowed ? { paddingTop: `${snapshot.topPad}px`, paddingBottom: `${snapshot.bottomPad}px` } : undefined}
+      >
+        {visibleItems.map((item) => {
           const isCurrent = item.active;
           return (
             <li key={item.id} draggable className={`xn-shell-nav__item ${isCurrent ? "xn-shell-nav__item--active" : ""}`}>
