@@ -167,6 +167,7 @@
     "plugins/sessions/XuenessStartPage.tsx",
     "plugins/sessions/permissionModes.ts",
     "plugins/sessions/TimelineVirtualWindow.ts#TimelineWindowModel",
-    "plugins/sessions/TimelineVirtualWindow.ts#useTimelineVirtualWindow"
+    "plugins/sessions/TimelineVirtualWindow.ts#useTimelineVirtualWindow",
+    "plugins/sessions/ListVirtualWindow.ts"
   ]
 }
