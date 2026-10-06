@@ -1,6 +1,7 @@
 import React from "react";
 import { t as tr, tf } from "../../i18n";
 import type { TimelineRow } from "../../xuenessWorkbench";
+import { useUniformListWindow } from "./ListVirtualWindow";
 
 export type ConversationHistoryItem = {
   seq: number;
@@ -79,6 +80,11 @@ export type XuenessConversationHistoryRailProps = {
   requestReveal?: (seq: number) => void;
 };
 
+/** 停靠点窗口化参数：12px 停靠点 + 3px 间隔（移动端 11px + 2px，滚动后自动实测）。 */
+const RAIL_WINDOW_PAGE_SIZE = 40;
+const RAIL_WINDOW_OVERSCAN_PX = 300;
+const RAIL_STRIDE_ESTIMATE_PX = 15;
+
 function findConversationScroller(root: HTMLElement): HTMLElement | null {
   return root.closest<HTMLElement>(".xn-conversation__stream");
 }
@@ -90,7 +96,28 @@ export function XuenessConversationHistoryRail({ rows, timelineRootRef, requestR
   const [focusSeq, setFocusSeq] = React.useState<number | null>(null);
   const [hoveredSeq, setHoveredSeq] = React.useState<number | null>(null);
   const trackRef = React.useRef<HTMLDivElement>(null);
+  const stopsRef = React.useRef<HTMLDivElement>(null);
   const navId = React.useId().replace(/:/gu, "");
+
+  // 停靠点窗口化：只挂载轨道可视区附近的行；当前选中与键盘焦点必须保持挂载。
+  const pinnedIndices = React.useMemo(() => {
+    const indices: number[] = [];
+    for (const seq of [activeSeq, rovingSeq, focusSeq]) {
+      if (seq === null) continue;
+      const index = items.findIndex((item) => item.seq === seq);
+      if (index >= 0) indices.push(index);
+    }
+    return indices;
+  }, [items, activeSeq, rovingSeq, focusSeq]);
+  const { snapshot, ensureIndex } = useUniformListWindow({
+    count: items.length,
+    listRef: stopsRef,
+    findScroller: (list) => list.closest<HTMLElement>(".xn-conversation-history-rail__track"),
+    pageSize: RAIL_WINDOW_PAGE_SIZE,
+    overscanPx: RAIL_WINDOW_OVERSCAN_PX,
+    estimateStridePx: RAIL_STRIDE_ESTIMATE_PX,
+    pinned: pinnedIndices,
+  });
 
   React.useEffect(() => {
     if (!items.some((item) => item.seq === rovingSeq)) setRovingSeq(items[0]?.seq ?? null);
@@ -173,6 +200,8 @@ export function XuenessConversationHistoryRail({ rows, timelineRootRef, requestR
     event.preventDefault();
     const item = items[nextIndex]!;
     setRovingSeq(item.seq);
+    // 目标停靠点可能尚未挂载（窗口化）：先同步扩大窗口，再聚焦。
+    ensureIndex(nextIndex);
     trackRef.current?.querySelector<HTMLElement>(`[data-history-seq="${item.seq}"]`)?.focus({ preventScroll: true });
   };
 
@@ -188,34 +217,41 @@ export function XuenessConversationHistoryRail({ rows, timelineRootRef, requestR
       onMouseLeave={() => setHoveredSeq(null)}
     >
       <div ref={trackRef} className="xn-conversation-history-rail__track">
-        {items.map((item, index) => {
-          const isActive = item.seq === activeSeq;
-          const isPreviewed = item.seq === previewSeq;
-          const buttonId = `${navId}-${item.seq}`;
-          const tooltipId = `${buttonId}-summary`;
-          const label = tf("跳转到第 {0} 条用户消息", [index + 1]);
-          return (
-            <button
-              key={item.seq}
-              id={buttonId}
-              type="button"
-              className="xn-conversation-history-rail__stop"
-              data-history-seq={item.seq}
-              data-active={isActive ? "true" : undefined}
-              aria-label={`${label}${item.userText ? `: ${item.userText}` : ""}`}
-              aria-current={isActive ? "location" : undefined}
-              aria-describedby={isPreviewed ? tooltipId : undefined}
-              tabIndex={item.seq === rovingSeq ? 0 : -1}
-              onClick={() => revealItem(item.seq)}
-              onFocus={() => { setRovingSeq(item.seq); setFocusSeq(item.seq); }}
-              onBlur={() => setFocusSeq((current) => current === item.seq ? null : current)}
-              onMouseEnter={() => setHoveredSeq(item.seq)}
-              onKeyDown={(event) => moveFocus(event, index)}
-            >
-              <span className="xn-conversation-history-rail__tick" aria-hidden="true" />
-            </button>
-          );
-        })}
+        <div
+          ref={stopsRef}
+          className="xn-conversation-history-rail__stops"
+          style={snapshot.windowed ? { marginTop: `${snapshot.topPad}px`, marginBottom: `${snapshot.bottomPad}px` } : undefined}
+        >
+          {items.slice(snapshot.start, snapshot.end).map((item, offset) => {
+            const index = snapshot.start + offset;
+            const isActive = item.seq === activeSeq;
+            const isPreviewed = item.seq === previewSeq;
+            const buttonId = `${navId}-${item.seq}`;
+            const tooltipId = `${buttonId}-summary`;
+            const label = tf("跳转到第 {0} 条用户消息", [index + 1]);
+            return (
+              <button
+                key={item.seq}
+                id={buttonId}
+                type="button"
+                className="xn-conversation-history-rail__stop"
+                data-history-seq={item.seq}
+                data-active={isActive ? "true" : undefined}
+                aria-label={`${label}${item.userText ? `: ${item.userText}` : ""}`}
+                aria-current={isActive ? "location" : undefined}
+                aria-describedby={isPreviewed ? tooltipId : undefined}
+                tabIndex={item.seq === rovingSeq ? 0 : -1}
+                onClick={() => revealItem(item.seq)}
+                onFocus={() => { setRovingSeq(item.seq); setFocusSeq(item.seq); }}
+                onBlur={() => setFocusSeq((current) => current === item.seq ? null : current)}
+                onMouseEnter={() => setHoveredSeq(item.seq)}
+                onKeyDown={(event) => moveFocus(event, index)}
+              >
+                <span className="xn-conversation-history-rail__tick" aria-hidden="true" />
+              </button>
+            );
+          })}
+        </div>
       </div>
       {previewItem && (
         <div

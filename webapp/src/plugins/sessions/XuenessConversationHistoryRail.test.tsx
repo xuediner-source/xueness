@@ -78,6 +78,21 @@ test("TimelineStream exposes an accessible stop for each user row and keeps targ
   assert.doesNotMatch(html.slice(0, html.indexOf("</nav>")), /private thought/);
 });
 
+test("长会话历史轨道只挂载可视区附近的停靠点，垫片补齐剩余高度", () => {
+  const manyRows: TimelineRow[] = [];
+  for (let index = 0; index < 300; index += 1) {
+    manyRows.push({ kind: "user", seq: index + 1, turnId: `turn-${index}`, text: `第 ${index + 1} 条用户消息` });
+  }
+  const html = renderToStaticMarkup(<TimelineStream rows={manyRows} />);
+  const stopCount = (html.match(/data-history-seq="/g) ?? []).length;
+  assert.ok(stopCount > 0, "窗口内应至少挂载一个停靠点");
+  assert.ok(stopCount < 300, `长会话应只挂载部分停靠点，实际 ${stopCount}`);
+  assert.match(html, /data-history-seq="1"/, "窗口应从第一条开始");
+  assert.match(html, /xn-conversation-history-rail__stops"[^>]*style="margin-top:0px;margin-bottom:\d+px"/, "未挂载停靠点应由底部垫片补齐");
+  // 停靠点序号（第 N 条用户消息）必须使用绝对下标，窗口平移后标注不错位。
+  assert.match(html, /aria-label="跳转到第 1 条用户消息: 第 1 条用户消息"/);
+});
+
 test("the rail is omitted when the timeline contains no user messages", () => {
   const html = renderToStaticMarkup(<TimelineStream rows={[{ kind: "assistant", seq: 4, turnId: "turn-a", text: "Only assistant" }]} />);
   assert.doesNotMatch(html, /conversation-history-rail/);
