@@ -50,6 +50,7 @@ export const XUENESS_PLUGIN_REGISTRY = {
   subagents: { name: "子代理", description: "子代理资源与运行态", panels: ["capabilities", "subagents"] },
   shell: { name: "Shell 工具", description: "执行命令工具", panels: [] },
   planning: { name: "规划工具", description: "待办、提问和交付完整性检查", panels: [] },
+  tools: { name: "工具执行策略", description: "对其他插件工具调用的实验性执行策略（干跑预览）", panels: [] },
 } as const satisfies Record<string, { name: string; description: string; panels: readonly PluginPanel[] }>;
 
 export type XuenessPluginId = keyof typeof XUENESS_PLUGIN_REGISTRY;

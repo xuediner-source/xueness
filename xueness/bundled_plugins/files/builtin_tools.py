@@ -264,10 +264,25 @@ def _list(root, gate, args, session, call_id) -> dict:
     return {"ok": True, "path": path, "output": sorted(p.name for p in target.iterdir())[:200]}
 
 
+def _dry_run_guard(root, gate, name: str, subject: str, args) -> "dict | None":
+    """Ask the experimental tools.dry_run_experimental policy before mutating.
+
+    ``None`` means run as always: the switch is off, the owning plugin is not
+    effective, or the Gate would refuse this call anyway -- in which case the
+    handler below stays the authority for the denial. The import is lazy because
+    the policy reads this package's own target resolution.
+    """
+    from ..tools.dry_run import guard
+    return guard(root, gate, name, subject, args)
+
+
 def _edit(root, gate, args, session, call_id) -> dict:
     path = args["path"]
     if not isinstance(path, str):
         raise ValueError("path must be a string")
+    preview = _dry_run_guard(root, gate, "edit", path, args)
+    if preview is not None:
+        return preview
     _check_path(gate, "edit", path, call_id)
     target = _mutating_target(gate, root, path)
     old = args["old"]
@@ -300,6 +315,9 @@ def _write(root, gate, args, session, call_id) -> dict:
     path = args["path"]
     if not isinstance(path, str):
         raise ValueError("path must be a string")
+    preview = _dry_run_guard(root, gate, "write", path, args)
+    if preview is not None:
+        return preview
     _check_path(gate, "write", path, call_id)
     target = _mutating_target(gate, root, path)
     content = args["content"]

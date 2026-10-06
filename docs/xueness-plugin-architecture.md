@@ -54,7 +54,7 @@ flowchart LR
 | updates | `DesktopUpdates.tsx`、`updateLifecycle.ts` |
 | workflows | `ExpertPanel.tsx`、`index.tsx` |
 
-## 27 个插件
+## 28 个插件
 
 | ID | 主要能力 | 依赖 | 初始状态 |
 |---|---|---|---|
@@ -85,6 +85,7 @@ flowchart LR
 | onboarding | 隐藏密钥输入的配置向导 | providers | 开 |
 | updates | 源仓库快进更新与桌面客户端更新 | — | 开 |
 | desktop | 原生窗口、目录选择、状态和标题栏 | — | 开 |
+| tools | 副作用工具调用的实验性策略（工具干跑，开关默认关闭） | — | 开 |
 
 “开”指模块可用。Hooks/MCP/子代理等运行 opt-in 仍默认关闭；Web 写操作继续逐调用批准。禁用依赖不会改写其他开关，但会让依赖者 `effective=false`。重新启用依赖后，原来启用的依赖者恢复；显式关闭的插件保持关闭。文件禁用不影响独立 PTY，但 shell 或 sessions 禁用会关闭终端。
 
@@ -113,7 +114,7 @@ python3 -m xueness skills list [--root DIR] [--json]
 python3 -m xueness skills inspect NAME [--root DIR] [--json]
 ```
 
-`--state DIR` 放在子命令之前；CLI 与该状态目录的 Web 服务共用开关。Web「设置 → 插件」默认展示全部 27 个实际功能插件及其启用/依赖状态；「资源清单」另列扩展 manifest，不能将其等同于功能插件。功能插件管理始终可访问；settings 关闭时通过账户菜单中的「插件管理」直达恢复入口，extensions/sessions 关闭也不影响目录。损坏的开关文件会关闭全部功能，并在目录中显示配置错误；修复 `plugin-state.json` 后恢复。它只允许 `apiVersion:1` 与已知 ID 的布尔 `enabled` 字典，不能提供 import 路径或命令。
+`--state DIR` 放在子命令之前；CLI 与该状态目录的 Web 服务共用开关。Web「设置 → 插件」默认展示全部 28 个实际功能插件及其启用/依赖状态；「资源清单」另列扩展 manifest，不能将其等同于功能插件。功能插件管理始终可访问；settings 关闭时通过账户菜单中的「插件管理」直达恢复入口，extensions/sessions 关闭也不影响目录。损坏的开关文件会关闭全部功能，并在目录中显示配置错误；修复 `plugin-state.json` 后恢复。它只允许 `apiVersion:1` 与已知 ID 的布尔 `enabled` 字典，不能提供 import 路径或命令。
 
 `GET /api/plugins` 返回 `enabled/effective/blockedBy`；`POST /api/plugins/<id>` 仅接受 `{enabled:boolean}`，需要 CSRF。所有功能 API 都检查实际生效状态。禁用终端/浏览器会清理本进程持有的服务；运行中的工作流在节点边界停止调度新节点。停用不是撤销已经发生的文件或外部副作用。
 
@@ -176,11 +177,11 @@ providers 的 CLI parser/handler 已迁入 `xueness/bundled_plugins/providers/op
 
 ## 功能逐项归属清单
 
-下表概述当前 27 份 manifest 中的 139 项用户能力。命令/工具/依赖和实际实现文件以同一份 manifest 为准；前端卡片直接展示该功能清单，不维护第二份隐藏列表。纯安全内核与通用布局的边界如前文所述。
+下表概述当前 28 份 manifest 中的 142 项用户能力。命令/工具/依赖和实际实现文件以同一份 manifest 为准；前端卡片直接展示该功能清单，不维护第二份隐藏列表。纯安全内核与通用布局的边界如前文所述。
 
 | 插件 | 已实现的用户能力 |
 |---|---|
-| sessions | 会话创建与 Agent 对话；选择、搜索、重命名、固定与归档；历史导航与跨会话上下文检索；闭合历史轮次分叉与来源链接；从轮次检查点分叉并记录来源快照；脱敏导出、导入与恢复；文本、思考与工具调用增量流；附件、上下文引用与会话输入；计划权限模式与会话计划草稿；多行 CLI、全屏 TUI 与中断恢复；运行中切换模型与推理档位（/model、/effort）；运行期间排队发送后续消息；命令面板搜索与键盘导航；时间线跟随与回到底部；空会话起始页快捷动作与最近会话；手动压缩上下文（/compact 与说明）；依赖感知的工具并发调度；模型选择分档、目录标签与详情卡 |
+| sessions | 会话创建与 Agent 对话；选择、搜索、重命名、固定与归档；历史导航与跨会话上下文检索；闭合历史轮次分叉与来源链接；从轮次检查点分叉并记录来源快照；脱敏导出、导入与恢复；文本、思考与工具调用增量流；附件、上下文引用与会话输入；计划权限模式与会话计划草稿；多行 CLI、全屏 TUI 与中断恢复；运行中切换模型与推理档位（/model、/effort）；运行期间排队发送后续消息；命令面板搜索与键盘导航；时间线跟随与回到底部；空会话起始页快捷动作与最近会话；手动压缩上下文（/compact 与说明）；依赖感知的工具并发调度；模型选择分档、目录标签与详情卡；会话事件的增量游标读取（实验，默认关闭） |
 | files | 文件列表、搜索与分页读取；批准后的文件写入与编辑；目录浏览、新建与本机目录选择；文本、图像、PDF 与媒体预览；会话文件改动视图；工作区 AGENTS 指导文件加载 |
 | shell | 批准后的 argv 命令执行 |
 | planning | 待办计划读取与更新；提问、用户回答与继续；持久交付清单与内容完成检查；会话目标设置、每轮注入与完成核验 |
@@ -207,6 +208,7 @@ providers 的 CLI parser/handler 已迁入 `xueness/bundled_plugins/providers/op
 | onboarding | 模型与工作区初次配置向导；隐藏密钥输入与配置保存 |
 | updates | 源仓库版本与更新检查；明确批准的干净仓库快进更新；桌面客户端检查、下载、取消与安装控制 |
 | desktop | Windows/macOS 桌面宿主集成；原生目录选择与平台状态；集成标题栏与窗口控制；单实例、启动恢复与后台进程清理；Windows 系统托盘与关闭窗口后后台运行；托盘会话分组、快速打开、新建与反馈入口 |
+| tools | 副作用工具调用的干跑预览（写/编辑给出目标路径与差异摘要，执行给出 argv 与工作目录；实验，默认关闭） |
 
 计划权限模式 `sessions.plan_mode` 在 build/edit/yolo 之外补上第四种模式。四种取值的单一来源是 `sessions/plan_mode.PERMISSION_MODES`（前端为 `plugins/sessions/permissionModes.ts`）；WebGate、专家工作流、app-server 与 CLI 都引用它。`plan` 下读取、搜索类工具照常，写/编辑/执行/网页工具一律拒绝，唯一例外是本会话专属的计划草稿 `<状态目录>/plan-drafts/<会话 id>.md`（在状态目录内按会话划分，不在工作区内）。草稿路径布局与中英双语拒绝文案都由 `sessions/plan_mode.py` 决定，WebGate 与 CLI 使用的内核 Gate 只按该插件给出的凭据精确匹配放行一次写入，files 的写/编辑解析也先问 Gate，因此工作区 jail 未被放宽、没有新增内建工具。拒绝结果带 `plan_mode_denied`，不会伪装成可批准的等待项；sessions 禁用或依赖不可用时 `plan` 值被拒绝，从 plan 切回 build/edit/yolo 沿用既有 `permission_mode_history` 审计。内核 `mode=plan` 仍是更硬的天花，连草稿一并拒绝，也压过 `permission_mode=yolo`。CLI `run`/`chat` 增加 `--permission-mode build|edit|yolo|plan`：plan 映射为只读加草稿，yolo 仍不自动放行远程 SSH，旧的 `--allow-*` 与 `--mode` 保持兼容；省略该参数时只继承已保存的 plan，不把已保存的 edit/yolo 静默套到 CLI 上。聊天 `/mode plan` 继续设置内核天花。完整格子见 `docs/xueness-permission-modes.md`。
 
@@ -678,3 +680,85 @@ subagents 插件登记新功能 `subagents.cancel_one`（单个子任务协作�
 被撤回的子任务在既有 `completion_check` 里记作 unsuccessful，因此父回合即便正常收尾也会落到 `needs_review`——这是保守的交付校验：用户主动撤回的发现不能算「已完成的证据」。前端不假装相反：会话头部只在存在运行中任务时出现「中止整个会话」，逐条「取消此项」只在实验开启且该条为 running 时出现，且都要二次确认。
 
 验证：`tests/test_subagents_cancel_one.py`（22 项：路由属主、默认关闭且不泄露状态、非布尔存储值仍关闭、精确取消一条而父会话/兄弟/别会话不受影响、开关形状与 405/400/404/403/409、CSRF 与跨 Origin 守卫、插件停用与恢复、工作区根与任务 root 校验、以及一条真实 `/run` 端到端——两个子任务在跑，取消其一，父代理继续独立工作并收集剩余结果）；前端 `SubagentSidePane.test.tsx` 与 `SubagentSettings.test.tsx` 覆盖开关开/关的渲染差异与旧文案不再出现；`tests/test_settings_store.py` 覆盖布尔校验。
+
+## 实验：会话事件增量游标（sessions.events_cursor，2026-10-06）
+
+sessions 插件登记实验功能 `sessions.events_cursor`（会话事件增量游标拉取，默认关闭）。实现全部位于 `xueness/bundled_plugins/sessions/events_cursor.py`，manifest 只增加数据（`modules` 增 `events_cursor`、`features` 增该 ID），路由归属既有 sessions 的 `sessions` HTTP 家族；没有新增工具、面板、前端模块、状态文件，也没有共享内核例外。
+
+### 开关
+
+设置键 `general.sessionsEventsCursorEnabled`，只有精确的布尔 `true` 才打开。缺省、`false`、`"true"`/`1` 等非布尔值，以及 `general` 段不是对象，一律算关闭；`POST /api/settings/general` 对这一键做布尔校验，非法值回 400。开关按请求绑定的状态目录逐次读取，改完即生效、不需要重启。sessions 插件停用或依赖被阻塞时 `effective=false`，整条会话路由回 403，开关再开也没有出口。
+
+### 请求参数
+
+`GET /api/sessions/<sid>/events` 额外接受三个查询参数：
+
+- `cursor`：非负十进制整数，取 `seq > cursor` 的增量窗口。
+- `since`：`cursor` 的别名。两者同时出现必须给出同一个值，否则 400 `conflicting cursor values`；空值等同于未提供，重复同名参数取第一个值。
+- `limit`：窗口大小，默认 200，钳到 1..500。与旧路径不同，游标请求里非十进制的 `limit` 直接 400 `invalid limit`；旧请求仍像过去一样回落到 200。
+
+不传 `cursor`/`since` 就是旧请求，响应仍是 `{id, status, steps, events}`，事件对象里不出现 `seq`，派生顺序与截断规则一字未改——老客户端看不见本功能存在。开关关闭时带游标的请求回 400 `{error: "sessions.events_cursor not enabled", feature: "sessions.events_cursor"}`，不会退化成「其实把全部事件都返回」。参数解析在开关检查之前，因此非法游标无论开关状态都得到同一个 400。
+
+### 响应字段
+
+打开后的 JSON 信封是 `{id, status, steps, events, next_cursor, has_more}`：
+
+- `events`：本会话完整旧派生结果按稠密 `seq`（从 1）编号后，落在窗口里的那一段，每项多带一个 `seq`。`seq` 1 是状态事件，它在运行期间原地变化，所以 `status` 与 `steps` 始终走信封字段，不作为重复事件下发。
+- `next_cursor`：本窗口最后一条的 `seq`；没有新事件时就是请求游标本身，客户端可以把它直接当作下一次的 `cursor`。
+- `has_more`：`cursor + limit < head`，即下一页是否已经在等着，客户端据此决定要不要立刻续拉。
+- 请求带 `Accept: text/event-stream` 时，同一窗口用 events.v1 的 SSE body 输出，每帧额外带 `id:`（就是 `seq`），便于断线重连；旧请求的 SSE 帧仍不含 `id:`。
+
+### 超前游标要求重同步
+
+journal 只会追加，但手动压缩或清空待回答问题会让这份派生列表缩短并重新编号。因此 `cursor` 大于当前 head 时不返回空页，而是 400 `cursor ahead of session head`（`errorCode: xueness.error.invalid_argument`）。客户端收到它必须从 `cursor=0` 重新同步，或退回不带游标的旧请求：静默给一个空页会让被重编号的事件永久丢失。其余非法值同样是 400——非十进制、带符号、空白或小数回 `invalid cursor`，超过 `2**53-1`（浏览器 JSON 已无法精确回传该整数）回 `cursor too large`。
+
+### 边界与验证
+
+会话 id 仍须通过既有合法性校验，事件只从本服务器 store 中的会话派生，payload 保持旧的截断摘要，游标没有暴露任何新内容；Host/Origin/CSRF 与只读语义不变。验证：`tests/test_sessions_events_cursor.py`（参数解析、别名与冲突、limit 的严格与钳位、稠密 `seq` 与逐页走完整个时间线、增长追加不重编号、压缩缩短后被迫重同步、超前游标 400、开关只认显式布尔、关闭时拒绝、旧响应逐字段不变、sessions 停用压过开关）。
+
+## 实验：工具干跑（tools.dry_run_experimental，2026-10-06）
+
+新的可信 bundled 插件 `tools`（工具执行策略）登记实验功能 `tools.dry_run_experimental`（工具调用干跑预览，默认关闭）。完整目录现为 **28 个插件、142 项登记功能**。该插件不贡献任何模型可见工具、面板、CLI 命令、HTTP 家族、状态文件或前端组件：它拥有的是一条「施加在别人注册的工具之上」的策略，实现全在 `xueness/bundled_plugins/tools/dry_run.py`，manifest 只有数据（`toolEvents` 声明 `before_tool_execution`、`priority` 100、`modules` 仅 `dry_run`）。共享内核只多了 `PLUGIN_IDS` 里这一个 ID，前端静态注册表加一条 `panels` 为空的目录条目；工作台容器、时间线与批准界面均未改动。
+
+打开后，一个「会写东西或会执行」的工具调用不再真正发生，而是返回结构化的「本次将要执行什么」；只读工具照常运行。它的用途是让小模型或实验配置先看清自己的打算，再决定切回可写模式。
+
+### 开关
+
+- 设置键 `general.toolsDryRunEnabled`：只有精确的布尔 `true` 打开。缺省、`false`、`"true"`/`1` 等非布尔值、`general` 段不是对象都算关闭；`POST /api/settings/general` 对这一键做布尔校验，非法值回 400 `toolsDryRunEnabled must be boolean`。目前没有界面控件（与 `sessionsEventsCursorEnabled` 同属实验位），开关只能由设置接口（沿用 Host/Origin/CSRF）或状态目录里的 `settings.json` 写入。
+- 操作员环境变量 `XUENESS_TOOLS_DRY_RUN=1|true|yes|on`（与项目里其他环境覆盖同样的拼写）只能**打开**本功能，不能反过来把已设置为真的开关关掉；其他值一律视为未打开。
+- 开关按每次调用绑定的状态目录读取（执行上下文 → store 目录 → gate），所以改了不必重启，也不会串到别的状态目录。`tools` 插件被停用或 `state_dir` 缺失且环境未覆盖时，策略完全不生效，行为与本功能不存在时一致。
+
+### 分类：借用现有 Gate/工具分类，不新增类别
+
+副作用判定只用已经存在的两个信号：注册表里 `BuiltinTool.mutating` 为真，或 `gate_kind` 属于 `Gate._check` 已视作变更的那一组（`write`、`edit`、`exec`、`mcp`、`web_fetch`、`web_search`）。当前 34 个登记工具因此分成三类：
+
+| 处理 | 工具 | 结果 |
+|---|---|---|
+| 协作返回预览 | `write`、`edit`、`exec` | 由所属插件的处理器在动手之前问一次守卫，答案是不执行 + `preview` |
+| dispatch 之前拒绝 | `remote_exec`、`web_fetch`、`web_search`、`browser_click/fill/navigate/screenshot/snapshot/inspect`、`background_exec/cancel`、`offpeak_create`、`workflow_run`、`workflow_answer_actor`（共 14 个） | 本插件的 `before_tool_execution` 参与者给出 `plugin_denied`，处理器根本没跑 |
+| 照常执行 | `read`、`list`、`glob`、`grep`、`todo_read/todo_write`、`tool_result_read`、`tool_search`、`read_session_context`、`ask_user`、`workflow_create/amend/status`、`background_logs/status`、`task_collect`、`delivery_plan`（共 17 个） | 不受本功能影响 |
+
+- `browser_snapshot` 与 `browser_inspect` 名义上是只读观察，但既有分类里它们走 `exec` 门，因此干跑下同样被拒绝而不是执行：建不出预览的调用宁可少一次观察，也不留一个「按只读之名放行副作用」的口子。
+- 诚实的范围外：MCP 工具经 capability 缝直达服务器、不进这份注册表；PreToolUse 钩子在 dispatch 之前自己运行命令；子代理派发的任务也不经过 `dispatch`。本功能对这三条路径不做任何声明，绝不假装预览过它们。
+
+### 预览形状
+
+外层统一是 `{ok: false, error: "dry_run", error_code: "dry_run_preview", dry_run: true, feature, tool, gate_kind, executed: false, awaiting_approval: false, retryable: false, requires_approval, preview, user_reason}`，`user_reason` 中英双语。
+
+- `write`：`path`、解析后的绝对 `target`、`creates_new_file`、`previous_chars`、`content_chars`、有界的 `content_preview`、`diff{changed, added_lines, removed_lines, excerpt, truncated}`。
+- `edit`：`path`、`target`、`old_chars/new_chars`、`matches`、`would_apply`、`file_exists`、同样的 `diff`（对文件当前内容计算）。目标不存在时不会创建文件，预览如实给出 `file_exists: false`、`would_apply: false`——它替代的本来是一次失败。
+- `exec`：`argv`（最多 64 项、每项 300 字符，超出置 `argv_truncated`）、`cwd`、`shell: false`、`would_filter_secrets_from_environment: true`——命令串与密钥过滤都和真跑时同一套。
+- 目标路径经 files 插件自己的 `_mutating_target` 解析，plan 草稿例外一并生效，所以预览里出现的绝对路径正是本次调用真会写入的路径；越界路径在解析阶段就抛 `PermissionError`，守卫让位，处理器给出原样的边界拒绝。
+- 内容与差异都有硬上限（预览 2000、差异 4000 字符 / 80 行），工具结果要进模型上下文和会话 journal，不随文件大小增长。
+- `ok: false` 且 `error` 不是 `"denied"`：预览既不会被 `changed_files` 当作改动收集（那里要求 `ok` 为真），也不会进 `pending_denials`（那里只认 `error == "denied"`），界面因此不会长出假的「批准」按钮。
+
+### 只能收紧，不能放宽
+
+- **Gate 照旧判定。** 守卫不猜测策略，而是复制一份当前 Gate 的政策字段（`root`、`allow_write/edit/exec/mcp/network`、`mode`、`disallow`、`permission_mode`、`plan_draft`、`hold_remote_exec`），用处理器原本要交给 `Gate.check` 的**同一个 subject 字符串**先问一次「这会被拒吗」。这份副本不持有任何批准桶、`interactive=False`，因此既不会提示操作员，也不会消耗一次性批准。判为拒绝时守卫立刻返回 `None`，让处理器按原样调用自己的 `gate.check`——`plan_mode_denied`、`permission_denied`、越界 `denied` 的字段与文案都不变。
+- **不发放也不消耗权限。** 本该等批准的调用仍报 `requires_approval: true`，桶里的条目一条都不会被预览花掉（回归测试直接断言批准后 `call-1` 仍在，关开关后仍能正常消耗）。预览不进入 `after_tool_authorization`，所以 git 检查点这类观察者也不会看到一次「并未被授权」的调用。
+- **建不出预览就不执行。** 参数畸形时处理器继续返回自己的原错误；差异计算等环节出意外时返回 `{action, preview_unavailable: true}`，同样不落盘。没有预览的副作用工具走的是拒绝，而不是「算了，让它执行」。
+- **关掉就是零变化。** 守卫与参与者在开关关闭（或插件停用）时一律返回 `None`，dispatch 路径、载荷、批准消耗与检查点与之前逐字段相同。
+
+### 验证
+
+`tests/test_tools_dry_run.py`（31 项）覆盖：分类与注册表对齐、无副作用工具能逃逸开关、只认显式布尔与环境覆盖、`tools` 停用压过开关、设置校验文案、三种预览的形状与上限且可 JSON 序列化、开关关时行为完全不变、开时 `write/edit/exec` 不落盘不执行、只读工具照常、开关即时生效不需重启、无预览的副作用被 `plugin_denied` 且一次都没调用底层实现、plan 权限模式与内核 `mode=plan`、`disallow`、越界路径的拒绝载荷不变、预览不消耗一次性批准、非法参数保持原错误、其它状态目录不受影响、manifest 只放数据且功能 ID 双语登记。结构门禁 `python3 tools/check_plugin_architecture.py` 与 `tests/test_plugin_architecture.py` 同步通过。

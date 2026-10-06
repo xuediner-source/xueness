@@ -91,7 +91,8 @@ def validate(section,values):
                     'toolGroupingExploreEnabled', 'toolGroupingTerminalEnabled',
                     'toolGroupingChangesEnabled', 'taskAutoArchiveEnabled',
                     'messageStreamShowReasoning', 'memoryEnabled',
-                    'sessionsEventsCursorEnabled'):
+                    'sessionsEventsCursorEnabled',
+                    'toolsDryRunEnabled'):
             if key in values and type(values[key]) is not bool:
                 raise ValueError(f'{key} must be boolean')
         if ('taskAutoArchiveOlderThanDays' in values

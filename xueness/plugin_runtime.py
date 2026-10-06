@@ -28,7 +28,7 @@ from .resources import _atomic_write_json, _is_link
 API_VERSION = 1
 PLUGIN_IDS = ('sessions', 'files', 'shell', 'planning', 'providers', 'memory',
               'settings', 'usage', 'git', 'workflows', 'terminal', 'office',
-              'commands', 'skills', 'hooks', 'mcp', 'subagents', 'network', 'automation', 'extensions', 'diagnostics', 'browser', 'remote', 'bots', 'onboarding', 'updates', 'desktop')
+              'commands', 'skills', 'hooks', 'mcp', 'subagents', 'network', 'automation', 'extensions', 'diagnostics', 'browser', 'remote', 'bots', 'onboarding', 'updates', 'desktop', 'tools')
 PACKAGE_ROOT = Path(__file__).with_name('bundled_plugins')
 CONFIG_NAME = 'plugin-state.json'
 MAX_STATE_BYTES = 65536
