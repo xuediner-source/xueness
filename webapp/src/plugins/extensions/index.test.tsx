@@ -6,6 +6,7 @@ import type { MarketplaceItem } from "../../xuenessApi";
 import {
   MarketplaceCard,
   MarketplaceDetail,
+  XuenessMarketplace,
   filterMarketplaceItems,
   restoreMarketplaceDialogFocus,
   shouldDismissMarketplaceDialogOnBackdrop,
@@ -50,6 +51,9 @@ test("marketplace cards show real source and keep the installed update affordanc
   assert.match(html, /bundled/);
   assert.match(html, /已安装/);
   assert.match(html, /更新/);
+  assert.match(html, /xn-marketplace__badge is-version/);
+  assert.match(html, /xn-marketplace__badge is-update/);
+  assert.match(html, /xn-marketplace__action is-primary/);
   assert.match(html, /marketplace-card-detail/);
 
   const catalogBehindInstall = { ...items[0]!, installedVersion: "2.0.0" };
@@ -58,12 +62,22 @@ test("marketplace cards show real source and keep the installed update affordanc
   assert.doesNotMatch(current, /更新/);
 });
 
+test("marketplace loading and header use the recovered installed structure", () => {
+  const html = renderToStaticMarkup(<XuenessMarketplace />);
+  assert.match(html, /xn-marketplace__title/);
+  assert.match(html, /xn-marketplace__header-actions/);
+  assert.match(html, /xn-marketplace__empty-icon/);
+  assert.match(html, /正在加载市场清单/);
+});
+
 test("marketplace detail shows allowlisted manifest fields and never renders arbitrary manifest values", () => {
   const html = renderToStaticMarkup(<MarketplaceDetail item={items[0]!} busy={false} onBack={() => {}} onAction={() => {}} />);
   assert.match(html, /safe-skill/);
   assert.match(html, /skills/);
   assert.match(html, /filesystem-write/);
   assert.match(html, /sha256:feedface/);
+  assert.match(html, /xn-marketplace__badge is-version/);
+  assert.match(html, /xn-marketplace__badge is-update/);
   assert.doesNotMatch(html, /never-show-this/);
   assert.match(html, /默认停用|安装仅写入数据清单/);
 });

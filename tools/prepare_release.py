@@ -306,6 +306,8 @@ def _collect_files(root: Path, version: str) -> list[SourceFile]:
         "webapp/tsconfig.typecheck.json",
         "webapp/run-tests.mjs",
         "webapp/verify-plugin-disclosures.mjs",
+        "webapp/verify-automation-redesign.mjs",
+        "webapp/verify-desktop-onboarding.mjs",
         "webapp/run-validate-events.mjs",
         "tools/check-parity-hygiene.mjs",
         "tools/validate-events-v1.ts",
@@ -337,6 +339,7 @@ def _collect_files(root: Path, version: str) -> list[SourceFile]:
         "docs/xueness-desktop.md",
         "docs/xueness-network-tools.md",
         "docs/xueness-reliability-and-updates.md",
+        "docs/desktop-onboarding-2026-10-06.md",
         "docs/frontend-handoff-prompt.md",
     )
     for path_text in explicit_paths:

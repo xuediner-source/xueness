@@ -21,7 +21,7 @@ export function DesktopAboutDetails({ version, dataDirectory }: AppInfo): React.
 }
 
 /** Desktop metadata belongs to the desktop plugin, wherever settings mounts it. */
-export function DesktopAbout({ enabled = true }: { enabled?: boolean }): React.JSX.Element | null {
+export function DesktopAbout({ enabled = true, onboardingEnabled = false }: { enabled?: boolean; onboardingEnabled?: boolean }): React.JSX.Element | null {
   const [info, setInfo] = useState<AppInfo | null>(null);
   const [error, setError] = useState(false);
   useEffect(() => {
@@ -41,5 +41,11 @@ export function DesktopAbout({ enabled = true }: { enabled?: boolean }): React.J
   return <section className="xn-desktop-about" data-testid="desktop-about">
     {info ? <DesktopAboutDetails {...info} /> : error ? <p role="alert">{tr("无法读取应用信息。")}</p>
       : <p role="status">{tr("正在读取应用信息…")}</p>}
+    {onboardingEnabled && typeof window !== "undefined" && new URLSearchParams(window.location.search).get("xuenessDesktop") === "1" &&
+      <div className="xn-desktop-about__permissions">
+        <div><h4>{tr("系统权限")}</h4><p>{tr("查看电脑使用、文件访问和麦克风权限，可随时跳过。")}</p></div>
+        <button type="button" data-testid="desktop-permissions-reopen"
+          onClick={() => window.dispatchEvent(new CustomEvent("xueness:permissions-open"))}>{tr("查看权限引导")}</button>
+      </div>}
   </section>;
 }

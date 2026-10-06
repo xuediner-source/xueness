@@ -171,3 +171,40 @@ test('private pipe accepts only well-formed update policy and fixed update reque
   assert.deepEqual(reply, { id: requestId, state: { phase: 'current' } });
   await backend.stop();
 });
+
+test('private pipe accepts only exact desktop permission messages', async t => {
+  const root = mkdtempSync(join(tmpdir(), 'xueness-desktop-permission-pipe-'));
+  const hostPath = join(root, 'host.cjs');
+  const requestId = 'fedcba9876543210fedcba9876543210';
+  writeFileSync(hostPath, `
+    const { createInterface } = require('node:readline');
+    const requestId = ${JSON.stringify(requestId)};
+    const send = value => process.stdout.write(JSON.stringify(value) + '\\n');
+    send({ type: 'permissions', id: requestId, action: 'status' });
+    send({ type: 'permissions', id: requestId, action: 'status', permission: 'screen' });
+    send({ type: 'permissions', id: requestId, action: 'request', permission: 'camera' });
+    send({ type: 'permissions', id: requestId, action: 'request', permission: 'screen', extra: true });
+    send({ type: 'permissions', id: requestId, action: 'request', permission: 'screen' });
+    send({ type: 'ready', url: 'http://127.0.0.1:4567' });
+    createInterface({ input: process.stdin }).on('line', line => {
+      let value; try { value = JSON.parse(line); } catch { return; }
+      if (value.type === 'shutdown') process.exit(0);
+    });
+  `);
+  const backend = new Backend({ executable: process.execPath, args: [hostPath], cwd: root,
+    data: root, assets: root, node: process.execPath, playwright: '' });
+  const requests = [];
+  backend.on('permissions', value => requests.push(value));
+  t.after(async () => {
+    if (backend.child && backend.child.exitCode === null && backend.child.signalCode === null) await backend.stop();
+    rmSync(root, { recursive: true, force: true });
+  });
+
+  await backend.start();
+  await waitFor(() => requests.length === 2);
+  assert.deepEqual(requests, [
+    { type: 'permissions', id: requestId, action: 'status' },
+    { type: 'permissions', id: requestId, action: 'request', permission: 'screen' },
+  ]);
+  await backend.stop();
+});

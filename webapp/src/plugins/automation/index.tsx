@@ -63,6 +63,8 @@ export function XuenessAutomationsPanel({
   const [detailId, setDetailId] = useState<string | null>(null);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [confirm, setConfirm] = useState<ConfirmAction | null>(null);
   const [allowReal, setAllowReal] = useState(false);
   const confirmDialogRef = useRef<HTMLElement>(null);
@@ -70,11 +72,15 @@ export function XuenessAutomationsPanel({
   useModalFocusScope({ open: confirm !== null, dialogRef: confirmDialogRef, initialFocusRef: confirmCancelRef });
 
   const refresh = async () => {
+    setRefreshing(true);
     try {
       setItems((await listAutomations()).automations);
       setError("");
     } catch (cause) {
       setError(errorMessage(cause));
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
     }
   };
   useEffect(() => { void refresh(); }, []);
@@ -142,6 +148,8 @@ export function XuenessAutomationsPanel({
   };
 
   const selected = items.find((item) => item.id === detailId) ?? null;
+  const enabledCount = items.filter((item) => item.enabled).length;
+  const approvalCount = items.filter((item) => !item.approved).length;
 
   const confirmAction = async () => {
     if (!confirm) return;
@@ -159,17 +167,27 @@ export function XuenessAutomationsPanel({
   };
 
   return (
-    <section className="xn-automation" data-testid="automations-panel">
+    <section className="xn-automation" data-testid="automations-panel" aria-labelledby="xn-automation-title">
       <header className="xn-automation__header">
         <div>
-          <h3>{tr("自动化")}</h3>
+          <span className="xn-automation__eyebrow">{tr("本地计划")}</span>
+          <h3 id="xn-automation-title">{tr("自动化")}</h3>
           <p>{tr("管理定时计划、工作流步骤、审批状态和运行记录。当前支持定时触发。")}</p>
         </div>
         <div className="xn-automation__header-actions">
-          <button type="button" disabled={busy} onClick={() => void refresh()}>{tr("刷新")}</button>
-          <button type="button" disabled={busy} onClick={beginCreate}>{tr("新建定时计划")}</button>
+          <button type="button" disabled={busy || refreshing} onClick={() => void refresh()} aria-busy={refreshing}>
+            {refreshing ? tr("正在刷新…") : tr("刷新")}
+          </button>
+          <button type="button" className="xn-automation__button--primary" disabled={busy} onClick={beginCreate}>{tr("新建定时计划")}</button>
         </div>
       </header>
+
+      <div className="xn-automation__overview" role="group" aria-label={tr("计划概览")} data-testid="automation-overview">
+        <div className="xn-automation__metric"><span>{tr("计划总数")}</span><strong>{loading ? "—" : items.length}</strong></div>
+        <div className="xn-automation__metric"><span>{tr("已启用")}</span><strong>{loading ? "—" : enabledCount}</strong></div>
+        <div className="xn-automation__metric"><span>{tr("待审批")}</span><strong>{loading ? "—" : approvalCount}</strong></div>
+        <p className="xn-automation__overview-note">{tr("计划按时区运行；执行前仍遵循审批策略。")}</p>
+      </div>
 
       {error && <p className="xn-automation__error" role="alert">{tr("自动化操作失败：")}{error}</p>}
 
@@ -198,14 +216,19 @@ export function XuenessAutomationsPanel({
         <>
         <section className="xn-automation__list-section" aria-labelledby="xn-automation-list-title">
           <div className="xn-automation__section-heading">
-            <h4 id="xn-automation-list-title">{tr("定时计划")} <span>{items.length}</span></h4>
+            <h4 id="xn-automation-list-title">{tr("定时计划")} <span>{loading ? "—" : items.length}</span></h4>
             <p>{tr("计划按本地时间表执行工作流；每次运行都遵循审批策略。")}</p>
           </div>
-          {items.length === 0 ? (
+          {loading && items.length === 0 ? (
+            <div className="xn-automation__empty xn-automation__loading" role="status" aria-live="polite">
+              <span className="xn-automation__loading-mark" aria-hidden="true" />
+              <span>{tr("正在加载计划…")}</span>
+            </div>
+          ) : items.length === 0 ? (
             <div className="xn-automation__empty">
               <h4>{tr("没有配置自动化")}</h4>
               <p>{tr("创建基于 Cron 的本地计划，并为它配置可执行的工作流步骤。")}</p>
-              <button type="button" onClick={beginCreate}>{tr("新建定时计划")}</button>
+              <button type="button" className="xn-automation__button--primary" onClick={beginCreate}>{tr("新建定时计划")}</button>
             </div>
           ) : (
             <div className="xn-automation__list">
@@ -254,7 +277,7 @@ export function XuenessAutomationsPanel({
             )}
             <div className="xn-automation__dialog-actions">
               <button ref={confirmCancelRef} type="button" disabled={busy} onClick={() => setConfirm(null)}>{tr("取消")}</button>
-              <button type="button" disabled={busy} onClick={() => void confirmAction()}>{tr("确认")}</button>
+              <button type="button" className={confirm.kind === "delete" ? "xn-automation__button--danger" : "xn-automation__button--primary"} disabled={busy} onClick={() => void confirmAction()}>{tr("确认")}</button>
             </div>
           </section>
         </div>
@@ -286,12 +309,16 @@ export function AutomationCard({
       <div className="xn-automation__card-main">
         <div className="xn-automation__card-title-row">
           <h4>{record.name}</h4>
-          <span className={`xn-automation__badge ${record.enabled ? "is-enabled" : "is-paused"}`}>{record.enabled ? tr("已启用") : tr("已暂停")}</span>
-          <span className={`xn-automation__badge ${record.approved ? "is-approved" : "is-pending"}`}>{approvalLabel(record)}</span>
+          <div className="xn-automation__badges">
+            <span className={`xn-automation__badge ${record.enabled ? "is-enabled" : "is-paused"}`}>{record.enabled ? tr("已启用") : tr("已暂停")}</span>
+            <span className={`xn-automation__badge ${record.approved ? "is-approved" : "is-pending"}`}>{approvalLabel(record)}</span>
+          </div>
         </div>
-        <p className="xn-automation__schedule">{describeCronSchedule(record.schedule, tr, tf)} <span>·</span> {record.timezone}</p>
+        <div className="xn-automation__schedule-block">
+          <p className="xn-automation__schedule">{describeCronSchedule(record.schedule, tr, tf)} <span>·</span> {record.timezone}</p>
+          <p className="xn-automation__next-run"><span>{tr("下次运行：")}</span><strong>{record.nextRunAt ? formatDate(record.nextRunAt) : tr("未安排")}</strong></p>
+        </div>
         <div className="xn-automation__card-meta">
-          <span>{tr("下次运行：")}{record.nextRunAt ? formatDate(record.nextRunAt) : tr("未安排")}</span>
           <span>{tr("工作流：")}{record.workflow.name}</span>
           <span>{record.workflow.nodes.length} {tr("个步骤")}</span>
           <span>{lastRun ? `${tr("最近运行：")}${runStatusLabel(lastRun.status)} · ${formatDate(lastRun.at)}` : tr("尚无运行记录")}</span>
@@ -300,9 +327,10 @@ export function AutomationCard({
       <div className="xn-automation__actions">
         <button type="button" onClick={onOpen}>{tr("查看详情和历史")}</button>
         <button type="button" onClick={onEdit}>{tr("编辑")}</button>
-        <button type="button" disabled={busy} onClick={onRun}>{tr("立即运行")}</button>
-        {!record.approved && <button type="button" disabled={busy} onClick={onApprove}>{tr("批准计划")}</button>}
-        <button type="button" disabled={busy} onClick={onDelete}>{tr("删除")}</button>
+        {record.approved
+          ? <button type="button" className="xn-automation__button--primary" disabled={busy} onClick={onRun}>{tr("立即运行")}</button>
+          : <button type="button" className="xn-automation__button--primary" disabled={busy} onClick={onApprove}>{tr("批准计划")}</button>}
+        <button type="button" className="xn-automation__button--quiet-danger" disabled={busy} onClick={onDelete}>{tr("删除")}</button>
       </div>
     </article>
   );
@@ -329,15 +357,20 @@ export function AutomationDetail({
     <section className="xn-automation__detail" data-testid="automation-detail">
       <div className="xn-automation__detail-heading">
         <button type="button" onClick={onBack}>{tr("返回计划列表")}</button>
-        <div>
+        <div className="xn-automation__detail-title">
           <h4>{record.name}</h4>
+          <div className="xn-automation__badges">
+            <span className={`xn-automation__badge ${record.enabled ? "is-enabled" : "is-paused"}`}>{record.enabled ? tr("已启用") : tr("已暂停")}</span>
+            <span className={`xn-automation__badge ${record.approved ? "is-approved" : "is-pending"}`}>{approvalLabel(record)}</span>
+          </div>
           <p>{describeCronSchedule(record.schedule, tr, tf)} <span>·</span> {record.timezone}</p>
         </div>
         <div className="xn-automation__actions">
           <button type="button" onClick={onEdit}>{tr("编辑")}</button>
-          <button type="button" disabled={busy} onClick={onRun}>{tr("立即运行")}</button>
-          {!record.approved && <button type="button" disabled={busy} onClick={onApprove}>{tr("批准计划")}</button>}
-          <button type="button" disabled={busy} onClick={onDelete}>{tr("删除")}</button>
+          {record.approved
+            ? <button type="button" className="xn-automation__button--primary" disabled={busy} onClick={onRun}>{tr("立即运行")}</button>
+            : <button type="button" className="xn-automation__button--primary" disabled={busy} onClick={onApprove}>{tr("批准计划")}</button>}
+          <button type="button" className="xn-automation__button--quiet-danger" disabled={busy} onClick={onDelete}>{tr("删除")}</button>
         </div>
       </div>
       <div className="xn-automation__detail-grid">
@@ -549,7 +582,7 @@ function AutomationForm({
       </fieldset>
 
       <div className="xn-automation__form-actions">
-        <button type="submit" disabled={busy}>{editing ? tr("保存") : tr("创建")}</button>
+        <button type="submit" className="xn-automation__button--primary" disabled={busy}>{editing ? tr("保存") : tr("创建")}</button>
         <button type="button" disabled={busy} onClick={onCancel}>{tr("取消")}</button>
       </div>
     </form>

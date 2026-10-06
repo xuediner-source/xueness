@@ -50,6 +50,8 @@ with tempfile.TemporaryDirectory(prefix='xueness-app-check-') as temporary:
     assert state.get('aboutVersion') == expected_version, state
     assert state.get('aboutDataDirectory') == str(isolated_data), state
     assert state.get('oldDesktopNavAbsent') is True, state
+    assert state.get('onboardingSeen') is True and state.get('onboardingCompleted') is True, state
+    assert state.get('permissionSnapshotValid') is True and state.get('permissionPostRequests') == 0, state
     assert state.get('clipWriteGranted') is True and state.get('clipReadDenied') is True, state
     assert state.get('title') == 'Xueness' and state.get('nodeAccess') is False and state.get('workbenchReady') is True and state.get('body', 0) > 100, state
     print(f'PASS: packaged Electron workbench renders, {expected_plugins} plugins/{expected_features} features, isolated renderer and clean exit')

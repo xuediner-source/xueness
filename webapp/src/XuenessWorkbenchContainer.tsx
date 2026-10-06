@@ -170,6 +170,7 @@ const DirectoryBrowser = lazy(() => import("./plugins/files/DirectoryBrowser").t
 const MemoryPanel = lazy(() => import("./plugins/memory/MemoryPanel").then(module => ({ default: module.MemoryPanel })));
 const SettingsSections = lazy(() => import("./plugins/settings/SettingsSections").then(module => ({ default: module.SettingsSections })));
 const DesktopAbout = lazy(() => import("./plugins/desktop/DesktopAbout").then(module => ({ default: module.DesktopAbout })));
+const DesktopPermissionOnboarding = lazy(() => import("./plugins/onboarding/DesktopPermissionOnboarding").then(module => ({ default: module.DesktopPermissionOnboarding })));
 const XuenessSettingsView = lazy(() => import("./plugins/settings/XuenessSettingsView").then(module => ({ default: module.XuenessSettingsView })));
 const NetworkSettings = lazy(() => import("./plugins/network/NetworkSettings").then(module => ({ default: module.NetworkSettings })));
 const DesktopUpdates = lazy(() => import("./plugins/updates/DesktopUpdates").then(module => ({ default: module.DesktopUpdates })));
@@ -1770,7 +1771,7 @@ export function XuenessWorkbenchContainer() {
   }, [settingsSectionIds, settingsSection]);
   const inlineSettings = ["general", "appearance", "shortcuts", "agent"].includes(settingsSection);
   const settingsContent = () => {
-    if (settingsSection === "about") return <DesktopAbout enabled={isPluginEffective("desktop")} />;
+    if (settingsSection === "about") return <DesktopAbout enabled={isPluginEffective("desktop")} onboardingEnabled={isPluginEffective("onboarding")} />;
     if (settingsSection === "network") return <NetworkSettings enabled={isPluginEffective('network')} disabled={busy || settingsSaving || pluginCatalogLoading} />;
     if (settingsSection === 'updates') return <DesktopUpdates enabled={isPluginEffective('updates') && isPluginEffective('desktop')} />;
     if (settingsSection === "browser") return <BrowserSettings enabled={isPluginEffective("browser")} disabled={busy || settingsSaving || pluginCatalogLoading}
@@ -1947,6 +1948,9 @@ export function XuenessWorkbenchContainer() {
 
   return (
     <CodeDisplayProvider settings={settingsValues.codePreviewSettings} dark={String(settingsValues.theme) === "dark" || (settingsValues.theme === "system" && systemDark)}>
+    {isPluginEffective('onboarding') && isPluginEffective('desktop') && <Suspense fallback={null}>
+      <DesktopPermissionOnboarding enabled={isPluginEffective('onboarding')} desktopEnabled={isPluginEffective('desktop')} />
+    </Suspense>}
     <DesktopTrayBridge enabled={isPluginEffective('desktop')} sessionsEnabled={isPluginEffective('sessions')} busy={busy}
       activeId={activeId} locale={locale} dark={String(settingsValues.theme) === 'dark' || (settingsValues.theme === 'system' && systemDark)}
       onNew={startNewTask} onSession={selectTraySession} />

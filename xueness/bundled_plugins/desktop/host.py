@@ -38,6 +38,8 @@ def main(argv=None):
     bridge = DesktopBridge(sys.stdout)
     from ..updates.desktop_updates import bind_desktop
     bind_desktop(ctx, bridge)
+    from .permissions import bind_permissions
+    bind_permissions(ctx, bridge)
 
     def choose(initial_root):
         plugin_runtime.require_enabled(ctx['state_dir'], 'desktop')

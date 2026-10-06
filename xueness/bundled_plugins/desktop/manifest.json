@@ -17,7 +17,8 @@
   "modules": [
     "host",
     "bridge",
-    "windows_job"
+    "windows_job",
+    "permissions"
   ],
   "features": [
     {
@@ -54,6 +55,11 @@
       "id": "desktop.tray_navigation",
       "name": "托盘会话分组、快速打开、新建与反馈入口",
       "nameEn": "Tray chat groups, quick navigation, new chat and feedback"
+    },
+    {
+      "id": "desktop.permissions",
+      "name": "系统权限真实状态与受限原生授权入口",
+      "nameEn": "Actual system permission status and fixed native authorization actions"
     }
   ],
   "frontendModules": [
@@ -72,6 +78,7 @@
     "src/desktop-background.cjs",
     "src/tray-menu.cjs",
     "src/tray-menu-preload.cjs",
-    "src/loading.html"
+    "src/loading.html",
+    "src/permissions.cjs"
   ]
 }

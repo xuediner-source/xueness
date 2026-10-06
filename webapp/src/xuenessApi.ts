@@ -255,21 +255,23 @@ export async function get<T>(path: string, signal?: AbortSignal): Promise<T> {
 }
 
 /** 写操作统一取 CSRF token 后再发送（GET 因契约不同分开处理）。 */
-async function send<T>(method: "POST" | "PUT" | "PATCH" | "DELETE", path: string, body?: object): Promise<T> {
-  const token = await get<{ csrfToken: string }>("/api/csrf");
+async function send<T>(method: "POST" | "PUT" | "PATCH" | "DELETE", path: string, body?: object, signal?: AbortSignal): Promise<T> {
+  const token = await get<{ csrfToken: string }>("/api/csrf", signal);
+  signal?.throwIfAborted();
   const response = await fetch(path, {
     method,
     credentials: "same-origin",
     headers: { "Content-Type": "application/json", "X-CSRF-Token": token.csrfToken },
     body: body === undefined ? undefined : JSON.stringify(body),
+    ...(signal ? { signal } : {}),
   });
   const payload = await response.json();
   if (!response.ok) throw new Error(payload.error || `HTTP ${response.status}`);
   return payload as T;
 }
 
-export async function post<T>(path: string, body: object): Promise<T> {
-  return send<T>("POST", path, body);
+export async function post<T>(path: string, body: object, signal?: AbortSignal): Promise<T> {
+  return send<T>("POST", path, body, signal);
 }
 
 export async function cancelSubagentTask(sessionId: string, taskId: string): Promise<{ cancelled: true; taskId: string }> {

@@ -6,6 +6,11 @@ import sys
 from ... import providers_api
 
 
+def dispatch(method, parts, query, data, ctx):
+    from .desktop_setup import dispatch as dispatch_setup
+    return dispatch_setup(method, parts, data, ctx)
+
+
 def register_cli(commands):
     wizard = commands.add_parser('onboarding', help='configure the first local model profile')
     wizard.add_argument('--id', default=None)

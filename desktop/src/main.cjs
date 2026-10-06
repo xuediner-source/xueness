@@ -1,4 +1,4 @@
-const { app, BrowserWindow, Menu, dialog, shell, net, ipcMain, Tray, screen } = require('electron');
+const { app, BrowserWindow, Menu, dialog, shell, net, ipcMain, Tray, screen, systemPreferences } = require('electron');
 const { join, resolve } = require('node:path');
 const { existsSync, mkdirSync, writeFileSync } = require('node:fs');
 const { Backend } = require('./backend.cjs');
@@ -7,6 +7,7 @@ const { getWindowChromeOptions, installWindowThemeSync } = require('./window-chr
 const { createDesktopBackground, handleSecondInstance } = require('./desktop-background.cjs');
 const { UpdateCoordinator } = require('./update-coordinator.cjs');
 const { createElectronAssetRequest } = require('./electron-net-asset.cjs');
+const { createPermissionsHandler } = require('./permissions.cjs');
 const { autoUpdater } = require('electron-updater');
 
 let window, backend, updater, background, quitting = false;
@@ -50,6 +51,20 @@ async function start() {
     cwd: app.isPackaged ? data : root, data, node: process.execPath,
     playwright: app.isPackaged ? join(process.resourcesPath, 'browser-runtime/node_modules/playwright/index.mjs') : join(root, 'webapp/node_modules/playwright/index.mjs'),
     assets: app.isPackaged ? join(process.resourcesPath, 'webapp') : join(root, 'webapp/dist') });
+  const handlePermissionRequest = createPermissionsHandler({
+    platform: process.platform,
+    systemPreferences,
+    shell,
+    getOwnerWindow: () => window,
+    getBackend: () => backend,
+  });
+  const sendPermissionReply = message => {
+    try { if (message) backend.reply(message); } catch { /* The parent pipe may close during shutdown. */ }
+  };
+  backend.on('permissions', message => {
+    void handlePermissionRequest(message)
+      .then(sendPermissionReply, () => sendPermissionReply({ id: message.id, error: 'unavailable' }));
+  });
   updater = new UpdateCoordinator({ app, autoUpdater, shell, signedMac: false,
     assetRequestImpl: createElectronAssetRequest(net),
     isEnabled: () => updatePolicy,
@@ -127,19 +142,53 @@ async function start() {
     ...(process.platform !== 'darwin' ? [{ label: '文件', submenu: [{ role: 'quit' }] }] : []),
   ]));
   const desktopChrome = process.platform === 'darwin' || process.platform === 'win32';
-  await window.loadURL(desktopChrome ? `${origin}/?xuenessDesktop=1` : origin);
+  let smokePermissionPostRequests = 0;
+  if (process.env.XUENESS_DESKTOP_SMOKE_FILE) {
+    session.webRequest.onBeforeRequest({ urls: [`${origin}/*`] }, (details, callback) => {
+      if (details.requestMethod === 'POST' && new URL(details.url).pathname === '/api/desktop/permissions/request') {
+        smokePermissionPostRequests += 1;
+      }
+      callback({});
+    });
+  }
+  await window.loadURL(desktopChrome || process.env.XUENESS_DESKTOP_SMOKE_FILE
+    ? `${origin}/?xuenessDesktop=1` : origin);
   if (process.env.XUENESS_DESKTOP_SMOKE_FILE) {
     const result = await window.webContents.executeJavaScript(String.raw`(async () => {
+      const waitFor = async selector => {
+        for (let n=0;n<100;n++) { const element=document.querySelector(selector); if (element) return element;
+          await new Promise(resolve => setTimeout(resolve,100)); }
+        throw new Error('UI did not render: '+selector);
+      };
       for (let n=0;n<100 && !document.querySelector('[data-testid=xn-shell] [data-testid=xn-sidebar-action-new-task]');n++)
         await new Promise(resolve => setTimeout(resolve,100));
       const workbenchReady = !!document.querySelector('[data-testid=xn-shell] [data-testid=xn-sidebar-action-new-task]');
       if (!workbenchReady) throw new Error('Workbench did not render');
       const response = await fetch('/api/plugins'); const catalog = await response.json();
-      const waitFor = async selector => {
-        for (let n=0;n<100;n++) { const element=document.querySelector(selector); if (element) return element;
-          await new Promise(resolve => setTimeout(resolve,100)); }
-        throw new Error('Settings did not render: '+selector);
-      };
+      const permissionOnboarding = await waitFor('[data-testid=desktop-permission-onboarding]');
+      const onboardingSeen = !!permissionOnboarding;
+      (await waitFor('[data-testid=desktop-permission-onboarding-skip-all]')).click();
+      for (let n=0;n<100 && document.querySelector('[data-testid=desktop-permission-onboarding]');n++)
+        await new Promise(resolve => setTimeout(resolve,100));
+      const onboardingClosed = !document.querySelector('[data-testid=desktop-permission-onboarding]');
+      if (!onboardingClosed) throw new Error('Permission guide did not close after skipping');
+      const onboardingResponse = await fetch('/api/onboarding/desktop');
+      const onboardingState = await onboardingResponse.json();
+      const permissionResponse = await fetch('/api/desktop/permissions');
+      const permissionSnapshot = await permissionResponse.json();
+      const allowedPermissionStatuses = new Set(['granted','not-determined','denied','restricted','unknown','unsupported']);
+      const permissionSnapshotValid = permissionResponse.ok && typeof permissionSnapshot.platform === 'string'
+        && Array.isArray(permissionSnapshot.permissions) && permissionSnapshot.permissions.length === 4
+        && ['accessibility','screen','fullDisk','microphone'].every(id => {
+          const row = permissionSnapshot.permissions.find(item => item.id === id);
+          return !!row && allowedPermissionStatuses.has(row.status) && typeof row.canRequest === 'boolean';
+        });
+      const permissionRows = Array.isArray(permissionSnapshot.permissions) ? permissionSnapshot.permissions : [];
+      const fullDisk = permissionRows.find(item => item.id === 'fullDisk');
+      const screen = permissionRows.find(item => item.id === 'screen');
+      const permissionStatusHonest = permissionSnapshot.platform === 'darwin' ? fullDisk?.status === 'unknown'
+        : permissionSnapshot.platform === 'win32' ? fullDisk?.status === 'unsupported' && screen?.status === 'unsupported'
+          : permissionRows.every(item => item.status === 'unsupported') && permissionRows.length === 4;
       document.querySelector('button[aria-label="打开设置"]').click();
       (await waitFor('[data-testid=xn-settings-nav-plugins]')).click();
       await waitFor('[data-testid=xn-installed-plugin-desktop]');
@@ -156,12 +205,18 @@ async function start() {
       const clipRead = await navigator.permissions.query({ name: 'clipboard-read' });
       return { title: document.title, plugins: catalog.plugins.length,
         features: catalog.plugins.reduce((n,p) => n+p.features.length,0),
+        onboardingSeen, onboardingClosed,
+        onboardingCompleted: onboardingResponse.ok && onboardingState.completed === true,
+        permissionSnapshotValid, permissionStatusHonest, permissionPlatform: permissionSnapshot.platform,
+        permissionSnapshot,
         installedCards, aboutReady: !!about && !!version && !!aboutDataDirectory,
         aboutVersion: version, aboutDataDirectory, oldDesktopNavAbsent,
         nodeAccess: typeof window.require !== 'undefined', workbenchReady, body: document.body.textContent.length,
         clipWriteGranted: clipWrite.state === 'granted', clipReadDenied: clipRead.state === 'denied' };
     })()`);
-    writeFileSync(process.env.XUENESS_DESKTOP_SMOKE_FILE, JSON.stringify({ ...result, updates: updater.status() }));
+    writeFileSync(process.env.XUENESS_DESKTOP_SMOKE_FILE, JSON.stringify({ ...result,
+      permissionPostRequests: smokePermissionPostRequests, noPermissionRequests: smokePermissionPostRequests === 0,
+      updates: updater.status() }));
     app.quit();
   }
 }

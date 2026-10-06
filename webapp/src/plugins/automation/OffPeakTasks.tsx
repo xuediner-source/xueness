@@ -78,6 +78,7 @@ export function OffPeakTasks({ enabled = false }: { enabled?: boolean }): React.
   const [notices, setNotices] = useState<OffPeakNotice[]>([]);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  const [loading, setLoading] = useState(true);
   const seen = useRef<string[] | null>(null);
 
   const load = async () => {
@@ -101,6 +102,8 @@ export function OffPeakTasks({ enabled = false }: { enabled?: boolean }): React.
       setError("");
     } catch (cause) {
       setError(errorText(cause));
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -163,18 +166,24 @@ export function OffPeakTasks({ enabled = false }: { enabled?: boolean }): React.
 
   return (
     <section className="xn-automation__list-section" data-testid="offpeak-panel" aria-labelledby="xn-offpeak-title">
-      <div className="xn-automation__section-heading">
-        <h4 id="xn-offpeak-title">{tr("闲时任务")} <span>{queuedCount(rows)}</span></h4>
-        <p>
-          {tr("把不急的任务排到本地低峰窗口，由现有自动化调度在窗口内按队列依次执行；未批准的计划不会无人值守运行。")}
-          {" "}{tr("窗口")} {describeWindow(settings.window, tr)}
-          {settings.timezone ? ` · ${settings.timezone}` : ""}
-          {" · "}{windowOpen ? tr("窗口内") : nextWindowAt ? tf("下次开启：{0}", [formatTime(nextWindowAt)]) : tr("等待窗口")}
-        </p>
+      <div className="xn-automation__section-heading xn-automation__offpeak-heading">
+        <div className="xn-automation__offpeak-intro">
+          <div className="xn-automation__offpeak-title">
+            <h4 id="xn-offpeak-title">{tr("闲时任务")} <span>{queuedCount(rows)}</span></h4>
+            <span className={"xn-automation__window-status" + (windowOpen ? " is-open" : "")}>
+              <span aria-hidden="true" />{windowOpen ? tr("窗口内") : tr("等待窗口")}
+            </span>
+          </div>
+          <p>{tr("把不急的任务排到本地低峰窗口，由现有自动化调度在窗口内按队列依次执行；未批准的计划不会无人值守运行。")}</p>
+          <div className="xn-automation__window-summary" role="status">
+            <span><strong>{tr("窗口")}</strong>{describeWindow(settings.window, tr)}{settings.timezone ? " · " + settings.timezone : ""}</span>
+            {nextWindowAt && !windowOpen && <span><strong>{tr("下次开启")}</strong>{formatTime(nextWindowAt)}</span>}
+          </div>
+        </div>
         <div className="xn-automation__header-actions">
           <button type="button" disabled={busy} onClick={() => void load()}>{tr("刷新")}</button>
           <button type="button" disabled={busy} onClick={openSettings}>{tr("设置闲时窗口")}</button>
-          <button type="button" disabled={busy} onClick={() => setFormOpen((current) => !current)}>{tr("排入闲时任务")}</button>
+          <button type="button" className="xn-automation__button--primary" disabled={busy} onClick={() => setFormOpen((current) => !current)}>{tr("排入闲时任务")}</button>
         </div>
       </div>
 
@@ -183,7 +192,7 @@ export function OffPeakTasks({ enabled = false }: { enabled?: boolean }): React.
       {notices.length > 0 && (
         <div className="xn-automation__card" role="status" aria-live="polite">
           {notices.map((notice) => (
-            <p key={notice.attemptId}>
+            <p className="xn-automation__notice" key={notice.attemptId}>
               {noticeLabel(notice)}
               {notice.workflowId && <> {tr("工作流运行 ID：")}<code>{notice.workflowId}</code></>}
               {" "}{formatTime(notice.at)}
@@ -194,7 +203,7 @@ export function OffPeakTasks({ enabled = false }: { enabled?: boolean }): React.
       )}
 
       {settingsOpen && (
-        <form className="xn-automation__form" onSubmit={(event) => void saveWindow(event)}>
+        <form className="xn-automation__form xn-automation__offpeak-form" onSubmit={(event) => void saveWindow(event)}>
           <div className="xn-automation__form-header">
             <div><h4>{tr("闲时窗口")}</h4><p>{tr("窗口按本地时间计算，可以跨越午夜；这里的改动只影响排队的闲时任务。")}</p></div>
             <button type="button" onClick={() => setSettingsOpen(false)}>{tr("取消")}</button>
@@ -210,13 +219,13 @@ export function OffPeakTasks({ enabled = false }: { enabled?: boolean }): React.
             <small>{tr("留空时使用运行本程序的主机本地时间。")}</small>
           </label>
           <div className="xn-automation__form-actions">
-            <button type="submit" disabled={busy}>{tr("保存窗口")}</button>
+            <button type="submit" className="xn-automation__button--primary" disabled={busy}>{tr("保存窗口")}</button>
           </div>
         </form>
       )}
 
       {formOpen && (
-        <form className="xn-automation__form" onSubmit={(event) => void create(event)}>
+        <form className="xn-automation__form xn-automation__offpeak-form" onSubmit={(event) => void create(event)}>
           <div className="xn-automation__form-header">
             <div><h4>{tr("排入闲时任务")}</h4><p>{tr("任务说明会作为一次单步代理运行的提示词；运行时遵循当前工作区与审批边界。")}</p></div>
             <button type="button" onClick={() => setFormOpen(false)}>{tr("取消")}</button>
@@ -252,13 +261,18 @@ export function OffPeakTasks({ enabled = false }: { enabled?: boolean }): React.
             {tr("允许调用真实服务商（仍需主机开启）")}
           </label>
           <div className="xn-automation__form-actions">
-            <button type="submit" disabled={busy}>{tr("排入队列")}</button>
+            <button type="submit" className="xn-automation__button--primary" disabled={busy}>{tr("排入队列")}</button>
             <button type="button" disabled={busy} onClick={() => setFormOpen(false)}>{tr("取消")}</button>
           </div>
         </form>
       )}
 
-      {rows.length === 0 ? (
+      {loading && rows.length === 0 ? (
+        <div className="xn-automation__empty xn-automation__loading" role="status" aria-live="polite">
+          <span className="xn-automation__loading-mark" aria-hidden="true" />
+          <span>{tr("正在加载队列…")}</span>
+        </div>
+      ) : rows.length === 0 ? (
         <div className="xn-automation__empty">
           <h4>{tr("队列是空的")}</h4>
           <p>{tr("排入一个不急的任务，让它在本地低峰窗口里完成。")}</p>
@@ -351,17 +365,17 @@ export function OffPeakTaskCard({
           <button type="button" disabled={busy} onClick={onBeginApprove}>{tr("批准计划")}</button>
         )}
         {approving && (
-          <div className="xn-automation__checkbox">
+          <div className="xn-automation__approval-controls">
             <label>
               <input type="checkbox" checked={approveReal} onChange={(event) => onApproveReal(event.target.checked)} />
               {tr("同时允许调用真实服务商（仍需主机开启）")}
             </label>
-            <button type="button" disabled={busy} onClick={onApprove}>{tr("确认批准")}</button>
+            <button type="button" className="xn-automation__button--primary" disabled={busy} onClick={onApprove}>{tr("确认批准")}</button>
             <button type="button" disabled={busy} onClick={onCancelApprove}>{tr("取消")}</button>
           </div>
         )}
-        {!terminal && <button type="button" disabled={busy} onClick={onRun}>{tr("立即运行一次")}</button>}
-        {!terminal && <button type="button" disabled={busy} onClick={onCancel}>{tr("取消任务")}</button>}
+        {!terminal && <button type="button" className={row.approved ? "xn-automation__button--primary" : undefined} disabled={busy} onClick={onRun}>{tr("立即运行一次")}</button>}
+        {!terminal && <button type="button" className="xn-automation__button--quiet-danger" disabled={busy} onClick={onCancel}>{tr("取消任务")}</button>}
       </div>
     </article>
   );

@@ -1,5 +1,9 @@
 """Desktop metadata belongs to a feature plugin; hosting also provides recovery."""
 def dispatch(method, parts, query, data, ctx):
+    from .permissions import dispatch as dispatch_permissions
+    permission_result = dispatch_permissions(method, parts, query, data, ctx)
+    if permission_result is not None:
+        return permission_result
     if parts == ['api', 'desktop', 'tray']:
         if method != 'GET':
             return 405, {'error': 'method not allowed'}

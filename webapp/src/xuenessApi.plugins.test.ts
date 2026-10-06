@@ -1,10 +1,29 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { listPlugins, setPluginEnabled, installMarketplaceItem, createAutomation, runAutomation, approveAutomation, discoverProviderModels } from "./xuenessApi";
+import { listPlugins, setPluginEnabled, installMarketplaceItem, createAutomation, runAutomation, approveAutomation, discoverProviderModels, post } from "./xuenessApi";
 
 const response = (payload: unknown, status = 200): Response => new Response(JSON.stringify(payload), {
   status,
   headers: { "Content-Type": "application/json" },
+});
+
+test("aborting a mutation during CSRF retrieval prevents its side-effect POST", async () => {
+  const original = globalThis.fetch;
+  const controller = new AbortController();
+  const calls: string[] = [];
+  let finishCsrf!: (value: Response) => void;
+  try {
+    globalThis.fetch = (async (input, init) => {
+      calls.push(String(input));
+      assert.equal(init?.signal, controller.signal);
+      return new Promise<Response>(resolve => { finishCsrf = resolve; });
+    }) as typeof fetch;
+    const pending = post("/api/desktop/permissions/request", { permission: "microphone" }, controller.signal);
+    controller.abort();
+    finishCsrf(response({ csrfToken: "token" }));
+    await assert.rejects(pending, { name: "AbortError" });
+    assert.deepEqual(calls, ["/api/csrf"]);
+  } finally { globalThis.fetch = original; }
 });
 
 test("listPlugins uses a same-origin uncached GET and returns the catalog", async () => {

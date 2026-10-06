@@ -3,6 +3,7 @@ const { randomBytes } = require('node:crypto');
 const { createInterface } = require('node:readline');
 const { EventEmitter } = require('node:events');
 const { readyOrigin } = require('./security.cjs');
+const { isPermissionsRequest } = require('./permissions.cjs');
 
 const POSIX_GROUP_DRAIN_MS = 3000;
 const UPDATE_ACTIONS = new Set(['status', 'check', 'download', 'install', 'cancel']);
@@ -93,6 +94,8 @@ class Backend extends EventEmitter {
           } catch { fail(); }
         } else if (message.type === 'dialog' && typeof message.id === 'string' && /^[a-f0-9]{32}$/.test(message.id)) {
           this.emit('dialog', message);
+        } else if (isPermissionsRequest(message)) {
+          this.emit('permissions', message);
         } else if (isUpdateRequest(message)) {
           this.emit('update', message);
         } else if (message.type === 'update-policy' && typeof message.enabled === 'boolean'

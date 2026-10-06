@@ -13,6 +13,7 @@ module.exports = {
   ],
   mac: { target: ['dmg', 'zip'], category: 'public.app-category.developer-tools',
     icon: '../webapp/public/icon_512@2x.png', identity: null,
+    extendInfo: { NSMicrophoneUsageDescription: 'Xueness requests microphone access only when you choose Allow in its permission guide. No recording starts during setup.' },
     artifactName: 'Xueness-${version}-macos-${arch}.${ext}' },
   win: { target: ['nsis', 'zip'], icon: '../webapp/public/icon_512@2x.png',
     artifactName: 'Xueness-${version}-windows-${arch}-portable.${ext}' },

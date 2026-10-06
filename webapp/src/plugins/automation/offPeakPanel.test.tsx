@@ -77,7 +77,9 @@ test("off-peak panel opens the queue with its window and an explicit approval no
   assert.match(html, /00:00–08:00/);
   assert.match(html, /设置闲时窗口/);
   assert.match(html, /排入闲时任务/);
-  assert.match(html, /队列是空的/);
+  assert.match(html, /等待窗口/);
+  // Server rendering has not run the first list request yet.
+  assert.match(html, /正在加载队列/);
   // 表单默认收起，批准选项不能凭空出现在页面上。
   assert.doesNotMatch(html, /批准该不可变计划/);
 });

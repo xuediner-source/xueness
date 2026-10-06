@@ -3,7 +3,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { renderToStaticMarkup } from "react-dom/server";
 import { setLocale } from "../../i18n";
-import { AutomationCard, AutomationDetail } from "./index";
+import { AutomationCard, AutomationDetail, XuenessAutomationsPanel } from "./index";
 import type { AutomationRecord } from "../../xuenessApi";
 
 const record: AutomationRecord = {
@@ -38,6 +38,22 @@ test("automation card summarizes schedule, approval, workflow, and the latest ba
   assert.match(html, /Review/);
   assert.match(html, /启动失败/);
   assert.match(html, /查看详情和历史/);
+  assert.match(html, /xn-automation__button--primary/);
+  assert.match(html, /xn-automation__next-run/);
+});
+
+test("the overview provides loading feedback before the initial request resolves", () => {
+  const html = renderToStaticMarkup(<XuenessAutomationsPanel />);
+  assert.match(html, /data-testid="automation-overview"/);
+  assert.match(html, /role="status"/);
+  assert.match(html, /正在加载计划/);
+});
+
+test("the prominent card action follows approval state", () => {
+  const approved = { ...record, approved: true };
+  const html = renderToStaticMarkup(<AutomationCard record={approved} busy={false} onOpen={() => {}} onEdit={() => {}} onApprove={() => {}} onRun={() => {}} onDelete={() => {}} />);
+  assert.match(html, /class="xn-automation__button--primary"[^>]*>立即运行</);
+  assert.doesNotMatch(html, /class="xn-automation__button--primary"[^>]*>批准计划</);
 });
 
 test("automation detail shows the executable workflow model and retained run history", () => {

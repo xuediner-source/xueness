@@ -1,6 +1,8 @@
 # Xueness 插件架构与功能归属
 
-2026-10-06 交接修复与后续功能：当前完整目录为 **28 个插件、145 项登记功能**。新增 `sessions.answer_question_experimental`、`sessions.question_answer_ui` 和 `tools.call_budget_experimental`，全部归属可信插件，实验开关默认关闭。复核问题及新接口见[本轮说明](handoff-followup-2026-10-06.md)。下方按日期保留的记录和数量为当时状态。
+2026-10-06 自动化美化与首次权限引导：当前完整目录为 **28 个插件、147 项登记功能**。新增 `onboarding.desktop_permissions` 与 `desktop.permissions`；界面、进度保存和原生权限查询分别登记在已有插件内。见[本轮说明](desktop-onboarding-2026-10-06.md)。
+
+2026-10-06 交接修复与后续功能时为 **28 个插件、145 项登记功能**。新增 `sessions.answer_question_experimental`、`sessions.question_answer_ui` 和 `tools.call_budget_experimental`，全部归属可信插件，实验开关默认关闭。复核问题及新接口见[本轮说明](handoff-followup-2026-10-06.md)。下方按日期保留的记录和数量为当时状态。
 
 2026-10-06 设置整理：`desktop.status` 的前端从 `DesktopSettings.tsx` 替换为 `DesktopAbout.tsx`，在「关于 Xueness」显示实际版本与数据位置；删除独立桌面端设置导航。`updates.desktop` 的侧栏入口仅在确认有新版本时显示红点，隐藏时仍维持已有状态轮询，手动检查保留在更新设置页。沿用既有插件和功能 ID，目录总数不变。使用位置见[桌面端说明](xueness-desktop.md#客户端更新)。
 
@@ -48,6 +50,7 @@ flowchart LR
 | office | `OfficeDocumentRenderer.tsx` |
 | automation | `OffPeakTasks.tsx`、`automationModel.ts`、`index.tsx`、`offPeakModel.ts` |
 | browser | `BrowserSettings.tsx`、`DesktopBrowserImport.tsx` |
+| onboarding | `DesktopPermissionOnboarding.tsx` |
 | desktop | `DesktopAbout.tsx`、`DesktopTitlebar.tsx`、`DesktopTrayBridge.tsx`、`DesktopTrayMenu.tsx`、`tray-main.tsx` |
 | diagnostics | `index.tsx` |
 | extensions | `PluginProfilePicker.tsx`、`index.tsx` |
@@ -86,9 +89,9 @@ flowchart LR
 | browser | Playwright 持久页面、精确动作批准与只读无障碍树快照 | files | **关** |
 | remote | 命名 SSH 连接和字面 argv 执行 | — | **关** |
 | bots | Telegram 白名单收件箱和明确回复 | sessions | **关** |
-| onboarding | 隐藏密钥输入的配置向导 | providers | 开 |
+| onboarding | 隐藏密钥输入的配置向导、首次启动权限引导 | providers | 开 |
 | updates | 源仓库快进更新与桌面客户端更新 | — | 开 |
-| desktop | 原生窗口、目录选择、状态和标题栏 | — | 开 |
+| desktop | 原生窗口、目录选择、状态、标题栏与系统权限入口 | — | 开 |
 | tools | 工具干跑及每轮工具调用预算（实验开关默认关闭） | — | 开 |
 
 “开”指模块可用。Hooks/MCP/子代理等运行 opt-in 仍默认关闭；Web 写操作继续逐调用批准。禁用依赖不会改写其他开关，但会让依赖者 `effective=false`。重新启用依赖后，原来启用的依赖者恢复；显式关闭的插件保持关闭。文件禁用不影响独立 PTY，但 shell 或 sessions 禁用会关闭终端。
@@ -211,9 +214,9 @@ providers 的 CLI parser/handler 已迁入 `xueness/bundled_plugins/providers/op
 | browser | 受审批约束的页面导航与检查；页面无障碍树快照（role、name、可交互元素 ref、层级缩进，超限标注截断）；精确点击、输入与内存截图（冗余输出动作裁剪）；浏览器控制配置与生命周期清理；桌面 Chrome 资料选择、确认导入与持久浏览器环境检测 |
 | remote | 命名 SSH 主机连接配置；明确批准的远程 argv 执行；stdio JSON-RPC app-server 入口 |
 | bots | Telegram 白名单收件箱；明确批准的消息回复 |
-| onboarding | 模型与工作区初次配置向导；隐藏密钥输入与配置保存 |
+| onboarding | 模型与工作区初次配置向导；隐藏密钥输入与配置保存；首次启动三步系统权限引导及进度保存 |
 | updates | 源仓库版本与更新检查；明确批准的干净仓库快进更新；桌面客户端检查、下载、取消与安装控制 |
-| desktop | Windows/macOS 桌面宿主集成；原生目录选择与平台状态；集成标题栏与窗口控制；单实例、启动恢复与后台进程清理；Windows 系统托盘与关闭窗口后后台运行；托盘会话分组、快速打开、新建与反馈入口 |
+| desktop | Windows/macOS 桌面宿主集成；原生目录选择与平台状态；集成标题栏与窗口控制；单实例、启动恢复与后台进程清理；Windows 系统托盘与关闭窗口后后台运行；托盘会话分组、快速打开、新建与反馈入口；系统权限真实状态与固定原生授权入口 |
 | tools | 副作用工具调用的干跑预览（写/编辑给出目标路径与差异摘要，执行给出 argv 与工作目录；实验，默认关闭） |
 
 计划权限模式 `sessions.plan_mode` 在 build/edit/yolo 之外补上第四种模式。四种取值的单一来源是 `sessions/plan_mode.PERMISSION_MODES`（前端为 `plugins/sessions/permissionModes.ts`）；WebGate、专家工作流、app-server 与 CLI 都引用它。`plan` 下读取、搜索类工具照常，写/编辑/执行/网页工具一律拒绝，唯一例外是本会话专属的计划草稿 `<状态目录>/plan-drafts/<会话 id>.md`（在状态目录内按会话划分，不在工作区内）。草稿路径布局与中英双语拒绝文案都由 `sessions/plan_mode.py` 决定，WebGate 与 CLI 使用的内核 Gate 只按该插件给出的凭据精确匹配放行一次写入，files 的写/编辑解析也先问 Gate，因此工作区 jail 未被放宽、没有新增内建工具。拒绝结果带 `plan_mode_denied`，不会伪装成可批准的等待项；sessions 禁用或依赖不可用时 `plan` 值被拒绝，从 plan 切回 build/edit/yolo 沿用既有 `permission_mode_history` 审计。内核 `mode=plan` 仍是更硬的天花，连草稿一并拒绝，也压过 `permission_mode=yolo`。CLI `run`/`chat` 增加 `--permission-mode build|edit|yolo|plan`：plan 映射为只读加草稿，yolo 仍不自动放行远程 SSH，旧的 `--allow-*` 与 `--mode` 保持兼容；省略该参数时只继承已保存的 plan，不把已保存的 edit/yolo 静默套到 CLI 上。聊天 `/mode plan` 继续设置内核天花。完整格子见 `docs/xueness-permission-modes.md`。
@@ -296,7 +299,7 @@ sessions 的时间线展示自然回复和 Markdown，识别协议封装后显�
 - `activate(scope, ctx)` 是 **reconcile 钩子**：每次请求与开关边界的 `sync_services` 都会对仍 effective 的插件再跑一次 activate，由 `ensure` 保证真实资源只获取一次。这样保留了既有运行语义——更新关闭准入时自动化不启动定时器、重新开放后的下一次 sync 才创建；宿主把 `ctx['automation_service']` 置空（桌面安装前）后，下一轮 sync 重新获取；`deactivate(pid)` 只停一次而插件仍启用时，下一轮同样会自动重建，不需要操作员重新开关。
 - `ScopeRegistry` 按 manifest 的 `dependencies` 与 `inject → provides` 边做拓扑定点排序，provider 先于注入者 activate；离开 effective 集合的插件逆序 dispose，依赖级联因此连带失效。
 
-manifest 新增三个可选数据字段：`provides`、`inject`（点分服务名，如 `terminal.broker`）与 `httpFamilies`（`/api` 之下的一段式模式，`*` 恰好匹配一段，如 `sessions/*/git`）。当前 3 个插件 provide 服务，24 份 manifest 登记 http 家族（shell、office、onboarding 没有 `/api` 家族故留空，字段是可选的）；`inject` 尚无 bundled 使用方，跨插件取服务仍走既有显式 entrypoint 调用，机制由回归覆盖，等有真实需求时不必再改内核。`plugin_contract.lifecycle_field_errors` 与 `tools/check_plugin_architecture.py` 共同校验：字段必须是不重复的字符串数组，服务名与路由段格式合法，`*` 不能是首段；跨包拒绝同一 http 家族或同一服务出现两个属主、同深度可重叠的模式分属两插件、声明 `provides` 却没有 `def activate(scope, ctx)`，以及 `inject` 指向无人提供的服务。
+manifest 新增三个可选数据字段：`provides`、`inject`（点分服务名，如 `terminal.broker`）与 `httpFamilies`（`/api` 之下的一段式模式，`*` 恰好匹配一段，如 `sessions/*/git`）。当前 3 个插件 provide 服务，24 份 manifest 登记 http 家族（shell、office、onboarding 在该历史批次尚无 `/api` 家族故留空，字段是可选的）；`inject` 尚无 bundled 使用方，跨插件取服务仍走既有显式 entrypoint 调用，机制由回归覆盖，等有真实需求时不必再改内核。`plugin_contract.lifecycle_field_errors` 与 `tools/check_plugin_architecture.py` 共同校验：字段必须是不重复的字符串数组，服务名与路由段格式合法，`*` 不能是首段；跨包拒绝同一 http 家族或同一服务出现两个属主、同深度可重叠的模式分属两插件、声明 `provides` 却没有 `def activate(scope, ctx)`，以及 `inject` 指向无人提供的服务。
 
 `route_owner` 不再持有硬编码 family→插件映射，改为按 `httpFamilies` 建立最深匹配索引，结果与原映射在所有 `/api/...` 路径上逐项一致（用 3688 条生成路径对照旧实现验证，含 `resources/<kind>`、`plugins/marketplace`、`sessions/*/git` 等嵌套归属）。`plugin_runtime.sync_services` 只做 native policy sync 加一次 `ScopeRegistry.sync()`；`ctx['terminals']`、`ctx['automation_service']` 等外部可见键保持不变，但写入与清空由对应插件负责。Web 服务器 `server_close` 改为 dispose 作用域，因此停服释放的是插件真正获取过的资源，而不再重复一遍启停条件；浏览器 worker 从「每次请求边界扫一遍」改为「持有者释放时清理」，CLI 禁用仍走 `on_disabled`，进程退出仍保留 `atexit` 兜底。
 

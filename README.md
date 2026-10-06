@@ -14,7 +14,7 @@
     <a href="https://github.com/xuediner-source/xueness/actions/workflows/desktop-build.yml"><img src="https://github.com/xuediner-source/xueness/actions/workflows/desktop-build.yml/badge.svg?branch=main" alt="Desktop build"></a>
     <a href="https://github.com/xuediner-source/xueness/blob/main/LICENSE"><img src="https://img.shields.io/github/license/xuediner-source/xueness?label=license" alt="Apache 2.0 license"></a>
     <a href="https://github.com/xuediner-source/xueness/releases/latest"><img src="https://img.shields.io/github/v/release/xuediner-source/xueness?label=release" alt="Latest release"></a>
-    <img src="https://img.shields.io/badge/plugins-28%20%7C%20145-4263eb" alt="28 plugins and 145 features">
+    <img src="https://img.shields.io/badge/plugins-28%20%7C%20147-4263eb" alt="28 plugins and 147 features">
   </p>
 </div>
 
@@ -33,7 +33,7 @@ Xueness 面向个人本地开发，提供可从终端、浏览器或 Windows/mac
 
 [打开 GitHub Releases](https://github.com/xuediner-source/xueness/releases/latest)，选择与系统和处理器架构匹配的安装包。版本页面会列出桌面产物及 `SHA256SUMS.txt` 校验文件。
 
-本轮源码与桌面界面更新见 [2026-10-06 Mac arm64 预览版](https://github.com/xuediner-source/xueness/releases/tag/mac-preview-20261006)：28 个插件、145 项登记功能，包含设置整理、会话长列表优化及默认关闭的实验能力。预览应用的版本号仍为 0.1.4，提供 Apple Silicon 应用 ZIP；稳定版下载和自动更新仍使用下表所列正式产物。
+最新源码与桌面界面更新见 [2026-10-06 Mac arm64 权限引导预览版](https://github.com/xuediner-source/xueness/releases/tag/mac-preview-20261006-permissions)：28 个插件、147 项登记功能，包含自动化与扩展市场界面优化、可跳过的首次权限引导，以及授权后自动刷新。预览应用的版本号仍为 0.1.4，提供 Apple Silicon 应用 ZIP；稳定版下载和自动更新仍使用下表所列正式产物。权限使用及验收记录见[实现说明](docs/desktop-onboarding-2026-10-06.md)。
 
 | 系统 | 安装程序 / 磁盘映像 | 便携版 / 应用 ZIP |
 | --- | --- | --- |
@@ -46,7 +46,7 @@ Xueness 面向个人本地开发，提供可从终端、浏览器或 Windows/mac
 ## 功能概览
 
 - **本地小模型配置。** 选择「本地轻量」运行档，细调提示、工具集合、上下文与输出预算、采样和协议选项。资源面板报告运行 Xueness 的机器 CPU、内存及进程状态；模型输出面板展示请求阶段、工具调用和服务实际返回的用量。缺少的 Token 或显存数据会标为不可用，不会估算成真实测量值。
-- **28 个可信插件，145 项登记功能。** 会话、工作区文件、模型、Shell、Git、终端、工作流、记忆、Hooks、MCP、浏览器、远程连接、渠道、自动化、诊断、Office 预览、工具执行策略等能力都有明确归属。插件管理页显示完整目录与依赖状态，CLI 也可查看和更改插件开关。会话支持运行中排队追加消息，桌面端支持确认导入 Chrome 资料到独立浏览器目录。
+- **28 个可信插件，147 项登记功能。** 会话、工作区文件、模型、Shell、Git、终端、工作流、记忆、Hooks、MCP、浏览器、远程连接、渠道、自动化、诊断、Office 预览、工具执行策略等能力都有明确归属。插件管理页显示完整目录与依赖状态，CLI 也可查看和更改插件开关。会话支持运行中排队追加消息，桌面端支持确认导入 Chrome 资料到独立浏览器目录。
 - **一键切换插件组合档位。** 「设置 → 供应商」顶部选择 minimal / lightweight / standard 档位，或在 CLI 运行 `xueness plugins profile list|show|apply`；档位只是一张插件 ID 到开关的数据清单，你自己的显式开关始终优先，切换不会改动工作区、审批或权限模式。市场清单可用 `xueness plugins validate <路径>` 只读校验，`xueness plugins update <id>|--all` 仅从既有可信目录原子升级已通过校验的清单。
 - **给会话设一条持续目标。** 开始新任务时在 Composer 的「+」菜单选择「添加为目标」，或用 CLI `--target` 设定；目标跨轮生效并每轮以短提示注入模型，会话标题下方一行徽标可查看或清除。运行结束时主机核对回答是否明确声明达成，未声明则进入需要复核状态。核对是确定性的规则判断，不额外调用模型，也不替用户证明目标真的完成。该能力归属规划插件，关闭后入口、注入与核对一并停止。
 - **三种入口，共用运行时。** 使用 Agent CLI 运行会话，通过 loopback Web 工作台查看和管理任务，或安装 Windows/macOS 桌面应用。桌面包自带运行时，跨平台差异留在对应插件适配中。
