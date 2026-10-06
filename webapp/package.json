@@ -9,7 +9,7 @@
     "preview": "vite preview",
     "typecheck": "tsc --noEmit -p tsconfig.typecheck.json",
     "test": "node run-tests.mjs",
-    "test:browser": "node verify-plugin-disclosures.mjs && node verify-workspace-task-interactions.mjs",
+    "test:browser": "node verify-plugin-disclosures.mjs && node verify-workspace-task-interactions.mjs && node verify-timeline-virtualization.mjs",
     "test:browser:composer": "node verify-composer-interactions.mjs",
     "check:plugins": "python3 ../tools/check_plugin_architecture.py",
     "check:design": "node ../tools/check_frontend_design.mjs",

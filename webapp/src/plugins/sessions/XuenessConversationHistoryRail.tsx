@@ -146,10 +146,13 @@ export function XuenessConversationHistoryRail({ rows, timelineRootRef, requestR
     const root = timelineRootRef.current;
     const scroller = root ? findConversationScroller(root) : null;
     let target = root?.querySelector<HTMLElement>(`[data-history-user-seq="${seq}"]`);
+    let revealedRemotely = false;
     if (!target && requestReveal) {
       // 虚拟化时间线：先把窗口展开到目标消息（同步重渲染），再定位滚动。
+      // 跨窗口的远距离跳转用瞬时滚动：平滑动画会被窗口补偿的定位写入打断。
       requestReveal(seq);
       target = root?.querySelector<HTMLElement>(`[data-history-user-seq="${seq}"]`);
+      revealedRemotely = true;
     }
     if (!scroller || !target) return;
     const nextTop = getConversationHistoryScrollTop(
@@ -158,7 +161,8 @@ export function XuenessConversationHistoryRail({ rows, timelineRootRef, requestR
       target.getBoundingClientRect().top,
     );
     const reduceMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
-    scroller.scrollTo({ top: nextTop, behavior: reduceMotion ? "auto" : "smooth" });
+    const behavior: ScrollBehavior = reduceMotion || revealedRemotely ? "auto" : "smooth";
+    scroller.scrollTo({ top: nextTop, behavior });
     setActiveSeq(seq);
     setRovingSeq(seq);
   };
