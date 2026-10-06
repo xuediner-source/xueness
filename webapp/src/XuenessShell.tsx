@@ -120,11 +120,23 @@ export function Shell({
     if (!narrow || !sidebarOpen) return;
     const aside = asideRef.current;
     const focusable = () => Array.from(aside?.querySelectorAll<HTMLElement>("a[href], button:not(:disabled), input:not(:disabled), select:not(:disabled), textarea:not(:disabled), [tabindex]:not([tabindex='-1'])") ?? []).filter(node => node.getAttribute("aria-hidden") !== "true" && node.getClientRects().length);
+    const isOwnedSelectPortal = (target: EventTarget | null) => {
+      if (!(target instanceof Element) || !aside) return false;
+      const content = target.closest<HTMLElement>(".xn-select-menu[data-xn-select-portal-owner]");
+      const owner = content?.dataset.xnSelectPortalOwner;
+      if (!owner) return false;
+      return Array.from(aside.querySelectorAll<HTMLElement>("[data-xn-select-portal-trigger]"))
+        .some(trigger => trigger.dataset.xnSelectPortalTrigger === owner);
+    };
     const activeModalOutsideDrawer = () => Array.from(document.querySelectorAll<HTMLElement>('[aria-modal="true"]'))
       .filter(activeModal => activeModal !== aside && !aside?.contains(activeModal))
       .at(-1) ?? null;
     (focusable()[0] ?? aside)?.focus();
     const key = (event: KeyboardEvent) => {
+      // Nested controls such as Radix Select own their keyboard interaction.
+      // Its portaled listbox is allowed only when its explicit owner trigger is
+      // inside this drawer; unrelated body portals remain outside the scope.
+      if (event.defaultPrevented || isOwnedSelectPortal(document.activeElement)) return;
       const outsideModal = activeModalOutsideDrawer();
       if (outsideModal?.contains(document.activeElement)) return;
       if (shouldCloseNarrowSidebarOnEscape(event)) { event.preventDefault(); closeDrawer(); return; }
@@ -139,6 +151,7 @@ export function Shell({
     };
     const keepFocusInside = (event: FocusEvent) => {
       if (aside?.contains(event.target as Node)) return;
+      if (isOwnedSelectPortal(event.target)) return;
       if (activeModalOutsideDrawer()?.contains(event.target as Node)) return;
       (focusable()[0] ?? aside)?.focus({ preventScroll: true });
     };

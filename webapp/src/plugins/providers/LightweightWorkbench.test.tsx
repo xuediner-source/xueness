@@ -451,6 +451,21 @@ test('LightweightTimeline: 思考过程默认折叠，流式中显示微光指�
   assert.match(html, /用户正在打招呼，需要礼貌回复。/);
 });
 
+test('LightweightTimeline: 流式 Markdown 使用统一提交门并延后代码高亮', () => {
+  const text = '说明\n\n```ts\nconst ready = true;\n```\n';
+  const streamingHtml = renderToStaticMarkup(<LightweightTimeline rows={[
+    { kind: 'assistant', seq: 8, turnId: 'stream-8', text, streaming: true },
+  ]} />);
+  assert.match(streamingHtml, /data-highlight="after-stream"/);
+  assert.match(streamingHtml, /data-highlight-timing="after-stream"/);
+
+  const settledHtml = renderToStaticMarkup(<LightweightTimeline rows={[
+    { kind: 'assistant', seq: 8, turnId: 'stream-8', text, streaming: false },
+  ]} />);
+  assert.match(settledHtml, /data-highlight="on-visible"/);
+  assert.doesNotMatch(settledHtml, /data-highlight="after-stream"/);
+});
+
 // -- 极简状态行 (Pi Footer) ----------------------------------------------------
 
 test('extractReportedUsage: 支持数组与单对象格式，只累加真实报告用量，缺失或非法返回 null', () => {
@@ -623,12 +638,18 @@ test('evaluateLightweightComposerKey: 尊重用户的发送快捷键设置', () 
   // 默认 Enter 发送
   assert.equal(evaluateLightweightComposerKey({ key: 'Enter' }, { ...baseCtx, sendShortcut: 'enter' }), 'send');
   assert.equal(evaluateLightweightComposerKey({ key: 'Enter', shiftKey: true }, { ...baseCtx, sendShortcut: 'enter' }), 'newline');
+  assert.equal(evaluateLightweightComposerKey({ key: 'Enter', altKey: true }, { ...baseCtx, sendShortcut: 'enter' }), null,
+    'Alt+Enter 保留给 textarea/平台，不应触发发送');
+  assert.equal(evaluateLightweightComposerKey({ key: 'Enter', ctrlKey: true, altKey: true }, { ...baseCtx, sendShortcut: 'enter' }), null,
+    '带 Alt 的组合键不能被普通 Enter 发送策略截获');
 
   // ⌘/Ctrl+Enter 发送时，裸 Enter 不发送（与标准档 composerEnterIntent 一致）
   assert.equal(evaluateLightweightComposerKey({ key: 'Enter' }, { ...baseCtx, sendShortcut: 'mod-enter' }), null);
   assert.equal(evaluateLightweightComposerKey({ key: 'Enter', shiftKey: true }, { ...baseCtx, sendShortcut: 'mod-enter' }), null);
   assert.equal(evaluateLightweightComposerKey({ key: 'Enter', metaKey: true }, { ...baseCtx, sendShortcut: 'mod-enter' }), 'send');
   assert.equal(evaluateLightweightComposerKey({ key: 'Enter', ctrlKey: true }, { ...baseCtx, sendShortcut: 'mod-enter' }), 'send');
+  assert.equal(evaluateLightweightComposerKey({ key: 'Enter', ctrlKey: true, altKey: true }, { ...baseCtx, sendShortcut: 'mod-enter' }), null,
+    'Alt+Ctrl+Enter 不能被 Mod+Enter 发送策略截获');
   assert.equal(
     evaluateLightweightComposerKey({ key: 'Enter', ctrlKey: true, shiftKey: true }, { ...baseCtx, sendShortcut: 'mod-enter' }),
     null,

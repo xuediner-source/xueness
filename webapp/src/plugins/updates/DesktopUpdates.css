@@ -9,8 +9,7 @@
 .xn-update-indicator { position: relative; flex: 0 0 auto; border: 0; border-radius: 7px; background: transparent; color: var(--fg-muted); cursor: pointer; }
 .xn-update-indicator:hover { background: var(--bg-hover); color: var(--fg); }
 .xn-update-indicator:focus-visible { outline: 2px solid var(--border-focus); outline-offset: 2px; }
-.xn-update-indicator__dot { position: absolute; top: 5px; right: 4px; width: 5px; height: 5px; border-radius: 50%; background: var(--ok); }
-.xn-update-indicator[data-error] .xn-update-indicator__dot { background: var(--warn); }
+.xn-update-indicator__dot { position: absolute; top: 5px; right: 4px; width: 5px; height: 5px; border-radius: 50%; background: var(--danger, #c34444); }
 .xn-update-indicator__spinner { animation: xn-update-spin 1s linear infinite; }
 @keyframes xn-update-spin { to { transform: rotate(360deg); } }
 @media (prefers-reduced-motion: reduce) { .xn-update-indicator__spinner { animation: none; } }

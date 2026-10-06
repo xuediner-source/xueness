@@ -124,7 +124,7 @@ class ArchitectureTests(unittest.TestCase):
         root = self.fixture()
         self.rewrite(root, 'usage', lambda m: m.update(
             toolEvents={'events': ['before_tool_execution', 'after_tool_execution',
-                                   'after_tool_authorization'],
+                                   'after_tool_authorization', 'before_tool_effect'],
                         'priority': 10}))
         self.assertEqual(guard.audit(root), [])
         for bad in ([],

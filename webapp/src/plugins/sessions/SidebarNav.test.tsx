@@ -130,6 +130,8 @@ test("SidebarNav: 有 onSelect 时渲染为 listbox，当前行 aria-selected，
   const activeOption = html.match(/<button[^>]*data-testid="xn-sidebar-item-task-1"[^>]*>/)?.[0] ?? "";
   assert.match(activeOption, /role="option"/);
   assert.match(activeOption, /aria-selected="true"/);
+  assert.match(activeOption, /aria-posinset="1"/);
+  assert.match(activeOption, /aria-setsize="3"/);
   assert.match(activeOption, /aria-current="true"/);
   assert.match(activeOption, /tabindex="-1"/, "listbox 模式下选项不再是 tab 停靠点");
   assert.match(activeOption, /data-cursor="true"/, "光标初始停在当前选中行上");
@@ -155,6 +157,8 @@ test("SidebarNav: 行属性比较器按值命中 memo——外层重渲染不重
   const base = {
     item: { id: "task-1", label: "任务一", active: true, status: "running", pinned: false, timeLabel: "2 分钟前" },
     optionId: "nav-task-1",
+    optionPosition: 1,
+    optionSetSize: 4,
     listbox: true,
     cursor: false,
     onSelect: stable,
@@ -170,6 +174,7 @@ test("SidebarNav: 行属性比较器按值命中 memo——外层重渲染不重
   assert.equal(sidebarNavItemPropsEqual(base, { ...base, item: { ...base.item, timeLabel: "3 分钟前" } }), false);
   assert.equal(sidebarNavItemPropsEqual(base, { ...base, cursor: true }), false);
   assert.equal(sidebarNavItemPropsEqual(base, { ...base, optionId: "nav-task-2" }), false);
+  assert.equal(sidebarNavItemPropsEqual(base, { ...base, optionPosition: 2 }), false);
   assert.equal(sidebarNavItemPropsEqual(base, { ...base, onSelect: () => {} }), false);
   assert.equal(sidebarNavItemPropsEqual(base, { ...base, onDelete: undefined }), false);
 });

@@ -193,8 +193,10 @@ class PreviewShapeTests(_Fixture):
         preview = result['preview']
         self.assertEqual(preview['action'], 'write')
         self.assertEqual(preview['path'], 'new.txt')
-        self.assertEqual(Path(preview['target']), self.root / 'new.txt')
+        self.assertEqual(Path(preview['target']), (self.root / 'new.txt').resolve())
         self.assertTrue(preview['creates_new_file'])
+        self.assertFalse(preview['file_exists'])
+        self.assertIsNone(preview['readable'])
         self.assertIsNone(preview['previous_chars'])
         self.assertEqual(preview['content_chars'], 8)
         self.assertEqual(preview['content_preview'], 'one\ntwo\n')
@@ -224,6 +226,74 @@ class PreviewShapeTests(_Fixture):
         self.assertLessEqual(len(preview['diff']['excerpt']), dry_run.MAX_DIFF_CHARS)
         self.assertTrue(preview['diff']['truncated'])
         self.assertFalse((self.root / 'big.txt').exists())
+
+    def test_existing_unreadable_file_is_not_reported_as_new_or_written(self):
+        self.set_flag(True)
+        target = self.root / 'note.txt'
+        original = target.read_bytes()
+        original_open = Path.open
+        target_resolved = target.resolve()
+
+        def deny_target(path, *args, **kwargs):
+            if path.resolve() == target_resolved:
+                raise PermissionError('fixture unreadable')
+            return original_open(path, *args, **kwargs)
+
+        with patch.object(Path, 'open', deny_target):
+            result = self.call('write', {'path': 'note.txt', 'content': 'replacement'},
+                               self.gate())
+        self.assertTrue(result['dry_run'], result)
+        self.assertTrue(result['preview']['preview_unavailable'], result)
+        self.assertEqual(result['preview']['reason'], 'cannot read existing target')
+        self.assertTrue(result['preview']['file_exists'])
+        self.assertFalse(result['preview']['readable'])
+        self.assertFalse(result['preview'].get('creates_new_file', False), result)
+        self.assertEqual(target.read_bytes(), original)
+
+    def test_large_existing_file_is_refused_before_unbounded_read(self):
+        self.set_flag(True)
+        target = self.root / 'large.txt'
+        target.write_bytes(b'x' * (dry_run.MAX_SOURCE_BYTES + 1))
+        result = self.call('edit', {'path': 'large.txt', 'old': 'x', 'new': 'y'},
+                           self.gate())
+        self.assertTrue(result['dry_run'], result)
+        self.assertTrue(result['preview']['preview_unavailable'], result)
+        self.assertEqual(result['preview']['reason'], 'target exceeds preview size limit')
+        self.assertTrue(result['preview']['file_exists'])
+        self.assertFalse(result['preview']['readable'])
+        self.assertEqual(target.stat().st_size, dry_run.MAX_SOURCE_BYTES + 1)
+
+    def test_binary_existing_file_is_distinguished_from_a_missing_file(self):
+        self.set_flag(True)
+        target = self.root / 'binary.dat'
+        target.write_bytes(b'\xff\xfe\x00')
+        result = self.call('write', {'path': 'binary.dat', 'content': 'replacement'},
+                           self.gate())
+        preview = result['preview']
+        self.assertTrue(preview['preview_unavailable'], result)
+        self.assertEqual(preview['reason'], 'cannot read existing target')
+        self.assertTrue(preview['file_exists'])
+        self.assertFalse(preview['readable'])
+        self.assertEqual(target.read_bytes(), b'\xff\xfe\x00')
+
+    def test_diff_refuses_to_compare_inputs_over_line_or_character_bound(self):
+        self.set_flag(True)
+        target = self.root / 'many-lines.txt'
+        count = dry_run.MAX_DIFF_COMPARE_LINES // 2 + 1
+        old = '\n'.join('old-%04d' % index for index in range(count))
+        target.write_text(old, encoding='utf-8')
+        replacement = '\n'.join('new-%04d' % index for index in range(count))
+        result = self.call('write', {'path': target.name, 'content': replacement},
+                           self.gate())
+        preview = result['preview']
+        self.assertTrue(preview['preview_unavailable'], result)
+        self.assertEqual(preview['reason'], 'diff exceeds comparison limit')
+        self.assertTrue(preview['file_exists'])
+        self.assertTrue(preview['readable'])
+        self.assertEqual(target.read_text(encoding='utf-8'), old)
+        with self.assertRaises(dry_run.PreviewUnavailable):
+            dry_run._diff('a' * (dry_run.MAX_DIFF_COMPARE_CHARS // 2 + 1),
+                          'b' * (dry_run.MAX_DIFF_COMPARE_CHARS // 2 + 1))
 
     def test_exec_previews_the_exact_argv_without_running_it(self):
         self.set_flag(True)
@@ -485,6 +555,17 @@ class IsolationTests(_Fixture):
         self.assertTrue(previewed['dry_run'], previewed)
         self.assertFalse((self.root / 'shown.txt').exists())
 
+    def test_sessionless_state_bound_call_still_observes_dry_run(self):
+        from xueness.core import execute
+        self.set_flag(True)
+        gate = Gate(self.root, allow_network=True)
+        with patch('xueness.bundled_plugins.network.tooling.fetch') as fetch:
+            result = execute(self.root, gate, 'web_fetch',
+                             {'url': 'https://example.invalid/no-call'},
+                             session=None, state_dir=self.state)
+        self.assertEqual(result['error_code'], 'plugin_denied', result)
+        fetch.assert_not_called()
+
     def test_manifest_declares_the_feature_as_data(self):
         manifest = json.loads((Path(dry_run.__file__).parent / 'manifest.json')
                               .read_text(encoding='utf-8'))
@@ -493,7 +574,11 @@ class IsolationTests(_Fixture):
         self.assertTrue(features['tools.dry_run_experimental']['name'].startswith('工具'))
         self.assertIn('off by default', features['tools.dry_run_experimental']['nameEn'])
         self.assertEqual(manifest['defaultEnabled'], True)
-        self.assertEqual(manifest['toolEvents']['events'], ['before_tool_execution'])
+        self.assertEqual(manifest['toolEvents']['events'],
+                         ['before_tool_execution', 'before_tool_effect',
+                          'after_tool_execution'])
+        self.assertIn('tools.call_budget_experimental',
+                      {row['id'] for row in manifest['features']})
         self.assertEqual(manifest['tools'], [])
         # Manifests carry no executable code: no module, command or path strings.
         self.assertNotIn('dry_run.py', json.dumps(manifest))

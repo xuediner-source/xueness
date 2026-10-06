@@ -231,11 +231,11 @@ def audit(root: Path) -> list[str]:
                             or len(events) != len(set(events))
                             or any(not isinstance(item, str) or item not in (
                                 'before_tool_execution', 'after_tool_execution',
-                                'after_tool_authorization')
+                                'after_tool_authorization', 'before_tool_effect')
                                 for item in events)):
                         errors.append(pid + ': toolEvents events must list unique names from '
                                       'before_tool_execution, after_tool_execution, '
-                                      'after_tool_authorization')
+                                      'after_tool_authorization, before_tool_effect')
                     priority = tool_events.get('priority')
                     if priority is not None and (type(priority) is not int
                                                  or not -1000 <= priority <= 1000):

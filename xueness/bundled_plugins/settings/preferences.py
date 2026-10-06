@@ -91,10 +91,12 @@ def validate(section,values):
                     'toolGroupingExploreEnabled', 'toolGroupingTerminalEnabled',
                     'toolGroupingChangesEnabled', 'taskAutoArchiveEnabled',
                     'messageStreamShowReasoning', 'memoryEnabled',
-                    'sessionsEventsCursorEnabled',
+                    'sessionsEventsCursorEnabled', 'sessionsAnswerQuestionEnabled', 'toolsCallBudgetEnabled',
                     'toolsDryRunEnabled'):
             if key in values and type(values[key]) is not bool:
                 raise ValueError(f'{key} must be boolean')
+        if 'toolsCallBudgetLimit' in values and (type(values['toolsCallBudgetLimit']) is not int or not 1 <= values['toolsCallBudgetLimit'] <= 10000):
+            raise ValueError('toolsCallBudgetLimit must be an integer from 1 to 10000')
         if ('taskAutoArchiveOlderThanDays' in values
                 and (type(values['taskAutoArchiveOlderThanDays']) is not int
                      or values['taskAutoArchiveOlderThanDays'] not in TASK_AUTO_ARCHIVE_DAY_OPTIONS)):

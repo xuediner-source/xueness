@@ -3,23 +3,23 @@
 Experimental feature ``sessions.events_cursor``: with settings key
 ``general.sessionsEventsCursorEnabled`` (default off) the legacy endpoint
 ``GET /api/sessions/<sid>/events`` additionally accepts ``cursor`` (alias
-``since``) and answers with an incremental window plus ``next_cursor``.
-Clients that send no cursor parameter keep the unchanged legacy response,
-so existing callers never see a difference.
+``since``). Cursor mode returns a numeric diagnostic ``next_cursor`` and a
+revision-bound ``next_cursor_token`` for safe continuation. Clients that send
+no cursor parameter keep the unchanged legacy response.
 
 Paging semantics (events.v1 semantics where they apply, documented where
 they differ):
 
-* The legacy derivation is deterministic, so it is numbered with a dense
-  ``seq`` from 1 and a window returns ``seq > cursor`` in order, up to
-  ``limit``. ``next_cursor`` is the last delivered ``seq`` (or the request
-  cursor when nothing was new); ``has_more`` says whether another page is
-  already waiting.
-* Journal growth appends events, but compaction or a cleared pending
-  question can shrink and renumber the list. A cursor beyond the current
-  head is therefore rejected with 400 instead of silently answering an
-  empty page: the client resyncs from 0 (or falls back to the legacy
-  response) and can never miss renumbered events.
+* The derivation is numbered densely with ``seq`` from 1. ``cursor=0`` starts
+  or resyncs; a nonzero numeric cursor cannot prove its consumed prefix is
+  unchanged and is rejected with 409 plus ``resync_cursor: 0``. The response's
+  opaque token binds a position to a hash of its consumed event prefix. Pass
+  ``next_cursor_token`` as ``cursor`` or ``since`` to continue safely. A
+  rewritten or shortened prefix rejects the token with 409 rather than
+  silently skipping renumbered events.
+* ``next_cursor`` is kept as a diagnostic/compatibility field. New clients
+  must use ``next_cursor_token``; SSE ``id`` fields carry the same opaque token
+  format so reconnects retain prefix validation.
 * ``seq`` 1 is the status event, which mutates in place while a run
   progresses; status and steps always travel in the envelope fields, never
   as repeated events.
@@ -32,6 +32,8 @@ this server's store, and payloads stay the truncated legacy summaries.
 from __future__ import annotations
 
 import re
+import hashlib
+import json
 import sys
 
 from ... import web as host
@@ -50,10 +52,52 @@ DEFAULT_LIMIT = 200
 MAX_LIMIT = 500
 
 _DIGITS = re.compile(r'[0-9]+\Z')
+_TOKEN = re.compile(r'c1\.([0-9]+)\.([0-9a-f]{64})\Z')
+
+
+class Cursor:
+    """A numeric migration cursor or a revision-bound continuation token."""
+
+    __slots__ = ('position', 'revision')
+
+    def __init__(self, position: int, revision: str | None = None):
+        self.position = position
+        self.revision = revision
+
+    def __eq__(self, other):
+        if isinstance(other, int):
+            return self.position == other and self.revision is None
+        return (isinstance(other, Cursor)
+                and self.position == other.position
+                and self.revision == other.revision)
+
+    def __repr__(self):
+        if self.revision is None:
+            return f'Cursor({self.position})'
+        return f'Cursor({self.position}, {self.revision!r})'
+
+    @property
+    def token(self) -> bool:
+        return self.revision is not None
 
 
 class CursorError(ValueError):
-    """A rejected cursor/limit value; the HTTP layer answers 400 with it."""
+    """A rejected cursor/limit value; the HTTP layer answers with its status."""
+
+    def __init__(self, message, *, status=400, code='xueness.error.invalid_argument',
+                 resync_cursor=None):
+        super().__init__(message)
+        self.status = status
+        self.code = code
+        self.resync_cursor = resync_cursor
+
+
+class ResyncRequired(CursorError):
+    """A prior numeric position cannot prove that its event prefix is intact."""
+
+    def __init__(self, message='cursor revision required'):
+        super().__init__(message, status=409, code='sessions.events_cursor.resync_required',
+                         resync_cursor=0)
 
 
 def enabled(ctx) -> bool:
@@ -69,34 +113,52 @@ def _first(raw) -> str:
     return str(raw)
 
 
-def requested_cursor(query) -> int | None:
+def requested_cursor(query) -> Cursor | None:
     """Parse ``cursor``/``since`` from a parsed query mapping.
 
     Returns ``None`` when neither name carries a value (a legacy request;
     ``parse_qs`` drops empty values, and an explicit empty string counts as
-    absent too). Both names accept the same non-negative integer; conflicting
-    values are rejected. Anything else — whitespace, signs, fractions —
-    raises :class:`CursorError`; a value beyond :data:`MAX_CURSOR` could not
-    round-trip through a JSON client and is rejected as well.
+    absent too). Both names accept either a non-negative numeric migration
+    cursor or an opaque revision token; conflicting values are rejected.
+    Numeric positions other than zero are parsed for compatibility but later
+    require resync because they carry no prefix revision. Anything malformed
+    or beyond :data:`MAX_CURSOR` is rejected.
     """
     texts = []
     for key in ('cursor', 'since'):
         if not isinstance(query, dict) or key not in query:
             continue
-        text = _first(query[key])
-        if text:
-            texts.append(text)
+        raw = query[key]
+        values = raw if isinstance(raw, (list, tuple)) else (raw,)
+        for value in values:
+            text = str(value)
+            if text:
+                texts.append(text)
     if not texts:
         return None
     values = []
     for text in texts:
+        token_match = _TOKEN.fullmatch(text)
+        if token_match:
+            try:
+                position = int(token_match.group(1))
+            except ValueError:
+                raise CursorError('cursor too large') from None
+            if position > MAX_CURSOR:
+                raise CursorError('cursor too large')
+            values.append(Cursor(position, token_match.group(2)))
+            continue
         if not _DIGITS.fullmatch(text):
             raise CursorError('invalid cursor')
-        value = int(text)
+        try:
+            value = int(text)
+        except ValueError:
+            raise CursorError('cursor too large') from None
         if value > MAX_CURSOR:
             raise CursorError('cursor too large')
-        values.append(value)
-    if any(value != values[0] for value in values[1:]):
+        values.append(Cursor(value))
+    if any(value.position != values[0].position or value.revision != values[0].revision
+           for value in values[1:]):
         raise CursorError('conflicting cursor values')
     return values[0]
 
@@ -113,7 +175,13 @@ def requested_limit(query, default: int = DEFAULT_LIMIT) -> int:
     text = _first(query['limit'])
     if not _DIGITS.fullmatch(text):
         raise CursorError('invalid limit')
-    return max(1, min(int(text), MAX_LIMIT))
+    try:
+        value = int(text)
+    except ValueError:
+        # Python bounds decimal conversion length; an oversized query is still
+        # an invalid limit, rather than an unhandled HTTP 500.
+        return MAX_LIMIT
+    return max(1, min(value, MAX_LIMIT))
 
 
 def numbered_events(session: dict) -> list[dict]:
@@ -122,23 +190,94 @@ def numbered_events(session: dict) -> list[dict]:
     return [{**event, 'seq': seq} for seq, event in enumerate(events, 1)]
 
 
-def page(session: dict, cursor: int, limit: int) -> dict:
-    """Build the incremental envelope for a validated cursor request.
+def _prefix_revision(session: dict, events: list[dict], position: int) -> str:
+    """Fingerprint consumed events, excluding the mutable status envelope.
 
-    Raises :class:`CursorError` when ``cursor`` sits beyond the current
-    head: the derivation shrank (compaction, cleared pending question) or
-    the value was fabricated, and the only safe answer is a resync.
+    The hash is built in one pass. A continuation remains valid when events are
+    appended after its position, while any change to an already-consumed event
+    (including compaction or replacement of a pending question) forces resync.
     """
+    digest = hashlib.sha256()
+    digest.update(str(session.get('id', '')).encode('utf-8'))
+    digest.update(b'\0events-cursor-v1\0')
+    # seq 1 is the mutable status event; its current value is carried in the
+    # response envelope and must not invalidate a cursor as a run advances.
+    for event in events[1:position]:
+        encoded = json.dumps(event, ensure_ascii=False, sort_keys=True,
+                             separators=(',', ':')).encode('utf-8')
+        digest.update(len(encoded).to_bytes(8, 'big'))
+        digest.update(encoded)
+    return digest.hexdigest()
+
+
+def _token(position: int, revision: str) -> str:
+    return f'c1.{position}.{revision}'
+
+
+def sse_body(session: dict, all_events: list[dict], window: list[dict]) -> bytes:
+    """Render a window with safe ids, hashing each prefix in one pass.
+
+    Rehashing the full prefix for every event makes a large SSE page quadratic.
+    Keep one digest while scanning the already-derived list and snapshot it only
+    for events in the outgoing window.
+    """
+    chunks = []
+    wanted = {event['seq'] for event in window}
+    if wanted:
+        digest = hashlib.sha256()
+        digest.update(str(session.get('id', '')).encode('utf-8'))
+        digest.update(b'\0events-cursor-v1\0')
+        max_seq = max(wanted)
+        for event in all_events:
+            seq = event['seq']
+            if seq > max_seq:
+                break
+            if seq > 1:
+                encoded = json.dumps(event, ensure_ascii=False, sort_keys=True,
+                                     separators=(',', ':')).encode('utf-8')
+                digest.update(len(encoded).to_bytes(8, 'big'))
+                digest.update(encoded)
+            if seq not in wanted:
+                continue
+            chunks.append('id: ' + _token(seq, digest.copy().hexdigest()))
+            chunks.append('event: ' + str(event.get('type', 'message')))
+            chunks.append('data: ' + json.dumps(event, ensure_ascii=False))
+            chunks.append('')
+    return ('\n'.join(chunks) + '\n').encode() if chunks else b''
+
+
+def page(session: dict, cursor: Cursor | int, limit: int) -> dict:
+    """Build one page, validating opaque tokens against their consumed prefix.
+
+    Legacy numeric cursor 0 remains the resync entrypoint. A nonzero numeric
+    cursor cannot prove its prefix survived a rewrite, so it safely requests a
+    resync instead of risking a silent skip.
+    """
+    if isinstance(cursor, int):
+        cursor = Cursor(cursor)
+    if not isinstance(cursor, Cursor):
+        raise CursorError('invalid cursor')
     events = numbered_events(session)
     head = len(events)
-    if cursor > head:
-        raise CursorError('cursor ahead of session head')
-    window = events[cursor:cursor + max(1, limit)]
+    position = cursor.position
+    if position > head:
+        raise ResyncRequired('cursor ahead of session head')
+    if position and cursor.revision is None:
+        raise ResyncRequired()
+    revision = _prefix_revision(session, events, position)
+    if cursor.revision is not None and cursor.revision != revision:
+        raise ResyncRequired('cursor revision changed')
+    window = events[position:position + max(1, limit)]
+    next_position = window[-1]['seq'] if window else position
+    next_revision = _prefix_revision(session, events, next_position)
     return {
         'id': session['id'],
         'status': session.get('status'),
         'steps': session.get('steps', 0),
         'events': window,
-        'next_cursor': window[-1]['seq'] if window else cursor,
-        'has_more': cursor + max(1, limit) < head,
+        # Keep the numeric field for existing readers that display or persist
+        # it. New clients must use next_cursor_token for safe continuation.
+        'next_cursor': next_position,
+        'next_cursor_token': _token(next_position, next_revision),
+        'has_more': position + max(1, limit) < head,
     }

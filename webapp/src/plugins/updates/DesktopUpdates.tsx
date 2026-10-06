@@ -37,8 +37,42 @@ export function UpdateDownloadProgress({ state }: { state: UpdateState }) {
   </div>;
 }
 
+const UPDATE_IN_PROGRESS_PHASES = ['available', 'downloading', 'ready', 'installing', 'opening-installer', 'installer_opened'];
+
+function compareStableVersions(candidate: unknown, current: unknown): number | null {
+  const parse = (value: unknown): number[] | null => {
+    if (typeof value !== 'string') return null;
+    const match = /^v?(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/.exec(value);
+    return match ? match.slice(1).map(Number) : null;
+  };
+  const next = parse(candidate);
+  const installed = parse(current);
+  if (!next || !installed) return null;
+  for (let index = 0; index < 3; index += 1) {
+    if (next[index] > installed[index]) return 1;
+    if (next[index] < installed[index]) return -1;
+  }
+  return 0;
+}
+
+function hasKnownUpdate(state: UpdateState | null): boolean {
+  if (!state || ['disabled', 'unsupported', 'current'].includes(state.phase)) return false;
+  const versionRelation = compareStableVersions(state.version, state.currentVersion);
+  // Rechecks preserve the last accepted candidate version. Keep the entry
+  // visible during those checks only when that version still proves an update.
+  if (state.phase === 'checking') return versionRelation === 1;
+  if (UPDATE_IN_PROGRESS_PHASES.includes(state.phase)) {
+    // The coordinator phase itself confirms discovery; use version fields to
+    // reject contradictory or stale status when both versions are available.
+    return versionRelation === null || versionRelation > 0;
+  }
+  // A failed or cancelled operation remains actionable only when its status
+  // still carries a version newer than the installed one.
+  return ['error', 'cancelled'].includes(state.phase) && versionRelation === 1;
+}
+
 export function DesktopUpdateIndicator({ state, failed = false, onManage }: { state: UpdateState | null; failed?: boolean; onManage?: () => void }) {
-  if (state && ['disabled', 'unsupported'].includes(state.phase)) return null;
+  if (!hasKnownUpdate(state)) return null;
   const phase = failed ? 'error' : state?.phase ?? 'idle';
   const pending = ['available', 'ready', 'installer_opened'].includes(phase);
   const working = ['checking', 'downloading', 'installing', 'opening-installer'].includes(phase);
@@ -50,7 +84,7 @@ export function DesktopUpdateIndicator({ state, failed = false, onManage }: { st
     aria-label={label} title={label} data-sidebar-navigate="true" data-testid="desktop-update-indicator"
     data-pending={pending || undefined} data-error={phase === 'error' || undefined}>
     {working ? <LoaderCircle size={16} className="xn-update-indicator__spinner" aria-hidden="true" /> : <CircleArrowUp size={16} aria-hidden="true" />}
-    {(pending || phase === 'error') && <span className="xn-update-indicator__dot" aria-hidden="true" />}
+    <span className="xn-update-indicator__dot" aria-hidden="true" />
   </button>;
 }
 export function DesktopUpdates({ enabled, compact = false, onManage }: { enabled: boolean; compact?: boolean; onManage?: () => void }) {

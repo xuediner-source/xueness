@@ -37,8 +37,8 @@
     },
     {
       "id": "desktop.status",
-      "name": "桌面平台、版本与数据位置",
-      "nameEn": "Desktop platform, version and data location"
+      "name": "关于页面的应用版本与数据位置",
+      "nameEn": "Application version and data location in About"
     },
     {
       "id": "desktop.window_chrome",
@@ -57,7 +57,7 @@
     }
   ],
   "frontendModules": [
-    "plugins/desktop/DesktopSettings.tsx",
+    "plugins/desktop/DesktopAbout.tsx",
     "plugins/desktop/DesktopTitlebar.tsx",
     "plugins/desktop/DesktopTrayBridge.tsx",
     "plugins/desktop/DesktopTrayMenu.tsx",

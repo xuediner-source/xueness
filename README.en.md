@@ -14,7 +14,7 @@
     <a href="https://github.com/xuediner-source/xueness/actions/workflows/desktop-build.yml"><img src="https://github.com/xuediner-source/xueness/actions/workflows/desktop-build.yml/badge.svg?branch=main" alt="Desktop build"></a>
     <a href="https://github.com/xuediner-source/xueness/blob/main/LICENSE"><img src="https://img.shields.io/github/license/xuediner-source/xueness?label=license" alt="Apache 2.0 license"></a>
     <a href="https://github.com/xuediner-source/xueness/releases/latest"><img src="https://img.shields.io/github/v/release/xuediner-source/xueness?label=release" alt="Latest release"></a>
-    <img src="https://img.shields.io/badge/plugins-28%20%7C%20142-4263eb" alt="28 plugins and 142 features">
+    <img src="https://img.shields.io/badge/plugins-28%20%7C%20145-4263eb" alt="28 plugins and 145 features">
   </p>
 </div>
 
@@ -32,6 +32,8 @@ Xueness is a personal development workbench for using an agent from the terminal
 
 Visit [GitHub Releases](https://github.com/xuediner-source/xueness/releases/latest) and choose the installer for your OS and CPU architecture. Each desktop release includes its packaged builds and a `SHA256SUMS.txt` checksum file.
 
+The current source and desktop UI changes are available in the [2026-10-06 Mac arm64 preview](https://github.com/xuediner-source/xueness/releases/tag/mac-preview-20261006): 28 plugins and 145 registered features, with simpler settings, long conversation lists and opt-in experiments. The preview application retains version 0.1.4 and is provided as an Apple Silicon app ZIP. Stable downloads and automatic updates use the official builds listed below.
+
 | System | Installer / disk image | Portable / app ZIP |
 | --- | --- | --- |
 | Windows 10/11 · x64 | [Installer `.exe`](https://github.com/xuediner-source/xueness/releases/download/v0.1.4/Xueness-0.1.4-windows-x64-setup.exe) | [Portable `.zip`](https://github.com/xuediner-source/xueness/releases/download/v0.1.4/Xueness-0.1.4-windows-x64-portable.zip) |
@@ -43,7 +45,7 @@ SHA-256 checksums for this release are in [`SHA256SUMS.txt`](https://github.com/
 ## What you can do
 
 - **Tune local-model runs.** Choose the “Local lightweight” profile and adjust prompts, tool selection, context and output budgets, sampling, and protocol options. The resource panel reports CPU, memory, and process activity on the machine running Xueness. The output view shows request phases, tool activity, and usage reported by the model service. Missing token or GPU-memory measurements are shown as unavailable instead of being estimated.
-- **Use 28 trusted plugins and 142 registered features.** Capabilities include sessions, workspace files, providers, shell, Git, terminals, workflows, memory, hooks, MCP, browser automation, remote connections, channels, automations, diagnostics, Office previews, and tool execution policies. The plugin manager shows the full catalog and dependency state; the CLI can inspect and change plugin switches.
+- **Use 28 trusted plugins and 145 registered features.** Capabilities include sessions, workspace files, providers, shell, Git, terminals, workflows, memory, hooks, MCP, browser automation, remote connections, channels, automations, diagnostics, Office previews, and tool execution policies. The plugin manager shows the full catalog and dependency state; the CLI can inspect and change plugin switches.
 - **Switch the plugin mix in one click.** Pick the minimal, lightweight, or standard tier at the top of “Settings → Providers”, or run `xueness plugins profile list|show|apply` in the CLI. A tier is only a data list of plugin ids and booleans: your own explicit switches always win, and switching never changes the workspace, approval rules, or the permission mode. Audit marketplace manifests read-only with `xueness plugins validate <path>`, and upgrade already-installed manifests atomically with `xueness plugins update <id>|--all`, which only accepts listings that pass the same validation.
 - **Give a session one durable goal.** Choose “Add goal” in the composer’s “+” menu when starting a task, or pass `--target` in the CLI, and the objective stays in force across turns: a short reminder is injected before every model request, and a one-line badge under the session title shows or clears it. When a run claims completion, the host checks whether the answer explicitly states the goal was achieved and otherwise marks the session for review. The check is deterministic: it makes no extra model call and does not prove on the user's behalf that the goal really was met. The feature belongs to the planning plugin; disabling it stops the entry points, injection, and the check together.
 - **Keep one local runtime across three entry points.** Run sessions in the Agent CLI, manage them in the loopback Web workbench, or install the Windows/macOS desktop app. Platform-specific support stays with the plugin that owns the feature.

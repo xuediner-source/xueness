@@ -26,6 +26,7 @@ async function listen(server) {
 const tempRoot = await mkdtemp(join(tmpdir(), "xueness-composer-interactions-"));
 let server;
 let browser;
+let streamContext;
 try {
   const harnessPath = join(tempRoot, "harness.tsx");
   const bundlePath = join(tempRoot, "harness.js");
@@ -35,7 +36,7 @@ try {
   await writeFile(harnessPath, `
     import React, { useRef, useState } from "react";
     import { createRoot } from "react-dom/client";
-    import { LightweightComposer, LightweightComposerControls } from ${JSON.stringify(lightweightPath)};
+    import { LightweightComposer, LightweightComposerControls, LightweightTimeline } from ${JSON.stringify(lightweightPath)};
     import { ElicitationForm, type ElicitationPending, type ElicitationSubmission } from ${JSON.stringify(elicitationPath)};
 
     type TestState = {
@@ -44,6 +45,7 @@ try {
       resolveDeferred?: (accepted: boolean) => void;
       submissions: ElicitationSubmission[];
       invalid: string;
+      updateStream?: (text: string, streaming: boolean) => void;
     };
     const testState: TestState = { mode: "accept", sends: [], submissions: [], invalid: "" };
     (window as Window & { __composerTest?: TestState }).__composerTest = testState;
@@ -61,11 +63,15 @@ try {
     function App() {
       const inputRef = useRef<HTMLTextAreaElement | null>(null);
       const [values, setValues] = useState<Record<string, string | boolean>>({});
+      const [sendShortcut, setSendShortcut] = useState<"enter" | "mod-enter">("enter");
+      const [stream, setStream] = useState({ text: "", streaming: false });
+      testState.updateStream = (text, streaming) => setStream({ text, streaming });
       const controls = <LightweightComposerControls enabled choices={choices} onChange={() => {}} models={models} loading={false} error="" onReload={() => {}} onManageModels={() => {}} inputRef={inputRef} />;
       return <main>
         <LightweightComposer
           inputRef={inputRef}
           controls={controls}
+          sendShortcut={sendShortcut}
           onSend={async (text) => {
             testState.sends.push(text);
             document.getElementById("send-count")!.textContent = String(testState.sends.length);
@@ -74,7 +80,9 @@ try {
             return testState.mode !== "false";
           }}
         />
+        <button type="button" data-testid="use-mod-enter" onClick={() => setSendShortcut("mod-enter")}>Use Mod+Enter</button>
         <output id="send-count">0</output>
+        <LightweightTimeline rows={[{ kind: "assistant", seq: 91, turnId: "stream-fixture", text: stream.text, streaming: stream.streaming }]} />
         <output id="elicitation-submit-count">0</output>
         <ElicitationForm
           pending={pending}
@@ -177,6 +185,18 @@ try {
   await composer.press("Enter");
   await page.waitForFunction(() => window.__composerTest.sends.length === 5 && document.querySelector("[data-testid='lightweight-composer-input']")?.value === "");
 
+  await composer.fill("Alt Enter stays in the draft");
+  await composer.press("Alt+Enter");
+  assert.equal(await sendCount.textContent(), "5", "Alt+Enter must not submit under the default Enter shortcut");
+  assert.match(await composer.inputValue(), /Alt Enter stays in the draft/);
+  await page.getByTestId("use-mod-enter").click();
+  await composer.fill("Alt Ctrl Enter stays in the draft");
+  await composer.press("Control+Alt+Enter");
+  assert.equal(await sendCount.textContent(), "5", "Alt+Ctrl+Enter must not submit under the Mod+Enter shortcut");
+  assert.match(await composer.inputValue(), /Alt Ctrl Enter stays in the draft/);
+  await composer.press("Control+Enter");
+  await page.waitForFunction(() => window.__composerTest.sends.length === 6 && document.querySelector("[data-testid='lightweight-composer-input']")?.value === "");
+
   await page.getByRole("button", { name: "选择模型" }).click();
   await page.locator('[data-model-row="local-b:model-b"]').click();
   await page.waitForFunction(() => document.activeElement?.getAttribute("data-testid") === "lightweight-composer-input");
@@ -193,11 +213,77 @@ try {
   assert.equal(await page.evaluate(() => window.__composerTest.invalid), "length", "code-point validation still rejects two basic characters at maxLength 1");
   assert.equal(await page.locator("#elicitation-submit-count").textContent(), "1", "invalid content is not submitted");
 
+  // Use an isolated real browser page with a controllable clock to verify the
+  // shared display gate, its trailing timestamp, and exact stream finalization.
+  streamContext = await browser.newContext();
+  const streamPage = await streamContext.newPage();
+  await streamPage.clock.install({ time: new Date("2026-10-06T00:00:00Z") });
+  const streamPageErrors = [];
+  const streamBlockedRequests = [];
+  streamPage.on("pageerror", (error) => streamPageErrors.push(error.message));
+  await streamPage.route("**/*", (route) => {
+    const url = new URL(route.request().url());
+    if (url.hostname === "127.0.0.1" && url.port === String(port) && (url.pathname === "/harness.js" || url.pathname === "/")) return route.continue();
+    streamBlockedRequests.push(url.href);
+    return route.abort();
+  });
+  await streamPage.goto(`http://127.0.0.1:${port}/`);
+  await streamPage.waitForSelector("#root > *");
+  const freezeAt = await streamPage.evaluate(() => Date.now() + 60_000);
+  await streamPage.clock.pauseAt(freezeAt);
+  const streamRow = streamPage.locator('[data-testid="timeline-item-assistant-91"]');
+  const first = "Initial\n\n```ts\nconst n = 0;\n```";
+  const middle = "Middle\n\n```ts\nconst n = 1;\n```";
+  const latest = "Latest\n\n```ts\nconst n = 2;\n```";
+  const afterTrailing = "After trailing\n\n```ts\nconst n = 3;\n```";
+  const unfinished = "Unfinished\n\n```ts\nconst n = 3.5;\n```";
+  const finalText = "Final\n\n```ts\nconst n = 4;\n```";
+  const updateStream = async (text, streaming = true) => {
+    await streamPage.evaluate(({ nextText, active }) => window.__composerTest.updateStream(nextText, active), { nextText: text, active: streaming });
+    await streamPage.clock.runFor(0);
+  };
+  const advanceStreamClock = async (milliseconds) => {
+    await streamPage.clock.runFor(milliseconds);
+    await streamPage.clock.runFor(0);
+  };
+  const rendered = () => streamRow.textContent();
+  await updateStream(first);
+  await streamRow.locator(".xn-md__code-fence").waitFor();
+  assert.equal(await streamRow.locator(".xn-md__code-fence").getAttribute("data-highlight"), "after-stream");
+  await updateStream(middle);
+  await updateStream(latest);
+  assert.match(await rendered(), /const n = 0;/, "tokens inside the cadence window keep the last committed text");
+  await advanceStreamClock(149);
+  assert.match(await rendered(), /const n = 0;/, "trailing text remains held until the deadline");
+  await advanceStreamClock(1);
+  assert.match(await rendered(), /const n = 2;/, "the trailing commit uses the latest text");
+
+  await updateStream(afterTrailing);
+  assert.match(await rendered(), /const n = 2;/, "a new token cannot bypass the interval after a trailing commit");
+  await advanceStreamClock(150);
+  assert.match(await rendered(), /const n = 3;/);
+
+  await updateStream(unfinished);
+  await updateStream(finalText, false);
+  assert.match(await rendered(), /const n = 4;/, "stream end exposes its exact final value immediately");
+  assert.equal(await streamRow.locator(".xn-md__code-fence").getAttribute("data-highlight"), "on-visible",
+    "settled code switches from deferred streaming highlight to visible-only highlight");
+  await advanceStreamClock(150);
+  assert.doesNotMatch(await rendered(), /const n = 3\.5;/, "ending the stream cancels its stale trailing timer");
+  assert.match(await rendered(), /const n = 4;/);
+  assert.deepEqual(streamBlockedRequests, [], "Stream fixture must not call outside services");
+  assert.deepEqual(streamPageErrors, [], "Stream fixture must finish without runtime errors");
+
   assert.deepEqual(blockedRequests, [], "Harness must not request external services or API routes");
   assert.deepEqual(pageErrors, [], "Harness must finish without runtime errors");
   console.log(`Composer interaction browser regression passed using ${browserChannel} Chrome.`);
 } finally {
   let cleanupError;
+  try {
+    await streamContext?.close();
+  } catch (error) {
+    cleanupError = error;
+  }
   try {
     await browser?.close();
   } catch (error) {

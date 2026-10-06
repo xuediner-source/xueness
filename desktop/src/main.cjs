@@ -129,7 +129,7 @@ async function start() {
   const desktopChrome = process.platform === 'darwin' || process.platform === 'win32';
   await window.loadURL(desktopChrome ? `${origin}/?xuenessDesktop=1` : origin);
   if (process.env.XUENESS_DESKTOP_SMOKE_FILE) {
-    const result = await window.webContents.executeJavaScript(`(async () => {
+    const result = await window.webContents.executeJavaScript(String.raw`(async () => {
       for (let n=0;n<100 && !document.querySelector('[data-testid=xn-shell] [data-testid=xn-sidebar-action-new-task]');n++)
         await new Promise(resolve => setTimeout(resolve,100));
       const workbenchReady = !!document.querySelector('[data-testid=xn-shell] [data-testid=xn-sidebar-action-new-task]');
@@ -145,13 +145,19 @@ async function start() {
       await waitFor('[data-testid=xn-installed-plugin-desktop]');
       const installedCards = document.querySelectorAll('[data-testid^="xn-installed-plugin-"]').length;
       document.querySelector('.xn-settings-view__extensions > summary').click();
-      (await waitFor('[data-testid=xn-settings-nav-desktop]')).click();
-      await waitFor('[data-testid=desktop-settings] dl');
+      (await waitFor('[data-testid=xn-settings-nav-about]')).click();
+      const dataDirectoryNode = await waitFor('[data-testid=desktop-data-directory]');
+      const about = dataDirectoryNode.closest('[data-testid=desktop-about]');
+      const versionText = about?.querySelector('header span')?.textContent || '';
+      const version = versionText.match(/\d+\.\d+\.\d+(?:[-+][\w.-]+)?/)?.[0] || '';
+      const aboutDataDirectory = dataDirectoryNode.textContent?.trim() || '';
+      const oldDesktopNavAbsent = !document.querySelector('[data-testid=xn-settings-nav-desktop]');
       const clipWrite = await navigator.permissions.query({ name: 'clipboard-write' });
       const clipRead = await navigator.permissions.query({ name: 'clipboard-read' });
       return { title: document.title, plugins: catalog.plugins.length,
         features: catalog.plugins.reduce((n,p) => n+p.features.length,0),
-        installedCards, desktopSettingsReady: !!document.querySelector('[data-testid=desktop-settings] dl'),
+        installedCards, aboutReady: !!about && !!version && !!aboutDataDirectory,
+        aboutVersion: version, aboutDataDirectory, oldDesktopNavAbsent,
         nodeAccess: typeof window.require !== 'undefined', workbenchReady, body: document.body.textContent.length,
         clipWriteGranted: clipWrite.state === 'granted', clipReadDenied: clipRead.state === 'denied' };
     })()`);

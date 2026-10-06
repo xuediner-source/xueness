@@ -87,7 +87,10 @@ class TerminalProfileTests(unittest.TestCase):
                 after_interrupt = "$r='AFTER'; Write-Output ($r+'_INTERRUPT')\r\n"
         else:
             term.write("printf 'PROFILE_READY=%s\\n' \"$0\"; stty size\n")
-            output = wait_for(f'PROFILE_READY={selected}')
+            wait_for(f'PROFILE_READY={selected}')
+            # PTY reads may split the shell's printf from stty's later output.
+            # Shell readiness alone does not establish that resize was applied.
+            output = wait_for('30 90')
             self.assertIn('30 90', output)
             running = "printf 'PROFILE_%s\\n' RUNNING; sleep 30\n"
             after_interrupt = "printf 'AFTER_%s\\n' INTERRUPT\n"

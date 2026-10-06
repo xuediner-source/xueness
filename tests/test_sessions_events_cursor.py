@@ -78,8 +78,10 @@ class CursorParsingTests(unittest.TestCase):
         self.assertEqual(events_cursor.requested_cursor({'since': ['5']}), 5)
         self.assertEqual(events_cursor.requested_cursor({'cursor': ['5'], 'since': ['5']}), 5)
 
-    def test_repeated_same_parameter_takes_first_value(self):
-        self.assertEqual(events_cursor.requested_cursor({'cursor': ['2', '9']}), 2)
+    def test_repeated_conflicting_parameter_values_are_rejected(self):
+        with self.assertRaises(events_cursor.CursorError) as raised:
+            events_cursor.requested_cursor({'cursor': ['2', '9']})
+        self.assertEqual(str(raised.exception), 'conflicting cursor values')
 
     def test_conflicting_values_are_rejected(self):
         with self.assertRaises(events_cursor.CursorError) as raised:
@@ -137,12 +139,16 @@ class PagingTests(unittest.TestCase):
         self.assertEqual(first['status'], 'running')
         self.assertEqual(first['steps'], 2)
 
-        second = events_cursor.page(SESSION_A, 3, 3)
+        second = events_cursor.page(SESSION_A,
+                                    events_cursor.requested_cursor(
+                                        {'cursor': [first['next_cursor_token']]}), 3)
         self.assertEqual([event['seq'] for event in second['events']], [4, 5, 6])
         self.assertEqual(second['next_cursor'], 6)
         self.assertFalse(second['has_more'])
 
-        caught_up = events_cursor.page(SESSION_A, HEAD_A, 3)
+        caught_up = events_cursor.page(SESSION_A,
+                                       events_cursor.requested_cursor(
+                                           {'cursor': [second['next_cursor_token']]}), 3)
         self.assertEqual(caught_up['events'], [])
         self.assertEqual(caught_up['next_cursor'], HEAD_A)
         self.assertFalse(caught_up['has_more'])
@@ -160,6 +166,14 @@ class PagingTests(unittest.TestCase):
                 with self.assertRaises(events_cursor.CursorError) as raised:
                     events_cursor.page(SESSION_A, cursor, 200)
                 self.assertEqual(str(raised.exception), 'cursor ahead of session head')
+                self.assertEqual(raised.exception.status, 409)
+                self.assertEqual(raised.exception.resync_cursor, 0)
+
+    def test_legacy_nonzero_numeric_cursor_requires_resync(self):
+        with self.assertRaises(events_cursor.ResyncRequired) as raised:
+            events_cursor.page(SESSION_A, 3, 200)
+        self.assertEqual(raised.exception.status, 409)
+        self.assertEqual(raised.exception.resync_cursor, 0)
 
     def test_growth_appends_without_renumbering(self):
         before = events_cursor.numbered_events(SESSION_A)
@@ -168,23 +182,54 @@ class PagingTests(unittest.TestCase):
         after = events_cursor.numbered_events(grown)
         self.assertEqual(after[:HEAD_A], before)
         self.assertEqual(after[-1]['seq'], HEAD_A + 1)
-        window = events_cursor.page(grown, HEAD_A, 200)
+        token = events_cursor.page(SESSION_A, 0, 200)['next_cursor_token']
+        window = events_cursor.page(grown,
+                                    events_cursor.requested_cursor({'since': [token]}), 200)
         self.assertEqual([event['seq'] for event in window['events']], [HEAD_A + 1])
         self.assertEqual(window['next_cursor'], HEAD_A + 1)
 
     def test_shrink_after_compaction_forces_a_resync(self):
+        initial = events_cursor.page(SESSION_A, 0, 200)
         head = len(events_cursor.numbered_events(SESSION_A))
         compacted = json.loads(json.dumps(SESSION_A))
         # Compaction drops whole older turns into archived_messages.
         compacted['messages'] = compacted['messages'][:3]
         smaller = len(events_cursor.numbered_events(compacted))
         self.assertLess(smaller, head)
-        with self.assertRaises(events_cursor.CursorError):
-            events_cursor.page(compacted, head, 200)
+        with self.assertRaises(events_cursor.ResyncRequired):
+            events_cursor.page(compacted,
+                               events_cursor.requested_cursor(
+                                   {'cursor': [initial['next_cursor_token']]}), 200)
         # A client that resyncs from 0 sees the new, shorter derivation.
         fresh = events_cursor.page(compacted, 0, 200)
         self.assertEqual(fresh['next_cursor'], smaller)
         self.assertFalse(fresh['has_more'])
+
+    def test_same_length_replacement_invalidates_consumed_prefix(self):
+        prior = events_cursor.page(SESSION_A, 0, 3)
+        replaced = json.loads(json.dumps(SESSION_A))
+        replaced['messages'][2]['tool_calls'][0]['function']['arguments'] = '{"path":"changed"}'
+        self.assertEqual(len(events_cursor.numbered_events(replaced)), HEAD_A)
+        with self.assertRaises(events_cursor.ResyncRequired):
+            events_cursor.page(replaced,
+                               events_cursor.requested_cursor(
+                                   {'cursor': [prior['next_cursor_token']]}), 200)
+
+    def test_shrink_then_regrow_cannot_reuse_old_numeric_position_token(self):
+        prior = events_cursor.page(SESSION_A, 0, 200)
+        changed = json.loads(json.dumps(SESSION_A))
+        changed['messages'] = changed['messages'][:3]
+        changed['messages'].extend([
+            {'role': 'assistant', 'content': 'new event one'},
+            {'role': 'assistant', 'content': 'new event two'},
+            {'role': 'assistant', 'content': 'new event three'},
+            {'role': 'assistant', 'content': 'new event four'},
+        ])
+        self.assertEqual(len(events_cursor.numbered_events(changed)), HEAD_A)
+        with self.assertRaises(events_cursor.ResyncRequired):
+            events_cursor.page(changed,
+                               events_cursor.requested_cursor(
+                                   {'cursor': [prior['next_cursor_token']]}), 200)
 
     def test_status_and_steps_travel_in_the_envelope(self):
         # seq 1 is the mutable status event; later windows never re-deliver it,
@@ -192,7 +237,9 @@ class PagingTests(unittest.TestCase):
         later = json.loads(json.dumps(SESSION_A))
         later['status'] = 'completed'
         later['steps'] = 7
-        window = events_cursor.page(later, HEAD_A, 200)
+        token = events_cursor.page(SESSION_A, 0, 200)['next_cursor_token']
+        window = events_cursor.page(later,
+                                    events_cursor.requested_cursor({'cursor': [token]}), 200)
         self.assertEqual(window['events'], [])
         self.assertEqual(window['status'], 'completed')
         self.assertEqual(window['steps'], 7)
@@ -279,7 +326,10 @@ class EventsCursorRouteTests(unittest.TestCase):
             with urllib.request.urlopen(req, timeout=10) as resp:
                 return resp.status, resp.read().decode("utf-8"), dict(resp.headers)
         except urllib.error.HTTPError as exc:
-            return exc.code, exc.read().decode("utf-8", "replace"), dict(exc.headers)
+            try:
+                return exc.code, exc.read().decode("utf-8", "replace"), dict(exc.headers)
+            finally:
+                exc.close()
 
     def _post(self, path, data):
         req = urllib.request.Request(
@@ -289,7 +339,10 @@ class EventsCursorRouteTests(unittest.TestCase):
             with urllib.request.urlopen(req, timeout=10) as resp:
                 return resp.status, json.loads(resp.read())
         except urllib.error.HTTPError as exc:
-            return exc.code, json.loads(exc.read())
+            try:
+                return exc.code, json.loads(exc.read())
+            finally:
+                exc.close()
 
     def _enable(self, enabled=True):
         save_settings(self.ctx["state_dir"],
@@ -372,17 +425,20 @@ class EventsCursorRouteTests(unittest.TestCase):
             self.assertEqual(code, 200)
             payload = json.loads(body)
             self.assertEqual(set(payload),
-                             {"id", "status", "steps", "events", "next_cursor", "has_more"})
+                             {"id", "status", "steps", "events", "next_cursor",
+                              "next_cursor_token", "has_more"})
             seen.extend(event["seq"] for event in payload["events"])
             self.assertEqual(payload["next_cursor"],
-                             payload["events"][-1]["seq"] if payload["events"] else cursor)
+                             payload["events"][-1]["seq"] if payload["events"] else
+                             (events_cursor.requested_cursor({'cursor': [cursor]}).position
+                              if isinstance(cursor, str) else cursor))
+            cursor = payload["next_cursor_token"]
             if not payload["has_more"]:
                 self.assertEqual(payload["next_cursor"], HEAD_A)
                 break
-            cursor = payload["next_cursor"]
         self.assertEqual(seen, list(range(1, HEAD_A + 1)))
         # A caught-up poll delivers nothing new and keeps the cursor.
-        code, body, _ = self._get(self._events_path(f"cursor={HEAD_A}"))
+        code, body, _ = self._get(self._events_path(f"cursor={cursor}"))
         payload = json.loads(body)
         self.assertEqual(code, 200)
         self.assertEqual(payload["events"], [])
@@ -391,14 +447,16 @@ class EventsCursorRouteTests(unittest.TestCase):
 
     def test_since_alias_and_conflicting_values(self):
         self._enable(True)
-        code, body, _ = self._get(self._events_path("since=2&limit=2"))
+        first = json.loads(self._get(self._events_path("cursor=0&limit=2"))[1])
+        token = first['next_cursor_token']
+        code, body, _ = self._get(self._events_path(f"since={token}&limit=2"))
         self.assertEqual(code, 200)
         payload = json.loads(body)
         self.assertEqual([event["seq"] for event in payload["events"]], [3, 4])
         code, body, _ = self._get(self._events_path("cursor=2&since=3"))
         self.assertEqual(code, 400)
         self.assertEqual(json.loads(body)["error"], "conflicting cursor values")
-        code, body, _ = self._get(self._events_path("cursor=3&since=3"))
+        code, body, _ = self._get(self._events_path(f"cursor={token}&since={token}"))
         self.assertEqual(code, 200)
 
     def test_invalid_cursor_values_are_400(self):
@@ -413,15 +471,17 @@ class EventsCursorRouteTests(unittest.TestCase):
                 self.assertEqual(payload["error"], message)
                 self.assertEqual(payload["errorCode"], "xueness.error.invalid_argument")
 
-    def test_cursor_ahead_of_head_is_400_even_for_huge_values(self):
+    def test_cursor_ahead_of_head_requires_resync_even_for_huge_values(self):
         self._enable(True)
         # All values stay below MAX_CURSOR: they parse, then fail the head
         # check. Values beyond MAX_CURSOR are covered above as "too large".
         for cursor in (HEAD_A + 1, 10 ** 12, 10 ** 15):
             with self.subTest(cursor=cursor):
                 code, body, _ = self._get(self._events_path(f"cursor={cursor}"))
-                self.assertEqual(code, 400)
-                self.assertEqual(json.loads(body)["error"], "cursor ahead of session head")
+                self.assertEqual(code, 409)
+                payload = json.loads(body)
+                self.assertEqual(payload["error"], "cursor ahead of session head")
+                self.assertEqual(payload["resync_cursor"], 0)
 
     def test_limit_is_strict_and_clamped_in_cursor_mode(self):
         self._enable(True)
@@ -443,7 +503,9 @@ class EventsCursorRouteTests(unittest.TestCase):
         self.assertEqual(len(payload["events"]), 500)
         self.assertTrue(payload["has_more"])
         self.assertEqual(payload["next_cursor"], 500)
-        code, body, _ = self._get(self._events_path("cursor=500&limit=99999"))
+        first = json.loads(body)
+        code, body, _ = self._get(self._events_path(
+            f"cursor={first['next_cursor_token']}&limit=99999"))
         payload = json.loads(body)
         self.assertEqual(len(payload["events"]), 101)
         self.assertFalse(payload["has_more"])
@@ -451,23 +513,32 @@ class EventsCursorRouteTests(unittest.TestCase):
 
     def test_sse_stream_carries_the_incremental_window(self):
         self._enable(True)
-        code, body, headers = self._get(self._events_path("cursor=2&limit=2"),
+        first = json.loads(self._get(self._events_path("cursor=0&limit=2"))[1])
+        code, body, headers = self._get(self._events_path(
+            f"cursor={first['next_cursor_token']}&limit=2"),
                                         accept="text/event-stream")
         self.assertEqual(code, 200)
         self.assertIn("text/event-stream", headers.get("Content-Type", ""))
-        self.assertIn("id: 3", body)
-        self.assertIn("id: 4", body)
-        self.assertNotIn("id: 1", body)
-        self.assertNotIn("id: 2", body)
-        self.assertNotIn("id: 5", body)
-        # The SSE id is the seq, so a reconnecting client resumes from it.
+        self.assertRegex(body, r"id: c1\.3\.[0-9a-f]{64}")
+        self.assertRegex(body, r"id: c1\.4\.[0-9a-f]{64}")
+        self.assertNotIn("id: c1.1.", body)
+        self.assertNotIn("id: c1.2.", body)
+        self.assertNotIn("id: c1.5.", body)
+        # Every SSE event id is a resumable prefix-revision token.
         self.assertIn("event: assistant", body)
+        last_id = next(line.removeprefix('id: ') for line in body.splitlines()
+                       if line.startswith('id: c1.4.'))
+        code, page, _ = self._get(self._events_path(f"cursor={last_id}"))
+        self.assertEqual(code, 200)
+        self.assertEqual([event['seq'] for event in json.loads(page)['events']], [5, 6])
 
     # -- growth, shrink and isolation ----------------------------------------
 
     def test_new_events_arrive_incrementally_as_the_journal_grows(self):
         self._enable(True)
-        _, body, _ = self._get(self._events_path(f"cursor={HEAD_A}"))
+        initial = json.loads(self._get(self._events_path("cursor=0&limit=500"))[1])
+        token = initial['next_cursor_token']
+        _, body, _ = self._get(self._events_path(f"cursor={token}"))
         self.assertEqual(json.loads(body)["events"], [])
         grown = json.loads(json.dumps(SESSION_A))
         grown["messages"].extend([
@@ -475,7 +546,7 @@ class EventsCursorRouteTests(unittest.TestCase):
             {"role": "assistant", "content": "reply"},
         ])
         self._save(grown)
-        code, body, _ = self._get(self._events_path(f"cursor={HEAD_A}"))
+        code, body, _ = self._get(self._events_path(f"cursor={token}"))
         self.assertEqual(code, 200)
         payload = json.loads(body)
         self.assertEqual([event["seq"] for event in payload["events"]], [HEAD_A + 1, HEAD_A + 2])
@@ -485,8 +556,10 @@ class EventsCursorRouteTests(unittest.TestCase):
         self._enable(True)
         self._save(_session(self.sid, []))  # compaction dropped every turn
         code, body, _ = self._get(self._events_path(f"cursor={HEAD_A}"))
-        self.assertEqual(code, 400)
-        self.assertEqual(json.loads(body)["error"], "cursor ahead of session head")
+        self.assertEqual(code, 409)
+        payload = json.loads(body)
+        self.assertEqual(payload["error"], "cursor ahead of session head")
+        self.assertEqual(payload["resync_cursor"], 0)
         code, body, _ = self._get(self._events_path("cursor=0"))
         self.assertEqual(code, 200)
         payload = json.loads(body)
@@ -517,11 +590,11 @@ class EventsCursorRouteTests(unittest.TestCase):
         self.assertNotIn(sentinel, body)
         self.assertEqual(max(event["seq"] for event in payload["events"]), HEAD_A)
 
-        # A cursor borrowed from the other session is just a number: it never
-        # merges the two timelines, and beyond this session's head it is 400.
+        # A legacy numeric cursor needs a safe resync; cursors remain
+        # session-bound even if two sessions happen to have matching heads.
         code, body, _ = self._get(self._events_path(f"cursor={other_head}"))
-        self.assertEqual(code, 400)
-        self.assertEqual(json.loads(body)["error"], "cursor ahead of session head")
+        self.assertEqual(code, 409)
+        self.assertEqual(json.loads(body)["resync_cursor"], 0)
 
         # The other session pages its own timeline, not this one's.
         code, body, _ = self._get(f"/api/sessions/{other_sid}/events?cursor=0")
@@ -548,7 +621,10 @@ class EventsCursorRouteTests(unittest.TestCase):
                     with urllib.request.urlopen(req, timeout=10) as resp:
                         code = resp.status
                 except urllib.error.HTTPError as exc:
-                    code = exc.code
+                    try:
+                        code = exc.code
+                    finally:
+                        exc.close()
                 self.assertEqual(code, 404)
             finally:
                 server.shutdown()

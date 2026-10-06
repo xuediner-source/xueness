@@ -26,12 +26,11 @@ ROUTE_SEGMENT = re.compile(r'\*|[a-z][a-z0-9_]*\Z')
 #: Data files are read-only package data addressed by relative path.
 DATA_PATH = re.compile(r'[A-Za-z0-9._-]+(?:/[A-Za-z0-9._-]+)*\Z')
 
-#: Tool event pipeline seams a manifest may declare. ``after_tool_authorization``
-#: is observer-only and runs after Gate succeeds; the other declarations grant
-#: their existing structured intervention (deny before or restrictively rewrite
-#: the result after execution).
+#: Tool event pipeline seams a manifest may declare. before_tool_effect is a
+#: strict post-Gate reservation point; after_tool_authorization is observer-only;
+#: the other declarations grant structured intervention.
 TOOL_EVENT_NAMES = ('before_tool_execution', 'after_tool_execution',
-                    'after_tool_authorization')
+                    'after_tool_authorization', 'before_tool_effect')
 
 #: Inclusive bounds for the optional declared dispatch priority.
 TOOL_EVENT_PRIORITY_BOUNDS = (-1000, 1000)

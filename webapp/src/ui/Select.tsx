@@ -20,6 +20,7 @@ function entries(children: React.ReactNode, group?: string): Entry[] {
 }
 export function Select({ children, value, defaultValue, onChange, className = '', style, disabled, required, name, id, title, ...rest }: Props) {
   const items = entries(children);
+  const portalOwner = React.useId().replace(/:/gu, '');
   const [localValue, setLocalValue] = React.useState(String(defaultValue ?? items[0]?.value ?? ''));
   const selected = String(value ?? localValue);
   const aria = Object.fromEntries(Object.entries(rest).filter(([key]) => key.startsWith('aria-') || key.startsWith('data-')));
@@ -30,11 +31,11 @@ export function Select({ children, value, defaultValue, onChange, className = ''
     const publicValue = decode(next); setLocalValue(publicValue);
     onChange?.({ target: { value: publicValue }, currentTarget: { value: publicValue } } as React.ChangeEvent<HTMLSelectElement>);
   }} disabled={disabled} required={required} name={name}>
-    <R.Trigger id={id} title={title} className={`xn-select ${className}`} style={style} {...aria}>
+    <R.Trigger id={id} title={title} className={`xn-select ${className}`} style={style} {...aria} data-xn-select-portal-trigger={portalOwner}>
       <R.Value>{items.find(item => item.value === selected)?.label ?? selected}</R.Value>
       <R.Icon asChild><ChevronDown size={14} /></R.Icon>
     </R.Trigger>
-    <R.Portal><R.Content className="xn-select-menu" position="item-aligned">
+    <R.Portal><R.Content className="xn-select-menu" data-xn-select-portal-owner={portalOwner} position="item-aligned">
       <R.ScrollUpButton className="xn-select-scroll"><ChevronUp size={14} /></R.ScrollUpButton>
       <R.Viewport className="xn-select-viewport">
         {items.map((item, index) => <React.Fragment key={`${item.value}-${index}`}>

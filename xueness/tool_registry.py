@@ -6,7 +6,8 @@ The legacy xueness.builtin_tools import aliases this router.
 from __future__ import annotations
 import subprocess
 from pathlib import Path
-from .tool_contract import BuiltinTool, Handler, bind_execution, execution_context, permission_result
+from .tool_contract import (BuiltinTool, Handler, ToolEffectDenied, bind_execution,
+                            execution_context, permission_result)
 from .bundled_plugins.files.builtin_tools import _walk_files, path_in, glob_search, grep_search, MAX_GLOB_HITS, MAX_GREP_HITS, MAX_GREP_PER_FILE
 from .bundled_plugins.planning.tooling import normalize_todos, MAX_TODO_ITEMS, TODO_STATUSES
 from .plugin_runtime import PLUGIN_IDS, entrypoint
@@ -83,37 +84,43 @@ def dispatch(root: Path, gate, name: str, args: dict, session: dict | None = Non
             owner = tool_owner(name)
             if owner is None or not is_enabled(state_dir, owner):
                 return {"ok": False, "error": "plugin disabled"}
-        if session is not None and state_dir is not None:
-            # Tool event pipeline seam: effective plugins observe (and, when
-            # their manifest declares it, may deny or restrictively rewrite)
-            # every registry tool call with a bound policy store -- serial or
-            # batched alike. It grants nothing: the Gate checks inside the
-            # handler still decide this call, and a deny can only tighten it.
+        if state_dir is not None:
+            # Plugin execution policy is state-bound even for direct calls with
+            # no model session. These callbacks receive None for a missing
+            # session and must not create one.
             from .plugin_runtime import after_tool_execution, before_tool_execution
             store = (context or {}).get("store") if context else None
             bound = dict(context or {})
             bound.update(session=session, tool_name=name,
                          tool_gate_kind=tool.gate_kind,
-                         tool_call_id=call_id)
+                         tool_call_id=call_id, state_dir=state_dir, store=store)
             with bind_execution(**bound):
                 denial = before_tool_execution(state_dir, session, store,
                                                name, tool.gate_kind, tool_call_id=call_id)
                 if denial is not None:
-                    return denial
-                try:
-                    result = tool.handler(root, gate, args, session, call_id)
-                except (OSError, ValueError, KeyError, PermissionError,
-                        subprocess.TimeoutExpired) as exc:
-                    # Exceptions may contain command output/environment from
-                    # untrusted processes: do not echo them.
-                    result = (permission_result(gate, exc)
-                              if isinstance(exc, PermissionError)
-                              else {"ok": False, "error": type(exc).__name__})
+                    result = denial
+                else:
+                    try:
+                        result = tool.handler(root, gate, args, session, call_id)
+                    except ToolEffectDenied as exc:
+                        result = exc.result
+                    except (OSError, ValueError, KeyError, PermissionError,
+                            subprocess.TimeoutExpired) as exc:
+                        # Exceptions may contain command output/environment from
+                        # untrusted processes: do not echo them.
+                        result = (permission_result(gate, exc)
+                                  if isinstance(exc, PermissionError)
+                                  else {"ok": False, "error": type(exc).__name__})
                 # The after event also sees handler failures, mirroring the
-                # PostToolUse/PostToolUseFailure split of the hooks plugin.
-                return after_tool_execution(state_dir, session, store,
-                                            name, call_id, result)
+                # PostToolUse/PostToolUseFailure split. Sessionless direct
+                # calls receive state-bound plugin projections without a
+                # synthetic session.
+                result = after_tool_execution(state_dir, session, store,
+                                              name, call_id, result)
+                return result
         return tool.handler(root, gate, args, session, call_id)
+    except ToolEffectDenied as exc:
+        return exc.result
     except (OSError, ValueError, KeyError, PermissionError, subprocess.TimeoutExpired) as exc:
         # Exceptions may contain command output/environment from untrusted
         # processes: do not echo them.

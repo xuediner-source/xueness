@@ -118,6 +118,9 @@ import { SHORTCUT_COMMANDS, resolveShortcutBinding } from "./xuenessShortcutComm
 import { Shell, SidebarActions } from "./XuenessShell";
 import { TimelineStream, TaskTodos } from "./plugins/sessions/XuenessTimeline";
 import { McpElicitation } from "./plugins/mcp/ElicitationForm";
+import { PendingQuestion, QuestionResume } from "./plugins/sessions/PendingQuestion";
+import { SessionExperimentSettings } from "./plugins/sessions/SessionExperimentSettings";
+import { ToolExecutionSettings, ToolCallBudgetStatus } from "./plugins/tools/ToolExecutionSettings";
 import { XuenessRenameDialog } from "./plugins/sessions/XuenessRenameDialog";
 import {
   CAPABILITY_KINDS,
@@ -166,7 +169,7 @@ const DiffView = lazy(() => import("./plugins/files/DiffView").then(module => ({
 const DirectoryBrowser = lazy(() => import("./plugins/files/DirectoryBrowser").then(module => ({ default: module.DirectoryBrowser })));
 const MemoryPanel = lazy(() => import("./plugins/memory/MemoryPanel").then(module => ({ default: module.MemoryPanel })));
 const SettingsSections = lazy(() => import("./plugins/settings/SettingsSections").then(module => ({ default: module.SettingsSections })));
-const DesktopSettings = lazy(() => import("./plugins/desktop/DesktopSettings").then(module => ({ default: module.DesktopSettings })));
+const DesktopAbout = lazy(() => import("./plugins/desktop/DesktopAbout").then(module => ({ default: module.DesktopAbout })));
 const XuenessSettingsView = lazy(() => import("./plugins/settings/XuenessSettingsView").then(module => ({ default: module.XuenessSettingsView })));
 const NetworkSettings = lazy(() => import("./plugins/network/NetworkSettings").then(module => ({ default: module.NetworkSettings })));
 const DesktopUpdates = lazy(() => import("./plugins/updates/DesktopUpdates").then(module => ({ default: module.DesktopUpdates })));
@@ -1029,6 +1032,17 @@ export function XuenessWorkbenchContainer() {
     await refreshList();
   }, [activeId, session?.id, busy, runSessionRequest, loadActive, refreshList]);
 
+  const handleQuestionSubmitted = useCallback(async (targetSessionId: string, continueRun: boolean, isCurrent: () => boolean) => {
+    if (!isCurrent() || activeIdRef.current !== targetSessionId || !pluginEffectiveRef.current("sessions")) return;
+    await loadActive(targetSessionId);
+    await refreshList();
+    if (!continueRun || !isCurrent() || activeIdRef.current !== targetSessionId || !pluginEffectiveRef.current("sessions")
+      || runRequestSessionsRef.current.has(targetSessionId)) return;
+    await runSessionRequest(targetSessionId, () => runSession(targetSessionId, getRunChoices()));
+    await loadActive(targetSessionId);
+    await refreshList();
+  }, [loadActive, refreshList, runSessionRequest]);
+
   const renameById = useCallback(
     async (id: string, value: string) => {
       const target = sessions.find((s) => s.id === id);
@@ -1111,7 +1125,7 @@ export function XuenessWorkbenchContainer() {
   const activeSessionRunning = activeId !== null && session?.id === activeId && (
     session.status === "running" || session.streaming?.status === "streaming" || runRequestSessions.has(activeId)
   );
-  const composerDisabled = (busy && !activeSessionRunning) || !activeId || session?.id !== activeId || !isPluginEffective("sessions");
+  const composerDisabled = (session?.status === "awaiting_user" && settingsValues.sessionsAnswerQuestionEnabled === true) || (busy && !activeSessionRunning) || !activeId || session?.id !== activeId || !isPluginEffective("sessions");
 
   const handleRefreshAll = useCallback(async () => {
     if (!isPluginEffective("sessions")) return;
@@ -1756,7 +1770,7 @@ export function XuenessWorkbenchContainer() {
   }, [settingsSectionIds, settingsSection]);
   const inlineSettings = ["general", "appearance", "shortcuts", "agent"].includes(settingsSection);
   const settingsContent = () => {
-    if (settingsSection === "desktop" && isPluginEffective("desktop")) return <DesktopSettings />;
+    if (settingsSection === "about") return <DesktopAbout enabled={isPluginEffective("desktop")} />;
     if (settingsSection === "network") return <NetworkSettings enabled={isPluginEffective('network')} disabled={busy || settingsSaving || pluginCatalogLoading} />;
     if (settingsSection === 'updates') return <DesktopUpdates enabled={isPluginEffective('updates') && isPluginEffective('desktop')} />;
     if (settingsSection === "browser") return <BrowserSettings enabled={isPluginEffective("browser")} disabled={busy || settingsSaving || pluginCatalogLoading}
@@ -1769,7 +1783,11 @@ export function XuenessWorkbenchContainer() {
     if (pluginId && !isPluginEffective(pluginId)) return <FeatureUnavailable feature={settingsSections.find(section => section.id === settingsSection)?.label ?? settingsSection} onManage={() => setSettingsSection("modules")} />;
     if (inlineSettings) return <SettingsSections embedded sections={[]} activeSection={settingsSection}
       values={{...settingsValues, language: settingsValues.language ?? locale}} capabilities={capabilities}
-      onToggleCapability={handleToggleCapability} onUpdateSetting={handleUpdateSetting} saving={settingsSaving} />;
+      onToggleCapability={handleToggleCapability} onUpdateSetting={handleUpdateSetting} saving={settingsSaving}
+      pluginSettings={settingsSection === "general" ? <>
+        {isPluginEffective("sessions") && <SessionExperimentSettings values={settingsValues} disabled={settingsSaving} onUpdate={handleUpdateSetting} />}
+        {isPluginEffective("tools") && <ToolExecutionSettings values={settingsValues} disabled={settingsSaving} onUpdate={handleUpdateSetting} />}
+      </> : undefined} />;
     if (settingsSection === "workspace") return <><XuenessWorkspaceSettings currentRoot={session?.root ?? draftRoot ?? composerCatalog.root}
       onDefaultChanged={() => { if (!activeId) { setDraftRoot(undefined); setIsolatedWorkspace(false); updateChoices({remote:undefined}); } void refreshComposerCatalog(); }} /><SettingsSections embedded sections={[]} activeSection="workspace-display" values={settingsValues} capabilities={capabilities} onUpdateSetting={handleUpdateSetting} saving={settingsSaving} /></>;
     if (settingsSection === "providers") return <>
@@ -2114,6 +2132,10 @@ export function XuenessWorkbenchContainer() {
             </div>
           )}
           {isPluginEffective("mcp") && <McpElicitation sessionId={session.id} />}
+          <PendingQuestion sessionId={session.id} pendingQuestion={session.status === "awaiting_user" ? session.pending_question : null}
+            enabled={isPluginEffective("sessions") && settingsValues.sessionsAnswerQuestionEnabled === true}
+            disabled={busy || runRequestSessions.has(session.id)} onSubmitted={handleQuestionSubmitted} />
+          <ToolCallBudgetStatus sessionId={session.id} enabled={isPluginEffective("tools") && settingsValues.toolsCallBudgetEnabled === true} revision={session} />
           <ConversationTimelineViewport
             key={session.id}
             autoScroll={settingsValues.autoScroll !== false}
@@ -2141,6 +2163,8 @@ export function XuenessWorkbenchContainer() {
             {queueError?.sessionId === session.id && <p className="xn-session-queue__error" role="alert">{queueError.message}</p>}
             {session.streaming?.status === "interrupted" && session.streaming.text && <p role="status" className="xn-run-error">{tr("输出已中断，已保留收到的内容。")}</p>}
           </ConversationTimelineViewport>
+          <QuestionResume enabled={isPluginEffective("sessions") && settingsValues.sessionsAnswerQuestionEnabled === true}
+            status={session.status} pendingQuestion={session.pending_question} disabled={busy || runRequestSessions.has(session.id)} onResume={handleRetryRun} />
           {(runError || session.status === "provider_error" || (!busy && session.status === "pending")) && (
             <div className="xn-run-error">
               {runError && <p role="alert">{runError}</p>}

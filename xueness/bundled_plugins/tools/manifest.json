@@ -1,11 +1,14 @@
 {
   "id": "tools",
   "name": "工具执行策略",
-  "description": "对其他插件注册的工具调用施加实验性执行策略（干跑预览）。",
+  "description": "对其他插件注册的工具调用施加可选执行策略：干跑预览与单轮调用预算均默认关闭。",
   "version": "0.1.0",
   "apiVersion": 1,
   "defaultEnabled": true,
   "dependencies": [],
+  "httpFamilies": [
+    "tools"
+  ],
   "tools": [],
   "commands": [],
   "panels": [],
@@ -13,11 +16,14 @@
   "capabilities": [],
   "toolEvents": {
     "events": [
-      "before_tool_execution"
+      "before_tool_execution",
+      "before_tool_effect",
+      "after_tool_execution"
     ],
     "priority": 100
   },
   "modules": [
+    "call_budget",
     "dry_run"
   ],
   "features": [
@@ -25,7 +31,14 @@
       "id": "tools.dry_run_experimental",
       "name": "工具调用干跑预览（实验，默认关闭）",
       "nameEn": "Tool call dry-run preview (experimental, off by default)"
+    },
+    {
+      "id": "tools.call_budget_experimental",
+      "name": "单轮工具调用预算（实验，默认关闭）",
+      "nameEn": "Per-turn tool call budget (experimental, off by default)"
     }
   ],
-  "frontendModules": []
+  "frontendModules": [
+    "plugins/tools/ToolExecutionSettings.tsx"
+  ]
 }

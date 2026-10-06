@@ -56,7 +56,7 @@ try {
       cancellations.push({ taskId, resolve, reject });
     });
     const renderPane = () => paneRoot.render(React.createElement(SubagentSidePane, {
-      ...paneProps, fetchTasksFn, onCancel,
+      ...paneProps, fetchTasksFn, onCancelTask: onCancel,
     }));
     renderPane();
 
@@ -246,7 +246,14 @@ try {
   await page.waitForFunction(() => window.__reviewR6R7.pane.requestInfo(window.__reviewR6R7.pane.requestCount() - 1)?.sessionId === "cancel-session");
   const cancelLoadIndex = await page.evaluate(() => window.__reviewR6R7.pane.requestCount() - 1);
   await page.evaluate((index) => window.__reviewR6R7.pane.resolve(index, [{ id: "cancel-task", status: "running", steps: 1 }]), cancelLoadIndex);
+  await page.getByTestId("subagent-task-cancel-task").waitFor({ state: "visible" });
+  assert.equal(await page.getByTestId("subagent-cancel-cancel-task").count(), 0, "per-task cancellation defaults off");
+  await page.evaluate(() => window.__reviewR6R7.pane.setProps({ cancelOneEnabled: true }));
   await page.getByTestId("subagent-cancel-cancel-task").waitFor({ state: "visible" });
+  page.once("dialog", async dialog => {
+    assert.equal(dialog.type(), "confirm");
+    await dialog.accept();
+  });
   await page.getByTestId("subagent-cancel-cancel-task").click();
   await page.waitForFunction(() => window.__reviewR6R7.pane.cancellationCount() === 1);
   await page.evaluate(() => window.__reviewR6R7.pane.setProps({ sessionId: "next-session" }));

@@ -52,6 +52,7 @@ function fixtureStyle() {
     .xn-timeline-window-spacer { flex: none; }
     .xn-timeline-item { min-width: 0; }
     .xn-conversation-history-rail { position: fixed; right: 8px; top: 8px; display: flex; flex-direction: column; }
+    .xn-conversation-history-rail__track { max-height: 220px; overflow-x: hidden; overflow-y: auto; }
   </style>`;
 }
 
@@ -161,14 +162,22 @@ async function withPage(caseName, options, run) {
     browser = await chromium.launch({ channel: browserChannel, headless: true });
     const page = await browser.newPage({ viewport: { width: 900, height: 640 } });
     const pageErrors = [];
-    page.on("pageerror", (error) => pageErrors.push(error.message));
+    const consoleErrors = [];
+    const failedRequests = [];
+    page.on("pageerror", (error) => pageErrors.push(`${error.message}\n${error.stack ?? ""}`));
+    page.on("console", (message) => { if (message.type() === "error") consoleErrors.push(message.text()); });
+    page.on("requestfailed", (request) => failedRequests.push(`${request.url()}: ${request.failure()?.errorText ?? "failed"}`));
     await page.route("**/*", (route) => {
       const url = new URL(route.request().url());
       if (url.origin === `http://127.0.0.1:${port}`) return route.continue();
       return route.abort();
     });
     await page.goto(`http://127.0.0.1:${port}/`);
-    await page.waitForSelector("[data-testid='timeline-stream']");
+    try {
+      await page.waitForSelector("[data-testid='timeline-stream']", { timeout: 5000 });
+    } catch (error) {
+      throw new Error(`${caseName}: timeline did not render; pageerrors=${JSON.stringify(pageErrors)} console=${JSON.stringify(consoleErrors)} failedRequests=${JSON.stringify(failedRequests)}; ${error.message}`);
+    }
     await settle(page);
     await run(page);
     assert.deepEqual(pageErrors, [], "页面不应出现未捕获错误");

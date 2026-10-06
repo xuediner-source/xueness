@@ -17,6 +17,24 @@ import urllib.request
 
 ROOT = Path(__file__).resolve().parents[2]
 DIAGNOSTIC_TAIL_CHARS = 8000
+sys.path.insert(0, str(ROOT))
+from xueness.plugin_runtime import PLUGIN_IDS
+
+EXPECTED_PLUGIN_IDS = set(PLUGIN_IDS)
+EXPECTED_FEATURE_IDS = {
+    feature['id']
+    for plugin_id in PLUGIN_IDS
+    for feature in json.loads(
+        (ROOT/'xueness/bundled_plugins'/plugin_id/'manifest.json').read_text(encoding='utf-8')
+    )['features']
+}
+
+
+def _assert_plugin_catalog(plugins):
+    plugin_ids = [plugin.get('id') for plugin in plugins]
+    feature_ids = [feature.get('id') for plugin in plugins for feature in plugin.get('features', [])]
+    assert len(plugin_ids) == len(PLUGIN_IDS) and set(plugin_ids) == EXPECTED_PLUGIN_IDS, plugin_ids
+    assert len(feature_ids) == len(EXPECTED_FEATURE_IDS) and set(feature_ids) == EXPECTED_FEATURE_IDS, feature_ids
 
 
 def _text(value):
@@ -377,7 +395,8 @@ def main():
             assert json.loads(request('/api/health'))['ok']
             assert b'assets/' in request('/')
             plugins = json.loads(request('/api/plugins'))['plugins']
-            assert len(plugins) == 27 and any(p['id'] == 'desktop' for p in plugins)
+            _assert_plugin_catalog(plugins)
+            assert any(p['id'] == 'desktop' for p in plugins)
             status = json.loads(request('/api/desktop/status'))
             assert status['desktop'] and status['frozen']
             workspace = data/'workspace'
@@ -471,7 +490,7 @@ def main():
                 raise AssertionError('disabled desktop feature accepted')
             except urllib.error.HTTPError as exc:
                 assert exc.code == 403
-            assert len(json.loads(request('/api/plugins'))['plugins']) == 27
+            _assert_plugin_catalog(json.loads(request('/api/plugins'))['plugins'])
             slow_argv = ['powershell.exe', '-NoProfile', '-Command', "Start-Sleep -Seconds 3; Set-Content 'late-write' 'bad'"] if os.name == 'nt' else ['/bin/sh', '-c', 'sleep 3; touch late-write']
             slow = json.loads(request('/api/workflows', {'root': str(workspace), 'plan': {'nodes': [{'id': 'slow', 'argv': slow_argv}]}}))
             request(f"/api/workflows/{slow['id']}/start", {'approve': True})
@@ -490,7 +509,7 @@ def main():
                 assert proc.wait(timeout=15) == 0
             time.sleep(3.5)
             assert not (workspace/'late-write').exists(), 'desktop exit left an owned workflow command running'
-            print('PASS: frozen runtime, authenticated HTTP, UI, 27 plugins, real PTY/ConPTY, workflow worker, gating and '+('forced-exit cleanup' if args.force_exit else 'shutdown'))
+            print(f'PASS: frozen runtime, authenticated HTTP, UI, {len(PLUGIN_IDS)} plugins, real PTY/ConPTY, workflow worker, gating and '+('forced-exit cleanup' if args.force_exit else 'shutdown'))
         except Exception:
             print('\n'.join(errors[-12:]))
             raise

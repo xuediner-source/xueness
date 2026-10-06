@@ -1,5 +1,9 @@
 # Xueness 插件架构与功能归属
 
+2026-10-06 交接修复与后续功能：当前完整目录为 **28 个插件、145 项登记功能**。新增 `sessions.answer_question_experimental`、`sessions.question_answer_ui` 和 `tools.call_budget_experimental`，全部归属可信插件，实验开关默认关闭。复核问题及新接口见[本轮说明](handoff-followup-2026-10-06.md)。下方按日期保留的记录和数量为当时状态。
+
+2026-10-06 设置整理：`desktop.status` 的前端从 `DesktopSettings.tsx` 替换为 `DesktopAbout.tsx`，在「关于 Xueness」显示实际版本与数据位置；删除独立桌面端设置导航。`updates.desktop` 的侧栏入口仅在确认有新版本时显示红点，隐藏时仍维持已有状态轮询，手动检查保留在更新设置页。沿用既有插件和功能 ID，目录总数不变。使用位置见[桌面端说明](xueness-desktop.md#客户端更新)。
+
 2026-10-05 前端体验（参照 Qoder IDE）：模型选择弹层重构为 `sessions` 的 `XuenessComposerToolbar.tsx` 内 `ComposerModelMenu`/`ComposerModelDetailCard`——顶部「标准 / 本地轻量」档位行、模型行右侧显示服务商声明的上下文窗口与推理档位、悬停/键盘聚焦弹出模型详情卡（模型 ID、协议、上下文、最大输出、推理档位与编辑入口，编辑跳转模型配置）。同轮新增的 `XuenessStartPage.tsx` 登记为 `sessions.start_page`，提供空会话起始页（左侧快捷动作块只接已有能力，右侧最近会话最多 5 条）。工作台用量速览归 `usage.quick_card`（`XuenessUsageQuickCard.tsx`）：输入框工具行的小「用量」按钮弹出本会话与今日的 Token 卡片，只统计服务商实际报告的用量，缺失不估算，usage 插件关闭时整个入口不渲染。与同日合入的 `planning.session_goal` 合计，当前完整目录包含 **27 个插件、115 项子功能**。
 
 2026-10-04 前端优化：设置搜索归 `settings.destination_search`；命令面板搜索与键盘导航归 `sessions.command_palette`；跟随消息及回到底部归 `sessions.timeline_follow`。文件逐行差异与未变上下文折叠扩展既有 `files.changes`。启动主题解析位于 settings 的 `themeBoot.ts`，会话刷新调度位于 sessions 的 `SessionPolling.ts`，均登记实际 frontendModules。当前完整目录包含 **27 个插件、108 项子功能**。令牌、跳转主要内容、加载占位及局部渲染错误边界属于既有基础 UI，不执行产品操作，也不改变插件权限。完整改动与验收见 [本轮记录](frontend-optimization-2026-10-04.md)。
@@ -44,7 +48,7 @@ flowchart LR
 | office | `OfficeDocumentRenderer.tsx` |
 | automation | `OffPeakTasks.tsx`、`automationModel.ts`、`index.tsx`、`offPeakModel.ts` |
 | browser | `BrowserSettings.tsx`、`DesktopBrowserImport.tsx` |
-| desktop | `DesktopSettings.tsx`、`DesktopTitlebar.tsx`、`DesktopTrayBridge.tsx`、`DesktopTrayMenu.tsx`、`tray-main.tsx` |
+| desktop | `DesktopAbout.tsx`、`DesktopTitlebar.tsx`、`DesktopTrayBridge.tsx`、`DesktopTrayMenu.tsx`、`tray-main.tsx` |
 | diagnostics | `index.tsx` |
 | extensions | `PluginProfilePicker.tsx`、`index.tsx` |
 | network | `NetworkSettings.tsx` |
@@ -85,7 +89,7 @@ flowchart LR
 | onboarding | 隐藏密钥输入的配置向导 | providers | 开 |
 | updates | 源仓库快进更新与桌面客户端更新 | — | 开 |
 | desktop | 原生窗口、目录选择、状态和标题栏 | — | 开 |
-| tools | 副作用工具调用的实验性策略（工具干跑，开关默认关闭） | — | 开 |
+| tools | 工具干跑及每轮工具调用预算（实验开关默认关闭） | — | 开 |
 
 “开”指模块可用。Hooks/MCP/子代理等运行 opt-in 仍默认关闭；Web 写操作继续逐调用批准。禁用依赖不会改写其他开关，但会让依赖者 `effective=false`。重新启用依赖后，原来启用的依赖者恢复；显式关闭的插件保持关闭。文件禁用不影响独立 PTY，但 shell 或 sessions 禁用会关闭终端。
 
@@ -685,48 +689,25 @@ subagents 插件登记新功能 `subagents.cancel_one`（单个子任务协作�
 
 ## 实验：会话事件增量游标（sessions.events_cursor，2026-10-06）
 
-sessions 插件登记实验功能 `sessions.events_cursor`（会话事件增量游标拉取，默认关闭）。实现全部位于 `xueness/bundled_plugins/sessions/events_cursor.py`，manifest 只增加数据（`modules` 增 `events_cursor`、`features` 增该 ID），路由归属既有 sessions 的 `sessions` HTTP 家族；没有新增工具、面板、前端模块、状态文件，也没有共享内核例外。
+实现位于 sessions 的 `events_cursor.py`，设置 → 通用 → 会话实验功能可开启 `general.sessionsEventsCursorEnabled`；只有布尔 `true` 生效。默认关闭，sessions 停用时整个会话 API 被拒绝。无 `cursor`/`since` 的旧路由响应及 SSE 保持兼容。
 
-### 开关
+`GET /api/sessions/<sid>/events?cursor=0&limit=200` 开始同步。`cursor` 与别名 `since` 可接受 `0` 或宿主返回的 opaque `c1.<position>.<prefix-revision>` token；多个值必须一致。limit 只接受十进制数字，默认 200，限制为 1–500。非法参数 400；开关关闭但请求游标时明确拒绝，不默默返回全量。
 
-设置键 `general.sessionsEventsCursorEnabled`，只有精确的布尔 `true` 才打开。缺省、`false`、`"true"`/`1` 等非布尔值，以及 `general` 段不是对象，一律算关闭；`POST /api/settings/general` 对这一键做布尔校验，非法值回 400。开关按请求绑定的状态目录逐次读取，改完即生效、不需要重启。sessions 插件停用或依赖被阻塞时 `effective=false`，整条会话路由回 403，开关再开也没有出口。
+响应 `{id,status,steps,events,next_cursor,next_cursor_token,has_more}`。事件 `seq` 为派生列表位置；**下一次请求必须使用 `next_cursor_token`**，`next_cursor` 数字仅作位置说明。已消费前缀哈希排除原地变化的 status 事件，status/steps 始终通过信封更新。追加保持旧 token 有效；已读事件替换、问题清空、压缩、缩短后重新增长，以及超前 token 均返回 409 `{errorCode:"sessions.events_cursor.resync_required",resync_cursor:0}`。客户端须清空本地派生投影并从 0 重同步；无版本信息的非零旧数字也明确要求重同步，避免静默漏取。
 
-### 请求参数
+`Accept: text/event-stream` 时每帧 `id:` 为该事件后的 token，data 保留数字 seq；token 哈希以一次扫描生成，不逐事件重算整个前缀。payload 继续采用旧摘要与边界，不携带额外原文。不带游标的老客户端完全不受上述契约迁移影响。
 
-`GET /api/sessions/<sid>/events` 额外接受三个查询参数：
-
-- `cursor`：非负十进制整数，取 `seq > cursor` 的增量窗口。
-- `since`：`cursor` 的别名。两者同时出现必须给出同一个值，否则 400 `conflicting cursor values`；空值等同于未提供，重复同名参数取第一个值。
-- `limit`：窗口大小，默认 200，钳到 1..500。与旧路径不同，游标请求里非十进制的 `limit` 直接 400 `invalid limit`；旧请求仍像过去一样回落到 200。
-
-不传 `cursor`/`since` 就是旧请求，响应仍是 `{id, status, steps, events}`，事件对象里不出现 `seq`，派生顺序与截断规则一字未改——老客户端看不见本功能存在。开关关闭时带游标的请求回 400 `{error: "sessions.events_cursor not enabled", feature: "sessions.events_cursor"}`，不会退化成「其实把全部事件都返回」。参数解析在开关检查之前，因此非法游标无论开关状态都得到同一个 400。
-
-### 响应字段
-
-打开后的 JSON 信封是 `{id, status, steps, events, next_cursor, has_more}`：
-
-- `events`：本会话完整旧派生结果按稠密 `seq`（从 1）编号后，落在窗口里的那一段，每项多带一个 `seq`。`seq` 1 是状态事件，它在运行期间原地变化，所以 `status` 与 `steps` 始终走信封字段，不作为重复事件下发。
-- `next_cursor`：本窗口最后一条的 `seq`；没有新事件时就是请求游标本身，客户端可以把它直接当作下一次的 `cursor`。
-- `has_more`：`cursor + limit < head`，即下一页是否已经在等着，客户端据此决定要不要立刻续拉。
-- 请求带 `Accept: text/event-stream` 时，同一窗口用 events.v1 的 SSE body 输出，每帧额外带 `id:`（就是 `seq`），便于断线重连；旧请求的 SSE 帧仍不含 `id:`。
-
-### 超前游标要求重同步
-
-journal 只会追加，但手动压缩或清空待回答问题会让这份派生列表缩短并重新编号。因此 `cursor` 大于当前 head 时不返回空页，而是 400 `cursor ahead of session head`（`errorCode: xueness.error.invalid_argument`）。客户端收到它必须从 `cursor=0` 重新同步，或退回不带游标的旧请求：静默给一个空页会让被重编号的事件永久丢失。其余非法值同样是 400——非十进制、带符号、空白或小数回 `invalid cursor`，超过 `2**53-1`（浏览器 JSON 已无法精确回传该整数）回 `cursor too large`。
-
-### 边界与验证
-
-会话 id 仍须通过既有合法性校验，事件只从本服务器 store 中的会话派生，payload 保持旧的截断摘要，游标没有暴露任何新内容；Host/Origin/CSRF 与只读语义不变。验证：`tests/test_sessions_events_cursor.py`（参数解析、别名与冲突、limit 的严格与钳位、稠密 `seq` 与逐页走完整个时间线、增长追加不重编号、压缩缩短后被迫重同步、超前游标 400、开关只认显式布尔、关闭时拒绝、旧响应逐字段不变、sessions 停用压过开关）。
+回归覆盖追加续页、别名/重复参数、同长度替换、压缩后增长、legacy 零游标、旧响应、插件关闭和 SSE token 续页。
 
 ## 实验：工具干跑（tools.dry_run_experimental，2026-10-06）
 
-新的可信 bundled 插件 `tools`（工具执行策略）登记实验功能 `tools.dry_run_experimental`（工具调用干跑预览，默认关闭）。完整目录现为 **28 个插件、142 项登记功能**。该插件不贡献任何模型可见工具、面板、CLI 命令、HTTP 家族、状态文件或前端组件：它拥有的是一条「施加在别人注册的工具之上」的策略，实现全在 `xueness/bundled_plugins/tools/dry_run.py`，manifest 只有数据（`toolEvents` 声明 `before_tool_execution`、`priority` 100、`modules` 仅 `dry_run`）。共享内核只多了 `PLUGIN_IDS` 里这一个 ID，前端静态注册表加一条 `panels` 为空的目录条目；工作台容器、时间线与批准界面均未改动。
+新的可信 bundled 插件 `tools`（工具执行策略）登记实验功能 `tools.dry_run_experimental`（工具调用干跑预览，默认关闭）。该策略实现在 `xueness/bundled_plugins/tools/dry_run.py`。同插件后续新增 `call_budget.py` 和只读预算状态接口，前端 `plugins/tools/ToolExecutionSettings.tsx` 提供实验开关与预算状态；没有新增模型可见工具或授权能力。宿主只挂载插件界面、分发通用执行协议。
 
 打开后，一个「会写东西或会执行」的工具调用不再真正发生，而是返回结构化的「本次将要执行什么」；只读工具照常运行。它的用途是让小模型或实验配置先看清自己的打算，再决定切回可写模式。
 
 ### 开关
 
-- 设置键 `general.toolsDryRunEnabled`：只有精确的布尔 `true` 打开。缺省、`false`、`"true"`/`1` 等非布尔值、`general` 段不是对象都算关闭；`POST /api/settings/general` 对这一键做布尔校验，非法值回 400 `toolsDryRunEnabled must be boolean`。目前没有界面控件（与 `sessionsEventsCursorEnabled` 同属实验位），开关只能由设置接口（沿用 Host/Origin/CSRF）或状态目录里的 `settings.json` 写入。
+- 设置键 `general.toolsDryRunEnabled`：只有精确的布尔 `true` 打开。缺省、`false`、`"true"`/`1` 等非布尔值、`general` 段不是对象都算关闭；`POST /api/settings/general` 对这一键做布尔校验，非法值回 400 `toolsDryRunEnabled must be boolean`。可通过「设置 → 通用 → 工具执行实验功能」开启，或使用设置接口（沿用 Host/Origin/CSRF）。
 - 操作员环境变量 `XUENESS_TOOLS_DRY_RUN=1|true|yes|on`（与项目里其他环境覆盖同样的拼写）只能**打开**本功能，不能反过来把已设置为真的开关关掉；其他值一律视为未打开。
 - 开关按每次调用绑定的状态目录读取（执行上下文 → store 目录 → gate），所以改了不必重启，也不会串到别的状态目录。`tools` 插件被停用或 `state_dir` 缺失且环境未覆盖时，策略完全不生效，行为与本功能不存在时一致。
 
@@ -751,7 +732,7 @@ journal 只会追加，但手动压缩或清空待回答问题会让这份派生
 - `edit`：`path`、`target`、`old_chars/new_chars`、`matches`、`would_apply`、`file_exists`、同样的 `diff`（对文件当前内容计算）。目标不存在时不会创建文件，预览如实给出 `file_exists: false`、`would_apply: false`——它替代的本来是一次失败。
 - `exec`：`argv`（最多 64 项、每项 300 字符，超出置 `argv_truncated`）、`cwd`、`shell: false`、`would_filter_secrets_from_environment: true`——命令串与密钥过滤都和真跑时同一套。
 - 目标路径经 files 插件自己的 `_mutating_target` 解析，plan 草稿例外一并生效，所以预览里出现的绝对路径正是本次调用真会写入的路径；越界路径在解析阶段就抛 `PermissionError`，守卫让位，处理器给出原样的边界拒绝。
-- 内容与差异都有硬上限（预览 2000、差异 4000 字符 / 80 行），工具结果要进模型上下文和会话 journal，不随文件大小增长。
+- 内容与差异都有输出上限（预览 2000、差异 4000 字符 / 80 行）；文件读取和 diff 处理另外设上限。已有但不可读、非普通文件或超过读取上限时返回 preview_unavailable / 不可可靠计算 diff，存在性保持真实，不伪装成新文件。
 - `ok: false` 且 `error` 不是 `"denied"`：预览既不会被 `changed_files` 当作改动收集（那里要求 `ok` 为真），也不会进 `pending_denials`（那里只认 `error == "denied"`），界面因此不会长出假的「批准」按钮。
 
 ### 只能收紧，不能放宽
@@ -764,3 +745,9 @@ journal 只会追加，但手动压缩或清空待回答问题会让这份派生
 ### 验证
 
 `tests/test_tools_dry_run.py`（31 项）覆盖：分类与注册表对齐、无副作用工具能逃逸开关、只认显式布尔与环境覆盖、`tools` 停用压过开关、设置校验文案、三种预览的形状与上限且可 JSON 序列化、开关关时行为完全不变、开时 `write/edit/exec` 不落盘不执行、只读工具照常、开关即时生效不需重启、无预览的副作用被 `plugin_denied` 且一次都没调用底层实现、plan 权限模式与内核 `mode=plan`、`disallow`、越界路径的拒绝载荷不变、预览不消耗一次性批准、非法参数保持原错误、其它状态目录不受影响、manifest 只放数据且功能 ID 双语登记。结构门禁 `python3 tools/check_plugin_architecture.py` 与 `tests/test_plugin_architecture.py` 同步通过。
+
+## 本轮答复与预算归属
+
+sessions 的 `answer_question.py`、`PendingQuestion.tsx`、`questionApi.ts`、`SessionExperimentSettings.tsx` 分别拥有结构化答复 API、标准/轻量共用表单与设置。tools 的 `call_budget.py`、`ToolExecutionSettings.tsx` 拥有执行前预算、状态投影和设置。所有子功能均可在完整功能插件目录检索；没有独立面板的 tools 仍完整显示。
+
+共享基础设施的新增 seam 是声明式 `before_tool_effect`：在既有 Gate/能力授权通过后、真正执行前同步调用可信插件策略；观察性 hook 不承担 fail-closed 策略。注册表不读取预算配置，不导入预算业务。`execution_scope` 只是一份通用临时数据映射，具体计数由 tools 提供。共享 `ui/StreamingCommitGate.ts` 只调度文本提交/清理计时器，由 sessions 登记导出符号，providers 轻量界面复用纯调度器；不拥有模型、请求或权限策略，也不扩大整个插件依赖。

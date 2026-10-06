@@ -402,7 +402,8 @@ def tool_event_plan(state_dir) -> list[dict]:
         plan.append({'id': pid, 'priority': _tool_event_priority(by_id[pid]),
                      'before': 'before_tool_execution' in events,
                      'after': 'after_tool_execution' in events,
-                     'authorized': 'after_tool_authorization' in events})
+                     'authorized': 'after_tool_authorization' in events,
+                     'effect': 'before_tool_effect' in events})
     return plan
 
 
@@ -472,7 +473,7 @@ def before_tool_execution(state_dir, session, store, tool_name, gate_kind,
 
     Returns ``None`` to proceed, or the structured denial result.
     """
-    if session is None or state_dir is None:
+    if state_dir is None:
         return None
     try:
         payload = {'state_dir': state_dir, 'session': session, 'store': store,
@@ -507,6 +508,59 @@ def before_tool_execution(state_dir, session, store, tool_name, gate_kind,
                     'user_reason': reason}
     except Exception:  # noqa: BLE001 - the seam must degrade, not fail the call
         return None
+    return None
+
+
+def before_tool_effect(state_dir, session, store, tool_name, gate_kind,
+                       subject, tool_call_id=None):
+    """Synchronously run declared strict policies after Gate, before effects.
+
+    Unlike observational tool events, this seam is fail-closed and is allowed
+    to return a structured refusal. It also runs for state-bound direct calls
+    without a model session; such callers receive only the plugin's scoped
+    behavior and do not acquire a synthetic session.
+    """
+    if state_dir is None:
+        return None
+    from .tool_contract import ToolEffectDenied
+    payload = {'state_dir': state_dir, 'session': session, 'store': store,
+               'tool': tool_name, 'gate_kind': gate_kind, 'subject': subject,
+               'tool_call_id': tool_call_id}
+    try:
+        participants = [item for item in tool_event_plan(state_dir)
+                        if item.get('effect')]
+    except Exception:  # noqa: BLE001 - policy lookup failure must fail closed.
+        raise ToolEffectDenied({
+            'ok': False, 'error': 'tool execution policy unavailable',
+            'error_code': 'tool_policy_unavailable', 'retryable': False})
+    for participant in participants:
+        callback = getattr(entrypoint(participant['id']),
+                           'before_tool_effect', None)
+        if not callable(callback):
+            continue
+        try:
+            outcome = callback(payload)
+        except Exception as exc:  # noqa: BLE001 - strict policy fails closed.
+            _tool_event_diagnostics(session, 'before_tool_effect',
+                                    participant['id'], 'error',
+                                    type(exc).__name__)
+            raise ToolEffectDenied({
+                'ok': False, 'error': 'tool execution policy unavailable',
+                'error_code': 'tool_policy_unavailable', 'retryable': False})
+        if outcome is None:
+            continue
+        if (isinstance(outcome, dict) and outcome.get('decision') == 'deny'
+                and isinstance(outcome.get('result'), dict)
+                and outcome['result'].get('ok') is False):
+            _tool_event_diagnostics(session, 'before_tool_effect',
+                                    participant['id'], 'deny',
+                                    outcome['result'].get('error_code', ''))
+            return outcome['result']
+        _tool_event_diagnostics(session, 'before_tool_effect',
+                                participant['id'], 'invalid_result', '')
+        raise ToolEffectDenied({
+            'ok': False, 'error': 'tool execution policy unavailable',
+            'error_code': 'tool_policy_unavailable', 'retryable': False})
     return None
 
 
@@ -580,11 +634,17 @@ def after_tool_execution(state_dir, session, store, tool_name, tool_call_id, res
     replacement with :func:`_rewrite_problem` and rejects it otherwise,
     recording a diagnostic. Returns the result to record.
     """
-    if session is None or state_dir is None or not isinstance(result, dict):
+    if state_dir is None or not isinstance(result, dict):
         return result
     try:
+        try:
+            from .tool_contract import execution_context
+            execution_scope = execution_context().get('execution_scope')
+        except ValueError:
+            execution_scope = None
         payload = {'state_dir': state_dir, 'session': session, 'store': store,
-                   'tool': tool_name, 'tool_call_id': tool_call_id, 'result': result}
+                   'tool': tool_name, 'tool_call_id': tool_call_id, 'result': result,
+                   'execution_scope': execution_scope}
         for participant in tool_event_plan(state_dir):
             callback = getattr(entrypoint(participant['id']),
                                'after_tool_execution', None)

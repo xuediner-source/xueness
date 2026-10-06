@@ -10,15 +10,22 @@ test('disabled updates mount no controls and do not claim an installation', () =
   assert.equal(renderToStaticMarkup(<DesktopUpdates enabled={false} compact />), '');
 });
 
-test('compact updates expose a small accessible entry instead of a banner', () => {
-  const html = renderToStaticMarkup(<DesktopUpdates enabled compact onManage={() => {}} />);
+test('compact updates hide the footer entry until an update is known', () => {
+  assert.equal(renderToStaticMarkup(<DesktopUpdates enabled compact onManage={() => {}} />), '');
+  const html = renderToStaticMarkup(<DesktopUpdateIndicator state={{ phase: 'available', version: '0.2.0', currentVersion: '0.1.0' }} />);
   assert.match(html, /data-testid="desktop-update-indicator"/);
-  assert.match(html, /aria-label="应用更新"/);
+  assert.match(html, /aria-label="应用更新 · Xueness 0\.2\.0 · 下载更新"/);
   assert.match(html, /data-sidebar-navigate="true"/);
+  assert.match(html, /xn-update-indicator__dot/);
   assert.doesNotMatch(html, /<aside|xn-update-notice|查看更新/);
 });
 
-test('update indicator marks ready, download and failure states without dumping server errors', () => {
+test('update indicator stays visible through a known update lifecycle and always shows a red-dot marker', () => {
+  for (const phase of ['available', 'downloading', 'ready', 'installing', 'opening-installer', 'installer_opened']) {
+    const html = renderToStaticMarkup(<DesktopUpdateIndicator state={{ phase, version: '0.2.0', currentVersion: '0.1.0' }} />);
+    assert.match(html, /data-testid="desktop-update-indicator"/, phase);
+    assert.match(html, /xn-update-indicator__dot/, phase);
+  }
   const ready = renderToStaticMarkup(<DesktopUpdateIndicator state={{ phase: 'ready', version: '0.2.0' }} />);
   assert.match(ready, /data-pending="true"/);
   assert.match(ready, /重启并更新/);
@@ -26,12 +33,37 @@ test('update indicator marks ready, download and failure states without dumping 
   const downloading = renderToStaticMarkup(<DesktopUpdateIndicator state={{ phase: 'downloading', percent: 35 }} />);
   assert.match(downloading, /xn-update-indicator__spinner/);
   assert.match(downloading, /更新下载进度/);
-  const failed = renderToStaticMarkup(<DesktopUpdateIndicator state={{ phase: 'error', reason: 'Cannot find latest.yml: Headers: long raw trace' }} />);
+  const failed = renderToStaticMarkup(<DesktopUpdateIndicator state={{ phase: 'error', version: '0.2.0', currentVersion: '0.1.0', reason: 'Cannot find latest.yml: Headers: long raw trace' }} />);
   assert.match(failed, /data-error="true"/);
+  assert.match(failed, /xn-update-indicator__dot/);
   assert.match(failed, /检查失败/);
   assert.doesNotMatch(failed, /latest.yml|Headers|raw trace/);
-  assert.match(renderToStaticMarkup(<DesktopUpdateIndicator state={null} failed />), /data-error="true"/);
-  for (const phase of ['disabled', 'unsupported']) assert.equal(renderToStaticMarkup(<DesktopUpdateIndicator state={{ phase }} />), '');
+  const cancelled = renderToStaticMarkup(<DesktopUpdateIndicator state={{ phase: 'cancelled', version: '0.2.0', currentVersion: '0.1.0' }} />);
+  assert.match(cancelled, /desktop-update-indicator/);
+  assert.match(cancelled, /xn-update-indicator__dot/);
+});
+
+test('unknown, failed, current, disabled and stale update states stay hidden', () => {
+  assert.equal(renderToStaticMarkup(<DesktopUpdateIndicator state={null} failed />), '');
+  const checkingKnownUpdate = renderToStaticMarkup(<DesktopUpdateIndicator state={{ phase: 'checking', version: '0.2.0', currentVersion: '0.1.0' }} />);
+  assert.match(checkingKnownUpdate, /data-testid="desktop-update-indicator"/);
+  assert.match(checkingKnownUpdate, /xn-update-indicator__dot/);
+  for (const state of [
+    { phase: 'error' },
+    { phase: 'error', version: '0.2.0' },
+    { phase: 'cancelled', version: '0.2.0' },
+    { phase: 'error', version: '0.1.0', currentVersion: '0.1.0' },
+    { phase: 'cancelled', version: '0.0.9', currentVersion: '0.1.0' },
+    { phase: 'current', version: '0.1.0', currentVersion: '0.1.0' },
+    { phase: 'checking' },
+    { phase: 'checking', version: '0.1.0', currentVersion: '0.1.0' },
+    { phase: 'checking', version: '0.0.9', currentVersion: '0.1.0' },
+    { phase: 'idle', version: '0.2.0', currentVersion: '0.1.0' },
+    { phase: 'available', version: '0.1.0', currentVersion: '0.1.0' },
+    { phase: 'ready', version: '0.0.9', currentVersion: '0.1.0' },
+    { phase: 'disabled', version: '0.2.0', currentVersion: '0.1.0' },
+    { phase: 'unsupported', version: '0.2.0', currentVersion: '0.1.0' },
+  ]) assert.equal(renderToStaticMarkup(<DesktopUpdateIndicator state={state} />), '', state.phase);
 });
 test('updater UI explains signed Mac limitation and keeps actions unavailable before status', () => {
   const html = renderToStaticMarkup(<DesktopUpdates enabled />);

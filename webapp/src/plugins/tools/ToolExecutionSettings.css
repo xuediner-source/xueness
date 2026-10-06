@@ -1,0 +1,4 @@
+.xn-tool-budget { width: min(100% - var(--space-8), var(--workbench-content-width)); margin: 8px auto; color: var(--fg-muted); font-size: var(--text-sm); }
+.xn-tool-budget-limit input { width: 88px; padding: 6px 10px; border: 1px solid var(--border); border-radius: var(--radius-sm); color: var(--fg); background: var(--bg-input); font: inherit; }
+.xn-tool-budget-limit input:focus-visible { outline: 2px solid var(--fg); outline-offset: 2px; }
+.xn-tool-budget-limit p { max-width: 180px; font-size: var(--text-sm); }

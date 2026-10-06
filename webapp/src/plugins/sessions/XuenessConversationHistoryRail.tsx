@@ -73,6 +73,19 @@ export function getHistoryRailScrollTop(
   return currentScrollTop;
 }
 
+function nearestVisibleHistoryStop(track: HTMLElement): HTMLButtonElement | null {
+  const viewport = track.getBoundingClientRect();
+  const midpoint = viewport.top + track.clientHeight / 2;
+  let nearest: { button: HTMLButtonElement; distance: number } | null = null;
+  for (const button of track.querySelectorAll<HTMLButtonElement>("button[data-history-seq]")) {
+    const rect = button.getBoundingClientRect();
+    if (rect.bottom <= viewport.top || rect.top >= viewport.bottom) continue;
+    const distance = Math.abs((rect.top + rect.bottom) / 2 - midpoint);
+    if (!nearest || distance < nearest.distance) nearest = { button, distance };
+  }
+  return nearest?.button ?? null;
+}
+
 export type XuenessConversationHistoryRailProps = {
   rows: TimelineRow[];
   timelineRootRef: React.RefObject<HTMLDivElement | null>;
@@ -98,6 +111,7 @@ export function XuenessConversationHistoryRail({ rows, timelineRootRef, requestR
   const trackRef = React.useRef<HTMLDivElement>(null);
   const stopsRef = React.useRef<HTMLDivElement>(null);
   const navId = React.useId().replace(/:/gu, "");
+  const restoreFocusAfterScrollRef = React.useRef(false);
 
   // 停靠点窗口化：只挂载轨道可视区附近的行；键盘焦点附近的停靠点软性保持挂载。
   const pinnedIndices = React.useMemo(() => {
@@ -118,6 +132,45 @@ export function XuenessConversationHistoryRail({ rows, timelineRootRef, requestR
     estimateStridePx: RAIL_STRIDE_ESTIMATE_PX,
     pinned: pinnedIndices,
   });
+
+  // Scrolling can make a remotely pinned button fall outside the bounded
+  // window. If that button held DOM focus, hand focus to the nearest visible
+  // stop after the virtual window commits so keyboard navigation continues.
+  React.useEffect(() => {
+    const track = trackRef.current;
+    if (!track) return;
+    let frame = 0;
+    const onScrollCapture = () => {
+      const active = document.activeElement;
+      if (!(active instanceof HTMLElement) || !track.contains(active) || !active.hasAttribute("data-history-seq")) return;
+      restoreFocusAfterScrollRef.current = true;
+      if (frame) cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(() => {
+        frame = 0;
+        if (!restoreFocusAfterScrollRef.current) return;
+        const current = document.activeElement;
+        const viewport = track.getBoundingClientRect();
+        const currentRect = current instanceof HTMLElement && track.contains(current) ? current.getBoundingClientRect() : null;
+        const stillVisible = Boolean(currentRect && currentRect.bottom > viewport.top && currentRect.top < viewport.bottom);
+        if (stillVisible) {
+          restoreFocusAfterScrollRef.current = false;
+          return;
+        }
+        const next = nearestVisibleHistoryStop(track);
+        if (!next) return;
+        const seq = Number(next.dataset.historySeq);
+        restoreFocusAfterScrollRef.current = false;
+        if (Number.isInteger(seq)) setRovingSeq(seq);
+        next.focus({ preventScroll: true });
+      });
+    };
+    track.addEventListener("scroll", onScrollCapture, { capture: true, passive: true });
+    return () => {
+      track.removeEventListener("scroll", onScrollCapture, true);
+      if (frame) cancelAnimationFrame(frame);
+      restoreFocusAfterScrollRef.current = false;
+    };
+  }, []);
 
   React.useEffect(() => {
     if (!items.some((item) => item.seq === rovingSeq)) setRovingSeq(items[0]?.seq ?? null);

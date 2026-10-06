@@ -80,7 +80,7 @@ class TaskCoordinator:
         tasks.update({row['id']: row for row in self.registry.list(self.session['id'])})
         self.session['task_runs'] = list(tasks.values())[-100:]
 
-    def dispatch(self, call_id, args, execute):
+    def dispatch(self, call_id, args, execute, *, before_start=None):
         prompt, agent = args.get('prompt'), args.get('agent')
         if not isinstance(prompt, str) or not prompt.strip() or len(prompt) > 24000:
             return {'ok': False, 'error': 'prompt must contain 1..24000 characters'}
@@ -94,6 +94,17 @@ class TaskCoordinator:
             return {'ok': False, 'error': 'subagent concurrency limit reached (4); collect existing tasks first'}
         if not _WORKER_SLOTS.acquire(blocking=False):
             return {'ok': False, 'error': 'subagent workers are busy (4); wait for existing requests to finish'}
+        if before_start is not None:
+            try:
+                denial = before_start()
+            except Exception:  # noqa: BLE001 - authorization fails closed.
+                denial = {'ok': False, 'error': 'tool execution policy unavailable',
+                          'error_code': 'tool_policy_unavailable', 'retryable': False}
+            if denial is not None:
+                _WORKER_SLOTS.release()
+                return denial if isinstance(denial, dict) else {
+                    'ok': False, 'error': 'tool execution policy unavailable',
+                    'error_code': 'tool_policy_unavailable', 'retryable': False}
         tid = self.registry.new_id()
         self.registry.record(tid, parent_session=self.session['id'], agent=agent,
                              prompt=prompt, root=self.session['root'])

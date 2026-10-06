@@ -507,7 +507,9 @@ def handle_GET(self, parts, path, data):
         try:
             cursor = events_cursor.requested_cursor(query)
         except events_cursor.CursorError as exc:
-            self._send(400, {'error': str(exc), 'errorCode': host.events_protocol.ERROR_INVALID_ARGUMENT})
+            self._send(exc.status, {'error': str(exc), 'errorCode': exc.code,
+                                   **({'resync_cursor': exc.resync_cursor}
+                                      if exc.resync_cursor is not None else {})})
             return True
         if cursor is not None:
             # sessions.events_cursor is experimental and default-off; a cursor
@@ -520,10 +522,15 @@ def handle_GET(self, parts, path, data):
                 envelope = events_cursor.page(session, cursor,
                                               events_cursor.requested_limit(query))
             except events_cursor.CursorError as exc:
-                self._send(400, {'error': str(exc), 'errorCode': host.events_protocol.ERROR_INVALID_ARGUMENT})
+                self._send(exc.status, {'error': str(exc), 'errorCode': exc.code,
+                                       **({'resync_cursor': exc.resync_cursor}
+                                          if exc.resync_cursor is not None else {})})
                 return True
             if 'text/event-stream' in (self.headers.get('Accept') or ''):
-                self._send(200, host.events_protocol.sse_body(envelope['events']), 'text/event-stream')
+                all_events = events_cursor.numbered_events(session)
+                self._send(200, events_cursor.sse_body(session, all_events,
+                                                       envelope['events']),
+                           'text/event-stream')
                 return True
             self._send(200, envelope)
             return True

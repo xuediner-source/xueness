@@ -145,7 +145,8 @@ def mcp_subject(tool_name: str, arguments) -> str:
     return json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
 
 
-def call_mcp(gate, mcp_call, tool_name: str, arguments, tool_call_id=None) -> dict:
+def call_mcp(gate, mcp_call, tool_name: str, arguments, tool_call_id=None,
+             *, store=None, state_dir=None, session=None) -> dict:
     """Gate-checked MCP tool call; denial is a result, never an exception.
 
     Every MCP call goes through the gate regardless of what the server advertises.
@@ -155,22 +156,28 @@ def call_mcp(gate, mcp_call, tool_name: str, arguments, tool_call_id=None) -> di
     there is no trustworthy read-only signal to classify by. A server that
     happens to be read-only simply gets approved once and stays cheap.
     """
+    from .tool_contract import (ToolEffectDenied, bind_tool_call_context,
+                                permission_result)
     subject = mcp_subject(tool_name, arguments)
-    try:
-        if getattr(gate, "web_approval_gate", False):
-            gate.check("mcp", subject, tool_call_id)
-        else:
-            gate.check("mcp", subject)
-    except PermissionError as exc:
-        from .tool_contract import permission_result
-        return permission_result(gate, exc)
-    try:
-        result = mcp_call(tool_name, arguments)
-    except Exception:  # noqa: BLE001 - a failed server call must not break a run
-        return {"ok": False, "error": "mcp call failed"}
-    if not isinstance(result, dict):
-        return {"ok": False, "error": "tool returned a malformed result"}
-    return result
+    with bind_tool_call_context(store=store, state_dir=state_dir,
+                                session=session, tool_name=tool_name,
+                                gate_kind='mcp', tool_call_id=tool_call_id):
+        try:
+            if getattr(gate, "web_approval_gate", False):
+                gate.check("mcp", subject, tool_call_id)
+            else:
+                gate.check("mcp", subject)
+        except PermissionError as exc:
+            return permission_result(gate, exc)
+        except ToolEffectDenied as exc:
+            return exc.result
+        try:
+            result = mcp_call(tool_name, arguments)
+        except Exception:  # noqa: BLE001 - a failed server call must not break a run
+            return {"ok": False, "error": "mcp call failed"}
+        if not isinstance(result, dict):
+            return {"ok": False, "error": "tool returned a malformed result"}
+        return result
 #: A delegated run is deliberately shallow and bounded.
 SUBAGENT_MAX_STEPS = 4
 SUBAGENT_SUMMARY_MAX = 4000
@@ -1480,15 +1487,33 @@ def _drive_run(session: dict, store: Store, provider, gate: Gate, max_steps=8, m
         if (owner := tool_owner(tool_name)) is not None and not plugin_enabled(owner):
             return {"ok": False, "error": "plugin disabled", "error_code": "plugin_disabled",
                     "retryable": False, "user_reason": "工具所属插件已关闭；请在插件管理中启用后继续。"}
+        capability_call = False
         if tool_name == 'skill_read' and skill_reader is not None:
+            capability_call = True
             if 'skill_read' in getattr(gate, 'disallow', ()) or 'read' in getattr(gate, 'disallow', ()):
                 result = permission_result(gate, PermissionError("tool denied by policy"))
             else:
-                result = skill_reader(arguments.get('id'))
+                skill_id = arguments.get('id')
+                if not isinstance(skill_id, str) or not skill_id.strip():
+                    result = {"ok": False, "error": "id must be a non-empty string"}
+                else:
+                    from .tool_contract import (authorize_tool_effect,
+                                                bind_tool_call_context)
+                    with bind_tool_call_context(
+                            store=store, state_dir=state_dir, session=session,
+                            tool_name=tool_name, gate_kind='read',
+                            tool_call_id=cid):
+                        denial = authorize_tool_effect(
+                            state_dir, session, store, tool_name, 'read',
+                            skill_id, cid)
+                        result = denial if denial is not None else skill_reader(skill_id)
         elif tool_name.startswith(MCP_TOOL_PREFIX) and mcp_call is not None:
-            result = call_mcp(gate, mcp_call, tool_name, arguments, cid)
+            capability_call = True
+            result = call_mcp(gate, mcp_call, tool_name, arguments, cid,
+                              store=store, state_dir=state_dir, session=session)
         elif (tool_name == TASK_TOOL_NAME and subagents is not None
                 and depth < max_depth and _subagent_coordinator is not None):
+            capability_call = True
             # Freeze per-call arguments: the worker outlives this dispatch iteration.
             def execute_child(task_id, child_stop, child_args=dict(arguments)):
                 return _run_subagent(gate, provider, subagents,
@@ -1497,11 +1522,28 @@ def _drive_run(session: dict, store: Store, provider, gate: Gate, max_steps=8, m
                                      registry=registry, parent_session=session.get('id'),
                                      parent_should_stop=child_stop, state_dir=state_dir,
                                      parent_model_selection=session.get('model_selection'), task_id=task_id)
-            result = _subagent_coordinator.dispatch(cid, arguments, execute_child)
+            from .tool_contract import (authorize_tool_effect,
+                                        bind_tool_call_context)
+            with bind_tool_call_context(
+                    store=store, state_dir=state_dir, session=session,
+                    tool_name=tool_name, gate_kind='planning',
+                    tool_call_id=cid):
+                def before_start():
+                    return authorize_tool_effect(
+                        state_dir, session, store, tool_name, 'planning',
+                        arguments.get('prompt'), cid)
+                result = _subagent_coordinator.dispatch(
+                    cid, arguments, execute_child, before_start=before_start)
         else:
             result = _dispatch_registry_tool(cid, tool_name, arguments)
         if not isinstance(result, dict):
             result = {"ok": False, "error": "tool returned a malformed result"}
+        if capability_call:
+            # Capability paths do not enter the registry dispatcher, but their
+            # model-visible outcomes share the declared plugin result seam.
+            from .plugin_runtime import after_tool_execution
+            result = after_tool_execution(state_dir, session, store, tool_name,
+                                          cid, result)
         return result
 
     def _prepare_batch_call(cid, function, tool_name):

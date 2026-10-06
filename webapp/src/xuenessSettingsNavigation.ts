@@ -41,7 +41,7 @@ const definitions: readonly SectionDefinition[] = [
   ['marketplace', '扩展市场', '查看并安装可信扩展资源。', 'extensions', 'extensions'],
   ['remote', 'SSH 工作区', '管理远程工作区连接。', 'extensions', 'remote'],
   ['automations', '自动化', '管理定时任务与审批。', 'extensions', 'automation'],
-  ['desktop', '桌面端', '查看桌面平台、版本与私有数据位置。', 'extensions', 'desktop'],
+  ['about', '关于 Xueness', '查看应用版本和本机数据位置。', 'extensions', 'desktop'],
   ['updates', '应用更新', '检查、下载和安装客户端稳定版。', 'extensions', 'updates'],
   ['diagnostics', '诊断与维护', '导出脱敏诊断和清理旧日志。', 'extensions', 'diagnostics'],
 ];

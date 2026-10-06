@@ -15,7 +15,8 @@
     "check:design": "node ../tools/check_frontend_design.mjs",
     "check:bundle": "node ../tools/check_frontend_bundle.mjs",
     "prebuild": "npm run check:plugins && npm run check:design",
-    "postbuild": "npm run check:bundle"
+    "postbuild": "npm run check:bundle",
+    "test:browser:experiments": "node verify-question-experiments.mjs"
   },
   "dependencies": {
     "@aiden0z/pptx-renderer": "1.2.4",

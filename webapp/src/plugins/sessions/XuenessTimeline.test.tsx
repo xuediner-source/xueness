@@ -668,6 +668,18 @@ test("StreamingCommitGate: 自定义间隔与慢流（超过间隔的稀疏推�
   assert.equal(polled.push("tick-3", 2500), "tick-3");
 });
 
+test("StreamingCommitGate: trailing commit 重置节流时钟，结束后的新流可立即开始", () => {
+  const gate = new StreamingCommitGate(150);
+  assert.equal(gate.push("start", 1000), "start");
+  assert.equal(gate.push("held", 1100), null);
+  assert.equal(gate.commit("trailing latest", 1150), "trailing latest");
+  assert.equal(gate.push("too soon", 1200), null, "尾提交也计入最近一次 commit 时间");
+  assert.equal(gate.dueAt(), 1300);
+  assert.equal(gate.push("due", 1300), "due");
+  gate.reset();
+  assert.equal(gate.push("next stream", 1301), "next stream", "结束并复位后下一轮流式立即呈现首段");
+});
+
 test("TimelineStream: 流式助手消息代码块推迟高亮（after-stream），结束后改为进入可视区再高亮", () => {
   const text = "说明\n\n```ts\nconst ready = true;\n```\n";
   const streamingHtml = renderToStaticMarkup(

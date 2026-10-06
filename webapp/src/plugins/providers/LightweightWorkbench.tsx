@@ -2,7 +2,8 @@ import React, { useCallback, useEffect, useId, useRef, useState } from 'react';
 import { ArrowUp, Square } from 'lucide-react';
 import { XuenessComposerToolbar } from '../sessions/XuenessComposerToolbar';
 import { completionPresentation } from '../sessions/completionPresentation';
-import { SimpleMarkdown, TimelineCard } from '../../XuenessShell';
+import { SimpleMarkdown, TimelineCard, MarkdownRenderOptionsContext, type MarkdownRenderOptions } from '../../XuenessShell';
+import { useQuantizedStreamingText } from '../../ui/StreamingCommitGate';
 import { t as tr, tf } from '../../i18n';
 import type { TimelineRow, WorkbenchSession } from '../../xuenessWorkbench';
 import type { ComposerDraftState } from '../sessions/XuenessWorkbenchView';
@@ -661,6 +662,30 @@ export type LightweightTimelineProps = {
   jsonToolProtocol?: boolean;
 };
 
+const LIGHTWEIGHT_STREAMING_MARKDOWN_OPTIONS: MarkdownRenderOptions = { codeHighlightTiming: 'after-stream', cacheParseResults: false };
+const LIGHTWEIGHT_SETTLED_MARKDOWN_OPTIONS: MarkdownRenderOptions = { codeHighlightTiming: 'on-visible', cacheParseResults: true };
+
+function LightweightAssistantMessage({ row }: { row: Extract<TimelineRow, { kind: 'assistant' }> }): React.JSX.Element {
+  const displayText = useQuantizedStreamingText(row.text, Boolean(row.streaming));
+  return (
+    <div
+      className="xn-lightweight-msg xn-lightweight-msg--assistant"
+      data-testid={`timeline-item-assistant-${row.seq}`}
+      data-role="assistant"
+    >
+      <span className="xn-lightweight-msg__author">{tr('Xueness 回复')}</span>
+      {row.reasoning && <LightweightReasoning reasoning={row.reasoning} streaming={row.streaming} />}
+      {displayText.trim() ? (
+        <MarkdownRenderOptionsContext.Provider value={row.streaming ? LIGHTWEIGHT_STREAMING_MARKDOWN_OPTIONS : LIGHTWEIGHT_SETTLED_MARKDOWN_OPTIONS}>
+          <div className="xn-lightweight-msg__prose"><SimpleMarkdown text={displayText} /></div>
+        </MarkdownRenderOptionsContext.Provider>
+      ) : row.streaming ? (
+        <p className="xn-lightweight-stream-status" role="status">{tr('正在生成回复…')}</p>
+      ) : null}
+    </div>
+  );
+}
+
 /**
  * 轻量紧凑时间线：
  * - 工具调用默认折叠为单行（工具名 + 关键参数摘要 + 状态 + 耗时）
@@ -747,26 +772,8 @@ export function LightweightTimeline({
           );
         }
         if (entry.kind === 'assistant') {
-          const r = entry.row;
           return (
-            <div
-              key={entry.id}
-              className="xn-lightweight-msg xn-lightweight-msg--assistant"
-              data-testid={`timeline-item-assistant-${r.seq}`}
-              data-role="assistant"
-            >
-              <span className="xn-lightweight-msg__author">{tr('Xueness 回复')}</span>
-              {r.reasoning && (
-                <LightweightReasoning reasoning={r.reasoning} streaming={r.streaming} />
-              )}
-              {r.text?.trim() ? (
-                <div className="xn-lightweight-msg__prose">
-                  <SimpleMarkdown text={r.text} />
-                </div>
-              ) : r.streaming ? (
-                <p className="xn-lightweight-stream-status" role="status">{tr('正在生成回复…')}</p>
-              ) : null}
-            </div>
+            <LightweightAssistantMessage key={entry.id} row={entry.row} />
           );
         }
         if (entry.kind === 'completion') {
@@ -944,6 +951,9 @@ export function evaluateLightweightComposerKey(
   }
   if (e.key === 'Enter') {
     const sendShortcut = context.sendShortcut ?? 'enter';
+    // Match the standard composer: Alt+Enter belongs to the platform/textarea
+    // and must never submit, even when Ctrl/Cmd is also held.
+    if (e.altKey) return null;
     if (sendShortcut === 'mod-enter') {
       // ⌘/Ctrl+Enter 发送；裸 Enter 换行，与标准档一致。
       if (mod && !e.shiftKey) return 'send';

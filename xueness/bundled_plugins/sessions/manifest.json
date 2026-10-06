@@ -34,6 +34,7 @@
     "cli_input",
     "cli_interrupt",
     "cli_tui",
+    "answer_question",
     "composer_api",
     "completion_policy",
     "deltas",
@@ -144,6 +145,16 @@
       "id": "sessions.events_cursor",
       "name": "会话事件增量游标拉取（实验，默认关闭）",
       "nameEn": "Incremental session event cursor polling (experimental, off by default)"
+    },
+    {
+      "id": "sessions.answer_question_experimental",
+      "name": "通过界面答复会话问题（实验，默认关闭）",
+      "nameEn": "Answer session questions in the UI (experimental, off by default)"
+    },
+    {
+      "id": "sessions.question_answer_ui",
+      "name": "会话问题答复界面",
+      "nameEn": "Session question answer UI"
     }
   ],
   "frontendModules": [
@@ -170,6 +181,14 @@
     "plugins/sessions/TimelineVirtualWindow.ts#useTimelineVirtualWindow",
     "plugins/sessions/ListVirtualWindow.ts",
     "plugins/sessions/SidebarNav.tsx",
-    "plugins/sessions/debounce.ts"
+    "plugins/sessions/debounce.ts",
+    "plugins/sessions/PendingQuestion.tsx#PendingQuestion",
+    "plugins/sessions/PendingQuestion.tsx#PendingQuestionModel",
+    "plugins/sessions/questionApi.ts",
+    "plugins/sessions/SessionExperimentSettings.tsx#SessionExperimentSettings",
+    "ui/StreamingCommitGate.ts#STREAM_COMMIT_INTERVAL_MS",
+    "ui/StreamingCommitGate.ts#StreamingCommitGate",
+    "ui/StreamingCommitGate.ts#useQuantizedStreamingText",
+    "plugins/sessions/PendingQuestion.tsx#QuestionResume"
   ]
 }

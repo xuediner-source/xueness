@@ -114,6 +114,27 @@ test("用户滚动时窗口跟随视口：pinned 的光标行不会把可视区�
   assert.equal(snapshot.topPad, snapshot.start * 15);
 });
 
+test("相隔很远的 pinned 项不会把它们之间的列表整段挂载", () => {
+  const fake = fakeHost({ count: 5000, stride: () => 15, item0Top: -7500, viewport: { top: 0, bottom: 220 } });
+  const model = new UniformListWindowModel(fake.host, { pageSize: 48, overscanPx: 0, estimateStridePx: 15, initialCount: 5000 });
+  model.setPinned([0, 500, 4999]);
+  model.sync();
+  const snapshot = model.getSnapshot();
+  assert.deepEqual([snapshot.start, snapshot.end], [500, 548]);
+  assert.equal(snapshot.end - snapshot.start, 48, "视口两侧的稀疏 pin 不应形成连续大窗口");
+});
+
+test("贴近窗口的多个 pinned 项只扩展到有界距离", () => {
+  const fake = fakeHost({ count: 1000, stride: () => 15, item0Top: -7500, viewport: { top: 0, bottom: 220 } });
+  const model = new UniformListWindowModel(fake.host, { pageSize: 48, overscanPx: 0, estimateStridePx: 15, initialCount: 1000 });
+  model.setPinned([452, 500, 596]);
+  model.sync();
+  const snapshot = model.getSnapshot();
+  assert.equal(snapshot.start, 452);
+  assert.equal(snapshot.end, 548, "远 pin 应忽略，近 pin 可以最小扩展");
+  assert.ok(snapshot.end - snapshot.start <= 48 * 3);
+});
+
 test("pinned 贴近窗口时只做最小扩展，不把窗口拽离视口", () => {
   const fake = fakeHost({ count: 1000, stride: () => 15, item0Top: 0, viewport: { top: 0, bottom: 220 } });
   const model = new UniformListWindowModel(fake.host, { pageSize: 48, overscanPx: 0, estimateStridePx: 15, initialCount: 1000 });

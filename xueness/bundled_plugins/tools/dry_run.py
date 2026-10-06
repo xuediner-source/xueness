@@ -40,6 +40,7 @@ from __future__ import annotations
 
 import difflib
 import os
+import stat
 from pathlib import Path
 
 #: Stable ids for the feature catalog and the refusal wording.
@@ -66,8 +67,30 @@ COOPERATIVE_TOOLS = {'write': 'write', 'edit': 'edit', 'exec': 'exec'}
 MAX_PREVIEW_CHARS = 2000
 MAX_DIFF_CHARS = 4000
 MAX_DIFF_LINES = 80
+MAX_DIFF_COMPARE_LINES = 4000
+MAX_DIFF_COMPARE_CHARS = 200_000
 MAX_ARGV_ITEMS = 64
 MAX_ARG_CHARS = 300
+MAX_SOURCE_BYTES = 1_000_000
+MAX_EDIT_ARGUMENT_CHARS = 200_000
+MAX_WRITE_CONTENT_CHARS = 200_000
+
+
+class PreviewUnavailable(Exception):
+    """A preview cannot safely describe this target within its bounds."""
+
+    SAFE_REASONS = frozenset({
+        'cannot inspect target', 'target is not a regular file',
+        'target exceeds preview size limit', 'cannot read existing target',
+        'edit arguments exceed preview size limit',
+        'diff exceeds comparison limit', 'preview unavailable',
+    })
+
+    def __init__(self, reason, *, file_exists=None, readable=None):
+        self.reason = reason if reason in self.SAFE_REASONS else 'preview unavailable'
+        self.file_exists = file_exists if type(file_exists) is bool else None
+        self.readable = readable if type(readable) is bool else None
+        super().__init__(self.reason)
 
 def _registry_tool(name):
     from ...tool_registry import REGISTRY_BY_NAME
@@ -176,19 +199,52 @@ def _probe_policy(gate, kind, subject) -> str:
 
 def _current_text(target) -> "str | None":
     try:
-        return target.read_text(encoding='utf-8')
-    except (OSError, ValueError, UnicodeDecodeError):
+        info = target.stat()
+    except FileNotFoundError:
         return None
+    except OSError as exc:
+        raise PreviewUnavailable('cannot inspect target') from exc
+    if not stat.S_ISREG(info.st_mode):
+        raise PreviewUnavailable('target is not a regular file',
+                                 file_exists=True, readable=False)
+    if info.st_size > MAX_SOURCE_BYTES:
+        raise PreviewUnavailable('target exceeds preview size limit',
+                                 file_exists=True, readable=False)
+    try:
+        with target.open('rb') as stream:
+            raw = stream.read(MAX_SOURCE_BYTES + 1)
+        if len(raw) > MAX_SOURCE_BYTES:
+            raise PreviewUnavailable('target exceeds preview size limit',
+                                     file_exists=True, readable=False)
+        return raw.decode('utf-8')
+    except PreviewUnavailable:
+        raise
+    except FileNotFoundError:
+        return None
+    except (OSError, ValueError, UnicodeDecodeError) as exc:
+        # Existing unreadable or non-UTF-8 content is never described as a new
+        # file; the guard turns this into a safe, non-executing refusal.
+        raise PreviewUnavailable('cannot read existing target',
+                                 file_exists=True, readable=False) from exc
 
 
-def _diff(old: str, new: str) -> dict:
+def _diff(old: str, new: str, *, file_exists=None) -> dict:
     """A bounded unified-diff summary of what the call would have changed."""
     if old == new:
         return {'changed': False, 'added_lines': 0, 'removed_lines': 0,
                 'excerpt': '', 'truncated': False}
+    if len(old) + len(new) > MAX_DIFF_COMPARE_CHARS:
+        raise PreviewUnavailable('diff exceeds comparison limit',
+                                 file_exists=file_exists,
+                                 readable=True if file_exists else None)
+    old_lines, new_lines = old.splitlines(), new.splitlines()
+    if len(old_lines) + len(new_lines) > MAX_DIFF_COMPARE_LINES:
+        raise PreviewUnavailable('diff exceeds comparison limit',
+                                 file_exists=file_exists,
+                                 readable=True if file_exists else None)
     added = removed = 0
     lines: list = []
-    for line in difflib.unified_diff(old.splitlines(), new.splitlines(),
+    for line in difflib.unified_diff(old_lines, new_lines,
                                      fromfile='current', tofile='after', lineterm='', n=1):
         if line.startswith('+++') or line.startswith('---'):
             continue
@@ -219,30 +275,39 @@ def _write_preview(root, gate, args):
     path, content = args.get('path'), args.get('content')
     if not isinstance(path, str) or not isinstance(content, str):
         return None  # the handler reports its own argument error, unchanged
+    if len(content) > MAX_WRITE_CONTENT_CHARS:
+        return None  # the handler rejects this before writing, unchanged
     target = _target(root, gate, path)
-    current = _current_text(target) if target.is_file() else None
+    current = _current_text(target)
     return {'action': 'write', 'path': path, 'target': str(target),
             'creates_new_file': current is None,
             'previous_chars': len(current) if current is not None else None,
             'content_chars': len(content),
+            'file_exists': current is not None,
+            'readable': True if current is not None else None,
             'content_preview': content[:MAX_PREVIEW_CHARS],
             'content_truncated': len(content) > MAX_PREVIEW_CHARS,
-            'diff': _diff(current or '', content)}
+            'diff': _diff(current or '', content,
+                          file_exists=current is not None)}
 
 
 def _edit_preview(root, gate, args):
     path, old, new = args.get('path'), args.get('old'), args.get('new')
     if not isinstance(path, str) or not isinstance(old, str) or not isinstance(new, str):
         return None
+    if len(old) > MAX_EDIT_ARGUMENT_CHARS or len(new) > MAX_EDIT_ARGUMENT_CHARS:
+        raise PreviewUnavailable('edit arguments exceed preview size limit')
     target = _target(root, gate, path)
-    current = _current_text(target) if target.is_file() else None
+    current = _current_text(target)
     matches = current.count(old) if (current is not None and old) else 0
     after = current.replace(old, new, 1) if (current is not None and matches == 1) else current
     return {'action': 'edit', 'path': path, 'target': str(target),
             'old_chars': len(old), 'new_chars': len(new),
             'matches': matches, 'would_apply': matches == 1,
             'file_exists': current is not None,
-            'diff': _diff(current or '', after or '')}
+            'readable': True if current is not None else None,
+            'diff': _diff(current or '', after or '',
+                          file_exists=current is not None)}
 
 
 def _exec_preview(root, gate, args):
@@ -285,18 +350,59 @@ def guard(root, gate, name, subject, args):
     """
     if name not in COOPERATIVE_TOOLS or not isinstance(args, dict):
         return None
+    # Let the handler report malformed inputs without charging a budget for an
+    # effect it would reject before any preview or side effect.
+    if name == 'write':
+        if (not isinstance(args.get('path'), str)
+                or not isinstance(args.get('content'), str)
+                or len(args['content']) > MAX_WRITE_CONTENT_CHARS):
+            return None
+    elif name == 'edit':
+        if (not isinstance(args.get('path'), str)
+                or not isinstance(args.get('old'), str)
+                or not isinstance(args.get('new'), str)
+                or len(args['old']) > MAX_EDIT_ARGUMENT_CHARS
+                or len(args['new']) > MAX_EDIT_ARGUMENT_CHARS):
+            return None
+    elif name == 'exec':
+        argv = args.get('argv')
+        if (not isinstance(argv, list) or not argv
+                or any(not isinstance(item, str) or not item for item in argv)):
+            return None
     if not active(_state_dir(gate)):
         return None
     verdict = _probe_policy(gate, COOPERATIVE_TOOLS[name], subject)
     if verdict == 'refuse':
         return None
+    # A preview is itself a settled tool call for budget purposes. The probe
+    # above first preserves Gate refusals and approval semantics.
+    try:
+        from .call_budget import reserve
+        from ...tool_contract import execution_context
+        context = execution_context()
+        budget_denial = reserve(context.get('state_dir'),
+                                context.get('session'), context.get('store'))
+        if budget_denial is not None:
+            return budget_denial
+    except ValueError:
+        # Historical calls without an execution binding have no persistent
+        # plugin policy or counter to consult.
+        pass
     try:
         payload = _PREVIEWS[name](root, gate, args)
     except PermissionError:
         return None  # boundary denial: the handler raises the same one itself
+    except PreviewUnavailable as exc:
+        payload = {'action': name, 'preview_unavailable': True,
+                   'reason': exc.reason}
+        if exc.file_exists is not None:
+            payload['file_exists'] = exc.file_exists
+        if exc.readable is not None:
+            payload['readable'] = exc.readable
     except (OSError, ValueError, KeyError, TypeError):
         # A preview this feature cannot describe must still not be executed.
-        payload = {'action': name, 'preview_unavailable': True}
+        payload = {'action': name, 'preview_unavailable': True,
+                   'reason': 'preview unavailable'}
     if payload is None:
         return None
     return _result(name, COOPERATIVE_TOOLS[name], payload, verdict == 'approval')

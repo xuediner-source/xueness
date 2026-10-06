@@ -18,6 +18,10 @@ def dispatch(method, parts, query, data, ctx):
     result = queue_dispatch(method, parts, query, data, ctx)
     if result is not None:
         return result
+    from .answer_question import dispatch as answer_question_dispatch
+    result = answer_question_dispatch(method, parts, query, data, ctx)
+    if result is not None:
+        return result
     from .composer_api import dispatch as composer_dispatch
     result = composer_dispatch(method, parts, query, data, ctx)
     if result is not None:

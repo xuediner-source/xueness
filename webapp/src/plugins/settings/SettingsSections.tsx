@@ -27,6 +27,7 @@ export type SettingsSectionsProps = {
   dirty?: boolean;
   embedded?: boolean;
   saving?: boolean;
+  pluginSettings?: React.ReactNode;
 };
 
 function SettingsToggle({
@@ -142,6 +143,7 @@ export function SettingsSections({
   onUpdateSetting,
   saving = false,
   embedded = false,
+  pluginSettings,
 }: SettingsSectionsProps): React.ReactElement {
   const update = (key: string, value: unknown) => onUpdateSetting?.(key, value);
   const select = (label: string, value: string, options: React.ReactNode, onChange: (next: string) => void, forceDisabled = false) => (
@@ -374,6 +376,7 @@ export function SettingsSections({
   const content = (
     <div className="xn-settings-controls" data-testid={`settings-section-content-${activeSection}`}>
       {controls}
+      {pluginSettings}
     </div>
   );
   return embedded ? content : <div className="xn-settings-controls">{content}</div>;

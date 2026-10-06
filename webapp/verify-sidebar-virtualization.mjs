@@ -59,6 +59,7 @@ function sidebarHarnessSource() {
           onPreferences: () => {}, onSelect: select,
           onRename: () => {}, onArchive: () => {}, onPin: () => {}, onOpenArchived: () => {},
         }),
+        React.createElement("button", { type: "button", "data-testid": "external-select-last", style: { display: "none" }, onClick: () => setActiveId("task-${SESSIONS}") }, "external select"),
         React.createElement("div", { "data-testid": "selected-log", style: { display: "none" } }, selected.join(",")),
       );
     }
@@ -99,6 +100,33 @@ function paletteHarnessSource() {
       return React.createElement(CommandPalette, {
         dialogRef, inputRef, sessions, busy: false, sessionsEnabled: true, settingsEnabled: true,
         onClose: () => {}, onRunCommand: () => {}, onSelectSession: () => {},
+      });
+    }
+    createRoot(document.getElementById("root")).render(React.createElement(Fixture));
+  `;
+}
+
+function narrowSelectHarnessSource() {
+  return `
+    import React, { useState } from "react";
+    import { createRoot } from "react-dom/client";
+    import { Shell } from ${JSON.stringify(resolve(webappRoot, "src/XuenessShell.tsx"))};
+    import { Select } from ${JSON.stringify(resolve(webappRoot, "src/ui/Select.tsx"))};
+    function Fixture() {
+      const [value, setValue] = useState("one");
+      return React.createElement(Shell, {
+        sidebar: React.createElement(React.Fragment, null,
+          React.createElement("button", { type: "button", "data-testid": "before-select" }, "之前"),
+          React.createElement(Select, {
+            "aria-label": "Fixture select", "data-testid": "fixture-select", value,
+            onChange: (event) => setValue(event.target.value),
+          },
+            React.createElement("option", { value: "one" }, "One"),
+            React.createElement("option", { value: "two" }, "Two"),
+          ),
+          React.createElement("button", { type: "button", "data-testid": "after-select" }, "之后"),
+        ),
+        children: React.createElement("div", null, "Main"),
       });
     }
     createRoot(document.getElementById("root")).render(React.createElement(Fixture));
@@ -188,6 +216,63 @@ async function withPage(caseName, harnessSource, run) {
 
 const rowCount = (page) => page.evaluate(() => document.querySelectorAll('[data-testid^="xn-sidebar-item-"]').length);
 
+// Narrow drawer: only an explicitly owned Select portal may receive focus
+// outside the aside, and its keyboard/selection flow returns focus correctly.
+await withPage("narrow-select", narrowSelectHarnessSource(), async (page) => {
+  await page.setViewportSize({ width: 390, height: 780 });
+  const toggle = page.getByTestId("xn-shell-sidebar-toggle");
+  await toggle.click();
+  await page.waitForFunction(() => document.querySelector('[data-testid="xn-shell"]')?.getAttribute("data-sidebar-open") === "true");
+  const trigger = page.getByTestId("fixture-select");
+  await trigger.click();
+  const listbox = page.getByRole("listbox");
+  await listbox.waitFor();
+  await page.waitForFunction(() => {
+    const content = document.querySelector(".xn-select-menu[data-xn-select-portal-owner]");
+    const owner = content?.getAttribute("data-xn-select-portal-owner");
+    return Boolean(owner && document.querySelector(`[data-xn-select-portal-trigger="${owner}"]`));
+  });
+
+  // A matching-looking but unowned body node must not bypass the drawer focus scope.
+  const rejectedSpoof = await page.evaluate(() => {
+    const spoof = document.createElement("button");
+    spoof.className = "xn-select-menu";
+    spoof.dataset.xnSelectPortalOwner = "unowned";
+    spoof.textContent = "unowned portal";
+    document.body.append(spoof);
+    spoof.focus();
+    const rejected = !spoof.matches(":focus");
+    spoof.remove();
+    return rejected;
+  });
+  assert.equal(rejectedSpoof, true, "同名 marker 但侧栏内没有 trigger owner 时必须拦截焦点");
+
+  // Radix owns Tab while its popup is active. The drawer trap must not bounce
+  // the focus back to its first control or close the popup.
+  await page.keyboard.press("Tab");
+  assert.equal(await listbox.isVisible(), true, "Tab 事件由打开的 Select 处理，菜单保持打开");
+  const focusStayedInSelect = await page.evaluate(() => {
+    const content = document.querySelector(".xn-select-menu[data-xn-select-portal-owner]");
+    return Boolean(content?.contains(document.activeElement));
+  });
+  assert.equal(focusStayedInSelect, true, "Select popup 的焦点不应被抽回 drawer 首项");
+
+  await page.keyboard.press("Escape");
+  await listbox.waitFor({ state: "hidden" });
+  assert.equal(await page.evaluate(() => document.querySelector('[data-testid="xn-shell"]')?.getAttribute("data-sidebar-open")), "true",
+    "关闭 Select 不应顺带关闭窄屏 drawer");
+  await page.waitForFunction(() => document.activeElement === document.querySelector('[data-testid="fixture-select"]'));
+  assert.equal(await trigger.evaluate((node) => node === document.activeElement), true, "关闭 Select 后焦点返回它自己的 trigger");
+
+  await trigger.click();
+  await page.getByRole("option", { name: "Two" }).click();
+  await listbox.waitFor({ state: "hidden" });
+  await page.waitForFunction(() => document.activeElement === document.querySelector('[data-testid="fixture-select"]'));
+  assert.equal(await trigger.textContent(), "Two", "选择项应更新受控 value");
+  assert.equal(await trigger.evaluate((node) => node === document.activeElement), true, "选择后焦点仍返回 trigger");
+  assert.equal(await page.evaluate(() => document.querySelector('[data-testid="xn-shell"]')?.getAttribute("data-sidebar-open")), "true");
+});
+
 // 会话侧栏：长列表窗口化、滚动后窗口平移、键盘导航与 Enter 激活。
 const pickList = "[...document.querySelectorAll('.xn-shell-nav__list')].at(-1)";
 
@@ -250,7 +335,7 @@ await withPage("sidebar", sidebarHarnessSource(), async (page) => {
   await page.keyboard.press("ArrowDown");
   await page.keyboard.press("Home");
   const homeId = await page.evaluate((pick) => eval(pick).getAttribute("aria-activedescendant"), pickList);
-  assert.equal(homeId.endsWith("task-1"), true, "Home 应回到第一行");
+  assert.equal(homeId?.endsWith("task-1"), true, `Home 应回到第一行；当前 id=${homeId}`);
   await page.keyboard.press("Enter");
   const selectedHome = await page.evaluate(() => document.querySelector('[data-testid="selected-log"]').textContent);
   assert.equal(selectedHome.split(",").at(-1), "task-1", "Enter 应选中第一行");
@@ -265,6 +350,77 @@ await withPage("sidebar", sidebarHarnessSource(), async (page) => {
   await page.keyboard.press("ArrowDown");
   const afterArrow = await page.evaluate((pick) => eval(pick).getAttribute("aria-activedescendant"), pickList);
   assert.equal(afterArrow.endsWith("task-41"), true, "点击后方向键应以被点击行为基准移动");
+
+  // 外部选中远端会话：光标选项须先挂载并滚入侧栏视口。
+  await page.evaluate(() => document.querySelector('[data-testid="external-select-last"]').click());
+  await page.waitForFunction(({ pick, lastIndex }) => {
+    const list = eval(pick);
+    const id = list.getAttribute("aria-activedescendant");
+    const option = id ? document.getElementById(id) : null;
+    if (!option) return false;
+    const body = document.querySelector('[data-testid="sidebar-body"]');
+    const rect = option.getBoundingClientRect();
+    const viewport = body.getBoundingClientRect();
+    return option.dataset.optionIndex === String(lastIndex)
+      && rect.bottom > viewport.top && rect.top < viewport.bottom;
+  }, { pick: pickList, lastIndex: SESSIONS - 1 }, { timeout: 5000 });
+
+  // 鼠标滚动期间列表仍持有焦点：active descendant 跟随可见行，不指向已卸载的旧选项。
+  await page.evaluate(() => {
+    const body = document.querySelector('[data-testid="sidebar-body"]');
+    body.scrollTop = 0;
+  });
+  await page.waitForFunction((pick) => {
+    const list = eval(pick);
+    if (document.activeElement !== list) return false;
+    const id = list.getAttribute("aria-activedescendant");
+    const option = id ? document.getElementById(id) : null;
+    if (!option) return false;
+    const body = document.querySelector('[data-testid="sidebar-body"]');
+    const rect = option.getBoundingClientRect();
+    const viewport = body.getBoundingClientRect();
+    return Number(option.dataset.optionIndex) < 80 && rect.bottom > viewport.top && rect.top < viewport.bottom;
+  }, pickList, { timeout: 5000 });
+  const beforeVisibleArrow = await page.evaluate((pick) => {
+    const option = document.getElementById(eval(pick).getAttribute("aria-activedescendant"));
+    return Number(option.dataset.optionIndex);
+  }, pickList);
+  await page.keyboard.press("ArrowDown");
+  const afterVisibleArrow = await page.evaluate((pick) => {
+    const option = document.getElementById(eval(pick).getAttribute("aria-activedescendant"));
+    return Number(option.dataset.optionIndex);
+  }, pickList);
+  assert.equal(afterVisibleArrow, Math.min(SESSIONS - 1, beforeVisibleArrow + 1), "滚动后方向键应从当前可见行继续");
+
+  // Row-action focus is a child-focus event, not a request to reveal the old
+  // active session. Keep the mid-list viewport stable for rename and delete.
+  await page.evaluate(() => {
+    const body = document.querySelector('[data-testid="sidebar-body"]');
+    body.scrollTop = body.scrollHeight / 2;
+  });
+  await page.waitForFunction((pick) => {
+    const list = eval(pick);
+    const option = list.querySelector('[role="option"][data-cursor="true"]');
+    const body = document.querySelector('[data-testid="sidebar-body"]');
+    if (!option || document.activeElement !== list) return false;
+    const rect = option.getBoundingClientRect(), viewport = body.getBoundingClientRect();
+    return rect.bottom > viewport.top && rect.top < viewport.bottom;
+  }, pickList, { timeout: 5000 });
+  const actionId = await page.evaluate((pick) => {
+    const option = eval(pick).querySelector('[role="option"][data-cursor="true"]');
+    return option.dataset.testid.replace("xn-sidebar-item-", "");
+  }, pickList);
+  const actionTop = await page.evaluate(() => document.querySelector('[data-testid="sidebar-body"]').scrollTop);
+  await page.getByTestId(`xn-sidebar-rename-${actionId}`).click();
+  assert.equal(await page.evaluate(() => document.activeElement?.getAttribute("data-testid")), `xn-sidebar-rename-${actionId}`,
+    "重命名控件应保有自身焦点");
+  assert.ok(Math.abs(await page.evaluate(() => document.querySelector('[data-testid="sidebar-body"]').scrollTop) - actionTop) <= 1,
+    "聚焦重命名控件不应把侧栏跳回旧 active 行");
+  await page.getByTestId(`xn-sidebar-delete-${actionId}`).click();
+  assert.equal(await page.evaluate(() => document.activeElement?.getAttribute("data-testid")), `xn-sidebar-delete-${actionId}`,
+    "删除控件应保有自身焦点");
+  assert.ok(Math.abs(await page.evaluate(() => document.querySelector('[data-testid="sidebar-body"]').scrollTop) - actionTop) <= 1,
+    "聚焦删除控件不应把侧栏跳回旧 active 行");
 });
 
 // 历史轨道：长会话只挂载部分停靠点，方向键移动焦点前自动补挂载。
@@ -280,6 +436,24 @@ await withPage("rail", railHarnessSource(), async (page) => {
   await page.keyboard.press("End");
   const endSeq = await page.evaluate(() => document.activeElement?.getAttribute("data-history-seq"));
   assert.equal(endSeq, String(STOPS), "End 应聚焦最后一个停靠点（含自动挂载）");
+
+  // 用户滚动轨道离开远端焦点后，焦点交给视口内停靠点，方向键仍可继续。
+  await page.evaluate(() => {
+    const track = document.querySelector(".xn-conversation-history-rail__track");
+    track.scrollTop = 0;
+  });
+  await page.waitForFunction(() => {
+    const track = document.querySelector(".xn-conversation-history-rail__track");
+    const active = document.activeElement;
+    if (!(active instanceof HTMLButtonElement) || !track.contains(active) || !active.hasAttribute("data-history-seq")) return false;
+    const rect = active.getBoundingClientRect();
+    const viewport = track.getBoundingClientRect();
+    return Number(active.dataset.historySeq) < 60 && rect.bottom > viewport.top && rect.top < viewport.bottom;
+  }, undefined, { timeout: 5000 });
+  const beforeScrollArrow = Number(await page.evaluate(() => document.activeElement?.getAttribute("data-history-seq")));
+  await page.keyboard.press("ArrowDown");
+  const afterScrollArrow = Number(await page.evaluate(() => document.activeElement?.getAttribute("data-history-seq")));
+  assert.equal(afterScrollArrow, Math.min(STOPS, beforeScrollArrow + 1), "轨道滚动后方向键应从恢复的焦点继续");
 });
 
 // 命令面板：输入先应用中间防抖轮次，补全输入后在防抖窗口内保持旧结果，再收敛到最终过滤态。

@@ -214,12 +214,17 @@ export class UniformListWindowModel {
    * 远处的 pinned 行由 ensureIndex 按需挂载。 */
   private mergePinned(start: number, end: number): WindowRange {
     if (!this.pinned.length) return { start, end };
-    const pinnedMin = Math.min(...this.pinned);
-    const pinnedMax = Math.max(...this.pinned);
-    if (pinnedMax < start - this.pageSize || pinnedMin >= end + this.pageSize) {
-      return { start, end };
+    // Only merge pins that are close to this viewport window. Merging the min
+    // and max of a sparse set can accidentally mount every row between a stale
+    // cursor and the visible active item (the history rail has both).
+    let nextStart = start;
+    let nextEnd = end;
+    for (const index of this.pinned) {
+      if (index < start - this.pageSize || index >= end + this.pageSize) continue;
+      nextStart = Math.min(nextStart, index);
+      nextEnd = Math.max(nextEnd, index + 1);
     }
-    return { start: Math.min(start, pinnedMin), end: Math.max(end, pinnedMax + 1) };
+    return { start: nextStart, end: nextEnd };
   }
 
   private buildSnapshot(): UniformListWindowSnapshot {
