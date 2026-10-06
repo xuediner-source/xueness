@@ -48,9 +48,9 @@ class DesktopSubagentHttpTests(unittest.TestCase):
         self.server.server_close()
         self.server_thread.join(timeout=3)
 
-    def _request(self, path, data=None, timeout=10):
+    def _request(self, path, data=None, timeout=10, csrf=True):
         body = json.dumps(data).encode("utf-8") if data is not None else None
-        headers = {"X-CSRF-Token": self.csrf}
+        headers = {"X-CSRF-Token": self.csrf} if csrf else {}
         if body is not None:
             headers["Content-Type"] = "application/json"
         request = urllib.request.Request(

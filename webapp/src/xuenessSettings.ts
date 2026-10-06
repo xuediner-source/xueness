@@ -19,7 +19,7 @@ const SECTION_OF_KEY: Record<string, string> = {
   theme: "appearance", fontSize: "appearance", tabSize: "appearance", wordWrap: "appearance", terminalFontSize: "appearance",
   codePreviewSettings: "appearance",
   bindings: "shortcuts", sendShortcut: "shortcuts", browserControlEnabled: "browser",
-  allowMcp: "agent", allowSubagents: "agent", allowHooks: "agent",
+  allowMcp: "agent", allowSubagents: "agent", allowHooks: "agent", subagentCancelOneEnabled: "agent",
 };
 
 function mergeSettings(settings: Record<string, unknown>, defaults: SettingsMap): SettingsMap {

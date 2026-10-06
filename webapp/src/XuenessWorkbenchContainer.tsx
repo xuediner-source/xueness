@@ -191,6 +191,7 @@ const SETTINGS_DEFAULTS: SettingsMap = {
   allowMcp: false,
   allowSubagents: false,
   allowHooks: false,
+  subagentCancelOneEnabled: false,
   theme: "system",
   fontSize: 14,
   tabSize: 2,
@@ -1755,7 +1756,12 @@ export function XuenessWorkbenchContainer() {
       resourceContent={isPluginEffective("extensions") ? <CapabilitiesPanel sections={capSections.filter(section => section.kind === "plugins")}
         onImportPlugin={async ({id,fields}) => { const result = await createCapabilityItem("plugins", {id,...fields,createOnly:true}); if(result.ok) await loadCapSlot("plugins"); return result; }}
         onRefreshPlugins={() => void loadCapSlot("plugins")} onBrowsePlugins={() => setSettingsSection("marketplace")} /> : undefined} />;
-    if (settingsSection === "subagents") return <XuenessSubagentSettings providersEnabled={isPluginEffective("providers")} />;
+    if (settingsSection === "subagents") return <XuenessSubagentSettings
+      providersEnabled={isPluginEffective("providers")}
+      cancelOneEnabled={settingsValues.subagentCancelOneEnabled === true}
+      settingsSaving={settingsSaving}
+      onCancelOneEnabledChange={value => void handleUpdateSetting("subagentCancelOneEnabled", value)}
+    />;
     if (pluginAvailability.capabilityKinds.includes(settingsSection as CapabilityKind)) return <CapabilitiesPanel sections={capSections.filter(section => section.kind === settingsSection)} />;
     if (settingsSection === "modules") return <XuenessPluginManager plugins={pluginCatalog} loading={pluginCatalogLoading} error={pluginCatalogError} onRefresh={refreshPluginCatalog} onToggle={togglePlugin} />;
     if (settingsSection === "marketplace") return <XuenessMarketplace onInstalled={() => void refreshPluginCatalog()} />;
@@ -1793,8 +1799,10 @@ export function XuenessWorkbenchContainer() {
           onClose={() => setPanel("chat")}
           activeRuntimeProfile={activeRuntimeProfile}
           subagentsEnabled={isPluginEffective("subagents")}
+          cancelOneEnabled={settingsValues.subagentCancelOneEnabled === true}
           lightweight={lightweightLayout}
           mode="panel"
+          onStopSession={handleStop}
         />
       </Suspense>
     ),
@@ -2166,8 +2174,10 @@ export function XuenessWorkbenchContainer() {
                 onClose={() => setSubagentsSidepaneOpen(false)}
                 activeRuntimeProfile={activeRuntimeProfile}
                 subagentsEnabled={isPluginEffective("subagents")}
+                cancelOneEnabled={settingsValues.subagentCancelOneEnabled === true}
                 lightweight={lightweightLayout}
                 mode="sidepane"
+                onStopSession={handleStop}
               />
             </Suspense>
           )}

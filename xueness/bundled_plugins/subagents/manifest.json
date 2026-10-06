@@ -33,7 +33,8 @@
     "tools",
     "runner",
     "subagents",
-    "task_registry"
+    "task_registry",
+    "cancel_one"
   ],
   "features": [
     {
@@ -45,6 +46,11 @@
       "id": "subagents.progress",
       "name": "子任务进度、结果与取消",
       "nameEn": "Subtask progress, results and cancellation"
+    },
+    {
+      "id": "subagents.cancel_one",
+      "name": "单个子任务协作取消",
+      "nameEn": "Cooperative cancellation for one subtask"
     },
     {
       "id": "subagents.parallel_coordination",

@@ -15,6 +15,10 @@ class SubagentsPlugin(Plugin):
 
 
 def dispatch(method, parts, query, data, ctx):
+    from . import cancel_one
+    result = cancel_one.handle(method, parts, data, ctx)
+    if result is not None:
+        return result
     from ...operations_api import dispatch as operations
     return operations(method, parts, query, data, ctx)
 

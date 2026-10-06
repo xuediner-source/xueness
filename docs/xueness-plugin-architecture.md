@@ -574,7 +574,7 @@ subagents 插件登记新功能 `subagents.sidepane`（Web 端子代理运行态
 
 1. **组件与样式归属**：实现位于 `webapp/src/plugins/subagents/SubagentSidePane.tsx` 与 `webapp/src/styles/subagent-sidepane.css`，在 manifest 登记 `frontendModules: ["plugins/subagents/SubagentSidePane.tsx"]`，并在 `panels` 与 `xuenessPluginRegistry.ts` 中声明 `subagents` 面板。工作台容器 `XuenessWorkbenchContainer.tsx` 仅负责受控状态开关、会话头部按钮及抽屉/分栏布局挂载，不包含子代理具体业务逻辑。
 2. **零请求与轻量档保护**：侧栏在未打开（`isOpen=false`）、会话未选中、插件禁用或轻量模式（`lightweightLayout` / `activeRuntimeProfile === "lightweight"`）下直接返回 `null`，且不启动任何 HTTP 轮询；仅在面板打开且页面可见（`document.visibilityState === "visible"`）时按 2s 间隔通过既有只读接口 `GET /api/sessions/<id>/tasks` 刷新。
-3. **协作取消**：对运行中的子任务提供「停止会话（取消全部子任务）」按钮，调用既有会话停止接口 `POST /api/sessions/<id>/stop`，主代理与子代理协同优雅退出；已结束任务不显示该按钮。目前没有单个子任务的取消接口，因此按钮文案明确写作「停止会话（取消全部子任务）」，不会假装只取消一项。
+3. **协作取消**：会话级取消改为头部的「中止整个会话」按钮，调用既有会话停止接口 `POST /api/sessions/<id>/stop`，主代理与子代理协同优雅退出；已结束任务不显示取消按钮。单个子任务的取消是实验功能 `subagents.cancel_one`，默认关闭，见文末「实验：单个子任务取消（2026-10-06）」。
 4. **历史合并**：后端 `operations_api.py` 的任务列表接口合并会话持久历史中的 `task_runs` 与内存中正在运行的活跃注册表 `task_registry`，确保多轮对话后历史子任务记录完整呈现。
 ## 起始页与克隆仓库（git.clone，2026-10-05）
 
@@ -640,3 +640,41 @@ commands 插件登记新功能 `commands.init`，完整目录现为 **27 个插�
 ## 2026-10-06 起始页与桌面更新修复
 
 起始页继续归属 `sessions.start_page`：快捷入口改为紧凑按钮，最近项目和会话改为轻量列表，沿用容器按插件生效状态传入的既有能力。更新传输适配器 `desktop/src/electron-net-asset.cjs` 登记在 updates 的 `desktopModules`，属于既有 `updates.desktop`：逐跳校验可信下载地址，保留系统代理、取消、流式写入与校验。主进程只注入适配器，不实现下载业务。未新增插件、功能 ID 或共享例外；完整目录仍为 27 个插件、139 项功能。
+## 实验：单个子任务取消（subagents.cancel_one，2026-10-06）
+
+subagents 插件登记新功能 `subagents.cancel_one`（单个子任务协作取消）。完整目录现为 **27 个插件、141 项登记功能**：本分支先后加入 `sessions.events_cursor` 与 `subagents.cancel_one` 各一项，文首与 README 的 139 项记录尚未随实验功能更正。
+
+### 开关与归属
+
+- 设置键 `agent.subagentCancelOneEnabled`，**默认关闭**，只有严格 `true` 才算开启；缺失、`false`、字符串或数字等任何非布尔值都按关闭处理（`settings/preferences.py` 校验，写入非法值被拒）。
+- 后端业务全部在 `xueness/bundled_plugins/subagents/cancel_one.py`，manifest 的 `modules` 新增该模块，`features` 新增 `subagents.cancel_one`（中英双语）。入口 `plugin.py` 只做统一分发：先问 `cancel_one.handle`，返回 `None` 才交给既有 operations API。
+- 前端仍留在 subagents 目录：`SubagentSidePane.tsx` 的逐条「取消此项」与 `SubagentSettings.tsx` 的实验开关；工作台容器只按插件生效状态透传 flag，不实现业务。新增文案全部登记 `webapp/src/i18n.ts` 英文对照。
+
+### 端点与安全边界
+
+`POST /api/sessions/<sid>/tasks/<tid>/cancel`，请求体必须为空。属主判定复用插件已声明的 `httpFamilies: ["sessions/*/tasks"]`（最长匹配），不新增 family、不加共享白名单。Host、Origin、Referer、桌面令牌、CSRF、并发准入与「属主插件是否生效」都由共享内核 `_guard` 在 handler 之前执行，本功能没有放宽 Gate，也没有新增 eval、动态导入、子进程、监听套接字或权限种类。
+
+回答顺序固定为「请求形状 → 实验开关 → 会话 → 工作区根 → 子任务」：
+
+| 情况 | 回答 |
+| --- | --- |
+| 非 POST | 405 method not allowed |
+| 请求体非空 | 400 request body must be empty |
+| 开关关闭 | 403 single subtask cancellation is disabled |
+| 会话不存在或 id 非法 | 404 session not found |
+| 会话工作区不在允许根内 / 不可读 | 403 workspace root not permitted |
+| 子任务不存在 | 404 subtask not found |
+| 子任务属于别的会话 | 403 subtask does not belong to session |
+| 子任务工作区与会话不一致（含缺失 root） | 403 subtask workspace does not match session |
+| 子任务已不在运行 | 409 subtask is not running |
+| 成功 | 200 `{cancelled: true, taskId}` |
+
+开关关闭时不查任何状态，所以实验未开启的部署无法用它探测 id 是否存在；形状检查（405/400）在开关之前，畸形请求始终是畸形请求。开启后跨会话回 403、未知 id 回 404，因此已认证的本机调用者能区分「该 id 属于别的会话」与「该 id 不存在」——注册表只在进程内、只保存 id/parent/root/status，调用者本来就能看见本状态目录的全部会话，故保留这个可诊断性差异。`/w/workspace` 与 `/w/workspace-evil` 这类前缀陷阱按解析后的绝对路径比较，不按字符串前缀。
+
+### 取消语义
+
+协作式取消，不强行杀线程：`task_registry.cancel(tid)` 把状态翻成 `cancelled` 并记下结束时间，子代理在下一次 provider/工具边界读到 `is_cancelled` 后自行收尾；worker 槽位在其 provider 请求真正退出时才归还，所以「取消后立即重开满并发」仍受 4 个在途请求的既有上限约束。父会话、兄弟子任务与父会话 journal 都不被改写，`GET /api/sessions/<sid>/tasks` 与既有会话级「中止整个会话」（`POST /api/sessions/<sid>/stop`）行为不变。
+
+被撤回的子任务在既有 `completion_check` 里记作 unsuccessful，因此父回合即便正常收尾也会落到 `needs_review`——这是保守的交付校验：用户主动撤回的发现不能算「已完成的证据」。前端不假装相反：会话头部只在存在运行中任务时出现「中止整个会话」，逐条「取消此项」只在实验开启且该条为 running 时出现，且都要二次确认。
+
+验证：`tests/test_subagents_cancel_one.py`（22 项：路由属主、默认关闭且不泄露状态、非布尔存储值仍关闭、精确取消一条而父会话/兄弟/别会话不受影响、开关形状与 405/400/404/403/409、CSRF 与跨 Origin 守卫、插件停用与恢复、工作区根与任务 root 校验、以及一条真实 `/run` 端到端——两个子任务在跑，取消其一，父代理继续独立工作并收集剩余结果）；前端 `SubagentSidePane.test.tsx` 与 `SubagentSettings.test.tsx` 覆盖开关开/关的渲染差异与旧文案不再出现；`tests/test_settings_store.py` 覆盖布尔校验。

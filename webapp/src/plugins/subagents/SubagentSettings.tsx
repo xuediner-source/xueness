@@ -3,7 +3,7 @@ import { Bot, Folder, Plus, RefreshCw, Search, Trash2 } from "lucide-react";
 import { createResource, deleteResource, listResources, listProviders, patchResource } from "../../xuenessApi";
 import type { ProviderSummary, ResourceItem } from "../../xuenessApi";
 import { Select } from "../../ui/Select";
-import { useLocale, type Locale } from "../../i18n";
+import { t as tr, useLocale, type Locale } from "../../i18n";
 import "../../styles/operations.css";
 import "../../styles/subagent-settings.css";
 
@@ -189,7 +189,17 @@ export function createSubagentSettingsLoader(
   };
 }
 
-export function XuenessSubagentSettings({ providersEnabled }: { providersEnabled: boolean }): React.JSX.Element {
+export function XuenessSubagentSettings({
+  providersEnabled,
+  cancelOneEnabled = false,
+  settingsSaving = false,
+  onCancelOneEnabledChange,
+}: {
+  providersEnabled: boolean;
+  cancelOneEnabled?: boolean;
+  settingsSaving?: boolean;
+  onCancelOneEnabledChange?: (enabled: boolean) => void;
+}): React.JSX.Element {
   const locale = useLocale();
   const localeRef = useRef(locale);
   localeRef.current = locale;
@@ -325,6 +335,21 @@ export function XuenessSubagentSettings({ providersEnabled }: { providersEnabled
   }, [items, query]);
 
   return <div className="xn-subagent-settings xn-operations" data-testid="subagent-settings">
+    <div className="xn-subagent-settings__experiment">
+      <div>
+        <strong>{tr("单个子任务取消（实验性）")}</strong>
+        <p>{tr("开启后可单独取消运行中的子任务；主会话和其他子任务会继续运行。")}</p>
+      </div>
+      <input
+        type="checkbox"
+        role="switch"
+        className="xn-settings-switch"
+        aria-label={tr("单个子任务取消（实验性）")}
+        checked={cancelOneEnabled}
+        disabled={settingsSaving || !onCancelOneEnabledChange}
+        onChange={event => onCancelOneEnabledChange?.(event.currentTarget.checked)}
+      />
+    </div>
     {error && <div role="alert">{error}</div>}
     {providersEnabled && profileError && <div className="xn-subagent-settings__profile-error" role="status">{copy(locale, "profileUnavailable")}: {profileError}</div>}
     {!providersEnabled && <div className="xn-subagent-settings__profile-error" role="status">{copy(locale, "providersDisabled")}</div>}

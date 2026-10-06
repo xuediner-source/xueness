@@ -75,3 +75,30 @@ test('batch B translation keys are present in English', () => {
     assert.equal(tf('将删除早于 {0} 天的日志文件。其他存储数据不会更改。', [30]), 'Log files older than 30 days will be deleted. Other stored data will not change.');
   } finally { setLocale('zh'); }
 });
+
+test('subagent cancellation copy is present in English', () => {
+  try {
+    setLocale('en');
+    // Per-task cancellation (subagents.cancel_one) and the session-wide stop.
+    assert.equal(t('取消此项'), 'Cancel this task');
+    assert.equal(t('正在取消此项…'), 'Cancelling this task…');
+    assert.equal(t('只取消此子任务；主会话和其他子任务继续运行。'),
+      'Cancels only this subtask. The main session and other subtasks keep running.');
+    assert.equal(t('取消此子任务？主会话和其他子任务将继续运行。'),
+      'Cancel this subtask? The main session and other subtasks will keep running.');
+    assert.equal(t('中止整个会话'), 'Stop the entire session');
+    assert.equal(t('正在中止会话…'), 'Stopping the session…');
+    assert.equal(t('停止主会话并取消全部运行中的子任务。'),
+      'Stops the main session and cancels every running subtask.');
+    assert.equal(t('中止整个会话？这会停止主会话并取消全部运行中的子任务。'),
+      'Stop the entire session? This stops the main session and cancels all running subtasks.');
+    assert.equal(t('单个子任务取消（实验性）'), 'Single-subtask cancellation (experimental)');
+    assert.equal(t('开启后可单独取消运行中的子任务；主会话和其他子任务会继续运行。'),
+      'When on, one running subtask can be cancelled on its own; the main session and other subtasks keep running.');
+    // The withdrawn copy must not come back as a registered English string.
+    assert.equal(t('停止会话（取消全部子任务）'), '停止会话（取消全部子任务）');
+    assert.equal(t('正在停止…'), '正在停止…');
+    assert.equal(t('目前没有单个子任务的取消接口：这会停止整个会话运行，并协作取消其全部子任务。'),
+      '目前没有单个子任务的取消接口：这会停止整个会话运行，并协作取消其全部子任务。');
+  } finally { setLocale('zh'); }
+});

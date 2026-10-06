@@ -108,6 +108,13 @@ class SettingsStoreTest(unittest.TestCase):
         self.assertEqual(status, 200)
         self.assertEqual(payload, {"section": "agent", "values": {}})
 
+    def test_single_subtask_cancel_setting_requires_boolean(self):
+        status, payload = self.call("POST", "/api/settings/agent", {
+            "values": {"subagentCancelOneEnabled": "true"},
+        })
+        self.assertEqual(status, 400)
+        self.assertIn("must be boolean", payload["error"])
+
     def test_workbench_preferences_validate_language_and_boolean_controls(self):
         valid = {"language": "en", "autoScroll": True, "showTodos": False,
                  "collapseTools": True,

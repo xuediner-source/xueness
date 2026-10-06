@@ -173,8 +173,6 @@ test("renders running, completed, failed, and cancelled tasks", () => {
   assert.match(html, /data-testid="subagent-task-task-run-1"/);
   assert.match(html, /explorer/);
   assert.match(html, /第 4 步/);
-  assert.match(html, /停止会话（取消全部子任务）/);
-  assert.match(html, /data-testid="subagent-cancel-task-run-1"/);
 
   // Completed task card
   assert.match(html, /data-testid="subagent-task-task-done-2"/);
@@ -194,6 +192,118 @@ test("renders running, completed, failed, and cancelled tasks", () => {
   assert.match(html, /data-testid="subagent-task-task-cancel-4"/);
   assert.match(html, /general-purpose/);
   assert.match(html, /已取消/);
+
+  // With the experiment off, the sidepane keeps exactly one stop control: the
+  // session-level one in the header. No per-card control and no stale copy.
+  assert.match(html, /data-testid="subagent-stop-session"/);
+  assert.match(html, /中止整个会话/);
+  assert.doesNotMatch(html, /停止会话（取消全部子任务）/);
+  assert.doesNotMatch(html, /目前没有单个子任务的取消接口/);
+});
+
+const MIXED_TASKS: SubagentTaskItem[] = [
+  { id: "task-live-1", agent: "explorer", status: "running", steps: 3, startedAt: 1000, endedAt: null },
+  { id: "task-live-2", agent: "reviewer", status: "running", steps: 1, startedAt: 1001, endedAt: null },
+  { id: "task-over-1", agent: "builder", status: "completed", steps: 6, startedAt: 1002, endedAt: 1030 },
+  { id: "task-over-2", agent: "analyzer", status: "failed", steps: 2, startedAt: 1003, endedAt: 1010 },
+  { id: "task-over-3", status: "cancelled", steps: 1, startedAt: 1004, endedAt: 1006 },
+];
+
+test("cancel-one experiment adds a per-task cancel control to running tasks only", () => {
+  const html = renderToStaticMarkup(
+    <SubagentSidePane
+      sessionId="sess-1"
+      isOpen={true}
+      subagentsEnabled={true}
+      cancelOneEnabled={true}
+      initialTasks={MIXED_TASKS}
+    />
+  );
+
+  // Every running task gets its own cooperative cancel control with the
+  // copy that promises a single-subtask scope.
+  assert.match(html, /data-testid="subagent-cancel-task-live-1"/);
+  assert.match(html, /data-testid="subagent-cancel-task-live-2"/);
+  assert.match(html, /取消此项/);
+  assert.match(html, /只取消此子任务；主会话和其他子任务继续运行。/);
+  assert.doesNotMatch(html, /正在取消此项…/);
+
+  // Ended tasks never expose a cancel control, even with the experiment on.
+  for (const id of ["task-over-1", "task-over-2", "task-over-3"]) {
+    assert.doesNotMatch(html, new RegExp(`data-testid="subagent-cancel-${id}"`));
+  }
+  assert.equal([...html.match(/data-testid="subagent-cancel-/g) ?? []].length, 2);
+
+  // The session-level stop control stays available alongside it.
+  assert.match(html, /data-testid="subagent-stop-session"/);
+  assert.match(html, /停止主会话并取消全部运行中的子任务。/);
+});
+
+test("per-task cancel control is absent while the session stop control is not gated by the experiment", () => {
+  const render = (cancelOneEnabled: boolean) => renderToStaticMarkup(
+    <SubagentSidePane
+      sessionId="sess-1"
+      isOpen={true}
+      subagentsEnabled={true}
+      cancelOneEnabled={cancelOneEnabled}
+      initialTasks={MIXED_TASKS}
+    />
+  );
+
+  const off = render(false);
+  const on = render(true);
+
+  assert.doesNotMatch(off, /data-testid="subagent-cancel-/);
+  assert.doesNotMatch(off, /取消此项/);
+  assert.match(on, /data-testid="subagent-cancel-task-live-1"/);
+
+  // Aborting the whole session is not part of the experiment, so it is offered
+  // in both flag states and never disappears when the flag is off.
+  for (const html of [off, on]) {
+    assert.match(html, /data-testid="subagent-stop-session"/);
+    assert.match(html, /中止整个会话/);
+  }
+});
+
+test("session stop control only appears when a subtask is actually running", () => {
+  const endedOnly: SubagentTaskItem[] = [
+    { id: "task-over-1", agent: "builder", status: "completed", steps: 6, startedAt: 1002, endedAt: 1030 },
+  ];
+
+  const noRunning = renderToStaticMarkup(
+    <SubagentSidePane sessionId="sess-1" isOpen={true} initialTasks={endedOnly} />
+  );
+  assert.doesNotMatch(noRunning, /data-testid="subagent-stop-session"/);
+
+  const empty = renderToStaticMarkup(
+    <SubagentSidePane sessionId="sess-1" isOpen={true} initialTasks={[]} />
+  );
+  assert.doesNotMatch(empty, /data-testid="subagent-stop-session"/);
+
+  const noSession = renderToStaticMarkup(
+    <SubagentSidePane sessionId={null} isOpen={true} subagentsEnabled={true}
+      initialTasks={[{ id: "task-live-1", status: "running", steps: 1 }]} />
+  );
+  assert.doesNotMatch(noSession, /data-testid="subagent-stop-session"/);
+
+  const pluginOff = renderToStaticMarkup(
+    <SubagentSidePane sessionId="sess-1" isOpen={true} subagentsEnabled={false}
+      initialTasks={[{ id: "task-live-1", status: "running", steps: 1 }]} />
+  );
+  assert.doesNotMatch(pluginOff, /data-testid="subagent-stop-session"/);
+});
+
+test("sidepane stop controls disappear in lightweight mode with zero rendered chrome", () => {
+  const html = renderToStaticMarkup(
+    <SubagentSidePane
+      sessionId="sess-1"
+      isOpen={true}
+      lightweight={true}
+      cancelOneEnabled={true}
+      initialTasks={MIXED_TASKS}
+    />
+  );
+  assert.equal(html, "");
 });
 
 test("fetchTasksFn is never called when closed or lightweight", async () => {

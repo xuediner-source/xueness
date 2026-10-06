@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AlertTriangle, Bot, Check, ChevronDown, ChevronRight, LoaderCircle, RefreshCw, X } from "lucide-react";
-import { get, post } from "../../xuenessApi";
+import { cancelSubagentTask, get, post } from "../../xuenessApi";
 import { t as tr, tf } from "../../i18n";
 import { startSessionPolling } from "../sessions/SessionPolling";
 import "../../styles/subagent-sidepane.css";
@@ -28,11 +28,13 @@ export type SubagentSidePaneProps = {
   onClose?: () => void;
   activeRuntimeProfile?: string | null;
   subagentsEnabled?: boolean;
+  cancelOneEnabled?: boolean;
   lightweight?: boolean;
   mode?: "sidepane" | "panel";
   pollIntervalMs?: number;
   initialTasks?: SubagentTaskItem[];
-  onCancel?: (taskId?: string) => Promise<void>;
+  onCancelTask?: (taskId: string) => Promise<void>;
+  onStopSession?: () => Promise<void>;
   fetchTasksFn?: (sessionId: string, signal?: AbortSignal) => Promise<{ tasks: SubagentTaskItem[] }>;
 };
 
@@ -74,11 +76,13 @@ export function SubagentSidePane({
   onClose,
   activeRuntimeProfile,
   subagentsEnabled = true,
+  cancelOneEnabled = false,
   lightweight = false,
   mode = "sidepane",
   pollIntervalMs = 2000,
   initialTasks,
-  onCancel,
+  onCancelTask,
+  onStopSession,
   fetchTasksFn,
 }: SubagentSidePaneProps): React.JSX.Element | null {
   const isLightweight = lightweight || activeRuntimeProfile === "lightweight";
@@ -87,6 +91,7 @@ export function SubagentSidePane({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [cancellingId, setCancellingId] = useState<string | null>(null);
+  const [stoppingSession, setStoppingSession] = useState(false);
   const [expandedIds, setExpandedIds] = useState<Set<string>>(() => new Set());
   const initialLoadDone = useRef(false);
   const requestScope = useRef<SubagentRequestScope | null>(null);
@@ -144,35 +149,47 @@ export function SubagentSidePane({
     [fetchTasksFn, isScopeCurrent],
   );
 
-  const handleCancel = useCallback(
+  const handleCancelTask = useCallback(
     async (taskId: string) => {
       const scope = requestScope.current;
-      if (!scope || !isScopeCurrent(scope)) return;
+      if (!cancelOneEnabled || !scope || !isScopeCurrent(scope) || cancellingId || stoppingSession) return;
+      if (!window.confirm(tr("取消此子任务？主会话和其他子任务将继续运行。"))) return;
       setCancellingId(taskId);
       try {
-        if (onCancel) {
-          await onCancel(taskId);
-        } else {
-          await post<{ stopping: boolean }>(`/api/sessions/${encodeURIComponent(scope.sessionId)}/stop`, {});
-        }
+        if (onCancelTask) await onCancelTask(taskId);
+        else await cancelSubagentTask(scope.sessionId, taskId);
         if (isScopeCurrent(scope)) await loadTasks(false);
       } catch (err: unknown) {
-        if (isScopeCurrent(scope)) {
-          const msg = err instanceof Error ? err.message : String(err);
-          setError(msg);
-        }
+        if (isScopeCurrent(scope)) setError(err instanceof Error ? err.message : String(err));
       } finally {
         if (isScopeCurrent(scope)) setCancellingId(null);
       }
     },
-    [isScopeCurrent, onCancel, loadTasks],
+    [cancelOneEnabled, cancellingId, stoppingSession, isScopeCurrent, onCancelTask, loadTasks],
   );
+
+  const handleStopSession = useCallback(async () => {
+    const scope = requestScope.current;
+    if (!scope || !isScopeCurrent(scope) || cancellingId || stoppingSession) return;
+    if (!window.confirm(tr("中止整个会话？这会停止主会话并取消全部运行中的子任务。"))) return;
+    setStoppingSession(true);
+    try {
+      if (onStopSession) await onStopSession();
+      else await post<{ stopping: boolean }>(`/api/sessions/${encodeURIComponent(scope.sessionId)}/stop`, {});
+      if (isScopeCurrent(scope)) await loadTasks(false);
+    } catch (err: unknown) {
+      if (isScopeCurrent(scope)) setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      if (isScopeCurrent(scope)) setStoppingSession(false);
+    }
+  }, [cancellingId, stoppingSession, isScopeCurrent, onStopSession, loadTasks]);
 
   useEffect(() => {
     setTasks(initialTasks ?? []);
     setError(null);
     setLoading(false);
     setCancellingId(null);
+    setStoppingSession(false);
     setExpandedIds(new Set());
     initialLoadDone.current = false;
   }, [sessionId, initialTasks]);
@@ -182,6 +199,7 @@ export function SubagentSidePane({
       initialLoadDone.current = false;
       setLoading(false);
       setCancellingId(null);
+      setStoppingSession(false);
       return;
     }
 
@@ -239,6 +257,18 @@ export function SubagentSidePane({
           )}
         </div>
         <div className="xn-subagent-sidepane__actions">
+          {subagentsEnabled && sessionId && runningTasks.length > 0 && (
+            <button
+              type="button"
+              className="xn-subagent-sidepane__stop-btn"
+              disabled={stoppingSession || cancellingId !== null}
+              onClick={() => void handleStopSession()}
+              data-testid="subagent-stop-session"
+              title={tr("停止主会话并取消全部运行中的子任务。")}
+            >
+              {stoppingSession ? tr("正在中止会话…") : tr("中止整个会话")}
+            </button>
+          )}
           <button
             type="button"
             className="xn-subagent-sidepane__btn"
@@ -312,9 +342,11 @@ export function SubagentSidePane({
                     key={task.id}
                     task={task}
                     isExpanded={expandedIds.has(task.id)}
+                    canCancel={cancelOneEnabled}
                     isCancelling={cancellingId === task.id}
+                    actionsDisabled={stoppingSession || cancellingId !== null}
                     onToggleExpand={() => toggleExpand(task.id)}
-                    onCancel={() => handleCancel(task.id)}
+                    onCancel={() => handleCancelTask(task.id)}
                   />
                 ))}
               </section>
@@ -330,9 +362,11 @@ export function SubagentSidePane({
                     key={task.id}
                     task={task}
                     isExpanded={expandedIds.has(task.id)}
-                    isCancelling={cancellingId === task.id}
+                    canCancel={false}
+                    isCancelling={false}
+                    actionsDisabled={stoppingSession || cancellingId !== null}
                     onToggleExpand={() => toggleExpand(task.id)}
-                    onCancel={() => handleCancel(task.id)}
+                    onCancel={() => undefined}
                   />
                 ))}
               </section>
@@ -347,13 +381,17 @@ export function SubagentSidePane({
 function TaskCard({
   task,
   isExpanded,
+  canCancel,
   isCancelling,
+  actionsDisabled,
   onToggleExpand,
   onCancel,
 }: {
   task: SubagentTaskItem;
   isExpanded: boolean;
+  canCancel: boolean;
   isCancelling: boolean;
+  actionsDisabled: boolean;
   onToggleExpand: () => void;
   onCancel: () => void;
 }): React.JSX.Element {
@@ -421,19 +459,19 @@ function TaskCard({
           <span>{tf("第 {0} 步", [task.steps])}</span>
           <span>{duration}</span>
         </div>
-        {task.status === "running" && (
+        {task.status === "running" && canCancel && (
           <button
             type="button"
             className="xn-subagent-card__cancel-btn"
-            disabled={isCancelling}
+            disabled={actionsDisabled}
             onClick={e => {
               e.stopPropagation();
               onCancel();
             }}
             data-testid={`subagent-cancel-${task.id}`}
-            title={tr("目前没有单个子任务的取消接口：这会停止整个会话运行，并协作取消其全部子任务。")}
+            title={tr("只取消此子任务；主会话和其他子任务继续运行。")}
           >
-            {isCancelling ? tr("正在停止…") : tr("停止会话（取消全部子任务）")}
+            {isCancelling ? tr("正在取消此项…") : tr("取消此项")}
           </button>
         )}
       </div>

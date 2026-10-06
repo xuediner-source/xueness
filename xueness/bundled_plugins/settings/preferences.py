@@ -100,6 +100,8 @@ def validate(section,values):
             raise ValueError('taskAutoArchiveOlderThanDays must be 3, 7, 14 or 30')
     if section=='browser' and 'browserControlEnabled' in values and type(values['browserControlEnabled']) is not bool:
         raise ValueError('browserControlEnabled must be boolean')
+    if section=='agent' and 'subagentCancelOneEnabled' in values and type(values['subagentCancelOneEnabled']) is not bool:
+        raise ValueError('subagentCancelOneEnabled must be boolean')
     if section=='appearance':
         if 'theme' in values and values['theme'] not in ('system','light','dark'): raise ValueError('theme must be system, light or dark')
         if 'fontSize' in values and (type(values['fontSize']) is not int or not 12<=values['fontSize']<=24): raise ValueError('fontSize must be 12..24')

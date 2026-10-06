@@ -272,6 +272,13 @@ export async function post<T>(path: string, body: object): Promise<T> {
   return send<T>("POST", path, body);
 }
 
+export async function cancelSubagentTask(sessionId: string, taskId: string): Promise<{ cancelled: true; taskId: string }> {
+  return post<{ cancelled: true; taskId: string }>(
+    `/api/sessions/${encodeURIComponent(sessionId)}/tasks/${encodeURIComponent(taskId)}/cancel`,
+    {},
+  );
+}
+
 async function patch<T>(path: string, body: object): Promise<T> {
   return send<T>("PATCH", path, body);
 }

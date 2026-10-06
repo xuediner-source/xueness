@@ -87,6 +87,27 @@
   gap: 4px;
 }
 
+.xn-subagent-sidepane__stop-btn {
+  min-height: 28px;
+  padding: 4px 8px;
+  border: 1px solid color-mix(in srgb, var(--danger) 55%, var(--border));
+  border-radius: 6px;
+  background: transparent;
+  color: var(--danger);
+  font-size: 11px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.xn-subagent-sidepane__stop-btn:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--danger) 12%, transparent);
+}
+
+.xn-subagent-sidepane__stop-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 .xn-subagent-sidepane__btn {
   display: inline-flex;
   align-items: center;

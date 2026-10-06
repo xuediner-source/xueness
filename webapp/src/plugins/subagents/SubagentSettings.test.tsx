@@ -1,11 +1,14 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import React from "react";
+import { renderToStaticMarkup } from "react-dom/server";
 import type { ProviderSummary, ResourceList } from "../../xuenessApi";
 import {
   createSubagentSettingsLoader,
   draftFromResource,
   makeSubagentPayload,
   slugifySubagentId,
+  XuenessSubagentSettings,
 } from "./SubagentSettings";
 
 const EMPTY_RESOURCES: ResourceList = { items: [], capability: { userScopeAvailable: true } };
@@ -91,4 +94,32 @@ test("subagent payload persists runtime model fields, prompt details, tools, and
 test("subagent IDs generated from names stay inside the resource ID format", () => {
   assert.equal(slugifySubagentId("  Repo Analyst / One  "), "repo-analyst-one");
   assert.equal(slugifySubagentId("🔥"), "");
+});
+
+test("cancel-one experiment toggle is off by default and mirrors the persisted setting", () => {
+  const render = (props: Parameters<typeof XuenessSubagentSettings>[0]) =>
+    renderToStaticMarkup(<XuenessSubagentSettings {...props} />);
+
+  const bare = render({ providersEnabled: false });
+  assert.match(bare, /xn-subagent-settings__experiment/);
+  assert.match(bare, /单个子任务取消（实验性）/);
+  assert.match(bare, /开启后可单独取消运行中的子任务；主会话和其他子任务会继续运行。/);
+  // No callback means the host cannot persist a change, so the switch is locked.
+  assert.match(bare, /role="switch"[^>]*disabled=""/);
+  assert.doesNotMatch(bare, /role="switch"[^>]*checked=""/);
+
+  const off = render({ providersEnabled: false, onCancelOneEnabledChange: () => {} });
+  assert.doesNotMatch(off, /role="switch"[^>]*checked=""/);
+  assert.doesNotMatch(off, /role="switch"[^>]*disabled=""/);
+
+  const on = render({ providersEnabled: false, cancelOneEnabled: true, onCancelOneEnabledChange: () => {} });
+  assert.match(on, /role="switch"[^>]*checked=""/);
+
+  const saving = render({
+    providersEnabled: false,
+    cancelOneEnabled: true,
+    settingsSaving: true,
+    onCancelOneEnabledChange: () => {},
+  });
+  assert.match(saving, /role="switch"[^>]*disabled=""/);
 });
