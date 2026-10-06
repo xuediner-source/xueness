@@ -169,6 +169,7 @@
     "plugins/sessions/TimelineVirtualWindow.ts#TimelineWindowModel",
     "plugins/sessions/TimelineVirtualWindow.ts#useTimelineVirtualWindow",
     "plugins/sessions/ListVirtualWindow.ts",
-    "plugins/sessions/SidebarNav.tsx"
+    "plugins/sessions/SidebarNav.tsx",
+    "plugins/sessions/debounce.ts"
   ]
 }

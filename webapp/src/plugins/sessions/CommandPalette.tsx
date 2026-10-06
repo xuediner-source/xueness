@@ -1,8 +1,9 @@
-import React, { useEffect, useId, useMemo, useState } from "react";
+import React, { useEffect, useId, useMemo, useRef, useState } from "react";
 import { Clock3, Folder } from "lucide-react";
 import { t as tr, tf, useLocale } from "../../i18n";
 import { fuzzyFilter } from "../../xuenessFuzzy";
 import type { SessionSummary } from "../../xuenessWorkbench";
+import { createDebouncer } from "./debounce";
 import "./sessions.css";
 
 type PaletteCommand = { id: string; label: string; description: string };
@@ -100,15 +101,38 @@ export type CommandPaletteProps = {
   onSelectSession: (id: string) => void;
 };
 
+/** 会话很多时，模糊过滤按防抖后的输入执行；清空输入立即恢复，不拖尾。 */
+const SEARCH_DEBOUNCE_MS = 120;
+
 /** Session-owned search, result rendering and keyboard navigation. The host only mounts it and provides actions. */
 export function CommandPalette({ dialogRef, inputRef, sessions, busy, sessionsEnabled, settingsEnabled, onClose, onRunCommand, onSelectSession }: CommandPaletteProps): React.JSX.Element | null {
   const locale = useLocale();
   const listboxId = `xn-command-palette-listbox-${useId().replace(/[^a-zA-Z0-9_-]/g, "")}`;
   const [search, setSearch] = useState("");
+  const [needle, setNeedle] = useState("");
+  const searchRef = useRef(search);
+  searchRef.current = search;
+  const debouncerRef = useRef<ReturnType<typeof createDebouncer> | null>(null);
+  if (debouncerRef.current === null) {
+    debouncerRef.current = createDebouncer(SEARCH_DEBOUNCE_MS, () => setNeedle(searchRef.current));
+  }
+  useEffect(() => () => debouncerRef.current?.cancel(), []);
   const commands = useMemo(() => makePaletteCommands(settingsEnabled), [settingsEnabled, locale]);
-  const results = useMemo(() => buildCommandPaletteResults(search, commands, sessions, busy), [search, commands, sessions, busy]);
+  const results = useMemo(() => buildCommandPaletteResults(needle, commands, sessions, busy), [needle, commands, sessions, busy]);
   const enabledIndices = useMemo(() => results.flatMap((entry, index) => entry.kind === "command" || !entry.disabled ? [index] : []), [results]);
   const [activeIndex, setActiveIndex] = useState<number | null>(() => 0);
+
+  const onSearchChange = (value: string) => {
+    setSearch(value);
+    setActiveIndex(0);
+    const debouncer = debouncerRef.current!;
+    if (value === "") {
+      debouncer.cancel();
+      setNeedle("");
+      return;
+    }
+    debouncer.push();
+  };
 
   useEffect(() => {
     if (!enabledIndices.includes(activeIndex ?? -1)) setActiveIndex(enabledIndices[0] ?? null);
@@ -172,10 +196,7 @@ export function CommandPalette({ dialogRef, inputRef, sessions, busy, sessionsEn
           aria-activedescendant={activeDescendant}
           placeholder={tr("搜索任务或命令…")}
           value={search}
-          onChange={event => {
-            setSearch(event.target.value);
-            setActiveIndex(0);
-          }}
+          onChange={event => onSearchChange(event.target.value)}
           onKeyDown={onKeyDown}
         />
         <div className="xn-command-results" id={listboxId} role="listbox" aria-label={tr("搜索结果")}>
