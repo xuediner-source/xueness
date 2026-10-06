@@ -107,6 +107,8 @@ export class TimelineWindowModel {
   private prefix: number[] = [0];
   private prefixDirty = true;
   private revealPending = false;
+  /** 跟随尾部的意图：只由滚动事件更新，条目增长（估计→实测）不改写它。 */
+  private tailSticky: boolean;
   private snapshot: TimelineWindowSnapshot;
   private listeners = new Set<() => void>();
 
@@ -114,6 +116,7 @@ export class TimelineWindowModel {
     this.host = host;
     this.enabled = options.enabled !== false;
     this.initialTail = options.initialTail === true;
+    this.tailSticky = this.initialTail;
     this.pageSize = Math.max(1, Math.floor(options.pageSize ?? DEFAULT_PAGE_SIZE));
     this.overscanPx = Math.max(0, options.overscanPx ?? DEFAULT_OVERSCAN_PX);
     this.defaultEstimate = Math.max(1, options.estimatePx ?? DEFAULT_ESTIMATE_PX);
@@ -169,11 +172,12 @@ export class TimelineWindowModel {
     this.notify();
   }
 
-  /** 滚动事件：按最新滚动位置平移窗口。 */
+  /** 滚动事件：按最新滚动位置平移窗口，并更新跟随尾部的意图。 */
   onScrolled(): void {
     if (!this.windowed || this.count === 0) return;
     const viewport = this.host.readViewport();
     if (!viewport) return;
+    this.tailSticky = !isAwayFromTail(viewport.scrollHeight, viewport.scrollTop, viewport.clientHeight, this.tailThresholdPx);
     const next = this.computeWindow(viewport.scrollTop, viewport.clientHeight, this.ensurePrefix());
     if (next.start !== this.range.start || next.end !== this.range.end) {
       this.range = next;
@@ -194,7 +198,12 @@ export class TimelineWindowModel {
     if (!viewport) return;
 
     this.measureWindow();
-    const atTail = !isAwayFromTail(viewport.scrollHeight, viewport.scrollTop, viewport.clientHeight, this.tailThresholdPx);
+    // 距底部是否足够近只用于“重新粘住”；离开尾部必须由滚动事件判定，
+    // 否则追加条目导致的高度增长会被误读为用户离开。
+    if (!isAwayFromTail(viewport.scrollHeight, viewport.scrollTop, viewport.clientHeight, this.tailThresholdPx)) {
+      this.tailSticky = true;
+    }
+    const atTail = this.tailSticky;
     // reveal 跳转后的首次提交只做测量：旧 scrollTop 可能超出新布局高度，
     // 此时锚点补偿与贴底跟随都会把窗口拉回原处，撤销跳转意图。
     if (this.revealPending) {
@@ -235,6 +244,8 @@ export class TimelineWindowModel {
     if (start === this.range.start && end === this.range.end) return;
     this.range = { start, end };
     this.revealPending = true;
+    // 跳转是明确的用户意图：挂起贴底跟随，直到滚动事件重新判定位置。
+    this.tailSticky = false;
     this.notify();
   }
 
