@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Archive, ArrowDownWideNarrow, ChevronsDownUp, ChevronDown, Folder, Hash, Plus, Pencil, Pin, Trash2 } from 'lucide-react';
-import { SidebarNav } from '../../XuenessShell';
+import { SidebarNav } from './SidebarNav';
 import { Select } from '../../ui/Select';
 import { t as tr, tf } from '../../i18n';
 import type { SessionSummary } from '../../xuenessWorkbench';

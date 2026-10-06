@@ -115,7 +115,7 @@ import { createSingleFlightRefresh, useSessionPolling } from "./plugins/sessions
 import { XuenessWorkspacePickerDialog } from "./plugins/settings/XuenessWorkspacePickerDialog";
 import { CodeDisplayProvider } from "./ui/CodeContent";
 import { SHORTCUT_COMMANDS, resolveShortcutBinding } from "./xuenessShortcutCommands";
-import { Shell, SidebarActions, SidebarNav } from "./XuenessShell";
+import { Shell, SidebarActions } from "./XuenessShell";
 import { TimelineStream, TaskTodos } from "./plugins/sessions/XuenessTimeline";
 import { McpElicitation } from "./plugins/mcp/ElicitationForm";
 import { XuenessRenameDialog } from "./plugins/sessions/XuenessRenameDialog";
