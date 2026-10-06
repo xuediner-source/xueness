@@ -463,6 +463,106 @@ const ToolTimelineCard = React.memo(function ToolTimelineCard({
   );
 });
 
+/** Row objects are kept referentially stable across polling ticks by
+ * `stabilizeTimelineRows`, so memoizing per-row items lets a streaming tick
+ * bail out every unchanged entry instead of recomputing the whole timeline. */
+type TimelineWindowIndex = number | undefined;
+
+const UserTimelineItem = React.memo(function UserTimelineItem({ row, windowIndex }: {
+  row: Extract<TimelineRow, { kind: "user" }>;
+  windowIndex: TimelineWindowIndex;
+}): React.JSX.Element {
+  return (
+    <div
+      data-testid={`timeline-item-user-${row.seq}`}
+      data-role="user"
+      data-history-user-seq={row.seq}
+      data-window-index={windowIndex}
+      className="xn-timeline-item xn-timeline-item--user"
+    >
+      <TimelineCard role="user" body={row.text} seq={row.seq} />
+    </div>
+  );
+});
+
+const AssistantTimelineItem = React.memo(function AssistantTimelineItem({ row, windowIndex, showReasoning, jsonToolProtocol, protocolModePending, completionSummary }: {
+  row: AssistantRow;
+  windowIndex: TimelineWindowIndex;
+  showReasoning: boolean;
+  jsonToolProtocol: boolean;
+  protocolModePending: boolean;
+  completionSummary?: string;
+}): React.JSX.Element {
+  const displayText = assistantTextForDisplay(row.text, row.streaming, completionSummary, jsonToolProtocol, protocolModePending);
+  return (
+    <div
+      data-testid={`timeline-item-assistant-${row.seq}`}
+      data-role="assistant"
+      data-window-index={windowIndex}
+      className="xn-timeline-item xn-timeline-item--assistant"
+    >
+      {showReasoning && row.reasoning && <details className="xn-reasoning"><summary>{row.streaming ? tr("思考中…") : tr("思考过程")}</summary><pre className="xn-reasoning__text">{row.reasoning}</pre></details>}
+      {displayText.trim()
+        ? <TimelineCard role="assistant" body={displayText} markdown seq={row.seq} />
+        : row.streaming && <p className="xn-assistant-stream-status" role="status">{tr("正在生成回复…")}</p>}
+    </div>
+  );
+});
+
+const ToolTimelineItem = React.memo(function ToolTimelineItem({ row, windowIndex, collapseTools }: {
+  row: Extract<TimelineRow, { kind: "tool" }>;
+  windowIndex: TimelineWindowIndex;
+  collapseTools: boolean;
+}): React.JSX.Element {
+  return (
+    <div
+      data-testid={`timeline-item-tool-${row.seq}`}
+      data-role="tool"
+      data-tool-status={toolDisplayStatus(row)}
+      data-window-index={windowIndex}
+      className={`xn-timeline-item xn-timeline-item--tool xn-timeline-item--${toolDisplayStatus(row)}`}
+    >
+      <ToolTimelineCard row={row} collapseTools={collapseTools} />
+    </div>
+  );
+});
+
+const CompletionTimelineItem = React.memo(function CompletionTimelineItem({ row, assistantText, windowIndex, jsonToolProtocol, protocolModePending }: {
+  row: CompletionRow;
+  assistantText: string;
+  windowIndex: TimelineWindowIndex;
+  jsonToolProtocol: boolean;
+  protocolModePending: boolean;
+}): React.JSX.Element {
+  const typedCompletion = row as CompletionRow & CompletionPresentationInput;
+  const completion = completionPresentation(typedCompletion, jsonToolProtocol);
+  const assistantAnswer = assistantTextForDisplay(assistantText, false, typedCompletion.summary, jsonToolProtocol, protocolModePending);
+  const duplicateSummary = isDuplicateCompletionAnswer(completion.summary, assistantAnswer, jsonToolProtocol);
+  const completionDetails = duplicateSummary ? "" : completion.summary;
+  return (
+    <div
+      data-testid={`timeline-item-completion-${row.seq}`}
+      data-role="completion"
+      data-window-index={windowIndex}
+      className="xn-timeline-item xn-timeline-item--completion"
+    >
+      <TimelineCard
+        role="completion"
+        title={completion.title}
+        status={completion.status}
+        statusLabel={completion.label}
+        body=""
+        markdown
+        seq={row.seq}
+      />
+      {completionDetails && <details className="xn-completion-details" open={completion.detailsOpen}>
+        <summary>{tr("查看完成详情")}</summary>
+        <div className="xn-completion-details__body"><SimpleMarkdown text={completionDetails} /></div>
+      </details>}
+    </div>
+  );
+});
+
 export function TimelineStream({ rows, emptyText = tr("暂无事件"), collapseTools = true, grouping, messageStreamShowReasoning = true, jsonToolProtocol = false, protocolModePending = false, streamingPending = false, virtualize = false, virtualizeFromTail = false }: TimelineStreamProps): React.JSX.Element {
   const timelineRootRef = React.useRef<HTMLDivElement>(null);
   const conversationIndexes = React.useMemo(() => indexConversationRows(rows ?? []), [rows]);
@@ -523,85 +623,40 @@ export function TimelineStream({ rows, emptyText = tr("暂无事件"), collapseT
           </details>;
         }
         const key = `${r.kind}-${r.seq}-${entryIndex}`;
+        const windowIndex = windowIndexAttribute(entryIndex);
 
         if (r.kind === "user") {
-          return (
-            <div
-              key={key}
-              data-testid={`timeline-item-user-${r.seq}`}
-              data-role="user"
-              data-history-user-seq={r.seq}
-              data-window-index={windowIndexAttribute(entryIndex)}
-              className="xn-timeline-item xn-timeline-item--user"
-            >
-              <TimelineCard role="user" body={r.text} seq={r.seq} />
-            </div>
-          );
+          return <UserTimelineItem key={key} row={r} windowIndex={windowIndex} />;
         }
 
         if (r.kind === "assistant") {
-          const terminal = conversationIndexes.completionByAssistantSeq.get(r.seq);
-          const displayText = assistantTextForDisplay(r.text, r.streaming, terminal?.summary, jsonToolProtocol, protocolModePending);
           return (
-            <div
+            <AssistantTimelineItem
               key={key}
-              data-testid={`timeline-item-assistant-${r.seq}`}
-              data-role="assistant"
-              data-window-index={windowIndexAttribute(entryIndex)}
-              className="xn-timeline-item xn-timeline-item--assistant"
-            >
-              {messageStreamShowReasoning && r.reasoning && <details className="xn-reasoning"><summary>{r.streaming ? tr("思考中…") : tr("思考过程")}</summary><pre className="xn-reasoning__text">{r.reasoning}</pre></details>}
-              {displayText.trim()
-                ? <TimelineCard role="assistant" body={displayText} markdown seq={r.seq} />
-                : r.streaming && <p className="xn-assistant-stream-status" role="status">{tr("正在生成回复…")}</p>}
-            </div>
+              row={r}
+              windowIndex={windowIndex}
+              showReasoning={messageStreamShowReasoning}
+              jsonToolProtocol={jsonToolProtocol}
+              protocolModePending={protocolModePending}
+              completionSummary={conversationIndexes.completionByAssistantSeq.get(r.seq)?.summary}
+            />
           );
         }
 
         if (r.kind === "tool") {
-          return (
-            <div
-              key={key}
-              data-testid={`timeline-item-tool-${r.seq}`}
-              data-role="tool"
-              data-tool-status={toolDisplayStatus(r)}
-              data-window-index={windowIndexAttribute(entryIndex)}
-              className={`xn-timeline-item xn-timeline-item--tool xn-timeline-item--${toolDisplayStatus(r)}`}
-            >
-              <ToolTimelineCard row={r as ToolPayloadRow} collapseTools={collapseTools} />
-            </div>
-          );
+          return <ToolTimelineItem key={key} row={r} windowIndex={windowIndex} collapseTools={collapseTools} />;
         }
 
         if (r.kind === "completion") {
-          const typedCompletion = r as typeof r & CompletionPresentationInput;
-          const completion = completionPresentation(typedCompletion, jsonToolProtocol);
-          const assistantRow = conversationIndexes.assistantByCompletionSeq.get(r.seq);
-          const assistantAnswer = assistantTextForDisplay(assistantRow?.text ?? "", false, typedCompletion.summary, jsonToolProtocol, protocolModePending);
-          const duplicateSummary = isDuplicateCompletionAnswer(completion.summary, assistantAnswer, jsonToolProtocol);
-          const completionDetails = duplicateSummary ? "" : completion.summary;
           return (
-            <div
+            <CompletionTimelineItem
               key={key}
-              data-testid={`timeline-item-completion-${r.seq}`}
-              data-role="completion"
-              data-window-index={windowIndexAttribute(entryIndex)}
-              className="xn-timeline-item xn-timeline-item--completion"
-            >
-              <TimelineCard
-                role="completion"
-                title={completion.title}
-                status={completion.status}
-                statusLabel={completion.label}
-                body=""
-                markdown
-                seq={r.seq}
-              />
-              {completionDetails && <details className="xn-completion-details" open={completion.detailsOpen}>
-                <summary>{tr("查看完成详情")}</summary>
-                <div className="xn-completion-details__body"><SimpleMarkdown text={completionDetails} /></div>
-              </details>}
-            </div>
+              row={r}
+              assistantText={conversationIndexes.assistantByCompletionSeq.get(r.seq)?.text ?? ""}
+              windowIndex={windowIndex}
+              jsonToolProtocol={jsonToolProtocol}
+              protocolModePending={protocolModePending}
+            />
           );
         }
 
