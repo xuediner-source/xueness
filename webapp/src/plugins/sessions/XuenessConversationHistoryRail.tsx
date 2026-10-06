@@ -99,7 +99,7 @@ export function XuenessConversationHistoryRail({ rows, timelineRootRef, requestR
   const stopsRef = React.useRef<HTMLDivElement>(null);
   const navId = React.useId().replace(/:/gu, "");
 
-  // 停靠点窗口化：只挂载轨道可视区附近的行；当前选中与键盘焦点必须保持挂载。
+  // 停靠点窗口化：只挂载轨道可视区附近的行；键盘焦点附近的停靠点软性保持挂载。
   const pinnedIndices = React.useMemo(() => {
     const indices: number[] = [];
     for (const seq of [activeSeq, rovingSeq, focusSeq]) {
@@ -154,15 +154,18 @@ export function XuenessConversationHistoryRail({ rows, timelineRootRef, requestR
 
   const keepRailStopVisible = React.useCallback((seq: number | null) => {
     const track = trackRef.current;
-    const stop = seq === null ? null : track?.querySelector<HTMLElement>(`[data-history-seq="${seq}"]`);
-    if (!track || !stop) return;
-    const trackRect = track.getBoundingClientRect();
-    const stopRect = stop.getBoundingClientRect();
-    const viewportTop = trackRect.top + track.clientTop;
-    const viewportBottom = viewportTop + track.clientHeight;
-    const nextScrollTop = getHistoryRailScrollTop(track.scrollTop, viewportTop, viewportBottom, stopRect.top, stopRect.bottom);
-    if (nextScrollTop !== track.scrollTop) track.scrollTop = nextScrollTop;
-  }, []);
+    const stops = stopsRef.current;
+    if (!track || !stops || seq === null || !(snapshot.stride > 0)) return;
+    const index = items.findIndex((item) => item.seq === seq);
+    if (index < 0) return;
+    // 等高停靠点的几何是精确的：垫片把未挂载区域补齐，停靠点 i 在轨道内容中
+    // 的位置 = 停靠区内边距 + i × 节距。无需停靠点已挂载即可定位滚动。
+    const cssPadTop = Number.parseFloat(window.getComputedStyle(stops).paddingTop) || 0;
+    const stopTop = cssPadTop + index * snapshot.stride;
+    const stopBottom = stopTop + snapshot.stride;
+    const nextScrollTop = getHistoryRailScrollTop(track.scrollTop, track.scrollTop, track.scrollTop + track.clientHeight, stopTop, stopBottom);
+    if (Math.abs(nextScrollTop - track.scrollTop) >= 1) track.scrollTop = nextScrollTop;
+  }, [items, snapshot.stride]);
 
   React.useEffect(() => keepRailStopVisible(activeSeq), [activeSeq, items, keepRailStopVisible]);
   React.useEffect(() => keepRailStopVisible(focusSeq), [focusSeq, items, keepRailStopVisible]);

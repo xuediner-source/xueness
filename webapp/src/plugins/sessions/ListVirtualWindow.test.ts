@@ -91,15 +91,27 @@ test("列表与视口不相交时只保留一个测量锚点，滚回后窗口�
   assert.deepEqual([snapshot.start, snapshot.end], [999, 1000]);
 });
 
-test("pinned 远离视口窗外时以它为中心开一页，而不是拉出跨整表的窗口", () => {
+test("pinned 只做邻近合并：远离视口时忽略，绝不把窗口从可视区拽走", () => {
   const fake = fakeHost({ count: 1000, stride: () => 15, item0Top: 0, viewport: { top: 0, bottom: 220 } });
   const model = new UniformListWindowModel(fake.host, { pageSize: 48, overscanPx: 300, initialCount: 1000 });
   model.setPinned([500]);
   model.sync();
   const snapshot = model.getSnapshot();
-  assert.equal(snapshot.start, 500 - 24);
-  assert.equal(snapshot.end, snapshot.start + 48);
-  assert.ok(snapshot.start <= 500 && 500 < snapshot.end);
+  assert.equal(snapshot.start, 0);
+  assert.equal(snapshot.end, 48, "远处的 pinned 行不应改变视口窗口");
+});
+
+test("用户滚动时窗口跟随视口：pinned 的光标行不会把可视区拖回顶部", () => {
+  // 光标 pinned 在第 0 行，用户把列表滚到中部（item0 顶在视口上方 6627px 处）。
+  const fake = fakeHost({ count: 1000, stride: () => 15, item0Top: -6627, viewport: { top: 0, bottom: 480 } });
+  const model = new UniformListWindowModel(fake.host, { pageSize: 48, overscanPx: 300, initialCount: 1000 });
+  model.sync();
+  model.setPinned([0]);
+  model.sync();
+  const snapshot = model.getSnapshot();
+  assert.ok(snapshot.start > 100, `窗口应跟随视口，实际 start=${snapshot.start}`);
+  assert.ok(snapshot.end - snapshot.start >= 48);
+  assert.equal(snapshot.topPad, snapshot.start * 15);
 });
 
 test("pinned 贴近窗口时只做最小扩展，不把窗口拽离视口", () => {
@@ -112,17 +124,31 @@ test("pinned 贴近窗口时只做最小扩展，不把窗口拽离视口", () =
   assert.equal(snapshot.end, 50);
 });
 
-test("ensureIndex 把窗口移到目标附近并同步生效", () => {
+test("ensureIndex 开出跳转页并在提交测量时保持，直到滚动事件重新规划", () => {
   const fake = fakeHost({ count: 1000, stride: () => 15, item0Top: 0, viewport: { top: 0, bottom: 220 } });
   const model = new UniformListWindowModel(fake.host, { pageSize: 48, overscanPx: 300, initialCount: 1000 });
   model.sync();
   model.ensureIndex(900);
-  const snapshot = model.getSnapshot();
-  assert.equal(snapshot.start, 876);
-  assert.equal(snapshot.end, 924);
+  assert.equal(model.getSnapshot().start, 876);
+  assert.equal(model.getSnapshot().end, 924);
+  // 提交后测量（此时视口还在别处）：跳转意图保持，窗口不被拉回。
+  model.syncAfterCommit();
+  assert.equal(model.getSnapshot().start, 876);
   // 已在窗口内时不再移动。
   model.ensureIndex(880);
   assert.equal(model.getSnapshot().start, 876);
+  // 真正的滚动事件后按视口重新规划（模拟用户已滚到目标附近）。
+  const scrolled: UniformListWindowModel = new UniformListWindowModel(
+    {
+      readViewport: () => ({ top: 0, bottom: 480 }),
+      readAnchor: (): { top: number; stride: number } | null => ({ top: -12774 + scrolled.getSnapshot().start * 15, stride: 15 }),
+    },
+    { pageSize: 48, overscanPx: 300, initialCount: 1000 },
+  );
+  scrolled.ensureIndex(900);
+  scrolled.sync();
+  assert.ok(scrolled.getSnapshot().start <= 900 && 900 < scrolled.getSnapshot().end, "滚动后窗口应覆盖视口");
+  void model;
 });
 
 test("setCount 收缩后夹取窗口，下一次 sync 按视口恢复；归零后重建从首页开始", () => {

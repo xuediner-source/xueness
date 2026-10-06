@@ -202,12 +202,21 @@ export function SidebarNav({
   activeIndexRef.current = activeIndex;
 
   // 选中会话变化（命令面板、托盘等入口）后光标跟随到新选中行。
+  // 初始光标已由 useState 定位；挂载后首次运行可能被动延迟（flush 时机），
+  // 跳过它，避免把用户已经移动过的光标拉回初始选中行。
+  const followReadyRef = useRef(false);
   useEffect(() => {
+    if (!followReadyRef.current) {
+      followReadyRef.current = true;
+      return;
+    }
     if (activeId === null) return;
     setCursor(activeIndexRef.current >= 0 ? activeIndexRef.current : null);
   }, [activeId]);
 
   // 上千条会话时只挂载滚动可视区附近的行；垫片精确补齐，列表滚动总高不变。
+  // 键盘光标是虚拟的（焦点留在容器上）：移动时经 ensureIndex 同步挂载目标行
+  // 并滚动到可见，不把窗口从用户的滚动位置拽走。
   const { snapshot, ensureIndex } = useUniformListWindow({
     count: orderedItems.length,
     listRef,
@@ -215,7 +224,6 @@ export function SidebarNav({
     pageSize: SIDEBAR_WINDOW_PAGE_SIZE,
     overscanPx: SIDEBAR_WINDOW_OVERSCAN_PX,
     estimateStridePx: SIDEBAR_STRIDE_ESTIMATE_PX,
-    pinned: cursor === null ? [] : [cursor],
   });
 
   // 行处理器经 latest-ref 保持身份稳定，行 memo 不因外层重渲染而失效。

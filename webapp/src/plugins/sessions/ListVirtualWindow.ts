@@ -73,6 +73,8 @@ export class UniformListWindowModel {
   /** 虚拟第 0 条的视口坐标，来自最近一次成功测量；null 表示还没有任何布局信息。 */
   private item0Top: number | null = null;
   private pinned: number[] = [];
+  /** ensureIndex 的跳转意图：窗口保持在这页，直到真正的滚动事件重新规划。 */
+  private revealHold = false;
   private snapshot: UniformListWindowSnapshot;
   private listeners = new Set<() => void>();
 
@@ -109,6 +111,7 @@ export class UniformListWindowModel {
     if (nextCount === this.count) return;
     const previousCount = this.count;
     this.count = nextCount;
+    this.revealHold = false;
     this.pinned = this.pinned.filter((index) => index < nextCount);
     if (nextCount === 0) {
       this.commit(0, 0);
@@ -127,7 +130,7 @@ export class UniformListWindowModel {
     this.commit(start, end);
   }
 
-  /** 必须保持挂载的条目下标（键盘光标、当前选中）。值不变时不动窗口。 */
+  /** 必须保持挂载的条目下标（键盘焦点等）。只做邻近合并，绝不把窗口从可视区拽走。 */
   setPinned(indices: ReadonlyArray<number>): void {
     const next = indices.filter((index) => Number.isInteger(index) && index >= 0 && index < this.count);
     const same = next.length === this.pinned.length && next.every((index, position) => index === this.pinned[position]);
@@ -135,7 +138,8 @@ export class UniformListWindowModel {
     this.pinned = [...next];
   }
 
-  /** 把窗口移到能盖住目标下标的一页并同步完成重渲染（键盘导航、跳转用）。 */
+  /** 把窗口移到能盖住目标下标的一页并同步完成重渲染（键盘导航、跳转用）。
+   * 窗口保持在这页直到真正的滚动事件到来（随后由调用方把目标行滚动到可见）。 */
   ensureIndex(index: number): void {
     if (!this.windowed || this.count === 0) return;
     const target = Math.min(Math.max(0, Math.floor(index)), this.count - 1);
@@ -143,11 +147,22 @@ export class UniformListWindowModel {
     const half = Math.floor(this.pageSize / 2);
     const start = Math.max(0, Math.min(target - half, this.count - this.pageSize));
     const end = Math.min(this.count, Math.max(start + this.pageSize, target + 1));
+    this.revealHold = true;
     this.commit(start, end);
   }
 
-  /** 滚动、尺寸变化或提交布局后重算窗口。 */
+  /** 滚动事件后重算窗口：跳转意图由真实滚动消费。 */
   sync(): void {
+    this.revealHold = false;
+    this.plan("sync");
+  }
+
+  /** 提交布局后测量节距并校正锚点；跳转意图保持期间不按视口重规划。 */
+  syncAfterCommit(): void {
+    this.plan("commit");
+  }
+
+  private plan(phase: "sync" | "commit"): void {
     if (this.count === 0) {
       this.commit(0, 0);
       return;
@@ -163,6 +178,7 @@ export class UniformListWindowModel {
       return;
     }
     if (this.item0Top === null) return;
+    if (phase === "commit" && this.revealHold) return;
     const viewport = this.host.readViewport();
     if (!viewport) return;
     const { start, end } = this.planRange(viewport);
@@ -194,16 +210,14 @@ export class UniformListWindowModel {
     return this.mergePinned(range.start, range.end);
   }
 
-  /** pinned 远离视口窗口时以它为中心开一页，避免跨越整段列表拉出巨型窗口；贴近窗口时只做最小扩展。 */
+  /** pinned 贴近窗口时只做最小扩展；远离视口时忽略——鼠标滚动不被键盘光标拽走，
+   * 远处的 pinned 行由 ensureIndex 按需挂载。 */
   private mergePinned(start: number, end: number): WindowRange {
     if (!this.pinned.length) return { start, end };
     const pinnedMin = Math.min(...this.pinned);
     const pinnedMax = Math.max(...this.pinned);
     if (pinnedMax < start - this.pageSize || pinnedMin >= end + this.pageSize) {
-      const half = Math.floor(this.pageSize / 2);
-      const nextStart = Math.max(0, Math.min(pinnedMin - half, this.count - this.pageSize));
-      const nextEnd = Math.min(this.count, Math.max(nextStart + this.pageSize, pinnedMax + 1));
-      return { start: nextStart, end: nextEnd };
+      return { start, end };
     }
     return { start: Math.min(start, pinnedMin), end: Math.max(end, pinnedMax + 1) };
   }
@@ -299,7 +313,7 @@ export function useUniformListWindow({
   React.useLayoutEffect(() => {
     model.setCount(count);
     model.setPinned(pinned);
-    model.sync();
+    model.syncAfterCommit();
   });
 
   React.useEffect(() => {
@@ -315,7 +329,7 @@ export function useUniformListWindow({
     const list = listRef.current;
     if (!list || typeof ResizeObserver === "undefined") return;
     const scroller = findScroller(list);
-    const observer = new ResizeObserver(() => model.sync());
+    const observer = new ResizeObserver(() => model.syncAfterCommit());
     observer.observe(list);
     if (scroller) observer.observe(scroller);
     return () => observer.disconnect();
