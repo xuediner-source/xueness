@@ -715,16 +715,17 @@ function MarkdownCodeFence({
   text: string;
   info?: string;
 }): React.JSX.Element {
+  const options = React.useContext(MarkdownRenderOptionsContext);
   const language = markdownCodeLanguage(info);
   const languageLabel = info?.trim().split(/\s+/u)[0] || tr("纯文本");
   const testId = `xn-copy-code-${React.useId()}`;
   return (
-    <div className="xn-md__code-fence" data-language={language}>
+    <div className="xn-md__code-fence" data-language={language} data-highlight={options.codeHighlightTiming}>
       <header className="xn-md__code-header">
         <span>{languageLabel}</span>
         <CopyFeedbackAction text={text} testId={testId} label={tr("复制代码")} />
       </header>
-      <CodeContent text={text} language={language} />
+      <CodeContent text={text} language={language} highlightTiming={options.codeHighlightTiming} />
     </div>
   );
 }
@@ -784,14 +785,44 @@ const REMARK_PLUGINS = [remarkGfm];
 export const MARKDOWN_ELEMENT_CACHE_LIMIT = 240;
 const markdownElementCache = new Map<string, React.JSX.Element>();
 
+export type MarkdownHighlightTiming = "immediate" | "on-visible" | "after-stream";
+export type MarkdownRenderOptions = {
+  /** When markdown code fences may run syntax highlighting. */
+  codeHighlightTiming: MarkdownHighlightTiming;
+  /** Whether rendered output may populate the content-keyed element cache. */
+  cacheParseResults: boolean;
+};
+
+/** Stream-aware render options for markdown prose. Default keeps historical
+ * behavior: highlight immediately and always cache. Streaming transcriptions
+ * provide `after-stream` (defer fence highlighting until the stream settles)
+ * and disable caching so growing transient text never evicts real entries. */
+export const MarkdownRenderOptionsContext = React.createContext<MarkdownRenderOptions>({
+  codeHighlightTiming: "immediate",
+  cacheParseResults: true,
+});
+
+function renderMarkdownElements(text: string): React.JSX.Element {
+  return ReactMarkdown({
+    children: text,
+    remarkPlugins: REMARK_PLUGINS,
+    components: markdownComponents,
+    skipHtml: true,
+    urlTransform: safeMarkdownUrl,
+  });
+}
+
 /**
  * ReactMarkdown element tree for `text`, memoized by exact content: identical
  * markdown (virtual-window remounts, session switches, repeated renders of
  * unchanged history) parses and compiles once. `ReactMarkdown` is a pure
  * function without hooks (react-markdown v10 `Markdown`), so calling it
  * directly here yields the same element tree the JSX path would render.
+ * With `cacheResults=false` the tree is rendered fresh and the cache is left
+ * untouched (used for still-growing streaming text).
  */
-export function cachedMarkdownElements(text: string): React.JSX.Element {
+export function cachedMarkdownElements(text: string, cacheResults = true): React.JSX.Element {
+  if (!cacheResults) return renderMarkdownElements(text);
   const cached = markdownElementCache.get(text);
   if (cached) {
     // Re-insert so Map insertion order keeps this entry as most-recently used.
@@ -799,13 +830,7 @@ export function cachedMarkdownElements(text: string): React.JSX.Element {
     markdownElementCache.set(text, cached);
     return cached;
   }
-  const elements = ReactMarkdown({
-    children: text,
-    remarkPlugins: REMARK_PLUGINS,
-    components: markdownComponents,
-    skipHtml: true,
-    urlTransform: safeMarkdownUrl,
-  });
+  const elements = renderMarkdownElements(text);
   markdownElementCache.set(text, elements);
   if (markdownElementCache.size > MARKDOWN_ELEMENT_CACHE_LIMIT) {
     const oldest = markdownElementCache.keys().next().value;
@@ -816,9 +841,10 @@ export function cachedMarkdownElements(text: string): React.JSX.Element {
 
 /** Markdown renderer for transcript prose. Raw HTML stays disabled; unsafe URL schemes are omitted. */
 export const SimpleMarkdown = React.memo(function SimpleMarkdown({ text }: { text: string }): React.JSX.Element {
+  const options = React.useContext(MarkdownRenderOptionsContext);
   return (
     <div className="xn-md" data-testid="xn-simple-markdown">
-      {cachedMarkdownElements(text)}
+      {cachedMarkdownElements(text, options.cacheParseResults)}
     </div>
   );
 });

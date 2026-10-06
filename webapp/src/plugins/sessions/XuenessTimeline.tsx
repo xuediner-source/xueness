@@ -2,7 +2,7 @@ import { t as tr, tf } from '../../i18n';
 import React from "react";
 import { Plug, SquareTerminal } from "lucide-react";
 import type { TimelineRow } from "../../xuenessWorkbench";
-import { SimpleMarkdown, TimelineCard } from "../../XuenessShell";
+import { SimpleMarkdown, TimelineCard, MarkdownRenderOptionsContext, type MarkdownRenderOptions } from "../../XuenessShell";
 import { EmptyState } from "../../ui/primitives";
 import { IconGear, IconPencil, IconSearch } from "../../ui/icons";
 import { XuenessConversationHistoryRail } from "./XuenessConversationHistoryRail";
@@ -468,6 +468,9 @@ const ToolTimelineCard = React.memo(function ToolTimelineCard({
  * bail out every unchanged entry instead of recomputing the whole timeline. */
 type TimelineWindowIndex = number | undefined;
 
+const SETTLED_MARKDOWN_RENDER_OPTIONS: MarkdownRenderOptions = { codeHighlightTiming: "on-visible", cacheParseResults: true };
+const STREAMING_MARKDOWN_RENDER_OPTIONS: MarkdownRenderOptions = { codeHighlightTiming: "after-stream", cacheParseResults: false };
+
 /** Screen-refresh floor for streaming markdown re-parses: commits are capped
  * at one per interval, so token bursts never re-render per token. With the
  * default 1 s session poll this never holds text back; it only protects
@@ -576,10 +579,12 @@ const AssistantTimelineItem = React.memo(function AssistantTimelineItem({ row, w
       data-window-index={windowIndex}
       className="xn-timeline-item xn-timeline-item--assistant"
     >
-      {showReasoning && row.reasoning && <details className="xn-reasoning"><summary>{row.streaming ? tr("思考中…") : tr("思考过程")}</summary><pre className="xn-reasoning__text">{row.reasoning}</pre></details>}
-      {displayText.trim()
-        ? <TimelineCard role="assistant" body={displayText} markdown seq={row.seq} />
-        : row.streaming && <p className="xn-assistant-stream-status" role="status">{tr("正在生成回复…")}</p>}
+      <MarkdownRenderOptionsContext.Provider value={row.streaming ? STREAMING_MARKDOWN_RENDER_OPTIONS : SETTLED_MARKDOWN_RENDER_OPTIONS}>
+        {showReasoning && row.reasoning && <details className="xn-reasoning"><summary>{row.streaming ? tr("思考中…") : tr("思考过程")}</summary><pre className="xn-reasoning__text">{row.reasoning}</pre></details>}
+        {displayText.trim()
+          ? <TimelineCard role="assistant" body={displayText} markdown seq={row.seq} />
+          : row.streaming && <p className="xn-assistant-stream-status" role="status">{tr("正在生成回复…")}</p>}
+      </MarkdownRenderOptionsContext.Provider>
     </div>
   );
 });
@@ -621,19 +626,21 @@ const CompletionTimelineItem = React.memo(function CompletionTimelineItem({ row,
       data-window-index={windowIndex}
       className="xn-timeline-item xn-timeline-item--completion"
     >
-      <TimelineCard
-        role="completion"
-        title={completion.title}
-        status={completion.status}
-        statusLabel={completion.label}
-        body=""
-        markdown
-        seq={row.seq}
-      />
-      {completionDetails && <details className="xn-completion-details" open={completion.detailsOpen}>
-        <summary>{tr("查看完成详情")}</summary>
-        <div className="xn-completion-details__body"><SimpleMarkdown text={completionDetails} /></div>
-      </details>}
+      <MarkdownRenderOptionsContext.Provider value={SETTLED_MARKDOWN_RENDER_OPTIONS}>
+        <TimelineCard
+          role="completion"
+          title={completion.title}
+          status={completion.status}
+          statusLabel={completion.label}
+          body=""
+          markdown
+          seq={row.seq}
+        />
+        {completionDetails && <details className="xn-completion-details" open={completion.detailsOpen}>
+          <summary>{tr("查看完成详情")}</summary>
+          <div className="xn-completion-details__body"><SimpleMarkdown text={completionDetails} /></div>
+        </details>}
+      </MarkdownRenderOptionsContext.Provider>
     </div>
   );
 });

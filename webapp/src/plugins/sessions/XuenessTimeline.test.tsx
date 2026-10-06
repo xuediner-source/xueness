@@ -667,3 +667,16 @@ test("StreamingCommitGate: 自定义间隔与慢流（超过间隔的稀疏推�
   assert.equal(polled.push("tick-2", 1000), "tick-2");
   assert.equal(polled.push("tick-3", 2500), "tick-3");
 });
+
+test("TimelineStream: 流式助手消息代码块推迟高亮（after-stream），结束后改为进入可视区再高亮", () => {
+  const text = "说明\n\n```ts\nconst ready = true;\n```\n";
+  const streamingHtml = renderToStaticMarkup(
+    <TimelineStream rows={[{ kind: "assistant", seq: 9, turnId: "t9", text, streaming: true }]} />,
+  );
+  assert.match(streamingHtml, /data-highlight="after-stream"/);
+  const settledHtml = renderToStaticMarkup(
+    <TimelineStream rows={[{ kind: "assistant", seq: 9, turnId: "t9", text, streaming: false }]} />,
+  );
+  assert.match(settledHtml, /data-highlight="on-visible"/);
+  assert.doesNotMatch(settledHtml, /data-highlight="after-stream"/);
+});

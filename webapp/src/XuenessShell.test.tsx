@@ -445,3 +445,13 @@ test("SimpleMarkdown: content cache is LRU-bounded and re-parses evicted entries
   assert.notEqual(survivor, undefined, "survivor must be captured");
   assert.equal(cachedMarkdownElements(`洪流条目 ${MARKDOWN_ELEMENT_CACHE_LIMIT}`), survivor);
 });
+
+test("SimpleMarkdown: 默认上下文代码块立即高亮（immediate），cacheParseResults=false 不写内容缓存", () => {
+  const html = renderToStaticMarkup(<SimpleMarkdown text={"```json\n{\"ok\": true}\n```"} />);
+  assert.match(html, /data-highlight="immediate"/);
+  const bypassedFirst = cachedMarkdownElements("绕过缓存的段落", false);
+  const bypassedAgain = cachedMarkdownElements("绕过缓存的段落", false);
+  assert.notEqual(bypassedAgain, bypassedFirst);
+  const hot = cachedMarkdownElements("绕过缓存的段落");
+  assert.equal(cachedMarkdownElements("绕过缓存的段落"), hot);
+});
