@@ -169,7 +169,13 @@ export function XuenessTaskList({
     }}
     onKeyDown={e=>{
       if(!isTaskContextMenuShortcut(e.key,e.shiftKey))return;
-      const el=(e.target as HTMLElement).closest<HTMLElement>('[data-testid^="xn-sidebar-item-"]');
+      const target=e.target as HTMLElement;
+      // 焦点在 listbox 容器上时（键盘导航），经 aria-activedescendant 找到光标行。
+      let el=target.closest<HTMLElement>('[data-testid^="xn-sidebar-item-"]');
+      if(!el&&target.getAttribute){
+        const cursorId=target.getAttribute('aria-activedescendant');
+        if(cursorId)el=document.getElementById(cursorId)?.closest<HTMLElement>('[data-testid^="xn-sidebar-item-"]')??null;
+      }
       if(!el)return;
       e.preventDefault();
       const bounds=el.getBoundingClientRect();

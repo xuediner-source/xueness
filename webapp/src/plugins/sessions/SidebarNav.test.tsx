@@ -3,7 +3,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { renderToStaticMarkup } from "react-dom/server";
 
-import { SidebarNav } from "./SidebarNav";
+import { SidebarNav, nextSidebarCursorIndex } from "./SidebarNav";
 
 test("SidebarNav: active 项有 aria-current 与 data-active，完成项不再显示状态徽标", () => {
   const items = [
@@ -98,6 +98,56 @@ test("SidebarNav: 无 pinned 项时不渲染「已置顶」标题与 pin 图标"
   const first = html.indexOf('data-testid="xn-sidebar-item-task-1"');
   const second = html.indexOf('data-testid="xn-sidebar-item-task-2"');
   assert.ok(first >= 0 && first < second);
+});
+
+test("SidebarNav: 键盘光标移动夹取边界，Home/End 跳到首尾", () => {
+  assert.equal(nextSidebarCursorIndex("ArrowDown", 0, 3), 1);
+  assert.equal(nextSidebarCursorIndex("ArrowDown", 2, 3), 2, "到底后停留");
+  assert.equal(nextSidebarCursorIndex("ArrowUp", 0, 3), 0, "到顶后停留");
+  assert.equal(nextSidebarCursorIndex("ArrowUp", 2, 3), 1);
+  assert.equal(nextSidebarCursorIndex("ArrowDown", -1, 3), 0, "无光标时下键落在首行");
+  assert.equal(nextSidebarCursorIndex("ArrowUp", -1, 3), 2, "无光标时上键落在末行");
+  assert.equal(nextSidebarCursorIndex("Home", 1, 3), 0);
+  assert.equal(nextSidebarCursorIndex("End", 1, 3), 2);
+  assert.equal(nextSidebarCursorIndex("Enter", 1, 3), null);
+  assert.equal(nextSidebarCursorIndex("ArrowDown", 0, 0), null);
+});
+
+test("SidebarNav: 有 onSelect 时渲染为 listbox，当前行 aria-selected，光标经 aria-activedescendant 暴露", () => {
+  const items = [
+    { id: "task-1", label: "任务一", active: true },
+    { id: "task-2", label: "任务二", active: false },
+    { id: "task-3", label: "任务三", active: false },
+  ];
+  const html = renderToStaticMarkup(<SidebarNav items={items} onSelect={() => {}} />);
+
+  assert.match(html, /<ul[^>]*role="listbox"/);
+  assert.match(html, /<ul[^>]*tabindex="0"/);
+  assert.match(html, /<ul[^>]*aria-label="任务列表"/);
+  const listOpen = html.slice(html.indexOf("<ul"), html.indexOf(">", html.indexOf("<ul")) + 1);
+  assert.match(listOpen, /aria-activedescendant="[^"]+"/, "初始光标应指向当前选中行");
+
+  const activeOption = html.match(/<button[^>]*data-testid="xn-sidebar-item-task-1"[^>]*>/)?.[0] ?? "";
+  assert.match(activeOption, /role="option"/);
+  assert.match(activeOption, /aria-selected="true"/);
+  assert.match(activeOption, /aria-current="true"/);
+  assert.match(activeOption, /tabindex="-1"/, "listbox 模式下选项不再是 tab 停靠点");
+  assert.match(activeOption, /data-cursor="true"/, "光标初始停在当前选中行上");
+  const inactiveOption = html.match(/<button[^>]*data-testid="xn-sidebar-item-task-2"[^>]*>/)?.[0] ?? "";
+  assert.match(inactiveOption, /aria-selected="false"/);
+  assert.doesNotMatch(inactiveOption, /data-cursor="true"/);
+
+  assert.match(html, /<li[^>]*role="none"/);
+  assert.doesNotMatch(html, /<li[^>]*role="option"/, "选项角色在行按钮上，li 为 presentation");
+});
+
+test("SidebarNav: 无 onSelect 时不启用 listbox", () => {
+  const html = renderToStaticMarkup(
+    <SidebarNav items={[{ id: "task-1", label: "任务一", active: true }]} />,
+  );
+  assert.doesNotMatch(html, /role="listbox"/);
+  assert.doesNotMatch(html, /aria-activedescendant/);
+  assert.match(html, /<div class="xn-shell-nav__link/);
 });
 
 test("SidebarNav: 空输入不抛", () => {

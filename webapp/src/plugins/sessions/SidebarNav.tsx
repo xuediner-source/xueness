@@ -1,4 +1,4 @@
-import React, { useRef } from "react";
+import React, { useCallback, useEffect, useId, useRef, useState } from "react";
 import { IconLoader, IconPencil, IconPin, IconTrash, IconX } from "../../ui/icons";
 import { t as tr } from "../../i18n";
 import { useUniformListWindow } from "./ListVirtualWindow";
@@ -34,12 +34,24 @@ export type SidebarNavProps = {
   width?: number;
 };
 
+/** 键盘光标移动（listbox 惯例：方向键夹取边界不环绕，Home/End 跳到首尾）。 */
+export function nextSidebarCursorIndex(key: string, current: number, count: number): number | null {
+  if (count < 1) return null;
+  if (key === "Home") return 0;
+  if (key === "End") return count - 1;
+  if (key !== "ArrowDown" && key !== "ArrowUp") return null;
+  if (current < 0) return key === "ArrowDown" ? 0 : count - 1;
+  return key === "ArrowDown" ? Math.min(count - 1, current + 1) : Math.max(0, current - 1);
+}
+
 /** 会话列表窗口化参数：行高约 33px（32px 行 + 1px 间隔），滚动后自动实测。 */
 const SIDEBAR_WINDOW_PAGE_SIZE = 48;
 const SIDEBAR_WINDOW_OVERSCAN_PX = 600;
 const SIDEBAR_STRIDE_ESTIMATE_PX = 33;
 
-/** 会话列表。悬停时仅在每个条目上显示重命名/删除操作（存在对应处理器时）。 */
+/** 会话列表。悬停时仅在每个条目上显示重命名/删除操作（存在对应处理器时）。
+ * 有 onSelect 时渲染为 listbox：↑/↓/Home/End 移动键盘光标（aria-activedescendant），
+ * Enter 打开光标条目；焦点留在列表容器上，未挂载的光标行先扩大窗口再滚动。 */
 export function SidebarNav({
   items,
   onSelect,
@@ -51,16 +63,69 @@ export function SidebarNav({
   // pinned the header is omitted and the list order is exactly as given.
   const pinnedItems = items.filter((item) => item.pinned);
   const orderedItems = [...pinnedItems, ...items.filter((item) => !item.pinned)];
+  const listbox = Boolean(onSelect);
+  const navId = useId().replace(/[^a-zA-Z0-9_-]/gu, "");
   const listRef = useRef<HTMLUListElement>(null);
+  const activeIndex = orderedItems.findIndex((item) => item.active);
+  // 键盘光标初始停在当前选中会话上（首页内）；没有选中项时等待首次聚焦再定位。
+  const [cursor, setCursor] = useState<number | null>(() =>
+    activeIndex >= 0 && activeIndex < SIDEBAR_WINDOW_PAGE_SIZE ? activeIndex : null);
+  const activeId = activeIndex >= 0 ? orderedItems[activeIndex]!.id : null;
+  const activeIndexRef = useRef(activeIndex);
+  activeIndexRef.current = activeIndex;
+
+  // 选中会话变化（命令面板、托盘等入口）后光标跟随到新选中行。
+  useEffect(() => {
+    if (activeId === null) return;
+    setCursor(activeIndexRef.current >= 0 ? activeIndexRef.current : null);
+  }, [activeId]);
+
   // 上千条会话时只挂载滚动可视区附近的行；垫片精确补齐，列表滚动总高不变。
-  const { snapshot } = useUniformListWindow({
+  const { snapshot, ensureIndex } = useUniformListWindow({
     count: orderedItems.length,
     listRef,
     findScroller: (list) => list.closest<HTMLElement>(".xn-shell-sidebar__body"),
     pageSize: SIDEBAR_WINDOW_PAGE_SIZE,
     overscanPx: SIDEBAR_WINDOW_OVERSCAN_PX,
     estimateStridePx: SIDEBAR_STRIDE_ESTIMATE_PX,
+    pinned: cursor === null ? [] : [cursor],
   });
+
+  const optionIdAt = useCallback((index: number) => `${navId}-${orderedItems[index]?.id ?? ""}`, [navId, orderedItems]);
+
+  const moveCursor = useCallback((index: number) => {
+    setCursor(index);
+    // 目标行可能尚未挂载（窗口化）：先同步扩大窗口，再滚动到可见。
+    ensureIndex(index);
+    document.getElementById(optionIdAt(index))?.scrollIntoView?.({ block: "nearest" });
+  }, [ensureIndex, optionIdAt]);
+
+  const onKeyDown = (event: React.KeyboardEvent<HTMLUListElement>) => {
+    if (!listbox) return;
+    // Shift+F10 / ContextMenu 交给外层的条目上下文菜单处理。
+    if (event.key === "ContextMenu" || (event.key === "F10" && event.shiftKey)) return;
+    if (event.key === "Enter") {
+      if (event.target !== event.currentTarget || cursor === null) return;
+      const item = orderedItems[cursor];
+      if (!item) return;
+      event.preventDefault();
+      onSelect?.(item.id);
+      return;
+    }
+    const next = nextSidebarCursorIndex(event.key, cursor ?? -1, orderedItems.length);
+    if (next === null) return;
+    event.preventDefault();
+    moveCursor(next);
+  };
+
+  const onFocus = () => {
+    setCursor((current) => current ?? (orderedItems.length > 0 ? Math.max(0, activeIndex) : null));
+  };
+
+  const refocusList = () => {
+    listRef.current?.focus({ preventScroll: true });
+  };
+
   const visibleItems = snapshot.windowed ? orderedItems.slice(snapshot.start, snapshot.end) : orderedItems;
   return (
     <nav
@@ -73,22 +138,34 @@ export function SidebarNav({
       <ul
         ref={listRef}
         className="xn-shell-nav__list"
+        role={listbox ? "listbox" : undefined}
+        aria-label={listbox ? tr("任务列表") : undefined}
+        tabIndex={listbox ? 0 : undefined}
+        aria-activedescendant={listbox && cursor !== null ? optionIdAt(cursor) : undefined}
+        onKeyDown={listbox ? onKeyDown : undefined}
+        onFocus={listbox ? onFocus : undefined}
         style={snapshot.windowed ? { paddingTop: `${snapshot.topPad}px`, paddingBottom: `${snapshot.bottomPad}px` } : undefined}
       >
-        {visibleItems.map((item) => {
+        {visibleItems.map((item, offset) => {
+          const index = snapshot.start + offset;
           const isCurrent = item.active;
           return (
-            <li key={item.id} draggable className={`xn-shell-nav__item ${isCurrent ? "xn-shell-nav__item--active" : ""}`}>
+            <li key={item.id} draggable role={listbox ? "none" : undefined} className={`xn-shell-nav__item ${isCurrent ? "xn-shell-nav__item--active" : ""}`}>
               {onSelect ? (
                 <button
                   type="button"
+                  id={optionIdAt(index)}
+                  role={listbox ? "option" : undefined}
+                  aria-selected={listbox ? (isCurrent ? "true" : "false") : undefined}
                   className={`xn-shell-nav__link ${isCurrent ? "xn-shell-nav__link--active" : ""}`}
                   aria-current={isCurrent ? "true" : undefined}
                   aria-haspopup="menu"
                   aria-keyshortcuts="Shift+F10"
                   data-active={isCurrent ? "true" : undefined}
+                  data-cursor={listbox && index === cursor ? "true" : undefined}
                   data-testid={`xn-sidebar-item-${item.id}`}
-                  onClick={() => onSelect(item.id)}
+                  tabIndex={listbox ? -1 : undefined}
+                  onClick={() => { onSelect(item.id); refocusList(); }}
                   data-sidebar-navigate="true"
                 >
                   <span className="xn-shell-nav__leading" aria-hidden="true">

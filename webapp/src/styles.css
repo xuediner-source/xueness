@@ -891,6 +891,20 @@ code, kbd, samp, pre {
   outline-offset: -2px;
 }
 
+/* listbox 键盘导航：焦点留在列表容器上，光标行以悬停底色 + 内描边呈现。 */
+.xn-shell-nav__list:focus-visible {
+  outline: none;
+}
+
+.xn-shell-nav__link[data-cursor="true"] {
+  background: var(--bg-hover);
+}
+
+.xn-shell-nav__list:focus-visible .xn-shell-nav__link[data-cursor="true"] {
+  outline: 2px solid var(--border-focus);
+  outline-offset: -2px;
+}
+
 .xn-shell-nav__link--active {
   font-weight: 600;
 }
