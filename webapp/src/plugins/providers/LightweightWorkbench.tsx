@@ -1,6 +1,7 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useId, useRef, useState } from 'react';
 import { ArrowUp, Square } from 'lucide-react';
 import { XuenessComposerToolbar } from '../sessions/XuenessComposerToolbar';
+import { completionPresentation } from '../sessions/completionPresentation';
 import { SimpleMarkdown, TimelineCard } from '../../XuenessShell';
 import { t as tr, tf } from '../../i18n';
 import type { TimelineRow, WorkbenchSession } from '../../xuenessWorkbench';
@@ -176,18 +177,78 @@ export type LightweightStatusBarProps = {
   workspaceRoot?: string | null;
   reportedUsage?: LightweightReportedUsage | null;
   status?: string;
+  /** 中断请求已发出、尚未收到终态：标准档靠按钮禁用表达，极简状态行同样要说出来。 */
+  stopping?: boolean;
+  /** 本轮流式输出被中断（session.streaming.status === 'interrupted'）。 */
+  interrupted?: boolean;
+  /** 待发送的排队消息条数。 */
+  queueCount?: number;
   isNarrow?: boolean;
 };
+
+export type LightweightStatusTone = 'idle' | 'running' | 'paused' | 'error' | 'done';
+
+export type LightweightStatusPresentation = { label: string; tone: LightweightStatusTone };
+
+/**
+ * 把会话状态映射成极简状态行的读数，词表与标准档保持一致（侧栏 StatusDot、
+ * SessionQueue、命令面板使用同一批状态字符串）。未知状态回落为空闲文案，
+ * 不虚构状态。
+ */
+export function lightweightStatusPresentation(
+  status?: string | null,
+  context: { stopping?: boolean; interrupted?: boolean; queueCount?: number } = {},
+): LightweightStatusPresentation {
+  const value = typeof status === 'string' ? status.trim() : '';
+  if (context.stopping) return { label: tr('正在停止'), tone: 'running' };
+  if (value === 'running' || value === 'streaming' || value === 'stopping') return { label: tr('运行中'), tone: 'running' };
+  if (value === 'pending' || value === 'queued') return { label: tr('等待中'), tone: 'paused' };
+  if (value === 'paused') return { label: tr('已暂停'), tone: 'paused' };
+  if (value === 'needs_review') return { label: tr('需要审核'), tone: 'paused' };
+  if (value === 'awaiting_user') return { label: tr('等待用户'), tone: 'paused' };
+  if (value === 'stalled') return { label: tr('运行停滞'), tone: 'paused' };
+  if (value === 'interrupted' || context.interrupted) return { label: tr('已中断'), tone: 'paused' };
+  if (value === 'error' || value === 'failed' || value === 'provider_error') return { label: tr('出错了'), tone: 'error' };
+  if (value === 'cancelled') return { label: tr('已取消'), tone: 'idle' };
+  if (value === 'completed') return { label: tr('已完成'), tone: 'done' };
+  if ((context.queueCount ?? 0) > 0) return { label: tr('队列中'), tone: 'paused' };
+  return { label: tr('空闲'), tone: 'idle' };
+}
+
+const STATUS_DOT_CLASS: Record<LightweightStatusTone, string> = {
+  running: 'xn-lightweight-status__dot--running',
+  error: 'xn-lightweight-status__dot--error',
+  paused: 'xn-lightweight-status__dot--paused',
+  done: 'xn-lightweight-status__dot--done',
+  idle: 'xn-lightweight-status__dot--idle',
+};
+
+/** 状态行右侧读数：状态本身，外加排队条数（不编造没有的队列）。 */
+export function lightweightStatusReadout(
+  presentation: LightweightStatusPresentation,
+  queueCount?: number,
+): string {
+  return (queueCount ?? 0) > 0
+    ? `${presentation.label} · ${tf('队列 {0}', [queueCount])}`
+    : presentation.label;
+}
 
 /**
  * 极简状态行（Pi 风格底部 footer）：只展示当前模型名、工作区路径缩写、
  * 真实报告的 Token 用量（缺失显示「—」）和当前运行状态。
+ *
+ * 读数区是 `role="region"` 地标，屏幕阅读器可以主动浏览但不自动播报；只有
+ * 右侧状态读数在 polite 实时区内，且 `aria-atomic` 保证状态翻转时只念这一句。
+ * Token 用量与路径每轮都可能变，刻意留在实时区外，避免持续打断朗读。
  */
 export function LightweightStatusBar({
   modelName,
   workspaceRoot,
   reportedUsage,
   status = 'idle',
+  stopping = false,
+  interrupted = false,
+  queueCount,
   isNarrow,
 }: LightweightStatusBarProps): React.JSX.Element {
   const [narrowAuto, setNarrowAuto] = useState(() => {
@@ -211,30 +272,17 @@ export function LightweightStatusBar({
   const modelDisplay = modelName?.trim() || '—';
 
   let tokenDisplay = '—';
+  let tokenSpeech = tr('暂无报告用量');
   if (reportedUsage && (typeof reportedUsage.inputTokens === 'number' || typeof reportedUsage.outputTokens === 'number')) {
     const inTokens = formatTokens(reportedUsage.inputTokens);
     const outTokens = formatTokens(reportedUsage.outputTokens);
     tokenDisplay = `↑${inTokens} ↓${outTokens}`;
+    tokenSpeech = tf('服务报告的 Token 用量：输入 {0}，输出 {1}', [inTokens, outTokens]);
   }
 
-  const isRunning = status === 'running' || status === 'streaming';
-  const isError = status === 'error' || status === 'provider_error';
-  const isPaused = status === 'paused' || status === 'needs_review';
-  const isPending = status === 'pending';
-
-  const statusLabel =
-    isRunning ? tr('运行中') :
-    isPaused ? tr('已暂停') :
-    isError ? tr('出错了') :
-    isPending ? tr('等待中') :
-    status === 'completed' ? tr('已完成') : tr('空闲');
-
-  const statusDotClass =
-    isRunning ? 'xn-lightweight-status__dot--running' :
-    isError ? 'xn-lightweight-status__dot--error' :
-    isPaused ? 'xn-lightweight-status__dot--paused' :
-    isPending ? 'xn-lightweight-status__dot--paused' :
-    'xn-lightweight-status__dot--idle';
+  const presentation = lightweightStatusPresentation(status, { stopping, interrupted, queueCount });
+  const readout = lightweightStatusReadout(presentation, queueCount);
+  const statusDotClass = STATUS_DOT_CLASS[presentation.tone];
 
   const isNarrowActive = typeof isNarrow === 'boolean' ? isNarrow : narrowAuto;
 
@@ -242,10 +290,11 @@ export function LightweightStatusBar({
     <footer
       className={`xn-lightweight-statusbar${isNarrowActive ? ' xn-lightweight-statusbar--narrow' : ''}`}
       data-testid="lightweight-statusbar"
-      role="status"
+      data-tone={presentation.tone}
+      role="region"
       aria-label={tr('轻量模式状态行')}
     >
-      <div className="xn-lightweight-statusbar__left">
+      <div className="xn-lightweight-statusbar__left" role="group" aria-label={tr('运行读数')}>
         <span className="xn-lightweight-statusbar__item xn-lightweight-statusbar__cwd" title={workspaceRoot ?? undefined}>
           {pathDisplay}
         </span>
@@ -254,13 +303,22 @@ export function LightweightStatusBar({
           {modelDisplay}
         </span>
         <span className="xn-lightweight-statusbar__sep" aria-hidden="true">•</span>
-        <span className="xn-lightweight-statusbar__item xn-lightweight-statusbar__tokens">
-          {tokenDisplay}
+        <span className="xn-lightweight-statusbar__item xn-lightweight-statusbar__tokens" title={tr('服务报告的 Token 用量')}>
+          <span className="xn-lightweight-statusbar__sr">{tokenSpeech}</span>
+          <span aria-hidden="true">{tokenDisplay}</span>
         </span>
       </div>
       <div className="xn-lightweight-statusbar__right">
         <span className={`xn-lightweight-status__dot ${statusDotClass}`} aria-hidden="true" />
-        <span className="xn-lightweight-statusbar__status-text">{statusLabel}</span>
+        <span
+          className="xn-lightweight-statusbar__status-text"
+          role="status"
+          aria-live="polite"
+          aria-atomic="true"
+          data-testid="lightweight-status-readout"
+        >
+          {readout}
+        </span>
       </div>
     </footer>
   );
@@ -386,6 +444,7 @@ export type LightweightGroupedEntry =
   | { kind: 'user'; row: Extract<TimelineRow, { kind: 'user' }>; id: string }
   | { kind: 'assistant'; row: Extract<TimelineRow, { kind: 'assistant' }>; id: string }
   | { kind: 'completion'; row: Extract<TimelineRow, { kind: 'completion' }>; id: string }
+  | { kind: 'pending_question'; row: Extract<TimelineRow, { kind: 'pending_question' }>; id: string }
   | { kind: 'other'; row: TimelineRow; id: string };
 
 /**
@@ -405,7 +464,8 @@ export function groupLightweightTimelineRows(rows: TimelineRow[]): LightweightGr
         j++;
       }
       if (group.length > 1) {
-        result.push({ kind: 'read-only-group', rows: group, id: `ro-group-${group[0].seq}-${group.length}` });
+        // key 只取组首 seq：流式期间组每多吸一行不重挂载，展开态与焦点不丢
+        result.push({ kind: 'read-only-group', rows: group, id: `ro-group-${group[0].seq}` });
       } else {
         result.push({ kind: 'tool', row: row as ToolRowType, id: `tool-${row.seq}` });
       }
@@ -422,8 +482,13 @@ export function groupLightweightTimelineRows(rows: TimelineRow[]): LightweightGr
     } else if (row.kind === 'completion') {
       result.push({ kind: 'completion', row, id: `completion-${row.seq}` });
       i++;
+    } else if (row.kind === 'pending_question') {
+      result.push({ kind: 'pending_question', row, id: `question-${row.seq}` });
+      i++;
     } else {
-      result.push({ kind: 'other', row, id: `${row.kind}-${(row as { seq?: number }).seq ?? i}` });
+      // 类型上已穷尽，但行来自服务端事件：出现未知 kind 时不吞掉，留作占位
+      const unknown = row as TimelineRow;
+      result.push({ kind: 'other', row: unknown, id: `${unknown.kind}-${(unknown as { seq?: number }).seq ?? i}` });
       i++;
     }
   }
@@ -443,14 +508,25 @@ function stringifyData(val: unknown): string {
 export type LightweightToolRowProps = {
   row: ToolRowType;
   defaultOpen?: boolean;
+  /** 这行就是当前等待用户回答的 ask_user：徽标改念「等待回答」。 */
+  awaitingAnswer?: boolean;
 };
 
+export function lightweightToolStatusLabel(status: string, awaitingAnswer = false): string {
+  return awaitingAnswer ? tr('等待回答') : toolStatusLabel(status);
+}
+
 /** 单行工具卡片：默认折叠为单行，点击/回车展开详情 */
-export function LightweightToolRow({ row, defaultOpen = false }: LightweightToolRowProps): React.JSX.Element {
+export function LightweightToolRow({
+  row,
+  defaultOpen = false,
+  awaitingAnswer = false,
+}: LightweightToolRowProps): React.JSX.Element {
   const [open, setOpen] = useState(defaultOpen);
   const summary = extractToolKeySummary(row.name, row.subject, row.input);
   const status = row.status ?? 'ok';
-  const statusLabel = toolStatusLabel(status);
+  const statusLabel = lightweightToolStatusLabel(status, awaitingAnswer);
+  const badgeStatus = awaitingAnswer ? 'pending' : status;
   const duration = formatToolDuration(row.durationMs);
 
   const inputText = row.input ? stringifyData(row.input) : '';
@@ -470,17 +546,15 @@ export function LightweightToolRow({ row, defaultOpen = false }: LightweightTool
     >
       <summary
         className="xn-lightweight-tool__summary"
-        tabIndex={0}
         onKeyDown={(e) => {
-          if (e.key === 'Enter') {
-            e.preventDefault();
-            setOpen((prev) => !prev);
-          }
+          if (evaluateLightweightDisclosureKey(e) !== 'toggle') return;
+          e.preventDefault();
+          setOpen((prev) => !prev);
         }}
       >
         <span className="xn-lightweight-tool__name">{row.name}</span>
         {summary && <span className="xn-lightweight-tool__args" title={summary}>{summary}</span>}
-        <span className="xn-lightweight-tool__status" data-status={status}>{statusLabel}</span>
+        <span className="xn-lightweight-tool__status" data-status={badgeStatus}>{statusLabel}</span>
         {duration && <span className="xn-lightweight-tool__duration">{duration}</span>}
       </summary>
       <div className="xn-lightweight-tool__details">
@@ -527,12 +601,10 @@ export function LightweightToolGroup({ rows, defaultOpen = false }: LightweightT
     >
       <summary
         className="xn-lightweight-tool-group__summary"
-        tabIndex={0}
         onKeyDown={(e) => {
-          if (e.key === 'Enter') {
-            e.preventDefault();
-            setOpen((prev) => !prev);
-          }
+          if (evaluateLightweightDisclosureKey(e) !== 'toggle') return;
+          e.preventDefault();
+          setOpen((prev) => !prev);
         }}
       >
         <span className="xn-lightweight-tool-group__title">{tf('只读操作 ({0})', [count])}</span>
@@ -567,12 +639,10 @@ export function LightweightReasoning({
     >
       <summary
         className="xn-lightweight-reasoning__summary"
-        tabIndex={0}
         onKeyDown={(e) => {
-          if (e.key === 'Enter') {
-            e.preventDefault();
-            setOpen((prev) => !prev);
-          }
+          if (evaluateLightweightDisclosureKey(e) !== 'toggle') return;
+          e.preventDefault();
+          setOpen((prev) => !prev);
         }}
       >
         {streaming ? tr('思考中…') : tr('思考过程')}
@@ -587,6 +657,8 @@ export type LightweightTimelineProps = {
   streamingPending?: boolean;
   emptyText?: string;
   className?: string;
+  /** 与标准档同一入参：JSON 工具协议下完成行要拆信封再展示。 */
+  jsonToolProtocol?: boolean;
 };
 
 /**
@@ -594,25 +666,50 @@ export type LightweightTimelineProps = {
  * - 工具调用默认折叠为单行（工具名 + 关键参数摘要 + 状态 + 耗时）
  * - 连续只读工具调用自动合并为一个组
  * - 思考内容默认折叠
+ *
+ * 朗读策略：整条时间线是 `role="log"` 地标（标准档同样如此，两档一致），
+ * additions 级 polite 播报让新增的一行工具/回复可被感知；流式期间标
+ * `aria-busy`，逐 Token 重渲染不打断朗读，收尾后再播报完成的那条消息。
  */
 export function LightweightTimeline({
   rows,
   streamingPending = false,
   emptyText = tr('暂无事件'),
   className = '',
+  jsonToolProtocol = false,
 }: LightweightTimelineProps): React.JSX.Element {
   const grouped = React.useMemo(() => groupLightweightTimelineRows(rows ?? []), [rows]);
+  // pending_question 行答完即消失，用它决定 ask_user 念「等待回答」而不是「已完成」
+  const awaitingQuestion = grouped.some((entry) => entry.kind === 'pending_question');
+
+  const timelineProps = {
+    'data-testid': 'lightweight-timeline',
+    role: 'log' as const,
+    'aria-label': tr('紧凑时间线'),
+    'aria-live': 'polite' as const,
+    'aria-atomic': false,
+    'aria-relevant': 'additions' as const,
+    'aria-busy': streamingPending,
+  };
 
   if (!rows || rows.length === 0) {
     if (streamingPending) {
       return (
-        <div className="xn-lightweight-timeline xn-lightweight-empty" data-testid="lightweight-timeline-loading">
+        <div
+          className="xn-lightweight-timeline xn-lightweight-empty"
+          {...timelineProps}
+          data-testid="lightweight-timeline-loading"
+        >
           <p className="xn-lightweight-stream-status" role="status">{tr('正在生成回复…')}</p>
         </div>
       );
     }
     return (
-      <div className="xn-lightweight-timeline xn-lightweight-empty" data-testid="lightweight-timeline-empty">
+      <div
+        className="xn-lightweight-timeline xn-lightweight-empty"
+        {...timelineProps}
+        data-testid="lightweight-timeline-empty"
+      >
         <p>{emptyText}</p>
       </div>
     );
@@ -621,15 +718,20 @@ export function LightweightTimeline({
   return (
     <div
       className={`xn-lightweight-timeline${className ? ` ${className}` : ''}`}
-      data-testid="lightweight-timeline"
-      aria-label={tr('紧凑时间线')}
+      {...timelineProps}
     >
       {grouped.map((entry) => {
         if (entry.kind === 'read-only-group') {
           return <LightweightToolGroup key={entry.id} rows={entry.rows} />;
         }
         if (entry.kind === 'tool') {
-          return <LightweightToolRow key={entry.id} row={entry.row} />;
+          return (
+            <LightweightToolRow
+              key={entry.id}
+              row={entry.row}
+              awaitingAnswer={awaitingQuestion && entry.row.name === 'ask_user'}
+            />
+          );
         }
         if (entry.kind === 'user') {
           return (
@@ -639,6 +741,7 @@ export function LightweightTimeline({
               data-testid={`timeline-item-user-${entry.row.seq}`}
               data-role="user"
             >
+              <span className="xn-lightweight-msg__author">{tr('我的消息')}</span>
               <div className="xn-lightweight-msg__bubble">{entry.row.text}</div>
             </div>
           );
@@ -652,6 +755,7 @@ export function LightweightTimeline({
               data-testid={`timeline-item-assistant-${r.seq}`}
               data-role="assistant"
             >
+              <span className="xn-lightweight-msg__author">{tr('Xueness 回复')}</span>
               {r.reasoning && (
                 <LightweightReasoning reasoning={r.reasoning} streaming={r.streaming} />
               )}
@@ -666,13 +770,44 @@ export function LightweightTimeline({
           );
         }
         if (entry.kind === 'completion') {
+          // 与标准档同一判定：通过/未通过/未完成的结论与标签都来自 completionPresentation
+          const presentation = completionPresentation(
+            entry.row as typeof entry.row & Parameters<typeof completionPresentation>[0],
+            jsonToolProtocol,
+          );
           return (
             <div
               key={entry.id}
               className="xn-lightweight-msg xn-lightweight-msg--completion"
               data-testid={`timeline-item-completion-${entry.row.seq}`}
+              data-role="completion"
             >
-              <TimelineCard role="completion" status={entry.row.verified ? 'ok' : 'warn'} body={entry.row.summary || tr('运行结束')} seq={entry.row.seq} />
+              <TimelineCard
+                role="completion"
+                title={presentation.title}
+                status={presentation.status}
+                statusLabel={presentation.label}
+                body={presentation.summary ?? ''}
+                seq={entry.row.seq}
+              />
+            </div>
+          );
+        }
+        if (entry.kind === 'pending_question') {
+          return (
+            <div
+              key={entry.id}
+              className="xn-lightweight-msg xn-lightweight-msg--question"
+              data-testid={`timeline-item-question-${entry.row.seq}`}
+              data-role="pending_question"
+            >
+              <TimelineCard
+                role="question"
+                title={tr('等待回答')}
+                status="pending"
+                body={entry.row.question}
+                seq={entry.row.seq}
+              />
             </div>
           );
         }
@@ -680,9 +815,12 @@ export function LightweightTimeline({
       })}
       {streamingPending && !rows.some((row) => row.kind === 'assistant' && row.streaming) && (
         <div className="xn-lightweight-streaming" data-testid="lightweight-timeline-streaming">
-          <span className="xn-lightweight-streaming-dot" />
-          <span className="xn-lightweight-streaming-dot" />
-          <span className="xn-lightweight-streaming-dot" />
+          <span className="xn-lightweight-streaming-dots" aria-hidden="true">
+            <span className="xn-lightweight-streaming-dot" />
+            <span className="xn-lightweight-streaming-dot" />
+            <span className="xn-lightweight-streaming-dot" />
+          </span>
+          <p className="xn-lightweight-stream-status" role="status">{tr('正在生成回复…')}</p>
         </div>
       )}
     </div>
@@ -705,6 +843,45 @@ export function scrollToTimelineBottom(): void {
   }
 }
 
+/** 模态层选择器：与标准档 Composer 的 Esc 守卫使用同一套判据，保持两档一致。 */
+/**
+ * 前景浮层判定用的选择器。只列「打开时才挂载」的节点：工具条菜单是
+ * `role="menu"` 的 popover，命令面板是 `.xn-command-overlay` ＋ `role="listbox"`，
+ * 对话框一律 `role="dialog"`。`.xn-composer-toolbar__*` 上的 `[open]` 是死选择器
+ * （这些菜单不是 `<details>`），用它会让 Esc 永远让位、停不掉回合。
+ */
+export const OVERLAY_SELECTOR = '[role="dialog"], [aria-modal="true"], [role="menu"], [role="listbox"], .xn-command-overlay, .xn-select-menu';
+
+/** 是否有对话框/命令面板一类的模态层在前景，轻量档的全局按键必须让位。 */
+export function hasOpenLightweightOverlay(): boolean {
+  if (typeof document === 'undefined' || typeof document.querySelector !== 'function') return false;
+  return Boolean(document.querySelector(OVERLAY_SELECTOR));
+}
+
+/** 焦点是否落在可编辑控件里（含其它插件的输入框、终端、下拉与富文本）。 */
+export function isEditableKeyTarget(target: unknown): boolean {
+  const element = target as { closest?: (selector: string) => unknown } | null;
+  if (!element || typeof element.closest !== 'function') return false;
+  return Boolean(element.closest("textarea, input, select, [contenteditable='true']"));
+}
+
+/** 轻量档全局按键的 DOM 侧写：把事件转成纯判定函数的输入。 */
+export function lightweightGlobalKeyContextFromEvent(
+  event: { target: unknown },
+  state: { panelOpen: boolean; running: boolean; stopping: boolean },
+): LightweightGlobalKeyContext {
+  const inEditableField = isEditableKeyTarget(event.target);
+  const inComposer = Boolean((event.target as HTMLElement | null)?.closest?.('[data-testid="lightweight-composer-input"]'));
+  return {
+    inComposer,
+    inEditableField,
+    overlayOpen: hasOpenLightweightOverlay(),
+    panelOpen: state.panelOpen,
+    running: state.running,
+    stopping: state.stopping,
+  };
+}
+
 export type LightweightComposerKeyAction =
   | 'clear_screen'
   | 'stop'
@@ -714,38 +891,126 @@ export type LightweightComposerKeyAction =
   | 'newline'
   | null;
 
+export type LightweightSendShortcut = 'enter' | 'mod-enter';
+
+export type LightweightComposerKeyContext = {
+  text: string;
+  historyIndex: number | null;
+  historyCount: number;
+  running: boolean;
+  stopping: boolean;
+  /** 跟随用户的「发送快捷键」设置，与标准档 Composer 同一语义。 */
+  sendShortcut?: LightweightSendShortcut;
+  /** 有浮层（工具条菜单、命令面板、对话框）展开时让位，Esc 不能既关浮层又中断回合。 */
+  overlayOpen?: boolean;
+};
+
 export function evaluateLightweightComposerKey(
   e: {
     key: string;
     shiftKey?: boolean;
     ctrlKey?: boolean;
     metaKey?: boolean;
+    altKey?: boolean;
     keyCode?: number;
     isComposing?: boolean;
     nativeEvent?: { isComposing?: boolean };
   },
-  context: { text: string; historyIndex: number | null; historyCount: number; running: boolean; stopping: boolean }
+  context: LightweightComposerKeyContext,
 ): LightweightComposerKeyAction {
   if (e.isComposing || e.nativeEvent?.isComposing || e.keyCode === 229) return null;
-  if ((e.ctrlKey || e.metaKey) && (e.key === 'l' || e.key === 'L')) {
+  const mod = Boolean(e.ctrlKey || e.metaKey);
+  // 只认裸 Mod+L：Ctrl+Shift+L / Ctrl+Alt+L 属于浏览器与其它插件，不劫持
+  if (mod && !e.altKey && !e.shiftKey && (e.key === 'l' || e.key === 'L')) {
     return 'clear_screen';
   }
   if (e.key === 'Escape') {
+    if (context.overlayOpen) return null;
     return context.running && !context.stopping ? 'stop' : null;
   }
-  if (e.key === 'ArrowUp') {
-    if (context.historyCount > 0) {
-      if (context.historyIndex === null && context.text.trim() === '') return 'history_prev';
-      if (context.historyIndex !== null && context.historyIndex > 0) return 'history_prev';
+  if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
+    // 历史翻找只用裸方向键：带修饰键的上下键交给光标移动与其它处理器
+    if (mod || e.altKey || e.shiftKey) return null;
+    if (context.overlayOpen) return null;
+    if (e.key === 'ArrowUp') {
+      if (context.historyCount > 0) {
+        if (context.historyIndex === null && context.text.trim() === '') return 'history_prev';
+        if (context.historyIndex !== null && context.historyIndex > 0) return 'history_prev';
+      }
+      return null;
     }
-    return null;
-  }
-  if (e.key === 'ArrowDown') {
     if (context.historyIndex !== null && context.historyCount > 0) return 'history_next';
     return null;
   }
   if (e.key === 'Enter') {
+    const sendShortcut = context.sendShortcut ?? 'enter';
+    if (sendShortcut === 'mod-enter') {
+      // ⌘/Ctrl+Enter 发送；裸 Enter 换行，与标准档一致。
+      if (mod && !e.shiftKey) return 'send';
+      return null;
+    }
     return e.shiftKey ? 'newline' : 'send';
+  }
+  return null;
+}
+
+/** 折叠项（工具行、只读组、思考过程）的可展开按键：Enter 与空格都应切换。 */
+export function evaluateLightweightDisclosureKey(e: {
+  key: string;
+  isComposing?: boolean;
+  nativeEvent?: { isComposing?: boolean };
+  keyCode?: number;
+}): 'toggle' | null {
+  if (e.isComposing || e.nativeEvent?.isComposing || e.keyCode === 229) return null;
+  return e.key === 'Enter' || e.key === ' ' || e.key === 'Spacebar' ? 'toggle' : null;
+}
+
+export type LightweightGlobalKeyAction = 'clear-screen' | 'close-panel' | 'stop' | null;
+
+export type LightweightGlobalKeyContext = {
+  /** 焦点在轻量输入框：由 composer 自己的按键处理，容器不重复执行。 */
+  inComposer: boolean;
+  /** 焦点落在任意可编辑控件（其它插件的编辑器、搜索框、下拉、富文本）。 */
+  inEditableField: boolean;
+  /** 对话框、命令面板或工具条浮层展开中。 */
+  overlayOpen: boolean;
+  /** 当前显示的是二级面板而不是对话页。 */
+  panelOpen: boolean;
+  running: boolean;
+  stopping: boolean;
+};
+
+/**
+ * 轻量档挂在 window 上的补充快捷键判定（纯函数，便于回归）。
+ *
+ * Mod+L 在本应用里是浏览器保留键（快捷键录制器明确拒绝它），所以只在轻量档
+ * 作为「滚到底」使用，且不越过输入控件与浮层：焦点在其它插件的输入框、
+ * 终端或对话框里时一律不接管。输入框内的 Mod+L 由 composer 自己处理。
+ */
+export function evaluateLightweightGlobalKey(
+  e: {
+    key: string;
+    ctrlKey?: boolean;
+    metaKey?: boolean;
+    altKey?: boolean;
+    shiftKey?: boolean;
+    repeat?: boolean;
+    defaultPrevented?: boolean;
+    isComposing?: boolean;
+    keyCode?: number;
+  },
+  context: LightweightGlobalKeyContext,
+): LightweightGlobalKeyAction {
+  if (e.defaultPrevented || e.repeat || e.isComposing || e.keyCode === 229) return null;
+  if (context.overlayOpen) return null;
+  if ((e.ctrlKey || e.metaKey) && !e.altKey && !e.shiftKey && (e.key === 'l' || e.key === 'L')) {
+    if (context.inComposer) return null;
+    return context.inEditableField ? null : 'clear-screen';
+  }
+  if (e.key === 'Escape') {
+    if (context.panelOpen) return 'close-panel';
+    if (context.inEditableField) return null;
+    return context.running && !context.stopping ? 'stop' : null;
   }
   return null;
 }
@@ -767,16 +1032,37 @@ export type LightweightComposerProps = {
   controls?: React.ReactNode;
   inputRef?: React.Ref<HTMLTextAreaElement>;
   autoFocus?: boolean;
+  /** 跟随用户的发送快捷键设置（与标准档同一选项）。 */
+  sendShortcut?: LightweightSendShortcut;
 };
+
+/** 轻量档键盘提示行：与标准档同一措辞分支，同时作为输入框的说明文本。 */
+export function lightweightComposerHint(
+  sendShortcut: LightweightSendShortcut,
+  running: boolean,
+  queueWhenRunning: boolean,
+): string {
+  const send = sendShortcut === 'mod-enter'
+    ? tr('⌘/Ctrl+Enter 发送')
+    : tr('Enter 发送 · Shift+Enter 换行');
+  const parts = [send];
+  if (running && queueWhenRunning) parts.push(tr('排队追加'));
+  parts.push(tr('Esc 中断'));
+  parts.push(tr('Ctrl/Cmd+L 滚到底'));
+  return parts.join(' · ');
+}
 
 /**
  * 轻量极简输入区：
  * - 单行起步自动增高
- * - Enter 发送 / Shift+Enter 换行
- * - Esc 中断运行中的回合（复用 onStop）
+ * - Enter 发送 / Shift+Enter 换行（可在设置里改为 ⌘/Ctrl+Enter 发送）
+ * - Esc 中断运行中的回合（复用 onStop），浮层展开时让位
  * - 运行中继续输入进入排队发送
  * - Up/Down 在空输入框中调出本会话历史输入
- * - Ctrl/Cmd+L 清屏式滚到底
+ * - Ctrl/Cmd+L 清屏式滚到底（只在输入框内，不越过其它插件的输入控件）
+ *
+ * 无障碍：整块是带名称的 form 地标；输入框有稳定的可访问名（不长挂 placeholder
+ * 文案），键盘提示通过 aria-describedby 关联；发送/停止按钮始终有文字级可访问名。
  */
 export function LightweightComposer({
   draftKey = 'default',
@@ -789,12 +1075,13 @@ export function LightweightComposer({
   stopping = false,
   queueWhenRunning = false,
   queueBusy = false,
-  placeholder = tr('输入消息（Enter 发送，Shift+Enter 换行，Esc 中断）'),
+  placeholder = tr('输入消息'),
   historyMessages = [],
   onClearScreen = scrollToTimelineBottom,
   controls,
   inputRef,
   autoFocus = false,
+  sendShortcut = 'enter',
 }: LightweightComposerProps): React.JSX.Element {
   const initialText = draftStore?.current.get(draftKey)?.text ?? '';
   const [text, setTextState] = useState(initialText);
@@ -802,6 +1089,7 @@ export function LightweightComposer({
   const textRevisionRef = useRef(0);
   const sendingRef = useRef(false);
   const localInputRef = useRef<HTMLTextAreaElement | null>(null);
+  const hintId = useId();
 
   // 历史浏览游标：null 表示不在浏览历史，数字表示浏览中的历史索引
   const [historyIndex, setHistoryIndex] = useState<number | null>(null);
@@ -913,6 +1201,8 @@ export function LightweightComposer({
       historyCount: validHistory.length,
       running,
       stopping,
+      sendShortcut,
+      overlayOpen: hasOpenLightweightOverlay(),
     });
 
     if (action === 'clear_screen') {
@@ -971,7 +1261,15 @@ export function LightweightComposer({
   };
 
   return (
-    <div className="xn-lightweight-composer" data-testid="lightweight-composer">
+    <form
+      className="xn-lightweight-composer"
+      data-testid="lightweight-composer"
+      aria-label={tr('消息输入')}
+      onSubmit={(e) => {
+        e.preventDefault();
+        void handleSend();
+      }}
+    >
       <div className="xn-lightweight-composer__input-wrap">
         <textarea
           ref={attachRef}
@@ -992,7 +1290,8 @@ export function LightweightComposer({
           rows={1}
           disabled={disabled}
           autoFocus={autoFocus}
-          aria-label={placeholder}
+          aria-label={tr('消息输入框')}
+          aria-describedby={hintId}
           data-testid="lightweight-composer-input"
         />
         <div className="xn-lightweight-composer__actions">
@@ -1001,7 +1300,7 @@ export function LightweightComposer({
               type="button"
               className="xn-lightweight-composer__btn xn-lightweight-composer__btn--stop"
               disabled={stopping}
-              aria-label={stopping ? tr('正在停止') : tr('停止')}
+              aria-label={stopping ? tr('正在停止') : tr('停止当前任务')}
               title={stopping ? tr('正在停止') : tr('停止当前任务')}
               data-testid="composer-stop"
               onClick={onStop}
@@ -1014,8 +1313,8 @@ export function LightweightComposer({
               type="button"
               className="xn-lightweight-composer__btn xn-lightweight-composer__btn--send"
               disabled={isSendDisabled}
-              aria-label={tr('加入队列')}
-              title={tr('加入队列')}
+              aria-label={queueBusy ? tr('正在排队…') : tr('加入队列')}
+              title={queueBusy ? tr('正在排队…') : tr('加入队列')}
               data-testid="composer-queue"
               onClick={() => void handleSend()}
             >
@@ -1023,24 +1322,29 @@ export function LightweightComposer({
             </button>
           ) : !running ? (
             <button
-              type="button"
+              type="submit"
               className="xn-lightweight-composer__btn xn-lightweight-composer__btn--send"
               disabled={isSendDisabled}
               aria-label={tr('发送')}
               title={tr('发送')}
               data-testid="composer-send"
-              onClick={() => void handleSend()}
             >
               <ArrowUp size={14} aria-hidden="true" />
             </button>
           ) : null}
         </div>
       </div>
+      <div className="xn-lightweight-composer__meta">
+        <span id={hintId} className="xn-lightweight-composer__hint">
+          {lightweightComposerHint(sendShortcut, running, queueWhenRunning)}
+        </span>
+        {queueBusy && <span className="xn-lightweight-composer__status" role="status">{tr('正在排队…')}</span>}
+      </div>
       {controls && (
-        <div className="xn-lightweight-composer__controls">
+        <div className="xn-lightweight-composer__controls" role="group" aria-label={tr('运行选项')}>
           {controls}
         </div>
       )}
-    </div>
+    </form>
   );
 }

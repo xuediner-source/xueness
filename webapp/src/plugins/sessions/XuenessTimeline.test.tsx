@@ -176,7 +176,9 @@ test("TimelineStream: tool cards show hydrated read, write, edit, exec and MCP p
   assert.match(html, /xn-toolcall--mcp/);
   assert.match(html, /Search · Lookup/);
   assert.match(html, /Found 2 results/);
-  assert.match(html, /aria-label="展开工具详情"/);
+  // 工具折叠控件的名称必须来自内容：aria-label 会整体覆盖它，N 个工具就变成 N 个同名控件
+  assert.doesNotMatch(html, /<summary[^>]*aria-label=/);
+  assert.match(html, /<summary class="xn-msg__tool-line xn-toolcall__summary">/);
   assert.doesNotMatch(html, /xn-card-duration/);
 });
 

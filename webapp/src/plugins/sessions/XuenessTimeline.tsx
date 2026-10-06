@@ -437,7 +437,7 @@ const ToolTimelineCard = React.memo(function ToolTimelineCard({
     >
       {hasDetails ? (
         <details className="xn-toolcall__details" open={!collapseTools}>
-          <summary className="xn-msg__tool-line xn-toolcall__summary" aria-label={tr("展开工具详情")}>
+          <summary className="xn-msg__tool-line xn-toolcall__summary">
             {summaryRow}
           </summary>
           <div className="xn-toolcall__content">

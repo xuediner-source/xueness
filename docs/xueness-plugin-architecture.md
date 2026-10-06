@@ -169,6 +169,8 @@ providers 的 CLI parser/handler 已迁入 `xueness/bundled_plugins/providers/op
 
 轻量档的极简工作台前端归 providers（`providers.lightweight_layout`，实现在 `webapp/src/plugins/providers/LightweightWorkbench.tsx`）：选中本地轻量档且 providers 生效时，容器挂载极简输入控制区（模型名与上下文用量）、默认收起侧栏并隐藏与本地运行无关的会话头部面板与徽标；共享 `XuenessShell.tsx` 只新增初始收起这一布局原语，输入框与工具条的通用组件仍归 sessions。providers 未生效或切回标准档时恢复原有布局。
 
+2026-10-06 的轻量/标准一致性与无障碍加深仍归同一功能，不新增插件、子功能或后端能力：状态词表读数、键位说明行、全局按键让位规则、焦点落点与实时区划分都实现于 `LightweightWorkbench.tsx` 与其样式文件，容器只提供挂载、状态与既有事件源。排队消息、审批、暂停原因与运行错误等横幅继续使用 sessions 与共享组件的同一实现，轻量档不复制第二套；完成行的判定直接调用 sessions 已导出的纯展示模块 `plugins/sessions/completionPresentation.ts`（按导出符号归属 sessions），不在 providers 内另写一套结论词表。两处回落修正写在归属组件自身而不是轻量档：档位切换后收起菜单并归还焦点、回落选择器认识轻量档输入框的类名，属 sessions 的 `XuenessComposerToolbar.tsx`；工具折叠控件不再用 `aria-label` 覆盖内容名，属 sessions 的 `XuenessTimeline.tsx`——两者都是既有组件的可访问性缺陷修复，不改变归属、开关或协议。布局判定与键盘判定是导出的纯函数，回归在 `LightweightWorkbench.test.tsx`。
+
 ## 新增功能的长期约束（2026-10-01）
 
 项目所有者要求之后新增的每项产品功能都作为插件实现。已有领域内扩展现有插件，独立领域新建插件；业务实现、工具/API/CLI/前端入口、后台请求和生命周期都归属于插件，不能只登记名称而继续在宿主实现。详见根目录 [AGENTS.md](../AGENTS.md) 与 [CONTRIBUTING.md](../CONTRIBUTING.md)。

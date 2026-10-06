@@ -689,7 +689,7 @@ export function XuenessComposerToolbar({
         if (input?.isConnected) input.focus();
         return;
       }
-      document.querySelector<HTMLTextAreaElement>("textarea.xn-composer__input")?.focus();
+      document.querySelector<HTMLTextAreaElement>("textarea.xn-composer__input, textarea.xn-lightweight-composer__textarea")?.focus();
     });
   };
 
@@ -729,6 +729,8 @@ export function XuenessComposerToolbar({
   const chooseRuntimeProfile = (profile: RuntimeProfile) => {
     if (disabled || !selectedModel?.configured || (profile === "standard" && !canSelectStandard)) return;
     onChange({ runtime_profile: runtimeProfileSelection(profile) });
+    // 档位换了会整片换掉输入区那棵树，菜单里的焦点随之丢失：像选模型一样收菜单并把焦点交回输入框。
+    closeModelMenu(true);
   };
   const isModelSelected = (model: ComposerModel) => {
     if (choices.provider_id) return model.id === choices.provider_id && (!choices.model || model.model === choices.model);

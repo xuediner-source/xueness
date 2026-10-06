@@ -29,6 +29,52 @@
   font-style: italic;
 }
 
+/* Streaming indicator: three pulsing dots plus a readout, decorative only */
+.xn-lightweight-streaming {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 12px;
+}
+
+.xn-lightweight-streaming-dots {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  flex-shrink: 0;
+}
+
+.xn-lightweight-streaming-dot {
+  display: inline-block;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--fg-muted);
+  opacity: 1;
+  animation: xn-lightweight-pulse 1.1s ease-in-out infinite;
+}
+
+.xn-lightweight-streaming-dot:nth-child(2) {
+  animation-delay: 0.18s;
+}
+
+.xn-lightweight-streaming-dot:nth-child(3) {
+  animation-delay: 0.36s;
+}
+
+@keyframes xn-lightweight-pulse {
+  0%, 100% { opacity: 0.35; }
+  50% { opacity: 1; }
+}
+
+/* Reduced motion falls back to three steady dots; the status text carries the state. */
+@media (prefers-reduced-motion: reduce) {
+  .xn-lightweight-streaming-dot {
+    animation: none;
+    opacity: 1;
+  }
+}
+
 /* User & Assistant messages */
 .xn-lightweight-msg {
   display: flex;
@@ -122,7 +168,8 @@
   min-width: 0;
 }
 
-.xn-lightweight-tool__status {
+.xn-lightweight-tool__status,
+.xn-lightweight-tool-group__status {
   font-size: 11px;
   padding: 1px 6px;
   border-radius: var(--radius-sm);
@@ -130,22 +177,32 @@
   font-weight: 500;
 }
 
-.xn-lightweight-tool__status[data-status="ok"] {
+.xn-lightweight-tool__status[data-status="ok"],
+.xn-lightweight-tool-group__status[data-status="ok"] {
   color: var(--ok-fg);
   background: var(--ok-bg);
 }
 
-.xn-lightweight-tool__status[data-status="running"] {
+.xn-lightweight-tool__status[data-status="running"],
+.xn-lightweight-tool-group__status[data-status="running"] {
   color: var(--warn-fg);
   background: var(--warn-bg);
 }
 
-.xn-lightweight-tool__status[data-status="error"] {
+/* ask_user 在等用户回答：不能用「已完成」的绿，也不能用失败的红 */
+.xn-lightweight-tool__status[data-status="pending"] {
+  color: var(--warn-fg);
+  background: var(--warn-bg);
+}
+
+.xn-lightweight-tool__status[data-status="error"],
+.xn-lightweight-tool-group__status[data-status="error"] {
   color: var(--error-fg);
   background: var(--error-bg);
 }
 
-.xn-lightweight-tool__status[data-status="cancelled"] {
+.xn-lightweight-tool__status[data-status="cancelled"],
+.xn-lightweight-tool-group__status[data-status="cancelled"] {
   color: var(--fg-muted);
   background: var(--bg-hover);
 }
@@ -352,6 +409,20 @@
   font-size: 10px;
 }
 
+/* 只给屏幕阅读器的文字：↑↓ 字形读不出「输入 / 输出」，紧凑档不画署名也得上报作者 */
+.xn-lightweight-statusbar__sr,
+.xn-lightweight-msg__author {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
 .xn-lightweight-status__dot {
   display: inline-block;
   width: 6px;
@@ -365,15 +436,38 @@
 }
 
 .xn-lightweight-status__dot--running {
-  background: var(--warn);
+  background: var(--warn-fg);
 }
 
 .xn-lightweight-status__dot--error {
-  background: var(--error);
+  background: var(--error-fg);
 }
 
 .xn-lightweight-status__dot--paused {
-  background: var(--warn);
+  background: var(--warn-fg);
+}
+
+.xn-lightweight-status__dot--done {
+  background: var(--ok-fg);
+}
+
+/* The readout is the one part of the footer that changes state: keep it legible. */
+.xn-lightweight-statusbar__status-text {
+  color: var(--fg);
+  font-weight: 500;
+}
+
+/* 6px 状态点不是唯一通道：读数文字按状态着色，令牌本身就是为正文对比度准备的 -fg 变体 */
+.xn-lightweight-statusbar[data-tone="error"] .xn-lightweight-statusbar__status-text {
+  color: var(--error-fg);
+}
+
+.xn-lightweight-statusbar[data-tone="paused"] .xn-lightweight-statusbar__status-text {
+  color: var(--warn-fg);
+}
+
+.xn-lightweight-statusbar[data-tone="done"] .xn-lightweight-statusbar__status-text {
+  color: var(--ok-fg);
 }
 
 /* Lightweight composer (input area) */
@@ -420,6 +514,30 @@
   line-height: 1.4;
   resize: none;
   box-sizing: border-box;
+}
+
+.xn-lightweight-composer__textarea:focus-visible {
+  outline: 2px solid var(--border-focus);
+  outline-offset: 1px;
+}
+
+.xn-lightweight-composer__meta {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-top: 4px;
+  min-height: 14px;
+}
+
+.xn-lightweight-composer__hint {
+  font-size: 11px;
+  line-height: 1.3;
+  color: var(--fg-subtle);
+}
+
+.xn-lightweight-composer__status {
+  font-size: 11px;
+  color: var(--fg-subtle);
 }
 
 .xn-lightweight-composer__actions {

@@ -7,6 +7,8 @@
 import React from 'react';
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { readFile } from 'node:fs/promises';
+import { resolve } from 'node:path';
 import { renderToStaticMarkup } from 'react-dom/server';
 
 import {
@@ -19,17 +21,25 @@ import {
   LightweightToolRow,
   abbreviatePath,
   evaluateLightweightComposerKey,
+  evaluateLightweightDisclosureKey,
+  evaluateLightweightGlobalKey,
   extractReportedUsage,
   extractToolKeySummary,
   formatTokens,
   formatToolDuration,
   groupLightweightTimelineRows,
   isReadOnlyTool,
+  lightweightComposerHint,
   lightweightContextUsage,
   lightweightLayoutActive,
+  lightweightStatusPresentation,
+  lightweightStatusReadout,
+  lightweightToolStatusLabel,
+  OVERLAY_SELECTOR,
   toolStatusLabel,
 } from './LightweightWorkbench';
 import { XuenessComposerToolbar } from '../sessions/XuenessComposerToolbar';
+import { setLocale } from '../../i18n';
 import { Composer } from '../sessions/XuenessWorkbenchView';
 import { Shell } from '../../XuenessShell';
 import { ProviderEditor, providerDraftFromSummary } from './index';
@@ -514,7 +524,8 @@ test('LightweightStatusBar: 展示模型、路径、真实 Token 或「—」降
   />);
   assert.match(fallbackHtml, /class="[^"]*xn-lightweight-statusbar__model[^"]*"[^>]*>—<\/span>/);
   assert.match(fallbackHtml, /class="[^"]*xn-lightweight-statusbar__cwd[^"]*"[^>]*>—<\/span>/);
-  assert.match(fallbackHtml, /class="[^"]*xn-lightweight-statusbar__tokens[^"]*"[^>]*>—<\/span>/);
+  assert.match(fallbackHtml, /class="[^"]*xn-lightweight-statusbar__left"[^>]*role="group"/);
+  assert.match(fallbackHtml, /class="[^"]*xn-lightweight-statusbar__tokens[^"]*"[^>]*><span class="xn-lightweight-statusbar__sr">暂无报告用量<\/span><span aria-hidden="true">—<\/span>/);
   assert.match(fallbackHtml, /空闲/);
   assert.match(fallbackHtml, /xn-lightweight-status__dot--idle/);
 
@@ -578,13 +589,11 @@ test('evaluateLightweightComposerKey: 键盘事件评估策略（Enter/Shift+Ent
 });
 
 test('LightweightComposer: 结构渲染包含自增高单行文本框、停止按钮与排队发送按钮', () => {
-  // 空闲态：单行输入框与发送按钮
-  const idleHtml = renderToStaticMarkup(<LightweightComposer
-    placeholder="输入消息（Enter 发送，Shift+Enter 换行，Esc 中断）"
-  />);
-  assert.match(idleHtml, /<div class="xn-lightweight-composer"/);
+  // 空闲态：单行输入框与发送按钮。placeholder 只描述输入内容，快捷键写在说明行里。
+  const idleHtml = renderToStaticMarkup(<LightweightComposer placeholder="输入消息" />);
+  assert.match(idleHtml, /<form class="xn-lightweight-composer"/);
   assert.match(idleHtml, /<textarea[^>]*class="xn-lightweight-composer__textarea"/);
-  assert.match(idleHtml, /placeholder="输入消息（Enter 发送，Shift\+Enter 换行，Esc 中断）"/);
+  assert.match(idleHtml, /placeholder="输入消息"/);
   assert.match(idleHtml, /data-testid="composer-send"/);
   assert.doesNotMatch(idleHtml, /data-testid="composer-stop"/);
 
@@ -596,4 +605,587 @@ test('LightweightComposer: 结构渲染包含自增高单行文本框、停止�
   />);
   assert.match(runningHtml, /data-testid="composer-stop"/);
   assert.match(runningHtml, /data-testid="composer-queue"/);
+});
+
+// -- 轻量/标准一致性：键盘与发送快捷键 ---------------------------------------
+
+test('evaluateLightweightComposerKey: 尊重用户的发送快捷键设置', () => {
+  const baseCtx = { text: '', historyIndex: null, historyCount: 0, running: false, stopping: false };
+  assert.equal(
+    evaluateLightweightComposerKey({ key: 'l', ctrlKey: true }, { ...baseCtx, historyCount: 0 }),
+    'clear_screen',
+    'Alt 不参与，Ctrl/Cmd+L 仍是滚到底',
+  );
+  assert.equal(evaluateLightweightComposerKey({ key: 'l', ctrlKey: true, altKey: true }, baseCtx), null,
+    'Alt+Ctrl+L 让给浏览器/终端');
+  assert.equal(evaluateLightweightComposerKey({ key: 'l', metaKey: true }, baseCtx), 'clear_screen');
+
+  // 默认 Enter 发送
+  assert.equal(evaluateLightweightComposerKey({ key: 'Enter' }, { ...baseCtx, sendShortcut: 'enter' }), 'send');
+  assert.equal(evaluateLightweightComposerKey({ key: 'Enter', shiftKey: true }, { ...baseCtx, sendShortcut: 'enter' }), 'newline');
+
+  // ⌘/Ctrl+Enter 发送时，裸 Enter 不发送（与标准档 composerEnterIntent 一致）
+  assert.equal(evaluateLightweightComposerKey({ key: 'Enter' }, { ...baseCtx, sendShortcut: 'mod-enter' }), null);
+  assert.equal(evaluateLightweightComposerKey({ key: 'Enter', shiftKey: true }, { ...baseCtx, sendShortcut: 'mod-enter' }), null);
+  assert.equal(evaluateLightweightComposerKey({ key: 'Enter', metaKey: true }, { ...baseCtx, sendShortcut: 'mod-enter' }), 'send');
+  assert.equal(evaluateLightweightComposerKey({ key: 'Enter', ctrlKey: true }, { ...baseCtx, sendShortcut: 'mod-enter' }), 'send');
+  assert.equal(
+    evaluateLightweightComposerKey({ key: 'Enter', ctrlKey: true, shiftKey: true }, { ...baseCtx, sendShortcut: 'mod-enter' }),
+    null,
+    'Mod+Shift+Enter 不发送',
+  );
+});
+
+test('evaluateLightweightComposerKey: 浮层展开时让位，Esc 不吞掉菜单关闭，上下键不抢列表', () => {
+  const overlay = { text: '', historyIndex: null, historyCount: 2, running: true, stopping: false, overlayOpen: true };
+  assert.equal(evaluateLightweightComposerKey({ key: 'Escape' }, overlay), null);
+  assert.equal(evaluateLightweightComposerKey({ key: 'ArrowUp' }, { ...overlay, running: false }), null);
+  assert.equal(evaluateLightweightComposerKey({ key: 'ArrowDown' }, { ...overlay, historyIndex: 1 }), null);
+  // 浮层关闭后恢复原有语义
+  assert.equal(evaluateLightweightComposerKey({ key: 'Escape' }, { ...overlay, overlayOpen: false }), 'stop');
+  assert.equal(evaluateLightweightComposerKey({ key: 'ArrowDown' }, { ...overlay, historyIndex: 1, overlayOpen: false }), 'history_next');
+  assert.equal(evaluateLightweightComposerKey({ key: 'ArrowUp' }, { ...overlay, running: false, overlayOpen: false }), 'history_prev');
+});
+
+test('evaluateLightweightDisclosureKey: 折叠项 Enter 与空格都能展开', () => {
+  assert.equal(evaluateLightweightDisclosureKey({ key: 'Enter' }), 'toggle');
+  assert.equal(evaluateLightweightDisclosureKey({ key: ' ' }), 'toggle');
+  assert.equal(evaluateLightweightDisclosureKey({ key: 'Spacebar' }), 'toggle');
+  assert.equal(evaluateLightweightDisclosureKey({ key: 'Escape' }), null);
+  assert.equal(evaluateLightweightDisclosureKey({ key: 'ArrowUp' }), null);
+  assert.equal(evaluateLightweightDisclosureKey({ key: ' ', isComposing: true }), null, '输入法组合中不切换');
+  assert.equal(evaluateLightweightDisclosureKey({ key: 'Enter', keyCode: 229 }), null);
+});
+
+test('evaluateLightweightGlobalKey: 轻量档全局按键不抢输入控件与浮层', () => {
+  const loose = {
+    inComposer: false, inEditableField: false, overlayOpen: false,
+    panelOpen: false, running: false, stopping: false,
+  };
+  assert.equal(evaluateLightweightGlobalKey({ key: 'l', ctrlKey: true }, loose), 'clear-screen');
+  assert.equal(evaluateLightweightGlobalKey({ key: 'L', metaKey: true }, loose), 'clear-screen');
+  // 焦点在轻量输入框：composer 自己已经处理，容器不重复执行
+  assert.equal(evaluateLightweightGlobalKey({ key: 'l', ctrlKey: true }, { ...loose, inComposer: true }), null);
+  // 焦点在其它插件的输入框/终端/编辑器：一律不接管（Mod+L 本身是浏览器保留键）
+  assert.equal(
+    evaluateLightweightGlobalKey({ key: 'l', ctrlKey: true }, { ...loose, inEditableField: true, inComposer: false }),
+    null,
+  );
+  // 对话框/命令面板/浮层展开时让位
+  assert.equal(evaluateLightweightGlobalKey({ key: 'l', ctrlKey: true }, { ...loose, overlayOpen: true }), null);
+  assert.equal(evaluateLightweightGlobalKey({ key: 'Escape' }, { ...loose, overlayOpen: true, running: true }), null);
+  // Esc：二级面板优先关闭，回到对话；否则中断运行中的回合
+  assert.equal(evaluateLightweightGlobalKey({ key: 'Escape' }, { ...loose, panelOpen: true }), 'close-panel');
+  assert.equal(
+    evaluateLightweightGlobalKey({ key: 'Escape' }, { ...loose, panelOpen: true, running: true }),
+    'close-panel',
+    '面板里也先返回对话，不顺手中断任务',
+  );
+  assert.equal(evaluateLightweightGlobalKey({ key: 'Escape' }, { ...loose, running: true }), 'stop');
+  assert.equal(evaluateLightweightGlobalKey({ key: 'Escape' }, { ...loose, running: true, stopping: true }), null);
+  assert.equal(evaluateLightweightGlobalKey({ key: 'Escape' }, { ...loose, inEditableField: true, running: true }), null);
+  assert.equal(evaluateLightweightGlobalKey({ key: 'Escape' }, loose), null);
+  // 其它按键一律放行给浏览器与其它插件
+  assert.equal(evaluateLightweightGlobalKey({ key: 'k', ctrlKey: true }, loose), null);
+  assert.equal(evaluateLightweightGlobalKey({ key: 'Enter' }, { ...loose, running: true }), null);
+});
+
+test('evaluateLightweightGlobalKey: 输入法组合、重复键与已被接管的按键一律不处理', () => {
+  const loose = {
+    inComposer: false, inEditableField: false, overlayOpen: false,
+    panelOpen: false, running: true, stopping: false,
+  };
+  assert.equal(evaluateLightweightGlobalKey({ key: 'Escape', defaultPrevented: true }, loose), null);
+  assert.equal(evaluateLightweightGlobalKey({ key: 'Escape', repeat: true }, loose), null);
+  assert.equal(evaluateLightweightGlobalKey({ key: 'Escape', isComposing: true }, loose), null);
+  assert.equal(evaluateLightweightGlobalKey({ key: 'l', ctrlKey: true, keyCode: 229 }, loose), null);
+});
+
+test('lightweightComposerHint: 键盘提示跟随发送快捷键设置，并覆盖轻量档全部键位', () => {
+  const enterHint = lightweightComposerHint('enter', false, false);
+  assert.match(enterHint, /Enter 发送/);
+  assert.match(enterHint, /Shift\+Enter 换行/);
+  assert.match(enterHint, /Esc 中断/);
+  assert.match(enterHint, /Ctrl\/Cmd\+L 滚到底/);
+  assert.doesNotMatch(enterHint, /排队追加/);
+
+  const modHint = lightweightComposerHint('mod-enter', false, false);
+  assert.match(modHint, /^⌘\/Ctrl\+Enter 发送/);
+  assert.doesNotMatch(modHint, /^Enter 发送/);
+
+  assert.match(lightweightComposerHint('enter', true, true), /排队追加/);
+});
+
+test('LightweightComposer: 占位符不宣称固定发送键，键位说明随设置变化', () => {
+  const enterHtml = renderToStaticMarkup(<LightweightComposer />);
+  const modHtml = renderToStaticMarkup(<LightweightComposer sendShortcut="mod-enter" />);
+
+  const placeholderOf = (html: string) => /<textarea[^>]*placeholder="([^"]*)"/.exec(html)?.[1] ?? '';
+  assert.doesNotMatch(placeholderOf(enterHtml), /Enter/);
+  assert.doesNotMatch(placeholderOf(modHtml), /Enter/);
+
+  // 说明行（aria-describedby 的目标）才是键位的唯一来源，并跟随设置
+  const describedBy = /aria-describedby="([^"]+)"/.exec(enterHtml)?.[1] ?? '';
+  assert.ok(describedBy, '输入框必须关联键盘说明');
+  const hintNode = new RegExp(`id="${describedBy}"[^>]*>([^<]*)<`).exec(enterHtml)?.[1] ?? '';
+  assert.match(hintNode, /Enter 发送/);
+  const modHintNode = new RegExp(`id="${(/aria-describedby="([^"]+)"/.exec(modHtml))?.[1]}"[^>]*>([^<]*)<`).exec(modHtml)?.[1] ?? '';
+  assert.match(modHintNode, /^⌘\/Ctrl\+Enter 发送/);
+});
+
+// -- 轻量/标准一致性：状态读数对等 ---------------------------------------------
+
+test('lightweightStatusPresentation: 状态词表覆盖标准档用到的全部取值', () => {
+  assert.deepEqual(lightweightStatusPresentation('running'), { label: '运行中', tone: 'running' });
+  assert.deepEqual(lightweightStatusPresentation('streaming'), { label: '运行中', tone: 'running' });
+  assert.deepEqual(lightweightStatusPresentation('pending'), { label: '等待中', tone: 'paused' });
+  assert.deepEqual(lightweightStatusPresentation('queued'), { label: '等待中', tone: 'paused' });
+  assert.deepEqual(lightweightStatusPresentation('paused'), { label: '已暂停', tone: 'paused' });
+  assert.deepEqual(lightweightStatusPresentation('needs_review'), { label: '需要审核', tone: 'paused' });
+  assert.deepEqual(lightweightStatusPresentation('awaiting_user'), { label: '等待用户', tone: 'paused' });
+  assert.deepEqual(lightweightStatusPresentation('stalled'), { label: '运行停滞', tone: 'paused' });
+  assert.deepEqual(lightweightStatusPresentation('failed'), { label: '出错了', tone: 'error' });
+  assert.deepEqual(lightweightStatusPresentation('provider_error'), { label: '出错了', tone: 'error' });
+  assert.deepEqual(lightweightStatusPresentation('cancelled'), { label: '已取消', tone: 'idle' });
+  assert.deepEqual(lightweightStatusPresentation('completed'), { label: '已完成', tone: 'done' });
+  assert.deepEqual(lightweightStatusPresentation(undefined), { label: '空闲', tone: 'idle' });
+  assert.deepEqual(lightweightStatusPresentation(''), { label: '空闲', tone: 'idle' });
+  // 未知状态不虚构，回落空闲文案但保留原状态色以外的中性表现
+  assert.deepEqual(lightweightStatusPresentation('whatever'), { label: '空闲', tone: 'idle' });
+});
+
+test('lightweightStatusPresentation: 停止中、输出中断与排队各有独立读数', () => {
+  assert.deepEqual(lightweightStatusPresentation('running', { stopping: true }), { label: '正在停止', tone: 'running' });
+  assert.deepEqual(lightweightStatusPresentation('cancelled', { interrupted: true }), { label: '已中断', tone: 'paused' });
+  assert.deepEqual(lightweightStatusPresentation('idle', { interrupted: true }), { label: '已中断', tone: 'paused' });
+  assert.deepEqual(lightweightStatusPresentation('completed', { queueCount: 2 }), { label: '已完成', tone: 'done' },
+    '已有明确状态时不被队列覆盖');
+  assert.deepEqual(lightweightStatusPresentation('idle', { queueCount: 2 }), { label: '队列中', tone: 'paused' });
+});
+
+test('lightweightStatusReadout: 队列条数并入同一句读数，没有队列时不编造', () => {
+  const running = lightweightStatusPresentation('running');
+  assert.equal(lightweightStatusReadout(running), '运行中');
+  assert.equal(lightweightStatusReadout(running, 0), '运行中');
+  assert.equal(lightweightStatusReadout(running, undefined), '运行中');
+  assert.equal(lightweightStatusReadout(running, 3), '运行中 · 队列 3');
+});
+
+test('LightweightStatusBar: 状态读数补齐停止中、中断与队列，且只播报状态句', () => {
+  const stoppingHtml = renderToStaticMarkup(<LightweightStatusBar
+    modelName="qwen3-4b-instruct"
+    status="running"
+    stopping
+  />);
+  assert.match(stoppingHtml, /正在停止/);
+  assert.match(stoppingHtml, /xn-lightweight-status__dot--running/);
+
+  const queueHtml = renderToStaticMarkup(<LightweightStatusBar
+    modelName="qwen3-4b-instruct"
+    status="running"
+    queueCount={2}
+  />);
+  assert.match(queueHtml, /运行中 · 队列 2/);
+  assert.match(queueHtml, /data-tone="running"/);
+
+  const interruptedHtml = renderToStaticMarkup(<LightweightStatusBar
+    modelName="qwen3-4b-instruct"
+    status="cancelled"
+    interrupted
+  />);
+  assert.match(interruptedHtml, /已中断/);
+  assert.match(interruptedHtml, /xn-lightweight-status__dot--paused/);
+
+  const failedHtml = renderToStaticMarkup(<LightweightStatusBar modelName="m" status="failed" />);
+  assert.match(failedHtml, /出错了/);
+  assert.match(failedHtml, /xn-lightweight-status__dot--error/);
+});
+
+// -- 无障碍：地标、可访问名与 aria-live 策略 -----------------------------------
+
+test('LightweightStatusBar: 是带名称的地标，易变读数不在实时区内，只有状态句播报', () => {
+  const html = renderToStaticMarkup(<LightweightStatusBar
+    modelName="qwen3-4b-instruct"
+    workspaceRoot="/home/box/project"
+    reportedUsage={{ inputTokens: 2500, outputTokens: 800, totalTokens: 3300 }}
+    status="running"
+  />);
+  // 整行是可浏览的 region 地标，不再是包裹一切的 role="status"
+  assert.match(html, /<footer[^>]*role="region"[^>]*aria-label="轻量模式状态行"/);
+  assert.doesNotMatch(html, /<footer[^>]*role="status"/);
+  // 只有状态读数在一个 polite 实时区里，且原子播报整句
+  const readout = html.match(/<span[^>]*data-testid="lightweight-status-readout"[^>]*>/)?.[0] ?? '';
+  assert.notEqual(readout, '');
+  assert.match(readout, /role="status"/);
+  assert.match(readout, /aria-live="polite"/);
+  assert.match(readout, /aria-atomic="true"/);
+  // 每轮都变的 Token 读数与路径刻意留在实时区外：整段左侧不携带任何 live 语义
+  const left = html.slice(html.indexOf('__left'), html.indexOf('__right'));
+  assert.doesNotMatch(left, /aria-live/);
+  assert.doesNotMatch(left, /role="status"/);
+  assert.match(left, /↑2\.5k ↓800/);
+});
+
+test('LightweightTimeline: 整条流是 role="log" 地标，流式期间标 aria-busy 不打断朗读', () => {
+  const rows: TimelineRow[] = [
+    { kind: 'user', seq: 1, turnId: 't1', text: '你好' },
+    { kind: 'assistant', seq: 2, turnId: 't1', text: '正在写的回答', streaming: true },
+  ];
+  const streamingHtml = renderToStaticMarkup(<LightweightTimeline rows={rows} streamingPending />);
+  assert.match(streamingHtml, /<div[^>]*role="log"[^>]*aria-label="紧凑时间线"/);
+  assert.match(streamingHtml, /aria-live="polite"/);
+  assert.match(streamingHtml, /aria-relevant="additions"/);
+  assert.match(streamingHtml, /aria-busy="true"/);
+
+  const settledHtml = renderToStaticMarkup(<LightweightTimeline rows={rows} />);
+  assert.match(settledHtml, /aria-busy="false"/);
+});
+
+test('LightweightTimeline: 空态与载入态都是同一个地标，流式指示器有文字且不重复播报', () => {
+  const emptyHtml = renderToStaticMarkup(<LightweightTimeline rows={[]} />);
+  assert.match(emptyHtml, /role="log"/);
+  assert.match(emptyHtml, /aria-label="紧凑时间线"/);
+  assert.match(emptyHtml, /暂无事件/);
+
+  const loadingHtml = renderToStaticMarkup(<LightweightTimeline rows={[]} streamingPending />);
+  assert.match(loadingHtml, /role="log"/);
+  assert.match(loadingHtml, /aria-busy="true"/);
+  assert.match(loadingHtml, /正在生成回复…/);
+
+  // 有历史行时：三个点纯装饰（aria-hidden），状态文字才是唯一的 role="status"
+  const rows: TimelineRow[] = [{ kind: 'user', seq: 1, turnId: 't1', text: '你好' }];
+  const pendingHtml = renderToStaticMarkup(<LightweightTimeline rows={rows} streamingPending />);
+  assert.match(pendingHtml, /data-testid="lightweight-timeline-streaming"/);
+  const dots = pendingHtml.match(/<span class="xn-lightweight-streaming-dots"[^>]*>/)?.[0] ?? '';
+  assert.notEqual(dots, '', '脉冲点容器必须存在且被标注为装饰');
+  assert.match(dots, /aria-hidden="true"/);
+  assert.equal(
+    pendingHtml.match(/role="status"/g)?.length,
+    1,
+    '同一屏只保留一个流式状态实时区，避免重复朗读',
+  );
+});
+
+test('LightweightComposer: 输入区是带名称的地标，输入框有稳定可访问名与键盘说明', () => {
+  const html = renderToStaticMarkup(<LightweightComposer
+    running
+    queueWhenRunning
+    queueBusy
+    onStop={() => undefined}
+  />);
+  assert.match(html, /<form[^>]*aria-label="消息输入"/);
+  const textarea = html.match(/<textarea[^>]*>/)?.[0] ?? '';
+  assert.match(textarea, /aria-label="消息输入框"/);
+  assert.match(textarea, /aria-describedby="[^"]+"/);
+  // 说明文本真实存在（不是只挂在 placeholder 上），且被 aria-describedby 指向
+  const hintId = textarea.match(/aria-describedby="([^"]+)"/)?.[1];
+  assert.ok(hintId, '输入框必须关联键盘说明');
+  assert.ok(html.includes(`id="${hintId}"`), 'aria-describedby 必须指向真实存在的元素');
+  assert.match(html, /class="xn-lightweight-composer__hint"[^>]*>[^<]*Esc 中断/);
+
+  // 图标按钮都有文字级可访问名，图标本身对 AT 隐藏
+  const stopLabel = html.match(/data-testid="composer-stop"/) ? html.match(/<button[^>]*data-testid="composer-stop"[^>]*>/)?.[0] ?? '' : '';
+  assert.match(stopLabel, /aria-label="停止当前任务"/);
+  assert.match(html, /aria-label="正在排队…"/, '排队中的按钮名要说清正在发生什么');
+  assert.equal(
+    [...html.matchAll(/<svg[^>]*>/g)].every((tag) => /aria-hidden="true"/.test(tag[0])),
+    true,
+    '装饰图标必须对 AT 隐藏',
+  );
+  assert.match(html, /<span class="xn-lightweight-composer__status" role="status">正在排队…<\/span>/);
+
+  // 停止请求已发出后，按钮名与状态读数都要变
+  const stoppingHtml = renderToStaticMarkup(<LightweightComposer running stopping onStop={() => undefined} />);
+  const stoppingButton = stoppingHtml.match(/<button[^>]*data-testid="composer-stop"[^>]*>/)?.[0] ?? '';
+  assert.match(stoppingButton, /aria-label="正在停止"/);
+  assert.match(stoppingButton, /disabled=""/);
+});
+
+test('轻量档折叠项保留原生 summary 焦点语义，不再额外挂 tabIndex', () => {
+  const row = {
+    kind: 'tool' as const,
+    seq: 1,
+    turnId: 't1',
+    toolCallId: 'c1',
+    name: 'read_file',
+    subject: '/etc/hosts',
+    status: 'ok' as const,
+    error: '',
+    errorCode: '',
+  };
+  const html = renderToStaticMarkup(<LightweightToolRow row={row} />);
+  assert.match(html, /<summary class="xn-lightweight-tool__summary"/);
+  assert.doesNotMatch(html, /tabindex="0"/, 'summary 本身可聚焦，重复挂 tabIndex 会多出一个焦点停靠');
+
+  const groupHtml = renderToStaticMarkup(<LightweightToolGroup rows={[row, { ...row, seq: 2, name: 'list_dir' }]} />);
+  assert.match(groupHtml, /<summary class="xn-lightweight-tool-group__summary"/);
+  assert.doesNotMatch(groupHtml, /tabindex="0"/);
+
+  const reasoningHtml = renderToStaticMarkup(<LightweightReasoning reasoning="分析" />);
+  assert.doesNotMatch(reasoningHtml, /tabindex="0"/);
+});
+
+// -- 样式与对比度：只用现有 design tokens，动效可降级 --------------------------
+
+test('LightweightWorkbench.css 只用既有设计令牌，并为流式指示器提供降级动效', async () => {
+  const css = await readFile(resolve(process.cwd(), 'src/plugins/providers/LightweightWorkbench.css'), 'utf8');
+  const block = (selector: string): string =>
+    css.match(new RegExp(`\\.${selector}\\s*\\{([^}]*)\\}`))?.[1] ?? '';
+
+  // 不硬编码颜色：新增的读数/提示/脉冲点一律走令牌
+  for (const selector of [
+    'xn-lightweight-streaming-dot',
+    'xn-lightweight-composer__hint',
+    'xn-lightweight-composer__status',
+    'xn-lightweight-statusbar__status-text',
+    'xn-lightweight-status__dot--done',
+  ]) {
+    const body = block(selector);
+    assert.notEqual(body, '', `缺少 ${selector} 样式`);
+    assert.doesNotMatch(body, /#[0-9a-f]{3,8}\b/i, `${selector} 不允许写死十六进制颜色`);
+    assert.doesNotMatch(body, /\brgba?\(/i, `${selector} 不允许写死 rgb(a) 颜色`);
+    assert.match(body, /var\(--/, `${selector} 必须引用设计令牌`);
+  }
+
+  // 文字读数不靠半透明压对比度
+  assert.doesNotMatch(block('xn-lightweight-composer__hint'), /opacity:/);
+  assert.doesNotMatch(block('xn-lightweight-statusbar__status-text'), /opacity:/);
+
+  // 脉冲动效必须能被 prefers-reduced-motion 关掉，且静帧仍然可见
+  assert.match(css, /@media \(prefers-reduced-motion: reduce\)[\s\S]*?\.xn-lightweight-streaming-dot\s*\{[^}]*animation: none/);
+  assert.match(block('xn-lightweight-streaming-dot'), /opacity: 1/);
+});
+
+
+// -- i18n：轻量档新增文案在英文档必须真的被翻译 -------------------------------
+
+test('轻量档新增的状态、地标与键位文案在英文档不回落中文', () => {
+  try {
+    setLocale('en');
+    const composerHtml = renderToStaticMarkup(<LightweightComposer
+      running
+      stopping
+      queueWhenRunning
+      queueBusy
+      sendShortcut="mod-enter"
+      onStop={() => undefined}
+    />);
+    const statusHtml = renderToStaticMarkup(<LightweightStatusBar
+      status="running"
+      stopping
+      interrupted
+      queueCount={3}
+      reportedUsage={{ inputTokens: 120, outputTokens: 40 }}
+      workspaceRoot="/tmp/workspace"
+      modelName="qwen3-4b"
+    />);
+    const timelineHtml = renderToStaticMarkup(<LightweightTimeline
+      rows={[
+        { seq: 1, kind: 'assistant', text: 'Working', status: 'streaming' } as never,
+        { seq: 2, kind: 'user', turnId: 'turn-1', text: 'Hello' } as never,
+        { seq: 3, kind: 'tool', turnId: 'turn-1', toolCallId: 'c3', name: 'ask_user', subject: '', status: 'ok', error: '', errorCode: '', input: { question: 'Which one?' } } as never,
+        { seq: 4, kind: 'pending_question', question: 'Which one?' } as never,
+      ]}
+      streamingPending
+    />);
+
+    for (const [name, html] of [['composer', composerHtml], ['status', statusHtml], ['timeline', timelineHtml]] as const) {
+      assert.doesNotMatch(html, /[\u4e00-\u9fff]/, `${name} 在英文档仍有中文文案`);
+    }
+    // 翻译后的键位说明与地标名依然完整
+    assert.match(composerHtml, /aria-label="Message input"/);
+    assert.match(composerHtml, /⌘\/Ctrl\+Enter to send/);
+    assert.match(composerHtml, /Esc to interrupt/);
+    assert.match(statusHtml, /Stopping · Queue 3/);
+    assert.match(timelineHtml, /<span class="xn-lightweight-msg__author">My message<\/span>/);
+    assert.match(timelineHtml, /<span class="xn-lightweight-msg__author">Xueness reply<\/span>/);
+    assert.match(timelineHtml, /<span class="xn-lightweight-tool__status" data-status="pending">Awaiting answer<\/span>/);
+    assert.match(renderToStaticMarkup(<LightweightStatusBar status="running" queueCount={3} />), /Running · Queue 3/);
+  } finally {
+    setLocale('zh');
+  }
+  assert.match(renderToStaticMarkup(<LightweightStatusBar status="running" queueCount={3} />), /运行中 · 队列 3/);
+});
+
+// -- 审计复核补漏：分组 key 稳定、等待回答、完成判定、修饰键、浮层选择器 ------
+
+const readOnlyTool = (seq: number, name = 'read_file'): TimelineRow => ({
+  kind: 'tool',
+  seq,
+  turnId: 'turn-1',
+  toolCallId: `call-${seq}`,
+  name,
+  subject: `subj-${seq}`,
+  status: 'ok',
+  error: '',
+  errorCode: '',
+});
+
+test('groupLightweightTimelineRows: 组 key 不随流式追加变化，展开态与焦点不丢', () => {
+  const two = groupLightweightTimelineRows([readOnlyTool(3), readOnlyTool(4)]);
+  const three = groupLightweightTimelineRows([readOnlyTool(3), readOnlyTool(4), readOnlyTool(5)]);
+  assert.equal(two[0].kind, 'read-only-group');
+  assert.equal(two[0].id, 'ro-group-3');
+  assert.equal(three[0].id, two[0].id, '新只读工具并入同一个组时 key 必须不变');
+});
+
+test('LightweightTimeline: 等待回答的行不再被静默丢弃，名称与标准档一致', () => {
+  const html = renderToStaticMarkup(<LightweightTimeline rows={[
+    { kind: 'pending_question', seq: 4, question: '要保留旧文件吗？' },
+  ]} />);
+  assert.match(html, /data-testid="timeline-item-question-4"/);
+  assert.match(html, /data-role="pending_question"/);
+  assert.match(html, /等待回答/);
+  assert.match(html, /要保留旧文件吗？/);
+});
+
+test('LightweightTimeline: 完成行沿用标准档的验证与交付判定，不再一律念「运行结束」', () => {
+  const completion = (row: Extract<TimelineRow, { kind: 'completion' }>) =>
+    renderToStaticMarkup(<LightweightTimeline rows={[row]} />);
+  const verified = completion({
+    kind: 'completion', seq: 9, verified: true, status: 'verified', toolExecutionStatus: 'succeeded', summary: '测试通过',
+  });
+  const unverified = completion({
+    kind: 'completion', seq: 9, verified: false, status: 'unverified', toolExecutionStatus: 'failed', summary: '',
+  });
+  const incomplete = completion({
+    kind: 'completion', seq: 9, verified: false, status: 'incomplete', summary: '',
+  });
+  assert.match(verified, /运行结束 · 工具成功证据通过/);
+  assert.match(unverified, /工具证据未通过验证/);
+  assert.match(incomplete, /回答尚未完成/);
+  assert.match(incomplete, /已暂停/);
+});
+
+test('轻量档按键判定: 带修饰键的组合不劫持清屏与历史翻找', () => {
+  const ctx = { text: '', historyIndex: null, historyCount: 2, running: true, stopping: false };
+  assert.equal(evaluateLightweightComposerKey({ key: 'l', ctrlKey: true, shiftKey: true }, ctx), null, 'Ctrl+Shift+L 属浏览器');
+  assert.equal(evaluateLightweightComposerKey({ key: 'l', ctrlKey: true, altKey: true }, ctx), null, 'Ctrl+Alt+L 属其它插件');
+  assert.equal(evaluateLightweightComposerKey({ key: 'l', ctrlKey: true }, ctx), 'clear_screen');
+  assert.equal(evaluateLightweightComposerKey({ key: 'ArrowUp', shiftKey: true }, ctx), null);
+  assert.equal(evaluateLightweightComposerKey({ key: 'ArrowUp', metaKey: true }, ctx), null);
+  assert.equal(evaluateLightweightComposerKey({ key: 'ArrowDown', altKey: true }, { ...ctx, historyIndex: 1 }), null);
+  assert.equal(evaluateLightweightComposerKey({ key: 'ArrowUp' }, ctx), 'history_prev');
+
+  const global = { inComposer: false, inEditableField: false, overlayOpen: false, panelOpen: false, running: true, stopping: false };
+  assert.equal(evaluateLightweightGlobalKey({ key: 'L', ctrlKey: true, shiftKey: true }, global), null);
+  assert.equal(evaluateLightweightGlobalKey({ key: 'L', ctrlKey: true, altKey: true }, global), null);
+  assert.equal(evaluateLightweightGlobalKey({ key: 'L', metaKey: true }, global), 'clear-screen');
+});
+
+test('OVERLAY_SELECTOR 只列打开时才挂载的浮层节点，不用 [open] 死选择器', async () => {
+  const toolbar = await readFile(resolve(process.cwd(), 'src/plugins/sessions/XuenessComposerToolbar.tsx'), 'utf8');
+  const palette = await readFile(resolve(process.cwd(), 'src/plugins/sessions/CommandPalette.tsx'), 'utf8');
+  assert.doesNotMatch(OVERLAY_SELECTOR, /\[open\]/, '工具条菜单不是 <details>，[open] 永远不命中');
+  for (const token of ['[role="dialog"]', '[role="menu"]', '[role="listbox"]']) {
+    assert.ok(OVERLAY_SELECTOR.includes(token), `浮层判定缺少 ${token}`);
+  }
+  assert.match(OVERLAY_SELECTOR, /\.xn-command-overlay/);
+  assert.match(toolbar, /className="xn-composer-toolbar__popover[\s\S]{0,90}role="menu"/);
+  assert.match(palette, /className="xn-command-overlay"/);
+  assert.match(palette, /role="listbox"/);
+});
+
+test('LightweightStatusBar: Token 读数给屏幕阅读器展开，箭头字形本身不播报', () => {
+  const html = renderToStaticMarkup(<LightweightStatusBar
+    modelName="qwen3-4b"
+    workspaceRoot="/tmp/workspace"
+    reportedUsage={{ inputTokens: 1200, outputTokens: 40 }}
+    status="running"
+  />);
+  assert.match(html, /<span class="xn-lightweight-statusbar__sr">服务报告的 Token 用量：输入 [\d.]+k?，输出 [\d.]+k?<\/span>/);
+  assert.match(html, /<span aria-hidden="true">↑[\d.]+k? ↓[\d.]+k?<\/span>/);
+});
+
+test('LightweightStatusBar: 状态色不只靠 6px 圆点表达，读数文字按 tone 着色且只用令牌', async () => {
+  const errorHtml = renderToStaticMarkup(<LightweightStatusBar status="provider_error" />);
+  assert.match(errorHtml, /data-tone="error"/);
+  assert.match(errorHtml, /出错了/);
+  const pausedHtml = renderToStaticMarkup(<LightweightStatusBar status="needs_review" />);
+  assert.match(pausedHtml, /data-tone="paused"/);
+
+  const css = await readFile(resolve(process.cwd(), 'src/plugins/providers/LightweightWorkbench.css'), 'utf8');
+  for (const tone of ['error', 'paused', 'done']) {
+    const body = css.match(new RegExp(`\\.xn-lightweight-statusbar\\[data-tone="${tone}"\\] \\.xn-lightweight-statusbar__status-text\\s*\\{([^}]*)\\}`))?.[1] ?? '';
+    assert.notEqual(body, '', `缺少 data-tone="${tone}" 的读数配色`);
+    assert.match(body, /var\(--/, `${tone} 配色必须引用设计令牌`);
+    assert.doesNotMatch(body, /#[0-9a-f]{3,8}\b/i, `${tone} 配色不允许写死十六进制颜色`);
+    assert.doesNotMatch(body, /opacity:/, `${tone} 配色不允许靠透明度压对比`);
+  }
+});
+
+const cssPath = () => resolve(process.cwd(), 'src/plugins/providers/LightweightWorkbench.css');
+
+test('ask_user 在等回答时念「等待回答」，答完回落成这一行的真实状态', () => {
+  assert.equal(lightweightToolStatusLabel('ok', true), '等待回答');
+  assert.equal(lightweightToolStatusLabel('ok'), '已完成');
+  assert.equal(lightweightToolStatusLabel('error'), '失败');
+
+  const askUser: TimelineRow = {
+    kind: 'tool',
+    seq: 7,
+    turnId: 'turn-1',
+    toolCallId: 'call-7',
+    name: 'ask_user',
+    subject: '',
+    status: 'ok',
+    error: '',
+    errorCode: '',
+    input: { question: '要按哪个方案改？' },
+  } as TimelineRow;
+  const question: TimelineRow = { kind: 'pending_question', seq: 8, question: '要按哪个方案改？' };
+
+  const waitingHtml = renderToStaticMarkup(<LightweightTimeline rows={[askUser, question]} />);
+  assert.match(waitingHtml, /<span class="xn-lightweight-tool__status" data-status="pending">等待回答<\/span>/);
+  assert.match(waitingHtml, /等待回答/);
+
+  const answeredHtml = renderToStaticMarkup(<LightweightTimeline rows={[askUser]} />);
+  assert.match(answeredHtml, /<span class="xn-lightweight-tool__status" data-status="ok">已完成<\/span>/);
+});
+
+test('轻量档消息行带屏幕阅读器作者名，视觉仍是极简气泡', async () => {
+  const html = renderToStaticMarkup(<LightweightTimeline rows={[
+    { kind: 'user', seq: 1, turnId: 't1', text: '你好' },
+    { kind: 'assistant', seq: 2, turnId: 't1', text: '在的' },
+  ]} />);
+  assert.match(html, /<span class="xn-lightweight-msg__author">我的消息<\/span>/);
+  assert.match(html, /<span class="xn-lightweight-msg__author">Xueness 回复<\/span>/);
+
+  const css = await readFile(cssPath(), 'utf8');
+  const rule = css.match(/\.xn-lightweight-statusbar__sr,\s*\.xn-lightweight-msg__author\s*\{([^}]*)\}/)?.[1] ?? '';
+  assert.match(rule, /clip: rect\(0, 0, 0, 0\)/, '作者名靠 clip 隐藏，不是删掉');
+  assert.doesNotMatch(rule, /display:\s*none/, 'display:none 会让屏幕阅读器读不到作者名');
+});
+
+test('轻量档控制区与标准档同名：成组且可发现', () => {
+  const html = renderToStaticMarkup(<LightweightComposer controls={<LightweightComposerControls {...baseProps} />} />);
+  assert.match(html, /<div class="xn-lightweight-composer__controls" role="group" aria-label="运行选项">/);
+});
+
+test('工具状态徽标只用设计令牌，合并组与「等待回答」不落到裸文字配色', async () => {
+  const css = await readFile(cssPath(), 'utf8');
+  const base = css.match(/\.xn-lightweight-tool__status,\s*\.xn-lightweight-tool-group__status\s*\{([^}]*)\}/)?.[1] ?? '';
+  assert.notEqual(base, '', '合并组徽标缺少与单行工具共用的基础样式');
+
+  for (const status of ['ok', 'running', 'error', 'cancelled']) {
+    const shared = css.match(new RegExp(`\\.xn-lightweight-tool__status\\[data-status="${status}"\\],\\s*\\.xn-lightweight-tool-group__status\\[data-status="${status}"\\]\\s*\\{([^}]*)\\}`))?.[1] ?? '';
+    assert.match(shared, /color: var\(--(ok-fg|warn-fg|error-fg|fg-muted)\)/, `${status} 态合并组徽标缺少可读的文字色令牌`);
+    assert.doesNotMatch(shared, /#[0-9a-f]{3,8}\b/i, `${status} 态不允许写死十六进制颜色`);
+  }
+  const pending = css.match(/\.xn-lightweight-tool__status\[data-status="pending"\]\s*\{([^}]*)\}/)?.[1] ?? '';
+  assert.match(pending, /var\(--warn-fg\)/, '等待回答不能沿用「已完成」的绿');
+
+  const dots = css.match(/\.xn-lightweight-status__dot--(?:running|paused|error|done)\s*\{[^}]*\}/g) ?? [];
+  assert.equal(dots.length, 4, '四种状态点配色必须齐全');
+  for (const dot of dots) {
+    assert.match(dot, /var\(--(warn|error|ok)-fg\)/, '状态点要用为文字准备的令牌，6px 圆点在浅底上不够对比');
+  }
+});
+
+test('共享工具条切档位后收菜单，并把焦点交回轻量档输入框', async () => {
+  const toolbar = await readFile(resolve(process.cwd(), 'src/plugins/sessions/XuenessComposerToolbar.tsx'), 'utf8');
+  assert.match(toolbar, /textarea\.xn-composer__input,\s*textarea\.xn-lightweight-composer__textarea/,
+    '回落选择器漏了轻量档输入框，切档位后焦点会掉到 body');
+  assert.match(toolbar, /const chooseRuntimeProfile[\s\S]{0,460}?closeModelMenu\(true\);/,
+    '档位切换换掉整棵输入区树，必须像选模型一样收菜单并归还焦点');
 });

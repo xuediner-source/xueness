@@ -90,7 +90,9 @@ import {
   LightweightComposerControls,
   LightweightStatusBar,
   LightweightTimeline,
+  evaluateLightweightGlobalKey,
   extractReportedUsage,
+  lightweightGlobalKeyContextFromEvent,
   lightweightLayoutActive,
   scrollToTimelineBottom,
 } from "./plugins/providers/LightweightWorkbench";
@@ -1393,14 +1395,40 @@ export function XuenessWorkbenchContainer() {
   useEffect(() => {
     if (!lightweightLayout) return;
     const onKeyDown = (e: KeyboardEvent) => {
-      if ((e.ctrlKey || e.metaKey) && (e.key === "l" || e.key === "L")) {
+      const action = evaluateLightweightGlobalKey(e, lightweightGlobalKeyContextFromEvent(e, {
+        panelOpen: panel !== "chat",
+        running: composerRunning,
+        stopping: activeId !== null && stoppingSessions.has(activeId),
+      }));
+      if (action === "clear-screen") {
         e.preventDefault();
         scrollToTimelineBottom();
+        return;
+      }
+      if (action === "close-panel") {
+        e.preventDefault();
+        setPanel("chat");
+        return;
+      }
+      if (action === "stop") {
+        e.preventDefault();
+        void handleStop();
       }
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [lightweightLayout]);
+  }, [lightweightLayout, panel, composerRunning, activeId, stoppingSessions, handleStop]);
+  // 轻量档补齐焦点：导航换了区域而焦点被丢到 body 时，把它落到新区域的合理落点。
+  useEffect(() => {
+    if (!lightweightLayout) return;
+    const target = panel === "chat"
+      ? heroInputRef.current
+      : document.querySelector<HTMLElement>(".xn-secondary-view__back");
+    if (!target) return;
+    const active = document.activeElement;
+    if (active && active !== document.body && active !== document.documentElement) return;
+    target.focus();
+  }, [lightweightLayout, panel]);
   const sessionUserMessages = useMemo(() => {
     const list: string[] = [];
     if (session?.task && typeof session.task === "string" && session.task.trim().length > 0) {
@@ -2098,6 +2126,7 @@ export function XuenessWorkbenchContainer() {
               <LightweightTimeline
                 rows={displayTimelineRows}
                 streamingPending={activeSessionRunning}
+                jsonToolProtocol={session.model_selection?.tool_calling === "json" && activeRuntimeProfile === "lightweight" && session.streaming?.text_format !== "markdown"}
               />
             ) : (
               <TimelineStream rows={displayTimelineRows} collapseTools={settingsValues.collapseTools !== false} messageStreamShowReasoning={settingsValues.messageStreamShowReasoning !== false}
@@ -2125,6 +2154,7 @@ export function XuenessWorkbenchContainer() {
                 draftStore={composerDraftStore}
                 inputRef={heroInputRef}
                 onSend={handleSend}
+                sendShortcut={settingsValues.sendShortcut === "mod-enter" ? "mod-enter" : "enter"}
                 disabled={composerDisabled || queueSubmittingSessions.has(session.id)}
                 sendDisabled={!composerModelReady || composerCatalogLoading}
                 running={composerRunning}
@@ -2133,7 +2163,7 @@ export function XuenessWorkbenchContainer() {
                 stopping={stoppingSessions.has(session.id)}
                 onStop={handleStop}
                 historyMessages={sessionUserMessages}
-                placeholder={tr("输入消息（Enter 发送，Shift+Enter 换行，Esc 中断）")}
+                placeholder={tr("输入消息")}
                 controls={composerControls}
               />
               <LightweightStatusBar
@@ -2141,6 +2171,9 @@ export function XuenessWorkbenchContainer() {
                 workspaceRoot={draftRoot ?? composerCatalog.root}
                 reportedUsage={extractReportedUsage(session.provider_usage)}
                 status={composerRunning ? "running" : (runError || session.status === "provider_error") ? "error" : session.status}
+                stopping={stoppingSessions.has(session.id)}
+                interrupted={session.streaming?.status === "interrupted"}
+                queueCount={(session.queued_messages ?? []).length}
               />
             </>
           ) : (
@@ -2204,19 +2237,21 @@ export function XuenessWorkbenchContainer() {
                   draftStore={composerDraftStore}
                   inputRef={heroInputRef}
                   onSend={handleCreate}
+                  sendShortcut={settingsValues.sendShortcut === "mod-enter" ? "mod-enter" : "enter"}
                   disabled={busy || creatingSession || !isPluginEffective("sessions")}
                   sendDisabled={!composerModelReady || composerCatalogLoading}
                   running={composerRunning}
                   stopping={activeId ? stoppingSessions.has(activeId) : false}
                   onStop={activeId ? handleStop : undefined}
                   historyMessages={sessionUserMessages}
-                  placeholder={tr("向 Xueness 提问（Enter 发送，Shift+Enter 换行）")}
+                  placeholder={tr("向 Xueness 提问")}
                   controls={composerControls}
                 />
                 <LightweightStatusBar
                   modelName={choices.model}
                   workspaceRoot={draftRoot ?? composerCatalog.root}
                   status={composerRunning ? "running" : runError ? "error" : "idle"}
+                  stopping={activeId ? stoppingSessions.has(activeId) : false}
                 />
               </>
             ) : (
