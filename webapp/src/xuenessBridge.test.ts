@@ -21,3 +21,15 @@ test("run choices validate and retain the explicit profile through the browser b
     setRunChoices(baseline);
   }
 });
+
+test("full-access acknowledgement follows an explicit yolo selection and clears on de-escalation", () => {
+  const pending = mergeRunChoices(baseline, { permission_mode: "yolo" });
+  assert.equal(pending.permission_mode, "yolo");
+  assert.equal(pending.acknowledge_yolo, false);
+
+  const confirmed = mergeRunChoices(pending, { permission_mode: "yolo", acknowledge_yolo: true });
+  assert.equal(confirmed.acknowledge_yolo, true);
+  assert.equal(mergeRunChoices(confirmed, { permission_mode: "yolo" }).acknowledge_yolo, true);
+  assert.equal(mergeRunChoices(confirmed, { permission_mode: "edit" }).acknowledge_yolo, false);
+  assert.throws(() => setRunChoices({ ...baseline, acknowledge_yolo: true }), /acknowledgement/);
+});

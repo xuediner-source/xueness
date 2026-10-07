@@ -835,6 +835,13 @@ def handle_POST(self, parts, path, data):
         if permission_mode is not None and not is_permission_mode(permission_mode):
             self._send(400, {'error': permission_mode_error()})
             return True
+        acknowledge_yolo = data.get('acknowledge_yolo', False)
+        if type(acknowledge_yolo) is not bool:
+            self._send(400, {'error': 'acknowledge_yolo must be a boolean'})
+            return True
+        if acknowledge_yolo and permission_mode != 'yolo':
+            self._send(400, {'error': 'acknowledge_yolo requires permission_mode=yolo'})
+            return True
         # ``plan`` belongs to this plugin, so its availability is decided by the
         # persisted sessions switch rather than by the request body alone.
         plan_available = host.plugin_runtime.is_enabled(ctx['state_dir'], 'sessions')
@@ -898,6 +905,20 @@ def handle_POST(self, parts, path, data):
             except ValueError as exc:
                 self._send(409, {'error': str(exc)})
                 return True
+            if permission_mode is None:
+                permission_mode = session.get('permission_mode', 'build')
+            if (not is_permission_mode(permission_mode)
+                    or (permission_mode == 'plan' and not plan_available)):
+                self._send(400, {'error': 'saved permission mode is invalid'})
+                return True
+            previous_permission_mode = session.get('permission_mode', 'build')
+            if (permission_mode == 'yolo' and previous_permission_mode != 'yolo'
+                    and not acknowledge_yolo):
+                self._send(428, {
+                    'error': 'confirm full access before escalating this session to yolo',
+                    'error_code': 'yolo_confirmation_required',
+                })
+                return True
             if continue_queue and not session.get('current_queue_item_id'):
                 try:
                     queued = queue.snapshot(parts[2])['queued_messages']
@@ -938,12 +959,6 @@ def handle_POST(self, parts, path, data):
             model = model if model is not None else selection.get('model')
             if not reasoning_effort_explicit:
                 reasoning_effort = selection.get('reasoning_effort')
-            if permission_mode is None:
-                permission_mode = session.get('permission_mode', 'build')
-            if (not is_permission_mode(permission_mode)
-                    or (permission_mode == 'plan' and not plan_available)):
-                self._send(400, {'error': 'saved permission mode is invalid'})
-                return True
             ctx.setdefault('running_context', {})[parts[2]] = {
                 'model_selection': _selection_record({
                     'provider_id': pid, 'model': model,

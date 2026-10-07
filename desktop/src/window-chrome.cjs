@@ -2,7 +2,7 @@ const TITLEBAR_HEIGHT = 40;
 const { isOwnedUrl } = require('./security.cjs');
 
 function installWindowThemeSync({ ipcMain, window, getOrigin, platform = process.platform }) {
-  if (platform !== 'win32') return;
+  if (platform !== 'win32' && platform !== 'darwin') return;
   const channel = 'xueness:window-colors';
   const apply = (event, colors) => {
     if (window.isDestroyed() || event.sender !== window.webContents
@@ -11,7 +11,11 @@ function installWindowThemeSync({ ipcMain, window, getOrigin, platform = process
     if (!colors || typeof colors.color !== 'string' || typeof colors.symbolColor !== 'string'
         || !/^#[0-9a-f]{6}$/i.test(colors.color)
         || !/^#[0-9a-f]{6}$/i.test(colors.symbolColor)) return;
-    window.setTitleBarOverlay({ color: colors.color, symbolColor: colors.symbolColor, height: TITLEBAR_HEIGHT });
+    // Electron supports live overlay styling on Windows. macOS keeps its native
+    // traffic lights and uses the window background behind the controls.
+    if (platform === 'win32') {
+      window.setTitleBarOverlay({ color: colors.color, symbolColor: colors.symbolColor, height: TITLEBAR_HEIGHT });
+    }
     window.setBackgroundColor(colors.color);
   };
   ipcMain.on(channel, apply);

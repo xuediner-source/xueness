@@ -2,20 +2,20 @@
   box-sizing: border-box;
   width: min(100% - 32px, 760px);
   margin: 0 auto 8px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-md, 9px);
-  background: var(--bg-panel, var(--bg-card));
+  border: 0;
+  border-radius: var(--radius-sm, 6px);
+  background: transparent;
   color: var(--fg);
   font-size: 12px;
 }
 
 .xn-delivery-checks > .xn-delivery-checks__summary {
   display: flex;
-  min-height: 38px;
+  min-height: 28px;
   align-items: center;
   justify-content: space-between;
   gap: 10px;
-  padding: 7px 11px;
+  padding: 3px 8px;
   list-style: none;
   cursor: pointer;
 }
@@ -43,16 +43,16 @@
   display: inline-flex;
   align-items: center;
   min-height: 21px;
-  border: 1px solid var(--border);
+  border: 0;
   border-radius: var(--radius-full, 9999px);
-  padding: 1px 7px;
-  background: var(--bg-subtle);
+  padding: 1px 3px;
+  background: transparent;
   color: var(--fg-muted);
   font-size: 10px;
   line-height: 1.4;
   white-space: nowrap;
 }
-.xn-delivery-checks__badge[data-status="passed"] { border-color: var(--ok-border); background: var(--ok-bg); color: var(--ok-fg); }
+.xn-delivery-checks__badge[data-status="passed"] { color: var(--fg-muted); }
 .xn-delivery-checks__badge[data-status="failed"] { border-color: var(--error-border); background: var(--error-bg); color: var(--error-fg); }
 .xn-delivery-checks__badge[data-status="unchecked"] { color: var(--fg-muted); }
 .xn-delivery-checks__badge[data-status="not-applicable"] { color: var(--fg-muted); }

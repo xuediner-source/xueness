@@ -47,3 +47,13 @@ def _run(args):
         return profiles.command(args.state, args.profile_action, getattr(args, 'name', None),
                                 bool(getattr(args, 'dry_run', False)))
     raise ValueError('unsupported plugins subcommand: %s' % action)
+
+
+def composer_capabilities():
+    from .composer_capabilities import CAPABILITIES
+    return CAPABILITIES
+
+
+def tools():
+    from .creator_tooling import REGISTRY
+    return REGISTRY

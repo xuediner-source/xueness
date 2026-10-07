@@ -44,6 +44,8 @@ SUBDIR = "providers"
 REQUIRED_TEXT_FIELDS = ("name", "baseUrl", "model")
 _PUBLIC_FIELDS = ("id", "name", "baseUrl", "model")
 REASONING_LEVELS = ("none", "minimal", "low", "medium", "high", "xhigh", "max")
+ARK_CODING_PLAN_REASONING_LEVELS = ("low", "medium", "high")
+ARK_CODING_PLAN_DEEPSEEK_MODEL = "deepseek-v4.1-flash"
 CONNECTION_TEST_TIMEOUT_SECONDS = 8.0
 MODEL_DISCOVERY_TIMEOUT_SECONDS = 8.0
 COMPATIBILITY_TEST_TIMEOUT_SECONDS = 8.0
@@ -95,6 +97,48 @@ def known_reasoning_levels(model):
     return ()
 
 
+def reasoning_levels_for_provider(model, base_url=None, configured=None):
+    """Return supported levels from an explicit declaration or trusted endpoint.
+
+    Coding Plan's DeepSeek alias is deliberately scoped by both the official
+    HTTPS endpoint and exact model name. A profile declaration takes priority,
+    including an explicit empty list, so operators can override inferred
+    capability data. Generic model-family inference remains unchanged.
+    """
+    if configured is not None:
+        if not isinstance(configured, list):
+            return ()
+        return tuple(level for level in configured
+                     if isinstance(level, str) and level in REASONING_LEVELS)
+
+    if _is_ark_coding_plan_deepseek_flash(model, base_url):
+        return ARK_CODING_PLAN_REASONING_LEVELS
+    return known_reasoning_levels(model)
+
+
+def _is_ark_coding_plan_deepseek_flash(model, base_url):
+    if (not isinstance(model, str)
+            or model.strip().casefold() != ARK_CODING_PLAN_DEEPSEEK_MODEL):
+        return False
+    if not isinstance(base_url, str):
+        return False
+    try:
+        parsed = urlsplit(base_url.strip())
+        port = parsed.port
+    except ValueError:
+        return False
+    return (
+        parsed.scheme.casefold() == "https"
+        and (parsed.hostname or "").casefold() == "ark.cn-beijing.volces.com"
+        and port in (None, 443)
+        and parsed.username is None
+        and parsed.password is None
+        and parsed.path in ("/api/coding/v3", "/api/coding/v3/")
+        and not parsed.query
+        and not parsed.fragment
+    )
+
+
 def profile_record(state_dir, provider_id):
     """One saved profile record, under the same jail as every other profile read."""
     if not isinstance(provider_id, str) or not _valid_id(provider_id):
@@ -116,10 +160,12 @@ def declared_reasoning_levels(state_dir, provider_id=None, model=None):
     whitelist so ``/effort list`` still shows what can be typed.
     """
     record = profile_record(state_dir, provider_id) if provider_id else None
-    declared = (record or {}).get("reasoningLevels")
-    if isinstance(declared, list) and declared:
-        return tuple(item for item in declared if isinstance(item, str))
-    known = known_reasoning_levels(model or (record or {}).get("model"))
+    effective_model = model or (record or {}).get("model")
+    if isinstance(record, dict) and "reasoningLevels" in record:
+        return reasoning_levels_for_provider(
+            effective_model, record.get("baseUrl"), record.get("reasoningLevels"))
+    known = reasoning_levels_for_provider(
+        effective_model, (record or {}).get("baseUrl"))
     if known:
         return known
     return REASONING_LEVELS
@@ -247,7 +293,7 @@ def _public(record: dict) -> dict:
                 or len(set(levels)) != len(levels)):
             levels = None
     elif record.get("protocol", "openai") == "openai":
-        levels = known_reasoning_levels(record.get("model"))
+        levels = reasoning_levels_for_provider(record.get("model"), record.get("baseUrl"))
     # Keep the historical public shape for models whose capabilities are not
     # declared and cannot be inferred. An explicit [] remains meaningful: it
     # says the operator has disabled reasoning for this profile.

@@ -1,5 +1,6 @@
 import React from "react";
 import { flushSync } from "react-dom";
+import { TimelineInitialTailOverrideContext } from "./ConversationTimelineViewport";
 
 /**
  * 时间线窗口化（虚拟列表）规划器。
@@ -378,6 +379,8 @@ export type TimelineVirtualWindowController = {
 
 /** 把窗口规划器接到时间线流容器上：滚动监听、提交后测量与尺寸变化重测。 */
 export function useTimelineVirtualWindow({ count, enabled, initialTail }: UseTimelineVirtualWindowProps): TimelineVirtualWindowController {
+  const restoredTailOverride = React.useContext(TimelineInitialTailOverrideContext);
+  const effectiveInitialTail = initialTail && restoredTailOverride !== false;
   const streamRef = React.useRef<HTMLDivElement | null>(null);
   const [model] = React.useState(() => new TimelineWindowModel({
     readViewport: () => {
@@ -402,7 +405,7 @@ export function useTimelineVirtualWindow({ count, enabled, initialTail }: UseTim
       const gapValue = Number.parseFloat(window.getComputedStyle(stream).rowGap);
       return Number.isFinite(gapValue) ? gapValue : 0;
     },
-  }, { enabled, initialTail, initialCount: count }));
+  }, { enabled, initialTail: effectiveInitialTail, initialCount: count }));
 
   const subscribe = React.useCallback((listener: () => void) => model.subscribe(listener), [model]);
   const getSnapshot = React.useCallback(() => model.getSnapshot(), [model]);

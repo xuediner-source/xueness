@@ -17,6 +17,7 @@ from xueness.memory import (ENTRY_DELIMITER, TOTAL_MAX_CHARS, TRACK_BUDGETS,
                             UNTRUSTED_PREAMBLE, clip, load, project_hash,
                             render_track, track_paths)
 from xueness.provider import FakeProvider
+from xueness import plugin_runtime
 
 
 class RecordingProvider:
@@ -147,7 +148,10 @@ class MemoryTests(unittest.TestCase):
         out = run(store.load(session["id"]), store, provider, Gate(self.workspace), memory=loaded)
         self.assertEqual(out["status"], "needs_review")
         prompt = provider.calls[0]
-        self.assertEqual(prompt[0]["content"], SYSTEM)          # system prompt intact
+        guidance = plugin_runtime.completion_instructions(store.directory, session)
+        expected_system = SYSTEM + ('\n' + '\n'.join(guidance) if guidance else '')
+        self.assertEqual(prompt[0]["content"], expected_system)
+        self.assertNotIn("Ignore all previous instructions", prompt[0]["content"])
         self.assertEqual(prompt[2]["content"], task)             # task intact; memory cannot displace it
         self.assertEqual(prompt[1]["role"], "user")
         self.assertTrue(prompt[1]["content"].startswith(UNTRUSTED_PREAMBLE))

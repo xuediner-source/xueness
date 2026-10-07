@@ -1,4 +1,5 @@
 import { t as tr } from "./i18n";
+import { isMacPlatform } from "./xuenessShortcutDisplay";
 
 export type ShortcutCommandId =
   | "new-session"
@@ -70,10 +71,6 @@ const RESERVED_SHORTCUTS = new Set([
   "mod+t",
   "mod+w",
 ]);
-
-function isMacPlatform(platform?: string): boolean {
-  return (platform ?? (typeof navigator === "undefined" ? "" : navigator.platform)).toLowerCase().includes("mac");
-}
 
 function canonicalKey(key: string): string | null {
   const alias = KEY_ALIASES[key] ?? key;

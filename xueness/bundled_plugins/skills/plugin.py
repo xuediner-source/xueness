@@ -45,3 +45,23 @@ def execute_slash(name, argument, ctx):
 def dispatch(method, parts, query, data, ctx):
     from . import files_api
     return files_api.dispatch(method, parts, query, data, ctx)
+
+
+def composer_capabilities():
+    from .composer_capabilities import CAPABILITIES
+    return CAPABILITIES
+
+
+def tools():
+    from .creator_tooling import REGISTRY
+    return REGISTRY
+
+
+def after_tool_execution(payload):
+    from .continuity import observe_read
+    observe_read(payload)
+
+
+def completion_instructions(session):
+    from .continuity import context_reminder
+    return context_reminder(session)

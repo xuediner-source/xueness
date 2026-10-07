@@ -12,6 +12,7 @@ import {
   restoreShortcutDefault,
   SHORTCUT_COMMANDS,
 } from "../../xuenessShortcutCommands";
+import { displayBinding, displayBindingParts, isMacPlatform } from "../../xuenessShortcutDisplay";
 
 const html = (node: React.ReactElement) => renderToStaticMarkup(node);
 
@@ -72,6 +73,26 @@ test("shortcut search matches action name, id, description, and effective bindin
   assert.deepEqual(filterShortcutCommands(SHORTCUT_COMMANDS, {}, "refresh-session").map((item) => item.id), ["refresh-session"]);
   assert.deepEqual(filterShortcutCommands(SHORTCUT_COMMANDS, {}, "Alt+Shift+R").map((item) => item.id), ["refresh-session"]);
   assert.deepEqual(filterShortcutCommands(SHORTCUT_COMMANDS, {}, "没有这样的命令"), []);
+});
+
+test("shortcut labels share platform-aware Meta display across compact and settings layouts", () => {
+  assert.equal(displayBinding("Meta+N", "Win32"), "Win+N");
+  assert.equal(displayBinding("Meta+N", "MacIntel"), "⌘N");
+  assert.deepEqual(displayBindingParts("Meta+Shift+ArrowLeft", "Win32"), ["Win", "Shift", "Left"]);
+  assert.deepEqual(displayBindingParts("Meta+Shift+ArrowLeft", "MacIntel"), ["⌘", "⇧", "Left"]);
+});
+
+test("shortcut recording and display agree for native and browser platform names", () => {
+  for (const platform of ["darwin", "MacIntel", "macOS", "MacARM"]) {
+    assert.equal(isMacPlatform(platform), true);
+    assert.equal(displayBinding("Mod+Alt+N", platform), "⌘⌥N");
+    assert.deepEqual(recordShortcutEvent(event("n", { metaKey: true }), platform), { kind: "binding", binding: "Mod+N" });
+  }
+  for (const platform of ["win32", "Win32", "Windows", "Linux x86_64"]) {
+    assert.equal(isMacPlatform(platform), false);
+    assert.equal(displayBinding("Mod+Alt+N", platform), "Ctrl+Alt+N");
+    assert.deepEqual(recordShortcutEvent(event("n", { ctrlKey: true }), platform), { kind: "binding", binding: "Mod+N" });
+  }
 });
 
 test("shortcut settings render a searchable action table with clear and restore controls", () => {

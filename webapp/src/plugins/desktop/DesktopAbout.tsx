@@ -43,7 +43,7 @@ export function DesktopAbout({ enabled = true, onboardingEnabled = false }: { en
       : <p role="status">{tr("正在读取应用信息…")}</p>}
     {onboardingEnabled && typeof window !== "undefined" && new URLSearchParams(window.location.search).get("xuenessDesktop") === "1" &&
       <div className="xn-desktop-about__permissions">
-        <div><h4>{tr("系统权限")}</h4><p>{tr("查看电脑使用、文件访问和麦克风权限，可随时跳过。")}</p></div>
+        <div><h4>{tr("系统权限")}</h4><p>{tr("查看当前系统支持的权限，可随时跳过。")}</p></div>
         <button type="button" data-testid="desktop-permissions-reopen"
           onClick={() => window.dispatchEvent(new CustomEvent("xueness:permissions-open"))}>{tr("查看权限引导")}</button>
       </div>}

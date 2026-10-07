@@ -1,12 +1,13 @@
 // Read the same CSS tokens as the title bar. No Electron API is exposed to the page.
 const { ipcRenderer } = require('electron');
 
-if (process.platform === 'win32' && window.top === window) {
+if ((process.platform === 'win32' || process.platform === 'darwin') && window.top === window) {
   const observeTheme = () => {
     const root = document.documentElement;
     let previous = '';
     let previousPolicy;
     let previousTrayState = '';
+    let previousLocale;
     const sync = () => {
       const style = getComputedStyle(root);
       const color = style.getPropertyValue('--bg-window').trim();
@@ -28,6 +29,10 @@ if (process.platform === 'win32' && window.top === window) {
         try {
           const parsed = JSON.parse(trayState);
           ipcRenderer.send('xueness:desktop-tray-state', parsed);
+          if ((parsed.locale === 'zh' || parsed.locale === 'en') && parsed.locale !== previousLocale) {
+            previousLocale = parsed.locale;
+            ipcRenderer.send('xueness:desktop-locale', parsed.locale);
+          }
           previousTrayState = trayState;
         } catch { /* Ignore incomplete state mutations. */ }
       }

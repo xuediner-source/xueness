@@ -1,5 +1,8 @@
+import { GoalEditorDialog } from './plugins/planning/GoalEditorDialog';
+import { sessionContextUsage } from './plugins/sessions/sessionContextUsage';
 import { listPlugins, listResources, listCommandCatalog, setPluginEnabled, post, saveDefaultModelSelection, type XuenessPlugin } from "./xuenessApi";
 import { t as tr, tf, useLocale, setLocale } from './i18n';
+import { isMacPlatform } from './xuenessShortcutDisplay';
 /**
  * Xueness workbench container — chat-first.
  *
@@ -110,7 +113,8 @@ import { RegionBoundary } from "./ui/primitives";
 import { XuenessWorkspaceSettings } from "./plugins/settings/XuenessWorkspaceSettings";
 import { XuenessTaskList, type SidebarPreferences } from "./plugins/sessions/XuenessTaskList";
 import { CommandPalette } from "./plugins/sessions/CommandPalette";
-import { ConversationTimelineViewport } from "./plugins/sessions/ConversationTimelineViewport";
+import { ConversationTimelineViewport, isAwayFromTimelineTail } from "./plugins/sessions/ConversationTimelineViewport";
+import { buildSessionScrollMemoryKey, saveSessionScrollMemoryState } from "./plugins/sessions/sessionScrollMemory";
 import { createSingleFlightRefresh, useSessionPolling } from "./plugins/sessions/SessionPolling";
 import { XuenessWorkspacePickerDialog } from "./plugins/settings/XuenessWorkspacePickerDialog";
 import { CodeDisplayProvider } from "./ui/CodeContent";
@@ -220,7 +224,7 @@ function matchesShortcut(event: KeyboardEvent, chord: string): boolean {
   const parts = chord.toLowerCase().split("+").map((part) => part.trim());
   const key = parts.at(-1);
   if (!key || (event.key === " " ? "space" : event.altKey && /^Key[A-Z]$/.test(event.code) ? event.code.slice(3).toLowerCase() : event.key.toLowerCase()) !== key) return false;
-  const isMac = navigator.platform.toLowerCase().includes("mac");
+  const isMac = isMacPlatform();
   const expectsCtrl = parts.includes("ctrl") || (parts.includes("mod") && !isMac);
   const expectsMeta = parts.includes("meta") || (parts.includes("mod") && isMac);
   return expectsCtrl === event.ctrlKey && expectsMeta === event.metaKey && parts.includes("shift") === event.shiftKey && parts.includes("alt") === event.altKey;
@@ -515,6 +519,20 @@ export function XuenessWorkbenchContainer() {
   }, [activeId, session, busy, isPluginEffective]);
 
   const selectSession = useCallback((id: string) => {
+    // 切换前保存当前会话的滚动记忆：视口在用户滚动时已持续保存，这里补一次，
+    // 确保程序化滚动（如流式贴底）后的位置也不丢失。恢复由视口在挂载时按
+    // sessionId 自行完成（见 sessionScrollMemory）。
+    const scroller = document.querySelector<HTMLElement>('[data-testid="session-timeline-scroller"]');
+    const memoryKey = buildSessionScrollMemoryKey({ sessionId: activeIdRef.current });
+    if (scroller && memoryKey) {
+      saveSessionScrollMemoryState(memoryKey, {
+        scrollTop: scroller.scrollTop,
+        scrollHeight: scroller.scrollHeight,
+        clientHeight: scroller.clientHeight,
+        wasPinnedToBottom: !isAwayFromTimelineTail(scroller.scrollHeight, scroller.scrollTop, scroller.clientHeight),
+        updatedAt: Date.now(),
+      });
+    }
     setRunError("");
     setPanel("chat");
     setActiveId(id);
@@ -870,7 +888,7 @@ export function XuenessWorkbenchContainer() {
   );
 
   const handleSend = useCallback(
-    async (text: string, input?: ComposerInput) => {
+    async (text: string, input?: ComposerInput, onAccepted?: () => void) => {
       const targetSessionId = activeId;
       const running = Boolean(targetSessionId && session?.id === targetSessionId && (
         session.status === "running" || session.streaming?.status === "streaming" || runRequestSessions.has(targetSessionId)
@@ -884,6 +902,7 @@ export function XuenessWorkbenchContainer() {
         setQueueError(previous => previous?.sessionId === targetSessionId ? null : previous);
         try {
           const selected = getRunChoices();
+      if (input?.capabilities?.includes("browser.composer_operation") && isPluginEffective("browser")) selected.browser = true;
           const prepared = await prepareComposer(text, input && { ...input, remote: selected.remote }, {
             session_id: targetSessionId,
             provider_id: selected.provider_id,
@@ -895,6 +914,7 @@ export function XuenessWorkbenchContainer() {
             await loadActive(targetSessionId, false);
             throw new Error(queued.error);
           }
+          onAccepted?.();
           await loadActive(targetSessionId, false);
           await refreshList();
           return true;
@@ -905,15 +925,17 @@ export function XuenessWorkbenchContainer() {
       }
       if (busy) return false;
       const selected = getRunChoices();
+      if (input?.capabilities?.includes("browser.composer_operation") && isPluginEffective("browser")) selected.browser = true;
+      let accepted = false;
       const requestResult = await runSessionRequest(targetSessionId, async () => {
         const prepared = await prepareComposer(text, input && { ...input, remote: selected.remote }, { session_id: targetSessionId, provider_id: selected.provider_id, model: selected.model, reasoning_effort: selected.reasoning_effort });
-        return sendTurn(targetSessionId, value, { ...selected, goal: prepared.goal }, prepared.token);
+        return sendTurn(targetSessionId, value, { ...selected, goal: prepared.goal }, prepared.token, () => { accepted = true; onAccepted?.(); });
       });
       if (requestResult.ok) {
         await loadActive(targetSessionId);
         await refreshList();
       }
-      return requestResult.ok;
+      return requestResult.ok || accepted;
     },
     [activeId, session, busy, runRequestSessions, isPluginEffective, run, runSessionRequest, loadActive, refreshList],
   );
@@ -956,7 +978,7 @@ export function XuenessWorkbenchContainer() {
 
   /** Hero composer: create the task and run it in one round trip pair. */
   const handleCreate = useCallback(
-    async (text: string, input?: ComposerInput) => {
+    async (text: string, input?: ComposerInput, onAccepted?: () => void) => {
       const value = text.trim() || tr("附件与上下文");
       if (!isPluginEffective("sessions")) return false;
       if (activeCreateRef.current !== null) return false;
@@ -971,10 +993,12 @@ export function XuenessWorkbenchContainer() {
       let createdId = "";
       const originSessionId = activeIdRef.current;
       const selected = getRunChoices();
+      if (input?.capabilities?.includes("browser.composer_operation") && isPluginEffective("browser")) selected.browser = true;
       try {
         const prepared = await prepareComposer(text, input && { ...input, remote: selected.remote }, { root: draftRoot ?? composerCatalog.root ?? undefined, provider_id: selected.provider_id, model: selected.model, reasoning_effort: selected.reasoning_effort });
         const result = await createSession(value, { ...selected, goal: prepared.goal }, { ...(isolatedWorkspace ? {} : { root: prepared.root }), prepared_token: prepared.token }, id => {
           createdId = id;
+          onAccepted?.();
           releaseCreateLock();
           trackSessionId(runRequestSessionsRef, setRunRequestSessions, id, true);
           trackSessionId(executingSessionsRef, setExecutingSessions, id, true);
@@ -1392,10 +1416,12 @@ export function XuenessWorkbenchContainer() {
   const activeRuntimeProfile = runtimeProfileFromSession(activeMonitorSource?.runtime_profile)
     ?? effectiveRuntimeProfile(selectedComposerModel, choices.runtime_profile);
   const runtimeMonitorSession: LocalRuntimeSession | null = activeMonitorSource ? {
+    status: activeMonitorSource.status,
     runtime_profile: activeRuntimeProfile,
     runtime_budget: activeMonitorSource.runtime_budget,
     runtime_activity: activeMonitorSource.runtime_activity,
     runtime_activity_history: activeMonitorSource.runtime_activity_history,
+    tool_timings: activeMonitorSource.tool_timings,
   } : null;
   const composerRunning = activeId !== null && session?.id === activeId && (
     session.status === "running" || session.streaming?.status === "streaming" || runRequestSessions.has(activeId)
@@ -1471,6 +1497,10 @@ export function XuenessWorkbenchContainer() {
     sessionProviderUsage={session?.id === activeId ? session.provider_usage : undefined}
     onOpenPanel={isPluginEffective("usage") ? () => setPanel("usage") : undefined}
   />;
+  const contextReading = sessionContextUsage(session?.id === activeId ? session : null,
+    composerCatalog.models.find(model => model.id === (choices.provider_id ?? "")), choices);
+  const [goalEditorOpen, setGoalEditorOpen] = useState(false);
+  useEffect(() => setGoalEditorOpen(false), [activeId]);
   const composerControls = lightweightLayout ? (
     <LightweightComposerControls
       enabled
@@ -1479,6 +1509,7 @@ export function XuenessWorkbenchContainer() {
       loading={composerCatalogLoading} error={composerCatalogError}
       onReload={() => void refreshComposerCatalog()}
       onManageModels={openModelSettings}
+      contextReading={contextReading}
       runtimeBudget={session?.id === activeId ? session.runtime_budget : undefined}
       pauseReason={session?.id === activeId ? session.pause_reason : undefined}
       disabled={busy || branchBusy || composerRunning}
@@ -1498,6 +1529,7 @@ export function XuenessWorkbenchContainer() {
       disabled={busy || branchBusy || composerRunning}
       onOpenUsage={isPluginEffective("usage") ? () => setPanel("usage") : undefined}
       runtimeBudget={session?.id === activeId ? session.runtime_budget : undefined}
+      contextReading={contextReading}
       pauseReason={session?.id === activeId ? session.pause_reason : undefined}
     />
     {usageQuickCard}
@@ -1558,10 +1590,16 @@ export function XuenessWorkbenchContainer() {
     }] : []),
   ];
   const composerStartActions = {
-    canGoal: !activeId && isPluginEffective('planning'), canWorkflow: isPluginEffective("workflows"),
+    canGoal: isPluginEffective('planning') && !composerRunning, canWorkflow: isPluginEffective("workflows"),
     canCompact: isPluginEffective('sessions'),
+    ...(activeId ? { onGoal: () => setGoalEditorOpen(true) } : {}),
     onWorkflow: () => setPanel("workflows"), onPlugins: () => setPanel("plugins"),
+    onModels: () => setPanel(isPluginEffective('providers') ? 'providers' : 'plugins'),
   };
+  const composerSendDisabledReason = composerCatalogLoading ? tr('正在加载模型…')
+    : composerCatalogError ? tr('模型列表加载失败，请重试。')
+    : !composerCatalog.allowReal && composerCatalog.models.some(model => model.configured) ? tr('服务端已关闭模型请求。')
+    : tr('选择或配置模型后即可发送。');
   const chooseWorkspace = (root: string, isolated = false, forceNew = false) => {
     if (branchBusy) return;
     if (root === (draftRoot ?? composerCatalog.root) && isolated === isolatedWorkspace && !choices.remote && !forceNew && !(workspacePicking && workspacePickerMode === 'project')) {
@@ -1978,8 +2016,8 @@ export function XuenessWorkbenchContainer() {
           <SidebarActions
             actions={[
               ...(isPluginEffective("sessions") ? [
-                { id: "new-task", icon: <MessageCirclePlus size={16} />, label: tr("新建任务"), shortcut: "Mod+N", onClick: startNewTask },
-                { id: "search", icon: <IconSearch size={15} />, label: tr("搜索"), shortcut: "Mod+K", onClick: (event: React.MouseEvent<HTMLButtonElement>) => openCommandPalette(event.currentTarget) },
+                { id: "new-task", icon: <MessageCirclePlus size={16} />, label: tr("新建任务"), shortcut: resolveShortcutBinding("new-session", (settingsValues.bindings && typeof settingsValues.bindings === "object" ? settingsValues.bindings : {}) as Record<string, string>), onClick: startNewTask },
+                { id: "search", icon: <IconSearch size={15} />, label: tr("搜索"), shortcut: resolveShortcutBinding("command-palette", (settingsValues.bindings && typeof settingsValues.bindings === "object" ? settingsValues.bindings : {}) as Record<string, string>), onClick: (event: React.MouseEvent<HTMLButtonElement>) => openCommandPalette(event.currentTarget) },
               ] : []),
               ...(isPluginEffective("automation") ? [{ id: "automations", icon: <CalendarClock size={16} />, label: tr("自动化"), onClick: () => setPanel("automations") }] : []),
               ...(isPluginEffective("extensions") ? [{ id: "marketplace", icon: <Blocks size={16} />, label: tr("插件市场"), onClick: () => setPanel("marketplace") }] : []),
@@ -2118,6 +2156,9 @@ export function XuenessWorkbenchContainer() {
             onRename={() => activeId && requestRename(activeId)}
             onDelete={() => activeId && void deleteById(activeId)}
           />
+          {goalEditorOpen && activeId && session?.id === activeId && isPluginEffective('planning') &&
+            <GoalEditorDialog key={`goal-editor:${activeId}`} sessionId={activeId} goal={session.goal}
+              onClose={() => setGoalEditorOpen(false)} onSaved={() => void loadActive(activeId)} />}
           {isPluginEffective('planning') && !lightweightLayout && <SessionGoal sessionId={session.id} goal={session.goal}
             disabled={busy || session.status === 'running'} onChanged={() => void handleRefreshAll()} />}
           {session.forkParent && <p className="xn-session-fork-provenance" data-testid="fork-session-provenance" role="note">
@@ -2127,7 +2168,7 @@ export function XuenessWorkbenchContainer() {
           </p>}
           {session.pause_reason && ["paused", "needs_review"].includes(session.status) && <p role="status" className="xn-run-error">{tf("暂停原因：{0}", [session.pause_reason])}</p>}
           {isPluginEffective('planning') && !lightweightLayout && <CompletionChecks sessionId={session.id} completion={session.completion} items={session.delivery_requirements ?? []} disabled={busy || session.status === 'running'} onSaved={() => void handleRefreshAll()} />}
-          {isPluginEffective('providers') && !lightweightLayout && <RequestTiming session={session} />}
+          {isPluginEffective('providers') && <RequestTiming session={session} />}
           {activeRuntimeProfile === "lightweight" && isPluginEffective("providers") && isPluginEffective("diagnostics") &&
             <LocalRuntimeMonitor lightweight session={runtimeMonitorSession} />}
           {session.pending && session.pending.length > 0 && (
@@ -2142,6 +2183,7 @@ export function XuenessWorkbenchContainer() {
           <ToolCallBudgetStatus sessionId={session.id} enabled={isPluginEffective("tools") && settingsValues.toolsCallBudgetEnabled === true} revision={session} />
           <ConversationTimelineViewport
             key={session.id}
+            sessionId={session.id}
             autoScroll={settingsValues.autoScroll !== false}
             rowsVersion={rows}
             streamingText={session.streaming?.text}
@@ -2152,6 +2194,7 @@ export function XuenessWorkbenchContainer() {
               <LightweightTimeline
                 rows={displayTimelineRows}
                 streamingPending={activeSessionRunning}
+                activityPhase={session.runtime_activity?.phase}
                 jsonToolProtocol={session.model_selection?.tool_calling === "json" && activeRuntimeProfile === "lightweight" && session.streaming?.text_format !== "markdown"}
               />
             ) : (
@@ -2159,20 +2202,25 @@ export function XuenessWorkbenchContainer() {
                 virtualize virtualizeFromTail={settingsValues.autoScroll !== false}
                 jsonToolProtocol={session.model_selection?.tool_calling === "json" && activeRuntimeProfile === "lightweight" && session.streaming?.text_format !== "markdown"}
                 protocolModePending={activeSessionRunning && activeRuntimeProfile === "lightweight" && session.streaming?.text_format !== "markdown" && session.model_selection?.tool_calling === "json" && false}
-                streamingPending={activeSessionRunning} grouping={timelineGrouping} />
+                streamingPending={activeSessionRunning} activityPhase={session.runtime_activity?.phase} grouping={timelineGrouping} />
             )}
-            <SessionQueue items={session.queued_messages ?? []} cancellingId={queueCancelling?.sessionId === session.id ? queueCancelling.queueId : null} onCancel={handleCancelQueuedTurn}
-              canContinue={session.status !== "running" && session.streaming?.status !== "streaming" && (session.queued_messages ?? []).some(item => item.status === "paused")}
-              continuing={queueContinuingSessions.has(session.id)} onContinue={handleContinueQueuedMessages} />
-            {queueError?.sessionId === session.id && <p className="xn-session-queue__error" role="alert">{queueError.message}</p>}
             {session.streaming?.status === "interrupted" && session.streaming.text && <p role="status" className="xn-run-error">{tr("输出已中断，已保留收到的内容。")}</p>}
           </ConversationTimelineViewport>
           <QuestionResume enabled={isPluginEffective("sessions") && settingsValues.sessionsAnswerQuestionEnabled === true}
             status={session.status} pendingQuestion={session.pending_question} disabled={busy || runRequestSessions.has(session.id)} onResume={handleRetryRun} />
-          {(runError || session.status === "provider_error" || (!busy && session.status === "pending")) && (
+          {(runError || session.status === "provider_error" || (!busy && !runRequestSessions.has(session.id) && session.status === "pending")) && (
             <div className="xn-run-error">
               {runError && <p role="alert">{runError}</p>}
               <button type="button" disabled={busy || runRequestSessions.has(session.id)} onClick={() => void handleRetryRun()}>{tr("重试运行")}</button>
+            </div>
+          )}
+          {/* 队列 bottom dock：贴在 composer 上方，与输入框融合成底 dock（对标 ZCode -mb-7 pb-7 磨砂贴合）。 */}
+          {((session.queued_messages?.length ?? 0) > 0 || queueError?.sessionId === session.id) && (
+            <div className="xn-queue-dock" data-testid="session-queue-dock">
+              <SessionQueue items={session.queued_messages ?? []} cancellingId={queueCancelling?.sessionId === session.id ? queueCancelling.queueId : null} onCancel={handleCancelQueuedTurn}
+                canContinue={session.status !== "running" && session.streaming?.status !== "streaming" && (session.queued_messages ?? []).some(item => item.status === "paused")}
+                continuing={queueContinuingSessions.has(session.id)} onContinue={handleContinueQueuedMessages} />
+              {queueError?.sessionId === session.id && <p className="xn-session-queue__error" role="alert">{queueError.message}</p>}
             </div>
           )}
           {lightweightLayout ? (
@@ -2214,6 +2262,7 @@ export function XuenessWorkbenchContainer() {
               minimal={lightweightLayout}
               disabled={composerDisabled || queueSubmittingSessions.has(session.id)}
               sendDisabled={!composerModelReady || composerCatalogLoading}
+              sendDisabledReason={composerSendDisabledReason}
               running={composerRunning}
               queueWhenRunning
               queueBusy={queueSubmittingSessions.has(session.id)}
@@ -2222,6 +2271,7 @@ export function XuenessWorkbenchContainer() {
               placeholder={tr("继续描述任务（/ 命令，@ 上下文，$ 技能）")}
               controls={composerControls}
               startActions={composerStartActions}
+          capabilities={(composerCatalog.capabilities ?? []).map(item => ({ ...item, available: item.available !== false && isPluginEffective(item.pluginId) }))}
               mentions={composerMentions}
               commands={isPluginEffective("commands") ? commandItems : []}
               files={files.map((f) => f.path)}
@@ -2294,12 +2344,14 @@ export function XuenessWorkbenchContainer() {
                 onSend={handleCreate}
                 disabled={busy || creatingSession || !isPluginEffective("sessions")}
                 sendDisabled={!composerModelReady || composerCatalogLoading}
+                sendDisabledReason={composerSendDisabledReason}
                 running={composerRunning}
                 stopping={activeId ? stoppingSessions.has(activeId) : false}
                 onStop={activeId ? handleStop : undefined}
                 placeholder={tr("向 Xueness 提问，使用 @ 添加上下文，使用 / 选择命令或能力")}
                 controls={composerControls}
                 startActions={composerStartActions}
+          capabilities={(composerCatalog.capabilities ?? []).map(item => ({ ...item, available: item.available !== false && isPluginEffective(item.pluginId) }))}
                 mentions={composerMentions}
                 commands={isPluginEffective("commands") ? commandItems : []}
               />

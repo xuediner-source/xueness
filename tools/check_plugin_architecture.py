@@ -26,6 +26,11 @@ SHARED_FRONTEND = {
     'xuenessWorkspace.ts', 'xuenessFuzzy.ts', 'xuenessEvents.ts', 'plugins/shared.tsx',
     'ui/CodeContent.tsx', 'ui/CodePreview.tsx', 'ui/Select.tsx',
     'ui/icons.tsx', 'ui/primitives.tsx',
+    # Platform-aware shortcut display (⌘/Ctrl, ⌥/Alt, ⇧/Shift).
+    # Single source of truth used by XuenessShell (sidebar actions) and the
+    # settings plugin (shortcuts panel). Pure display logic, no business rules.
+    # Added 2026-10-07 during Win/Mac shortcut display unification.
+    'xuenessShortcutDisplay.ts',
 }
 
 SERVICE_NAME = re.compile(r'[a-z][a-z0-9_]*(?:\.[a-z][a-z0-9_]*)*\Z')

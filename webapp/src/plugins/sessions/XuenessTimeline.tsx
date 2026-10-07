@@ -1,7 +1,7 @@
-import { t as tr, tf } from '../../i18n';
+import { t as tr, tf, getLocale } from '../../i18n';
 import React from "react";
-import { Plug, SquareTerminal } from "lucide-react";
-import type { TimelineRow } from "../../xuenessWorkbench";
+import { Brain, Check, ChevronDown, Copy, Files, Plug, Search, SquareTerminal } from "lucide-react";
+import type { TimelineRow, ToolDisplayStatus } from "../../xuenessWorkbench";
 import { SimpleMarkdown, TimelineCard, MarkdownRenderOptionsContext, type MarkdownRenderOptions } from "../../XuenessShell";
 import { EmptyState } from "../../ui/primitives";
 import { useQuantizedStreamingText } from "../../ui/StreamingCommitGate";
@@ -17,6 +17,9 @@ import {
   unwrapProtocolEnvelopeText,
   type CompletionPresentationInput,
 } from './completionPresentation';
+import { conversationActivityLabel, reasoningIsActive } from "./conversationActivity";
+import { formatConversationWorkDuration } from './conversationWorkDuration';
+import { TOOL_DISPLAY_STATUS_LABELS, TOOL_DISPLAY_STATUS_TONES, toolDisplayStatusOf } from './toolDisplayStatus';
 import "./sessions.css";
 import "../../styles/conversation-history-rail.css";
 
@@ -35,14 +38,20 @@ export type TimelineStreamProps = {
   protocolModePending?: boolean;
   /** Shows that a turn is active before its first text or reasoning delta arrives. */
   streamingPending?: boolean;
+  /** Authoritative runtime phase; absent metadata never implies generation. */
+  activityPhase?: string;
   /** 长会话窗口化渲染：只挂载可视区附近的节点（仅顶层时间线启用，工具分组递归不启用）。 */
   virtualize?: boolean;
   /** 窗口初始定位在末尾（自动滚动开启的会话从底部呈现）。 */
   virtualizeFromTail?: boolean;
+  /** Group contents already belong to their parent work segment. */
+  nested?: boolean;
 };
 
 type ToolGroupKind = "explore" | "terminal" | "changes";
-type TimelineEntry = TimelineRow | { kind: "tool-group"; category: ToolGroupKind; rows: TimelineRow[] };
+type ToolGroupEntry = { kind: "tool-group"; category: ToolGroupKind; rows: TimelineRow[] };
+type WorkSummaryEntry = { kind: "work-summary"; key: string; seq: number; tools: number; running: boolean; interrupted: boolean; open: boolean; durationMs?: number };
+type TimelineEntry = TimelineRow | ToolGroupEntry | WorkSummaryEntry;
 type AssistantRow = Extract<TimelineRow, { kind: "assistant" }>;
 type CompletionRow = Extract<TimelineRow, { kind: "completion" }>;
 
@@ -112,6 +121,56 @@ export function groupTimelineRows(rows: TimelineRow[], grouping: TimelineStreamP
     index = end;
   }
   return entries;
+}
+
+/** Keep the final reply and interaction boundaries outside collapsible work.
+ * Flat entries retain the existing virtual window and per-row scroll anchors. */
+export function buildConversationWorkEntries(entries: TimelineEntry[], collapsed: ReadonlySet<string>, streamingPending = false, openOverrides?: ReadonlyMap<string, boolean>): {
+  entries: TimelineEntry[]; intermediate: Set<number>; summarized: Set<number>;
+} {
+  const result: TimelineEntry[] = [];
+  const intermediate = new Set<number>(), summarized = new Set<number>();
+  let work: TimelineEntry[] = [];
+  const flush = (running = false, completion?: Extract<TimelineRow, { kind: 'completion' }>) => {
+    if (!work.length) return;
+    const rows = work.flatMap(entry => entry.kind === 'tool-group' ? entry.rows : entry.kind === 'work-summary' ? [] : [entry]);
+    const tools = rows.filter(row => row.kind === 'tool').length;
+    if (!tools) { result.push(...work); work = []; return; }
+    const assistants = rows.filter((row): row is AssistantRow => row.kind === 'assistant');
+    const lastText = assistants.filter(row => row.text.trim()).at(-1);
+    const lastToolIndex = rows.findLastIndex(row => row.kind === 'tool');
+    // Commentary that proposes a call is not a final reply if that call has no reply yet.
+    const final = lastText && rows.indexOf(lastText) > lastToolIndex ? lastText : undefined;
+    const firstTool = rows.find((row): row is Extract<TimelineRow, { kind: 'tool' }> => row.kind === 'tool')!;
+    // Journal hydration can insert earlier commentary after a call arrives.
+    // Keep the user's fold choice bound to the first real call, not row position.
+    const key = `work:${firstTool.turnId}:${firstTool.toolCallId}`;
+    const started = assistants.map(row => row.startedAt).filter((value): value is number => typeof value === 'number' && Number.isFinite(value));
+    const ended = assistants.map(row => row.endedAt).filter((value): value is number => typeof value === 'number' && Number.isFinite(value));
+    const durationMs = !running && started.length && ended.length && Math.max(...ended) >= Math.min(...started)
+      ? Math.max(...ended) - Math.min(...started) : undefined;
+    assistants.forEach(row => {
+      summarized.add(row.seq);
+      if (row !== final) intermediate.add(row.seq);
+    });
+    const active = running || assistants.some(row => row.streaming === true);
+    const interrupted = assistants.some(row => row.interrupted === true);
+    const abnormal = interrupted || rows.some(row => row.kind === 'tool' && ['error', 'cancelled'].includes(toolDisplayStatus(row)))
+      || completion?.verified === false || completion?.deliveryStatus === 'failed';
+    const defaultOpen = active || abnormal || !completion || !final;
+    const open = openOverrides ? openOverrides.get(key) ?? defaultOpen : !collapsed.has(key);
+    result.push({ kind: 'work-summary', key, seq: rows[0].seq, tools, running: active, interrupted, open, durationMs });
+    result.push(...work.flatMap(entry => open ? [entry] : entry === final && entry.kind === 'assistant'
+      ? [{ ...entry, reasoning: undefined }] : []));
+    work = [];
+  };
+  for (const entry of entries) {
+    if (entry.kind === 'user' || entry.kind === 'completion' || entry.kind === 'pending_question') {
+      flush(false, entry.kind === 'completion' ? entry : undefined); result.push(entry);
+    } else work.push(entry);
+  }
+  flush(streamingPending);
+  return { entries: result, intermediate, summarized };
 }
 
 function formatToolSubject(name: string, subject: string): string {
@@ -241,10 +300,9 @@ export function assistantTextForDisplay(text: string, streaming = false, complet
   return text;
 }
 
-type ToolDisplayStatus = "running" | "ok" | "error" | "cancelled";
-
+/** 行状态 → 展示状态：显式查表（见 ./toolDisplayStatus），不再用 errorCode 推导。 */
 function toolDisplayStatus(row: Extract<TimelineRow, { kind: "tool" }>): ToolDisplayStatus {
-  return row.status === "error" && row.errorCode === "xueness.error.cancelled" ? "cancelled" : row.status;
+  return toolDisplayStatusOf(row.status);
 }
 
 function readString(value: Record<string, unknown>, keys: readonly string[]): string | undefined {
@@ -300,7 +358,50 @@ function stringifyPayload(value: unknown): string | undefined {
   }
 }
 
-function commandFromInput(input: Record<string, unknown>): string | undefined {
+/** Only recognized text results become a terminal transcript. Unknown result
+ * objects keep the generic view instead of being presented as process output. */
+export function terminalResultForDisplay(value: unknown, depth = 0): { output: string; stderr?: string; exitCode?: number } | null {
+  if (typeof value === 'string') return { output: value };
+  if (!isRecord(value) || depth > 3) return null;
+  const code = value.exit_code ?? value.exitCode;
+  const exitCode = typeof code === 'number' && Number.isInteger(code) ? code : undefined;
+  if (typeof value.stdout === 'string' || typeof value.stderr === 'string') {
+    return { output: typeof value.stdout === 'string' ? value.stdout : '',
+      stderr: typeof value.stderr === 'string' ? value.stderr : undefined, exitCode };
+  }
+  for (const key of ['output', 'text', 'content', 'result']) {
+    if (typeof value[key] === 'string') return { output: value[key], exitCode };
+  }
+  if (Array.isArray(value.content) && value.content.length && value.content.every(item =>
+    typeof item === 'string' || (isRecord(item) && typeof item.text === 'string' && (item.type === undefined || item.type === 'text')))) {
+    return { output: value.content.map(item => typeof item === 'string' ? item : item.text).join('\n'), exitCode };
+  }
+  if (value.rawOutput !== undefined) {
+    const nested = terminalResultForDisplay(value.rawOutput, depth + 1);
+    return nested ? { ...nested, exitCode: exitCode ?? nested.exitCode } : null;
+  }
+  return null;
+}
+
+/**
+ * 从工具输入中提取可展示的命令。
+ * 移植自 zcode `ToolCallBlocks/renderers/execute.tsx` 的 `getExecuteSecondaryText`：
+ * 流式过程中 `input` 会逐步更新（字符串 / 字符串数组 / 对象都可能出现），
+ * 这里消费最新值，而不是只读提交时的快照。
+ */
+function commandFromInput(input: unknown): string | undefined {
+  if (typeof input === "string") {
+    const trimmed = input.trim();
+    return trimmed ? trimmed : undefined;
+  }
+  if (Array.isArray(input)) {
+    const parts = input.flatMap((item) => (typeof item === "string" && item.trim() ? [item.trim()] : []));
+    if (parts.length === 0) return undefined;
+    const shellCommandIndex = parts.findIndex((part) => part === "-lc");
+    if (shellCommandIndex >= 0 && parts[shellCommandIndex + 1]) return parts[shellCommandIndex + 1];
+    return parts.join(" ");
+  }
+  if (!isRecord(input)) return undefined;
   const direct = readString(input, ["command", "cmd", "script"]);
   if (direct) return direct;
   const parsed = input.parsed_cmd;
@@ -349,12 +450,13 @@ function mcpNameParts(name: string): { server: string; tool: string } | undefine
   return { server: formatMcpIdentifier(server), tool: formatMcpIdentifier(tool) };
 }
 
-function toolPrimaryText(row: ToolPayloadRow, input: Record<string, unknown>): { text: string; mono: boolean } {
+function toolPrimaryText(row: ToolPayloadRow, input: unknown): { text: string; mono: boolean } {
   const name = row.name.toLowerCase();
   if (name === "exec" || name.startsWith("exec_") || name.includes("terminal")) {
     const command = commandFromInput(input);
     if (command) return { text: command, mono: true };
-    const argv = input.argv ?? input.args;
+    const record = isRecord(input) ? input : undefined;
+    const argv = record?.argv ?? record?.args;
     if (Array.isArray(argv) && argv.every((item) => typeof item === "string")) {
       return { text: argv.join(" "), mono: true };
     }
@@ -362,13 +464,14 @@ function toolPrimaryText(row: ToolPayloadRow, input: Record<string, unknown>): {
   }
 
   if (["read", "write", "edit"].includes(name)) {
-    const path = readString(input, ["file_path", "filePath", "path", "filename", "target"]);
+    const path = isRecord(input) ? readString(input, ["file_path", "filePath", "path", "filename", "target"]) : undefined;
     return { text: path ?? formatToolSubject(row.name, row.subject), mono: false };
   }
 
   if (name === "mcp" || name.startsWith("mcp_") || name.startsWith("mcp__")) {
-    const server = readString(input, ["server", "server_name", "serverName"]);
-    const tool = readString(input, ["tool", "tool_name", "toolName"]);
+    const record = isRecord(input) ? input : undefined;
+    const server = record ? readString(record, ["server", "server_name", "serverName"]) : undefined;
+    const tool = record ? readString(record, ["tool", "tool_name", "toolName"]) : undefined;
     if (server && tool) return { text: `${formatMcpIdentifier(server)} · ${formatMcpIdentifier(tool)}`, mono: false };
     const legacy = mcpNameParts(row.name);
     return { text: legacy ? `${legacy.server} · ${legacy.tool}` : row.name, mono: false };
@@ -437,6 +540,126 @@ function FoldablePayloadText({ text }: { text: string }): React.JSX.Element {
   return <FoldablePayloadTextView text={text} expanded={expanded} onToggle={() => setExpanded((value) => !value)} />;
 }
 
+function RawToolPayload({ input, output }: { input: unknown; output: unknown }): React.JSX.Element {
+  const [open, setOpen] = React.useState(false);
+  const serialize = (value: unknown) => {
+    try { return JSON.stringify(value, null, 2) ?? ''; } catch { return String(value); }
+  };
+  return <details className="xn-toolcall__raw" open={open} onToggle={event => setOpen(event.currentTarget.open)}>
+    <summary>{tr('原始工具数据')}</summary>
+    {open && <div className="xn-toolcall__raw-content">
+      {input !== undefined && <section className="xn-toolcall__section"><span className="xn-toolcall__section-label">{tr('输入参数')}</span><FoldablePayloadText text={serialize(input)} /></section>}
+      {output !== undefined && <section className="xn-toolcall__section"><span className="xn-toolcall__section-label">{tr('工具结果')}</span><FoldablePayloadText text={serialize(output)} /></section>}
+    </div>}
+  </details>;
+}
+
+/**
+ * 按 toolCallId 持久化的工具卡片展开态（移植自 zcode ToolLayout 的 toolLayoutOpenState）。
+ * 原生 <details> 的展开态在虚拟列表重挂后会丢失，这里用模块级 Map 记住用户选择。
+ */
+export const toolCallOpenState = new Map<string, boolean>();
+
+function useToolCallOpenState(toolCallId: string, defaultOpen: boolean): [boolean, (next: boolean) => void] {
+  const [open, setOpen] = React.useState(() => toolCallOpenState.get(toolCallId) ?? defaultOpen);
+  const setPersistedOpen = React.useCallback((next: boolean) => {
+    toolCallOpenState.set(toolCallId, next);
+    setOpen(next);
+  }, [toolCallId]);
+  return [open, setPersistedOpen];
+}
+
+/**
+ * 流式参数实时摘要：primary 文本随 `row.input` 的流式更新重算，
+ * 文本变化时用 key 重挂触发一次轻量 opacity 过渡。
+ */
+function StreamingPrimaryText({ text, mono }: { text: string; mono: boolean }): React.JSX.Element | null {
+  const [pulseKey, setPulseKey] = React.useState(0);
+  const prevTextRef = React.useRef(text);
+  React.useEffect(() => {
+    if (prevTextRef.current !== text) {
+      prevTextRef.current = text;
+      setPulseKey((key) => key + 1);
+    }
+  }, [text]);
+  if (!text) return null;
+  return (
+    <span
+      key={pulseKey}
+      className={`xn-msg__tool-subject xn-toolcall__primary${mono ? " xn-toolcall__primary--mono" : ""} xn-toolcall__primary--pulse`}
+      title={text}
+      data-testid="xn-toolcall-primary"
+    >
+      {text}
+    </span>
+  );
+}
+
+/** 失败态一键复制：复制成功后 1500ms 内显示打勾态（移植自 zcode ToolLayout 的 handleCopyFailureTooltip）。 */
+const FAILURE_COPY_RESET_MS = 1500;
+
+export async function copyFailureText(
+  clipboard: Pick<Clipboard, "writeText"> | undefined,
+  text: string,
+): Promise<boolean> {
+  if (!clipboard || typeof clipboard.writeText !== "function" || !text.trim()) return false;
+  try {
+    await clipboard.writeText(text);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function FailureCopyTooltip({ text, label }: { text: string; label: React.ReactNode }): React.JSX.Element {
+  const [copied, setCopied] = React.useState(false);
+  const resetRef = React.useRef<number | null>(null);
+  const tooltipId = React.useId();
+  React.useEffect(() => () => {
+    if (resetRef.current !== null) window.clearTimeout(resetRef.current);
+  }, []);
+
+  const copyFailure = (event: React.MouseEvent) => {
+    // 复制按钮位于 <summary> 内：阻止默认行为，避免触发 details 展开/收起。
+    event.preventDefault();
+    event.stopPropagation();
+    if (!text.trim()) return;
+    const markCopied = () => {
+      setCopied(true);
+      if (resetRef.current !== null) window.clearTimeout(resetRef.current);
+      resetRef.current = window.setTimeout(() => {
+        setCopied(false);
+        resetRef.current = null;
+      }, FAILURE_COPY_RESET_MS);
+    };
+    void copyFailureText(navigator.clipboard, text).then((copiedSuccessfully) => {
+      if (copiedSuccessfully) markCopied();
+    });
+  };
+
+  const copyLabel = copied ? tr("已复制") : tr("复制错误信息");
+  return (
+    <span className="xn-toolcall__failure-tip" data-testid="xn-toolcall-failure-tip">
+      <span className="xn-toolcall__status xn-toolcall__status--failure" data-tone="error" tabIndex={0} aria-describedby={tooltipId}>
+        {label}
+      </span>
+      <span id={tooltipId} className="xn-toolcall__failure-tooltip" role="tooltip" data-testid="xn-toolcall-failure-tooltip">
+        <span className="xn-toolcall__failure-text">{text}</span>
+        <button
+          type="button"
+          className="xn-toolcall__failure-copy"
+          data-testid="xn-toolcall-copy-failure"
+          onClick={copyFailure}
+          title={copyLabel}
+          aria-label={copyLabel}
+        >
+          {copied ? <Check size={14} aria-hidden="true" /> : <Copy size={14} aria-hidden="true" />}
+        </button>
+      </span>
+    </span>
+  );
+}
+
 const ToolTimelineCard = React.memo(function ToolTimelineCard({
   row,
   collapseTools,
@@ -449,26 +672,34 @@ const ToolTimelineCard = React.memo(function ToolTimelineCard({
   const primary = toolPrimaryText(row, input);
   const inputText = parsedInput ? stringifyPayload(parsedInput) : undefined;
   const outputText = stringifyPayload(row.output);
+  const terminal = ['exec', 'exec_start'].includes(row.name.toLowerCase()) ? terminalResultForDisplay(row.output) : null;
   const hasDetails = Boolean(inputText || outputText);
   const status = toolDisplayStatus(row);
-  const tone = status === "error" ? "error" : status === "ok" ? "ok" : status === "cancelled" ? "neutral" : "warn";
-  const statusLabel = status === "running" ? tr("运行中") : status === "error" ? tr("失败") : status === "cancelled" ? tr("已取消") : tr("已完成");
+  const tone = TOOL_DISPLAY_STATUS_TONES[status];
+  const statusLabel = tr(TOOL_DISPLAY_STATUS_LABELS[status]);
+  const [detailsOpen, setDetailsOpen] = useToolCallOpenState(row.toolCallId, !collapseTools);
   const toolKind = ["read", "write", "edit", "exec", "mcp"].find((kind) =>
     row.name.toLowerCase() === kind || row.name.toLowerCase().startsWith(`${kind}_`) || row.name.toLowerCase().startsWith(`${kind}__`),
   ) ?? "other";
+  // 失败态不再强制展开：错误详情挂在状态词的 Tooltip 上（含一键复制），
+  // 卡片保持和成功态一致的展开逻辑。
   const errorText = row.error
     ? `${row.errorCode ? `[${row.errorCode}] ` : ""}${row.error}`
-    : row.status === "error" && status !== "cancelled" ? tr("工具执行失败") : "";
-  const kindLabel = toolKind === "mcp" ? "MCP" : row.name;
+    : row.status === "error" ? tr("工具执行失败") : "";
+  const kindLabel = toolKind === "mcp" ? "MCP" : toolKind === 'exec' ? tr('终端') : row.name;
+
+  const statusNode = status === "error" && errorText
+    ? <FailureCopyTooltip text={errorText} label={statusLabel} />
+    : <span className={`xn-toolcall__status${status === 'ok' ? ' xn-toolcall__status--quiet' : ''}`} data-tone={tone}>{statusLabel}</span>;
 
   const summaryRow = (
     <>
       <span className="xn-toolcall__kind-icon" aria-hidden="true"><ToolKindIcon name={row.name} /></span>
       <span className="xn-msg__tool-name xn-toolcall__kind">{kindLabel}</span>
-      {primary.text && <span className={`xn-msg__tool-subject xn-toolcall__primary${primary.mono ? " xn-toolcall__primary--mono" : ""}`} title={primary.text}>{primary.text}</span>}
+      <StreamingPrimaryText text={primary.text} mono={primary.mono} />
       <span className="xn-msg__tool-trailing xn-toolcall__trailing">
         {row.status === "error" && row.errorCode && <span className="xn-card__meta">{tf("错误码: {0}", [row.errorCode])}</span>}
-        {statusLabel && <span className="xn-toolcall__status" data-tone={tone}>{statusLabel}</span>}
+        {statusNode}
         {hasDetails && <span className="xn-toolcall__chevron" aria-hidden="true">›</span>}
       </span>
     </>
@@ -484,11 +715,28 @@ const ToolTimelineCard = React.memo(function ToolTimelineCard({
       data-tool-name={row.name}
     >
       {hasDetails ? (
-        <details className="xn-toolcall__details" open={!collapseTools}>
+        <details
+          className="xn-toolcall__details"
+          open={detailsOpen}
+          onToggle={(event) => {
+            // toggle 事件不可取消：以 DOM 翻转后的实际状态为准并按 toolCallId 持久化，
+            // 虚拟列表重挂后保持用户选择的展开态。
+            setDetailsOpen(event.currentTarget.open);
+          }}
+        >
           <summary className="xn-msg__tool-line xn-toolcall__summary">
             {summaryRow}
           </summary>
-          <div className="xn-toolcall__content">
+          <div className={`xn-toolcall__content${terminal ? ' xn-toolcall__content--terminal' : ''}`}>
+            {terminal ? <>
+              <section className="xn-toolcall__terminal" aria-label={tr('终端输出')}>
+                <pre className="xn-toolcall__command">$ {primary.text}</pre>
+                {terminal.output && <FoldablePayloadText text={terminal.output} />}
+                {terminal.stderr && <section className="xn-toolcall__section xn-toolcall__stderr"><span className="xn-toolcall__section-label">{tr('标准错误')}</span><FoldablePayloadText text={terminal.stderr} /></section>}
+                {terminal.exitCode !== undefined && <span className="xn-toolcall__exit-code">{tf('退出码 {0}', [terminal.exitCode])}</span>}
+              </section>
+              <RawToolPayload input={parsedInput} output={row.output} />
+            </> : <>
             {inputText && (
               <section className="xn-toolcall__section">
                 <span className="xn-toolcall__section-label">{tr("输入参数")}</span>
@@ -501,12 +749,13 @@ const ToolTimelineCard = React.memo(function ToolTimelineCard({
                 <FoldablePayloadText text={outputText} />
               </section>
             )}
+            </>}
           </div>
         </details>
       ) : (
         <div className="xn-msg__tool-line xn-toolcall__summary">{summaryRow}</div>
       )}
-      {errorText && <div className={status === "cancelled" ? "xn-toolcall__cancel-note" : "xn-msg__tool-error"} data-testid="xn-card-body">{errorText}</div>}
+      {status === "cancelled" && errorText && <div className="xn-toolcall__cancel-note" data-testid="xn-card-body">{errorText}</div>}
     </div>
   );
 });
@@ -536,13 +785,82 @@ const UserTimelineItem = React.memo(function UserTimelineItem({ row, windowIndex
   );
 });
 
-const AssistantTimelineItem = React.memo(function AssistantTimelineItem({ row, windowIndex, showReasoning, jsonToolProtocol, protocolModePending, completionSummary }: {
+/**
+ * 每个 assistant 工作段顶部的状态条（移植自 zcode ConversationTurnGroup 的 AssistantHistoryStatus）：
+ * 运行中「工作中 X」/ 完成「用时 X」/ 中断「已停止」。
+ * 时长只用 row.startedAt/endedAt 计算；缺少权威起始时间时只显示「工作中」，
+ * 不把此组件挂载后的可见时长说成实际工作时长。
+ */
+function AssistantWorkStatusPill({ row }: { row: AssistantRow }): React.JSX.Element | null {
+  const streaming = row.streaming === true;
+  // 流式期间每秒刷新一次「工作中 X」。
+  const [, forceTick] = React.useReducer((count: number) => count + 1, 0);
+  React.useEffect(() => {
+    if (!streaming || row.startedAt == null) return;
+    const timer = window.setInterval(forceTick, 1000);
+    return () => window.clearInterval(timer);
+  }, [streaming, row.startedAt]);
+
+  let state: "running" | "done" | "stopped" | null = null;
+  let durationMs: number | undefined;
+  if (row.interrupted) {
+    state = "stopped";
+  } else if (streaming) {
+    state = "running";
+    durationMs = row.startedAt != null
+      ? Math.max(0, Date.now() - row.startedAt)
+      : undefined;
+  } else if (row.startedAt != null && row.endedAt != null && row.endedAt >= row.startedAt) {
+    state = "done";
+    durationMs = row.endedAt - row.startedAt;
+  }
+  // 终态没有起止时间戳 → 隐藏 pill，不编造「用时 X」。
+  if (state === null) return null;
+
+  const durationLabel = formatConversationWorkDuration(durationMs, getLocale());
+  const label = state === "stopped"
+    ? tr("已停止")
+    : state === "running"
+      ? durationLabel ? tf("工作中 {0}", [durationLabel]) : tr("工作中")
+      : durationLabel ? tf("用时 {0}", [durationLabel]) : tr("已完成");
+
+  return (
+    <div
+      className="xn-turn-work-status"
+      data-testid={`xn-turn-work-status-${row.seq}`}
+      data-state={state}
+      role="status"
+    >
+      <span className="xn-turn-work-status__label">{label}</span>
+    </div>
+  );
+}
+
+function ReasoningDisclosure({ row, activityPhase }: { row: AssistantRow; activityPhase?: string }): React.JSX.Element {
+  const active = reasoningIsActive(row.streaming, activityPhase, row.text);
+  const [open, setOpen] = useToolCallOpenState(`reasoning:${row.turnId}:${row.messageIndex ?? row.seq}`, false);
+  const preview = active && !open ? row.reasoning?.trim().split(/\r?\n/u).filter(Boolean).at(-1)?.slice(-180) : undefined;
+  return <details className="xn-reasoning" open={open} onToggle={event => setOpen(event.currentTarget.open)} data-active={active || undefined}>
+    <summary>
+      <Brain size={16} aria-hidden="true" />
+      <span className="xn-reasoning__label">{active ? tr("思考中…") : tr("思考过程")}</span>
+      {preview && <span className="xn-reasoning__preview" aria-hidden="true">{preview}</span>}
+      <ChevronDown size={13} className="xn-reasoning__chevron" aria-hidden="true" />
+    </summary>
+    <pre className="xn-reasoning__text">{row.reasoning}</pre>
+  </details>;
+}
+
+const AssistantTimelineItem = React.memo(function AssistantTimelineItem({ row, windowIndex, showReasoning, jsonToolProtocol, protocolModePending, completionSummary, activityPhase, intermediate = false, summarized = false }: {
   row: AssistantRow;
   windowIndex: TimelineWindowIndex;
   showReasoning: boolean;
   jsonToolProtocol: boolean;
   protocolModePending: boolean;
   completionSummary?: string;
+  activityPhase?: string;
+  intermediate?: boolean;
+  summarized?: boolean;
 }): React.JSX.Element {
   const sourceText = useQuantizedStreamingText(row.text, Boolean(row.streaming));
   const displayText = assistantTextForDisplay(sourceText, row.streaming, completionSummary, jsonToolProtocol, protocolModePending);
@@ -551,13 +869,14 @@ const AssistantTimelineItem = React.memo(function AssistantTimelineItem({ row, w
       data-testid={`timeline-item-assistant-${row.seq}`}
       data-role="assistant"
       data-window-index={windowIndex}
-      className="xn-timeline-item xn-timeline-item--assistant"
+      className={`xn-timeline-item xn-timeline-item--assistant${intermediate ? ' xn-timeline-item--intermediate' : ''}`}
     >
+      {!summarized && <AssistantWorkStatusPill row={row} />}
       <MarkdownRenderOptionsContext.Provider value={row.streaming ? STREAMING_MARKDOWN_RENDER_OPTIONS : SETTLED_MARKDOWN_RENDER_OPTIONS}>
-        {showReasoning && row.reasoning && <details className="xn-reasoning"><summary>{row.streaming ? tr("思考中…") : tr("思考过程")}</summary><pre className="xn-reasoning__text">{row.reasoning}</pre></details>}
+        {showReasoning && row.reasoning && <ReasoningDisclosure row={row} activityPhase={activityPhase} />}
         {displayText.trim()
           ? <TimelineCard role="assistant" body={displayText} markdown seq={row.seq} />
-          : row.streaming && <p className="xn-assistant-stream-status" role="status">{tr("正在生成回复…")}</p>}
+          : row.streaming && !(showReasoning && row.reasoning && reasoningIsActive(row.streaming, activityPhase, row.text)) && <p className="xn-assistant-stream-status" role="status">{tr(conversationActivityLabel(activityPhase))}</p>}
       </MarkdownRenderOptionsContext.Provider>
     </div>
   );
@@ -619,10 +938,38 @@ const CompletionTimelineItem = React.memo(function CompletionTimelineItem({ row,
   );
 });
 
-export function TimelineStream({ rows, emptyText = tr("暂无事件"), collapseTools = true, grouping, messageStreamShowReasoning = true, jsonToolProtocol = false, protocolModePending = false, streamingPending = false, virtualize = false, virtualizeFromTail = false }: TimelineStreamProps): React.JSX.Element {
+function ToolGroupTimelineItem({ entry, collapseTools, windowIndex }: { entry: ToolGroupEntry; collapseTools: boolean; windowIndex?: number }): React.JSX.Element {
+  const [open, setOpen] = useToolCallOpenState(`group:${entry.rows[0].kind === 'tool' ? entry.rows[0].toolCallId : entry.rows[0].seq}`, !collapseTools);
+  const label = entry.category === 'explore' ? tr('探索工作区') : entry.category === 'terminal' ? tr('终端操作') : tr('文件修改');
+  const errors = entry.rows.filter(row => row.kind === 'tool' && toolDisplayStatus(row) === 'error').length;
+  const running = entry.rows.some(row => row.kind === 'tool' && ['running', 'queued'].includes(row.status));
+  const latest = entry.rows.at(-1);
+  const preview = latest?.kind === 'tool' ? toolPrimaryText(latest, latest.input ?? parseSubjectArguments(latest.subject) ?? {}).text : '';
+  const Icon = entry.category === 'terminal' ? SquareTerminal : entry.category === 'explore' ? Search : Files;
+  return <details className="xn-tool-group" data-window-index={windowIndex} data-testid={`timeline-tool-group-${entry.rows[0].seq}`}
+    open={open} onToggle={event => setOpen(event.currentTarget.open)}>
+    <summary>
+      <Icon size={16} className="xn-tool-group__icon" aria-hidden="true" />
+      <span className="xn-tool-group__label">{label}</span>
+      <span className="xn-tool-group__count">{entry.rows.length}</span>
+      {!open && preview && <span className="xn-tool-group__preview" title={preview}>{preview}</span>}
+      {errors > 0 && <strong>{tf('{0} 项失败', [errors])}</strong>}
+      {running && <span className="xn-tool-group__running">{tr('执行中')}</span>}
+      <ChevronDown size={13} className="xn-tool-group__chevron" aria-hidden="true" />
+    </summary>
+    <TimelineStream rows={entry.rows} collapseTools={collapseTools} nested />
+  </details>;
+}
+
+export function TimelineStream({ rows, emptyText = tr("暂无事件"), collapseTools = true, grouping, messageStreamShowReasoning = true, jsonToolProtocol = false, protocolModePending = false, streamingPending = false, activityPhase, virtualize = false, virtualizeFromTail = false, nested = false }: TimelineStreamProps): React.JSX.Element {
   const timelineRootRef = React.useRef<HTMLDivElement>(null);
+  const [workOpenOverrides, setWorkOpenOverrides] = React.useState(() => new Map<string, boolean>());
   const conversationIndexes = React.useMemo(() => indexConversationRows(rows ?? []), [rows]);
-  const groupedTimeline = React.useMemo(() => groupTimelineRows(rows ?? [], grouping), [rows, grouping]);
+  const grouped = React.useMemo(() => groupTimelineRows((rows ?? []).filter(row =>
+    messageStreamShowReasoning || row.kind !== 'assistant' || row.text.trim() || row.streaming || !row.reasoning), grouping), [rows, grouping, messageStreamShowReasoning]);
+  const presentation = React.useMemo(() => nested ? { entries: grouped, intermediate: new Set<number>(), summarized: new Set<number>() }
+    : buildConversationWorkEntries(grouped, new Set(), streamingPending, workOpenOverrides), [grouped, workOpenOverrides, streamingPending, nested]);
+  const groupedTimeline = presentation.entries;
   const { snapshot: windowState, streamRef, reveal } = useTimelineVirtualWindow({
     count: groupedTimeline.length,
     enabled: virtualize,
@@ -643,7 +990,7 @@ export function TimelineStream({ rows, emptyText = tr("暂无事件"), collapseT
   }, [reveal, userEntryIndexBySeq, windowState.start, windowState.end]);
   if (!rows || rows.length === 0) {
     if (streamingPending) return <div className="xn-timeline-empty xn-timeline-empty--streaming" data-testid="timeline-stream-loading">
-      <p className="xn-assistant-stream-status" role="status">{tr("正在生成回复…")}</p>
+      <p className="xn-assistant-stream-status" role="status">{tr(conversationActivityLabel(activityPhase))}</p>
     </div>;
     return (
       <div data-testid="timeline-stream-empty" className="xn-timeline-empty">
@@ -670,13 +1017,20 @@ export function TimelineStream({ rows, emptyText = tr("暂无事件"), collapseT
       )}
       {visibleEntries.map((r, idx) => {
         const entryIndex = rangeStart + idx;
+        if (r.kind === 'work-summary') {
+          const open = r.open;
+          const duration = formatConversationWorkDuration(r.durationMs, getLocale());
+          const label = r.interrupted ? tr('已停止') : r.running ? tr('工作中') : duration ? tf('已工作 {0}', [duration]) : tr('工作过程');
+          return <div className="xn-conversation-work-summary" key={r.key} data-window-index={windowIndexAttribute(entryIndex)}>
+            <button type="button" data-testid={`timeline-work-toggle-${r.seq}`} aria-expanded={open}
+              onClick={() => setWorkOpenOverrides(previous => new Map(previous).set(r.key, !open))}>
+              <span>{label}</span><ChevronDown size={14} aria-hidden="true" />
+            </button>
+            <span className="xn-conversation-work-summary__count">{tf('{0} 次工具调用', [r.tools])}</span>
+          </div>;
+        }
         if (r.kind === "tool-group") {
-          const label = r.category === "explore" ? tr("探索工作区") : r.category === "terminal" ? tr("终端操作") : tr("文件修改");
-          const errors = r.rows.filter(row => row.kind === "tool" && toolDisplayStatus(row) === "error").length;
-          return <details className="xn-tool-group" key={`group-${r.rows[0].seq}-${entryIndex}`} data-window-index={windowIndexAttribute(entryIndex)} open={!collapseTools}>
-            <summary>{label}<span>{r.rows.length}</span>{errors > 0 && <strong>{tf("{0} 项失败", [errors])}</strong>}</summary>
-            <TimelineStream rows={r.rows} collapseTools={collapseTools} />
-          </details>;
+          return <ToolGroupTimelineItem key={`group-${r.rows[0].seq}`} entry={r} collapseTools={collapseTools} windowIndex={windowIndexAttribute(entryIndex)} />;
         }
         const key = `${r.kind}-${r.seq}-${entryIndex}`;
         const windowIndex = windowIndexAttribute(entryIndex);
@@ -692,6 +1046,9 @@ export function TimelineStream({ rows, emptyText = tr("暂无事件"), collapseT
               row={r}
               windowIndex={windowIndex}
               showReasoning={messageStreamShowReasoning}
+              activityPhase={activityPhase}
+              intermediate={presentation.intermediate.has(r.seq)}
+              summarized={presentation.summarized.has(r.seq)}
               jsonToolProtocol={jsonToolProtocol}
               protocolModePending={protocolModePending}
               completionSummary={conversationIndexes.completionByAssistantSeq.get(r.seq)?.summary}
@@ -742,7 +1099,7 @@ export function TimelineStream({ rows, emptyText = tr("暂无事件"), collapseT
         <div aria-hidden="true" className="xn-timeline-window-spacer" data-testid="timeline-window-bottom-spacer" style={{ height: windowState.bottomPad }} />
       )}
       {streamingPending && !rows.some(row => row.kind === "assistant" && row.streaming) && <div className="xn-timeline-item xn-timeline-item--assistant xn-assistant-stream-pending" data-testid="timeline-stream-loading">
-        <p className="xn-assistant-stream-status" role="status">{tr("正在生成回复…")}</p>
+        <p className="xn-assistant-stream-status" role="status">{tr(conversationActivityLabel(activityPhase))}</p>
       </div>}
     </div>
   );

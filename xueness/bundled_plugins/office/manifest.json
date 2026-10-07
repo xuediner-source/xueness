@@ -8,13 +8,19 @@
   "dependencies": [
     "files"
   ],
-  "tools": [],
+  "tools": [
+    "office_read",
+    "office_create",
+    "office_replace"
+  ],
   "commands": [],
   "panels": [],
   "resources": [],
   "capabilities": [],
   "modules": [
-    "office_preview"
+    "office_preview",
+    "composer_capabilities",
+    "tooling"
   ],
   "features": [
     {
@@ -31,6 +37,26 @@
       "id": "office.xlsx",
       "name": "XLSX 工作表与缓存单元格值",
       "nameEn": "XLSX worksheets and cached cell values"
+    },
+    {
+      "id": "office.pdf_authoring",
+      "name": "PDF 创建、读取与结构化替换",
+      "nameEn": "PDF creation, reading and structured replacement"
+    },
+    {
+      "id": "office.pptx_authoring",
+      "name": "PPTX 创建、读取与结构化替换",
+      "nameEn": "PPTX creation, reading and structured replacement"
+    },
+    {
+      "id": "office.xlsx_authoring",
+      "name": "XLSX 创建、读取与结构化替换",
+      "nameEn": "XLSX creation, reading and structured replacement"
+    },
+    {
+      "id": "office.docx_authoring",
+      "name": "DOCX 创建、读取与结构化替换",
+      "nameEn": "DOCX creation, reading and structured replacement"
     }
   ],
   "frontendModules": [

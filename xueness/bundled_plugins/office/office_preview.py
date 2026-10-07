@@ -245,7 +245,13 @@ def _image_data(archive, target, budget):
     return record
 
 
-def _word_runs(element):
+def _bounded_text(text, truncation, limit=8000):
+    if len(text) > limit:
+        truncation[0] = True
+    return text[:limit]
+
+
+def _word_runs(element, truncation):
     runs = []
     for run in element.findall('.//w:r', NS):
         text = ''.join(node.text or '' for node in run.findall('.//w:t', NS))
@@ -265,11 +271,11 @@ def _word_runs(element):
                 style['color'] = '#' + color.attrib['{' + NS['w'] + '}val']
             if size is not None and size.attrib.get('{' + NS['w'] + '}val', '').isdigit():
                 style['fontSize'] = min(48, max(6, int(size.attrib['{' + NS['w'] + '}val']) / 2))
-        runs.append({'text': text[:8000], 'style': style})
+        runs.append({'text': _bounded_text(text, truncation), 'style': style})
     return runs
 
 
-def _a_runs(element):
+def _a_runs(element, truncation):
     runs = []
     for run in element.findall('.//a:r', NS):
         text = ''.join(node.text or '' for node in run.findall('.//a:t', NS))
@@ -286,17 +292,26 @@ def _a_runs(element):
             color = props.find('a:solidFill/a:srgbClr', NS)
             if color is not None and re.fullmatch(r'[0-9A-Fa-f]{6}', color.attrib.get('val', '')):
                 style['color'] = '#' + color.attrib['val']
-        runs.append({'text': text[:8000], 'style': style})
+        runs.append({'text': _bounded_text(text, truncation), 'style': style})
     return runs
 
 
 def preview(path):
     with Path(path).open('rb') as stream:
         data = stream.read(MAX_BYTES+1)
+    return preview_bytes(data, Path(path).suffix.lower())
+
+
+def preview_bytes(data, suffix, *, include_full_document=True):
+    """Return the bounded, read-only preview for one in-memory package.
+
+    ``office_read`` uses this entrypoint after opening a workspace file once,
+    so the digest it records describes the same bytes that the parser sees.
+    """
     if len(data) > MAX_BYTES:
         raise ValueError('Office file too large')
-    suffix = Path(path).suffix.lower()
-    full_document = sanitize_full_document(data, suffix)
+    suffix = suffix.lower()
+    full_document = sanitize_full_document(data, suffix) if include_full_document else None
     with zipfile.ZipFile(io.BytesIO(data)) as archive:
         entries = archive.infolist()
         if len(entries) > 2000 or sum(e.file_size for e in entries) > 40_000_000:
@@ -306,8 +321,10 @@ def preview(path):
             if info.file_size > 4_000_000:
                 raise ValueError('Office XML exceeds preview budget')
             return ET.fromstring(_xml_bytes(archive.read(name)))
+        truncation = [False]
         def texts(element, prefix):
-            return ''.join(t.text or '' for t in element.findall('.//' + prefix + ':t', NS))[:8000]
+            return _bounded_text(''.join(t.text or '' for t in element.findall('.//' + prefix + ':t', NS)),
+                                 truncation)
         sections = []
         truncated = False
         image_budget = {'images': [], 'bytes': 0, 'truncated': False}
@@ -319,17 +336,26 @@ def preview(path):
             if body is not None:
                 for child in list(body)[:500]:
                     if child.tag.endswith('}tbl'):
-                        rows = [[texts(cell, 'w') for cell in row.findall('w:tc', NS)[:50]] for row in child.findall('w:tr', NS)[:200]]
+                        table_rows = child.findall('w:tr', NS)
+                        if len(table_rows) > 200:
+                            truncated = True
+                        rows = []
+                        for row in table_rows[:200]:
+                            cells = row.findall('w:tc', NS)
+                            if len(cells) > 50:
+                                truncated = True
+                            rows.append([texts(cell, 'w') for cell in cells[:50]])
                         blocks.append({'type': 'table', 'table': rows})
                     else:
-                        runs = _word_runs(child)
+                        runs = _word_runs(child, truncation)
                         paragraph_props = child.find('w:pPr', NS)
                         style = {}
                         if paragraph_props is not None:
                             pstyle = paragraph_props.find('w:pStyle', NS)
                             align = paragraph_props.find('w:jc', NS)
                             if pstyle is not None:
-                                style['paragraphStyle'] = pstyle.attrib.get('{' + NS['w'] + '}val', '')[:40]
+                                style['paragraphStyle'] = _bounded_text(
+                                    pstyle.attrib.get('{' + NS['w'] + '}val', ''), truncation, 40)
                             if align is not None and align.attrib.get('{' + NS['w'] + '}val') in ('left', 'center', 'right', 'both'):
                                 style['align'] = 'justify' if align.attrib.get('{' + NS['w'] + '}val') == 'both' else align.attrib.get('{' + NS['w'] + '}val')
                         images = []
@@ -337,9 +363,9 @@ def preview(path):
                             rid = blip.attrib.get('{' + NS['r'] + '}embed')
                             image = _image_data(archive, relationships.get(rid), image_budget)
                             if image is not None: images.append(image)
-                        text = ''.join(run['text'] for run in runs) or texts(child, 'w')
-                        blocks.append({'type': 'paragraph', 'text': text[:8000], 'runs': runs, 'style': style, 'images': images})
-                truncated = len(body) > 500
+                        text = _bounded_text(''.join(run['text'] for run in runs), truncation) or texts(child, 'w')
+                        blocks.append({'type': 'paragraph', 'text': text, 'runs': runs, 'style': style, 'images': images})
+                truncated |= len(body) > 500
             page_size = document.find('.//w:sectPr/w:pgSz', NS)
             layout = {}
             if page_size is not None:
@@ -366,7 +392,10 @@ def preview(path):
                 shapes = slide.find('p:cSld/p:spTree', NS)
                 blocks = []
                 if shapes is not None:
-                    for shape in list(shapes)[:200]:
+                    shape_items = list(shapes)
+                    if len(shape_items) > 200:
+                        truncated = True
+                    for shape in shape_items[:200]:
                         shape_kind = shape.tag.rsplit('}', 1)[-1]
                         if shape_kind not in ('sp', 'pic'):
                             continue
@@ -382,23 +411,27 @@ def preview(path):
                                 position = {}
                         fill = shape.find('.//a:solidFill/a:srgbClr', NS)
                         style = {'fill': '#' + fill.attrib['val']} if fill is not None and re.fullmatch(r'[0-9A-Fa-f]{6}', fill.attrib.get('val', '')) else {}
-                        runs = _a_runs(shape)
-                        text = ''.join(run['text'] for run in runs) or texts(shape, 'a')
+                        runs = _a_runs(shape, truncation)
+                        text = _bounded_text(''.join(run['text'] for run in runs), truncation) or texts(shape, 'a')
                         image = None
                         if shape_kind == 'pic':
                             blip = shape.find('.//a:blip', NS)
                             rid = blip.attrib.get('{' + NS['r'] + '}embed') if blip is not None else None
                             image = _image_data(archive, relationships.get(rid), image_budget)
                         if text or image:
-                            blocks.append({'type': 'image' if image else 'shape', 'text': text[:8000], 'runs': runs,
+                            blocks.append({'type': 'image' if image else 'shape', 'text': text, 'runs': runs,
                                            'position': position, 'style': style, 'images': [image] if image else []})
                 else:
-                    for paragraph in slide.findall('.//a:p', NS)[:200]:
-                        runs = _a_runs(paragraph)
-                        blocks.append({'type': 'text', 'text': ''.join(run['text'] for run in runs)[:8000],
+                    slide_paragraphs = slide.findall('.//a:p', NS)
+                    if len(slide_paragraphs) > 200:
+                        truncated = True
+                    for paragraph in slide_paragraphs[:200]:
+                        runs = _a_runs(paragraph, truncation)
+                        text = _bounded_text(''.join(run['text'] for run in runs), truncation)
+                        blocks.append({'type': 'text', 'text': text,
                                        'runs': runs, 'style': {}, 'position': {}, 'images': []})
                 sections.append({'name': f'Slide {index}', 'blocks': blocks, 'layout': slide_layout})
-            truncated = len(names) > 100
+            truncated |= len(names) > 100
         elif suffix == '.xlsx':
             shared = []
             if 'xl/sharedStrings.xml' in archive.namelist():
@@ -410,7 +443,10 @@ def preview(path):
                 style_root = xml(styles_name)
                 fonts = style_root.findall('s:fonts/s:font', NS)
                 fills = style_root.findall('s:fills/s:fill', NS)
-                for xf in style_root.findall('s:cellXfs/s:xf', NS)[:256]:
+                cell_xfs = style_root.findall('s:cellXfs/s:xf', NS)
+                if len(cell_xfs) > 256:
+                    truncated = True
+                for xf in cell_xfs[:256]:
                     style = {}
                     try:
                         font = fonts[int(xf.attrib.get('fontId', '0'))]
@@ -462,7 +498,7 @@ def preview(path):
                             text = shared[int(text)] if int(text) < len(shared) else ''
                         if not text and cell.find('s:f', NS) is not None:
                             text = '=' + (cell.find('s:f', NS).text or '')
-                        cells[index-1] = text[:8000]
+                        cells[index-1] = _bounded_text(text, truncation)
                         try:
                             style_index = int(cell.attrib.get('s', '0'))
                             if 0 <= style_index < len(style_defs): row_styles[index-1] = style_defs[style_index]
@@ -476,20 +512,27 @@ def preview(path):
                 truncated |= len(all_rows) > 200
                 sheet_root = xml(name)
                 columns = []
-                for column in sheet_root.findall('s:cols/s:col', NS)[:50]:
+                column_items = sheet_root.findall('s:cols/s:col', NS)
+                if len(column_items) > 50:
+                    truncated = True
+                for column in column_items[:50]:
                     try:
                         lo, hi, width = int(column.attrib.get('min', '0')), int(column.attrib.get('max', '0')), float(column.attrib.get('width', '0'))
                         if 1 <= lo <= hi <= 50 and 0 < width <= 100:
                             columns.append({'min': lo, 'max': hi, 'width': round(width, 2), 'hidden': column.attrib.get('hidden') == '1'})
                     except ValueError:
                         continue
-                merged = [item.attrib['ref'] for item in sheet_root.findall('s:mergeCells/s:mergeCell', NS)[:200]
+                merge_items = sheet_root.findall('s:mergeCells/s:mergeCell', NS)
+                if len(merge_items) > 200:
+                    truncated = True
+                merged = [item.attrib['ref'] for item in merge_items[:200]
                           if re.fullmatch(r'[A-Z]{1,3}\d+:[A-Z]{1,3}\d+', item.attrib.get('ref', ''))]
                 sections.append({'name': sheet.attrib.get('name', 'Sheet'), 'blocks': [{'type': 'table', 'table': rows,
                                   'cellStyles': cell_styles, 'columns': columns, 'mergedRanges': merged}]})
             truncated |= len(sheets) > 20
         else:
             raise ValueError('unsupported Office format')
+    truncated |= truncation[0]
     # Bound before serialization, including repeated shared-string cells.
     # Accounting per leaf avoids constructing a huge intermediate JSON string.
     remaining = 400000
@@ -497,6 +540,8 @@ def preview(path):
     for section in sections:
         if remaining <= 0:
             truncated = True; break
+        if len(section['name']) > 200:
+            truncated = True
         target = {'name': section['name'][:200], 'blocks': []}
         if section.get('layout'):
             target['layout'] = section['layout']
@@ -512,6 +557,8 @@ def preview(path):
                 output['text'] = text
             if 'runs' in block:
                 runs = []
+                if len(block['runs']) > 500:
+                    truncated = True
                 for run in block['runs'][:500]:
                     if remaining <= 0: truncated = True; break
                     text = run.get('text', '')[:max(0, remaining-20)]
@@ -521,6 +568,8 @@ def preview(path):
                 output['runs'] = runs
             if 'table' in block:
                 rows = []
+                if len(block['table']) > 200 or any(len(row) > 50 for row in block['table'][:200]):
+                    truncated = True
                 for row in block['table'][:200]:
                     if remaining <= 0:
                         truncated = True; break
@@ -540,6 +589,8 @@ def preview(path):
                 if 'columns' in block: output['columns'] = block['columns'][:50]
                 if 'mergedRanges' in block: output['mergedRanges'] = block['mergedRanges'][:200]
             if 'images' in block:
+                if len(block['images']) > MAX_IMAGE_COUNT:
+                    truncated = True
                 output['images'] = block['images'][:MAX_IMAGE_COUNT]
             target['blocks'].append(output)
         bounded.append(target)

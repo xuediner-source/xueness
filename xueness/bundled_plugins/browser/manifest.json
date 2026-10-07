@@ -30,9 +30,12 @@
     "settings_api",
     "profiles",
     "runtime",
-    "snapshot"
+    "snapshot",
+    "composer_capabilities"
   ],
-  "backendAssets": ["bridge.mjs"],
+  "backendAssets": [
+    "bridge.mjs"
+  ],
   "features": [
     {
       "id": "browser.pages",
@@ -58,6 +61,11 @@
       "id": "browser.snapshot",
       "name": "页面无障碍树快照",
       "nameEn": "Page accessibility tree snapshot"
+    },
+    {
+      "id": "browser.composer_operation",
+      "name": "添加菜单浏览器操作工作流",
+      "nameEn": "Add-menu browser operation workflow"
     }
   ],
   "frontendModules": [

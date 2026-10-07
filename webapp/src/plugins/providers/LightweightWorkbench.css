@@ -75,6 +75,43 @@
   }
 }
 
+.xn-lightweight-permission-selector {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--fg-muted);
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.xn-lightweight-permission-selector__select {
+  width: 112px;
+  min-width: 96px;
+  height: 28px;
+  padding: 0 6px 0 8px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--fg);
+  font: inherit;
+  cursor: pointer;
+}
+
+.xn-lightweight-permission-selector__select:hover:not(:disabled),
+.xn-lightweight-permission-selector__select:focus-visible {
+  background: var(--bg-hover);
+}
+
+.xn-lightweight-permission-selector__select:focus-visible {
+  outline: 2px solid var(--border-focus);
+  outline-offset: 1px;
+}
+
+.xn-lightweight-permission-selector__select:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 /* User & Assistant messages */
 .xn-lightweight-msg {
   display: flex;

@@ -1,0 +1,64 @@
+.xn-shell-layout .xn-composer__plus-menu:has(.xn-composer-add-search) {
+  box-sizing: border-box;
+  width: min(400px, calc(100vw - 48px));
+  max-height: min(360px, 60vh);
+  padding: 6px;
+  border-radius: 12px;
+}
+.xn-composer-add-search {
+  position: sticky;
+  top: -6px;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 8px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-card);
+  color: var(--fg-muted);
+}
+.xn-composer-add-search input {
+  width: 100%;
+  min-width: 0;
+  padding: 2px;
+  border: 0;
+  border-radius: 3px;
+  background: transparent;
+  color: var(--fg);
+  font: inherit;
+  font-size: 12px;
+}
+.xn-composer-add-search input::placeholder { color: var(--fg-muted); }
+.xn-composer-add-search input:focus-visible { outline: 2px solid var(--border-focus); outline-offset: 2px; }
+.xn-composer-capabilities > button {
+  gap: 9px;
+  min-height: 42px;
+  padding: 6px 8px;
+  border-radius: 7px;
+}
+.xn-composer-capabilities__icon {
+  display: grid;
+  flex: 0 0 30px;
+  width: 30px;
+  height: 30px;
+  place-items: center;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: var(--bg-subtle);
+  color: var(--fg-muted);
+}
+.xn-composer-capabilities__copy { display: grid; gap: 2px; min-width: 0; }
+.xn-composer-capabilities__copy strong { font-size: 12px; font-weight: 550; }
+.xn-composer-capabilities__copy small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; color: var(--fg-muted); line-height: 1.45; }
+.xn-composer-capabilities__check { flex: 0 0 auto; margin-left: auto; }
+
+/* The hero composer's positioned background must not paint over static
+   selections or errors. Keep product feedback above that surface. */
+.xn-composer__chips,
+.xn-composer__status,
+.xn-composer__error { position: relative; }
+.xn-composer__chips { padding: 10px 12px 2px; gap: 6px; }
+.xn-composer__context-chip { color: var(--fg); border-radius: 7px; }
+.xn-composer__setup { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.xn-composer__setup button { border: 0; border-radius: 4px; padding: 2px 4px; background: transparent; color: var(--fg); text-decoration: underline; cursor: pointer; font: inherit; }
+.xn-composer__setup button:focus-visible { outline: 2px solid var(--border-focus); outline-offset: 2px; }

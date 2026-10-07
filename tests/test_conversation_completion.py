@@ -47,6 +47,62 @@ class ConversationCompletionTests(unittest.TestCase):
         content = json.dumps({'summary': 'example', 'values': [1, 2], 'evidence': []})
         self.assertEqual(assess(content, {})['summary'], content)
 
+    def test_markdown_answer_with_terminal_evidence_is_verified_and_preserves_prose(self):
+        prose = 'Created **report.docx** and read back both required paragraphs.'
+        envelope = json.dumps({'summary': 'Created document', 'evidence': [
+            {'evidence_id': 'E2', 'observation': 'Both paragraphs returned by office_read'}]})
+        content = prose + '\n\n```json\n' + envelope + '\n```'
+        result = assess(content, {'actual-read': {'ok': True}}, {'E2': 'actual-read'})
+        self.assertTrue(result['verified'])
+        self.assertEqual(result['summary'], prose)
+        self.assertEqual(result['evidence'][0]['tool_call_id'], 'actual-read')
+        invalid = assess(content, {'actual-read': {'ok': True}}, {'E1': 'actual-read'})
+        self.assertFalse(invalid['verified'])
+        self.assertEqual(invalid['error_code'], 'invalid_evidence_reference')
+
+    def test_markdown_completion_examples_or_ambiguous_trailers_are_not_stripped(self):
+        envelope = json.dumps({'summary': 'Example', 'evidence': [
+            {'evidence_id': 'E1', 'observation': 'Example observation'}]})
+        trailer = '\n\n```json\n' + envelope + '\n```'
+        for content in ('Example:' + trailer, 'Example:' + trailer + '\nMore prose',
+                        'Example:' + trailer + trailer):
+            with self.subTest(content=content):
+                self.assertEqual(assess(content, {}, {})['summary'], content)
+        for content in ('Done' + trailer + trailer,
+                        'Done\n```json\n{"summary":"sample","evidence":[],"extra":true}\n```'):
+            with self.subTest(content=content):
+                self.assertEqual(assess(content, {'actual': {'ok': True}}, {'E1': 'actual'})['summary'], content)
+
+    def test_markdown_evidence_between_answer_and_readback_table_preserves_both(self):
+        envelope = json.dumps({'summary': 'Created report', 'evidence': [
+            {'evidence_id': 'E1', 'observation': 'Read back the unique fixture code'}]})
+        before = 'Created **report.docx**.'
+        after = '| Paragraph | Content |\n| --- | --- |\n| 1 | bluebird-731 |'
+        content = before + '\n\n```json\n' + envelope + '\n```\n\n' + after
+        result = assess(content, {'actual': {'ok': True}}, {'E1': 'actual'})
+        self.assertTrue(result['verified'])
+        self.assertEqual(result['summary'], before + '\n\n' + after)
+        self.assertEqual(result['evidence'][0]['tool_call_id'], 'actual')
+        self.assertFalse(assess(content, {'actual': {'ok': False}}, {'E1': 'actual'})['verified'])
+
+    def test_successful_tools_remain_successful_when_final_evidence_is_missing(self):
+        (self.root / 'note.txt').write_text('known fixture', encoding='utf-8')
+        class Provider:
+            def __init__(self): self.calls = 0
+            def complete(self, messages, tools):
+                self.calls += 1
+                if self.calls == 1:
+                    return {'content':'', 'tool_calls':[{'id':'real-read','type':'function',
+                        'function':{'name':'read','arguments':'{"path":"note.txt"}'}}]}
+                return {'content':'The file was read, but this answer has no evidence envelope.'}
+        session = self.store.new('Read note.txt in this workspace.', self.root)
+        result = run(session, self.store, Provider(), Gate(self.root))
+        self.assertEqual(result['status'], 'needs_review')
+        self.assertTrue(result['completion']['tool_execution_success'])
+        self.assertEqual(result['completion']['tool_execution_status'], 'succeeded')
+        self.assertFalse(result['completion']['verified'])
+        self.assertFalse(result['completion']['delivery_check_passed'])
+
     def test_plain_code_explanation_and_snippet_do_not_require_tools(self):
         for prompt in ('解释这段 Python 代码：print(1 + 1)', '给我一个计算斐波那契数的 Python 示例。',
                        'How do I implement a binary search in Python?',
@@ -166,3 +222,50 @@ class ConversationCompletionTests(unittest.TestCase):
         with patch('xueness.plugin_runtime.completion_checks', return_value={}) as checker:
             self.finish('给我一段文字', content)
         self.assertEqual(checker.call_args.args[-1], content)
+
+    def test_completed_checklist_allows_ordinary_followups_but_not_new_actions(self):
+        (self.root / 'note.txt').write_text('bluebird-731', encoding='utf-8')
+        session = self.store.new('Read note.txt.', self.root)
+        session['delivery_requirements'] = [{'id': 'note', 'label': 'Note content',
+            'path': 'note.txt', 'contains': ['bluebird-731'], 'min_links': 0}]
+        class Provider:
+            def __init__(self): self.calls = 0
+            def complete(self, messages, tools):
+                self.calls += 1
+                if self.calls == 1:
+                    return {'content': '', 'tool_calls': [{'id': 'note-read', 'type': 'function',
+                        'function': {'name': 'read', 'arguments': '{"path":"note.txt"}'}}]}
+                return {'content': json.dumps({'summary': 'bluebird-731', 'evidence': [
+                    {'evidence_id': 'E1', 'observation': 'Read the actual note'}]})}
+        result = run(session, self.store, Provider(), Gate(self.root))
+        self.assertEqual(result['status'], 'completed')
+        self.assertEqual(result['completion']['delivery_status'], 'passed')
+        for prompt in ('What unique code appeared?', 'Explain that code in a sentence.'):
+            append_user_turn(result, self.store, prompt)
+            result = run(result, self.store, AnswerProvider('bluebird-731'), Gate(self.root))
+            self.assertEqual(result['status'], 'completed')
+            self.assertEqual(result['completion']['status'], 'not_applicable')
+            self.assertEqual(result['completion']['delivery_status'], 'passed')
+        append_user_turn(result, self.store, 'Modify note.txt to add a second line.')
+        result = run(result, self.store, AnswerProvider('Done without using tools'), Gate(self.root))
+        self.assertEqual(result['status'], 'needs_review')
+
+    def test_settled_checklist_exemption_fails_closed_for_missing_changed_and_failed_proofs(self):
+        import copy
+        import hashlib
+        plan = [{'id': 'note', 'label': 'Note', 'path': 'note.txt', 'contains': [], 'min_links': 0}]
+        digest = hashlib.sha256(json.dumps(plan, sort_keys=True, ensure_ascii=True).encode('ascii')).hexdigest()
+        base = {'delivery_requirements': plan, 'messages': [
+            {'role': 'user', 'content': 'Read note.txt'}, {'role': 'assistant', 'content': 'Done'},
+            {'role': 'user', 'content': 'Hello'}], 'completion_history': [
+            {'turn_id': 'turn-1', 'status': 'verified', 'delivery_status': 'passed', 'delivery_plan_digest': digest}]}
+        self.assertFalse(requires_evidence(base))
+        self.assertTrue(requires_evidence(base, ['new-call']))
+        for change in ('changed-plan', 'missing-digest', 'failed-check', 'unverified-turn', 'same-turn'):
+            session = copy.deepcopy(base)
+            if change == 'changed-plan': session['delivery_requirements'][0]['contains'] = ['new content']
+            elif change == 'missing-digest': session['completion_history'][-1].pop('delivery_plan_digest')
+            elif change == 'failed-check': session['completion_history'][-1]['delivery_status'] = 'failed'
+            elif change == 'unverified-turn': session['completion_history'][-1]['status'] = 'unverified'
+            else: session['completion_history'][-1]['turn_id'] = 'turn-2'
+            with self.subTest(change=change): self.assertTrue(requires_evidence(session))

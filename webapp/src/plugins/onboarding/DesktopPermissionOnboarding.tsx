@@ -24,6 +24,21 @@ export function isDesktopOnboardingAvailable(enabled: boolean, desktopEnabled: b
   return enabled && desktopEnabled && new URLSearchParams(search).get(DESKTOP_MARKER) === "1";
 }
 
+export function initialDesktopPermissionPlatform(platform?: string): string {
+  const normalized = platform?.toLowerCase() ?? "";
+  if (normalized.includes("win")) return "win32";
+  if (normalized.includes("mac")) return "darwin";
+  // Unknown and non-macOS platforms should not briefly show macOS-only setup
+  // while the native permission snapshot is still loading.
+  return "unknown";
+}
+
+export function desktopPermissionActionLabel(platform: string, id: DesktopPermissionId, status: DesktopPermissionStatus): string {
+  // Windows has no in-app microphone consent prompt; the native action opens
+  // Windows Privacy settings, so make that destination clear on the button.
+  return id === "microphone" && status === "not-determined" && platform !== "win32" ? "允许麦克风" : "打开系统设置";
+}
+
 export function normalizeDesktopPermissionSnapshot(value: unknown): DesktopPermissionSnapshot {
   if (!value || typeof value !== "object") throw new Error("invalid desktop permission snapshot");
   const input = value as { platform?: unknown; permissions?: unknown };
@@ -217,11 +232,30 @@ export function startDesktopPermissionStatusObserver({ enabled, desktopEnabled, 
   return { refresh, stop };
 }
 
-const STEPS = [
-  { title: "辅助功能与屏幕录制", eyebrow: "01 / 03", description: "可选的系统权限。你可以分别查看状态，或在需要时打开系统授权流程。" },
-  { title: "完全磁盘访问权限", eyebrow: "02 / 03", description: "在 macOS 中，你可以打开系统设置后自行决定是否开启。Xueness 不会读取此权限状态。" },
-  { title: "麦克风", eyebrow: "03 / 03", description: "只在你点击下方按钮后请求系统授权。此步骤不会开始录音。" },
-] as const;
+type OnboardingStepBody = "accessibilityScreen" | "fullDisk" | "microphone";
+type OnboardingStepArt = "accessibility" | "fullDisk" | "microphone";
+type OnboardingStep = { title: string; description: string; art: OnboardingStepArt; body: OnboardingStepBody };
+
+export function buildOnboardingSteps(platform: string): OnboardingStep[] {
+  const microphoneStep: OnboardingStep = {
+    title: "麦克风",
+    // Windows has no system consent dialog: requesting opens the Settings page.
+    description: platform === "win32"
+      ? "在 Windows 设置 → 隐私和安全性 → 麦克风中，按需允许 Xueness 使用麦克风。此步骤不会开始录音。"
+      : "只在你点击下方按钮后请求系统授权。此步骤不会开始录音。",
+    art: "microphone",
+    body: "microphone",
+  };
+  if (platform === "darwin") return [
+    { title: "辅助功能与屏幕录制", description: "可选的系统权限。你可以分别查看状态，或在需要时打开系统授权流程。", art: "accessibility", body: "accessibilityScreen" },
+    { title: "完全磁盘访问权限", description: "在 macOS 中，你可以打开系统设置后自行决定是否开启。Xueness 不会读取此权限状态。", art: "fullDisk", body: "fullDisk" },
+    microphoneStep,
+  ];
+  // Accessibility, screen recording and Full Disk Access are unsupported outside
+  // macOS. Showing their macOS-only instructions would mislead Windows users,
+  // so the wizard is trimmed to the microphone step on other platforms.
+  return [microphoneStep];
+}
 
 function StatusLabel({ permission }: { permission: DesktopPermission }): React.JSX.Element {
   const manual = permission.id === "fullDisk" && permission.status === "unknown";
@@ -238,8 +272,8 @@ function StatusLabel({ permission }: { permission: DesktopPermission }): React.J
   </span>;
 }
 
-function StepIllustration({ step }: { step: number }): React.JSX.Element {
-  if (step === 0) return <svg className="xn-desktop-permission__illustration" viewBox="0 0 360 188" role="img" aria-label={tr("辅助功能与屏幕录制设置示意图")}>
+function StepIllustration({ art }: { art: OnboardingStepArt }): React.JSX.Element {
+  if (art === "accessibility") return <svg className="xn-desktop-permission__illustration" viewBox="0 0 360 188" role="img" aria-label={tr("辅助功能与屏幕录制设置示意图")}>
     <defs><linearGradient id="xn-onboard-disk" x1="0" x2="1" y1="0" y2="1"><stop stopColor="#9db5ff" /><stop offset="1" stopColor="#6478d6" /></linearGradient></defs>
     <rect x="47" y="17" width="266" height="154" rx="19" fill="var(--bg-subtle)" stroke="var(--border-strong)" />
     <rect x="47" y="17" width="266" height="28" rx="19" fill="var(--bg-card)" />
@@ -259,7 +293,7 @@ function StepIllustration({ step }: { step: number }): React.JSX.Element {
     <rect x="212" y="121" width="60" height="6" rx="3" fill="var(--fg-subtle)" /><rect x="212" y="132" width="70" height="5" rx="2.5" fill="var(--border)" />
     <circle cx="291" cy="145" r="13" fill="url(#xn-onboard-disk)" /><path d="m285 145 4 4 8-9" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
   </svg>;
-  if (step === 1) return <svg className="xn-desktop-permission__illustration" viewBox="0 0 360 188" role="img" aria-label={tr("完全磁盘访问权限手动设置示意图")}>
+  if (art === "fullDisk") return <svg className="xn-desktop-permission__illustration" viewBox="0 0 360 188" role="img" aria-label={tr("完全磁盘访问权限手动设置示意图")}>
     <rect x="70" y="18" width="220" height="153" rx="18" fill="var(--bg-subtle)" stroke="var(--border-strong)" />
     <rect x="70" y="18" width="220" height="28" rx="18" fill="var(--bg-card)" /><path d="M70 36v10h220V36" fill="var(--bg-card)" />
     <circle cx="87" cy="32" r="3" fill="#e48787" /><circle cx="98" cy="32" r="3" fill="#e6ba6a" /><circle cx="109" cy="32" r="3" fill="#79b892" />
@@ -291,6 +325,7 @@ export function DesktopPermissionOnboarding({ enabled, desktopEnabled, reopenSig
   const desktopMarker = typeof window !== "undefined" && isDesktopOnboardingAvailable(enabled, desktopEnabled, window.location.search);
   const [open, setOpen] = useState(false);
   const [step, setStep] = useState(0);
+  const [platform, setPlatform] = useState(() => initialDesktopPermissionPlatform(typeof navigator === "undefined" ? undefined : navigator.platform));
   const [permissions, setPermissions] = useState<Record<DesktopPermissionId, DesktopPermission>>(() => Object.fromEntries(
     PERMISSION_IDS.map(id => [id, { id, status: "unknown", canRequest: false }]),
   ) as Record<DesktopPermissionId, DesktopPermission>);
@@ -400,6 +435,7 @@ export function DesktopPermissionOnboarding({ enabled, desktopEnabled, reopenSig
       onSnapshot: snapshot => {
         if (!activeRef.current) return;
         setPermissions(Object.fromEntries(snapshot.permissions.map(row => [row.id, row])) as Record<DesktopPermissionId, DesktopPermission>);
+        setPlatform(snapshot.platform);
         setPermissionError("");
       },
       onError: () => { if (activeRef.current) setPermissionError(tr("无法读取系统权限状态。你可以稍后刷新，或跳过此设置。")); },
@@ -460,8 +496,14 @@ export function DesktopPermissionOnboarding({ enabled, desktopEnabled, reopenSig
   }, [desktopMarker, open, permissions, requesting]);
 
   if (!desktopMarker || !open) return null;
-  const currentStep = STEPS[step];
-  const statusDescription = readingPermissions ? tr("正在读取系统状态…") : permissions.accessibility.status === "granted" && permissions.screen.status === "granted"
+  const steps = buildOnboardingSteps(platform);
+  const safeStep = Math.min(step, steps.length - 1);
+  const currentStep = steps[safeStep];
+  const eyebrow = `${String(safeStep + 1).padStart(2, "0")} / ${String(steps.length).padStart(2, "0")}`;
+  const allGranted = platform === "darwin"
+    ? permissions.accessibility.status === "granted" && permissions.screen.status === "granted"
+    : permissions.microphone.status === "granted";
+  const statusDescription = readingPermissions ? tr("正在读取系统状态…") : allGranted
     ? tr("已读取到当前状态") : tr("状态仅供参考；最终权限由操作系统决定。");
   const renderPermission = (id: DesktopPermissionId, title: string, detail: string) => {
     const permission = permissions[id];
@@ -474,7 +516,7 @@ export function DesktopPermissionOnboarding({ enabled, desktopEnabled, reopenSig
           : "更改后可能需要重新启动应用。")}</small>}
       </div>
       {requestable && <button className="xn-desktop-permission__request" type="button" disabled={Boolean(requesting) || saving} onClick={() => void requestSystemPermission(id)}>
-        {tr(isRequesting ? "正在打开…" : id === "microphone" && permission.status === "not-determined" ? "允许麦克风" : "打开系统设置")}
+        {tr(isRequesting ? "正在打开…" : desktopPermissionActionLabel(platform, id, permission.status))}
       </button>}
     </article>;
   };
@@ -488,21 +530,21 @@ export function DesktopPermissionOnboarding({ enabled, desktopEnabled, reopenSig
       </header>
       <div className="xn-desktop-permission__content">
         <div className="xn-desktop-permission__hero">
-          <div className="xn-desktop-permission__step-line"><span>{currentStep.eyebrow}</span><span>{tr("可选设置")}</span></div>
+          <div className="xn-desktop-permission__step-line"><span>{eyebrow}</span><span>{tr("可选设置")}</span></div>
           <h2 id="xn-desktop-permission-title">{tr(currentStep.title)}</h2>
           <p id="xn-desktop-permission-description">{tr(currentStep.description)}</p>
-          <StepIllustration step={step} />
+          <StepIllustration art={currentStep.art} />
         </div>
         <div className="xn-desktop-permission__details">
-          {step === 0 && <>
+          {currentStep.body === "accessibilityScreen" && <>
             {renderPermission("accessibility", "辅助功能", "用于需要系统辅助功能授权的兼容操作。")}
             {renderPermission("screen", "屏幕录制", "用于需要系统屏幕捕获授权的兼容操作。")}
           </>}
-          {step === 1 && <>
+          {currentStep.body === "fullDisk" && <>
             {renderPermission("fullDisk", "完全磁盘访问权限", "在 macOS 系统设置 → 隐私与安全性 → 完全磁盘访问权限中，按需添加或开启 Xueness。Xueness 不读取此权限状态。")}
             <div className="xn-desktop-permission__manual-note"><span aria-hidden="true">i</span><p>{tr("此设置为可选项；打开系统设置不会自动开启权限。没有开启时，应用仍可继续使用。")}</p></div>
           </>}
-          {step === 2 && <>
+          {currentStep.body === "microphone" && <>
             {renderPermission("microphone", "麦克风", "此按钮只请求系统授权，不会开始录音或启动音频任务。")}
             <div className="xn-desktop-permission__manual-note"><span aria-hidden="true">i</span><p>{tr("此设置为可选项；仅在你主动点击授权按钮时才会请求权限。")}</p></div>
           </>}
@@ -519,11 +561,11 @@ export function DesktopPermissionOnboarding({ enabled, desktopEnabled, reopenSig
       <footer className="xn-desktop-permission__footer">
         <button data-testid="desktop-permission-onboarding-skip-all" className="xn-desktop-permission__skip" type="button" disabled={saving} onClick={() => void finish()}>{tr(saving ? "正在保存…" : "跳过全部")}</button>
         <div className="xn-desktop-permission__progress" aria-label={tr("设置步骤")}>
-          {STEPS.map((item, index) => <span key={item.eyebrow} data-current={index === step} aria-hidden="true" />)}
+          {steps.map((item, index) => <span key={item.title} data-current={index === safeStep} aria-hidden="true" />)}
         </div>
-        <button data-testid={step < STEPS.length - 1 ? "desktop-permission-onboarding-continue" : "desktop-permission-onboarding-finish"} className="xn-desktop-permission__next" type="button" disabled={saving} onClick={() => step < STEPS.length - 1 ? setStep(step + 1) : void finish()}>
-          {tr(saving ? "正在保存…" : step < STEPS.length - 1 ? "继续设置" : "完成")}
-          {step < STEPS.length - 1 && <span aria-hidden="true">→</span>}
+        <button data-testid={safeStep < steps.length - 1 ? "desktop-permission-onboarding-continue" : "desktop-permission-onboarding-finish"} className="xn-desktop-permission__next" type="button" disabled={saving} onClick={() => safeStep < steps.length - 1 ? setStep(safeStep + 1) : void finish()}>
+          {tr(saving ? "正在保存…" : safeStep < steps.length - 1 ? "继续设置" : "完成")}
+          {safeStep < steps.length - 1 && <span aria-hidden="true">→</span>}
         </button>
       </footer>
     </div>

@@ -551,7 +551,9 @@ def _provider_catalog(ctx: dict) -> tuple[list[dict], dict[str, dict]]:
     # The environment profile has no persistent id and is shown only when it
     # passes the same constructor checks used by the actual request path.
     try:
-        env_provider = provider_config.resolve(ctx["state_dir"])
+        # An explicit empty id selects the host environment. An unqualified
+        # resolution would apply a saved default and mislabel it as environment.
+        env_provider = provider_config.resolve(ctx["state_dir"], provider_id="")
     except (OSError, ValueError, TypeError):
         env_provider = None
     if env_provider is not None:
@@ -559,7 +561,9 @@ def _provider_catalog(ctx: dict) -> tuple[list[dict], dict[str, dict]]:
         env_model = getattr(env_provider, "model", "")
         protocol = "anthropic" if os.environ.get("XUENESS_PROVIDER", "").strip().lower() == "anthropic" else "openai"
         if isinstance(env_model, str) and env_model.strip():
-            levels = list(providers_api.known_reasoning_levels(env_model)) if protocol == "openai" else []
+            levels = (list(providers_api.reasoning_levels_for_provider(
+                env_model, base_url=getattr(env_provider, "base", None)))
+                if protocol == "openai" else [])
             option = {
                 "id": env_id,
                 "name": _safe_label(env_model, "Environment model", 160),
@@ -610,6 +614,7 @@ def _get_catalog(ctx: dict, root: Path) -> dict:
         "sessions": _session_catalog(ctx, root),
         "skills": _skills_catalog(ctx),
         "plugins": _plugin_catalog(ctx),
+        "capabilities": _capability_catalog(ctx),
         "models": models,
         "allowReal": bool(ctx.get("allow_real") is True and providers_on),
     }
@@ -623,6 +628,11 @@ def _get_catalog(ctx: dict, root: Path) -> dict:
         if git is not None:
             response["git"] = git
     return response
+
+
+def _capability_catalog(ctx):
+    from .composer_capabilities import catalog
+    return catalog(ctx["state_dir"])
 
 
 def _check_keys(value, allowed: set[str], field: str) -> None:
@@ -887,7 +897,7 @@ def _prepare(ctx: dict, data: dict) -> tuple[int, dict]:
         raise _ComposerError(400, "text must be at most 5000 characters")
     text = text.strip()
     body_input = data.get("input", {})
-    allowed_input = {"attachments", "files", "sessions", "skills", "plugins", "remote", "goal"}
+    allowed_input = {"attachments", "files", "sessions", "skills", "plugins", "capabilities", "remote", "goal"}
     _check_keys(body_input, allowed_input, "input")
     goal = body_input.get("goal", False)
     if type(goal) is not bool:
@@ -904,6 +914,10 @@ def _prepare(ctx: dict, data: dict) -> tuple[int, dict]:
     sessions_selected = _check_list(body_input.get("sessions"), "session selection")
     skills_selected = _check_list(body_input.get("skills"), "skill selection")
     plugins_selected = _check_list(body_input.get("plugins"), "plugin selection")
+    capabilities_selected = _check_list(body_input.get("capabilities"), "capability selection")
+    if ("browser.composer_operation" in capabilities_selected and session_id in ctx.get("running", ())
+            and not (_read_session(ctx, session_id) or {}).get("browser_enabled")):
+        raise _ComposerError(409, "enable browser before starting a run; browser capability cannot be added to an active run")
     if root_isolated and (files_selected or sessions_selected):
         raise _ComposerError(400, "isolated workspaces cannot reference shared files or sessions")
     if files_selected:
@@ -968,7 +982,13 @@ def _prepare(ctx: dict, data: dict) -> tuple[int, dict]:
         skill_blocks.append(block)
         skill_metadata.append(summary)
     plugin_block, plugin_metadata = _plugin_context(ctx, plugins_selected)
-    sections = (session_blocks + skill_blocks + ([plugin_block] if plugin_block else [])
+    from .composer_capabilities import prepare as prepare_capabilities
+    try:
+        capability_block, capability_metadata = prepare_capabilities(ctx["state_dir"], capabilities_selected)
+    except ValueError:
+        raise _ComposerError(403, "capability disabled or unavailable") from None
+    sections = (session_blocks + skill_blocks + ([capability_block] if capability_block else [])
+                + ([plugin_block] if plugin_block else [])
                 + ([remote_block] if remote_block else []))
     prompt_context = prompt_text
     if sections:
@@ -991,6 +1011,7 @@ def _prepare(ctx: dict, data: dict) -> tuple[int, dict]:
         "sessions": session_metadata,
         "skills": skill_metadata,
         "plugins": plugin_metadata,
+        "capabilities": capability_metadata,
         **({"commandInvocations": command_invocations} if command_invocations else {}),
         "modelSelection": {
             "provider_id": chosen_provider["id"],

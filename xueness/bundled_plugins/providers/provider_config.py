@@ -59,12 +59,13 @@ def reject_legacy_fake_session(session):
         )
 
 
-def _validate_reasoning_effort(model, configured, effort):
+def _validate_reasoning_effort(model, configured, effort, base_url=None):
     if effort is None:
         return
     if effort not in providers_api.REASONING_LEVELS:
         raise ValueError('invalid reasoning effort')
-    supported = configured if configured is not None else providers_api.known_reasoning_levels(model)
+    supported = providers_api.reasoning_levels_for_provider(
+        model, base_url=base_url, configured=configured)
     if effort not in supported:
         raise ValueError('selected model does not declare support for reasoning effort ' + effort)
 
@@ -133,7 +134,8 @@ def resolve(state_dir, provider_id=None, model=None, reasoning_effort=None, runt
             if protocol != 'openai':
                 raise ValueError('provider profile uses an unsupported protocol')
             selected_model = model or record.get('model')
-            _validate_reasoning_effort(selected_model, declared_levels, reasoning_effort)
+            _validate_reasoning_effort(
+                selected_model, declared_levels, reasoning_effort, record.get('baseUrl'))
             return OpenAICompatible(base=record.get('baseUrl'), model=model or record.get('model'),
                                     key=record.get('apiKey', ''), capabilities=capabilities,
                                     reasoning_effort=reasoning_effort,
@@ -169,7 +171,9 @@ def resolve(state_dir, provider_id=None, model=None, reasoning_effort=None, runt
             anthropic.lightweight_options = runtime_options['lightweight_options']
             return anthropic
         selected_model = model or os.environ.get('XUENESS_MODEL', '')
-        _validate_reasoning_effort(selected_model, None, reasoning_effort)
+        _validate_reasoning_effort(
+            selected_model, None, reasoning_effort,
+            os.environ.get('XUENESS_API_BASE'))
         if runtime_profile is None:
             return OpenAICompatible(model=model, reasoning_effort=reasoning_effort)
         runtime_options = resolve_runtime_options({'runtimeProfile': runtime_profile}, 'openai')

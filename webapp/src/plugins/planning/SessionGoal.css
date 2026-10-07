@@ -63,3 +63,9 @@
 }
 .xn-session-goal__button:hover { background: var(--bg-hover); }
 .xn-session-goal__button:disabled { opacity: 0.55; cursor: not-allowed; }
+
+/* Goal editing uses the same planning-owned surface as the session badge. */
+.xn-goal-editor { box-sizing: border-box; max-height: calc(100dvh - 32px); overflow-y: auto; }
+.xn-goal-editor > p { color: var(--fg-muted); font-size: 13px; line-height: 1.6; }
+.xn-goal-editor__input { resize: vertical; min-height: 130px; margin: 6px 0; }
+.xn-goal-editor > label { display: flex; gap: 8px; align-items: center; font-size: 13px; }

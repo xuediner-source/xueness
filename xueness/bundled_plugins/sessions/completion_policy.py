@@ -1,6 +1,8 @@
 """Sessions-owned policy for deciding when a turn needs tool evidence."""
 from __future__ import annotations
 
+import hashlib
+import json
 import re
 
 
@@ -30,13 +32,35 @@ _NETWORK_ACTION = re.compile(
     r"|(?:搜索|浏览|查询|查找|研究).{0,30}(?:网页|网络|最新|当前|今天|价格|新闻|天气)", re.IGNORECASE)
 
 
+def _delivery_plan_settled(session: dict) -> bool:
+    """A previous successful turn can settle only the exact same checklist."""
+    requirements = session.get('delivery_requirements')
+    history = session.get('completion_history')
+    if not isinstance(requirements, list) or not requirements or not isinstance(history, list) or not history:
+        return False
+    latest = history[-1]
+    if (not isinstance(latest, dict) or latest.get('delivery_status') != 'passed'
+            or latest.get('status') not in ('verified', 'not_applicable')):
+        return False
+    messages = session.get('messages') or []
+    current_turn = 'turn-' + str(max(1, sum(1 for row in messages
+        if isinstance(row, dict) and row.get('role') == 'user')))
+    if latest.get('turn_id') == current_turn or not re.fullmatch(r'turn-[1-9][0-9]*', str(latest.get('turn_id', ''))):
+        return False
+    try:
+        digest = hashlib.sha256(json.dumps(requirements, sort_keys=True, ensure_ascii=True).encode('ascii')).hexdigest()
+    except (TypeError, ValueError):
+        return False
+    return latest.get('delivery_plan_digest') == digest
+
+
 def requires_evidence(session: dict, call_ids=()) -> bool:
     """Require evidence only for actions that depend on tools or outside state.
 
     A no-tool response can still be the completed answer to ordinary chat,
     general questions, code explanations, or text-only programming examples.
     """
-    if call_ids or session.get("delivery_requirements"):
+    if call_ids or (session.get("delivery_requirements") and not _delivery_plan_settled(session)):
         return True
     messages = session.get("messages") or []
     user_text = next((row.get("content", "") for row in reversed(messages)

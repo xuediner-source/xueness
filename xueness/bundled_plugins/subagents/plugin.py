@@ -57,3 +57,8 @@ def tools():
 def completion_check(root, gate, session, summary, *, state_dir=None):
     from .coordinator import completion_check
     return completion_check(session)
+
+
+def completion_instructions(session):
+    from .coordinator import context_reminder
+    return context_reminder(session)

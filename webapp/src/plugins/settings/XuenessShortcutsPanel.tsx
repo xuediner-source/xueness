@@ -10,30 +10,13 @@ import {
   SHORTCUT_COMMANDS,
   type ShortcutCommandId,
 } from "../../xuenessShortcutCommands";
+import { displayBindingParts } from "../../xuenessShortcutDisplay";
 
 export type XuenessShortcutsPanelProps = {
   bindings?: Record<string, string>;
   disabled?: boolean;
   onChange: (bindings: Record<string, string>) => void | Promise<unknown>;
 };
-
-function isMac(): boolean {
-  return typeof navigator !== "undefined" && navigator.platform.toLowerCase().includes("mac");
-}
-
-function displayBinding(binding: string): string[] {
-  if (!binding) return [tr("未设置")];
-  const isMacPlatform = isMac();
-  return binding.split("+").map((part) => {
-    if (part === "Mod") return isMacPlatform ? "⌘" : "Ctrl";
-    if (part === "Ctrl") return "Ctrl";
-    if (part === "Meta") return "⌘";
-    if (part === "Alt") return isMacPlatform ? "⌥" : "Alt";
-    if (part === "Shift") return isMacPlatform ? "⇧" : "Shift";
-    if (part.startsWith("Arrow")) return part.replace("Arrow", "");
-    return part;
-  });
-}
 
 function recordingError(reason: "modifier-required" | "unsupported-key" | "reserved", conflictLabel?: string): string {
   if (reason === "modifier-required") return tr("请同时按下至少一个修饰键。")
@@ -195,7 +178,7 @@ export function XuenessShortcutsPanel({
                     onClick={() => startRecording(command.id)}
                     data-testid={`xn-shortcut-record-${command.id}`}
                   >
-                    {displayBinding(binding).map((part, index) => <kbd key={`${part}-${index}`}>{part}</kbd>)}
+                    {(binding ? displayBindingParts(binding) : [tr("未设置")]).map((part, index) => <kbd key={`${part}-${index}`}>{part}</kbd>)}
                   </button>
                 )}
               </span>

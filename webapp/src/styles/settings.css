@@ -927,9 +927,3 @@
   .xn-settings-view__saving-mark,
   .xn-settings-view__loading-mark { animation-duration: 2s; }
 }
-
-.xn-tool-group { margin: 10px 0; border: 1px solid var(--border); border-radius: 12px; padding: 4px 14px; background: var(--bg-subtle); }
-.xn-tool-group > summary { cursor: pointer; padding: 8px 0; font-size: 12px; color: var(--fg-muted); }
-.xn-tool-group > summary > span { margin-left: 8px; font-variant-numeric: tabular-nums; }
-.xn-tool-group > summary > strong { margin-left: 12px; color: var(--error-fg); font-weight: 500; }
-.xn-tool-group .xn-timeline-stream { padding: 0; }

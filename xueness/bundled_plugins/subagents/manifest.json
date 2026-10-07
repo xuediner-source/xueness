@@ -58,6 +58,11 @@
       "nameEn": "Background delegation, parent progress and result collection"
     },
     {
+      "id": "subagents.context_restore",
+      "name": "压缩后未收集子任务的状态恢复",
+      "nameEn": "Uncollected subtask state restoration after compaction"
+    },
+    {
       "id": "subagents.settings",
       "name": "子代理资源与能力配置",
       "nameEn": "Subagent resources and capability settings"

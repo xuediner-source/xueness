@@ -1,0 +1,102 @@
+.xn-context-usage-ring {
+  position: relative;
+  display: inline-grid;
+  width: 20px;
+  height: 28px;
+  flex: 0 0 20px;
+  place-items: center;
+}
+
+.xn-context-usage-ring__indicator {
+  display: inline-grid;
+  place-items: center;
+  color: var(--fg-muted);
+  cursor: help;
+  outline: none;
+}
+
+.xn-context-usage-ring__graphic {
+  display: block;
+  width: 18px;
+  height: 18px;
+  overflow: visible;
+}
+
+.xn-context-usage-ring__track,
+.xn-context-usage-ring__value {
+  fill: none;
+  stroke-width: 3;
+}
+
+.xn-context-usage-ring__track {
+  stroke: var(--border-strong);
+  opacity: .72;
+}
+
+.xn-context-usage-ring__value {
+  stroke: var(--fg-muted);
+  stroke-linecap: round;
+  transition: stroke-dashoffset 180ms ease;
+}
+
+.xn-context-usage-ring__indicator[data-known="false"] .xn-context-usage-ring__track {
+  stroke-dasharray: 2 2;
+}
+
+.xn-context-usage-ring__tooltip {
+  box-sizing: border-box;
+  position: fixed;
+  z-index: var(--z-select);
+  right: -8px;
+  bottom: calc(100% + 7px);
+  display: grid;
+  width: min(260px, calc(100vw - 24px));
+  max-width: min(260px, calc(100vw - 24px));
+  gap: 4px;
+  padding: 8px 10px;
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+  background: var(--bg-popover, var(--bg-card));
+  color: var(--fg);
+  box-shadow: var(--shadow-md, 0 6px 20px rgb(0 0 0 / .18));
+  font-size: 11px;
+  line-height: 1.4;
+  white-space: normal;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(3px);
+  transition: opacity 120ms ease, transform 120ms ease;
+  visibility: hidden;
+}
+
+.xn-context-usage-ring__tooltip strong {
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.xn-context-usage-ring__tooltip small {
+  color: var(--fg-muted);
+  font-size: 10px;
+}
+
+.xn-context-usage-ring:hover .xn-context-usage-ring__tooltip,
+.xn-context-usage-ring__indicator:focus + .xn-context-usage-ring__tooltip,
+.xn-context-usage-ring__indicator:focus-visible + .xn-context-usage-ring__tooltip {
+  opacity: 1;
+  pointer-events: none;
+  transform: translateY(0);
+  visibility: visible;
+}
+
+.xn-context-usage-ring__indicator:focus-visible {
+  border-radius: 50%;
+  outline: 2px solid var(--border-focus);
+  outline-offset: 1px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .xn-context-usage-ring__value,
+  .xn-context-usage-ring__tooltip {
+    transition: none;
+  }
+}

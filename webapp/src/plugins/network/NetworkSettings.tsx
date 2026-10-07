@@ -5,6 +5,7 @@ import "./network.css";
 
 export type NetworkSettingsValue = {
   searchEndpoint: string;
+  imageSearchEndpoint: string;
   dohEndpoint: string;
   searchMode: "service" | "model";
   searchModelEndpoint: string;
@@ -37,6 +38,7 @@ export async function readNetworkSettings(enabled: boolean): Promise<NetworkSett
   if (!enabled) return null;
   const result = await get<{ settings: NetworkSettingsValue }>("/api/network/settings");
   if (!result.settings || typeof result.settings.searchEndpoint !== "string"
+      || typeof result.settings.imageSearchEndpoint !== "string"
       || typeof result.settings.dohEndpoint !== "string"
       || typeof result.settings.searchMode !== "string"
       || typeof result.settings.searchModelEndpoint !== "string"
@@ -50,6 +52,7 @@ export async function readNetworkSettings(enabled: boolean): Promise<NetworkSett
 
 export async function saveNetworkSettings(values: {
   searchEndpoint: string;
+  imageSearchEndpoint: string;
   dohEndpoint: string;
   searchMode: "service" | "model";
   searchModelEndpoint: string;
@@ -86,6 +89,7 @@ export function NetworkSettings({ enabled, disabled = false }: Props): React.JSX
   const tr = (zh: string, english: string) => en ? english : zh;
   const [settings, setSettings] = useState<NetworkSettingsValue | null>(null);
   const [searchEndpoint, setSearchEndpoint] = useState(DEFAULT_ENDPOINT);
+  const [imageSearchEndpoint, setImageSearchEndpoint] = useState("");
   const [dohEndpoint, setDohEndpoint] = useState("");
   const [searchMode, setSearchMode] = useState<"service" | "model">("service");
   const [searchModelEndpoint, setSearchModelEndpoint] = useState("");
@@ -115,6 +119,7 @@ export function NetworkSettings({ enabled, disabled = false }: Props): React.JSX
       if (disposed || !value) return;
       setSettings(value);
       setSearchEndpoint(value.searchEndpoint);
+      setImageSearchEndpoint(value.imageSearchEndpoint);
       setDohEndpoint(value.dohEndpoint);
       setSearchMode(value.searchMode);
       setSearchModelEndpoint(value.searchModelEndpoint);
@@ -133,7 +138,7 @@ export function NetworkSettings({ enabled, disabled = false }: Props): React.JSX
     setError("");
     setNotice("");
     try {
-      const updated = await saveNetworkSettings({ searchEndpoint, dohEndpoint, searchMode,
+      const updated = await saveNetworkSettings({ searchEndpoint, imageSearchEndpoint, dohEndpoint, searchMode,
         searchModelEndpoint, searchModel,
         ...(searchKey ? { searchKey } : {}), ...(searchModelKey ? { searchModelKey } : {}) });
       setSettings(updated);
@@ -228,24 +233,6 @@ export function NetworkSettings({ enabled, disabled = false }: Props): React.JSX
               <input type="url" required maxLength={2048} value={searchEndpoint} disabled={disabled || saving}
                 onChange={event => setSearchEndpoint(event.currentTarget.value)} autoComplete="url" />
             </label>
-            <label>
-              <span>{tr("搜索服务密钥", "Search service key")}</span>
-              <input type="password" maxLength={4096} value={searchKey} disabled={disabled || saving}
-                onChange={event => setSearchKey(event.currentTarget.value)} autoComplete="new-password"
-                placeholder={settings?.hasSavedSearchKey
-                  ? tr("已保存；留空以保留当前密钥", "Saved; leave blank to keep the current key")
-                  : settings?.hasEnvironmentSearchKey
-                    ? tr("由服务端环境变量提供", "Provided by the server environment")
-                    : tr("输入搜索服务提供的密钥", "Enter the key from the search service")} />
-            </label>
-            <div className="xn-network-settings__key-state" aria-live="polite">
-              {settings?.hasSearchKey
-                ? tr("密钥已配置，界面不会读取或回显密钥。", "A key is configured. The interface never reads or displays it.")
-                : tr("尚未配置密钥。", "No key is configured.")}
-              {settings?.hasSavedSearchKey && <button type="button" disabled={disabled || saving} onClick={() => void clearKey()}>
-                {tr("删除本地密钥", "Remove saved key")}
-              </button>}
-            </div>
           </> : <>
             <label>
               <span>{tr("OpenAI-compatible Chat Completions HTTPS 地址", "OpenAI-compatible Chat Completions HTTPS endpoint")}</span>
@@ -278,6 +265,33 @@ export function NetworkSettings({ enabled, disabled = false }: Props): React.JSX
               "Model-generated summaries and sources are not treated as verified web search. Xueness cannot confirm that the model accessed the internet. Only public HTTPS model endpoints are supported; local and private endpoints are not.",
             )}</p>
           </>}
+          <label>
+            <span>{tr("图片搜索服务 HTTPS 地址（可选）", "Image search service HTTPS endpoint (optional)")}</span>
+            <input type="url" maxLength={2048} value={imageSearchEndpoint} disabled={disabled || saving}
+              onChange={event => setImageSearchEndpoint(event.currentTarget.value)} autoComplete="url" />
+          </label>
+          <p className="xn-network-settings__help">{tr(
+            "留空时，Brave 兼容搜索模式使用官方图片搜索 API。选择独立搜索模型时，必须填写真实图片服务地址；文本模型不会生成图片搜索结果。此服务使用下方搜索服务密钥，图片和来源 URL 只做 HTTPS 与公网 DNS 检查，不会下载图片内容。",
+            "When blank, Brave-compatible search mode uses the official image-search API. Separate SearchModel mode requires a real image-service endpoint; text models do not generate image-search results. This service uses the search-service key below and checks HTTPS/public DNS only; it does not download image content.",
+          )}</p>
+          <label>
+            <span>{tr("搜索服务密钥", "Search service key")}</span>
+            <input type="password" maxLength={4096} value={searchKey} disabled={disabled || saving}
+              onChange={event => setSearchKey(event.currentTarget.value)} autoComplete="new-password"
+              placeholder={settings?.hasSavedSearchKey
+                ? tr("已保存；留空以保留当前密钥", "Saved; leave blank to keep the current key")
+                : settings?.hasEnvironmentSearchKey
+                  ? tr("由服务端环境变量提供", "Provided by the server environment")
+                  : tr("输入搜索服务提供的密钥", "Enter the key from the search service")} />
+          </label>
+          <div className="xn-network-settings__key-state" aria-live="polite">
+            {settings?.hasSearchKey
+              ? tr("密钥已配置，界面不会读取或回显密钥。", "A key is configured. The interface never reads or displays it.")
+              : tr("尚未配置密钥。", "No key is configured.")}
+            {settings?.hasSavedSearchKey && <button type="button" disabled={disabled || saving} onClick={() => void clearKey()}>
+              {tr("删除本地密钥", "Remove saved key")}
+            </button>}
+          </div>
           <label>
             <span>{tr("FakeIP 代理的可选 DoH 解析地址", "Optional DoH resolver for FakeIP proxies")}</span>
             <input type="url" maxLength={2048} value={dohEndpoint} disabled={disabled || saving}

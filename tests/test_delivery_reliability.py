@@ -126,6 +126,115 @@ class DeliveryReliabilityTests(unittest.TestCase):
         (self.root / 'empty.txt').write_bytes(b'')
         self.assertEqual('passed', check(self.root, self.gate, empty_task, '')['status'])
 
+    def test_delivery_checks_visible_content_in_authored_office_formats(self):
+        from xueness.bundled_plugins.office import tooling
+
+        authored = {
+            'docx': ('brief.docx', 'DOCX_VISIBLE_MARKER', {
+                'title': 'Brief title',
+                'paragraphs': [{'text': 'DOCX_VISIBLE_MARKER', 'style': 'Normal'}],
+            }),
+            'pptx': ('slides.pptx', 'PPTX_VISIBLE_MARKER', {
+                'slides': [{'title': 'PPTX_VISIBLE_MARKER'}],
+            }),
+            'xlsx': ('metrics.xlsx', 'XLSX_VISIBLE_MARKER', {
+                'sheets': [{'name': 'Data', 'rows': [['XLSX_VISIBLE_MARKER']]}],
+            }),
+            'pdf': ('notes.pdf', 'PDF_VISIBLE_MARKER', {
+                'paragraphs': [{'text': 'PDF_VISIBLE_MARKER', 'style': 'body'}],
+            }),
+        }
+        items = []
+        for fmt, (path, marker, document) in authored.items():
+            (self.root / path).write_bytes(tooling._build_document(fmt, document))
+            items.append({'id': fmt, 'label': fmt.upper(), 'path': path,
+                          'contains': [marker], 'min_links': 0})
+        session = self.store.new('Create Office deliverables', self.root)
+        plan(self.root, self.gate, {'items': items}, session, None)
+
+        result = check(self.root, self.gate, session, '', state_dir=self.store.directory)
+        self.assertEqual('passed', result['status'])
+        self.assertEqual({'docx', 'pptx', 'xlsx', 'pdf'},
+                         {item['id'] for item in result['items'] if item['passed']})
+
+    def test_delivery_does_not_treat_workbook_metadata_as_cell_content(self):
+        from xueness.bundled_plugins.office import tooling
+
+        marker = 'XLSX_METADATA_ONLY_MARKER'
+        document = {'title': marker, 'sheets': [{'name': 'Data', 'rows': []}]}
+        (self.root / 'metadata.xlsx').write_bytes(tooling._build_document('xlsx', document))
+        session = self.store.new('Create a workbook', self.root)
+        plan(self.root, self.gate, {'items': [{
+            'id': 'metadata', 'label': 'Workbook content', 'path': 'metadata.xlsx',
+            'contains': [marker],
+        }]}, session, None)
+
+        result = check(self.root, self.gate, session, '', state_dir=self.store.directory)
+        self.assertEqual('failed', result['status'])
+        self.assertIn('缺少内容：' + marker, result['items'][0]['missing'])
+
+    def test_delivery_office_checks_fail_closed_for_missing_and_truncated_content(self):
+        from docx import Document
+        from xueness.bundled_plugins.office import tooling
+
+        missing_marker = 'REQUESTED_VISIBLE_MARKER'
+        (self.root / 'missing.docx').write_bytes(tooling._build_document('docx', {
+            'paragraphs': [{'text': 'Different visible content'}],
+        }))
+        large = Document()
+        large.add_paragraph('TRUNCATION_PREFIX ' + ('x' * 9_000))
+        large.save(self.root / 'truncated.docx')
+        session = self.store.new('Create Word deliverables', self.root)
+        plan(self.root, self.gate, {'items': [
+            {'id': 'missing', 'label': 'Missing content', 'path': 'missing.docx',
+             'contains': [missing_marker]},
+            {'id': 'truncated', 'label': 'Truncated content', 'path': 'truncated.docx',
+             'contains': ['TRUNCATION_PREFIX']},
+        ]}, session, None)
+
+        result = check(self.root, self.gate, session, '', state_dir=self.store.directory)
+        self.assertEqual('failed', result['status'])
+        self.assertIn('缺少内容：' + missing_marker, result['items'][0]['missing'])
+        self.assertFalse(result['items'][1]['passed'])
+
+    def test_delivery_skips_office_parser_when_office_plugin_is_disabled(self):
+        from xueness.bundled_plugins.office import tooling
+
+        marker = 'DISABLED_OFFICE_MARKER'
+        (self.root / 'disabled.docx').write_bytes(tooling._build_document('docx', {
+            'paragraphs': [{'text': marker}],
+        }))
+        session = self.store.new('Create a Word file', self.root)
+        plan(self.root, self.gate, {'items': [{
+            'id': 'disabled', 'label': 'Disabled Office file', 'path': 'disabled.docx',
+            'contains': [marker],
+        }]}, session, None)
+        set_enabled(self.store.directory, 'office', False)
+
+        with patch.object(tooling, 'delivery_content_text', side_effect=AssertionError('Office parser called')):
+            result = check(self.root, self.gate, session, '', state_dir=self.store.directory)
+        self.assertEqual('failed', result['status'])
+        self.assertTrue(any('插件已禁用' in text for text in result['items'][0]['missing']))
+
+    def test_delivery_rejects_office_symlink_that_escapes_workspace(self):
+        from xueness.bundled_plugins.office import tooling
+
+        outside = self.root.parent / (self.root.name + '-outside.docx')
+        outside.write_bytes(tooling._build_document('docx', {
+            'paragraphs': [{'text': 'PRIVATE OFFICE CONTENT'}],
+        }))
+        self.addCleanup(lambda: outside.unlink(missing_ok=True))
+        make_symlink(self.root / 'linked.docx', outside)
+        session = self.store.new('Create a Word file', self.root)
+        plan(self.root, self.gate, {'items': [{
+            'id': 'linked-office', 'label': 'Linked Office file', 'path': 'linked.docx',
+            'contains': ['REQUIRED OFFICE CONTENT'],
+        }]}, session, None)
+
+        result = check(self.root, self.gate, session, '', state_dir=self.store.directory)
+        self.assertEqual('failed', result['status'])
+        self.assertNotIn('PRIVATE OFFICE CONTENT', json.dumps(result))
+
     def test_delivery_check_rejects_symlinks_that_escape_workspace(self):
         outside = self.root.parent / (self.root.name + '-outside.txt')
         outside.write_text('private content', encoding='utf-8')

@@ -26,7 +26,9 @@ def main():
                '--name', 'xueness-backend', '--python-option', 'X utf8', '--distpath', str(work/'dist'),
                '--workpath', str(work/'work'), '--specpath', str(work),
                '--paths', str(ROOT), '--collect-submodules', 'xueness', '--collect-data', 'xueness',
-               '--collect-all', 'tzdata']
+               '--collect-all', 'tzdata', '--collect-all', 'docx',
+               '--collect-all', 'openpyxl', '--collect-all', 'pptx',
+               '--collect-all', 'pypdf', '--collect-all', 'reportlab']
     if os.name == 'nt':
         command.extend(['--collect-all', 'winpty'])
     command.append(str(DESKTOP/'entrypoint.py'))
@@ -43,7 +45,9 @@ def main():
         raise SystemExit('Python license text is required for runtime distribution.')
     shutil.copy2(license_source, target/'PYTHON-LICENSE.txt')
     import importlib.metadata
-    for package in ('pyinstaller', 'pyinstaller-hooks-contrib', 'pywinpty', 'tzdata'):
+    for package in ('pyinstaller', 'pyinstaller-hooks-contrib', 'pywinpty', 'tzdata',
+                    'python-docx', 'openpyxl', 'python-pptx', 'pypdf', 'reportlab',
+                    'lxml', 'pillow', 'et-xmlfile'):
         try:
             distribution = importlib.metadata.distribution(package)
         except importlib.metadata.PackageNotFoundError:

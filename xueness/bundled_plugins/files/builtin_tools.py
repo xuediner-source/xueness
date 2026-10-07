@@ -356,8 +356,10 @@ REGISTRY: tuple[BuiltinTool, ...] = (
                 concurrency_safe=True),
     BuiltinTool("write", "Write a UTF-8 file inside the workspace (approval required)",
                 {"path": {"type": "string"}, "content": {"type": "string"}}, ("path", "content"),
-                "write", True, _write),
+                "write", True, _write,
+                approval_subject=lambda args: args.get("path", "")),
     BuiltinTool("edit", "Replace exactly one occurrence in a workspace file (approval required)",
                 {"path": {"type": "string"}, "old": {"type": "string"}, "new": {"type": "string"}},
-                ("path", "old", "new"), "edit", True, _edit),
+                ("path", "old", "new"), "edit", True, _edit,
+                approval_subject=lambda args: args.get("path", "")),
 )

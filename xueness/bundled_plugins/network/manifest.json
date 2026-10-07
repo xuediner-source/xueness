@@ -8,7 +8,8 @@
   "dependencies": [],
   "tools": [
     "web_fetch",
-    "web_search"
+    "web_search",
+    "image_search"
   ],
   "commands": [],
   "panels": [],
@@ -22,7 +23,8 @@
     "search_model",
     "settings_api",
     "tooling",
-    "transport"
+    "transport",
+    "composer_capabilities"
   ],
   "features": [
     {
@@ -54,6 +56,11 @@
       "id": "network.fakeip_doh",
       "name": "FakeIP 环境的显式 DoH 解析",
       "nameEn": "Explicit DoH resolution in FakeIP environments"
+    },
+    {
+      "id": "network.image_search",
+      "name": "有界公网图片搜索与来源链接",
+      "nameEn": "Bounded public image search and source links"
     }
   ],
   "frontendModules": [

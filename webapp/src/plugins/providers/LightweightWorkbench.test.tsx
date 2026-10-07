@@ -91,7 +91,7 @@ const provider = (overrides: Partial<ProviderSummary> = {}): ProviderSummary => 
 
 // -- 轻量档极简工具条 ---------------------------------------------------------
 
-test('轻量档输入控制区只保留模型名与上下文用量，隐藏模式、浏览器、后台任务与思考强度', () => {
+test('轻量档输入控制区显示权限、模型、思考强度与上下文用量，隐藏浏览器和后台任务', () => {
   const html = renderToStaticMarkup(<LightweightComposerControls
     {...baseProps}
     runtimeBudget={{ profile: 'lightweight', estimatedInputTokens: 2048, inputBudgetTokens: 6144 }}
@@ -100,20 +100,28 @@ test('轻量档输入控制区只保留模型名与上下文用量，隐藏模�
   assert.match(html, /aria-label="选择模型"[^>]*aria-haspopup="menu"/);
   assert.match(html, /本地小模型/);
   assert.match(html, /aria-label="上下文用量"/);
-  assert.match(html, /33%/);
-  assert.match(html, /xn-composer-toolbar__usage--static/);
+  assert.match(html, /aria-valuenow="33"/);
+  assert.match(html, /data-usage-source="estimated"/);
+  assert.match(html, /data-capacity-source="input-budget"/);
+  assert.match(html, /aria-label="执行权限"/);
+  assert.match(html, /<option value="yolo">完全访问<\/option>/);
   assert.doesNotMatch(html, /aria-label="模式"/);
-  assert.doesNotMatch(html, /变更前确认|自动编辑|完全访问/);
+  assert.match(html, /变更前确认/);
+  assert.match(html, /自动编辑/);
+  assert.match(html, /完全访问/);
   assert.doesNotMatch(html, /启用浏览器|浏览器已启用/);
   assert.doesNotMatch(html, /后台任务/);
-  assert.doesNotMatch(html, /aria-label="思考强度"/);
+  assert.match(html, /aria-label="思考强度"/);
+  assert.match(html, /data-testid="reasoning-effort-trigger"/);
   assert.doesNotMatch(html, /xn-composer-toolbar__plan-marker/);
 });
 
-test('轻量档没有运行预算时不编造上下文用量', () => {
+test('轻量档没有运行预算时不编造上下文用量，并保留权限选择器', () => {
   const html = renderToStaticMarkup(<LightweightComposerControls {...baseProps} />);
-  assert.doesNotMatch(html, /aria-label="上下文用量"/);
+  assert.match(html, /data-known="false"/);
+  assert.doesNotMatch(html, /aria-valuenow=/);
   assert.match(html, /aria-label="选择模型"/);
+  assert.match(html, /aria-label="执行权限"/);
   assert.equal(lightweightContextUsage(null), undefined);
   assert.equal(lightweightContextUsage({ estimatedInputTokens: 0, inputBudgetTokens: 6144 }), undefined);
   assert.deepEqual(lightweightContextUsage({ profile: 'lightweight', estimatedInputTokens: 512, inputBudgetTokens: 7168 }), { used: 512, max: 7168 });
@@ -149,13 +157,13 @@ test('标准档工具条保持完整控制区，不受轻量极简展示影响',
   assert.match(html, /aria-label="模式"/);
   assert.match(html, /启用浏览器/);
   assert.match(html, /后台任务/);
-  // 用量仍然是有 onOpenUsage 的按钮读数。
-  const usage = html.match(/<button[^>]*aria-label="上下文用量"[^>]*>/)?.[0] ?? '';
+  // 圆环可键盘聚焦，标注输入预算估算，不能误标为服务报告。
+  const usage = html.match(/<span[^>]*role="progressbar"[^>]*>/)?.[0] ?? '';
   assert.notEqual(usage, '');
   assert.doesNotMatch(html, /xn-composer-toolbar__usage--static/);
 });
 
-test('标准档 Composer 保留上下文加号与键盘提示；轻量档 Composer 只留发送/停止与控制区', () => {
+test('标准档 Composer 保留上下文加号与键盘提示；轻量档 Composer 保留能力入口与紧凑控制区', () => {
   const standard = renderToStaticMarkup(<Composer onSend={() => undefined} defaultValue="hi" />);
   assert.match(standard, /data-testid="composer-plus"/);
   assert.match(standard, /Enter 发送 · Shift\+Enter 换行/);
@@ -167,7 +175,7 @@ test('标准档 Composer 保留上下文加号与键盘提示；轻量档 Compos
     minimal
     controls={<LightweightComposerControls {...baseProps} />}
   />);
-  assert.doesNotMatch(minimal, /data-testid="composer-plus"/);
+  assert.match(minimal, /data-testid="composer-plus"/);
   assert.doesNotMatch(minimal, /Enter 发送 · Shift\+Enter 换行/);
   assert.match(minimal, /aria-label="选择模型"/);
   assert.match(minimal, /xn-composer-toolbar/);
@@ -731,7 +739,7 @@ test('lightweightComposerHint: 键盘提示跟随发送快捷键设置，并覆�
   assert.doesNotMatch(enterHint, /排队追加/);
 
   const modHint = lightweightComposerHint('mod-enter', false, false);
-  assert.match(modHint, /^⌘\/Ctrl\+Enter 发送/);
+  assert.match(modHint, /^按 (⌘Enter|Ctrl\+Enter) 发送/);
   assert.doesNotMatch(modHint, /^Enter 发送/);
 
   assert.match(lightweightComposerHint('enter', true, true), /排队追加/);
@@ -751,7 +759,7 @@ test('LightweightComposer: 占位符不宣称固定发送键，键位说明随�
   const hintNode = new RegExp(`id="${describedBy}"[^>]*>([^<]*)<`).exec(enterHtml)?.[1] ?? '';
   assert.match(hintNode, /Enter 发送/);
   const modHintNode = new RegExp(`id="${(/aria-describedby="([^"]+)"/.exec(modHtml))?.[1]}"[^>]*>([^<]*)<`).exec(modHtml)?.[1] ?? '';
-  assert.match(modHintNode, /^⌘\/Ctrl\+Enter 发送/);
+  assert.match(modHintNode, /^按 (⌘Enter|Ctrl\+Enter) 发送/);
 });
 
 // -- 轻量/标准一致性：状态读数对等 ---------------------------------------------
@@ -871,7 +879,7 @@ test('LightweightTimeline: 空态与载入态都是同一个地标，流式指�
   const loadingHtml = renderToStaticMarkup(<LightweightTimeline rows={[]} streamingPending />);
   assert.match(loadingHtml, /role="log"/);
   assert.match(loadingHtml, /aria-busy="true"/);
-  assert.match(loadingHtml, /正在生成回复…/);
+  assert.match(loadingHtml, /正在处理请求…/);
 
   // 有历史行时：三个点纯装饰（aria-hidden），状态文字才是唯一的 role="status"
   const rows: TimelineRow[] = [{ kind: 'user', seq: 1, turnId: 't1', text: '你好' }];
@@ -885,6 +893,48 @@ test('LightweightTimeline: 空态与载入态都是同一个地标，流式指�
     1,
     '同一屏只保留一个流式状态实时区，避免重复朗读',
   );
+});
+
+test('LightweightTimeline pending status follows reported request phases and unknown phases stay generic', () => {
+  const phases = [
+    ['waiting_model', '等待模型响应…'],
+    ['thinking', '思考中…'],
+    ['generating', '正在生成回复…'],
+    ['tools', '正在执行工具…'],
+    ['repairing', '正在校验结果…'],
+  ] as const;
+  for (const [activityPhase, label] of phases) {
+    const empty = renderToStaticMarkup(<LightweightTimeline rows={[]} streamingPending activityPhase={activityPhase} />);
+    assert.match(empty, new RegExp(label));
+    assert.equal(empty.match(/role="status"/g)?.length, 1, `${activityPhase} empty state exposes one live status`);
+
+    const firstDeltaPending = renderToStaticMarkup(<LightweightTimeline rows={[{
+      kind: 'assistant', seq: 2, turnId: 'phase-turn', text: '', streaming: true,
+    }]} streamingPending activityPhase={activityPhase} />);
+    assert.match(firstDeltaPending, new RegExp(label));
+    assert.equal(firstDeltaPending.match(new RegExp(label, 'g'))?.length, 1, `${activityPhase} assistant row has one phase label`);
+  }
+
+  for (const activityPhase of [undefined, 'future_provider_phase']) {
+    const html = renderToStaticMarkup(<LightweightTimeline rows={[]} streamingPending activityPhase={activityPhase} />);
+    assert.match(html, /正在处理请求…/);
+    assert.doesNotMatch(html, /future_provider_phase|正在生成回复…/);
+  }
+});
+
+test('current generation keeps settled reasoning history static and announces only the pending turn', () => {
+  const html = renderToStaticMarkup(<LightweightTimeline rows={[
+    { kind: 'user', seq: 1, turnId: 'prior-turn', text: 'Question' },
+    {
+      kind: 'assistant', seq: 2, turnId: 'prior-turn', text: 'Prior answer', reasoning: 'Prior reasoning',
+      streaming: false, startedAt: 1000, endedAt: 2500,
+    },
+  ]} streamingPending activityPhase="generating" />);
+  assert.match(html, /<summary class="xn-lightweight-reasoning__summary"[^>]*>思考过程<\/summary>/);
+  assert.doesNotMatch(html, /思考中…/);
+  assert.match(html, /data-testid="lightweight-timeline-streaming"/);
+  assert.equal(html.match(/正在生成回复…/g)?.length, 1, 'the prior assistant row is not relabeled as a second active reply');
+  assert.match(html, /aria-busy="true"/);
 });
 
 test('LightweightComposer: 输入区是带名称的地标，输入框有稳定可访问名与键盘说明', () => {
@@ -1015,7 +1065,7 @@ test('轻量档新增的状态、地标与键位文案在英文档不回落中�
     }
     // 翻译后的键位说明与地标名依然完整
     assert.match(composerHtml, /aria-label="Message input"/);
-    assert.match(composerHtml, /⌘\/Ctrl\+Enter to send/);
+    assert.match(composerHtml, /Press (⌘Enter|Ctrl\+Enter) to send/);
     assert.match(composerHtml, /Esc to interrupt/);
     assert.match(statusHtml, /Stopping · Queue 3/);
     assert.match(timelineHtml, /<span class="xn-lightweight-msg__author">My message<\/span>/);

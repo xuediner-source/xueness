@@ -65,7 +65,7 @@ _PROJECT_DIR = Path(__file__).resolve().parents[3]
 _TURN_KEYS = {
     "sessionId", "text", "modelSelection", "mode", "permissionMode", "steps",
     "maxChars", "maxTokens", "maxWallSeconds", "runtimeProfile", "browser",
-    "disallowTools", "continueQueue",
+    "disallowTools", "continueQueue", "acknowledgeYolo",
 }
 #: Checked here only as a parameter vocabulary so ``turn/start`` answers
 #: -32602 immediately; the sessions run route stays the authority that also
@@ -366,10 +366,18 @@ class AppServer:
         if permission_mode is not None and permission_mode not in _PERMISSION_MODES:
             raise _Refused("permissionMode must be one of: " + ", ".join(_PERMISSION_MODES),
                            INVALID_PARAMS, {"permissionMode": permission_mode})
+        acknowledge_yolo = params.get("acknowledgeYolo")
+        if "acknowledgeYolo" in params and type(acknowledge_yolo) is not bool:
+            raise _Refused("acknowledgeYolo must be a boolean", INVALID_PARAMS,
+                           {"acknowledgeYolo": acknowledge_yolo})
+        if acknowledge_yolo is True and permission_mode != "yolo":
+            raise _Refused("acknowledgeYolo requires permissionMode=yolo", INVALID_PARAMS,
+                           {"acknowledgeYolo": acknowledge_yolo})
         sid = _sid(params)
         selection = _selection_param(params)
         body = {"model_selection": selection} if selection else {}
         for source, target in (("mode", "mode"), ("permissionMode", "permission_mode"),
+                               ("acknowledgeYolo", "acknowledge_yolo"),
                                ("steps", "steps"), ("maxChars", "max_chars"),
                                ("maxTokens", "max_tokens"),
                                ("maxWallSeconds", "max_wall_seconds"),

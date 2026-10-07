@@ -25,7 +25,8 @@
   "modules": [
     "tooling",
     "delivery",
-    "session_goal"
+    "session_goal",
+    "work_policy"
   ],
   "features": [
     {
@@ -47,10 +48,21 @@
       "id": "planning.session_goal",
       "name": "会话目标设置、每轮注入与完成核验",
       "nameEn": "Session goals with per-request reminders and completion checks"
+    },
+    {
+      "id": "planning.goal_editor",
+      "name": "添加菜单会话目标创建与显式替换",
+      "nameEn": "Add-menu goal creation and explicit replacement"
+    },
+    {
+      "id": "planning.work_policy",
+      "name": "任务拆解、持续执行与交付自查规则",
+      "nameEn": "Task decomposition, persistent execution and delivery self-checks"
     }
   ],
   "frontendModules": [
     "plugins/planning/CompletionChecks.tsx",
-    "plugins/planning/SessionGoal.tsx#SessionGoal"
+    "plugins/planning/SessionGoal.tsx#SessionGoal",
+    "plugins/planning/GoalEditorDialog.tsx"
   ]
 }

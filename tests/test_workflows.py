@@ -1,5 +1,6 @@
 import json
 import os
+import subprocess
 import sys
 import tempfile
 import threading
@@ -47,6 +48,63 @@ class WorkflowTests(unittest.TestCase):
         self.assertEqual(r['status'], 'completed')
         self.assertEqual((self.root/'count').read_text(), 'x')
         self.assertEqual(r['nodes']['second']['attempts'], 2)
+
+    def test_detached_cli_workflow_survives_its_short_lived_launcher(self):
+        # CLI launchers exit as soon as the worker is queued. The detached
+        # worker remains the durable owner and must not mistake that expected
+        # parent exit for a desktop-host shutdown.
+        command = "import time; time.sleep(5.6); open('detached-result.txt','w').write('done')"
+        launcher = r'''import sys, time
+from pathlib import Path
+from xueness.workflows import WorkflowStore
+store = WorkflowStore(sys.argv[1])
+root = Path(sys.argv[2])
+record = store.create({'nodes': [{'id': 'slow', 'argv': [sys.executable, '-c', sys.argv[3]], 'timeout': 15}]}, root)
+store.launch(record['id'], approved=True)
+print(record['id'], flush=True)
+time.sleep(.8)
+'''
+        env = {key: value for key, value in os.environ.items()
+               if key not in ('XUENESS_DESKTOP_HOST', 'XUENESS_DESKTOP_OWNER_PID')}
+        launched = subprocess.run(
+            [sys.executable, '-c', launcher, str(self.store.state), str(self.root), command],
+            capture_output=True, text=True, env=env, timeout=10, check=True)
+        wid = launched.stdout.strip()
+        self.assertRegex(wid, r'^[a-f0-9]{32}$')
+        finished = self.wait(wid, seconds=10)
+        self.assertEqual(finished['status'], 'completed')
+        self.assertEqual(finished['nodes']['slow']['status'], 'completed')
+        self.assertEqual((self.root/'detached-result.txt').read_text(), 'done')
+
+    @unittest.skipIf(os.name == 'nt', 'POSIX desktop owner detection uses parent PID identity')
+    def test_desktop_workflow_parent_loss_cooperatively_stops_command(self):
+        launcher = r'''import os, sys, time
+from pathlib import Path
+from xueness.workflows import WorkflowStore
+os.environ['XUENESS_DESKTOP_OWNER_PID'] = str(os.getpid())
+store = WorkflowStore(sys.argv[1])
+root = Path(sys.argv[2])
+record = store.create({'nodes': [{'id': 'slow', 'argv': [sys.executable, '-c', 'import time; time.sleep(30)'], 'timeout': 40}]}, root)
+store.launch(record['id'], approved=True)
+print(record['id'], flush=True)
+deadline = time.monotonic() + 10
+while time.monotonic() < deadline and not store.load(record['id'])['nodes']['slow'].get('pid'):
+    time.sleep(.02)
+'''
+        env = {**os.environ, 'XUENESS_DESKTOP_HOST': '1'}
+        env.pop('XUENESS_DESKTOP_OWNER_PID', None)
+        # desktop.host sets this to the backend process; this wrapper models
+        # that owner while keeping the backend state entirely temporary.
+        launched = subprocess.run(
+            [sys.executable, '-c', launcher, str(self.store.state), str(self.root)],
+            capture_output=True, text=True, env=env, timeout=15, check=True)
+        wid = launched.stdout.strip()
+        active = self.wait(wid, lambda row: row['status'] == 'cancelled', seconds=5)
+        self.assertEqual(active['nodes']['slow']['status'], 'cancelled')
+        child_pid = active['nodes']['slow'].get('pid')
+        self.assertIsInstance(child_pid, int)
+        with self.assertRaises(ProcessLookupError):
+            os.kill(child_pid, 0)
 
     def test_cancel_terminates_command_and_keeps_bounded_log(self):
         r = self.store.create({'nodes': [self.node('slow', 'import time; print("started", flush=True); time.sleep(30)')]}, self.root)

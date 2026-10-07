@@ -52,9 +52,6 @@ body { -webkit-font-smoothing:auto; }
 .xn-shell-layout .xn-composer--with-top-content:hover::before,.xn-shell-layout .xn-composer--with-top-content:focus-within::before { border-color:var(--border-strong); }
 .xn-shell-layout .xn-composer--with-top-content .xn-composer__input { position:relative; margin-top:13px; }
 .xn-shell-layout .xn-composer--with-top-content .xn-composer__row { position:relative; margin-bottom:13px; }
-.xn-reasoning { margin:0 0 16px; color:var(--fg-muted); font-size:14px; line-height:1.6; }
-.xn-reasoning summary { display:list-item; width:fit-content; cursor:pointer; }
-.xn-reasoning>div { padding:12px 0; white-space:pre-wrap; overflow-wrap:anywhere; }
 .xn-settings-view__topbar { position:relative; }
 .xn-settings-help { position:absolute; right:8px; top:8px; z-index:25; }
 .xn-settings-help>summary { display:flex; align-items:center; justify-content:center; list-style:none; width:32px; height:32px; border-radius:8px; cursor:pointer; color:var(--fg); }

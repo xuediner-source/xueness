@@ -1,5 +1,19 @@
 # Xueness 插件架构与功能归属
 
+2026-10-07 工作规则补强：完整目录现为 **28 个插件、163 项登记功能**。`planning.work_policy` 在现有规划插件中提供标准／轻量两种任务执行规则，下一次请求遵守实际插件开关，参与原有输入预算。没有新增工具、模型调用、内核入口或权限；实际交付继续由宿主独立检查。用法见[Agent 工作规则](agent-work-policy-2026-10-07.md)。下方统计保留各阶段历史状态。
+
+2026-10-07 压缩后的上下文连续性补强：完整目录现为 **28 个插件、162 项登记功能**。`subagents.context_restore` 在现有 `completion_instructions` 挂接点提供本轮未收集子任务的 ID 和最后记录状态（最多 8 项）；`skills.context_restore` 经现有工具事件观察器记住成功读取的技能索引（最多 6 项），按需重新读取提示最多 3000 字符。没有新增内核逻辑、动态加载入口或共享例外；关闭插件或依赖阻塞后不再贡献提示。子任务正文不复制到宿主规则，索引不是授权或完成证据。用法与验证见[上下文连续性说明](context-continuity-2026-10-07.md)。下方数量保留各阶段历史状态。
+
+2026-10-07 ZCode 实机／源码会话对照：发送时清空及按接受状态恢复草稿属于 `sessions.composer`；journal 顺序、纯思考投影、单行工具和工作过程折叠属于 `sessions.streaming`，新增 `conversationJournalProjection.ts` 已登记。请求明细折叠扩展 providers，紧凑交付检查扩展 planning；容器只协调 ACK、状态及挂载，未新增共享例外。仍为 **28 个插件、160 项功能**。实测、源码依据与边界见[本轮会话核对](conversation-zcode-review-2026-10-07.md)。
+
+2026-10-07 思考强度入口补齐：`sessions.runtime_model_switch` 提供标准/轻量模式共用的按钮与渐变拖动弹层，未知或单档位模型也可找到入口；拖动取消、焦点回退及模型切换清理均在 sessions 组件内。providers 的既有连接/默认选择功能新增精确方舟端点和模型组合的档位识别，公开目录、准备校验、默认选择及请求校验复用同一规则，显式声明仍优先。沿用既有模块和功能 ID，保持 **28 个插件、160 项功能**，用法与参考见[会话能力说明](xueness-composer-capabilities.md)。
+
+2026-10-07 Mac/Windows 桌面统一：平台安全留白、原生窗口主题同步、双语宿主菜单、Windows 托盘/macOS Dock 快捷任务复用分别扩展既有 `desktop.window_chrome`、`desktop.background`、`desktop.tray_navigation`，原生词典纳入 desktopModules；实际安装方式提示属于 `updates.desktop`，Shell 默认选择修正属于 `terminal.preferences`。沿用既有插件和稳定功能 ID，仍为 **28 个插件、160 项功能**。统一范围与原生验收限制见[桌面统一记录](desktop-parity-2026-10-07.md)。
+
+2026-10-07 添加菜单、上下文圆环与完全访问确认：当前为 **28 个插件、160 项登记功能**。完整清单与全量验证见[核查记录](composer-plugin-audit-2026-10-07.md)，用法与边界见[使用说明](xueness-composer-capabilities.md)。下方按日期保留的数量为对应阶段状态。
+
+2026-10-07 隔夜优化复审：会话历史预览及阅读位置记忆沿用 `sessions.history`/`sessions.timeline_follow`；推理档位滑块沿用 `sessions.runtime_model_switch`；工具执行状态、失败详情复制及输出中断提示沿用 `sessions.streaming`。实现和辅助模块全部登记在 sessions，功能目录中的既有条目补齐具体名称，仍为 **28 个插件、147 项功能**。纯平台快捷键标签格式化属于基础 UI 的共享显示例外，理由见 CONTRIBUTING；配置、键盘监听与执行仍属于原插件。会话基础布局由 sessions 提供，不依赖子代理侧栏是否打开。复审证据及未接线的时间格式化辅助函数说明见[本轮记录](overnight-review-2026-10-07.md)。
+
 2026-10-06 自动化美化与首次权限引导：当前完整目录为 **28 个插件、147 项登记功能**。新增 `onboarding.desktop_permissions` 与 `desktop.permissions`；界面、进度保存和原生权限查询分别登记在已有插件内。见[本轮说明](desktop-onboarding-2026-10-06.md)。
 
 2026-10-06 交接修复与后续功能时为 **28 个插件、145 项登记功能**。新增 `sessions.answer_question_experimental`、`sessions.question_answer_ui` 和 `tools.call_budget_experimental`，全部归属可信插件，实验开关默认关闭。复核问题及新接口见[本轮说明](handoff-followup-2026-10-06.md)。下方按日期保留的记录和数量为当时状态。
@@ -190,7 +204,7 @@ providers 的 CLI parser/handler 已迁入 `xueness/bundled_plugins/providers/op
 
 | 插件 | 已实现的用户能力 |
 |---|---|
-| sessions | 会话创建与 Agent 对话；选择、搜索、重命名、固定与归档；历史导航与跨会话上下文检索；闭合历史轮次分叉与来源链接；从轮次检查点分叉并记录来源快照；脱敏导出、导入与恢复；文本、思考与工具调用增量流；附件、上下文引用与会话输入；计划权限模式与会话计划草稿；多行 CLI、全屏 TUI 与中断恢复；运行中切换模型与推理档位（/model、/effort）；运行期间排队发送后续消息；命令面板搜索与键盘导航；时间线跟随与回到底部；空会话起始页快捷动作与最近会话；手动压缩上下文（/compact 与说明）；依赖感知的工具并发调度；模型选择分档、目录标签与详情卡；会话事件的增量游标读取（实验，默认关闭） |
+| sessions | 会话创建与 Agent 对话；选择、搜索、重命名、固定与归档；历史导航与跨会话上下文检索；闭合历史轮次分叉与来源链接；从轮次检查点分叉并记录来源快照；脱敏导出、导入与恢复；文本、思考与工具调用增量流；附件、上下文引用与会话输入；计划权限模式与会话计划草稿；多行 CLI、全屏 TUI 与中断恢复；运行中切换模型与推理档位（/model、/effort）；运行期间排队发送后续消息；命令面板搜索与键盘导航；时间线跟随与回到底部；空会话起始页快捷动作与最近会话；手动压缩上下文（/compact 与说明）；依赖感知的工具并发调度；统一模型选择与详情卡；会话事件的增量游标读取（实验，默认关闭） |
 | files | 文件列表、搜索与分页读取；批准后的文件写入与编辑；目录浏览、新建与本机目录选择；文本、图像、PDF 与媒体预览；会话文件改动视图；工作区 AGENTS 指导文件加载 |
 | shell | 批准后的 argv 命令执行 |
 | planning | 待办计划读取与更新；提问、用户回答与继续；持久交付清单与内容完成检查；会话目标设置、每轮注入与完成核验 |
@@ -214,9 +228,9 @@ providers 的 CLI parser/handler 已迁入 `xueness/bundled_plugins/providers/op
 | browser | 受审批约束的页面导航与检查；页面无障碍树快照（role、name、可交互元素 ref、层级缩进，超限标注截断）；精确点击、输入与内存截图（冗余输出动作裁剪）；浏览器控制配置与生命周期清理；桌面 Chrome 资料选择、确认导入与持久浏览器环境检测 |
 | remote | 命名 SSH 主机连接配置；明确批准的远程 argv 执行；stdio JSON-RPC app-server 入口 |
 | bots | Telegram 白名单收件箱；明确批准的消息回复 |
-| onboarding | 模型与工作区初次配置向导；隐藏密钥输入与配置保存；首次启动三步系统权限引导及进度保存 |
+| onboarding | 模型与工作区初次配置向导；隐藏密钥输入与配置保存；首次启动当前平台支持的系统权限引导及进度保存 |
 | updates | 源仓库版本与更新检查；明确批准的干净仓库快进更新；桌面客户端检查、下载、取消与安装控制 |
-| desktop | Windows/macOS 桌面宿主集成；原生目录选择与平台状态；集成标题栏与窗口控制；单实例、启动恢复与后台进程清理；Windows 系统托盘与关闭窗口后后台运行；托盘会话分组、快速打开、新建与反馈入口；系统权限真实状态与固定原生授权入口 |
+| desktop | Windows/macOS 桌面宿主集成；原生目录选择与平台状态；集成标题栏、窗口控制、双语菜单及主题同步；单实例、启动恢复与后台进程清理；Windows 托盘/macOS Dock 后台运行与恢复；共用会话分组、快速打开、新建与反馈入口；系统权限真实状态与固定原生授权入口 |
 | tools | 副作用工具调用的干跑预览（写/编辑给出目标路径与差异摘要，执行给出 argv 与工作目录；实验，默认关闭） |
 
 计划权限模式 `sessions.plan_mode` 在 build/edit/yolo 之外补上第四种模式。四种取值的单一来源是 `sessions/plan_mode.PERMISSION_MODES`（前端为 `plugins/sessions/permissionModes.ts`）；WebGate、专家工作流、app-server 与 CLI 都引用它。`plan` 下读取、搜索类工具照常，写/编辑/执行/网页工具一律拒绝，唯一例外是本会话专属的计划草稿 `<状态目录>/plan-drafts/<会话 id>.md`（在状态目录内按会话划分，不在工作区内）。草稿路径布局与中英双语拒绝文案都由 `sessions/plan_mode.py` 决定，WebGate 与 CLI 使用的内核 Gate 只按该插件给出的凭据精确匹配放行一次写入，files 的写/编辑解析也先问 Gate，因此工作区 jail 未被放宽、没有新增内建工具。拒绝结果带 `plan_mode_denied`，不会伪装成可批准的等待项；sessions 禁用或依赖不可用时 `plan` 值被拒绝，从 plan 切回 build/edit/yolo 沿用既有 `permission_mode_history` 审计。内核 `mode=plan` 仍是更硬的天花，连草稿一并拒绝，也压过 `permission_mode=yolo`。CLI `run`/`chat` 增加 `--permission-mode build|edit|yolo|plan`：plan 映射为只读加草稿，yolo 仍不自动放行远程 SSH，旧的 `--allow-*` 与 `--mode` 保持兼容；省略该参数时只继承已保存的 plan，不把已保存的 edit/yolo 静默套到 CLI 上。聊天 `/mode plan` 继续设置内核天花。完整格子见 `docs/xueness-permission-modes.md`。
@@ -573,7 +587,7 @@ browser 插件新增 `browser.snapshot`，完整目录现为 **27 个插件、13
 
 sessions 登记 `sessions.model_picker`，providers 登记 `providers.custom_empty`。完整目录现为 **27 个插件、135 项登记功能**。两者都只组织前端已经拿到的模型字段，不新增后端请求，也不调用真实服务商。
 
-模型弹层仍在 `plugins/sessions/XuenessComposerToolbar.tsx`。顶部四个分档（自动 / 旗舰 / 性能 / 高效）按当前 New 或 Custom 标签过滤：旗舰只保留已声明的最大上下文窗口，性能只保留已声明推理档位的模型，高效只保留显式本地轻量档，自动不做额外过滤。分档本身没有成本倍率字段，因此右侧不显示倍率。New 是环境模型（空 id），Custom 是已保存的服务商配置。模型行仅在目录给出正数 `costMultiplier` 时显示倍率。悬停或键盘聚焦打开详情卡，列出上下文、推理（已声明档位，否则「—」）、成本（否则「—」）和一句由已有字段拼出的说明；Edit 关闭弹层并打开该服务商设置。Esc 仍关闭弹层。既有「标准 / 本地轻量」运行档位开关保留，不改轻量档的提示词或工具上限。
+模型弹层仍在 `plugins/sessions/XuenessComposerToolbar.tsx`。2026-10-07 简化为同一列表展示环境模型和已保存配置，移除没有真实路由作用的「自动 / 旗舰 / 性能 / 高效」分类与「新模型 / 自定义」标签，避免用上下文窗口、推理字段或配置来源暗示能力等级。功能归属仍为 `sessions.model_picker`，不新增后端请求。模型行仅在目录给出正数 `costMultiplier` 时显示倍率。悬停或键盘聚焦打开详情卡，列出上下文、推理（已声明档位，否则「—」）、成本（否则「—」）和一句由已有字段拼出的说明；Edit 关闭弹层并打开该服务商设置。Esc 关闭弹层并恢复触发按钮焦点。既有「标准 / 本地轻量」运行档位、模型选择、设为默认、思考强度和管理入口保留。未配置的模型仍显示但不能选用。
 
 自定义模型列表为空时，`ProviderEmptyState` 显示内联 SVG、说明、主按钮「添加」，以及右上角「+ 添加」和「查看模型文档」。文档指向仓库已有的 `docs/xueness-local-lightweight-mode.md` 的公开副本，因为工作台源站不提供 `docs/`。列表有数据时这一空状态不渲染。
 
@@ -754,3 +768,33 @@ subagents 插件登记新功能 `subagents.cancel_one`（单个子任务协作�
 sessions 的 `answer_question.py`、`PendingQuestion.tsx`、`questionApi.ts`、`SessionExperimentSettings.tsx` 分别拥有结构化答复 API、标准/轻量共用表单与设置。tools 的 `call_budget.py`、`ToolExecutionSettings.tsx` 拥有执行前预算、状态投影和设置。所有子功能均可在完整功能插件目录检索；没有独立面板的 tools 仍完整显示。
 
 共享基础设施的新增 seam 是声明式 `before_tool_effect`：在既有 Gate/能力授权通过后、真正执行前同步调用可信插件策略；观察性 hook 不承担 fail-closed 策略。注册表不读取预算配置，不导入预算业务。`execution_scope` 只是一份通用临时数据映射，具体计数由 tools 提供。共享 `ui/StreamingCommitGate.ts` 只调度文本提交/清理计时器，由 sessions 登记导出符号，providers 轻量界面复用纯调度器；不拥有模型、请求或权限策略，也不扩大整个插件依赖。
+
+
+## 2026-10-07 添加菜单、上下文与权限确认
+
+本轮仍使用现有 28 个 bundled plugins，不增设动态执行入口。完整功能目录现有 160 项功能；可信源码贡献的添加菜单与资源 manifest 分离。每个能力在前端按 effective 状态显示可用/停用，prepare 服务端再次核对归属、依赖与实际工具。关闭或阻塞的能力保留可见说明，不可选择/执行。
+
+| 用户能力 | 插件与功能 ID | 实际入口 |
+| --- | --- | --- |
+| 附件、文件/会话/技能上下文 | sessions.composer | 上传/读取及 composer prepare |
+| 添加菜单与能力上下文 | sessions.composer_capabilities | 静态 entrypoint 贡献及短期 prepared token |
+| 使用指南 | sessions.usage_guide | 可信配置与诊断指引 |
+| 当前请求用量圆环 | sessions.context_usage_ring | 最新 runtime_activity 与明确标注的容量来源 |
+| 完全访问确认 | sessions.yolo_confirmation | 前端取消/确认与 HTTP 新升级的 acknowledge_yolo 校验 |
+| 会话目标编辑 | planning.goal_editor | 既有目标 HTTP API，替换必须显式确认 |
+| 工作流创建 | workflows.engine / workflows.dynamic_runs | 既有工作流面板、创建与校验 API |
+| 插件创建器 | extensions.plugin_creator | plugin_manifest_validate，数据资源不执行、不自动安装 |
+| 技能创建器 | skills.skill_creator | skill_validate，与发现机制复用相同 frontmatter 规则 |
+| PDF / PPTX / XLSX / DOCX 编写 | office.*_authoring | office_read / office_create / office_replace |
+| 浏览器操作 | browser.composer_operation | 既有真实 browser_* 工具，每轮显式 opt-in |
+| 搜图 | network.image_search | 真实图片服务、公网 HTTPS/DNS 校验、有界来源元数据 |
+
+Node/Electron 浏览器宿主是现有 browser/desktop 运行设施，不是可选择的用户技能；数据清单不能加载 JS 或 Python。Office 依赖由桌面构建固定打包，源码运行安装 desktop/requirements-office.txt。内核只保留既有工具分发、批准和上下文基础设施，实际实现和说明均位于所属插件。
+
+本轮共享基础设施仍限于通用 API 与历史投影：会话快照结构比较不解释目标、权限或模型字段；`changed_paths` 按注册工具的 write/edit 与路径 subject 元数据投影成功结果。具体路径元数据由 files/office 的工具注册声明，宿主不维护 Office 工具名清单，也不产生新的执行权限。结构检查白名单未为这些功能新增例外。
+
+## 会话反馈与 Office 交付修复（2026-10-07）
+
+`sessions.composer_capabilities` 拥有可搜索添加菜单、可见已选标签和模型未配置提示；`sessions.streaming` 拥有标准/轻量共用的请求阶段标签，纯标签模块在 sessions manifest 登记。`providers.activity` 拥有实时状态、已报告用量、有效运行时钟与有界耗时明细；禁用 providers 后不挂载，不引入新的后台请求。
+
+Office 内容交付检查复用 `office.tooling.delivery_content_text` 的有界解析，planning 在检查 files 与 office 生效状态和工作区读权限之后调用。二进制文档不再按 UTF-8 读取；缺少内容、截断、禁用及越界仍检查失败。已通过且内容定义未变化的交付清单由宿主在 completion history 写入摘要哈希，sessions 完成策略允许之后的普通聊天不再要求新工具引用；新工作区动作、失败/缺失/变化的清单继续要求验证。共享 core 仅保存验证元数据和统一完成结果，不拥有新产品能力。

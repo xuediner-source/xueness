@@ -22,6 +22,7 @@ import {
   composerEnterIntent,
   handleComposerEscapeAction,
   clearSubmittedComposerDraft,
+  restoreSubmittedComposerDraft,
   type ComposerDraftState,
 } from "./XuenessWorkbenchView";
 import type {
@@ -30,6 +31,23 @@ import type {
   TimelineRow,
   PendingApproval,
 } from "../../xuenessWorkbench";
+
+test('rejected optimistic submissions restore full drafts without touching new edits or another session', () => {
+  const original: ComposerDraftState = { text: '  keep whitespace\n', attachments: [{ name: 'a.txt', data: 'YQ==', mimeType: 'text/plain' }],
+    goal: true, selectedCapabilities: ['office.composer_pdf'], selectedContext: { files: ['a.txt'], sessions: [], skills: [], plugins: [] },
+    submissionError: '', attachmentError: '', revision: 4 };
+  const other = { ...original, text: 'other session' };
+  const cleared = clearSubmittedComposerDraft(new Map([['a', original], ['b', other]]), 'a', 4);
+  assert.equal(cleared.get('a')?.text, '');
+  const restored = restoreSubmittedComposerDraft(cleared, 'a', 5, original, 'rejected');
+  assert.equal(restored.get('a')?.text, original.text);
+  assert.deepEqual(restored.get('a')?.attachments, original.attachments);
+  assert.deepEqual(restored.get('a')?.selectedCapabilities, original.selectedCapabilities);
+  assert.equal(restored.get('a')?.submissionError, 'rejected');
+  assert.equal(restored.get('b'), other);
+  const edited = new Map(cleared).set('a', { ...cleared.get('a')!, text: 'new follow-up', revision: 6 });
+  assert.equal(restoreSubmittedComposerDraft(edited, 'a', 5, original), edited);
+});
 
 test("TaskList: renders title and highlights activeId", () => {
   const sessions: SessionSummary[] = [
@@ -435,7 +453,7 @@ test("Composer: a running task keeps Stop available even when sending is disable
   assert.match(html, /disabled="" placeholder="输入消息或指令\.\.\."/);
 });
 
-test("Composer: running queue action keeps Stop reachable and advertises the shortcut", () => {
+test("Composer: running with a draft shows the queue action instead of Stop (mutually exclusive)", () => {
   const html = renderToStaticMarkup(<Composer
     defaultValue="follow-up"
     running
@@ -444,8 +462,33 @@ test("Composer: running queue action keeps Stop reachable and advertises the sho
     onSend={() => true}
   />);
   assert.match(html, /data-testid="composer-queue"/);
-  assert.match(html, /data-testid="composer-stop"/);
+  assert.doesNotMatch(html, /data-testid="composer-stop"/);
   assert.match(html, /Enter 排队 · Shift\+Enter 换行/);
+});
+
+test("Composer: running with an empty draft shows Stop exclusively in the send slot", () => {
+  const html = renderToStaticMarkup(<Composer
+    running
+    queueWhenRunning
+    onStop={() => {}}
+    onSend={() => true}
+  />);
+  assert.match(html, /data-testid="composer-stop"/);
+  assert.doesNotMatch(html, /data-testid="composer-queue"/);
+  assert.match(html, /aria-label="停止"/);
+  assert.match(html, /aria-keyshortcuts="Escape"/);
+  assert.match(html, /title="停止当前任务 \(Esc\)"/);
+});
+
+test("Composer: stop button uses a square glyph (not the X close glyph)", () => {
+  const html = renderToStaticMarkup(<Composer
+    running
+    onStop={() => {}}
+    onSend={() => true}
+  />);
+  const stopButton = html.match(/<button[^>]*data-testid="composer-stop"[^>]*>[\s\S]*?<\/button>/)?.[0] ?? "";
+  assert.match(stopButton, /<rect[^>]*x="7"[^>]*>/);
+  assert.doesNotMatch(stopButton, /M6 6l12 12M18 6 6 18/);
 });
 
 test("Composer: an old submission clears only its unchanged session draft", () => {

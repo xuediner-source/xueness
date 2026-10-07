@@ -149,6 +149,22 @@ class WorkspaceApiTests(unittest.TestCase):
         self.assertEqual(status, 400, payload)
         self.assertEqual(workspaces_api.selected_roots(local), ())
 
+    def test_windows_first_level_system_dirs_are_too_broad(self):
+        from pathlib import PureWindowsPath
+        for raw in ("C:\\Users", "C:\\ProgramData", "C:\\PerfLogs", "D:\\ProgramData"):
+            path = PureWindowsPath(raw)
+            self.assertTrue(workspaces_api.is_windows_first_level_system_dir(path), raw)
+            with patch.object(workspaces_api.os, "name", "nt"):
+                self.assertTrue(workspaces_api._is_too_broad_native_root(path), raw)
+        nested = PureWindowsPath("C:\\Users\\Public")
+        self.assertFalse(workspaces_api.is_windows_first_level_system_dir(nested))
+        self.assertFalse(workspaces_api.is_windows_first_level_system_dir(
+            PureWindowsPath(r"\\fileserver\projects\Users")))
+        # normcase keeps the check case-insensitive where the OS supports it.
+        with patch.object(workspaces_api.os.path, "normcase", lambda value: value.lower()):
+            self.assertTrue(
+                workspaces_api.is_windows_first_level_system_dir(PureWindowsPath("c:\\users")))
+
     def test_native_picker_passes_initial_path_as_data_not_script(self):
         malicious = "/tmp/quoted ' ; do not execute"
         completed = SimpleNamespace(returncode=0, stdout=str(self.outside) + "\n")

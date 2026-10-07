@@ -48,6 +48,46 @@ test('journal text and reasoning hydrate exact event positions including a parti
   assert.equal(streamed[0].kind==='assistant'&&streamed[0].reasoning,'only reasoning');
 });
 
+test('journal projects tool-response reasoning and narration before their real call IDs without fabricated timing', () => {
+  const tool: import('./xuenessWorkbench').TimelineRow = { kind: 'tool', seq: 2, turnId: 'turn-1', toolCallId: 'real-call', name: 'exec', subject: 'pwd', status: 'ok', error: '', errorCode: '' };
+  const journal = { messages: [{ role: 'user', content: 'task' },
+    { role: 'assistant', content: '', tool_calls: [{ id: 'real-call' }] }, { role: 'tool', content: '{}' }] };
+  const history = [{ message_index: 1, text: 'Check the folder first.' }];
+  const out = hydrateTimelineJournalRows([tool], journal, history);
+  assert.equal(out.length, 2);
+  assert.equal(out[0].kind === 'assistant' && out[0].reasoning, history[0].text);
+  assert.equal(out[0].seq, 1.75);
+  assert.equal(out[1], tool);
+  assert.equal('startedAt' in out[0], false);
+  assert.deepEqual(hydrateTimelineJournalRows(out, journal, history), out, 'idempotent across polling');
+  assert.deepEqual(hydrateTimelineJournalRows([], journal, history), [], 'no matching visible call means no invented row');
+  const narrated = hydrateTimelineJournalRows([tool, { kind: 'assistant', seq: 3, turnId: 'turn-1', text: 'preview' }],
+    { messages: [journal.messages[0], { ...journal.messages[1], content: 'I will inspect it.' }] }, history);
+  assert.equal(narrated[0].kind === 'assistant' && narrated[0].text, 'I will inspect it.');
+  assert.equal(narrated[1], tool);
+});
+
+test('journal hydration accounts for prior turn completions and structured user content before relocating tool narration', () => {
+  const journal = { messages: [{ role: 'user', content: 'task' }, { role: 'assistant', content: 'first answer' },
+    { role: 'user', content: [{ type: 'text', text: 'second full task' }, { type: 'image_url', image_url: {} }] },
+    { role: 'assistant', content: 'I will run pwd.', tool_calls: [{ id: 'second-call' }] },
+    { role: 'tool', tool_call_id: 'second-call', content: '{}' }, { role: 'assistant', content: 'Second final answer' }],
+    completion_history: [{ turn_id: 'turn-1' }, { turn_id: 'turn-1' }, { turn_id: 'bad-record' }] };
+  const rows: import('./xuenessWorkbench').TimelineRow[] = [
+    { kind: 'user', seq: 5, turnId: 'turn-2', text: 'preview task' },
+    { kind: 'tool', seq: 6, turnId: 'turn-2', toolCallId: 'second-call', name: 'exec', subject: 'pwd', status: 'ok', error: '', errorCode: '' },
+    { kind: 'assistant', seq: 7, turnId: 'turn-2', text: 'preview narration' },
+    { kind: 'assistant', seq: 9, turnId: 'turn-2', text: 'preview final' },
+  ];
+  const out = hydrateTimelineJournalRows(rows, journal, [{ message_index: 3, text: 'second reasoning' }]);
+  assert.equal(out[0].kind === 'user' && out[0].text, 'second full task');
+  assert.equal(out[1].kind === 'assistant' && out[1].text, 'I will run pwd.');
+  assert.equal(out[1].kind === 'assistant' && out[1].reasoning, 'second reasoning');
+  assert.equal(out[2], rows[1]);
+  assert.equal(out[3].kind === 'assistant' && out[3].text, 'Second final answer');
+  assert.deepEqual(hydrateTimelineJournalRows(out, journal, [{ message_index: 3, text: 'second reasoning' }]), out);
+});
+
 test('initial task message is restored from the journal once, with fallback only when no user task is available',()=>{
   const fullTask='complete initial task '.repeat(300);
   const rows:import('./xuenessWorkbench').TimelineRow[]=[
@@ -108,6 +148,10 @@ describe("durable assistant text", () => {
     assert.equal(liveRefresh[0]?.kind === "assistant" && liveRefresh[0].streaming, true);
     const interruptedRefresh = withAssistantStream(liveRefresh, { ...stream, status: "interrupted" });
     assert.equal(interruptedRefresh[0]?.kind === "assistant" ? interruptedRefresh[0].streaming : undefined, false);
+    const resumedRefresh = withAssistantStream(interruptedRefresh, stream);
+    assert.equal(resumedRefresh[0]?.kind === "assistant" ? resumedRefresh[0].streaming : undefined, true);
+    assert.equal(resumedRefresh[0]?.kind === "assistant" ? resumedRefresh[0].interrupted : undefined, false);
+    assert.equal(withAssistantStream(resumedRefresh, stream), resumedRefresh, "unchanged resumed stream preserves row and array identity");
     assert.equal(withAssistantStream([...completed, { kind: "user", seq: 4, turnId: "next", text: "repeat" }], stream).length, 3);
     assert.deepEqual(withAssistantStream([], null), []);
   });
@@ -809,6 +853,21 @@ describe("xuenessWorkbench run orchestration", () => {
     assert.deepEqual(bodyOf(recorded[1]), { text: "继续下一步" });
   });
 
+  it('sendTurn acknowledges the durable message before model execution, even if the run fails', async () => {
+    let accepted = false;
+    stubFetch(url => {
+      if (url === '/api/csrf') return jsonResponse({ csrfToken: 'test-csrf-token' });
+      if (url === '/api/settings/agent') return jsonResponse({ values: {} });
+      if (url.endsWith('/messages')) { assert.equal(accepted, false); return jsonResponse({}); }
+      if (url.endsWith('/run')) { assert.equal(accepted, true); return jsonResponse({ error: 'provider failed' }, 502); }
+      throw new Error(url);
+    });
+    const result = await sendTurn('s9', 'accepted text', undefined, undefined, () => { accepted = true; });
+    assert.equal(accepted, true);
+    assert.equal(result.ok, false);
+    assert.equal(result.accepted, true);
+  });
+
   it("sendTurn does not run when posting the message fails", async () => {
     stubFetch((url) => {
       if (url === "/api/csrf") return jsonResponse({ csrfToken: "test-csrf-token" });
@@ -903,6 +962,22 @@ describe("xuenessWorkbench run orchestration", () => {
       allow_hooks: false,
     });
     assert.equal(headerOf(recorded[2], "X-CSRF-Token"), "test-csrf-token");
+  });
+
+  it("runSession carries the yolo acknowledgement from RunChoices into the request", async () => {
+    stubStandardFetch({ "/api/sessions/s6/run": {} });
+
+    const result = await runSession("s6", {
+      provider: "real",
+      mode: "build",
+      permission_mode: "yolo",
+      acknowledge_yolo: true,
+    });
+    assert.deepEqual(result, { ok: true, value: undefined });
+    const runCall = recorded.find(call => call.url === "/api/sessions/s6/run");
+    assert.ok(runCall);
+    assert.equal((bodyOf(runCall) as Record<string, unknown>).acknowledge_yolo, true);
+    assert.equal((bodyOf(runCall) as Record<string, unknown>).permission_mode, "yolo");
   });
 
   it("runSession reports server errors as {ok:false}", async () => {
@@ -1235,12 +1310,57 @@ describe("structural sharing stabilization", () => {
     const prev: any = {
       id: "s1", status: "completed", task: "do something", title: "Task 1",
       pinned: false, root: "/ws", streaming: null, todos: [], queued_messages: [],
+      model_selection: { provider_id: "p1", model: "m1" }, changed_files: ["src/a.ts"],
+      future_metadata: { revision: 2, tags: ["ready", "reviewed"] },
     };
     const next: any = {
       id: "s1", status: "completed", task: "do something", title: "Task 1",
       pinned: false, root: "/ws", streaming: null, todos: [], queued_messages: [],
+      future_metadata: { tags: ["ready", "reviewed"], revision: 2 }, changed_files: ["src/a.ts"],
+      model_selection: { model: "m1", provider_id: "p1" },
     };
     assert.equal(stabilizeSession(prev, next), prev);
+  });
+
+  it("stabilizeSession accepts goal, permission, model, file and additive metadata changes", () => {
+    const base: any = {
+      id: "s1", status: "completed", task: "do something", title: "Task 1",
+      pinned: false, root: "/ws", streaming: null, todos: [], queued_messages: [],
+      goal: null, permission_mode: "build", model_selection: { provider_id: "p1", model: "m1" },
+      changed_files: ["src/a.ts"],
+    };
+    const goal = { text: "Ship the report", status: "active", setAt: "t1", updatedAt: "t1", history: [] };
+    const savedGoal: any = { ...base, goal };
+    assert.equal(stabilizeSession(base, savedGoal), savedGoal, "saving a goal must update the snapshot");
+
+    const clearedGoal: any = { ...savedGoal, goal: { ...goal, status: "cleared", updatedAt: "t2" } };
+    assert.equal(stabilizeSession(savedGoal, clearedGoal), clearedGoal, "clearing a goal must update the snapshot");
+    const removedGoal: any = { ...clearedGoal, goal: null };
+    assert.equal(stabilizeSession(clearedGoal, removedGoal), removedGoal, "removing a goal must update the snapshot");
+
+    const changes: Array<[string, Record<string, unknown>]> = [
+      ["permission mode", { permission_mode: "yolo" }],
+      ["model selection", { model_selection: { provider_id: "p2", model: "m2" } }],
+      ["changed files", { changed_files: ["src/a.ts", "out/report.pdf"] }],
+      ["additive API field", { future_metadata: { revision: 3, labels: ["new"] } }],
+    ];
+    for (const [label, change] of changes) {
+      const next: any = { ...base, ...change };
+      assert.equal(stabilizeSession(base, next), next, `${label} change must be accepted`);
+    }
+  });
+
+  it("stabilizeSession preserves array order and still accepts streaming updates", () => {
+    const prev: any = {
+      id: "s1", status: "running", task: "do something",
+      streaming: { id: "turn1", status: "streaming", text: "same" },
+      changed_files: ["src/a.ts", "src/b.ts"],
+    };
+    const reordered: any = { ...prev, changed_files: ["src/b.ts", "src/a.ts"] };
+    assert.equal(stabilizeSession(prev, reordered), reordered, "ordered product data must not be normalized away");
+
+    const streamed: any = { ...prev, streaming: { id: "turn1", status: "streaming", text: "same plus more" } };
+    assert.equal(stabilizeSession(prev, streamed), streamed);
   });
 
   it("stabilizeSession returns new session instance when streaming status updates", () => {

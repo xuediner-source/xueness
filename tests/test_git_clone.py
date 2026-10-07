@@ -55,6 +55,20 @@ class UrlValidationTests(unittest.TestCase):
         self.assertEqual(clone.suggested_name("git@host:-bad"), "")
 
 
+class BroadDirectoryTests(unittest.TestCase):
+    def test_windows_first_level_system_dirs_are_broad(self):
+        from pathlib import PureWindowsPath
+        with mock.patch.object(clone.os, "name", "nt"):
+            for raw in ("C:\\Users", "C:\\ProgramData", "C:\\PerfLogs", "D:\\Users"):
+                with self.subTest(raw=raw):
+                    self.assertTrue(clone._is_broad_directory(PureWindowsPath(raw)), raw)
+
+    def test_nested_windows_project_dirs_are_not_broad(self):
+        from pathlib import PureWindowsPath
+        self.assertFalse(
+            workspaces_api.is_windows_first_level_system_dir(PureWindowsPath("C:\\Users\\Public")))
+
+
 @unittest.skipUnless(GIT, "git is not installed")
 class CloneRepositoryTests(unittest.TestCase):
     def setUp(self):

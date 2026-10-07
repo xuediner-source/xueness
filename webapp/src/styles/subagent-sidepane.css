@@ -1,18 +1,5 @@
-/* Subagent runtime sidepane styles */
-.xn-conversation-container {
-  display: flex;
-  flex-direction: row;
-  height: 100%;
-  width: 100%;
-  min-width: 0;
-  overflow: hidden;
-  position: relative;
-}
-
-.xn-conversation-container > .xn-conversation {
-  flex: 1 1 0%;
-  min-width: 0;
-}
+/* Subagent runtime sidepane styles. Conversation layout lives in sessions.css,
+   which is always loaded with the session viewport. */
 
 .xn-subagent-sidepane {
   display: flex;

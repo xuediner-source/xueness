@@ -29,7 +29,7 @@ KNOWN_TOOLS: tuple[str, ...] = BUILTIN_TOOL_NAMES + ("mcp",)
 # connection. It may still use planning, ask-user, and explicitly enabled
 # network tools. Dynamic skill/MCP/delegation tools are excluded in core.run.
 REMOTE_ALLOWED_TOOL_NAMES = frozenset({
-    "remote_exec", "web_fetch", "web_search", "ask_user", "todo_read",
+    "remote_exec", "web_fetch", "web_search", "image_search", "ask_user", "todo_read",
     "todo_write", "workflow_create", "workflow_amend", "workflow_status", "tool_search", "tool_result_read",
 })
 REMOTE_LOCAL_TOOL_NAMES = frozenset(

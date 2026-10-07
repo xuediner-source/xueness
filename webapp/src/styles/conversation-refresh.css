@@ -9,7 +9,10 @@
   position: relative;
   z-index: 30;
   inset: auto;
-  display: block;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 12px;
   flex: 0 0 auto;
   box-sizing: border-box;
   width: 100%;
@@ -24,18 +27,24 @@
 }
 
 .xn-shell-layout .xn-conv-header__title {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  margin: -1px;
+  position: static;
+  flex: 1 1 auto;
+  min-width: 0;
+  width: auto;
+  height: auto;
+  margin: 0;
   overflow: hidden;
-  clip: rect(0, 0, 0, 0);
+  text-overflow: ellipsis;
   white-space: nowrap;
-  clip-path: inset(50%);
+  font-size: 13px;
+  font-weight: 600;
+  text-align: start;
 }
 
 .xn-shell-layout .xn-conv-header__main {
+  flex: 0 0 auto;
   min-width: 0;
+  flex-wrap: nowrap;
   justify-content: flex-end;
   pointer-events: auto;
 }
@@ -46,10 +55,10 @@
   display: flex;
   min-width: 0;
   max-width: 100%;
-  flex: 0 1 auto;
+  flex: 0 0 auto;
   align-items: center;
   justify-content: flex-end;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   gap: 6px;
   pointer-events: auto;
 }
@@ -537,14 +546,23 @@
 
 .xn-shell-layout .xn-tool-group {
   min-width: 0;
+  width: 100%;
+  margin: 0;
+  border: 0;
+  border-radius: 0;
+  padding: 0;
+  background: transparent;
 }
 
 .xn-shell-layout .xn-tool-group > summary {
   display: flex;
+  min-height: 24px;
+  min-width: 0;
   align-items: center;
   gap: 8px;
-  color: var(--fg-subtle);
-  font-size: 12px;
+  padding: 0;
+  color: var(--fg-muted);
+  font-size: 14px;
   line-height: 20px;
   list-style: none;
   cursor: pointer;
@@ -554,21 +572,32 @@
   display: none;
 }
 
-.xn-shell-layout .xn-tool-group > summary::before {
-  content: "›";
-  color: var(--fg-muted);
-  transition: transform 120ms ease;
-}
-
-.xn-shell-layout .xn-tool-group[open] > summary::before {
-  transform: rotate(90deg);
-}
+.xn-tool-group__icon, .xn-tool-group__label, .xn-tool-group__count, .xn-tool-group__chevron { flex: 0 0 auto; }
+.xn-tool-group__count { font-size: 12px; font-variant-numeric: tabular-nums; }
+.xn-tool-group__preview { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; color: var(--fg-subtle); }
+.xn-tool-group__chevron { margin-inline-start: auto; transition: transform 120ms ease; transform: rotate(-90deg); }
+.xn-tool-group[open] > summary .xn-tool-group__chevron { transform: rotate(0); }
+.xn-tool-group > summary > strong { flex: 0 0 auto; color: var(--error-fg); font-size: 11px; font-weight: 500; }
+.xn-tool-group__running { flex: 0 0 auto; color: var(--fg-muted); font-size: 11px; }
 
 .xn-shell-layout .xn-tool-group > .xn-timeline-stream {
   width: 100%;
   max-width: none;
-  gap: 12px;
+  gap: 10px;
   padding: 8px 0 0 24px;
+}
+
+.xn-shell-layout .xn-timeline-item--intermediate .xn-msg__actions { display: none; }
+.xn-shell-layout .xn-timeline-item--intermediate .xn-md__paragraph:last-child { margin-bottom: 0; }
+.xn-conversation-work-summary { display: flex; min-width: 0; align-items: center; gap: 12px; padding-bottom: 8px; border-bottom: 1px solid var(--border); color: var(--fg-muted); }
+.xn-conversation-work-summary > button { display: inline-flex; min-width: 0; align-items: center; gap: 7px; border: 0; padding: 0; background: transparent; color: inherit; font: inherit; font-size: 13px; cursor: pointer; }
+.xn-conversation-work-summary > button:hover { color: var(--fg); }
+.xn-conversation-work-summary > button:focus-visible { outline: 2px solid var(--border-focus); outline-offset: 4px; border-radius: 3px; }
+.xn-conversation-work-summary > button > svg { flex: 0 0 auto; transition: transform 120ms ease; }
+.xn-conversation-work-summary > button[aria-expanded="false"] > svg { transform: rotate(-90deg); }
+.xn-conversation-work-summary__count { margin-inline-start: auto; font-size: 11px; white-space: nowrap; }
+@media (prefers-reduced-motion: reduce) {
+  .xn-tool-group__chevron, .xn-conversation-work-summary > button > svg { transition: none; }
 }
 
 .xn-shell-layout .xn-msg--completion,
@@ -857,6 +886,10 @@
   }
 
   .xn-shell-layout .xn-conversation > .xn-conv-header { padding-inline-end: 8px; }
+  .xn-shell-layout .xn-conv-header__main { flex-wrap: nowrap; }
+  .xn-shell-layout .xn-conv-header__tools { flex-wrap: nowrap; }
+  .xn-shell-layout .xn-conv-header__subagents > span,
+  .xn-shell-layout .xn-conv-header__fork > span { display: none; }
 }
 
 @media (prefers-reduced-motion: reduce) {

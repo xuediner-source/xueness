@@ -10,11 +10,10 @@ import {
   ComposerModelDetailCard,
   formatContextWindow,
   formatCostMultiplier,
+  isReasoningEffortSupported,
   modelReasoningSummary,
   modelThinkingText,
   modelDetailSentence,
-  modelMatchesPreset,
-  nextCatalogTab,
   modelDetailCardStyle,
   nextIndex,
 } from "./XuenessComposerToolbar";
@@ -63,11 +62,12 @@ test("Toolbar: plan is a selectable permission mode shown by the trigger", () =>
   assert.doesNotMatch(html, /<span>自动编辑<\/span>/);
 });
 
-test("Toolbar: model picker is a keyboard-openable menu and unsupported context usage stays hidden", () => {
+test("Toolbar: model picker is a keyboard-openable menu and missing context usage stays explicitly unknown", () => {
   const noUsage = renderToStaticMarkup(<XuenessComposerToolbar {...baseProps} />);
   assert.match(noUsage, /aria-label="选择模型"[^>]*aria-haspopup="menu"[^>]*aria-expanded="false"/);
   assert.match(noUsage, /Default model/);
-  assert.doesNotMatch(noUsage, /aria-label="上下文用量"/);
+  assert.match(noUsage, /data-known="false"/);
+  assert.doesNotMatch(noUsage.match(/<span[^>]*role="progressbar"[^>]*>/)?.[0] ?? "", /aria-valuenow=/);
   const reportedUsage = renderToStaticMarkup(
     <XuenessComposerToolbar
       {...baseProps}
@@ -79,7 +79,7 @@ test("Toolbar: model picker is a keyboard-openable menu and unsupported context 
   assert.match(reportedUsage, /20 \/ 100/);
 });
 
-test("Toolbar: reasoning selector clears to default instead of inventing a model default", () => {
+test("Toolbar: reasoning has an explicit popover trigger instead of hiding a slider in the toolbar", () => {
   const html = renderToStaticMarkup(
     <XuenessComposerToolbar
       {...baseProps}
@@ -87,8 +87,29 @@ test("Toolbar: reasoning selector clears to default instead of inventing a model
     />,
   );
   assert.match(html, /aria-label="思考强度"/);
-  assert.match(html, /xn-composer-toolbar__reasoning-select/);
-  assert.doesNotMatch(html, /<select[^>]*aria-label="思考强度"/);
+  assert.match(html, /data-testid="reasoning-effort-trigger"/);
+  assert.match(html, /aria-haspopup="dialog"[^>]*aria-expanded="false"/);
+  assert.doesNotMatch(html, /role="slider"/);
+  assert.doesNotMatch(html, /xn-composer-toolbar__reasoning-select/);
+});
+
+test("Toolbar: reasoning trigger reflects the actual chosen level", () => {
+  const html = renderToStaticMarkup(
+    <XuenessComposerToolbar
+      {...baseProps}
+      choices={{ ...choices, model: "model-default", reasoning_effort: "high" }}
+    />,
+  );
+  assert.match(html, /data-testid="reasoning-effort-trigger"/);
+  assert.match(html, /<span>高<\/span>/);
+});
+
+test("Toolbar: reasoning stays discoverable for undeclared and single-level models, including lightweight mode", () => {
+  for (const levels of [[], ["high"]]) for (const minimal of [false, true]) {
+    const html = renderToStaticMarkup(<XuenessComposerToolbar {...baseProps} minimal={minimal}
+      models={[{ ...model, reasoningLevels: levels }]} />);
+    assert.match(html, /data-testid="reasoning-effort-trigger"/);
+  }
 });
 
 test("Toolbar: on popover close via Escape, restores focus to trigger button and does not restore composer input", () => {
@@ -168,8 +189,6 @@ test("Toolbar: model rows show a reported cost multiplier and hide it when the c
   );
   assert.doesNotMatch(absent, /data-testid="model-row-cost"/);
   assert.doesNotMatch(absent, /×/);
-  // 分档预设没有独立倍率字段，即使模型声明了上下文也不编造预设倍率。
-  assert.doesNotMatch(absent, /data-preset="auto"[^>]*>[\s\S]*×/);
 });
 
 test("Toolbar: the model menu offers 「设为默认」only when the host wires it", () => {
@@ -209,7 +228,15 @@ test("formatContextWindow and modelReasoningSummary: compact facts or null when 
   assert.equal(modelReasoningSummary({ reasoningLevels: ["a", "b", "c", "d"] }), "a/b/c+");
 });
 
-test("ComposerModelDetailCard: context, thinking, cost, a factual sentence and Edit", () => {
+test("reasoning effort stays valid for the selected model declaration", () => {
+  assert.equal(isReasoningEffortSupported(undefined, "high"), true);
+  assert.equal(isReasoningEffortSupported(model, undefined), true);
+  assert.equal(isReasoningEffortSupported(model, "high"), true);
+  assert.equal(isReasoningEffortSupported(model, "ultra"), false);
+  assert.equal(isReasoningEffortSupported({ reasoningLevels: [] }, "high"), false);
+});
+
+test("ComposerModelDetailCard: context, thinking, cost, a factual sentence and keyboard-reachable Edit", () => {
   const html = renderToStaticMarkup(
     <ComposerModelDetailCard
       model={{ ...model, protocol: "anthropic", contextWindow: 200000, maxOutputTokens: 8192, costMultiplier: 2 }}
@@ -227,6 +254,9 @@ test("ComposerModelDetailCard: context, thinking, cost, a factual sentence and E
   assert.match(html, /<dt>成本<\/dt><dd>2×<\/dd>/);
   assert.match(html, /Anthropic 协议 · 上下文 200K · 推理档位 low\/medium\/high/);
   assert.match(html, /data-testid="composer-model-detail-edit"/);
+  const editButton = html.match(/<button[^>]*data-testid="composer-model-detail-edit"[^>]*>/)?.[0] ?? "";
+  assert.match(editButton, /type="button"/);
+  assert.doesNotMatch(editButton, /disabled|tabindex=/);
   assert.match(html, /编辑/);
   // 详情卡固定定位在锚点行左侧（SSR 视口 1280）：right = 1280 - 400 + 10。
   assert.match(html, /top:100px;right:890px;width:248px/);
@@ -278,37 +308,26 @@ test("ComposerModelDetailCard: Edit calls the settings callback", () => {
   assert.equal(edits, 1);
 });
 
-test("Toolbar: New and Custom tabs keep environment models and saved profiles apart", () => {
-  const env = { ...model, id: "", name: "Environment", model: "env-model" };
+test("Toolbar: environment and saved models share one accessible list without inferred categories", () => {
+  const environment = { ...model, id: "", name: "Environment", model: "env-model" };
   const custom = { ...model, id: "provider-a", name: "Default model", model: "model-default" };
-  const models = [env, custom];
-  const customHtml = renderToStaticMarkup(
-    <ComposerModelMenu {...menuProps} models={models} catalogTab="custom" />,
+  const unavailable = { ...model, id: "missing", name: "Missing credentials", model: "missing-model", configured: false };
+  const html = renderToStaticMarkup(
+    <ComposerModelMenu {...menuProps} models={[environment, custom, unavailable]} />,
   );
-  assert.match(customHtml, /role="tablist"/);
-  const newTab = customHtml.match(/<button[^>]*data-testid="composer-model-tab-new"[^>]*>/)?.[0] ?? "";
-  const customTab = customHtml.match(/<button[^>]*data-testid="composer-model-tab-custom"[^>]*>/)?.[0] ?? "";
-  assert.match(newTab, /aria-selected="false"/);
-  assert.match(customTab, /aria-selected="true"/);
-  assert.match(customHtml, /aria-controls="composer-model-tabpanel"/);
-  assert.match(customHtml, /data-model-row="provider-a:model-default"/);
-  assert.doesNotMatch(customHtml, /data-model-row=":env-model"/);
-
-  const newHtml = renderToStaticMarkup(
-    <ComposerModelMenu {...menuProps} models={models} catalogTab="new" selectedModel={env} isSelected={() => false} />,
-  );
-  const newTabOn = newHtml.match(/<button[^>]*data-testid="composer-model-tab-new"[^>]*>/)?.[0] ?? "";
-  const customTabOff = newHtml.match(/<button[^>]*data-testid="composer-model-tab-custom"[^>]*>/)?.[0] ?? "";
-  assert.match(newTabOn, /aria-selected="true"/);
-  assert.match(customTabOff, /aria-selected="false"/);
-  assert.match(newHtml, /data-model-row=":env-model"/);
-  assert.doesNotMatch(newHtml, /data-model-row="provider-a:model-default"/);
-  assert.equal(nextCatalogTab("new", "ArrowRight"), "custom");
-  assert.equal(nextCatalogTab("custom", "ArrowLeft"), "new");
-  assert.equal(nextCatalogTab("new", "ArrowLeft"), "custom");
+  assert.match(html, /data-testid="composer-model-options"/);
+  assert.match(html, /data-model-row=":env-model"/);
+  assert.match(html, /data-model-row="provider-a:model-default"/);
+  assert.match(html, /data-model-row="missing:missing-model"/);
+  const unavailableButton = html.match(/<button[^>]*data-model-row="missing:missing-model"[^>]*>/)?.[0] ?? "";
+  assert.match(unavailableButton, /disabled/);
+  assert.doesNotMatch(html, /role="tab(list|panel)?"|composer-model-tab|composer-model-presets|data-preset=/);
+  assert.doesNotMatch(html, /旗舰|性能|高效|新模型|自定义/);
+  assert.match(html, /data-testid="composer-runtime-profile"/);
+  assert.match(html, /管理模型/);
 });
 
-test("Toolbar: presets filter on reported fields and the detail card follows detailKey", () => {
+test("Toolbar: model details stay available across context, reasoning and runtime profiles", () => {
   const big = {
     ...model,
     id: "big",
@@ -327,54 +346,28 @@ test("Toolbar: presets filter on reported fields and the detail card follows det
     reasoningLevels: ["low"],
     runtimeProfile: "lightweight" as const,
   };
-  const peers = [big, small];
-  assert.equal(modelMatchesPreset(big, "ultimate", peers), true);
-  assert.equal(modelMatchesPreset(small, "ultimate", peers), false);
-  assert.equal(modelMatchesPreset(small, "performance", peers), true);
-  assert.equal(modelMatchesPreset(big, "performance", peers), false);
-  assert.equal(modelMatchesPreset(small, "efficient", peers), true);
-  assert.equal(modelMatchesPreset(big, "efficient", peers), false);
-  assert.equal(modelMatchesPreset(big, "auto", peers), true);
-
-  const ultimate = renderToStaticMarkup(
-    <ComposerModelMenu {...menuProps} models={peers} catalogTab="custom" preset="ultimate" />,
-  );
-  const ultimateButton = ultimate.match(/<button[^>]*data-preset="ultimate"[^>]*>/)?.[0] ?? "";
-  assert.match(ultimateButton, /aria-checked="true"/);
-  assert.match(ultimate, /Big context/);
-  assert.doesNotMatch(ultimate, /Small reasoner/);
-  assert.doesNotMatch(ultimate, /×/);
-
-  const efficient = renderToStaticMarkup(
-    <ComposerModelMenu {...menuProps} models={peers} catalogTab="custom" preset="efficient" />,
-  );
-  assert.match(efficient, /Small reasoner/);
-  assert.doesNotMatch(efficient, /Big context/);
-
-  const card = renderToStaticMarkup(
+  const html = renderToStaticMarkup(
     <ComposerModelMenu
       {...menuProps}
-      models={[{ ...big, description: "已有说明" }]}
-      catalogTab="custom"
+      models={[{ ...big, description: "已有说明" }, small]}
       detailKey="big:big-model"
     />,
   );
-  assert.match(card, /data-testid="composer-model-detail"/);
-  assert.match(card, /aria-describedby="composer-model-detail"/);
-  assert.match(card, /已有说明/);
-  assert.match(card, /<dt>上下文<\/dt><dd>200K<\/dd>/);
-  assert.match(card, /<dt>推理<\/dt><dd>—<\/dd>/);
-  assert.match(card, /编辑/);
+  assert.match(html, /data-model-row="big:big-model"/);
+  assert.match(html, /data-model-row="small:small-model"/);
+  assert.doesNotMatch(html, /×/);
+  assert.match(html, /data-testid="composer-model-detail"/);
+  assert.match(html, /aria-describedby="composer-model-detail"/);
+  assert.match(html, /已有说明/);
+  assert.match(html, /<dt>上下文<\/dt><dd>200K<\/dd>/);
+  assert.match(html, /<dt>推理<\/dt><dd>—<\/dd>/);
+  assert.match(html, /编辑/);
 });
 
 test("model picker strings exist in English", () => {
   try {
     setLocale("en");
     assert.equal(t("自动"), "Auto");
-    assert.equal(t("旗舰"), "Ultimate");
-    assert.equal(t("性能"), "Performance");
-    assert.equal(t("高效"), "Efficient");
-    assert.equal(t("新模型"), "New");
     assert.equal(t("自定义"), "Custom");
     assert.equal(t("上下文"), "Context");
     assert.equal(t("推理"), "Thinking");
@@ -407,6 +400,32 @@ test("modelDetailCardStyle: flips to the row's right when the left side has no r
   // 行太靠下：top 被夹住，卡片不会离开视口。
   const clamped = modelDetailCardStyle({ top: 500, left: 400, right: 648 }, { width: 1280, height: 600 }, card);
   assert.equal(clamped.top, 252);
+});
+
+test("modelDetailCardStyle: keeps the card outside the menu and above it when a narrow viewport has no side room", () => {
+  const card = { width: 248, maxHeight: 340 };
+  const menu = { top: 440, bottom: 840, left: 26, right: 314 };
+  const above = modelDetailCardStyle(
+    { top: 700, left: 32, right: 308 },
+    { width: 420, height: 900 },
+    card,
+    menu,
+  );
+  assert.deepEqual(above, { bottom: 470, left: 26, width: 248, maxHeight: 340 });
+  const below = modelDetailCardStyle(
+    { top: 150, left: 32, right: 308 },
+    { width: 420, height: 600 },
+    card,
+    { top: 30, bottom: 160, left: 26, right: 314 },
+  );
+  assert.deepEqual(below, { top: 170, left: 26, width: 248, maxHeight: 340 });
+  const left = modelDetailCardStyle(
+    { top: 100, left: 800, right: 1080 },
+    { width: 1280, height: 800 },
+    card,
+    { top: 100, bottom: 500, left: 790, right: 1100 },
+  );
+  assert.deepEqual(left, { top: 100, left: 532, width: 248, maxHeight: 340 });
 });
 
 test("Toolbar menu keyboard movement wraps and honours Home/End", () => {

@@ -43,18 +43,18 @@
     },
     {
       "id": "desktop.window_chrome",
-      "name": "原生窗口控件与沉浸式工作台标题栏",
-      "nameEn": "Native window controls and integrated workbench title bar"
+      "name": "原生窗口控件、工作台标题栏、双语菜单与主题同步",
+      "nameEn": "Native window controls, integrated title bar, bilingual menus and theme sync"
     },
     {
       "id": "desktop.background",
-      "name": "Windows 系统托盘与关闭窗口后后台运行",
-      "nameEn": "Windows system tray and background operation after closing the window"
+      "name": "Windows 托盘与 macOS Dock 后台运行和窗口恢复",
+      "nameEn": "Windows tray and macOS Dock background operation and window restoration"
     },
     {
       "id": "desktop.tray_navigation",
-      "name": "托盘会话分组、快速打开、新建与反馈入口",
-      "nameEn": "Tray chat groups, quick navigation, new chat and feedback"
+      "name": "托盘与 Dock 会话分组、快速打开、新建与反馈入口",
+      "nameEn": "Tray and Dock chat groups, quick navigation, new chat and feedback"
     },
     {
       "id": "desktop.permissions",
@@ -79,6 +79,7 @@
     "src/tray-menu.cjs",
     "src/tray-menu-preload.cjs",
     "src/loading.html",
-    "src/permissions.cjs"
+    "src/permissions.cjs",
+    "src/native-labels.cjs"
   ]
 }

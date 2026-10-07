@@ -39,6 +39,18 @@ export function UpdateDownloadProgress({ state }: { state: UpdateState }) {
 
 const UPDATE_IN_PROGRESS_PHASES = ['available', 'downloading', 'ready', 'installing', 'opening-installer', 'installer_opened'];
 
+/** The authenticated host reports installation support; avoid guessing it from the browser OS. */
+export function UpdateInstallationHelp({ installMode }: { installMode?: string }) {
+  const message = installMode === 'open-dmg'
+    ? '更新下载到客户端，打开 DMG 后请在 Finder 中将 Xueness 替换到应用程序文件夹。'
+    : installMode === 'restart'
+      ? '更新下载到客户端，结束运行中的任务后点击“重启并更新”完成安装。会话和设置会保留。'
+      : installMode === 'unsupported'
+        ? '当前运行方式不支持应用内安装更新。Windows 请使用安装版，源码运行请更新源码。'
+        : '正在确认当前客户端的更新安装方式…';
+  return <small data-testid="update-installation-help">{t(message)}</small>;
+}
+
 function compareStableVersions(candidate: unknown, current: unknown): number | null {
   const parse = (value: unknown): number[] | null => {
     if (typeof value !== 'string') return null;
@@ -76,7 +88,8 @@ export function DesktopUpdateIndicator({ state, failed = false, onManage }: { st
   const phase = failed ? 'error' : state?.phase ?? 'idle';
   const pending = ['available', 'ready', 'installer_opened'].includes(phase);
   const working = ['checking', 'downloading', 'installing', 'opening-installer'].includes(phase);
-  const status = phase === 'error' ? t('检查失败') : phase === 'ready' ? t('重启并更新')
+  const status = phase === 'error' ? t('检查失败') : phase === 'ready'
+    ? state?.installMode === 'open-dmg' ? t('打开安装器') : t('重启并更新')
     : phase === 'downloading' ? t('更新下载进度') : phase === 'available' ? t('下载更新')
     : phase === 'installer_opened' ? t('打开安装器') : working ? t('检查更新') : '';
   const label = [t('应用更新'), state?.version ? `Xueness ${state.version}` : '', status].filter(Boolean).join(' · ');
@@ -128,6 +141,6 @@ export function DesktopUpdates({ enabled, compact = false, onManage }: { enabled
       {state?.phase === 'downloading' && <button type="button" disabled={actions.cancelDisabled} onClick={() => void action('cancel')}>{t('取消下载')}</button>}
     </div>
     {error && <p role="alert">{error}</p>}
-    <small>{t('macOS 未签名版本可在客户端下载并打开 DMG，仍需在 Finder 中完成替换。Windows 便携版需换用安装版。')}</small>
+    <UpdateInstallationHelp installMode={state?.installMode} />
   </section>;
 }

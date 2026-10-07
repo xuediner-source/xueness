@@ -277,38 +277,49 @@ def pending_denials(session: dict) -> list:
                 if tool and tool.approval_subject:
                     info["kind"] = tool.gate_kind
                 calls[call["id"]] = info
+    # Only a later successful retry resolves an earlier denial. A previous
+    # turn's success must not hide a fresh one-shot approval request.
     succeeded = {
-        (info["name"], info["subject"])
-        for cid, info in calls.items()
+        (info["name"], info["subject"]): index
+        for index, (cid, info) in enumerate(calls.items())
         if isinstance((session.get("results") or {}).get(cid), dict)
         and (session["results"][cid] or {}).get("ok")
     }
     return [
-        info for cid, info in calls.items()
+        info for index, (cid, info) in enumerate(calls.items())
         if isinstance((session.get("results") or {}).get(cid), dict)
         and (session["results"][cid] or {}).get("error") == "denied"
         # Legacy journals have no classification. New policy denials cannot be
         # resolved with a one-shot approval and must never offer that button.
         and (session["results"][cid] or {}).get("error_code") in (None, "approval_required")
-        and (info["name"], info["subject"]) not in succeeded
+        and succeeded.get((info["name"], info["subject"]), -1) < index
     ]
 
 
 def changed_paths(session: dict) -> list:
-    """Workspace paths successfully written or edited, in first-seen order."""
+    """Workspace paths from successful registered write/edit tools, in order."""
     paths = []
     seen = set()
     results = session.get("results") or {}
+    from .tool_registry import REGISTRY_BY_NAME
+
     for message in session.get("messages", []):
         for call in message.get("tool_calls") or []:
             function = call.get("function") or {}
-            if function.get("name") not in ("write", "edit"):
+            tool = REGISTRY_BY_NAME.get(function.get("name"))
+            if (tool is None or tool.gate_kind not in ("write", "edit")
+                    or tool.approval_subject is None):
                 continue
             try:
                 args = json.loads(function.get("arguments") or "{}")
             except (ValueError, TypeError):
                 continue
-            path = args.get("path") if isinstance(args, dict) else ""
+            if not isinstance(args, dict):
+                continue
+            try:
+                path = tool.approval_subject(args)
+            except (ValueError, KeyError, TypeError):
+                continue
             result = results.get(call.get("id"))
             if isinstance(path, str) and path and isinstance(result, dict) and result.get("ok") and path not in seen:
                 seen.add(path)

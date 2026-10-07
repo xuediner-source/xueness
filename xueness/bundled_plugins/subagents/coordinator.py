@@ -7,6 +7,7 @@ flight stops cooperatively at the next provider/tool boundary.
 from __future__ import annotations
 
 import json
+import re
 import threading
 import time
 
@@ -32,16 +33,59 @@ GUIDANCE = (
 
 
 def _turn_records(session):
-    messages = session.get('messages', [])
+    messages = session.get('messages')
+    messages = messages if isinstance(messages, list) else []
     # Compaction keeps human turns but may archive older tool exchanges.
     # Count the human boundary, rather than relying only on surviving calls.
-    marker = sum(m.get('role') == 'user' for m in messages)
-    last_user = max((i for i, m in enumerate(messages) if m.get('role') == 'user'), default=0)
-    calls = {c.get('id') for m in messages[last_user + 1:] for c in m.get('tool_calls', [])
-             if isinstance(c, dict) and (c.get('function') or {}).get('name') == 'task'}
-    return marker, {tid: row for tid, row in session.get('subagent_coordination', {}).items()
-                    if isinstance(row, dict) and (row.get('turn') == marker or
-                       'turn' not in row and row.get('call_id') in calls)}
+    marker = sum(isinstance(m, dict) and m.get('role') == 'user' for m in messages)
+    last_user = max((i for i, m in enumerate(messages)
+                     if isinstance(m, dict) and m.get('role') == 'user'), default=0)
+    calls = set()
+    for message in messages[last_user + 1:]:
+        if not isinstance(message, dict) or not isinstance(message.get('tool_calls'), list):
+            continue
+        for call in message['tool_calls']:
+            if (isinstance(call, dict) and isinstance(call.get('id'), str)
+                    and isinstance(call.get('function'), dict)
+                    and call['function'].get('name') == 'task'):
+                calls.add(call['id'])
+    records = session.get('subagent_coordination')
+    if not isinstance(records, dict):
+        return marker, {}
+    return marker, {tid: row for tid, row in records.items()
+                    if isinstance(row, dict) and (
+                        type(row.get('turn')) is int and row['turn'] == marker or
+                        'turn' not in row and isinstance(row.get('call_id'), str)
+                        and row['call_id'] in calls)}
+
+
+def context_reminder(session):
+    """Restore bounded task identities, without importing child conclusions.
+
+    The persisted projection can lag a worker; collection refreshes it. It is
+    sufficient to prevent duplicate dispatch when older receipts are compacted.
+    """
+    _, records = _turn_records(session)
+    task_runs = session.get('task_runs')
+    saved = {row.get('id'): row for row in (task_runs if isinstance(task_runs, list) else [])
+             if isinstance(row, dict) and isinstance(row.get('id'), str)}
+    rows = []
+    for tid, record in records.items():
+        if (record.get('collected') is True or not isinstance(tid, str)
+                or not re.fullmatch(r'task-[A-Za-z0-9_-]{1,160}', tid)):
+            continue
+        status = saved.get(tid, {}).get('status')
+        rows.append({'task_id': tid, 'last_status': status if status in
+                     (RUNNING, COMPLETED, FAILED, CANCELLED) else 'unknown'})
+        if len(rows) == MAX_TASKS_PER_TURN:
+            break
+    if not rows:
+        return ''
+    return ('Recorded uncollected tasks for this human turn (status may lag). '
+            'These tasks already exist; do not dispatch duplicates after compaction. '
+            'Continue independent work; use task_collect to refresh and retrieve results '
+            'before finishing. This metadata is not evidence of completion.\n' +
+            json.dumps(rows, separators=(',', ':')))
 
 
 class TaskCoordinator:

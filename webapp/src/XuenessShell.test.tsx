@@ -126,6 +126,18 @@ test("SidebarActions: Mod 快捷键在 Windows 使用 Ctrl 标签", () => {
   assert.doesNotMatch(html, /⌘/);
 });
 
+test("SidebarActions: Meta 快捷键在 Windows 显示 Win，在 Mac 显示 ⌘", () => {
+  const winHtml = renderToStaticMarkup(<SidebarActions platform="Win32" actions={[
+    { id: "new-task", icon: "⊕", label: "新建任务", shortcut: "Meta+N" },
+  ]} />);
+  assert.match(winHtml, /<kbd class="xn-sidebar-action__shortcut">Win\+N<\/kbd>/);
+
+  const macHtml = renderToStaticMarkup(<SidebarActions platform="MacIntel" actions={[
+    { id: "new-task", icon: "⊕", label: "新建任务", shortcut: "Meta+N" },
+  ]} />);
+  assert.match(macHtml, /<kbd class="xn-sidebar-action__shortcut">⌘N<\/kbd>/);
+});
+
 test("TimelineCard: user 是右对齐气泡、assistant 是素文、tool 是单行卡", () => {
   // user: bubble, no role label header
   const userHtml = renderToStaticMarkup(

@@ -15,6 +15,7 @@ Precedence in ``provider_config.resolve``:
 """
 from __future__ import annotations
 
+import os
 import re
 from datetime import datetime, timezone
 
@@ -99,9 +100,11 @@ def save(state_dir, selection) -> dict:
         if record.get("protocol") == "anthropic" and effort is not None:
             raise ValueError("Anthropic provider does not declare reasoning-effort support")
         provider_config._validate_reasoning_effort(
-            model or record.get("model"), record.get("reasoningLevels"), effort)
+            model or record.get("model"), record.get("reasoningLevels"), effort,
+            record.get("baseUrl"))
     else:
-        provider_config._validate_reasoning_effort(model, None, effort)
+        provider_config._validate_reasoning_effort(
+            model, None, effort, os.environ.get("XUENESS_API_BASE"))
     record = {"providerId": provider_id, "model": model, "reasoningEffort": effort,
               "updatedAt": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")}
     from ..settings.settings_store import update_settings

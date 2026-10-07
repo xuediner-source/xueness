@@ -7,7 +7,8 @@
   "defaultEnabled": true,
   "dependencies": [],
   "tools": [
-    "skill_read"
+    "skill_read",
+    "skill_validate"
   ],
   "commands": [
     "skills"
@@ -19,6 +20,9 @@
     "skills"
   ],
   "capabilities": [],
+  "toolEvents": {
+    "events": ["after_tool_execution"]
+  },
   "httpFamilies": [
     "resources/skills",
     "resources/skills/files"
@@ -27,7 +31,10 @@
     "skills",
     "file_skills",
     "files_api",
-    "skills_cli"
+    "skills_cli",
+    "composer_capabilities",
+    "creator_tooling",
+    "continuity"
   ],
   "features": [
     {
@@ -41,6 +48,11 @@
       "nameEn": "Bounded skill body reading"
     },
     {
+      "id": "skills.context_restore",
+      "name": "压缩后的当前技能索引与按需重读",
+      "nameEn": "Current skill pointers and on-demand reload after compaction"
+    },
+    {
       "id": "skills.file_skills",
       "name": "目录型技能发现与来源覆盖",
       "nameEn": "Directory-shaped skill discovery and source shadowing"
@@ -49,6 +61,11 @@
       "id": "skills.cli",
       "name": "skills list/inspect 命令与聊天 /skills",
       "nameEn": "skills list/inspect commands and in-chat /skills"
+    },
+    {
+      "id": "skills.skill_creator",
+      "name": "技能创建与 SKILL.md 校验",
+      "nameEn": "Skill creation and SKILL.md validation"
     }
   ],
   "frontendModules": []

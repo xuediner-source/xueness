@@ -9,6 +9,7 @@ import { Select } from "../../ui/Select";
 import { XuenessShortcutsPanel } from "./XuenessShortcutsPanel";
 import { SettingsGroup, SettingsRow } from "./SettingsPrimitives";
 import { CODE_PREVIEW_THEME_OPTIONS, CodePreview, isCodePreviewTheme, type CodePreviewTheme } from "../../ui/CodePreview";
+import { displayBinding } from "../../xuenessShortcutDisplay";
 
 // ============================================================================
 // 5. SettingsSections
@@ -348,7 +349,7 @@ export function SettingsSections({
         <SettingsRow
           label={tr("发送消息快捷键")}
           description={tr("选择 Enter 或 Mod+Enter 发送。Shift+Enter 始终用于换行。")}
-          control={select("发送消息快捷键", values.sendShortcut === "mod-enter" ? "mod-enter" : "enter", <><option value="enter">Enter</option><option value="mod-enter">Mod+Enter</option></>, (next) => { void update("sendShortcut", next); })}
+          control={select("发送消息快捷键", values.sendShortcut === "mod-enter" ? "mod-enter" : "enter", <><option value="enter">Enter</option><option value="mod-enter">{displayBinding('Mod+Enter')}</option></>, (next) => { void update("sendShortcut", next); })}
         />
       </SettingsGroup>
       <div className="xn-settings-shortcut-hints" aria-label={tr("固定快捷键")}>

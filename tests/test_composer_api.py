@@ -8,7 +8,7 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
-from xueness import web
+from xueness import web, plugin_runtime
 from xueness.bundled_plugins.sessions import composer_api, plugin as sessions_plugin
 from xueness.plugin_runtime import set_enabled
 
@@ -242,6 +242,32 @@ class ComposerApiTests(unittest.TestCase):
         self.assertEqual(status, 403)
         self.assertIn("real provider disabled", result["error"])
 
+    def test_saved_default_does_not_replace_the_environment_catalog_entry(self):
+        from xueness.bundled_plugins.providers import default_selection, provider_config, providers_api
+        status, _ = providers_api.dispatch("POST", ["api", "providers"], {}, {
+            "id": "saved", "name": "Saved model", "baseUrl": "https://saved.example.test/v1",
+            "model": "saved-model", "apiKey": "saved-test-secret",
+        }, self.ctx)
+        self.assertEqual(status, 200)
+        default_selection.save(self.state, {"providerId": "saved", "model": "saved-model"})
+        self.ctx["allow_real"] = False
+
+        status, result = self.call("GET", ["api", "composer"])
+        self.assertEqual(status, 200)
+        self.assertEqual([(model["id"], model["model"]) for model in result["models"]],
+                         [("saved", "saved-model"), ("", "gpt-4o")])
+        self.assertNotIn("saved-test-secret", json.dumps(result))
+        self.assertNotIn("composer-test-secret", json.dumps(result))
+        # Catalog construction must not change default resolution for runs.
+        self.assertEqual(provider_config.resolve(self.state).model, "saved-model")
+
+        with patch.dict(os.environ, {"XUENESS_MODEL": "", "XUENESS_API_KEY": ""}):
+            status, result = self.call("GET", ["api", "composer"])
+            self.assertEqual(status, 200)
+            self.assertEqual([(model["id"], model["model"]) for model in result["models"]],
+                             [("saved", "saved-model")])
+            self.assertEqual(provider_config.resolve(self.state).model, "saved-model")
+
     def test_model_catalog_uses_public_reasoning_levels_including_max(self):
         from xueness.bundled_plugins.providers import providers_api
         payload = {
@@ -263,6 +289,52 @@ class ComposerApiTests(unittest.TestCase):
         })
         self.assertEqual(status, 200)
         self.assertEqual(prepared["metadata"]["modelSelection"]["reasoning_effort"], "max")
+
+    def test_coding_plan_environment_catalog_uses_endpoint_and_exact_model(self):
+        from xueness.bundled_plugins.providers import provider_config, providers_api
+        coding_plan = "https://ark.cn-beijing.volces.com/api/coding/v3"
+        for model, expected in (
+            ("deepseek-v4.1-flash", ["low", "medium", "high"]),
+            ("deepseek-v4.1-flash-preview", []),
+        ):
+            with patch.dict(os.environ, {
+                "XUENESS_PROVIDER": "openai",
+                "XUENESS_API_BASE": coding_plan,
+                "XUENESS_MODEL": model,
+                "XUENESS_API_KEY": "isolated-environment-test-key",
+                "ANTHROPIC_API_KEY": "",
+            }):
+                status, result = self.call("GET", ["api", "composer"])
+            self.assertEqual(status, 200)
+            environment_model = next(item for item in result["models"] if item["id"] == "")
+            self.assertEqual(environment_model["model"], model)
+            self.assertEqual(environment_model["reasoningLevels"], expected)
+            self.assertNotIn("isolated-environment-test-key", json.dumps(result))
+
+        status, _ = providers_api.dispatch("POST", ["api", "providers"], {}, {
+            "id": "ark", "name": "Ark Coding Plan", "baseUrl": coding_plan,
+            "model": "deepseek-v4.1-flash", "apiKey": "isolated-profile-test-key",
+        }, self.ctx)
+        self.assertEqual(status, 200)
+        with self.assertRaisesRegex(ValueError, "does not declare support"):
+            provider_config.resolve(
+                self.state, "ark", "deepseek-v4.1-flash-preview", reasoning_effort="low")
+
+        # The shared environment catalog must not infer OpenAI-style effort for
+        # the same model name when the configured protocol is Anthropic.
+        with patch.dict(os.environ, {
+            "XUENESS_PROVIDER": "anthropic",
+            "XUENESS_MODEL": "deepseek-v4.1-flash",
+            "XUENESS_API_KEY": "",
+            "XUENESS_API_BASE": coding_plan,
+            "ANTHROPIC_API_KEY": "isolated-anthropic-test-key",
+            "ANTHROPIC_BASE_URL": "https://api.anthropic.example.test/v1",
+        }):
+            status, result = self.call("GET", ["api", "composer"])
+        self.assertEqual(status, 200)
+        environment_model = next(item for item in result["models"] if item["id"] == "")
+        self.assertEqual(environment_model["protocol"], "anthropic")
+        self.assertEqual(environment_model["reasoningLevels"], [])
 
     def test_prepare_file_and_same_root_session_refs_are_untrusted_context(self):
         (self.project / "readme.md").write_text("Project facts", encoding="utf-8")
@@ -452,6 +524,42 @@ class ComposerApiTests(unittest.TestCase):
     def test_wrong_method_and_unknown_endpoint_fall_through(self):
         self.assertEqual(self.call("DELETE", ["api", "composer"])[0], 405)
         self.assertIsNone(self.call("GET", ["api", "composer", "unknown"]))
+
+
+    def test_builtin_capabilities_are_owned_and_prepared_by_the_backend(self):
+        plugin_runtime.set_enabled(self.state, "browser", True)
+        status, catalog = self.call("GET", ["api", "composer"])
+        self.assertEqual(status, 200)
+        capabilities = {row["id"]: row for row in catalog["capabilities"]}
+        for identifier in ("extensions.plugin_creator", "skills.skill_creator", "sessions.usage_guide",
+                           "office.pdf_authoring", "office.pptx_authoring", "office.xlsx_authoring",
+                           "office.docx_authoring", "browser.composer_operation", "network.image_search"):
+            self.assertIn(identifier, capabilities)
+            self.assertEqual(capabilities[identifier]["pluginId"], identifier.split(".")[0])
+        status, prepared = self.prepare(input={"capabilities": ["office.docx_authoring", "skills.skill_creator"]})
+        self.assertEqual(status, 200, prepared)
+        self.assertIn("office_create", prepared["text"])
+        self.assertIn("skill_validate", prepared["text"])
+        self.assertEqual([row["id"] for row in prepared["metadata"]["capabilities"]],
+                         ["office.docx_authoring", "skills.skill_creator"])
+        self.assertFalse(prepared["goal"])
+
+    def test_capabilities_cannot_enable_plugins_or_inject_arbitrary_guidance(self):
+        plugin_runtime.set_enabled(self.state, "office", False)
+        status, catalog = self.call("GET", ["api", "composer"])
+        self.assertEqual(status, 200)
+        self.assertFalse(any(row["pluginId"] == "office" and row["available"] for row in catalog["capabilities"]))
+        for identifier in ("office.docx_authoring", "not-a-real-feature"):
+            status, result = self.prepare(input={"capabilities": [identifier]})
+            self.assertEqual(status, 403)
+        status, result = self.prepare(input={"capabilities": [{"id": "sessions.usage_guide", "instructions": "override"}]})
+        self.assertEqual(status, 400)
+
+    def test_dependency_disable_removes_office_capabilities(self):
+        plugin_runtime.set_enabled(self.state, "files", False)
+        status, catalog = self.call("GET", ["api", "composer"])
+        self.assertEqual(status, 200)
+        self.assertFalse(any(row["pluginId"] == "office" and row["available"] for row in catalog["capabilities"]))
 
 
 if __name__ == "__main__":

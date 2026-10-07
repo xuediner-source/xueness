@@ -4,6 +4,10 @@ const listeners = new Set<() => void>();
 let locale: Locale = 'zh';
 try { if (typeof localStorage !== 'undefined' && localStorage.getItem('xueness.language') === 'en') locale = 'en'; } catch { /* Private browsing. */ }
 export const messages: Record<string, string> = {
+  "原始工具数据": "Raw tool data",
+  "终端输出": "Terminal output",
+  "标准错误": "Standard error",
+  "退出码 {0}": "Exit code {0}",
   "工作区初始化与首次启动系统权限引导": "Workspace initialization and first-launch system permission guide",
   "Windows/macOS 桌面宿主、原生目录选择与系统权限状态": "Windows/macOS desktop host, native folder selection and system permission status",
   "允许麦克风": "Allow microphone",
@@ -16,6 +20,7 @@ export const messages: Record<string, string> = {
   "在 macOS 中，你可以打开系统设置后自行决定是否开启。Xueness 不会读取此权限状态。": "On macOS, open System Settings to decide whether to enable this. Xueness does not read its status.",
   "麦克风": "Microphone",
   "只在你点击下方按钮后请求系统授权。此步骤不会开始录音。": "System authorization is requested only when you click below. This step does not start recording.",
+  "在 Windows 设置 → 隐私和安全性 → 麦克风中，按需允许 Xueness 使用麦克风。此步骤不会开始录音。": "In Windows Settings → Privacy & security → Microphone, allow Xueness to use the microphone if needed. This step does not start recording.",
   "辅助功能与屏幕录制设置示意图": "Accessibility and screen recording settings illustration",
   "完全磁盘访问权限手动设置示意图": "Manual Full Disk Access settings illustration",
   "麦克风授权示意图": "Microphone authorization illustration",
@@ -271,6 +276,16 @@ export const messages: Record<string, string> = {
   "自动编辑文件。": "Edit files automatically.",
   "完全访问": "Full access",
   "减少确认次数。": "Run with fewer confirmations.",
+  "跳过常规工具审批。": "Skip ordinary tool approvals.",
+  "切换到完全访问？": "Switch to full access?",
+  "完全访问会跳过常规的单项工具审批。Agent 可不经逐项批准使用文件编辑、命令、MCP 和公网网络工具。": "Full access skips ordinary per-tool approvals. The agent can use file editing, commands, MCP and public network tools without per-action approval.",
+  "内置文件工具仍受工作区路径边界限制。": "Built-in file tools remain confined to workspace paths.",
+  "本地命令以当前操作系统账户运行；如果账户有权限，命令可能访问工作区外文件。": "Local commands run as your current OS account and may access files outside the workspace when that account has permission.",
+  "网络工具仍限于受校验的公网 HTTPS；网页搜索还需要已配置的搜索服务。": "Network tools remain limited to checked public HTTPS; web search also requires a configured search service.",
+  "远程 SSH 命令仍需单独确认具体操作。": "Remote SSH commands still require separate confirmation of the specific action.",
+  "操作系统权限仍适用，系统拒绝的操作仍会失败。": "Operating system permissions still apply, and actions the system denies will still fail.",
+  "确认完全访问": "Confirm full access",
+  "模型、权限与上下文": "Model, permissions and context",
   "只读并先出计划。": "Read only, and write the plan first.",
   "编辑前先出计划。": "Plan before editing.",
   "自动归档旧任务": "Auto-archive old tasks",
@@ -411,6 +426,7 @@ export const messages: Record<string, string> = {
   "默认": "Default",
   "停止": "Stop",
   "停止当前任务": "Stop current task",
+  "停止当前任务 (Esc)": "Stop current task (Esc)",
   "正在停止": "Stopping",
   "移除上下文：{0}": "Remove context: {0}",
   "移除附件：{0}": "Remove attachment: {0}",
@@ -474,6 +490,7 @@ export const messages: Record<string, string> = {
   "插件": "Plugins",
   "目标": "Goal",
   "添加上下文或能力": "Add context or capability",
+  "最多选择 8 项能力；取消一项后可继续选择。": "You can select up to 8 capabilities. Deselect one to choose another.",
   "添加附件": "Attach files",
   "创建工作流": "Create workflow",
   "标记为目标任务": "Mark as a goal",
@@ -637,6 +654,7 @@ export const messages: Record<string, string> = {
   "输入辅助": "Input helpers",
   "运行选项": "Run options",
   "Enter 发送 · Shift+Enter 换行": "Enter to send · Shift+Enter for a new line",
+  "按 {0} 发送": "Press {0} to send",
   "搜索插件名称、ID、功能、工具或命令…": "Search plugin names, IDs, features, tools or commands…",
   "插件状态筛选": "Filter by plugin state",
   "已显示 {0} / {1} 个插件": "Showing {0} of {1} plugins",
@@ -866,8 +884,22 @@ export const messages: Record<string, string> = {
 Object.assign(messages, {"编辑 {0}": "Edit {0}", "删除 {0}": "Delete {0}", "新建{0}": "New {0}", "已选择 {0}": "Selected {0}", "统计周期: {0}": "Period: {0}", "错误码: {0}": "Error code: {0}", "删除{0}「{1}」？配置文件会从资源目录移除。": "Delete {0} “{1}”? Its configuration file will be removed.", "恢复任务 {0}": "Restore task {0}", "预览 {0}": "Preview {0}"});
 Object.assign(messages, {"技能": "Skills", "子代理": "Subagents", "插件": "Plugins", "描述": "Description", "正文": "Body", "模板正文": "Template body", "事件": "Event", "这个技能做什么（一句话）": "What this skill does", "技能正文（Markdown）": "Skill body (Markdown)", "这个命令做什么（一句话）": "What this command does", "命令模板正文": "Command template", "例如 python3 hook.py": "For example: python3 hook.py", "这个服务器做什么（可选）": "What this server does (optional)", "这个子代理负责什么（可选）": "Subagent role (optional)", "这个插件是什么（可选）": "What this plugin does (optional)", "ID 不能为空": "ID is required", "ID 不能超过 64 个字符": "ID must not exceed 64 characters", "ID 只能包含字母、数字、点、下划线和连字符": "ID may only contain letters, digits, dots, underscores and hyphens", "ID 不能是点号": "ID cannot be dot-only"});
 Object.assign(messages, {"名称": "Name", "传输方式": "Transport", "程序路径": "Executable path", "参数 JSON": "Arguments JSON", "认证环境变量 JSON": "Authentication environment variables JSON", "允许本机 HTTP": "Allow loopback HTTP", "子代理指令": "Subagent instructions", "JSON 配置格式无效": "Invalid JSON configuration"});
+Object.assign(messages, {"工作中": "Working", "工作中 {0}": "Working for {0}", "用时 {0}": "Worked for {0}", "复制错误信息": "Copy error details"});
+Object.assign(messages, {"工作过程": "Work history", "已工作 {0}": "Worked for {0}", "{0} 次工具调用": "{0} tool calls"});
 Object.assign(messages, {"按需加载技能": "Load skills on demand"});
 Object.assign(messages, {
+  '思考强度': 'Reasoning effort',
+  '关闭思考': 'Off',
+  '极低': 'Minimal',
+  '低': 'Low',
+  '中等': 'Medium',
+  '高': 'High',
+  '极高': 'Extra high',
+  '最高': 'Max',
+  '恢复默认思考强度': 'Reset reasoning effort',
+  '拖动选择，松开生效。只使用此模型支持的档位。': 'Drag to choose, release to apply. Only supported model levels are offered.',
+  '此模型尚未声明可调推理档位，当前使用服务默认。': 'This model has no declared reasoning levels. The service default is used.',
+  '配置模型推理档位': 'Configure reasoning levels',
   "桌面端": "Desktop",
   "查看桌面平台、版本与私有数据位置。": "View the desktop platform, version and private data directory.",
   "插件管理": "Plugin manager",
@@ -1778,21 +1810,10 @@ Object.assign(messages, {
   "结束时间": "Ended at",
 });
 
-// 模型选择弹层（分档预设、New/Custom、详情卡）与自定义模型空状态。
+// 统一模型选择弹层、详情卡与自定义模型空状态。
 Object.assign(messages, {
-  "分档预设": "Model presets",
   "自动": "Auto",
-  "旗舰": "Ultimate",
-  "性能": "Performance",
-  "高效": "Efficient",
-  "显示当前标签下的全部模型，不改已选模型。": "Show every model in the current tab. The selected model stays as it is.",
-  "只列出当前标签里已声明最大上下文窗口的模型。": "List only models in this tab that declare the largest context window.",
-  "只列出已声明推理档位的模型。": "List only models that declare reasoning levels.",
-  "只列出本地轻量档模型。": "List only local lightweight models.",
-  "新模型": "New",
   "模型目录": "Model catalog",
-  "此标签下暂无模型": "No models in this tab",
-  "没有模型符合这个分档。": "No models match this preset.",
   "成本倍率": "Cost multiplier",
   "上下文": "Context",
   "推理": "Thinking",
@@ -1907,9 +1928,69 @@ Object.assign(messages, {
   "开发或源码运行不检查更新。": "Development and source runs do not check for updates.",
   "便携版不支持应用内更新，请使用 NSIS 安装版。": "The portable build cannot update in place. Use the NSIS installer build.",
   "macOS 未签名版本可在客户端下载并打开 DMG，仍需在 Finder 中完成替换。Windows 便携版需换用安装版。": "Unsigned macOS builds download and open the DMG in the client; replace the application in Finder. Windows portable builds require the installer build.",
+  "更新下载到客户端，打开 DMG 后请在 Finder 中将 Xueness 替换到应用程序文件夹。": "Updates download in the client. Open the DMG and replace Xueness in the Applications folder using Finder.",
+  "更新下载到客户端，结束运行中的任务后点击“重启并更新”完成安装。会话和设置会保留。": "Updates download in the client. Finish running tasks, then select Restart and update to install. Sessions and settings are retained.",
+  "当前运行方式不支持应用内安装更新。Windows 请使用安装版，源码运行请更新源码。": "This runtime cannot install updates in the app. On Windows, use the installer build. For source runs, update the source code.",
+  "正在确认当前客户端的更新安装方式…": "Checking how this client installs updates…",
+  "查看当前系统支持的权限，可随时跳过。": "Review the permissions available on this system. You can skip at any time.",
+  "描述你想完成的事，Xueness 会在你的工作区里执行。": "Describe what you want to do. Xueness will work in your workspace.",
   "此 macOS 应用尚未签名，不能自动覆盖安装；可下载 DMG 并在 Finder 中手动替换应用。": "This unsigned macOS app cannot overwrite itself. Download the DMG and replace the application in Finder.",
   "正在打开 DMG。请在 Finder 中手动替换应用。": "Opening the DMG. Replace the application in Finder.",
   "DMG 已在 Finder 中打开；请手动替换应用以完成更新。": "DMG opened in Finder. Replace the application to finish updating.",
   "正在退出并启动安装程序。": "Quitting and starting the installer.",
   "更新操作失败": "Update action failed",
+});
+
+Object.assign(messages, {
+  "移除能力": "Remove capability",
+  "目标内容": "Goal content",
+  "保存目标": "Save goal",
+  "确认替换现有目标": "Confirm replacement of the current goal",
+  "目标保存在当前会话中，每轮提醒模型；修改不会自动启动任务。": "The goal is saved with this session and included in each request. Editing it does not start a run.",
+});
+
+Object.assign(messages, {"启用所属插件后可用": "Enable the owning plugin to use this capability", "最近一次请求的输入上下文": "Input context of the latest request"});
+
+Object.assign(messages, {
+  "文件和文件夹": "Files and folders", "终端命令": "Terminal commands",
+  "互联网与已连接的工具": "Internet and connected tools",
+  "这可能造成文件丢失、敏感数据泄露或执行非预期指令。你可以随时切回变更前确认。": "This may cause file loss, expose sensitive data or execute unintended instructions. You can switch back to asking before changes at any time.",
+});
+
+Object.assign(messages, {"完全访问会跳过常规的单项工具审批。Agent 可不经逐项批准使用文件编辑、本地命令、浏览器操作、MCP 和公网网络工具。": "Full access skips routine individual tool approvals. The agent may edit files, run local commands, operate the browser, and use enabled MCP and public-network tools without asking for each action."});
+
+Object.assign(messages, {"附件": "Attachment"});
+
+Object.assign(messages, {
+  '搜索能力或上下文': 'Search capabilities or context',
+  '没有匹配的能力或上下文': 'No matching capabilities or context',
+  '已添加能力。描述具体需求后发送，即可使用。': 'Capability added. Describe what you need and send your message to use it.',
+  '选择或配置模型后即可发送。': 'Select or configure a model to send your message.',
+  '正在加载模型…': 'Loading models…',
+});
+
+Object.assign(messages, {
+  '等待模型响应…': 'Waiting for the model…',
+  '正在执行工具…': 'Running tools…',
+  '正在校验结果…': 'Checking results…',
+  '正在处理请求…': 'Processing the request…',
+  '当前模型请求状态': 'Current model request status',
+  '已报告 Token 用量': 'Reported token usage',
+  '缓存 Token': 'Cached tokens',
+  '尚无已完成请求耗时记录': 'No completed request timing records yet',
+  '未知': 'Unknown',
+  '等待启动': 'Waiting to start',
+  '已运行': 'Elapsed',
+});
+
+Object.assign(messages, {
+  '步骤耗时与实际用量': 'Step timings and reported usage',
+  '等待、思考和生成按收到流数据的时段计时，包含传输等待；非流式请求无法拆分思考与生成。缺失 Token 和重试信息显示 —。': 'Waiting, reasoning and generation are timed from received stream data, including transport delay. Non-streaming requests cannot separate reasoning and generation. Missing token and retry data appears as —.',
+  '步骤': 'Step',
+  '模型请求': 'Model request',
+  '等待': 'Waiting',
+  '思考流': 'Reasoning stream',
+  '生成流': 'Generation stream',
+  '工具': 'Tools',
+  '失败重试': 'Failed retries',
 });

@@ -1,3 +1,5 @@
+import { projectJournalAssistantWork } from './plugins/sessions/conversationJournalProjection';
+
 /**
  * Xueness workbench data layer.
  *
@@ -204,9 +206,13 @@ export type FilePreview = {
   text: string;
 };
 
+/** 工具调用展示状态：显式枚举（参考 zcode 的 CompactToolCallState + stopped 特判）。
+ * 展示层只做显式映射，不再用 errorCode 推导；"cancelled" 等状态由行构造时确定。 */
+export type ToolDisplayStatus = "queued" | "running" | "ok" | "error" | "cancelled" | "stopped";
+
 export type TimelineRow =
   | { kind: "user"; seq: number; turnId: string; text: string }
-  | { kind: "assistant"; seq: number; turnId: string; text: string; reasoning?: string; messageIndex?: number; streaming?: boolean }
+  | { kind: "assistant"; seq: number; turnId: string; text: string; reasoning?: string; messageIndex?: number; streaming?: boolean; startedAt?: number; endedAt?: number; interrupted?: boolean }
   | {
       kind: "tool";
       seq: number;
@@ -214,7 +220,7 @@ export type TimelineRow =
       toolCallId: string;
       name: string;
       subject: string;
-      status: "running" | "ok" | "error";
+      status: ToolDisplayStatus;
       error: string;
       errorCode: string;
       input?: Record<string, unknown>;
@@ -229,13 +235,14 @@ export function withAssistantStream(rows: TimelineRow[], stream: WorkbenchSessio
   const latest = rows[rows.length - 1];
   if (latest?.kind === "assistant" && latest.text === stream.text) {
     const streaming = stream.status === "streaming";
-    if (latest.streaming === streaming && (!stream.reasoning || latest.reasoning === stream.reasoning)) return rows;
-    return [...rows.slice(0, -1), { ...latest, ...(stream.reasoning ? { reasoning: stream.reasoning } : {}), streaming }];
+    const interrupted = stream.status === "interrupted";
+    if (latest.streaming === streaming && (latest.interrupted === true) === interrupted && (!stream.reasoning || latest.reasoning === stream.reasoning)) return rows;
+    return [...rows.slice(0, -1), { ...latest, ...(stream.reasoning ? { reasoning: stream.reasoning } : {}), streaming, interrupted }];
   }
   return [...rows, { kind: "assistant", seq: rows.reduce((max, row) => Math.max(max, row.seq), 0) + 1,
     turnId: stream.id, text: stream.text,
     ...(stream.reasoning ? { reasoning: stream.reasoning } : {}),
-    streaming: stream.status === "streaming" }];
+    streaming: stream.status === "streaming", ...(stream.status === "interrupted" ? { interrupted: true } : {}) }];
 }
 
 function shallowEqualRecords(a: Record<string, unknown> | undefined | null, b: Record<string, unknown> | undefined | null): boolean {
@@ -257,7 +264,8 @@ function isEqualTimelineRow(a: TimelineRow, b: TimelineRow): boolean {
     return a.turnId === b.turnId && a.text === b.text;
   }
   if (a.kind === "assistant" && b.kind === "assistant") {
-    return a.turnId === b.turnId && a.text === b.text && a.reasoning === b.reasoning && a.messageIndex === b.messageIndex && a.streaming === b.streaming;
+    return a.turnId === b.turnId && a.text === b.text && a.reasoning === b.reasoning && a.messageIndex === b.messageIndex && a.streaming === b.streaming
+      && a.startedAt === b.startedAt && a.endedAt === b.endedAt && a.interrupted === b.interrupted;
   }
   if (a.kind === "tool" && b.kind === "tool") {
     if (a.turnId !== b.turnId || a.toolCallId !== b.toolCallId || a.name !== b.name || a.subject !== b.subject || a.status !== b.status || a.error !== b.error || a.errorCode !== b.errorCode) return false;
@@ -334,44 +342,61 @@ export function stabilizeSessionList(prev: SessionSummary[] | undefined, next: S
   return result;
 }
 
+/** Compare JSON-shaped snapshots independent of object key order. API payloads
+ * are parsed JSON, so enumerable own fields and array order define identity. */
+function areSessionSnapshotsEqual(a: unknown, b: unknown): boolean {
+  const pending: Array<[unknown, unknown]> = [[a, b]];
+  const seen = new WeakMap<object, WeakSet<object>>();
+
+  while (pending.length > 0) {
+    const [left, right] = pending.pop()!;
+    if (Object.is(left, right)) continue;
+    if (left === null || right === null || typeof left !== "object" || typeof right !== "object") return false;
+
+    const leftArray = Array.isArray(left);
+    if (leftArray !== Array.isArray(right)) return false;
+    if (!leftArray) {
+      const leftPrototype = Object.getPrototypeOf(left);
+      const rightPrototype = Object.getPrototypeOf(right);
+      // Parsed payload objects are plain records. Treat other object types as
+      // changed unless they were already identical above.
+      if (leftPrototype !== rightPrototype || (leftPrototype !== Object.prototype && leftPrototype !== null)) return false;
+    }
+
+    let paired = seen.get(left);
+    if (paired?.has(right)) continue;
+    if (!paired) {
+      paired = new WeakSet<object>();
+      seen.set(left, paired);
+    }
+    paired.add(right);
+
+    if (leftArray) {
+      const leftItems = left as unknown[];
+      const rightItems = right as unknown[];
+      if (leftItems.length !== rightItems.length) return false;
+      for (let index = 0; index < leftItems.length; index++) {
+        pending.push([leftItems[index], rightItems[index]]);
+      }
+      continue;
+    }
+
+    const leftRecord = left as Record<string, unknown>;
+    const rightRecord = right as Record<string, unknown>;
+    const keys = Object.keys(leftRecord);
+    if (keys.length !== Object.keys(rightRecord).length) return false;
+    for (const key of keys) {
+      if (!Object.prototype.hasOwnProperty.call(rightRecord, key)) return false;
+      pending.push([leftRecord[key], rightRecord[key]]);
+    }
+  }
+  return true;
+}
+
 /** Structural sharing for session details so polling returns the stable object reference when data has not changed. */
 export function stabilizeSession(prev: WorkbenchSession | null | undefined, next: WorkbenchSession): WorkbenchSession {
   if (!prev || prev.id !== next.id) return next;
-  if (prev === next) return prev;
-
-  const basicEqual = (
-    prev.status === next.status &&
-    prev.task === next.task &&
-    prev.title === next.title &&
-    prev.pinned === next.pinned &&
-    prev.root === next.root &&
-    prev.pause_reason === next.pause_reason
-  );
-  if (!basicEqual) return next;
-
-  const streamPrev = prev.streaming;
-  const streamNext = next.streaming;
-  const streamingEqual = streamPrev === streamNext || (
-    Boolean(streamPrev) === Boolean(streamNext) &&
-    (!streamPrev || !streamNext || (
-      streamPrev.id === streamNext.id &&
-      streamPrev.status === streamNext.status &&
-      streamPrev.text === streamNext.text &&
-      streamPrev.reasoning === streamNext.reasoning &&
-      streamPrev.text_format === streamNext.text_format
-    ))
-  );
-  if (!streamingEqual) return next;
-
-  // Check lightweight budget calibration or runtime telemetry
-  if (JSON.stringify(prev.runtime_budget) !== JSON.stringify(next.runtime_budget)) return next;
-  if (JSON.stringify(prev.runtime_activity) !== JSON.stringify(next.runtime_activity)) return next;
-  if (JSON.stringify(prev.todos) !== JSON.stringify(next.todos)) return next;
-  if (JSON.stringify(prev.queued_messages) !== JSON.stringify(next.queued_messages)) return next;
-  if (JSON.stringify(prev.pending) !== JSON.stringify(next.pending)) return next;
-  if (JSON.stringify(prev.completion) !== JSON.stringify(next.completion)) return next;
-
-  return prev;
+  return areSessionSnapshotsEqual(prev, next) ? prev : next;
 }
 
 // -- implementation below is filled by the data-layer lane ------------------
@@ -776,11 +801,13 @@ export async function sendTurn(
   text: string,
   choices?: RunChoices,
   preparedToken?: string,
+  onAccepted?: () => void,
 ): Promise<SubmissionResult<void>> {
   let accepted = false;
   try {
     await requestPost(sessionPath(id, "/messages"), { text, ...(preparedToken ? { prepared_token: preparedToken } : {}) });
     accepted = true;
+    onAccepted?.();
     await runSessionWith(id, choices);
     return { ok: true, value: undefined };
   } catch (error) {
@@ -902,24 +929,39 @@ export function hydrateTimelineTools(rows: TimelineRow[], journal: unknown): Tim
  */
 export function hydrateTimelineJournalRows(rows: TimelineRow[], journal: unknown, history: ReasoningHistoryEntry[] = []): TimelineRow[] {
   if (!journal || typeof journal !== "object" || Array.isArray(journal)) return rows;
-  const messages = (journal as Record<string, unknown>).messages;
+  const source = journal as Record<string, unknown>;
+  const messages = source.messages;
   if (!Array.isArray(messages)) return rows;
   const reasoning = new Map(history.filter(item => Number.isInteger(item?.message_index) && typeof item?.text === "string")
     .map(item => [item.message_index, item.text.slice(0, 32_000)]));
   const texts = new Map<number, { kind: "user" | "assistant"; text: string; messageIndex: number }>();
-  let seq = 1, firstUser = true;
+  // events.v1 inserts historical completion records before the next user
+  // message. Ignoring them shifts every later message and its reasoning.
+  const completionCounts = new Map<string, number>();
+  for (const record of Array.isArray(source.completion_history) ? source.completion_history.slice(-200) : []) {
+    if (!record || typeof record !== 'object' || Array.isArray(record) || typeof record.turn_id !== 'string' || !/^turn-[1-9][0-9]*$/u.test(record.turn_id)) continue;
+    completionCounts.set(record.turn_id, (completionCounts.get(record.turn_id) ?? 0) + 1);
+  }
+  let seq = 1, firstUser = true, turn = 1;
   messages.forEach((message, messageIndex) => {
     if (!message || typeof message !== "object") return;
     if (message.role === "assistant") {
       for (const call of Array.isArray(message.tool_calls) ? message.tool_calls : []) if (call && typeof call === "object") seq++;
       if (message.content) texts.set(++seq, { kind:"assistant", text:String(message.content), messageIndex });
     } else if (message.role === "tool") seq++;
-    else if (message.role === "user" && typeof message.content === "string") {
+    else if (message.role === "user") {
       if (firstUser) firstUser = false;
-      else texts.set(++seq, { kind:"user", text:message.content, messageIndex });
+      else {
+        seq += completionCounts.get(`turn-${turn}`) ?? 0;
+        turn += 1;
+        const content = Array.isArray(message.content) ? message.content.filter((part: unknown) =>
+          part && typeof part === 'object' && (part as Record<string, unknown>).type === 'text' && typeof (part as Record<string, unknown>).text === 'string')
+          .map((part: { text: string }) => part.text).join('\n') : String(message.content ?? '');
+        texts.set(++seq, { kind:"user", text:content, messageIndex });
+      }
     }
   });
-  return rows.map(row => {
+  const hydrated = rows.map(row => {
     if (row.kind !== "user" && row.kind !== "assistant") return row;
     const full = texts.get(row.seq);
     if (!full || full.kind !== row.kind) return row;
@@ -927,6 +969,7 @@ export function hydrateTimelineJournalRows(rows: TimelineRow[], journal: unknown
     return {...row, text:full.text, messageIndex:full.messageIndex,
       ...(reasoning.has(full.messageIndex) ? { reasoning:reasoning.get(full.messageIndex) } : {})};
   });
+  return projectJournalAssistantWork(hydrated, messages, history);
 }
 
 /** Add the journal's original task message, which events.v1 deliberately omits. */
@@ -1003,7 +1046,8 @@ export function toTimelineRows(events: XuenessEventV1[]): TimelineRow[] {
           // In-place upgrade: same position, same call seq, only the outcome changes.
           rows[index] = {
             ...existing,
-            status: event.ok ? "ok" : "error",
+            // 取消态在行构造时显式确定，展示层只做 status → ToolDisplayStatus 的显式映射。
+            status: event.ok ? "ok" : event.errorCode === "xueness.error.cancelled" ? "cancelled" : "error",
             error: event.error,
             errorCode: event.errorCode,
           };
@@ -1017,7 +1061,7 @@ export function toTimelineRows(events: XuenessEventV1[]): TimelineRow[] {
             toolCallId: event.toolCallId,
             name: event.name,
             subject: event.subject,
-            status: event.ok ? "ok" : "error",
+            status: event.ok ? "ok" : event.errorCode === "xueness.error.cancelled" ? "cancelled" : "error",
             error: event.error,
             errorCode: event.errorCode,
           });

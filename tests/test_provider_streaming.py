@@ -12,6 +12,7 @@ from xueness.bundled_plugins.providers.provider import (
     ProviderRequestError, _openai_messages, _split_multimodal, _to_anthropic_messages,
 )
 from xueness import providers_api, provider_config
+from xueness.bundled_plugins.providers import default_selection
 
 
 def _server(handler):
@@ -113,6 +114,128 @@ class ProviderStreamTests(unittest.TestCase):
             self.assertEqual([body["reasoning_effort"] for body in bodies], ["max", "max"])
         finally:
             server.shutdown(); server.server_close()
+
+    def test_coding_plan_reasoning_levels_are_scoped_to_endpoint_and_model(self):
+        coding_plan = "https://ark.cn-beijing.volces.com/api/coding/v3"
+        profiles = (
+            ("ark", coding_plan, "deepseek-v4.1-flash", None),
+            ("ark-disabled", coding_plan, "deepseek-v4.1-flash", []),
+            ("ark-explicit", coding_plan, "deepseek-v4.1-flash", ["max"]),
+            ("ark-model-mismatch", coding_plan, "deepseek-v4.1-flash-preview", None),
+            ("ark-api-mismatch", "https://ark.cn-beijing.volces.com/api/v3",
+             "deepseek-v4.1-flash", None),
+            ("ark-host-suffix", "https://ark.cn-beijing.volces.com.evil.test/api/coding/v3",
+             "deepseek-v4.1-flash", None),
+        )
+        with tempfile.TemporaryDirectory() as tmp:
+            state = Path(tmp)
+            for pid, base_url, model, levels in profiles:
+                payload = {"id": pid, "name": pid, "baseUrl": base_url,
+                           "model": model, "apiKey": "isolated-test-key"}
+                if levels is not None:
+                    payload["reasoningLevels"] = levels
+                status, result = providers_api.dispatch(
+                    "POST", ["api", "providers"], {}, payload, {"state_dir": state})
+                self.assertEqual(status, 200, result)
+
+            status, result = providers_api.dispatch(
+                "GET", ["api", "providers"], {}, {}, {"state_dir": state})
+            self.assertEqual(status, 200)
+            rows = {item["id"]: item for item in result["providers"]}
+            self.assertEqual(rows["ark"]["reasoningLevels"], ["low", "medium", "high"])
+            self.assertEqual(rows["ark-disabled"]["reasoningLevels"], [])
+            self.assertEqual(rows["ark-explicit"]["reasoningLevels"], ["max"])
+            for pid in ("ark-model-mismatch", "ark-api-mismatch", "ark-host-suffix"):
+                self.assertNotIn("reasoningLevels", rows[pid])
+            self.assertNotIn("isolated-test-key", json.dumps(result))
+
+            self.assertEqual(providers_api.declared_reasoning_levels(state, "ark"),
+                             ("low", "medium", "high"))
+            self.assertEqual(providers_api.declared_reasoning_levels(state, "ark-disabled"), ())
+            self.assertEqual(providers_api.known_reasoning_levels("deepseek-v4.1-flash"), ())
+
+            for level in ("low", "medium", "high"):
+                resolved = provider_config.resolve(
+                    state, "ark", "deepseek-v4.1-flash", reasoning_effort=level)
+                self.assertEqual(resolved.reasoning_effort, level)
+            with self.assertRaisesRegex(ValueError, "does not declare support"):
+                provider_config.resolve(
+                    state, "ark", "deepseek-v4.1-flash", reasoning_effort="max")
+            with self.assertRaisesRegex(ValueError, "invalid reasoning effort"):
+                provider_config.resolve(
+                    state, "ark", "deepseek-v4.1-flash", reasoning_effort="ultra")
+            with self.assertRaisesRegex(ValueError, "does not declare support"):
+                provider_config.resolve(
+                    state, "ark-disabled", "deepseek-v4.1-flash", reasoning_effort="low")
+
+            default_selection.save(state, {
+                "providerId": "ark", "model": "deepseek-v4.1-flash",
+                "reasoningEffort": "high",
+            })
+            resolved_default = provider_config.resolve(state)
+            self.assertEqual(resolved_default.model, "deepseek-v4.1-flash")
+            self.assertEqual(resolved_default.reasoning_effort, "high")
+
+            # An explicit default stop stores no effort and keeps the provider's
+            # documented default behavior rather than synthesizing a level.
+            default_selection.save(state, {
+                "providerId": "ark", "model": "deepseek-v4.1-flash",
+            })
+            resolved_default = provider_config.resolve(state)
+            self.assertIsNone(resolved_default.reasoning_effort)
+            self.assertEqual(resolved_default._default_max_tokens_field(), "max_tokens")
+
+            with patch.dict("os.environ", {
+                "XUENESS_PROVIDER": "openai",
+                "XUENESS_API_BASE": coding_plan,
+                "XUENESS_MODEL": "deepseek-v4.1-flash",
+                "XUENESS_API_KEY": "isolated-test-key",
+            }):
+                default_selection.save(state, {
+                    "model": "deepseek-v4.1-flash", "reasoningEffort": "medium",
+                })
+                resolved_env_default = provider_config.resolve(state)
+            self.assertEqual(resolved_env_default.model, "deepseek-v4.1-flash")
+            self.assertEqual(resolved_env_default.reasoning_effort, "medium")
+
+    def test_coding_plan_chat_payload_passes_efforts_and_omits_provider_default(self):
+        bodies = []
+
+        class Handler(BaseHTTPRequestHandler):
+            def do_POST(self):
+                bodies.append(json.loads(self.rfile.read(int(self.headers.get("Content-Length", 0)))))
+                payload = json.dumps({"choices": [{"message": {
+                    "role": "assistant", "content": "ok", "tool_calls": [],
+                }}]}).encode()
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Content-Length", str(len(payload)))
+                self.end_headers()
+                self.wfile.write(payload)
+            def log_message(self, *args): pass
+
+        server = _server(Handler)
+        try:
+            messages = [{"role": "user", "content": "synthetic local test"}]
+            for effort in ("low", "medium", "high", None):
+                provider = OpenAICompatible(
+                    base=f"http://127.0.0.1:{server.server_port}/api/coding/v3",
+                    model="deepseek-v4.1-flash", key="isolated-test-key",
+                    allow_loopback_http=True, reasoning_effort=effort)
+                provider.complete(messages, [])
+                provider.stream(messages, [])
+        finally:
+            server.shutdown(); server.server_close()
+
+        self.assertEqual(len(bodies), 8)
+        for index, effort in enumerate(("low", "medium", "high", None)):
+            complete, stream = bodies[index * 2:index * 2 + 2]
+            if effort is None:
+                self.assertNotIn("reasoning_effort", complete)
+                self.assertNotIn("reasoning_effort", stream)
+            else:
+                self.assertEqual(complete["reasoning_effort"], effort)
+                self.assertEqual(stream["reasoning_effort"], effort)
 
     def test_public_reasoning_levels_preserve_explicit_empty_and_infer_only_known_models(self):
         with tempfile.TemporaryDirectory() as tmp:

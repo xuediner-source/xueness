@@ -117,7 +117,14 @@ def _is_broad_directory(path: Path) -> bool:
                    Path(tempfile.gettempdir()).resolve(), Path(path.anchor).resolve()}
         if path in anchors:
             return True
-        if os.name != "nt" and len(path.parts) <= 2:
+        if os.name == "nt":
+            # Keep the clone target as narrow as the POSIX "len(parts) <= 2"
+            # rule: first-level Windows system dirs aggregate every user
+            # profile or machine-wide state.
+            from ..settings.workspaces_api import is_windows_first_level_system_dir
+            if is_windows_first_level_system_dir(path):
+                return True
+        elif len(path.parts) <= 2:
             return True
         return path.is_mount()
     except (OSError, RuntimeError, ValueError):

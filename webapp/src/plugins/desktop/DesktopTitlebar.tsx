@@ -1,11 +1,23 @@
 import React, { useEffect } from "react";
 import { ArrowLeft, ArrowRight, CircleHelp, PanelLeft, Terminal } from "lucide-react";
 import { t as tr } from "../../i18n";
+import { isMacPlatform } from "../../xuenessShortcutDisplay";
 import { IconXuenessMark } from "../../ui/icons";
 import "./desktop-titlebar.css";
 
+export type DesktopTitlebarPlatform = "macos" | "windows" | "other";
+
+/** Resolve the browser's native platform string for host-specific titlebar insets. */
+export function resolveDesktopTitlebarPlatform(platform?: string): DesktopTitlebarPlatform {
+  const nativePlatform = platform ?? (typeof navigator === "undefined" ? "" : navigator.platform);
+  if (isMacPlatform(nativePlatform)) return "macos";
+  if (nativePlatform.toLowerCase().includes("win")) return "windows";
+  return "other";
+}
+
 export type DesktopTitlebarProps = {
   desktopEnabled?: boolean;
+  platform?: string;
   canGoBack: boolean;
   canGoForward: boolean;
   onGoBack?: () => void;
@@ -25,6 +37,7 @@ export type DesktopTitlebarProps = {
  */
 export function DesktopTitlebar({
   desktopEnabled = false,
+  platform,
   canGoBack,
   canGoForward,
   onGoBack,
@@ -35,11 +48,12 @@ export function DesktopTitlebar({
   onOpenTerminal,
   helpContent,
 }: DesktopTitlebarProps): React.JSX.Element {
+  const nativePlatform = resolveDesktopTitlebarPlatform(platform);
   useEffect(() => {
     document.documentElement.setAttribute('data-xn-desktop-enabled', String(desktopEnabled));
     return () => document.documentElement.setAttribute('data-xn-desktop-enabled', 'false');
   }, [desktopEnabled]);
-  return <div className="xn-desktop-titlebar" data-testid="xn-desktop-titlebar">
+  return <div className="xn-desktop-titlebar" data-platform={nativePlatform} data-testid="xn-desktop-titlebar">
     <div className="xn-desktop-titlebar__brand" aria-label="Xueness">
       <IconXuenessMark size={17} className="xn-desktop-titlebar__mark" />
       <span>Xueness</span>

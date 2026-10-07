@@ -320,6 +320,24 @@ class WebTests(unittest.TestCase):
         pending = web.pending_denials(session)
         self.assertNotEqual(pending[0]["subject"], pending[1]["subject"])
 
+    def test_previous_success_does_not_hide_a_new_one_shot_approval(self):
+        call = lambda cid: {"id":cid,"function":{"name":"exec","arguments":json.dumps({"argv":["pwd"]})}}
+        session = {"messages":[{"role":"assistant","tool_calls":[call("old-success")]},
+                                {"role":"user","content":"again"},
+                                {"role":"assistant","tool_calls":[call("new-denial")]}],
+                   "results":{"old-success":{"ok":True},"new-denial":{"ok":False,"error":"denied","error_code":"approval_required"}}}
+        self.assertEqual([item["tool_call_id"] for item in web.pending_denials(session)], ["new-denial"])
+        session["results"]["new-denial"]["error_code"] = "policy_denied"
+        self.assertEqual(web.pending_denials(session), [])
+
+    def test_successful_retry_resolves_only_earlier_matching_denials(self):
+        call = lambda cid: {"id":cid,"function":{"name":"exec","arguments":json.dumps({"argv":["pwd"]})}}
+        ids = ("old-denial","successful-retry","fresh-denial")
+        session = {"messages":[{"tool_calls":[call(cid)]} for cid in ids],
+                   "results":{cid: {"ok":False,"error":"denied"} for cid in ids}}
+        session["results"]["successful-retry"] = {"ok":True}
+        self.assertEqual([item["tool_call_id"] for item in web.pending_denials(session)], ["fresh-denial"])
+
     def test_exact_origin_port_required(self):
         sid = self._new_session()
         code, _, _ = self._post(f"/api/sessions/{sid}/approvals", {"kind":"write","subject":"x"}, origin="http://localhost:9999")
@@ -560,7 +578,7 @@ class WebTests(unittest.TestCase):
         with patch("xueness.web.run", side_effect=no_cost_run):
             code, body, _ = self._post(f"/api/sessions/{sid}/run", {
                 "provider": "real", "steps": 1, "reasoning_effort": None,
-                "permission_mode": "yolo",
+                "permission_mode": "yolo", "acknowledge_yolo": True,
             })
         self.assertEqual(code, 200, body)
         saved = self.ctx["store"].load(sid)
@@ -833,12 +851,43 @@ class SearchEditModeWebTests(WebTests):
         self.assertEqual(code, 400, body)
         session = self.ctx["store"].load(sid)
         session["messages"].append({"role": "assistant", "tool_calls": [
-            {"id": "w1", "type": "function", "function": {"name": "write", "arguments": json.dumps({"path": "note.txt", "content": "x"})}}]})
-        session["results"]["w1"] = {"ok": True}
+            {"id": "w1", "type": "function", "function": {"name": "write", "arguments": json.dumps({"path": "note.txt", "content": "x"})}},
+            {"id": "o1", "type": "function", "function": {"name": "office_create", "arguments": json.dumps({"path": "report.docx", "format": "docx", "document": {}})}},
+            {"id": "o2", "type": "function", "function": {"name": "office_replace", "arguments": json.dumps({"path": "report.docx", "format": "docx", "document": {}})}},
+            {"id": "o3", "type": "function", "function": {"name": "office_create", "arguments": json.dumps({"path": "denied.docx", "format": "docx", "document": {}})}},
+            {"id": "s1", "type": "function", "function": {"name": "test_side_effect", "arguments": json.dumps({"path": "side-effect.txt"})}},
+        ]})
+        session["results"].update({
+            "w1": {"ok": True},
+            "o1": {"ok": True},
+            "o2": {"ok": True},
+            "o3": {"ok": False, "error": "denied"},
+            "s1": {"ok": True},
+        })
         self.ctx["store"].save(session)
-        code, body, _ = self._req(f"/api/sessions/{sid}")
+        from xueness.tool_contract import BuiltinTool
+        from xueness.tool_registry import REGISTRY_BY_NAME
+        side_effect = BuiltinTool("test_side_effect", "Synthetic non-file mutation", {}, (),
+                                  "write", True, lambda *_: {"ok": True})
+        with patch.dict(REGISTRY_BY_NAME, {"test_side_effect": side_effect}):
+            code, body, _ = self._req(f"/api/sessions/{sid}")
         self.assertEqual(code, 200, body)
-        self.assertEqual(json.loads(body)["changed_files"], ["note.txt"])
+        self.assertEqual(json.loads(body)["changed_files"], ["note.txt", "report.docx"])
+
+    def test_changed_paths_keeps_first_200_registered_successes(self):
+        calls = []
+        results = {}
+        for index in range(201):
+            call_id = f"write-{index}"
+            calls.append({"id": call_id, "function": {
+                "name": "write",
+                "arguments": json.dumps({"path": f"file-{index}.txt", "content": "x"}),
+            }})
+            results[call_id] = {"ok": True}
+        paths = web.changed_paths({"messages": [{"tool_calls": calls}], "results": results})
+        self.assertEqual(len(paths), 200)
+        self.assertEqual(paths[0], "file-0.txt")
+        self.assertEqual(paths[-1], "file-199.txt")
 
     def test_new_shell_is_not_the_legacy_workbench(self):
         code, body, headers = self._req("/")

@@ -48,7 +48,8 @@
     "queue",
     "session_management",
     "sessions_api",
-    "tooling"
+    "tooling",
+    "composer_capabilities"
   ],
   "features": [
     {
@@ -68,8 +69,8 @@
     },
     {
       "id": "sessions.history",
-      "name": "历史导航与跨会话上下文检索",
-      "nameEn": "History navigation and session context search"
+      "name": "会话历史预览、阅读位置记忆与跨会话上下文检索",
+      "nameEn": "History previews, reading-position memory and session context search"
     },
     {
       "id": "sessions.fork",
@@ -88,13 +89,13 @@
     },
     {
       "id": "sessions.streaming",
-      "name": "文本、思考与工具调用增量流",
-      "nameEn": "Text, reasoning and tool streams"
+      "name": "文本、思考与工具增量流、可折叠工作过程、真实请求阶段和中断提示",
+      "nameEn": "Text, reasoning and tool streams, collapsible work history, actual phases and interruption notices"
     },
     {
       "id": "sessions.composer",
-      "name": "附件、上下文引用与会话输入",
-      "nameEn": "Attachments, context mentions and input"
+      "name": "附件、上下文引用、发送即时清空与拒绝恢复草稿",
+      "nameEn": "Attachments, context mentions, immediate submission clearing and rejected draft recovery"
     },
     {
       "id": "sessions.message_queue",
@@ -133,13 +134,13 @@
     },
     {
       "id": "sessions.runtime_model_switch",
-      "name": "运行中切换模型与推理档位（/model、/effort）",
-      "nameEn": "Switch model and reasoning level mid-run via /model and /effort"
+      "name": "模型与推理档位切换（思考强度按钮、拖动弹层与 /model、/effort）",
+      "nameEn": "Model and reasoning-level switching (effort button, slider popover, /model and /effort)"
     },
     {
       "id": "sessions.model_picker",
-      "name": "模型选择分档、目录标签与详情卡",
-      "nameEn": "Model picker presets, catalog tabs and detail card"
+      "name": "统一模型选择与详情卡",
+      "nameEn": "Unified model picker and detail card"
     },
     {
       "id": "sessions.events_cursor",
@@ -155,10 +156,31 @@
       "id": "sessions.question_answer_ui",
       "name": "会话问题答复界面",
       "nameEn": "Session question answer UI"
+    },
+    {
+      "id": "sessions.composer_capabilities",
+      "name": "可搜索添加菜单、可见标签与插件能力上下文",
+      "nameEn": "Searchable Add menu, visible selections and plugin capability context"
+    },
+    {
+      "id": "sessions.usage_guide",
+      "name": "Xueness 使用与配置诊断指南",
+      "nameEn": "Xueness usage and configuration guide"
+    },
+    {
+      "id": "sessions.context_usage_ring",
+      "name": "当前请求上下文用量圆环与来源说明",
+      "nameEn": "Current-request context usage ring and provenance"
+    },
+    {
+      "id": "sessions.yolo_confirmation",
+      "name": "完全访问权限确认",
+      "nameEn": "Full access permission confirmation"
     }
   ],
   "frontendModules": [
     "plugins/sessions/XuenessComposerToolbar.tsx",
+    "plugins/sessions/ReasoningEffortSlider.tsx",
     "plugins/sessions/XuenessConversationHistoryRail.tsx",
     "plugins/sessions/XuenessRenameDialog.tsx",
     "plugins/sessions/XuenessTaskList.tsx",
@@ -171,6 +193,8 @@
     "plugins/sessions/composerCatalogLifecycle.ts",
     "plugins/sessions/ComposerWorkspaceSelect.tsx",
     "plugins/sessions/completionPresentation.ts",
+    "plugins/sessions/conversationWorkDuration.ts",
+    "plugins/sessions/toolDisplayStatus.ts",
     "plugins/sessions/SessionQueue.tsx",
     "plugins/sessions/CommandPalette.tsx",
     "plugins/sessions/ConversationTimelineViewport.tsx",
@@ -180,6 +204,9 @@
     "plugins/sessions/TimelineVirtualWindow.ts#TimelineWindowModel",
     "plugins/sessions/TimelineVirtualWindow.ts#useTimelineVirtualWindow",
     "plugins/sessions/ListVirtualWindow.ts",
+    "plugins/sessions/messageTimeLabel.ts#formatMessageTimeLabel",
+    "plugins/sessions/sessionScrollMemory.ts",
+    "plugins/sessions/timelineScrollAnchor.ts",
     "plugins/sessions/SidebarNav.tsx",
     "plugins/sessions/debounce.ts",
     "plugins/sessions/PendingQuestion.tsx#PendingQuestion",
@@ -189,6 +216,12 @@
     "ui/StreamingCommitGate.ts#STREAM_COMMIT_INTERVAL_MS",
     "ui/StreamingCommitGate.ts#StreamingCommitGate",
     "ui/StreamingCommitGate.ts#useQuantizedStreamingText",
-    "plugins/sessions/PendingQuestion.tsx#QuestionResume"
+    "plugins/sessions/PendingQuestion.tsx#QuestionResume",
+    "plugins/sessions/ComposerCapabilityMenu.tsx",
+    "plugins/sessions/ContextUsageRing.tsx",
+    "plugins/sessions/sessionContextUsage.ts",
+    "plugins/sessions/FullAccessConfirmationDialog.tsx",
+    "plugins/sessions/conversationActivity.ts",
+    "plugins/sessions/conversationJournalProjection.ts"
   ]
 }

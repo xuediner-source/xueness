@@ -9,6 +9,7 @@ from ...tool_contract import BuiltinTool
 MAX_ITEMS = 40
 MAX_BYTES = 2_000_000
 REPORT_RE = re.compile(r'报告|资料|research|report', re.I)
+OFFICE_SUFFIXES = {'.docx', '.pptx', '.xlsx', '.pdf'}
 
 
 def _read_bounded_workspace_file(root, requested_path):
@@ -164,14 +165,26 @@ def check(root, gate, session, summary, *, state_dir=None):
         text, missing = summary or '', []
         if item['path'] is not None:
             try:
+                suffix = Path(item['path']).suffix.lower()
                 if state_dir is not None:
                     from ...plugin_runtime import require_enabled
                     require_enabled(state_dir, 'files')
+                    if suffix in OFFICE_SUFFIXES:
+                        require_enabled(state_dir, 'office')
+                elif suffix in OFFICE_SUFFIXES:
+                    raise ValueError('Office plugin state is unavailable')
                 gate.check('read', item['path'])
                 raw_bytes = _read_bounded_workspace_file(root, item['path'])
-                text = raw_bytes.decode('utf-8')
+                if suffix in OFFICE_SUFFIXES:
+                    # Import only after the plugin switch and dependency checks
+                    # above; the Office parser is not available to delivery
+                    # checks when its owning plugin is disabled.
+                    from ..office.tooling import delivery_content_text
+                    text = delivery_content_text(raw_bytes, suffix)
+                else:
+                    text = raw_bytes.decode('utf-8')
             except (OSError, ValueError, PermissionError, UnicodeError):
-                missing.append('文件不存在、不可读取、插件已禁用或不支持文本检查')
+                missing.append('文件不存在、不可读取、插件已禁用、内容被截断或不支持文本检查')
                 text = ''
             if not missing and not text.lstrip('\ufeff').strip() and REPORT_RE.search(
                     str(session.get('task', '')) + ' ' + item['label']):

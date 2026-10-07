@@ -40,7 +40,7 @@
 .xn-shell-layout .xn-shell-main__panel { position: relative; display: flex; flex: 1 1 auto; flex-direction: column; min-width: 0; min-height: 0; overflow: hidden; border: 1px solid var(--border); border-radius: 12px; background: var(--bg); }
 .xn-shell-layout--sidebar-collapsed { grid-template-columns: minmax(0, 1fr); }
 .xn-shell-layout--sidebar-collapsed .xn-shell-sidebar { display: none; }
-.xn-shell-layout--sidebar-collapsed .xn-shell-sidebar-toggle { display: inline-flex; position: absolute; top: 12px; left: 14px; z-index: 25; }
+.xn-shell-layout--sidebar-collapsed .xn-shell-sidebar-toggle { display: inline-flex; position: absolute; top: 12px; left: 14px; z-index: 31; }
 .xn-shell-layout--sidebar-collapsed .xn-conv-header,
 .xn-shell-layout--sidebar-collapsed .xn-secondary-view__bar,
 .xn-shell-layout--sidebar-collapsed .xn-hero__bar { padding-left: 58px; }
@@ -91,7 +91,7 @@
   .xn-shell-layout { grid-template-columns: 1fr; }
   .xn-shell-layout .xn-shell-main { padding-left: 6px; }
   .xn-shell-layout .xn-shell-sidebar { width: min(290px, 86vw); z-index: 40; }
-  .xn-shell-layout .xn-shell-sidebar-toggle { display: inline-flex; position: absolute; top: 11px; left: 13px; z-index: 25; }
+  .xn-shell-layout .xn-shell-sidebar-toggle { display: inline-flex; position: absolute; top: 11px; left: 13px; z-index: 31; }
   .xn-shell-layout .xn-conv-header,
   .xn-shell-layout .xn-secondary-view__bar,
   .xn-shell-layout .xn-hero__bar { padding-left: 56px; }

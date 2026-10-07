@@ -7,6 +7,7 @@ export type ComposerInput = {
   sessions: string[];
   skills: string[];
   plugins: string[];
+  capabilities?: string[];
   remote?: string;
   goal: boolean;
 };
@@ -37,6 +38,16 @@ export type ComposerModel = {
   };
 };
 export type RuntimeProfile = "standard" | "lightweight";
+
+export type ComposerCapability = {
+  id: string;
+  pluginId: string;
+  available?: boolean;
+  label: string;
+  labelEn: string;
+  description: string;
+  descriptionEn: string;
+};
 
 /** A missing override means: use the selected provider's declared profile. */
 export function effectiveRuntimeProfile(
@@ -72,6 +83,7 @@ export type ComposerCatalog = {
   sessions: { id: string; label: string; description?: string }[];
   skills: { id: string; label: string; description?: string }[];
   plugins: { id: string; label: string; description?: string }[];
+  capabilities?: ComposerCapability[];
   models: ComposerModel[];
   allowReal: boolean;
   backgroundCount?: number;

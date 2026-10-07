@@ -1,14 +1,19 @@
+import { contextUsageReading, type ContextUsageReading } from '../sessions/ContextUsageRing';
 import React, { useCallback, useEffect, useId, useRef, useState } from 'react';
 import { ArrowUp, Square } from 'lucide-react';
 import { XuenessComposerToolbar } from '../sessions/XuenessComposerToolbar';
+import { conversationActivityLabel, reasoningIsActive } from '../sessions/conversationActivity';
 import { completionPresentation } from '../sessions/completionPresentation';
 import { SimpleMarkdown, TimelineCard, MarkdownRenderOptionsContext, type MarkdownRenderOptions } from '../../XuenessShell';
 import { useQuantizedStreamingText } from '../../ui/StreamingCommitGate';
 import { t as tr, tf } from '../../i18n';
+import { displayBinding } from '../../xuenessShortcutDisplay';
 import type { TimelineRow, WorkbenchSession } from '../../xuenessWorkbench';
 import type { ComposerDraftState } from '../sessions/XuenessWorkbenchView';
 import type { ComposerInput, ComposerModel } from '../../xuenessComposer';
 import type { RunChoices } from '../../xuenessBridge';
+import { isPermissionMode, type PermissionMode } from '../sessions/permissionModes';
+import { FullAccessConfirmationDialog, requiresYoloConfirmation } from '../sessions/FullAccessConfirmationDialog';
 import './LightweightWorkbench.css';
 
 /**
@@ -51,15 +56,71 @@ export type LightweightComposerControlsProps = {
   onReload(): void;
   onManageModels(): void;
   inputRef?: React.RefObject<HTMLTextAreaElement | null>;
+  contextReading?: ContextUsageReading | null;
   runtimeBudget?: WorkbenchSession['runtime_budget'];
   pauseReason?: string | null;
   disabled?: boolean;
 };
 
+const LIGHTWEIGHT_PERMISSION_CHOICES: readonly { value: PermissionMode; label: string }[] = [
+  { value: 'plan', label: '计划' },
+  { value: 'build', label: '变更前确认' },
+  { value: 'edit', label: '自动编辑' },
+  { value: 'yolo', label: '完全访问' },
+];
+
+function LightweightPermissionSelector({
+  choices,
+  onChange,
+  disabled,
+}: {
+  choices: RunChoices;
+  onChange(patch: Partial<RunChoices>): void;
+  disabled: boolean;
+}): React.JSX.Element {
+  const [confirmYoloOpen, setConfirmYoloOpen] = useState(false);
+  const selected = choices.permission_mode ?? 'build';
+
+  const handleChange = (event: React.ChangeEvent<HTMLSelectElement>) => {
+    const next = event.currentTarget.value;
+    if (!isPermissionMode(next)) return;
+    if (requiresYoloConfirmation(selected, next, choices.acknowledge_yolo === true)) {
+      setConfirmYoloOpen(true);
+      return;
+    }
+    onChange({ permission_mode: next, acknowledge_yolo: false });
+  };
+
+  return <>
+    <label className="xn-lightweight-permission-selector">
+      <span>{tr('执行权限')}</span>
+      <select
+        className="xn-select xn-lightweight-permission-selector__select"
+        aria-label={tr('执行权限')}
+        value={selected}
+        disabled={disabled || confirmYoloOpen}
+        onChange={handleChange}
+      >
+        {LIGHTWEIGHT_PERMISSION_CHOICES.map(option => (
+          <option key={option.value} value={option.value}>{tr(option.label)}</option>
+        ))}
+      </select>
+    </label>
+    <FullAccessConfirmationDialog
+      open={confirmYoloOpen}
+      onCancel={() => setConfirmYoloOpen(false)}
+      onConfirm={() => {
+        setConfirmYoloOpen(false);
+        onChange({ permission_mode: 'yolo', acknowledge_yolo: true });
+      }}
+    />
+  </>;
+}
+
 /**
- * 轻量档输入框控制区：只保留模型名（菜单内含「标准 / 本地轻量」切换，用于
- * 切回标准档）与上下文用量。模式、浏览器、后台任务、思考强度等通用工具条
- * 全部隐藏；用量为估算读数，不打开用量面板。
+ * 轻量档输入框控制区：保留权限选择、模型名（菜单内含「标准 / 本地轻量」切换，
+ * 用于切回标准档）与上下文用量。浏览器、后台任务和思考强度仍隐藏；
+ * 用量为估算读数，不打开用量面板。
  */
 export function LightweightComposerControls({
   enabled,
@@ -72,6 +133,7 @@ export function LightweightComposerControls({
   onManageModels,
   inputRef,
   runtimeBudget,
+  contextReading,
   pauseReason,
   disabled = false,
 }: LightweightComposerControlsProps): React.JSX.Element | null {
@@ -85,8 +147,9 @@ export function LightweightComposerControls({
     error={error}
     onReload={onReload}
     onManageModels={onManageModels}
+    minimalPermissionControl={<LightweightPermissionSelector choices={choices} onChange={onChange} disabled={disabled} />}
     inputRef={inputRef}
-    contextUsage={lightweightContextUsage(runtimeBudget)}
+    contextReading={contextReading !== undefined ? contextReading : contextUsageReading(runtimeBudget)}
     runtimeBudget={runtimeBudget}
     pauseReason={pauseReason}
     disabled={disabled}
@@ -656,6 +719,7 @@ export function LightweightReasoning({
 export type LightweightTimelineProps = {
   rows: TimelineRow[];
   streamingPending?: boolean;
+  activityPhase?: string;
   emptyText?: string;
   className?: string;
   /** 与标准档同一入参：JSON 工具协议下完成行要拆信封再展示。 */
@@ -665,7 +729,7 @@ export type LightweightTimelineProps = {
 const LIGHTWEIGHT_STREAMING_MARKDOWN_OPTIONS: MarkdownRenderOptions = { codeHighlightTiming: 'after-stream', cacheParseResults: false };
 const LIGHTWEIGHT_SETTLED_MARKDOWN_OPTIONS: MarkdownRenderOptions = { codeHighlightTiming: 'on-visible', cacheParseResults: true };
 
-function LightweightAssistantMessage({ row }: { row: Extract<TimelineRow, { kind: 'assistant' }> }): React.JSX.Element {
+function LightweightAssistantMessage({ row, activityPhase }: { row: Extract<TimelineRow, { kind: 'assistant' }>; activityPhase?: string }): React.JSX.Element {
   const displayText = useQuantizedStreamingText(row.text, Boolean(row.streaming));
   return (
     <div
@@ -674,13 +738,13 @@ function LightweightAssistantMessage({ row }: { row: Extract<TimelineRow, { kind
       data-role="assistant"
     >
       <span className="xn-lightweight-msg__author">{tr('Xueness 回复')}</span>
-      {row.reasoning && <LightweightReasoning reasoning={row.reasoning} streaming={row.streaming} />}
+      {row.reasoning && <LightweightReasoning reasoning={row.reasoning} streaming={reasoningIsActive(row.streaming, activityPhase, row.text)} />}
       {displayText.trim() ? (
         <MarkdownRenderOptionsContext.Provider value={row.streaming ? LIGHTWEIGHT_STREAMING_MARKDOWN_OPTIONS : LIGHTWEIGHT_SETTLED_MARKDOWN_OPTIONS}>
           <div className="xn-lightweight-msg__prose"><SimpleMarkdown text={displayText} /></div>
         </MarkdownRenderOptionsContext.Provider>
       ) : row.streaming ? (
-        <p className="xn-lightweight-stream-status" role="status">{tr('正在生成回复…')}</p>
+        <p className="xn-lightweight-stream-status" role="status">{tr(conversationActivityLabel(activityPhase))}</p>
       ) : null}
     </div>
   );
@@ -699,6 +763,7 @@ function LightweightAssistantMessage({ row }: { row: Extract<TimelineRow, { kind
 export function LightweightTimeline({
   rows,
   streamingPending = false,
+  activityPhase,
   emptyText = tr('暂无事件'),
   className = '',
   jsonToolProtocol = false,
@@ -725,7 +790,7 @@ export function LightweightTimeline({
           {...timelineProps}
           data-testid="lightweight-timeline-loading"
         >
-          <p className="xn-lightweight-stream-status" role="status">{tr('正在生成回复…')}</p>
+          <p className="xn-lightweight-stream-status" role="status">{tr(conversationActivityLabel(activityPhase))}</p>
         </div>
       );
     }
@@ -773,7 +838,7 @@ export function LightweightTimeline({
         }
         if (entry.kind === 'assistant') {
           return (
-            <LightweightAssistantMessage key={entry.id} row={entry.row} />
+            <LightweightAssistantMessage key={entry.id} row={entry.row} activityPhase={activityPhase} />
           );
         }
         if (entry.kind === 'completion') {
@@ -827,7 +892,7 @@ export function LightweightTimeline({
             <span className="xn-lightweight-streaming-dot" />
             <span className="xn-lightweight-streaming-dot" />
           </span>
-          <p className="xn-lightweight-stream-status" role="status">{tr('正在生成回复…')}</p>
+          <p className="xn-lightweight-stream-status" role="status">{tr(conversationActivityLabel(activityPhase))}</p>
         </div>
       )}
     </div>
@@ -1028,7 +1093,7 @@ export function evaluateLightweightGlobalKey(
 export type LightweightComposerProps = {
   draftKey?: string;
   draftStore?: React.MutableRefObject<Map<string, ComposerDraftState>>;
-  onSend?(text: string, draft?: ComposerInput): void | Promise<unknown>;
+  onSend?(text: string, draft?: ComposerInput, onAccepted?: () => void): unknown | Promise<unknown>;
   onStop?(): void;
   disabled?: boolean;
   sendDisabled?: boolean;
@@ -1053,7 +1118,7 @@ export function lightweightComposerHint(
   queueWhenRunning: boolean,
 ): string {
   const send = sendShortcut === 'mod-enter'
-    ? tr('⌘/Ctrl+Enter 发送')
+    ? tf('按 {0} 发送', [displayBinding('Mod+Enter')])
     : tr('Enter 发送 · Shift+Enter 换行');
   const parts = [send];
   if (running && queueWhenRunning) parts.push(tr('排队追加'));
@@ -1098,6 +1163,7 @@ export function LightweightComposer({
   const [sending, setSending] = useState(false);
   const textRevisionRef = useRef(0);
   const sendingRef = useRef(false);
+  const submissionTicketRef = useRef(0);
   const localInputRef = useRef<HTMLTextAreaElement | null>(null);
   const hintId = useId();
 
@@ -1162,9 +1228,22 @@ export function LightweightComposer({
     const trimmed = text.trim();
     if (sendingRef.current || !trimmed || isSendDisabled || stopping || !onSend) return;
 
-    const submittedRevision = textRevisionRef.current;
+    const submittedText = text;
+    const ticket = ++submissionTicketRef.current;
     sendingRef.current = true;
     setSending(true);
+    updateText('');
+    const clearedRevision = textRevisionRef.current;
+    let accepted = false;
+    const release = () => {
+      if (submissionTicketRef.current !== ticket) return;
+      sendingRef.current = false;
+      setSending(false);
+    };
+    const acknowledge = () => { accepted = true; release(); };
+    const restore = () => {
+      if (!accepted && textRevisionRef.current === clearedRevision) updateText(submittedText);
+    };
 
     const inputData: ComposerInput = {
       attachments: [],
@@ -1176,17 +1255,17 @@ export function LightweightComposer({
     };
 
     try {
-      const accepted = await onSend(trimmed, inputData);
-      if (accepted !== false && textRevisionRef.current === submittedRevision) {
-        updateText('');
+      const result = await onSend(trimmed, inputData, acknowledge);
+      if (result === false) restore();
+      else if (textRevisionRef.current === clearedRevision) {
         setHistoryIndex(null);
         draftBeforeHistoryRef.current = '';
       }
     } catch {
       // Keep the exact draft as typed, including whitespace around the submitted text.
+      restore();
     } finally {
-      sendingRef.current = false;
-      setSending(false);
+      release();
     }
   }, [text, isSendDisabled, stopping, onSend, updateText]);
 

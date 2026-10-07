@@ -28,6 +28,7 @@ export type RuntimeActivity = {
 };
 
 export type LocalRuntimeSession = {
+  status?: string | null;
   runtime_profile?: string | null;
   runtime_budget?: {
     profile?: string;
@@ -47,16 +48,54 @@ export type LocalRuntimeSession = {
 };
 
 export function RequestTiming({ session }: { session: LocalRuntimeSession | null }) {
-  const rows = session?.runtime_activity_history ?? [];
-  if (!rows.length) return null;
-  return <details className="xn-runtime-monitor__timings"><summary>{t('步骤耗时与实际用量')}</summary>
-    <p>{t('等待、思考和生成按收到流数据的时段计时，包含传输等待；非流式请求无法拆分思考与生成。缺失 Token 和重试信息显示 —。')}</p>
-    <div style={{ overflowX: 'auto' }}><table><thead><tr>{['步骤', '模型请求', '等待', '思考流', '生成流', '工具', '输入 Token', '缓存 Token', '输出 Token', '失败重试'].map(label => <th key={label}>{t(label)}</th>)}</tr></thead>
-      <tbody>{rows.map((row, index) => <tr key={row.startedAt ?? index}><td>#{row.requestStep ?? index + 1}</td>
-        {[row.requestSeconds, row.waitingSeconds, row.thinkingSeconds, row.generatingSeconds, row.toolSeconds].map((seconds, i) => <td key={i}>{finite(seconds) ? `${seconds.toFixed(2)} s` : '—'}</td>)}
-        {[row.reportedInputTokens, row.reportedCachedTokens, row.reportedOutputTokens, row.retryCount].map((count, i) => <td key={i}>{formatCount(count)}</td>)}
-      </tr>)}</tbody></table></div>
-    {session?.tool_timings?.length ? <ul>{session.tool_timings.slice(-30).map((tool, i) => <li key={`${tool.tool_call_id}-${i}`}>#{tool.step} · {tool.name} · {tool.seconds.toFixed(3)} s · {t(tool.ok ? '执行成功' : '执行未成功')}</li>)}</ul> : null}
+  const rows = (session?.runtime_activity_history ?? []).slice(-24);
+  const activity = session?.runtime_activity ?? null;
+  const status = currentRequestStatus(session);
+  const startedAt = activeRequestStartedAt(session);
+  const [now, setNow] = useState(() => Date.now());
+
+  useEffect(() => startRequestElapsedClock(session, setNow), [session?.status, activity?.phase, activity?.startedAt]);
+
+  const elapsedSeconds = startedAt === null ? null : Math.max(0, Math.floor((now - startedAt) / 1000));
+  return <details className="xn-request-telemetry" data-testid="request-telemetry" open={status.phase === 'provider_error' || status.phase === 'stalled'}>
+    <summary className="xn-request-telemetry__summary">
+      <Activity size={13} aria-hidden="true" />
+      <span>{status.label}</span>
+      <span className="xn-request-telemetry__label">{t('步骤耗时与实际用量')}</span>
+      {elapsedSeconds !== null && <span className="xn-request-telemetry__elapsed">{t('已运行')} {formatRate(elapsedSeconds, '秒')}</span>}
+      <ChevronDown size={13} className="xn-request-telemetry__chevron" aria-hidden="true" />
+    </summary>
+    <section className="xn-runtime-monitor__request-summary" aria-label={t('当前模型请求状态')}>
+      <header className="xn-runtime-monitor__request-heading">
+        <strong className={`xn-runtime-monitor__request-phase xn-runtime-monitor__request-phase--${status.phase}`}>
+          <span aria-hidden="true" />{status.label}
+        </strong>
+        <div className="xn-runtime-monitor__request-meta">
+          {Number.isInteger(activity?.requestStep) && (activity?.requestStep as number) >= 0 &&
+            <span>{t('请求轮次')} #{activity?.requestStep}</span>}
+          {elapsedSeconds !== null && <span><span>{t('已运行')}</span> {formatRate(elapsedSeconds, '秒')}</span>}
+        </div>
+      </header>
+      <dl className="xn-runtime-monitor__request-usage" aria-label={t('已报告 Token 用量')}>
+        {[
+          [t('输入 Token'), activity?.reportedInputTokens],
+          [t('缓存 Token'), activity?.reportedCachedTokens],
+          [t('输出 Token'), activity?.reportedOutputTokens],
+        ].map(([label, count]) => <div key={label as string}>
+          <dt>{label}</dt><dd>{formatCount(count as number | undefined)}</dd>
+        </div>)}
+      </dl>
+    </section>
+    <details className="xn-runtime-monitor__timings">
+      <summary>{t('步骤耗时与实际用量')}</summary>
+      <p>{t('等待、思考和生成按收到流数据的时段计时，包含传输等待；非流式请求无法拆分思考与生成。缺失 Token 和重试信息显示 —。')}</p>
+      {rows.length ? <div className="xn-runtime-monitor__timings-table"><table><thead><tr>{['步骤', '模型请求', '等待', '思考流', '生成流', '工具', '输入 Token', '缓存 Token', '输出 Token', '失败重试'].map(label => <th key={label}>{t(label)}</th>)}</tr></thead>
+        <tbody>{rows.map((row, index) => <tr key={row.startedAt ?? index}><td>#{row.requestStep ?? index + 1}</td>
+          {[row.requestSeconds, row.waitingSeconds, row.thinkingSeconds, row.generatingSeconds, row.toolSeconds].map((seconds, i) => <td key={i}>{finite(seconds) ? `${seconds.toFixed(2)} s` : '—'}</td>)}
+          {[row.reportedInputTokens, row.reportedCachedTokens, row.reportedOutputTokens, row.retryCount].map((count, i) => <td key={i}>{formatCount(count)}</td>)}
+        </tr>)}</tbody></table></div> : <p className="xn-runtime-monitor__timings-empty">{t('尚无已完成请求耗时记录')}</p>}
+      {session?.tool_timings?.length ? <ul>{session.tool_timings.slice(-30).map((tool, i) => <li key={`${tool.tool_call_id}-${i}`}>#{tool.step} · {tool.name} · {tool.seconds.toFixed(3)} s · {t(tool.ok ? '执行成功' : '执行未成功')}</li>)}</ul> : null}
+    </details>
   </details>;
 }
 
@@ -83,8 +122,52 @@ const PHASE_LABELS: Record<string, string> = {
   waiting_model: '等待模型', thinking: '思考', generating: '生成', tools: '工具调用',
   repairing: '修复', completed: '已完成', needs_review: '需要审核', paused: '已暂停',
   stopped: '已停止', stalled: '运行停滞', awaiting_user: '等待用户', provider_error: '供应商错误',
-  interrupted: '已中断',
+  interrupted: '已中断', running: '运行中', pending: '等待启动', failed: '失败',
+  cancelled: '已取消', closed: '已关闭', unknown: '未知',
 };
+
+const LIVE_REQUEST_PHASES = new Set(['waiting_model', 'thinking', 'generating', 'tools', 'repairing', 'stalled']);
+
+function currentRequestStatus(session: LocalRuntimeSession | null): { phase: string; label: string; running: boolean } {
+  const sessionStatus = typeof session?.status === 'string' ? session.status.trim() : '';
+  if (sessionStatus === 'running') {
+    const activityPhase = session?.runtime_activity?.phase;
+    const phase = activityPhase && LIVE_REQUEST_PHASES.has(activityPhase) ? activityPhase : 'running';
+    return { phase, label: t(PHASE_LABELS[phase]), running: true };
+  }
+  const phase = sessionStatus && Object.hasOwn(PHASE_LABELS, sessionStatus) ? sessionStatus : 'unknown';
+  return { phase, label: t(PHASE_LABELS[phase]), running: false };
+}
+
+function validStartedAt(value: string | undefined): number | null {
+  if (!value) return null;
+  const parsed = Date.parse(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+type IntervalScheduler = (callback: () => void, delayMs: number) => () => void;
+
+function scheduleBrowserInterval(callback: () => void, delayMs: number): () => void {
+  const timer = globalThis.setInterval(callback, delayMs);
+  return () => globalThis.clearInterval(timer);
+}
+
+/** Start a one-second elapsed clock only for a running session with a valid server start time. */
+export function startRequestElapsedClock(
+  session: LocalRuntimeSession | null,
+  onTick: (now: number) => void,
+  schedule: IntervalScheduler = scheduleBrowserInterval,
+): () => void {
+  if (activeRequestStartedAt(session) === null) return () => {};
+  onTick(Date.now());
+  return schedule(() => onTick(Date.now()), 1000);
+}
+
+function activeRequestStartedAt(session: LocalRuntimeSession | null): number | null {
+  const activity = session?.runtime_activity;
+  if (!currentRequestStatus(session).running || !activity || !LIVE_REQUEST_PHASES.has(activity.phase)) return null;
+  return validStartedAt(activity.startedAt);
+}
 
 function finite(value: unknown): value is number {
   return typeof value === 'number' && Number.isFinite(value) && value >= 0;

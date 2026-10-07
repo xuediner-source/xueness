@@ -3,7 +3,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { renderToStaticMarkup } from "react-dom/server";
 
-import { TimelineStream, TaskTodos, groupTimelineRows, assistantTextForDisplay, StreamingCommitGate, STREAM_COMMIT_INTERVAL_MS, FoldablePayloadTextView, TOOL_PAYLOAD_FOLD_THRESHOLD } from "./XuenessTimeline";
+import { TimelineStream, TaskTodos, groupTimelineRows, buildConversationWorkEntries, assistantTextForDisplay, StreamingCommitGate, STREAM_COMMIT_INTERVAL_MS, FoldablePayloadTextView, TOOL_PAYLOAD_FOLD_THRESHOLD, toolCallOpenState, copyFailureText, terminalResultForDisplay } from "./XuenessTimeline";
 import { unwrapProtocolEnvelopeText, isDuplicateCompletionAnswer, completionPresentation } from "./completionPresentation";
 import type { TimelineRow } from "../../xuenessWorkbench";
 
@@ -14,6 +14,66 @@ test('reasoning disclosure is collapsed, plain text, and hidden by the preferenc
   assert.doesNotMatch(html, /<details[^>]*open/);
   assert.match(html, /&lt;script&gt;private thought/);
   assert.doesNotMatch(renderToStaticMarkup(<TimelineStream rows={rows} messageStreamShowReasoning={false} />), /private thought/);
+});
+
+test('work folding preserves the final reply and completion while hiding intermediate commentary and tools', () => {
+  const rows: TimelineRow[] = [
+    { kind: 'user', seq: 0, turnId: 't', text: 'task' },
+    { kind: 'assistant', seq: 1, turnId: 't', text: 'I will inspect the files.' },
+    { kind: 'tool', seq: 2, turnId: 't', toolCallId: 'a', name: 'exec', subject: 'pwd', status: 'ok', error: '', errorCode: '' },
+    { kind: 'assistant', seq: 4, turnId: 't', text: 'Final answer' },
+    { kind: 'completion', seq: 5, turnId: 't', verified: true, summary: 'Final answer' },
+  ];
+  const expanded = buildConversationWorkEntries(groupTimelineRows(rows), new Set());
+  const header = expanded.entries.find(entry => entry.kind === 'work-summary');
+  assert.ok(header?.kind === 'work-summary');
+  assert.equal(header.durationMs, undefined);
+  const collapsed = buildConversationWorkEntries(groupTimelineRows(rows), new Set([header.key]));
+  assert.deepEqual(collapsed.entries.filter(entry => entry.kind !== 'work-summary').map(entry => entry.kind === 'tool-group' ? entry.rows[0].seq : entry.seq), [0, 4, 5]);
+  assert.equal(expanded.intermediate.has(1), true);
+  assert.equal(expanded.intermediate.has(4), false);
+  const html = renderToStaticMarkup(<TimelineStream rows={rows} />);
+  assert.match(html, /aria-expanded="false"/);
+  assert.match(html, /工作过程/);
+  assert.doesNotMatch(html, /已工作 \d/);
+});
+
+test('settled work folds by default, while unfinished, failed and manually expanded work remains visible', () => {
+  const rows: TimelineRow[] = [
+    { kind: 'user', seq: 0, turnId: 't', text: 'task' },
+    { kind: 'assistant', seq: 1, turnId: 't', text: 'Preparing the command.' },
+    { kind: 'tool', seq: 2, turnId: 't', toolCallId: 'fold-default', name: 'exec', subject: 'pwd', status: 'ok', error: '', errorCode: '' },
+    { kind: 'assistant', seq: 3, turnId: 't', text: 'Final answer', reasoning: 'Post-command thought' },
+    { kind: 'completion', seq: 4, verified: true, summary: 'Final answer' },
+  ];
+  const settled = buildConversationWorkEntries(rows, new Set(), false, new Map());
+  const header = settled.entries.find(entry => entry.kind === 'work-summary');
+  assert.ok(header?.kind === 'work-summary');
+  assert.equal(header.open, false);
+  assert.deepEqual(settled.entries.map(entry => entry.kind), ['user', 'work-summary', 'assistant', 'completion']);
+  const final = settled.entries.find(entry => entry.kind === 'assistant');
+  assert.ok(final?.kind === 'assistant');
+  assert.equal(final.reasoning, undefined);
+  const expanded = buildConversationWorkEntries(rows, new Set(), false, new Map([[header.key, true]]));
+  assert.equal(expanded.entries.filter(entry => entry.kind === 'assistant').at(-1)?.reasoning, 'Post-command thought');
+  const active = buildConversationWorkEntries(rows.slice(0, 3), new Set(), true, new Map());
+  assert.equal(active.entries.find(entry => entry.kind === 'work-summary')?.open, true);
+  const beforeHydration = buildConversationWorkEntries(rows.slice(2, 3), new Set(), true, new Map());
+  assert.equal(beforeHydration.entries.find(entry => entry.kind === 'work-summary')?.key, header.key);
+  const failed = buildConversationWorkEntries([...rows.slice(0, -1), { kind: 'completion', seq: 4, verified: false, summary: 'Needs review' }], new Set(), false, new Map());
+  assert.equal(failed.entries.find(entry => entry.kind === 'work-summary')?.open, true);
+  const unfinished = buildConversationWorkEntries([rows[0], rows[1], rows[2], rows[4]], new Set(), false, new Map());
+  assert.equal(unfinished.intermediate.has(1), true);
+  assert.equal(unfinished.entries.find(entry => entry.kind === 'work-summary')?.open, true);
+});
+
+test('reasoning-only steps disappear with the preference, while active reasoning shows a bounded live preview', () => {
+  const thought: TimelineRow = { kind: 'assistant', seq: 1.75, turnId: 't', text: '', reasoning: 'only thought' };
+  const hidden = renderToStaticMarkup(<TimelineStream rows={[thought]} messageStreamShowReasoning={false} />);
+  assert.doesNotMatch(hidden, /timeline-item-assistant-1.75/);
+  const live = renderToStaticMarkup(<TimelineStream rows={[{ ...thought, streaming: true, reasoning: 'old line\nlatest line' }]} activityPhase="thinking" />);
+  assert.match(live, /xn-reasoning__preview[^>]*>latest line/);
+  assert.equal(live.match(/思考中…/g)?.length, 1);
 });
 
 test("TimelineStream: renders empty state with default text and custom emptyText", () => {
@@ -113,7 +173,16 @@ test("TimelineStream: tool row errorCode and error message are visible when stat
   assert.match(html, /Command failed with exit code 1/);
   assert.match(html, /错误码: ENOENT/);
   assert.match(html, /xn-timeline-item--error/);
-  assert.match(html, /xn-msg__tool-error/);
+  // 失败态不强制展开：错误详情挂在状态词 Tooltip 上（含一键复制），不再是行内错误块
+  assert.doesNotMatch(html, /xn-msg__tool-error/);
+  assert.doesNotMatch(html, /<details class="xn-toolcall__details" open/);
+  assert.match(html, /data-testid="xn-toolcall-failure-tooltip"/);
+  const describedTooltipId = html.match(/class="xn-toolcall__status xn-toolcall__status--failure"[^>]*aria-describedby="([^"]+)"/)?.[1];
+  const tooltipId = html.match(/<span id="([^"]+)" class="xn-toolcall__failure-tooltip" role="tooltip"/)?.[1];
+  assert.ok(describedTooltipId, "keyboard-focusable failure status references its tooltip");
+  assert.equal(tooltipId, describedTooltipId, "the referenced tooltip contains the failure detail");
+  assert.match(html, /data-testid="xn-toolcall-copy-failure"/);
+  assert.match(html, /aria-label="复制错误信息"/);
 });
 
 test("TimelineStream: assistant Markdown fence uses the themed code content and copy action", () => {
@@ -182,6 +251,32 @@ test("TimelineStream: tool cards show hydrated read, write, edit, exec and MCP p
   assert.doesNotMatch(html, /xn-card-duration/);
 });
 
+test('terminal transcript preserves reported whitespace and exit codes without treating unknown metadata as stdout', () => {
+  assert.deepEqual(terminalResultForDisplay({ stdout: '  actual output\n\n', stderr: ' error\n', exit_code: 2 }),
+    { output: '  actual output\n\n', stderr: ' error\n', exitCode: 2 });
+  assert.deepEqual(terminalResultForDisplay({ output: '', exit_code: 0 }), { output: '', exitCode: 0 });
+  assert.equal(terminalResultForDisplay({ job_id: 'background', completed: true }), null);
+  assert.equal(terminalResultForDisplay({ content: [{ type: 'image', text: 'not terminal text' }] }), null);
+  assert.equal(terminalResultForDisplay(undefined), null);
+  const circular: Record<string, unknown> = {}; circular.rawOutput = circular;
+  assert.equal(terminalResultForDisplay(circular), null);
+});
+
+test('exec argv details show a safe command/output transcript with raw data hidden until requested', () => {
+  const row: Extract<TimelineRow, { kind: 'tool' }> = { kind: 'tool', seq: 41, turnId: 't', toolCallId: 'argv-transcript',
+    name: 'exec', subject: '', status: 'ok', error: '', errorCode: '', input: { argv: ['pwd'] },
+    output: { output: '  <script>output</script>\n', exit_code: 0, internal_metadata: 'raw-only-marker' } };
+  const html = renderToStaticMarkup(<TimelineStream rows={[row]} collapseTools={false} />);
+  assert.match(html, /xn-toolcall__command">\$ pwd/);
+  assert.match(html, /  &lt;script&gt;output&lt;\/script&gt;\n/);
+  assert.match(html, /退出码 0/);
+  assert.match(html, /原始工具数据/);
+  assert.doesNotMatch(html, /raw-only-marker|<script>|输入参数/);
+  const unknown = renderToStaticMarkup(<TimelineStream rows={[{ ...row, output: { job_id: 'unknown-result' } }]} />);
+  assert.doesNotMatch(unknown, /xn-toolcall__terminal/);
+  assert.match(unknown, /unknown-result/);
+});
+
 test("TimelineStream: renders completion and pending_question rows", () => {
   const rows: TimelineRow[] = [
     {
@@ -248,7 +343,7 @@ test('unknown local tool-calling metadata holds back only a recognized protocol 
   const html = renderToStaticMarkup(<TimelineStream rows={[{
     kind: 'assistant', seq: 7, turnId: 'turn-1', text: protocolPrefix, streaming: true,
   }]} protocolModePending />);
-  assert.match(html, /正在生成回复/);
+  assert.match(html, /正在处理请求/);
   assert.doesNotMatch(html, /summary|Hello/);
 });
 
@@ -316,17 +411,60 @@ test('historical protocol envelopes unwrap only when the terminal answer confirm
   assert.equal(unrelated, '{"summary":"user JSON","evidence":[]}');
 });
 
-test('an active run with no first delta still announces generation and grouped tools start collapsed', () => {
+test('an active run with no first delta still announces a pending request and grouped tools start collapsed', () => {
   const empty = renderToStaticMarkup(<TimelineStream rows={[]} streamingPending />);
   assert.match(empty, /data-testid="timeline-stream-loading"/);
   assert.match(empty, /role="status"/);
-  assert.match(empty, /正在生成回复/);
+  assert.match(empty, /正在处理请求/);
   const grouped = renderToStaticMarkup(<TimelineStream rows={[
     { kind: 'tool', seq: 1, turnId: 'turn-1', toolCallId: 'a', name: 'read', subject: 'a.ts', status: 'ok', error: '', errorCode: '' },
     { kind: 'tool', seq: 2, turnId: 'turn-1', toolCallId: 'b', name: 'grep', subject: 'needle', status: 'ok', error: '', errorCode: '' },
   ]} grouping={{ explore: true }} />);
   assert.match(grouped, /class="xn-tool-group"/);
   assert.doesNotMatch(grouped, /class="xn-tool-group"[^>]*open/);
+});
+
+test('TimelineStream pending status follows each reported runtime phase and keeps unknown phases generic', () => {
+  const phases = [
+    ['waiting_model', '等待模型响应…'],
+    ['thinking', '思考中…'],
+    ['generating', '正在生成回复…'],
+    ['tools', '正在执行工具…'],
+    ['repairing', '正在校验结果…'],
+  ] as const;
+  for (const [activityPhase, label] of phases) {
+    const empty = renderToStaticMarkup(<TimelineStream rows={[]} streamingPending activityPhase={activityPhase} />);
+    assert.match(empty, new RegExp(label));
+    assert.equal(empty.match(/role="status"/g)?.length, 1, `${activityPhase} empty state has one live status`);
+
+    const firstDeltaPending = renderToStaticMarkup(<TimelineStream rows={[{
+      kind: 'assistant', seq: 2, turnId: 'phase-turn', text: '', streaming: true,
+    }]} streamingPending activityPhase={activityPhase} />);
+    assert.match(firstDeltaPending, new RegExp(label));
+    assert.equal(firstDeltaPending.match(new RegExp(label, 'g'))?.length, 1, `${activityPhase} assistant row has one phase label`);
+  }
+
+  for (const activityPhase of [undefined, 'future_provider_phase']) {
+    const html = renderToStaticMarkup(<TimelineStream rows={[]} streamingPending activityPhase={activityPhase} />);
+    assert.match(html, /正在处理请求…/);
+    assert.doesNotMatch(html, /future_provider_phase|正在生成回复…/);
+  }
+});
+
+test('current generation does not relabel completed reasoning history as active', () => {
+  const html = renderToStaticMarkup(<TimelineStream rows={[
+    { kind: 'user', seq: 1, turnId: 'prior-turn', text: 'Question' },
+    {
+      kind: 'assistant', seq: 2, turnId: 'prior-turn', text: 'Prior answer', reasoning: 'Prior reasoning',
+      streaming: false, startedAt: 1000, endedAt: 2500,
+    },
+  ]} streamingPending activityPhase="generating" />);
+  assert.match(html, /xn-reasoning__label">思考过程<\/span>/);
+  assert.doesNotMatch(html, /xn-reasoning__label">思考中…<\/span>/);
+  assert.match(html, /data-testid="xn-turn-work-status-2"[^>]*data-state="done"/);
+  assert.doesNotMatch(html, /data-testid="xn-turn-work-status-2"[^>]*data-state="running"/);
+  assert.match(html, /data-testid="timeline-stream-loading"/);
+  assert.equal(html.match(/正在生成回复…/g)?.length, 1, 'only the pending current turn carries the active phase label');
 });
 
 test('an existing assistant row is marked live when the latest stream snapshot repeats its text', () => {
@@ -338,13 +476,16 @@ test('an existing assistant row is marked live when the latest stream snapshot r
 });
 
 test('cancelled tools use a neutral terminal state rather than a failure badge', () => {
+  // 显式映射：取消态由行 status 直接给出，不再用 errorCode 推导。
   const html = renderToStaticMarkup(<TimelineStream rows={[{
     kind: 'tool', seq: 1, turnId: 'turn-1', toolCallId: 'cancelled', name: 'exec', subject: 'long command',
-    status: 'error', error: 'Run cancelled by the user', errorCode: 'xueness.error.cancelled',
+    status: 'cancelled', error: 'Run cancelled by the user', errorCode: '',
   }]} />);
   assert.match(html, /data-tool-status="cancelled"/);
   assert.match(html, /data-tone="neutral"/);
   assert.doesNotMatch(html, /xn-timeline-item--error/);
+  assert.match(html, /已取消/);
+  assert.match(html, /xn-toolcall__cancel-note/);
 });
 
 
@@ -724,4 +865,85 @@ test("ToolTimelineCard: 超长工具输出默认折叠为预览，全文不入 D
     <FoldablePayloadTextView text={longOutput} expanded={false} onToggle={() => {}} />,
   );
   assert.doesNotMatch(expandedOriginal, /tail-marker-9/);
+});
+
+test("tool status enum: queued and stopped render with mapped labels and tones", () => {
+  const tool = (seq: number, status: "queued" | "stopped"): TimelineRow => ({
+    kind: "tool", seq, turnId: "t", toolCallId: `s-${seq}`, name: "exec", subject: "sleep 1", status, error: "", errorCode: "",
+  });
+  const html = renderToStaticMarkup(<TimelineStream rows={[tool(1, "queued"), tool(2, "stopped")]} />);
+  assert.match(html, /data-tool-status="queued"/);
+  assert.match(html, /排队中/);
+  assert.match(html, /data-tool-status="stopped"/);
+  assert.match(html, /已停止/);
+  assert.match(html, /data-tone="neutral"/);
+});
+
+test("tool card open state persists across remounts via toolCallOpenState", () => {
+  const row = (seq: number): TimelineRow => ({
+    kind: "tool", seq, turnId: "t", toolCallId: "persist-9", name: "exec", subject: "",
+    status: "ok", error: "", errorCode: "", input: { command: "echo hi" },
+  });
+  try {
+    // 默认跟随 collapseTools：收起
+    toolCallOpenState.delete("persist-9");
+    assert.doesNotMatch(
+      renderToStaticMarkup(<TimelineStream rows={[row(1)]} collapseTools={true} />),
+      /<details class="xn-toolcall__details" open/,
+    );
+    // 用户展开一次后记住：即使 collapseTools=true、重挂后依然展开
+    toolCallOpenState.set("persist-9", true);
+    assert.match(
+      renderToStaticMarkup(<TimelineStream rows={[row(1)]} collapseTools={true} />),
+      /<details class="xn-toolcall__details" open/,
+    );
+  } finally {
+    toolCallOpenState.delete("persist-9");
+  }
+});
+
+test("tool primary text carries the streaming pulse marker", () => {
+  const html = renderToStaticMarkup(<TimelineStream rows={[{
+    kind: "tool", seq: 7, turnId: "t", toolCallId: "p1", name: "exec", subject: "",
+    status: "running", error: "", errorCode: "", input: { command: "npm run build" },
+  }]} />);
+  assert.match(html, /data-testid="xn-toolcall-primary"/);
+  assert.match(html, /xn-toolcall__primary--pulse/);
+  assert.match(html, /npm run build/);
+});
+
+test("assistant work status pill: timestamp-free streaming shows working without claiming elapsed time", () => {
+  const streamingHtml = renderToStaticMarkup(<TimelineStream rows={[{
+    kind: "assistant", seq: 3, turnId: "turn-9", text: "delta", streaming: true,
+  }]} />);
+  assert.match(streamingHtml, /data-testid="xn-turn-work-status-3"/);
+  assert.match(streamingHtml, /data-state="running"/);
+  assert.match(streamingHtml, /工作中/);
+  assert.doesNotMatch(streamingHtml, /工作中\s+\d/);
+
+  const settledHtml = renderToStaticMarkup(<TimelineStream rows={[{
+    kind: "assistant", seq: 4, turnId: "turn-9", text: "done",
+  }]} />);
+  assert.doesNotMatch(settledHtml, /xn-turn-work-status/);
+});
+
+test("assistant work status pill: timestamps render worked-for label, interrupted renders stopped", () => {
+  const timedHtml = renderToStaticMarkup(<TimelineStream rows={[{
+    kind: "assistant", seq: 5, turnId: "turn-9", text: "done", startedAt: 1000, endedAt: 1000 + 65_000,
+  }]} />);
+  assert.match(timedHtml, /data-state="done"/);
+  assert.match(timedHtml, /用时 1 分 5 秒/);
+
+  const stoppedHtml = renderToStaticMarkup(<TimelineStream rows={[{
+    kind: "assistant", seq: 6, turnId: "turn-9", text: "partial", interrupted: true,
+  }]} />);
+  assert.match(stoppedHtml, /data-state="stopped"/);
+  assert.match(stoppedHtml, /已停止/);
+});
+
+test("failure copy reports success only after the clipboard write succeeds", async () => {
+  assert.equal(await copyFailureText(undefined, "error details"), false);
+  assert.equal(await copyFailureText({ writeText: async () => { throw new Error("denied"); } }, "error details"), false);
+  assert.equal(await copyFailureText({ writeText: async () => {} }, "error details"), true);
+  assert.equal(await copyFailureText({ writeText: async () => {} }, "  "), false);
 });

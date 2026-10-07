@@ -2,8 +2,11 @@ import React from "react";
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
+  buildOnboardingSteps,
   canRequestDesktopPermission,
   completeDesktopPermissionOnboarding,
+  desktopPermissionActionLabel,
+  initialDesktopPermissionPlatform,
   isDesktopOnboardingAvailable,
   normalizeDesktopPermissionSnapshot,
   requestDesktopPermission,
@@ -293,4 +296,33 @@ test("the onboarding modal uses the shared focus-safe Escape policy", () => {
   assert.equal(shouldDismissModalOnEscape({ key: "Escape" }), true);
   assert.equal(shouldDismissModalOnEscape({ key: "Escape", isComposing: true }), false);
   assert.equal(shouldDismissModalOnEscape({ key: "Escape" }, true), false);
+});
+
+test("Windows wizard is trimmed to the microphone step with Windows copy", () => {
+  const mac = buildOnboardingSteps("darwin");
+  assert.equal(mac.length, 3);
+  assert.deepEqual(mac.map(step => step.body), ["accessibilityScreen", "fullDisk", "microphone"]);
+  const windows = buildOnboardingSteps("win32");
+  assert.equal(windows.length, 1);
+  assert.equal(windows[0].body, "microphone");
+  assert.match(windows[0].description, /Windows 设置 → 隐私和安全性 → 麦克风/);
+  const allText = windows.map(step => `${step.title} ${step.description}`).join("\n");
+  assert.doesNotMatch(allText, /macOS/);
+  assert.doesNotMatch(allText, /完全磁盘访问/);
+  // Unknown platforms also skip the macOS-only steps.
+  assert.equal(buildOnboardingSteps("linux").length, 1);
+});
+
+test("desktop permission onboarding does not assume macOS before the native snapshot", () => {
+  assert.equal(initialDesktopPermissionPlatform("Win32"), "win32");
+  assert.equal(initialDesktopPermissionPlatform("MacIntel"), "darwin");
+  assert.equal(initialDesktopPermissionPlatform("Linux x86_64"), "unknown");
+  assert.equal(initialDesktopPermissionPlatform(undefined), "unknown");
+  assert.equal(buildOnboardingSteps(initialDesktopPermissionPlatform("Linux x86_64")).length, 1);
+});
+
+test("Windows microphone request is labeled as a settings action", () => {
+  assert.equal(desktopPermissionActionLabel("win32", "microphone", "not-determined"), "打开系统设置");
+  assert.equal(desktopPermissionActionLabel("darwin", "microphone", "not-determined"), "允许麦克风");
+  assert.equal(desktopPermissionActionLabel("darwin", "microphone", "denied"), "打开系统设置");
 });

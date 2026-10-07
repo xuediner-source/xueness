@@ -372,7 +372,8 @@ class AppServerTests(unittest.TestCase):
         sid = self.create(peer, "创建 hello.txt 并验证内容", 40)
         with patch("xueness.provider_config.resolve", return_value=FakeProvider()):
             peer.request("turn/start", {"sessionId": sid, "text": "创建 hello.txt",
-                                        "permissionMode": "yolo"}, request_id=41)
+                                        "permissionMode": "yolo",
+                                        "acknowledgeYolo": True}, request_id=41)
             accepted = peer.response(41)["result"]
             self.assertEqual(accepted["sessionId"], sid)
             self.assertTrue(accepted["accepted"])
@@ -519,7 +520,8 @@ class AppServerTests(unittest.TestCase):
             sid = self.create(peer, "不要监听", 71)
             with patch("xueness.provider_config.resolve", return_value=FakeProvider()):
                 peer.request("turn/start", {"sessionId": sid, "text": "创建 hello.txt",
-                                            "permissionMode": "yolo"}, request_id=72)
+                                            "permissionMode": "yolo",
+                                            "acknowledgeYolo": True}, request_id=72)
                 peer.response(72)
                 peer.collect(["turn/finished"])
         finally:
@@ -565,12 +567,29 @@ class AppServerTests(unittest.TestCase):
         peer.request("session/get", {"sessionId": sid}, request_id=96)
         self.assertNotEqual(peer.response(96)["result"]["status"], "running")
 
+    def test_yolo_turn_requires_explicit_acknowledgement(self):
+        peer = self.start()
+        sid = self.create(peer, "未确认的完全访问", 961)
+        with patch("xueness.provider_config.resolve", return_value=FakeProvider()):
+            peer.request("turn/start", {"sessionId": sid, "text": "创建 hello.txt",
+                                        "permissionMode": "yolo"}, request_id=962)
+            self.assertTrue(peer.response(962)["result"]["accepted"])
+            _, frames = peer.collect(["turn/started", "turn/finished"])
+        finished = frames[-1]["params"]
+        self.assertFalse(finished["ok"], finished)
+        self.assertEqual(finished["status"], 428)
+        self.assertEqual(finished["error"]["message"],
+                         "confirm full access before escalating this session to yolo")
+        self.assertEqual((self.root / "hello.txt").read_text(encoding="utf-8"), "xueness\n")
+        self.assertEqual(self.ctx["store"].load(sid).get("permission_mode", "build"), "build")
+
     def test_turn_stops_a_run_when_the_plugin_is_disabled_midflight(self):
         peer = self.start()
         sid = self.create(peer, "禁用后不再运行", 96)
         with patch("xueness.provider_config.resolve", return_value=FakeProvider()):
             peer.request("turn/start", {"sessionId": sid, "text": "创建 hello.txt",
-                                        "permissionMode": "yolo"}, request_id=97)
+                                        "permissionMode": "yolo",
+                                        "acknowledgeYolo": True}, request_id=97)
             self.assertTrue(peer.response(97)["result"]["accepted"])
             peer.collect(["turn/finished"])
         set_enabled(self.state, "sessions", False)

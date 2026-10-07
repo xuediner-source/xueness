@@ -6,9 +6,11 @@ import {
   formatRuntimeBytes,
   estimatedMemoryUsedBytes,
   LocalRuntimeMonitor,
+  RequestTiming,
   RuntimeMonitorDetails,
   memoryAvailabilityExplanation,
   runtimeCharacterTrend,
+  startRequestElapsedClock,
 } from './LocalRuntimeMonitor';
 import type { LocalRuntimeSession } from './LocalRuntimeMonitor';
 
@@ -81,6 +83,116 @@ test('token rate is withheld unless output token usage was reported', () => {
   const html = renderToStaticMarkup(<RuntimeMonitorDetails lightweight session={session} />);
   assert.match(html, /本轮未报告输出 Token/);
   assert.doesNotMatch(html, /90 Token\/秒/);
+});
+
+test('request timing has a compact live summary and retains the first request details before history exists', () => {
+  const html = renderToStaticMarkup(<RequestTiming session={{
+    status: 'running',
+    runtime_activity: { phase: 'waiting_model', startedAt: '2026-10-07T00:00:00Z', requestStep: 4 },
+  }} />);
+  assert.match(html, /当前模型请求状态/);
+  assert.match(html, /等待模型/);
+  assert.match(html, /请求轮次 #4/);
+  assert.match(html, /输入 Token/);
+  assert.match(html, /缓存 Token/);
+  assert.match(html, /输出 Token/);
+  assert.equal((html.match(/<dd>—<\/dd>/g) ?? []).length, 3);
+  assert.match(html, /<details class="xn-runtime-monitor__timings">/);
+  assert.doesNotMatch(html, /<details[^>]* open/);
+  assert.match(html, /尚无已完成请求耗时记录/);
+  assert.match(html, /data-testid="request-telemetry"/);
+});
+
+test('request details expand for provider errors while normal completed details remain collapsed', () => {
+  const failed = renderToStaticMarkup(<RequestTiming session={{ status: 'provider_error' }} />);
+  assert.match(failed, /data-testid="request-telemetry" open=""/);
+  const completed = renderToStaticMarkup(<RequestTiming session={{ status: 'completed' }} />);
+  assert.doesNotMatch(completed, /data-testid="request-telemetry" open/);
+  assert.match(completed, /已报告 Token 用量/);
+});
+
+test('the live request phase and provider-reported usage stay visible without history', () => {
+  for (const [phase, label] of [['thinking', '思考'], ['generating', '生成'], ['tools', '工具调用']] as const) {
+    const html = renderToStaticMarkup(<RequestTiming session={{ status: 'running', runtime_activity: {
+      phase, startedAt: '2026-10-07T00:00:00Z', requestStep: 2,
+      reportedInputTokens: 1200, reportedCachedTokens: 480, reportedOutputTokens: 37,
+    } }} />);
+    assert.match(html, new RegExp(label));
+    assert.match(html, /请求轮次 #2/);
+    assert.match(html, />1,200</);
+    assert.match(html, />480</);
+    assert.match(html, />37</);
+  }
+});
+
+test('terminal session status overrides stale generating activity and disables elapsed timing', () => {
+  for (const [status, label] of [['completed', '已完成'], ['stopped', '已停止'], ['provider_error', '供应商错误']] as const) {
+    const html = renderToStaticMarkup(<RequestTiming session={{ status, runtime_activity: {
+      phase: 'generating', startedAt: '2026-10-07T00:00:00Z', requestStep: 7,
+    } }} />);
+    assert.match(html, new RegExp(label));
+    assert.doesNotMatch(html, /xn-runtime-monitor__request-phase--generating|>生成</);
+    assert.doesNotMatch(html, /已运行/);
+  }
+});
+
+test('legacy unknown status is shown as unknown instead of trusting a stale phase', () => {
+  for (const status of [undefined, 'unknown'] as const) {
+    const html = renderToStaticMarkup(<RequestTiming session={{ status, runtime_activity: {
+      phase: 'generating', startedAt: '2026-10-07T00:00:00Z', requestStep: 8,
+    } }} />);
+    assert.match(html, /未知/);
+    assert.doesNotMatch(html, /xn-runtime-monitor__request-phase--generating|>生成</);
+    assert.doesNotMatch(html, /已运行/);
+  }
+});
+
+test('missing usage stays missing and the collapsed request table is bounded', () => {
+  const history = Array.from({ length: 30 }, (_, index) => ({ phase: 'completed', requestStep: index + 1 }));
+  const html = renderToStaticMarkup(<RequestTiming session={{ status: 'completed', runtime_activity: {
+    phase: 'completed', tokensPerSecond: 900, requestStep: 31,
+  }, runtime_activity_history: history }} />);
+  assert.equal((html.match(/<tr>/g) ?? []).length, 25); // one header plus the latest 24 requests
+  assert.match(html, /<details class="xn-runtime-monitor__timings">/);
+  assert.doesNotMatch(html, /<details[^>]* open/);
+  assert.doesNotMatch(html, /900 Token\/秒/);
+  assert.match(html, /<dd>—<\/dd>/);
+});
+
+test('elapsed clock schedules only for a running request and always returns cleanup', () => {
+  let scheduled = 0;
+  let cancelled = 0;
+  let delay = 0;
+  const schedule = (_callback: () => void, delayMs: number) => {
+    scheduled++;
+    delay = delayMs;
+    return () => { cancelled++; };
+  };
+  const terminalCleanup = startRequestElapsedClock({ status: 'failed', runtime_activity: {
+    phase: 'generating', startedAt: '2026-10-07T00:00:00Z',
+  } }, () => {}, schedule);
+  terminalCleanup();
+  assert.equal(scheduled, 0);
+  const unknownCleanup = startRequestElapsedClock({ runtime_activity: {
+    phase: 'generating', startedAt: '2026-10-07T00:00:00Z',
+  } }, () => {}, schedule);
+  unknownCleanup();
+  assert.equal(scheduled, 0);
+  const staleActivityCleanup = startRequestElapsedClock({ status: 'running', runtime_activity: {
+    phase: 'completed', startedAt: '2026-10-07T00:00:00Z',
+  } }, () => {}, schedule);
+  staleActivityCleanup();
+  assert.equal(scheduled, 0);
+
+  let ticks = 0;
+  const runningCleanup = startRequestElapsedClock({ status: 'running', runtime_activity: {
+    phase: 'thinking', startedAt: '2026-10-07T00:00:00Z',
+  } }, () => { ticks++; }, schedule);
+  assert.equal(ticks, 1);
+  assert.equal(scheduled, 1);
+  assert.equal(delay, 1000);
+  runningCleanup();
+  assert.equal(cancelled, 1);
 });
 
 test('formatting and trend helpers tolerate missing or invalid optional telemetry', () => {

@@ -5,13 +5,22 @@
   gap: 8px;
   width: 100%;
   height: 40px;
-  margin-inline-start: env(titlebar-area-x, 0px);
   padding: 0 10px;
-  padding-right: max(148px, calc(100vw - env(titlebar-area-width, 100vw) + 10px));
   color: var(--fg, #f4f4f5);
   background: var(--bg-window, #171717);
   -webkit-app-region: drag;
   user-select: none;
+}
+
+/* macOS places its native traffic lights on the left; keep the brand and
+   navigation clear of them while letting the trailing actions use the width. */
+.xn-desktop-titlebar[data-platform="macos"] {
+  padding-inline-start: max(78px, env(titlebar-area-x, 0px));
+}
+
+/* Windows keeps native caption buttons on the right of its title-bar overlay. */
+.xn-desktop-titlebar[data-platform="windows"] {
+  padding-inline-end: max(148px, calc(100vw - env(titlebar-area-width, 100vw) + 10px));
 }
 
 .xn-desktop-titlebar__brand,
@@ -72,6 +81,12 @@
 }
 
 .xn-desktop-titlebar__history button:disabled { opacity: .38; cursor: default; }
+.xn-desktop-titlebar__history button:focus-visible,
+.xn-desktop-titlebar__actions > button:focus-visible,
+.xn-desktop-titlebar__help > summary:focus-visible {
+  outline: 2px solid var(--border-focus, #6aa9ff);
+  outline-offset: 2px;
+}
 .xn-desktop-titlebar__help { position: relative; -webkit-app-region: no-drag; }
 .xn-desktop-titlebar__help > summary { list-style: none; }
 .xn-desktop-titlebar__help > summary::-webkit-details-marker { display: none; }

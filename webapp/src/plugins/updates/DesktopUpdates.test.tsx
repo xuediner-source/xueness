@@ -3,7 +3,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { setLocale, t } from '../../i18n';
-import { DesktopUpdates, DesktopUpdateIndicator, UpdateDownloadProgress } from './DesktopUpdates';
+import { DesktopUpdates, DesktopUpdateIndicator, UpdateDownloadProgress, UpdateInstallationHelp } from './DesktopUpdates';
 import { startUpdateStatusPolling, updateActionAvailability } from './updateLifecycle';
 test('disabled updates mount no controls and do not claim an installation', () => {
   assert.equal(renderToStaticMarkup(<DesktopUpdates enabled={false} />), '');
@@ -30,6 +30,9 @@ test('update indicator stays visible through a known update lifecycle and always
   assert.match(ready, /data-pending="true"/);
   assert.match(ready, /重启并更新/);
   assert.match(ready, /Xueness 0.2.0/);
+  const readyDmg = renderToStaticMarkup(<DesktopUpdateIndicator state={{ phase: 'ready', version: '0.2.0', installMode: 'open-dmg' }} />);
+  assert.match(readyDmg, /打开安装器/);
+  assert.doesNotMatch(readyDmg, /重启并更新/);
   const downloading = renderToStaticMarkup(<DesktopUpdateIndicator state={{ phase: 'downloading', percent: 35 }} />);
   assert.match(downloading, /xn-update-indicator__spinner/);
   assert.match(downloading, /更新下载进度/);
@@ -65,10 +68,32 @@ test('unknown, failed, current, disabled and stale update states stay hidden', (
     { phase: 'unsupported', version: '0.2.0', currentVersion: '0.1.0' },
   ]) assert.equal(renderToStaticMarkup(<DesktopUpdateIndicator state={state} />), '', state.phase);
 });
-test('updater UI explains signed Mac limitation and keeps actions unavailable before status', () => {
+test('updater UI keeps actions unavailable and does not guess installation support before status', () => {
   const html = renderToStaticMarkup(<DesktopUpdates enabled />);
   assert.match(html, /自动下载稳定版更新/); assert.match(html, /重启并更新/);
-  assert.match(html, /Finder/); assert.match(html, /disabled/); assert.doesNotMatch(html, /安装成功/);
+  assert.match(html, /正在确认当前客户端/); assert.match(html, /disabled/); assert.doesNotMatch(html, /Finder|安装成功/);
+});
+
+test('installation help follows actual host support across Mac and Windows', () => {
+  const mac = renderToStaticMarkup(<UpdateInstallationHelp installMode="open-dmg" />);
+  assert.match(mac, /Finder|DMG/);
+  assert.doesNotMatch(mac, /重启并更新|Windows/);
+  const installer = renderToStaticMarkup(<UpdateInstallationHelp installMode="restart" />);
+  assert.match(installer, /重启并更新|会话和设置会保留/);
+  assert.doesNotMatch(installer, /Finder|DMG|Windows/);
+  const portable = renderToStaticMarkup(<UpdateInstallationHelp installMode="unsupported" />);
+  assert.match(portable, /不支持应用内安装更新|Windows 请使用安装版/);
+  assert.doesNotMatch(portable, /重启并更新/);
+});
+
+test('all installation modes have English help without mixing locales', () => {
+  setLocale('en');
+  try {
+    for (const installMode of ['open-dmg', 'restart', 'unsupported', undefined]) {
+      const html = renderToStaticMarkup(<UpdateInstallationHelp installMode={installMode} />);
+      assert.doesNotMatch(html, /[\u3400-\u9fff]/);
+    }
+  } finally { setLocale('zh'); }
 });
 
 test('disabling the update panel ignores an in-flight result and starts no follow-up poll', async () => {

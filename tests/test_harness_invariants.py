@@ -11,7 +11,9 @@ import json
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
+from xueness import plugin_runtime
 from xueness.core import Gate, Store, compact, run
 from xueness.provider import FakeProvider
 
@@ -27,8 +29,11 @@ class _RecordingProvider:
     def __init__(self):
         self.inner = FakeProvider()
         self.prompts = []
+        self.before_request = None
 
     def complete(self, messages, tools):
+        if self.before_request:
+            self.before_request()
         # Deep copy: the loop mutates its message list in place, so holding a
         # reference would let a later step rewrite what we recorded here.
         self.prompts.append(json.loads(json.dumps(messages, ensure_ascii=False)))
@@ -56,16 +61,24 @@ class CompactionGuardTests(unittest.TestCase):
         """No prompt may be sent without compaction having run in that step."""
         session = self.store.new("do a thing", self.root)
         provider = _RecordingProvider()
+        guidance_chars = len(json.dumps(plugin_runtime.completion_instructions(
+            self.store.directory, session), ensure_ascii=False))
         # A budget small enough that compaction has real work to do.
-        run(session, self.store, provider, Gate(self.root), max_steps=3, max_chars=600)
+        with patch('xueness.core.compact', wraps=compact) as guard:
+            def check_boundary():
+                self.assertEqual(guard.call_count, len(provider.prompts) + 1)
+                self.assertEqual(guard.call_args.args[1], max(256, 600 - guidance_chars))
+            provider.before_request = check_boundary
+            run(session, self.store, provider, Gate(self.root), max_steps=3, max_chars=600)
 
         self.assertGreaterEqual(len(provider.prompts), 1, "the model was never called")
-        # The prompt view is always bounded by the configured budget, however many
-        # steps ran. Growth past it means a step skipped its compaction call.
+        # System/user text and trusted guidance cannot be dropped. A budget below
+        # that floor cannot be a hard bound; separately pin reserved guidance and
+        # an actual compaction at every request, not just a final size threshold.
         for index, prompt in enumerate(provider.prompts):
             size = len(json.dumps(prompt, ensure_ascii=False))
             self.assertLessEqual(
-                size, 600 + 1200,
+                size, 600 + 1200 + guidance_chars,
                 "prompt %d was %d chars: compaction did not run before this request"
                 % (index, size),
             )
@@ -74,10 +87,17 @@ class CompactionGuardTests(unittest.TestCase):
         """The overflow case specifically: many tool results in one run."""
         session = self.store.new("do a thing", self.root)
         provider = _RecordingProvider()
-        run(session, self.store, provider, Gate(self.root), max_steps=6, max_chars=800)
+        guidance_chars = len(json.dumps(plugin_runtime.completion_instructions(
+            self.store.directory, session), ensure_ascii=False))
+        with patch('xueness.core.compact', wraps=compact) as guard:
+            def check_boundary():
+                self.assertEqual(guard.call_count, len(provider.prompts) + 1)
+                self.assertEqual(guard.call_args.args[1], max(256, 800 - guidance_chars))
+            provider.before_request = check_boundary
+            run(session, self.store, provider, Gate(self.root), max_steps=6, max_chars=800)
 
         largest = max(len(json.dumps(p, ensure_ascii=False)) for p in provider.prompts)
-        self.assertLess(largest, 800 + 1200,
+        self.assertLess(largest, 800 + 1200 + guidance_chars,
                         "a request exceeded the budget: the guard missed appended results")
 
 

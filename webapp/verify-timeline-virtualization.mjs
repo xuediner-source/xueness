@@ -66,6 +66,7 @@ function harnessSource(rowsJson, options) {
     function Fixture() {
       const [rows, setRows] = React.useState(initialRows);
       const [version, setVersion] = React.useState(0);
+      const [sessionId, setSessionId] = React.useState("session-a");
       const append = () => {
         const base = rows.length / 2;
         const extra = [];
@@ -76,9 +77,16 @@ function harnessSource(rowsJson, options) {
         setRows((current) => [...current, ...extra]);
         setVersion((value) => value + 1);
       };
-      return React.createElement(ConversationTimelineViewport, { autoScroll: true, rowsVersion: version },
+      return React.createElement(ConversationTimelineViewport, { key: sessionId, sessionId, autoScroll: true, rowsVersion: rows },
         React.createElement(TimelineStream, { rows, virtualize: true, virtualizeFromTail: ${options.virtualizeFromTail} }),
         React.createElement("button", { type: "button", "data-testid": "append-rows", onClick: append }, "append"),
+        React.createElement("button", {
+          type: "button",
+          "data-testid": "switch-session",
+          "data-active-session": sessionId,
+          "data-row-count": rows.length,
+          onClick: () => setSessionId((current) => current === "session-a" ? "session-b" : "session-a"),
+        }, "switch session"),
       );
     }
     createRoot(document.getElementById("root")).render(React.createElement(Fixture));
@@ -248,6 +256,31 @@ await withPage("long", { turns: TURNS, virtualizeFromTail: true }, async (page) 
   await settle(page);
   const jumpState = await scrollerState(page);
   assert.ok(jumpState.visibleItems > 0, "跳转后视口内应可见条目");
+
+  // Session-scoped restoration survives the production-style viewport remount.
+  const rememberedScrollTop = jumpState.scrollTop;
+  await page.evaluate(() => document.querySelector("[data-testid='switch-session']").click());
+  await page.waitForFunction(() => document.querySelector("[data-testid='switch-session']")?.getAttribute("data-active-session") === "session-b");
+  await settle(page);
+  const otherSession = await scrollerState(page);
+  assert.ok(otherSession.scrollHeight - otherSession.scrollTop - otherSession.clientHeight <= 40, "未访问过的会话从尾部打开");
+  await page.evaluate(() => document.querySelector("[data-testid='switch-session']").click());
+  await page.waitForFunction(() => document.querySelector("[data-testid='switch-session']")?.getAttribute("data-active-session") === "session-a");
+  await settle(page);
+  const restored = await scrollerState(page);
+  assert.ok(Math.abs(restored.scrollTop - rememberedScrollTop) <= 2, `返回会话应恢复原位置 ${rememberedScrollTop}px，实际 ${restored.scrollTop}px`);
+
+  // Content updates and viewport resizing while reading must not pull the reader to the tail.
+  await page.evaluate(() => { document.querySelector("#root").style.height = "700px"; });
+  await settle(page);
+  const beforeAppendWhileReading = await scrollerState(page);
+  await page.evaluate(() => document.querySelector("[data-testid='append-rows']").click());
+  await page.waitForFunction(() => document.querySelector("[data-testid='switch-session']")?.getAttribute("data-row-count") === "412");
+  await settle(page);
+  const afterAppendWhileReading = await scrollerState(page);
+  assert.ok(afterAppendWhileReading.scrollHeight - afterAppendWhileReading.scrollTop - afterAppendWhileReading.clientHeight > 80, "离尾阅读时追加不应恢复贴底");
+  assert.ok(Math.abs(afterAppendWhileReading.scrollTop - beforeAppendWhileReading.scrollTop) <= 60, "追加与 resize 后阅读位置应稳定");
+
 });
 
 // 短会话：行为不变，完整渲染且无垫片。

@@ -115,8 +115,8 @@
     },
     {
       "id": "providers.activity",
-      "name": "输出阶段、延迟、计数与速率趋势",
-      "nameEn": "Output phase, latency, counts and rate trends"
+      "name": "实时请求状态、已报告用量、步骤耗时与速率趋势",
+      "nameEn": "Live request states, reported usage, step timings and rate trends"
     },
     {
       "id": "providers.custom_empty",

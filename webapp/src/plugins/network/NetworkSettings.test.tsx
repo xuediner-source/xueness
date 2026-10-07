@@ -34,7 +34,7 @@ test("network settings load only through the local API and never accept a key in
     const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
     calls.push({ url, method: init?.method ?? "GET", ...(typeof init?.body === "string" ? { body: init.body } : {}) });
     const payload = url === "/api/network/settings"
-      ? { settings: { searchEndpoint: "https://search.example/search", dohEndpoint: "", searchMode: "service",
+      ? { settings: { searchEndpoint: "https://search.example/search", imageSearchEndpoint: "", dohEndpoint: "", searchMode: "service",
           searchModelEndpoint: "https://models.example/v1/chat/completions", searchModel: "model-x",
           hasSearchKey: true, hasSavedSearchKey: true, hasEnvironmentSearchKey: false, searchKeySource: "saved",
           hasSearchModelKey: true, hasSavedSearchModelKey: true } }
@@ -44,6 +44,7 @@ test("network settings load only through the local API and never accept a key in
   try {
     const values = await readNetworkSettings(true);
     assert.equal(values?.searchEndpoint, "https://search.example/search");
+    assert.equal(values?.imageSearchEndpoint, "");
     assert.equal(values?.hasSearchKey, true);
     assert.equal(JSON.stringify(values).includes("apiKey"), false);
     assert.deepEqual(calls, [{ url: "/api/network/settings", method: "GET" }]);
@@ -61,21 +62,21 @@ test("save leaves a blank secret out, clear is explicit, and diagnostics run onl
     calls.push({ url, method, ...(typeof init?.body === "string" ? { body: init.body } : {}) });
     const payload = url === "/api/csrf" ? { csrfToken: "local-test" }
       : url === "/api/network/diagnostics" ? { ok: true, operation: "dns", dnsSource: "system" }
-      : { settings: { searchEndpoint: "https://search.example/search", dohEndpoint: "", searchMode: "service",
+      : { settings: { searchEndpoint: "https://search.example/search", imageSearchEndpoint: "https://images.example/v1/images/search", dohEndpoint: "", searchMode: "service",
             searchModelEndpoint: "https://models.example/v1/chat/completions", searchModel: "model-x",
             hasSearchKey: false, hasSavedSearchKey: false, hasEnvironmentSearchKey: false, searchKeySource: "none",
             hasSearchModelKey: false, hasSavedSearchModelKey: false } };
     return new Response(JSON.stringify(payload), { status: 200, headers: { "Content-Type": "application/json" } });
   }) as typeof fetch;
   try {
-    await saveNetworkSettings({ searchEndpoint: "https://search.example/search", dohEndpoint: "", searchMode: "service",
+    await saveNetworkSettings({ searchEndpoint: "https://search.example/search", imageSearchEndpoint: "https://images.example/v1/images/search", dohEndpoint: "", searchMode: "service",
       searchModelEndpoint: "https://models.example/v1/chat/completions", searchModel: "model-x", searchKey: "" });
     await diagnoseNetwork("dns");
     await clearSavedNetworkKey();
     await clearSavedSearchModelKey();
     const writes = calls.filter(call => call.method === "POST" && call.url !== "/api/csrf");
     assert.deepEqual(writes.map(call => [call.url, JSON.parse(call.body ?? "{}")]), [
-      ["/api/network/settings", { searchEndpoint: "https://search.example/search", dohEndpoint: "", searchMode: "service",
+      ["/api/network/settings", { searchEndpoint: "https://search.example/search", imageSearchEndpoint: "https://images.example/v1/images/search", dohEndpoint: "", searchMode: "service",
         searchModelEndpoint: "https://models.example/v1/chat/completions", searchModel: "model-x" }],
       ["/api/network/diagnostics", { operation: "dns" }],
       ["/api/network/settings", { clearSearchKey: true }],

@@ -26,6 +26,8 @@ export type RunChoices = {
   provider: "real";
   mode: "build" | "plan";
   permission_mode?: PermissionMode;
+  /** Set only after the sessions plugin's explicit full-access confirmation. */
+  acknowledge_yolo?: boolean;
   provider_id?: string;
   model?: string;
   runtime_profile?: "standard" | "lightweight";
@@ -40,6 +42,11 @@ let runChoices: RunChoices = { provider: "real", mode: "build", permission_mode:
 /** Clear a profile override when the user changes provider; that provider's saved default then applies. */
 export function mergeRunChoices(current: RunChoices, patch: Partial<RunChoices>): RunChoices {
   const next = { ...current, ...patch };
+  if ("permission_mode" in patch && !("acknowledge_yolo" in patch)) {
+    next.acknowledge_yolo = patch.permission_mode === "yolo"
+      ? current.permission_mode === "yolo" && current.acknowledge_yolo === true
+      : false;
+  }
   if ("provider_id" in patch && patch.provider_id !== current.provider_id && !("runtime_profile" in patch)) {
     next.runtime_profile = undefined;
   }
@@ -50,6 +57,10 @@ export function setRunChoices(choices: RunChoices): void {
   if (choices.provider !== "real" || !(["build", "plan"] as string[]).includes(choices.mode) ||
       (choices.permission_mode !== undefined && !isPermissionMode(choices.permission_mode))) {
     throw new Error("invalid run choices");
+  }
+  if ((choices.acknowledge_yolo !== undefined && typeof choices.acknowledge_yolo !== "boolean") ||
+      (choices.acknowledge_yolo === true && choices.permission_mode !== "yolo")) {
+    throw new Error("invalid yolo acknowledgement");
   }
   if (choices.runtime_profile !== undefined &&
       choices.runtime_profile !== "standard" && choices.runtime_profile !== "lightweight") {

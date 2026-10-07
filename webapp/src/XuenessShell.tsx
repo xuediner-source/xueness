@@ -7,6 +7,7 @@ import { Badge } from "./ui/primitives";
 import { IconBack, IconCheck, IconLoader, IconX, IconMenu, IconXuenessMark } from "./ui/icons";
 import { CodeContent } from "./ui/CodeContent";
 import type { CodeLanguage } from "./ui/CodePreview";
+import { displayBinding } from "./xuenessShortcutDisplay";
 
 export function shouldCloseNarrowSidebarOnEscape(event: {
   key: string;
@@ -269,13 +270,6 @@ export type SidebarAction = {
 };
 
 export function SidebarActions({ actions, platform }: { actions: SidebarAction[]; platform?: string }): React.JSX.Element {
-  const isMac = (platform ?? (typeof navigator === "undefined" ? "" : navigator.platform)).toLowerCase().includes("mac");
-  const displayShortcut = (shortcut: string) => shortcut.split("+").map((part) => {
-    if (part === "Mod") return isMac ? "⌘" : "Ctrl";
-    if (part === "Alt") return isMac ? "⌥" : "Alt";
-    if (part === "Shift") return isMac ? "⇧" : "Shift";
-    return part;
-  }).join(isMac ? "" : "+");
   return (
     <div className="xn-sidebar-actions" data-testid="xn-sidebar-actions">
       {actions.map((action) => (
@@ -292,7 +286,7 @@ export function SidebarActions({ actions, platform }: { actions: SidebarAction[]
           </span>
           <span className="xn-sidebar-action__label">{action.label}</span>
           {action.shortcut && (
-            <kbd className="xn-sidebar-action__shortcut">{displayShortcut(action.shortcut)}</kbd>
+            <kbd className="xn-sidebar-action__shortcut">{displayBinding(action.shortcut, platform)}</kbd>
           )}
         </button>
       ))}

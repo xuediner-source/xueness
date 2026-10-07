@@ -8,7 +8,9 @@ import type {
 } from "../../xuenessWorkbench";
 import { Button, Badge, EmptyState } from "../../ui/primitives";
 import { IconArrowUp, IconLoader, IconPaperclip, IconPencil, IconPin, IconRefresh, IconTrash, IconX } from "../../ui/icons";
-import type { ComposerInput } from "../../xuenessComposer";
+import type { ComposerCapability, ComposerInput } from "../../xuenessComposer";
+import { ComposerCapabilityMenu, MAX_SELECTED_COMPOSER_CAPABILITIES, capabilityLabel, matchesComposerSearch } from './ComposerCapabilityMenu';
+import { Search, Target, Workflow, Blocks } from 'lucide-react';
 import { completionPresentation } from './completionPresentation';
 
 export type TaskListProps = {
@@ -371,8 +373,10 @@ export type ComposerStartActions = {
   canGoal: boolean;
   canWorkflow: boolean;
   canCompact?: boolean;
+  onGoal?: () => void;
   onWorkflow: () => void;
   onPlugins: () => void;
+  onModels?: () => void;
 };
 
 /** Shared autocomplete for the hero and conversation composer. */
@@ -453,10 +457,11 @@ async function encodeComposerFile(file: File): Promise<string> {
 
 export type ComposerProps = {
   sendShortcut?: "enter" | "mod-enter";
-  onSend?: (text: string, input?: ComposerInput) => boolean | void | Promise<boolean | void>;
+  onSend?: (text: string, input?: ComposerInput, onAccepted?: () => void) => boolean | void | Promise<boolean | void>;
   disabled?: boolean;
   /** Disable sending while keeping the prompt editable (for model/permission gates). */
   sendDisabled?: boolean;
+  sendDisabledReason?: string;
   running?: boolean;
   queueWhenRunning?: boolean;
   queueBusy?: boolean;
@@ -480,6 +485,7 @@ export type ComposerProps = {
   controls?: React.ReactNode;
   startActions?: ComposerStartActions;
   mentions?: ComposerMention[];
+  capabilities?: ComposerCapability[];
   /** Slash-command candidates (loaded by the container from /api/resources/commands). */
   commands?: { id: string; description?: string }[];
   /** Workspace file candidates for @-mentions (loaded by the container). */
@@ -496,6 +502,7 @@ export type ComposerDraftState = {
   text: string;
   attachments: ComposerInput["attachments"];
   goal: boolean;
+  selectedCapabilities?: string[];
   selectedContext: Pick<ComposerInput, "files" | "sessions" | "skills" | "plugins">;
   submissionError: string;
   attachmentError: string;
@@ -507,6 +514,7 @@ function emptyComposerDraft(text = ""): ComposerDraftState {
     text,
     attachments: [],
     goal: false,
+    selectedCapabilities: [],
     selectedContext: { files: [], sessions: [], skills: [], plugins: [] },
     submissionError: "",
     attachmentError: "",
@@ -524,6 +532,18 @@ export function clearSubmittedComposerDraft(
   if (!current || current.revision !== submittedRevision) return drafts;
   const next = new Map(drafts);
   next.set(draftKey, { ...emptyComposerDraft(), revision: current.revision + 1 });
+  return next;
+}
+
+/** A rejected submission may restore its snapshot only while the cleared draft is still untouched. */
+export function restoreSubmittedComposerDraft(
+  drafts: Map<string, ComposerDraftState>, draftKey: string, clearedRevision: number,
+  submittedDraft: ComposerDraftState, error = "",
+): Map<string, ComposerDraftState> {
+  const current = drafts.get(draftKey);
+  if (!current || current.revision !== clearedRevision) return drafts;
+  const next = new Map(drafts);
+  next.set(draftKey, { ...submittedDraft, revision: current.revision + 1, submissionError: error });
   return next;
 }
 
@@ -584,6 +604,7 @@ export function Composer({
   onSend,
   disabled = false,
   sendDisabled = false,
+  sendDisabledReason,
   running = false,
   queueWhenRunning = false,
   queueBusy = false,
@@ -601,6 +622,7 @@ export function Composer({
   controls,
   startActions,
   mentions = [],
+  capabilities = [],
   commands = [],
   files = [],
   minimal = false,
@@ -608,6 +630,8 @@ export function Composer({
   const localDraftsRef = useRef<Map<string, ComposerDraftState>>(new Map());
   const draftsRef = draftStore ?? localDraftsRef;
   const [draftRenderVersion, setDraftRenderVersion] = useState(0);
+  const pendingSubmissionsRef = useRef(new Map<string, number>());
+  const submissionTicketRef = useRef(0);
   if (!draftsRef.current.has(draftKey)) draftsRef.current.set(draftKey, emptyComposerDraft(defaultValue));
   const draft = draftsRef.current.get(draftKey)!;
   // State lives in a per-scope map so late handlers keep writing to the draft
@@ -631,6 +655,18 @@ export function Composer({
   const updateCurrentDraft = (update: (current: ComposerDraftState) => ComposerDraftState, contentChanged = true) =>
     updateDraftFor(draftKey, update, contentChanged);
   const { text, attachments, goal, selectedContext, submissionError, attachmentError } = draft;
+  const selectedCapabilities = draft.selectedCapabilities ?? [];
+  const toggleCapability = (item: ComposerCapability) => {
+    if (item.available === false || !capabilities.some(entry => entry.id === item.id && entry.available !== false)) return;
+    updateCurrentDraft(current => {
+      const previous = current.selectedCapabilities ?? [];
+      if (previous.includes(item.id)) {
+        return { ...current, selectedCapabilities: previous.filter(id => id !== item.id) };
+      }
+      if (previous.length >= MAX_SELECTED_COMPOSER_CAPABILITIES) return current;
+      return { ...current, selectedCapabilities: [...previous, item.id] };
+    });
+  };
   const setText = (value: string | ((previous: string) => string)) => updateCurrentDraft(current => {
     const nextText = typeof value === "function" ? value(current.text) : value;
     if (nextText === current.text && !current.submissionError) return current;
@@ -643,6 +679,7 @@ export function Composer({
   const attachmentBusyRef = useRef(false);
   const [attachmentBusy, setAttachmentBusy] = useState(false);
   const [plusOpen, setPlusOpen] = useState(false);
+  const [addSearch, setAddSearch] = useState('');
   const plusRef = useRef<HTMLDivElement | null>(null);
   const plusButtonRef = useRef<HTMLButtonElement | null>(null);
   const menuRef = useRef<HTMLDivElement | null>(null);
@@ -717,6 +754,7 @@ export function Composer({
   };
   const closePlusMenu = (restoreFocus = false) => {
     setPlusOpen(false);
+    setAddSearch('');
     if (restoreFocus) plusButtonRef.current?.focus();
   };
   const openAttachmentPicker = () => {
@@ -724,15 +762,20 @@ export function Composer({
     attachInputRef.current?.click();
   };
   const handlePlusMenuKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
+    if (isImeCompositionKey(event)) return;
     const items = Array.from(event.currentTarget.querySelectorAll<HTMLButtonElement>('[role="menuitem"]:not(:disabled), [role="menuitemcheckbox"]:not(:disabled)'));
     const index = items.indexOf(document.activeElement as HTMLButtonElement);
     if (event.key === "Escape") {
       event.preventDefault();
+      event.stopPropagation();
       closePlusMenu(true);
     } else if (event.key === "ArrowDown" || event.key === "ArrowUp") {
       event.preventDefault();
       const delta = event.key === "ArrowDown" ? 1 : -1;
-      items[(index + delta + items.length) % items.length]?.focus();
+      items[index < 0 ? (delta > 0 ? 0 : items.length - 1) : (index + delta + items.length) % items.length]?.focus();
+    } else if (event.target instanceof HTMLInputElement) {
+      // Searching the Add menu must never submit the enclosing message form.
+      if (event.key === 'Enter') { event.preventDefault(); items[0]?.focus(); }
     } else if (event.key === "Home") {
       event.preventDefault();
       items[0]?.focus();
@@ -768,13 +811,20 @@ export function Composer({
   const plusMenuId = useId();
 
   const trimmed = text.trim();
-  const selectedContextCount = Object.values(selectedContext).reduce((sum, values) => sum + values.length, 0);
-  const slashQueryRemoved = text.replace(/(?:^|\s)\/[A-Za-z0-9._-]*$/, (match) => match.match(/^\s*/)?.[0] ?? "");
-  const emptyStartDraft = slashQueryRemoved.trim().length === 0 && attachments.length === 0 && selectedContextCount === 0;
-  const canOfferGoal = Boolean(startActions?.canGoal && (goal || emptyStartDraft));
-  const canOfferWorkflow = Boolean(startActions?.canWorkflow && emptyStartDraft);
+  const selectedContextCount = Object.values(selectedContext).reduce((sum, values) => sum + values.length, selectedCapabilities.length);
+  const visibleCapabilities = capabilities.filter(item => matchesComposerSearch(addSearch,
+    item.id, item.label, item.labelEn, item.description, item.descriptionEn));
+  const visibleMentions = availableMentions.filter(item => matchesComposerSearch(addSearch, item.id, item.label, item.description));
+  const canOfferGoal = Boolean(startActions?.canGoal);
+  const canOfferWorkflow = Boolean(startActions?.canWorkflow);
   const hasSendableContent = trimmed.length > 0 || attachments.length > 0 || selectedContextCount > 0;
-  const isSendDisabled = disabled || sendDisabled || queueBusy || (running && !queueWhenRunning) || attachmentBusy || !hasSendableContent;
+  const isSendDisabled = disabled || sendDisabled || queueBusy || pendingSubmissionsRef.current.has(draftKey) || (running && !queueWhenRunning) || attachmentBusy || !hasSendableContent;
+  // 停止/发送互斥（对标 ZCode showStopControl = canStop && !hasDraftToSubmit）：
+  // 运行中且草稿为空时，停止按钮独占发送槽位；有草稿时显示排队发送键。
+  // queueWhenRunning=false 时发送键在运行中没有排队语义，停止键始终保留。
+  const canStop = running && Boolean(onStop);
+  const showStopControl = canStop && (!queueWhenRunning || !hasSendableContent);
+  const showQueueControl = running && queueWhenRunning && hasSendableContent;
   const suggestions = !disabled && !suggestDismissed
     ? contextComposerSuggestions(text, commands, availableMentions, {
       canGoal: canOfferGoal,
@@ -827,7 +877,8 @@ export function Composer({
 
   const acceptSuggestion = (suggestion: ContextComposerSuggestion) => {
     if (suggestion.kind === "goal") {
-      setGoal((current) => !current);
+      if (startActions?.onGoal) startActions.onGoal();
+      else setGoal((current) => !current);
       setText((prev) => applyContextSuggestion(prev, suggestion));
     } else if (suggestion.kind === "workflow") {
       startActions?.onWorkflow();
@@ -843,7 +894,7 @@ export function Composer({
   };
 
   const handleSend = async () => {
-    if (isSendDisabled || !onSend) return;
+    if (isSendDisabled || pendingSubmissionsRef.current.has(draftKey) || !onSend) return;
     setSubmissionError("");
     const submittedDraft = draftsRef.current.get(draftKey) ?? emptyComposerDraft(defaultValue);
     const submittedRevision = submittedDraft.revision;
@@ -853,27 +904,34 @@ export function Composer({
       sessions: submittedDraft.selectedContext.sessions,
       skills: submittedDraft.selectedContext.skills,
       plugins: submittedDraft.selectedContext.plugins,
+      capabilities: submittedDraft.selectedCapabilities ?? [],
       goal: submittedDraft.goal,
     };
+    const ticket = ++submissionTicketRef.current;
+    pendingSubmissionsRef.current.set(draftKey, ticket);
+    // Move the complete submission out of the editor before the async run can
+    // promote/remount the composer. A rejection restores this frozen snapshot.
+    draftsRef.current = clearSubmittedComposerDraft(draftsRef.current, draftKey, submittedRevision);
+    const clearedRevision = draftsRef.current.get(draftKey)!.revision;
+    setDraftRenderVersion(version => version + 1);
+    let accepted = false;
+    const release = () => {
+      if (pendingSubmissionsRef.current.get(draftKey) !== ticket) return;
+      pendingSubmissionsRef.current.delete(draftKey);
+      setDraftRenderVersion(version => version + 1);
+    };
+    const acknowledge = () => { accepted = true; release(); };
+    const restore = (error = "") => {
+      if (accepted) return;
+      const next = restoreSubmittedComposerDraft(draftsRef.current, draftKey, clearedRevision, submittedDraft, error);
+      if (next !== draftsRef.current) { draftsRef.current = next; setDraftRenderVersion(version => version + 1); }
+    };
     try {
-      const sent = await onSend(submittedDraft.text.trim(), draft);
-      if (sent !== false) {
-        const currentDrafts = draftsRef.current;
-        const nextDrafts = clearSubmittedComposerDraft(currentDrafts, draftKey, submittedRevision);
-        if (nextDrafts !== currentDrafts) {
-          draftsRef.current = nextDrafts;
-          setDraftRenderVersion(version => version + 1);
-        }
-      }
+      const sent = await onSend(submittedDraft.text.trim(), draft, acknowledge);
+      if (sent === false) restore();
     } catch (error) {
-      const current = draftsRef.current.get(draftKey) ?? emptyComposerDraft();
-      if (current.revision === submittedRevision) {
-        updateDraftFor(draftKey, state => ({
-          ...state,
-          submissionError: error instanceof Error ? error.message : tr("发送失败，草稿已保留。"),
-        }), false);
-      }
-    }
+      restore(error instanceof Error ? error.message : tr("发送失败，草稿已保留。"));
+    } finally { release(); }
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -966,7 +1024,15 @@ export function Composer({
         </ul>
       )}
       {(goal || attachments.length > 0 || selectedContextCount > 0) && (
-        <div className="xn-composer__chips" aria-label={tr("已添加的上下文")}>
+        <div className="xn-composer__chips" aria-label={tr("已添加的上下文")} data-testid="composer-selected-context" aria-live="polite" aria-relevant="additions removals">
+          {selectedCapabilities.map(id => {
+            const capability = capabilities.find(item => item.id === id);
+            return <span className="xn-composer__context-chip" key={id} data-testid={`composer-capability-chip-${id}`}>
+              <span>{capability ? capabilityLabel(capability) : id}</span>
+              <button type="button" aria-label={tr("移除能力")} onClick={() => updateCurrentDraft(current => ({ ...current,
+                selectedCapabilities: (current.selectedCapabilities ?? []).filter(value => value !== id) }))}><IconX size={12} /></button>
+            </span>;
+          })}
           {goal && (
             <span className="xn-composer__context-chip" data-testid="composer-goal-chip">
               {tr("目标")}
@@ -999,6 +1065,11 @@ export function Composer({
       )}
       {attachmentBusy && <div className="xn-composer__status" role="status">{tr("正在读取附件...")}</div>}
       {attachmentError && <div className="xn-composer__error" role="alert">{attachmentError}</div>}
+      {selectedCapabilities.length > 0 && <div className="xn-composer__status" role="status" data-testid="composer-capability-hint">{tr('已添加能力。描述具体需求后发送，即可使用。')}</div>}
+      {sendDisabled && (hasSendableContent || goal) && <div className="xn-composer__status xn-composer__setup" role="status" data-testid="composer-send-unavailable">
+        <span>{sendDisabledReason || tr('选择或配置模型后即可发送。')}</span>
+        {startActions?.onModels && <button type="button" onClick={startActions.onModels}>{tr('配置模型')}</button>}
+      </div>}
       {submissionError && <div className="xn-composer__error" role="alert">{submissionError}</div>}
       <textarea
         ref={attachRef}
@@ -1031,8 +1102,21 @@ export function Composer({
       />
       <div className="xn-composer__row">
         <div className="xn-composer__tools">
-          {!minimal && <div className="xn-composer__actions" role="group" aria-label={tr("输入辅助")}>
+          {<div className="xn-composer__actions" role="group" aria-label={tr("输入辅助")}>
             <div className="xn-composer__plus-wrap" ref={plusRef}>
+              {/* 附件一级入口（ZCode attachmentAction 式）：直接调现有附件逻辑，
+                  「+」菜单保留给 mentions/命令，减少一次点击。 */}
+              <button
+                type="button"
+                className="xn-composer__chip"
+                aria-label={tr("添加附件")}
+                title={tr("添加附件")}
+                data-testid="composer-attachment"
+                disabled={disabled || attachmentBusy}
+                onClick={openAttachmentPicker}
+              >
+                <IconPaperclip size={16} />
+              </button>
               <button
                 ref={plusButtonRef}
                 type="button"
@@ -1064,26 +1148,31 @@ export function Composer({
                   aria-label={tr("添加上下文或能力")}
                   onKeyDown={handlePlusMenuKeyDown}
                   onBlur={(event) => {
-                    if (!event.currentTarget.contains(event.relatedTarget as Node | null)) closePlusMenu();
+                    // Native mouse/touch focus loss can report null before click.
+                    // Outside pointerdown and a real Tab focus destination dismiss it.
+                    if (event.relatedTarget && !plusRef.current?.contains(event.relatedTarget as Node)) closePlusMenu();
                   }}
                 >
-                  <button
-                    type="button"
-                    role="menuitem"
-                    disabled={disabled || attachmentBusy}
-                    onClick={openAttachmentPicker}
-                  ><IconPaperclip size={14} />{tr("添加附件")}</button>
+                  <div className="xn-composer-add-search"><Search size={15} aria-hidden="true" /><input
+                    type="search" value={addSearch} data-testid="composer-add-search"
+                    aria-label={tr('搜索能力或上下文')} placeholder={tr('搜索能力或上下文')}
+                    onChange={event => setAddSearch(event.target.value)} /></div>
+                  <div className="xn-composer__plus-heading">{tr("添加")}</div>
+                  <button type="button" role="menuitem" disabled={attachmentBusy} onClick={openAttachmentPicker}>
+                    <IconPaperclip size={16} />{tr("附件")}
+                  </button>
                   {canOfferGoal && (
                     <button
                       type="button"
                       role="menuitem"
                       aria-pressed={goal}
                       onClick={() => {
-                        setGoal((current) => !current);
+                        if (startActions?.onGoal) startActions.onGoal();
+                        else setGoal((current) => !current);
                         closePlusMenu();
                         localInputRef.current?.focus();
                       }}
-                    >{goal ? tr("移除目标标记") : tr("添加为目标")}</button>
+                    ><Target size={16} aria-hidden="true" />{goal ? tr("移除目标标记") : tr("添加为目标")}</button>
                   )}
                   {canOfferWorkflow && startActions && (
                     <button
@@ -1094,7 +1183,7 @@ export function Composer({
                         closePlusMenu();
                         localInputRef.current?.focus();
                       }}
-                    >{tr("创建工作流")}</button>
+                    ><Workflow size={16} aria-hidden="true" />{tr("创建工作流")}</button>
                   )}
                   {startActions && (
                     <button
@@ -1104,10 +1193,13 @@ export function Composer({
                         startActions.onPlugins();
                         closePlusMenu();
                       }}
-                    >{tr("管理插件")}</button>
+                    ><Blocks size={16} aria-hidden="true" />{tr("管理插件")}</button>
                   )}
+                  <ComposerCapabilityMenu items={visibleCapabilities} selected={selectedCapabilities} onToggle={item => {
+                    toggleCapability(item); closePlusMenu(); localInputRef.current?.focus();
+                  }} />
                   {(["plugin", "file", "session", "skill"] as const).map((kind) => {
-                    const items = availableMentions.filter((mention) => mention.kind === kind).slice(0, 8);
+                    const items = visibleMentions.filter((mention) => mention.kind === kind).slice(0, addSearch.trim() ? 50 : 8);
                     if (items.length === 0) return null;
                     const field = kind === "file" ? "files" : kind === "session" ? "sessions" : kind === "skill" ? "skills" : "plugins";
                     const heading = kind === "plugin" ? tr("插件") : kind === "file" ? tr("文件") : kind === "session" ? tr("任务") : tr("技能");
@@ -1131,6 +1223,7 @@ export function Composer({
                       </div>
                     );
                   })}
+                  {addSearch.trim() && !visibleCapabilities.length && !visibleMentions.length && <div className="xn-composer__plus-empty" role="status">{tr('没有匹配的能力或上下文')}</div>}
                   {availableMentions.length === 0 && !startActions && (
                     <div className="xn-composer__plus-empty">{tr("暂无可添加的上下文")}</div>
                   )}
@@ -1147,22 +1240,27 @@ export function Composer({
           </span>}
         </div>
         <div className="xn-composer__submit-actions">
-          {running && queueWhenRunning && <button type="submit" disabled={isSendDisabled}
+          {showQueueControl && <button type="submit" disabled={isSendDisabled}
             className="xn-composer__send xn-composer__queue" aria-label={tr(queueBusy ? "正在排队…" : "加入队列")}
             title={tr(queueBusy ? "正在排队…" : "加入队列")} data-testid="composer-queue">
             {queueBusy ? <IconLoader size={16} /> : <IconArrowUp size={16} />}
           </button>}
-          {running && onStop ? (
+          {showStopControl ? (
             <button
               type="button"
               disabled={stopping}
               className="xn-composer__send xn-composer__stop"
               aria-label={stopping ? tr("正在停止") : tr("停止")}
-              title={stopping ? tr("正在停止") : tr("停止当前任务")}
+              aria-keyshortcuts="Escape"
+              title={stopping ? tr("正在停止") : tr("停止当前任务 (Esc)")}
               data-testid="composer-stop"
               onClick={onStop}
             >
-              {stopping ? <IconLoader size={16} /> : <IconX size={16} />}
+              {stopping ? <IconLoader size={16} /> : (
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                  <rect x="7" y="7" width="10" height="10" rx="2" />
+                </svg>
+              )}
             </button>
           ) : !running && (
             <button

@@ -25,6 +25,29 @@ _MAX_RECENT = 10
 _MAX_SELECTED_ROOTS = 100
 _WORKSPACE_SECTION = "workspace"
 _BROAD_TEMP_ROOT = Path("/tmp").resolve()
+
+# First-level Windows system directories, per drive anchor. They aggregate every
+# user profile or machine-wide state, so granting one as a workspace root is the
+# Windows counterpart of the POSIX "len(parts) <= 2" rejection below.
+WINDOWS_FIRST_LEVEL_SYSTEM_DIRS = ("Users", "ProgramData", "PerfLogs")
+
+
+def is_windows_first_level_system_dir(path: Path) -> bool:
+    """True when path is a first-level Windows system dir (e.g. C:\\Users).
+
+    Restrict this to drive-letter roots; UNC shares can legitimately have
+    first-level directories named Users or ProgramData. Uses normcase on both
+    sides so the check is case-insensitive on Windows. Pure-path arithmetic
+    keeps it testable off Windows.
+    """
+    anchor = path.anchor
+    drive = path.drive
+    if len(drive) != 2 or drive[1] != ':' or not anchor:
+        return False
+    lowered = os.path.normcase(str(path))
+    return any(lowered == os.path.normcase(anchor + name)
+               for name in WINDOWS_FIRST_LEVEL_SYSTEM_DIRS)
+
 _SESSION_DIR_RE = re.compile(r"[0-9a-f]{32}\Z")
 _NATIVE_PICKER_LOCK = threading.Lock()
 _PICKER_CANCELLED = "__XUENESS_NATIVE_PICKER_CANCELLED__"
@@ -144,9 +167,16 @@ def _is_too_broad_native_root(path: Path) -> bool:
         # projects. Mounted volume roots are broad even when nested below /.
         system_locations = {Path(v).resolve() for k, v in os.environ.items()
                             if k.upper() in ('SYSTEMROOT', 'PROGRAMFILES', 'PROGRAMFILES(X86)') and v}
-        if (os.name == 'nt' and (path == Path(path.anchor) or path in system_locations)):
+        if os.name == 'nt':
+            if path == Path(path.anchor) or path in system_locations:
+                return True
+            # Windows first-level system dirs (C:\Users, C:\ProgramData, ...)
+            # are as broad as POSIX two-part roots like /Users.
+            if is_windows_first_level_system_dir(path):
+                return True
+        elif len(path.parts) <= 2:
             return True
-        if (os.name != 'nt' and len(path.parts) <= 2) or path.is_mount():
+        if path.is_mount():
             return True
     except (OSError, RuntimeError, ValueError):
         return True

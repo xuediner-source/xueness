@@ -76,18 +76,28 @@
   height: 3px;
   border-radius: 999px;
   background: var(--fg-muted);
-  transition: width 120ms ease, background-color 120ms ease;
+  transform-origin: center;
+  /* 不透明度/横向缩放由 data-visual-tone + 内联样式驱动（见 XuenessConversationHistoryRail）。 */
+  transition: background-color 120ms ease, transform 160ms ease, opacity 160ms ease;
 }
 
-.xn-conversation-history-rail__stop:hover .xn-conversation-history-rail__tick,
-.xn-conversation-history-rail__stop:focus-visible .xn-conversation-history-rail__tick {
-  width: 16px;
-  background: var(--fg-subtle);
-}
-
-.xn-conversation-history-rail__stop[data-active="true"] .xn-conversation-history-rail__tick {
-  width: 20px;
+/* 四档视觉：peak（hover/focus 的停靠点）与无交互时的滚动激活项用前景色强调；
+   mid/near/idle 的不透明度与 scaleX 由内联样式给出。 */
+.xn-conversation-history-rail__stop[data-visual-tone="peak"] .xn-conversation-history-rail__tick,
+.xn-conversation-history-rail__stop[data-scroll-active="true"] .xn-conversation-history-rail__tick {
   background: var(--fg);
+}
+
+/* 运行中的轮次：JS 侧已做不透明度保底（Math.max(opacity, 0.72)），这里再加呼吸强调。 */
+@media (prefers-reduced-motion: no-preference) {
+  .xn-conversation-history-rail__stop[data-running="true"] .xn-conversation-history-rail__tick {
+    animation: xn-history-rail-running 1.4s ease-in-out infinite;
+  }
+}
+
+@keyframes xn-history-rail-running {
+  0%, 100% { filter: brightness(1); }
+  50% { filter: brightness(1.35); }
 }
 
 .xn-conversation-history-rail__stop:focus-visible {
@@ -130,6 +140,16 @@
   color: var(--fg-subtle);
   border-left: 2px solid var(--border-strong);
   padding-left: 8px;
+}
+
+.xn-conversation-history-rail__running {
+  align-self: flex-start;
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: var(--bg-hover);
+  color: var(--fg-subtle);
+  font-size: 11px;
+  font-weight: 600;
 }
 
 @media (max-width: 600px) {

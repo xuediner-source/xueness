@@ -7,6 +7,7 @@ import stat
 import tempfile
 import unittest
 from unittest.mock import patch
+from urllib.parse import parse_qs, urlsplit
 
 from tests.secret_permissions import assert_secret_file_private
 from xueness import plugin_runtime
@@ -227,6 +228,162 @@ class NetworkTransportTests(unittest.TestCase):
         model_search.assert_called_once_with("test query", state_dir=state)
         service_search.assert_not_called()
 
+    def test_image_search_returns_bounded_metadata_and_never_fetches_media(self):
+        with tempfile.TemporaryDirectory() as state, bind_execution(state_dir=state):
+            search_settings.update_settings(state, {"searchKey": "image-service-secret"})
+            payload = {"results": [{
+                "title": "Red fox",
+                "url": "https://source.example/photo-page",
+                "properties": {"url": "https://images.example/fox.jpg?size=large", "width": 1600, "height": 900},
+                "thumbnail": {"src": "https://thumbs.example/fox.webp", "width": 500, "height": 281},
+            }]}
+            dns_hosts = []
+            with patch.object(tooling, "fetch", return_value={
+                    "ok": True, "output": json.dumps(payload), "dnsSource": "system"}) as request, \
+                    patch.object(tooling, "resolve_public", side_effect=lambda host, doh="": (
+                        dns_hosts.append(host) or (["8.8.8.8"], "system"))):
+                gate = _Gate()
+                gate.web_approval_gate = True
+                result = tooling._image_search(Path("."), gate, {"query": "red fox"}, {}, "image-call")
+
+        self.assertEqual(gate.calls, [("web_search", "red fox", "image-call")])
+        self.assertEqual(request.call_count, 1)
+        requested_url = request.call_args.args[0]
+        self.assertEqual(urlsplit(requested_url).path, "/res/v1/images/search")
+        self.assertEqual(parse_qs(urlsplit(requested_url).query),
+                         {"q": ["red fox"], "count": ["10"], "safesearch": ["strict"]})
+        self.assertEqual(request.call_args.args[1]["X-Subscription-Token"], "image-service-secret")
+        self.assertCountEqual(dns_hosts, ["images.example", "source.example", "thumbs.example"])
+        self.assertEqual(result["sourceType"], "image_search_service")
+        self.assertEqual(result["provenance"]["mediaFetched"], False)
+        self.assertEqual(result["output"], [{
+            "title": "Red fox",
+            "imageUrl": "https://images.example/fox.jpg?size=large",
+            "sourceUrl": "https://source.example/photo-page",
+            "thumbnailUrl": "https://thumbs.example/fox.webp",
+            "width": 1600,
+            "height": 900,
+            "urlCheck": "https_public_dns_only",
+        }])
+        self.assertNotIn("image-service-secret", json.dumps(result))
+
+    def test_image_search_caps_results_and_each_metadata_field(self):
+        payload = {"results": [
+            {"title": "x" * 500, "properties": {
+                "url": "https://images.example/" + str(index), "width": True, "height": 100_001,
+            }}
+            for index in range(12)
+        ]}
+        with patch.object(tooling, "resolve_public", return_value=(["8.8.8.8"], "system")):
+            result = tooling._image_search_payload(
+                {"output": json.dumps(payload)}, "service-key", "bounded query", "")
+        self.assertEqual(len(result["output"]), 10)
+        self.assertTrue(all(len(row["title"]) == 300 for row in result["output"]))
+        self.assertTrue(all(row["width"] is None and row["height"] is None for row in result["output"]))
+
+    def test_image_search_stops_after_twenty_raw_rows_and_marks_truncated(self):
+        payload = {"results": [
+            {"properties": {"url": f"https://private-{index}.example/image.jpg"}}
+            for index in range(10_000)
+        ]}
+        with patch.object(tooling, "resolve_public", side_effect=transport.NetworkError(
+                "ssrf_blocked", False, "not public")) as resolve:
+            result = tooling._image_search_payload(
+                {"output": json.dumps(payload)}, "image-key", "large response", "")
+        self.assertEqual(result["output"], [])
+        self.assertTrue(result["truncated"])
+        self.assertEqual(resolve.call_count, 20)
+
+    def test_image_search_caps_unique_dns_hosts_and_obeys_deadline(self):
+        payload = {"results": [
+            {
+                "properties": {"url": f"https://image-{index}.example/file.jpg"},
+                "url": f"https://source-{index}.example/page",
+                "thumbnail": {"src": f"https://thumb-{index}.example/file.webp"},
+            }
+            for index in range(20)
+        ]}
+        with patch.object(tooling, "resolve_public", return_value=(["8.8.8.8"], "system")) as resolve:
+            result = tooling._image_search_payload(
+                {"output": json.dumps(payload)}, "image-key", "many hosts", "")
+        self.assertLessEqual(resolve.call_count, 20)
+        self.assertTrue(result["truncated"])
+
+        one_image = {"results": [{"properties": {"url": "https://image.example/file.jpg"}}]}
+        with patch.object(tooling.time, "monotonic", side_effect=[100.0, 115.0]), \
+                patch.object(tooling, "resolve_public") as resolve:
+            expired = tooling._image_search_payload(
+                {"output": json.dumps(one_image)}, "image-key", "expired budget", "")
+        resolve.assert_not_called()
+        self.assertEqual(expired["output"], [])
+        self.assertTrue(expired["truncated"])
+
+    def test_image_search_drops_nonpublic_image_urls_and_model_mode_never_fabricates(self):
+        with tempfile.TemporaryDirectory() as state, bind_execution(state_dir=state):
+            search_settings.update_settings(state, {"searchKey": "image-key"})
+            payload = {"results": [
+                {"title": "Private", "properties": {"url": "https://private.example/image.jpg"}},
+                {"title": "Credential URL", "properties": {
+                    "url": "https://public.example/private.jpg?api_key=embedded-secret",
+                }},
+                {"title": "Valid", "properties": {"url": "https://public.example/image.jpg"}},
+            ]}
+            def resolve(host, doh=""):
+                if host == "private.example":
+                    raise transport.NetworkError("ssrf_blocked", False, "not public")
+                return ["8.8.8.8"], "system"
+            with patch.object(tooling, "fetch", return_value={"ok": True, "output": json.dumps(payload)}), \
+                    patch.object(tooling, "resolve_public", side_effect=resolve):
+                result = tooling.image_search("animals", state_dir=state)
+            self.assertEqual([row["title"] for row in result["output"]], ["Valid"])
+            self.assertNotIn("embedded-secret", json.dumps(result))
+
+            search_settings.update_settings(state, {
+                "searchMode": "model",
+                "searchModelEndpoint": "https://models.example/v1/chat/completions",
+                "searchModel": "web-researcher",
+                "searchModelKey": "model-key",
+            })
+            with patch.object(tooling, "fetch") as request, patch.object(search_model, "search") as model_search:
+                failure = tooling._image_search(Path("."), _Gate(), {"query": "cats"}, {}, "image-call")
+        self.assertEqual(failure["error_code"], "image_search_unsupported")
+        self.assertFalse(failure["retryable"])
+        self.assertIn("不会生成或伪造", failure["user_reason"])
+        request.assert_not_called()
+        model_search.assert_not_called()
+
+    def test_search_model_mode_uses_only_an_explicit_real_image_service(self):
+        with tempfile.TemporaryDirectory() as state:
+            search_settings.update_settings(state, {
+                "searchMode": "model",
+                "searchModelEndpoint": "https://models.example/v1/chat/completions",
+                "searchModel": "web-researcher",
+                "searchModelKey": "model-key",
+                "searchKey": "image-service-key",
+                "imageSearchEndpoint": "https://images.example/v1/images/search",
+            })
+            values = search_settings.get_settings(state)
+            self.assertEqual(values["imageSearchEndpoint"], "https://images.example/v1/images/search")
+            self.assertNotIn("image-service-key", json.dumps(values))
+            result_body = {"results": []}
+            with patch.object(tooling, "fetch", return_value={"ok": True, "output": json.dumps(result_body)}) as request:
+                result = tooling.image_search("a real image query", state_dir=state)
+        self.assertTrue(result["ok"])
+        self.assertEqual(result["sourceType"], "image_search_service")
+        self.assertTrue(request.call_args.args[0].startswith("https://images.example/v1/images/search?"))
+        self.assertEqual(request.call_args.args[1]["X-Subscription-Token"], "image-service-key")
+
+    def test_image_search_gate_uses_query_and_prevents_network_access(self):
+        denied = PermissionError("web_search requires explicit approval")
+        gate = _Gate(denied)
+        gate.web_approval_gate = True
+        with patch.object(tooling, "fetch") as request:
+            with self.assertRaises(PermissionError) as caught:
+                tooling._image_search(Path("."), gate, {"query": "a landscape"}, {}, "image-call")
+        self.assertIs(caught.exception, denied)
+        self.assertEqual(gate.calls, [("web_search", "a landscape", "image-call")])
+        request.assert_not_called()
+
 
 class NetworkSettingsTests(unittest.TestCase):
     def test_settings_save_without_fchmod_closes_and_replaces_temp_file(self):
@@ -274,6 +431,7 @@ class NetworkSettingsTests(unittest.TestCase):
                              ("dohEndpoint", "https://resolver.example/dns-query?name=example.com"),
                              ("dohEndpoint", "https://u:p@resolver.example/dns-query"),
                              ("dohEndpoint", "https://[::1]/dns-query"),
+                             ("imageSearchEndpoint", "https://127.0.0.1/v1/images/search"),
                              ("searchModelEndpoint", "https://192.168.1.7/v1/chat/completions")):
             with self.subTest(field=field, value=value), tempfile.TemporaryDirectory() as state:
                 with self.assertRaises(ValueError):
@@ -287,6 +445,7 @@ class NetworkSettingsTests(unittest.TestCase):
                                                  {"state_dir": state})
         self.assertEqual(status, 200)
         self.assertEqual(body["settings"]["searchEndpoint"], search_settings._DEFAULT_SEARCH_ENDPOINT)
+        self.assertEqual(body["settings"]["imageSearchEndpoint"], "")
         probe.assert_not_called()
         search.assert_not_called()
 

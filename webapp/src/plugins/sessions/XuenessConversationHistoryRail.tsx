@@ -4,9 +4,15 @@ import type { TimelineRow } from "../../xuenessWorkbench";
 import { useUniformListWindow } from "./ListVirtualWindow";
 
 export type ConversationHistoryItem = {
+  /** 所属 product turn；同一 turn 的多条用户消息复用一个停靠点。 */
+  turnId: string;
+  /** 本 turn 首条用户消息的 seq：时间线滚动锚点（data-history-user-seq）与
+   * requestReveal 都用它定位，XuenessTimeline 的锚点按 user seq 渲染。 */
   seq: number;
   userText: string;
   assistantText?: string;
+  /** turn 内存在 streaming 的 assistant 行时为 true（停靠点 running 强调）。 */
+  isRunning: boolean;
 };
 
 function previewText(value: string, limit = 220): string {
@@ -15,19 +21,62 @@ function previewText(value: string, limit = 220): string {
   return `${normalized.slice(0, limit - 1).trimEnd()}…`;
 }
 
-/** Derive one navigation stop per actual user message; public assistant text is
- * included only as a hover hint and is recomputed as a streamed reply grows. */
+/** 按 turnId 分组建停靠点：一轮对话（turn）对应一个停靠点；公开 assistant 文本
+ * 只做 hover 提示，随流式回复增长重算。turnId 缺失的行退化为按 seq 独立成项。 */
 export function buildConversationHistoryItems(rows: TimelineRow[]): ConversationHistoryItem[] {
   const items: ConversationHistoryItem[] = [];
+  const itemByGroup = new Map<string, ConversationHistoryItem>();
   for (const row of rows) {
     if (row.kind === "user") {
-      items.push({ seq: row.seq, userText: previewText(row.text) });
-    } else if (row.kind === "assistant" && row.text.trim()) {
-      const current = items[items.length - 1];
-      if (current) current.assistantText = previewText(row.text);
+      const groupKey = row.turnId ? `turn:${row.turnId}` : `seq:${row.seq}`;
+      if (itemByGroup.has(groupKey)) continue;
+      const item: ConversationHistoryItem = {
+        turnId: row.turnId,
+        seq: row.seq,
+        userText: previewText(row.text),
+        isRunning: false,
+      };
+      itemByGroup.set(groupKey, item);
+      items.push(item);
+    } else if (row.kind === "assistant") {
+      const groupKey = row.turnId ? `turn:${row.turnId}` : `seq:${row.seq}`;
+      const target = itemByGroup.get(groupKey) ?? items[items.length - 1];
+      if (!target) continue;
+      if (row.streaming === true) target.isRunning = true;
+      if (row.text.trim()) target.assistantText = previewText(row.text);
     }
   }
   return items;
+}
+
+export type HistoryStopVisualTone = "idle" | "mid" | "near" | "peak";
+
+export type HistoryStopVisualState = {
+  opacity: number;
+  scaleX: number;
+  tone: HistoryStopVisualTone;
+};
+
+/** 移植自 ZCode resolveConversationTurnNavigatorBarVisualState：按停靠点与视觉
+ * 焦点（hover/focus 的停靠点）的距离给出 idle/mid/near/peak 四档样式；
+ * 无交互（焦点 undefined）时全部回落到 idle，滚动激活项另由 data-scroll-active 着色。 */
+export function resolveHistoryStopVisualState(
+  itemIndex: number,
+  visualFocusItemIndex: number | undefined,
+): HistoryStopVisualState {
+  if (visualFocusItemIndex === undefined) {
+    return { opacity: 0.58, scaleX: 1, tone: "idle" };
+  }
+  const distance = Math.abs(itemIndex - visualFocusItemIndex);
+  if (distance === 0) return { opacity: 1, scaleX: 2.6, tone: "peak" };
+  if (distance === 1) return { opacity: 0.86, scaleX: 1.7, tone: "near" };
+  if (distance === 2) return { opacity: 0.72, scaleX: 1.25, tone: "mid" };
+  return { opacity: 0.58, scaleX: 1, tone: "idle" };
+}
+
+/** running 停靠点保底不透明度（ZCode：Math.max(visualState.opacity, 0.72)）。 */
+export function resolveHistoryStopTickOpacity(isRunning: boolean, baseOpacity: number): number {
+  return isRunning ? Math.max(baseOpacity, 0.72) : baseOpacity;
 }
 
 export function resolveVisibleHistorySequence(
@@ -41,6 +90,14 @@ export function resolveVisibleHistorySequence(
     else break;
   }
   return visible;
+}
+
+export function resolveActiveHistorySequence(
+  previousSeq: number | null,
+  positions: ReadonlyArray<{ seq: number; top: number }>,
+  threshold: number,
+): number | null {
+  return resolveVisibleHistorySequence(positions, threshold) ?? previousSeq;
 }
 
 export function getConversationHistoryScrollTop(
@@ -189,8 +246,13 @@ export function XuenessConversationHistoryRail({ rows, timelineRootRef, requestR
         const target = root.querySelector<HTMLElement>(`[data-history-user-seq="${item.seq}"]`);
         return target ? [{ seq: item.seq, top: target.getBoundingClientRect().top }] : [];
       });
-      const nextSeq = resolveVisibleHistorySequence(positions, threshold);
-      setActiveSeq((previous) => previous === nextSeq ? previous : nextSeq);
+      // A long assistant/tool block can exceed the virtual window overscan, so
+      // there may be no user anchor mounted while it fills the viewport. Keep
+      // the last known turn active until another user anchor becomes visible.
+      setActiveSeq((previous) => {
+        const nextSeq = resolveActiveHistorySequence(previous, positions, threshold);
+        return previous === nextSeq ? previous : nextSeq;
+      });
     };
 
     updateActive();
@@ -264,6 +326,9 @@ export function XuenessConversationHistoryRail({ rows, timelineRootRef, requestR
   const previewSeq = hoveredSeq ?? focusSeq;
   const previewIndex = items.findIndex((item) => item.seq === previewSeq);
   const previewItem = previewIndex >= 0 ? items[previewIndex] : null;
+  // 视觉焦点：hover/focus 的停靠点；无交互时为 undefined，四档全部回落 idle，
+  // 滚动激活项改由 data-scroll-active 着色（ZCode showScrollActiveColor 语义）。
+  const visualFocusItemIndex = previewIndex >= 0 ? previewIndex : undefined;
 
   return (
     <nav
@@ -285,6 +350,8 @@ export function XuenessConversationHistoryRail({ rows, timelineRootRef, requestR
             const buttonId = `${navId}-${item.seq}`;
             const tooltipId = `${buttonId}-summary`;
             const label = tf("跳转到第 {0} 条用户消息", [index + 1]);
+            const visualState = resolveHistoryStopVisualState(index, visualFocusItemIndex);
+            const showScrollActive = visualFocusItemIndex === undefined && isActive;
             return (
               <button
                 key={item.seq}
@@ -292,7 +359,11 @@ export function XuenessConversationHistoryRail({ rows, timelineRootRef, requestR
                 type="button"
                 className="xn-conversation-history-rail__stop"
                 data-history-seq={item.seq}
+                data-turn-id={item.turnId}
                 data-active={isActive ? "true" : undefined}
+                data-running={item.isRunning ? "true" : undefined}
+                data-visual-tone={visualState.tone}
+                data-scroll-active={showScrollActive ? "true" : undefined}
                 aria-label={`${label}${item.userText ? `: ${item.userText}` : ""}`}
                 aria-current={isActive ? "location" : undefined}
                 aria-describedby={isPreviewed ? tooltipId : undefined}
@@ -303,7 +374,14 @@ export function XuenessConversationHistoryRail({ rows, timelineRootRef, requestR
                 onMouseEnter={() => setHoveredSeq(item.seq)}
                 onKeyDown={(event) => moveFocus(event, index)}
               >
-                <span className="xn-conversation-history-rail__tick" aria-hidden="true" />
+                <span
+                  className="xn-conversation-history-rail__tick"
+                  aria-hidden="true"
+                  style={{
+                    opacity: resolveHistoryStopTickOpacity(item.isRunning, visualState.opacity),
+                    transform: `scaleX(${visualState.scaleX})`,
+                  }}
+                />
               </button>
             );
           })}
@@ -317,6 +395,7 @@ export function XuenessConversationHistoryRail({ rows, timelineRootRef, requestR
           data-testid="conversation-history-summary"
         >
           <strong>{tf("用户消息 {0}", [previewIndex + 1])}</strong>
+          {previewItem.isRunning && <span className="xn-conversation-history-rail__running">{tr("运行中")}</span>}
           {previewItem.userText && <span>{previewItem.userText}</span>}
           {previewItem.assistantText && <span className="xn-conversation-history-rail__reply">{previewItem.assistantText}</span>}
         </div>

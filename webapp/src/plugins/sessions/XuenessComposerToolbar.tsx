@@ -1,12 +1,14 @@
-import React, { useEffect, useRef, useState } from "react";
+import { ContextUsageRing, type ContextUsageReading } from './ContextUsageRing';
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { ClipboardList, Hand, Lightbulb, ShieldAlert, ShieldCheck } from "lucide-react";
 import { t as tr, tf } from "../../i18n";
 import { IconCheck, IconChevronDown, IconPencil, IconRefresh, IconX } from "../../ui/icons";
-import { Select } from "../../ui/Select";
+import { normalizeReasoningLevels, ReasoningEffortControl } from "./ReasoningEffortSlider";
 import { canUseRuntimeProfile, effectiveRuntimeProfile, runtimeProfileSelection, type ComposerModel, type RuntimeProfile } from "../../xuenessComposer";
 import type { RunChoices } from "../../xuenessBridge";
 import type { WorkbenchSession } from "../../xuenessWorkbench";
 import type { PermissionMode } from "./permissionModes";
+import { FullAccessConfirmationDialog, requiresYoloConfirmation } from "./FullAccessConfirmationDialog";
 
 export type ComposerToolbarProps = {
   choices: RunChoices;
@@ -25,6 +27,7 @@ export type ComposerToolbarProps = {
   /** Kept for callers that still pass it; the actual selected state comes from choices.browser. */
   browserEnabled?: boolean;
   onToggleBrowser?(enabled: boolean): void;
+  contextReading?: ContextUsageReading | null;
   contextUsage?: { used: number; max: number; cacheHitRate?: number | null };
   runtimeBudget?: WorkbenchSession["runtime_budget"];
   pauseReason?: string | null;
@@ -34,11 +37,11 @@ export type ComposerToolbarProps = {
   inputRef?: React.RefObject<HTMLTextAreaElement | null>;
   /**
    * Minimal chrome for the lightweight local profile (owned by the providers
-   * plugin): the model trigger (with its runtime-profile menu) and the context
-   * usage readout only. Permission, browser, background and reasoning controls
-   * are left out; the model menu itself is unchanged.
+   * plugin): model, reasoning and context controls. Other controls stay out unless the owning plugin supplies
+   * the lightweight permission selector; the model menu itself is unchanged.
    */
   minimal?: boolean;
+  minimalPermissionControl?: React.ReactNode;
 };
 
 const permissionChoiceMeta: Record<PermissionMode, {
@@ -49,7 +52,7 @@ const permissionChoiceMeta: Record<PermissionMode, {
   plan: { label: "计划", description: "只读并先出计划。", Icon: ClipboardList },
   build: { label: "变更前确认", description: "改文件前先问我。", Icon: Hand },
   edit: { label: "自动编辑", description: "自动编辑文件。", Icon: ShieldCheck },
-  yolo: { label: "完全访问", description: "减少确认次数。", Icon: ShieldAlert },
+  yolo: { label: "完全访问", description: "跳过常规工具审批。", Icon: ShieldAlert },
 };
 
 /** 展示顺序。缺任一 PermissionMode 时下面的赋值无法通过类型检查。 */
@@ -105,8 +108,14 @@ export function modelReasoningSummary(model: Pick<ComposerModel, "reasoningLevel
   return levels.slice(0, 3).join("/") + (levels.length > 3 ? "+" : "");
 }
 
+/** Keep restored or edited model choices from sending an undeclared effort. */
+export function isReasoningEffortSupported(model: Pick<ComposerModel, "reasoningLevels"> | undefined, effort: string | undefined): boolean {
+  return !effort || !model || model.reasoningLevels?.includes(effort) === true;
+}
+
 /** Row hit area the detail card anchors to, in viewport coordinates. */
 export type ModelDetailAnchor = { top: number; left: number; right: number };
+export type ModelPopoverBounds = { top: number; bottom: number; left: number; right: number };
 
 /**
  * Place the detail card beside the anchored row: left of it when the viewport
@@ -117,83 +126,45 @@ export function modelDetailCardStyle(
   anchor: ModelDetailAnchor,
   viewport: { width: number; height: number },
   card: { width: number; maxHeight: number },
+  popover?: ModelPopoverBounds,
 ): React.CSSProperties {
   const margin = 8;
   const gap = 10;
+  const width = Math.max(0, Math.min(card.width, viewport.width - margin * 2));
   const top = Math.max(margin, Math.min(anchor.top, viewport.height - card.maxHeight - margin));
-  if (anchor.left - gap - card.width >= margin) {
-    return { top, right: viewport.width - anchor.left + gap, width: card.width, maxHeight: card.maxHeight };
+  if (popover) {
+    // Keep the detail card outside the interactive model menu. On a narrow
+    // viewport neither side may fit, so put it above or below the whole menu.
+    const leftSpace = popover.left - margin - gap;
+    const rightSpace = viewport.width - popover.right - margin - gap;
+    if (leftSpace >= width) {
+      return { top, left: popover.left - gap - width, width, maxHeight: card.maxHeight };
+    }
+    if (rightSpace >= width) {
+      return { top, left: popover.right + gap, width, maxHeight: card.maxHeight };
+    }
+    const aboveSpace = Math.max(0, popover.top - margin - gap);
+    const belowSpace = Math.max(0, viewport.height - popover.bottom - margin - gap);
+    const above = aboveSpace >= belowSpace;
+    const left = Math.max(margin, Math.min(popover.left, viewport.width - width - margin));
+    return above
+      ? { bottom: viewport.height - popover.top + gap, left, width, maxHeight: Math.min(card.maxHeight, aboveSpace) }
+      : { top: popover.bottom + gap, left, width, maxHeight: Math.min(card.maxHeight, belowSpace) };
   }
+  if (anchor.left - gap - width >= margin) {
+    return { top, right: viewport.width - anchor.left + gap, width, maxHeight: card.maxHeight };
+  }
+  const right = anchor.right + gap;
+  if (right + width <= viewport.width - margin) return { top, left: right, width, maxHeight: card.maxHeight };
   return {
     top,
-    left: Math.min(anchor.right + gap, Math.max(margin, viewport.width - card.width - margin)),
-    width: card.width,
+    left: Math.max(margin, Math.min(right, viewport.width - width - margin)),
+    width,
     maxHeight: card.maxHeight,
   };
 }
 
 const MODEL_DETAIL_CARD = { width: 248, maxHeight: 340 } as const;
-
-/** Qoder-style catalog tabs. Custom profiles have a saved id; the environment model does not. */
-export type ModelCatalogTab = "new" | "custom";
-
-/** Local filters over fields the catalog already reports. They do not call a provider. */
-export type ModelPresetId = "auto" | "ultimate" | "performance" | "efficient";
-
-export const MODEL_PRESET_ORDER = ["auto", "ultimate", "performance", "efficient"] as const;
-
-export const MODEL_PRESET_LABEL: Record<ModelPresetId, string> = {
-  auto: "自动",
-  ultimate: "旗舰",
-  performance: "性能",
-  efficient: "高效",
-};
-
-export const MODEL_PRESET_HINT: Record<ModelPresetId, string> = {
-  auto: "显示当前标签下的全部模型，不改已选模型。",
-  ultimate: "只列出当前标签里已声明最大上下文窗口的模型。",
-  performance: "只列出已声明推理档位的模型。",
-  efficient: "只列出本地轻量档模型。",
-};
-
-export function modelCatalogTab(model: Pick<ComposerModel, "id">): ModelCatalogTab {
-  return model.id ? "custom" : "new";
-}
-
-export function modelsInCatalogTab(models: readonly ComposerModel[], tab: ModelCatalogTab): ComposerModel[] {
-  return models.filter(model => modelCatalogTab(model) === tab);
-}
-
-/** Largest positive context window actually declared by these models. */
-export function maxReportedContext(models: readonly Pick<ComposerModel, "contextWindow">[]): number | null {
-  let max: number | null = null;
-  for (const model of models) {
-    const value = model.contextWindow;
-    if (typeof value === "number" && Number.isFinite(value) && value > 0 && (max === null || value > max)) max = value;
-  }
-  return max;
-}
-
-/**
- * Preset membership uses only reported fields.
- * Ultimate needs a declared context window; performance needs reasoning levels;
- * efficient needs an explicit lightweight profile. Missing data does not match.
- */
-export function modelMatchesPreset(
-  model: ComposerModel,
-  preset: ModelPresetId,
-  peers: readonly ComposerModel[],
-): boolean {
-  if (preset === "auto") return true;
-  if (preset === "ultimate") {
-    const max = maxReportedContext(peers);
-    return max !== null && model.contextWindow === max;
-  }
-  if (preset === "performance") {
-    return (model.reasoningLevels ?? []).some(level => typeof level === "string" && level.length > 0);
-  }
-  return model.runtimeProfile === "lightweight";
-}
 
 /** A reported cost multiplier, or null when the catalog did not provide one. */
 export function reportedCostMultiplier(model: { costMultiplier?: number | null }): number | null {
@@ -208,13 +179,6 @@ export function formatCostMultiplier(value: number | null | undefined): string |
   const rounded = Math.round(value * 100) / 100;
   const text = Number.isInteger(rounded) ? String(rounded) : rounded.toFixed(2).replace(/\.?0+$/, "");
   return `${text}×`;
-}
-
-export function nextCatalogTab(current: ModelCatalogTab, key: "ArrowLeft" | "ArrowRight"): ModelCatalogTab {
-  const order: ModelCatalogTab[] = ["new", "custom"];
-  const index = order.indexOf(current);
-  const delta = key === "ArrowRight" ? 1 : -1;
-  return order[(index + delta + order.length) % order.length];
 }
 
 /** Thinking line: declared reasoning levels, or null when the profile did not report any. */
@@ -245,6 +209,7 @@ export function modelDetailSentence(model: ComposerModel): string | null {
 export type ComposerModelDetailCardProps = {
   model: ComposerModel | undefined;
   anchor: ModelDetailAnchor;
+  popoverBounds?: ModelPopoverBounds;
   cardRef?: React.Ref<HTMLDivElement>;
   onPointerEnter?(): void;
   onPointerLeave?(): void;
@@ -260,6 +225,7 @@ export type ComposerModelDetailCardProps = {
 export function ComposerModelDetailCard({
   model,
   anchor,
+  popoverBounds,
   cardRef,
   onPointerEnter,
   onPointerLeave,
@@ -278,7 +244,7 @@ export function ComposerModelDetailCard({
       style={modelDetailCardStyle(anchor, {
         width: typeof window === "undefined" ? 1280 : window.innerWidth,
         height: typeof window === "undefined" ? 800 : window.innerHeight,
-      }, MODEL_DETAIL_CARD)}
+      }, MODEL_DETAIL_CARD, popoverBounds)}
       id="composer-model-detail"
       role="group"
       tabIndex={0}
@@ -327,17 +293,12 @@ export type ComposerModelMenuProps = {
   defaultSaved?: boolean;
   /** Close the popover; a truthy argument re-focuses the composer input. */
   onRequestClose(restoreInput?: boolean): void;
-  /** Controlled catalog tab. Omitted: the menu keeps its own tab. */
-  catalogTab?: ModelCatalogTab;
-  /** Controlled preset filter. Omitted: the menu keeps its own preset. */
-  preset?: ModelPresetId;
   /** Renders the detail card for this row key without a pointer event (tests). */
   detailKey?: string;
 };
 
 /**
- * 模型弹层：分档预设（自动 / 旗舰 / 性能 / 高效）只过滤已有字段，不调用服务商，
- * 也没有目录倍率时不显示倍率。New / Custom 标签区分环境模型与已保存配置。
+ * 模型弹层直接列出环境模型与已保存配置，不按来源或推测的能力分档。
  * 模型行只在目录给出成本倍率时显示它。悬停或键盘聚焦弹出详情卡。
  * 「标准 / 本地轻量」仍是既有运行档位开关。Esc 关闭并把焦点还给触发按钮。
  */
@@ -361,18 +322,25 @@ export function ComposerModelMenu({
   onSaveDefault,
   defaultSaved = false,
   onRequestClose,
-  catalogTab,
-  preset,
   detailKey,
 }: ComposerModelMenuProps): React.JSX.Element {
-  const [catalogTabState, setCatalogTabState] = useState<ModelCatalogTab>(selectedModel?.id ? "custom" : "new");
-  const [presetState, setPresetState] = useState<ModelPresetId>("auto");
-  const activeTab = catalogTab ?? catalogTabState;
-  const activePreset = preset ?? presetState;
   /** Row the detail card is anchored to; set on hover or keyboard focus. */
-  const [modelDetail, setModelDetail] = useState<{ key: string; anchor: ModelDetailAnchor } | null>(null);
+  const [modelDetail, setModelDetail] = useState<{
+    key: string;
+    anchor: ModelDetailAnchor;
+    popoverBounds?: ModelPopoverBounds;
+  } | null>(null);
+  const popoverElementRef = useRef<HTMLDivElement | null>(null);
   const detailCardRef = useRef<HTMLDivElement | null>(null);
   const detailCloseTimer = useRef<number | null>(null);
+  const setMenuElement = useCallback((node: HTMLDivElement | null) => {
+    popoverElementRef.current = node;
+    if (typeof menuRef === "function") menuRef(node);
+    else if (menuRef) (menuRef as React.MutableRefObject<HTMLDivElement | null>).current = node;
+  }, [menuRef]);
+  const clearModelDetail = () => {
+    setModelDetail(null);
+  };
   const cancelDetailClose = () => {
     if (detailCloseTimer.current !== null) {
       window.clearTimeout(detailCloseTimer.current);
@@ -383,13 +351,18 @@ export function ComposerModelMenu({
     cancelDetailClose();
     detailCloseTimer.current = window.setTimeout(() => {
       detailCloseTimer.current = null;
-      setModelDetail(null);
+      clearModelDetail();
     }, 180);
   };
   const showDetail = (key: string, row: HTMLElement) => {
     cancelDetailClose();
     const rect = row.getBoundingClientRect();
-    setModelDetail({ key, anchor: { top: rect.top, left: rect.left, right: rect.right } });
+    const menu = popoverElementRef.current?.getBoundingClientRect();
+    setModelDetail({
+      key,
+      anchor: { top: rect.top, left: rect.left, right: rect.right },
+      popoverBounds: menu ? { top: menu.top, bottom: menu.bottom, left: menu.left, right: menu.right } : undefined,
+    });
   };
   useEffect(() => () => cancelDetailClose(), []);
 
@@ -407,29 +380,9 @@ export function ComposerModelMenu({
   const detailModel = shownDetailKey
     ? models.find((model) => model.id + ":" + model.model === shownDetailKey)
     : undefined;
-  const chooseTab = (tab: ModelCatalogTab) => {
-    setModelDetail(null);
-    if (catalogTab === undefined) setCatalogTabState(tab);
-  };
-  const choosePreset = (next: ModelPresetId) => {
-    setModelDetail(null);
-    if (preset === undefined) setPresetState(next);
-  };
-  const onTabKeyDown = (event: React.KeyboardEvent<HTMLButtonElement>) => {
-    if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
-    event.preventDefault();
-    event.stopPropagation();
-    const next = nextCatalogTab(activeTab, event.key);
-    chooseTab(next);
-    const tablist = event.currentTarget.parentElement;
-    queueMicrotask(() => tablist?.querySelector<HTMLButtonElement>(`[data-testid="composer-model-tab-${next}"]`)?.focus());
-  };
-  const tabModels = modelsInCatalogTab(models, activeTab);
-  const visibleModels = tabModels.filter(model => modelMatchesPreset(model, activePreset, tabModels));
-
   return (
     <div
-      ref={menuRef}
+      ref={setMenuElement}
       className="xn-composer-toolbar__popover xn-composer-toolbar__model-popover"
       role="menu"
       aria-label={tr("可用模型")}
@@ -438,34 +391,6 @@ export function ComposerModelMenu({
         if (!event.currentTarget.contains(event.relatedTarget as Node | null)) onRequestClose();
       }}
     >
-      <div
-        className="xn-composer-toolbar__model-presets"
-        role="group"
-        aria-label={tr("分档预设")}
-        data-testid="composer-model-presets"
-      >
-        {MODEL_PRESET_ORDER.map(id => {
-          const selected = activePreset === id;
-          return (
-            <button
-              type="button"
-              role="menuitemradio"
-              aria-checked={selected}
-              key={id}
-              data-preset={id}
-              className="xn-composer-toolbar__profile-option"
-              disabled={disabled}
-              title={tr(MODEL_PRESET_HINT[id])}
-              onClick={() => choosePreset(id)}
-            >
-              <span>{tr(MODEL_PRESET_LABEL[id])}</span>
-              <span className="xn-composer-toolbar__menu-indicator" aria-hidden="true">
-                {selected && <IconCheck />}
-              </span>
-            </button>
-          );
-        })}
-      </div>
       <div
         className="xn-composer-toolbar__runtime-profile"
         role="group"
@@ -494,27 +419,6 @@ export function ComposerModelMenu({
         })}
         {!canSelectStandard && <p className="xn-composer-toolbar__profile-note">{tr("JSON 工具模式只能使用本地轻量档位。")}</p>}
       </div>
-      <div className="xn-composer-toolbar__model-tabs" role="tablist" aria-label={tr("模型目录")} data-testid="composer-model-tabs">
-        {(["new", "custom"] as const).map(tab => {
-          const selected = activeTab === tab;
-          const tabId = `composer-model-tab-${tab}`;
-          return (
-            <button
-              type="button"
-              role="tab"
-              id={tabId}
-              key={tab}
-              data-testid={tabId}
-              aria-selected={selected}
-              aria-controls="composer-model-tabpanel"
-              tabIndex={selected ? 0 : -1}
-              className="xn-composer-toolbar__model-tab"
-              onClick={() => chooseTab(tab)}
-              onKeyDown={onTabKeyDown}
-            >{tr(tab === "new" ? "新模型" : "自定义")}</button>
-          );
-        })}
-      </div>
       {loading && <div className="xn-composer-toolbar__message">{tr("正在读取模型...")}</div>}
       {error && (
         <div role="alert" className="xn-composer-toolbar__error">
@@ -529,19 +433,13 @@ export function ComposerModelMenu({
       )}
       {!loading && !error && models.length > 0 && (
         <div
-          id="composer-model-tabpanel"
-          role="tabpanel"
-          aria-labelledby={`composer-model-tab-${activeTab}`}
+          role="group"
+          aria-label={tr("可用模型")}
           className="xn-composer-toolbar__model-options"
-          data-testid="composer-model-tabpanel"
-          onScroll={() => setModelDetail(null)}
+          data-testid="composer-model-options"
+          onScroll={clearModelDetail}
         >
-          {visibleModels.length === 0 && (
-            <div className="xn-composer-toolbar__message" data-testid="composer-model-tab-empty">
-              {tr(tabModels.length === 0 ? "此标签下暂无模型" : "没有模型符合这个分档。")}
-            </div>
-          )}
-          {visibleModels.map((model) => {
+          {models.map((model) => {
             const selected = isSelected(model);
             const rowKey = model.id + ":" + model.model;
             const costLabel = formatCostMultiplier(reportedCostMultiplier(model));
@@ -631,6 +529,7 @@ export function ComposerModelMenu({
         <ComposerModelDetailCard
           model={detailModel}
           anchor={shownAnchor}
+          popoverBounds={modelDetail?.popoverBounds}
           cardRef={detailCardRef}
           onPointerEnter={cancelDetailClose}
           onPointerLeave={scheduleDetailClose}
@@ -659,15 +558,18 @@ export function XuenessComposerToolbar({
   backgroundCount = 0,
   onToggleBrowser,
   contextUsage,
+  contextReading,
   runtimeBudget,
   pauseReason,
   onOpenUsage,
   disabled = false,
   minimal = false,
+  minimalPermissionControl,
   inputRef,
 }: ComposerToolbarProps) {
   const [modeMenuOpen, setModeMenuOpen] = useState(false);
   const [modelMenuOpen, setModelMenuOpen] = useState(false);
+  const [confirmYoloOpen, setConfirmYoloOpen] = useState(false);
   const modeWrapRef = useRef<HTMLDivElement | null>(null);
   const modelWrapRef = useRef<HTMLDivElement | null>(null);
   const modeMenuRef = useRef<HTMLDivElement | null>(null);
@@ -695,17 +597,16 @@ export function XuenessComposerToolbar({
 
   const selectedModel = models.find((model) => model.id === (choices.provider_id ?? ""))
     ?? (choices.model ? models.find((model) => model.model === choices.model) : undefined);
+  const reasoningLevels = selectedModel ? normalizeReasoningLevels(selectedModel.reasoningLevels) : [];
+  useEffect(() => {
+    if (disabled || !selectedModel || !choices.reasoning_effort) return;
+    if (!isReasoningEffortSupported(selectedModel, choices.reasoning_effort)) onChange({ reasoning_effort: undefined });
+  }, [disabled, selectedModel?.id, selectedModel?.model, selectedModel?.reasoningLevels, choices.reasoning_effort, onChange]);
   const selectedPermission = permissionChoices.find((choice) => choice.value === (choices.permission_mode ?? "build")) ?? permissionChoices[0];
-  const hasUsage = Boolean(
-    contextUsage &&
-    Number.isFinite(contextUsage.used) &&
-    Number.isFinite(contextUsage.max) &&
-    contextUsage.used > 0 &&
-    contextUsage.max > 0,
-  );
-  const usagePercent = hasUsage && contextUsage
-    ? Math.min(100, Math.max(0, (contextUsage.used / contextUsage.max) * 100))
-    : 0;
+  const ringReading = contextReading !== undefined ? contextReading : contextUsage ? {
+    usedTokens: contextUsage.used, capacityTokens: contextUsage.max,
+    usageSource: "estimated" as const, capacitySource: "input-budget" as const,
+  } : null;
   const browserIsEnabled = choices.browser === true;
   const activeRuntimeProfile = effectiveRuntimeProfile(selectedModel, choices.runtime_profile);
   const canSelectStandard = canUseRuntimeProfile(selectedModel, "standard");
@@ -737,7 +638,12 @@ export function XuenessComposerToolbar({
     return choices.model ? model.model === choices.model : model.id === "";
   };
   const changePermission = (permission: NonNullable<RunChoices["permission_mode"]>) => {
-    onChange({ permission_mode: permission });
+    if (requiresYoloConfirmation(choices.permission_mode ?? "build", permission, choices.acknowledge_yolo === true)) {
+      closeModeMenu(false);
+      setConfirmYoloOpen(true);
+      return;
+    }
+    onChange({ permission_mode: permission, acknowledge_yolo: permission === "yolo" });
     closeModeMenu(true);
   };
 
@@ -823,7 +729,7 @@ export function XuenessComposerToolbar({
               aria-label={tr("模式与权限")}
               onKeyDown={onModeKeyDown}
               onBlur={(event) => {
-                if (!event.currentTarget.contains(event.relatedTarget as Node | null)) closeModeMenu();
+                if (!confirmYoloOpen && !event.currentTarget.contains(event.relatedTarget as Node | null)) closeModeMenu();
               }}
             >
               <button
@@ -905,7 +811,23 @@ export function XuenessComposerToolbar({
         )}
       </div>}
 
-      <div className="xn-composer-toolbar__right" role="group" aria-label={tr("模型与上下文")}>
+      <FullAccessConfirmationDialog
+        open={confirmYoloOpen}
+        returnFocusTo={modeTriggerRef.current}
+        onCancel={() => {
+          setConfirmYoloOpen(false);
+          closeModeMenu(false);
+        }}
+        onConfirm={() => {
+          setConfirmYoloOpen(false);
+          onChange({ permission_mode: "yolo", acknowledge_yolo: true });
+          closeModeMenu(true);
+        }}
+      />
+
+      <div className="xn-composer-toolbar__right" role="group" aria-label={tr(minimalPermissionControl ? "模型、权限与上下文" : "模型与上下文")}>
+        {minimal && minimalPermissionControl}
+        <ContextUsageRing enabled reading={ringReading} />
         <div className="xn-composer-toolbar__model" ref={modelWrapRef}>
           <button
             ref={modelTriggerRef}
@@ -951,45 +873,18 @@ export function XuenessComposerToolbar({
             />
           )}
         </div>
-        {!minimal && selectedModel && selectedModel.reasoningLevels.length > 1 && (
-          <Select
-            className="xn-composer-toolbar__reasoning-select"
-            aria-label={tr("思考强度")}
-            title={tr("思考强度")}
-            value={choices.reasoning_effort ?? ""}
+        {selectedModel && (
+          <ReasoningEffortControl
+            levels={reasoningLevels}
+            value={choices.reasoning_effort}
+            modelName={selectedModel.model || selectedModel.name}
+            scopeKey={JSON.stringify([selectedModel.id, selectedModel.model, choices.model ?? ""])}
             disabled={disabled}
-            onChange={(event) => onChange({ reasoning_effort: event.target.value || undefined })}
-          >
-            <option value="">{tr("默认")}</option>
-            {selectedModel.reasoningLevels.map((level) => <option key={level} value={level}>{level}</option>)}
-          </Select>
+            onConfigure={() => { closeModelMenu(); onManageModels(selectedModel); }}
+            onChange={(reasoning_effort) => onChange({ reasoning_effort })}
+          />
         )}
-        {hasUsage && contextUsage && (onOpenUsage ? (
-          <button
-            type="button"
-            className="xn-composer-toolbar__usage"
-            aria-label={tr("上下文用量")}
-            title={contextUsage.used.toLocaleString() + " / " + contextUsage.max.toLocaleString()}
-            disabled={disabled}
-            onClick={onOpenUsage}
-          >
-            <span className="xn-composer-toolbar__usage-track" aria-hidden="true">
-              <span style={{ width: usagePercent + "%" }} />
-            </span>
-            <span>{Math.round(usagePercent)}%</span>
-          </button>
-        ) : (
-          <span
-            className="xn-composer-toolbar__usage xn-composer-toolbar__usage--static"
-            aria-label={tr("上下文用量")}
-            title={contextUsage.used.toLocaleString() + " / " + contextUsage.max.toLocaleString()}
-          >
-            <span className="xn-composer-toolbar__usage-track" aria-hidden="true">
-              <span style={{ width: usagePercent + "%" }} />
-            </span>
-            <span>{Math.round(usagePercent)}%</span>
-          </span>
-        ))}
+
       </div>
     </div>
   );

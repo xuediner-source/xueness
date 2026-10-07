@@ -50,3 +50,8 @@ def tools():
 def completion_requires_evidence(session, call_ids=()):
     from .completion_policy import requires_evidence
     return requires_evidence(session, call_ids)
+
+
+def composer_capabilities():
+    from .composer_capabilities import CAPABILITIES
+    return CAPABILITIES

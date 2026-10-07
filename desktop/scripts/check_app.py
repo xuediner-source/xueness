@@ -7,6 +7,7 @@ import subprocess
 import tempfile
 import queue
 import threading
+import sys
 
 ROOT = Path(__file__).resolve().parents[2]
 RELEASE = ROOT/'desktop/release'
@@ -54,7 +55,23 @@ with tempfile.TemporaryDirectory(prefix='xueness-app-check-') as temporary:
     assert state.get('permissionSnapshotValid') is True and state.get('permissionPostRequests') == 0, state
     assert state.get('clipWriteGranted') is True and state.get('clipReadDenied') is True, state
     assert state.get('title') == 'Xueness' and state.get('nodeAccess') is False and state.get('workbenchReady') is True and state.get('body', 0) > 100, state
+    if sys.platform in ('darwin', 'win32'):
+        assert state.get('titlebarPlatform') == ('macos' if sys.platform == 'darwin' else 'windows'), state
+        insets = state.get('titlebarInsets', {})
+        if sys.platform == 'darwin':
+            assert insets.get('brandLeft', 0) >= 78 and 10 <= insets.get('actionsRight', 0) < 30, state
+            assert any(label in state.get('dockMenuLabels', []) for label in ('任务与项目', 'Tasks and projects')), state
+            assert state.get('dockTaskPopupReady') is True, state
+        else:
+            assert 10 <= insets.get('brandLeft', 0) < 30 and insets.get('actionsRight', 0) >= 148, state
+        assert state.get('nativeBackground', '').lower() == state.get('windowBgToken', '').lower(), state
+        native_menus = set(state.get('nativeMenuLabels', []))
+        assert {'编辑', '视图', '窗口'} <= native_menus or {'Edit', 'View', 'Window'} <= native_menus, state
     print(f'PASS: packaged Electron workbench renders, {expected_plugins} plugins/{expected_features} features, isolated renderer and clean exit')
+    if sys.platform in ('darwin', 'win32'):
+        print('PASS: native window caption safe areas, workbench background theme and localized application menu')
+    if sys.platform == 'darwin':
+        print('PASS: macOS Dock opens the shared production task popup')
     resources = executable.parent/'resources' if os.name == 'nt' else executable.parents[1]/'Resources'
     worker = resources/'backend/_internal/xueness/bundled_plugins/browser/bridge.mjs'
     driver = resources/'browser-runtime/node_modules/playwright/index.mjs'

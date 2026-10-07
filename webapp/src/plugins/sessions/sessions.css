@@ -152,6 +152,24 @@
 .xn-session-timeline-viewport { position: relative; flex: 1 1 auto; min-height: 0; }
 /* overflow-anchor 关闭浏览器原生滚动锚定，滚动位置由时间线窗口补偿逻辑维护。 */
 .xn-session-timeline-viewport__scroll { width: 100%; height: 100%; overflow-anchor: none; }
+/* The conversation shell must fill the chat surface even when the optional
+   subagent sidepane is closed (its stylesheet is loaded lazily). */
+.xn-conversation-container {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: row;
+  min-width: 0;
+  min-height: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  position: relative;
+}
+.xn-conversation-container > .xn-conversation {
+  flex: 1 1 0%;
+  min-width: 0;
+  min-height: 0;
+}
 /* 窗口化时间线的上下垫片：占据未渲染条目的高度，且不可被 flex 压缩。 */
 .xn-timeline-window-spacer { flex: none; }
 .xn-session-back-to-bottom {
@@ -180,13 +198,17 @@
 
 .xn-reasoning {
   min-width: 0;
-  border-inline-start: 2px solid var(--border);
-  padding-inline-start: 10px;
+  margin: 0;
   color: var(--fg-muted);
-  font-size: 12px;
-  line-height: 1.55;
+  font-size: 14px;
+  line-height: 1.6;
 }
-.xn-reasoning > summary,
+.xn-reasoning > summary { display: flex; min-width: 0; min-height: 24px; align-items: center; gap: 8px; list-style: none; cursor: pointer; }
+.xn-reasoning > summary:focus-visible { outline: 2px solid var(--border-focus); outline-offset: 3px; border-radius: 3px; }
+.xn-reasoning > summary > svg, .xn-reasoning__label { flex: 0 0 auto; }
+.xn-reasoning__preview { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--fg-subtle); font-size: 13px; }
+.xn-reasoning__chevron { transition: transform 120ms ease; transform: rotate(-90deg); }
+.xn-reasoning[open] .xn-reasoning__chevron { transform: rotate(0); }
 .xn-completion-details > summary {
   width: fit-content;
   color: var(--fg-muted);
@@ -195,18 +217,18 @@
 }
 .xn-reasoning > summary::-webkit-details-marker,
 .xn-completion-details > summary::-webkit-details-marker { display: none; }
-.xn-reasoning > summary::before,
 .xn-completion-details > summary::before {
   display: inline-block;
   margin-inline-end: 6px;
   content: "›";
   transition: transform 120ms ease;
 }
-.xn-reasoning[open] > summary::before,
 .xn-completion-details[open] > summary::before { transform: rotate(90deg); }
 .xn-reasoning__text {
   max-height: min(32vh, 18rem);
-  margin: 7px 0 4px;
+  margin: 9px 0 0 7px;
+  padding-inline-start: 17px;
+  border-inline-start: 1px solid var(--border);
   overflow: auto;
   color: var(--fg-subtle);
   font: inherit;
@@ -248,8 +270,31 @@
 }
 .xn-completion-details__body > :first-child { margin-top: 0; }
 .xn-completion-details__body > :last-child { margin-bottom: 0; }
+
+/* Successful process rows remain quiet; their status stays available to assistive technology. */
+.xn-toolcall__status--quiet {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
 .xn-toolcall__status[data-tone="neutral"] { color: var(--fg-muted); }
 .xn-toolcall__cancel-note { margin: 2px 0 2px 24px; color: var(--fg-muted); font-size: 11px; overflow-wrap: anywhere; }
+
+.xn-shell-layout .xn-toolcall__content--terminal { border-top: 0; padding-top: 4px; }
+.xn-toolcall__terminal { min-width: 0; padding: 12px 14px; border: 1px solid var(--border); border-radius: 10px; background: var(--bg-subtle); }
+.xn-toolcall__command { margin: 0 0 8px; color: var(--fg); font: 12px/20px var(--font-mono); white-space: pre-wrap; overflow-wrap: anywhere; }
+.xn-toolcall__command:last-child { margin-bottom: 0; }
+.xn-toolcall__stderr { margin-top: 8px; }
+.xn-toolcall__exit-code { display: block; margin-top: 8px; color: var(--fg-muted); font-size: 11px; }
+.xn-toolcall__raw { color: var(--fg-muted); font-size: 11px; }
+.xn-toolcall__raw > summary { width: fit-content; cursor: pointer; }
+.xn-toolcall__raw > summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 3px; }
+.xn-toolcall__raw-content { display: grid; gap: 8px; padding: 8px 0; }
 @keyframes xn-session-stream-pulse { 50% { opacity: .3; transform: scale(.8); } }
 
 .xn-session-queue {
@@ -292,6 +337,26 @@
 .xn-session-queue__continue:focus-visible,
 .xn-session-queue__cancel:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .xn-session-queue__error { width: min(100% - 48px, 848px); margin: 0 auto 9px; color: var(--error-fg); font-size: 11px; overflow-wrap: anywhere; }
+/* 队列 bottom dock：从时间线视口移出，贴在 composer 上方成为底 dock 的一部分。
+   对标 ZCode -mb-7 pb-7 磨砂贴合：卡片磨砂半透明、底边去圆角、负边距与输入框
+   顶部边框熔接，视觉上连成一个整体。 */
+.xn-queue-dock {
+  width: min(896px, calc(100% - 48px));
+  margin: 0 auto;
+}
+.xn-queue-dock .xn-session-queue {
+  width: 100%;
+  margin: 0 0 -1px;
+  border-bottom-right-radius: 0;
+  border-bottom-left-radius: 0;
+  background: color-mix(in srgb, var(--bg-card) 82%, transparent);
+  backdrop-filter: blur(14px) saturate(1.25);
+  -webkit-backdrop-filter: blur(14px) saturate(1.25);
+}
+.xn-queue-dock .xn-session-queue__error {
+  width: 100%;
+  margin: 8px 0 -1px;
+}
 .xn-composer__submit-actions { display: inline-flex; flex: 0 0 auto; align-items: center; gap: 5px; }
 .xn-composer__queue { background: var(--bg-active); color: var(--fg); }
 .xn-composer__queue:hover:not(:disabled) { background: var(--bg-hover); }
@@ -331,7 +396,7 @@
 
 @media (prefers-reduced-motion: reduce) {
   .xn-assistant-stream-status::before { animation: none; }
-  .xn-reasoning > summary::before,
+  .xn-reasoning__chevron,
   .xn-completion-details > summary::before { transition: none; }
 }
 
@@ -355,4 +420,76 @@
 .xn-toolcall__fold-toggle:focus-visible {
   outline: 1px solid var(--accent);
   outline-offset: 1px;
+}
+
+/* ---- 失败一键复制：错误详情挂在状态词的 Tooltip 上（含 Copy 按钮） ---- */
+.xn-toolcall__failure-tip { position: relative; display: inline-flex; }
+.xn-toolcall__status--failure {
+  white-space: nowrap;
+  text-decoration: underline dotted;
+  text-underline-offset: 2px;
+  cursor: help;
+}
+.xn-toolcall__failure-tooltip {
+  position: absolute;
+  inset-inline-start: 0;
+  bottom: calc(100% + 6px);
+  z-index: 30;
+  display: none;
+  align-items: flex-start;
+  gap: 8px;
+  max-width: 24rem;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg-card);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
+  color: var(--fg);
+  font-size: 12px;
+  line-height: 1.5;
+}
+.xn-toolcall__failure-tip:hover .xn-toolcall__failure-tooltip,
+.xn-toolcall__failure-tip:focus-within .xn-toolcall__failure-tooltip { display: flex; }
+.xn-toolcall__failure-text {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.xn-toolcall__failure-copy {
+  flex: 0 0 auto;
+  display: inline-grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border: 0;
+  border-radius: 6px;
+  padding: 0;
+  background: transparent;
+  color: var(--fg-muted);
+  cursor: pointer;
+}
+.xn-toolcall__failure-copy:hover { background: var(--bg-hover); color: var(--fg); }
+.xn-toolcall__failure-copy:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+/* ---- 流式参数实时摘要：文本变化时的轻量 opacity 过渡 ---- */
+.xn-toolcall__primary--pulse { animation: xn-toolcall-primary-pulse 0.35s ease-out; }
+@keyframes xn-toolcall-primary-pulse { from { opacity: 0.25; } to { opacity: 1; } }
+
+/* ---- 回合计时 pill：每个 assistant 工作段顶部的状态条 ---- */
+.xn-turn-work-status {
+  display: flex;
+  width: 100%;
+  margin-bottom: 8px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--border);
+}
+.xn-turn-work-status__label { color: var(--fg-muted); font-size: 12px; line-height: 1.5; }
+
+@media (prefers-reduced-motion: reduce) {
+  .xn-toolcall__primary--pulse { animation: none; }
 }

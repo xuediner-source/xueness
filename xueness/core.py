@@ -1015,18 +1015,36 @@ def evidence_aliases(session):
     return aliases
 
 
-def _completion_payload(content: str) -> tuple[str, list, bool]:
+def _completion_payload(content: str, *, allow_markdown_envelope=False) -> tuple[str, list, bool]:
     """Extract a private completion envelope while keeping its answer as Markdown."""
     if not isinstance(content, str):
         return "", [], False
     text = content.strip()
     candidate = text
+    prose = ''
     if candidate.startswith("```json") and candidate.endswith("```"):
         candidate = candidate[7:-3].strip()
     try:
         report = json.loads(candidate)
     except (ValueError, TypeError):
-        return content, [], False
+        if not allow_markdown_envelope:
+            return content, [], False
+        # Compatible models may surround the private envelope with prose or a
+        # readback table. Accept only one standalone JSON fence with the exact
+        # schema below. Evidence is still checked against real current-turn
+        # tool results by assess(); ordinary no-tool examples stay intact.
+        fences = list(re.finditer(r'^```json[ \t]*\r?\n(.*?)\r?\n```[ \t]*(?=\r?\n|$)',
+                                  text, re.MULTILINE | re.DOTALL | re.IGNORECASE))
+        if len(fences) != 1:
+            return content, [], False
+        prose = '\n\n'.join(part for part in (
+            text[:fences[0].start()].strip(), text[fences[0].end():].strip()) if part)
+        if not prose:
+            return content, [], False
+        try:
+            report = json.loads(fences[0].group(1))
+        except (ValueError, TypeError):
+            return content, [], False
     if not isinstance(report, dict):
         return content, [], False
     fields = set(report)
@@ -1036,7 +1054,7 @@ def _completion_payload(content: str) -> tuple[str, list, bool]:
     evidence = report.get("evidence")
     if not isinstance(answer, str) or not isinstance(evidence, list):
         return content, [], False
-    return answer, evidence, True
+    return prose or answer, evidence, True
 
 
 def _current_turn_tool_ids(session: dict) -> list[str]:
@@ -1115,6 +1133,13 @@ def _record_completion_history(session: dict, completion: dict) -> None:
     # remains the authoritative human-readable answer for this turn.
     if isinstance(record.get("summary"), str):
         record["summary"] = record["summary"][:4000]
+    if completion.get('delivery_status') == 'passed' and session.get('delivery_requirements'):
+        # A bounded host-owned snapshot identifies a settled delivery plan
+        # without copying files or potentially large requirement text into
+        # each turn's completion history.
+        import hashlib
+        record['delivery_plan_digest'] = hashlib.sha256(json.dumps(
+            session['delivery_requirements'], sort_keys=True, ensure_ascii=True).encode('ascii')).hexdigest()
     history.append(record)
     if len(history) > 200:
         del history[:-200]
@@ -1122,7 +1147,8 @@ def _record_completion_history(session: dict, completion: dict) -> None:
 
 def assess(content: str, results: dict, aliases=None) -> dict:
     """Parse a completion envelope or accept plain Markdown as an answer."""
-    answer, evidence, structured = _completion_payload(content)
+    answer, evidence, structured = _completion_payload(content, allow_markdown_envelope=
+        bool(aliases) or (aliases is None and bool(results)))
     if not structured:
         return {"verified": False, "summary": answer, "evidence": []}
     if not evidence:
@@ -2034,17 +2060,22 @@ def _drive_run(session: dict, store: Store, provider, gate: Gate, max_steps=8, m
                 save_session()
                 continue
             tool_status = _tool_execution_status(session, current_call_ids)
-            evidence_required = bool(current_call_ids or session.get('delivery_requirements'))
+            evidence_required = bool(current_call_ids)
             if plugin_enabled('sessions'):
                 policy = getattr(plugin_runtime, 'completion_requires_evidence', None)
                 if callable(policy):
                     evidence_required = bool(policy(state_dir, session, current_call_ids)) or evidence_required
+                else:
+                    evidence_required = bool(session.get('delivery_requirements')) or evidence_required
             else:
                 # Disabling the sessions policy cannot downgrade an evidence
                 # obligation or let a no-tool task claim successful work.
                 evidence_required = True
             completion['tool_execution_status'] = tool_status
-            completion['tool_execution_success'] = bool(completion.get('verified') and tool_status == 'succeeded')
+            # Tool execution and final evidence/delivery assessment are
+            # independent facts. Missing or invalid citations cannot turn an
+            # actually successful tool execution into a failed execution.
+            completion['tool_execution_success'] = tool_status == 'succeeded'
             if tool_status != 'succeeded' and tool_status != 'not_applicable':
                 completion['verified'] = False
                 completion['error_code'] = 'tool_execution_' + tool_status
@@ -2208,7 +2239,9 @@ def _drive_run(session: dict, store: Store, provider, gate: Gate, max_steps=8, m
             session['pause_reason'] = (halt_result or {}).get('user_reason') or '证据引用修复失败，未再次执行工具。'
             session['pause_code'] = (halt_result or {}).get('error_code') or 'invalid_evidence_reference'
             if session['status'] == 'needs_review':
-                session['completion'] = {'verified': False, 'tool_execution_success': False,
+                tool_status = _tool_execution_status(session, _current_turn_tool_ids(session))
+                session['completion'] = {'verified': False, 'tool_execution_status': tool_status,
+                                         'tool_execution_success': tool_status == 'succeeded',
                                          'delivery_status': 'not_assessed', 'summary': session['pause_reason'],
                                          'evidence': []}
             fire_stop()

@@ -159,7 +159,10 @@ class PlanModeHttpTests(unittest.TestCase):
             with urllib.request.urlopen(request, timeout=10) as response:
                 return response.status, response.read().decode("utf-8", "replace")
         except urllib.error.HTTPError as error:
-            return error.code, error.read().decode("utf-8", "replace")
+            try:
+                return error.code, error.read().decode("utf-8", "replace")
+            finally:
+                error.close()
 
     def _session(self):
         return self.ctx["store"].new("plan then build", self.project)["id"]
@@ -209,6 +212,73 @@ class PlanModeHttpTests(unittest.TestCase):
         saved = self.ctx["store"].load(sid)
         self.assertEqual(saved["observed_permission_mode"], "plan")
         self.assertEqual(self._history(sid), [("build", "plan")])
+
+    def test_new_yolo_escalation_requires_ack_before_run_side_effects(self):
+        sid = self._session()
+        before = self.ctx["store"].load(sid)
+        queue_directory = self.ctx["store"].directory / "session-message-queues"
+        with inject_provider(ctx=self.ctx):
+            with patch.object(web.provider_config, "resolve", wraps=web.provider_config.resolve) as resolve, \
+                    patch("xueness.web.run") as run:
+                code, body = self._post(f"/api/sessions/{sid}/run",
+                                        {"provider": "real", "steps": 1,
+                                         "permission_mode": "yolo",
+                                         "continue_queue": True})
+        self.assertEqual(code, 428, body)
+        self.assertEqual(json.loads(body)["error_code"], "yolo_confirmation_required")
+        resolve.assert_not_called()
+        run.assert_not_called()
+        after = self.ctx["store"].load(sid)
+        self.assertEqual(after["status"], before["status"])
+        self.assertNotIn("permission_mode", after)
+        self.assertEqual(after.get("permission_mode_history", []), [])
+        self.assertNotIn(sid, self.ctx["running"])
+        self.assertNotIn(sid, self.ctx.get("running_context", {}))
+        self.assertFalse(queue_directory.exists())
+
+    def test_confirmed_yolo_transition_is_audited_and_legacy_yolo_continues(self):
+        sid = self._session()
+        code, body = self._run(sid, permission_mode="yolo", acknowledge_yolo=True)
+        self.assertEqual(code, 200, body)
+        saved = self.ctx["store"].load(sid)
+        self.assertEqual(saved["permission_mode"], "yolo")
+        self.assertEqual(saved["observed_permission_mode"], "yolo")
+        self.assertEqual(self._history(sid), [("build", "yolo")])
+
+        # Once the persisted session is already in yolo, it can continue without
+        # repeating the UI acknowledgement on every turn.
+        code, body = self._run(sid, permission_mode="yolo")
+        self.assertEqual(code, 200, body)
+        self.assertEqual(self._history(sid), [("build", "yolo")])
+
+        # De-escalating clears the elevated mode. A later new escalation asks again.
+        self.assertEqual(self._run(sid, permission_mode="build")[0], 200)
+        code, body = self._run(sid, permission_mode="yolo")
+        self.assertEqual(code, 428, body)
+        self.assertEqual(self.ctx["store"].load(sid)["permission_mode"], "build")
+
+        legacy = self._session()
+        legacy_session = self.ctx["store"].load(legacy)
+        legacy_session["permission_mode"] = "yolo"
+        self.ctx["store"].save(legacy_session)
+        self.assertEqual(self._run(legacy)[0], 200)
+        self.assertEqual(self.ctx["store"].load(legacy)["observed_permission_mode"], "yolo")
+
+    def test_yolo_acknowledgement_field_is_strict_and_bound_to_yolo(self):
+        sid = self._session()
+        for value in (1, "true", None):
+            with self.subTest(value=value):
+                code, body = self._post(f"/api/sessions/{sid}/run",
+                                        {"provider": "real", "permission_mode": "yolo",
+                                         "acknowledge_yolo": value})
+                self.assertEqual(code, 400, body)
+                self.assertIn("acknowledge_yolo must be a boolean", body)
+        code, body = self._post(f"/api/sessions/{sid}/run",
+                                {"provider": "real", "permission_mode": "build",
+                                 "acknowledge_yolo": True})
+        self.assertEqual(code, 400, body)
+        self.assertIn("acknowledge_yolo requires permission_mode=yolo", body)
+        self.assertNotIn("permission_mode", self.ctx["store"].load(sid))
 
     def test_unknown_permission_mode_is_rejected(self):
         sid = self._session()
