@@ -27,6 +27,7 @@ class WindowsTerminalCloseTests(unittest.TestCase):
 
     def test_successful_and_repeated_close_disposes_once(self):
         proc = Mock()
+        proc.isalive.return_value = False
         term = self.terminal(proc)
         with patch('xueness.process_runtime.run_external') as fallback:
             term.close()
@@ -39,7 +40,7 @@ class WindowsTerminalCloseTests(unittest.TestCase):
     def test_native_close_failure_terminates_only_owned_process_and_rechecks_exit(self):
         proc = Mock(pid=4312)
         proc.close.side_effect = [OSError('Could not terminate the child'), None]
-        proc.isalive.side_effect = [True, False]
+        proc.isalive.side_effect = [True, False, False]
         term = self.terminal(proc)
         with patch('xueness.process_runtime.run_external') as fallback:
             term.close()
@@ -47,12 +48,11 @@ class WindowsTerminalCloseTests(unittest.TestCase):
                          ['taskkill.exe', '/PID', '4312', '/T', '/F'])
         self.assertIs(fallback.call_args.kwargs['check'], False)
         self.assertEqual(fallback.call_args.kwargs['timeout'], 5)
-        self.assertEqual(proc.isalive.call_count, 2)
+        self.assertEqual(proc.isalive.call_count, 3)
         self.assertTrue(term.disposed)
 
     def test_still_alive_after_fallback_is_an_error_and_can_retry(self):
         proc = Mock(pid=4312)
-        proc.close.side_effect = OSError('Could not terminate the child')
         proc.isalive.return_value = True
         term = self.terminal(proc)
         with patch('xueness.process_runtime.run_external'), self.assertRaises(OSError):
@@ -128,6 +128,16 @@ class TerminalProfileTests(unittest.TestCase):
                 validate('general', {'defaultShell':value})
 
     def test_open_consumes_selected_shell_and_preserves_existing_terminal(self):
+        self.exercise_profile()
+
+    @unittest.skipUnless(os.name == 'nt', 'native Windows shell profiles')
+    def test_other_windows_shell_profiles_interrupt_and_close_their_children(self):
+        for item in available_shells():
+            if item['id'] != resolve_shell():
+                with self.subTest(shell=item['id']):
+                    self.exercise_profile(item['id'])
+
+    def exercise_profile(self, profile=None):
         temp = tempfile.TemporaryDirectory()
         self.addCleanup(temp.cleanup)
         root = Path(temp.name).resolve()
@@ -136,7 +146,7 @@ class TerminalProfileTests(unittest.TestCase):
         # current working directory is removed on Windows.
         self.addCleanup(ctx['terminals'].close)
         session = ctx['store'].new('terminal fixture', root)
-        selected = ('/bin/bash' if os.name != 'nt' and
+        selected = profile or ('/bin/bash' if os.name != 'nt' and
                     any(item['id'] == '/bin/bash' for item in available_shells())
                     else resolve_shell())
         update_settings(ctx['state_dir'], lambda data: data.setdefault('general', {}).update(defaultShell=selected))
@@ -186,12 +196,13 @@ class TerminalProfileTests(unittest.TestCase):
                 time.sleep(.03)
             self.fail('the selected shell did not return to its prompt after interrupt: '+output)
 
+        native_shell = None
         if os.name == 'nt':
             shell_name = Path(selected).name.casefold()
             if shell_name == 'cmd.exe':
                 term.write('set ready=READY & call echo PROFILE_%%ready%%\r')
                 wait_for('PROFILE_READY')
-                term.write('echo PROFILE_SIZE_BEGIN & mode con & echo PROFILE_SIZE_END\r')
+                term.write('set size=SIZE & call echo PROFILE_%%size%%_BEGIN & mode con & call echo PROFILE_%%size%%_END\r')
                 output = wait_for('PROFILE_SIZE_END')
                 size_report = output.split('PROFILE_SIZE_BEGIN', 1)[-1].split('PROFILE_SIZE_END', 1)[0]
                 dimensions = re.findall(r'\b\d+\b', size_report)
@@ -202,8 +213,28 @@ class TerminalProfileTests(unittest.TestCase):
             else:
                 # xterm sends CR for Enter. CRLF also sends a second raw key to
                 # PSReadLine and can leave the following line in continuation mode.
-                term.write("$r='PROFILE'; Write-Output ($r+'_READY')\r")
+                term.write("$r='PROFILE'; Write-Output ($r+'_READY'); Write-Output ('SHELL_PID='+$PID)\r")
                 wait_for('PROFILE_READY')
+                end = time.monotonic()+5
+                match = None
+                while time.monotonic() < end:
+                    match = re.search(r'SHELL_PID=(\d+)', read_output())
+                    if match:
+                        break
+                    time.sleep(.03)
+                self.assertIsNotNone(match)
+                import ctypes
+                from ctypes import wintypes
+                kernel = ctypes.WinDLL('kernel32', use_last_error=True)
+                kernel.OpenProcess.argtypes = [wintypes.DWORD, wintypes.BOOL, wintypes.DWORD]
+                kernel.OpenProcess.restype = wintypes.HANDLE
+                kernel.GetExitCodeProcess.argtypes = [wintypes.HANDLE, ctypes.POINTER(wintypes.DWORD)]
+                kernel.GetExitCodeProcess.restype = wintypes.BOOL
+                kernel.CloseHandle.argtypes = [wintypes.HANDLE]
+                kernel.CloseHandle.restype = wintypes.BOOL
+                native_shell = kernel.OpenProcess(0x1000, False, int(match.group(1)))
+                self.assertTrue(native_shell)
+                self.addCleanup(kernel.CloseHandle, native_shell)
                 term.write('Write-Output "SIZE=$($Host.UI.RawUI.WindowSize.Height)x$($Host.UI.RawUI.WindowSize.Width)"\r')
                 wait_for('SIZE=30x90')
                 running = "$r='PROFILE'; Write-Output ($r+'_RUNNING'); Start-Sleep -Seconds 30\r"
@@ -233,6 +264,10 @@ class TerminalProfileTests(unittest.TestCase):
         ctx['terminals'].close()
         if os.name == 'nt':
             self.assertFalse(term.proc.isalive())
+            if native_shell:
+                exit_code = wintypes.DWORD()
+                self.assertTrue(kernel.GetExitCodeProcess(native_shell, ctypes.byref(exit_code)))
+                self.assertNotEqual(exit_code.value, 259, 'the actual shell was orphaned after closing its launcher')
         else:
             self.assertIsNotNone(term.proc.poll())
         self.assertTrue(term.closed)

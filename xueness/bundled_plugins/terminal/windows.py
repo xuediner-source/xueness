@@ -92,21 +92,22 @@ class WindowsTerminal:
             with self.lock:
                 self.closed = True
             try:
+                # The ConPTY root is our launcher; terminate its owned tree
+                # before pywinpty can kill only the launcher and orphan its shell.
+                if self.proc.isalive():
+                    from ...process_runtime import run_external
+                    env = {k: v for k, v in os.environ.items() if k.upper() in
+                           ('PATH', 'SYSTEMROOT', 'WINDIR', 'TEMP', 'TMP', 'COMSPEC')}
+                    run_external(subprocess.run,
+                                 ['taskkill.exe', '/PID', str(self.proc.pid), '/T', '/F'],
+                                 env=env, capture_output=True, timeout=5, check=False)
+                    if self.proc.isalive():
+                        raise OSError('the owned terminal process did not exit')
                 try:
                     self.proc.close(force=True)
                 except (OSError, ValueError):
-                    # pywinpty can fail to terminate a still-live Windows shell.
-                    # Only fall back for this terminal's owned process, and never
-                    # treat an unsuccessful taskkill as successful cleanup.
                     if self.proc.isalive():
-                        from ...process_runtime import run_external
-                        env = {k: v for k, v in os.environ.items() if k.upper() in
-                               ('PATH', 'SYSTEMROOT', 'WINDIR', 'TEMP', 'TMP', 'COMSPEC')}
-                        run_external(subprocess.run,
-                                     ['taskkill.exe', '/PID', str(self.proc.pid), '/T', '/F'],
-                                     env=env, capture_output=True, timeout=5, check=False)
-                        if self.proc.isalive():
-                            raise
+                        raise
                     self.proc.close(force=True)
                 self.disposed = True
             finally:

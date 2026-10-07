@@ -1,8 +1,8 @@
 # Mac / Windows 桌面统一记录
 
-原生 Windows 中断回归发现，普通 Ctrl+C 字节和 ConPTY 键盘协议事件均不能恢复运行中 PowerShell 的提示符。terminal 插件改为固定的隔离控制台辅助进程：只附加该终端拥有的活动 Shell 控制台，发送真正的 CTRL_C_EVENT；宿主不附加控制台、不接收该信号，也不终止整个交互式 Shell 来替代中断。普通输入继续传递，关闭和输入串行化。测试使用与 xterm Enter 一致的 CR，并检查中断后可以继续输入、资源关闭完成。依据为 [Microsoft GenerateConsoleCtrlEvent](https://learn.microsoft.com/en-us/windows/console/generateconsolectrlevent) 和 [AttachConsole](https://learn.microsoft.com/en-us/windows/console/attachconsole)；原生结果以本轮实际 CI 为准。
+原生 Windows 中断回归发现，Shell 继承宿主的 Ctrl+C 忽略属性后，普通字节、键盘事件和直接控制台信号都不能取消运行中命令。terminal 插件在自己拥有的启动进程中清除该继承属性，再启动用户选择的固定 Shell；宿主的控制台与信号处理保持原样。Ctrl+C 通过固定的隔离辅助进程，只附加该终端的控制台发送 CTRL_C_EVENT；不会用终止整个 Shell 来替代中断。原生测试已证实命令中断后能继续输入。依据为 [Microsoft SetConsoleCtrlHandler](https://learn.microsoft.com/en-us/windows/console/setconsolectrlhandler)、[GenerateConsoleCtrlEvent](https://learn.microsoft.com/en-us/windows/console/generateconsolectrlevent) 和 [AttachConsole](https://learn.microsoft.com/en-us/windows/console/attachconsole)。
 
-Windows 原生 CI 在冻结后端检查中发现 ConPTY 输出正常但关闭返回 400。本轮在 terminal 插件内串行化关闭与资源释放：pywinpty 原生关闭失败时，只对该终端拥有的 PID 使用系统终止进程树，再检查是否退出；失败继续报告错误，重复关闭不重复处理资源。终端真实 Shell、尺寸和中断回归已加入三平台构建门禁，原生冻结检查仍验证关闭，不放宽通过条件。对上游 API 的参考为 [pywinpty 3.0.2 关闭实现](https://github.com/andfoy/pywinpty/blob/v3.0.2/winpty/ptyprocess.py)。该修复扩展已有终端生命周期，功能目录数量不变。
+关闭终端时先终止该终端拥有的启动进程树并检查退出，再释放 ConPTY；避免 pywinpty 只终止启动进程而遗留真实 Shell。输入、关闭与资源释放串行化，重复关闭不重复处理，失败继续报告错误。回归覆盖实际 Windows Shell 配置、尺寸、中断后继续输入、实际 Shell 进程退出和读取线程清理；三平台原生冻结检查仍验证关闭，不放宽通过条件。该修复扩展已有 terminal.pty／terminal.lifecycle，功能目录数量不变。
 
 2026-10-07 工作规则补强：当前目录 **28 个插件、163 项功能**，共享版本 **0.1.5**。planning 的标准／轻量规则同时进入 Windows x64、Mac Intel 和 Mac Apple Silicon 的原生构建；两个 CI 流程均纳入实际请求和插件开关回归。用户已授权本轮完成后上传 GitHub；下面“未上传”表述属于此前各阶段状态。原生构建与发布结果以本轮最终检查和 GitHub 记录为准。
 

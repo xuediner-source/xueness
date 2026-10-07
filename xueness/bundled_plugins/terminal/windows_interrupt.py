@@ -25,9 +25,13 @@ def interrupt(pid):
     env = {k: v for k, v in os.environ.items() if k.upper() in
            ('PATH', 'SYSTEMROOT', 'WINDIR', 'TEMP', 'TMP', 'COMSPEC')}
     from ...process_runtime import run_external
-    run_external(subprocess.run, argv, env=env,
-                 creationflags=getattr(subprocess, 'CREATE_NO_WINDOW', 0),
-                 capture_output=True, timeout=5, check=True)
+    try:
+        run_external(subprocess.run, argv, env=env,
+                     creationflags=getattr(subprocess, 'CREATE_NO_WINDOW', 0),
+                     capture_output=True, timeout=5, check=True)
+    except subprocess.SubprocessError as exc:
+        raise OSError('Windows terminal interrupt failed') from exc
+
 
 
 def _send(pid):
