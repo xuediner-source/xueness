@@ -384,8 +384,14 @@ def main():
                 if payload is not None:
                     headers['X-CSRF-Token'] = json.loads(request('/api/csrf'))['csrfToken']
                 req = urllib.request.Request(url+path, data=payload, headers=headers)
-                with urllib.request.urlopen(req, timeout=15) as response:
-                    return response.read()
+                try:
+                    with urllib.request.urlopen(req, timeout=15) as response:
+                        return response.read()
+                except urllib.error.HTTPError as exc:
+                    # This fixture owns all request state. Keep the real server
+                    # error visible instead of reducing it to an HTTP status.
+                    _print_tail(f'isolated HTTP {exc.code} {path}', exc.read(), limit=2000)
+                    raise
 
             try:
                 urllib.request.urlopen(url+'/api/health', timeout=5)
