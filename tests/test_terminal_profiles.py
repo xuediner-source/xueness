@@ -200,16 +200,16 @@ class TerminalProfileTests(unittest.TestCase):
         if os.name == 'nt':
             shell_name = Path(selected).name.casefold()
             if shell_name == 'cmd.exe':
-                term.write('set ready=READY & call echo PROFILE_%%ready%%\r')
+                term.write('set "ready=READY"\recho PROFILE_%ready%\r')
                 wait_for('PROFILE_READY')
-                term.write('set "size=SIZE" & call echo PROFILE_%%size%%_BEGIN & mode con & call echo PROFILE_%%size%%_END\r')
+                term.write('set "size=SIZE"\recho PROFILE_%size%_BEGIN & mode con & echo PROFILE_%size%_END\r')
                 output = wait_for('PROFILE_SIZE_END')
                 size_report = output.split('PROFILE_SIZE_BEGIN', 1)[-1].split('PROFILE_SIZE_END', 1)[0]
                 dimensions = re.findall(r'\b\d+\b', size_report)
                 self.assertIn('30', dimensions)
                 self.assertIn('90', dimensions)
-                running = 'set status=RUNNING & call echo PROFILE_%%status%% & ping -n 31 127.0.0.1 >NUL\r'
-                after_interrupt = 'set suffix=INTERRUPT & call echo AFTER_%%suffix%%\r'
+                running = 'set "status=RUNNING"\recho PROFILE_%status% & ping -n 31 127.0.0.1 >NUL\r'
+                after_interrupt = 'set "suffix=INTERRUPT"\recho AFTER_%suffix%\r'
             else:
                 # xterm sends CR for Enter. CRLF also sends a second raw key to
                 # PSReadLine and can leave the following line in continuation mode.
@@ -264,6 +264,8 @@ class TerminalProfileTests(unittest.TestCase):
         ctx['terminals'].close()
         if os.name == 'nt':
             self.assertFalse(term.proc.isalive())
+            self.assertEqual(term.proc.fileobj.fileno(), -1)
+            self.assertEqual(term.proc._server.fileno(), -1)
             if native_shell:
                 exit_code = wintypes.DWORD()
                 self.assertTrue(kernel.GetExitCodeProcess(native_shell, ctypes.byref(exit_code)))

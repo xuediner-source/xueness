@@ -103,11 +103,15 @@ class WindowsTerminal:
                                  env=env, capture_output=True, timeout=5, check=False)
                     if self.proc.isalive():
                         raise OSError('the owned terminal process did not exit')
+                # pywinpty.isalive() sets its closed flag on process exit,
+                # although the reader/listener sockets still need disposal.
+                self.proc.closed = False
                 try:
                     self.proc.close(force=True)
                 except (OSError, ValueError):
                     if self.proc.isalive():
                         raise
+                    self.proc.closed = False
                     self.proc.close(force=True)
                 self.disposed = True
             finally:
