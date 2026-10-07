@@ -33,7 +33,10 @@ class CoordinationTests(unittest.TestCase):
 
         def child(*args, **kwargs):
             started.set()
-            self.assertTrue(release.wait(3), 'parent never made independent progress')
+            # This is a controlled blocked child, not a three-second performance
+            # assertion. Slow native runners still have to perform the own read
+            # before releasing it; the bound only prevents a hung regression.
+            self.assertTrue(release.wait(15), 'parent never made independent progress')
             return {'ok': True, 'summary': 'bounded child findings', 'steps': 1}
 
         class Provider:
@@ -56,7 +59,8 @@ class CoordinationTests(unittest.TestCase):
 
         with patch('xueness.core._run_subagent', side_effect=child):
             out = run(self.session, self.store, Provider(), Gate(self.root), subagents=[], max_steps=4)
-        self.assertEqual(out['status'], 'completed')
+        self.assertEqual(out['status'], 'completed', json.dumps({
+            'completion': out.get('completion'), 'tasks': out.get('task_runs')}))
         self.assertEqual(out['completion']['delivery_checks']['subagents']['status'], 'passed')
         self.assertEqual(out['results']['collect']['tasks'][0]['summary'], 'bounded child findings')
         self.assertEqual(out['task_runs'][0]['status'], 'completed')

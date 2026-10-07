@@ -15,6 +15,7 @@ VALIDATION_FILES = {
     '.github/workflows/windows-runtime-check.yml',
     'desktop/scripts/check_backend.py',
     'desktop/scripts/check_artifact_terminal.py',
+    'tests/test_subagent_coordination.py',
 }
 
 
