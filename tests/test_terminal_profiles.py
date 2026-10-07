@@ -22,6 +22,8 @@ class WindowsTerminalCloseTests(unittest.TestCase):
         term.proc, term.reader = proc, Mock()
         term.lock, term.close_lock = threading.RLock(), threading.Lock()
         term.closed, term.disposed = False, False
+        term.write_lock = threading.Lock()
+        term.win32_input, term.input_mode_tail = False, ''
         return term
 
     def test_successful_and_repeated_close_disposes_once(self):
@@ -69,6 +71,36 @@ class WindowsTerminalCloseTests(unittest.TestCase):
             term.close()
         fallback.assert_not_called()
         self.assertTrue(term.disposed)
+
+    def test_ctrl_c_tracks_split_win32_mode_and_sends_paired_modifier_events(self):
+        proc = Mock()
+        term = self.terminal(proc)
+        term._observe_input_mode('\x1b[?90')
+        self.assertFalse(term.win32_input)
+        term._observe_input_mode('01h')
+        term.write('\x03')
+        sent = proc.write.call_args.args[0]
+        self.assertIn('\x1b[67;46;3;1;8;1_', sent)
+        self.assertTrue(sent.endswith('\x1b[17;29;0;0;0;1_'))
+
+    def test_legacy_ctrl_c_and_regular_input_are_preserved(self):
+        proc = Mock()
+        term = self.terminal(proc)
+        term.write('\x03')
+        proc.write.assert_called_with('\x03')
+        term._observe_input_mode('\x1b[?9001h')
+        term.write('echo hello\r')
+        proc.write.assert_called_with('echo hello\r')
+
+    def test_win32_mode_disable_or_terminal_reset_returns_to_legacy_input(self):
+        term = self.terminal(Mock())
+        for reset in ('\x1b[?9001l', '\x1bc'):
+            term._observe_input_mode('\x1b[?1004;9001h')
+            self.assertTrue(term.win32_input)
+            term._observe_input_mode(reset)
+            self.assertFalse(term.win32_input)
+        term._observe_input_mode('\x1b[?90010h')
+        self.assertFalse(term.win32_input)
 
 
 class TerminalProfileTests(unittest.TestCase):
