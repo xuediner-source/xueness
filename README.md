@@ -14,7 +14,7 @@
     <a href="https://github.com/xuediner-source/xueness/actions/workflows/desktop-build.yml"><img src="https://github.com/xuediner-source/xueness/actions/workflows/desktop-build.yml/badge.svg?branch=main" alt="Desktop build"></a>
     <a href="https://github.com/xuediner-source/xueness/blob/main/LICENSE"><img src="https://img.shields.io/github/license/xuediner-source/xueness?label=license" alt="Apache 2.0 license"></a>
     <a href="https://github.com/xuediner-source/xueness/releases/latest"><img src="https://img.shields.io/github/v/release/xuediner-source/xueness?label=release" alt="Latest release"></a>
-    <img src="https://img.shields.io/badge/plugins-28%20%7C%20160-4263eb" alt="28 plugins and 160 features">
+    <img src="https://img.shields.io/badge/plugins-28%20%7C%20163-4263eb" alt="28 plugins and 163 features">
   </p>
 </div>
 
@@ -46,7 +46,7 @@ Xueness 面向个人本地开发，提供可从终端、浏览器或 Windows/mac
 ## 功能概览
 
 - **本地小模型配置。** 选择「本地轻量」运行档，细调提示、工具集合、上下文与输出预算、采样和协议选项。资源面板报告运行 Xueness 的机器 CPU、内存及进程状态；模型输出面板展示请求阶段、工具调用和服务实际返回的用量。缺少的 Token 或显存数据会标为不可用，不会估算成真实测量值。
-- **28 个可信插件，160 项登记功能。** 会话、工作区文件、模型、Shell、Git、终端、工作流、记忆、Hooks、MCP、浏览器、远程连接、渠道、自动化、诊断、Office 文档创建/重建与预览、搜图、工具执行策略等能力都有明确归属。插件管理页显示完整目录与依赖状态，CLI 也可查看和更改插件开关。会话支持运行中排队追加消息，桌面端支持确认导入 Chrome 资料到独立浏览器目录。
+- **28 个可信插件，163 项登记功能。** 会话、工作区文件、模型、Shell、Git、终端、工作流、记忆、Hooks、MCP、浏览器、远程连接、渠道、自动化、诊断、Office 文档创建/重建与预览、搜图、工具执行策略等能力都有明确归属。插件管理页显示完整目录与依赖状态，CLI 也可查看和更改插件开关。会话支持运行中排队追加消息，桌面端支持确认导入 Chrome 资料到独立浏览器目录。
 - **一键切换插件组合档位。** 「设置 → 供应商」顶部选择 minimal / lightweight / standard 档位，或在 CLI 运行 `xueness plugins profile list|show|apply`；档位只是一张插件 ID 到开关的数据清单，你自己的显式开关始终优先，切换不会改动工作区、审批或权限模式。市场清单可用 `xueness plugins validate <路径>` 只读校验，`xueness plugins update <id>|--all` 仅从既有可信目录原子升级已通过校验的清单。
 - **给会话设一条持续目标。** 开始新任务时在 Composer 的「+」菜单选择「添加为目标」，或用 CLI `--target` 设定；目标跨轮生效并每轮以短提示注入模型，会话标题下方一行徽标可查看或清除。运行结束时主机核对回答是否明确声明达成，未声明则进入需要复核状态。核对是确定性的规则判断，不额外调用模型，也不替用户证明目标真的完成。该能力归属规划插件，关闭后入口、注入与核对一并停止。
 - **三种入口，共用运行时。** 使用 Agent CLI 运行会话，通过 loopback Web 工作台查看和管理任务，或安装 Windows/macOS 桌面应用。桌面包自带运行时，跨平台差异留在对应插件适配中。
@@ -133,4 +133,4 @@ python3 -m unittest tests.test_plugin_architecture -q
 
 本仓库使用 [Apache License 2.0](LICENSE)。Web 界面包含经适配的 [ZCode](https://github.com/zai-org/ZCode) 界面素材，相关版权和改动说明见 [NOTICE.md](NOTICE.md)；Xueness 使用自己的 Agent 运行时、插件接口和 Electron 桌面外壳，并非 Z.AI、ZCode 或 DeepSeek 的官方产品。插件接口是 Xueness 自有实现；本项目不宣称与上游插件 ABI 兼容，也不声称完整复刻上游功能。[DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) 仅作为架构与桌面设计参考，没有随本项目分发其桌面代码、商标或图标。Web 及桌面依赖的许可说明随源代码和产物提供，另见 [第三方声明](webapp/public/third-party-notices.txt)。
 
-添加菜单能力、上下文用量圆环与完全访问确认见[使用说明](docs/xueness-composer-capabilities.md)；全部 160 项功能的归属与本轮全量验证见[核查记录](docs/composer-plugin-audit-2026-10-07.md)。
+添加菜单能力、上下文用量圆环与完全访问确认见[使用说明](docs/xueness-composer-capabilities.md)；当前功能归属见[插件架构清单](docs/xueness-plugin-architecture.md)，添加能力阶段的验证见[核查记录](docs/composer-plugin-audit-2026-10-07.md)。

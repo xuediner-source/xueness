@@ -14,7 +14,7 @@
     <a href="https://github.com/xuediner-source/xueness/actions/workflows/desktop-build.yml"><img src="https://github.com/xuediner-source/xueness/actions/workflows/desktop-build.yml/badge.svg?branch=main" alt="Desktop build"></a>
     <a href="https://github.com/xuediner-source/xueness/blob/main/LICENSE"><img src="https://img.shields.io/github/license/xuediner-source/xueness?label=license" alt="Apache 2.0 license"></a>
     <a href="https://github.com/xuediner-source/xueness/releases/latest"><img src="https://img.shields.io/github/v/release/xuediner-source/xueness?label=release" alt="Latest release"></a>
-    <img src="https://img.shields.io/badge/plugins-28%20%7C%20160-4263eb" alt="28 plugins and 160 features">
+    <img src="https://img.shields.io/badge/plugins-28%20%7C%20163-4263eb" alt="28 plugins and 163 features">
   </p>
 </div>
 
@@ -129,4 +129,4 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for test commands and contribution steps.
 
 This repository uses the [Apache License 2.0](LICENSE). The Web interface contains adapted interface material from [ZCode](https://github.com/zai-org/ZCode); [NOTICE.md](NOTICE.md) records the attribution and changes. Xueness has its own Agent runtime, plugin interfaces, and Electron desktop shell. It is not an official product of Z.AI, ZCode, or DeepSeek. Its plugin interfaces are Xueness-specific; this project does not claim upstream plugin ABI compatibility or complete feature parity. [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) informed architecture and desktop design review only; its desktop code, trademarks, and icons are not distributed here. License notices for Web and desktop dependencies are included with the source and packaged builds; see [third-party notices](webapp/public/third-party-notices.txt).
 
-See the [Add-menu, context usage, and full-access guide](docs/xueness-composer-capabilities.md) and the [complete 160-feature ownership and regression audit](docs/composer-plugin-audit-2026-10-07.md).
+See the [Add-menu, context usage, and full-access guide](docs/xueness-composer-capabilities.md) and the [current feature inventory](docs/xueness-plugin-architecture.md); the earlier capability checks are recorded in the [regression audit](docs/composer-plugin-audit-2026-10-07.md).
