@@ -38,7 +38,8 @@ def main():
         archive = data/'download'/'Xueness-0.1.5-windows-x64-portable.zip'
         expected = dict((row.split('  ',1)[1], row.split('  ',1)[0])
                         for row in (data/'download'/'SHA256SUMS.txt').read_text().splitlines())[archive.name]
-        actual = hashlib.file_digest(archive.open('rb'), 'sha256').hexdigest()
+        with archive.open('rb') as stream:
+            actual = hashlib.file_digest(stream, 'sha256').hexdigest()
         if actual != expected:
             raise ValueError('native package checksum mismatch')
         unpacked = data/'unpacked'
