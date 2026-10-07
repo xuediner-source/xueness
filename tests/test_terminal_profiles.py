@@ -55,10 +55,24 @@ class WindowsTerminalCloseTests(unittest.TestCase):
         proc = Mock(pid=4312)
         proc.isalive.return_value = True
         term = self.terminal(proc)
-        with patch('xueness.process_runtime.run_external'), self.assertRaises(OSError):
+        with patch('xueness.process_runtime.run_external'), \
+                patch('xueness.bundled_plugins.terminal.windows.time.monotonic', side_effect=[0, 3]), \
+                self.assertRaises(OSError):
             term.close()
         self.assertFalse(term.disposed)
         term.reader.join.assert_called_once_with(timeout=3)
+
+    def test_tree_termination_waits_for_actual_exit_before_disposing(self):
+        proc = Mock(pid=4312)
+        proc.isalive.side_effect = [True, True, False]
+        term = self.terminal(proc)
+        with patch('xueness.process_runtime.run_external') as terminate, \
+                patch('xueness.bundled_plugins.terminal.windows.time.sleep') as wait:
+            term.close()
+        terminate.assert_called_once()
+        wait.assert_called_once_with(.05)
+        proc.close.assert_called_once_with(force=True)
+        self.assertTrue(term.disposed)
 
     def test_exited_shell_still_disposes_without_killing_a_process(self):
         proc = Mock()

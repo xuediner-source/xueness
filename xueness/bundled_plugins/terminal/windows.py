@@ -101,8 +101,13 @@ class WindowsTerminal:
                     run_external(subprocess.run,
                                  ['taskkill.exe', '/PID', str(self.proc.pid), '/T', '/F'],
                                  env=env, capture_output=True, timeout=5, check=False)
-                    if self.proc.isalive():
-                        raise OSError('the owned terminal process did not exit')
+                    # Windows termination is asynchronous. taskkill returning
+                    # does not prove that the owned process handle is signaled.
+                    deadline = time.monotonic() + 2
+                    while self.proc.isalive():
+                        if time.monotonic() >= deadline:
+                            raise OSError('the owned terminal process did not exit')
+                        time.sleep(.05)
                 # pywinpty.isalive() sets its closed flag on process exit,
                 # although the reader/listener sockets still need disposal.
                 self.proc.closed = False

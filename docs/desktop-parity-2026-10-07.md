@@ -4,6 +4,8 @@
 
 关闭终端时先终止该终端拥有的启动进程树并检查退出，再释放 ConPTY；避免 pywinpty 只终止启动进程而遗留真实 Shell。输入、关闭与资源释放串行化，重复关闭不重复处理，失败继续报告错误。回归覆盖实际 Windows Shell 配置、尺寸、中断后继续输入、实际 Shell 进程退出和读取线程清理；三平台原生冻结检查仍验证关闭，不放宽通过条件。该修复扩展已有 terminal.pty／terminal.lifecycle，功能目录数量不变。
 
+Windows 终止进程是异步操作，不能在 taskkill 返回后立即把仍未退出的句柄当成关闭失败。关闭路径现等待最多 2 秒并确认实际退出，超时仍报错；单元回归模拟延迟退出和一直存活两种边界，原生冻结检查覆盖中断、继续输入、关闭及宿主退出。依据为 [Microsoft TerminateProcess](https://learn.microsoft.com/en-us/windows/win32/api/processthreadsapi/nf-processthreadsapi-terminateprocess)。
+
 2026-10-07 工作规则补强：当前目录 **28 个插件、163 项功能**，共享版本 **0.1.5**。planning 的标准／轻量规则同时进入 Windows x64、Mac Intel 和 Mac Apple Silicon 的原生构建；两个 CI 流程均纳入实际请求和插件开关回归。用户已授权本轮完成后上传 GitHub；下面“未上传”表述属于此前各阶段状态。原生构建与发布结果以本轮最终检查和 GitHub 记录为准。
 
 2026-10-07 后续补强已同步两端构建链路：当前目录为 **28 个插件、162 项功能**，版本保持 **0.1.5**。压缩后的子任务与技能恢复实现由同一可信插件源码提供，Windows x64／Mac x64／Mac arm64 构建矩阵均执行新增连续性回归，独立 Windows 运行时门禁也覆盖它们；固定 Office 依赖、原生冻结、精确插件目录、打包 UI 与 Windows 默认开启的更新演练保持统一。Mac 本机构建、Windows 原生构建及本轮未上传的边界见[本轮补强说明](context-continuity-2026-10-07.md)。下方版本和统计为先前桌面统一阶段的记录。
