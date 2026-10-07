@@ -146,11 +146,29 @@ class TerminalProfileTests(unittest.TestCase):
         self.assertEqual(term.shell, selected)
         term.resize(90, 30)
 
+        answered_da = False
+        answered_cursor = 0
+
+        def read_output():
+            nonlocal answered_da, answered_cursor
+            value = base64.b64decode(term.read(0)['data']).decode(errors='replace')
+            # The real frontend's xterm replies to terminal capability/cursor
+            # requests. A headless ConPTY must provide the same handshake.
+            if os.name == 'nt':
+                if not answered_da and '\x1b[c' in value:
+                    term.write('\x1b[?1;2c')
+                    answered_da = True
+                count = value.count('\x1b[6n')
+                if count > answered_cursor:
+                    term.write('\x1b[1;1R' * (count - answered_cursor))
+                    answered_cursor = count
+            return value
+
         def wait_for(text):
             output = ''
             end = time.monotonic()+5
             while time.monotonic() < end:
-                output = base64.b64decode(term.read(0)['data']).decode(errors='replace')
+                output = read_output()
                 if text in output:
                     return output
                 time.sleep(.03)
@@ -160,7 +178,7 @@ class TerminalProfileTests(unittest.TestCase):
             end = time.monotonic()+5
             output = ''
             while time.monotonic() < end:
-                output = base64.b64decode(term.read(0)['data']).decode(errors='replace')
+                output = read_output()
                 plain = re.sub(r'\x1b(?:\[[0-?]*[ -/]*[@-~]|\][^\x07]*(?:\x07|\x1b\\\\))', '', output)
                 marker = plain.rfind(text)
                 if marker >= 0 and re.search(r'(?:PS )?[A-Za-z]:\\[^>\r\n]*>', plain[marker+len(text):]):
