@@ -22,4 +22,5 @@ jobs:
       - name: Exercise PowerShell and plugin context continuity with isolated data
         run: |
           python -m pip install -r desktop/requirements-build.txt
+          python -m tests.windows_console_probe
           python -m unittest tests.test_desktop.DesktopTests.test_source_workflow_worker_completes_powershell_unicode_command tests.test_context_continuity tests.test_agent_work_policy tests.test_terminal_profiles -v
