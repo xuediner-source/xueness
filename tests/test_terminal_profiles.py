@@ -94,18 +94,23 @@ class WindowsTerminalCloseTests(unittest.TestCase):
 
     def test_console_helper_is_fixed_isolated_and_reports_failure(self):
         from xueness.bundled_plugins.terminal.windows_interrupt import interrupt
-        with patch.dict(os.environ, {'SystemRoot': r'C:\Windows'}, clear=True), \
-                patch('xueness.process_runtime.run_external',
-                      side_effect=OSError('attach failed')) as run:
-            with self.assertRaises(OSError):
-                interrupt(4312)
-        args = run.call_args.args[1]
-        source = base64.b64decode(args[-1]).decode('utf-16le')
-        self.assertTrue(source.endswith('[XuenessTerminalInterrupt]::Send(4312)'))
-        self.assertIn('AttachConsole(pid)', source)
-        self.assertIn('GenerateConsoleCtrlEvent(0, 0)', source)
-        self.assertEqual(run.call_args.kwargs['timeout'], 5)
-        self.assertIs(run.call_args.kwargs['check'], True)
+        import sys
+        for frozen in (False, True):
+            with self.subTest(frozen=frozen), \
+                    patch.object(sys, 'frozen', frozen, create=True), \
+                    patch('xueness.process_runtime.run_external',
+                          side_effect=OSError('attach failed')) as run:
+                with self.assertRaises(OSError):
+                    interrupt(4312)
+            args = run.call_args.args[1]
+            self.assertEqual(args[0], sys.executable)
+            self.assertEqual(args[-1], '4312')
+            if frozen:
+                self.assertEqual(args[1:3], ['--worker', 'terminal-interrupt'])
+            else:
+                self.assertEqual(Path(args[1]).name, 'windows_interrupt.py')
+            self.assertEqual(run.call_args.kwargs['timeout'], 5)
+            self.assertIs(run.call_args.kwargs['check'], True)
         for invalid in (True, 0, -1, '4312', '4312); bad()', 2**32):
             with self.subTest(pid=invalid), self.assertRaises(ValueError):
                 interrupt(invalid)
