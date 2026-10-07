@@ -408,31 +408,32 @@ def main():
             workspace = data/'workspace'
             session = json.loads(request('/api/sessions', {'task': 'packaged terminal smoke', 'root': str(workspace)}))
             sid = session.get('id') or session['session']['id']
-            term = json.loads(request('/api/terminals', {'session_id': sid, 'open': True}))
-            def terminal_wait(marker):
-                deadline = time.monotonic()+10
-                while time.monotonic() < deadline:
-                    tail = json.loads(request(f"/api/terminals/{term['id']}"))
-                    if marker in base64.b64decode(tail['data']):
-                        return
-                    time.sleep(.1)
-                raise AssertionError('packaged terminal did not produce '+marker.decode())
+            for terminal_round in range(3):
+                term = json.loads(request('/api/terminals', {'session_id': sid, 'open': True}))
+                def terminal_wait(marker):
+                    deadline = time.monotonic()+10
+                    while time.monotonic() < deadline:
+                        tail = json.loads(request(f"/api/terminals/{term['id']}"))
+                        if marker in base64.b64decode(tail['data']):
+                            return
+                        time.sleep(.1)
+                    raise AssertionError('packaged terminal did not produce '+marker.decode())
 
-            # Markers must occur in shell output, never merely echoed input.
-            command = "Write-Output ('XUENESS_' + 'TERMINAL_OK')\r" if os.name == 'nt' else "printf 'XUENESS_%s\\n' TERMINAL_OK\n"
-            request(f"/api/terminals/{term['id']}/input", {'text': command})
-            terminal_wait(b'XUENESS_TERMINAL_OK')
-            running = ("Write-Output ('XUENESS_' + 'INTERRUPT_READY'); Start-Sleep -Seconds 30\r"
-                       if os.name == 'nt' else "printf 'XUENESS_%s\\n' INTERRUPT_READY; sleep 30\n")
-            request(f"/api/terminals/{term['id']}/input", {'text': running})
-            terminal_wait(b'XUENESS_INTERRUPT_READY')
-            request(f"/api/terminals/{term['id']}/input", {'text': '\x03'})
-            after = ("Write-Output ('XUENESS_' + 'AFTER_INTERRUPT')\r" if os.name == 'nt'
-                     else "printf 'XUENESS_%s\\n' AFTER_INTERRUPT\n")
-            request(f"/api/terminals/{term['id']}/input", {'text': after})
-            terminal_wait(b'XUENESS_AFTER_INTERRUPT')
-            print('PASS: frozen terminal interrupts running work and accepts the next command', flush=True)
-            request(f"/api/terminals/{term['id']}/close", {})
+                # Markers must occur in shell output, never merely echoed input.
+                command = "Write-Output ('XUENESS_' + 'TERMINAL_OK')\r" if os.name == 'nt' else "printf 'XUENESS_%s\\n' TERMINAL_OK\n"
+                request(f"/api/terminals/{term['id']}/input", {'text': command})
+                terminal_wait(b'XUENESS_TERMINAL_OK')
+                running = ("Write-Output ('XUENESS_' + 'INTERRUPT_READY'); Start-Sleep -Seconds 30\r"
+                           if os.name == 'nt' else "printf 'XUENESS_%s\\n' INTERRUPT_READY; sleep 30\n")
+                request(f"/api/terminals/{term['id']}/input", {'text': running})
+                terminal_wait(b'XUENESS_INTERRUPT_READY')
+                request(f"/api/terminals/{term['id']}/input", {'text': '\x03'})
+                after = ("Write-Output ('XUENESS_' + 'AFTER_INTERRUPT')\r" if os.name == 'nt'
+                         else "printf 'XUENESS_%s\\n' AFTER_INTERRUPT\n")
+                request(f"/api/terminals/{term['id']}/input", {'text': after})
+                terminal_wait(b'XUENESS_AFTER_INTERRUPT')
+                request(f"/api/terminals/{term['id']}/close", {})
+                print(f'PASS: frozen terminal interrupt/resume/close round {terminal_round+1}/3', flush=True)
             argv = ['powershell.exe', '-NoProfile', '-Command', "[Console]::OutputEncoding=[Text.UTF8Encoding]::new(); Write-Output '工作流_OK'"] if os.name == 'nt' else ['/bin/sh', '-c', "printf '工作流_OK\\n'"]
             automation_response = json.loads(request('/api/automations', {
                 'enabled': False,
