@@ -51,7 +51,7 @@ jobs:
         run: |
           python tools/check_plugin_architecture.py
           node desktop/scripts/check_electron_update_transport.cjs
-          python -m unittest tests.test_desktop tests.test_desktop_updates tests.test_plugin_architecture tests.test_workspace_instructions -q
+          python -m unittest tests.test_desktop tests.test_desktop_updates tests.test_plugin_architecture tests.test_workspace_instructions tests.test_terminal_profiles -q
           python -m unittest tests.test_workflows.WorkflowTests.test_real_background_dag_failure_then_resume_without_replaying_success tests.test_mcp.McpTestCase.test_start_performs_the_initialize_handshake -q
           python -m unittest tests.test_desktop_subagents tests.test_subagent_coordination tests.test_subagents tests.test_subagent_deadlines tests.test_context_continuity tests.test_agent_work_policy -q
           python -m unittest discover -s desktop/tests -p 'test_windows_update_smoke.py' -q

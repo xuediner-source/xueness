@@ -5,12 +5,70 @@ import tempfile
 import time
 import unittest
 from pathlib import Path
+import threading
+from unittest.mock import Mock, patch
 
 from xueness.web import build_context
 from xueness.bundled_plugins.settings.preferences import validate
 from xueness.bundled_plugins.settings.settings_store import update_settings
 from xueness.bundled_plugins.terminal.shells import available_shells, resolve_shell, SHELL_PATHS
 from xueness.bundled_plugins.terminal.terminals import dispatch
+from xueness.bundled_plugins.terminal.windows import WindowsTerminal
+
+
+class WindowsTerminalCloseTests(unittest.TestCase):
+    def terminal(self, proc):
+        term = WindowsTerminal.__new__(WindowsTerminal)
+        term.proc, term.reader = proc, Mock()
+        term.lock, term.close_lock = threading.RLock(), threading.Lock()
+        term.closed, term.disposed = False, False
+        return term
+
+    def test_successful_and_repeated_close_disposes_once(self):
+        proc = Mock()
+        term = self.terminal(proc)
+        with patch('xueness.process_runtime.run_external') as fallback:
+            term.close()
+            term.close()
+        proc.close.assert_called_once_with(force=True)
+        fallback.assert_not_called()
+        term.reader.join.assert_called_once_with(timeout=3)
+        self.assertTrue(term.disposed)
+
+    def test_native_close_failure_terminates_only_owned_process_and_rechecks_exit(self):
+        proc = Mock(pid=4312)
+        proc.close.side_effect = [OSError('Could not terminate the child'), None]
+        proc.isalive.side_effect = [True, False]
+        term = self.terminal(proc)
+        with patch('xueness.process_runtime.run_external') as fallback:
+            term.close()
+        self.assertEqual(fallback.call_args.args[1],
+                         ['taskkill.exe', '/PID', '4312', '/T', '/F'])
+        self.assertIs(fallback.call_args.kwargs['check'], False)
+        self.assertEqual(fallback.call_args.kwargs['timeout'], 5)
+        self.assertEqual(proc.isalive.call_count, 2)
+        self.assertTrue(term.disposed)
+
+    def test_still_alive_after_fallback_is_an_error_and_can_retry(self):
+        proc = Mock(pid=4312)
+        proc.close.side_effect = OSError('Could not terminate the child')
+        proc.isalive.return_value = True
+        term = self.terminal(proc)
+        with patch('xueness.process_runtime.run_external'), self.assertRaises(OSError):
+            term.close()
+        self.assertFalse(term.disposed)
+        term.reader.join.assert_called_once_with(timeout=3)
+
+    def test_exited_shell_still_disposes_without_killing_a_process(self):
+        proc = Mock()
+        proc.close.side_effect = [OSError('already exited'), None]
+        proc.isalive.return_value = False
+        term = self.terminal(proc)
+        term.closed = True
+        with patch('xueness.process_runtime.run_external') as fallback:
+            term.close()
+        fallback.assert_not_called()
+        self.assertTrue(term.disposed)
 
 
 class TerminalProfileTests(unittest.TestCase):

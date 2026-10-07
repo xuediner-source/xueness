@@ -25,6 +25,8 @@ class WindowsTerminal:
         self.id, self.session_id = uuid.uuid4().hex, session_id
         self.lock = threading.RLock()
         self.write_lock = threading.Lock()
+        self.close_lock = threading.Lock()
+        self.disposed = False
         self.buffer, self.offset = bytearray(), 0
         self.touched, self.closed = time.monotonic(), False
         self.reader = threading.Thread(target=self._read, daemon=True)
@@ -77,7 +79,30 @@ class WindowsTerminal:
                 self.proc.setwinsize(rows, cols)
 
     def close(self):
-        with self.lock:
-            self.closed = True
-        self.proc.close(force=True)
-        self.reader.join(timeout=3)
+        # Reader EOF is different from disposing the ConPTY resources. Serialize
+        # explicit/broker shutdown so repeated closes cannot race the sockets.
+        with self.close_lock:
+            if self.disposed:
+                return
+            with self.lock:
+                self.closed = True
+            try:
+                try:
+                    self.proc.close(force=True)
+                except (OSError, ValueError):
+                    # pywinpty can fail to terminate a still-live Windows shell.
+                    # Only fall back for this terminal's owned process, and never
+                    # treat an unsuccessful taskkill as successful cleanup.
+                    if self.proc.isalive():
+                        from ...process_runtime import run_external
+                        env = {k: v for k, v in os.environ.items() if k.upper() in
+                               ('PATH', 'SYSTEMROOT', 'WINDIR', 'TEMP', 'TMP', 'COMSPEC')}
+                        run_external(subprocess.run,
+                                     ['taskkill.exe', '/PID', str(self.proc.pid), '/T', '/F'],
+                                     env=env, capture_output=True, timeout=5, check=False)
+                        if self.proc.isalive():
+                            raise
+                    self.proc.close(force=True)
+                self.disposed = True
+            finally:
+                self.reader.join(timeout=3)
