@@ -1,5 +1,7 @@
 # Mac / Windows 桌面统一记录
 
+原生 Windows 中断回归进一步发现，ConPTY 请求模式 9001 后普通 Ctrl+C 字节不能恢复 PowerShell 提示符。terminal 插件现在跨输出分块跟踪协议启停，仅在该模式生效时把 Ctrl+C 转为配对的控制键与 C 键事件，普通文本和旧协议仍原样传递；测试使用与 xterm 前端 Enter 一致的 CR，并核验中断后可继续输入。协议依据为 [Microsoft ConPTY 键盘事件规范](https://github.com/microsoft/terminal/blob/main/doc/specs/%234999%20-%20Improved%20keyboard%20handling%20in%20Conpty.md)。没有修改系统控制台设置或终止整个交互式 Shell 来替代中断。
+
 Windows 原生 CI 在冻结后端检查中发现 ConPTY 输出正常但关闭返回 400。本轮在 terminal 插件内串行化关闭与资源释放：pywinpty 原生关闭失败时，只对该终端拥有的 PID 使用系统终止进程树，再检查是否退出；失败继续报告错误，重复关闭不重复处理资源。终端真实 Shell、尺寸和中断回归已加入三平台构建门禁，原生冻结检查仍验证关闭，不放宽通过条件。对上游 API 的参考为 [pywinpty 3.0.2 关闭实现](https://github.com/andfoy/pywinpty/blob/v3.0.2/winpty/ptyprocess.py)。该修复扩展已有终端生命周期，功能目录数量不变。
 
 2026-10-07 工作规则补强：当前目录 **28 个插件、163 项功能**，共享版本 **0.1.5**。planning 的标准／轻量规则同时进入 Windows x64、Mac Intel 和 Mac Apple Silicon 的原生构建；两个 CI 流程均纳入实际请求和插件开关回归。用户已授权本轮完成后上传 GitHub；下面“未上传”表述属于此前各阶段状态。原生构建与发布结果以本轮最终检查和 GitHub 记录为准。
