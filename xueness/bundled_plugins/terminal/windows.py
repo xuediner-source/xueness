@@ -1,7 +1,9 @@
 """Real Windows ConPTY terminals, backed by the bundled pywinpty runtime."""
 import base64
 import os
+from pathlib import Path
 import subprocess
+import sys
 import threading
 import time
 import uuid
@@ -13,9 +15,9 @@ class WindowsTerminal:
         from winpty import PtyProcess
         from winpty.enums import Backend
         self.shell = resolve_shell(shell)
-        argv = [self.shell]
-        if self.shell.lower().endswith(('powershell.exe', 'pwsh.exe')):
-            argv.extend(['-NoLogo', '-NoProfile'])
+        argv = ([sys.executable, '--worker', 'terminal-shell', self.shell]
+                if getattr(sys, 'frozen', False) else
+                [sys.executable, str(Path(__file__).with_name('windows_shell.py')), self.shell])
         env = {k: v for k, v in os.environ.items() if k.upper() in
                ('PATH', 'SYSTEMROOT', 'WINDIR', 'TEMP', 'TMP', 'COMSPEC', 'PATHEXT',
                 'USERPROFILE', 'APPDATA', 'LOCALAPPDATA')}

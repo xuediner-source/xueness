@@ -14,7 +14,8 @@ def main():
             faulthandler.dump_traceback_later(3, repeat=True)
         module = {'workflow': 'xueness.bundled_plugins.workflows.workflow_worker',
                   'terminal': 'xueness.bundled_plugins.terminal.terminal_worker',
-                  'terminal-interrupt': 'xueness.bundled_plugins.terminal.windows_interrupt'}.get(sys.argv[2])
+                  'terminal-interrupt': 'xueness.bundled_plugins.terminal.windows_interrupt',
+                  'terminal-shell': 'xueness.bundled_plugins.terminal.windows_shell'}.get(sys.argv[2])
         if module is None:
             raise SystemExit('unknown worker')
         sys.argv = [module, *sys.argv[3:]]
