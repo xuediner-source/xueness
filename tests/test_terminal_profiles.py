@@ -126,23 +126,25 @@ class TerminalProfileTests(unittest.TestCase):
         if os.name == 'nt':
             shell_name = Path(selected).name.casefold()
             if shell_name == 'cmd.exe':
-                term.write('set ready=READY & call echo PROFILE_%%ready%%\r\n')
+                term.write('set ready=READY & call echo PROFILE_%%ready%%\r')
                 wait_for('PROFILE_READY')
-                term.write('echo PROFILE_SIZE_BEGIN & mode con & echo PROFILE_SIZE_END\r\n')
+                term.write('echo PROFILE_SIZE_BEGIN & mode con & echo PROFILE_SIZE_END\r')
                 output = wait_for('PROFILE_SIZE_END')
                 size_report = output.split('PROFILE_SIZE_BEGIN', 1)[-1].split('PROFILE_SIZE_END', 1)[0]
                 dimensions = re.findall(r'\b\d+\b', size_report)
                 self.assertIn('30', dimensions)
                 self.assertIn('90', dimensions)
-                running = 'set status=RUNNING & call echo PROFILE_%%status%% & ping -n 31 127.0.0.1 >NUL\r\n'
-                after_interrupt = 'set suffix=INTERRUPT & call echo AFTER_%%suffix%%\r\n'
+                running = 'set status=RUNNING & call echo PROFILE_%%status%% & ping -n 31 127.0.0.1 >NUL\r'
+                after_interrupt = 'set suffix=INTERRUPT & call echo AFTER_%%suffix%%\r'
             else:
-                term.write("$r='PROFILE'; Write-Output ($r+'_READY')\r\n")
+                # xterm sends CR for Enter. CRLF also sends a second raw key to
+                # PSReadLine and can leave the following line in continuation mode.
+                term.write("$r='PROFILE'; Write-Output ($r+'_READY')\r")
                 wait_for('PROFILE_READY')
-                term.write('Write-Output "SIZE=$($Host.UI.RawUI.WindowSize.Height)x$($Host.UI.RawUI.WindowSize.Width)"\r\n')
+                term.write('Write-Output "SIZE=$($Host.UI.RawUI.WindowSize.Height)x$($Host.UI.RawUI.WindowSize.Width)"\r')
                 wait_for('SIZE=30x90')
-                running = "$r='PROFILE'; Write-Output ($r+'_RUNNING'); Start-Sleep -Seconds 30\r\n"
-                after_interrupt = "$r='AFTER'; Write-Output ($r+'_INTERRUPT')\r\n"
+                running = "$r='PROFILE'; Write-Output ($r+'_RUNNING'); Start-Sleep -Seconds 30\r"
+                after_interrupt = "$r='AFTER'; Write-Output ($r+'_INTERRUPT')\r"
         else:
             term.write("printf 'PROFILE_READY=%s\\n' \"$0\"; stty size\n")
             wait_for(f'PROFILE_READY={selected}')
