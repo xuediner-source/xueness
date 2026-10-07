@@ -202,7 +202,7 @@ class TerminalProfileTests(unittest.TestCase):
             if shell_name == 'cmd.exe':
                 term.write('set ready=READY & call echo PROFILE_%%ready%%\r')
                 wait_for('PROFILE_READY')
-                term.write('set size=SIZE & call echo PROFILE_%%size%%_BEGIN & mode con & call echo PROFILE_%%size%%_END\r')
+                term.write('set "size=SIZE" & call echo PROFILE_%%size%%_BEGIN & mode con & call echo PROFILE_%%size%%_END\r')
                 output = wait_for('PROFILE_SIZE_END')
                 size_report = output.split('PROFILE_SIZE_BEGIN', 1)[-1].split('PROFILE_SIZE_END', 1)[0]
                 dimensions = re.findall(r'\b\d+\b', size_report)
