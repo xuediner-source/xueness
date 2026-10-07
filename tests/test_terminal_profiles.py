@@ -23,7 +23,6 @@ class WindowsTerminalCloseTests(unittest.TestCase):
         term.lock, term.close_lock = threading.RLock(), threading.Lock()
         term.closed, term.disposed = False, False
         term.write_lock = threading.Lock()
-        term.win32_input, term.input_mode_tail = False, ''
         return term
 
     def test_successful_and_repeated_close_disposes_once(self):
@@ -72,35 +71,44 @@ class WindowsTerminalCloseTests(unittest.TestCase):
         fallback.assert_not_called()
         self.assertTrue(term.disposed)
 
-    def test_ctrl_c_tracks_split_win32_mode_and_sends_paired_modifier_events(self):
-        proc = Mock()
+    def test_ctrl_c_signals_only_the_owned_live_console(self):
+        proc = Mock(pid=4312)
         term = self.terminal(proc)
-        term._observe_input_mode('\x1b[?90')
-        self.assertFalse(term.win32_input)
-        term._observe_input_mode('01h')
-        term.write('\x03')
-        sent = proc.write.call_args.args[0]
-        self.assertIn('\x1b[67;46;3;1;8;1_', sent)
-        self.assertTrue(sent.endswith('\x1b[17;29;0;0;0;1_'))
-
-    def test_legacy_ctrl_c_and_regular_input_are_preserved(self):
-        proc = Mock()
-        term = self.terminal(proc)
-        term.write('\x03')
+        with patch('xueness.bundled_plugins.terminal.windows_interrupt.interrupt') as signal:
+            term.write('echo hello\r')
+            signal.assert_not_called()
+            term.write('\x03')
         proc.write.assert_called_with('\x03')
-        term._observe_input_mode('\x1b[?9001h')
-        term.write('echo hello\r')
-        proc.write.assert_called_with('echo hello\r')
+        signal.assert_called_once_with(4312)
 
-    def test_win32_mode_disable_or_terminal_reset_returns_to_legacy_input(self):
-        term = self.terminal(Mock())
-        for reset in ('\x1b[?9001l', '\x1bc'):
-            term._observe_input_mode('\x1b[?1004;9001h')
-            self.assertTrue(term.win32_input)
-            term._observe_input_mode(reset)
-            self.assertFalse(term.win32_input)
-        term._observe_input_mode('\x1b[?90010h')
-        self.assertFalse(term.win32_input)
+    def test_closed_or_exited_terminal_does_not_launch_an_interrupt_helper(self):
+        proc = Mock()
+        proc.isalive.return_value = False
+        term = self.terminal(proc)
+        with patch('xueness.bundled_plugins.terminal.windows_interrupt.interrupt') as signal:
+            term.write('\x03')
+            term.closed = True
+            with self.assertRaises(ValueError):
+                term.write('\x03')
+        signal.assert_not_called()
+
+    def test_console_helper_is_fixed_isolated_and_reports_failure(self):
+        from xueness.bundled_plugins.terminal.windows_interrupt import interrupt
+        with patch.dict(os.environ, {'SystemRoot': r'C:\Windows'}, clear=True), \
+                patch('xueness.process_runtime.run_external',
+                      side_effect=OSError('attach failed')) as run:
+            with self.assertRaises(OSError):
+                interrupt(4312)
+        args = run.call_args.args[1]
+        source = base64.b64decode(args[-1]).decode('utf-16le')
+        self.assertTrue(source.endswith('[XuenessTerminalInterrupt]::Send(4312)'))
+        self.assertIn('AttachConsole(pid)', source)
+        self.assertIn('GenerateConsoleCtrlEvent(0, 0)', source)
+        self.assertEqual(run.call_args.kwargs['timeout'], 5)
+        self.assertIs(run.call_args.kwargs['check'], True)
+        for invalid in (True, 0, -1, '4312', '4312); bad()', 2**32):
+            with self.subTest(pid=invalid), self.assertRaises(ValueError):
+                interrupt(invalid)
 
 
 class TerminalProfileTests(unittest.TestCase):

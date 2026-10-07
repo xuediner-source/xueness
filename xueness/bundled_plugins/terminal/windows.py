@@ -1,7 +1,6 @@
 """Real Windows ConPTY terminals, backed by the bundled pywinpty runtime."""
 import base64
 import os
-import re
 import subprocess
 import threading
 import time
@@ -28,8 +27,6 @@ class WindowsTerminal:
         self.write_lock = threading.Lock()
         self.close_lock = threading.Lock()
         self.disposed = False
-        self.win32_input = False
-        self.input_mode_tail = ''
         self.buffer, self.offset = bytearray(), 0
         self.touched, self.closed = time.monotonic(), False
         self.reader = threading.Thread(target=self._read, daemon=True)
@@ -45,7 +42,6 @@ class WindowsTerminal:
                     time.sleep(.03)
                     continue
                 with self.lock:
-                    self._observe_input_mode(chunk)
                     self.buffer.extend(chunk.encode('utf-8', 'replace'))
                     excess = max(0, len(self.buffer)-1_000_000)
                     if excess:
@@ -66,29 +62,17 @@ class WindowsTerminal:
                     'data': base64.b64encode(data).decode(), 'cursor': self.offset+start+len(data),
                     'truncated': cursor < self.offset, 'closed': self.closed}
 
-    def _observe_input_mode(self, chunk):
-        """Track ConPTY's requested key protocol across split output chunks."""
-        text = self.input_mode_tail + chunk
-        for match in re.finditer(r'\x1b\[\?([0-9;]{1,48})([hl])|\x1bc', text):
-            if match.group(1) is None:
-                self.win32_input = False
-            elif any(int(p) == 9001 for p in match.group(1).split(';') if p):
-                self.win32_input = match.group(2) == 'h'
-        self.input_mode_tail = text[-64:]
-
     def write(self, text):
         if not isinstance(text, str) or len(text.encode()) > 65536:
             raise ValueError('terminal input too large')
-        with self.write_lock, self.lock:
+        with self.write_lock, self.close_lock, self.lock:
             if self.closed:
                 raise ValueError('terminal is closed')
             self.touched = time.monotonic()
-            if text == '\x03' and self.win32_input:
-                # ConPTY mode 9001 needs KEY_EVENT_RECORD-style input for Ctrl+C.
-                # Keep the modifier down/up events paired so it cannot stay held.
-                text = ('\x1b[17;29;0;1;8;1_\x1b[67;46;3;1;8;1_'
-                        '\x1b[67;46;3;0;8;1_\x1b[17;29;0;0;0;1_')
             self.proc.write(text)
+            if text == '\x03' and self.proc.isalive():
+                from .windows_interrupt import interrupt
+                interrupt(self.proc.pid)
 
     def resize(self, cols, rows):
         if type(cols) is not int or type(rows) is not int or not 10 <= cols <= 500 or not 2 <= rows <= 200:

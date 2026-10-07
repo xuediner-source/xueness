@@ -28,7 +28,8 @@
     "shells",
     "terminal_worker",
     "terminals",
-    "windows"
+    "windows",
+    "windows_interrupt"
   ],
   "features": [
     {
