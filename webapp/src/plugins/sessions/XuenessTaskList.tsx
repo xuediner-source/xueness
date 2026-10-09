@@ -272,7 +272,7 @@ export function XuenessTaskList({
     if(next!==null)items[next]?.focus();
   };
   return <div className="xn-task-list">
-    <div className="xn-task-list__toolbar">
+    <div className="xn-task-list__toolbar" data-section-label={tr('任务')}>
       <div className="xn-task-list__segments" role="group" aria-label={tr('列表分组方式')}>
         <button aria-pressed={view==='groups'} onClick={()=>save({view:'groups'})}><Hash size={12}/>{tr('分组')}</button>
         <button aria-pressed={view==='projects'} onClick={()=>save({view:'projects'})}><Folder size={12}/>{tr('项目')}</button>
