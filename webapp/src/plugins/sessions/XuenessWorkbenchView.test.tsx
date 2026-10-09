@@ -1,4 +1,5 @@
 import React from "react";
+import { displayBinding } from "../../xuenessShortcutDisplay";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { renderToStaticMarkup } from "react-dom/server";
@@ -268,6 +269,15 @@ test("Composer: hero workspace header stays in the input surface and keeps keybo
   assert.match(html, /Enter 发送 · Shift\+Enter 换行/);
   assert.equal((html.match(/aria-label="添加上下文或能力"/g) ?? []).length, 1);
   assert.doesNotMatch(html, /aria-label="(?:\/|@|\$)"/);
+});
+
+test("Composer: Mod+Enter keyboard help uses the host platform label instead of a mixed ⌘/Ctrl hint", () => {
+  const html = renderToStaticMarkup(<Composer variant="hero" sendShortcut="mod-enter" onSend={() => {}} />);
+  assert.doesNotMatch(html, /⌘\/Ctrl/);
+  const expected = displayBinding("Mod+Enter");
+  assert.ok(html.includes(`${expected} 发送 · Enter 换行`), html);
+  assert.equal(displayBinding("Mod+Enter", "MacIntel"), "⌘Enter");
+  assert.equal(displayBinding("Mod+Enter", "Win32"), "Ctrl+Enter");
 });
 
 test("heroGreeting follows the original six local-time intervals", () => {

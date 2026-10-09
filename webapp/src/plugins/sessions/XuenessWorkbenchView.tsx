@@ -12,6 +12,7 @@ import type { ComposerCapability, ComposerInput } from "../../xuenessComposer";
 import { ComposerCapabilityMenu, MAX_SELECTED_COMPOSER_CAPABILITIES, capabilityLabel, matchesComposerSearch } from './ComposerCapabilityMenu';
 import { Search, Target, Workflow, Blocks } from 'lucide-react';
 import { completionPresentation } from './completionPresentation';
+import { displayBinding } from '../../xuenessShortcutDisplay';
 
 export type TaskListProps = {
   sessions: SessionSummary[];
@@ -1238,8 +1239,8 @@ export function Composer({
           {(controls || footer) && <div className="xn-composer__settings" role="group" aria-label={tr("运行选项")}>{controls ?? footer}</div>}
           {!minimal && <span id={`${suggestionListId}-keyboard-help`} className="xn-composer__keyboard-help">
             {queueWhenRunning && running
-              ? sendShortcut === "mod-enter" ? tr("⌘/Ctrl+Enter 排队 · Enter 换行") : tr("Enter 排队 · Shift+Enter 换行")
-              : sendShortcut === "mod-enter" ? tr("⌘/Ctrl+Enter 发送 · Enter 换行") : tr("Enter 发送 · Shift+Enter 换行")}
+              ? sendShortcut === "mod-enter" ? tf("{0} 排队 · Enter 换行", [displayBinding("Mod+Enter")]) : tr("Enter 排队 · Shift+Enter 换行")
+              : sendShortcut === "mod-enter" ? tf("{0} 发送 · Enter 换行", [displayBinding("Mod+Enter")]) : tr("Enter 发送 · Shift+Enter 换行")}
           </span>}
         </div>
         <div className="xn-composer__submit-actions">

@@ -1211,7 +1211,7 @@ Object.assign(messages, {
 });
 
 Object.assign(messages, {
-  "⌘/Ctrl+Enter 发送 · Enter 换行": "⌘/Ctrl+Enter to send · Enter for a new line",
+  "{0} 发送 · Enter 换行": "{0} to send · Enter for a new line",
   "探索工作区": "Explore workspace", "终端操作": "Terminal operations", "文件修改": "File changes", "{0} 项失败": "{0} failed",
 });
 
@@ -1452,7 +1452,7 @@ Object.assign(messages, {
   "交付检查": "Delivery checks",
   "继续中…": "Continuing…",
   "Enter 排队 · Shift+Enter 换行": "Enter to queue · Shift+Enter for a new line",
-  "⌘/Ctrl+Enter 排队 · Enter 换行": "⌘/Ctrl+Enter to queue · Enter for a new line",
+  "{0} 排队 · Enter 换行": "{0} to queue · Enter for a new line",
   "受管理浏览器资料状态": "Managed browser profile status",
   "移除受管理浏览器的缓存；不会影响个人 Chrome 资料。": "Remove cached data from the managed browser profile. Personal Chrome data is not affected.",
   "移除缓存和当前服务的受管理浏览器资料，不会更改个人 Chrome 资料。此操作无法撤销。": "Remove the cache and this service's managed browser data. Personal Chrome data will not change. This action cannot be undone.",
@@ -1886,7 +1886,6 @@ Object.assign(messages, {
   "消息输入框": "Message input field",
   "输入消息": "Enter a message",
   "向 Xueness 提问": "Ask Xueness",
-  "⌘/Ctrl+Enter 发送": "⌘/Ctrl+Enter to send",
   "Esc 中断": "Esc to interrupt",
   "排队追加": "Append to the queue",
   "可排队": "Can queue",
