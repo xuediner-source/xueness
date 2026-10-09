@@ -23,7 +23,8 @@ for (const [file, source] of sources) for (const match of source.matchAll(/var\(
 }
 const tokens = readFileSync(resolve(src, 'styles/tokens.css'), 'utf8');
 const blocks = {};
-for (const selector of [':root', '.dark']) {
+const tokenSelectors = [':root', '.dark', ':root[data-xn-palette="claude"]', '.dark[data-xn-palette="claude"]'];
+for (const selector of tokenSelectors) {
   const escaped = selector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   const matches = [...tokens.matchAll(new RegExp(`${escaped}\\s*\\{([^}]+)\\}`, 'g'))];
   if (matches.length !== 1) errors.push(`tokens.css: expected one ${selector} token block, got ${matches.length}`);
@@ -34,9 +35,15 @@ function luminance(hex) {
   const channels = [1, 3, 5].map(i => parseInt(hex.slice(i, i + 2), 16) / 255).map(c => c <= .04045 ? c / 12.92 : ((c + .055) / 1.055) ** 2.4);
   return channels[0] * .2126 + channels[1] * .7152 + channels[2] * .0722;
 }
+// Resolved themes: default light/dark plus optional Claude 风格 light/dark.
+const themes = {
+  'default-light': { ...blocks[':root'] },
+  'default-dark': { ...blocks[':root'], ...blocks['.dark'] },
+  'claude-light': { ...blocks[':root'], ...blocks[':root[data-xn-palette="claude"]'] },
+  'claude-dark': { ...blocks[':root'], ...blocks['.dark'], ...blocks['.dark[data-xn-palette="claude"]'] },
+};
 let minimum = Infinity;
-for (const [theme, overrides] of Object.entries(blocks)) {
-  const values = { ...blocks[':root'], ...overrides };
+for (const [theme, values] of Object.entries(themes)) {
   for (const fg of ['--fg', '--fg-subtle', '--fg-muted']) for (const bg of ['--bg', '--bg-subtle', '--bg-card', '--bg-window', '--bg-sidebar', '--bg-panel', '--bg-input', '--bg-popover', '--bg-active']) {
     // bg-active is a transparent overlay in light mode; all readable surfaces are checked separately.
     if (!values[bg]?.startsWith('#')) continue;
@@ -50,8 +57,7 @@ for (const [theme, overrides] of Object.entries(blocks)) {
 }
 // Status text sits on its own tint and on cards. The single accent is used for links, active labels and the send action, so it
 // must read as text on every page surface and carry its own foreground.
-for (const [theme, overrides] of Object.entries(blocks)) {
-  const values = { ...blocks[':root'], ...overrides };
+for (const [theme, values] of Object.entries(themes)) {
   const pairs = [['--accent-brand', '--bg'], ['--accent-brand', '--bg-card'], ['--accent-brand', '--bg-panel'], ['--accent-brand-fg', '--accent-brand'],
     ['--ok-fg', '--ok-bg'], ['--warn-fg', '--warn-bg'], ['--error-fg', '--error-bg'], ['--info-fg', '--info-bg'],
     ['--ok-fg', '--bg-card'], ['--warn-fg', '--bg-card'], ['--error-fg', '--bg-card'], ['--info-fg', '--bg-card']];
@@ -65,4 +71,4 @@ for (const [theme, overrides] of Object.entries(blocks)) {
   }
 }
 if (errors.length) { console.error([...new Set(errors)].join('\n')); process.exitCode = 1; }
-else console.log(`PASS: theme variables resolve; muted/subtle/body/accent/status text contrast >= ${minimum.toFixed(2)}:1 on checked surfaces.`);
+else console.log(`PASS: theme variables resolve; muted/subtle/body/accent/status text contrast >= ${minimum.toFixed(2)}:1 on checked surfaces (default + Claude 风格).`);

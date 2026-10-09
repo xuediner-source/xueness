@@ -74,7 +74,7 @@ try {
       return selectors.map(selector => {
         const node = document.querySelector(selector); if (!node) return { selector, absent: true };
         const style = getComputedStyle(node);
-        return { selector, display: node.classList.contains('xn-hero__greeting'), fontFamily: style.fontFamily, fontSize: style.fontSize, fontWeight: style.fontWeight, fontToken: style.getPropertyValue('--font-sans').trim(), serifToken: style.getPropertyValue('--font-serif').trim() };
+        return { selector, fontFamily: style.fontFamily, fontSize: style.fontSize, fontWeight: style.fontWeight, fontToken: style.getPropertyValue('--font-sans').trim(), serifToken: style.getPropertyValue('--font-serif').trim() };
       });
     });
     const cdp = await context.newCDPSession(page);
@@ -86,14 +86,9 @@ try {
       actualFonts.push({ selector, fonts: nodeId ? (await cdp.send('CSS.getPlatformFontsForNode', { nodeId })).fonts : [] });
     }
     if (!process.env.XUENESS_WINDOWS_BASELINE) {
+      // 默认配色下问候语也是系统无衬线；Claude 风格才启用 --font-serif。令牌本身仍须保留中文回退。
+      assert.ok(fonts.some(font => font.serifToken && font.serifToken.includes('Microsoft YaHei UI') && !/SimSun/.test(font.serifToken)), 'font-serif CJK fallback');
       for (const font of fonts.filter(font => !font.absent)) {
-        // 首页问候语是唯一使用展示衬线令牌的位置；其中文必须回退到雅黑而不是宋体。
-        if (font.display) {
-          const normalize = value => value.replace(/["']/g, '').replace(/\s+/g, ' ');
-          assert.equal(normalize(font.fontFamily), normalize(font.serifToken), `Greeting must use --font-serif: ${JSON.stringify(font)}`);
-          assert.ok(font.fontFamily.includes('"Microsoft YaHei UI"') && !/SimSun/.test(font.fontFamily), `Greeting CJK fallback: ${JSON.stringify(font)}`);
-          continue;
-        }
         assert.ok(font.fontFamily.startsWith('system-ui'), `Inconsistent font: ${JSON.stringify(font)}`);
       }
     }
