@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { t as tr, tf, useLocale } from "./i18n";
 import type { XuenessPlugin, XuenessPluginFeature } from "./xuenessApi";
 import { XUENESS_PLUGIN_REGISTRY } from "./xuenessPluginRegistry";
@@ -116,15 +116,21 @@ export function XuenessPluginManager({ plugins, loading, error, onRefresh, onTog
     setDetailsOverrides({});
   };
 
+  const mountedRef = useRef(true);
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => { mountedRef.current = false; };
+  }, []);
+
   const toggle = async (plugin: XuenessPlugin) => {
     setBusyId(plugin.id);
     setActionError("");
     try {
       await onToggle(plugin.id, !plugin.enabled);
     } catch (reason) {
-      setActionError(reason instanceof Error ? reason.message : String(reason));
+      if (mountedRef.current) setActionError(reason instanceof Error ? reason.message : String(reason));
     } finally {
-      setBusyId(null);
+      if (mountedRef.current) setBusyId(null);
     }
   };
 

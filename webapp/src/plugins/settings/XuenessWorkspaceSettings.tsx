@@ -135,18 +135,28 @@ export function XuenessWorkspaceSettings({
     return () => { live = false; };
   }, []);
 
+  const mountedRef = useRef(true);
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => { mountedRef.current = false; };
+  }, []);
+
   const selectNative = async () => {
     if (busy) return;
     setBusy(true); setError(""); setNotice("");
     try {
       const result = await chooseNativeWorkspace(candidate || currentRoot);
+      if (!mountedRef.current) return;
       if (!result.cancelled) {
         setRootInput(result.root);
         await refresh(result.root);
-        if (picking) onChoose?.(result.root, false);
+        if (picking && mountedRef.current) onChoose?.(result.root, false);
       }
-    } catch (reason) { setError(errorText(reason)); }
-    finally { setBusy(false); }
+    } catch (reason) {
+      if (mountedRef.current) setError(errorText(reason));
+    } finally {
+      if (mountedRef.current) setBusy(false);
+    }
   };
 
   const candidate = rootInput.trim();

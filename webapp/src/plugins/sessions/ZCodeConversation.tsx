@@ -77,15 +77,24 @@ function CopyAction({ text }: { text: string }) {
   const [copied, setCopied] = React.useState(false);
   const [error, setError] = React.useState(false);
   const timer = React.useRef<ReturnType<typeof setTimeout> | null>(null);
-  React.useEffect(() => () => { if (timer.current) clearTimeout(timer.current); }, []);
+  const mounted = React.useRef(true);
+  React.useEffect(() => () => {
+    mounted.current = false;
+    if (timer.current) clearTimeout(timer.current);
+  }, []);
   return <><button type="button" className="xn-zc-action" aria-label={tr('复制')} title={tr('复制')}
     onClick={async () => {
       try {
         await navigator.clipboard.writeText(text);
+        if (!mounted.current) return;
         setError(false); setCopied(true);
         if (timer.current) clearTimeout(timer.current);
-        timer.current = setTimeout(() => setCopied(false), 1500);
-      } catch { setError(true); }
+        timer.current = setTimeout(() => {
+          if (mounted.current) setCopied(false);
+        }, 1500);
+      } catch {
+        if (mounted.current) setError(true);
+      }
     }}>{copied ? <Check size={14} /> : <Copy size={14} />}</button>
     {error && <span role="alert" className="xn-zc-action-error">{tr('复制失败')}</span>}</>;
 }
@@ -238,6 +247,8 @@ function FeedbackActions({ row, onFeedback }: { row: Assistant; onFeedback: NonN
   const [feedback, setFeedback] = React.useState(row.feedback);
   const [busy, setBusy] = React.useState(false);
   const [error, setError] = React.useState('');
+  const mounted = React.useRef(true);
+  React.useEffect(() => () => { mounted.current = false; }, []);
   React.useEffect(() => setFeedback(row.feedback), [row.feedback]);
   const submit = async (value: 'like' | 'dislike') => {
     if (busy) return;
@@ -245,8 +256,14 @@ function FeedbackActions({ row, onFeedback }: { row: Assistant; onFeedback: NonN
     const next = feedback === value ? undefined : value;
     setFeedback(next); setBusy(true); setError('');
     try { await onFeedback(row, next ?? null); }
-    catch (reason) { setFeedback(previous); setError(reason instanceof Error ? reason.message : tr('反馈保存失败')); }
-    finally { setBusy(false); }
+    catch (reason) {
+      if (mounted.current) {
+        setFeedback(previous);
+        setError(reason instanceof Error ? reason.message : tr('反馈保存失败'));
+      }
+    } finally {
+      if (mounted.current) setBusy(false);
+    }
   };
   return <>{(['like', 'dislike'] as const).map(value => <button key={value} type="button" className="xn-zc-action" disabled={busy}
     aria-label={tr(value === 'like' ? '有帮助' : '没有帮助')} title={tr(value === 'like' ? '有帮助' : '没有帮助')}

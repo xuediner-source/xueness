@@ -292,16 +292,24 @@ export function XuenessMarketplace({ onInstalled }: { onInstalled?: () => void }
   busyRef.current = busy;
   const dialogTitleId = useId();
   const dialogDescriptionId = useId();
+  const mountedRef = useRef(true);
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => { mountedRef.current = false; };
+  }, []);
 
   const refresh = async () => {
     setLoading(true);
     setError("");
     try {
-      setItems((await listMarketplace()).marketplace);
+      const res = await listMarketplace();
+      if (!mountedRef.current) return;
+      setItems(res.marketplace);
     } catch (e) {
-      setError(errorText(e));
+      if (mountedRef.current) setError(errorText(e));
     } finally {
-      setLoading(false);
+      if (mountedRef.current) setLoading(false);
     }
   };
 
@@ -357,22 +365,24 @@ export function XuenessMarketplace({ onInstalled }: { onInstalled?: () => void }
     setError("");
     try {
       const result = await installMarketplaceItem(item.id, item.sha256, Boolean(item.installedVersion));
+      if (!mountedRef.current) return;
       setItems(result.marketplace);
       setDetail(current => current?.id === item.id ? result.marketplace.find(candidate => candidate.id === item.id) ?? current : current);
       setConfirm(null);
       onInstalled?.();
     } catch (e) {
+      if (!mountedRef.current) return;
       const message = errorText(e);
       setError(message);
       setConfirm(null);
       try {
         const refreshed = await listMarketplace();
-        setItems(refreshed.marketplace);
+        if (mountedRef.current) setItems(refreshed.marketplace);
       } catch {
         // Preserve the action error when the best-effort catalog refresh also fails.
       }
     } finally {
-      setBusy("");
+      if (mountedRef.current) setBusy("");
     }
   };
 

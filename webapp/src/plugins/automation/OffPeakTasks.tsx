@@ -80,10 +80,17 @@ export function OffPeakTasks({ enabled = false }: { enabled?: boolean }): React.
   const [busy, setBusy] = useState(false);
   const [loading, setLoading] = useState(true);
   const seen = useRef<string[] | null>(null);
+  const mountedRef = useRef(true);
 
-  const load = async () => {
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => { mountedRef.current = false; };
+  }, []);
+
+  const load = async (signal?: AbortSignal) => {
     try {
-      const payload = await listOffPeakTasks();
+      const payload = await listOffPeakTasks(signal);
+      if (!mountedRef.current || signal?.aborted) return;
       setRows(payload.tasks);
       setSettings(payload.settings);
       setWindowOpen(payload.windowOpen === true);
@@ -101,17 +108,27 @@ export function OffPeakTasks({ enabled = false }: { enabled?: boolean }): React.
       }
       setError("");
     } catch (cause) {
-      setError(errorText(cause));
+      if (mountedRef.current && !signal?.aborted && !(cause instanceof DOMException && cause.name === 'AbortError')) {
+        setError(errorText(cause));
+      }
     } finally {
-      setLoading(false);
+      if (mountedRef.current && !signal?.aborted) {
+        setLoading(false);
+      }
     }
   };
 
   useEffect(() => {
     if (!enabled) return;
-    void load();
-    const timer = setInterval(() => void load(), POLL_MS);
-    return () => clearInterval(timer);
+    const controller = new AbortController();
+    void load(controller.signal);
+    const timer = setInterval(() => {
+      if (!controller.signal.aborted) void load(controller.signal);
+    }, POLL_MS);
+    return () => {
+      clearInterval(timer);
+      controller.abort();
+    };
   }, [enabled]);
 
   const mutate = async (operation: () => Promise<unknown>) => {
@@ -119,11 +136,12 @@ export function OffPeakTasks({ enabled = false }: { enabled?: boolean }): React.
     setError("");
     try {
       await operation();
+      if (!mountedRef.current) return;
       await load();
     } catch (cause) {
-      setError(errorText(cause));
+      if (mountedRef.current) setError(errorText(cause));
     } finally {
-      setBusy(false);
+      if (mountedRef.current) setBusy(false);
     }
   };
 

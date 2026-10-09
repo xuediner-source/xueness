@@ -70,18 +70,28 @@ export function XuenessAutomationsPanel({
   const [allowReal, setAllowReal] = useState(false);
   const confirmDialogRef = useRef<HTMLElement>(null);
   const confirmCancelRef = useRef<HTMLButtonElement>(null);
+  const mountedRef = useRef(true);
   useModalFocusScope({ open: confirm !== null, dialogRef: confirmDialogRef, initialFocusRef: confirmCancelRef });
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => { mountedRef.current = false; };
+  }, []);
 
   const refresh = async () => {
     setRefreshing(true);
     try {
-      setItems((await listAutomations()).automations);
+      const res = await listAutomations();
+      if (!mountedRef.current) return;
+      setItems(res.automations);
       setError("");
     } catch (cause) {
-      setError(errorMessage(cause));
+      if (mountedRef.current) setError(errorMessage(cause));
     } finally {
-      setLoading(false);
-      setRefreshing(false);
+      if (mountedRef.current) {
+        setLoading(false);
+        setRefreshing(false);
+      }
     }
   };
   useEffect(() => { void refresh(); }, []);
@@ -91,12 +101,14 @@ export function XuenessAutomationsPanel({
     setError("");
     try {
       await operation();
+      if (!mountedRef.current) return;
       await refresh();
+      if (!mountedRef.current) return;
       after?.();
     } catch (cause) {
-      setError(errorMessage(cause));
+      if (mountedRef.current) setError(errorMessage(cause));
     } finally {
-      setBusy(false);
+      if (mountedRef.current) setBusy(false);
     }
   };
 

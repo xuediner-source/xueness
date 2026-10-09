@@ -15,19 +15,37 @@ export function XuenessMemoryEditor({ workspaceRoot, initialTrack = "memory", on
   const [stale, setStale] = useState(false);
   const dialogRef = useRef<HTMLElement>(null);
   const saveButtonRef = useRef<HTMLButtonElement>(null);
+  const mountedRef = useRef(true);
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => { mountedRef.current = false; };
+  }, []);
   useModalFocusScope({ open: confirm, dialogRef, returnFocusTo: saveButtonRef.current });
   const reload = async () => {
     setBusy(true); setError(""); setNotice(""); setStale(false);
-    try { setDocument(await get<MemoryDocument>(`/api/memory/tracks/${name}${workspaceRoot ? `?root=${encodeURIComponent(workspaceRoot)}` : ""}`)); }
-    catch (e) { setError(e instanceof Error ? e.message : String(e)); }
-    finally { setBusy(false); }
+    try {
+      const doc = await get<MemoryDocument>(`/api/memory/tracks/${name}${workspaceRoot ? `?root=${encodeURIComponent(workspaceRoot)}` : ""}`);
+      if (!mountedRef.current) return;
+      setDocument(doc);
+    } catch (e) {
+      if (mountedRef.current) setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      if (mountedRef.current) setBusy(false);
+    }
   };
   const save = async () => {
     if (!document) return;
     setBusy(true); setError(""); setNotice(""); setConfirm(false);
-    try { setDocument(await post<MemoryDocument>(`/api/memory/tracks/${document.name}${workspaceRoot ? `?root=${encodeURIComponent(workspaceRoot)}` : ""}`, { confirmed: true, content: document.content, digest: document.digest })); setNotice(tr("记忆内容已保存。")); setStale(false); onSaved?.(); }
-    catch (e) { const message = e instanceof Error ? e.message : String(e); setError(message); if (message.includes("memory changed")) setStale(true); }
-    finally { setBusy(false); }
+    try {
+      const doc = await post<MemoryDocument>(`/api/memory/tracks/${document.name}${workspaceRoot ? `?root=${encodeURIComponent(workspaceRoot)}` : ""}`, { confirmed: true, content: document.content, digest: document.digest });
+      if (!mountedRef.current) return;
+      setDocument(doc); setNotice(tr("记忆内容已保存。")); setStale(false); onSaved?.();
+    } catch (e) {
+      if (!mountedRef.current) return;
+      const message = e instanceof Error ? e.message : String(e); setError(message); if (message.includes("memory changed")) setStale(true);
+    } finally {
+      if (mountedRef.current) setBusy(false);
+    }
   };
   return <section className="xn-memory-editor" data-testid="memory-editor">
     <header><div><h3>{tr("编辑记忆轨道")}</h3><p>{tr("内容只会在你点击加载后读取；保存使用版本摘要检测并发更改。")}</p></div></header>

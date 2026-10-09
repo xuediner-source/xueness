@@ -357,16 +357,21 @@ function CopyFeedbackAction({
 }): React.JSX.Element {
   const [state, setState] = useState<"idle" | "copied" | "failed">("idle");
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const mountedRef = useRef(true);
 
   useEffect(() => () => {
+    mountedRef.current = false;
     if (timerRef.current !== null) clearTimeout(timerRef.current);
   }, []);
 
   const copy = async () => {
     const copied = await copyTextToClipboard(text);
+    if (!mountedRef.current) return;
     setState(copied ? "copied" : "failed");
     if (timerRef.current !== null) clearTimeout(timerRef.current);
-    timerRef.current = setTimeout(() => setState("idle"), copied ? 1200 : 2400);
+    timerRef.current = setTimeout(() => {
+      if (mountedRef.current) setState("idle");
+    }, copied ? 1200 : 2400);
   };
 
   return (

@@ -616,8 +616,10 @@ export async function copyFailureText(
 function FailureCopyTooltip({ text, label }: { text: string; label: React.ReactNode }): React.JSX.Element {
   const [copied, setCopied] = React.useState(false);
   const resetRef = React.useRef<number | null>(null);
+  const mountedRef = React.useRef(true);
   const tooltipId = React.useId();
   React.useEffect(() => () => {
+    mountedRef.current = false;
     if (resetRef.current !== null) window.clearTimeout(resetRef.current);
   }, []);
 
@@ -627,15 +629,16 @@ function FailureCopyTooltip({ text, label }: { text: string; label: React.ReactN
     event.stopPropagation();
     if (!text.trim()) return;
     const markCopied = () => {
+      if (!mountedRef.current) return;
       setCopied(true);
       if (resetRef.current !== null) window.clearTimeout(resetRef.current);
       resetRef.current = window.setTimeout(() => {
-        setCopied(false);
+        if (mountedRef.current) setCopied(false);
         resetRef.current = null;
       }, FAILURE_COPY_RESET_MS);
     };
     void copyFailureText(navigator.clipboard, text).then((copiedSuccessfully) => {
-      if (copiedSuccessfully) markCopied();
+      if (copiedSuccessfully && mountedRef.current) markCopied();
     });
   };
 

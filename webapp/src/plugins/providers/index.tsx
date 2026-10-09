@@ -1000,11 +1000,18 @@ export function ModelManager({ onSelect, runtimeMonitorEnabled = false, focusPro
     ? !draftsEqual(draft, emptyProviderDraft())
     : (currentProvider !== null && !draftsEqual(draft, providerDraftFromSummary(currentProvider)));
 
+  const mountedRef = React.useRef(true);
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => { mountedRef.current = false; };
+  }, []);
+
   const refresh = async (quiet = false) => {
     if (!quiet) setLoading(true);
     setError('');
     try {
       const result = await listProviders();
+      if (!mountedRef.current) return;
       setItems(result.providers);
       if (selectedKey !== ENVIRONMENT_KEY && selectedKey !== NEW_PROVIDER_KEY && !result.providers.some(provider => provider.id === selectedKey)) {
         setSelectedKey(ENVIRONMENT_KEY);
@@ -1014,9 +1021,9 @@ export function ModelManager({ onSelect, runtimeMonitorEnabled = false, focusPro
         if (provider) setDraft(providerDraftFromSummary(provider));
       }
     } catch (reason) {
-      setError(errorText(reason));
+      if (mountedRef.current) setError(errorText(reason));
     } finally {
-      if (!quiet) setLoading(false);
+      if (mountedRef.current && !quiet) setLoading(false);
     }
   };
 
@@ -1082,15 +1089,17 @@ export function ModelManager({ onSelect, runtimeMonitorEnabled = false, focusPro
     setError('');
     try {
       const result = await testProviderConnection(id);
+      if (!mountedRef.current) return;
       setConnectionTest({ id, result });
     } catch (reason) {
+      if (!mountedRef.current) return;
       const message = errorText(reason);
       setConnectionTest({ id, error: message.includes('details suppressed')
         ? tr('请检查 API 地址、密钥和模型名称。')
         : message.includes('real model requests are disabled') ? tr('服务端已关闭模型请求。')
         : message });
     } finally {
-      setTestingProviderId('');
+      if (mountedRef.current) setTestingProviderId('');
     }
   };
 
