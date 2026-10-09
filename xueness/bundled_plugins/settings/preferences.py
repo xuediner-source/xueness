@@ -107,6 +107,7 @@ def validate(section,values):
         raise ValueError('subagentCancelOneEnabled must be boolean')
     if section=='appearance':
         if 'theme' in values and values['theme'] not in ('system','light','dark'): raise ValueError('theme must be system, light or dark')
+        if 'colorPalette' in values and values['colorPalette'] not in ('xueness','claude'): raise ValueError('colorPalette must be xueness or claude')
         if 'fontSize' in values and (type(values['fontSize']) is not int or not 12<=values['fontSize']<=24): raise ValueError('fontSize must be 12..24')
         if 'terminalFontSize' in values and (type(values['terminalFontSize']) is not int or not 10<=values['terminalFontSize']<=24): raise ValueError('terminalFontSize must be 10..24')
         if 'tabSize' in values and values['tabSize'] not in (2,4,8): raise ValueError('tabSize must be 2, 4 or 8')

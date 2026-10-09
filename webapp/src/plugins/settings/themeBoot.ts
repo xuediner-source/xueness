@@ -1,5 +1,8 @@
 /** The same theme resolver runs in the document head and the React settings host. */
 export type ThemePreference = 'light' | 'dark' | 'system';
+/** Optional UI color palette. Default Xueness is neutral; Claude 风格 is warm. */
+export type ColorPalettePreference = 'xueness' | 'claude';
+
 export function normalizeTheme(value: unknown): ThemePreference {
   return value === 'light' || value === 'dark' ? value : 'system';
 }
@@ -7,6 +10,10 @@ export function resolveTheme(value: unknown, systemDark: boolean): 'light' | 'da
   const theme = normalizeTheme(value);
   return theme === 'system' ? (systemDark ? 'dark' : 'light') : theme;
 }
+export function normalizeColorPalette(value: unknown): ColorPalettePreference {
+  return value === 'claude' ? 'claude' : 'xueness';
+}
+
 export function applyDocumentTheme(value: unknown, cache = true): void {
   if (typeof document === 'undefined') return;
   const preference = normalizeTheme(value);
@@ -16,17 +23,39 @@ export function applyDocumentTheme(value: unknown, cache = true): void {
   root.style.colorScheme = theme;
   root.dataset.xnTheme = theme;
   const meta = document.querySelector<HTMLMetaElement>('meta[name="theme-color"]');
-  if (meta) meta.content = theme === 'dark' ? '#161616' : '#fafafa';
+  if (meta) {
+    const palette = normalizeColorPalette(root.dataset.xnPalette);
+    if (palette === 'claude') meta.content = theme === 'dark' ? '#1d1c1a' : '#f2f0e9';
+    else meta.content = theme === 'dark' ? '#161616' : '#fafafa';
+  }
   if (cache) {
     try { localStorage.setItem('xueness.theme', preference); } catch { /* Private browsing: use the in-memory theme. */ }
   }
 }
+
+export function applyDocumentColorPalette(value: unknown, cache = true): void {
+  if (typeof document === 'undefined') return;
+  const palette = normalizeColorPalette(value);
+  const root = document.documentElement;
+  if (palette === 'xueness') delete root.dataset.xnPalette;
+  else root.dataset.xnPalette = palette;
+  // Refresh theme-color meta for the active light/dark + palette pair.
+  applyDocumentTheme(localStorage.getItem('xueness.theme'), false);
+  if (cache) {
+    try { localStorage.setItem('xueness.colorPalette', palette); } catch { /* Private browsing. */ }
+  }
+}
+
 // Compiled into a small classic script in <head>, before styles and React load.
 if (typeof window !== 'undefined' && typeof document !== 'undefined') {
-  let cached: unknown = 'system';
+  let cachedTheme: unknown = 'system';
+  let cachedPalette: unknown = 'xueness';
   try {
-    cached = localStorage.getItem('xueness.theme');
+    cachedTheme = localStorage.getItem('xueness.theme');
+    cachedPalette = localStorage.getItem('xueness.colorPalette');
     document.documentElement.lang = localStorage.getItem('xueness.language') === 'en' ? 'en' : 'zh-CN';
   } catch { /* System appearance remains available. */ }
-  applyDocumentTheme(cached, false);
+  // Palette before theme so theme-color meta sees the active scheme.
+  applyDocumentColorPalette(cachedPalette, false);
+  applyDocumentTheme(cachedTheme, false);
 }
