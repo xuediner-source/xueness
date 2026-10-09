@@ -1423,3 +1423,25 @@ test("formatCommandArgv quotes arguments with spaces so distinct argv never rend
   assert.equal(formatCommandArgv(["C:\\Program Files\\Git\\bin\\git.exe", "--version"]), '"C:\\Program Files\\Git\\bin\\git.exe" --version');
   assert.equal(formatCommandArgv(["echo", 'say "hi"', ""]), 'echo "say \\"hi\\"" ""');
 });
+
+test("loadSession and loadFiles forward AbortSignal to fetch and handle aborts gracefully", async () => {
+  stubFetch((url, init) => {
+    if (init.signal?.aborted) throw new DOMException("aborted", "AbortError");
+    if (url === "/api/sessions/s1") return jsonResponse({ id: "s1", status: "idle", task: "test" });
+    if (url === "/api/sessions/s1/files") return jsonResponse({ files: [], truncated: false });
+    throw new Error(`unexpected url: ${url}`);
+  });
+
+  const controller = new AbortController();
+  const sessionRes = await loadSession("s1", controller.signal);
+  assert.equal(sessionRes.ok, true);
+  assert.equal(callsTo("/api/sessions/s1")[0].init.signal, controller.signal);
+
+  const filesRes = await loadFiles("s1", controller.signal);
+  assert.equal(filesRes.ok, true);
+  assert.equal(callsTo("/api/sessions/s1/files")[0].init.signal, controller.signal);
+
+  controller.abort();
+  const abortedRes = await loadSession("s1", controller.signal);
+  assert.equal(abortedRes.ok, false);
+});

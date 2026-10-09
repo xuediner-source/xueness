@@ -194,3 +194,26 @@ test("a non-JSON 200 response is reported as invalid, not as success", async () 
     globalThis.fetch = original;
   }
 });
+
+test("loadGitStatus forwards AbortSignal to fetch and aborts gracefully", async () => {
+  const original = globalThis.fetch;
+  try {
+    let capturedSignal: AbortSignal | undefined;
+    globalThis.fetch = (async (_input: RequestInfo | URL, init?: RequestInit) => {
+      capturedSignal = init?.signal ?? undefined;
+      if (capturedSignal?.aborted) throw new DOMException("The user aborted a request.", "AbortError");
+      return new Response(JSON.stringify({ branch: "main", entries: [], clean: true }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    }) as typeof fetch;
+
+    const controller = new AbortController();
+    controller.abort();
+    const res = await loadGitStatus(SID, controller.signal);
+    assert.equal(res.ok, false);
+    assert.equal(capturedSignal, controller.signal);
+  } finally {
+    globalThis.fetch = original;
+  }
+});

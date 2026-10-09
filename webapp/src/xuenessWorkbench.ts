@@ -440,13 +440,13 @@ async function requestJson<T>(path: string, init: RequestInit): Promise<T> {
   return payload as T;
 }
 
-function requestGet<T>(path: string): Promise<T> {
-  return requestJson<T>(path, { credentials: "same-origin", cache: "no-store" });
+function requestGet<T>(path: string, signal?: AbortSignal): Promise<T> {
+  return requestJson<T>(path, { credentials: "same-origin", cache: "no-store", ...(signal ? { signal } : {}) });
 }
 
 /** Every mutation fetches a fresh CSRF token first and sends it as a header. */
-async function requestMutation<T>(method: "POST" | "PATCH" | "DELETE", path: string, body: unknown): Promise<T> {
-  const token = await requestGet<{ csrfToken?: string }>("/api/csrf");
+async function requestMutation<T>(method: "POST" | "PATCH" | "DELETE", path: string, body: unknown, signal?: AbortSignal): Promise<T> {
+  const token = await requestGet<{ csrfToken?: string }>("/api/csrf", signal);
   const csrfToken = typeof token?.csrfToken === "string" ? token.csrfToken : "";
   if (!csrfToken) throw new Error("missing csrf token");
   return requestJson<T>(path, {
@@ -454,11 +454,12 @@ async function requestMutation<T>(method: "POST" | "PATCH" | "DELETE", path: str
     credentials: "same-origin",
     headers: { "Content-Type": "application/json", "X-CSRF-Token": csrfToken },
     body: JSON.stringify(body),
+    ...(signal ? { signal } : {}),
   });
 }
 
-function requestPost<T>(path: string, body: unknown): Promise<T> {
-  return requestMutation<T>("POST", path, body);
+function requestPost<T>(path: string, body: unknown, signal?: AbortSignal): Promise<T> {
+  return requestMutation<T>("POST", path, body, signal);
 }
 
 function sessionPath(id: string, suffix = ""): string {
@@ -467,18 +468,18 @@ function sessionPath(id: string, suffix = ""): string {
 
 // -- reads -------------------------------------------------------------------
 
-export async function listSessions(): Promise<Result<SessionSummary[]>> {
+export async function listSessions(signal?: AbortSignal): Promise<Result<SessionSummary[]>> {
   try {
-    const payload = await requestGet<{ sessions?: SessionSummary[] }>("/api/sessions");
+    const payload = await requestGet<{ sessions?: SessionSummary[] }>("/api/sessions", signal);
     return { ok: true, value: payload.sessions ?? [] };
   } catch (error) {
     return { ok: false, error: toErrorMessage(error) };
   }
 }
 
-export async function loadSession(id: string): Promise<Result<WorkbenchSession>> {
+export async function loadSession(id: string, signal?: AbortSignal): Promise<Result<WorkbenchSession>> {
   try {
-    const payload = await requestGet<unknown>(sessionPath(id));
+    const payload = await requestGet<unknown>(sessionPath(id), signal);
     if (!payload || typeof payload !== "object" || Array.isArray(payload)) throw new Error("invalid session response");
     const value = payload as WorkbenchSession;
     const queuedMessages = parseQueuedMessages((payload as Record<string, unknown>).queued_messages);
@@ -491,9 +492,9 @@ export async function loadSession(id: string): Promise<Result<WorkbenchSession>>
 export type ConversationSnapshot = {session: WorkbenchSession; journal: Record<string, unknown>; timeline: TimelinePage};
 
 /** Reject mixed sessions and incomplete snapshots before updating the view. */
-export async function loadConversationSnapshot(id: string): Promise<Result<ConversationSnapshot>> {
+export async function loadConversationSnapshot(id: string, signal?: AbortSignal): Promise<Result<ConversationSnapshot>> {
   try {
-    const payload = await requestGet<unknown>(sessionPath(id, '/conversation'));
+    const payload = await requestGet<unknown>(sessionPath(id, '/conversation'), signal);
     if (!payload || typeof payload !== 'object' || Array.isArray(payload)) throw new Error('invalid conversation snapshot');
     const record = payload as Record<string, unknown>;
     const session = record.session as WorkbenchSession | null;
@@ -512,9 +513,9 @@ export async function loadConversationSnapshot(id: string): Promise<Result<Conve
 }
 
 /** Read opaque, revision-bound safe fork selectors from the server. */
-export async function loadForkBoundaries(sourceId: string): Promise<Result<ForkBoundaryList>> {
+export async function loadForkBoundaries(sourceId: string, signal?: AbortSignal): Promise<Result<ForkBoundaryList>> {
   try {
-    const payload = await requestGet<unknown>(sessionPath(sourceId, "/fork-boundaries"));
+    const payload = await requestGet<unknown>(sessionPath(sourceId, "/fork-boundaries"), signal);
     if (!payload || typeof payload !== "object" || Array.isArray(payload)) throw new Error("invalid fork boundaries response");
     const record = payload as Record<string, unknown>;
     if (record.sourceId !== sourceId || typeof record.revision !== "string" || !record.revision
@@ -594,10 +595,11 @@ export async function loadTimeline(
   id: string,
   cursor = 0,
   limit = 200,
+  signal?: AbortSignal,
 ): Promise<Result<TimelinePage>> {
   try {
     const query = new URLSearchParams({ cursor: String(cursor), limit: String(limit) });
-    const payload = await requestGet<unknown>(`${sessionPath(id, "/events.v1")}?${query.toString()}`);
+    const payload = await requestGet<unknown>(`${sessionPath(id, "/events.v1")}?${query.toString()}`, signal);
     // Bad data counts as failure: the UI must never render an unvalidated envelope.
     const envelope = parseEventsEnvelope(payload);
     if (!envelope) throw new Error("invalid events.v1 envelope");
@@ -617,9 +619,9 @@ export async function loadTimeline(
 }
 
 /** Read every validated event through the head reported by the first page. */
-export async function loadCompleteTimeline(id: string): Promise<Result<TimelinePage>> {
+export async function loadCompleteTimeline(id: string, signal?: AbortSignal): Promise<Result<TimelinePage>> {
   try {
-    const first = await loadTimeline(id, 0, 200);
+    const first = await loadTimeline(id, 0, 200, signal);
     if (!first.ok) return first;
 
     const snapshotHead = first.value.head;
@@ -653,7 +655,7 @@ export async function loadCompleteTimeline(id: string): Promise<Result<TimelineP
       if (!page.hasMore) throw new Error("timeline ended before the snapshot head");
 
       cursor = page.nextCursor;
-      const next = await loadTimeline(id, cursor, 200);
+      const next = await loadTimeline(id, cursor, 200, signal);
       if (!next.ok) return next;
       page = next.value;
     }
@@ -671,19 +673,19 @@ export async function loadCompleteTimeline(id: string): Promise<Result<TimelineP
   }
 }
 
-export async function loadFiles(id: string): Promise<Result<WorkspaceListing>> {
+export async function loadFiles(id: string, signal?: AbortSignal): Promise<Result<WorkspaceListing>> {
   try {
-    const value = await requestGet<WorkspaceListing>(sessionPath(id, "/files"));
+    const value = await requestGet<WorkspaceListing>(sessionPath(id, "/files"), signal);
     return { ok: true, value };
   } catch (error) {
     return { ok: false, error: toErrorMessage(error) };
   }
 }
 
-export async function loadFilePreview(id: string, path: string): Promise<Result<FilePreview>> {
+export async function loadFilePreview(id: string, path: string, signal?: AbortSignal): Promise<Result<FilePreview>> {
   try {
     const query = new URLSearchParams({ path });
-    const value = await requestGet<FilePreview>(`${sessionPath(id, "/file")}?${query.toString()}`);
+    const value = await requestGet<FilePreview>(`${sessionPath(id, "/file")}?${query.toString()}`, signal);
     return { ok: true, value };
   } catch (error) {
     return { ok: false, error: toErrorMessage(error) };
@@ -727,9 +729,9 @@ export async function pinSession(id: string, pinned: boolean): Promise<Result<vo
 }
 
 /** Lists soft-deleted sessions from the archive, newest archive first. */
-export async function listArchivedSessions(): Promise<Result<ArchivedSummary[]>> {
+export async function listArchivedSessions(signal?: AbortSignal): Promise<Result<ArchivedSummary[]>> {
   try {
-    const payload = await requestGet<{ sessions?: ArchivedSummary[] }>("/api/sessions/archived");
+    const payload = await requestGet<{ sessions?: ArchivedSummary[] }>("/api/sessions/archived", signal);
     return { ok: true, value: payload.sessions ?? [] };
   } catch (error) {
     return { ok: false, error: toErrorMessage(error) };
@@ -1172,9 +1174,9 @@ export type FileChangeSet = {
   source: "session-journal";
 };
 
-export async function loadJournal(id: string): Promise<Result<unknown>> {
+export async function loadJournal(id: string, signal?: AbortSignal): Promise<Result<unknown>> {
   try {
-    return { ok: true, value: await requestGet<unknown>(sessionPath(id, "/journal")) };
+    return { ok: true, value: await requestGet<unknown>(sessionPath(id, "/journal"), signal) };
   } catch (error) {
     return { ok: false, error: error instanceof Error ? error.message : String(error) };
   }

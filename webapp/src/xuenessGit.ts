@@ -53,17 +53,18 @@ async function requestJson<T>(path: string, init: RequestInit): Promise<T> {
   return payload as T;
 }
 
-function requestGet<T>(path: string): Promise<T> {
-  return requestJson<T>(path, { credentials: "same-origin", cache: "no-store" });
+function requestGet<T>(path: string, signal?: AbortSignal): Promise<T> {
+  return requestJson<T>(path, { credentials: "same-origin", cache: "no-store", ...(signal ? { signal } : {}) });
 }
 
-async function requestPost<T>(path: string, body: object): Promise<T> {
-  const csrf = await requestGet<{ csrfToken: string }>("/api/csrf");
+async function requestPost<T>(path: string, body: object, signal?: AbortSignal): Promise<T> {
+  const csrf = await requestGet<{ csrfToken: string }>("/api/csrf", signal);
   return requestJson<T>(path, {
     method: "POST",
     credentials: "same-origin",
     headers: { "Content-Type": "application/json", "X-CSRF-Token": csrf.csrfToken },
     body: JSON.stringify(body),
+    ...(signal ? { signal } : {}),
   });
 }
 
@@ -81,36 +82,37 @@ async function gitAction<T>(id: string, verb: string, data: object): Promise<Res
 
 // -- reads --------------------------------------------------------------------
 
-export async function loadGitStatus(id: string): Promise<Result<GitStatus>> {
+export async function loadGitStatus(id: string, signal?: AbortSignal): Promise<Result<GitStatus>> {
   try {
-    const value = await requestGet<GitStatus>(gitPath(id, "status"));
+    const value = await requestGet<GitStatus>(gitPath(id, "status"), signal);
     return { ok: true, value };
   } catch (error) {
     return { ok: false, error: toErrorMessage(error) };
   }
 }
 
-export async function loadGitDiff(id: string): Promise<Result<GitDiff>> {
+export async function loadGitDiff(id: string, signal?: AbortSignal): Promise<Result<GitDiff>> {
   try {
-    const value = await requestGet<GitDiff>(gitPath(id, "diff"));
+    const value = await requestGet<GitDiff>(gitPath(id, "diff"), signal);
     return { ok: true, value };
   } catch (error) {
     return { ok: false, error: toErrorMessage(error) };
   }
 }
 
-export async function loadGitLog(id: string): Promise<Result<GitCommit[]>> {
+export async function loadGitLog(id: string, count?: number, signal?: AbortSignal): Promise<Result<GitCommit[]>> {
   try {
-    const payload = await requestGet<{ commits?: GitCommit[] }>(gitPath(id, "log"));
+    const query = count && count > 0 ? `?count=${encodeURIComponent(count)}` : "";
+    const payload = await requestGet<{ commits?: GitCommit[] }>(`${gitPath(id, "log")}${query}`, signal);
     return { ok: true, value: payload.commits ?? [] };
   } catch (error) {
     return { ok: false, error: toErrorMessage(error) };
   }
 }
 
-export async function loadGitCheckpoints(id: string): Promise<Result<GitCheckpoint[]>> {
+export async function loadGitCheckpoints(id: string, signal?: AbortSignal): Promise<Result<GitCheckpoint[]>> {
   try {
-    const payload = await requestGet<{ checkpoints?: GitCheckpoint[] }>(gitPath(id, "checkpoints"));
+    const payload = await requestGet<{ checkpoints?: GitCheckpoint[] }>(gitPath(id, "checkpoints"), signal);
     return { ok: true, value: payload.checkpoints ?? [] };
   } catch (error) { return { ok: false, error: toErrorMessage(error) }; }
 }

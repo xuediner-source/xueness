@@ -71,8 +71,8 @@ export function setRunChoices(choices: RunChoices): void {
 }
 export function getRunChoices(): RunChoices { return { ...runChoices }; }
 
-async function get<T>(path: string): Promise<T> {
-  const response = await fetch(path, { credentials: "same-origin", cache: "no-store" });
+async function get<T>(path: string, signal?: AbortSignal): Promise<T> {
+  const response = await fetch(path, { credentials: "same-origin", cache: "no-store", ...(signal ? { signal } : {}) });
   return readJsonResponse<T>(response);
 }
 
@@ -82,13 +82,13 @@ async function get<T>(path: string): Promise<T> {
  * 默认全关：任何读取失败都返回 {}，而后端把缺失当作 false。
  * 这些能力会 spawn 子进程或嵌套模型调用，不能因为一次设置读取失败就默认打开。
  */
-export async function readRunOptIns(): Promise<{
+export async function readRunOptIns(signal?: AbortSignal): Promise<{
   allow_mcp?: boolean;
   allow_subagents?: boolean;
   allow_hooks?: boolean;
 }> {
   try {
-    const payload = await get<{ values?: Record<string, unknown> }>("/api/settings/agent");
+    const payload = await get<{ values?: Record<string, unknown> }>("/api/settings/agent", signal);
     const values = payload?.values ?? {};
     return {
       allow_mcp: values.allowMcp === true,

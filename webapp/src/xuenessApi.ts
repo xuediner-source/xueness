@@ -299,16 +299,16 @@ export async function cancelSubagentTask(sessionId: string, taskId: string): Pro
   );
 }
 
-async function patch<T>(path: string, body: object): Promise<T> {
-  return send<T>("PATCH", path, body);
+async function patch<T>(path: string, body: object, signal?: AbortSignal): Promise<T> {
+  return send<T>("PATCH", path, body, signal);
 }
 
-async function put<T>(path: string, body: object): Promise<T> {
-  return send<T>("PUT", path, body);
+async function put<T>(path: string, body: object, signal?: AbortSignal): Promise<T> {
+  return send<T>("PUT", path, body, signal);
 }
 
-export async function del<T>(path: string): Promise<T> {
-  return send<T>("DELETE", path);
+export async function del<T>(path: string, signal?: AbortSignal): Promise<T> {
+  return send<T>("DELETE", path, undefined, signal);
 }
 
 /* ------------------------------------------------------------------ */
@@ -316,22 +316,23 @@ export async function del<T>(path: string): Promise<T> {
 /* ------------------------------------------------------------------ */
 
 /** GET /api/settings → 全部 section 的键值。 */
-export async function getSettings(): Promise<SettingsMap> {
-  const payload = await get<{ settings: SettingsMap }>("/api/settings");
+export async function getSettings(signal?: AbortSignal): Promise<SettingsMap> {
+  const payload = await get<{ settings: SettingsMap }>("/api/settings", signal);
   return payload.settings ?? {};
 }
 
 /** GET /api/settings/<section> */
-export async function getSettingsSection(section: string): Promise<SettingsSection> {
-  return get<SettingsSection>(`/api/settings/${encodeURIComponent(section)}`);
+export async function getSettingsSection(section: string, signal?: AbortSignal): Promise<SettingsSection> {
+  return get<SettingsSection>(`/api/settings/${encodeURIComponent(section)}`, signal);
 }
 
 /** POST /api/settings/<section> */
 export async function saveSettingsSection(
   section: string,
   values: Record<string, unknown>,
+  signal?: AbortSignal,
 ): Promise<SettingsSection> {
-  return post<SettingsSection>(`/api/settings/${encodeURIComponent(section)}`, { values });
+  return post<SettingsSection>(`/api/settings/${encodeURIComponent(section)}`, { values }, signal);
 }
 
 /* ------------------------------------------------------------------ */
@@ -339,8 +340,8 @@ export async function saveSettingsSection(
 /* ------------------------------------------------------------------ */
 
 /** GET /api/resources/<kind> → 按 id 升序的条目 + 用户级作用域能力。 */
-export async function listResources(kind: string): Promise<ResourceList> {
-  const payload = await get<ResourceList>(`/api/resources/${encodeURIComponent(kind)}`);
+export async function listResources(kind: string, signal?: AbortSignal): Promise<ResourceList> {
+  const payload = await get<ResourceList>(`/api/resources/${encodeURIComponent(kind)}`, signal);
   return {
     items: payload.items ?? [],
     capability: payload.capability ?? { userScopeAvailable: true },
@@ -422,8 +423,8 @@ export async function putResource(
 /* ------------------------------------------------------------------ */
 
 /** GET /api/providers —— 只返回 hasKey，绝不含 apiKey。 */
-export async function listProviders(): Promise<{ providers: ProviderSummary[] }> {
-  const payload = await get<{ providers: ProviderSummary[] }>("/api/providers");
+export async function listProviders(signal?: AbortSignal): Promise<{ providers: ProviderSummary[] }> {
+  const payload = await get<{ providers: ProviderSummary[] }>("/api/providers", signal);
   return { providers: payload.providers ?? [] };
 }
 
@@ -599,8 +600,8 @@ export async function setPluginEnabled(id: string, enabled: boolean): Promise<Xu
   return { plugins: payload.plugins };
 }
 
-export async function listMarketplace(): Promise<{ marketplace: MarketplaceItem[] }> {
-  const payload = await get<{ marketplace: MarketplaceItem[] }>("/api/plugins/marketplace");
+export async function listMarketplace(signal?: AbortSignal): Promise<{ marketplace: MarketplaceItem[] }> {
+  const payload = await get<{ marketplace: MarketplaceItem[] }>("/api/plugins/marketplace", signal);
   if (!Array.isArray(payload.marketplace)) throw new Error("Invalid marketplace response");
   return { marketplace: payload.marketplace };
 }
@@ -651,8 +652,8 @@ export async function applyPluginProfile(name: string, dryRun = false): Promise<
   };
 }
 
-export async function listAutomations(): Promise<{ automations: AutomationRecord[] }> {
-  const payload = await get<{ automations: AutomationRecord[] }>("/api/automations");
+export async function listAutomations(signal?: AbortSignal): Promise<{ automations: AutomationRecord[] }> {
+  const payload = await get<{ automations: AutomationRecord[] }>("/api/automations", signal);
   if (!Array.isArray(payload.automations)) throw new Error("Invalid automations response");
   return { automations: payload.automations };
 }
@@ -673,8 +674,8 @@ export async function approveAutomation(id: string, allowReal: boolean): Promise
 }
 
 /* 闲时任务（automation.off_peak）：本地低峰窗口队列，纯数据，不引入可执行配置。 */
-export async function listOffPeakTasks(): Promise<OffPeakOverview> {
-  const payload = await get<OffPeakOverview>("/api/automation/offpeak");
+export async function listOffPeakTasks(signal?: AbortSignal): Promise<OffPeakOverview> {
+  const payload = await get<OffPeakOverview>("/api/automation/offpeak", signal);
   if (!Array.isArray(payload.tasks)) throw new Error("Invalid off-peak queue response");
   return payload;
 }

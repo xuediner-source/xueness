@@ -64,9 +64,10 @@ export type ResultT<T> = Result<T>;
  */
 export async function loadWorkbenchSettings(
   defaults: SettingsMap,
+  signal?: AbortSignal,
 ): Promise<Result<SettingsMap>> {
   try {
-    return { ok: true, value: mergeSettings(await getSettings(), defaults) };
+    return { ok: true, value: mergeSettings(await getSettings(signal), defaults) };
   } catch (error) {
     return { ok: false, error: toErrorMessage(error) };
   }
@@ -77,9 +78,10 @@ export async function loadWorkbenchSettings(
 export async function saveWorkbenchSettings(
   defaults: SettingsMap,
   patch: SettingsMap,
+  signal?: AbortSignal,
 ): Promise<Result<SettingsMap>> {
   try {
-    const existing = await getSettings();
+    const existing = await getSettings(signal);
     const grouped = new Map<string, SettingsMap>();
     for (const [key, value] of Object.entries(patch)) {
       const section = SECTION_OF_KEY[key] ?? "general";
@@ -88,9 +90,9 @@ export async function saveWorkbenchSettings(
     for (const [section, values] of grouped) {
       const stored = existing[section];
       const base = stored && typeof stored === "object" && !Array.isArray(stored) ? stored : {};
-      await saveSettingsSection(section, { ...base, ...values });
+      await saveSettingsSection(section, { ...base, ...values }, signal);
     }
-    const persisted = await getSettings();
+    const persisted = await getSettings(signal);
     const missed = Object.keys(patch).filter(key => {
       const section = persisted[SECTION_OF_KEY[key] ?? "general"] as SettingsMap | undefined;
       return !section || !Object.hasOwn(section, key) || !sameValue(section[key], patch[key]);
