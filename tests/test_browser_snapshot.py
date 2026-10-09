@@ -73,7 +73,7 @@ class BrowserSnapshotTests(unittest.TestCase):
         self.assertTrue(tools["browser_click"].mutating)
         self.assertIn("aria-ref=<ref>", tools["browser_click"].description)
         self.assertIn("aria-ref=<ref>", tools["browser_fill"].description)
-        manifest = json.loads((ROOT / "xueness/bundled_plugins/browser/manifest.json").read_text())
+        manifest = json.loads((ROOT / "xueness/bundled_plugins/browser/manifest.json").read_text(encoding="utf-8"))
         self.assertIn("browser_snapshot", manifest["tools"])
         feature = next(item for item in manifest["features"] if item["id"] == "browser.snapshot")
         self.assertTrue(feature["name"].strip())

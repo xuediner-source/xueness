@@ -142,7 +142,7 @@ class ChatLoopTests(unittest.TestCase):
         code, err, out = self._chat(["帮我写一个文件", "/exit"])
         self.assertEqual(code, 0)
         # The turn was journaled and the fake demo streamed its steps.
-        journal = json.loads(Path(self.state, f"{self.sid}.json").read_text())
+        journal = json.loads(Path(self.state, f"{self.sid}.json").read_text(encoding="utf-8"))
         user_turns = [m for m in journal["messages"] if m.get("role") == "user"]
         self.assertTrue(any("帮我写一个文件" in (m.get("content") or "") for m in user_turns))
         self.assertIn("→ write", err)
@@ -154,22 +154,22 @@ class ChatLoopTests(unittest.TestCase):
     def test_exit_and_empty_lines(self):
         code, err, out = self._chat(["", "  ", "/exit"])
         self.assertEqual(code, 0)
-        journal = json.loads(Path(self.state, f"{self.sid}.json").read_text())
+        journal = json.loads(Path(self.state, f"{self.sid}.json").read_text(encoding="utf-8"))
         user_turns = [m for m in journal["messages"] if m.get("role") == "user"]
         # Only the initial task turn exists; empty lines added nothing.
         self.assertEqual(len(user_turns), 1)
 
     def test_pending_question_consumes_next_line_as_answer(self):
         # Simulate a tool-driven question the way ask_user would leave one.
-        s = json.loads(Path(self.state, f"{self.sid}.json").read_text())
+        s = json.loads(Path(self.state, f"{self.sid}.json").read_text(encoding="utf-8"))
         s["pending_question"] = "要继续部署吗？"
         s["status"] = "awaiting_user"
-        Path(self.state, f"{self.sid}.json").write_text(json.dumps(s, ensure_ascii=False))
+        Path(self.state, f"{self.sid}.json").write_text(json.dumps(s, ensure_ascii=False), encoding="utf-8")
         code, err, _ = self._chat(["好的，继续", "/exit"])
         self.assertEqual(code, 0)
         self.assertIn("问题: 要继续部署吗？", err)
         self.assertIn("已回答", err)
-        journal = json.loads(Path(self.state, f"{self.sid}.json").read_text())
+        journal = json.loads(Path(self.state, f"{self.sid}.json").read_text(encoding="utf-8"))
         self.assertEqual(journal["status"], "completed")
         self.assertIsNone(journal.get("pending_question"))
 
