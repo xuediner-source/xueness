@@ -1359,6 +1359,8 @@ export function WorkbenchHeader({
   }
 
   const title = session.title || session.task || tr("未命名任务");
+  // Project folder name for the Codex 风格 header mark; no visual change in the default palette.
+  const project = session.root?.replace(/[\\/]+$/, "").split(/[\\/]/).pop() || undefined;
   const hasMenuActions = Boolean(onRefresh || onTogglePin || onRename || onDelete || menuItems);
 
   return (
@@ -1366,7 +1368,7 @@ export function WorkbenchHeader({
       aria-label={title}
       className="xn-conv-header"
     >
-      <h2 className="xn-conv-header__title">{title}</h2>
+      <h2 className="xn-conv-header__title" data-project={project}>{title}</h2>
       <div className="xn-conv-header__main">
         <div className="xn-conv-header__spacer" />
         <div className="xn-conv-header__tools">
