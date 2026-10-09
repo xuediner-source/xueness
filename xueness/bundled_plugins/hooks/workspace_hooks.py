@@ -15,8 +15,11 @@ Compat entries are parsed from ZCode's nested ``hooks`` key; a ZCode
 ``command``-type declaration is a shell string the argv-only runner must never
 execute, so it is reported as a diagnostic instead of a row. Links are refused
 at every level (``resources._is_link``) and every resolved path must stay
-inside the workspace, so a redirect cannot move the jail. One broken entry
-costs that entry and produces a structured diagnostic, never an exception.
+inside the workspace, so a redirect cannot move the jail. Containment uses
+the shared host-path comparison: Windows and macOS treat case variants as the
+same path, and Linux does not. A mismatch is still a refusal, and discovery
+still never raises. One broken entry costs that entry and produces a
+structured diagnostic, never an exception.
 
 The whole feature is default-off: ``<state_dir>/workspace-hooks.json`` must
 explicitly hold ``{"enabled": true}``. While it is off nothing under the
@@ -39,6 +42,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from ...resources import _atomic_write_json, _is_link
+from ...write_lock import host_path_contained, host_relative_to
 from .hooks import HOOK_EVENTS
 
 #: One hook row is a plain-data dict; a hook command only ever runs through the
@@ -84,7 +88,7 @@ def diagnostic(code: str, severity: str, message: str, path=None) -> dict:
 
 
 def _contained(child: Path, parent: Path) -> bool:
-    return child == parent or parent in child.parents
+    return host_path_contained(child, parent)
 
 
 def _real(path) -> Path | None:
@@ -406,11 +410,11 @@ def discover(root) -> dict:
                                           "%s must not be a link" % path.name, path))
             continue
         resolved = _real(path)
-        if resolved is None or not _contained(resolved, jail):
+        relative = None if resolved is None else host_relative_to(resolved, jail)
+        if relative is None:
             diagnostics.append(diagnostic("hook_escapes_workspace", "error",
                                           "hook file resolves outside the workspace", path))
             continue
-        relative = resolved.relative_to(jail).as_posix()
         text, failure = _read_text(path)
         if failure:
             diagnostics.append(diagnostic(failure, "error",

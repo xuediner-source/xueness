@@ -9,9 +9,11 @@ won, silently, and the loser's tool result still said ``ok``.
 The lock key is the **resolved absolute path**, so ``a/../notes.md``,
 ``./notes.md`` and a symlink that lands on ``notes.md`` all contend for the same
 lock. Windows and macOS compare that key without case, because those file
-systems do. Linux keeps the case. The key is fixed when the lock is acquired,
-so a later symlink swap cannot drop a different path. Anything coarser
-(per-session, per-run) would not catch the shared file.
+systems do. Linux keeps the case. The same folding is what
+``host_path_contained`` and ``host_relative_to`` use, so command, skill and
+hook jails, and plan-draft paths, agree with these locks. The key is fixed
+when the lock is acquired, so a later symlink swap cannot drop a different
+path. Anything coarser (per-session, per-run) would not catch the shared file.
 
 Scope and limits, stated plainly:
 
@@ -38,6 +40,47 @@ def _fold_host_path(text: str) -> str:
     if sys.platform == "darwin":
         return text.casefold()
     return text
+
+
+def host_relative_to(child, parent):
+    """Return ``child``'s suffix inside ``parent``, or None when it is outside.
+
+    Windows and macOS fold case the same way as write-lock keys. Linux keeps
+    case. ``..`` is collapsed before the comparison, and a sibling such as
+    ``/tmp/workspace-extra`` stays outside ``/tmp/workspace``. A mismatch is a
+    refusal, not a way out of the jail. The suffix keeps ``child``'s own
+    spelling. Bad values return None; this never raises.
+    """
+    try:
+        child_text = os.path.normpath(os.fspath(child))
+        parent_text = os.path.normpath(os.fspath(parent))
+        folded_child = _fold_host_path(child_text)
+        folded_parent = _fold_host_path(parent_text)
+        child_parts = Path(child_text).parts
+        parent_parts = Path(parent_text).parts
+        folded_child_parts = Path(folded_child).parts
+        folded_parent_parts = Path(folded_parent).parts
+        if (len(child_parts) != len(folded_child_parts)
+                or len(parent_parts) != len(folded_parent_parts)):
+            return None
+        folded_child_path = Path(folded_child)
+        folded_parent_path = Path(folded_parent)
+        if folded_child_path == folded_parent_path:
+            return "."
+        folded_child_path.relative_to(folded_parent_path)
+    except (TypeError, ValueError, OSError):
+        return None
+    if len(child_parts) <= len(parent_parts):
+        return None
+    suffix = child_parts[len(parent_parts):]
+    if len(suffix) != len(folded_child_parts) - len(folded_parent_parts):
+        return None
+    return Path(*suffix).as_posix()
+
+
+def host_path_contained(child, parent) -> bool:
+    """True when ``child`` is ``parent`` or a path inside it, per host identity."""
+    return host_relative_to(child, parent) is not None
 
 
 class WriteLocks:

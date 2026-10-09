@@ -3,7 +3,8 @@
 计划模式仍由内核 Gate 执行，本模块只提供 sessions 插件拥有的策略：四种
 权限模式的唯一取值、草稿文件落在状态目录的哪个位置、什么样的写入目标算
 这份草稿、远程执行主体的形状，以及被拒时回传给模型的提示。草稿不在工作区
-内，因此写入它不会改动项目文件。
+内，因此写入它不会改动项目文件。草稿路径与写锁共用主机路径比较：Windows
+与 macOS 忽略大小写，Linux 保持区分。父目录不会命中这份草稿。
 
 ``PERMISSION_MODES`` 是 build/edit/yolo/plan 的单一来源。内核 ``mode``
 仍只有 plan|build，那是另一套更硬的上限，不要并进这个元组。
@@ -16,6 +17,7 @@ import re
 from pathlib import Path
 
 from ...resources import _is_link
+from ... import write_lock
 
 #: 与内核 Gate、HTTP、CLI、app-server 和前端共用的权限模式取值。
 #: ``plan`` 是只读规划模式，唯一的写例外是本会话的计划草稿。
@@ -72,10 +74,11 @@ class DraftPolicy:
         self.path = Path(path)
 
     def matches(self, subject) -> bool:
-        """纯字符串判定：只有绝对路径且规范化后正是这份草稿才算命中。
+        """纯字符串判定：只有绝对路径且按主机路径身份规范化后正是这份草稿才算命中。
 
-        不做 realpath，也不接受相对路径 —— 相对路径属于工作区 jail，让 ``path_in``
-        继续管它。判不中就当普通工作区写入处理，宁可多问一次批准。
+        Windows 与 macOS 忽略大小写，Linux 保持区分。不做 realpath，也不接受相对
+        路径 —— 相对路径属于工作区 jail，让 ``path_in`` 继续管它。判不中就当普通
+        工作区写入处理，宁可多问一次批准。父目录不会命中这份草稿。
         """
         if not isinstance(subject, str) or not subject:
             return False
@@ -95,7 +98,7 @@ class DraftPolicy:
 
 
 def _key(path: Path) -> str:
-    return os.path.normcase(os.path.normpath(str(path)))
+    return write_lock._fold_host_path(os.path.normpath(os.fspath(path)))
 
 
 def draft_policy(state_dir, session_id: str) -> DraftPolicy:

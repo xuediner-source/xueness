@@ -17,7 +17,9 @@ bytes are never read.
 
 Every path is refused when the entry itself is a symlink or Windows reparse
 point, and every resolved path must stay inside the skill root it came from, so
-a redirected directory cannot move the jail somewhere else.
+a redirected directory cannot move the jail somewhere else. Containment uses
+the shared host-path comparison: Windows and macOS treat case variants as the
+same path, and Linux does not. A mismatch is still a refusal.
 """
 from __future__ import annotations
 
@@ -26,6 +28,7 @@ import re
 from pathlib import Path
 
 from ...resources import _is_link
+from ...write_lock import host_path_contained
 
 SKILL_FILE_NAME = "SKILL.md"
 
@@ -57,7 +60,7 @@ def diagnostic(code: str, severity: str, message: str, path=None) -> dict:
 
 
 def _contained(child: Path, parent: Path) -> bool:
-    return child == parent or parent in child.parents
+    return host_path_contained(child, parent)
 
 
 def _real(path) -> Path | None:

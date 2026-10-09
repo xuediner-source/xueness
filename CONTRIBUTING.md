@@ -54,7 +54,7 @@ Xueness 的固定开发规则是：**每项产品功能归属于插件，并在�
 
 桌面产品集成属于 `desktop` 插件。Electron 业务模块在 `desktop/src/`，由 desktop manifest 的 `desktopModules` 精确登记；Python 对应实现位于 `xueness/bundled_plugins/desktop/`，界面位于 `webapp/src/plugins/desktop/`。结构门禁同样检查 Electron 模块归属。
 
-窗口、私有后端连接和插件管理是桌面入口的恢复基础设施，类似 Web HTTP 宿主；禁用 desktop 时它们仍提供其它插件和插件恢复入口，原生目录选择和桌面状态 API 则关闭。不能将其它桌面业务借此放入宿主。跨平台文件锁是已有 lease/写锁基础设施的实现。会话租约在打开后校验：POSIX 用 `O_DIRECTORY|O_NOFOLLOW` 打开锁目录再相对打开锁文件，Windows 在未跟随的目录句柄上相对创建并拒绝 reparse point。Shell、终端、工作流和机器指标的系统差异必须留在各自插件。
+窗口、私有后端连接和插件管理是桌面入口的恢复基础设施，类似 Web HTTP 宿主；禁用 desktop 时它们仍提供其它插件和插件恢复入口，原生目录选择和桌面状态 API 则关闭。不能将其它桌面业务借此放入宿主。跨平台文件锁是已有 lease/写锁基础设施的实现。会话租约在打开后校验：POSIX 用 `O_DIRECTORY|O_NOFOLLOW` 打开锁目录再相对打开锁文件，Windows 在未跟随的目录句柄上相对创建并拒绝 reparse point。路径是否为同一文件，以及命令、技能、钩子是否仍在 jail 内，只走 `write_lock` 的主机路径比较：Windows 与 macOS 忽略大小写，Linux 保持区分。Shell、终端、工作流和机器指标的系统差异必须留在各自插件。
 
 `process_runtime.py` 是进程创建的共享基础设施例外：Windows 冻结后端的 DLL 搜索目录是进程全局状态，多个插件必须共用同一把锁，在创建外部进程时暂时恢复系统搜索路径，创建后立即还原。Windows 子进程的最小环境还需保留固定 allowlist 内的系统、架构、用户目录与 PowerShell 模块路径，使 .NET/PowerShell 能启动；不会追加模型密钥或其它私密环境变量。它不检查或授予业务权限；调用插件仍先执行原有 Gate 与开关检查。不能为不同插件复制互不协调的 DLL 目录修改器。参考 [PyInstaller 外部进程要求](https://pyinstaller.org/en/stable/common-issues-and-pitfalls.html#launching-external-programs-from-the-frozen-application)。
 
