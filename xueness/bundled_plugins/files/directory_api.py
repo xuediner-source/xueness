@@ -68,12 +68,32 @@ def fully_qualified(path: str) -> bool:
     ``isabs`` yet still resolves against the process's current drive, so it is
     not treated as fully qualified here.
     """
-    if not isinstance(path, str) or not path:
+    if not isinstance(path, str) or not path or "\x00" in path:
         return False
     if os.name == 'nt':
         drive, tail = ntpath.splitdrive(path)
         return bool(drive) and ntpath.isabs(path) and tail.startswith(('\\', '/'))
     return posixpath.isabs(path) and not path.startswith("//")
+
+
+def _resolve_roots(roots: tuple[Path, ...]) -> tuple[Path, ...]:
+    """Resolve browse roots, skipping entries the host can no longer open.
+
+    An empty argument still falls back to ``/``, which is what the picker did
+    when the caller configured no fence. When every supplied root fails, raise
+    instead of silently browsing the filesystem root.
+    """
+    if not roots:
+        return (Path("/").resolve(),)
+    resolved: list[Path] = []
+    for root in roots:
+        try:
+            resolved.append(Path(root).resolve())
+        except (OSError, RuntimeError, ValueError):
+            continue
+    if not resolved:
+        raise DirectoryError(UNREADABLE, "", "permitted roots are unreadable")
+    return tuple(dict.fromkeys(resolved))
 
 
 def _fence(candidate: Path, roots: tuple[Path, ...]) -> Path:
@@ -181,7 +201,7 @@ def list_level(
     picker only ever walks directories. The generic file listing opts in, since
     a workspace file tree must show files alongside directories.
     """
-    roots = tuple(root.resolve() for root in roots) or (Path("/").resolve(),)
+    roots = _resolve_roots(tuple(roots))
     # Anchor ``home`` the same way ``/api/system`` does: a narrowed scope must
     # not hand the client a root-outside path it can never list.
     raw_home = Path.home().resolve()
@@ -240,7 +260,7 @@ def list_level(
 
 def create_child(roots: tuple[Path, ...], path: str, name: str) -> str:
     """Create one child directory under an existing parent. Non-recursive."""
-    roots = tuple(root.resolve() for root in roots) or (Path("/").resolve(),)
+    roots = _resolve_roots(tuple(roots))
     if not fully_qualified(path or ""):
         raise DirectoryError(CREATE_FAILED, str(path), f'cannot create under "{path}": not a fully qualified path')
     parent = _fence(Path(path), roots)
@@ -292,17 +312,21 @@ def dispatch(method: str, parts: list, query: dict, data: dict, ctx: dict):
         # Startup roots remain available if workspace preferences are disabled
         # or malformed; no user-selected path is inferred from the request.
         pass
-    list_roots = tuple(dict.fromkeys(Path(root).resolve() for root in list_roots))
-    create_roots = tuple(dict.fromkeys(Path(root).resolve() for root in create_roots))
+    list_roots = tuple(dict.fromkeys(Path(root) for root in list_roots))
+    create_roots = tuple(dict.fromkeys(Path(root) for root in create_roots))
     max_entries = int(ctx.get("max_entries") or DEFAULT_MAX_ENTRIES)
     verb = method.upper() if isinstance(method, str) else ""
 
     if parts == ["api", "system"] and verb == "GET":
+        try:
+            list_roots = _resolve_roots(list_roots)
+        except DirectoryError as exc:
+            return _status_for(exc.code), {"error": exc.code, "message": exc.message}
         home = Path.home().resolve()
         # The picker starts here, so a narrowed scope must move the anchor with
         # it rather than handing the client a path it cannot list.
-        if not any(home.is_relative_to(root.resolve()) for root in list_roots):
-            home = list_roots[0].resolve()
+        if not any(home.is_relative_to(root) for root in list_roots):
+            home = list_roots[0]
         return 200, {"homedir": str(home)}
 
     if parts != ["api", "directory"]:
