@@ -254,14 +254,15 @@
 }
 
 /* Optional Claude 风格 palette: warm ivory / clay accent. Applied only when
- * settings → 外观 → 配色方案 = Claude 风格 (data-xn-palette="claude"). */
+ * settings → 外观 → 配色方案 = Claude 风格 (data-xn-palette="claude").
+ * Colour tokens only: radius, spacing, type, motion and shadow geometry stay
+ * on the shared defaults so switching palettes never changes layout. */
 :root[data-xn-palette="claude"] {
   --bg-window: #f2f0e9;
   --bg-sidebar: #f2f0e9;
   --bg-panel: #fbfaf7;
   --bg-input: #ffffff;
   --bg-popover: #fffefb;
-  --dur-normal: 160ms;
   --bg: #fbfaf7;
   --bg-subtle: #f2f0e9;
   --bg-card: #ffffff;
@@ -304,12 +305,11 @@
   --info-bg: #eef4f8;
   --info-border: #b6d0e2;
   --info-fg: #2c5f86;
+  /* Shadow geometry matches the default palette; only the tint is warm. */
   --shadow-sm: 0 1px 2px 0 rgb(48 40 24 / 0.05);
-  --shadow-md: 0 1px 2px rgb(48 40 24 / 0.04), 0 4px 12px -4px rgb(48 40 24 / 0.10);
-  --shadow-lg: 0 2px 6px rgb(48 40 24 / 0.05), 0 16px 36px -12px rgb(48 40 24 / 0.18);
-  --shadow-composer: 0 1px 2px rgb(48 40 24 / 0.04), 0 6px 24px -10px rgb(48 40 24 / 0.14);
-  --radius-md: 10px;
-  --radius-lg: 14px;
+  --shadow-md: 0 4px 6px -1px rgb(48 40 24 / 0.1), 0 2px 4px -2px rgb(48 40 24 / 0.1);
+  --shadow-lg: 0 10px 15px -3px rgb(48 40 24 / 0.1), 0 4px 6px -4px rgb(48 40 24 / 0.1);
+  --shadow-composer: 0 1px 2px rgb(48 40 24 / 0.05), 0 6px 20px -10px rgb(48 40 24 / 0.12);
   --accent: var(--accent-brand);
   --tool-accent: #b7851f;
   --tool-result-accent: #3b7bab;
@@ -361,10 +361,12 @@
   --info-bg: #1d2a33;
   --info-border: #2f5470;
   --info-fg: #8fc3e8;
-  --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.35);
-  --shadow-md: 0 1px 2px rgb(0 0 0 / 0.3), 0 6px 16px -6px rgb(0 0 0 / 0.45);
-  --shadow-lg: 0 2px 6px rgb(0 0 0 / 0.3), 0 18px 40px -12px rgb(0 0 0 / 0.6);
-  --shadow-composer: 0 1px 2px rgb(0 0 0 / 0.25), 0 8px 28px -12px rgb(0 0 0 / 0.55);
+  /* Same values as the default dark palette (the light Claude block would
+   * otherwise win on specificity); geometry is shared by both palettes. */
+  --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.5);
+  --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.5), 0 2px 4px -2px rgb(0 0 0 / 0.5);
+  --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.6), 0 4px 6px -4px rgb(0 0 0 / 0.5);
+  --shadow-composer: 0 1px 2px rgb(0 0 0 / 0.35), 0 8px 28px -12px rgb(0 0 0 / 0.55);
   --accent: var(--accent-brand);
   --tool-accent: #d9a845;
   --tool-result-accent: #6aa8d6;
