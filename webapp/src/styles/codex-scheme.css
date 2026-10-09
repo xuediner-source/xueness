@@ -722,3 +722,79 @@ html[data-xn-palette="claude"] .xn-shell-layout .xn-error-banner > button { bord
   html[data-xn-palette="claude"] .xn-shell-layout--desktop-titlebar .xn-shell-nav__time { order: 2; }
   html[data-xn-palette="claude"] .xn-shell-layout--desktop-titlebar .xn-shell-nav__leading { order: 3; justify-content: center; width: 14px; }
 }
+
+/* Title bar: back / forward / sidebar toggle as 28px buttons at x=88/122/156
+ * (Windows: from the left edge), no wordmark. With a conversation open the
+ * header joins the title bar row like Codex: project mark at main+8, the title
+ * at main+44 in 14px, actions on the right clear of the window controls. */
+@media (min-width: 901px) {
+  html[data-xn-palette="claude"] .xn-shell-layout--desktop-titlebar .xn-shell-layout__titlebar { background: transparent; pointer-events: none; }
+  html[data-xn-palette="claude"] .xn-shell-layout--desktop-titlebar .xn-desktop-titlebar { position: relative; gap: 6px; }
+  html[data-xn-palette="claude"] .xn-shell-layout--desktop-titlebar .xn-desktop-titlebar[data-platform="macos"] { padding-inline-start: 88px; }
+  html[data-xn-palette="claude"] .xn-shell-layout--desktop-titlebar .xn-desktop-titlebar__brand { display: none; }
+  html[data-xn-palette="claude"] .xn-shell-layout--desktop-titlebar .xn-desktop-titlebar__history { gap: 6px; }
+  html[data-xn-palette="claude"] .xn-shell-layout--desktop-titlebar .xn-desktop-titlebar__history button,
+  html[data-xn-palette="claude"] .xn-shell-layout--desktop-titlebar .xn-desktop-titlebar__actions > button,
+  html[data-xn-palette="claude"] .xn-shell-layout--desktop-titlebar .xn-desktop-titlebar__help > summary { width: 28px; height: 28px; border-radius: 8px; pointer-events: auto; }
+  html[data-xn-palette="claude"] .xn-shell-layout--desktop-titlebar .xn-desktop-titlebar__help { pointer-events: auto; }
+  html[data-xn-palette="claude"] .xn-shell-layout--desktop-titlebar [data-testid="xn-desktop-titlebar-sidebar"] { position: absolute; top: 8px; left: 156px; }
+  html[data-xn-palette="claude"] .xn-shell-layout--desktop-titlebar .xn-desktop-titlebar[data-platform="windows"] [data-testid="xn-desktop-titlebar-sidebar"],
+  html[data-xn-palette="claude"] .xn-shell-layout--desktop-titlebar .xn-desktop-titlebar[data-platform="other"] [data-testid="xn-desktop-titlebar-sidebar"] { left: 78px; }
+
+  html[data-xn-palette="claude"] .xn-shell-layout--desktop-titlebar .xn-shell-main:has(.xn-conv-header) { grid-column: 2; grid-row: 1 / 3; }
+  html[data-xn-palette="claude"] .xn-shell-layout--desktop-titlebar.xn-shell-layout--sidebar-collapsed .xn-shell-main:has(.xn-conv-header),
+  html[data-xn-palette="claude"] .xn-shell-layout--desktop-titlebar.xn-shell-layout--no-sidebar .xn-shell-main:has(.xn-conv-header) { grid-column: 1; }
+  html[data-xn-palette="claude"] .xn-shell-layout--desktop-titlebar .xn-shell-main:has(.xn-conv-header) .xn-shell-main__panel { background: var(--bg); }
+  html[data-xn-palette="claude"] .xn-shell-layout--desktop-titlebar .xn-conversation > .xn-conv-header {
+    box-sizing: border-box;
+    min-height: var(--codex-titlebar-height);
+    height: var(--codex-titlebar-height);
+    margin-right: calc(-1 * var(--codex-frame-inset));
+    padding: 0 84px 0 8px;
+    gap: 8px;
+    border: 0;
+    background: var(--codex-frame);
+    -webkit-app-region: drag;
+  }
+  html[data-xn-palette="claude"] .xn-shell-layout--desktop-titlebar:has(.xn-desktop-titlebar[data-platform="windows"]) .xn-conversation > .xn-conversation > .xn-conv-header { padding-right: 222px; }
+  html[data-xn-palette="claude"] .xn-shell-layout--desktop-titlebar.xn-shell-layout--sidebar-collapsed .xn-conversation > .xn-conversation > .xn-conv-header { padding-left: 190px; }
+  html[data-xn-palette="claude"] .xn-shell-layout--desktop-titlebar .xn-conv-header__main,
+  html[data-xn-palette="claude"] .xn-shell-layout--desktop-titlebar .xn-conv-header__tools,
+  html[data-xn-palette="claude"] .xn-shell-layout--desktop-titlebar .xn-conv-header__more { -webkit-app-region: no-drag; }
+  html[data-xn-palette="claude"] .xn-shell-layout--desktop-titlebar .xn-conv-header__title {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+    color: var(--fg);
+    font-size: var(--xn-ui-font-size, 14px);
+    font-weight: 400;
+    line-height: 20px;
+  }
+  html[data-xn-palette="claude"] .xn-shell-layout--desktop-titlebar .xn-conv-header__title[data-project]::before {
+    content: "";
+    flex: 0 0 28px;
+    height: 28px;
+    background: var(--fg);
+    -webkit-mask: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='-6 -6 36 36' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z'/></svg>") center / 28px 28px no-repeat;
+    mask: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='-6 -6 36 36' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z'/></svg>") center / 28px 28px no-repeat;
+  }
+  html[data-xn-palette="claude"] .xn-shell-layout--desktop-titlebar .xn-conv-header__title:not([data-project]) { padding-left: 36px; }
+  /* Header actions read as quiet 28px icons, like Codex's "…" and summary toggles; names stay for assistive tech. */
+  html[data-xn-palette="claude"] .xn-shell-layout--desktop-titlebar .xn-conv-header__tools > .xn-conv-header__action {
+    justify-content: center;
+    width: 28px;
+    min-width: 28px;
+    height: 28px;
+    min-height: 28px;
+    padding: 0;
+    border: 0;
+    border-radius: 8px;
+    background: transparent;
+    color: var(--fg-subtle);
+  }
+  html[data-xn-palette="claude"] .xn-shell-layout--desktop-titlebar .xn-conv-header__tools > .xn-conv-header__action:hover { background: var(--bg-hover); color: var(--fg); }
+  html[data-xn-palette="claude"] .xn-shell-layout--desktop-titlebar .xn-conv-header__tools > .xn-conv-header__action > span { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+  html[data-xn-palette="claude"] .xn-shell-layout--desktop-titlebar .xn-conv-header__tools .xn-view-switcher { min-height: 28px; height: 28px; border: 0; background: transparent; color: var(--fg-subtle); }
+  html[data-xn-palette="claude"] .xn-shell-layout--desktop-titlebar .xn-conv-header__tools .xn-view-switcher:hover { background: var(--bg-hover); color: var(--fg); }
+}
