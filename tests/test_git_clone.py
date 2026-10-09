@@ -59,10 +59,11 @@ class UrlValidationTests(unittest.TestCase):
 class BroadDirectoryTests(unittest.TestCase):
     def test_windows_first_level_system_dirs_are_broad(self):
         from pathlib import PureWindowsPath
-        with mock.patch.object(clone.os, "name", "nt"):
-            for raw in ("C:\\Users", "C:\\ProgramData", "C:\\PerfLogs", "D:\\Users"):
-                with self.subTest(raw=raw):
-                    self.assertTrue(clone._is_broad_directory(PureWindowsPath(raw)), raw)
+        for raw in ("C:\\Users", "C:\\ProgramData", "C:\\PerfLogs", "D:\\Users"):
+            with self.subTest(raw=raw):
+                self.assertTrue(workspaces_api.is_windows_first_level_system_dir(PureWindowsPath(raw)), raw)
+                if os.name == 'nt':
+                    self.assertTrue(clone._is_broad_directory(Path(raw)), raw)
 
     def test_nested_windows_project_dirs_are_not_broad(self):
         from pathlib import PureWindowsPath

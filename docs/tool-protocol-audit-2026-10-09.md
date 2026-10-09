@@ -60,6 +60,14 @@ Xueness 修复基线为 `5afa8a7`。ZCode 从官方仓库重新获取 HEAD，确
 
 本机原始实验结果及日志存于 `E:\models\diagnostics\tool-protocol-audit-20261009`。这些是小样本功能证据，不是对 ZCode 或 Codex 模型能力的排名。完整回归、安装和原生跨平台构建的最终结果另记在交付记录中。
 
+## 本机交付记录
+
+最终后端全套按两个互斥 discovery 文件组执行：`test_[a-p]*.py` 为 1,522 项，`test_[q-z]*.py` 为 896 项，合计 **2,418 项，无失败或错误，69 项明确跳过**。两个组使用独立临时目录；没有排除失败模块。原生安装包检查入口的 94 项协议 / 文件工具 / 传输回归通过，冻结后端退出清理通过。
+
+本机提供者通过既有 `providers save` CLI 保存为 `native`；保持 `qwen3.8-27b`、lightweight、65,536 上下文、6,144 输出及 none / xhigh 两档。保存前后核对真实会话文件哈希，内容一致。真实模型实验结束后已停止模型服务并释放显存。
+
+测试用搜索设置已通过公开状态 API 确认四个隔离目录均无保存的 Tavily 密钥。删除这些隔离目录被自动审批拒绝（仅返回 blocked by policy），因此暂时保留，未删除真实用户数据。回归源码和结果日志保留用于复现。
+
 ## 插件归属
 
 解析、流式调用装配、参数预检、兼容诊断及恢复归属 providers 的 `providers.tool_recovery`，新增 `tool_protocol` 和 `tool_arguments` 均登记 modules。会话状态呈现归 sessions 既有能力；内核只协调 journal、验证、审批与运行生命周期，没有增加业务插件的共享例外。
