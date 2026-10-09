@@ -203,3 +203,65 @@
   background: var(--bg-popover);
   box-shadow: var(--shadow-md);
 }
+
+/* ── 3. Composer: one roomy, softly raised card ──────────────────────────── */
+.xn-shell-layout .xn-composer {
+  border-color: var(--border);
+  border-radius: var(--radius-xl);
+  background: var(--bg-input);
+  box-shadow: var(--shadow-composer);
+  transition: border-color var(--dur-normal) var(--ease-standard), box-shadow var(--dur-normal) var(--ease-standard);
+}
+.xn-shell-layout .xn-composer:hover { border-color: var(--border-strong); }
+.xn-shell-layout .xn-composer:focus-within {
+  border-color: var(--border-strong);
+  box-shadow: 0 0 0 3px color-mix(in oklab, var(--fg) 4%, transparent), var(--shadow-composer);
+}
+/* Start page: the workspace chooser sits above the card; the card itself is
+ * drawn by the ::before layer so only that layer gets the radius and shadow. */
+.xn-shell-layout .xn-composer--with-top-content,
+.xn-shell-layout .xn-composer--with-top-content:hover,
+.xn-shell-layout .xn-composer--with-top-content:focus-within { background: transparent; box-shadow: none; }
+.xn-shell-layout .xn-composer--with-top-content::before {
+  border-radius: var(--radius-xl);
+  background: var(--bg-input);
+  box-shadow: var(--shadow-composer);
+  transition: border-color var(--dur-normal) var(--ease-standard), box-shadow var(--dur-normal) var(--ease-standard);
+}
+.xn-shell-layout .xn-composer--with-top-content:focus-within::before {
+  box-shadow: 0 0 0 3px color-mix(in oklab, var(--fg) 4%, transparent), var(--shadow-composer);
+}
+.xn-shell-layout .xn-composer-region--docked {
+  width: min(var(--conversation-width), calc(100% - 48px));
+  max-width: var(--conversation-width);
+  margin-bottom: 16px;
+}
+.xn-shell-layout .xn-composer__input {
+  color: var(--conversation-fg);
+  font-size: calc(var(--xn-ui-font-size, 14px) + 1px);
+  line-height: 1.55;
+}
+.xn-shell-layout .xn-composer__input::placeholder { color: var(--fg-muted); }
+
+/* Controls tucked inside the card: quiet until hovered. */
+.xn-shell-layout .xn-composer-toolbar__tool,
+.xn-shell-layout .xn-composer__chip,
+.xn-shell-layout .xn-composer__context-chip { border-radius: 9px; transition: background-color var(--dur-fast) var(--ease-standard), color var(--dur-fast) var(--ease-standard); }
+.xn-shell-layout .xn-composer-toolbar__tool:hover:not(:disabled) { color: var(--fg); }
+.xn-shell-layout .xn-composer-toolbar__popover { border-radius: var(--radius-lg); background: var(--bg-popover); box-shadow: var(--shadow-lg); }
+
+/* Send is the accent's main home: a small clay square with rounded corners. */
+.xn-shell-layout .xn-composer__send {
+  width: 32px;
+  height: 32px;
+  border-radius: 10px;
+  background: var(--accent-brand);
+  color: var(--accent-brand-fg);
+  transition: background-color var(--dur-fast) var(--ease-standard), transform var(--dur-fast) var(--ease-standard);
+}
+.xn-shell-layout .xn-composer__send:hover:not(:disabled) { background: var(--accent-brand-hover); }
+.xn-shell-layout .xn-composer__send:active:not(:disabled) { transform: scale(.96); }
+.xn-shell-layout .xn-composer__send:disabled { background: var(--bg-active); color: var(--fg-muted); }
+.xn-shell-layout .xn-composer__stop,
+.xn-shell-layout .xn-composer__stop:hover:not(:disabled) { background: var(--primary); color: var(--primary-fg); }
+
