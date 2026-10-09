@@ -400,8 +400,6 @@ class WorkspaceApiTests(unittest.TestCase):
             preferences.validate("browser", {"browserControlEnabled": "true"})
 
 
-if __name__ == "__main__":
-    unittest.main()
     def test_preferences_validate_color_palette(self):
         self.assertEqual(preferences.validate("appearance", {"colorPalette": "xueness"}),
                          {"colorPalette": "xueness"})
@@ -410,4 +408,7 @@ if __name__ == "__main__":
         with self.assertRaises(ValueError):
             preferences.validate("appearance", {"colorPalette": "warm"})
 
+
+if __name__ == "__main__":
+    unittest.main()
 
