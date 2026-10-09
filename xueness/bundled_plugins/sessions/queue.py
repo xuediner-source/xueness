@@ -18,7 +18,7 @@ import threading
 import uuid
 
 from ... import file_lock
-from ...resources import _protect_private_file
+from ...resources import _protect_private_file, replace_file
 
 
 SCHEMA = 1
@@ -180,7 +180,7 @@ class MessageQueue:
                 stream.write(encoded)
                 stream.flush()
                 os.fsync(stream.fileno())
-            os.replace(temporary, path)
+            replace_file(temporary, path)
         finally:
             if fd is not None:
                 os.close(fd)

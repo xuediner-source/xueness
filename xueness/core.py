@@ -14,7 +14,7 @@ from pathlib import Path
 
 from .memory import UNTRUSTED_PREAMBLE
 from .tool_contract import permission_result
-from .resources import _is_link, _protect_private_file
+from .resources import _is_link, _protect_private_file, replace_file
 from .cli_input import with_attachments, record_attachments
 # Base tool registration/dispatch now lives in the Xueness-owned registry. These
 # names stay importable from ``core`` for compatibility: ``KNOWN_TOOLS`` and
@@ -73,10 +73,6 @@ MCP_TOOL_PREFIX = "mcp__"
 STREAM_HISTORY_MAX = 20
 STREAM_REASONING_MAX = 32_000
 REASONING_HISTORY_MAX = 20
-_STORE_REPLACE_RETRYABLE_WINERRORS = frozenset({5, 32, 33})
-_STORE_REPLACE_RETRY_DELAYS = (0.025, 0.075)
-
-
 def _annotate_store_failure(error, stage):
     """Attach a fixed Store.save substage without retaining exception text."""
     try:
@@ -114,16 +110,7 @@ def _replace_session_file(source, target):
     boundary; failures while encoding, flushing, fsyncing, or protecting the
     private temp file are not transient replace conflicts and must surface.
     """
-    delays = _STORE_REPLACE_RETRY_DELAYS if os.name == "nt" else ()
-    for attempt in range(len(delays) + 1):
-        try:
-            os.replace(source, target)
-            return
-        except OSError as exc:
-            if (attempt >= len(delays)
-                    or getattr(exc, "winerror", None) not in _STORE_REPLACE_RETRYABLE_WINERRORS):
-                raise
-            time.sleep(delays[attempt])
+    replace_file(source, target)
 
 
 def _reasoning_setting_enabled(state_dir) -> bool:

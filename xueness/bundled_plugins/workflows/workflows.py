@@ -8,6 +8,7 @@ from __future__ import annotations
 from contextlib import contextmanager
 from concurrent.futures import ThreadPoolExecutor
 from ... import file_lock as fcntl
+from ...resources import replace_file
 from .desktop_lifecycle import owner_gone, register as register_desktop_worker
 import hashlib
 import json
@@ -33,21 +34,10 @@ def _replace_state_file(temporary, destination):
     """Keep atomic writes despite brief Windows read/scan handles.
 
     A normal Windows file reader can deny deletion while it is open, making
-    replace fail even though the complete new record is ready. Retry only
-    those sharing/access errors, for at most half a second; do not truncate
-    the previous record or conceal persistent write failures.
+    replace fail even though the complete new record is ready. The shared
+    helper retries only those sharing/access errors, for at most half a second.
     """
-    deadline = time.monotonic() + .5
-    while True:
-        try:
-            os.replace(temporary, destination)
-            return
-        except OSError as error:
-            remaining = deadline - time.monotonic()
-            if (os.name != 'nt' or getattr(error, 'winerror', None) not in (5, 32, 33)
-                    or remaining <= 0):
-                raise
-            time.sleep(min(.01, remaining))
+    replace_file(temporary, destination)
 
 
 def workspace_fingerprint(root, state_dir=None):

@@ -8,6 +8,8 @@ import time
 import unittest
 from unittest.mock import Mock, patch
 from pathlib import Path
+from xueness import resources
+from xueness.core import _replace_session_file
 from xueness.workflows import WorkflowStore, ProviderGovernor, drive, validate_plan, ACTIVE
 from xueness.bundled_plugins.workflows import tools as workflow_tools
 from xueness.bundled_plugins.workflows.dsl import compile_workflow_script
@@ -504,39 +506,46 @@ class WorkflowStatePersistenceTests(unittest.TestCase):
             self.assertEqual(store.load(record['id']), record)
 
     def test_atomic_replace_retries_only_bounded_windows_sharing_errors(self):
-        for code in (5, 32, 33, 87):
-            with self.subTest(winerror=code), patch.object(workflows, 'os') as host, \
-                    patch.object(workflows.time, 'sleep') as sleep:
+        callers = (workflows._replace_state_file, _replace_session_file, resources.replace_file)
+        for caller in callers:
+            for code in (5, 32, 33, 87):
+                with self.subTest(caller=caller.__name__, winerror=code, platform='win32'), \
+                        patch.object(resources, 'os') as host, \
+                        patch.object(resources.time, 'sleep') as sleep:
+                    host.name = 'nt'
+                    error = OSError('replace denied')
+                    error.winerror = code
+                    host.replace.side_effect = [error, None]
+                    if code == 87:
+                        with self.assertRaises(OSError):
+                            caller('new', 'old')
+                        self.assertEqual(host.replace.call_count, 1)
+                        sleep.assert_not_called()
+                    else:
+                        caller('new', 'old')
+                        self.assertEqual(host.replace.call_count, 2)
+                        sleep.assert_called_once()
+            with self.subTest(caller=caller.__name__, winerror='deadline', platform='win32'), \
+                    patch.object(resources, 'os') as host, \
+                    patch.object(resources.time, 'monotonic', side_effect=[0, .1, .6]), \
+                    patch.object(resources.time, 'sleep'):
                 host.name = 'nt'
-                error = OSError('replace denied')
-                error.winerror = code
-                host.replace.side_effect = [error, None]
-                if code == 87:
-                    with self.assertRaises(OSError):
-                        workflows._replace_state_file('new', 'old')
+                error = PermissionError('permanent denial')
+                error.winerror = 5
+                host.replace.side_effect = error
+                with self.assertRaises(PermissionError):
+                    caller('new', 'old')
+                self.assertEqual(host.replace.call_count, 2)
+            for platform_name in ('darwin', 'linux'):
+                with self.subTest(caller=caller.__name__, platform=platform_name), \
+                        patch.object(resources, 'os') as host, \
+                        patch.object(resources.time, 'sleep') as sleep:
+                    host.name = 'posix'
+                    host.replace.side_effect = error
+                    with self.assertRaises(PermissionError):
+                        caller('new', 'old')
                     self.assertEqual(host.replace.call_count, 1)
                     sleep.assert_not_called()
-                else:
-                    workflows._replace_state_file('new', 'old')
-                    self.assertEqual(host.replace.call_count, 2)
-                    sleep.assert_called_once()
-        with patch.object(workflows, 'os') as host, \
-                patch.object(workflows.time, 'monotonic', side_effect=[0, .1, .6]), \
-                patch.object(workflows.time, 'sleep'):
-            host.name = 'nt'
-            error = PermissionError('permanent denial')
-            error.winerror = 5
-            host.replace.side_effect = error
-            with self.assertRaises(PermissionError):
-                workflows._replace_state_file('new', 'old')
-            self.assertEqual(host.replace.call_count, 2)
-        with patch.object(workflows, 'os') as host, patch.object(workflows.time, 'sleep') as sleep:
-            host.name = 'posix'
-            host.replace.side_effect = error
-            with self.assertRaises(PermissionError):
-                workflows._replace_state_file('new', 'old')
-            self.assertEqual(host.replace.call_count, 1)
-            sleep.assert_not_called()
 
     def test_failed_atomic_save_preserves_previous_record_and_removes_temp(self):
         with tempfile.TemporaryDirectory() as temporary:
@@ -574,7 +583,7 @@ class WorkflowStatePersistenceTests(unittest.TestCase):
             thread = threading.Thread(target=release_reader)
             thread.start()
             try:
-                with patch.object(workflows.os, 'replace', side_effect=replace):
+                with patch.object(resources.os, 'replace', side_effect=replace):
                     store.save({**record, 'value': 'after'})
                 self.assertTrue(denied.is_set(), 'the real open handle must block the first replace')
                 self.assertEqual(store.load(record['id'])['value'], 'after')

@@ -4,6 +4,7 @@ import hashlib
 import os
 from pathlib import Path
 import tempfile
+from ...resources import replace_file
 from .memory_api import memory_root, resolve_cwd, TRACK_NAMES
 from .memory import track_paths
 
@@ -36,7 +37,7 @@ def write(ctx,name,data):
         fd,name_tmp=tempfile.mkstemp(prefix='.memory-',dir=target.parent)
         try:
             with os.fdopen(fd,'w',encoding='utf-8',newline='\n') as stream: stream.write(content);stream.flush();os.fsync(stream.fileno())
-            os.replace(name_tmp,target)
+            replace_file(name_tmp,target)
         finally:
             if os.path.exists(name_tmp): os.unlink(name_tmp)
     return read(ctx,name)

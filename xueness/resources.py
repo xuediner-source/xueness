@@ -28,6 +28,7 @@ import re
 import stat
 import tempfile
 import threading
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -386,6 +387,31 @@ def _protect_private_windows_handle(handle, *, directory: bool) -> None:
             local_free(owner_descriptor)
 
 
+_REPLACE_SHARING_WINERRORS = frozenset({5, 32, 33})
+
+
+def replace_file(source, destination):
+    """Atomically replace ``destination``, retrying brief Windows sharing collisions.
+
+    Antivirus, indexers, and open readers can deny ReplaceFile (winerror 5, 32,
+    or 33) for a moment. Those errors are retried for at most half a second.
+    Other platforms and every other error fail immediately. Callers still remove
+    the temporary file when this raises, so a failed replace keeps the previous
+    record.
+    """
+    deadline = time.monotonic() + .5
+    while True:
+        try:
+            os.replace(source, destination)
+            return
+        except OSError as error:
+            remaining = deadline - time.monotonic()
+            if (os.name != "nt" or getattr(error, "winerror", None) not in _REPLACE_SHARING_WINERRORS
+                    or remaining <= 0):
+                raise
+            time.sleep(min(.01, remaining))
+
+
 def _atomic_write_json(path: Path, item: dict, *, private: bool = True) -> None:
     """Atomically replace JSON, protecting the temporary file before writes."""
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -404,7 +430,7 @@ def _atomic_write_json(path: Path, item: dict, *, private: bool = True) -> None:
             json.dump(item, stream, ensure_ascii=False, indent=2)
             stream.flush()
             os.fsync(stream.fileno())
-        os.replace(tmp, path)
+        replace_file(tmp, path)
     finally:
         if os.path.exists(tmp):
             os.unlink(tmp)

@@ -12,7 +12,7 @@ from pathlib import Path
 
 from ...core import Store
 from ...session_lease import lease
-from ...resources import _is_link
+from ...resources import _is_link, replace_file
 
 MAX_TITLE = 120
 TASK_AUTO_ARCHIVE_DAY_OPTIONS = (3, 7, 14, 30)
@@ -111,7 +111,7 @@ def mark_viewed(store: Store, sid: str) -> None:
                     json.dump({"readThroughMtimeNs": observed_mtime_ns, "viewedAt": now}, stream)
                     stream.flush()
                     os.fsync(stream.fileno())
-                os.replace(temporary, path)
+                replace_file(temporary, path)
             finally:
                 if os.path.exists(temporary):
                     os.unlink(temporary)

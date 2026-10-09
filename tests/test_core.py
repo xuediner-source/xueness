@@ -160,15 +160,15 @@ class HarnessTests(unittest.TestCase):
                 raise winerror(33)
             actual_replace(source, target)
 
-        with patch("xueness.core.os.replace", side_effect=collide_then_replace) as replace, \
-                patch("xueness.core.time.sleep") as sleep:
+        with patch("xueness.resources.os.replace", side_effect=collide_then_replace) as replace, \
+                patch("xueness.resources.time.sleep") as sleep:
             self.store.save(session)
         self.assertEqual(replace.call_count, 3)
-        self.assertEqual([call.args[0] for call in sleep.call_args_list], [0.025, 0.075])
+        self.assertEqual([call.args[0] for call in sleep.call_args_list], [0.01, 0.01])
         self.assertEqual(self.store.load(session["id"])["task"], "updated")
 
         session["task"] = "must not replace"
-        with patch("xueness.core.os.replace", side_effect=winerror(2)) as replace:
+        with patch("xueness.resources.os.replace", side_effect=winerror(2)) as replace:
             with self.assertRaises(PermissionError):
                 self.store.save(session)
         replace.assert_called_once()

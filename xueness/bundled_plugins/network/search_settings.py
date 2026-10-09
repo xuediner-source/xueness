@@ -17,7 +17,7 @@ from urllib.parse import urlsplit
 
 from .transport import NetworkError, _parse_https_url
 from .search_services import DEFAULT_ENDPOINTS, PROVIDERS
-from ...resources import _is_link, _protect_private_file
+from ...resources import _is_link, _protect_private_file, replace_file
 
 _LOCK = threading.RLock()
 _DEFAULT_SEARCH_ENDPOINT = "https://api.search.brave.com/res/v1/web/search"
@@ -97,7 +97,7 @@ def _write_json(path: Path, value):
             json.dump(value, stream, ensure_ascii=False, separators=(",", ":"))
             stream.flush()
             os.fsync(stream.fileno())
-        os.replace(temporary, path)
+        replace_file(temporary, path)
     finally:
         if os.path.exists(temporary):
             os.unlink(temporary)

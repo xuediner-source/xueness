@@ -34,7 +34,7 @@ from urllib.parse import urlsplit
 
 from .runtime_options import public_runtime_options, resolve_runtime_options, validate_compatibility
 from .lightweight_config import validate_options
-from ...resources import _is_link, _protect_private_file
+from ...resources import _is_link, _protect_private_file, replace_file
 
 ID_RE = re.compile(r"^[A-Za-z0-9._-]{1,64}$")
 # Dot-only names are legal for the regex but are traversal/parent markers.
@@ -544,7 +544,7 @@ def _atomic_write(path: Path, payload: dict) -> None:
             json.dump(payload, stream, ensure_ascii=False, indent=2, sort_keys=True)
             stream.flush()
             os.fsync(stream.fileno())
-        os.replace(tmp, path)
+        replace_file(tmp, path)
     finally:
         if os.path.exists(tmp):
             os.unlink(tmp)

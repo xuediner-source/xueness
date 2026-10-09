@@ -23,6 +23,8 @@ import tempfile
 import threading
 from pathlib import Path
 
+from ...resources import replace_file
+
 __all__ = ["SECTION_IDS", "load_settings", "save_settings", "update_settings", "dispatch"]
 
 #: Whitelist of accepted ``<section>`` identifiers. Anything else -> 404.
@@ -75,7 +77,7 @@ def save_settings(state_dir, settings) -> None:
     """Atomically write ``settings`` to ``<state_dir>/settings.json``.
 
     Mirrors ``core.Store.save``: tempfile.mkstemp in the target directory,
-    flush + fsync, then ``os.replace``. The temp file is always cleaned up.
+    flush + fsync, then ``replace_file``. The temp file is always cleaned up.
     """
     with _settings_lock(state_dir):
         _save_settings_unlocked(state_dir, settings)
@@ -91,7 +93,7 @@ def _save_settings_unlocked(state_dir, settings) -> None:
             json.dump(settings, stream, ensure_ascii=False, indent=2)
             stream.flush()
             os.fsync(stream.fileno())
-        os.replace(tmp, path)
+        replace_file(tmp, path)
     finally:
         if os.path.exists(tmp):
             os.unlink(tmp)
