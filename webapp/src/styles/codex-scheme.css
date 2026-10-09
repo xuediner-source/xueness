@@ -823,3 +823,41 @@ html[data-xn-palette="claude"] .xn-shell-layout .xn-md__paragraph,
 html[data-xn-palette="claude"] .xn-shell-layout .xn-zc-answer .xn-md p { margin: 0 0 14px; }
 html[data-xn-palette="claude"] .xn-shell-layout .xn-conversation-work-summary,
 html[data-xn-palette="claude"] .xn-shell-layout .xn-zc-work-status { padding-bottom: 0; border-bottom: 0; font-size: 13px; }
+
+/* ── 12. 实测对齐：输入框 ───────────────────────────────────────────────
+ * Codex composer: same 736px column, 97px tall resting, #383838 fill with no
+ * border or shadow, radius 20; text at +11/+13 on a 44px input, a 28px tool
+ * row 4px below and 8px from the bottom; 17px above the canvas edge. On the
+ * start page a #282828 strip (38px, inset 15px, rounded top) carries the
+ * project / run-location chips above the card. */
+html[data-xn-palette="claude"] .xn-shell-layout .xn-composer-region--docked { width: min(var(--codex-column), calc(100% - 60px)); margin-bottom: 13px; }
+html[data-xn-palette="claude"] .xn-shell-layout .xn-composer,
+html[data-xn-palette="claude"] .xn-shell-layout .xn-composer:hover,
+html[data-xn-palette="claude"] .xn-shell-layout .xn-composer:focus-within {
+  gap: 4px;
+  padding: 13px 8px 8px 11px;
+  border-color: transparent;
+  border-radius: 20px;
+  background: var(--codex-composer-bg);
+  box-shadow: none;
+}
+html[data-xn-palette="claude"] .xn-shell-layout .xn-composer__input { min-height: 44px; line-height: 20px; }
+html[data-xn-palette="claude"] .xn-shell-layout .xn-composer__input::placeholder { color: var(--codex-placeholder); }
+html[data-xn-palette="claude"] .xn-shell-layout .xn-composer__row { min-height: 28px; }
+html[data-xn-palette="claude"] .xn-shell-layout .xn-composer--with-top-content,
+html[data-xn-palette="claude"] .xn-shell-layout .xn-composer--with-top-content:hover,
+html[data-xn-palette="claude"] .xn-shell-layout .xn-composer--with-top-content:focus-within { padding: 0; border-radius: 20px; background: transparent; }
+html[data-xn-palette="claude"] .xn-shell-layout .xn-composer--with-top-content::before { inset: 38px 0 0; border: 0; border-radius: 20px; background: var(--codex-composer-bg); box-shadow: none; }
+html[data-xn-palette="claude"] .xn-shell-layout .xn-composer__top-content {
+  box-sizing: border-box;
+  min-height: 38px;
+  height: 38px;
+  margin: 0 15px;
+  padding: 0 8px 4px;
+  border-radius: 12px 12px 0 0;
+  background: var(--codex-composer-strip);
+}
+html[data-xn-palette="claude"] .xn-shell-layout .xn-composer__top-content .xn-composer-workspace,
+html[data-xn-palette="claude"] .xn-shell-layout .xn-composer__top-content .xn-select { color: var(--fg); font-size: 13px; }
+html[data-xn-palette="claude"] .xn-shell-layout .xn-composer--with-top-content .xn-composer__input { width: calc(100% - 19px); margin: 13px 8px 0 11px; }
+html[data-xn-palette="claude"] .xn-shell-layout .xn-composer--with-top-content .xn-composer__row { margin: 4px 8px 8px 11px; }
