@@ -84,13 +84,11 @@ def _search_payload(result: dict, key: str, query: str) -> dict:
 
 def search(query: str, *, state_dir=None, doh_endpoint_override=None) -> dict:
     """Perform one bounded search using saved settings or operator env values."""
-    endpoint, key, doh_endpoint = search_settings.resolve_config(state_dir)
+    from . import search_services
+    provider, endpoint, key, doh_endpoint = search_settings.resolve_service_config(state_dir)
     if doh_endpoint_override is not None:
         doh_endpoint = doh_endpoint_override
-    url = endpoint + ("&" if "?" in endpoint else "?") + urlencode({"q": query, "count": 5})
-    result = fetch(url, {"X-Subscription-Token": key, "Accept": "application/json"},
-                   max_chars=1_000_000, doh_endpoint=doh_endpoint)
-    return _search_payload(result, key, query)
+    return search_services.search(provider, endpoint, key, doh_endpoint, query)
 
 
 def _image_text(value, limit: int) -> str:

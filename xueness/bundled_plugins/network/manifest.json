@@ -21,12 +21,18 @@
   "modules": [
     "search_settings",
     "search_model",
+    "search_services",
     "settings_api",
     "tooling",
     "transport",
     "composer_capabilities"
   ],
   "features": [
+    {
+      "id": "network.search_services",
+      "name": "Tavily、Brave 与 SearXNG 搜索适配",
+      "nameEn": "Tavily, Brave and SearXNG search adapters"
+    },
     {
       "id": "network.fetch",
       "name": "受限公网 HTTPS 页面读取",

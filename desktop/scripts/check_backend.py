@@ -37,6 +37,39 @@ def _assert_plugin_catalog(plugins):
     assert len(feature_ids) == len(EXPECTED_FEATURE_IDS) and set(feature_ids) == EXPECTED_FEATURE_IDS, feature_ids
 
 
+def _assert_network_search_services(request):
+    """Check provider persistence through the frozen API without external calls."""
+    fixture_keys = {'brave': 'fixture-native-brave-key', 'tavily': 'fixture-native-tavily-key'}
+
+    def settings(body=None):
+        response = request('/api/network/settings', body)
+        assert all(key.encode() not in response for key in fixture_keys.values()), 'search key echoed'
+        value = json.loads(response)['settings']
+        assert set(value['searchServices']) == {'brave', 'tavily', 'searxng'}
+        return value
+
+    initial = settings()
+    assert initial['searchProvider'] == 'brave'
+    for provider, key in fixture_keys.items():
+        saved = settings({'searchProvider': provider, 'searchKey': key})
+        assert saved['searchProvider'] == provider and saved['hasSavedSearchKey']
+        assert saved['searchKeySource'] == 'saved'
+
+    public_instance = 'https://search.example/search'
+    searxng = settings({'searchProvider': 'searxng', 'searchEndpoint': public_instance})
+    assert searxng['searchEndpoint'] == public_instance
+    assert not searxng['requiresSearchKey'] and not searxng['hasSearchKey']
+    for provider in fixture_keys:
+        restored = settings({'searchProvider': provider})
+        assert restored['hasSavedSearchKey'] and restored['requiresSearchKey']
+        assert restored['searchServices']['searxng']['searchEndpoint'] == public_instance
+    assert settings()['searchEndpoint'] == 'https://api.tavily.com/search'
+    cleared = settings({'clearSearchKey': True})
+    assert not cleared['hasSavedSearchKey']
+    assert cleared['searchServices']['brave']['hasSavedSearchKey']
+    print('PASS: frozen search API: Tavily/Brave/SearXNG, private keys and independent provider settings', flush=True)
+
+
 def _text(value):
     if value is None:
         return ''
@@ -358,7 +391,10 @@ def main():
         data = Path(temporary)/'data'
         token = secrets.token_hex(32)
         host_env = {key: value for key, value in os.environ.items()
-                    if key != 'XUENESS_DESKTOP_SMOKE_TRACE'}
+                    if key != 'XUENESS_DESKTOP_SMOKE_TRACE'
+                    and not key.startswith(('XUENESS_SEARCH_', 'XUENESS_TAVILY_SEARCH_',
+                                            'XUENESS_BRAVE_SEARCH_', 'XUENESS_IMAGE_SEARCH_',
+                                            'XUENESS_DOH_'))}
         host_env.update({'XUENESS_DESKTOP_TOKEN': token, 'XUENESS_ALLOW_REAL': '0', 'PYTHONTZPATH': ''})
         proc = subprocess.Popen([str(executable), '--data', str(data), '--assets', str(ROOT/'webapp/dist')],
                                 stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
@@ -403,6 +439,7 @@ def main():
             plugins = json.loads(request('/api/plugins'))['plugins']
             _assert_plugin_catalog(plugins)
             assert any(p['id'] == 'desktop' for p in plugins)
+            _assert_network_search_services(request)
             status = json.loads(request('/api/desktop/status'))
             assert status['desktop'] and status['frozen']
             workspace = data/'workspace'

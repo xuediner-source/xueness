@@ -1,8 +1,19 @@
 # 网络工具
 
-`network` 插件提供逐调用批准的 WebFetch 与 WebSearch。在「设置 → 网络搜索」选择一种搜索方式：配置 Brave 兼容搜索服务，或配置独立的 OpenAI-compatible SearchModel。两种方式的配置和凭据与主模型供应商分开，切换搜索方式不会修改主模型设置。
+`network` 插件提供逐调用批准的 WebFetch 与 WebSearch。在「设置 → 网络搜索」选择 Tavily、Brave Search、SearXNG，或独立的 OpenAI-compatible SearchModel。普通模式、轻量模式和设置页诊断复用相同搜索入口；切换搜索方式不会修改主模型设置。
 
-搜索服务需要兼容 Brave Web Search JSON 请求：后端使用 HTTPS GET，提交 `q` 和 `count`，并通过 `X-Subscription-Token` 请求头发送密钥；默认地址是 `https://api.search.brave.com/res/v1/web/search`。SearchModel 使用 OpenAI-compatible Chat Completions：填写完整 HTTPS 接口地址、model ID 和独立 API 密钥。模型输出必须是包含 `sources` 数组的 JSON；自由文本不会作为搜索结果展示。模型生成的来源会注明 `urlsVerified:false` 与 `networkAccess:"unverified"`。来源 URL 只检查 HTTPS 结构和非私网 IP 字面量，不执行 DNS 查询或打开页面；Xueness 无法确认模型是否真正访问互联网。
+## 搜索服务适配
+
+- **Tavily**：默认 `https://api.tavily.com/search`，Bearer 鉴权，POST JSON。固定基础搜索 `basic`、最多 5 条结果，关闭自动参数、生成答案和原文下载；响应提供积分用量时按实显示。
+- **Brave**：保留 GET JSON 接口与 `X-Subscription-Token` 鉴权，旧配置继续兼容。
+- **SearXNG**：填写明确选择的公开 HTTPS 实例 `/search` 地址。无需 API 密钥，使用 `q` 与 `format=json`；实例必须允许 JSON 输出。本机和私网实例不属于当前公网网络工具的支持范围。
+
+各服务的地址和密钥分开保存。Brave 继续使用 `network/search-key.json`，Tavily 使用 `network/search-key-tavily.json`，接口只返回是否配置。切换服务、留空保存和删除密钥不影响另一服务的配置。图片搜索继续使用 Brave 兼容接口及 Brave 密钥，Tavily 密钥不会发往图片服务或 SearXNG。
+
+可设置 `XUENESS_TAVILY_SEARCH_KEY`、`XUENESS_BRAVE_SEARCH_KEY`。旧通用密钥 `XUENESS_SEARCH_KEY` 绑定到 `XUENESS_SEARCH_PROVIDER` 指定的服务（默认 Brave），不会随界面切换发送给其他服务。
+更改服务或地址后需先保存再诊断。Tavily 的 432/433 额度上限返回 `search_quota_exhausted`，不会自动重试；401/403 返回 `search_access_denied`。保留插件开关、Gate 批准、公网 DNS、TLS 验证和不跟随重定向的边界。
+
+Brave 默认地址为 `https://api.search.brave.com/res/v1/web/search`。SearchModel 使用 OpenAI-compatible Chat Completions：填写完整 HTTPS 接口地址、model ID 和独立 API 密钥。模型输出必须是包含 `sources` 数组的 JSON；自由文本不会作为搜索结果展示。模型生成的来源会注明 `urlsVerified:false` 与 `networkAccess:"unverified"`。来源 URL 只检查 HTTPS 结构和非私网 IP 字面量，不执行 DNS 查询或打开页面；Xueness 无法确认模型是否真正访问互联网。
 
 服务地址必须使用 HTTPS 和标准 443 端口，不能在 URL 中放用户名、密码、查询参数或片段。搜索模型目前只支持公开 HTTPS 服务，本机和私网模型地址会被阻止；同样不会通过 providers 插件改动主模型配置。填写密钥后会分别保存在本地状态目录的 network 子目录中；接口不会再次返回密钥。以后保存地址时把密钥留空即可保留现有密钥。删除本地服务密钥不会清除由管理员设置的 `XUENESS_SEARCH_KEY` 环境变量。环境配置也支持 `XUENESS_SEARCH_ENDPOINT`。
 

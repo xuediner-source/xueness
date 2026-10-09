@@ -3,7 +3,11 @@ import { get, post } from "../../xuenessApi";
 import { useLocale } from "../../i18n";
 import "./network.css";
 
+export type SearchProvider = "brave" | "tavily" | "searxng";
+type SearchService = Pick<NetworkSettingsValue, "searchEndpoint" | "hasSearchKey" | "hasSavedSearchKey" | "hasEnvironmentSearchKey" | "searchKeySource">;
 export type NetworkSettingsValue = {
+  searchProvider?: SearchProvider;
+  searchServices?: Partial<Record<SearchProvider, SearchService>>;
   searchEndpoint: string;
   imageSearchEndpoint: string;
   dohEndpoint: string;
@@ -33,6 +37,13 @@ export type NetworkDiagnostic = {
 };
 
 const DEFAULT_ENDPOINT = "https://api.search.brave.com/res/v1/web/search";
+export const SEARCH_ENDPOINTS: Record<SearchProvider, string> = {
+  brave: DEFAULT_ENDPOINT, tavily: "https://api.tavily.com/search", searxng: "",
+};
+
+export function selectedSearchService(settings: NetworkSettingsValue | null, provider: SearchProvider): SearchService | undefined {
+  return settings?.searchServices?.[provider] ?? ((settings?.searchProvider ?? "brave") === provider ? settings ?? undefined : undefined);
+}
 
 export async function readNetworkSettings(enabled: boolean): Promise<NetworkSettingsValue | null> {
   if (!enabled) return null;
@@ -51,6 +62,7 @@ export async function readNetworkSettings(enabled: boolean): Promise<NetworkSett
 }
 
 export async function saveNetworkSettings(values: {
+  searchProvider?: SearchProvider;
   searchEndpoint: string;
   imageSearchEndpoint: string;
   dohEndpoint: string;
@@ -60,15 +72,17 @@ export async function saveNetworkSettings(values: {
   searchKey?: string;
   searchModelKey?: string;
 }): Promise<NetworkSettingsValue> {
-  const payload = { ...values };
+  const payload: Partial<typeof values> = { ...values };
+  if (values.searchMode === "model" && !payload.searchEndpoint) delete payload.searchEndpoint;
   if (!payload.searchKey) delete payload.searchKey;
   if (!payload.searchModelKey) delete payload.searchModelKey;
   const result = await post<{ settings: NetworkSettingsValue }>("/api/network/settings", payload);
   return result.settings;
 }
 
-export async function clearSavedNetworkKey(): Promise<NetworkSettingsValue> {
-  const result = await post<{ settings: NetworkSettingsValue }>("/api/network/settings", { clearSearchKey: true });
+export async function clearSavedNetworkKey(searchProvider?: SearchProvider): Promise<NetworkSettingsValue> {
+  const result = await post<{ settings: NetworkSettingsValue }>("/api/network/settings", { clearSearchKey: true,
+    ...(searchProvider ? { searchProvider } : {}) });
   return result.settings;
 }
 
@@ -89,6 +103,7 @@ export function NetworkSettings({ enabled, disabled = false }: Props): React.JSX
   const tr = (zh: string, english: string) => en ? english : zh;
   const [settings, setSettings] = useState<NetworkSettingsValue | null>(null);
   const [searchEndpoint, setSearchEndpoint] = useState(DEFAULT_ENDPOINT);
+  const [searchProvider, setSearchProvider] = useState<SearchProvider>("brave");
   const [imageSearchEndpoint, setImageSearchEndpoint] = useState("");
   const [dohEndpoint, setDohEndpoint] = useState("");
   const [searchMode, setSearchMode] = useState<"service" | "model">("service");
@@ -102,6 +117,13 @@ export function NetworkSettings({ enabled, disabled = false }: Props): React.JSX
   const [result, setResult] = useState<NetworkDiagnostic | null>(null);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
+  const selectedService = selectedSearchService(settings, searchProvider);
+  const unsavedSelection = settings !== null && (searchProvider !== (settings.searchProvider ?? "brave")
+    || searchMode !== settings.searchMode || searchEndpoint !== settings.searchEndpoint
+    || imageSearchEndpoint !== settings.imageSearchEndpoint || dohEndpoint !== settings.dohEndpoint || searchModelEndpoint !== settings.searchModelEndpoint
+    || searchModel !== settings.searchModel || Boolean(searchKey || searchModelKey));
+  const searchReady = searchMode === "model" ? settings?.hasSearchModelKey
+    : searchProvider === "searxng" ? Boolean(searchEndpoint) : selectedService?.hasSearchKey;
 
   useEffect(() => {
     let disposed = false;
@@ -119,6 +141,7 @@ export function NetworkSettings({ enabled, disabled = false }: Props): React.JSX
       if (disposed || !value) return;
       setSettings(value);
       setSearchEndpoint(value.searchEndpoint);
+      setSearchProvider(value.searchProvider ?? "brave");
       setImageSearchEndpoint(value.imageSearchEndpoint);
       setDohEndpoint(value.dohEndpoint);
       setSearchMode(value.searchMode);
@@ -138,7 +161,7 @@ export function NetworkSettings({ enabled, disabled = false }: Props): React.JSX
     setError("");
     setNotice("");
     try {
-      const updated = await saveNetworkSettings({ searchEndpoint, imageSearchEndpoint, dohEndpoint, searchMode,
+      const updated = await saveNetworkSettings({ searchProvider, searchEndpoint, imageSearchEndpoint, dohEndpoint, searchMode,
         searchModelEndpoint, searchModel,
         ...(searchKey ? { searchKey } : {}), ...(searchModelKey ? { searchModelKey } : {}) });
       setSettings(updated);
@@ -169,12 +192,12 @@ export function NetworkSettings({ enabled, disabled = false }: Props): React.JSX
   };
 
   const clearKey = async () => {
-    if (!enabled || disabled || saving || !settings?.hasSavedSearchKey) return;
+    if (!enabled || disabled || saving || !selectedService?.hasSavedSearchKey || unsavedSelection) return;
     setSaving(true);
     setError("");
     setNotice("");
     try {
-      const updated = await clearSavedNetworkKey();
+      const updated = await clearSavedNetworkKey(searchProvider);
       setSettings(updated);
       setNotice(updated.hasEnvironmentSearchKey
         ? tr("已删除本地保存的密钥；服务端环境变量仍可提供密钥。", "Saved key removed; the server environment variable can still provide a key.")
@@ -187,7 +210,7 @@ export function NetworkSettings({ enabled, disabled = false }: Props): React.JSX
   };
 
   const runDiagnostic = async (operation: "dns" | "search") => {
-    if (!enabled || disabled || saving || diagnostic !== null) return;
+    if (!enabled || disabled || saving || diagnostic !== null || unsavedSelection) return;
     if (operation === "search") {
       const prompt = searchMode === "model"
         ? tr("这会向独立搜索模型发送一次测试请求；服务商可能按其规则计费。模型联网能力不会因此得到验证。继续？",
@@ -213,8 +236,8 @@ export function NetworkSettings({ enabled, disabled = false }: Props): React.JSX
   return <section className="xn-network-settings" data-testid="network-settings">
     {!enabled ? <p className="xn-network-settings__disabled">{tr("网络工具已关闭；保存的设置仍保留。", "Network tools are disabled; saved settings are retained.")}</p> : <>
       <p className="xn-network-settings__intro">{tr(
-        "选择 Brave 兼容搜索服务或独立 OpenAI 兼容搜索模型。搜索和页面读取仍需每次通过运行批准。搜索凭据与主模型配置相互独立。",
-        "Choose a Brave-compatible search service or a separate OpenAI-compatible search model. Searches and page reads still require run approval. Search credentials are separate from the main model configuration.",
+        "网页搜索支持 Tavily、Brave 和 SearXNG，普通模式与轻量模式使用相同配置。也可使用独立搜索模型。",
+        "Web search supports Tavily, Brave, and SearXNG. Standard and lightweight modes share these settings. A separate search model is also available.",
       )}</p>
       {error && <p className="xn-network-settings__feedback is-error" role="alert">{error}</p>}
       {notice && <p className="xn-network-settings__feedback is-success" role="status">{notice}</p>}
@@ -223,11 +246,26 @@ export function NetworkSettings({ enabled, disabled = false }: Props): React.JSX
           <label>
             <span>{tr("搜索方式", "Search provider")}</span>
             <select value={searchMode} disabled={disabled || saving} onChange={event => setSearchMode(event.currentTarget.value as "service" | "model")}>
-              <option value="service">{tr("Brave 兼容搜索服务", "Brave-compatible search service")}</option>
+              <option value="service">{tr("网页搜索服务", "Web search service")}</option>
               <option value="model">{tr("独立搜索模型", "Separate SearchModel")}</option>
             </select>
           </label>
           {searchMode === "service" ? <>
+            <label><span>{tr("搜索服务", "Search service")}</span>
+              <select value={searchProvider} disabled={disabled || saving} onChange={event => {
+                const next = event.currentTarget.value as SearchProvider;
+                setSearchProvider(next);
+                setSearchEndpoint(selectedSearchService(settings, next)?.searchEndpoint ?? SEARCH_ENDPOINTS[next]);
+                setSearchKey(""); setResult(null); setNotice("");
+              }}>
+                <option value="tavily">Tavily</option><option value="brave">Brave Search</option><option value="searxng">SearXNG</option>
+              </select>
+            </label>
+            <p className="xn-network-settings__help">{searchProvider === "tavily"
+              ? tr("使用基础搜索，每次最多 5 条结果；关闭自动参数、深度搜索和原文下载。", "Uses basic search with up to 5 results. Automatic parameters, advanced search, and raw content are disabled.")
+              : searchProvider === "searxng"
+                ? tr("不需要 API 密钥。填写允许 JSON 输出的公网 HTTPS 实例搜索地址，例如 https://你的实例/search。", "No API key is needed. Enter a public HTTPS instance search endpoint with JSON enabled, such as https://your-instance/search.")
+                : tr("兼容 Brave Web Search JSON 接口。", "Compatible with the Brave Web Search JSON API.")}</p>
             <label>
               <span>{tr("搜索服务 HTTPS 地址", "Search service HTTPS endpoint")}</span>
               <input type="url" required maxLength={2048} value={searchEndpoint} disabled={disabled || saving}
@@ -271,27 +309,27 @@ export function NetworkSettings({ enabled, disabled = false }: Props): React.JSX
               onChange={event => setImageSearchEndpoint(event.currentTarget.value)} autoComplete="url" />
           </label>
           <p className="xn-network-settings__help">{tr(
-            "留空时，Brave 兼容搜索模式使用官方图片搜索 API。选择独立搜索模型时，必须填写真实图片服务地址；文本模型不会生成图片搜索结果。此服务使用下方搜索服务密钥，图片和来源 URL 只做 HTTPS 与公网 DNS 检查，不会下载图片内容。",
-            "When blank, Brave-compatible search mode uses the official image-search API. Separate SearchModel mode requires a real image-service endpoint; text models do not generate image-search results. This service uses the search-service key below and checks HTTPS/public DNS only; it does not download image content.",
+            "图片搜索仍使用 Brave 兼容服务和单独保存的 Brave 密钥，Tavily 密钥不会发往图片服务。可切换 Brave 配置密钥，再切回当前网页搜索服务。搜索模型模式需要填写真实图片服务地址。",
+            "Image search uses a Brave-compatible service and the separately saved Brave key. Tavily keys are never sent to image services. Switch to Brave to configure its key, then return to your web-search provider. SearchModel mode requires an image-service endpoint.",
           )}</p>
-          <label>
+          {searchProvider !== "searxng" && <><label>
             <span>{tr("搜索服务密钥", "Search service key")}</span>
             <input type="password" maxLength={4096} value={searchKey} disabled={disabled || saving}
               onChange={event => setSearchKey(event.currentTarget.value)} autoComplete="new-password"
-              placeholder={settings?.hasSavedSearchKey
+              placeholder={selectedService?.hasSavedSearchKey
                 ? tr("已保存；留空以保留当前密钥", "Saved; leave blank to keep the current key")
-                : settings?.hasEnvironmentSearchKey
+                : selectedService?.hasEnvironmentSearchKey
                   ? tr("由服务端环境变量提供", "Provided by the server environment")
                   : tr("输入搜索服务提供的密钥", "Enter the key from the search service")} />
           </label>
           <div className="xn-network-settings__key-state" aria-live="polite">
-            {settings?.hasSearchKey
+            {selectedService?.hasSearchKey
               ? tr("密钥已配置，界面不会读取或回显密钥。", "A key is configured. The interface never reads or displays it.")
               : tr("尚未配置密钥。", "No key is configured.")}
-            {settings?.hasSavedSearchKey && <button type="button" disabled={disabled || saving} onClick={() => void clearKey()}>
+            {selectedService?.hasSavedSearchKey && <button type="button" disabled={disabled || saving || unsavedSelection} onClick={() => void clearKey()}>
               {tr("删除本地密钥", "Remove saved key")}
             </button>}
-          </div>
+          </div></>}
           <label>
             <span>{tr("FakeIP 代理的可选 DoH 解析地址", "Optional DoH resolver for FakeIP proxies")}</span>
             <input type="url" maxLength={2048} value={dohEndpoint} disabled={disabled || saving}
@@ -309,17 +347,17 @@ export function NetworkSettings({ enabled, disabled = false }: Props): React.JSX
           <h2 id="xn-network-diagnostics-title">{tr("按需诊断", "On-demand diagnostics")}</h2>
           <p>{tr("打开页面和读取配置不会发起外部网络请求。选择下列操作后才会运行对应检查。", "Opening this page and reading settings make no external request. Choose an action below to run a check.")}</p>
           <div className="xn-network-settings__actions">
-            <button type="button" disabled={disabled || saving || diagnostic !== null || loading}
+            <button type="button" disabled={disabled || saving || diagnostic !== null || loading || unsavedSelection}
               aria-busy={diagnostic === "dns"} onClick={() => void runDiagnostic("dns")}>
               {diagnostic === "dns" ? tr("正在检查 DNS…", "Checking DNS…") : tr("检查搜索服务 DNS", "Check search service DNS")}
             </button>
-            <button type="button" disabled={disabled || saving || diagnostic !== null || loading
-              || (searchMode === "model" ? !settings?.hasSearchModelKey : !settings?.hasSearchKey)}
+            <button type="button" disabled={disabled || saving || diagnostic !== null || loading || unsavedSelection || !searchReady}
               aria-busy={diagnostic === "search"} onClick={() => void runDiagnostic("search")}>
               {diagnostic === "search" ? tr("正在测试搜索…", "Testing search…") : tr("发送一次测试搜索", "Send one test search")}
             </button>
           </div>
-          {!(searchMode === "model" ? settings?.hasSearchModelKey : settings?.hasSearchKey)
+          {unsavedSelection && <p className="xn-network-settings__help">{tr("先保存当前设置，再测试所选搜索服务。", "Save these settings before testing the selected service.")}</p>}
+          {!searchReady && searchProvider !== "searxng"
             && <p className="xn-network-settings__help">{tr("配置当前所选搜索方式的密钥后才能测试。", "Configure a key for the selected search provider before testing.")}</p>}
           {result && <div className={`xn-network-settings__result${result.ok ? " is-success" : " is-error"}`} role={result.ok ? "status" : "alert"}>
             <strong>{result.ok ? tr("诊断完成", "Diagnostic complete") : tr("诊断失败", "Diagnostic failed")}</strong>

@@ -263,6 +263,8 @@ providers 的 CLI parser/handler 已迁入 `xueness/bundled_plugins/providers/op
 
 ## 网络工具设置与 DNS 诊断
 
+`network.search_services` 由 `network/search_services.py` 提供 Tavily、Brave 和 SearXNG 请求与结果适配。普通、轻量和诊断入口复用同一配置快照；Tavily 使用独立的 `search-key-tavily.json`，Brave 沿用旧密钥文件，SearXNG 不发送凭据。每个服务保留自己的端点和密钥；界面切换服务后先保存再测试。Tavily 固定基础搜索、最多五条摘要，缺少鉴权和额度上限返回明确错误。所有适配保留既有批准和公网网络边界，图片服务继续使用 Brave 独立凭据。
+
 网页搜索服务与 SearchModel 的接口、模型 ID、密钥和 FakeIP 解析选项由 `network` 插件独立管理，不会覆盖主模型供应商。设置页的读取和打开不会访问外部网络；服务密钥和 SearchModel 密钥分别保存在状态目录下 `network/search-key.json` 与 `network/search-model-key.json`，使用仅所有者可读写的权限，API 只返回是否已配置，绝不回显密钥。留空密钥会保留已有值；删除按钮只清除本地保存的值，管理员提供的 `XUENESS_SEARCH_KEY` 环境变量仍可作为服务密钥回退。旧部署可继续使用 `XUENESS_SEARCH_ENDPOINT`。
 
 「检查搜索服务 DNS」由用户明确触发，仅解析已配置的搜索服务主机名，不连接服务。系统 DNS 地址全部通过公网地址检查后才会建立 TLS 连接，连接固定到已检查地址，并继续按原主机名验证证书；所有 DNS 记录都必须是公网地址。只有系统 DNS 的全部结果都位于 `198.18.0.0/15` RFC 2544 FakeIP 段，且用户显式填写公开 DoH 地址时，才会查询 DoH。DoH 使用无凭据的 HTTPS `application/dns-json` GET，每次查询最多等待 5 秒、最多读取 64 KiB；其 DNS 记录也必须全部是公网地址。私网、混合 FakeIP/公网或其它非公网结果不会触发解析器回退。

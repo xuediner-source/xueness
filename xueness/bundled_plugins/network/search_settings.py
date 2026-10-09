@@ -16,6 +16,7 @@ import threading
 from urllib.parse import urlsplit
 
 from .transport import NetworkError, _parse_https_url
+from .search_services import DEFAULT_ENDPOINTS, PROVIDERS
 from ...resources import _is_link, _protect_private_file
 
 _LOCK = threading.RLock()
@@ -107,9 +108,12 @@ def _settings_path(state_dir):
     return directory / _SETTINGS_FILE if directory else None
 
 
-def _secret_path(state_dir, *, create=False):
+def _secret_path(state_dir, *, create=False, provider='brave'):
+    if provider not in ('brave', 'tavily'):
+        raise ValueError('该搜索服务不使用密钥。')
     directory = _network_dir(state_dir, create=create)
-    return directory / _SECRET_FILE if directory else None
+    filename = _SECRET_FILE if provider == 'brave' else 'search-key-tavily.json'
+    return directory / filename if directory else None
 
 
 def _model_secret_path(state_dir, *, create=False):
@@ -155,8 +159,10 @@ def _read_settings(state_dir):
     return _read_json(path)
 
 
-def _read_saved_key(state_dir):
-    path = _secret_path(state_dir)
+def _read_saved_key(state_dir, provider='brave'):
+    if provider == 'searxng':
+        return ''
+    path = _secret_path(state_dir, provider=provider)
     if path is None:
         return ""
     value = _read_json(path)
@@ -178,62 +184,103 @@ def _key_is_usable(value) -> bool:
         character in value for character in "\r\n")
 
 
+def _provider(settings):
+    return settings.get('searchProvider') or os.environ.get('XUENESS_SEARCH_PROVIDER', 'brave')
+
+
+def get_search_provider(state_dir=None):
+    provider = _provider(_read_settings(state_dir))
+    if provider not in PROVIDERS:
+        raise NetworkError('search_provider_invalid', False, '搜索服务类型无效，请在网络搜索设置中重新选择。')
+    return provider
+
+
+def _environment_key(provider):
+    if provider == 'searxng':
+        return ''
+    specific = os.environ.get('XUENESS_' + provider.upper() + '_SEARCH_KEY', '')
+    if _key_is_usable(specific):
+        return specific
+    # Bind the old generic credential to its declared provider. Switching a
+    # service never forwards the previous provider's key to a different host.
+    if os.environ.get('XUENESS_SEARCH_PROVIDER', 'brave') == provider:
+        return os.environ.get('XUENESS_SEARCH_KEY', '')
+    return ''
+
+
+def _service_view(state_dir, stored, provider):
+    endpoints = stored.get('searchEndpoints')
+    endpoint = endpoints.get(provider) if isinstance(endpoints, dict) else None
+    if not isinstance(endpoint, str) or not endpoint:
+        endpoint = stored.get('searchEndpoint') if _provider(stored) == provider else None
+    if not isinstance(endpoint, str) or not endpoint:
+        endpoint = (os.environ.get('XUENESS_SEARCH_ENDPOINT') if
+                    os.environ.get('XUENESS_SEARCH_PROVIDER', 'brave') == provider else None)
+    endpoint = endpoint or DEFAULT_ENDPOINTS[provider]
+    saved_key = _read_saved_key(state_dir, provider)
+    environment_key = _environment_key(provider)
+    source = 'saved' if _key_is_usable(saved_key) else 'environment' if _key_is_usable(environment_key) else 'none'
+    return {'searchEndpoint': endpoint, 'hasSearchKey': source != 'none',
+            'hasSavedSearchKey': _key_is_usable(saved_key), 'hasEnvironmentSearchKey': _key_is_usable(environment_key),
+            'searchKeySource': source, 'requiresSearchKey': provider != 'searxng'}
+
+
 def get_settings(state_dir=None) -> dict:
     with _LOCK:
         stored = _read_settings(state_dir)
-        endpoint = stored.get("searchEndpoint")
-        if not isinstance(endpoint, str) or not endpoint:
-            endpoint = os.environ.get("XUENESS_SEARCH_ENDPOINT", _DEFAULT_SEARCH_ENDPOINT)
+        provider = get_search_provider(state_dir)
+        services = {name: _service_view(state_dir, stored, name) for name in PROVIDERS}
+        service = services[provider]
         image_endpoint = stored.get("imageSearchEndpoint")
         if not isinstance(image_endpoint, str) or not image_endpoint:
             image_endpoint = os.environ.get("XUENESS_IMAGE_SEARCH_ENDPOINT", "")
         doh_endpoint = stored.get("dohEndpoint")
         if not isinstance(doh_endpoint, str):
             doh_endpoint = os.environ.get("XUENESS_DOH_ENDPOINT", "")
-        saved_key = _read_saved_key(state_dir)
-        environment_key = os.environ.get("XUENESS_SEARCH_KEY", "")
-        source = "saved" if _key_is_usable(saved_key) else "environment" if _key_is_usable(environment_key) else "none"
         model_key = _read_saved_model_key(state_dir)
         mode = stored.get("searchMode") if stored.get("searchMode") in ("service", "model") else "service"
         model_endpoint = stored.get("searchModelEndpoint")
         model_name = stored.get("searchModel")
         return {
-            "searchEndpoint": endpoint,
+            **service,
+            'searchProvider': provider,
+            'searchServices': services,
             "imageSearchEndpoint": image_endpoint,
             "dohEndpoint": doh_endpoint,
             "searchMode": mode,
             "searchModelEndpoint": model_endpoint if isinstance(model_endpoint, str) else "",
             "searchModel": model_name if isinstance(model_name, str) else "",
-            "hasSearchKey": _key_is_usable(saved_key) or _key_is_usable(environment_key),
-            "hasSavedSearchKey": _key_is_usable(saved_key),
-            "hasEnvironmentSearchKey": _key_is_usable(environment_key),
-            "searchKeySource": source,
             "hasSearchModelKey": _key_is_usable(model_key),
             "hasSavedSearchModelKey": _key_is_usable(model_key),
         }
 
 
-def resolve_config(state_dir=None) -> tuple[str, str, str]:
+def resolve_service_config(state_dir=None) -> tuple[str, str, str, str]:
     """Return search endpoint, credential and optional DoH resolver endpoint."""
     with _LOCK:
         settings = _read_settings(state_dir)
-        endpoint = settings.get("searchEndpoint") or os.environ.get(
-            "XUENESS_SEARCH_ENDPOINT", _DEFAULT_SEARCH_ENDPOINT)
+        provider = get_search_provider(state_dir)
+        endpoint = _service_view(state_dir, settings, provider)['searchEndpoint']
         doh_endpoint = settings.get("dohEndpoint")
         if not isinstance(doh_endpoint, str):
             doh_endpoint = os.environ.get("XUENESS_DOH_ENDPOINT", "")
-        saved_key = _read_saved_key(state_dir)
-        key = saved_key if _key_is_usable(saved_key) else os.environ.get("XUENESS_SEARCH_KEY", "")
+        saved_key = _read_saved_key(state_dir, provider)
+        key = saved_key if _key_is_usable(saved_key) else _environment_key(provider)
         if not isinstance(endpoint, str) or not _valid_https_endpoint(endpoint):
             raise NetworkError("search_endpoint_invalid", False,
                                "网页搜索服务地址无效。请在网络搜索设置中填写公开 HTTPS JSON 搜索服务地址。")
-        if not _key_is_usable(key):
+        if provider != 'searxng' and not _key_is_usable(key):
             raise NetworkError("search_key_missing", False,
                                "尚未配置网页搜索密钥。请在设置的网络搜索页保存服务密钥，或由管理员设置 XUENESS_SEARCH_KEY。")
         if doh_endpoint and (not isinstance(doh_endpoint, str) or not _valid_https_endpoint(doh_endpoint, doh=True)):
             raise NetworkError("doh_endpoint_invalid", False,
                                "DoH 解析服务地址无效。请清空该设置，或填写公开、无凭据的 HTTPS DNS JSON 地址。")
-        return endpoint, key, doh_endpoint
+        return provider, endpoint, key, doh_endpoint
+
+
+def resolve_config(state_dir=None) -> tuple[str, str, str]:
+    """Compatibility view; request dispatch uses the atomic provider snapshot."""
+    return resolve_service_config(state_dir)[1:]
 
 
 def resolve_image_search_config(state_dir=None) -> tuple[str, str, str]:
@@ -262,7 +309,7 @@ def resolve_image_search_config(state_dir=None) -> tuple[str, str, str]:
             raise NetworkError("image_search_endpoint_invalid", False,
                                "图片搜索服务地址无效。请在网络搜索设置中填写公开 HTTPS Brave Image Search 兼容地址。")
         saved_key = _read_saved_key(state_dir)
-        key = saved_key if _key_is_usable(saved_key) else os.environ.get("XUENESS_SEARCH_KEY", "")
+        key = saved_key if _key_is_usable(saved_key) else _environment_key('brave')
         if not _key_is_usable(key):
             raise NetworkError("image_search_key_missing", False,
                                "尚未配置图片搜索服务密钥。请在网络搜索设置中保存服务密钥，或由管理员设置 XUENESS_SEARCH_KEY。")
@@ -311,7 +358,7 @@ def update_settings(state_dir, data: dict) -> dict:
     """Validate and persist a partial update; credentials never leave storage."""
     if not isinstance(data, dict):
         raise ValueError("请求内容必须是对象。")
-    allowed = {"searchEndpoint", "imageSearchEndpoint", "dohEndpoint", "searchMode", "searchKey", "clearSearchKey",
+    allowed = {"searchProvider", "searchEndpoint", "imageSearchEndpoint", "dohEndpoint", "searchMode", "searchKey", "clearSearchKey",
                "searchModelEndpoint", "searchModel", "searchModelKey", "clearSearchModelKey"}
     if set(data) - allowed:
         raise ValueError("包含不支持的网络搜索设置字段。")
@@ -326,6 +373,8 @@ def update_settings(state_dir, data: dict) -> dict:
             raise ValueError("API 密钥格式无效或超过长度限制。")
     if "searchMode" in data and data["searchMode"] not in ("service", "model"):
         raise ValueError("searchMode 必须是 service 或 model。")
+    if 'searchProvider' in data and data['searchProvider'] not in PROVIDERS:
+        raise ValueError('搜索服务必须是 brave、tavily 或 searxng。')
     if "searchEndpoint" in data:
         data = {**data, "searchEndpoint": validate_endpoint(data["searchEndpoint"])}
     if "imageSearchEndpoint" in data:
@@ -353,24 +402,37 @@ def update_settings(state_dir, data: dict) -> dict:
         directory = _network_dir(state_dir, create=True)
         settings_path = directory / _SETTINGS_FILE
         current = _read_json(settings_path)
-        settings = {key: current.get(key) for key in ("searchEndpoint", "imageSearchEndpoint", "dohEndpoint", "searchMode",
+        settings = {key: current.get(key) for key in ("searchProvider", "searchEndpoint", "imageSearchEndpoint", "dohEndpoint", "searchMode",
                                                        "searchModelEndpoint", "searchModel")
                     if isinstance(current.get(key), str)}
-        for field in ("searchEndpoint", "imageSearchEndpoint", "dohEndpoint", "searchMode", "searchModelEndpoint", "searchModel"):
+        old_provider = _provider(current)
+        provider = data.get('searchProvider', old_provider)
+        if provider not in PROVIDERS:
+            raise ValueError('搜索服务类型无效，请重新选择。')
+        endpoints = {name: value for name, value in (current.get('searchEndpoints') or {}).items()
+                     if name in PROVIDERS and isinstance(value, str)} if isinstance(current.get('searchEndpoints', {}), dict) else {}
+        if old_provider in PROVIDERS and isinstance(current.get('searchEndpoint'), str):
+            endpoints.setdefault(old_provider, current['searchEndpoint'])
+        if 'searchEndpoint' in data:
+            endpoints[provider] = data['searchEndpoint']
+        settings['searchProvider'] = provider
+        settings['searchEndpoints'] = endpoints
+        settings['searchEndpoint'] = endpoints.get(provider) or DEFAULT_ENDPOINTS[provider]
+        for field in ("imageSearchEndpoint", "dohEndpoint", "searchMode", "searchModelEndpoint", "searchModel"):
             if field in data:
                 settings[field] = data[field]
         _write_json(settings_path, settings)
 
-        if data.get("clearSearchKey") is True:
-            secret_path = _secret_path(state_dir, create=True)
+        if data.get("clearSearchKey") is True and provider != 'searxng':
+            secret_path = _secret_path(state_dir, create=True, provider=provider)
             if _is_link(secret_path):
                 raise ValueError("network credential path denied")
             try:
                 secret_path.unlink()
             except FileNotFoundError:
                 pass
-        elif data.get("searchKey"):
-            secret_path = _secret_path(state_dir, create=True)
+        elif data.get("searchKey") and provider != 'searxng':
+            secret_path = _secret_path(state_dir, create=True, provider=provider)
             if _is_link(secret_path):
                 raise ValueError("network credential path denied")
             _write_json(secret_path, {"apiKey": data["searchKey"]})

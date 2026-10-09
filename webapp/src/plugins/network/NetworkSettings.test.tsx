@@ -9,7 +9,33 @@ import {
   diagnoseNetwork,
   readNetworkSettings,
   saveNetworkSettings,
+  selectedSearchService,
 } from "./NetworkSettings";
+
+test("provider changes carry a selected service and retain blank saved secrets", async () => {
+  const original = globalThis.fetch;
+  const bodies: Record<string, unknown>[] = [];
+  globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+    if (init?.body) bodies.push(JSON.parse(String(init.body)));
+    return new Response(JSON.stringify(String(input).includes("csrf") ? {csrfToken:"local-test"} : {settings:{}}), {status:200});
+  }) as typeof fetch;
+  try {
+    await saveNetworkSettings({searchProvider:"tavily",searchEndpoint:"https://api.tavily.com/search",imageSearchEndpoint:"",
+      dohEndpoint:"",searchMode:"service",searchModelEndpoint:"",searchModel:"",searchKey:""});
+    await clearSavedNetworkKey("tavily");
+    const writes = bodies.filter(value => "searchProvider" in value);
+    assert.equal(writes[0].searchProvider,"tavily");
+    assert.equal("searchKey" in writes[0],false);
+    assert.deepEqual(writes[1],{clearSearchKey:true,searchProvider:"tavily"});
+  } finally {globalThis.fetch=original;}
+});
+
+test("old server key metadata is never borrowed for another search service", () => {
+  const old = {searchEndpoint:"https://brave.example/search",hasSearchKey:true,hasSavedSearchKey:true} as Parameters<typeof selectedSearchService>[0];
+  assert.equal(selectedSearchService(old,"brave")?.hasSearchKey,true);
+  assert.equal(selectedSearchService(old,"tavily"),undefined);
+  assert.equal(selectedSearchService(old,"searxng"),undefined);
+});
 
 test("disabled network settings show no controls and the guarded reader makes no request", async () => {
   const originalFetch = globalThis.fetch;
