@@ -78,7 +78,7 @@ class EvidenceRecoveryTests(unittest.TestCase):
         provider = Provider([report('E1')])
         out = run(self.store.load(self.session['id']), self.store, provider, self.gate)
         self.assertEqual('completed', out['status'])
-        self.assertTrue(any('Repair only the final JSON' in str(message.get('content')) for message in provider.requests[0]))
+        self.assertTrue(any('Repair only the final evidence references' in str(message.get('content')) for message in provider.requests[0]))
         self.assertEqual({'used': True, 'pending': False}, out['completion_reference_repair'])
         self.assertEqual('verified', out['completion']['status'])
 

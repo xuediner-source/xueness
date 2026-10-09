@@ -28,6 +28,7 @@ from pathlib import Path
 
 from ... import plugin_runtime
 from ...process_runtime import run_external
+from ...resources import _is_link
 
 #: A hung network clone must not pin a request thread.
 CLONE_TIMEOUT_SECONDS = 300
@@ -180,8 +181,8 @@ def validated_destination(dest, ctx: dict, root=None) -> Path:
     if not any(parent == base or parent.is_relative_to(base) for base in roots):
         raise CloneError("目标目录不在已授权的工作区内", 403)
     target = parent / name
-    if target.is_symlink():
-        raise CloneError("目标目录是符号链接，已拒绝")
+    if _is_link(target):
+        raise CloneError("目标目录是链接或重解析点，已拒绝")
     if target.exists():
         if not target.is_dir():
             raise CloneError("目标路径已存在同名文件", 409)

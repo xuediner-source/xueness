@@ -18,6 +18,7 @@ from unittest import mock
 from xueness import plugin_runtime
 from xueness.bundled_plugins.git import clone, operator_cli
 from xueness.bundled_plugins.settings import workspaces_api
+from tests.fs_link_helpers import make_directory_boundary_link, remove_directory_junction
 
 GIT = shutil.which("git")
 GIT_IDENT = ["-c", "user.name=t", "-c", "user.email=t@example.invalid",
@@ -166,7 +167,10 @@ class CloneRepositoryTests(unittest.TestCase):
         (self.projects / "busy").mkdir()
         (self.projects / "busy" / "f").write_text("x", encoding="utf-8")
         (self.projects / "file").write_text("x", encoding="utf-8")
-        (self.projects / "link").symlink_to(self.outside, target_is_directory=True)
+        link = self.projects / "link"
+        kind = make_directory_boundary_link(link, self.outside)
+        if kind == 'junction':
+            self.addCleanup(remove_directory_junction, link)
         cases = {
             str(self.outside / "w"): 403,
             str(self.projects / "busy"): 409,

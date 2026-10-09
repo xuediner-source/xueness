@@ -390,7 +390,9 @@ def main():
     # frozen API checks below. These fixtures never call a real model/network.
     subprocess.run([sys.executable, '-m', 'unittest',
                     'tests.test_tool_protocol_recovery', 'tests.test_native_evidence',
-                    'tests.test_app_server', '-q'], cwd=ROOT, check=True)
+                    'tests.test_app_server', 'tests.test_git_clone',
+                    'tests.test_office_tools', 'tests.test_lightweight_transport_budget',
+                    '-q'], cwd=ROOT, check=True)
     executable = args.executable or ROOT/'desktop/runtime/backend'/('xueness-backend.exe' if os.name == 'nt' else 'xueness-backend')
     with tempfile.TemporaryDirectory(prefix='xueness-frozen-check-', ignore_cleanup_errors=True) as temporary:
         data = Path(temporary)/'data'

@@ -5,6 +5,7 @@ import json
 import threading
 import time
 import unittest
+from contextlib import contextmanager
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from unittest.mock import patch
 
@@ -30,6 +31,13 @@ def _server(handler):
 
 
 class LightweightTransportBudgetTests(unittest.TestCase):
+    @contextmanager
+    def assert_timeout(self):
+        with self.assertRaises(ProviderRequestError) as caught:
+            yield
+        self.assertEqual('timeout', caught.exception.category)
+        self.assertEqual('deadline', caught.exception.stage)
+
     def provider(self, server, *, options=None, profile="lightweight"):
         return OpenAICompatible(
             base=f"http://127.0.0.1:{server.server_port}/v1",
@@ -89,7 +97,7 @@ class LightweightTransportBudgetTests(unittest.TestCase):
         server = _server(Handler)
         try:
             started = time.monotonic()
-            with self.assertRaises(TimeoutError):
+            with self.assert_timeout():
                 self.provider(server).complete([{"role": "user", "content": "hi"}], [])
             elapsed = time.monotonic() - started
             self.assertLess(elapsed, 2.5)
@@ -129,7 +137,7 @@ class LightweightTransportBudgetTests(unittest.TestCase):
         server = _server(Handler)
         try:
             started = time.monotonic()
-            with self.assertRaises(TimeoutError):
+            with self.assert_timeout():
                 self.provider(server).complete([{"role": "user", "content": "hi"}], [])
             self.assertLess(time.monotonic() - started, 2.5)
             self.assertEqual(1, state["calls"])
@@ -202,7 +210,7 @@ class LightweightTransportBudgetTests(unittest.TestCase):
         server = _server(Handler)
         try:
             started = time.monotonic()
-            with self.assertRaises(TimeoutError):
+            with self.assert_timeout():
                 self.anthropic_provider(server).complete(
                     [{"role": "user", "content": "hi"}], [])
             self.assertLess(time.monotonic() - started, 2.5)
@@ -287,7 +295,7 @@ class LightweightTransportBudgetTests(unittest.TestCase):
         server = _server(Handler)
         try:
             reasoning = []
-            with self.assertRaises(TimeoutError):
+            with self.assert_timeout():
                 self.anthropic_provider(server, options={
                     "requestTimeoutSeconds": 1, "transportRetries": 2,
                 }).stream(
@@ -358,7 +366,7 @@ class LightweightTransportBudgetTests(unittest.TestCase):
             })
             deltas = []
             started = time.monotonic()
-            with self.assertRaises(TimeoutError):
+            with self.assert_timeout():
                 provider.stream([{"role": "user", "content": "hi"}], [], deltas.append)
             self.assertLess(time.monotonic() - started, 2.5)
             self.assertEqual(["partial"], deltas)
@@ -401,7 +409,7 @@ class LightweightTransportBudgetTests(unittest.TestCase):
                 "requestTimeoutSeconds": 1, "transportRetries": 2,
             })
             reasoning = []
-            with self.assertRaises(TimeoutError):
+            with self.assert_timeout():
                 provider.stream(
                     [{"role": "user", "content": "hi"}], [],
                     on_reasoning_delta=reasoning.append,
@@ -445,7 +453,7 @@ class LightweightTransportBudgetTests(unittest.TestCase):
             })
             provider.request_deadline = time.monotonic() + 0.25
             started = time.monotonic()
-            with self.assertRaises(TimeoutError):
+            with self.assert_timeout():
                 provider.complete([{"role": "user", "content": "hi"}], [])
             self.assertLess(time.monotonic() - started, 0.9)
             self.assertTrue(state["finished"].wait(1))
@@ -474,7 +482,7 @@ class LightweightTransportBudgetTests(unittest.TestCase):
             })
             provider.request_deadline = time.monotonic() + 0.25
             started = time.monotonic()
-            with self.assertRaises(TimeoutError):
+            with self.assert_timeout():
                 provider.complete([{"role": "user", "content": "hi"}], [])
             self.assertLess(time.monotonic() - started, 0.9)
             self.assertEqual(1, state["calls"])

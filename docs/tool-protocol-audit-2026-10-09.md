@@ -51,6 +51,13 @@ Xueness 修复基线为 `5afa8a7`。ZCode 从官方仓库重新获取 HEAD，确
 - 全套回归最初卡在旧 app-server 测试 harness：Windows 的 `select()` 不接受匿名管道，随后清理阻塞。已改成专用管道读取线程和队列，25 项 app-server 回归通过；没有以放宽生产保护绕过测试。
 - 原生 Windows / Intel Mac / Apple Silicon Mac 安装包检查入口增加本轮工具协议、证据和 app-server 回归，避免只在开发源码目录验证。
 
+全套审查还发现两个工具执行层问题，修复归既有插件：
+
+- Git `git.clone` 原来只拒绝符号链接，漏掉 Windows 目录 junction。复用共享 `_is_link` 检查实际 reparse point，在克隆子进程启动前拒绝；真实 junction 回归验证不发生克隆。
+- Office 原子替换在本机出现短暂 Windows 拒绝访问。只对 WinError 5 / 32 / 33 最多尝试三次、间隔 50ms，每次重新检查路径及原读取哈希；永久拒绝仍失败，期间外部改动会终止替换。回归覆盖暂时占用恢复、永久失败保留原文件、外部编辑不被覆盖及临时文件清理。没有修改文件权限或强制解锁其它程序。
+
+旧回归中部分工具调用 fixture 缺少 write 必填 content，已补齐真实 schema 输入后再验证并行、审批与 hooks；无效参数的副作用拦截仍由专门回归覆盖。超时回归保留时间、次数和禁止回放检查，并核对当前 `ProviderRequestError` 的 timeout / deadline 分类。符号链接权限不足明确记为跳过；目录边界在 Windows 使用真实 junction，并清理链接本身。未启用开发者模式或修改系统策略来让测试通过。
+
 本机原始实验结果及日志存于 `E:\models\diagnostics\tool-protocol-audit-20261009`。这些是小样本功能证据，不是对 ZCode 或 Codex 模型能力的排名。完整回归、安装和原生跨平台构建的最终结果另记在交付记录中。
 
 ## 插件归属

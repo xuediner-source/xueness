@@ -380,7 +380,7 @@ class ToolEventTests(unittest.TestCase):
 
         self.replace_handler("write", gated_write)
         provider = _ScriptedProvider([
-            {"content": "", "tool_calls": [_call("w1", "write", path="a")]},
+            {"content": "", "tool_calls": [_call("w1", "write", path="a", content="fixture")]},
         ])
         out = self.run_turn(provider, gate=Gate(self.root, mode="plan"))
         self.assertFalse(out["results"]["w1"]["ok"])
@@ -417,8 +417,12 @@ class ToolEventTests(unittest.TestCase):
         timeout_patch.start()
         self.patches.append(timeout_patch)
 
+        release = threading.Event()
+        finished = threading.Event()
+        self.addCleanup(release.set)
         def slow(payload):
-            time.sleep(1.0)
+            release.wait(10)
+            finished.set()
 
         self.patch_callback("hooks", "after_tool_execution", slow)
         self.replace_handler(
@@ -426,13 +430,13 @@ class ToolEventTests(unittest.TestCase):
         provider = _ScriptedProvider([
             {"content": "", "tool_calls": [_call("r1", "read", path="a")]},
         ])
-        started = time.monotonic()
         out = self.run_turn(provider)
-        self.assertLess(time.monotonic() - started, 0.9,
-                        "a stalled observer must not stall the tool call")
+        self.assertFalse(finished.is_set(), 'the run must finish while the observer is still blocked')
         self.assertTrue(out["results"]["r1"]["ok"])
         timeouts = self.diagnostics(out, "timeout")
         self.assertEqual(1, len(timeouts))
+        release.set()
+        self.assertTrue(finished.wait(2))
         self.assertIn("exceeded", timeouts[0]["detail"])
 
     def test_disabled_plugin_stops_contributing_immediately(self):

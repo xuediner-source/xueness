@@ -3,10 +3,12 @@ from __future__ import annotations
 
 import hashlib
 import io
+import os
 import tempfile
 import unittest
 import zipfile
 from pathlib import Path
+from unittest.mock import patch
 
 from xueness.bundled_plugins.office import tooling
 
@@ -107,6 +109,56 @@ class OfficeToolTests(unittest.TestCase):
         self.assertTrue(result["ok"])
         self.assertNotIn("draft.docx", self.session["_office_read_proofs"])
         self.assertEqual(self.read("draft.docx")["document"]["paragraphs"][0]["text"], "New")
+
+    @unittest.skipUnless(os.name == 'nt', 'Windows atomic replacement behavior')
+    def test_atomic_replace_recovers_from_one_sharing_violation(self):
+        target = self.root/'artifact.docx'
+        target.write_bytes(b'old')
+        error = PermissionError('fixture sharing violation')
+        error.winerror = 32
+        actual = tooling.os.replace
+        with patch.object(tooling.os, 'replace', side_effect=[error, None]) as rename:
+            def attempt(source, destination):
+                if rename.call_count == 1:
+                    raise error
+                actual(source, destination)
+            rename.side_effect = attempt
+            tooling._write_atomic(target, b'new', create_only=False, root=self.root,
+                                  path=target.name, expected_sha256=hashlib.sha256(b'old').hexdigest())
+            self.assertEqual(2, rename.call_count)
+        self.assertEqual(b'new', target.read_bytes())
+        self.assertFalse(list(self.root.glob('.xueness-office-*.tmp')))
+
+    @unittest.skipUnless(os.name == 'nt', 'Windows atomic replacement behavior')
+    def test_atomic_retry_rejects_an_intervening_external_edit(self):
+        target = self.root/'artifact.docx'
+        target.write_bytes(b'old')
+        error = PermissionError('fixture sharing violation')
+        error.winerror = 32
+        def occupied(_source, destination):
+            Path(destination).write_bytes(b'external edit')
+            raise error
+        with patch.object(tooling.os, 'replace', side_effect=occupied) as rename:
+            with self.assertRaisesRegex(ValueError, 'changed after office_read'):
+                tooling._write_atomic(target, b'new', create_only=False, root=self.root,
+                                      path=target.name, expected_sha256=hashlib.sha256(b'old').hexdigest())
+            self.assertEqual(1, rename.call_count)
+        self.assertEqual(b'external edit', target.read_bytes())
+        self.assertFalse(list(self.root.glob('.xueness-office-*.tmp')))
+
+    @unittest.skipUnless(os.name == 'nt', 'Windows atomic replacement behavior')
+    def test_atomic_retry_is_bounded_and_retains_original_on_denial(self):
+        target = self.root/'artifact.docx'
+        target.write_bytes(b'old')
+        error = PermissionError('fixture access denied')
+        error.winerror = 5
+        with patch.object(tooling.os, 'replace', side_effect=error) as rename:
+            with self.assertRaises(PermissionError):
+                tooling._write_atomic(target, b'new', create_only=False, root=self.root,
+                                      path=target.name, expected_sha256=hashlib.sha256(b'old').hexdigest())
+            self.assertEqual(3, rename.call_count)
+        self.assertEqual(b'old', target.read_bytes())
+        self.assertFalse(list(self.root.glob('.xueness-office-*.tmp')))
 
     def test_gate_receives_exact_subject_and_workspace_symlinks_are_rejected(self):
         self.create("safe.docx", "docx", {"paragraphs": [{"text": "ok"}]})

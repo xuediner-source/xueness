@@ -103,7 +103,8 @@ class CustomProfileTests(unittest.TestCase):
     def test_a_symlinked_profile_file_is_refused(self):
         outside = Path(self.temp.name) / "outside.json"
         outside.write_text(json.dumps({"plugins": {"git": True}}), encoding="utf-8")
-        os.symlink(outside, self.directory / "linked.json")
+        from tests.fs_link_helpers import make_symlink
+        make_symlink(self.directory / "linked.json", outside)
         with self.assertRaises(ValueError):
             profiles.custom(self.state)
 

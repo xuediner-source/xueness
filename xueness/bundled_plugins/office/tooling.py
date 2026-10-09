@@ -9,6 +9,7 @@ import os
 import re
 import stat
 import tempfile
+import time
 import zipfile
 import zlib
 from pathlib import Path, PurePosixPath, PureWindowsPath
@@ -649,7 +650,8 @@ def _build_document(fmt: str, document) -> bytes:
     return data
 
 
-def _write_atomic(target: Path, data: bytes, *, create_only: bool, root: Path, path: str) -> None:
+def _write_atomic(target: Path, data: bytes, *, create_only: bool, root: Path, path: str,
+                  expected_sha256: str | None = None) -> None:
     """Write a complete artifact next to its target and atomically install it."""
     parent = target.parent
     if _is_link(parent) or not parent.is_dir():
@@ -667,7 +669,21 @@ def _write_atomic(target: Path, data: bytes, *, create_only: bool, root: Path, p
             os.link(temporary, target, follow_symlinks=False)
             os.unlink(temporary)
         else:
-            os.replace(temporary, target)
+            for attempt in range(3):
+                # Windows scanners can briefly deny rename. Keep the retry
+                # bounded and recheck the original read proof before each
+                # attempt so an intervening edit is never silently replaced.
+                _target(root, path, must_exist=True)
+                if expected_sha256 and not hmac.compare_digest(
+                        hashlib.sha256(_read_bytes(target)).hexdigest(), expected_sha256):
+                    raise ValueError("office file changed after office_read; read it again before replacing")
+                try:
+                    os.replace(temporary, target)
+                    break
+                except PermissionError as error:
+                    if os.name != 'nt' or getattr(error, 'winerror', None) not in (5, 32, 33) or attempt == 2:
+                        raise
+                    time.sleep(0.05)
         try:
             directory_fd = os.open(parent, os.O_RDONLY | getattr(os, "O_DIRECTORY", 0))
         except OSError:
@@ -745,7 +761,8 @@ def _replace(root, gate, args, session, call_id):
         latest = hashlib.sha256(_read_bytes(target)).hexdigest()
         if not hmac.compare_digest(latest, expected):
             raise ValueError("office file changed after office_read; read it again before replacing")
-        _write_atomic(target, data, create_only=False, root=root, path=path)
+        _write_atomic(target, data, create_only=False, root=root, path=path,
+                      expected_sha256=expected)
     finally:
         DEFAULT_LOCKS.release(target, owner)
     proofs.pop(path, None)

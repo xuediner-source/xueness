@@ -26,6 +26,9 @@ from xueness.tool_registry import REGISTRY_BY_NAME
 
 
 def _call(cid, name, **arguments):
+    # Scheduler tests need valid write arguments to reach their fake handler.
+    if name == 'write' and 'path' in arguments:
+        arguments = {'content': 'fixture payload', **arguments}
     return {"id": cid, "type": "function",
             "function": {"name": name, "arguments": json.dumps(arguments)}}
 

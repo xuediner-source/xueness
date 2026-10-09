@@ -12,6 +12,7 @@ from pathlib import Path
 
 from xueness.bundled_plugins.browser.plugin import REGISTRY, _subject
 from xueness.bundled_plugins.browser.profiles import managed_profile, ProfileError
+from tests.fs_link_helpers import make_directory_boundary_link, remove_directory_junction
 
 
 class ParityBrowserTests(unittest.TestCase):
@@ -56,9 +57,13 @@ class ParityBrowserTests(unittest.TestCase):
             real_state = Path(tmp) / "real_state"
             real_state.mkdir()
             symlink_state = Path(tmp) / "sym_state"
-            symlink_state.symlink_to(real_state)
-            with self.assertRaises(ProfileError):
-                managed_profile(symlink_state)
+            kind = make_directory_boundary_link(symlink_state, real_state)
+            try:
+                with self.assertRaises(ProfileError):
+                    managed_profile(symlink_state)
+            finally:
+                if kind == 'junction':
+                    remove_directory_junction(symlink_state)
 
     def test_bridge_source_guards_screenshot_output(self):
         bridge_path = Path(__file__).parent.parent / "xueness" / "bundled_plugins" / "browser" / "bridge.mjs"

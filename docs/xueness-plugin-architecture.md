@@ -808,3 +808,5 @@ Office 内容交付检查复用 `office.tooling.delivery_content_text` 的有界
 `providers.tool_recovery` 拥有无损 JSON 外包装规范化、重复键/非法值拒绝、原生 SSE 调用身份校验、已声明参数约束预检与有界无正文诊断；实现为 providers 的 `tool_protocol`、`tool_arguments`。JSON 兼容诊断和实际运行共用同一个 decoder；候选配置必须通过工具结果续轮，不能仅凭第一条工具 JSON 验证通过。协议修复按连续错误计数，失败流以结束状态归档，不生成助手假消息。
 
 `sessions.native_evidence` 拥有原生 Markdown 回答末尾的显式证据引用行；实现为 sessions 的 `native_evidence`。内核仍负责统一 journal、真实结果验证、审批及停止边界，引用只允许当前轮真实成功证据，关闭 sessions 后不能借此通过验证。前端复用已有 providers 编辑器和 sessions 请求阶段，不新增布局容器或共享例外。详见 [工具调用审查](tool-protocol-audit-2026-10-09.md)。
+
+既有 `git.clone` 复用共享 reparse 检查拒绝 Windows junction；既有 Office authoring 处理 Windows 短暂原子替换失败，最多三次且每次核对读取哈希，期间外部编辑、路径重定向和永久拒绝继续失败。这是现有工具执行的跨平台修复，不增加工具或共享业务例外。
