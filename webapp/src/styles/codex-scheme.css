@@ -599,3 +599,23 @@ html[data-xn-palette="claude"] .xn-shell-layout .xn-error-banner > button { bord
   html[data-xn-palette="claude"] .xn-shell-layout .xn-composer,
   html[data-xn-palette="claude"] .xn-shell-layout .xn-composer__send { transition: none; }
 }
+
+/* ── 10. 实测对齐：Codex 桌面端（macOS 深色，2x 窗口截图实测，2026-10-10） ──
+ * Desktop window chrome (?xuenessDesktop=1) only, wide windows only. Values
+ * in xueness-opt/screens/codex-real/MEASURE.md: 44px title bar in the frame
+ * colour, a 52px icon rail, a 238px sidebar sheet with a 10px top-left corner,
+ * and a 4px frame on the right and bottom of the canvas. */
+@media (min-width: 901px) {
+  html[data-xn-palette="claude"] .xn-shell-layout--desktop-titlebar { grid-template-rows: var(--codex-titlebar-height) minmax(0, 1fr); background: var(--codex-frame); }
+  html[data-xn-palette="claude"] .xn-shell-layout--desktop-titlebar .xn-shell-layout__titlebar { height: var(--codex-titlebar-height); background: var(--codex-frame); }
+  html[data-xn-palette="claude"] .xn-shell-layout--desktop-titlebar .xn-desktop-titlebar { height: var(--codex-titlebar-height); background: transparent; }
+  html[data-xn-palette="claude"] .xn-shell-layout--desktop-titlebar .xn-shell-sidebar {
+    position: relative;
+    padding: 0 0 var(--codex-frame-inset) var(--codex-rail-width);
+    background: var(--codex-frame);
+  }
+  html[data-xn-palette="claude"] .xn-shell-layout--desktop-titlebar .xn-shell-sidebar__body { border-top-left-radius: 10px; background: var(--bg-sidebar); }
+  html[data-xn-palette="claude"] .xn-shell-layout--desktop-titlebar .xn-shell-main { padding: 0 var(--codex-frame-inset) var(--codex-frame-inset) 0; background: var(--codex-frame); }
+  html[data-xn-palette="claude"] .xn-shell-layout--desktop-titlebar .xn-shell-main__panel { border-radius: 0 0 6px; }
+  html[data-xn-palette="claude"] .xn-shell-layout--desktop-titlebar.xn-shell-layout--sidebar-collapsed .xn-shell-main__panel { border-radius: 10px 0 6px; }
+}
