@@ -10,6 +10,9 @@ test("titlebar resolves native host platforms for platform-specific caption inse
   assert.equal(resolveDesktopTitlebarPlatform("macOS"), "macos");
   assert.equal(resolveDesktopTitlebarPlatform("Win32"), "windows");
   assert.equal(resolveDesktopTitlebarPlatform("Linux x86_64"), "other");
+  assert.equal(resolveDesktopTitlebarPlatform("win32"), "windows");
+  // 名字里带 "win" 但不是 Windows 的平台不应套用 Windows 标题栏
+  assert.equal(resolveDesktopTitlebarPlatform("cygwin-like"), "other");
 });
 
 test("DesktopTitlebar exposes native-safe navigation, workbench menu and effective plugin actions", () => {

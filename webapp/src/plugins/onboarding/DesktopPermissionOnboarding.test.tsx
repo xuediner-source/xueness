@@ -316,6 +316,9 @@ test("Windows wizard is trimmed to the microphone step with Windows copy", () =>
 test("desktop permission onboarding does not assume macOS before the native snapshot", () => {
   assert.equal(initialDesktopPermissionPlatform("Win32"), "win32");
   assert.equal(initialDesktopPermissionPlatform("MacIntel"), "darwin");
+  // Node 风格的 process.platform："darwin" 含有 "win"，不能被判成 Windows。
+  assert.equal(initialDesktopPermissionPlatform("darwin"), "darwin");
+  assert.equal(initialDesktopPermissionPlatform("win32"), "win32");
   assert.equal(initialDesktopPermissionPlatform("Linux x86_64"), "unknown");
   assert.equal(initialDesktopPermissionPlatform(undefined), "unknown");
   assert.equal(buildOnboardingSteps(initialDesktopPermissionPlatform("Linux x86_64")).length, 1);

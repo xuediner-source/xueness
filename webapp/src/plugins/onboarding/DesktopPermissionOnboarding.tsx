@@ -3,6 +3,7 @@ import { get, post } from "../../xuenessApi";
 import { t as tr } from "../../i18n";
 import { IconXuenessMark } from "../../ui/icons";
 import { shouldDismissModalOnEscape, useModalFocusScope } from "../shared";
+import { resolveHostPlatform } from "../../xuenessShortcutDisplay";
 import "./desktop-permission-onboarding.css";
 
 export type DesktopPermissionId = "accessibility" | "screen" | "fullDisk" | "microphone";
@@ -25,9 +26,10 @@ export function isDesktopOnboardingAvailable(enabled: boolean, desktopEnabled: b
 }
 
 export function initialDesktopPermissionPlatform(platform?: string): string {
-  const normalized = platform?.toLowerCase() ?? "";
-  if (normalized.includes("win")) return "win32";
-  if (normalized.includes("mac")) return "darwin";
+  if (!platform) return "unknown";
+  const host = resolveHostPlatform(platform);
+  if (host === "windows") return "win32";
+  if (host === "macos") return "darwin";
   // Unknown and non-macOS platforms should not briefly show macOS-only setup
   // while the native permission snapshot is still loading.
   return "unknown";

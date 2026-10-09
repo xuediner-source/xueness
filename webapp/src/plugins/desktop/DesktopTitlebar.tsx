@@ -1,18 +1,15 @@
 import React, { useEffect } from "react";
 import { ArrowLeft, ArrowRight, CircleHelp, PanelLeft, Terminal } from "lucide-react";
 import { t as tr } from "../../i18n";
-import { isMacPlatform } from "../../xuenessShortcutDisplay";
+import { resolveHostPlatform, type HostPlatform } from "../../xuenessShortcutDisplay";
 import { IconXuenessMark } from "../../ui/icons";
 import "./desktop-titlebar.css";
 
-export type DesktopTitlebarPlatform = "macos" | "windows" | "other";
+export type DesktopTitlebarPlatform = HostPlatform;
 
 /** Resolve the browser's native platform string for host-specific titlebar insets. */
 export function resolveDesktopTitlebarPlatform(platform?: string): DesktopTitlebarPlatform {
-  const nativePlatform = platform ?? (typeof navigator === "undefined" ? "" : navigator.platform);
-  if (isMacPlatform(nativePlatform)) return "macos";
-  if (nativePlatform.toLowerCase().includes("win")) return "windows";
-  return "other";
+  return resolveHostPlatform(platform);
 }
 
 export type DesktopTitlebarProps = {
