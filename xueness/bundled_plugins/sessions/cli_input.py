@@ -217,9 +217,15 @@ def capture_clipboard_image(root):
 def _capture_bounded_stdout(command, target, cwd, env):
     """Capture one image/png stream without buffering unbounded clipboard data."""
     try:
+        popen_kwargs = {}
+        if os.name != "nt":
+            popen_kwargs["start_new_session"] = True
         process = spawn_external(subprocess.Popen, command, cwd=cwd, env=env, stdin=subprocess.DEVNULL,
                                  stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
-                                 creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0) if os.name == "nt" else 0)
+                                 creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0) if os.name == "nt" else 0,
+                                 **popen_kwargs)
+        from ...process_runtime import note_owned_process
+        note_owned_process(process, group=os.name != "nt")
     except OSError:
         raise ValueError("clipboard image capture command failed") from None
     try:
@@ -234,7 +240,7 @@ def _capture_bounded_stdout(command, target, cwd, env):
                         break
                     total += len(chunk)
                     if total > MAX_MEDIA_FILE_BYTES:
-                        process.terminate()
+                        _stop_capture(process)
                         raise ValueError("clipboard PNG exceeds 2 MiB")
                     output.write(chunk)
         finally:
@@ -242,21 +248,24 @@ def _capture_bounded_stdout(command, target, cwd, env):
         try:
             status = process.wait(timeout=2)
         except subprocess.TimeoutExpired:
-            process.terminate()
-            process.wait(timeout=2)
+            _stop_capture(process)
             raise ValueError("clipboard image capture timed out") from None
         if status:
             raise ValueError("clipboard does not contain a PNG image")
     except ValueError:
-        if process.poll() is None:
-            process.terminate()
-            process.wait(timeout=2)
+        _stop_capture(process)
         raise
     except OSError:
-        if process.poll() is None:
-            process.terminate()
-            process.wait(timeout=2)
+        _stop_capture(process)
         raise ValueError("clipboard image capture failed") from None
+    finally:
+        from ...process_runtime import forget_owned_process
+        forget_owned_process(process)
+
+
+def _stop_capture(process):
+    from ...process_runtime import terminate_process_tree
+    terminate_process_tree(process, group=os.name != "nt", grace=1.0)
 
 
 def enqueue(queue, attachment):

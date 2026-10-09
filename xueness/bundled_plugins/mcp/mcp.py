@@ -538,6 +538,9 @@ class McpClient:
                     self.proc = proc
                     return proc
 
+            session = {}
+            if os.name != 'nt':
+                session['start_new_session'] = True
             self.proc = spawn_external(process_factory,
                 argv,
                 shell=False,
@@ -550,7 +553,10 @@ class McpClient:
                 bufsize=1,
                 env=env,
                 creationflags=creationflags,
+                **session,
             )
+            from ...process_runtime import note_owned_process
+            note_owned_process(self.proc, group=os.name != 'nt')
             if os.name == 'nt':
                 # CREATE_SUSPENDED keeps the process inert while
                 # spawn_external restores PyInstaller's process-wide DLL path.
@@ -761,22 +767,15 @@ class McpClient:
                         proc.stdin.close()
                 except Exception:  # noqa: BLE001
                     pass
-                if proc.poll() is None:
-                    try:
-                        proc.terminate()
-                    except Exception:  # noqa: BLE001
-                        pass
+                from ...process_runtime import forget_owned_process, terminate_process_tree
                 try:
-                    proc.wait(timeout=CLOSE_GRACE)
+                    # Windows already asked the Job Object to kill the tree.
+                    # POSIX has no job, so the session group is the tree.
+                    terminate_process_tree(
+                        proc, group=os.name != 'nt', grace=CLOSE_GRACE)
                 except Exception:  # noqa: BLE001
-                    try:
-                        proc.kill()
-                    except Exception:  # noqa: BLE001
-                        pass
-                    try:
-                        proc.wait(timeout=CLOSE_GRACE)
-                    except Exception:  # noqa: BLE001
-                        pass
+                    pass
+                forget_owned_process(proc)
                 for stream in (proc.stdout, proc.stderr):
                     try:
                         if stream is not None:

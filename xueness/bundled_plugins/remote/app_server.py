@@ -482,6 +482,8 @@ class AppServer:
             registry = self.ctx.get("plugin_scopes")
             if registry is not None:
                 registry.dispose()
+            from ...process_runtime import release_owned_processes
+            release_owned_processes()
 
     def handle_line(self, line):
         try:

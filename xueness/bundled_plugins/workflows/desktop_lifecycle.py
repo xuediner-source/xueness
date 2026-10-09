@@ -29,6 +29,26 @@ def register(worker, store, wid):
     threading.Thread(target=reap, daemon=True).start()
 
 
+def _stop_recorded_commands(store, wid):
+    """Stop command sessions this host's worker still has marked running."""
+    try:
+        record = store.load(wid)
+    except (OSError, ValueError):
+        return
+    nodes = record.get('nodes') if isinstance(record, dict) else None
+    if not isinstance(nodes, dict):
+        return
+    from ...process_runtime import terminate_pid
+    for node in nodes.values():
+        if not isinstance(node, dict) or node.get('status') != 'running':
+            continue
+        pid = node.get('pid')
+        if isinstance(pid, int) and 1 < pid < 2**32 and pid != os.getpid():
+            # POSIX commands are session leaders. Windows taskkill /T follows
+            # the process tree from that pid.
+            terminate_pid(pid, group=os.name != 'nt', grace=0.5)
+
+
 def shutdown():
     with _lock:
         workers = list(_workers.items())
@@ -39,14 +59,25 @@ def shutdown():
             except (OSError, ValueError):
                 pass
     deadline = time.monotonic()+2
-    for worker, _ in workers:
+    for worker, (store, wid) in workers:
         remaining = deadline-time.monotonic()
-        if remaining <= 0:
-            break
+        if remaining > 0:
+            try:
+                worker.wait(timeout=remaining)
+            except TimeoutError:
+                pass
+            except Exception:
+                # A stuck worker is force-stopped below; do not skip the others.
+                pass
+        # Read command pids before killing the worker so a SIGKILL cannot
+        # orphan session-leader grandchildren.
         try:
-            worker.wait(timeout=remaining)
-        except TimeoutError:
+            _stop_recorded_commands(store, wid)
+        except (OSError, ValueError):
             pass
-        except Exception:
-            # Host group/Job Object termination is the final cleanup boundary.
-            pass
+        if worker.poll() is None:
+            from ...process_runtime import terminate_process_tree
+            try:
+                terminate_process_tree(worker, group=False, grace=1.0)
+            except (OSError, ValueError):
+                pass

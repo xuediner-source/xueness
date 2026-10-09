@@ -15,7 +15,6 @@ import json
 import os
 from pathlib import Path
 import re
-import signal
 import subprocess
 import sys
 import tempfile
@@ -491,20 +490,13 @@ class WorkflowStore:
 
 
 def _terminate(proc):
-    if proc.poll() is not None:
+    if proc is None or proc.returncode is not None:
         return
-    if os.name == 'nt':
-        from .windows import terminate_tree
-        terminate_tree(proc)
-        return
-    try:
-        os.killpg(proc.pid, signal.SIGTERM)
-        proc.wait(timeout=2)
-    except subprocess.TimeoutExpired:
-        os.killpg(proc.pid, signal.SIGKILL)
-        proc.wait(timeout=2)
-    except ProcessLookupError:
-        pass
+    from ...process_runtime import terminate_process_tree
+    # Command children are session leaders on POSIX. Windows taskkill /T
+    # follows the parent-child tree and ignores the group flag. Do not poll()
+    # first: that reaps the pid before the group signal.
+    terminate_process_tree(proc, group=os.name != 'nt', grace=2.0)
 
 
 def _owner_permission_ceiling(store, record):
@@ -691,11 +683,12 @@ def _execute(store, record, spec):
     finally:
         if proc is not None:
             _terminate(proc)
-            # A command must not leave descendants holding output/leases open.
-            try:
-                os.killpg(proc.pid, signal.SIGKILL)
-            except ProcessLookupError:
-                pass
+            # The leader may already have been reaped by the read loop. Its
+            # session can still hold descendants; this is the same final
+            # group signal as before, only for a session this command created.
+            if os.name != 'nt' and isinstance(proc.pid, int) and proc.pid > 1:
+                from ...process_runtime import terminate_pid
+                terminate_pid(proc.pid, group=True, grace=0.2)
             proc.stdout.close()
         for fd in reversed(locks):
             os.close(fd)

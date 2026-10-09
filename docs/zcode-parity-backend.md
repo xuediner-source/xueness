@@ -106,14 +106,14 @@ Xueness：
 
 - `sessions/http_routes.py` 的 stop 只在进程内 `running` 集合里时把 id 加入 `stop_requested`，并让 task registry 取消该会话仍在跑的任务。空闲会话也返回 200，`stopping` 为 false。
 - `core.py` 的 `should_stop` 在循环和 `on_delta` / `on_reasoning_delta` 里生效：回调里抛 `_StreamStopped`，流记录写成 `interrupted`。没有新 token 的阻塞 `provider.complete`，或流已经发出去但套接字不再回调时，这个标志要等到该调用返回。
-- `shell/tooling.py` 的 `exec` 使用 `subprocess.run(..., timeout=30)`。停止标志不能提前结束这 30 秒。到点后 Python 会杀掉直接子进程并返回 `command_timeout`；调用没有新建进程组，也没有按创建身份核对孙进程。上游的进程树回收补的是这一段，而不是超时数字本身。
+- `shell/tooling.py` 的 `exec` 经 `process_runtime.run_external` 执行，超时仍是 30 秒。会话 `should_stop`（用户停止或本轮墙钟截止）现在会提前结束这次 argv，并返回 `command_cancelled`。POSIX 上这次调用是新会话，超时和取消都 `killpg` 整组；Windows 用 `taskkill /T /F`。已回收的 pid 不会再次发信号，因此没有按创建时间核对身份：领导进程若已被 `wait`/`poll` 收割，不能再安全地按 pid 找孙进程。上游多出来的是这层身份核对，而不是超时数字本身。
 - 终端中断在 `terminal/windows_interrupt.py`，只管终端会话，不管 Agent 的 `exec`。
 - 单个子任务取消是 `subagents.cancel_one`，设置键 `agent.subagentCancelOneEnabled`，默认关闭，到下一个 provider/工具边界才停。工作流取消在 workflows 插件里，用 ticket，和会话 stop 不是同一条命令。
 - 模型流被打断后，`deltas.py` 把该 stream id 标成 interrupted，续读不会把下一轮正文拼进来。这一段是对齐的，缺的是打断本身的到达范围。
 
-差距：停止是协作标志，不是带所有权的进程树回收。一次 `exec` 最多让停止晚 30 秒；非流式模型请求晚一个完整往返。多个表面（HTTP、app-server、工作流、子任务）各有各的取消入口，没有一条带 workId 的回执说明「取消了什么 / 为什么没取消」。
+差距：已启动且走 `run_external` 的 argv 会随既有 stop 结束。非流式模型请求仍要等完整往返。多个表面（HTTP、app-server、工作流、子任务）各有各的取消入口，没有一条带 workId 的回执说明「取消了什么 / 为什么没取消」。进程身份仍不对创建时间做核对；查询失败不能当成进程已退出，已收割的 pid 直接跳过。
 
-若以后补：让既有 stop 在流式与非流式、以及已启动的 argv 上同样结束，属于现有语义的补全，应附回归，而不是新开一种默认开启的模式。进程身份核对要复用已有平台 helper（`process_runtime`、终端里的 Windows 中断），不要再写一套按裸 PID 扫描全机的逻辑。单子任务取消保持实验开关和默认关闭。需要前端时，stop 响应里区分「已请求、已结束、没有正在跑的工作」即可；本轮响应不变。
+若以后补：进程身份核对继续复用 `process_runtime`，不要再写一套按裸 PID 扫描全机的逻辑，也不要在领导进程已经被收割之后对复用的 pid 发信号。单子任务取消保持实验开关和默认关闭。需要前端时，stop 响应里区分「已请求、已结束、没有正在跑的工作」即可；`exec` 被停止时工具结果的 `error_code` 是 `command_cancelled`，现有错误字符串已经能显示，本轮不改 stop 的 HTTP 响应。
 
 ## 4. 重连：帧级有界重放，加上按 epoch 的重新订阅
 

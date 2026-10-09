@@ -48,13 +48,20 @@ class _BrowserBroker:
         self.responses = queue.Queue()
         env = _worker_environment()
         from .runtime import worker_command
-        from ...process_runtime import spawn_external
+        from ...process_runtime import note_owned_process, spawn_external
+        popen_kwargs = {}
+        if os.name != 'nt':
+            # Session leader so close() can killpg the browser and its children.
+            popen_kwargs['start_new_session'] = True
         self.process = spawn_external(subprocess.Popen,
             worker_command(self.profile), cwd=self.root,
             env=env, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
             stderr=subprocess.DEVNULL, text=True, encoding="utf-8", bufsize=1,
             creationflags=getattr(subprocess, 'CREATE_NO_WINDOW', 0) if os.name == 'nt' else 0,
+            **popen_kwargs,
         )
+        self._tree_group = os.name != 'nt'
+        note_owned_process(self.process, group=self._tree_group)
         self.reader = threading.Thread(target=self._read_output, daemon=True,
                                        name="xueness-browser-output")
         self.reader.start()
@@ -93,7 +100,9 @@ class _BrowserBroker:
         if len(encoded.encode("utf-8")) > MAX_REQUEST:
             raise ValueError("browser request exceeds the size limit")
         with self.lock:
-            if self.process.poll() is not None:
+            from ...process_runtime import process_running
+            if not process_running(self.process):
+                self.close()
                 raise RuntimeError("browser worker stopped")
             try:
                 self.process.stdin.write(encoded + "\n")
@@ -117,20 +126,22 @@ class _BrowserBroker:
 
     def close(self):
         with self.lock:
+            if getattr(self, "_tree_closed", False):
+                return
+            self._tree_closed = True
             process = getattr(self, "process", None)
-            if process is None or process.poll() is not None:
+            if process is None:
                 return
             try:
                 if process.stdin:
                     process.stdin.close()
-                process.wait(timeout=2)
-            except (OSError, subprocess.TimeoutExpired):
-                process.terminate()
-                try:
-                    process.wait(timeout=1)
-                except subprocess.TimeoutExpired:
-                    process.kill()
-                    process.wait(timeout=1)
+            except OSError:
+                pass
+            # Signal before any wait/poll. Reaping the node first lets a
+            # renderer it spawned keep the pipes and the pid.
+            from ...process_runtime import forget_owned_process, terminate_process_tree
+            terminate_process_tree(process, group=getattr(self, "_tree_group", os.name != "nt"), grace=1.0)
+            forget_owned_process(process)
 
 
 def shutdown(state_dir=None):
@@ -169,7 +180,8 @@ def _broker(state, root):
     key = str(state)
     with _BROKERS_LOCK:
         current = _BROKERS.get(key)
-        if current is not None and current.process.poll() is None:
+        from ...process_runtime import process_running
+        if current is not None and process_running(current.process):
             return current
         if current is not None:
             _BROKERS.pop(key, None)

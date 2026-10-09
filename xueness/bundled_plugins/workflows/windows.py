@@ -1,23 +1,14 @@
 """Windows pipe streaming and owned command-tree cancellation."""
-import os
 import queue
 import subprocess
 import threading
 import time
-from ...process_runtime import spawn_external, run_external
+from ...process_runtime import spawn_external
 
 
 def terminate_tree(proc):
-    if proc.poll() is None:
-        run_external(subprocess.run, ['taskkill', '/PID', str(proc.pid), '/T', '/F'],
-                       stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
-                       stderr=subprocess.DEVNULL, timeout=8,
-                       creationflags=getattr(subprocess, 'CREATE_NO_WINDOW', 0))
-        try:
-            proc.wait(timeout=2)
-        except subprocess.TimeoutExpired:
-            proc.kill()
-            proc.wait(timeout=2)
+    from ...process_runtime import terminate_process_tree
+    terminate_process_tree(proc, grace=2.0)
 
 
 def execute_command(store, record, spec, cwd, logpath, env, start):

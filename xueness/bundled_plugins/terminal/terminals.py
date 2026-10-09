@@ -70,14 +70,10 @@ class Terminal:
             pass
         finally:
             try:
-                os.killpg(self.proc.pid, signal.SIGHUP)
-            except (ProcessLookupError, PermissionError):
+                from ...process_runtime import terminate_process_tree
+                terminate_process_tree(self.proc, group=True, grace=1.0, sig=signal.SIGHUP)
+            except (ProcessLookupError, PermissionError, OSError):
                 pass
-            try:
-                self.proc.wait(timeout=1)
-            except subprocess.TimeoutExpired:
-                self.proc.kill()
-                self.proc.wait(timeout=2)
             with self.lock:
                 if not self.closed:
                     os.close(self.master)
@@ -124,22 +120,8 @@ class Terminal:
         with self.lock:
             if self.closed:
                 return
-            try:
-                os.killpg(self.proc.pid, signal.SIGTERM)
-            except (ProcessLookupError, PermissionError):
-                pass
-        try:
-            self.proc.wait(timeout=1)
-        except subprocess.TimeoutExpired:
-            try:
-                os.killpg(self.proc.pid, signal.SIGKILL)
-            except (ProcessLookupError, PermissionError):
-                pass
-            self.proc.wait(timeout=2)
-        try:
-            os.killpg(self.proc.pid, signal.SIGKILL)
-        except (ProcessLookupError, PermissionError):
-            pass
+        from ...process_runtime import terminate_process_tree
+        terminate_process_tree(self.proc, group=True, grace=1.0)
         self.reader.join(timeout=2)
 
 

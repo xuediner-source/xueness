@@ -40,10 +40,18 @@ class ShellDesktopTests(unittest.TestCase):
             self.assertEqual(tooling._decode_output("本机输出".encode(encoding)), "本机输出")
 
     @unittest.skipUnless(os.name == "nt", "Windows console encoding")
-    def test_windows_oem_code_page_preserves_chinese_and_children_are_hidden(self):
+    def test_windows_console_command_uses_utf8_and_hides_children(self):
         import ctypes
         cp = f'cp{ctypes.windll.kernel32.GetOEMCP()}'
-        self.assertEqual(tooling._decode_output("本机输出".encode(cp)), "本机输出")
+        # Captured pipes are UTF-8 on every host. An OEM code page is not a
+        # second decoder; a console that is already UTF-8 still round-trips.
+        raw = "本机输出".encode(cp)
+        decoded = tooling._decode_output(raw)
+        if cp.lower() in ("utf-8", "utf8", "cp65001"):
+            self.assertEqual(decoded, "本机输出")
+        else:
+            self.assertNotEqual(decoded, "本机输出")
+            self.assertIn("\ufffd", decoded)
         with patch.object(process_runtime, "run_external", wraps=process_runtime.run_external) as run:
             result = self.execute(["powershell.exe", "-NoProfile", "-NonInteractive", "-Command",
                                    "[Console]::OutputEncoding=[System.Text.UTF8Encoding]::new(); Write-Output '本机输出'"])

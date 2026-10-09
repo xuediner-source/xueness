@@ -2,7 +2,6 @@
 import base64
 import os
 from pathlib import Path
-import subprocess
 import sys
 import threading
 import time
@@ -95,12 +94,8 @@ class WindowsTerminal:
                 # The ConPTY root is our launcher; terminate its owned tree
                 # before pywinpty can kill only the launcher and orphan its shell.
                 if self.proc.isalive():
-                    from ...process_runtime import run_external
-                    env = {k: v for k, v in os.environ.items() if k.upper() in
-                           ('PATH', 'SYSTEMROOT', 'WINDIR', 'TEMP', 'TMP', 'COMSPEC')}
-                    run_external(subprocess.run,
-                                 ['taskkill.exe', '/PID', str(self.proc.pid), '/T', '/F'],
-                                 env=env, capture_output=True, timeout=5, check=False)
+                    from ...process_runtime import signal_process_tree
+                    signal_process_tree(self.proc.pid)
                     # Windows termination is asynchronous. taskkill returning
                     # does not prove that the owned process handle is signaled.
                     deadline = time.monotonic() + 2

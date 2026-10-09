@@ -798,6 +798,12 @@ def main(argv=None) -> int:
         server.serve_forever()
     except KeyboardInterrupt:
         pass
+    finally:
+        # KeyboardInterrupt leaves serve_forever without server_close, so plugin
+        # scopes would not stop terminals, browsers, or MCP servers.
+        server.server_close()
+        from .process_runtime import release_owned_processes
+        release_owned_processes()
     return 0
 
 

@@ -49,7 +49,9 @@ class SubprocessTextTests(unittest.TestCase):
             self.assertEqual(seen[1]['encoding'], 'utf-8')
             self.assertEqual(seen[1]['errors'], 'strict')
             self.assertEqual(seen[2]['encoding'], 'gbk')
-            self.assertNotIn('errors', seen[2])
+            # Omitted errors follow the shared replacement policy even when the
+            # caller picked a non-UTF-8 encoding. Explicit errors=strict stays.
+            self.assertEqual(seen[2]['errors'], 'replace')
             self.assertNotIn('encoding', seen[3])
             self.assertEqual(seen[4]['encoding'], 'utf-8')
             self.assertEqual(seen[4]['errors'], 'replace')
@@ -63,20 +65,21 @@ class SubprocessTextTests(unittest.TestCase):
             process_runtime.run_external(
                 subprocess.run, command, capture_output=True, text=True, errors='strict', timeout=10)
 
-    def test_oem_bytes_decode_on_windows_and_stay_untranslated_on_macos(self):
+    def test_subprocess_bytes_decode_as_utf8_on_windows_and_macos(self):
+        decoded = {}
         for platform_name, os_name in _HOSTS:
             with self.subTest(platform=platform_name), \
                  mock.patch.object(process_runtime.sys, 'platform', platform_name), \
-                 mock.patch.object(process_runtime.os, 'name', os_name), \
-                 mock.patch.object(process_runtime, 'windows_oem_encoding', return_value='gbk'):
-                decoded = process_runtime.decode_subprocess_output(_GBK_OUTPUT)
-                self.assertEqual(decoded, tooling._decode_output(_GBK_OUTPUT))
+                 mock.patch.object(process_runtime.os, 'name', os_name):
+                decoded[os_name] = process_runtime.decode_subprocess_output(_GBK_OUTPUT)
+                self.assertEqual(decoded[os_name], tooling._decode_output(_GBK_OUTPUT))
                 self.assertEqual(process_runtime.decode_subprocess_output('本机输出'.encode()), '本机输出')
-                if os_name == 'nt':
-                    self.assertEqual(decoded, '本机输出')
-                else:
-                    self.assertNotIn('本机输出', decoded)
-                    self.assertIn('\ufffd', decoded)
+                self.assertEqual(
+                    process_runtime.decode_subprocess_output('本机输出'.encode('utf-16')),
+                    '本机输出')
+                self.assertNotEqual(decoded[os_name], '本机输出')
+                self.assertIn('\ufffd', decoded[os_name])
+        self.assertEqual(decoded['nt'], decoded['posix'])
         with mock.patch.object(process_runtime.os, 'name', 'posix'), self.assertRaises(OSError):
             process_runtime.windows_oem_encoding()
 

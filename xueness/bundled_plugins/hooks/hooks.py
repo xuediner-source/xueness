@@ -352,10 +352,8 @@ class HookRunner:
 
 
 def _timeout_output(exc) -> str:
+    from ...process_runtime import decode_subprocess_output
     raw = getattr(exc, "stdout", None)
-    if isinstance(raw, bytes):
-        try:
-            return raw.decode("utf-8", "replace")
-        except Exception:  # noqa: BLE001
-            return ""
-    return raw if isinstance(raw, str) else ""
+    if isinstance(raw, (bytes, str)):
+        return decode_subprocess_output(raw)
+    return ""

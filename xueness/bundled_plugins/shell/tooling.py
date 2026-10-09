@@ -18,6 +18,16 @@ def _description():
     return text + " Host OS: POSIX. For shell syntax, explicitly invoke an available shell."
 
 
+def _execution_stop():
+    """Session stop callback, or None when this exec is not inside a run."""
+    try:
+        from ...tool_contract import execution_context
+        stop = execution_context().get('should_stop')
+    except ValueError:
+        return None
+    return stop if callable(stop) else None
+
+
 def _exec(root, gate, args, session, call_id) -> dict:
     argv = args["argv"]
     if not isinstance(argv, list) or not argv or any(not isinstance(x, str) or not x for x in argv):
@@ -34,18 +44,23 @@ def _exec(root, gate, args, session, call_id) -> dict:
         gate.check("exec", subject, call_id)
     else:
         gate.check("exec", subject)
-    from ...process_runtime import run_external
+    from ...process_runtime import ProcessCancelled, run_external
+    stop = _execution_stop()
     try:
         proc = run_external(subprocess.run, argv, cwd=root, shell=False, stdin=subprocess.DEVNULL,
-                          capture_output=True, timeout=30,
+                          capture_output=True, text=True, timeout=30,
                           creationflags=getattr(subprocess, 'CREATE_NO_WINDOW', 0) if os.name == 'nt' else 0,
                           env={k: v for k, v in os.environ.items()
-                               if not re.search(r"KEY|TOKEN|SECRET|PASSWORD|CREDENTIAL", k, re.I)})
+                               if not re.search(r"KEY|TOKEN|SECRET|PASSWORD|CREDENTIAL", k, re.I)},
+                          **({'cancel': stop} if stop is not None else {}))
     except FileNotFoundError:
         return {"ok": False, "error": "command not found", "error_code": "command_not_found", "argv": argv,
                 "retryable": False, "output": "The executable is unavailable on this host. " + _description()}
     except subprocess.TimeoutExpired:
         return {"ok": False, "error": "command timed out after 30 seconds", "error_code": "command_timeout",
+                "argv": argv, "retryable": False}
+    except ProcessCancelled:
+        return {"ok": False, "error": "command cancelled", "error_code": "command_cancelled",
                 "argv": argv, "retryable": False}
     output = (_decode_output(proc.stdout) + _decode_output(proc.stderr))[:12000]
     return {"ok": proc.returncode == 0, "exit_code": proc.returncode, "argv": argv, "output": output}

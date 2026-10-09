@@ -70,6 +70,8 @@ def main(argv=None):
         shutdown()
         server.shutdown()
         server.server_close()
+        from ...process_runtime import release_owned_processes
+        release_owned_processes()
         runner.join(timeout=5)
     return 0
 

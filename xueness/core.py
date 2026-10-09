@@ -1568,7 +1568,8 @@ def _drive_run(session: dict, store: Store, provider, gate: Gate, max_steps=None
         from .tool_contract import bind_execution
         with bind_execution(store=store, state_dir=state_dir,
                             registry=registry, tool_catalog=tool_catalog,
-                            subagent_coordinator=_subagent_coordinator):
+                            subagent_coordinator=_subagent_coordinator,
+                            should_stop=stop_requested):
             result = dispatch(root, gate, tool_name, arguments, session)
         if not isinstance(result, dict):
             result = {"ok": False, "error": "tool returned a malformed result"}

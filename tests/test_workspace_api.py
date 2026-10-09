@@ -358,17 +358,27 @@ class WorkspaceApiTests(unittest.TestCase):
         root_a.mkdir()
         root_b.mkdir()
         context = {}
+        started = {}
 
         class ServerStub:
             def serve_forever(self):
                 return None
 
-        with patch.object(web, "create_server", side_effect=lambda port, ctx, host: (context.update(ctx) or ServerStub())), \
+            def server_close(self):
+                self.closed = True
+
+        def serve(port, ctx, host):
+            context.update(ctx)
+            started['server'] = ServerStub()
+            return started['server']
+
+        with patch.object(web, "create_server", side_effect=serve), \
              patch.dict(os.environ, {"XUENESS_WORKSPACE_ROOTS": ""}), \
              redirect_stdout(StringIO()):
             self.assertEqual(web.main(["--state", str(self.state), "--web-runs", str(self.runs),
                                        "--workspace-root", str(root_a), "--workspace-root", str(root_b)]), 0)
         self.assertEqual(context["workspace_roots"], (root_a.resolve(), root_b.resolve()))
+        self.assertTrue(started['server'].closed)
 
         missing = self.base / "missing"
         file_path = self.base / "not-a-directory"
