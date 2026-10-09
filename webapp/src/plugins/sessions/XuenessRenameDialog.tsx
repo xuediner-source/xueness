@@ -1,6 +1,6 @@
 import { t as tr, tf } from '../../i18n';
 import React from "react";
-import { isImeComposingEvent } from '../../xuenessShortcutDisplay';
+import { deferCompositionEnd, isImeComposingEvent } from '../../xuenessShortcutDisplay';
 
 /**
  * Modal rename dialog for sessions (replaces window.prompt):
@@ -177,11 +177,16 @@ export function XuenessRenameDialog({
           aria-label={title}
           value={draft}
           onChange={(event) => setDraft(event.target.value)}
-          onCompositionStart={() => {
+          onCompositionStart={(event) => {
             compositionActiveRef.current = true;
+            event.currentTarget.setAttribute("data-composing", "true");
           }}
-          onCompositionEnd={() => {
-            compositionActiveRef.current = false;
+          onCompositionEnd={(event) => {
+            const el = event.currentTarget;
+            deferCompositionEnd(() => {
+              compositionActiveRef.current = false;
+              el?.removeAttribute("data-composing");
+            });
           }}
         />
         <div className="xn-dialog__actions">

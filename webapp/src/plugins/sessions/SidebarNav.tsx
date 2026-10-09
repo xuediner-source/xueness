@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useId, useRef, useState } from "react";
 import { IconLoader, IconPencil, IconPin, IconTrash, IconX } from "../../ui/icons";
 import { t as tr } from "../../i18n";
+import { isImeComposingEvent } from "../../xuenessShortcutDisplay";
 import { useUniformListWindow } from "./ListVirtualWindow";
 
 /** 状态圆点：ZCode 用小彩色圆点而非字形。 */
@@ -361,7 +362,7 @@ export function SidebarNav({
   }, [cancelPendingReveal, ensureIndex, optionIdAt]);
 
   const onKeyDown = (event: React.KeyboardEvent<HTMLUListElement>) => {
-    if (!listbox) return;
+    if (!listbox || isImeComposingEvent(event)) return;
     // Shift+F10 / ContextMenu 交给外层的条目上下文菜单处理。
     if (event.key === "ContextMenu" || (event.key === "F10" && event.shiftKey)) return;
     if (event.key === "Enter") {

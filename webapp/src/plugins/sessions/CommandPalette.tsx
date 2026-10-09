@@ -4,7 +4,7 @@ import { t as tr, tf, useLocale } from "../../i18n";
 import { fuzzyFilter } from "../../xuenessFuzzy";
 import type { SessionSummary } from "../../xuenessWorkbench";
 import { createDebouncer } from "./debounce";
-import { isImeComposingEvent } from "../../xuenessShortcutDisplay";
+import { deferCompositionEnd, isImeComposingEvent } from "../../xuenessShortcutDisplay";
 import "./sessions.css";
 
 type PaletteCommand = { id: string; label: string; description: string };
@@ -84,6 +84,20 @@ export function isPaletteCompositionKey(event: {
   return isImeComposingEvent(event);
 }
 
+export function shouldDismissPaletteOnEscape(
+  event: {
+    key: string;
+    isComposing?: boolean;
+    keyCode?: number;
+    nativeEvent?: { isComposing?: boolean; keyCode?: number };
+    compositionActive?: boolean;
+  },
+  compositionActive = false,
+): boolean {
+  if (event.key !== "Escape") return false;
+  return !compositionActive && !isPaletteCompositionKey(event);
+}
+
 function makePaletteCommands(settingsEnabled: boolean): PaletteCommand[] {
   return [
     { id: "new-task", label: tr("新建任务"), description: tr("回到空态输入卡开始新任务") },
@@ -159,6 +173,14 @@ export function CommandPalette({ dialogRef, inputRef, sessions, busy, sessionsEn
 
   const onKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {
     const isComposing = compositionActiveRef.current || isPaletteCompositionKey(event);
+    if (event.key === "Escape") {
+      event.preventDefault();
+      event.stopPropagation();
+      if (shouldDismissPaletteOnEscape(event, compositionActiveRef.current)) {
+        onClose();
+      }
+      return;
+    }
     if (event.target !== inputRef.current || isComposing) return;
     if (["ArrowDown", "ArrowUp", "Home", "End"].includes(event.key)) {
       const next = nextPaletteIndex(event.key, activeIndex ?? -1, enabledIndices);
@@ -203,11 +225,16 @@ export function CommandPalette({ dialogRef, inputRef, sessions, busy, sessionsEn
           value={search}
           onChange={event => onSearchChange(event.target.value)}
           onKeyDown={onKeyDown}
-          onCompositionStart={() => {
+          onCompositionStart={(event) => {
             compositionActiveRef.current = true;
+            event.currentTarget.setAttribute("data-composing", "true");
           }}
-          onCompositionEnd={() => {
-            compositionActiveRef.current = false;
+          onCompositionEnd={(event) => {
+            const el = event.currentTarget;
+            deferCompositionEnd(() => {
+              compositionActiveRef.current = false;
+              el?.removeAttribute("data-composing");
+            });
           }}
         />
         <div className="xn-command-results" id={listboxId} role="listbox" aria-label={tr("搜索结果")}>

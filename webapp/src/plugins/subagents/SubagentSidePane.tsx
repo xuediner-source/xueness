@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { AlertTriangle, Bot, Check, ChevronDown, ChevronRight, LoaderCircle, RefreshCw, X } from "lucide-react";
 import { cancelSubagentTask, get, post } from "../../xuenessApi";
 import { t as tr, tf } from "../../i18n";
+import { isImeComposingEvent } from "../../xuenessShortcutDisplay";
 import { startSessionPolling } from "../sessions/SessionPolling";
 import "../../styles/subagent-sidepane.css";
 
@@ -483,6 +484,7 @@ function TaskCard({
           role="button"
           tabIndex={0}
           onKeyDown={e => {
+            if (isImeComposingEvent(e)) return;
             if (e.key === "Enter" || e.key === " ") {
               e.preventDefault();
               onToggleExpand();

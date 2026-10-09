@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState, useSyncExternalStore } from "react"
 import { t as tr, tf } from "../../i18n";
 import { answerQuestion, loadQuestion, type PendingQuestionRecord, type QuestionResponse, type AnswerResponse } from "./questionApi";
 import { evaluatePendingQuestionKey } from "../shared";
+import { deferCompositionEnd } from "../../xuenessShortcutDisplay";
 import "./PendingQuestion.css";
 
 type QuestionTransport = {
@@ -119,8 +120,17 @@ export function PendingQuestion({ sessionId, pendingQuestion, enabled, disabled 
     <textarea id={`question-answer-${sessionId}`} value={current ? state.draft : ""} disabled={busy || !state.question}
       placeholder={tr("填写答复，或补充任务所需的信息…")} rows={3} maxLength={10000}
       onChange={event => model.setDraft(event.currentTarget.value)}
-      onCompositionStart={() => { compositionActiveRef.current = true; }}
-      onCompositionEnd={() => { compositionActiveRef.current = false; }}
+      onCompositionStart={(event) => {
+        compositionActiveRef.current = true;
+        event.currentTarget.setAttribute("data-composing", "true");
+      }}
+      onCompositionEnd={(event) => {
+        const el = event.currentTarget;
+        deferCompositionEnd(() => {
+          compositionActiveRef.current = false;
+          el?.removeAttribute("data-composing");
+        });
+      }}
       onKeyDown={event => {
         const action = evaluatePendingQuestionKey({ ...event, compositionActive: compositionActiveRef.current });
         if (action === "submit") {

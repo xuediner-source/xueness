@@ -9,7 +9,7 @@ import { Select } from "../../ui/Select";
 import { XuenessShortcutsPanel } from "./XuenessShortcutsPanel";
 import { SettingsGroup, SettingsRow } from "./SettingsPrimitives";
 import { CODE_PREVIEW_THEME_OPTIONS, CodePreview, isCodePreviewTheme, type CodePreviewTheme } from "../../ui/CodePreview";
-import { displayBinding } from "../../xuenessShortcutDisplay";
+import { displayBinding, isImeComposingEvent } from "../../xuenessShortcutDisplay";
 
 // ============================================================================
 // 5. SettingsSections
@@ -114,6 +114,7 @@ function SettingsFontSizeInput({
         onChange={(event) => setDraft(event.currentTarget.value)}
         onBlur={commit}
         onKeyDown={(event) => {
+          if (isImeComposingEvent(event)) return;
           if (event.key === "Enter") event.currentTarget.blur();
           else if (event.key === "Escape") {
             event.preventDefault();

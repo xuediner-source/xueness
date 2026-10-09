@@ -2,7 +2,7 @@ import { GoalEditorDialog } from './plugins/planning/GoalEditorDialog';
 import { sessionContextUsage } from './plugins/sessions/sessionContextUsage';
 import { listPlugins, listResources, listCommandCatalog, setPluginEnabled, post, saveDefaultModelSelection, type XuenessPlugin } from "./xuenessApi";
 import { t as tr, tf, useLocale, setLocale } from './i18n';
-import { isImeComposingEvent } from './xuenessShortcutDisplay';
+import { isImeComposingEvent, resolveHostPlatform } from './xuenessShortcutDisplay';
 /**
  * Xueness workbench container — chat-first.
  *
@@ -1231,6 +1231,7 @@ export function XuenessWorkbenchContainer() {
         isPluginEffective,
         panel,
         busy,
+        platform: resolveHostPlatform(),
       });
       if (!action) return;
       event.preventDefault();
@@ -1506,6 +1507,7 @@ export function XuenessWorkbenchContainer() {
         panelOpen: panel !== "chat",
         running: composerRunning,
         stopping: activeId !== null && stoppingSessions.has(activeId),
+        platform: resolveHostPlatform(),
       }));
       if (action === "clear-screen") {
         e.preventDefault();
@@ -2279,6 +2281,7 @@ export function XuenessWorkbenchContainer() {
               draftKey={`session:${session.id}`}
               draftStore={composerDraftStore}
               inputRef={heroInputRef}
+              platform={resolveHostPlatform()}
               sendShortcut={settingsValues.sendShortcut === "mod-enter" ? "mod-enter" : "enter"}
               onSend={handleSend}
               disabled={composerDisabled || queueSubmittingSessions.has(session.id)}
@@ -2335,6 +2338,7 @@ export function XuenessWorkbenchContainer() {
               <Composer
                 draftKey="new-task"
                 draftStore={composerDraftStore}
+                platform={resolveHostPlatform()}
                 sendShortcut={settingsValues.sendShortcut === "mod-enter" ? "mod-enter" : "enter"}
                 variant="hero"
                   topContent={workspaceContext}

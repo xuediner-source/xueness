@@ -3,7 +3,7 @@ import { AlertTriangle, GitBranch, LoaderCircle, RefreshCw, X } from "lucide-rea
 import { t as tr, tf } from "../../i18n";
 import { forkSession, loadForkBoundaries } from "../../xuenessWorkbench";
 import type { ForkBoundary, ForkSessionResponse } from "../../xuenessWorkbench";
-import { isImeComposingEvent } from "../../xuenessShortcutDisplay";
+import { deferCompositionEnd, isImeComposingEvent } from "../../xuenessShortcutDisplay";
 import "./sessions.css";
 
 export type ForkSessionDialogProps = {
@@ -104,6 +104,7 @@ export function ForkSessionDialog({ open, sourceId, sourceTitle, initialTurn, on
   const [requestMessage, setRequestMessage] = React.useState("");
   const requestNumber = React.useRef(0);
   const dialogRef = React.useRef<HTMLElement | null>(null);
+  const compositionActiveRef = React.useRef(false);
   const selected = boundaries.find(boundary => boundary.token === selectedToken) ?? null;
   const titleValue = title.trim();
   const titleValid = Array.from(titleValue).length <= 120 && !/[\x00-\x1f\x7f]/u.test(titleValue);
@@ -145,7 +146,7 @@ export function ForkSessionDialog({ open, sourceId, sourceTitle, initialTurn, on
   React.useEffect(() => {
     if (!open || busy) return;
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (shouldDismissForkDialogOnEscape(event, busy)) {
+      if (shouldDismissForkDialogOnEscape({ ...event, compositionActive: compositionActiveRef.current }, busy)) {
         event.preventDefault();
         onCancel();
       }
@@ -219,7 +220,7 @@ export function ForkSessionDialog({ open, sourceId, sourceTitle, initialTurn, on
           {!loading && !error && boundaries.length === 0 && <p className="xn-session-fork__state" role="status">{tr("没有可用的完整轮次边界。")}</p>}
           {!loading && boundaries.length > 0 && <ForkBoundaryChoices boundaries={boundaries} selectedToken={selectedToken} busy={busy} onSelect={setSelectedToken} />}
         </div>
-        <label className="xn-session-fork__title-field"><span>{tr("新会话标题（可选）")}</span><input maxLength={120} value={title} disabled={busy} onChange={event => setTitle(event.currentTarget.value)} aria-label={tr("新会话标题（可选）")} />{!titleValid && <small role="alert">{tr("标题最多 120 个可见字符，不能包含控制字符。")}</small>}</label>
+        <label className="xn-session-fork__title-field"><span>{tr("新会话标题（可选）")}</span><input maxLength={120} value={title} disabled={busy} onChange={event => setTitle(event.currentTarget.value)} onCompositionStart={(event) => { compositionActiveRef.current = true; event.currentTarget.setAttribute("data-composing", "true"); }} onCompositionEnd={(event) => { const el = event.currentTarget; deferCompositionEnd(() => { compositionActiveRef.current = false; el?.removeAttribute("data-composing"); }); }} onKeyDown={(event) => { if (event.key === "Enter" && (compositionActiveRef.current || isImeComposingEvent(event))) event.preventDefault(); }} aria-label={tr("新会话标题（可选）")} />{!titleValid && <small role="alert">{tr("标题最多 120 个可见字符，不能包含控制字符。")}</small>}</label>
         <p className="xn-session-fork__note">{tr("新会话会保留所选轮次之前的对话历史；待审批操作与旧会话的审批状态不会复制。创建分叉不会自动调用模型或工具。")}</p>
       </div>
       <footer className="xn-session-fork__footer">

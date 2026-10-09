@@ -373,6 +373,10 @@ export function ElicitationForm({
     handleElicitationAction(action, { ...pending, requestedSchema: schema }, values, onResolve, (field, code) => onInvalid?.(field, code));
   };
   const onKeyDown = (event: React.KeyboardEvent<HTMLFormElement>) => {
+    if (event.key === "Enter" && isImeComposingEvent(event)) {
+      event.preventDefault();
+      return;
+    }
     if (!shouldDismissElicitationOnEscape(event)) return;
     event.preventDefault();
     submit("cancel");

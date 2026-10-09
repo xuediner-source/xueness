@@ -2,6 +2,7 @@ import React, { useMemo, useState } from "react";
 import { t as tr, tf, useLocale } from "./i18n";
 import type { XuenessPlugin, XuenessPluginFeature } from "./xuenessApi";
 import { XUENESS_PLUGIN_REGISTRY } from "./xuenessPluginRegistry";
+import { isImeComposingEvent } from "./xuenessShortcutDisplay";
 import "./styles/plugins.css";
 
 export type XuenessPluginManagerProps = {
@@ -217,8 +218,7 @@ export function XuenessPluginManager({ plugins, loading, error, onRefresh, onTog
                     onKeyDown={(event) => {
                       // Keep native Enter/Space activation. During IME composition
                       // those keys commit text and must not toggle the disclosure.
-                      if ((event.key === "Enter" || event.key === " ") &&
-                        (event.nativeEvent.isComposing || event.nativeEvent.keyCode === 229)) {
+                      if ((event.key === "Enter" || event.key === " ") && isImeComposingEvent(event)) {
                         event.preventDefault();
                       }
                     }}

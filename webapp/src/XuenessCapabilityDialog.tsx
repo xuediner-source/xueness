@@ -36,6 +36,24 @@ export function shouldDismissCapabilityDialogOnEscape(
   return !isImeComposingEvent(event);
 }
 
+export function shouldSubmitCapabilityDialogOnEnter(
+  event: {
+    key: string;
+    isComposing?: boolean;
+    nativeEvent?: { isComposing?: boolean; keyCode?: number };
+    keyCode?: number;
+    compositionActive?: boolean;
+    target?: unknown;
+  },
+  busy = false,
+  valid = true,
+): boolean {
+  if (event.key !== "Enter" || isImeComposingEvent(event) || busy || !valid) return false;
+  const target = event.target as { tagName?: string } | null;
+  if (target?.tagName === "TEXTAREA") return false;
+  return true;
+}
+
 export function trapCapabilityDialogTab(
   event: { key: string; shiftKey: boolean; preventDefault: () => void },
   activeElement: unknown,
@@ -242,15 +260,13 @@ export function XuenessCapabilityDialog({
 
   const handleKeyDown = (event: React.KeyboardEvent) => {
     // An IME composition's Enter/Esc belong to the composition, not the dialog.
-    if (event.nativeEvent.isComposing || event.keyCode === 229) return;
+    if (isImeComposingEvent(event)) return;
     if (shouldDismissCapabilityDialogOnEscape(event, busy, Boolean(onCancel))) {
       event.preventDefault();
       onCancel?.();
       return;
     }
-    if (event.key === "Enter") {
-      const target = event.target as HTMLElement | null;
-      if (target?.tagName === "TEXTAREA") return; // Enter is a newline there
+    if (shouldSubmitCapabilityDialogOnEnter(event, busy, canSubmit)) {
       event.preventDefault();
       submit();
       return;

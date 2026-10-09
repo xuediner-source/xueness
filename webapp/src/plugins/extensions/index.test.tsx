@@ -108,6 +108,12 @@ test("marketplace confirmation traps Tab at both boundaries and focuses the dial
 test("marketplace confirmation handles Escape, backdrop dismissal, and opener focus restoration", () => {
   assert.equal(shouldDismissMarketplaceDialogOnEscape({ key: "Escape" }, false), true);
   assert.equal(shouldDismissMarketplaceDialogOnEscape({ key: "Escape", isComposing: true }, false), false);
+  assert.equal(shouldDismissMarketplaceDialogOnEscape({ key: "Escape", nativeEvent: { isComposing: true } }, false), false);
+  assert.equal(shouldDismissMarketplaceDialogOnEscape({ key: "Escape", keyCode: 229 }, false), false);
+  assert.equal(shouldDismissMarketplaceDialogOnEscape({ key: "Escape", nativeEvent: { keyCode: 229 } }, false), false);
+  assert.equal(shouldDismissMarketplaceDialogOnEscape({ key: "Process" }, false), false);
+  assert.equal(shouldDismissMarketplaceDialogOnEscape({ key: "Dead" }, false), false);
+  assert.equal(shouldDismissMarketplaceDialogOnEscape({ key: "Escape", compositionActive: true }, false), false);
   assert.equal(shouldDismissMarketplaceDialogOnEscape({ key: "Escape" }, true), false);
   const backdrop = {};
   assert.equal(shouldDismissMarketplaceDialogOnBackdrop(backdrop, backdrop, false), true);

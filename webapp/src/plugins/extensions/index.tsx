@@ -11,6 +11,7 @@ import {
   ShieldCheck,
 } from "lucide-react";
 import { installMarketplaceItem, listMarketplace, type MarketplaceItem } from "../../xuenessApi";
+import { isImeComposingEvent } from "../../xuenessShortcutDisplay";
 import { t as tr, tf } from "../../i18n";
 import "../../styles/marketplace.css";
 
@@ -66,10 +67,16 @@ export function restoreMarketplaceDialogFocus(
 }
 
 export function shouldDismissMarketplaceDialogOnEscape(
-  event: { key: string; isComposing?: boolean; keyCode?: number },
+  event: {
+    key: string;
+    isComposing?: boolean;
+    keyCode?: number;
+    nativeEvent?: { isComposing?: boolean; keyCode?: number };
+    compositionActive?: boolean;
+  },
   busy: boolean,
 ): boolean {
-  return event.key === "Escape" && !event.isComposing && event.keyCode !== 229 && !busy;
+  return event.key === "Escape" && !isImeComposingEvent(event) && !busy;
 }
 
 export function shouldDismissMarketplaceDialogOnBackdrop(

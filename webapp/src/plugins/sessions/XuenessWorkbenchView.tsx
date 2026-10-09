@@ -12,7 +12,7 @@ import type { ComposerCapability, ComposerInput } from "../../xuenessComposer";
 import { ComposerCapabilityMenu, MAX_SELECTED_COMPOSER_CAPABILITIES, capabilityLabel, matchesComposerSearch } from './ComposerCapabilityMenu';
 import { Search, Target, Workflow, Blocks } from 'lucide-react';
 import { completionPresentation } from './completionPresentation';
-import { displayBinding, isModKeyPressed, isImeComposingEvent } from '../../xuenessShortcutDisplay';
+import { deferCompositionEnd, displayBinding, isModKeyPressed, isImeComposingEvent } from '../../xuenessShortcutDisplay';
 import { formatCommandArgv } from "../../xuenessWorkbench";
 
 export type TaskListProps = {
@@ -503,6 +503,7 @@ export type ComposerProps = {
    * and the keyboard hint. Chips and @-mention suggestions stay available.
    */
   minimal?: boolean;
+  platform?: string;
 };
 
 export type ComposerDraftState = {
@@ -645,6 +646,7 @@ export function Composer({
   commands = [],
   files = [],
   minimal = false,
+  platform,
 }: ComposerProps) {
   const localDraftsRef = useRef<Map<string, ComposerDraftState>>(new Map());
   const draftsRef = draftStore ?? localDraftsRef;
@@ -981,6 +983,7 @@ export function Composer({
         { ...e, compositionActive: compositionActiveRef.current },
         sendShortcut,
         suggestions.length > 0 && currentSuggestion >= 0,
+        platform,
       );
       if (intent === "accept-suggestion") {
         e.preventDefault();
@@ -1107,11 +1110,16 @@ export function Composer({
           setSubmissionError("");
         }}
         onKeyDown={handleKeyDown}
-        onCompositionStart={() => {
+        onCompositionStart={(event) => {
           compositionActiveRef.current = true;
+          event.currentTarget.setAttribute("data-composing", "true");
         }}
-        onCompositionEnd={() => {
-          compositionActiveRef.current = false;
+        onCompositionEnd={(event) => {
+          const el = event.currentTarget;
+          deferCompositionEnd(() => {
+            compositionActiveRef.current = false;
+            el?.removeAttribute("data-composing");
+          });
         }}
         onPaste={(event) => {
           const pastedFiles = event.clipboardData.files;
@@ -1160,6 +1168,7 @@ export function Composer({
                 disabled={disabled}
                 onClick={() => setPlusOpen((open) => !open)}
                 onKeyDown={(event) => {
+                  if (isImeComposingEvent(event)) return;
                   if (event.key === "ArrowDown" || event.key === "Enter" || event.key === " ") {
                     event.preventDefault();
                     setPlusOpen(true);

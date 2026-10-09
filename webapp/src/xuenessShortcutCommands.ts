@@ -96,6 +96,7 @@ const RESERVED_SHORTCUTS = new Set([
   "mod+-",
   "mod+h",
   "mod+m",
+  "mod+f",
   "mod+ctrl+f",
 ]);
 
@@ -148,6 +149,9 @@ export function isReservedShortcut(binding: string): boolean {
 }
 
 export function recordShortcutEvent(event: ShortcutEventLike, platform?: string): ShortcutRecordingResult {
+  if (isImeComposingEvent(event)) {
+    return { kind: "invalid", reason: "unsupported-key" };
+  }
   const keyLower = event.key.toLowerCase();
   if (MODIFIER_KEYS.has(keyLower)) {
     const pressed = keyLower === "control" || keyLower === "ctrl" ? "Ctrl"
@@ -284,7 +288,7 @@ export function isEditorTarget(target: unknown): boolean {
   return className.includes("editor") || className.includes("diff");
 }
 
-const EDITING_OPERATIONS = new Set(["a", "c", "v", "x", "z", "y"]);
+const EDITING_OPERATIONS = new Set(["a", "c", "v", "x", "z", "y", "f"]);
 
 /**
  * 检查全局快捷键与当前焦点所在的输入框、终端、编辑器之间是否存在冲突。

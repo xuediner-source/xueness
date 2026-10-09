@@ -6,7 +6,7 @@ import React from 'react';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { DesktopTrayMenu, groupTraySessions, type TraySession, type TraySnapshot } from './DesktopTrayMenu';
+import { DesktopTrayMenu, groupTraySessions, shouldDismissTrayMenuOnEscape, type TraySession, type TraySnapshot } from './DesktopTrayMenu';
 import { applyDesktopTrayCommand } from './DesktopTrayBridge';
 
 const id = (n: number) => n.toString(16).padStart(32, '0');
@@ -55,6 +55,18 @@ test('main workbench bridge rejects disabled, busy and malformed commands and al
   applyDesktopTrayCommand({ kind: 'session', id: id(0) }, { ...actions, busy: true });
   applyDesktopTrayCommand({ kind: 'session', id: id(1) }, actions); applyDesktopTrayCommand({ kind: 'new' }, actions);
   assert.deepEqual(called, [id(0), id(1), 'new']);
+});
+
+test('tray Escape dismissal guards against IME composition', () => {
+  assert.equal(shouldDismissTrayMenuOnEscape({ key: 'Escape' }), true);
+  assert.equal(shouldDismissTrayMenuOnEscape({ key: 'Enter' }), false);
+  assert.equal(shouldDismissTrayMenuOnEscape({ key: 'Escape', isComposing: true }), false);
+  assert.equal(shouldDismissTrayMenuOnEscape({ key: 'Escape', nativeEvent: { isComposing: true } }), false);
+  assert.equal(shouldDismissTrayMenuOnEscape({ key: 'Escape', keyCode: 229 }), false);
+  assert.equal(shouldDismissTrayMenuOnEscape({ key: 'Escape', nativeEvent: { keyCode: 229 } }), false);
+  assert.equal(shouldDismissTrayMenuOnEscape({ key: 'Process' }), false);
+  assert.equal(shouldDismissTrayMenuOnEscape({ key: 'Dead' }), false);
+  assert.equal(shouldDismissTrayMenuOnEscape({ key: 'Escape', compositionActive: true }), false);
 });
 
 

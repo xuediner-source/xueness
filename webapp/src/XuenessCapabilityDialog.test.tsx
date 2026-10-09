@@ -9,7 +9,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { renderToStaticMarkup } from "react-dom/server";
 
-import { XuenessCapabilityDialog, shouldDismissCapabilityDialogOnEscape, trapCapabilityDialogTab } from "./XuenessCapabilityDialog";
+import { XuenessCapabilityDialog, shouldDismissCapabilityDialogOnEscape, shouldSubmitCapabilityDialogOnEnter, trapCapabilityDialogTab } from "./XuenessCapabilityDialog";
 import type { CapabilityItem } from "./xuenessCapabilities";
 
 function item(partial: Partial<CapabilityItem> & { id: string }): CapabilityItem {
@@ -200,4 +200,24 @@ test("CapabilityDialog: IME 组合输入状态下的 Escape 不触发退出", ()
   assert.equal(shouldDismissCapabilityDialogOnEscape({ key: "Escape", compositionActive: true }, false, true), false);
   // 非 Escape 键不退出
   assert.equal(shouldDismissCapabilityDialogOnEscape({ key: "Enter" }, false, true), false);
+});
+
+test("CapabilityDialog: Enter 提交与 IME 组合输入状态防御", () => {
+  // 正常 Enter 提交
+  assert.equal(shouldSubmitCapabilityDialogOnEnter({ key: "Enter" }), true);
+  // busy 或 invalid 时不提交
+  assert.equal(shouldSubmitCapabilityDialogOnEnter({ key: "Enter" }, true, true), false);
+  assert.equal(shouldSubmitCapabilityDialogOnEnter({ key: "Enter" }, false, false), false);
+  // textarea 内 Enter 作为换行，不提交
+  assert.equal(shouldSubmitCapabilityDialogOnEnter({ key: "Enter", target: { tagName: "TEXTAREA" } }), false);
+  // input 内 Enter 正常提交
+  assert.equal(shouldSubmitCapabilityDialogOnEnter({ key: "Enter", target: { tagName: "INPUT" } }), true);
+  // IME 状态下绝不提交
+  assert.equal(shouldSubmitCapabilityDialogOnEnter({ key: "Enter", isComposing: true }), false);
+  assert.equal(shouldSubmitCapabilityDialogOnEnter({ key: "Enter", nativeEvent: { isComposing: true } }), false);
+  assert.equal(shouldSubmitCapabilityDialogOnEnter({ key: "Enter", keyCode: 229 }), false);
+  assert.equal(shouldSubmitCapabilityDialogOnEnter({ key: "Enter", nativeEvent: { keyCode: 229 } }), false);
+  assert.equal(shouldSubmitCapabilityDialogOnEnter({ key: "Process" }), false);
+  assert.equal(shouldSubmitCapabilityDialogOnEnter({ key: "Dead" }), false);
+  assert.equal(shouldSubmitCapabilityDialogOnEnter({ key: "Enter", compositionActive: true }), false);
 });

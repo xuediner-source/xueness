@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
+import { isImeComposingEvent } from '../../xuenessShortcutDisplay';
 import './desktop-tray-menu.css';
 
 export type TraySession = { id: string; title: string; project: string; status: string; pinned: boolean; updatedAt: string };
@@ -15,6 +16,17 @@ export function groupTraySessions(sessions: TraySession[]) {
   const recent = sessions.slice(0, 3);
   const visible = new Set([...running, ...pinned, ...recent].map(session => session.id));
   return { running, pinned, recent, more: sessions.filter(session => !visible.has(session.id)) };
+}
+
+export function shouldDismissTrayMenuOnEscape(event: {
+  key: string;
+  isComposing?: boolean;
+  nativeEvent?: { isComposing?: boolean; keyCode?: number };
+  keyCode?: number;
+  compositionActive?: boolean;
+}): boolean {
+  if (event.key !== 'Escape' || isImeComposingEvent(event)) return false;
+  return true;
 }
 
 export function DesktopTrayMenu({ snapshot, api }: { snapshot: TraySnapshot; api?: TrayApi }) {
@@ -46,7 +58,7 @@ export function DesktopTrayMenu({ snapshot, api }: { snapshot: TraySnapshot; api
   </section>;
   return <main ref={root} role="menu" aria-label={text('Xueness 托盘菜单', 'Xueness tray menu')} className="xn-tray-menu" data-theme={snapshot.dark ? 'dark' : 'light'} tabIndex={-1}
     onKeyDown={event => {
-      if (event.key === 'Escape') { event.preventDefault(); if (more) setMore(false); else api?.dismiss(); }
+      if (shouldDismissTrayMenuOnEscape(event)) { event.preventDefault(); if (more) setMore(false); else api?.dismiss(); }
       if (['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) {
         event.preventDefault();
         const buttons = Array.from(root.current?.querySelectorAll<HTMLButtonElement>('button[role="menuitem"]:not(:disabled)') ?? []);

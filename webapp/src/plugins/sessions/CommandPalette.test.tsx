@@ -12,6 +12,7 @@ import {
   nextPaletteIndex,
   paletteActivationIndex,
   paletteWorkspaceLabel,
+  shouldDismissPaletteOnEscape,
   CommandPalette,
 } from "./CommandPalette";
 
@@ -77,6 +78,17 @@ test("composition keystrokes never activate or dismiss a palette result, and sta
   assert.equal(isPaletteCompositionKey({ key: "Dead" }), true);
   assert.equal(isPaletteCompositionKey({ compositionActive: true }), true);
   assert.equal(isPaletteCompositionKey({}), false);
+  // Escape dismiss logic
+  assert.equal(shouldDismissPaletteOnEscape({ key: "Escape" }), true);
+  assert.equal(shouldDismissPaletteOnEscape({ key: "Escape" }, true), false);
+  assert.equal(shouldDismissPaletteOnEscape({ key: "Escape", isComposing: true }), false);
+  assert.equal(shouldDismissPaletteOnEscape({ key: "Escape", nativeEvent: { isComposing: true } }), false);
+  assert.equal(shouldDismissPaletteOnEscape({ key: "Escape", keyCode: 229 }), false);
+  assert.equal(shouldDismissPaletteOnEscape({ key: "Escape", nativeEvent: { keyCode: 229 } }), false);
+  assert.equal(shouldDismissPaletteOnEscape({ key: "Process" }), false);
+  assert.equal(shouldDismissPaletteOnEscape({ key: "Dead" }), false);
+  assert.equal(shouldDismissPaletteOnEscape({ key: "Escape", compositionActive: true }), false);
+  assert.equal(shouldDismissPaletteOnEscape({ key: "Enter" }), false);
   assert.equal(commandPaletteStatusLabel("running"), "运行中");
   setLocale("en");
   try {

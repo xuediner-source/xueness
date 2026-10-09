@@ -17,7 +17,7 @@ import { conversationActivityLabel, reasoningIsActive } from './conversationActi
 import { formatConversationWorkDuration } from './conversationWorkDuration';
 import { useTimelineVirtualWindow } from './TimelineVirtualWindow';
 import { XuenessConversationHistoryRail } from './XuenessConversationHistoryRail';
-import { isImeComposingEvent, isModKeyPressed } from '../../xuenessShortcutDisplay';
+import { deferCompositionEnd, isImeComposingEvent, isModKeyPressed } from '../../xuenessShortcutDisplay';
 import './zcode-conversation.css';
 import { formatCommandArgv } from '../../xuenessWorkbench';
 
@@ -207,8 +207,17 @@ function UserMessage({ row, onEdit }: { row: User; onEdit?: ZCodeConversationPro
   return <div className="xn-zc-user" data-history-user-seq={row.seq} data-role="user" data-testid={`timeline-item-user-${row.seq}`}>
     {editing ? <form className="xn-zc-editor" onSubmit={event => { event.preventDefault(); void save(); }}>
       <textarea aria-label={tr('编辑消息')} value={text} autoFocus disabled={saving} onChange={event => setText(event.target.value)}
-        onCompositionStart={() => { compositionActiveRef.current = true; }}
-        onCompositionEnd={() => { compositionActiveRef.current = false; }}
+        onCompositionStart={(event) => {
+          compositionActiveRef.current = true;
+          event.currentTarget.setAttribute("data-composing", "true");
+        }}
+        onCompositionEnd={(event) => {
+          const el = event.currentTarget;
+          deferCompositionEnd(() => {
+            compositionActiveRef.current = false;
+            el?.removeAttribute("data-composing");
+          });
+        }}
         onKeyDown={event => {
           const action = evaluateUserMessageEditKey({ ...event, compositionActive: compositionActiveRef.current }, { saving });
           if (action === 'cancel') { event.preventDefault(); setEditing(false); }

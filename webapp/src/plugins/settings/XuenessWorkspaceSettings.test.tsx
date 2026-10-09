@@ -3,7 +3,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { renderToStaticMarkup } from "react-dom/server";
 import { XuenessWorkspacePickerDialog, shouldDismissWorkspacePickerOnEscape } from "./XuenessWorkspacePickerDialog";
-import { XuenessWorkspaceSettings } from "./XuenessWorkspaceSettings";
+import { XuenessWorkspaceSettings, shouldNavigateOnWorkspaceEnter } from "./XuenessWorkspaceSettings";
 
 const render = (node: React.ReactElement) => renderToStaticMarkup(node);
 
@@ -69,4 +69,21 @@ test("Adding a project uses the same folder picker without suggesting a new repo
   assert.match(html, /添加项目/);
   assert.match(html, /选择一个文件夹，开始在其中工作/);
   assert.doesNotMatch(html, /git init|创建仓库|重启服务/);
+});
+
+test("Workspace root input Enter navigation and IME composition guards", () => {
+  // 正常 Enter 在有效路径时允许导航
+  assert.equal(shouldNavigateOnWorkspaceEnter({ key: "Enter" }, true), true);
+  // 路径无效时不触发导航
+  assert.equal(shouldNavigateOnWorkspaceEnter({ key: "Enter" }, false), false);
+  // 非 Enter 键不触发
+  assert.equal(shouldNavigateOnWorkspaceEnter({ key: "a" }, true), false);
+  // IME 状态下绝不触发导航
+  assert.equal(shouldNavigateOnWorkspaceEnter({ key: "Enter", isComposing: true }, true), false);
+  assert.equal(shouldNavigateOnWorkspaceEnter({ key: "Enter", nativeEvent: { isComposing: true } }, true), false);
+  assert.equal(shouldNavigateOnWorkspaceEnter({ key: "Enter", keyCode: 229 }, true), false);
+  assert.equal(shouldNavigateOnWorkspaceEnter({ key: "Enter", nativeEvent: { keyCode: 229 } }, true), false);
+  assert.equal(shouldNavigateOnWorkspaceEnter({ key: "Process" }, true), false);
+  assert.equal(shouldNavigateOnWorkspaceEnter({ key: "Dead" }, true), false);
+  assert.equal(shouldNavigateOnWorkspaceEnter({ key: "Enter", compositionActive: true }, true), false);
 });

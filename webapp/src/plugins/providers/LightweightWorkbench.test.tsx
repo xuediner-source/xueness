@@ -739,7 +739,19 @@ test('evaluateLightweightGlobalKey: 输入法组合、重复键与已被接管�
   assert.equal(evaluateLightweightGlobalKey({ key: 'Escape', defaultPrevented: true }, loose), null);
   assert.equal(evaluateLightweightGlobalKey({ key: 'Escape', repeat: true }, loose), null);
   assert.equal(evaluateLightweightGlobalKey({ key: 'Escape', isComposing: true }, loose), null);
+  assert.equal(evaluateLightweightGlobalKey({ key: 'Escape', nativeEvent: { isComposing: true } }, loose), null);
+  assert.equal(evaluateLightweightGlobalKey({ key: 'Escape', keyCode: 229 }, loose), null);
+  assert.equal(evaluateLightweightGlobalKey({ key: 'Escape', nativeEvent: { keyCode: 229 } }, loose), null);
+  assert.equal(evaluateLightweightGlobalKey({ key: 'Process' }, loose), null);
+  assert.equal(evaluateLightweightGlobalKey({ key: 'Dead' }, loose), null);
+  assert.equal(evaluateLightweightGlobalKey({ key: 'Escape', compositionActive: true }, loose), null);
   assert.equal(evaluateLightweightGlobalKey({ key: 'l', ctrlKey: true, keyCode: 229 }, loose), null);
+
+  // 跨平台 Mod 判定（darwin vs win32）
+  assert.equal(evaluateLightweightGlobalKey({ key: 'l', metaKey: true }, { ...loose, platform: 'darwin' }), 'clear-screen');
+  assert.equal(evaluateLightweightGlobalKey({ key: 'l', ctrlKey: true }, { ...loose, platform: 'darwin' }), null);
+  assert.equal(evaluateLightweightGlobalKey({ key: 'l', ctrlKey: true }, { ...loose, platform: 'win32' }), 'clear-screen');
+  assert.equal(evaluateLightweightGlobalKey({ key: 'l', metaKey: true }, { ...loose, platform: 'win32' }), null);
 });
 
 test('lightweightComposerHint: 键盘提示跟随发送快捷键设置，并覆盖轻量档全部键位', () => {

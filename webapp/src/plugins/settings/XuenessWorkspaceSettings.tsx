@@ -13,6 +13,7 @@ import {
   workspaceBreadcrumbs,
   type WorkspaceCatalog,
 } from "../../xuenessWorkspaces";
+import { isImeComposingEvent } from "../../xuenessShortcutDisplay";
 import "../../styles/workspaces.css";
 
 export type XuenessWorkspaceSettingsProps = {
@@ -41,6 +42,21 @@ function formatLastUsed(value: string | number): string {
   }
   const date = new Date(value);
   return Number.isNaN(date.getTime()) ? value : date.toLocaleString();
+}
+
+export function shouldNavigateOnWorkspaceEnter(
+  event: {
+    key: string;
+    isComposing?: boolean;
+    nativeEvent?: { isComposing?: boolean; keyCode?: number };
+    keyCode?: number;
+    compositionActive?: boolean;
+    target?: unknown;
+  },
+  candidateValid = true,
+): boolean {
+  if (event.key !== "Enter" || isImeComposingEvent(event) || !candidateValid) return false;
+  return true;
 }
 
 export function XuenessWorkspaceSettings({
@@ -265,7 +281,7 @@ export function XuenessWorkspaceSettings({
                 aria-invalid={Boolean(candidate && !candidateValid)}
                 value={rootInput}
                 onKeyDown={(event) => {
-                  if (event.key === "Enter") {
+                  if (shouldNavigateOnWorkspaceEnter(event, Boolean(candidate && candidateValid))) {
                     event.preventDefault();
                     void navigate(candidate);
                   }
@@ -322,7 +338,7 @@ export function XuenessWorkspaceSettings({
               </ul>
             )}
             <form className="xn-workspace-settings__create" onSubmit={(event) => void createDirectory(event)}>
-              <label><span>{tr("新建文件夹")}</span><input value={newDirectoryName} onChange={(event) => setNewDirectoryName(event.target.value)} aria-label={tr("新建文件夹名称")} placeholder={tr("文件夹名称")} /></label>
+              <label><span>{tr("新建文件夹")}</span><input value={newDirectoryName} onChange={(event) => setNewDirectoryName(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter" && isImeComposingEvent(event)) event.preventDefault(); }} aria-label={tr("新建文件夹名称")} placeholder={tr("文件夹名称")} /></label>
               <button type="submit" className="xn-workspace-settings__button" disabled={!pickerPath || !newDirectoryName.trim() || busy || loading || remote}>{tr("创建")}</button>
             </form>
           </section>

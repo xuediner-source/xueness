@@ -51,8 +51,23 @@ export function isModKeyPressed(
 }
 
 /**
+ * 延后重置输入法组合态（对标 ZCode LexicalChatInput 时序保护）：
+ * 部分浏览器与系统（如 macOS WebKit / Chromium）在确认候选词或取消组合时，
+ * compositionend 会在提交当前候选词的 keydown（Enter / Escape）同拍或稍早触发。
+ * 若同步将组合态设为 false，该 keydown 会被误判为常规回车/退出。
+ * 通过 queueMicrotask 将重置动作延后至当前宏任务的微任务阶段执行，闭环时序缝隙。
+ */
+export function deferCompositionEnd(callback: () => void): void {
+  if (typeof queueMicrotask === 'function') {
+    queueMicrotask(callback);
+  } else {
+    setTimeout(callback, 0);
+  }
+}
+
+/**
  * 通用的 IME 输入法组合态事件判断：
- * 覆盖 isComposing / nativeEvent.isComposing / keyCode 229 / key "Process" / key "Dead" / compositionActive。
+ * 覆盖 isComposing / nativeEvent.isComposing / keyCode 229 / key "Process" / key "Dead" / compositionActive / [data-composing='true']。
  */
 export function isImeComposingEvent(event?: {
   isComposing?: boolean;
@@ -60,10 +75,16 @@ export function isImeComposingEvent(event?: {
   keyCode?: number;
   key?: string;
   compositionActive?: boolean;
+  target?: unknown;
 } | null): boolean {
   if (!event) return false;
+  const target = (event as { target?: unknown }).target as HTMLElement | null | undefined;
+  const targetComposing = Boolean(
+    target && typeof target.closest === 'function' && target.closest("[data-composing='true']")
+  );
   return Boolean(
     event.compositionActive ||
+    targetComposing ||
     event.isComposing ||
     event.nativeEvent?.isComposing ||
     event.keyCode === 229 ||

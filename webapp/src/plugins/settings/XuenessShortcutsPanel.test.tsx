@@ -12,6 +12,7 @@ import {
   restoreShortcutDefault,
   SHORTCUT_COMMANDS,
   matchesShortcut,
+  isReservedShortcut,
   canonicalPhysicalBinding,
   isSamePhysicalBinding,
   isEditableTarget,
@@ -211,7 +212,23 @@ test("hasGlobalShortcutConflict protects terminal, input, and editor from keyboa
   // 正常打字（无修饰键或仅 Shift）绝不触发全局命令
   assert.equal(hasGlobalShortcutConflict({ key: "f" }, "new-session", inputEl, "darwin"), true);
   assert.equal(hasGlobalShortcutConflict({ key: "F", shiftKey: true }, "new-session", inputEl, "darwin"), true);
-  // 原生编辑操作（全选、复制、撤销等）不可被全局命令抢占
+  // 原生编辑操作（全选、复制、撤销、查找等）不可被全局命令抢占
   assert.equal(hasGlobalShortcutConflict({ key: "a", metaKey: true }, "new-session", editorEl, "darwin"), true);
   assert.equal(hasGlobalShortcutConflict({ key: "z", ctrlKey: true }, "new-session", inputEl, "win32"), true);
+  assert.equal(hasGlobalShortcutConflict({ key: "f", metaKey: true }, "new-session", editorEl, "darwin"), true);
+  assert.equal(hasGlobalShortcutConflict({ key: "f", ctrlKey: true }, "new-session", inputEl, "win32"), true);
+});
+
+test("isReservedShortcut protects browser/OS search shortcuts and recordShortcutEvent rejects IME", () => {
+  assert.equal(isReservedShortcut("Mod+F"), true);
+  assert.equal(isReservedShortcut("mod+ctrl+f"), true);
+  assert.equal(isReservedShortcut("Mod+C"), true);
+  assert.equal(isReservedShortcut("Mod+V"), true);
+  assert.equal(isReservedShortcut("Mod+K"), false);
+  assert.equal(isReservedShortcut("Mod+Shift+N"), false);
+
+  // IME 状态下录制快捷键直接返回 invalid unsupported-key，不录入临时组合字符
+  assert.deepEqual(recordShortcutEvent({ key: "Process", isComposing: true }), { kind: "invalid", reason: "unsupported-key" });
+  assert.deepEqual(recordShortcutEvent({ key: "Enter", keyCode: 229 }), { kind: "invalid", reason: "unsupported-key" });
+  assert.deepEqual(recordShortcutEvent({ key: "Dead" }), { kind: "invalid", reason: "unsupported-key" });
 });

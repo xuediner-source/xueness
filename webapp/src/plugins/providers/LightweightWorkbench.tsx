@@ -8,7 +8,7 @@ import { assistantTextForDisplay } from '../sessions/XuenessTimeline';
 import { SimpleMarkdown, TimelineCard, MarkdownRenderOptionsContext, type MarkdownRenderOptions } from '../../XuenessShell';
 import { useQuantizedStreamingText } from '../../ui/StreamingCommitGate';
 import { t as tr, tf } from '../../i18n';
-import { displayBinding, isImeComposingEvent, isModKeyPressed } from '../../xuenessShortcutDisplay';
+import { deferCompositionEnd, displayBinding, isImeComposingEvent, isModKeyPressed } from '../../xuenessShortcutDisplay';
 import type { TimelineRow, WorkbenchSession } from '../../xuenessWorkbench';
 import type { ComposerDraftState } from '../sessions/XuenessWorkbenchView';
 import type { ComposerInput, ComposerModel } from '../../xuenessComposer';
@@ -961,7 +961,7 @@ export function isEditableKeyTarget(target: unknown): boolean {
 /** 轻量档全局按键的 DOM 侧写：把事件转成纯判定函数的输入。 */
 export function lightweightGlobalKeyContextFromEvent(
   event: { target: unknown },
-  state: { panelOpen: boolean; running: boolean; stopping: boolean },
+  state: { panelOpen: boolean; running: boolean; stopping: boolean; platform?: string },
 ): LightweightGlobalKeyContext {
   const inEditableField = isEditableKeyTarget(event.target);
   const inComposer = Boolean((event.target as HTMLElement | null)?.closest?.('[data-testid="lightweight-composer-input"]'));
@@ -972,6 +972,7 @@ export function lightweightGlobalKeyContextFromEvent(
     panelOpen: state.panelOpen,
     running: state.running,
     stopping: state.stopping,
+    platform: state.platform,
   };
 }
 
@@ -1028,7 +1029,7 @@ export function evaluateLightweightComposerKey(
   }
   if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
     // 历史翻找只用裸方向键：带修饰键的上下键交给光标移动与其它处理器
-    if (mod || e.altKey || e.shiftKey) return null;
+    if (e.ctrlKey || e.metaKey || e.altKey || e.shiftKey) return null;
     if (context.overlayOpen) return null;
     if (e.key === 'ArrowUp') {
       if (context.historyCount > 0) {
@@ -1059,10 +1060,11 @@ export function evaluateLightweightComposerKey(
 export function evaluateLightweightDisclosureKey(e: {
   key: string;
   isComposing?: boolean;
-  nativeEvent?: { isComposing?: boolean };
+  nativeEvent?: { isComposing?: boolean; keyCode?: number };
   keyCode?: number;
+  compositionActive?: boolean;
 }): 'toggle' | null {
-  if (e.isComposing || e.nativeEvent?.isComposing || e.keyCode === 229) return null;
+  if (isImeComposingEvent(e)) return null;
   return e.key === 'Enter' || e.key === ' ' || e.key === 'Spacebar' ? 'toggle' : null;
 }
 
@@ -1079,6 +1081,7 @@ export type LightweightGlobalKeyContext = {
   panelOpen: boolean;
   running: boolean;
   stopping: boolean;
+  platform?: string;
 };
 
 /**
@@ -1099,12 +1102,17 @@ export function evaluateLightweightGlobalKey(
     defaultPrevented?: boolean;
     isComposing?: boolean;
     keyCode?: number;
+    nativeEvent?: { isComposing?: boolean; keyCode?: number };
+    compositionActive?: boolean;
   },
   context: LightweightGlobalKeyContext,
 ): LightweightGlobalKeyAction {
-  if (e.defaultPrevented || e.repeat || e.isComposing || e.keyCode === 229) return null;
+  if (e.defaultPrevented || e.repeat || isImeComposingEvent(e)) return null;
   if (context.overlayOpen) return null;
-  if ((e.ctrlKey || e.metaKey) && !e.altKey && !e.shiftKey && (e.key === 'l' || e.key === 'L')) {
+  const isMod = context.platform
+    ? isModKeyPressed(e, context.platform)
+    : Boolean((e.ctrlKey && !e.metaKey) || (e.metaKey && !e.ctrlKey));
+  if (isMod && !e.altKey && !e.shiftKey && (e.key === 'l' || e.key === 'L')) {
     if (context.inComposer) return null;
     return context.inEditableField ? null : 'clear-screen';
   }
@@ -1137,6 +1145,7 @@ export type LightweightComposerProps = {
   autoFocus?: boolean;
   /** 跟随用户的发送快捷键设置（与标准档同一选项）。 */
   sendShortcut?: LightweightSendShortcut;
+  platform?: string;
 };
 
 /** 轻量档键盘提示行：与标准档同一措辞分支，同时作为输入框的说明文本。 */
@@ -1187,6 +1196,7 @@ export function LightweightComposer({
   inputRef,
   autoFocus = false,
   sendShortcut = 'enter',
+  platform,
 }: LightweightComposerProps): React.JSX.Element {
   const initialText = draftStore?.current.get(draftKey)?.text ?? '';
   const [text, setTextState] = useState(initialText);
@@ -1312,9 +1322,9 @@ export function LightweightComposer({
   }, []);
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    if (isComposingRef.current) return;
+    if (isComposingRef.current || isImeComposingEvent(e)) return;
 
-    const action = evaluateLightweightComposerKey(e, {
+    const action = evaluateLightweightComposerKey({ ...e, compositionActive: isComposingRef.current }, {
       text,
       historyIndex,
       historyCount: validHistory.length,
@@ -1323,6 +1333,7 @@ export function LightweightComposer({
       hasTimeline,
       sendShortcut,
       overlayOpen: hasOpenLightweightOverlay(),
+      platform,
     });
 
     if (action === 'clear_screen') {
@@ -1400,11 +1411,16 @@ export function LightweightComposer({
             if (historyIndex !== null) setHistoryIndex(null);
           }}
           onKeyDown={handleKeyDown}
-          onCompositionStart={() => {
+          onCompositionStart={(e) => {
             isComposingRef.current = true;
+            e.currentTarget.setAttribute('data-composing', 'true');
           }}
-          onCompositionEnd={() => {
-            isComposingRef.current = false;
+          onCompositionEnd={(e) => {
+            const el = e.currentTarget;
+            deferCompositionEnd(() => {
+              isComposingRef.current = false;
+              el?.removeAttribute('data-composing');
+            });
           }}
           placeholder={placeholder}
           rows={1}
