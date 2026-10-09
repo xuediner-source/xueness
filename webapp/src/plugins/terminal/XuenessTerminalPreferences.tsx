@@ -26,6 +26,17 @@ export function XuenessTerminalShellSelect({ value, onChange, disabled }: { valu
   </Select>{error && <small role="status">{error}</small>}</div>;
 }
 
+/**
+ * 跨平台系统等宽字体栈：macOS 用 SF Mono/Menlo，Windows 用 Cascadia Mono/Consolas
+ * （Chromium 在 Windows 上不支持 ui-monospace，旧栈会退到 Courier New），
+ * 中文字符再回退到各平台的 CJK 字体，避免 Windows 上落到宋体。
+ */
+export const SYSTEM_MONOSPACE_STACK = 'ui-monospace, SFMono-Regular, Menlo, "Cascadia Mono", Consolas, "Liberation Mono", "Noto Sans Mono CJK SC", "PingFang SC", "Microsoft YaHei UI", monospace';
+
+/** 选中的字体放最前；该字体不存在（例如在 Windows 上选了 Menlo）时回退到系统等宽栈。 */
 export function terminalFontStack(value = "system"): string {
-  return value === "Menlo" ? 'Menlo, monospace' : value === "SFMono-Regular" ? 'SFMono-Regular, Menlo, monospace' : value === "monospace" ? 'monospace' : 'ui-monospace, SFMono-Regular, Menlo, monospace';
+  if (value === "Menlo") return `Menlo, ${SYSTEM_MONOSPACE_STACK}`;
+  if (value === "SFMono-Regular") return `SFMono-Regular, ${SYSTEM_MONOSPACE_STACK}`;
+  if (value === "monospace") return "monospace";
+  return SYSTEM_MONOSPACE_STACK;
 }
