@@ -12,6 +12,7 @@ import re
 import uuid
 from .lightweight_config import effective_options
 from .context_budget import calibration_factor, history_digest
+from .tool_protocol import DuplicateKey, envelope_text, failure, normalize_native, strict_json
 
 BASE_TOOLS = frozenset({'read', 'write', 'edit', 'exec',
                         'ask_user', 'tool_search', 'tool_result_read'})
@@ -41,6 +42,10 @@ JSON_INSTRUCTION = (
     'Replace E1 and the example observation with actual host-issued successful references and facts; '
     'a real tool_call_id may replace evidence_id. Never invent evidence. '
     'Never put tool instructions inside answer. Available tools: '
+)
+NATIVE_INSTRUCTION = (
+    'Use native tool_calls. After tools, answer Markdown ending with a standalone "Evidence: E1, E2" line '
+    '(actual successful result IDs only; the host checks and hides it). No evidence tool is needed.'
 )
 
 
@@ -125,7 +130,21 @@ def select_tools(catalog, session, gate, provider=None):
     maximum = options['maxDiscoveredTools']
     if maximum == 0:
         base = base - {'tool_search'}
-    names = base | frozenset(n for n in (discovered[-maximum:] if maximum else []) if isinstance(n, str))
+    requested = []
+    if maximum and (getattr(provider, 'context_window', None) or 8192) >= 4096:
+        # A tool explicitly named by the human should not be reported missing
+        # merely because it is optional. Exposure is bounded and never grants
+        # permission. Tool-result/file text is deliberately not inspected.
+        task = next((row.get('content', '') for row in reversed(session.get('messages', []))
+                     if isinstance(row, dict) and row.get('role') == 'user'), '')
+        if isinstance(task, list):
+            task = '\n'.join(row['text'] for row in task if isinstance(row, dict)
+                             and row.get('type') == 'text' and isinstance(row.get('text'), str))
+        if isinstance(task, str):
+            requested = [tool_name(schema) for schema in catalog if tool_name(schema) not in base
+                         and re.search(r'(?<![A-Za-z0-9_])'+re.escape(tool_name(schema))+r'(?![A-Za-z0-9_])', task)]
+    optional = list(dict.fromkeys(requested + [n for n in reversed(discovered) if isinstance(n, str)]))[:maximum]
+    names = base | frozenset(optional)
     if any(not row.get('collected') for row in session.get('subagent_coordination', {}).values()):
         # A launched task must remain collectable even in a minimal tool window.
         names = names | {'task_collect'}
@@ -308,6 +327,10 @@ def prompt_view(messages, tools, provider, *, max_chars=24000, max_tokens=None,
             system = configured_system[:2500]
     if json_mode:
         system += '\n' + JSON_INSTRUCTION + json.dumps(tools, ensure_ascii=False, separators=(',', ':'))
+    elif context < 4096:
+        system = system.replace('Always use the configured response format.', 'End tool answers with "Evidence: E1".')
+    else:
+        system += '\n' + NATIVE_INSTRUCTION
     if repair:
         system += '\n' + repair
     if host_instructions:
@@ -455,28 +478,27 @@ def stream_answer_text(content):
 def decode_text_response(response, tools):
     """Parse the entire explicit envelope, never mine JSON from arbitrary prose."""
     if response.get('tool_calls'):
-        return {**response, '_protocol_error': 'Use the configured JSON tool protocol, not native calls.'}
+        return failure(response, 'wrong_protocol', 'Use the configured JSON tool protocol, not native calls.')
     content = response.get('content')
     if not isinstance(content, str):
-        return {**response, '_protocol_error': 'Reply with one JSON tool or answer object.'}
-    text = content.strip()
-    if text.startswith('```json\n') and text.endswith('\n```'):
-        text = text[8:-4].strip()
+        return failure(response, 'missing_text', 'Reply with one JSON tool or answer object.')
+    text = envelope_text(content)
     try:
-        obj = json.loads(text)
-    except ValueError:
-        obj = None
+        obj = strict_json(text)
+    except (ValueError, RecursionError) as exc:
+        code = 'duplicate_json_key' if isinstance(exc, DuplicateKey) else 'invalid_json'
+        return failure(response, code, 'Reply with one valid JSON tool or answer object; escape newlines and quotes inside strings.', error=exc)
     if not isinstance(obj, dict):
-        return {**response, '_protocol_error': 'Reply with one JSON tool or answer object.'}
+        return failure(response, 'invalid_envelope', 'Reply with one JSON tool or answer object.')
     try:
-        json.dumps(obj, ensure_ascii=False).encode('utf-8')
-    except UnicodeEncodeError:
+        json.dumps(obj, ensure_ascii=False, allow_nan=False).encode('utf-8')
+    except (UnicodeEncodeError, ValueError):
         # Escaped unpaired UTF-16 surrogates are accepted by json.loads, but
         # cannot be persisted as UTF-8. Reject before journaling or tool use.
-        return {**response, '_protocol_error': 'Use valid Unicode text without unpaired UTF-16 surrogates.'}
+        return failure(response, 'invalid_json_value', 'Use finite JSON numbers and valid Unicode text without unpaired UTF-16 surrogates.')
     if set(obj) == {'tool', 'arguments'} and isinstance(obj['tool'], str) and isinstance(obj['arguments'], dict):
         if obj['tool'] not in {tool_name(s) for s in tools}:
-            return {**response, '_protocol_error': 'That tool is unavailable. Discover optional tools using tool_search first.'}
+            return failure(response, 'tool_unavailable', 'That tool is unavailable. Discover optional tools using tool_search first.')
         return {**response, 'content': '', 'tool_calls': [{'id': 'local-' + uuid.uuid4().hex,
                  'type': 'function', 'function': {'name': obj['tool'],
                  'arguments': json.dumps(obj['arguments'], ensure_ascii=False)}}]}
@@ -488,29 +510,16 @@ def decode_text_response(response, tools):
         # its optional empty evidence field here; the core keeps strict envelope
         # matching so ordinary JSON answers are not mistaken for private data.
         return {**response, 'content': json.dumps({**obj, 'evidence': obj.get('evidence', [])}, ensure_ascii=False)}
-    return {**response, '_protocol_error': 'Use exactly {"tool":"NAME","arguments":{...}} or {"answer":"...","evidence":[]}.'}
+    return failure(response, 'invalid_envelope', 'Use exactly {"tool":"NAME","arguments":{...}} or {"answer":"...","evidence":[]}.')
 
 
-def normalize_native_response(response):
+def normalize_native_response(response, *, used_ids=()):
     """Some compatible servers return an argument object instead of a string.
 
     This is a lossless shape conversion only. Invalid objects and ambiguous
     prose are still rejected by normal message/argument validation.
     """
-    if not isinstance(response, dict) or not isinstance(response.get('tool_calls'), list):
-        return response
-    normalized = dict(response)
-    calls = []
-    for call in response['tool_calls']:
-        if not isinstance(call, dict) or not isinstance(call.get('function'), dict):
-            calls.append(call)
-            continue
-        fn = dict(call['function'])
-        if isinstance(fn.get('arguments'), dict):
-            fn['arguments'] = json.dumps(fn['arguments'], ensure_ascii=False)
-        calls.append({**call, 'function': fn})
-    normalized['tool_calls'] = calls
-    return normalized
+    return normalize_native(response, used_ids=used_ids)
 
 
 def partial_answer(response, json_mode=False):

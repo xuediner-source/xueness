@@ -426,6 +426,7 @@ export type ProviderCompatibilityTestMode =
   | "conversation"
   | "native_tool_call"
   | "json_tool_call"
+  | "json_tool_roundtrip"
   | "stream"
   | "tool_roundtrip";
 

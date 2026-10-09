@@ -48,9 +48,9 @@ ARK_CODING_PLAN_REASONING_LEVELS = ("low", "medium", "high")
 ARK_CODING_PLAN_DEEPSEEK_MODEL = "deepseek-v4.1-flash"
 CONNECTION_TEST_TIMEOUT_SECONDS = 8.0
 MODEL_DISCOVERY_TIMEOUT_SECONDS = 8.0
-COMPATIBILITY_TEST_TIMEOUT_SECONDS = 8.0
+COMPATIBILITY_TEST_TIMEOUT_SECONDS = 120.0
 COMPATIBILITY_TEST_MODES = frozenset({
-    "conversation", "native_tool_call", "json_tool_call", "stream", "tool_roundtrip",
+    "conversation", "native_tool_call", "json_tool_call", "stream", "tool_roundtrip", "json_tool_roundtrip",
 })
 COMPATIBILITY_STEPS = frozenset({
     "conversation", "native_tool_call", "json_tool_call", "stream", "tool_result_followup",
@@ -348,7 +348,7 @@ def _timestamp() -> str:
 
 
 def _required_compatibility_modes(record):
-    tool_mode = "json_tool_call" if record.get("toolCalling") == "json" else "tool_roundtrip"
+    tool_mode = "json_tool_roundtrip" if record.get("toolCalling") == "json" else "tool_roundtrip"
     return ("conversation", "stream", tool_mode)
 
 
@@ -364,7 +364,7 @@ def _compatibility_result_has_proof(mode, result):
     details = result.get("details") if isinstance(result, dict) else None
     if not isinstance(details, dict) or details.get("mode") != mode:
         return False
-    expected_count = 2 if mode == "tool_roundtrip" else 1
+    expected_count = 2 if mode in ("tool_roundtrip", "json_tool_roundtrip") else 1
     if details.get("requestCount") != expected_count or type(details.get("requestCount")) is not int:
         return False
     requests = details.get("requests")
@@ -374,6 +374,7 @@ def _compatibility_result_has_proof(mode, result):
         "json_tool_call": ["json_tool_call"],
         "stream": ["stream"],
         "tool_roundtrip": ["native_tool_call", "tool_result_followup"],
+        "json_tool_roundtrip": ["json_tool_call", "tool_result_followup"],
     }.get(mode)
     if not isinstance(requests, list) or len(requests) != expected_count:
         return False
@@ -411,8 +412,10 @@ def _compatibility_result_has_proof(mode, result):
                 and details.get("doneReceived") is True
                 and type(details.get("deltaCount")) is int and details["deltaCount"] > 0
                 and type(details.get("deltaCharacters")) is int and details["deltaCharacters"] > 0)
-    if mode == "tool_roundtrip":
-        return (all("stream" in item["fields"] and "tools" in item["fields"] for item in requests)
+    if mode in ("tool_roundtrip", "json_tool_roundtrip"):
+        json_mode = mode == 'json_tool_roundtrip'
+        return (all("stream" in item["fields"] and (('tools' not in item['fields']) if json_mode else ('tools' in item['fields'])) for item in requests)
+                and (not json_mode or details.get('jsonToolCallValidated') is True)
                 and details.get("toolCallValidated") is True
                 and details.get("toolResultFollowupValidated") is True
                 and details.get("toolName") == "xueness_fixture_add"
@@ -814,7 +817,7 @@ def _handle_compatibility_test(ctx: dict, data) -> tuple:
     except (OSError, KeyError):
         return 400, {"error": "provider profile is unavailable"}
 
-    if mode == "json_tool_call" and getattr(provider, "runtime_profile", None) != "lightweight":
+    if mode in ("json_tool_call", "json_tool_roundtrip") and getattr(provider, "runtime_profile", None) != "lightweight":
         return 400, {"error": "JSON tool-call diagnostics require a lightweight profile"}
     check = getattr(provider, "compatibility_test", None)
     if not callable(check):
@@ -831,7 +834,7 @@ def _handle_compatibility_test(ctx: dict, data) -> tuple:
         return 502, {"error": "invalid provider compatibility result"}
     details = result.get("details")
     request_count = details.get("requestCount") if isinstance(details, dict) else None
-    max_requests = 2 if mode == "tool_roundtrip" else 1
+    max_requests = 2 if mode in ("tool_roundtrip", "json_tool_roundtrip") else 1
     if (not isinstance(details, dict) or details.get("mode") != mode
             or type(request_count) is not int or not 1 <= request_count <= max_requests):
         return 502, {"error": "invalid provider compatibility result"}

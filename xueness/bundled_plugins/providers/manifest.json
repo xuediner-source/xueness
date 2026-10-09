@@ -35,9 +35,16 @@
     "providers_api",
     "response_metadata",
     "runtime_options",
-    "tooling"
+    "tooling",
+    "tool_protocol",
+    "tool_arguments"
   ],
   "features": [
+    {
+      "id": "providers.tool_recovery",
+      "name": "工具协议诊断、连续错误修复与调用身份校验",
+      "nameEn": "Tool protocol diagnostics, consecutive-error recovery and call identity validation"
+    },
     {
       "id": "providers.termination",
       "name": "生成结束原因、截断与步骤时限的可续暂停",

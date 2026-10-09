@@ -51,9 +51,15 @@
     "tooling",
     "composer_capabilities",
     "message_actions",
-    "conversation_snapshot"
+    "conversation_snapshot",
+    "native_evidence"
   ],
   "features": [
+    {
+      "id": "sessions.native_evidence",
+      "name": "原生工具回答的 Markdown 与真实证据引用",
+      "nameEn": "Native tool answers with Markdown and genuine evidence references"
+    },
     {
       "id": "sessions.conversation",
       "name": "会话创建与 Agent 对话",

@@ -802,3 +802,9 @@ Node/Electron 浏览器宿主是现有 browser/desktop 运行设施，不是可�
 `sessions.composer_capabilities` 拥有可搜索添加菜单、可见已选标签和模型未配置提示；`sessions.streaming` 拥有标准/轻量共用的请求阶段标签，纯标签模块在 sessions manifest 登记。`providers.activity` 拥有实时状态、已报告用量、有效运行时钟与有界耗时明细；禁用 providers 后不挂载，不引入新的后台请求。
 
 Office 内容交付检查复用 `office.tooling.delivery_content_text` 的有界解析，planning 在检查 files 与 office 生效状态和工作区读权限之后调用。二进制文档不再按 UTF-8 读取；缺少内容、截断、禁用及越界仍检查失败。已通过且内容定义未变化的交付清单由宿主在 completion history 写入摘要哈希，sessions 完成策略允许之后的普通聊天不再要求新工具引用；新工作区动作、失败/缺失/变化的清单继续要求验证。共享 core 仅保存验证元数据和统一完成结果，不拥有新产品能力。
+
+## 工具协议与完整回合诊断（2026-10-09）
+
+`providers.tool_recovery` 拥有无损 JSON 外包装规范化、重复键/非法值拒绝、原生 SSE 调用身份校验、已声明参数约束预检与有界无正文诊断；实现为 providers 的 `tool_protocol`、`tool_arguments`。JSON 兼容诊断和实际运行共用同一个 decoder；候选配置必须通过工具结果续轮，不能仅凭第一条工具 JSON 验证通过。协议修复按连续错误计数，失败流以结束状态归档，不生成助手假消息。
+
+`sessions.native_evidence` 拥有原生 Markdown 回答末尾的显式证据引用行；实现为 sessions 的 `native_evidence`。内核仍负责统一 journal、真实结果验证、审批及停止边界，引用只允许当前轮真实成功证据，关闭 sessions 后不能借此通过验证。前端复用已有 providers 编辑器和 sessions 请求阶段，不新增布局容器或共享例外。详见 [工具调用审查](tool-protocol-audit-2026-10-09.md)。

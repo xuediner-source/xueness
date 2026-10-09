@@ -19,6 +19,7 @@ import uuid
 
 from .runtime_options import build_openai_payload, resolve_runtime_options, validate_compatibility
 from .lightweight_config import effective_options
+from .tool_protocol import NativeCallAssembler
 
 #: Opt-in env flag unlocking plaintext HTTP **only** for loopback IP literals.
 #: Kept off by default so existing HTTPS-only behaviour is unchanged.
@@ -29,9 +30,10 @@ MAX_DISCOVERED_MODELS = 500
 MAX_DISCOVERED_MODEL_ID_CHARS = 256
 MAX_MODEL_OWNER_CHARS = 128
 MODEL_DISCOVERY_MAX_TIMEOUT_SECONDS = 8.0
-COMPATIBILITY_TEST_MAX_OUTPUT_TOKENS = 128
+COMPATIBILITY_TEST_MAX_OUTPUT_TOKENS = 1024
+COMPATIBILITY_TEST_MAX_TIMEOUT_SECONDS = 120.0
 COMPATIBILITY_TEST_MODES = frozenset({
-    "conversation", "native_tool_call", "json_tool_call", "stream", "tool_roundtrip",
+    "conversation", "native_tool_call", "json_tool_call", "stream", "tool_roundtrip", "json_tool_roundtrip",
 })
 COMPATIBILITY_FIXTURE_NAME = "xueness_fixture_add"
 COMPATIBILITY_FIXTURE_RECEIPT = "xueness-local-fixture:3+4=7"
@@ -51,12 +53,12 @@ def _json_fixture_prompt():
     return [
         {"role": "system", "content": (
             "This is a provider compatibility diagnostic. Return exactly one JSON object "
-            "with keys tool_call, no markdown or extra keys. tool_call must have name "
-            "xueness_fixture_add and arguments with integer values a=3 and b=4. "
+            "with keys tool and arguments, no markdown or extra keys. tool must be "
+            "xueness_fixture_add and arguments must have integer values a=3 and b=4. "
             "Do not answer in prose.")},
         {"role": "user", "content": (
-            'Return {"tool_call":{"name":"xueness_fixture_add",'
-            '"arguments":{"a":3,"b":4}}} exactly.')},
+            'Return {"tool":"xueness_fixture_add",'
+            '"arguments":{"a":3,"b":4}} exactly.')},
     ]
 
 
@@ -107,15 +109,13 @@ def _validated_fixture_json_call(reply):
     raw = reply.get("content") if isinstance(reply, dict) else None
     if not isinstance(raw, str) or len(raw) > 2048:
         return "The provider returned no bounded JSON tool-call response."
-    try:
-        value = json.loads(raw, object_pairs_hook=_unique_json_object)
-    except (TypeError, ValueError):
+    from .lightweight import decode_text_response
+    fixture = [{'type': 'function', 'function': {'name': COMPATIBILITY_FIXTURE_NAME}}]
+    parsed = decode_text_response(reply, fixture)
+    if parsed.get('_protocol_error'):
         return "The provider did not return strict JSON."
-    if (type(value) is not dict or set(value) != {"tool_call"}
-            or type(value.get("tool_call")) is not dict
-            or set(value["tool_call"]) != {"name", "arguments"}
-            or value["tool_call"].get("name") != COMPATIBILITY_FIXTURE_NAME
-            or not _fixture_arguments_valid(value["tool_call"].get("arguments"))):
+    call, error = _validated_fixture_tool_call(parsed)
+    if error:
         return "The provider returned JSON outside the required function name and argument schema."
     return None
 
@@ -475,7 +475,9 @@ def _is_loopback_literal(hostname):
     if not hostname:
         return False
     try:
-        return ipaddress.ip_address(hostname).is_loopback
+        address = ipaddress.ip_address(hostname)
+        mapped = getattr(address, 'ipv4_mapped', None)
+        return address.is_loopback or mapped is not None and mapped.is_loopback
     except ValueError:
         return False
 
@@ -630,24 +632,24 @@ class OpenAICompatible:
             total_timeout=timeout, max_response_bytes=MAX_PROVIDER_RESPONSE_BYTES,
         )
 
-    def compatibility_test(self, mode, compatibility=None, timeout=8):
+    def compatibility_test(self, mode, compatibility=None, timeout=120):
         """Run one explicit, bounded wire-compatibility diagnostic.
 
         The fixture tool is an in-process arithmetic example. It never reaches
         the workspace, command runner, or Xueness tool dispatcher. Each mode
-        sends at most one model request except ``tool_roundtrip``, which sends
+        sends at most one model request except the roundtrip modes, which send
         one tool-call request and one result-follow-up request.
         """
         if mode not in COMPATIBILITY_TEST_MODES:
             raise ValueError("unsupported provider compatibility test mode")
         options = validate_compatibility(
             self.compatibility if compatibility is None else compatibility)
-        if self.runtime_profile != "lightweight" and mode == "json_tool_call":
+        if self.runtime_profile != "lightweight" and mode in ("json_tool_call", "json_tool_roundtrip"):
             raise ValueError("JSON tool-call diagnostics require a lightweight profile")
         if not math.isfinite(float(timeout)) or float(timeout) <= 0:
             raise ValueError("invalid compatibility test timeout")
 
-        deadline = time.monotonic() + min(float(timeout), MODEL_DISCOVERY_MAX_TIMEOUT_SECONDS)
+        deadline = time.monotonic() + min(float(timeout), COMPATIBILITY_TEST_MAX_TIMEOUT_SECONDS)
         request_count = 0
         request_fields = []
 
@@ -669,10 +671,12 @@ class OpenAICompatible:
             return build_openai_payload(
                 model=self.model, messages=messages, tools=tools,
                 runtime_profile=self.runtime_profile, context_window=self.context_window,
-                max_output_tokens=self.max_output_tokens, tool_calling=tool_calling,
+                max_output_tokens=min(self.max_output_tokens or COMPATIBILITY_TEST_MAX_OUTPUT_TOKENS,
+                                      COMPATIBILITY_TEST_MAX_OUTPUT_TOKENS,
+                                      (self.context_window or 8192) // 2), tool_calling=tool_calling,
                 compatibility=options if test_options is None else test_options,
                 stream=stream, reasoning_effort=self.reasoning_effort,
-                test_connection=True, test_max_tokens=COMPATIBILITY_TEST_MAX_OUTPUT_TOKENS,
+                test_connection=False,
                 default_max_tokens_field=self._default_max_tokens_field(),
                 lightweight_options=self.lightweight_options,
             )
@@ -787,9 +791,18 @@ class OpenAICompatible:
                                 "requests": request_fields},
                 }
 
-            if mode == "tool_roundtrip":
+            if mode in ("tool_roundtrip", "json_tool_roundtrip"):
+                json_mode = mode == 'json_tool_roundtrip'
                 first, first_stream = request_stream(
-                    _native_fixture_prompt(), "native", fixture_tool, "native_tool_call")
+                    _json_fixture_prompt() if json_mode else _native_fixture_prompt(),
+                    'json' if json_mode else 'native', [] if json_mode else fixture_tool,
+                    'json_tool_call' if json_mode else 'native_tool_call')
+                if json_mode:
+                    error = _validated_fixture_json_call(first)
+                    if error:
+                        return fail(error, step='json_tool_call')
+                    from .lightweight import decode_text_response
+                    first = decode_text_response(first, fixture_tool)
                 call, error = _validated_fixture_tool_call(first)
                 if error:
                     return fail(error, step="native_tool_call")
@@ -811,10 +824,20 @@ class OpenAICompatible:
                     {"role": "user", "content": (
                         "Reply with exactly the receipt from the tool result above.")},
                 ]
+                if json_mode:
+                    followup_messages[0]['content'] += (' Reply with only {"answer":"the receipt string","evidence":[]}.')
+                    from .lightweight import text_messages
+                    followup_messages = text_messages(followup_messages)
                 followup, followup_stream = request_stream(
-                    followup_messages, "native", fixture_tool, "tool_result_followup",
+                    followup_messages, 'json' if json_mode else 'native',
+                    [] if json_mode else fixture_tool, "tool_result_followup",
                     test_options=followup_compatibility)
                 content = followup.get("content")
+                if json_mode:
+                    decoded = decode_text_response(followup, fixture_tool)
+                    if decoded.get('_protocol_error') or decoded.get('tool_calls'):
+                        return fail('The provider did not echo the deterministic tool-result receipt.', step='tool_result_followup')
+                    content = json.loads(decoded['content']).get('answer')
                 followed = isinstance(content, str) and content.strip() == COMPATIBILITY_FIXTURE_RECEIPT
                 if not followed:
                     return fail("The provider did not echo the deterministic tool-result receipt.",
@@ -823,6 +846,7 @@ class OpenAICompatible:
                     "ok": True,
                     "details": {"mode": mode, "requestCount": request_count,
                                 "toolCallValidated": True, "toolResultFollowupValidated": True,
+                                **({'jsonToolCallValidated': True} if json_mode else {}),
                                 "toolName": COMPATIBILITY_FIXTURE_NAME,
                                 "arguments": {"a": 3, "b": 4}, "fixtureExecuted": True,
                                 "sseContentType": first_stream["sseContentType"] and followup_stream["sseContentType"],
@@ -1339,7 +1363,7 @@ def _read_openai_stream(response, on_delta, mark_delivered, on_reasoning_delta=N
                         require_done=False, finish_metadata=None):
     from .response_metadata import reported_usage, finish_reason
     text_parts = []
-    calls = {}
+    calls = NativeCallAssembler()
     finished = False
     done_marker = False
     usage = None
@@ -1349,17 +1373,27 @@ def _read_openai_stream(response, on_delta, mark_delivered, on_reasoning_delta=N
             done_marker = True
             break
         item = json.loads(payload)
+        if not isinstance(item, dict):
+            raise ValueError('provider SSE event must be an object')
         raw_usage = item.get("usage")
         if isinstance(raw_usage, dict):
             usage = {**(usage or {}), **reported_usage(raw_usage)}
         choices = item.get("choices") or []
+        if not isinstance(choices, list):
+            raise ValueError('provider SSE choices must be a list')
         if not choices:
             continue
+        if not isinstance(choices[0], dict):
+            raise ValueError('invalid provider SSE choice')
+        delta = choices[0].get("delta") or {}
+        if not isinstance(delta, dict):
+            raise ValueError('provider SSE delta must be an object')
+        if finished and any(delta.get(key) for key in ('content', 'tool_calls', 'reasoning_content', 'reasoning', 'thinking')):
+            raise ValueError('provider SSE payload after completion')
         if choices[0].get("finish_reason") is not None:
             finished = True
             if finish_metadata is not None:
                 finish_metadata['_finish_reason'] = finish_reason(choices[0]['finish_reason'])
-        delta = choices[0].get("delta") or {}
         # Compatible APIs expose reasoning under different names. Keep it out
         # of assistant content and only forward it through the opt-in observer;
         # callers that do not request reasoning retain the previous behavior.
@@ -1374,22 +1408,13 @@ def _read_openai_stream(response, on_delta, mark_delivered, on_reasoning_delta=N
             mark_delivered()
             if on_delta:
                 _notify_stream_callback(on_delta, content)
-        for call in delta.get("tool_calls") or []:
-            index = call.get("index", 0)
-            target = calls.setdefault(index, {"id": "", "type": "function",
-                                               "function": {"name": "", "arguments": ""}})
-            if call.get("id"):
-                target["id"] = call["id"]
-            fn = call.get("function") or {}
-            if fn.get("name"):
-                target["function"]["name"] += fn["name"]
-            if fn.get("arguments"):
-                target["function"]["arguments"] += fn["arguments"]
+        if delta.get('tool_calls') is not None:
+            calls.add(delta['tool_calls'])
     if not finished:
         raise ConnectionError("incomplete provider stream")
     if require_done and not done_marker:
         raise ConnectionError("provider stream ended without the required done marker")
-    return "".join(text_parts), [calls[index] for index in sorted(calls)], usage
+    return "".join(text_parts), calls.finish(), usage
 
 
 _MULTIMODAL_MARKER = "\n\nXUENESS_MULTIMODAL_V1:"

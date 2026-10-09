@@ -453,7 +453,7 @@ test('TimelineStream pending status follows each reported runtime phase and keep
     ['thinking', '思考中…'],
     ['generating', '正在生成回复…'],
     ['tools', '正在执行工具…'],
-    ['repairing', '正在校验结果…'],
+    ['repairing', '正在修复工具调用格式…'],
   ] as const;
   for (const [activityPhase, label] of phases) {
     const empty = renderToStaticMarkup(<TimelineStream rows={[]} streamingPending activityPhase={activityPhase} />);

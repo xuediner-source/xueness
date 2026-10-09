@@ -261,7 +261,7 @@ function compatibilityOptionsKey(value: NonNullable<ProviderSummary['compatibili
 }
 
 function requiredCompatibilityModes(draft: ProviderDraft): ProviderCompatibilityTestMode[] {
-  return ['conversation', 'stream', draft.toolCalling === 'json' ? 'json_tool_call' : 'tool_roundtrip'];
+  return ['conversation', 'stream', draft.toolCalling === 'json' ? 'json_tool_roundtrip' : 'tool_roundtrip'];
 }
 
 export function canAdoptProviderCompatibility(draft: ProviderDraft, original: ProviderSummary | null): boolean {
@@ -620,6 +620,7 @@ export function ProviderEditor({
                 <option value="conversation">{tr('普通对话（plain）')}</option>
                 <option value="native_tool_call">{tr('原生工具调用（native）')}</option>
                 <option value="json_tool_call" disabled={runtimeProfile !== 'lightweight'}>{tr('JSON 工具调用（json）')}</option>
+                <option value="json_tool_roundtrip" disabled={runtimeProfile !== 'lightweight'}>{tr('工具结果续轮（json，两次请求）')}</option>
                 <option value="stream">{tr('SSE 流式 delta + done（plain）')}</option>
                 <option value="tool_roundtrip">{tr('工具结果续轮（native，两次请求）')}</option>
               </Select>

@@ -439,9 +439,9 @@ SYSTEM = ("You are Xueness, a local coding assistant. Answer ordinary chat, gene
           "For work you cannot finish in one pass, write durable notes (a plan, findings, decisions) to a "
           "file in the workspace and keep it current: older turns may be compacted out of your context, "
           "but a file you wrote survives, and that is how the next run picks up where you left off. "
-          "When tool evidence is needed, finish with JSON text containing summary and evidence: evidence is an array of "
-          "{evidence_id, observation} entries citing host-issued E1/E2 identifiers from successful tool results. "
-          "Legacy real tool_call_id is also accepted; never invent an identifier. For ordinary conversation, "
+          "When tool evidence is needed, finish with natural Markdown and one final standalone Evidence: E1, E2 line "
+          "citing actual host-issued identifiers from successful tool results. The host checks and hides this metadata. "
+          "No extra tool is needed to submit evidence; never invent an identifier. For ordinary conversation, "
           "finish with a natural Markdown answer. Denied tools and failed commands are not proof of success. "
           "Otherwise explain what remains.")
 
@@ -449,7 +449,7 @@ SYSTEM = ("You are Xueness, a local coding assistant. Answer ordinary chat, gene
 MODES = ("plan", "build")
 
 
-def validate_message(message) -> dict:
+def validate_message(message, *, used_ids=()) -> dict:
     """Reject malformed provider messages before any intent is persisted.
 
     A provider response that does not match the OpenAI message shape is
@@ -462,6 +462,7 @@ def validate_message(message) -> dict:
     if content is not None and not isinstance(content, str):
         raise ValueError("provider message content must be a string or null")
     calls = message.get("tool_calls")
+    seen = set(used_ids)
     if calls is not None:
         if not isinstance(calls, list):
             raise ValueError("tool_calls must be a list")
@@ -470,6 +471,9 @@ def validate_message(message) -> dict:
                 raise ValueError("tool call must be an object")
             if not isinstance(call.get("id"), str) or not call.get("id"):
                 raise ValueError("tool call id must be a nonempty string")
+            if call['id'] in seen:
+                raise ValueError('duplicate or reused tool call id')
+            seen.add(call['id'])
             if call.get("type") != "function":
                 raise ValueError("tool call type must be 'function'")
             function = call.get("function")
@@ -1198,10 +1202,16 @@ def _record_completion_history(session: dict, completion: dict) -> None:
         del history[:-200]
 
 
-def assess(content: str, results: dict, aliases=None) -> dict:
+def assess(content: str, results: dict, aliases=None, *, native_references=False) -> dict:
     """Parse a completion envelope or accept plain Markdown as an answer."""
     answer, evidence, structured = _completion_payload(content, allow_markdown_envelope=
         bool(aliases) or (aliases is None and bool(results)))
+    if native_references and not structured:
+        from .bundled_plugins.sessions.native_evidence import extract
+        footer = extract(content) if isinstance(content, str) else None
+        if footer is not None:
+            answer, evidence = footer
+            structured = True
     if not structured:
         return {"verified": False, "summary": answer, "evidence": []}
     if not evidence:
@@ -1517,6 +1527,10 @@ def _drive_run(session: dict, store: Store, provider, gate: Gate, max_steps=None
     evidence_repairs = int(isinstance(repair_state, dict) and repair_state.get('used') is True)
     evidence_repair_active = bool(evidence_repairs and repair_state.get('pending') is True)
     def reference_repair_prompt():
+        if getattr(provider, 'tool_calling', 'native') == 'native':
+            return ('Repair only the final evidence references. Do not call tools or redo work. '
+                    'Keep the Markdown answer unchanged and end with one standalone "Evidence: E1, E2" line. '
+                    'Use only these host-issued successful references: ' + json.dumps(evidence_aliases(session), ensure_ascii=False))
         return ('Repair only the final JSON evidence references. Do not call tools or redo work. '
                 'Keep the summary and observations unchanged. Use evidence_id from the following '
                 'host-issued successful references: ' + json.dumps(evidence_aliases(session), ensure_ascii=False))
@@ -1578,15 +1592,18 @@ def _drive_run(session: dict, store: Store, provider, gate: Gate, max_steps=None
         # PreToolUse may veto the call before any side effect happens. Use
         # fire() rather than pre_tool_use() so each hook's result is available
         # for the audit log; the gate decision is derived here.
+        from .bundled_plugins.providers.tool_protocol import arguments_object
+        try:
+            arguments = arguments_object(function.get("arguments", "{}"))
+        except (ValueError, TypeError, RecursionError):
+            return {"ok": False, "error": "invalid tool arguments", "error_code": "invalid_tool_arguments"}
+        from .bundled_plugins.providers.tool_arguments import preflight
+        invalid = preflight(arguments, tool_name, active_tools)
+        if invalid is not None:
+            return invalid
         veto = _pretooluse_veto(cid, tool_name, function)
         if veto is not None:
             return veto
-        try:
-            arguments = json.loads(function.get("arguments", "{}"))
-        except (ValueError, TypeError):
-            arguments = None
-        if not isinstance(arguments, dict):
-            return {"ok": False, "error": "invalid tool arguments"}
         if tool_name in getattr(gate, 'disallow', ()):
             return permission_result(gate, PermissionError('tool disallowed'))
         if (getattr(gate, "allowed_tool_names", None) is not None
@@ -1669,15 +1686,18 @@ def _drive_run(session: dict, store: Store, provider, gate: Gate, max_steps=None
         remaining members still execute, exactly as they would follow such a
         serial result.
         """
+        from .bundled_plugins.providers.tool_protocol import arguments_object
+        try:
+            arguments = arguments_object(function.get("arguments", "{}"))
+        except (ValueError, TypeError, RecursionError):
+            return {"ok": False, "error": "invalid tool arguments", "error_code": "invalid_tool_arguments"}, None
+        from .bundled_plugins.providers.tool_arguments import preflight
+        invalid = preflight(arguments, tool_name, active_tools)
+        if invalid is not None:
+            return invalid, None
         veto = _pretooluse_veto(cid, tool_name, function)
         if veto is not None:
             return veto, None
-        try:
-            arguments = json.loads(function.get("arguments", "{}"))
-        except (ValueError, TypeError):
-            return {"ok": False, "error": "invalid tool arguments"}, None
-        if not isinstance(arguments, dict):
-            return {"ok": False, "error": "invalid tool arguments"}, None
         return None, arguments
 
     def _record_outcome(cid, tool_name, result, tool_started):
@@ -1940,8 +1960,9 @@ def _drive_run(session: dict, store: Store, provider, gate: Gate, max_steps=None
             if light and getattr(provider, 'tool_calling', 'native') == 'json':
                 response = lightweight.decode_text_response(response, active_tools)
             elif light:
-                response = lightweight.normalize_native_response(response)
+                response = lightweight.normalize_native_response(response, used_ids=session.get('results', {}))
             protocol_error = response.pop('_protocol_error', None) if isinstance(response, dict) else None
+            protocol_diagnostic = response.pop('_protocol_diagnostic', None) if isinstance(response, dict) else None
             usage = response.get("_usage") if isinstance(response, dict) else None
             cost = response.get("_cost") if isinstance(response, dict) else None
             request_attempts = response.get('_request_attempts') if isinstance(response, dict) else None
@@ -1998,8 +2019,12 @@ def _drive_run(session: dict, store: Store, provider, gate: Gate, max_steps=None
             if incomplete:
                 response = {'content': lightweight.partial_answer(
                     response, light and getattr(provider, 'tool_calling', 'native') == 'json')}
+            elif protocol_error:
+                # Invalid calls never become durable intent. Diagnostics retain
+                # only structural metadata, not raw text or arguments.
+                response = {'content': ''}
             try:
-                response = validate_message(response)
+                response = validate_message(response, used_ids=session.get('results', {}))
             except (TypeError, ValueError) as validation_error:
                 # A malformed normalized provider message is a response
                 # protocol failure, while unrelated runtime/callback failures
@@ -2110,28 +2135,45 @@ def _drive_run(session: dict, store: Store, provider, gate: Gate, max_steps=None
                 activity.phase('repairing')
             protocol_repairs += 1
             repair = 'Your previous response had an invalid tool envelope. ' + protocol_error
-            session['messages'].append({
-                'role': 'assistant',
-                'content': 'The previous response could not be decoded using the configured tool protocol.'})
             session['steps'] += 1
-            session.pop('streaming', None)
+            from .bundled_plugins.providers.tool_protocol import record_failure
+            diagnostic = record_failure(session, protocol_diagnostic or {'code': 'invalid_envelope'},
+                                        protocol=getattr(provider, 'tool_calling', 'native'),
+                                        attempt=protocol_repairs, finish=finish, turn_id=_turn_id(session))
+            record = session.pop('streaming', None)
+            if isinstance(record, dict):
+                record.update(status='interrupted', interrupted=True,
+                              protocol_error=diagnostic['code'],
+                              completed_at=datetime.now(timezone.utc).isoformat())
+                _archive_stream(session, record)
             save_session()
             if protocol_repairs > light_options.get('jsonRepairAttempts', 1):
-                summary = ('The model response could not be decoded with the configured tool protocol. '
-                           'Try again or choose a compatible model protocol.')
+                diagnostic['outcome'] = 'exhausted'
+                summary = '模型连续返回了无法解析的工具格式，已停止自动重试。已执行的工具结果保留，可以继续或检查模型协议。'
                 completion = {
                     'status': 'unverified', 'verified': False,
                     'summary': summary, 'evidence': [], 'evidence_count': 0,
-                    'tool_execution_status': 'incomplete', 'tool_execution_success': False,
+                    'error_code': 'tool_protocol_error', 'protocol_error_code': diagnostic['code'],
+                    'tool_execution_status': _tool_execution_status(session, _current_turn_tool_ids(session)),
+                    'tool_execution_success': _tool_execution_status(session, _current_turn_tool_ids(session)) == 'succeeded',
                     'delivery_status': 'not_assessed', 'turn_id': _turn_id(session),
                 }
                 session['status'] = 'needs_review'
+                session['pause_code'] = 'tool_protocol_error'
+                session['pause_reason'] = summary
                 session['completion'] = completion
                 _record_completion_history(session, completion)
                 fire_stop()
                 save_session()
+                _emit_event(on_event, 'status', status='needs_review', steps=session['steps'], reason=summary)
                 return session
             continue
+        if protocol_repairs:
+            for diagnostic in reversed(session.get('protocol_diagnostics', [])):
+                if diagnostic.get('outcome') != 'repairing':
+                    break
+                diagnostic['outcome'] = 'recovered'
+            protocol_repairs = 0
         repair = None
         message = {"role": "assistant", "content": response.get("content") or ""}
         if calls:
@@ -2154,7 +2196,8 @@ def _drive_run(session: dict, store: Store, provider, gate: Gate, max_steps=None
                     save_session()
                     continue
             aliases = _current_turn_aliases(evidence_aliases(session), current_call_ids)
-            final_assessment = assess(message["content"], session["results"], aliases)
+            final_assessment = assess(message["content"], session["results"], aliases,
+                                      native_references=plugin_enabled('sessions') and getattr(provider, 'tool_calling', 'native') == 'native')
             # Keep only the model's Markdown answer in the visible conversation.
             # The JSON evidence envelope remains a private host assessment input.
             message["content"] = final_assessment.get("summary", message["content"])
@@ -2182,7 +2225,8 @@ def _drive_run(session: dict, store: Store, provider, gate: Gate, max_steps=None
                         subject=(fn.get("arguments") or "")[:160])
         if not calls:
             aliases = _current_turn_aliases(evidence_aliases(session), current_call_ids)
-            completion = final_assessment or assess(message["content"], session["results"], aliases)
+            completion = final_assessment or assess(message["content"], session["results"], aliases,
+                                                    native_references=plugin_enabled('sessions') and getattr(provider, 'tool_calling', 'native') == 'native')
             if (completion.get('error_code') == 'invalid_evidence_reference'
                     and aliases and evidence_repairs == 0 and _ + 1 < max_steps):
                 evidence_repairs += 1

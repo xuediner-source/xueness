@@ -24,7 +24,7 @@ RECEIPT = "xueness-local-fixture:3+4=7"
 
 def _wire_server(state, *, statuses=None, invalid_tool=False, wrong_tool_name=False,
                  extra_tool_args=False, omit_done=False, spoof_attempts=False,
-                 sse=False):
+                 sse=False, plain_json_followup=False):
     statuses = list(statuses or [])
 
     class Handler(BaseHTTPRequestHandler):
@@ -69,6 +69,12 @@ def _wire_server(state, *, statuses=None, invalid_tool=False, wrong_tool_name=Fa
                         {"choices": [{"delta": {"content": RECEIPT}, "finish_reason": None}]},
                         {"choices": [{"delta": {}, "finish_reason": "stop"}]},
                     ]
+                elif any('UNTRUSTED tool result (' in str(message.get('content', '')) for message in messages):
+                    answer = RECEIPT if plain_json_followup else json.dumps({'answer': RECEIPT, 'evidence': []})
+                    events = [{'choices': [{'delta': {'content': answer}, 'finish_reason': 'stop'}]}]
+                elif not body.get('tools') and any('"tool":"xueness_fixture_add"' in str(message.get('content', '')) for message in messages):
+                    content = json.dumps({'tool': TOOL, 'arguments': {'a': 3, 'b': 4}})
+                    events = [{'choices': [{'delta': {'content': content}, 'finish_reason': 'stop'}]}]
                 elif body.get("tools"):
                     events = [
                         {"choices": [{"delta": {"tool_calls": [{
@@ -104,9 +110,9 @@ def _wire_server(state, *, statuses=None, invalid_tool=False, wrong_tool_name=Fa
                     "function": {"name": "wrong_tool" if invalid_tool or wrong_tool_name else TOOL,
                                  "arguments": json.dumps(args)},
                 }]}
-            elif any("tool_call" in str(message.get("content", "")) for message in messages):
+            elif any('"tool":"xueness_fixture_add"' in str(message.get("content", "")) for message in messages):
                 message = {"role": "assistant", "content": json.dumps({
-                    "tool_call": {"name": TOOL, "arguments": {"a": 3, "b": 4}},
+                    "tool": TOOL, "arguments": {"a": 3, "b": 4},
                 }, separators=(",", ":"))}
             else:
                 message = {"role": "assistant", "content": "COMPAT_OK"}
@@ -185,7 +191,7 @@ class ProviderCompatibilityTests(unittest.TestCase):
         self.assertNotIn("parallel_tool_calls", body)
         self.assertIs(body["think"], False)
         self.assertEqual("user-selected-local-model", body["model"])
-        self.assertEqual(128, body["max_tokens"])
+        self.assertEqual(1024, body["max_tokens"])
         self.assertNotIn(SECRET, json.dumps(result))
 
     def test_native_tool_call_requires_exact_name_and_argument_schema(self):
@@ -242,6 +248,42 @@ class ProviderCompatibilityTests(unittest.TestCase):
         self.assertNotIn("tool_choice", body)
         self.assertNotIn("parallel_tool_calls", body)
         self.assertTrue(result["details"]["jsonToolCallValidated"])
+
+    def test_json_roundtrip_uses_production_contract_and_requires_final_format(self):
+        state = {}
+        self.save_profile(self.with_server(state), toolCalling='json')
+        status, result = self.run_check('json_tool_roundtrip')
+        self.assertEqual(200, status, result)
+        self.assertTrue(result['ok'], result)
+        self.assertEqual(2, len(state['requests']))
+        first, second = [entry['body'] for entry in state['requests']]
+        self.assertIn('"tool":"xueness_fixture_add"', first['messages'][1]['content'])
+        self.assertTrue(any('UNTRUSTED tool result (' in m.get('content', '') for m in second['messages']))
+        self.assertFalse(any(m['role'] == 'tool' for m in second['messages']))
+        self.assertNotIn('tools', first)
+        self.assertNotIn('tools', second)
+
+        other = {}
+        self.save_profile(self.with_server(other, plain_json_followup=True), toolCalling='json')
+        status, result = self.run_check('json_tool_roundtrip')
+        self.assertEqual(200, status)
+        self.assertFalse(result['ok'])
+        self.assertEqual('tool_result_followup', result['details']['failedStep'])
+
+    def test_first_json_call_alone_cannot_verify_a_profile(self):
+        state = {}
+        self.save_profile(self.with_server(state), toolCalling='json')
+        last = None
+        for mode in ('conversation', 'stream', 'json_tool_call'):
+            status, last = self.run_check(mode)
+            self.assertEqual(200, status)
+            self.assertTrue(last['ok'])
+        self.assertEqual(409, self.adopt(last['optionsHash'])[0])
+
+    def test_inference_diagnostics_have_their_own_finite_budget(self):
+        self.assertGreater(providers_api.COMPATIBILITY_TEST_TIMEOUT_SECONDS, providers_api.MODEL_DISCOVERY_TIMEOUT_SECONDS)
+        from xueness.bundled_plugins.providers.provider import COMPATIBILITY_TEST_MAX_TIMEOUT_SECONDS
+        self.assertLessEqual(providers_api.COMPATIBILITY_TEST_TIMEOUT_SECONDS, COMPATIBILITY_TEST_MAX_TIMEOUT_SECONDS)
 
     def test_json_tool_call_requires_lightweight_profile_before_network(self):
         state = {}
@@ -380,14 +422,14 @@ class ProviderCompatibilityTests(unittest.TestCase):
         candidate = {"think": False}
         first_status, first = self.run_check("conversation", candidate)
         self.assertEqual(200, first_status, first)
-        for mode in ("stream", "json_tool_call"):
+        for mode in ("stream", "json_tool_roundtrip"):
             status, result = self.run_check(mode, candidate)
             self.assertEqual(200, status, result)
             self.assertTrue(result["ok"], result)
         status, adopted = self.adopt(first["optionsHash"])
         self.assertEqual(200, status, adopted)
         check_modes = {item["mode"] for item in adopted["provider"]["compatibilityVerification"]["checks"]}
-        self.assertEqual({"conversation", "stream", "json_tool_call"}, check_modes)
+        self.assertEqual({"conversation", "stream", "json_tool_roundtrip"}, check_modes)
 
         # Saving any connection/runtime field rotates the revision and removes
         # the old verified provenance, even when the old options hash is known.

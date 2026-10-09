@@ -32,7 +32,7 @@ class LoopbackLiteralTests(unittest.TestCase):
             "localhost", "LOCALHOST", "127.0.0.1.evil.com", "evil127.0.0.1",
             "2130706433", "0x7f000001", "0x7f.0.0.1", "0177.0.0.1",
             "127.1", "10.0.0.1", "192.168.1.1", "8.8.8.8",
-            "0.0.0.0", "::", "", None,
+            "0.0.0.0", "::", "::ffff:8.8.8.8", "::ffff:10.0.0.1", "", None,
         ):
             self.assertFalse(_is_loopback_literal(host), repr(host))
 

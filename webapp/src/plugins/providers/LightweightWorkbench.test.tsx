@@ -905,7 +905,7 @@ test('LightweightTimeline pending status follows reported request phases and unk
     ['thinking', '思考中…'],
     ['generating', '正在生成回复…'],
     ['tools', '正在执行工具…'],
-    ['repairing', '正在校验结果…'],
+    ['repairing', '正在修复工具调用格式…'],
   ] as const;
   for (const [activityPhase, label] of phases) {
     const empty = renderToStaticMarkup(<LightweightTimeline rows={[]} streamingPending activityPhase={activityPhase} />);

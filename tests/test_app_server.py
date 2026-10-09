@@ -7,7 +7,7 @@ import io
 import json
 import os
 from pathlib import Path
-import select
+import queue
 import socket
 import subprocess
 import sys
@@ -43,10 +43,27 @@ class AppServerHarness:
         self._server_in = os.fdopen(stdin_read, "rb", closefd=True)
         self._server_out = os.fdopen(stdout_write, "wb", closefd=True)
         self.peer_in = os.fdopen(stdin_write, "wb", closefd=True)
-        os.set_blocking(self.out_fd, False)
+        self._chunks = queue.Queue()
+        self._reader = threading.Thread(target=self._drain_stdout,
+                                        name="app-server-test-stdout", daemon=True)
+        self._reader.start()
         self._thread = threading.Thread(target=self._serve, args=(state_dir,),
                                         name="app-server-under-test", daemon=True)
         self._thread.start()
+
+    def _drain_stdout(self):
+        # select() accepts sockets only on Windows. A dedicated pipe reader
+        # also drains output while a test is waiting for another event.
+        try:
+            while True:
+                chunk = os.read(self.out_fd, 65536)
+                if not chunk:
+                    break
+                self._chunks.put(chunk)
+        except OSError:
+            pass
+        finally:
+            self._chunks.put(None)
 
     def _serve(self, state_dir):
         options = self._options
@@ -127,17 +144,11 @@ class AppServerHarness:
             remaining = deadline - time.monotonic()
             if remaining <= 0:
                 raise AssertionError(f"no frame within the timeout; error={self.error!r}")
-            ready, _, _ = select.select([self.out_fd], [], [], min(remaining, 0.2))
-            if not ready:
-                continue
             try:
-                chunk = os.read(self.out_fd, 65536)
-            except BlockingIOError:
+                chunk = self._chunks.get(timeout=min(remaining, 0.2))
+            except queue.Empty:
                 continue
-            except OSError:
-                self.eof = True
-                continue
-            if not chunk:
+            if chunk is None:
                 self.eof = True
             else:
                 self.buffer += chunk
@@ -170,6 +181,7 @@ class AppServerHarness:
             os.close(self.out_fd)
         except OSError:
             pass
+        self._reader.join(2)
 
     def wait_until_stopped(self):
         self._thread.join(15)

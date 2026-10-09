@@ -1998,6 +1998,8 @@ Object.assign(messages, {
   '等待模型响应…': 'Waiting for the model…',
   '正在执行工具…': 'Running tools…',
   '正在校验结果…': 'Checking results…',
+  '正在修复工具调用格式…': 'Repairing tool call format…',
+  '工具结果续轮（json，两次请求）': 'Tool result round trip (JSON, two requests)',
   '正在处理请求…': 'Processing the request…',
   '当前模型请求状态': 'Current model request status',
   '已报告 Token 用量': 'Reported token usage',

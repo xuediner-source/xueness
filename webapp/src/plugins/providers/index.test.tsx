@@ -457,7 +457,7 @@ test('compatibility diagnostics require an unchanged saved connection and never 
   const jsonSaved = providerDraftFromSummary(jsonOriginal);
   const jsonTested = { ...jsonOriginal, compatibilityDiagnostics: [{
     optionsHash: 'd'.repeat(64), compatibility: candidate,
-    checks: [checks[0], checks[1], { ...checks[2], mode: 'json_tool_call' as const }],
+    checks: [checks[0], checks[1], { ...checks[2], mode: 'json_tool_roundtrip' as const }],
   }] };
   assert.equal(canAdoptProviderCompatibility({ ...jsonSaved, compatibility: candidate }, jsonTested), true);
 

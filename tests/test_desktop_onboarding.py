@@ -10,6 +10,7 @@ from unittest.mock import patch
 
 from xueness import plugin_runtime, web
 from xueness.bundled_plugins.onboarding import desktop_setup
+from tests.fs_link_helpers import make_symlink, make_directory_boundary_link, remove_directory_junction
 
 
 class DesktopOnboardingTests(unittest.TestCase):
@@ -50,21 +51,26 @@ class DesktopOnboardingTests(unittest.TestCase):
         self.assertEqual(self.request('DELETE')[0], 405)
         self.assertIsNone(desktop_setup.dispatch('GET', ['api', 'onboarding', 'elsewhere'], {}, self.ctx))
 
-    def test_rejects_symlinks_malformed_and_oversized_state(self):
+    def test_rejects_malformed_and_oversized_state(self):
         path = self.state/'desktop-onboarding.json'
-        outside = Path(self.temporary.name)/'outside'
-        outside.write_text('preserve')
-        path.symlink_to(outside)
-        self.assertEqual(self.request()[0], 400)
-        self.assertEqual(self.request('POST', {'completed': True})[0], 400)
-        self.assertEqual(outside.read_text(), 'preserve')
-        path.unlink()
         for raw in ('{}', '{"completed":true,"version":true}', 'x' * 4097):
             path.write_text(raw)
             self.assertEqual(self.request()[0], 400)
-        path.unlink()
+
+    def test_rejects_file_symlink_state(self):
+        path = self.state/'desktop-onboarding.json'
+        outside = Path(self.temporary.name)/'outside'
+        outside.write_text('preserve')
+        make_symlink(path, outside)
+        self.assertEqual(self.request()[0], 400)
+        self.assertEqual(self.request('POST', {'completed': True})[0], 400)
+        self.assertEqual(outside.read_text(), 'preserve')
+
+    def test_rejects_redirected_state_directory(self):
         linked = Path(self.temporary.name)/'linked'
-        linked.symlink_to(self.state, target_is_directory=True)
+        kind = make_directory_boundary_link(linked, self.state)
+        if kind == 'junction':
+            self.addCleanup(remove_directory_junction, linked)
         self.ctx['state_dir'] = linked
         self.assertEqual(self.request('POST', {'completed': True})[0], 400)
 

@@ -552,6 +552,7 @@ def _remember_workspace(ctx, root):
         pass
 
 def public_session_payload(ctx, session):
+    from ..providers.tool_protocol import public_diagnostics
     with ctx['lock']:
         buckets = ctx['approvals'].get(session['id'], {})
         approved = {'write': sorted(buckets.get('write', {}).values()), 'edit': sorted(buckets.get('edit', {}).values()), 'exec': sorted(buckets.get('exec', {}).values()), 'mcp': sorted(buckets.get('mcp', {}).values())}
@@ -577,6 +578,7 @@ def public_session_payload(ctx, session):
         'runtime_budget': _public_runtime_budget(session),
         'runtime_activity': _public_runtime_activity(session),
         'runtime_activity_history': _public_runtime_activity_history(session),
+        'protocol_diagnostics': public_diagnostics(session.get('protocol_diagnostics')),
         'pause_reason': session.get('pause_reason'),
         'pause_code': session.get('pause_code'),
         'remote_connection': _public_remote_connection(session),
