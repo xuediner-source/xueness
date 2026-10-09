@@ -48,11 +48,13 @@ for (const [theme, overrides] of Object.entries(blocks)) {
     } catch (error) { errors.push(`${theme}: ${error.message}`); }
   }
 }
-// The single accent is used for links, active labels and the send action, so it
+// Status text sits on its own tint and on cards. The single accent is used for links, active labels and the send action, so it
 // must read as text on every page surface and carry its own foreground.
 for (const [theme, overrides] of Object.entries(blocks)) {
   const values = { ...blocks[':root'], ...overrides };
-  const pairs = [['--accent-brand', '--bg'], ['--accent-brand', '--bg-card'], ['--accent-brand', '--bg-panel'], ['--accent-brand-fg', '--accent-brand']];
+  const pairs = [['--accent-brand', '--bg'], ['--accent-brand', '--bg-card'], ['--accent-brand', '--bg-panel'], ['--accent-brand-fg', '--accent-brand'],
+    ['--ok-fg', '--ok-bg'], ['--warn-fg', '--warn-bg'], ['--error-fg', '--error-bg'], ['--info-fg', '--info-bg'],
+    ['--ok-fg', '--bg-card'], ['--warn-fg', '--bg-card'], ['--error-fg', '--bg-card'], ['--info-fg', '--bg-card']];
   for (const [fg, bg] of pairs) {
     try {
       const [light, dark] = [luminance(values[fg] ?? ''), luminance(values[bg] ?? '')].sort((a, b) => b - a);
@@ -63,4 +65,4 @@ for (const [theme, overrides] of Object.entries(blocks)) {
   }
 }
 if (errors.length) { console.error([...new Set(errors)].join('\n')); process.exitCode = 1; }
-else console.log(`PASS: theme variables resolve; muted/subtle/body/accent text contrast >= ${minimum.toFixed(2)}:1 on checked surfaces.`);
+else console.log(`PASS: theme variables resolve; muted/subtle/body/accent/status text contrast >= ${minimum.toFixed(2)}:1 on checked surfaces.`);
