@@ -9,8 +9,34 @@ import os
 from pathlib import Path, PurePosixPath
 import stat
 
+_RESERVED_BASENAMES = frozenset(
+    {"CON", "PRN", "AUX", "NUL", *(f"COM{n}" for n in range(1, 10)), *(f"LPT{n}" for n in range(1, 10))}
+)
+
+
+def windows_relative_alias(relative: str):
+    """Return the component Win32 would alias, or None when the relative path is exact.
+
+    Trailing dots and spaces, reserved device names (even with an extension), and
+    alternate-data-stream colons refer to a different file than the path spells.
+    ``.`` and ``..`` stay with the workspace jail. Other hosts return None: a
+    trailing dot is a legal name there.
+    """
+    if os.name != "nt" or not isinstance(relative, str):
+        return None
+    for part in relative.replace("\\", "/").split("/"):
+        if part in ("", ".", ".."):
+            continue
+        if ":" in part or part.endswith(" ") or part.endswith("."):
+            return part
+        if part.split(".", 1)[0].upper() in _RESERVED_BASENAMES:
+            return part
+    return None
+
 
 def open_regular_file(root: Path, relative: str):
+    if windows_relative_alias(relative):
+        return None
     import msvcrt
     parts = PurePosixPath(relative).parts
     if not parts or any(part in ('', '.', '..') or ':' in part or '\\' in part for part in parts):

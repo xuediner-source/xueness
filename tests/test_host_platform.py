@@ -184,3 +184,30 @@ class LocaleTextTests(unittest.TestCase):
                     created = execute_workflow(args)
                 self.assertEqual([item['id'] for item in listed], [session['id']])
                 self.assertEqual(created['plan']['name'], '价格 €')
+
+
+class WindowsPathAliasTests(unittest.TestCase):
+    def test_windows_aliases_are_outside_the_workspace_and_macos_keeps_the_name(self):
+        from xueness.bundled_plugins.files import builtin_tools, windows_paths
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            (root / 'notes.txt').write_text('kept', encoding='utf-8')
+            aliases = ('notes.txt.', 'notes.txt ', 'dir/CON.txt', 'prn', 'COM1.log',
+                       'LPT9', r'sub\AUX.txt', 'file.txt:stream', '...')
+            with mock.patch.object(windows_paths.os, 'name', 'nt'), \
+                    mock.patch.object(builtin_tools.os, 'name', 'nt'):
+                for name in aliases:
+                    with self.subTest(platform='win32', name=name):
+                        self.assertIsNotNone(windows_paths.windows_relative_alias(name))
+                        with self.assertRaisesRegex(PermissionError, 'path outside workspace'):
+                            builtin_tools.path_in(root, name)
+                self.assertIsNone(windows_paths.windows_relative_alias('subdir/notes.txt'))
+                self.assertIsNone(windows_paths.windows_relative_alias('COM10.txt'))
+                self.assertIsNone(windows_paths.windows_relative_alias('dir/../notes.txt'))
+            for platform_name, os_name in (('darwin', 'posix'), ('linux', 'posix')):
+                with self.subTest(platform=platform_name), \
+                        mock.patch.object(sys, 'platform', platform_name), \
+                        mock.patch.object(windows_paths.os, 'name', os_name), \
+                        mock.patch.object(builtin_tools.os, 'name', os_name):
+                    self.assertIsNone(windows_paths.windows_relative_alias('notes.txt.'))
+                    self.assertEqual(builtin_tools.path_in(root, 'notes.txt.').name, 'notes.txt.')
