@@ -344,3 +344,45 @@
 .xn-shell-layout .xn-pending-question h3 { font-size: 15px; }
 .xn-shell-layout .xn-pending-question textarea { border-radius: var(--radius-md); }
 .xn-shell-layout .xn-pending-question textarea:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 1px; }
+
+/* ── 6. Settings: paper cards on the warm canvas, quiet navigation ───────── */
+.xn-shell-layout .xn-settings-view,
+.xn-shell-layout .xn-settings-view__sidebar { background: var(--bg-window); }
+.xn-shell-layout .xn-settings-view__main {
+  border-color: color-mix(in oklab, var(--border) 85%, transparent);
+  border-radius: var(--radius-lg) 0 0 var(--radius-lg);
+  background: var(--bg);
+  box-shadow: var(--shadow-sm);
+}
+.xn-shell-layout .xn-settings-view__frame { max-width: 840px; padding-inline: 40px; }
+.xn-shell-layout .xn-settings-view__header h1 { font-size: 26px; line-height: 34px; letter-spacing: -.02em; }
+.xn-shell-layout .xn-settings-view__description { color: var(--fg-muted); }
+.xn-shell-layout .xn-settings-view__nav-item,
+.xn-shell-layout .xn-settings-view__extensions > summary { border-radius: 8px; color: var(--fg-subtle); font-weight: 450; }
+.xn-shell-layout .xn-settings-view__nav-item:hover { background: var(--bg-hover); color: var(--fg); }
+.xn-shell-layout .xn-settings-view__nav-item[aria-current="page"] { background: var(--bg-active); color: var(--fg); font-weight: 550; }
+.xn-shell-layout .xn-settings-view__nav-icon { color: var(--fg-muted); }
+.xn-shell-layout .xn-settings-view__nav-item[aria-current="page"] .xn-settings-view__nav-icon { color: var(--fg); }
+.xn-shell-layout .xn-settings-view__group-label { color: var(--fg-muted); font-size: 12px; font-weight: 500; }
+.xn-shell-layout .xn-settings-view__search input { border-radius: 9px; background: var(--bg-input); }
+.xn-shell-layout .xn-settings-account { border-radius: var(--radius-md); background: var(--bg-card); border-color: var(--border); }
+
+.xn-shell-layout .xn-settings-group,
+.xn-shell-layout .xn-plugins__list,
+.xn-shell-layout .xn-settings-readonly {
+  border-color: var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--bg-card);
+  box-shadow: var(--shadow-sm);
+}
+.xn-shell-layout .xn-setting-row { border-top-color: color-mix(in oklab, var(--border) 75%, transparent); }
+.xn-shell-layout .xn-setting-row h3 { color: var(--fg); }
+.xn-shell-layout .xn-setting-control .xn-select,
+.xn-shell-layout .xn-setting-control input:not([type=checkbox]):not([type=radio]),
+.xn-shell-layout .xn-setting-control textarea { border-radius: 8px; background: var(--bg-input); }
+.xn-shell-layout .xn-plugin-card { padding: 10px 14px; }
+.xn-shell-layout .xn-plugin-card__state.is-effective { color: var(--ok-fg); background: var(--ok-bg); }
+/* Switches stay ink-coloured (not accent) so pages full of toggles stay calm. */
+.xn-shell-layout .xn-settings-switch { transition: background-color var(--dur-normal) var(--ease-standard), border-color var(--dur-normal) var(--ease-standard); }
+.xn-shell-layout .xn-settings-switch::after { box-shadow: 0 1px 2px rgb(0 0 0 / .18); transition: transform var(--dur-normal) var(--ease-standard), background-color var(--dur-normal) var(--ease-standard); }
+.xn-shell-layout .xn-settings-switch:focus-visible { outline: 2px solid var(--focus-ring); }
