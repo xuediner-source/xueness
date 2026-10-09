@@ -1,4 +1,4 @@
-import { post } from "./xuenessApi";
+import { post, readJsonResponse } from "./xuenessApi";
 import { getLocale } from "./i18n";
 
 export type ComposerInput = {
@@ -100,9 +100,7 @@ export async function loadComposerCatalog(root?: string, sessionId?: string, sig
   const response = await fetch(`/api/composer${query.size ? `?${query}` : ""}`, {
     credentials: "same-origin", cache: "no-store", signal,
   });
-  const payload = await response.json();
-  if (!response.ok) throw new Error(payload.error || `HTTP ${response.status}`);
-  return payload as ComposerCatalog;
+  return readJsonResponse<ComposerCatalog>(response);
 }
 export async function prepareComposer(text: string, input: ComposerInput | undefined, selection: {
   root?: string; session_id?: string; provider_id?: string; model?: string; reasoning_effort?: string;

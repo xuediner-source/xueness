@@ -1,3 +1,4 @@
+import { readJsonResponse } from "./xuenessApi";
 import { isPermissionMode, type PermissionMode } from "./plugins/sessions/permissionModes";
 
 export type XuenessSession = {
@@ -72,9 +73,7 @@ export function getRunChoices(): RunChoices { return { ...runChoices }; }
 
 async function get<T>(path: string): Promise<T> {
   const response = await fetch(path, { credentials: "same-origin", cache: "no-store" });
-  const payload = await response.json();
-  if (!response.ok) throw new Error(payload.error || `HTTP ${response.status}`);
-  return payload as T;
+  return readJsonResponse<T>(response);
 }
 
 /**

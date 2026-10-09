@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { listPlugins, setPluginEnabled, installMarketplaceItem, createAutomation, runAutomation, approveAutomation, discoverProviderModels, post } from "./xuenessApi";
+import { listPlugins, setPluginEnabled, installMarketplaceItem, createAutomation, runAutomation, approveAutomation, discoverProviderModels, post, get } from "./xuenessApi";
 
 const response = (payload: unknown, status = 200): Response => new Response(JSON.stringify(payload), {
   status,
@@ -134,5 +134,19 @@ test("provider model discovery rejects malformed model entries and reports the s
       ? response({ csrfToken: "token" })
       : response({ error: "real model requests are disabled" }, 403)) as typeof fetch;
     await assert.rejects(discoverProviderModels("p"), /real model requests are disabled/);
+  } finally { globalThis.fetch = original; }
+});
+
+test("non-JSON gateway errors surface the HTTP status instead of a JSON SyntaxError", async () => {
+  const original = globalThis.fetch;
+  try {
+    globalThis.fetch = (async () => new Response("<html><body>502 Bad Gateway</body></html>", {
+      status: 502, headers: { "Content-Type": "text/html" },
+    })) as typeof fetch;
+    await assert.rejects(get("/api/plugins"), { message: "HTTP 502" });
+    globalThis.fetch = (async () => new Response("", { status: 200 })) as typeof fetch;
+    await assert.rejects(get("/api/plugins"), { message: "invalid JSON response" });
+    globalThis.fetch = (async () => response({ error: "插件不存在" }, 404)) as typeof fetch;
+    await assert.rejects(get("/api/plugins"), { message: "插件不存在" });
   } finally { globalThis.fetch = original; }
 });

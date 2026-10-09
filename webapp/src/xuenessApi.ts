@@ -247,11 +247,31 @@ export type OffPeakOverview = {
 /* 传输层（复用 xuenessBridge.ts 的 get/post 风格）                     */
 /* ------------------------------------------------------------------ */
 
+/**
+ * 统一解析 JSON 响应。反向代理/网关在后端不可用时常返回 HTML 或空体（502/504），
+ * 直接 response.json() 会抛出难懂的 SyntaxError；这里改为给出 HTTP 状态码。
+ * 读取被中止（AbortError）时照常向上抛出。
+ */
+export async function readJsonResponse<T>(response: Response): Promise<T> {
+  let payload: unknown;
+  let parsed = true;
+  try {
+    payload = await response.json();
+  } catch (error) {
+    if (error instanceof Error && error.name === "AbortError") throw error;
+    parsed = false;
+  }
+  if (!response.ok) {
+    const detail = (payload as { error?: unknown } | null | undefined)?.error;
+    throw new Error(typeof detail === "string" && detail ? detail : `HTTP ${response.status}`);
+  }
+  if (!parsed) throw new Error("invalid JSON response");
+  return payload as T;
+}
+
 export async function get<T>(path: string, signal?: AbortSignal): Promise<T> {
   const response = await fetch(path, { credentials: "same-origin", cache: "no-store", ...(signal ? { signal } : {}) });
-  const payload = await response.json();
-  if (!response.ok) throw new Error(payload.error || `HTTP ${response.status}`);
-  return payload as T;
+  return readJsonResponse<T>(response);
 }
 
 /** 写操作统一取 CSRF token 后再发送（GET 因契约不同分开处理）。 */
@@ -265,9 +285,7 @@ async function send<T>(method: "POST" | "PUT" | "PATCH" | "DELETE", path: string
     body: body === undefined ? undefined : JSON.stringify(body),
     ...(signal ? { signal } : {}),
   });
-  const payload = await response.json();
-  if (!response.ok) throw new Error(payload.error || `HTTP ${response.status}`);
-  return payload as T;
+  return readJsonResponse<T>(response);
 }
 
 export async function post<T>(path: string, body: object, signal?: AbortSignal): Promise<T> {
