@@ -382,7 +382,7 @@ test("appearance uses accessible theme, font and code-preview controls", () => {
   assert.match(out, /role="combobox"/);
   assert.match(out, /深色/);
   assert.match(out, /aria-label="配色方案"/);
-  assert.match(out, /Claude 风格/);
+  assert.match(out, /Codex 风格/);
   assert.match(out, /aria-label="界面字号"/);
   assert.match(out, /value="18"/);
   assert.match(out, /aria-label="代码字号"/);

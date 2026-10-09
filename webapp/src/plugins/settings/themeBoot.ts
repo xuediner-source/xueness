@@ -1,6 +1,7 @@
 /** The same theme resolver runs in the document head and the React settings host. */
 export type ThemePreference = 'light' | 'dark' | 'system';
-/** Optional UI color palette. Default Xueness is neutral; Claude 风格 is warm. */
+/** Optional UI color palette. Default Xueness is the original look; the stored
+ * value `claude` keeps older settings working and is shown as 「Codex 风格」. */
 export type ColorPalettePreference = 'xueness' | 'claude';
 
 export function normalizeTheme(value: unknown): ThemePreference {
