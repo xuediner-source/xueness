@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { evaluateWorkbenchGlobalKey } from "./XuenessWorkbenchContainer";
+import { evaluateWorkbenchGlobalKey, shouldIgnoreSessionResponse, createCleanSessionTransientState } from "./XuenessWorkbenchContainer";
 
 function makeContext(overrides: Partial<Parameters<typeof evaluateWorkbenchGlobalKey>[1]> = {}) {
   return {
@@ -144,3 +144,42 @@ test("evaluateWorkbenchGlobalKey honors custom shortcut bindings", () => {
   // Custom binding matches
   assert.deepEqual(evaluateWorkbenchGlobalKey({ key: "n", ctrlKey: true, shiftKey: true }, customCtx), { type: "new-session" });
 });
+
+test("shouldIgnoreSessionResponse guards against unmount, aborted signals, and session mismatch races", () => {
+  const activeSession = "session-123";
+  const controller = new AbortController();
+
+  // Active matching session, mounted, not aborted -> accept response
+  assert.equal(shouldIgnoreSessionResponse(activeSession, activeSession, true, controller.signal), false);
+
+  // Mismatched session (user switched sessions before fetch returned) -> ignore
+  assert.equal(shouldIgnoreSessionResponse("old-session-001", activeSession, true, controller.signal), true);
+
+  // Unmounted component -> ignore
+  assert.equal(shouldIgnoreSessionResponse(activeSession, activeSession, false, controller.signal), true);
+
+  // Aborted signal -> ignore
+  controller.abort();
+  assert.equal(shouldIgnoreSessionResponse(activeSession, activeSession, true, controller.signal), true);
+});
+
+test("createCleanSessionTransientState resets files, preview, changes, and git panel states", () => {
+  const clean = createCleanSessionTransientState();
+  assert.deepEqual(clean.files, []);
+  assert.equal(clean.filesTruncated, false);
+  assert.equal(clean.selectedPath, null);
+  assert.equal(clean.preview, null);
+  assert.equal(clean.previewError, "");
+  assert.equal(clean.changeSet, null);
+  assert.equal(clean.changesError, "");
+  assert.equal(clean.gitStatus, null);
+  assert.equal(clean.gitStatusError, "");
+  assert.equal(clean.gitDiff, null);
+  assert.equal(clean.gitDiffError, "");
+  assert.equal(clean.gitLog, null);
+  assert.equal(clean.gitLogError, "");
+  assert.deepEqual(clean.gitCheckpoints, []);
+  assert.equal(clean.gitCheckpointError, "");
+  assert.equal(clean.runError, "");
+});
+

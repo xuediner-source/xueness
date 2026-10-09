@@ -293,6 +293,38 @@ function trackSessionId(
   setValue(next);
 }
 
+export function shouldIgnoreSessionResponse(
+  requestSessionId: string | null,
+  activeSessionId: string | null,
+  isMounted = true,
+  signal?: AbortSignal,
+): boolean {
+  if (!isMounted) return true;
+  if (signal?.aborted) return true;
+  return requestSessionId !== activeSessionId;
+}
+
+export function createCleanSessionTransientState() {
+  return {
+    files: [] as { path: string; size: number }[],
+    filesTruncated: false,
+    selectedPath: null as string | null,
+    preview: null as FilePreview | null,
+    previewError: "",
+    changeSet: null as FileChangeSet | null,
+    changesError: "",
+    gitStatus: null as GitStatus | null,
+    gitStatusError: "",
+    gitDiff: null as GitDiff | null,
+    gitDiffError: "",
+    gitLog: null as GitCommit[] | null,
+    gitLogError: "",
+    gitCheckpoints: [] as GitCheckpoint[],
+    gitCheckpointError: "",
+    runError: "",
+  };
+}
+
 export function XuenessWorkbenchContainer() {
   const locale = useLocale();
   useEffect(() => { document.documentElement.lang = locale === "zh" ? "zh-CN" : "en"; }, [locale]);
@@ -307,28 +339,57 @@ export function XuenessWorkbenchContainer() {
   // In-flight and queued reads must consult the current catalog, not an old closure.
   const pluginEffectiveRef = useRef(isPluginEffective);
   pluginEffectiveRef.current = isPluginEffective;
+
+  const mountedRef = useRef(true);
+  const activeAbortRef = useRef<AbortController | null>(null);
+  const filesAbortRef = useRef<AbortController | null>(null);
+  const previewAbortRef = useRef<AbortController | null>(null);
+  const selectedPathRef = useRef<string | null>(null);
+  const changesAbortRef = useRef<AbortController | null>(null);
+  const gitAbortRef = useRef<AbortController | null>(null);
+  const listAbortRef = useRef<AbortController | null>(null);
+
+  useEffect(() => {
+    return () => {
+      mountedRef.current = false;
+      activeAbortRef.current?.abort();
+      filesAbortRef.current?.abort();
+      previewAbortRef.current?.abort();
+      changesAbortRef.current?.abort();
+      gitAbortRef.current?.abort();
+      listAbortRef.current?.abort();
+    };
+  }, []);
+
   const refreshPluginCatalog = useCallback(async () => {
     setPluginCatalogLoading(true);
     try {
       const result = await listPlugins();
+      if (!mountedRef.current) return;
       setPluginCatalog(result.plugins);
       setPluginCatalogError("");
     } catch (reason) {
+      if (!mountedRef.current) return;
       setPluginCatalog([]);
       setPluginCatalogError(reason instanceof Error ? reason.message : String(reason));
     } finally {
-      setPluginCatalogReady(true);
-      setPluginCatalogLoading(false);
+      if (mountedRef.current) {
+        setPluginCatalogReady(true);
+        setPluginCatalogLoading(false);
+      }
     }
   }, []);
   const togglePlugin = useCallback(async (id: string, enabled: boolean) => {
     try {
       const result = await setPluginEnabled(id, enabled);
+      if (!mountedRef.current) return;
       setPluginCatalog(result.plugins);
       setPluginCatalogError("");
       setPluginCatalogReady(true);
     } catch (reason) {
-      await refreshPluginCatalog();
+      if (mountedRef.current) {
+        await refreshPluginCatalog();
+      }
       throw reason;
     }
   }, [refreshPluginCatalog]);
@@ -444,6 +505,7 @@ export function XuenessWorkbenchContainer() {
   const [files, setFiles] = useState<{ path: string; size: number }[]>([]);
   const [filesTruncated, setFilesTruncated] = useState(false);
   const [selectedPath, setSelectedPath] = useState<string | null>(null);
+  selectedPathRef.current = selectedPath;
   const [preview, setPreview] = useState<FilePreview | null>(null);
   const [previewError, setPreviewError] = useState("");
 
@@ -516,8 +578,11 @@ export function XuenessWorkbenchContainer() {
       setSessions([]);
       return;
     }
-    const res = await listSessions();
-    if (!pluginEffectiveRef.current("sessions")) return;
+    listAbortRef.current?.abort();
+    const controller = new AbortController();
+    listAbortRef.current = controller;
+    const res = await listSessions(controller.signal);
+    if (!mountedRef.current || !pluginEffectiveRef.current("sessions") || controller.signal.aborted) return;
     if (res.ok) {
       setSessions(prev => stabilizeSessionList(prev, res.value));
       if (stoppingSessionsRef.current.size > 0) {
@@ -588,14 +653,17 @@ export function XuenessWorkbenchContainer() {
 
   const loadActiveSnapshot = useCallback(async (id: string, includeFiles = true) => {
     if (!pluginEffectiveRef.current("sessions")) return;
+    activeAbortRef.current?.abort();
+    const controller = new AbortController();
+    activeAbortRef.current = controller;
     // Detail carries pending/approved/changed_files; the timeline carries the
     // real tool_call/tool_result sequence. Both come from the server; neither is
     // reconstructed client-side.
-    const snapshot = await loadConversationSnapshot(id);
+    const snapshot = await loadConversationSnapshot(id, controller.signal);
     const detail = snapshot.ok ? {ok: true as const, value: snapshot.value.session} : snapshot;
     const timeline = snapshot.ok ? {ok: true as const, value: snapshot.value.timeline} : snapshot;
     const journal = snapshot.ok ? {ok: true as const, value: snapshot.value.journal} : snapshot;
-    if (activeIdRef.current !== id || !pluginEffectiveRef.current("sessions")) return;
+    if (shouldIgnoreSessionResponse(id, activeIdRef.current, mountedRef.current, controller.signal) || !pluginEffectiveRef.current("sessions")) return;
     if (detail.ok) {
       setSession(prev => stabilizeSession(prev, detail.value));
       if (detail.value.status !== "running" && detail.value.streaming?.status !== "streaming") {
@@ -620,8 +688,8 @@ export function XuenessWorkbenchContainer() {
     });
     // @ 文件提及候选：会话工作区文件列表（失败静默，composer 不出建议）。
     if (includeFiles && pluginEffectiveRef.current("files")) {
-      const listing = await loadFiles(id);
-      if (activeIdRef.current !== id || !pluginEffectiveRef.current("files")) return;
+      const listing = await loadFiles(id, controller.signal);
+      if (shouldIgnoreSessionResponse(id, activeIdRef.current, mountedRef.current, controller.signal) || !pluginEffectiveRef.current("files")) return;
       if (listing.ok) {
         setFiles(listing.value.files);
         setFilesTruncated(listing.value.truncated);
@@ -897,11 +965,40 @@ export function XuenessWorkbenchContainer() {
   }, [settingsValues.colorPalette, settingsLoading]);
 
   useEffect(() => {
+    activeAbortRef.current?.abort();
+    activeAbortRef.current = null;
+    filesAbortRef.current?.abort();
+    filesAbortRef.current = null;
+    previewAbortRef.current?.abort();
+    previewAbortRef.current = null;
+    changesAbortRef.current?.abort();
+    changesAbortRef.current = null;
+    gitAbortRef.current?.abort();
+    gitAbortRef.current = null;
+
     setSession(null);
     setRows([]);
     setDataErrors(previous => ({ ...previous, active: "" }));
     setQueueError(null);
     setQueueCancelling(null);
+
+    const clean = createCleanSessionTransientState();
+    setFiles(clean.files);
+    setFilesTruncated(clean.filesTruncated);
+    setSelectedPath(clean.selectedPath);
+    setPreview(clean.preview);
+    setPreviewError(clean.previewError);
+    setChangeSet(clean.changeSet);
+    setChangesError(clean.changesError);
+    setGitStatus(clean.gitStatus);
+    setGitStatusError(clean.gitStatusError);
+    setGitDiff(clean.gitDiff);
+    setGitDiffError(clean.gitDiffError);
+    setGitLog(clean.gitLog);
+    setGitLogError(clean.gitLogError);
+    setGitCheckpoints(clean.gitCheckpoints);
+    setGitCheckpointError(clean.gitCheckpointError);
+    setRunError(clean.runError);
   }, [activeId]);
   useEffect(() => {
     if (activeId) void loadActive(activeId);
@@ -1247,8 +1344,13 @@ export function XuenessWorkbenchContainer() {
 
   // -- files panel ---------------------------------------------------------
   const handleLoadFiles = useCallback(async () => {
-    if (!activeId || !isPluginEffective("files")) return;
-    const res = await loadFiles(activeId);
+    const currentId = activeId;
+    if (!currentId || !isPluginEffective("files")) return;
+    filesAbortRef.current?.abort();
+    const controller = new AbortController();
+    filesAbortRef.current = controller;
+    const res = await loadFiles(currentId, controller.signal);
+    if (shouldIgnoreSessionResponse(currentId, activeIdRef.current, mountedRef.current, controller.signal) || !isPluginEffective("files")) return;
     if (res.ok) {
       setFiles(res.value.files);
       setFilesTruncated(res.value.truncated);
@@ -1259,11 +1361,17 @@ export function XuenessWorkbenchContainer() {
 
   const handleSelectFile = useCallback(
     async (path: string) => {
-      if (!activeId || !isPluginEffective("files")) return;
+      const currentId = activeId;
+      if (!currentId || !isPluginEffective("files")) return;
+      selectedPathRef.current = path;
       setSelectedPath(path);
       setPreview(null);
       setPreviewError("");
-      const res = await loadFilePreview(activeId, path);
+      previewAbortRef.current?.abort();
+      const controller = new AbortController();
+      previewAbortRef.current = controller;
+      const res = await loadFilePreview(currentId, path, controller.signal);
+      if (shouldIgnoreSessionResponse(currentId, activeIdRef.current, mountedRef.current, controller.signal) || selectedPathRef.current !== path) return;
       if (res.ok)
         setPreview({
           ...res.value,
@@ -1275,9 +1383,14 @@ export function XuenessWorkbenchContainer() {
 
   // -- changes panel -------------------------------------------------------
   const handleLoadChanges = useCallback(async () => {
-    if (!activeId || !isPluginEffective("files")) return;
+    const currentId = activeId;
+    if (!currentId || !isPluginEffective("files")) return;
     setChangesError("");
-    const res = await loadJournal(activeId);
+    changesAbortRef.current?.abort();
+    const controller = new AbortController();
+    changesAbortRef.current = controller;
+    const res = await loadJournal(currentId, controller.signal);
+    if (shouldIgnoreSessionResponse(currentId, activeIdRef.current, mountedRef.current, controller.signal) || !isPluginEffective("files")) return;
     if (res.ok) setChangeSet(deriveFileChanges(res.value));
     else {
       setChangeSet(null);
@@ -1296,6 +1409,7 @@ export function XuenessWorkbenchContainer() {
     setSettingsDirty(true);
     const operation = settingsWriteQueue.current.then(async () => {
       const result = await saveWorkbenchSettings(SETTINGS_DEFAULTS, patch);
+      if (!mountedRef.current) return;
       if (result.ok) {
         for (const [key, value] of Object.entries(patch)) {
           if (JSON.stringify(pendingSettings.current[key]) === JSON.stringify(value)) delete pendingSettings.current[key];
@@ -1303,11 +1417,14 @@ export function XuenessWorkbenchContainer() {
         if (Object.keys(pendingSettings.current).length === 0) setSettingsError("");
       } else setSettingsError(result.error);
     }).finally(() => {
+      if (!mountedRef.current) return;
       settingsWriteCount.current -= 1;
       setSettingsSaving(settingsWriteCount.current > 0);
       setSettingsDirty(Object.keys(pendingSettings.current).length > 0);
     });
-    settingsWriteQueue.current = operation.catch(reason => { setSettingsError(String(reason)); });
+    settingsWriteQueue.current = operation.catch(reason => {
+      if (mountedRef.current) setSettingsError(String(reason));
+    });
     return settingsWriteQueue.current;
   }, []);
 
@@ -1333,17 +1450,22 @@ export function XuenessWorkbenchContainer() {
   // -- git panel --------------------------------------------------------------
   // Read-only round trips; a non-repo workspace surfaces its honest empty state.
   const loadGitPanel = useCallback(async () => {
-    if (!activeId) return;
+    const currentId = activeId;
+    if (!currentId) return;
+    gitAbortRef.current?.abort();
+    const controller = new AbortController();
+    gitAbortRef.current = controller;
     setGitLoading(true);
     setGitStatusError("");
     setGitDiffError("");
     setGitLogError("");
     const [status, diff, log, checkpoints] = await Promise.all([
-      loadGitStatus(activeId),
-      loadGitDiff(activeId),
-      loadGitLog(activeId),
-      loadGitCheckpoints(activeId),
+      loadGitStatus(currentId, controller.signal),
+      loadGitDiff(currentId, controller.signal),
+      loadGitLog(currentId, controller.signal),
+      loadGitCheckpoints(currentId, controller.signal),
     ]);
+    if (shouldIgnoreSessionResponse(currentId, activeIdRef.current, mountedRef.current, controller.signal)) return;
     setGitStatus(status.ok ? status.value : null);
     setGitStatusError(status.ok ? "" : status.error);
     setGitDiff(diff.ok ? diff.value : null);
@@ -1360,10 +1482,13 @@ export function XuenessWorkbenchContainer() {
     setGitActionBusy(true);
     try {
       const result = await action();
+      if (!mountedRef.current) return;
       if (!result.ok) setGitCheckpointError(result.error);
       else setGitCheckpointError("");
       await loadGitPanel();
-    } finally { setGitActionBusy(false); }
+    } finally {
+      if (mountedRef.current) setGitActionBusy(false);
+    }
   }, [activeId, gitActionBusy, isPluginEffective, loadGitPanel]);
 
   useEffect(() => {
@@ -1379,10 +1504,11 @@ export function XuenessWorkbenchContainer() {
     setDirError("");
     try {
       const res = await loadDirectory(path);
+      if (!mountedRef.current) return;
       if (res.ok) setDirListing(res.value);
       else setDirError(res.error);
     } finally {
-      setDirLoading(false);
+      if (mountedRef.current) setDirLoading(false);
     }
   }, [isPluginEffective]);
 
@@ -1391,6 +1517,7 @@ export function XuenessWorkbenchContainer() {
     setDirLoading(true);
     void (async () => {
       const home = await loadHome();
+      if (!mountedRef.current) return;
       setDirLoading(false);
       if (home.ok) await browseDirectory(home.value);
       else setDirError(home.error);
@@ -1413,6 +1540,7 @@ export function XuenessWorkbenchContainer() {
     setProvidersLoading(true);
     void (async () => {
       const res = await loadProviders();
+      if (!mountedRef.current) return;
       setProvidersLoading(false);
       if (res.ok) {
         setProviders(res.value);
@@ -1426,6 +1554,7 @@ export function XuenessWorkbenchContainer() {
     setUsageLoading(true);
     void (async () => {
       const res = await loadUsage();
+      if (!mountedRef.current) return;
       setUsageLoading(false);
       if (res.ok) {
         setUsage(res.value);
@@ -1439,6 +1568,7 @@ export function XuenessWorkbenchContainer() {
     setTracksLoading(true);
     void (async () => {
       const res = await loadMemoryTracks();
+      if (!mountedRef.current) return;
       setTracksLoading(false);
       if (res.ok) {
         setTracks(res.value);
@@ -1453,6 +1583,7 @@ export function XuenessWorkbenchContainer() {
   const handleLoadAllSettings = useCallback(async () => {
     setSettingsLoading(true);
     const res = await loadWorkbenchSettings(SETTINGS_DEFAULTS);
+    if (!mountedRef.current) return;
     setSettingsLoading(false);
     if (res.ok) {
       setSettingsValues(res.value);

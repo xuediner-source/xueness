@@ -100,10 +100,12 @@ export async function loadGitDiff(id: string, signal?: AbortSignal): Promise<Res
   }
 }
 
-export async function loadGitLog(id: string, count?: number, signal?: AbortSignal): Promise<Result<GitCommit[]>> {
+export async function loadGitLog(id: string, count?: number | AbortSignal, signal?: AbortSignal): Promise<Result<GitCommit[]>> {
+  const actualSignal = count instanceof AbortSignal ? count : signal;
+  const actualCount = typeof count === "number" ? count : undefined;
   try {
-    const query = count && count > 0 ? `?count=${encodeURIComponent(count)}` : "";
-    const payload = await requestGet<{ commits?: GitCommit[] }>(`${gitPath(id, "log")}${query}`, signal);
+    const query = actualCount && actualCount > 0 ? `?count=${encodeURIComponent(actualCount)}` : "";
+    const payload = await requestGet<{ commits?: GitCommit[] }>(`${gitPath(id, "log")}${query}`, actualSignal);
     return { ok: true, value: payload.commits ?? [] };
   } catch (error) {
     return { ok: false, error: toErrorMessage(error) };
