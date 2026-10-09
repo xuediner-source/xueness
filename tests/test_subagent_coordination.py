@@ -99,6 +99,34 @@ class CoordinationTests(unittest.TestCase):
         self.assertTrue(exited.wait(1))
         self.assertNotIn('premature done', json.dumps(out['messages']))
 
+    def test_collecting_results_clears_the_specific_blocker_at_the_step_limit(self):
+        finished = threading.Event()
+
+        def child(*args, **kwargs):
+            finished.set()
+            return {'ok': True, 'summary': 'bounded child findings', 'steps': 1}
+
+        class Provider:
+            steps = 0
+            def complete(_, messages, tools):
+                _.steps += 1
+                if _.steps == 1:
+                    return call('spawn', 'task', {'prompt': 'child inspection'})
+                if _.steps == 2:
+                    self.assertTrue(finished.wait(1))
+                    return {'content': json.dumps({'summary': 'premature done', 'evidence': []})}
+                return call('collect', 'task_collect', {'wait_seconds': 1,
+                            'reason': 'dependency', 'detail': 'Collect the result before finishing.'})
+
+        with patch('xueness.core._run_subagent', side_effect=child):
+            out = run(self.session, self.store, Provider(), Gate(self.root), subagents=[], max_steps=3)
+        self.assertEqual(out['status'], 'paused')
+        self.assertEqual(out['pause_code'], 'step_limit_reached')
+        self.assertTrue(out['results']['collect']['ok'])
+        self.assertTrue(out['subagent_coordination'][out['task_runs'][0]['id']]['collected'])
+        self.assertIsNone(out['completion'])
+        self.assertNotIn('premature done', json.dumps(out['messages']))
+
     def test_concurrency_cap_parent_stop_and_unknown_task_isolation(self):
         c = TaskCoordinator(self.session)
         self.addCleanup(c.close)

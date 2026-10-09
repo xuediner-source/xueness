@@ -2394,9 +2394,14 @@ def _drive_run(session: dict, store: Store, provider, gate: Gate, max_steps=None
         if user_stop_requested():
             return settle_stopped()
     session["status"] = "paused"
-    session["pause_code"] = "step_limit_reached"
-    session["pause_reason"] = (
-        f"本轮达到 {max_steps} 步上限，任务尚未完成；继续当前任务可接着处理。")
+    # Keep the specific final-answer blocker while its results remain missing.
+    # A later successful collection clears that blocker even at the step limit.
+    if not (session.get("pause_code") == "subagent_results_uncollected"
+            and _subagent_coordinator is not None
+            and _subagent_coordinator.completion_guidance()):
+        session["pause_code"] = "step_limit_reached"
+        session["pause_reason"] = (
+            f"本轮达到 {max_steps} 步上限，任务尚未完成；继续当前任务可接着处理。")
     fire_stop()
     save_session()
     _emit_event(on_event, "status", status="paused", steps=session.get("steps", 0),

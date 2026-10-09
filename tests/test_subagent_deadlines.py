@@ -13,6 +13,7 @@ from xueness.core import Gate
 from xueness.bundled_plugins.providers.provider import (
     AnthropicMessages,
     OpenAICompatible,
+    ProviderRequestError,
 )
 from xueness.bundled_plugins.subagents.runner import run_subagent
 
@@ -146,8 +147,10 @@ class SubagentDeadlineTests(unittest.TestCase):
                     provider = self.make_provider(protocol, server)
                     provider.request_deadline = time.monotonic() + 0.25
                     started = time.monotonic()
-                    with self.assertRaises(TimeoutError):
+                    with self.assertRaises(ProviderRequestError) as raised:
                         provider.complete([{"role": "user", "content": "hi"}], [])
+                    self.assertEqual(raised.exception.category, 'timeout')
+                    self.assertEqual(raised.exception.stage, 'deadline')
                     self.assertLess(time.monotonic() - started, 1.2)
                     self.assertEqual(1, state["calls"])
                     self.assertTrue(state["finished"].wait(1))
@@ -166,9 +169,11 @@ class SubagentDeadlineTests(unittest.TestCase):
                     provider.request_deadline = time.monotonic() + 0.25
                     deltas = []
                     started = time.monotonic()
-                    with self.assertRaises(TimeoutError):
+                    with self.assertRaises(ProviderRequestError) as raised:
                         provider.stream(
                             [{"role": "user", "content": "hi"}], [], deltas.append)
+                    self.assertEqual(raised.exception.category, 'timeout')
+                    self.assertEqual(raised.exception.stage, 'deadline')
                     self.assertLess(time.monotonic() - started, 1.2)
                     self.assertEqual(["part"], deltas)
                     self.assertEqual(1, state["calls"])

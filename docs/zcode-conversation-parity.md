@@ -45,4 +45,6 @@ desktop 插件的自定义数据位置偏好现同时支持 Windows 与 macOS，
 
 相关后端回归完成 434 项检查（26 项按测试条件跳过），覆盖插件边界、消息操作、模型流式兼容、轻量预算、交付状态和 Web 接口；没有运行后端全套或真实模型推理。
 
+原生矩阵初次检查发现子任务未收集的具体暂停原因被步数上限覆盖，现只在该阻塞仍有效时保留原因，收集成功后正常显示步数上限。超时回归同步检查规范化的 `ProviderRequestError` 的 `timeout/deadline` 分类，保留绝对耗时、请求次数和已交付文本断言。补充核心/子任务/超时相关回归 118 项完成（4 项按测试条件跳过），包括收集后清除旧阻塞的反例。
+
 这些浏览器截图在 Windows 执行，明确记录 `simulatedOS` 与 `executionHost`，不算 Mac 原生安装验证。既有 `Desktop installers` 工作流分别在 Windows x64、Mac Intel x64 与 Mac arm64 原生 runner 中运行共享前端回归、桌面回归、冻结后端和真正的 Electron 打包应用检查。原生验证结果以对应 GitHub Actions 运行记录为准。源代码提交不替换既有 Release 安装包。
