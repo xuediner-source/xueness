@@ -123,8 +123,9 @@ try {
           bubblePadding:bs.padding,bubbleRadius:bs.borderRadius,bubbleBackground:bs.backgroundColor,answerBorder:as.borderWidth,
           font:getComputedStyle(document.querySelector('.xn-zcode-conversation')).fontSize,composerCount:document.querySelectorAll('.xn-composer__input').length};
       });
-      assert.ok(geometry.documentWidth<=width+1,'Horizontal overflow');assert.equal(geometry.bubblePadding,'12px 16px');
-      assert.equal(geometry.bubbleRadius,'12px 2px 12px 12px');assert.equal(geometry.answerBorder,'0px');assert.equal(geometry.turnGap,'20px');
+      assert.ok(geometry.documentWidth<=width+1,'Horizontal overflow');assert.equal(geometry.bubblePadding,'10px 16px');
+      // 2026-10-10 起按用户要求改为暖色润饰风格：用户气泡全圆角、无尖角。
+      assert.equal(geometry.bubbleRadius,'18px');assert.equal(geometry.answerBorder,'0px');assert.equal(geometry.turnGap,'20px');
       report.views.push({platform,theme,width,profile,kind,...geometry});
       await page.screenshot({path:join(output,`${theme}-${width}-${profile}-${kind}.png`)});
     }
