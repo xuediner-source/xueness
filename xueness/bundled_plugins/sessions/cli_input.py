@@ -22,6 +22,24 @@ MAX_PROMPT_CHARS = 5000
 MAX_MEDIA_FILE_BYTES = 2 * 1024 * 1024
 MAX_MEDIA_TOTAL_BYTES = 4 * 1024 * 1024
 MULTIMODAL_MARKER = "\n\nXUENESS_MULTIMODAL_V1:"
+# The output path is argv item 1, never interpolated. A workspace directory
+# name can contain quotes, newlines, or AppleScript syntax.
+_MACOS_CLIPBOARD_SCRIPT = r'''on run argv
+    set outputFile to POSIX file (item 1 of argv)
+    set clipboardData to the clipboard as «class PNGf»
+    set fileRef to open for access outputFile with write permission
+    try
+        set eof fileRef to 0
+        write clipboardData to fileRef
+        close access fileRef
+    on error
+        try
+            close access fileRef
+        end try
+        error
+    end try
+    return "captured"
+end run'''
 MEDIA_TYPES = {
     ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg",
     ".gif": "image/gif", ".webp": "image/webp", ".pdf": "application/pdf",
@@ -156,19 +174,14 @@ def capture_clipboard_image(root):
                     raise ValueError("macOS clipboard image capture is unavailable")
                 fd = os.open(target, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
                 os.close(fd)
-                path = str(target).replace("\\", "\\\\").replace('"', '\\"')
-                script = (f'set outputFile to POSIX file "{path}"\n'
-                          'set clipboardData to the clipboard as «class PNGf»\n'
-                          'set fileRef to open for access outputFile with write permission\n'
-                          'try\nset eof fileRef to 0\nwrite clipboardData to fileRef\n'
-                          'close access fileRef\non error\ntry\nclose access fileRef\nend try\nerror\nend try\n'
-                          'return "captured"')
                 try:
-                    result = run_external(subprocess.run, [executable, "-e", script], cwd=root,
-                                            env=env, stdin=subprocess.DEVNULL,
-                                            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-                                            timeout=8, check=False,
-                                            creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0) if os.name == "nt" else 0)
+                    result = run_external(
+                        subprocess.run,
+                        [executable, "-e", _MACOS_CLIPBOARD_SCRIPT, str(target)],
+                        cwd=root, env=env, stdin=subprocess.DEVNULL,
+                        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                        timeout=8, check=False,
+                        creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0) if os.name == "nt" else 0)
                 except (OSError, subprocess.TimeoutExpired):
                     raise ValueError("clipboard image capture failed") from None
                 if result.returncode:

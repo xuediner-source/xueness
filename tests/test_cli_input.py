@@ -12,7 +12,9 @@ from unittest import mock
 
 from tests.fs_link_helpers import make_symlink
 from xueness.cli import main
-from xueness.cli_input import capture_clipboard_image, enqueue, multiline, snapshot, with_attachments
+from xueness.cli_input import (
+    _MACOS_CLIPBOARD_SCRIPT, capture_clipboard_image, enqueue, multiline, snapshot, with_attachments,
+)
 from xueness.core import Store
 
 
@@ -254,9 +256,9 @@ class InputTests(unittest.TestCase):
             script = argv[2]
             self.assertIn("«class PNGf»", script)
             self.assertNotIn(png.decode("latin1"), script)
-            marker = 'set outputFile to POSIX file "'
-            path = script.split(marker, 1)[1].split('"', 1)[0]
-            Path(path).write_bytes(png)
+            self.assertEqual(argv[1], "-e")
+            self.assertEqual(len(argv), 4)
+            Path(argv[3]).write_bytes(png)
             return mock.Mock(returncode=0, stdout=b"captured")
 
         with mock.patch("xueness.bundled_plugins.sessions.cli_input.platform.system", return_value="Darwin"), \
@@ -265,6 +267,36 @@ class InputTests(unittest.TestCase):
             attachment = capture_clipboard_image(self.root)
         self.assertEqual("image/png", attachment.mime_type)
         self.assertEqual(subprocess.DEVNULL, run.call_args.kwargs["stdout"])
+
+    def test_macos_clipboard_path_stays_argv_for_windows_and_macos_names(self):
+        png = b"\x89PNG\r\n\x1a\nprivate"
+        hostile = self.root / 'say "hello"\nbeep'
+        hostile.mkdir()
+        captured = {}
+
+        def fake_osascript(argv, **kwargs):
+            captured["argv"] = list(argv)
+            Path(argv[-1]).write_bytes(png)
+            return mock.Mock(returncode=0)
+
+        for system in ("Darwin", "Windows"):
+            with self.subTest(system=system):
+                if system == "Windows":
+                    with mock.patch("xueness.bundled_plugins.sessions.cli_input.platform.system", return_value="Windows"), \
+                         mock.patch("xueness.bundled_plugins.sessions.cli_input.subprocess.run") as run, \
+                         self.assertRaisesRegex(ValueError, "unsupported on this platform"):
+                        capture_clipboard_image(hostile)
+                    run.assert_not_called()
+                    continue
+                with mock.patch("xueness.bundled_plugins.sessions.cli_input.platform.system", return_value="Darwin"), \
+                     mock.patch("xueness.bundled_plugins.sessions.cli_input.shutil.which", return_value="/usr/bin/osascript"), \
+                     mock.patch("xueness.bundled_plugins.sessions.cli_input.subprocess.run", side_effect=fake_osascript):
+                    attachment = capture_clipboard_image(hostile)
+                script, path = captured["argv"][2], captured["argv"][3]
+                self.assertEqual(script, _MACOS_CLIPBOARD_SCRIPT)
+                self.assertNotIn(hostile.name, script)
+                self.assertIn(hostile.name, path)
+                self.assertEqual("image/png", attachment.mime_type)
 
     def test_unsupported_clipboard_platform_reports_without_capturing(self):
         with mock.patch("xueness.bundled_plugins.sessions.cli_input.platform.system", return_value="Windows"), \
