@@ -10,6 +10,8 @@ import "./styles/conversation-refresh.css";
 import "./styles/composer-workspace.css";
 import "./styles/composer-toolbar.css";
 import "./styles/parity-final.css";
+// Warm, calm visual polish layer; must stay last.
+import "./styles/claude-polish.css";
 
 function mount(): void {
   const rootElement = document.getElementById("root");

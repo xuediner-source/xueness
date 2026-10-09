@@ -1,0 +1,108 @@
+/*
+ * Calm "reading room" polish layer (2026-10-10).
+ * Loaded after every other workbench stylesheet. Direction: warm ivory / warm
+ * gray surfaces, one restrained clay accent, generous whitespace, a centered
+ * ~768px reading column, quiet chrome and short (<=200ms) motion. Everything
+ * here is visual only: no behavior, API, i18n key or a11y hook changes.
+ * Sections are appended per area; keep selectors scoped to .xn-shell-layout
+ * so lazily loaded plugin stylesheets cannot silently win the cascade.
+ */
+
+/* ── 1. App shell, sidebar and window chrome ─────────────────────────────── */
+.xn-shell-layout { background: var(--bg-window); }
+.xn-shell-layout .xn-shell-main { background: var(--bg-window); }
+/* The conversation surface floats on the warm window colour with a hairline,
+ * like a sheet of paper: no heavy border, a whisper of shadow. */
+.xn-shell-layout .xn-shell-main__panel {
+  border-color: color-mix(in oklab, var(--border) 85%, transparent);
+  border-radius: var(--radius-lg);
+  background: var(--bg);
+  box-shadow: var(--shadow-sm);
+}
+.xn-shell-layout .xn-shell-sidebar,
+.xn-shell-layout .xn-shell-sidebar__footer { background: var(--bg-sidebar); }
+.xn-shell-layout .xn-sidebar-brand { font-size: 15px; font-weight: 600; letter-spacing: -.01em; }
+
+/* Navigation rows: plain text, 8px radius, a soft warm hover and a quiet
+ * filled active row. */
+.xn-shell-layout .xn-sidebar-action,
+.xn-shell-layout .xn-shell-nav__item,
+.xn-shell-layout .xn-shell-nav__link { border-radius: 8px; }
+.xn-shell-layout .xn-sidebar-action {
+  color: var(--fg-subtle);
+  font-weight: 450;
+  transition: background-color var(--dur-fast) var(--ease-standard), color var(--dur-fast) var(--ease-standard);
+}
+.xn-shell-layout .xn-sidebar-action:hover { background: var(--bg-hover); color: var(--fg); }
+.xn-shell-layout .xn-sidebar-action__icon,
+.xn-shell-layout .xn-sidebar-actions svg { color: var(--fg-muted); }
+.xn-shell-layout .xn-sidebar-action:hover svg { color: var(--fg); }
+/* "New task" is the one sidebar row that carries the accent, as a small mark. */
+.xn-shell-layout [data-testid="xn-sidebar-action-new-task"] { color: var(--fg); font-weight: 550; }
+.xn-shell-layout [data-testid="xn-sidebar-action-new-task"] svg { color: var(--accent-brand); }
+.xn-shell-layout .xn-sidebar-action__shortcut { color: var(--fg-muted); font-family: var(--font-sans); font-size: 11px; opacity: 0; transition: opacity var(--dur-fast) var(--ease-standard); }
+.xn-shell-layout .xn-sidebar-action:hover .xn-sidebar-action__shortcut,
+.xn-shell-layout .xn-sidebar-action:focus-visible .xn-sidebar-action__shortcut { opacity: 1; }
+
+.xn-shell-layout .xn-shell-nav__item { transition: background-color var(--dur-fast) var(--ease-standard); }
+.xn-shell-layout .xn-shell-nav__item:hover { background: var(--bg-hover); }
+.xn-shell-layout .xn-shell-nav__item--active,
+.xn-shell-layout .xn-shell-nav__item--active:hover { background: var(--bg-active); }
+.xn-shell-layout .xn-shell-nav__link { color: var(--fg-subtle); }
+.xn-shell-layout .xn-shell-nav__item:hover .xn-shell-nav__link,
+.xn-shell-layout .xn-shell-nav__item--active .xn-shell-nav__link { color: var(--fg); }
+.xn-shell-layout .xn-shell-nav__link--active { font-weight: 550; }
+.xn-shell-layout .xn-shell-nav__time { color: var(--fg-muted); font-size: 11px; }
+.xn-shell-layout .xn-shell-nav__group {
+  color: var(--fg-muted);
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: .01em;
+}
+.xn-shell-layout .xn-sidebar-pill { border-radius: var(--radius-full); padding: 3px 10px; }
+.xn-shell-layout .xn-sidebar-pill--active { background: var(--bg-active); color: var(--fg); }
+.xn-shell-layout .xn-sidebar-search { border-radius: 8px; background: var(--bg-input); }
+.xn-shell-layout .xn-shell-sidebar__footer { border-top: 1px solid color-mix(in oklab, var(--border) 70%, transparent); }
+.xn-shell-layout .xn-sidebar-account__avatar {
+  background: var(--accent-soft);
+  color: var(--accent-brand);
+}
+.xn-shell-layout .xn-sidebar-account__menu { border-radius: var(--radius-md); box-shadow: var(--shadow-lg); }
+.xn-shell-layout .xn-sidebar-footer__action { border-radius: 8px; }
+.xn-shell-layout .xn-sidebar-collapse,
+.xn-shell-layout .xn-shell-sidebar-toggle,
+.xn-shell-layout .xn-shell-history__button { border-radius: 8px; transition: background-color var(--dur-fast) var(--ease-standard), color var(--dur-fast) var(--ease-standard); }
+.xn-shell-layout .xn-shell-backdrop { background: rgb(28 24 16 / .28); backdrop-filter: blur(1px); }
+
+/* Conversation header: borderless, quiet title, icon-only weight. */
+.xn-shell-layout .xn-conv-header__title { color: var(--fg); font-weight: 550; letter-spacing: -.005em; }
+.xn-shell-layout .xn-conv-header__action,
+.xn-shell-layout .xn-view-switcher { border-radius: 8px; color: var(--fg-subtle); }
+.xn-shell-layout .xn-conv-header__action:hover { color: var(--fg); }
+.xn-shell-layout .xn-conv-header__menu { border-radius: var(--radius-md); background: var(--bg-popover); }
+
+/* Native window chrome keeps the platform helper's geometry (macOS traffic
+ * lights inset on the left, Windows caption buttons on the right); only the
+ * surface and controls are tuned. */
+.xn-desktop-titlebar { background: var(--bg-window); }
+.xn-desktop-titlebar__brand { font-size: 12.5px; font-weight: 600; color: var(--fg); }
+.xn-desktop-titlebar__history button,
+.xn-desktop-titlebar__actions > button,
+.xn-desktop-titlebar__help > summary { border-radius: 8px; transition: background-color var(--dur-fast) var(--ease-standard), color var(--dur-fast) var(--ease-standard); }
+.xn-desktop-titlebar__menu { border-radius: var(--radius-md); background: var(--bg-popover); box-shadow: var(--shadow-lg); }
+
+/* One focus language everywhere: a 2px accent ring with a small offset. */
+.xn-shell-layout button:focus-visible,
+.xn-shell-layout a:focus-visible,
+.xn-shell-layout input:focus-visible,
+.xn-shell-layout select:focus-visible,
+.xn-shell-layout summary:focus-visible,
+.xn-shell-layout [role="option"]:focus-visible,
+.xn-shell-layout [role="tab"]:focus-visible,
+.xn-desktop-titlebar button:focus-visible,
+.xn-desktop-titlebar summary:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
+.xn-shell-layout .xn-shell-nav__link:focus-visible,
+.xn-shell-layout .xn-shell-nav__list:focus-visible .xn-shell-nav__link[data-cursor="true"] { outline: 2px solid var(--focus-ring); outline-offset: -2px; }
+.xn-shell-layout .xn-composer textarea:focus-visible,
+.xn-shell-layout .xn-composer__input:focus-visible { outline: none; }
+::selection { background: color-mix(in oklab, var(--accent-brand) 22%, transparent); }
