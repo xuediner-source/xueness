@@ -242,42 +242,56 @@
   --assistant-msg-fg: var(--fg);
 }
 
-/* Optional Claude 风格 palette: warm ivory / clay accent. Applied only when
+/* Optional Claude 风格 scheme: replicates the Claude desktop app (warm ivory /
+ * warm gray, clay accent, serif reading face). Applied only when
  * settings → 外观 → 配色方案 = Claude 风格 (data-xn-palette="claude").
- * Colour tokens only: radius, spacing, type, motion and shadow geometry stay
- * on the shared defaults so switching palettes never changes layout. */
+ * The --claude-* layout tokens are consumed only by styles/claude-polish.css;
+ * shared tokens (--xn-ui-font-size, radius, spacing) are not changed here, so
+ * nothing zooms globally. */
 :root[data-xn-palette="claude"] {
-  --bg-window: #f2f0e9;
-  --bg-sidebar: #f2f0e9;
-  --bg-panel: #fbfaf7;
+  --claude-sidebar-width: 288px;
+  --claude-column: 768px;
+  --claude-reading-size: calc(var(--xn-ui-font-size, 14px) + 2px);
+  --claude-ease: cubic-bezier(0, 0, .2, 1);
+  /* Free system serifs only (no proprietary Anthropic fonts); CJK falls back
+   * to the platform sans so Windows never lands on SimSun. */
+  --claude-font-serif: "Iowan Old Style", Charter, "Palatino Linotype", Palatino, Georgia, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei UI", "Microsoft YaHei", "Noto Sans CJK SC", serif;
+  --claude-composer-shadow: 0 4px 20px rgb(0 0 0 / .035);
+  --claude-border-hover: color-mix(in oklab, #1f1e1d 28%, transparent);
+  --claude-greeting: #3d3d3a;
+  --accent-danger-ink: #a8452b;
+
+  --bg-window: #f5f4ed;
+  --bg-sidebar: #f5f4ed;
+  --bg-panel: #faf9f5;
   --bg-input: #ffffff;
-  --bg-popover: #fffefb;
-  --bg: #fbfaf7;
-  --bg-subtle: #f2f0e9;
+  --bg-popover: #ffffff;
+  --bg: #faf9f5;
+  --bg-subtle: #f5f4ed;
   --bg-card: #ffffff;
-  --bg-hover: rgba(61, 55, 40, 0.06);
-  --bg-active: rgba(61, 55, 40, 0.08);
-  --fg: #22211e;
-  --fg-subtle: #4b4943;
-  --fg-muted: #66645c;
+  --bg-hover: rgba(31, 30, 29, 0.05);
+  --bg-active: rgba(31, 30, 29, 0.08);
+  --fg: #141413;
+  --fg-subtle: #3d3d3a;
+  --fg-muted: #6b6a64;
   --fg-inverted: #ffffff;
-  --conversation-fg: #2b2a26;
+  --conversation-fg: #141413;
   --conversation-muted: color-mix(in oklab, var(--conversation-fg) 62%, transparent);
   --conversation-subtlest: color-mix(in oklab, var(--conversation-fg) 42%, transparent);
-  --conversation-user-surface: #efece4;
-  --border: color-mix(in oklab, #3d3828 12%, transparent);
-  --border-strong: color-mix(in oklab, #3d3828 22%, transparent);
+  --conversation-user-surface: #f0eee6;
+  --border: color-mix(in oklab, #1f1e1d 10%, transparent);
+  --border-strong: color-mix(in oklab, #1f1e1d 18%, transparent);
   --border-focus: color-mix(in oklab, var(--accent) 55%, transparent);
-  --accent-brand: #b05336;
-  --accent-brand-hover: #9a4630;
+  --accent-brand: #b4532f;
+  --accent-brand-hover: #9f4828;
   --accent-brand-fg: #ffffff;
   --accent-soft: color-mix(in oklab, var(--accent-brand) 12%, transparent);
   --focus-ring: color-mix(in oklab, var(--accent-brand) 62%, transparent);
-  --primary: #22211e;
-  --primary-hover: #34322d;
+  --primary: #141413;
+  --primary-hover: #2b2a27;
   --primary-active: #000000;
   --primary-fg: #ffffff;
-  --primary-light: rgba(61, 55, 40, 0.07);
+  --primary-light: rgba(31, 30, 29, 0.07);
   --ok: #3f8a4f;
   --ok-bg: #eef6ee;
   --ok-border: #b9dcbf;
@@ -294,45 +308,49 @@
   --info-bg: #eef4f8;
   --info-border: #b6d0e2;
   --info-fg: #2c5f86;
-  /* Shadow geometry matches the default palette; only the tint is warm. */
-  --shadow-sm: 0 1px 2px 0 rgb(48 40 24 / 0.05);
-  --shadow-md: 0 4px 6px -1px rgb(48 40 24 / 0.1), 0 2px 4px -2px rgb(48 40 24 / 0.1);
-  --shadow-lg: 0 10px 15px -3px rgb(48 40 24 / 0.1), 0 4px 6px -4px rgb(48 40 24 / 0.1);
+  --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.04);
+  --shadow-md: 0 1px 2px rgb(0 0 0 / 0.04), 0 4px 14px -4px rgb(0 0 0 / 0.08);
+  --shadow-lg: 0 2px 6px rgb(0 0 0 / 0.04), 0 16px 36px -12px rgb(0 0 0 / 0.16);
   --accent: var(--accent-brand);
   --tool-accent: #b7851f;
   --tool-result-accent: #3b7bab;
 }
 
 .dark[data-xn-palette="claude"] {
-  --bg-window: #1d1c1a;
-  --bg-sidebar: #1d1c1a;
-  --bg-panel: #252422;
-  --bg-input: #2f2e2b;
-  --bg-popover: #32312d;
-  --primary-fg: #1d1c1a;
-  --bg: #252422;
-  --bg-subtle: #1d1c1a;
-  --bg-card: #2f2e2b;
-  --bg-hover: color-mix(in oklab, #f5f1e3 8%, transparent);
-  --bg-active: #3a3935;
-  --fg: #ecebe5;
-  --fg-subtle: #cdcbc1;
-  --fg-muted: #adaba0;
-  --fg-inverted: #1d1c1a;
-  --conversation-fg: #eceae3;
+  --claude-composer-shadow: none;
+  --claude-border-hover: color-mix(in oklab, #dedcd1 30%, transparent);
+  --claude-greeting: #c3c2b7;
+  --accent-danger-ink: #e8957a;
+
+  --bg-window: #1f1e1d;
+  --bg-sidebar: #1f1e1d;
+  --bg-panel: #262624;
+  --bg-input: #30302e;
+  --bg-popover: #30302e;
+  --primary-fg: #1f1e1d;
+  --bg: #262624;
+  --bg-subtle: #1f1e1d;
+  --bg-card: #30302e;
+  --bg-hover: color-mix(in oklab, #f8f8f6 6%, transparent);
+  --bg-active: color-mix(in oklab, #f8f8f6 10%, transparent);
+  --fg: #f8f8f6;
+  --fg-subtle: #c2c0b6;
+  --fg-muted: #9c9a90;
+  --fg-inverted: #1f1e1d;
+  --conversation-fg: #f8f8f6;
   --conversation-muted: color-mix(in oklab, var(--conversation-fg) 62%, transparent);
   --conversation-subtlest: color-mix(in oklab, var(--conversation-fg) 34%, transparent);
-  --conversation-user-surface: #34332f;
-  --border: color-mix(in oklab, #e8e4d4 12%, transparent);
-  --border-strong: color-mix(in oklab, #e8e4d4 26%, transparent);
+  --conversation-user-surface: #141413;
+  --border: color-mix(in oklab, #dedcd1 10%, transparent);
+  --border-strong: color-mix(in oklab, #dedcd1 18%, transparent);
   --border-focus: color-mix(in oklab, var(--accent) 60%, transparent);
-  --accent-brand: #dc8a69;
-  --accent-brand-hover: #e69c7e;
-  --accent-brand-fg: #1d1c1a;
-  --primary: #ecebe5;
-  --primary-hover: #f7f6f1;
+  --accent-brand: #de8466;
+  --accent-brand-hover: #e6977c;
+  --accent-brand-fg: #1f1e1d;
+  --primary: #f8f8f6;
+  --primary-hover: #ffffff;
   --primary-active: #ffffff;
-  --primary-light: rgba(245, 241, 227, 0.09);
+  --primary-light: rgba(248, 248, 246, 0.08);
   --ok: #6cbf7f;
   --ok-bg: #1f2d22;
   --ok-border: #35573c;
@@ -349,8 +367,6 @@
   --info-bg: #1d2a33;
   --info-border: #2f5470;
   --info-fg: #8fc3e8;
-  /* Same values as the default dark palette (the light Claude block would
-   * otherwise win on specificity); geometry is shared by both palettes. */
   --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.5);
   --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.5), 0 2px 4px -2px rgb(0 0 0 / 0.5);
   --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.6), 0 4px 6px -4px rgb(0 0 0 / 0.5);

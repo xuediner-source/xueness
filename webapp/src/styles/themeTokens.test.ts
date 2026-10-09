@@ -32,8 +32,8 @@ test("Claude 风格：暖色象牙白/暖灰与 clay 强调色，仅在 data-xn-
       assert.ok(r >= b, `${selector} --${name} ${hex} should be warm (red >= blue)`);
     }
   }
-  assert.equal(value(light, "accent-brand"), "#b05336");
-  assert.equal(value(dark, "accent-brand"), "#dc8a69");
+  assert.equal(value(light, "accent-brand"), "#b4532f");
+  assert.equal(value(dark, "accent-brand"), "#de8466");
   assert.equal(value(light, "accent"), "var(--accent-brand)");
 });
 
