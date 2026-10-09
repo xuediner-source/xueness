@@ -10,6 +10,7 @@ import {
   type CapabilityItem,
   type CapabilityKind,
 } from "./xuenessCapabilities";
+import { isImeComposingEvent } from "./xuenessShortcutDisplay";
 
 const FOCUSABLE = [
   "a[href]",
@@ -21,13 +22,18 @@ const FOCUSABLE = [
 ].join(",");
 
 export function shouldDismissCapabilityDialogOnEscape(
-  event: { key: string; nativeEvent?: { isComposing?: boolean }; keyCode?: number },
+  event: {
+    key: string;
+    nativeEvent?: { isComposing?: boolean; keyCode?: number };
+    keyCode?: number;
+    isComposing?: boolean;
+    compositionActive?: boolean;
+  },
   busy = false,
   hasCancel = true,
 ): boolean {
   if (event.key !== "Escape" || busy || !hasCancel) return false;
-  if (event.nativeEvent?.isComposing || event.keyCode === 229) return false;
-  return true;
+  return !isImeComposingEvent(event);
 }
 
 export function trapCapabilityDialogTab(

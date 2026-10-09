@@ -73,6 +73,9 @@ test("composition keystrokes never activate or dismiss a palette result, and sta
   assert.equal(isPaletteCompositionKey({ nativeEvent: { isComposing: true } }), true);
   assert.equal(isPaletteCompositionKey({ keyCode: 229 }), true);
   assert.equal(isPaletteCompositionKey({ nativeEvent: { keyCode: 229 } }), true);
+  assert.equal(isPaletteCompositionKey({ key: "Process" }), true);
+  assert.equal(isPaletteCompositionKey({ key: "Dead" }), true);
+  assert.equal(isPaletteCompositionKey({ compositionActive: true }), true);
   assert.equal(isPaletteCompositionKey({}), false);
   assert.equal(commandPaletteStatusLabel("running"), "运行中");
   setLocale("en");

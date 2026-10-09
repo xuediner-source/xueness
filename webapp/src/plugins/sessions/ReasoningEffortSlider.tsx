@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import { Brain, ChevronDown, RotateCcw, Zap } from "lucide-react";
 import { t as tr } from "../../i18n";
+import { isImeComposingEvent } from "../../xuenessShortcutDisplay";
 
 /**
  * Codex-style reasoning effort slider.
@@ -445,7 +446,7 @@ export function ReasoningEffortControl(props: ReasoningEffortPanelProps) {
     };
   }, [open]);
   return <div className="xn-effort-control" ref={wrapRef} onKeyDown={event => {
-    if (event.key !== "Escape" || event.nativeEvent.isComposing || event.nativeEvent.keyCode === 229 || !open) return;
+    if (event.key !== "Escape" || isImeComposingEvent(event) || !open) return;
     event.preventDefault(); event.stopPropagation(); setOpen(false); triggerRef.current?.focus();
   }}>
     <button type="button" className="xn-effort-control__trigger" ref={triggerRef}

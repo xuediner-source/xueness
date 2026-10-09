@@ -9,6 +9,7 @@ import type { RunChoices } from "../../xuenessBridge";
 import type { WorkbenchSession } from "../../xuenessWorkbench";
 import type { PermissionMode } from "./permissionModes";
 import { FullAccessConfirmationDialog, requiresYoloConfirmation } from "./FullAccessConfirmationDialog";
+import { isImeComposingEvent } from "../../xuenessShortcutDisplay";
 
 export type ComposerToolbarProps = {
   choices: RunChoices;
@@ -75,11 +76,19 @@ export function nextIndex(current: number, length: number, key: "ArrowDown" | "A
 }
 
 export function handlePopoverEscape(
-  event: { key: string; preventDefault: () => void; stopPropagation?: () => void },
+  event: {
+    key: string;
+    preventDefault: () => void;
+    stopPropagation?: () => void;
+    isComposing?: boolean;
+    keyCode?: number;
+    nativeEvent?: { isComposing?: boolean; keyCode?: number };
+    compositionActive?: boolean;
+  },
   closeMenu: (restoreInput: boolean) => void,
   trigger: { focus: () => void } | null,
 ): boolean {
-  if (event.key === "Escape") {
+  if (event.key === "Escape" && !isImeComposingEvent(event)) {
     event.preventDefault();
     event.stopPropagation?.();
     closeMenu(false);

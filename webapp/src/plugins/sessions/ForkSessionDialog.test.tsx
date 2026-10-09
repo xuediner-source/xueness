@@ -70,6 +70,11 @@ test("fork dialog Escape dismissal guards against IME composition and busy state
   assert.equal(shouldDismissForkDialogOnEscape({ key: "Escape", isComposing: true }, false), false);
   // Escape with keyCode 229 (IME composition) is ignored
   assert.equal(shouldDismissForkDialogOnEscape({ key: "Escape", keyCode: 229 }, false), false);
+  assert.equal(shouldDismissForkDialogOnEscape({ key: "Escape", nativeEvent: { keyCode: 229 } }, false), false);
+  assert.equal(shouldDismissForkDialogOnEscape({ key: "Escape", nativeEvent: { isComposing: true } }, false), false);
+  assert.equal(shouldDismissForkDialogOnEscape({ key: "Process" }, false), false);
+  assert.equal(shouldDismissForkDialogOnEscape({ key: "Dead" }, false), false);
+  assert.equal(shouldDismissForkDialogOnEscape({ key: "Escape", compositionActive: true }, false), false);
   // Non-Escape key is ignored
   assert.equal(shouldDismissForkDialogOnEscape({ key: "Enter" }, false), false);
 });

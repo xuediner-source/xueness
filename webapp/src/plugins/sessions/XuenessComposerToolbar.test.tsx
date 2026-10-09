@@ -136,6 +136,15 @@ test("Toolbar: on popover close via Escape, restores focus to trigger button and
     stopPropagation: () => events.push("stop-propagation-non"),
   };
   assert.equal(handlePopoverEscape(nonEscapeEvent, closeMenu, trigger), false);
+
+  // IME composing Escape must not dismiss popover
+  assert.equal(handlePopoverEscape({ key: "Escape", isComposing: true, preventDefault: () => {} }, closeMenu, trigger), false);
+  assert.equal(handlePopoverEscape({ key: "Escape", keyCode: 229, preventDefault: () => {} }, closeMenu, trigger), false);
+  assert.equal(handlePopoverEscape({ key: "Escape", nativeEvent: { keyCode: 229 }, preventDefault: () => {} }, closeMenu, trigger), false);
+  assert.equal(handlePopoverEscape({ key: "Escape", nativeEvent: { isComposing: true }, preventDefault: () => {} }, closeMenu, trigger), false);
+  assert.equal(handlePopoverEscape({ key: "Process", preventDefault: () => {} }, closeMenu, trigger), false);
+  assert.equal(handlePopoverEscape({ key: "Dead", preventDefault: () => {} }, closeMenu, trigger), false);
+  assert.equal(handlePopoverEscape({ key: "Escape", compositionActive: true, preventDefault: () => {} }, closeMenu, trigger), false);
 });
 
 // -- Qoder 式模型弹层：档位行、行内元数据与详情卡 -----------------------------

@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { PendingQuestion, PendingQuestionModel, QuestionResume } from "./PendingQuestion";
+import { evaluatePendingQuestionKey } from "../shared";
 import { parseQuestionResponse } from "./questionApi";
 
 const question = (id = "q1", sessionId = "s1") => ({ id: sessionId, enabled: true, question: { id, text: "Which folder?" } });
@@ -92,4 +93,34 @@ test("budget-paused turns expose continue without enabling structured questions"
   const pending = renderToStaticMarkup(<QuestionResume enabled={false} resumeBudgetEnabled pauseCode="step_limit_reached"
     status="paused" pendingQuestion="Question" disabled={false} onResume={async () => {}} />);
   assert.equal(pending, "");
+});
+
+test("evaluatePendingQuestionKey: Enter+Mod submission obeys platform and rejects IME composition", () => {
+  // Plain Enter does not submit (it creates newline in textarea)
+  assert.equal(evaluatePendingQuestionKey({ key: "Enter" }), null);
+
+  // Darwin (macOS): ⌘ (metaKey) submits; Ctrl does not
+  assert.equal(evaluatePendingQuestionKey({ key: "Enter", metaKey: true }, { platform: "darwin" }), "submit");
+  assert.equal(evaluatePendingQuestionKey({ key: "Enter", ctrlKey: true }, { platform: "darwin" }), null);
+
+  // Win32 (Windows): Ctrl submits; ⌘ (metaKey) does not
+  assert.equal(evaluatePendingQuestionKey({ key: "Enter", ctrlKey: true }, { platform: "win32" }), "submit");
+  assert.equal(evaluatePendingQuestionKey({ key: "Enter", metaKey: true }, { platform: "win32" }), null);
+
+  // Both Ctrl and Meta simultaneously is rejected
+  assert.equal(evaluatePendingQuestionKey({ key: "Enter", ctrlKey: true, metaKey: true }, { platform: "darwin" }), null);
+  assert.equal(evaluatePendingQuestionKey({ key: "Enter", ctrlKey: true, metaKey: true }, { platform: "win32" }), null);
+
+  // Shift or Alt suppresses submission
+  assert.equal(evaluatePendingQuestionKey({ key: "Enter", metaKey: true, shiftKey: true }, { platform: "darwin" }), null);
+  assert.equal(evaluatePendingQuestionKey({ key: "Enter", ctrlKey: true, altKey: true }, { platform: "win32" }), null);
+
+  // IME composition states must block submission
+  assert.equal(evaluatePendingQuestionKey({ key: "Enter", metaKey: true, isComposing: true }, { platform: "darwin" }), null);
+  assert.equal(evaluatePendingQuestionKey({ key: "Enter", ctrlKey: true, nativeEvent: { isComposing: true } }, { platform: "win32" }), null);
+  assert.equal(evaluatePendingQuestionKey({ key: "Enter", ctrlKey: true, keyCode: 229 }, { platform: "win32" }), null);
+  assert.equal(evaluatePendingQuestionKey({ key: "Enter", ctrlKey: true, nativeEvent: { keyCode: 229 } }, { platform: "win32" }), null);
+  assert.equal(evaluatePendingQuestionKey({ key: "Enter", ctrlKey: true, compositionActive: true }, { platform: "win32" }), null);
+  assert.equal(evaluatePendingQuestionKey({ key: "Process", ctrlKey: true }, { platform: "win32" }), null);
+  assert.equal(evaluatePendingQuestionKey({ key: "Dead", metaKey: true }, { platform: "darwin" }), null);
 });

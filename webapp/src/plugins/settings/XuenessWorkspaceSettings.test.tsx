@@ -54,8 +54,13 @@ test("Workspace picker dialog prioritizes the system picker and recent folders i
 
 test("Workspace picker Escape dismisses normally and leaves IME composition untouched", () => {
   assert.equal(shouldDismissWorkspacePickerOnEscape({ key: "Escape" }), true);
+  assert.equal(shouldDismissWorkspacePickerOnEscape({ key: "Escape", isComposing: true }), false);
   assert.equal(shouldDismissWorkspacePickerOnEscape({ key: "Escape", nativeEvent: { isComposing: true } }), false);
   assert.equal(shouldDismissWorkspacePickerOnEscape({ key: "Escape", keyCode: 229 }), false);
+  assert.equal(shouldDismissWorkspacePickerOnEscape({ key: "Escape", nativeEvent: { keyCode: 229 } }), false);
+  assert.equal(shouldDismissWorkspacePickerOnEscape({ key: "Process" }), false);
+  assert.equal(shouldDismissWorkspacePickerOnEscape({ key: "Dead" }), false);
+  assert.equal(shouldDismissWorkspacePickerOnEscape({ key: "Escape", compositionActive: true }), false);
   assert.equal(shouldDismissWorkspacePickerOnEscape({ key: "Enter" }), false);
 });
 

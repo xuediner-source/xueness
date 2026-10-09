@@ -8,6 +8,7 @@ import {
   handleElicitationAction,
   parsePending,
   validateElicitationContent,
+  shouldDismissElicitationOnEscape,
   type ElicitationPending,
   type ElicitationSubmission,
 } from "./ElicitationForm";
@@ -130,4 +131,18 @@ test("string length limits count Unicode code points like Python and allow an em
   );
   // maxlength is in UTF-16 units; 2 units admit one supplementary-plane code point.
   assert.match(html, /id="xn-mcp-elicitation-answer"[^>]*maxLength="2"/);
+});
+
+test("shouldDismissElicitationOnEscape: dismisses on ordinary Escape and blocks on IME composition or select elements", () => {
+  assert.equal(shouldDismissElicitationOnEscape({ key: "Escape" }), true);
+  assert.equal(shouldDismissElicitationOnEscape({ key: "Enter" }), false);
+
+  // IME composition states must block Escape
+  assert.equal(shouldDismissElicitationOnEscape({ key: "Escape", isComposing: true }), false);
+  assert.equal(shouldDismissElicitationOnEscape({ key: "Escape", nativeEvent: { isComposing: true } }), false);
+  assert.equal(shouldDismissElicitationOnEscape({ key: "Escape", keyCode: 229 }), false);
+  assert.equal(shouldDismissElicitationOnEscape({ key: "Escape", nativeEvent: { keyCode: 229 } }), false);
+  assert.equal(shouldDismissElicitationOnEscape({ key: "Process" }), false);
+  assert.equal(shouldDismissElicitationOnEscape({ key: "Dead" }), false);
+  assert.equal(shouldDismissElicitationOnEscape({ key: "Escape", compositionActive: true }), false);
 });

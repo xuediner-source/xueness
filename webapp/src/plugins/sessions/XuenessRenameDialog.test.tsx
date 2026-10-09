@@ -101,9 +101,15 @@ test("RenameDialog: IME 组合输入状态下的 Escape 不触发弹窗关闭", 
   // 正常 Escape 关闭
   assert.equal(shouldDismissRenameOnEscape({ key: "Escape" }), true);
   // IME isComposing 期间的 Escape 不关闭
+  assert.equal(shouldDismissRenameOnEscape({ key: "Escape", isComposing: true }), false);
   assert.equal(shouldDismissRenameOnEscape({ key: "Escape", nativeEvent: { isComposing: true } }), false);
   // keyCode 229 期间的 Escape 不关闭
   assert.equal(shouldDismissRenameOnEscape({ key: "Escape", keyCode: 229 }), false);
+  assert.equal(shouldDismissRenameOnEscape({ key: "Escape", nativeEvent: { keyCode: 229 } }), false);
+  // Process / Dead / compositionActive 期间的 Escape 不关闭
+  assert.equal(shouldDismissRenameOnEscape({ key: "Process" }), false);
+  assert.equal(shouldDismissRenameOnEscape({ key: "Dead" }), false);
+  assert.equal(shouldDismissRenameOnEscape({ key: "Escape", compositionActive: true }), false);
   // 非 Escape 键不关闭
   assert.equal(shouldDismissRenameOnEscape({ key: "Enter" }), false);
 });

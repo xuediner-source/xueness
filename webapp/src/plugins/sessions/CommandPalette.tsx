@@ -4,6 +4,7 @@ import { t as tr, tf, useLocale } from "../../i18n";
 import { fuzzyFilter } from "../../xuenessFuzzy";
 import type { SessionSummary } from "../../xuenessWorkbench";
 import { createDebouncer } from "./debounce";
+import { isImeComposingEvent } from "../../xuenessShortcutDisplay";
 import "./sessions.css";
 
 type PaletteCommand = { id: string; label: string; description: string };
@@ -77,8 +78,10 @@ export function isPaletteCompositionKey(event: {
   isComposing?: boolean;
   keyCode?: number;
   nativeEvent?: { isComposing?: boolean; keyCode?: number };
+  key?: string;
+  compositionActive?: boolean;
 }): boolean {
-  return Boolean(event.isComposing || event.nativeEvent?.isComposing || event.keyCode === 229 || event.nativeEvent?.keyCode === 229);
+  return isImeComposingEvent(event);
 }
 
 function makePaletteCommands(settingsEnabled: boolean): PaletteCommand[] {
@@ -112,6 +115,7 @@ export function CommandPalette({ dialogRef, inputRef, sessions, busy, sessionsEn
   const [needle, setNeedle] = useState("");
   const searchRef = useRef(search);
   searchRef.current = search;
+  const compositionActiveRef = useRef(false);
   const debouncerRef = useRef<ReturnType<typeof createDebouncer> | null>(null);
   if (debouncerRef.current === null) {
     debouncerRef.current = createDebouncer(SEARCH_DEBOUNCE_MS, () => setNeedle(searchRef.current));
@@ -154,7 +158,8 @@ export function CommandPalette({ dialogRef, inputRef, sessions, busy, sessionsEn
   };
 
   const onKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {
-    if (event.target !== inputRef.current || isPaletteCompositionKey(event)) return;
+    const isComposing = compositionActiveRef.current || isPaletteCompositionKey(event);
+    if (event.target !== inputRef.current || isComposing) return;
     if (["ArrowDown", "ArrowUp", "Home", "End"].includes(event.key)) {
       const next = nextPaletteIndex(event.key, activeIndex ?? -1, enabledIndices);
       if (next !== null) {
@@ -198,6 +203,12 @@ export function CommandPalette({ dialogRef, inputRef, sessions, busy, sessionsEn
           value={search}
           onChange={event => onSearchChange(event.target.value)}
           onKeyDown={onKeyDown}
+          onCompositionStart={() => {
+            compositionActiveRef.current = true;
+          }}
+          onCompositionEnd={() => {
+            compositionActiveRef.current = false;
+          }}
         />
         <div className="xn-command-results" id={listboxId} role="listbox" aria-label={tr("搜索结果")}>
           {commandCount > 0 && (

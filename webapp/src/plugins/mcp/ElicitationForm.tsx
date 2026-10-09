@@ -1,7 +1,22 @@
 import React, { useEffect, useState } from "react";
 import { get, post } from "../../xuenessApi";
+import { isImeComposingEvent } from "../../xuenessShortcutDisplay";
 import { t as tr, tf } from "../../i18n";
 import "./ElicitationForm.css";
+
+export function shouldDismissElicitationOnEscape(event: {
+  key: string;
+  isComposing?: boolean;
+  keyCode?: number;
+  nativeEvent?: { isComposing?: boolean; keyCode?: number };
+  compositionActive?: boolean;
+  target?: unknown;
+}): boolean {
+  if (event.key !== "Escape" || isImeComposingEvent(event)) return false;
+  if (typeof HTMLSelectElement !== "undefined" && event.target instanceof HTMLSelectElement) return false;
+  if ((event.target as { tagName?: string } | null)?.tagName?.toUpperCase() === "SELECT") return false;
+  return true;
+}
 
 const MAX_PROPERTIES = 16;
 const MAX_STRING = 4000;
@@ -358,7 +373,7 @@ export function ElicitationForm({
     handleElicitationAction(action, { ...pending, requestedSchema: schema }, values, onResolve, (field, code) => onInvalid?.(field, code));
   };
   const onKeyDown = (event: React.KeyboardEvent<HTMLFormElement>) => {
-    if (event.key !== "Escape" || event.target instanceof HTMLSelectElement) return;
+    if (!shouldDismissElicitationOnEscape(event)) return;
     event.preventDefault();
     submit("cancel");
   };

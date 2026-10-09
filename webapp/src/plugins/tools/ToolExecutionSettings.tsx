@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import "./ToolExecutionSettings.css";
 import { get } from "../../xuenessApi";
+import { isImeComposingEvent } from "../../xuenessShortcutDisplay";
 import { t as tr, tf } from "../../i18n";
 import type { SettingsMap } from "../../xuenessSettings";
 import { SettingsGroup, SettingsRow } from "../settings/SettingsPrimitives";
@@ -30,7 +31,7 @@ export function ToolExecutionSettings({ values, disabled = false, onUpdate }: {
       control={<div className="xn-tool-budget-limit"><input type="number" min={1} max={10000} step={1} aria-label={tr("每轮调用上限")} value={draft}
         disabled={disabled || !onUpdate || values.toolsCallBudgetEnabled !== true}
         onChange={event => setDraft(event.currentTarget.value)} onBlur={commit}
-        onKeyDown={event => { if (event.nativeEvent.isComposing || event.keyCode === 229) return; if (event.key === "Enter") event.currentTarget.blur(); if (event.key === "Escape") { setDraft(String(limit)); setError(""); } }} />
+        onKeyDown={event => { if (isImeComposingEvent(event)) return; if (event.key === "Enter") event.currentTarget.blur(); if (event.key === "Escape") { setDraft(String(limit)); setError(""); } }} />
         {error && <p role="alert">{error}</p>}</div>} />
   </SettingsGroup>;
 }

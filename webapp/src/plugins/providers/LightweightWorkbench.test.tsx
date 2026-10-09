@@ -586,7 +586,17 @@ test('evaluateLightweightComposerKey: 键盘事件评估策略（Enter/Shift+Ent
   assert.equal(evaluateLightweightComposerKey({ key: 'Enter', nativeEvent: { isComposing: true } }, baseCtx), null);
   assert.equal(evaluateLightweightComposerKey({ key: 'Enter', isComposing: true }, baseCtx), null);
   assert.equal(evaluateLightweightComposerKey({ key: 'Enter', keyCode: 229 }, baseCtx), null);
+  assert.equal(evaluateLightweightComposerKey({ key: 'Enter', nativeEvent: { keyCode: 229 } }, baseCtx), null);
+  assert.equal(evaluateLightweightComposerKey({ key: 'Process' }, baseCtx), null);
+  assert.equal(evaluateLightweightComposerKey({ key: 'Dead' }, baseCtx), null);
+  assert.equal(evaluateLightweightComposerKey({ key: 'Enter', compositionActive: true }, baseCtx), null);
   assert.equal(evaluateLightweightComposerKey({ key: 'ArrowUp', isComposing: true }, baseCtx), null);
+
+  // 跨平台 Mod 判定（darwin vs win32）
+  assert.equal(evaluateLightweightComposerKey({ key: 'l', metaKey: true }, { ...baseCtx, platform: 'darwin' }), 'clear_screen');
+  assert.equal(evaluateLightweightComposerKey({ key: 'l', ctrlKey: true }, { ...baseCtx, platform: 'darwin' }), null);
+  assert.equal(evaluateLightweightComposerKey({ key: 'l', ctrlKey: true }, { ...baseCtx, platform: 'win32' }), 'clear_screen');
+  assert.equal(evaluateLightweightComposerKey({ key: 'l', metaKey: true }, { ...baseCtx, platform: 'win32' }), null);
 
   // Enter 发送，Shift+Enter 换行
   assert.equal(evaluateLightweightComposerKey({ key: 'Enter', shiftKey: false }, baseCtx), 'send');

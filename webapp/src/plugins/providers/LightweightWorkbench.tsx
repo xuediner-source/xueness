@@ -8,7 +8,7 @@ import { assistantTextForDisplay } from '../sessions/XuenessTimeline';
 import { SimpleMarkdown, TimelineCard, MarkdownRenderOptionsContext, type MarkdownRenderOptions } from '../../XuenessShell';
 import { useQuantizedStreamingText } from '../../ui/StreamingCommitGate';
 import { t as tr, tf } from '../../i18n';
-import { displayBinding } from '../../xuenessShortcutDisplay';
+import { displayBinding, isImeComposingEvent, isModKeyPressed } from '../../xuenessShortcutDisplay';
 import type { TimelineRow, WorkbenchSession } from '../../xuenessWorkbench';
 import type { ComposerDraftState } from '../sessions/XuenessWorkbenchView';
 import type { ComposerInput, ComposerModel } from '../../xuenessComposer';
@@ -1009,12 +1009,15 @@ export function evaluateLightweightComposerKey(
     altKey?: boolean;
     keyCode?: number;
     isComposing?: boolean;
-    nativeEvent?: { isComposing?: boolean };
+    nativeEvent?: { isComposing?: boolean; keyCode?: number };
+    compositionActive?: boolean;
   },
-  context: LightweightComposerKeyContext,
+  context: LightweightComposerKeyContext & { platform?: string },
 ): LightweightComposerKeyAction {
-  if (e.isComposing || e.nativeEvent?.isComposing || e.keyCode === 229) return null;
-  const mod = Boolean(e.ctrlKey || e.metaKey);
+  if (isImeComposingEvent(e)) return null;
+  const mod = context.platform
+    ? isModKeyPressed(e, context.platform)
+    : Boolean((e.ctrlKey && !e.metaKey) || (e.metaKey && !e.ctrlKey));
   // 只认裸 Mod+L：Ctrl+Shift+L / Ctrl+Alt+L 属于浏览器与其它插件，不劫持
   if (mod && context.hasTimeline !== false && !e.altKey && !e.shiftKey && (e.key === 'l' || e.key === 'L')) {
     return 'clear_screen';

@@ -1,5 +1,6 @@
 import { t as tr, tf } from '../../i18n';
 import React from "react";
+import { isImeComposingEvent } from '../../xuenessShortcutDisplay';
 
 /**
  * Modal rename dialog for sessions (replaces window.prompt):
@@ -28,12 +29,13 @@ const FOCUSABLE = [
 
 export function shouldDismissRenameOnEscape(event: {
   key: string;
-  nativeEvent?: { isComposing?: boolean };
+  nativeEvent?: { isComposing?: boolean; keyCode?: number };
   keyCode?: number;
+  isComposing?: boolean;
+  compositionActive?: boolean;
 }): boolean {
   if (event.key !== "Escape") return false;
-  if (event.nativeEvent?.isComposing || event.keyCode === 229) return false;
-  return true;
+  return !isImeComposingEvent(event);
 }
 
 export function trapRenameDialogTab(
@@ -79,6 +81,7 @@ export function XuenessRenameDialog({
   const inputRef = React.useRef<HTMLInputElement | null>(null);
   const dialogRef = React.useRef<HTMLDivElement | null>(null);
   const openerRef = React.useRef<HTMLElement | null>(null);
+  const compositionActiveRef = React.useRef(false);
 
   // Capture the invoking control before the next effect moves focus into the
   // dialog. Some entry points pass their row explicitly because a menu closes
@@ -126,7 +129,7 @@ export function XuenessRenameDialog({
 
   const handleKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
     // An IME composition's Enter confirms the composition, not the dialog.
-    if (event.nativeEvent.isComposing || event.keyCode === 229) return;
+    if (compositionActiveRef.current || isImeComposingEvent(event)) return;
     if (event.key === "Enter") {
       const target = event.target as HTMLElement | null;
       if (target?.tagName === "BUTTON") return;
@@ -174,6 +177,12 @@ export function XuenessRenameDialog({
           aria-label={title}
           value={draft}
           onChange={(event) => setDraft(event.target.value)}
+          onCompositionStart={() => {
+            compositionActiveRef.current = true;
+          }}
+          onCompositionEnd={() => {
+            compositionActiveRef.current = false;
+          }}
         />
         <div className="xn-dialog__actions">
           <button

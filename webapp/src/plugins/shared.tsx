@@ -1,6 +1,25 @@
 import React from "react";
 import { t as tr } from "../i18n";
-import { isImeComposingEvent } from "../xuenessShortcutDisplay";
+import { isImeComposingEvent, isModKeyPressed } from "../xuenessShortcutDisplay";
+
+export function evaluatePendingQuestionKey(
+  event: {
+    key: string;
+    ctrlKey?: boolean;
+    metaKey?: boolean;
+    altKey?: boolean;
+    shiftKey?: boolean;
+    keyCode?: number;
+    isComposing?: boolean;
+    nativeEvent?: { isComposing?: boolean; keyCode?: number };
+    compositionActive?: boolean;
+  },
+  options: { platform?: string } = {},
+): "submit" | null {
+  if (isImeComposingEvent(event) || event.altKey || event.shiftKey) return null;
+  if (event.key === "Enter" && isModKeyPressed(event, options.platform)) return "submit";
+  return null;
+}
 
 type FocusRef = { current: HTMLElement | null };
 

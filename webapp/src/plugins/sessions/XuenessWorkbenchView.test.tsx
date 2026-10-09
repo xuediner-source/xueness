@@ -577,7 +577,12 @@ test("Composer attachment payload sizing uses decoded base64 bytes and fixed lim
 
 test("Composer IME guard: detects active composition or keyCode 229", () => {
   assert.equal(isImeCompositionKey({ nativeEvent: { isComposing: true } }), true);
+  assert.equal(isImeCompositionKey({ isComposing: true }), true);
   assert.equal(isImeCompositionKey({ keyCode: 229 }), true);
+  assert.equal(isImeCompositionKey({ nativeEvent: { keyCode: 229 } }), true);
+  assert.equal(isImeCompositionKey({ key: "Process" }), true);
+  assert.equal(isImeCompositionKey({ key: "Dead" }), true);
+  assert.equal(isImeCompositionKey({ compositionActive: true }), true);
   assert.equal(isImeCompositionKey({ nativeEvent: { isComposing: false }, keyCode: 27 }), false);
   assert.equal(isImeCompositionKey({}), false);
 });
@@ -586,9 +591,14 @@ test("Composer Enter policy preserves multiline input and blocks IME submission"
   assert.equal(composerEnterIntent({ key: "Enter", shiftKey: true }, "enter", false), null);
   assert.equal(composerEnterIntent({ key: "Enter", keyCode: 229 }, "enter", false), null);
   assert.equal(composerEnterIntent({ key: "Enter", nativeEvent: { isComposing: true } }, "mod-enter", false), null);
+  assert.equal(composerEnterIntent({ key: "Process" }, "enter", false), null);
+  assert.equal(composerEnterIntent({ key: "Enter", compositionActive: true }, "enter", false), null);
   assert.equal(composerEnterIntent({ key: "Enter" }, "enter", false), "send");
   assert.equal(composerEnterIntent({ key: "Enter" }, "mod-enter", false), null);
-  assert.equal(composerEnterIntent({ key: "Enter", ctrlKey: true }, "mod-enter", false), "send");
+  assert.equal(composerEnterIntent({ key: "Enter", ctrlKey: true }, "mod-enter", false, "win32"), "send");
+  assert.equal(composerEnterIntent({ key: "Enter", metaKey: true }, "mod-enter", false, "win32"), null);
+  assert.equal(composerEnterIntent({ key: "Enter", metaKey: true }, "mod-enter", false, "darwin"), "send");
+  assert.equal(composerEnterIntent({ key: "Enter", ctrlKey: true }, "mod-enter", false, "darwin"), null);
   assert.equal(composerEnterIntent({ key: "Enter" }, "mod-enter", true), "accept-suggestion");
 });
 

@@ -190,9 +190,14 @@ test("CapabilityDialog: IME 组合输入状态下的 Escape 不触发退出", ()
   // 没有 onCancel 回调时不退出
   assert.equal(shouldDismissCapabilityDialogOnEscape({ key: "Escape" }, false, false), false);
   // IME isComposing 期间的 Escape 不退出
+  assert.equal(shouldDismissCapabilityDialogOnEscape({ key: "Escape", isComposing: true }, false, true), false);
   assert.equal(shouldDismissCapabilityDialogOnEscape({ key: "Escape", nativeEvent: { isComposing: true } }, false, true), false);
   // keyCode 229 期间的 Escape 不退出
   assert.equal(shouldDismissCapabilityDialogOnEscape({ key: "Escape", keyCode: 229 }, false, true), false);
+  assert.equal(shouldDismissCapabilityDialogOnEscape({ key: "Escape", nativeEvent: { keyCode: 229 } }, false, true), false);
+  assert.equal(shouldDismissCapabilityDialogOnEscape({ key: "Process" }, false, true), false);
+  assert.equal(shouldDismissCapabilityDialogOnEscape({ key: "Dead" }, false, true), false);
+  assert.equal(shouldDismissCapabilityDialogOnEscape({ key: "Escape", compositionActive: true }, false, true), false);
   // 非 Escape 键不退出
   assert.equal(shouldDismissCapabilityDialogOnEscape({ key: "Enter" }, false, true), false);
 });

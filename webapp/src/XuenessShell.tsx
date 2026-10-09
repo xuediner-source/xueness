@@ -7,15 +7,17 @@ import { Badge } from "./ui/primitives";
 import { IconBack, IconCheck, IconLoader, IconX, IconMenu, IconXuenessMark } from "./ui/icons";
 import { CodeContent } from "./ui/CodeContent";
 import type { CodeLanguage } from "./ui/CodePreview";
-import { displayBinding } from "./xuenessShortcutDisplay";
+import { displayBinding, isImeComposingEvent } from "./xuenessShortcutDisplay";
 
 export function shouldCloseNarrowSidebarOnEscape(event: {
   key: string;
   isComposing?: boolean;
   keyCode?: number;
+  nativeEvent?: { isComposing?: boolean; keyCode?: number };
+  compositionActive?: boolean;
   defaultPrevented?: boolean;
 }): boolean {
-  return event.key === "Escape" && !event.defaultPrevented && !event.isComposing && event.keyCode !== 229;
+  return event.key === "Escape" && !event.defaultPrevented && !isImeComposingEvent(event);
 }
 
 /**

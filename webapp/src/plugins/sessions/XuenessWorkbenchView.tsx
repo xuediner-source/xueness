@@ -12,7 +12,7 @@ import type { ComposerCapability, ComposerInput } from "../../xuenessComposer";
 import { ComposerCapabilityMenu, MAX_SELECTED_COMPOSER_CAPABILITIES, capabilityLabel, matchesComposerSearch } from './ComposerCapabilityMenu';
 import { Search, Target, Workflow, Blocks } from 'lucide-react';
 import { completionPresentation } from './completionPresentation';
-import { displayBinding } from '../../xuenessShortcutDisplay';
+import { displayBinding, isModKeyPressed, isImeComposingEvent } from '../../xuenessShortcutDisplay';
 import { formatCommandArgv } from "../../xuenessWorkbench";
 
 export type TaskListProps = {
@@ -555,27 +555,39 @@ export function restoreSubmittedComposerDraft(
 }
 
 export function isImeCompositionKey(e: {
-  nativeEvent?: { isComposing?: boolean };
+  nativeEvent?: { isComposing?: boolean; keyCode?: number };
   keyCode?: number;
+  isComposing?: boolean;
+  key?: string;
+  compositionActive?: boolean;
 }): boolean {
-  return Boolean(e.nativeEvent?.isComposing || e.keyCode === 229);
+  return isImeComposingEvent(e);
 }
 
-export function composerEnterIntent(e: {
-  key: string; shiftKey?: boolean; altKey?: boolean; ctrlKey?: boolean; metaKey?: boolean;
-  nativeEvent?: { isComposing?: boolean }; keyCode?: number;
-}, sendShortcut: "enter" | "mod-enter", hasSuggestions: boolean): "accept-suggestion" | "send" | null {
+export function composerEnterIntent(
+  e: {
+    key: string; shiftKey?: boolean; altKey?: boolean; ctrlKey?: boolean; metaKey?: boolean;
+    nativeEvent?: { isComposing?: boolean; keyCode?: number }; keyCode?: number; isComposing?: boolean;
+    compositionActive?: boolean;
+  },
+  sendShortcut: "enter" | "mod-enter",
+  hasSuggestions: boolean,
+  platform?: string,
+): "accept-suggestion" | "send" | null {
   if (e.key !== "Enter" || isImeCompositionKey(e)) return null;
   if (hasSuggestions && !e.shiftKey && !e.altKey) return "accept-suggestion";
   if (e.shiftKey || e.altKey) return null;
-  return sendShortcut === "enter" || e.metaKey || e.ctrlKey ? "send" : null;
+  if (sendShortcut === "enter") return "send";
+  return isModKeyPressed(e, platform) ? "send" : null;
 }
 
 export function handleComposerEscapeAction(
   e: {
     key: string;
-    nativeEvent?: { isComposing?: boolean };
+    nativeEvent?: { isComposing?: boolean; keyCode?: number };
     keyCode?: number;
+    isComposing?: boolean;
+    compositionActive?: boolean;
     preventDefault: () => void;
   },
   state: {
@@ -639,6 +651,7 @@ export function Composer({
   const [draftRenderVersion, setDraftRenderVersion] = useState(0);
   const pendingSubmissionsRef = useRef(new Map<string, number>());
   const submissionTicketRef = useRef(0);
+  const compositionActiveRef = useRef(false);
   if (!draftsRef.current.has(draftKey)) draftsRef.current.set(draftKey, emptyComposerDraft(defaultValue));
   const draft = draftsRef.current.get(draftKey)!;
   // State lives in a per-scope map so late handlers keep writing to the draft
@@ -845,7 +858,7 @@ export function Composer({
   useEffect(() => {
     if (!running || !onStop || stopping) return;
     const onWindowKeyDown = (event: KeyboardEvent) => {
-      if (event.key !== "Escape" || event.defaultPrevented || event.repeat) return;
+      if (event.key !== "Escape" || event.defaultPrevented || event.repeat || isImeCompositionKey(event)) return;
       const target = event.target as HTMLElement | null;
       if (target?.closest?.("textarea, input, select, [contenteditable='true']")) return;
       if (
@@ -942,8 +955,9 @@ export function Composer({
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    const isComposing = compositionActiveRef.current || isImeCompositionKey(e);
     if (e.key === "Escape") {
-      if (isImeCompositionKey(e)) return;
+      if (isComposing) return;
       e.preventDefault();
       if (suggestions.length > 0) {
         setSuggestDismissed(true);
@@ -955,15 +969,19 @@ export function Composer({
       }
       if (running && onStop && !stopping) onStop();
     } else if (e.key === "ArrowDown" && suggestions.length > 0) {
-      if (isImeCompositionKey(e)) return;
+      if (isComposing) return;
       e.preventDefault();
       setActiveSuggestion((currentSuggestion + 1) % suggestions.length);
     } else if (e.key === "ArrowUp" && suggestions.length > 0) {
-      if (isImeCompositionKey(e)) return;
+      if (isComposing) return;
       e.preventDefault();
       setActiveSuggestion((currentSuggestion - 1 + suggestions.length) % suggestions.length);
     } else {
-      const intent = composerEnterIntent(e, sendShortcut, suggestions.length > 0 && currentSuggestion >= 0);
+      const intent = composerEnterIntent(
+        { ...e, compositionActive: compositionActiveRef.current },
+        sendShortcut,
+        suggestions.length > 0 && currentSuggestion >= 0,
+      );
       if (intent === "accept-suggestion") {
         e.preventDefault();
         acceptSuggestion(suggestions[currentSuggestion]);
@@ -1089,6 +1107,12 @@ export function Composer({
           setSubmissionError("");
         }}
         onKeyDown={handleKeyDown}
+        onCompositionStart={() => {
+          compositionActiveRef.current = true;
+        }}
+        onCompositionEnd={() => {
+          compositionActiveRef.current = false;
+        }}
         onPaste={(event) => {
           const pastedFiles = event.clipboardData.files;
           if (pastedFiles.length > 0) {

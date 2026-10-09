@@ -3,6 +3,7 @@ import { AlertTriangle, GitBranch, LoaderCircle, RefreshCw, X } from "lucide-rea
 import { t as tr, tf } from "../../i18n";
 import { forkSession, loadForkBoundaries } from "../../xuenessWorkbench";
 import type { ForkBoundary, ForkSessionResponse } from "../../xuenessWorkbench";
+import { isImeComposingEvent } from "../../xuenessShortcutDisplay";
 import "./sessions.css";
 
 export type ForkSessionDialogProps = {
@@ -30,12 +31,17 @@ const FOCUSABLE = [
 ].join(",");
 
 export function shouldDismissForkDialogOnEscape(
-  event: { key: string; isComposing?: boolean; keyCode?: number },
+  event: {
+    key: string;
+    isComposing?: boolean;
+    keyCode?: number;
+    nativeEvent?: { isComposing?: boolean; keyCode?: number };
+    compositionActive?: boolean;
+  },
   busy = false,
 ): boolean {
   if (event.key !== "Escape" || busy) return false;
-  if (event.isComposing || event.keyCode === 229) return false;
-  return true;
+  return !isImeComposingEvent(event);
 }
 
 export function trapForkDialogTab(

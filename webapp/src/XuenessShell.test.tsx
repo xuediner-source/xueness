@@ -17,7 +17,12 @@ import {
 test("Shell drawer Escape closes normally, while composition or a handled nested Escape stays local", () => {
   assert.equal(shouldCloseNarrowSidebarOnEscape({ key: "Escape" }), true);
   assert.equal(shouldCloseNarrowSidebarOnEscape({ key: "Escape", isComposing: true }), false);
+  assert.equal(shouldCloseNarrowSidebarOnEscape({ key: "Escape", nativeEvent: { isComposing: true } }), false);
   assert.equal(shouldCloseNarrowSidebarOnEscape({ key: "Escape", keyCode: 229 }), false);
+  assert.equal(shouldCloseNarrowSidebarOnEscape({ key: "Escape", nativeEvent: { keyCode: 229 } }), false);
+  assert.equal(shouldCloseNarrowSidebarOnEscape({ key: "Process" }), false);
+  assert.equal(shouldCloseNarrowSidebarOnEscape({ key: "Dead" }), false);
+  assert.equal(shouldCloseNarrowSidebarOnEscape({ key: "Escape", compositionActive: true }), false);
   assert.equal(shouldCloseNarrowSidebarOnEscape({ key: "Escape", defaultPrevented: true }), false);
   assert.equal(shouldCloseNarrowSidebarOnEscape({ key: "Enter" }), false);
 });

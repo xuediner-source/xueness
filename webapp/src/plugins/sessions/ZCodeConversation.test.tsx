@@ -2,7 +2,7 @@ import React from 'react';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { ZCodeConversation, buildConversationTurns } from './ZCodeConversation';
+import { ZCodeConversation, buildConversationTurns, evaluateUserMessageEditKey } from './ZCodeConversation';
 import type { TimelineRow } from '../../xuenessWorkbench';
 
 const revision = `sha256:${'a'.repeat(64)}`;
@@ -67,4 +67,39 @@ test('reasoning preferences and unsafe Markdown remain respected', () => {
   assert.doesNotMatch(html,/检查范围/);
   const unsafe=renderToStaticMarkup(<ZCodeConversation rows={[{kind:'assistant',seq:1,turnId:'t',text:'[click](javascript:alert(1)) <script>bad</script>'}]} />);
   assert.doesNotMatch(unsafe,/href="javascript:|<script>/);
+});
+
+test('evaluateUserMessageEditKey: handles Escape and Mod+Enter with IME and platform awareness', () => {
+  // Ordinary Escape cancels edit unless saving
+  assert.equal(evaluateUserMessageEditKey({ key: 'Escape' }), 'cancel');
+  assert.equal(evaluateUserMessageEditKey({ key: 'Escape' }, { saving: true }), null);
+
+  // Darwin (macOS): ⌘ (metaKey) saves; Ctrl does not
+  assert.equal(evaluateUserMessageEditKey({ key: 'Enter', metaKey: true }, { platform: 'darwin' }), 'save');
+  assert.equal(evaluateUserMessageEditKey({ key: 'Enter', ctrlKey: true }, { platform: 'darwin' }), null);
+
+  // Win32 (Windows): Ctrl saves; ⌘ (metaKey) does not
+  assert.equal(evaluateUserMessageEditKey({ key: 'Enter', ctrlKey: true }, { platform: 'win32' }), 'save');
+  assert.equal(evaluateUserMessageEditKey({ key: 'Enter', metaKey: true }, { platform: 'win32' }), null);
+
+  // Plain Enter or Alt+Enter does not save
+  assert.equal(evaluateUserMessageEditKey({ key: 'Enter' }), null);
+  assert.equal(evaluateUserMessageEditKey({ key: 'Enter', metaKey: true, altKey: true }, { platform: 'darwin' }), null);
+  assert.equal(evaluateUserMessageEditKey({ key: 'Enter', ctrlKey: true, shiftKey: true }, { platform: 'win32' }), null);
+
+  // IME composition states must block both Escape and Enter
+  assert.equal(evaluateUserMessageEditKey({ key: 'Escape', isComposing: true }), null);
+  assert.equal(evaluateUserMessageEditKey({ key: 'Escape', nativeEvent: { isComposing: true } }), null);
+  assert.equal(evaluateUserMessageEditKey({ key: 'Escape', keyCode: 229 }), null);
+  assert.equal(evaluateUserMessageEditKey({ key: 'Escape', nativeEvent: { keyCode: 229 } }), null);
+  assert.equal(evaluateUserMessageEditKey({ key: 'Process' }), null);
+  assert.equal(evaluateUserMessageEditKey({ key: 'Dead' }), null);
+  assert.equal(evaluateUserMessageEditKey({ key: 'Escape', compositionActive: true }), null);
+
+  assert.equal(evaluateUserMessageEditKey({ key: 'Enter', metaKey: true, isComposing: true }, { platform: 'darwin' }), null);
+  assert.equal(evaluateUserMessageEditKey({ key: 'Enter', ctrlKey: true, nativeEvent: { isComposing: true } }, { platform: 'win32' }), null);
+  assert.equal(evaluateUserMessageEditKey({ key: 'Enter', ctrlKey: true, keyCode: 229 }, { platform: 'win32' }), null);
+  assert.equal(evaluateUserMessageEditKey({ key: 'Enter', ctrlKey: true, nativeEvent: { keyCode: 229 } }, { platform: 'win32' }), null);
+  assert.equal(evaluateUserMessageEditKey({ key: 'Enter', ctrlKey: true, compositionActive: true }, { platform: 'win32' }), null);
+  assert.equal(evaluateUserMessageEditKey({ key: 'Process', ctrlKey: true }, { platform: 'win32' }), null);
 });

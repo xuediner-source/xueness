@@ -3,6 +3,7 @@ import { ArrowRight, Folder, FolderOpen, LoaderCircle, X } from "lucide-react";
 import { t as tr } from "../../i18n";
 import { XuenessWorkspaceSettings } from "./XuenessWorkspaceSettings";
 import { chooseNativeWorkspace, confirmWorkspaceRoot, loadNativeWorkspacePicker, loadWorkspaceCatalog, type WorkspaceCatalog } from "../../xuenessWorkspaces";
+import { isImeComposingEvent } from "../../xuenessShortcutDisplay";
 import "../../styles/workspace-picker-dialog.css";
 
 export type XuenessWorkspacePickerDialogProps = {
@@ -25,10 +26,12 @@ const FOCUSABLE = [
 
 export function shouldDismissWorkspacePickerOnEscape(event: {
   key: string;
-  nativeEvent?: { isComposing?: boolean };
+  nativeEvent?: { isComposing?: boolean; keyCode?: number };
   keyCode?: number;
+  isComposing?: boolean;
+  compositionActive?: boolean;
 }): boolean {
-  return event.key === "Escape" && !event.nativeEvent?.isComposing && event.keyCode !== 229;
+  return event.key === "Escape" && !isImeComposingEvent(event);
 }
 
 /** A compact project entry point with OS selection and a host-browser fallback. */

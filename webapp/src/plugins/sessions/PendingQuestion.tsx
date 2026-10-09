@@ -1,6 +1,7 @@
-import React, { useEffect, useState, useSyncExternalStore } from "react";
+import React, { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { t as tr, tf } from "../../i18n";
 import { answerQuestion, loadQuestion, type PendingQuestionRecord, type QuestionResponse, type AnswerResponse } from "./questionApi";
+import { evaluatePendingQuestionKey } from "../shared";
 import "./PendingQuestion.css";
 
 type QuestionTransport = {
@@ -80,6 +81,7 @@ export function PendingQuestion({ sessionId, pendingQuestion, enabled, disabled 
   const [continuingError, setContinuingError] = useState("");
   const context = React.useRef({ sessionId, enabled });
   context.current = { sessionId, enabled };
+  const compositionActiveRef = useRef(false);
   useEffect(() => () => { context.current.enabled = false; }, []);
   useEffect(() => {
     setContinuingError("");
@@ -117,9 +119,14 @@ export function PendingQuestion({ sessionId, pendingQuestion, enabled, disabled 
     <textarea id={`question-answer-${sessionId}`} value={current ? state.draft : ""} disabled={busy || !state.question}
       placeholder={tr("填写答复，或补充任务所需的信息…")} rows={3} maxLength={10000}
       onChange={event => model.setDraft(event.currentTarget.value)}
+      onCompositionStart={() => { compositionActiveRef.current = true; }}
+      onCompositionEnd={() => { compositionActiveRef.current = false; }}
       onKeyDown={event => {
-        if (event.nativeEvent.isComposing || event.keyCode === 229 || event.altKey || event.shiftKey) return;
-        if (event.key === "Enter" && (event.ctrlKey || event.metaKey)) { event.preventDefault(); void submit(true); }
+        const action = evaluatePendingQuestionKey({ ...event, compositionActive: compositionActiveRef.current });
+        if (action === "submit") {
+          event.preventDefault();
+          void submit(true);
+        }
       }} />
     {(state.error || continuingError) && <p role="alert">{tf("答复操作失败：{0}", [state.error || continuingError])}</p>}
     <footer><small aria-live="polite">{state.loading ? tr("正在加载问题…") : count > 5000 ? tr("答复不能超过 5000 个字符。") : tr("提交答复不会批准工具操作。")}</small>

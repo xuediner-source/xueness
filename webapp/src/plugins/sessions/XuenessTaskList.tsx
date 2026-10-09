@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { Archive, ArrowDownWideNarrow, ChevronsDownUp, ChevronDown, Folder, Hash, Plus, Pencil, Pin, Trash2 } from 'lucide-react';
 import { SidebarNav } from './SidebarNav';
 import { Select } from '../../ui/Select';
+import { isImeComposingEvent } from '../../xuenessShortcutDisplay';
 import { t as tr, tf } from '../../i18n';
 import type { SessionSummary } from '../../xuenessWorkbench';
 import '../../styles/task-list-parity.css';
@@ -76,10 +77,12 @@ export function dialogFocusWrapIndex(current:number,length:number,backward:boole
 
 export function shouldDismissGroupEditorOnEscape(event: {
   key: string;
-  nativeEvent?: { isComposing?: boolean };
+  nativeEvent?: { isComposing?: boolean; keyCode?: number };
   keyCode?: number;
+  isComposing?: boolean;
+  compositionActive?: boolean;
 }): boolean {
-  return event.key === 'Escape' && !event.nativeEvent?.isComposing && event.keyCode !== 229;
+  return event.key === 'Escape' && !isImeComposingEvent(event);
 }
 
 export function restoreSidebarFocus(
@@ -258,6 +261,7 @@ export function XuenessTaskList({
 
   const handleTaskMenuKeyDown=(event:React.KeyboardEvent<HTMLDivElement>)=>{
     if(event.key==='Escape'){
+      if(isImeComposingEvent(event))return;
       event.preventDefault();
       closeTaskMenu(true);
       return;

@@ -17,8 +17,29 @@ import { conversationActivityLabel, reasoningIsActive } from './conversationActi
 import { formatConversationWorkDuration } from './conversationWorkDuration';
 import { useTimelineVirtualWindow } from './TimelineVirtualWindow';
 import { XuenessConversationHistoryRail } from './XuenessConversationHistoryRail';
+import { isImeComposingEvent, isModKeyPressed } from '../../xuenessShortcutDisplay';
 import './zcode-conversation.css';
 import { formatCommandArgv } from '../../xuenessWorkbench';
+
+export function evaluateUserMessageEditKey(
+  event: {
+    key: string;
+    ctrlKey?: boolean;
+    metaKey?: boolean;
+    altKey?: boolean;
+    shiftKey?: boolean;
+    keyCode?: number;
+    isComposing?: boolean;
+    nativeEvent?: { isComposing?: boolean; keyCode?: number };
+    compositionActive?: boolean;
+  },
+  options: { saving?: boolean; platform?: string } = {},
+): 'save' | 'cancel' | null {
+  if (isImeComposingEvent(event)) return null;
+  if (event.key === 'Escape' && !options.saving) return 'cancel';
+  if (event.key === 'Enter' && !event.altKey && !event.shiftKey && isModKeyPressed(event, options.platform)) return 'save';
+  return null;
+}
 
 type Assistant = Extract<TimelineRow, { kind: 'assistant' }>;
 type Tool = Extract<TimelineRow, { kind: 'tool' }>;
@@ -173,6 +194,7 @@ function UserMessage({ row, onEdit }: { row: User; onEdit?: ZCodeConversationPro
   const [text, setText] = React.useState(row.text);
   const [saving, setSaving] = React.useState(false);
   const [error, setError] = React.useState('');
+  const compositionActiveRef = React.useRef(false);
   const save = async () => {
     if (!onEdit || saving || !text.trim()) return;
     setSaving(true); setError('');
@@ -185,9 +207,13 @@ function UserMessage({ row, onEdit }: { row: User; onEdit?: ZCodeConversationPro
   return <div className="xn-zc-user" data-history-user-seq={row.seq} data-role="user" data-testid={`timeline-item-user-${row.seq}`}>
     {editing ? <form className="xn-zc-editor" onSubmit={event => { event.preventDefault(); void save(); }}>
       <textarea aria-label={tr('编辑消息')} value={text} autoFocus disabled={saving} onChange={event => setText(event.target.value)}
-        onKeyDown={event => { if (event.nativeEvent.isComposing || event.keyCode === 229) return;
-          if (event.key === 'Escape' && !saving) { event.preventDefault(); setEditing(false); }
-          if (event.key === 'Enter' && (event.ctrlKey || event.metaKey)) { event.preventDefault(); void save(); } }} />
+        onCompositionStart={() => { compositionActiveRef.current = true; }}
+        onCompositionEnd={() => { compositionActiveRef.current = false; }}
+        onKeyDown={event => {
+          const action = evaluateUserMessageEditKey({ ...event, compositionActive: compositionActiveRef.current }, { saving });
+          if (action === 'cancel') { event.preventDefault(); setEditing(false); }
+          else if (action === 'save') { event.preventDefault(); void save(); }
+        }} />
       <p className="xn-zc-editor-note">{tr('重新发送会替换这条消息及其后续对话。工作区文件保持当前状态。')}</p>
       {error && <p role="alert">{error}</p>}
       <div><button type="button" disabled={saving} onClick={() => setEditing(false)}>{tr('取消')}</button>

@@ -56,8 +56,13 @@ test('Sidebar dialogs restore focus to their opener, with a fallback when it was
 
 test('Sidebar group dialog dismisses on ordinary Escape and preserves IME Escape',()=>{
   assert.equal(shouldDismissGroupEditorOnEscape({key:'Escape'}),true);
+  assert.equal(shouldDismissGroupEditorOnEscape({key:'Escape',isComposing:true}),false);
   assert.equal(shouldDismissGroupEditorOnEscape({key:'Escape',nativeEvent:{isComposing:true}}),false);
   assert.equal(shouldDismissGroupEditorOnEscape({key:'Escape',keyCode:229}),false);
+  assert.equal(shouldDismissGroupEditorOnEscape({key:'Escape',nativeEvent:{keyCode:229}}),false);
+  assert.equal(shouldDismissGroupEditorOnEscape({key:'Process'}),false);
+  assert.equal(shouldDismissGroupEditorOnEscape({key:'Dead'}),false);
+  assert.equal(shouldDismissGroupEditorOnEscape({key:'Escape',compositionActive:true}),false);
   assert.equal(shouldDismissGroupEditorOnEscape({key:'Enter'}),false);
 });
 
