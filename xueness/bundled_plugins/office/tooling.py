@@ -9,12 +9,11 @@ import os
 import re
 import stat
 import tempfile
-import time
 import zipfile
 import zlib
 from pathlib import Path, PurePosixPath, PureWindowsPath
 
-from ...resources import _is_link
+from ...resources import _is_link, replace_file
 from ...tool_contract import BuiltinTool
 from ...write_lock import DEFAULT_LOCKS, owner_for
 
@@ -669,21 +668,16 @@ def _write_atomic(target: Path, data: bytes, *, create_only: bool, root: Path, p
             os.link(temporary, target, follow_symlinks=False)
             os.unlink(temporary)
         else:
-            for attempt in range(3):
-                # Windows scanners can briefly deny rename. Keep the retry
-                # bounded and recheck the original read proof before each
-                # attempt so an intervening edit is never silently replaced.
+            # Windows sharing collisions retry inside replace_file. Recheck the
+            # original read proof before every attempt, including the first, so
+            # an intervening edit is never silently replaced.
+            def _prove_unchanged():
                 _target(root, path, must_exist=True)
                 if expected_sha256 and not hmac.compare_digest(
                         hashlib.sha256(_read_bytes(target)).hexdigest(), expected_sha256):
                     raise ValueError("office file changed after office_read; read it again before replacing")
-                try:
-                    os.replace(temporary, target)
-                    break
-                except PermissionError as error:
-                    if os.name != 'nt' or getattr(error, 'winerror', None) not in (5, 32, 33) or attempt == 2:
-                        raise
-                    time.sleep(0.05)
+
+            replace_file(temporary, target, before_replace=_prove_unchanged)
         try:
             directory_fd = os.open(parent, os.O_RDONLY | getattr(os, "O_DIRECTORY", 0))
         except OSError:

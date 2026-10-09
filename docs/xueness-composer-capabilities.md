@@ -10,7 +10,7 @@
 
 创建器：插件清单是非执行 JSON，可使用 plugin_manifest_validate 校验；包含 entrypoint、动态代码等字段会被拒绝。可执行新功能仍需在源码中建立 bundled plugin、登记工具/模块/双语功能、运行结构检查并重新构建。技能使用项目 .xueness/skills/<name>/SKILL.md，skill_validate 与实际技能发现复用相同规则；验证不会执行技能内容。
 
-Office：office_create 创建新文件；office_read 有界读取；office_replace 要求同一会话先完整读取相同路径，并传入返回的 expected_sha256。文件在读取后发生变化会拒绝覆盖。截断或含图片的文本投影不给替换证明，应生成独立输出。替换会重新构建结构化文档，不能保留任意富版式、图表、嵌入对象或动画。XLSX 字符串以字面文本存储（包括 = 开头），不会执行公式。PPTX 使用简洁文字布局：每页标题不超过 60 字符，最多 20 个内容项，每项最多 400 字符、每页最多约 18 行。源码运行先执行 `python3 -m pip install -r desktop/requirements-office.txt`；桌面包已包含依赖。
+Office：office_create 创建新文件；office_read 有界读取；office_replace 要求同一会话先完整读取相同路径，并传入返回的 expected_sha256。文件在读取后发生变化会拒绝覆盖。替换安装复用共享的原子替换：Windows 上短暂的共享冲突（WinError 5/32/33）最多重试约半秒，每次尝试前重新核对 expected_sha256；其它系统立即失败。截断或含图片的文本投影不给替换证明，应生成独立输出。替换会重新构建结构化文档，不能保留任意富版式、图表、嵌入对象或动画。XLSX 字符串以字面文本存储（包括 = 开头），不会执行公式。PPTX 使用简洁文字布局：每页标题不超过 60 字符，最多 20 个内容项，每项最多 400 字符、每页最多约 18 行。源码运行先执行 `python3 -m pip install -r desktop/requirements-office.txt`；桌面包已包含依赖。
 
 搜图：使用设置中的真实图片服务与搜索密钥，不让文字模型编造图片链接。兼容 Brave Image Search，默认 service 模式使用官方图片端点；model 模式需单独填图片服务端点。返回图片/来源/缩略图地址及尺寸元数据；通过 HTTPS 与公网 DNS 检查不等于已获取或验证图片内容。最多检查 20 条/20 个主机，15 秒检查预算，不可重试的缺少密钥/不支持模式会明确报错。
 

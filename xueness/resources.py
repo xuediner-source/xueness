@@ -390,17 +390,20 @@ def _protect_private_windows_handle(handle, *, directory: bool) -> None:
 _REPLACE_SHARING_WINERRORS = frozenset({5, 32, 33})
 
 
-def replace_file(source, destination):
+def replace_file(source, destination, *, before_replace=None):
     """Atomically replace ``destination``, retrying brief Windows sharing collisions.
 
     Antivirus, indexers, and open readers can deny ReplaceFile (winerror 5, 32,
     or 33) for a moment. Those errors are retried for at most half a second.
-    Other platforms and every other error fail immediately. Callers still remove
-    the temporary file when this raises, so a failed replace keeps the previous
-    record.
+    Other platforms and every other error fail immediately. ``before_replace``,
+    when given, runs before every attempt, including the first, and may raise
+    to stop without another rename. Callers still remove the temporary file
+    when this raises, so a failed replace keeps the previous record.
     """
     deadline = time.monotonic() + .5
     while True:
+        if before_replace is not None:
+            before_replace()
         try:
             os.replace(source, destination)
             return

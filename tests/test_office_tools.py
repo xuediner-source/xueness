@@ -7,9 +7,11 @@ import os
 import tempfile
 import unittest
 import zipfile
+from contextlib import contextmanager
 from pathlib import Path
 from unittest.mock import patch
 
+from xueness import resources
 from xueness.bundled_plugins.office import tooling
 
 
@@ -110,54 +112,135 @@ class OfficeToolTests(unittest.TestCase):
         self.assertNotIn("draft.docx", self.session["_office_read_proofs"])
         self.assertEqual(self.read("draft.docx")["document"]["paragraphs"][0]["text"], "New")
 
-    @unittest.skipUnless(os.name == 'nt', 'Windows atomic replacement behavior')
-    def test_atomic_replace_recovers_from_one_sharing_violation(self):
-        target = self.root/'artifact.docx'
-        target.write_bytes(b'old')
-        error = PermissionError('fixture sharing violation')
-        error.winerror = 32
-        actual = tooling.os.replace
-        with patch.object(tooling.os, 'replace', side_effect=[error, None]) as rename:
-            def attempt(source, destination):
-                if rename.call_count == 1:
-                    raise error
-                actual(source, destination)
-            rename.side_effect = attempt
-            tooling._write_atomic(target, b'new', create_only=False, root=self.root,
-                                  path=target.name, expected_sha256=hashlib.sha256(b'old').hexdigest())
-            self.assertEqual(2, rename.call_count)
-        self.assertEqual(b'new', target.read_bytes())
-        self.assertFalse(list(self.root.glob('.xueness-office-*.tmp')))
+    def _platform(self, host_name, monotonic=None):
+        """Mock only the resources module's os, so Path stays a POSIX path."""
 
-    @unittest.skipUnless(os.name == 'nt', 'Windows atomic replacement behavior')
-    def test_atomic_retry_rejects_an_intervening_external_edit(self):
-        target = self.root/'artifact.docx'
-        target.write_bytes(b'old')
+        @contextmanager
+        def opened():
+            patches = [patch.object(resources, 'os'), patch.object(resources.time, 'sleep')]
+            if monotonic is not None:
+                patches.append(patch.object(resources.time, 'monotonic', side_effect=monotonic))
+            started = [item.start() for item in patches]
+            host, sleep = started[0], started[1]
+            host.name = host_name
+            try:
+                yield host, sleep
+            finally:
+                for item in reversed(patches):
+                    item.stop()
+
+        return opened()
+
+    def _replace(self, target, data, digest):
+        tooling._write_atomic(target, data, create_only=False, root=self.root,
+                              path=target.name, expected_sha256=digest)
+
+    def test_atomic_replace_recovers_on_windows_and_not_on_posix(self):
+        digest = hashlib.sha256(b'old').hexdigest()
         error = PermissionError('fixture sharing violation')
         error.winerror = 32
+        real_replace = os.replace
+        for host_name, platform_name in (('nt', 'win32'), ('posix', 'darwin'), ('posix', 'linux')):
+            with self.subTest(platform=platform_name):
+                target = self.root / ('artifact-%s.docx' % platform_name)
+                target.write_bytes(b'old')
+                with self._platform(host_name, [0, .1, .2] if host_name == 'nt' else None) as (host, sleep):
+                    if host_name == 'nt':
+                        def attempt(source, destination, _error=error):
+                            if host.replace.call_count == 1:
+                                raise _error
+                            real_replace(source, destination)
+                        host.replace.side_effect = attempt
+                        self._replace(target, b'new', digest)
+                        self.assertEqual(host.replace.call_count, 2)
+                        sleep.assert_called()
+                        self.assertEqual(b'new', target.read_bytes())
+                    else:
+                        host.replace.side_effect = error
+                        with self.assertRaises(PermissionError):
+                            self._replace(target, b'new', digest)
+                        self.assertEqual(host.replace.call_count, 1)
+                        sleep.assert_not_called()
+                        self.assertEqual(b'old', target.read_bytes())
+                self.assertFalse(list(self.root.glob('.xueness-office-*.tmp')))
+
+    def test_atomic_retry_rejects_an_intervening_external_edit(self):
+        digest = hashlib.sha256(b'old').hexdigest()
+        error = PermissionError('fixture sharing violation')
+        error.winerror = 32
+
         def occupied(_source, destination):
             Path(destination).write_bytes(b'external edit')
             raise error
-        with patch.object(tooling.os, 'replace', side_effect=occupied) as rename:
-            with self.assertRaisesRegex(ValueError, 'changed after office_read'):
-                tooling._write_atomic(target, b'new', create_only=False, root=self.root,
-                                      path=target.name, expected_sha256=hashlib.sha256(b'old').hexdigest())
-            self.assertEqual(1, rename.call_count)
-        self.assertEqual(b'external edit', target.read_bytes())
-        self.assertFalse(list(self.root.glob('.xueness-office-*.tmp')))
 
-    @unittest.skipUnless(os.name == 'nt', 'Windows atomic replacement behavior')
+        for host_name, platform_name, expected in (
+                ('nt', 'win32', ValueError),
+                ('posix', 'darwin', PermissionError),
+                ('posix', 'linux', PermissionError)):
+            with self.subTest(platform=platform_name):
+                target = self.root / ('external-%s.docx' % platform_name)
+                target.write_bytes(b'old')
+                monotonic = [0, .1, .2] if host_name == 'nt' else None
+                with self._platform(host_name, monotonic) as (host, _sleep):
+                    host.replace.side_effect = occupied
+                    with self.assertRaises(expected):
+                        self._replace(target, b'new', digest)
+                    self.assertEqual(host.replace.call_count, 1)
+                self.assertEqual(b'external edit', target.read_bytes())
+                self.assertFalse(list(self.root.glob('.xueness-office-*.tmp')))
+
     def test_atomic_retry_is_bounded_and_retains_original_on_denial(self):
-        target = self.root/'artifact.docx'
-        target.write_bytes(b'old')
+        digest = hashlib.sha256(b'old').hexdigest()
         error = PermissionError('fixture access denied')
         error.winerror = 5
-        with patch.object(tooling.os, 'replace', side_effect=error) as rename:
-            with self.assertRaises(PermissionError):
-                tooling._write_atomic(target, b'new', create_only=False, root=self.root,
-                                      path=target.name, expected_sha256=hashlib.sha256(b'old').hexdigest())
-            self.assertEqual(3, rename.call_count)
+        other = OSError('not a sharing collision')
+        other.winerror = 87
+        for host_name, platform_name, monotonic, calls in (
+                ('nt', 'win32', [0, .1, .6], 2),
+                ('posix', 'darwin', None, 1),
+                ('posix', 'linux', None, 1)):
+            with self.subTest(platform=platform_name):
+                target = self.root / ('denied-%s.docx' % platform_name)
+                target.write_bytes(b'old')
+                with self._platform(host_name, monotonic) as (host, sleep):
+                    host.replace.side_effect = error
+                    with self.assertRaises(PermissionError):
+                        self._replace(target, b'new', digest)
+                    self.assertEqual(host.replace.call_count, calls)
+                    if host_name == 'nt':
+                        sleep.assert_called()
+                    else:
+                        sleep.assert_not_called()
+                self.assertEqual(b'old', target.read_bytes())
+                self.assertFalse(list(self.root.glob('.xueness-office-*.tmp')))
+        target = self.root / 'other-error.docx'
+        target.write_bytes(b'old')
+        with self._platform('nt', [0, .1]) as (host, sleep):
+            host.replace.side_effect = other
+            with self.assertRaises(OSError):
+                self._replace(target, b'new', digest)
+            self.assertEqual(host.replace.call_count, 1)
+            sleep.assert_not_called()
         self.assertEqual(b'old', target.read_bytes())
+
+    def test_stale_sha256_is_rejected_before_rename_on_windows_and_posix(self):
+        digest = hashlib.sha256(b'old').hexdigest()
+        for host_name, platform_name in (('nt', 'win32'), ('posix', 'darwin'), ('posix', 'linux')):
+            with self.subTest(platform=platform_name):
+                target = self.root / ('stale-%s.docx' % platform_name)
+                target.write_bytes(b'changed')
+                with self._platform(host_name) as (host, _sleep):
+                    host.replace.side_effect = AssertionError('renamed')
+                    with self.assertRaisesRegex(ValueError, 'changed after office_read'):
+                        self._replace(target, b'new', digest)
+                    host.replace.assert_not_called()
+                self.assertEqual(b'changed', target.read_bytes())
+
+    def test_create_only_links_without_the_shared_replace(self):
+        target = self.root / 'created.docx'
+        with patch.object(resources, 'replace_file', side_effect=AssertionError('replace')):
+            tooling._write_atomic(target, b'new', create_only=True, root=self.root, path=target.name)
+        self.assertEqual(b'new', target.read_bytes())
         self.assertFalse(list(self.root.glob('.xueness-office-*.tmp')))
 
     def test_gate_receives_exact_subject_and_workspace_symlinks_are_rejected(self):
@@ -252,6 +335,58 @@ class OfficeToolTests(unittest.TestCase):
         self.assertEqual(result, {"ok": False, "error": "plugin disabled"})
         self.assertEqual(self.gate.calls, [])
         self.assertFalse((self.root / "disabled.docx").exists())
+
+
+class ReplaceFileHookTests(unittest.TestCase):
+    def test_before_replace_runs_before_every_windows_attempt_and_can_abort(self):
+        calls = []
+
+        def before():
+            calls.append('check')
+            if len(calls) == 2:
+                raise ValueError('changed')
+
+        error = PermissionError('sharing')
+        error.winerror = 32
+        with patch.object(resources, 'os') as host, \
+                patch.object(resources.time, 'sleep') as sleep, \
+                patch.object(resources.time, 'monotonic', side_effect=[0, .1, .2]):
+            host.name = 'nt'
+            host.replace.side_effect = error
+            with self.assertRaisesRegex(ValueError, 'changed'):
+                resources.replace_file('new', 'old', before_replace=before)
+            self.assertEqual(host.replace.call_count, 1)
+            self.assertEqual(calls, ['check', 'check'])
+            sleep.assert_called_once()
+
+    def test_posix_calls_before_replace_once_and_does_not_retry(self):
+        calls = []
+        error = PermissionError('denied')
+        error.winerror = 32
+        for host_name, platform_name in (('posix', 'darwin'), ('posix', 'linux')):
+            with self.subTest(platform=platform_name):
+                calls.clear()
+                with patch.object(resources, 'os') as host, \
+                        patch.object(resources.time, 'sleep') as sleep:
+                    host.name = host_name
+                    host.replace.side_effect = error
+                    with self.assertRaises(PermissionError):
+                        resources.replace_file('new', 'old', before_replace=lambda: calls.append(1))
+                    self.assertEqual(calls, [1])
+                    self.assertEqual(host.replace.call_count, 1)
+                    sleep.assert_not_called()
+
+    def test_before_replace_error_skips_the_rename(self):
+        def stop():
+            raise ValueError('stop')
+
+        for host_name, platform_name in (('nt', 'win32'), ('posix', 'darwin')):
+            with self.subTest(platform=platform_name):
+                with patch.object(resources, 'os') as host:
+                    host.name = host_name
+                    with self.assertRaisesRegex(ValueError, 'stop'):
+                        resources.replace_file('new', 'old', before_replace=stop)
+                    host.replace.assert_not_called()
 
 
 if __name__ == "__main__":
