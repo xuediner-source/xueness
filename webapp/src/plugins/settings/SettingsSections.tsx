@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { Monitor, Moon, Sun } from "lucide-react";
-import { t as tr } from "../../i18n";
+import { t as tr, tf } from "../../i18n";
 import { XuenessTerminalShellSelect } from "../terminal/XuenessTerminalPreferences";
 import type { SettingsMap } from "../../xuenessWorkspace";
 import type { AgentCapabilities } from "../../xuenessSettings";
@@ -348,7 +348,7 @@ export function SettingsSections({
       <SettingsGroup title={tr("发送行为")} description={tr("选择发送消息时使用的 Enter 组合。") }>
         <SettingsRow
           label={tr("发送消息快捷键")}
-          description={tr("选择 Enter 或 Mod+Enter 发送。Shift+Enter 始终用于换行。")}
+          description={tf("选择 Enter 或 {0} 发送。Shift+Enter 始终用于换行。", [displayBinding("Mod+Enter")])}
           control={select("发送消息快捷键", values.sendShortcut === "mod-enter" ? "mod-enter" : "enter", <><option value="enter">Enter</option><option value="mod-enter">{displayBinding('Mod+Enter')}</option></>, (next) => { void update("sendShortcut", next); })}
         />
       </SettingsGroup>

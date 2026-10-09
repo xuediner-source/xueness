@@ -353,6 +353,15 @@ test("SettingsSections renders supported capability switches in card rows", () =
   assert.match(out, /xn-settings-group/);
 });
 
+test("SettingsSections send-shortcut description shows the platform key instead of the internal Mod token", () => {
+  const out = renderToStaticMarkup(<SettingsSections
+    sections={[]} activeSection="shortcuts"
+    values={{}} capabilities={noCapabilities}
+  />);
+  assert.doesNotMatch(out, /Mod\+Enter/);
+  assert.match(out, /选择 Enter 或 (?:⌘Enter|Ctrl\+Enter) 发送/);
+});
+
 test("SettingsSections has no unsupported generic JSON fallback or global save button", () => {
   const out = renderToStaticMarkup(<SettingsSections
     sections={[]} activeSection="not-a-real-section"
@@ -442,7 +451,9 @@ test("shortcuts expose the registered action table and clearly separate send beh
   assert.match(out, /data-testid="xn-shortcut-row-new-session"/);
   assert.match(out, /data-testid="xn-shortcut-row-open-settings"/);
   assert.match(out, /aria-label="重新录制：打开命令面板"/);
-  assert.match(out, /Mod\+Enter/);
+  // 设置里显示平台按键（⌘Enter / Ctrl+Enter），不泄露内部的 Mod 记号
+  assert.match(out, /(?:⌘Enter|Ctrl\+Enter)/);
+  assert.doesNotMatch(out, /Mod\+Enter/);
   assert.match(out, /aria-label="发送消息快捷键"/);
   assert.match(out, /Shift\+Enter/);
   assert.match(out, /Escape/);
