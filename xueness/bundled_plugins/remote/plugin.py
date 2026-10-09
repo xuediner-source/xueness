@@ -7,6 +7,11 @@ refused before approval and before SSH, because those shells do not honor
 POSIX quoting. Saving a connection without ``system`` keeps a previously
 stored value, so a client that does not yet send the field cannot silently
 turn a Windows host back into a POSIX command.
+
+``general.remoteHandshakeEnabled`` (feature ``remote.handshake``) is off
+unless it is boolean true. While it is on, a fixed probe runs after approval
+and before the operator command; a probed Windows shell is refused and the
+command is not sent. Declared ``system=windows`` still never reaches SSH.
 """
 from pathlib import Path
 import argparse
@@ -17,9 +22,13 @@ import re
 import shlex
 import stat
 import subprocess
+from ...process_runtime import run_external
 from ...resources import _atomic_write_json
 from ...tool_contract import BuiltinTool,execution_context
 from ...plugin_runtime import _config_lock
+from . import handshake
+
+_COMMAND_TIMEOUT = 40
 
 _REMOTE_FIELDS = {'id', 'host', 'user', 'port', 'directory', 'system'}
 _REMOTE_SYSTEMS = {'posix', 'windows'}
@@ -74,6 +83,65 @@ def _ssh_creationflags():
     """Hide the console on a local Windows ssh client; other hosts pass 0."""
     return getattr(subprocess, 'CREATE_NO_WINDOW', 0) if os.name == 'nt' else 0
 
+def _ssh_argv(row, remote_command):
+    return ['ssh', '-F', os.devnull, '-o', 'BatchMode=yes', '-o', 'StrictHostKeyChecking=yes',
+            '-o', 'ConnectTimeout=10', '-p', str(row.get('port', 22)),
+            row['user'] + '@' + row['host'], remote_command]
+
+def _ssh_env():
+    return {key: value for key, value in os.environ.items()
+            if not re.search('KEY|TOKEN|SECRET|PASSWORD|CREDENTIAL', key, re.I)}
+
+def _run_ssh(row, root, remote_command, timeout):
+    return run_external(
+        subprocess.run, _ssh_argv(row, remote_command), cwd=root, text=True,
+        capture_output=True, timeout=timeout, creationflags=_ssh_creationflags(),
+        env=_ssh_env())
+
+def _command_result(proc):
+    stdout = proc.stdout if isinstance(proc.stdout, str) else ''
+    stderr = proc.stderr if isinstance(proc.stderr, str) else ''
+    return {'ok': proc.returncode == 0, 'exit_code': proc.returncode,
+            'output': (stdout + stderr)[:16000]}
+
+def _approved_row_still_saved(state, row):
+    """Re-read under the config lock. A torn or replaced row must not run."""
+    with _config_lock(state):
+        try:
+            current = next((item for item in _load(state) if item.get('id') == row.get('id')), None)
+        except (OSError, ValueError):
+            return False
+    return isinstance(current, dict) and _digest(current) == _digest(row)
+
+def _exec_with_handshake(root, row, command, state):
+    """Probe first. The operator command is a second ssh, and only after accept."""
+    try:
+        proc = _run_ssh(row, root, handshake.PROBE_COMMAND, handshake.PROBE_TIMEOUT_SECONDS)
+    except subprocess.TimeoutExpired as exc:
+        return handshake.timeout_result(exc)
+    except OSError:
+        return handshake.client_unavailable_result()
+    decision = handshake.decide(proc.returncode, proc.stdout, proc.stderr)
+    if not decision['accepted']:
+        return decision['result']
+    # The probe can take 15s. A save in that window must not send the command
+    # to the host the operator no longer has saved.
+    if not _approved_row_still_saved(state, row):
+        raise ValueError('connection changed; inspect configuration again')
+    try:
+        proc = _run_ssh(row, root, command, _COMMAND_TIMEOUT)
+    except subprocess.TimeoutExpired as exc:
+        return handshake.command_timeout_result(exc, decision['hello'])
+    except OSError:
+        result = handshake.client_unavailable_result()
+        result['handshake'] = decision['hello']
+        return result
+    result = _command_result(proc)
+    result['executed'] = True
+    result['feature'] = handshake.FEATURE_ID
+    result['handshake'] = decision['hello']
+    return result
+
 def _subject(args): return json.dumps(args,sort_keys=True,separators=(',',':'),ensure_ascii=False)
 
 def _digest(row): return hashlib.sha256(json.dumps(row,sort_keys=True,separators=(',',':')).encode()).hexdigest()
@@ -89,9 +157,10 @@ def _exec(root,gate,args,session,call_id):
     if args.get('connection_digest')!=__import__('hashlib').sha256(expected.encode()).hexdigest(): raise ValueError('connection changed; inspect configuration again')
     gate.check('exec',_subject(args),call_id)
     command='cd -- '+shlex.quote(row.get('directory','.'))+' && exec '+shlex.join(argv)
-    from ...process_runtime import run_external
-    proc=run_external(subprocess.run,['ssh','-F',os.devnull,'-o','BatchMode=yes','-o','StrictHostKeyChecking=yes','-o','ConnectTimeout=10','-p',str(row.get('port',22)),row['user']+'@'+row['host'],command],cwd=root,text=True,capture_output=True,timeout=40,creationflags=_ssh_creationflags(),env={k:v for k,v in os.environ.items() if not re.search('KEY|TOKEN|SECRET|PASSWORD|CREDENTIAL',k,re.I)})
-    return {'ok':proc.returncode==0,'exit_code':proc.returncode,'output':(proc.stdout+proc.stderr)[:16000]}
+    if handshake.enabled(state):
+        return _exec_with_handshake(root, row, command, state)
+    proc=_run_ssh(row, root, command, _COMMAND_TIMEOUT)
+    return _command_result(proc)
 
 REGISTRY=(BuiltinTool('remote_exec','Run literal argv on a configured POSIX SSH host; trusted host key and exact action approval required. Connections declared system=windows (cmd or PowerShell) are refused.',{'connection':{'type':'string'},'connection_digest':{'type':'string'},'argv':{'type':'array','items':{'type':'string'}}},('connection','connection_digest','argv'),'exec',True,_exec,_subject),)
 def tools(): return REGISTRY
@@ -204,6 +273,9 @@ def execute_cli(args):
                 result=_exec(root,gate,call,None,None)
     except (OSError,ValueError,PermissionError,subprocess.TimeoutExpired) as exc:
         print(json.dumps({'error':str(exc)},ensure_ascii=False),file=__import__('sys').stderr)
+        return 1
+    if handshake.cli_local_failure(result):
+        print(json.dumps(handshake.cli_payload(result),ensure_ascii=False),file=__import__('sys').stderr)
         return 1
     print(json.dumps(result,ensure_ascii=False,indent=2))
     return 0 if result.get('ok',True) else 2

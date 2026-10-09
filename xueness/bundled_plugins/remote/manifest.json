@@ -23,7 +23,8 @@
   ],
   "modules": [
     "app_server",
-    "frame_replay"
+    "frame_replay",
+    "handshake"
   ],
   "features": [
     {
@@ -45,6 +46,11 @@
       "id": "remote.exec",
       "name": "明确批准的远程 argv 执行",
       "nameEn": "Explicitly approved remote argv execution"
+    },
+    {
+      "id": "remote.handshake",
+      "name": "远程执行握手与能力协商（实验，默认关闭）",
+      "nameEn": "Remote execution handshake and capability check (experimental, off by default)"
     }
   ],
   "frontendModules": [
