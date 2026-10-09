@@ -836,10 +836,10 @@ html[data-xn-palette="claude"] .xn-shell-layout .xn-composer:hover,
 html[data-xn-palette="claude"] .xn-shell-layout .xn-composer:focus-within {
   gap: 4px;
   padding: 13px 8px 8px 11px;
-  border-color: transparent;
+  border-color: var(--codex-composer-border);
   border-radius: 20px;
   background: var(--codex-composer-bg);
-  box-shadow: none;
+  box-shadow: var(--codex-composer-shadow);
 }
 html[data-xn-palette="claude"] .xn-shell-layout .xn-composer__input { min-height: 44px; line-height: 20px; }
 html[data-xn-palette="claude"] .xn-shell-layout .xn-composer__input::placeholder { color: var(--codex-placeholder); }
@@ -847,13 +847,15 @@ html[data-xn-palette="claude"] .xn-shell-layout .xn-composer__row { min-height: 
 html[data-xn-palette="claude"] .xn-shell-layout .xn-composer--with-top-content,
 html[data-xn-palette="claude"] .xn-shell-layout .xn-composer--with-top-content:hover,
 html[data-xn-palette="claude"] .xn-shell-layout .xn-composer--with-top-content:focus-within { padding: 0; border-radius: 20px; background: transparent; }
-html[data-xn-palette="claude"] .xn-shell-layout .xn-composer--with-top-content::before { inset: 38px 0 0; border: 0; border-radius: 20px; background: var(--codex-composer-bg); box-shadow: none; }
+html[data-xn-palette="claude"] .xn-shell-layout .xn-composer--with-top-content::before { inset: 38px 0 0; border: 1px solid var(--codex-composer-border); border-radius: 20px; background: var(--codex-composer-bg); box-shadow: var(--codex-composer-shadow); }
 html[data-xn-palette="claude"] .xn-shell-layout .xn-composer__top-content {
   box-sizing: border-box;
   min-height: 38px;
   height: 38px;
   margin: 0 15px;
   padding: 0 8px 4px;
+  border: 1px solid var(--codex-composer-border);
+  border-bottom: 0;
   border-radius: 12px 12px 0 0;
   background: var(--codex-composer-strip);
 }
