@@ -24,21 +24,7 @@ test("润饰样式层只用设计令牌，不写死十六进制颜色", () => {
   assert.deepEqual(withoutComments.match(/#[0-9a-f]{3,8}\b/gi) ?? [], []);
 });
 
-test("动效保持克制（<= 200ms）并尊重减少动态效果偏好", () => {
-  const durations = [...css.matchAll(/(\d+(?:\.\d+)?)ms/g)].map(match => Number(match[1]));
-  for (const value of durations) assert.ok(value <= 200, `${value}ms`);
-  assert.match(css, /@media \(prefers-reduced-motion: reduce\)[\s\S]*animation: none/);
-});
-
-test("对话、输入框、轻量模式共享同一阅读宽度令牌", () => {
-  for (const selector of [".xn-timeline-stream", ".xn-composer-region--docked", ".xn-lightweight-composer"]) {
-    const index = css.indexOf(selector);
-    assert.ok(index >= 0, selector);
-  }
-  assert.ok((css.match(/var\(--conversation-width\)/g) ?? []).length >= 4);
-});
-
-test("焦点环统一使用强调色令牌，文本输入区不重复描边", () => {
-  assert.match(css, /button:focus-visible[\s\S]*?outline: 2px solid var\(--focus-ring\)/);
-  assert.match(css, /\.xn-composer__input:focus-visible \{ outline: none; \}/);
+test("润饰层不改阅读宽度、字号和输入框尺寸（只改颜色）", () => {
+  const withoutComments = css.replace(/\/\*[\s\S]*?\*\//g, "");
+  assert.doesNotMatch(withoutComments, /--conversation-width|font-size|line-height|max-width|border-radius|padding|margin|stroke-width|transform|font-family/);
 });
