@@ -13,14 +13,7 @@
   /* Windows 补 Cascadia Mono；中文字符回退到各平台 CJK 字体，避免 Windows 代码块里的中文落到宋体。 */
   --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, "Cascadia Mono", Consolas, "Liberation Mono", "Noto Sans Mono CJK SC", "PingFang SC", "Microsoft YaHei UI", "Courier New", monospace;
 
-
-  /* Optional display serif (used by the Claude 风格 polish layer). */
-  --font-serif: "Iowan Old Style", "Charter", "Palatino Linotype", Palatino, Georgia, "Source Han Serif SC", "Noto Serif CJK SC", "Songti SC", "STSong", "Microsoft YaHei UI", "Microsoft YaHei", serif;
-
   --workbench-content-width: 672px;
-  /* Shared layout tokens; Claude 风格 polish opts into the wider reading column. */
-  --conversation-width: 768px;
-  --leading-prose: 1.7;
   --workbench-page-width: 896px;
   --sidebar-width: 270px;
 
@@ -49,7 +42,6 @@
   --dur-fast: 120ms;
   --dur-normal: 150ms;
   --dur-slow: 200ms;
-  --ease-standard: cubic-bezier(.2, 0, 0, 1);
   --z-content: 10;
   --z-header: 30;
   --z-scrim: 35;
@@ -118,13 +110,11 @@
   --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
   --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
   --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
-  --shadow-composer: 0 1px 2px rgb(0 0 0 / 0.05), 0 6px 20px -10px rgb(0 0 0 / 0.12);
 
   /* Radius */
   --radius-sm: 6px;
   --radius-md: 9px;
   --radius-lg: 12px;
-  --radius-xl: 20px;
   --radius-full: 9999px;
 
   /* Text/fill aliases keep every legacy consumer on the same theme. */
@@ -234,7 +224,6 @@
   --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.5);
   --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.5), 0 2px 4px -2px rgb(0 0 0 / 0.5);
   --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.6), 0 4px 6px -4px rgb(0 0 0 / 0.5);
-  --shadow-composer: 0 1px 2px rgb(0 0 0 / 0.35), 0 8px 28px -12px rgb(0 0 0 / 0.55);
 
   /* Aliases matching existing inline variables */
   --background: var(--bg);
@@ -309,7 +298,6 @@
   --shadow-sm: 0 1px 2px 0 rgb(48 40 24 / 0.05);
   --shadow-md: 0 4px 6px -1px rgb(48 40 24 / 0.1), 0 2px 4px -2px rgb(48 40 24 / 0.1);
   --shadow-lg: 0 10px 15px -3px rgb(48 40 24 / 0.1), 0 4px 6px -4px rgb(48 40 24 / 0.1);
-  --shadow-composer: 0 1px 2px rgb(48 40 24 / 0.05), 0 6px 20px -10px rgb(48 40 24 / 0.12);
   --accent: var(--accent-brand);
   --tool-accent: #b7851f;
   --tool-result-accent: #3b7bab;
@@ -366,7 +354,6 @@
   --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.5);
   --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.5), 0 2px 4px -2px rgb(0 0 0 / 0.5);
   --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.6), 0 4px 6px -4px rgb(0 0 0 / 0.5);
-  --shadow-composer: 0 1px 2px rgb(0 0 0 / 0.35), 0 8px 28px -12px rgb(0 0 0 / 0.55);
   --accent: var(--accent-brand);
   --tool-accent: #d9a845;
   --tool-result-accent: #6aa8d6;

@@ -37,21 +37,13 @@ test("Claude 风格：暖色象牙白/暖灰与 clay 强调色，仅在 data-xn-
   assert.equal(value(light, "accent"), "var(--accent-brand)");
 });
 
-test("共享布局令牌：阅读宽度、行高、圆角、动效与衬线字体存在", () => {
+test("默认 :root 不新增仅供润饰层使用的布局令牌（与原版几何一致）", () => {
   const root = block(":root");
-  assert.equal(value(root, "conversation-width"), "768px");
-  assert.ok(Number(value(root, "leading-prose")) >= 1.6);
-  assert.equal(value(root, "radius-xl"), "20px");
-  const slow = Number.parseInt(value(root, "dur-slow"), 10);
-  assert.ok(slow <= 200, "motion stays subtle");
-  assert.ok(value(root, "ease-standard").startsWith("cubic-bezier"));
+  for (const name of ["conversation-width", "leading-prose", "radius-xl", "font-serif", "shadow-composer", "ease-standard"]) {
+    assert.equal(value(root, name), "", `--${name}`);
+  }
+  assert.equal(value(root, "workbench-content-width"), "672px");
+  assert.equal(value(root, "radius-md"), "9px");
+  assert.equal(value(root, "radius-lg"), "12px");
   assert.match(value(root, "focus-ring"), /accent-brand/);
-});
-
-test("衬线问候字体在 Windows 回退到雅黑而不是宋体", () => {
-  const serif = value(block(":root"), "font-serif");
-  assert.ok(serif.includes('"Songti SC"'));
-  assert.ok(serif.includes('"Microsoft YaHei UI"'));
-  assert.ok(!/SimSun|宋体/.test(serif));
-  assert.ok(serif.trim().endsWith("serif"));
 });
