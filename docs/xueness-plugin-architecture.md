@@ -1,5 +1,7 @@
 # Xueness 插件架构与功能归属
 
+2026-10-09 会话统一与版本保护：目录现为 **28 个插件、167 项登记功能**。sessions 新登记 `sessions.zcode_conversation`、`sessions.message_edit`、`sessions.message_feedback`、`sessions.consistent_snapshot`；提供共用显示、发送前确认及版本保护的 journal 操作。planning 保留实际交付检查并将空清单入口放入更多菜单。内核仅在既有 compact 中重映射通用 `message_annotations`，属于 journal 位置维护；反馈创建、修改与显示仍归 sessions。未增加插件白名单例外。来源、测试范围与差异见 [会话对齐记录](zcode-conversation-parity.md)。
+
 2026-10-07 工作规则补强：完整目录现为 **28 个插件、163 项登记功能**。`planning.work_policy` 在现有规划插件中提供标准／轻量两种任务执行规则，下一次请求遵守实际插件开关，参与原有输入预算。没有新增工具、模型调用、内核入口或权限；实际交付继续由宿主独立检查。用法见[Agent 工作规则](agent-work-policy-2026-10-07.md)。下方统计保留各阶段历史状态。
 
 2026-10-07 压缩后的上下文连续性补强：完整目录现为 **28 个插件、162 项登记功能**。`subagents.context_restore` 在现有 `completion_instructions` 挂接点提供本轮未收集子任务的 ID 和最后记录状态（最多 8 项）；`skills.context_restore` 经现有工具事件观察器记住成功读取的技能索引（最多 6 项），按需重新读取提示最多 3000 字符。没有新增内核逻辑、动态加载入口或共享例外；关闭插件或依赖阻塞后不再贡献提示。子任务正文不复制到宿主规则，索引不是授权或完成证据。用法与验证见[上下文连续性说明](context-continuity-2026-10-07.md)。下方数量保留各阶段历史状态。

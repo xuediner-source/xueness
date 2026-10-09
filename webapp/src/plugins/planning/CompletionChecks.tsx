@@ -12,9 +12,10 @@ export type CompletionAssessment = {
   delivery_checks?: Record<string, { status: string; reason?: string; scope?: string; items?: (DeliveryRequirement & { passed: boolean; missing: string[] })[] }>;
 };
 
-export function CompletionChecks({ sessionId, completion, items, disabled, onSaved }: {
+export function CompletionChecks({ sessionId, completion, items, disabled, onSaved, compact = false, openEditorRequest = 0 }: {
   sessionId: string; completion?: CompletionAssessment | null; items: DeliveryRequirement[];
   disabled?: boolean; onSaved: () => void;
+  compact?: boolean; openEditorRequest?: number;
 }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(items);
@@ -34,6 +35,11 @@ export function CompletionChecks({ sessionId, completion, items, disabled, onSav
   const toolFailed = completion?.tool_execution_status === 'failed' || completion?.tool_execution_status === 'incomplete';
   const toolNotApplicable = !toolFailed && (verificationStatus === 'not_applicable'
     || (verificationStatus === undefined && completion?.tool_execution_status === 'not_applicable'));
+  useEffect(() => {
+    if (openEditorRequest > 0) { setDraft(items); setEditing(true); }
+  }, [sessionId, openEditorRequest]);
+  if (compact && !items.length && !editing && !check?.items?.length
+      && check?.status !== 'failed' && completion?.delivery_status !== 'failed') return null;
   const toolOk = toolNotApplicable ? undefined
     : toolFailed ? false
       : completion?.tool_execution_status === 'succeeded' ? true

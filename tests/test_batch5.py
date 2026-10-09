@@ -215,7 +215,7 @@ class StopTests(unittest.TestCase):
         resumed = run(session, self.store, FakeProvider(), Gate(self.root), max_steps=8)
         self.assertIn(resumed["status"], ("completed", "needs_review", "paused"))
 
-    def test_wall_clock_budget_stops_at_boundary_and_can_resume(self):
+    def test_wall_clock_budget_pauses_at_boundary_and_can_resume(self):
         session = self.store.new("bounded run", self.root)
         # The first tool completes; the clock expires before the next provider
         # step, leaving its result and journal pair intact. Advance a controlled
@@ -238,7 +238,9 @@ class StopTests(unittest.TestCase):
         with patch('xueness.core.time.monotonic', side_effect=lambda: clock[0]):
             out = run(session, self.store, provider, Gate(self.root), max_steps=8,
                       max_wall_seconds=0.005)
-        self.assertEqual(out["status"], "stopped")
+        self.assertEqual(out["status"], "paused")
+        self.assertEqual(out["pause_code"], "wall_time_limit_reached")
+        self.assertIn("0.005 秒", out["pause_reason"])
         self.assertEqual(provider.calls, 1)
         self.assertEqual(out["steps"], 1)
         self.assertTrue(out["results"]["wall-read"]["ok"])

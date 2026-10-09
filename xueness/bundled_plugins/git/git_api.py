@@ -49,7 +49,8 @@ class GitApiError(Exception):
         self.message = message
 
 
-def _run_git(root: str, argv: list, *, empty_repo_ok: bool = False) -> subprocess.CompletedProcess:
+def _run_git(root: str, argv: list, *, empty_repo_ok: bool = False,
+             timeout: float = GIT_TIMEOUT, allowed_returncodes=(0,)) -> subprocess.CompletedProcess:
     """Run one read-only git command inside the workspace; map failures to errors.
 
     ``empty_repo_ok`` lets ``log`` accept the "no commits yet" exit instead of
@@ -65,7 +66,7 @@ def _run_git(root: str, argv: list, *, empty_repo_ok: bool = False) -> subproces
             stdin=subprocess.DEVNULL,  # Never inherit the desktop's open JSON control pipe.
             capture_output=True,
             text=True,
-            timeout=GIT_TIMEOUT,
+            timeout=timeout,
             env=dict(os.environ),
             creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0) if os.name == "nt" else 0,
         )
@@ -74,12 +75,12 @@ def _run_git(root: str, argv: list, *, empty_repo_ok: bool = False) -> subproces
         # executable is the only realistic cause: git is simply not installed.
         raise GitApiError(501, "git 不可用：运行环境未安装 git")
     except subprocess.TimeoutExpired:
-        print(f"[git_api] git {argv} timed out after {GIT_TIMEOUT}s", flush=True)
+        print(f"[git_api] git {argv} timed out after {timeout}s", flush=True)
         raise GitApiError(400, "git 命令失败")
     except OSError as exc:
         print(f"[git_api] git {argv} failed to start: {exc}", flush=True)
         raise GitApiError(400, "git 命令失败")
-    if proc.returncode != 0:
+    if proc.returncode not in allowed_returncodes:
         stderr = (proc.stderr or "").strip()
         # ``git diff`` phrases it as "warning: Not a git repository..." (rc 129,
         # usage dump attached); ``git status``/``log`` as "fatal: not a git
@@ -103,6 +104,16 @@ def _parse_branch(head: str) -> str:
         return head[len("No commits yet on "):].strip()
     # ``## main...origin/main [ahead 1]`` -> ``main``
     return head.split("...", 1)[0].split()[0] if head.split() else ""
+
+
+def _git_branch_catalog(root: str) -> dict:
+    """Read branch metadata without scanning the working tree during navigation."""
+    head = _run_git(root, ["--no-optional-locks", "symbolic-ref", "--quiet", "--short", "HEAD"],
+                    timeout=2, allowed_returncodes=(0, 1))
+    refs = _run_git(root, ["--no-optional-locks", "for-each-ref", "--format=%(refname:short)", "refs/heads/"],
+                    timeout=2)
+    return {"branch": (head.stdout or "").strip() if head.returncode == 0 else "HEAD (detached)",
+            "branches": sorted({line.strip() for line in (refs.stdout or "").splitlines() if line.strip()})}
 
 
 def _git_status(root: str) -> dict:

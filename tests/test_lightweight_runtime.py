@@ -97,6 +97,229 @@ class LightweightTests(unittest.TestCase):
         self.assertFalse(missing['ok'])
         self.assertFalse(bad['ok'])
 
+    def test_source_file_pages_keep_source_offsets_and_instruct_read(self):
+        (self.root / 'source.txt').write_text('abcdefghij', encoding='utf-8')
+        session = self.session('Read all of source.txt')
+        session['runtime_profile'] = 'lightweight'
+        with bind_execution(store=self.store, state_dir=self.store.directory):
+            first = dispatch(self.root, self.gate, 'read', {'path': 'source.txt', 'limit': 4}, session)
+            first_view = json.loads(lw._window_result({
+                'role': 'tool', 'tool_call_id': 'read-first',
+                'content': json.dumps(first, ensure_ascii=False),
+            }, limit=1200)['content'])
+            second = dispatch(self.root, self.gate, 'read', {
+                'path': first['path'], 'offset': first['nextOffset'], 'limit': 4,
+            }, session)
+            second_view = json.loads(lw._window_result({
+                'role': 'tool', 'tool_call_id': 'read-second',
+                'content': json.dumps(second, ensure_ascii=False),
+            }, limit=1200)['content'])
+            last = dispatch(self.root, self.gate, 'read', {
+                'path': second['path'], 'offset': second['nextOffset'], 'limit': 4,
+            }, session)
+            last_view = json.loads(lw._window_result({
+                'role': 'tool', 'tool_call_id': 'read-last',
+                'content': json.dumps(last, ensure_ascii=False),
+            }, limit=1200)['content'])
+        self.assertEqual(first_view['paging_kind'], 'source_file')
+        self.assertEqual((first_view['path'], first_view['offset'], first_view['totalChars']),
+                         ('source.txt', 0, 10))
+        self.assertEqual(first_view['output_untrusted'], 'abcd')
+        self.assertEqual(first_view['nextOffset'], 4)
+        self.assertIn("read(path='source.txt', offset=4, limit=4", first_view['page_instruction'])
+        self.assertIn('Do not use tool_result_read', first_view['page_instruction'])
+        self.assertEqual(second_view['paging_kind'], 'source_file')
+        self.assertEqual(second_view['offset'], 4)
+        self.assertEqual(second_view['output_untrusted'], 'efgh')
+        self.assertEqual(second_view['nextOffset'], 8)
+        self.assertTrue(second_view['source_page_truncated'])
+        self.assertEqual(last_view['output_untrusted'], 'ij')
+        self.assertIsNone(last_view['nextOffset'])
+        self.assertTrue(last_view['pageComplete'])
+        self.assertIn('reaches EOF', last_view['page_instruction'])
+
+    def test_source_file_page_remains_complete_even_when_over_tool_result_preview_limit(self):
+        source_result = {
+            'ok': True, 'path': 'long.txt', 'output': '甲' * 8000,
+            'offset': 0, 'totalChars': 47441, 'nextOffset': 8000, 'truncated': True,
+        }
+        view = json.loads(lw._window_result({
+            'role': 'tool', 'tool_call_id': 'source-read',
+            'content': json.dumps(source_result, ensure_ascii=False),
+        }, limit=900)['content'])
+        self.assertEqual(view['paging_kind'], 'source_file')
+        self.assertEqual(view['visibleChars'], 8000)
+        self.assertEqual(len(view['output_untrusted']), 8000)
+        self.assertEqual(view['nextOffset'], 8000)
+        self.assertFalse(view['truncated_in_prompt'])
+        self.assertIn('offset=8000, limit=8000', view['page_instruction'])
+        self.assertIn('read(path=', view['page_instruction'])
+        self.assertIn('Do not use tool_result_read', view['page_instruction'])
+
+    def test_prompt_budget_drops_old_page_as_a_unit_and_keeps_latest_source_page_complete(self):
+        messages = [
+            {'role': 'user', 'content': 'Read the latest source page.'},
+            call('read', {'path': 'old.txt', 'limit': 8000}, 'old-read'),
+            {'role': 'tool', 'tool_call_id': 'old-read', 'content': json.dumps({
+                'ok': True, 'path': 'old.txt', 'output': 'o' * 8000,
+                'offset': 0, 'totalChars': 16000, 'nextOffset': 8000, 'truncated': True,
+            }, ensure_ascii=False)},
+            call('read', {'path': 'latest.txt', 'offset': 8000, 'limit': 8000}, 'latest-read'),
+            {'role': 'tool', 'tool_call_id': 'latest-read', 'content': json.dumps({
+                'ok': True, 'path': 'latest.txt', 'output': 'n' * 8000,
+                'offset': 8000, 'totalChars': 24000, 'nextOffset': 16000, 'truncated': True,
+            }, ensure_ascii=False)},
+        ]
+        view, stats = lw.prompt_view(messages, [], self.provider, max_chars=30000)
+        latest = next(item for item in view if item.get('role') == 'tool'
+                      and item.get('tool_call_id') == 'latest-read')
+        latest_result = json.loads(latest['content'])
+        self.assertFalse(any(item.get('tool_call_id') == 'old-read' for item in view))
+        self.assertFalse(any(call_item.get('id') == 'old-read'
+                             for item in view for call_item in item.get('tool_calls', [])))
+        self.assertEqual(latest_result['paging_kind'], 'source_file')
+        self.assertEqual(latest_result['nextOffset'], 16000)
+        self.assertEqual(latest_result['visibleChars'], 8000)
+        self.assertEqual(len(latest_result['output_untrusted']), 8000)
+        self.assertGreaterEqual(stats['omittedMessages'], 2)
+        self.assertLessEqual(stats['estimatedInputTokens'], stats['inputBudgetTokens'])
+
+    def test_stored_result_page_keeps_its_own_offset_and_avoids_nested_preview(self):
+        session = self.session()
+        session['results']['read-call'] = {'ok': True, 'path': 'source.txt', 'output': 'x' * 6000}
+        with bind_execution(store=self.store, state_dir=self.store.directory):
+            page = dispatch(self.root, self.gate, 'tool_result_read', {
+                'tool_call_id': 'read-call', 'offset': 0, 'limit': 4000,
+            }, session)
+        view = json.loads(lw._window_result({
+            'role': 'tool', 'tool_call_id': 'result-page-call',
+            'content': json.dumps(page, ensure_ascii=False),
+        }, limit=900)['content'])
+        self.assertEqual(view['paging_kind'], 'stored_result')
+        self.assertEqual(view['full_result_tool_call_id'], 'read-call')
+        self.assertEqual(view['nextOffset'], 4000)
+        self.assertFalse(view['truncated_in_prompt'])
+        self.assertEqual(len(view['output_untrusted']), 4000)
+        self.assertEqual(view['visibleChars'], 4000)
+        self.assertIn('tool_result_read', view['page_instruction'])
+        self.assertIn(f"offset={view['nextOffset']}", view['page_instruction'])
+        self.assertNotIn('preview_untrusted', view)
+        self.assertNotIn('read_more', view)
+
+    def test_stored_result_eof_and_out_of_range_offsets_are_explicit(self):
+        session = self.session()
+        session['results']['small'] = {'ok': True, 'output': 'short'}
+        with bind_execution(store=self.store, state_dir=self.store.directory):
+            size = len(json.dumps(session['results']['small'], ensure_ascii=False))
+            eof = dispatch(self.root, self.gate, 'tool_result_read', {
+                'tool_call_id': 'small', 'offset': size, 'limit': 20,
+            }, session)
+            outside = dispatch(self.root, self.gate, 'tool_result_read', {
+                'tool_call_id': 'small', 'offset': size + 1, 'limit': 20,
+            }, session)
+        self.assertTrue(eof['ok'])
+        self.assertEqual(eof['output_untrusted'], '')
+        self.assertIsNone(eof['nextOffset'])
+        self.assertTrue(eof['pageComplete'])
+        self.assertEqual(outside['error_code'], 'invalid_result_page')
+        self.assertTrue(outside['retryable'])
+        self.assertEqual(outside['total_chars'], size)
+        self.assertIn(f'offset={size + 1}', outside['user_reason'])
+        self.assertIn(f'offset={size} is EOF', outside['user_reason'])
+
+    def test_result_page_limit_schema_matches_validation_and_errors_are_recoverable(self):
+        schema = next(item for item in tool_schemas()
+                      if item['function']['name'] == 'tool_result_read')
+        parameters = schema['function']['parameters']['properties']
+        self.assertEqual(parameters['offset']['minimum'], 0)
+        self.assertEqual(parameters['limit']['minimum'], 1)
+        self.assertEqual(parameters['limit']['maximum'], 4000)
+        self.assertEqual(parameters['tool_call_id']['maxLength'], 200)
+        session = self.session()
+        session['results']['local-' + 'a' * 32] = {'ok': True, 'output': 'x' * 5000}
+        cid = 'local-' + 'a' * 32
+        with bind_execution(store=self.store, state_dir=self.store.directory):
+            oversized = dispatch(self.root, self.gate, 'tool_result_read',
+                                 {'tool_call_id': cid, 'offset': 0, 'limit': 12000}, session)
+            page = dispatch(self.root, self.gate, 'tool_result_read',
+                             {'tool_call_id': cid, 'offset': 0, 'limit': 4000}, session)
+            missing = dispatch(self.root, self.gate, 'tool_result_read',
+                               {'tool_call_id': 'local-' + 'b' * 32}, session)
+        self.assertEqual(oversized['error_code'], 'invalid_result_page')
+        self.assertTrue(oversized['retryable'])
+        self.assertEqual(oversized['max_limit'], 4000)
+        self.assertIn('max_limit=4000', oversized['user_reason'])
+        self.assertTrue(page['ok'])
+        self.assertEqual(len(page['output_untrusted']), 4000)
+        self.assertEqual(missing['error_code'], 'tool_result_not_found')
+        self.assertTrue(missing['retryable'])
+
+    def test_omitted_lightweight_steps_inherit_profile_cap_and_explicit_steps_cap_down(self):
+        def reads(count):
+            return [call('read', {'path': f'missing-{index}.txt'}, f'page-{index}')
+                    for index in range(count)]
+
+        inherited = self.session('inspect a long local fixture')
+        provider = ScriptedProvider(reads(3))
+        provider.lightweight_options = {'stepLimit': 3}
+        result = run(inherited, self.store, provider, self.gate)
+        self.assertEqual(len(provider.requests), 3)
+        self.assertEqual(result['status'], 'paused')
+        self.assertEqual(result['pause_code'], 'step_limit_reached')
+        self.assertIn('3 步', result['pause_reason'])
+        self.assertIn('尚未完成', result['pause_reason'])
+
+        capped = self.session('explicit caller cap')
+        provider = ScriptedProvider(reads(1))
+        provider.lightweight_options = {'stepLimit': 3}
+        result = run(capped, self.store, provider, self.gate, max_steps=1)
+        self.assertEqual(len(provider.requests), 1)
+        self.assertEqual(result['status'], 'paused')
+        self.assertEqual(result['pause_code'], 'step_limit_reached')
+        self.assertIn('1 步', result['pause_reason'])
+
+    def test_omitted_lightweight_wall_limit_inherits_profile_and_explicit_limit_caps_down(self):
+        (self.root / 'data.txt').write_text('safe fixture', encoding='utf-8')
+        for request_limit, expected_limit in ((None, 5), (2, 2)):
+            with self.subTest(request_limit=request_limit):
+                session = self.session('read the fixture')
+                clock = [0.0]
+                provider = ScriptedProvider([lambda *_: (
+                    clock.__setitem__(0, expected_limit + 1) or
+                    call('read', {'path': 'data.txt'}, f'read-{expected_limit}'))])
+                provider.lightweight_options = {
+                    'stepLimit': 4, 'wallTimeSeconds': 5,
+                    'requestTimeoutSeconds': 30,
+                }
+                with patch('xueness.core.time.monotonic', side_effect=lambda: clock[0]):
+                    result = run(session, self.store, provider, self.gate,
+                                 max_wall_seconds=request_limit)
+                self.assertEqual(result['status'], 'paused')
+                self.assertEqual(result['pause_code'], 'wall_time_limit_reached')
+                self.assertIn(f'{expected_limit} 秒', result['pause_reason'])
+                self.assertNotIn(f'read-{expected_limit}', result['results'])
+                self.assertEqual(result['steps'], 0)
+                self.assertEqual(len(provider.requests), 1)
+
+    def test_default_lightweight_char_limit_tracks_context_without_changing_output_budget(self):
+        provider = ScriptedProvider([])
+        self.assertEqual(lw.default_prompt_char_limit(provider), 24000)
+        provider.context_window = 65536
+        provider.max_output_tokens = 1024
+        self.assertEqual(lw.default_prompt_char_limit(provider), 100000)
+        provider.max_output_tokens = 20000
+        self.assertEqual(lw.default_prompt_char_limit(provider), 90048)
+
+    def test_default_char_limit_applies_input_cap_separately_from_provider_output(self):
+        provider = ScriptedProvider([])
+        provider.context_window = 65536
+        provider.max_output_tokens = 4096
+        char_limit = lw.default_prompt_char_limit(provider, input_cap=50000)
+        self.assertEqual(char_limit, 100000)
+        _, stats = lw.prompt_view(self.session()['messages'], [], provider,
+                                  max_chars=char_limit, max_tokens=50000)
+        self.assertEqual(stats['inputBudgetTokens'], 50000)
+
     def test_read_file_page_unicode_and_denial(self):
         (self.root / 'data.txt').write_text('甲乙丙丁' * 5000, encoding='utf-8')
         page = dispatch(self.root, self.gate, 'read', {'path': 'data.txt', 'offset': 2, 'limit': 4})

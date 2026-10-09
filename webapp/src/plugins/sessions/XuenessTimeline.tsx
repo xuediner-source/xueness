@@ -11,6 +11,7 @@ import { useTimelineVirtualWindow } from "./TimelineVirtualWindow";
 import {
   completionPresentation,
   isDuplicateCompletionAnswer,
+  shouldHideCompletionCard,
   isRecord,
   protocolAnswerEnvelope,
   decodeJsonStringFragment,
@@ -906,12 +907,16 @@ const CompletionTimelineItem = React.memo(function CompletionTimelineItem({ row,
   windowIndex: TimelineWindowIndex;
   jsonToolProtocol: boolean;
   protocolModePending: boolean;
-}): React.JSX.Element {
+}): React.JSX.Element | null {
   const typedCompletion = row as CompletionRow & CompletionPresentationInput;
   const completion = completionPresentation(typedCompletion, jsonToolProtocol);
   const assistantAnswer = assistantTextForDisplay(assistantText, false, typedCompletion.summary, jsonToolProtocol, protocolModePending);
   const duplicateSummary = isDuplicateCompletionAnswer(completion.summary, assistantAnswer, jsonToolProtocol);
   const completionDetails = duplicateSummary ? "" : completion.summary;
+  // The assistant row owns an ordinary chat answer. Do not add a generic
+  // "completed" card when there is no verification outcome and its summary
+  // merely repeats that answer (or is empty).
+  if (shouldHideCompletionCard(typedCompletion, assistantAnswer, jsonToolProtocol)) return null;
   return (
     <div
       data-testid={`timeline-item-completion-${row.seq}`}

@@ -131,7 +131,7 @@
   border-radius: var(--radius-md);
   padding: 8px 12px;
   color: var(--fg);
-  font-size: 13px;
+  font-size: var(--xn-ui-font-size, 14px);
   line-height: 1.5;
   white-space: pre-wrap;
   word-break: break-word;
@@ -143,7 +143,7 @@
 
 .xn-lightweight-msg--assistant .xn-lightweight-msg__prose {
   color: var(--fg);
-  font-size: 13px;
+  font-size: var(--xn-ui-font-size, 14px);
   line-height: 1.6;
 }
 
@@ -514,9 +514,21 @@
   width: 100%;
   max-width: var(--workbench-content-width);
   margin: 0 auto;
+  gap: 4px;
   padding: 8px 12px;
   box-sizing: border-box;
-  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  background: var(--bg-input, var(--bg-card));
+  transition: border-color var(--dur-fast);
+}
+
+.xn-lightweight-composer:hover {
+  border-color: var(--border-strong);
+}
+
+.xn-lightweight-composer:focus-within {
+  border-color: var(--border-strong);
 }
 
 .xn-lightweight-composer__input-wrap {
@@ -525,15 +537,10 @@
   gap: 6px;
   width: 100%;
   box-sizing: border-box;
-  background: var(--bg-input);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-md);
-  padding: 6px 8px;
-  transition: border-color var(--dur-fast);
-}
-
-.xn-lightweight-composer__input-wrap:focus-within {
-  border-color: var(--border-focus);
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  padding: 2px 0 6px;
 }
 
 .xn-lightweight-composer__textarea {
@@ -547,8 +554,8 @@
   background: transparent;
   color: var(--fg);
   font-family: inherit;
-  font-size: 13px;
-  line-height: 1.4;
+  font-size: var(--xn-ui-font-size, 14px);
+  line-height: 20px;
   resize: none;
   box-sizing: border-box;
 }
@@ -561,19 +568,19 @@
 .xn-lightweight-composer__meta {
   display: flex;
   align-items: baseline;
-  gap: 8px;
-  margin-top: 4px;
-  min-height: 14px;
+  gap: 6px;
+  margin-top: 1px;
+  min-height: 16px;
 }
 
 .xn-lightweight-composer__hint {
-  font-size: 11px;
+  font-size: 12px;
   line-height: 1.3;
   color: var(--fg-subtle);
 }
 
 .xn-lightweight-composer__status {
-  font-size: 11px;
+  font-size: 12px;
   color: var(--fg-subtle);
 }
 
@@ -627,7 +634,9 @@
 .xn-lightweight-composer__controls {
   display: flex;
   align-items: center;
-  margin-top: 4px;
+  margin-top: 2px;
+  padding-top: 4px;
+  border-top: 1px solid var(--border);
 }
 
 /* Responsive / narrow screen */

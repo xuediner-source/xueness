@@ -3,7 +3,8 @@ import React, { useCallback, useEffect, useId, useRef, useState } from 'react';
 import { ArrowUp, Square } from 'lucide-react';
 import { XuenessComposerToolbar } from '../sessions/XuenessComposerToolbar';
 import { conversationActivityLabel, reasoningIsActive } from '../sessions/conversationActivity';
-import { completionPresentation } from '../sessions/completionPresentation';
+import { completionPresentation, isDuplicateCompletionAnswer, shouldHideCompletionCard } from '../sessions/completionPresentation';
+import { assistantTextForDisplay } from '../sessions/XuenessTimeline';
 import { SimpleMarkdown, TimelineCard, MarkdownRenderOptionsContext, type MarkdownRenderOptions } from '../../XuenessShell';
 import { useQuantizedStreamingText } from '../../ui/StreamingCommitGate';
 import { t as tr, tf } from '../../i18n';
@@ -21,7 +22,8 @@ import './LightweightWorkbench.css';
  *
  * 对标 Pi coding agent 的极简形态：选中本地轻量档时只保留与本地小模型运行
  * 直接相关的界面。输入区单行起步自动增高、时间线紧凑折叠（连续只读工具自动
- * 合并分组、思考过程折叠）、极简状态行显示真实模型名/工作区/已报告 Token 用量。
+ * 合并分组、思考过程折叠）、极简状态行显示工作区/已报告 Token 用量；模型名由
+ * 输入区的单一选择器展示。
  */
 
 export type LightweightContextUsage = { used: number; max: number };
@@ -88,7 +90,7 @@ function LightweightPermissionSelector({
       setConfirmYoloOpen(true);
       return;
     }
-    onChange({ permission_mode: next, acknowledge_yolo: false });
+    onChange({ permission_mode: next, acknowledge_yolo: next === 'yolo' && choices.acknowledge_yolo === true });
   };
 
   return <>
@@ -237,6 +239,7 @@ export function formatTokens(count: number | null | undefined): string {
 }
 
 export type LightweightStatusBarProps = {
+  /** @deprecated The composer model selector is now the single visible model label. */
   modelName?: string | null;
   workspaceRoot?: string | null;
   reportedUsage?: LightweightReportedUsage | null;
@@ -298,15 +301,15 @@ export function lightweightStatusReadout(
 }
 
 /**
- * 极简状态行（Pi 风格底部 footer）：只展示当前模型名、工作区路径缩写、
- * 真实报告的 Token 用量（缺失显示「—」）和当前运行状态。
+ * 极简状态行（Pi 风格底部 footer）：显示工作区路径缩写、真实报告的 Token
+ * 用量（缺失显示「—」）和当前运行状态。当前模型已由输入区模型选择器展示，
+ * 此处不再重复一遍。
  *
  * 读数区是 `role="region"` 地标，屏幕阅读器可以主动浏览但不自动播报；只有
  * 右侧状态读数在 polite 实时区内，且 `aria-atomic` 保证状态翻转时只念这一句。
  * Token 用量与路径每轮都可能变，刻意留在实时区外，避免持续打断朗读。
  */
 export function LightweightStatusBar({
-  modelName,
   workspaceRoot,
   reportedUsage,
   status = 'idle',
@@ -333,7 +336,6 @@ export function LightweightStatusBar({
   }, [isNarrow]);
 
   const pathDisplay = abbreviatePath(workspaceRoot);
-  const modelDisplay = modelName?.trim() || '—';
 
   let tokenDisplay = '—';
   let tokenSpeech = tr('暂无报告用量');
@@ -361,10 +363,6 @@ export function LightweightStatusBar({
       <div className="xn-lightweight-statusbar__left" role="group" aria-label={tr('运行读数')}>
         <span className="xn-lightweight-statusbar__item xn-lightweight-statusbar__cwd" title={workspaceRoot ?? undefined}>
           {pathDisplay}
-        </span>
-        <span className="xn-lightweight-statusbar__sep" aria-hidden="true">•</span>
-        <span className="xn-lightweight-statusbar__item xn-lightweight-statusbar__model" title={modelDisplay}>
-          {modelDisplay}
         </span>
         <span className="xn-lightweight-statusbar__sep" aria-hidden="true">•</span>
         <span className="xn-lightweight-statusbar__item xn-lightweight-statusbar__tokens" title={tr('服务报告的 Token 用量')}>
@@ -729,8 +727,9 @@ export type LightweightTimelineProps = {
 const LIGHTWEIGHT_STREAMING_MARKDOWN_OPTIONS: MarkdownRenderOptions = { codeHighlightTiming: 'after-stream', cacheParseResults: false };
 const LIGHTWEIGHT_SETTLED_MARKDOWN_OPTIONS: MarkdownRenderOptions = { codeHighlightTiming: 'on-visible', cacheParseResults: true };
 
-function LightweightAssistantMessage({ row, activityPhase }: { row: Extract<TimelineRow, { kind: 'assistant' }>; activityPhase?: string }): React.JSX.Element {
-  const displayText = useQuantizedStreamingText(row.text, Boolean(row.streaming));
+function LightweightAssistantMessage({ row, activityPhase, completionSummary, jsonToolProtocol }: { row: Extract<TimelineRow, { kind: 'assistant' }>; activityPhase?: string; completionSummary?: string; jsonToolProtocol: boolean }): React.JSX.Element {
+  const sourceText = useQuantizedStreamingText(row.text, Boolean(row.streaming));
+  const displayText = assistantTextForDisplay(sourceText, row.streaming, completionSummary, jsonToolProtocol);
   return (
     <div
       className="xn-lightweight-msg xn-lightweight-msg--assistant"
@@ -810,7 +809,7 @@ export function LightweightTimeline({
       className={`xn-lightweight-timeline${className ? ` ${className}` : ''}`}
       {...timelineProps}
     >
-      {grouped.map((entry) => {
+      {grouped.map((entry, entryIndex) => {
         if (entry.kind === 'read-only-group') {
           return <LightweightToolGroup key={entry.id} rows={entry.rows} />;
         }
@@ -837,16 +836,37 @@ export function LightweightTimeline({
           );
         }
         if (entry.kind === 'assistant') {
+          let completionSummary: string | undefined;
+          for (const later of grouped.slice(entryIndex + 1)) {
+            if (later.kind === 'user' || later.kind === 'assistant') break;
+            if (later.kind === 'completion' && later.row.turnId === entry.row.turnId) {
+              completionSummary = later.row.summary;
+              break;
+            }
+          }
           return (
-            <LightweightAssistantMessage key={entry.id} row={entry.row} activityPhase={activityPhase} />
+            <LightweightAssistantMessage key={entry.id} row={entry.row} activityPhase={activityPhase} completionSummary={completionSummary} jsonToolProtocol={jsonToolProtocol} />
           );
         }
         if (entry.kind === 'completion') {
+          let assistantAnswer: string | undefined;
+          for (let i = entryIndex - 1; i >= 0; i--) {
+            const earlier = grouped[i];
+            if (earlier.kind === 'user' || earlier.kind === 'completion') break;
+            if (earlier.kind === 'assistant' && earlier.row.turnId === entry.row.turnId) {
+              assistantAnswer = assistantTextForDisplay(earlier.row.text, earlier.row.streaming, entry.row.summary, jsonToolProtocol);
+              break;
+            }
+          }
+          if (shouldHideCompletionCard(entry.row, assistantAnswer, jsonToolProtocol)) return null;
           // 与标准档同一判定：通过/未通过/未完成的结论与标签都来自 completionPresentation
           const presentation = completionPresentation(
             entry.row as typeof entry.row & Parameters<typeof completionPresentation>[0],
             jsonToolProtocol,
           );
+          const completionBody = isDuplicateCompletionAnswer(presentation.summary ?? '', assistantAnswer, jsonToolProtocol)
+            ? ''
+            : presentation.summary ?? '';
           return (
             <div
               key={entry.id}
@@ -859,7 +879,7 @@ export function LightweightTimeline({
                 title={presentation.title}
                 status={presentation.status}
                 statusLabel={presentation.label}
-                body={presentation.summary ?? ''}
+                body={completionBody}
                 seq={entry.row.seq}
               />
             </div>
@@ -971,6 +991,8 @@ export type LightweightComposerKeyContext = {
   historyCount: number;
   running: boolean;
   stopping: boolean;
+  /** Fresh compose has no timeline to scroll; retain the old default for active sessions. */
+  hasTimeline?: boolean;
   /** 跟随用户的「发送快捷键」设置，与标准档 Composer 同一语义。 */
   sendShortcut?: LightweightSendShortcut;
   /** 有浮层（工具条菜单、命令面板、对话框）展开时让位，Esc 不能既关浮层又中断回合。 */
@@ -993,7 +1015,7 @@ export function evaluateLightweightComposerKey(
   if (e.isComposing || e.nativeEvent?.isComposing || e.keyCode === 229) return null;
   const mod = Boolean(e.ctrlKey || e.metaKey);
   // 只认裸 Mod+L：Ctrl+Shift+L / Ctrl+Alt+L 属于浏览器与其它插件，不劫持
-  if (mod && !e.altKey && !e.shiftKey && (e.key === 'l' || e.key === 'L')) {
+  if (mod && context.hasTimeline !== false && !e.altKey && !e.shiftKey && (e.key === 'l' || e.key === 'L')) {
     return 'clear_screen';
   }
   if (e.key === 'Escape') {
@@ -1099,6 +1121,8 @@ export type LightweightComposerProps = {
   sendDisabled?: boolean;
   running?: boolean;
   stopping?: boolean;
+  /** False for the first-turn composer, which has no conversation timeline yet. */
+  hasTimeline?: boolean;
   queueWhenRunning?: boolean;
   queueBusy?: boolean;
   placeholder?: string;
@@ -1121,9 +1145,10 @@ export function lightweightComposerHint(
     ? tf('按 {0} 发送', [displayBinding('Mod+Enter')])
     : tr('Enter 发送 · Shift+Enter 换行');
   const parts = [send];
-  if (running && queueWhenRunning) parts.push(tr('排队追加'));
-  parts.push(tr('Esc 中断'));
-  parts.push(tr('Ctrl/Cmd+L 滚到底'));
+  if (running) {
+    parts.push(tr('Esc 中断'));
+    if (queueWhenRunning) parts.push(tr('可排队'));
+  }
   return parts.join(' · ');
 }
 
@@ -1148,6 +1173,7 @@ export function LightweightComposer({
   sendDisabled = false,
   running = false,
   stopping = false,
+  hasTimeline = true,
   queueWhenRunning = false,
   queueBusy = false,
   placeholder = tr('输入消息'),
@@ -1290,6 +1316,7 @@ export function LightweightComposer({
       historyCount: validHistory.length,
       running,
       stopping,
+      hasTimeline,
       sendShortcut,
       overlayOpen: hasOpenLightweightOverlay(),
     });
@@ -1423,17 +1450,17 @@ export function LightweightComposer({
           ) : null}
         </div>
       </div>
+      {controls && (
+        <div className="xn-lightweight-composer__controls" role="group" aria-label={tr('运行选项')}>
+          {controls}
+        </div>
+      )}
       <div className="xn-lightweight-composer__meta">
         <span id={hintId} className="xn-lightweight-composer__hint">
           {lightweightComposerHint(sendShortcut, running, queueWhenRunning)}
         </span>
         {queueBusy && <span className="xn-lightweight-composer__status" role="status">{tr('正在排队…')}</span>}
       </div>
-      {controls && (
-        <div className="xn-lightweight-composer__controls" role="group" aria-label={tr('运行选项')}>
-          {controls}
-        </div>
-      )}
     </form>
   );
 }

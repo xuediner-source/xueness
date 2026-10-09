@@ -34,6 +34,8 @@ Visit [GitHub Releases](https://github.com/xuediner-source/xueness/releases/late
 
 Version 0.1.5 aligns conversations, composer capabilities and the desktop runtime across Windows and both Mac architectures. The full catalog contains **28 plugins and 163 registered features**, including context usage, reasoning-strength selection, context continuity and standard/lightweight work rules. See the [agent workflow guide](docs/agent-work-policy-2026-10-07.md) and [desktop parity record](docs/desktop-parity-2026-10-07.md).
 
+The current main branch further unifies standard and lightweight conversations on Windows and macOS, with **28 plugins and 167 registered features**: inline editing, persistent feedback, turn-based forks, pre-send permission confirmation and consistent conversation snapshots. See the [conversation parity record](docs/zcode-conversation-parity.md). These source changes are separate from the published installers below; an existing client needs a rebuild or a new package containing them.
+
 | System | Installer / disk image | Portable / app ZIP |
 | --- | --- | --- |
 | Windows 10/11 · x64 | [Installer `.exe`](https://github.com/xuediner-source/xueness/releases/download/v0.1.5/Xueness-0.1.5-windows-x64-setup.exe) | [Portable `.zip`](https://github.com/xuediner-source/xueness/releases/download/v0.1.5/Xueness-0.1.5-windows-x64-portable.zip) |

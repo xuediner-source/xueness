@@ -138,6 +138,43 @@ class HarnessTests(unittest.TestCase):
         with self.assertRaises(OSError):
             os.fstat(captured["fd"])
 
+    @unittest.skipUnless(os.name == "nt", "Windows replace-sharing errors only")
+    def test_store_save_retries_only_transient_windows_replace_sharing_errors(self):
+        session = self.store.new("original", self.root)
+        journal = self.store._path(session["id"])
+        session["task"] = "updated"
+        actual_replace = os.replace
+
+        def winerror(code):
+            error = PermissionError(f"simulated WinError {code}")
+            error.winerror = code
+            return error
+
+        call_count = {"value": 0}
+
+        def collide_then_replace(source, target):
+            call_count["value"] += 1
+            if call_count["value"] == 1:
+                raise winerror(32)
+            if call_count["value"] == 2:
+                raise winerror(33)
+            actual_replace(source, target)
+
+        with patch("xueness.core.os.replace", side_effect=collide_then_replace) as replace, \
+                patch("xueness.core.time.sleep") as sleep:
+            self.store.save(session)
+        self.assertEqual(replace.call_count, 3)
+        self.assertEqual([call.args[0] for call in sleep.call_args_list], [0.025, 0.075])
+        self.assertEqual(self.store.load(session["id"])["task"], "updated")
+
+        session["task"] = "must not replace"
+        with patch("xueness.core.os.replace", side_effect=winerror(2)) as replace:
+            with self.assertRaises(PermissionError):
+                self.store.save(session)
+        replace.assert_called_once()
+        self.assertEqual(self.store.load(session["id"])["task"], "updated")
+        self.assertEqual(list(self.store.directory.glob(".session-*")), [])
+
     def test_provider_refuses_bearer_redirect(self):
         p = OpenAICompatible(base="https://example.org/v1", model="m", key="secret")
         request = urllib.request.Request("https://example.org/v1/chat/completions",
@@ -236,17 +273,36 @@ class HarnessTests(unittest.TestCase):
                 validate_message(payload)
 
     def test_malformed_provider_response_records_provider_error(self):
+        from xueness.bundled_plugins.providers.provider import ProviderRequestError
+
         class Broken:
             def complete(self, messages, tools):
                 return {"content": 123}  # non-string content: invalid shape
 
         s = self.store.new("bad payload", self.root)
         before = len(s["messages"])
-        with self.assertRaises(ValueError):
+        with self.assertRaises(ProviderRequestError) as caught:
             run(s, self.store, Broken(), Gate(self.root, allow_write=True))
         out = self.store.load(s["id"])
+        self.assertEqual(caught.exception.category, "invalid_response")
         self.assertEqual(out["status"], "provider_error")
         self.assertEqual(len(out["messages"]), before, "no intent may be journaled from a malformed payload")
+
+    def test_stream_callback_stop_is_settled_as_stopped_not_provider_error(self):
+        state = {"stop": False}
+
+        class StopsDuringReasoning:
+            def stream(self, messages, tools, on_delta=None, on_reasoning_delta=None):
+                state["stop"] = True
+                on_reasoning_delta("private reasoning fixture")
+                return {"content": "must not be consumed", "tool_calls": []}
+
+        session = self.store.new("stop while streaming", self.root)
+        with patch("xueness.core._reasoning_setting_enabled", return_value=True):
+            out = run(session, self.store, StopsDuringReasoning(), Gate(self.root),
+                      should_stop=lambda: state["stop"])
+        self.assertEqual(out["status"], "stopped")
+        self.assertEqual(self.store.load(session["id"])["status"], "stopped")
 
     def test_journal_export_command(self):
         import io

@@ -34,7 +34,7 @@ test('monitor defaults to a compact collapsed button without mounting resource s
   assert.match(html, /本机资源/);
   assert.match(html, /aria-expanded="false"/);
   assert.match(html, /aria-controls="[^"]+"/);
-  assert.match(html, /生成/);
+  assert.doesNotMatch(html, /compact-status|生成/);
   assert.match(html, /hidden=""/);
   assert.doesNotMatch(html, /xn-runtime-monitor__body|本进程 CPU|progressbar|暂停采样/);
 });
@@ -108,7 +108,17 @@ test('request details expand for provider errors while normal completed details 
   assert.match(failed, /data-testid="request-telemetry" open=""/);
   const completed = renderToStaticMarkup(<RequestTiming session={{ status: 'completed' }} />);
   assert.doesNotMatch(completed, /data-testid="request-telemetry" open/);
-  assert.match(completed, /已报告 Token 用量/);
+  assert.equal(completed, '', 'A completed turn with no recorded telemetry has no empty diagnostics panel');
+  const recorded = renderToStaticMarkup(<RequestTiming session={{status:'completed', runtime_activity:{phase:'completed',requestSeconds:2}}} />);
+  assert.match(recorded, /已报告 Token 用量/);
+});
+
+test('lightweight completed request summary is omitted while error diagnostics remain visible', () => {
+  const completed = renderToStaticMarkup(<RequestTiming session={{ status: 'completed', runtime_profile: 'lightweight' }} />);
+  assert.equal(completed, '');
+  const failed = renderToStaticMarkup(<RequestTiming session={{ status: 'provider_error', runtime_profile: 'lightweight' }} />);
+  assert.match(failed, /data-testid="request-telemetry" open=""/);
+  assert.match(failed, /供应商错误/);
 });
 
 test('the live request phase and provider-reported usage stay visible without history', () => {

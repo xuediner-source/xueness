@@ -35,6 +35,8 @@ Xueness 面向个人本地开发，提供可从终端、浏览器或 Windows/mac
 
 0.1.5 将会话、添加能力和桌面运行链路统一到 Windows 与两种 Mac 架构：完整目录包含 **28 个插件、163 项登记功能**，并补齐上下文用量、推理强度选择、上下文恢复及标准／轻量工作规则。规则归属与使用见[Agent 工作规则](docs/agent-work-policy-2026-10-07.md)；平台差异见[桌面统一记录](docs/desktop-parity-2026-10-07.md)。
 
+当前主分支进一步统一 Windows / macOS 的标准与轻量会话，包含 **28 个插件、167 项登记功能**：行内编辑重发、持久反馈、当前回合分叉、发送前权限确认和一致的会话快照。详见[会话对齐记录](docs/zcode-conversation-parity.md)。源码更新与下方已发布安装包分别管理；既有客户端需要重新构建或安装包含这些改动的新包。
+
 | 系统 | 安装程序 / 磁盘映像 | 便携版 / 应用 ZIP |
 | --- | --- | --- |
 | Windows 10/11 · x64 | [安装程序 `.exe`](https://github.com/xuediner-source/xueness/releases/download/v0.1.5/Xueness-0.1.5-windows-x64-setup.exe) | [便携版 `.zip`](https://github.com/xuediner-source/xueness/releases/download/v0.1.5/Xueness-0.1.5-windows-x64-portable.zip) |

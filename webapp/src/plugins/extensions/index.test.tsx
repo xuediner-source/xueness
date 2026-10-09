@@ -5,6 +5,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import type { MarketplaceItem } from "../../xuenessApi";
 import {
   MarketplaceCard,
+  marketplaceDisplayCopy,
   MarketplaceDetail,
   XuenessMarketplace,
   filterMarketplaceItems,
@@ -36,6 +37,14 @@ const items: MarketplaceItem[] = [
     source: "https://catalog.example.test/plugins.json",
   },
 ];
+
+test('bundled marketplace copy is readable and searchable without relabeling external catalogs', () => {
+  const local = { ...items[0]!, id: 'xueness-skills', manifest: { ...items[0]!.manifest, builtin: 'skills' } };
+  assert.equal(marketplaceDisplayCopy(local).name, '技能');
+  assert.equal(filterMarketplaceItems([local], 'all', '操作指南').length, 1);
+  const external = { ...local, source: 'https://catalog.example.test' };
+  assert.equal(marketplaceDisplayCopy(external).name, external.name);
+});
 
 test("marketplace filters use only returned items and match source, id, description, adapter, and capability", () => {
   assert.deepEqual(filterMarketplaceItems(items, "all", "catalog.example.test").map(item => item.id), ["safe-hooks"]);

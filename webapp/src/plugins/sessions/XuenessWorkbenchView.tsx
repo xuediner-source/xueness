@@ -211,9 +211,10 @@ export function formatSubject(name: string, subject: string): string {
 export type ApprovalsProps = {
   pending: PendingApproval[];
   onApprove?: (pending: PendingApproval) => void | Promise<unknown>;
+  busy?: boolean;
 };
 
-export function Approvals({ pending, onApprove }: ApprovalsProps) {
+export function Approvals({ pending, onApprove, busy = false }: ApprovalsProps) {
   if (!pending || pending.length === 0) {
     return (
       <div data-testid="approvals-empty" className="p-2 text-xs text-[var(--fg-muted)]">{tr("无待审批")}</div>
@@ -297,11 +298,13 @@ export function Approvals({ pending, onApprove }: ApprovalsProps) {
               )}
               {onApprove && (
                 <div style={{ marginTop: 4, display: "flex", justifyContent: "flex-end" }}>
+                  {p.granted && <span className="xn-approval-granted" role="status">{tr("已批准，等待执行")}</span>}
                   <Button
                     variant="primary"
                     size="sm"
+                    disabled={busy}
                     onClick={() => void onApprove(p)}
-                  >{tr("批准并重试")}</Button>
+                  >{tr(busy ? "正在继续…" : p.granted ? "继续执行" : "批准并重试")}</Button>
                 </div>
               )}
             </div>
@@ -1295,6 +1298,7 @@ export type WorkbenchHeaderProps = {
   session?: WorkbenchSession | null;
   /** Right side: view switcher and other real controls. */
   actions?: React.ReactNode;
+  menuItems?: React.ReactNode;
   pinned?: boolean;
   onTogglePin?: () => void;
   onRefresh?: () => void;
@@ -1306,6 +1310,7 @@ export type WorkbenchHeaderProps = {
 export function WorkbenchHeader({
   session,
   actions,
+  menuItems,
   pinned = false,
   onTogglePin,
   onRefresh,
@@ -1317,7 +1322,7 @@ export function WorkbenchHeader({
   }
 
   const title = session.title || session.task || tr("未命名任务");
-  const hasMenuActions = Boolean(onRefresh || onTogglePin || onRename || onDelete);
+  const hasMenuActions = Boolean(onRefresh || onTogglePin || onRename || onDelete || menuItems);
 
   return (
     <header
@@ -1381,6 +1386,7 @@ export function WorkbenchHeader({
                     <span>{tr("重命名任务")}</span>
                   </button>
                 )}
+                {menuItems}
                 {onDelete && (
                   <button type="button" className="xn-conv-header__action xn-conv-header__action--danger" aria-label={tr("删除任务")} title={tr("删除")} onClick={onDelete}>
                     <IconTrash size={14} />

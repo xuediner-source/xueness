@@ -11,6 +11,7 @@
     "test": "node run-tests.mjs",
     "test:browser": "node verify-plugin-disclosures.mjs && node verify-workspace-task-interactions.mjs && node verify-timeline-virtualization.mjs && node verify-sidebar-virtualization.mjs",
     "test:browser:composer": "node verify-composer-interactions.mjs",
+    "test:browser:conversation": "node verify-zcode-conversation.mjs",
     "check:plugins": "python3 ../tools/check_plugin_architecture.py",
     "check:design": "node ../tools/check_frontend_design.mjs",
     "check:bundle": "node ../tools/check_frontend_bundle.mjs",

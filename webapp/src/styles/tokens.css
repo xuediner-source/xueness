@@ -7,7 +7,7 @@
  */
 
 :root {
-  --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", "Noto Sans", Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
+  --font-sans: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI Variable", "Segoe UI", "Microsoft YaHei UI", "Microsoft YaHei", "PingFang SC", "Hiragino Sans GB", "Noto Sans CJK SC", "Noto Sans", Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji";
   --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
 
   --workbench-content-width: 672px;
@@ -61,6 +61,10 @@
   --fg-subtle: #535353;
   --fg-muted: #626262;
   --fg-inverted: #ffffff;
+  --conversation-fg: #404040;
+  --conversation-muted: color-mix(in oklab, var(--conversation-fg) 60%, transparent);
+  --conversation-subtlest: color-mix(in oklab, var(--conversation-fg) 40%, transparent);
+  --conversation-user-surface: color-mix(in oklab, #0a0a0a 3%, transparent);
 
   --border: color-mix(in oklab, #0a0a0a 10%, transparent);
   --border-strong: color-mix(in oklab, #0a0a0a 20%, transparent);
@@ -166,6 +170,10 @@
   --fg-subtle: #c0c0c0;
   --fg-muted: #b3b3b3;
   --fg-inverted: #0a0a0a;
+  --conversation-fg: #e5e5e5;
+  --conversation-muted: color-mix(in oklab, var(--conversation-fg) 60%, transparent);
+  --conversation-subtlest: color-mix(in oklab, var(--conversation-fg) 30%, transparent);
+  --conversation-user-surface: color-mix(in oklab, white 5%, transparent);
 
   --border: color-mix(in oklab, #fafafa 10%, transparent);
   --border-strong: color-mix(in oklab, #fafafa 30%, transparent);

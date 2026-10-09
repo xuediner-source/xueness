@@ -26,6 +26,22 @@ function fakeHost(options: {
   };
 }
 
+test('pending window replans do not mistake the committed DOM anchor for a different index', () => {
+  const model = new UniformListWindowModel({
+    readViewport: () => ({top: 375, bottom: 595}),
+    readAnchor: () => ({top: 1163, stride: 15, index: 350}),
+  }, {initialCount: 351, pageSize: 40, overscanPx: 300, estimateStridePx: 15});
+  model.ensureIndex(350);
+  model.sync();
+  const first = model.getSnapshot();
+  assert.ok(first.start > 250 && first.end > 300);
+  // React has not yet committed the newly planned range; the same DOM anchor
+  // must still produce the same visible window on a second scroll/layout pass.
+  model.syncAfterCommit();
+  model.sync();
+  assert.deepEqual(model.getSnapshot(), first);
+});
+
 test("初始快照只渲染首页，垫片补齐剩余高度", () => {
   const snapshot = UniformListWindowModel.initialSnapshot(1000, { pageSize: 48, estimateStridePx: 15 });
   assert.equal(snapshot.windowed, true);

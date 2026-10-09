@@ -57,11 +57,16 @@ export function RequestTiming({ session }: { session: LocalRuntimeSession | null
   useEffect(() => startRequestElapsedClock(session, setNow), [session?.status, activity?.phase, activity?.startedAt]);
 
   const elapsedSeconds = startedAt === null ? null : Math.max(0, Math.floor((now - startedAt) / 1000));
+  const showDetailsLabel = status.phase !== 'completed';
+  // The lightweight footer already reports a normal completed turn. Keep the
+  // request timing panel for errors/stalls, where its details are actionable.
+  if (session?.runtime_profile === 'lightweight' && status.phase === 'completed') return null;
+  if (status.phase === 'completed' && !activity && !rows.length && !session?.tool_timings?.length) return null;
   return <details className="xn-request-telemetry" data-testid="request-telemetry" open={status.phase === 'provider_error' || status.phase === 'stalled'}>
-    <summary className="xn-request-telemetry__summary">
+    <summary className="xn-request-telemetry__summary" title={t('步骤耗时与实际用量')}>
       <Activity size={13} aria-hidden="true" />
       <span>{status.label}</span>
-      <span className="xn-request-telemetry__label">{t('步骤耗时与实际用量')}</span>
+      {showDetailsLabel && <span className="xn-request-telemetry__label">{t('步骤耗时与实际用量')}</span>}
       {elapsedSeconds !== null && <span className="xn-request-telemetry__elapsed">{t('已运行')} {formatRate(elapsedSeconds, '秒')}</span>}
       <ChevronDown size={13} className="xn-request-telemetry__chevron" aria-hidden="true" />
     </summary>
@@ -388,12 +393,10 @@ export function LocalRuntimeMonitor({ lightweight, session }: { lightweight: boo
   const [expanded, setExpanded] = useState(false);
   const id = React.useId();
   if (!lightweight) return null;
-  const phase = session?.runtime_activity?.phase;
   return <section className="xn-runtime-monitor" aria-label={t('本机运行状态')} data-expanded={expanded}>
     <button type="button" className="xn-runtime-monitor__toggle" aria-expanded={expanded} aria-controls={id}
       onClick={() => setExpanded(value => !value)}>
       <Activity size={14} aria-hidden="true" /><span>{t('本机资源')}</span>
-      <span className="xn-runtime-monitor__compact-status">{phase ? t(PHASE_LABELS[phase] ?? phase) : t('资源与运行详情')}</span>
       <ChevronDown size={14} aria-hidden="true" className={expanded ? 'xn-runtime-monitor__chevron--expanded' : ''} />
     </button>
     <div id={id} hidden={!expanded}>

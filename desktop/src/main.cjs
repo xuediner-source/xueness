@@ -10,12 +10,14 @@ const { createElectronAssetRequest } = require('./electron-net-asset.cjs');
 const { createPermissionsHandler } = require('./permissions.cjs');
 const { buildApplicationMenu, getNativeLabels } = require('./native-labels.cjs');
 const { autoUpdater } = require('electron-updater');
+const { configuredDataDirectory } = require('./data-directory.cjs');
 
 let window, backend, updater, background, quitting = false;
 let updatePolicy = false, autoDownloadUpdates = true;
 let desktopLocale = 'zh', applicationMenuReady = false;
 app.setName('Xueness');
-if (process.env.XUENESS_DESKTOP_DATA) app.setPath('userData', resolve(process.env.XUENESS_DESKTOP_DATA));
+const dataDirectory = configuredDataDirectory({ appData: app.getPath('appData') });
+if (dataDirectory) app.setPath('userData', dataDirectory);
 if (!app.requestSingleInstanceLock()) app.quit();
 else if (process.argv.includes('--quit')) app.quit();
 else {

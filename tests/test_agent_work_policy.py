@@ -95,7 +95,7 @@ class AgentWorkPolicyTests(unittest.TestCase):
         self.assertFalse((self.root / 'missing-output.txt').exists())
 
     def test_existing_report_guidance_and_goal_remain_within_plugin_budget(self):
-        session = self.store.new('Write a research report', self.root)
+        session = self.store.new('Write a research report to report.md', self.root)
         set_goal(session, 'Specific requested outcome ' * 150, state_dir=self.store.directory)
         for profile in ('standard', 'lightweight'):
             session['runtime_profile'] = profile

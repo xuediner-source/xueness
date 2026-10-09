@@ -79,3 +79,17 @@ test("saving without running exposes an explicit resume for paused conversations
     assert.equal(renderToStaticMarkup(<QuestionResume {...props} {...patch} />), "");
   }
 });
+
+test("budget-paused turns expose continue without enabling structured questions", () => {
+  for (const pauseCode of ["step_limit_reached", "wall_time_limit_reached"]) {
+    const html = renderToStaticMarkup(<QuestionResume enabled={false} resumeBudgetEnabled pauseCode={pauseCode}
+      status="paused" pendingQuestion={null} disabled={false} onResume={async () => {}} />);
+    assert.match(html, /继续本轮/);
+  }
+  const unrelated = renderToStaticMarkup(<QuestionResume enabled={false} resumeBudgetEnabled pauseCode="unknown"
+    status="paused" pendingQuestion={null} disabled={false} onResume={async () => {}} />);
+  assert.equal(unrelated, "");
+  const pending = renderToStaticMarkup(<QuestionResume enabled={false} resumeBudgetEnabled pauseCode="step_limit_reached"
+    status="paused" pendingQuestion="Question" disabled={false} onResume={async () => {}} />);
+  assert.equal(pending, "");
+});

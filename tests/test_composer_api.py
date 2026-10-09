@@ -509,6 +509,36 @@ class ComposerApiTests(unittest.TestCase):
         self.assertEqual(status, 409)
         self.assertIn("active run", result["error"])
 
+    def test_catalog_reads_branches_without_scanning_working_tree(self):
+        from xueness.bundled_plugins.git import git_api
+        self._init_git()
+        with patch.object(git_api, "_git_status", side_effect=AssertionError("navigation must not scan status")):
+            status, catalog = self.call("GET", ["api", "composer"])
+            self.assertEqual(status, 200)
+            self.assertEqual(catalog["git"], {"branch": "main", "branches": ["main", "next"]})
+            subprocess.run(["git", "checkout", "--detach", "HEAD"], cwd=self.project,
+                           check=True, capture_output=True)
+            self.assertEqual(self.call("GET", ["api", "composer"])[1]["git"]["branch"], "HEAD (detached)")
+
+    def test_optional_git_failure_does_not_break_file_or_model_choices(self):
+        from xueness.bundled_plugins.git import git_api
+        (self.project / "note.txt").write_text("hello", encoding="utf-8")
+        for code in (400, 404, 501):
+            with patch.object(git_api, "_git_branch_catalog", side_effect=git_api.GitApiError(code, "unavailable")):
+                status, catalog = self.call("GET", ["api", "composer"])
+            self.assertEqual(status, 200)
+            self.assertNotIn("git", catalog)
+            self.assertIn({"id": "note.txt", "label": "note.txt"}, catalog["files"])
+            self.assertTrue(catalog["models"])
+
+    def test_branch_catalog_supports_empty_repository_with_bounded_commands(self):
+        from xueness.bundled_plugins.git import git_api
+        subprocess.run(["git", "init", "-b", "main"], cwd=self.project, check=True, capture_output=True)
+        with patch.object(git_api, "run_external", wraps=git_api.run_external) as run:
+            self.assertEqual(git_api._git_branch_catalog(str(self.project)), {"branch": "main", "branches": []})
+        self.assertEqual(len(run.call_args_list), 2)
+        self.assertTrue(all(call.kwargs["timeout"] == 2 for call in run.call_args_list))
+
     def test_git_branch_rejects_unknown_or_creation_requests(self):
         self._init_git()
         status, result = self.call("POST", ["api", "composer", "branch"], {

@@ -13,6 +13,18 @@ html:lang(en) .xn-skip-link [lang="zh-CN"] { display: none; }
 .xn-region-error > div { display: flex; gap: var(--space-2); flex-wrap: wrap; }
 
 /* Base typography & resets */
+html {
+  font-family: var(--font-sans);
+  text-size-adjust: 100%;
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+
+button, input, select, textarea {
+  font: inherit;
+  letter-spacing: inherit;
+}
+
 body {
   font-family: var(--font-sans);
   font-size: var(--xn-ui-font-size, 14px);
@@ -21,6 +33,8 @@ body {
   background-color: var(--bg);
   -webkit-font-smoothing: antialiased;
 }
+
+.xn-approval-granted { align-self: center; margin-right: auto; color: var(--fg-muted); font-size: 12px; }
 
 html[data-xn-tab-size="2"] pre, html[data-xn-tab-size="2"] textarea { tab-size: 2; }
 html[data-xn-tab-size="4"] pre, html[data-xn-tab-size="4"] textarea { tab-size: 4; }

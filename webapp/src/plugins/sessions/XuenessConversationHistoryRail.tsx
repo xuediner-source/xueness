@@ -169,6 +169,10 @@ export function XuenessConversationHistoryRail({ rows, timelineRootRef, requestR
   const stopsRef = React.useRef<HTMLDivElement>(null);
   const navId = React.useId().replace(/:/gu, "");
   const restoreFocusAfterScrollRef = React.useRef(false);
+  const keyboardFocusFrame = React.useRef(0);
+  React.useEffect(() => () => {
+    if (keyboardFocusFrame.current) cancelAnimationFrame(keyboardFocusFrame.current);
+  }, []);
 
   // 停靠点窗口化：只挂载轨道可视区附近的行；键盘焦点附近的停靠点软性保持挂载。
   const pinnedIndices = React.useMemo(() => {
@@ -198,6 +202,7 @@ export function XuenessConversationHistoryRail({ rows, timelineRootRef, requestR
     if (!track) return;
     let frame = 0;
     const onScrollCapture = () => {
+      if (keyboardFocusFrame.current) return;
       const active = document.activeElement;
       if (!(active instanceof HTMLElement) || !track.contains(active) || !active.hasAttribute("data-history-seq")) return;
       restoreFocusAfterScrollRef.current = true;
@@ -287,6 +292,13 @@ export function XuenessConversationHistoryRail({ rows, timelineRootRef, requestR
 
   if (items.length === 0) return null;
 
+  // A remembered keyboard cursor may be outside the bounded window after a
+  // mouse scroll. Keep one visible stop reachable by Tab, then Home/End can
+  // reveal the remote cursor through the normal keyboard navigation path.
+  const mountedItems = items.slice(snapshot.start, snapshot.end);
+  const tabStopSeq = mountedItems.some(item => item.seq === rovingSeq) ? rovingSeq
+    : mountedItems.some(item => item.seq === activeSeq) ? activeSeq : mountedItems[0]?.seq;
+
   const revealItem = (seq: number) => {
     const root = timelineRootRef.current;
     const scroller = root ? findConversationScroller(root) : null;
@@ -318,9 +330,31 @@ export function XuenessConversationHistoryRail({ rows, timelineRootRef, requestR
     event.preventDefault();
     const item = items[nextIndex]!;
     setRovingSeq(item.seq);
+    // Move the real viewport before replacing a remote window. Otherwise the
+    // scroll event can re-plan from the old viewport and unmount the button
+    // between focusing it and committing its focus state.
+    keepRailStopVisible(item.seq);
     // 目标停靠点可能尚未挂载（窗口化）：先同步扩大窗口，再聚焦。
     ensureIndex(nextIndex);
     trackRef.current?.querySelector<HTMLElement>(`[data-history-seq="${item.seq}"]`)?.focus({ preventScroll: true });
+    // A remote window can temporarily clamp scrollTop while its spacers and
+    // buttons commit. Preserve this explicit keyboard target through that
+    // commit, without stealing focus if the user selects another control.
+    if (keyboardFocusFrame.current) cancelAnimationFrame(keyboardFocusFrame.current);
+    const settleFocus = (remaining: number) => {
+      keyboardFocusFrame.current = requestAnimationFrame(() => {
+        keyboardFocusFrame.current = 0;
+        const track = trackRef.current;
+        if (!track?.isConnected) return;
+        const active = document.activeElement;
+        if (active && active !== document.body && active !== document.documentElement && !track.contains(active)) return;
+        keepRailStopVisible(item.seq);
+        ensureIndex(nextIndex);
+        track.querySelector<HTMLElement>(`[data-history-seq="${item.seq}"]`)?.focus({ preventScroll: true });
+        if (remaining > 0) settleFocus(remaining - 1);
+      });
+    };
+    settleFocus(1);
   };
 
   const previewSeq = hoveredSeq ?? focusSeq;
@@ -341,7 +375,10 @@ export function XuenessConversationHistoryRail({ rows, timelineRootRef, requestR
         <div
           ref={stopsRef}
           className="xn-conversation-history-rail__stops"
-          style={snapshot.windowed ? { marginTop: `${snapshot.topPad}px`, marginBottom: `${snapshot.bottomPad}px` } : undefined}
+          // Keep total scroll geometry fixed while swapping windows. Separate
+          // margin and child commits can otherwise temporarily shrink the
+          // scroll range and clamp a remote Home/End jump to the wrong page.
+          style={snapshot.windowed ? { position: 'relative', height: items.length * snapshot.stride + 10, boxSizing: 'border-box' } : undefined}
         >
           {items.slice(snapshot.start, snapshot.end).map((item, offset) => {
             const index = snapshot.start + offset;
@@ -359,6 +396,7 @@ export function XuenessConversationHistoryRail({ rows, timelineRootRef, requestR
                 type="button"
                 className="xn-conversation-history-rail__stop"
                 data-history-seq={item.seq}
+                data-list-window-index={index}
                 data-turn-id={item.turnId}
                 data-active={isActive ? "true" : undefined}
                 data-running={item.isRunning ? "true" : undefined}
@@ -367,7 +405,8 @@ export function XuenessConversationHistoryRail({ rows, timelineRootRef, requestR
                 aria-label={`${label}${item.userText ? `: ${item.userText}` : ""}`}
                 aria-current={isActive ? "location" : undefined}
                 aria-describedby={isPreviewed ? tooltipId : undefined}
-                tabIndex={item.seq === rovingSeq ? 0 : -1}
+                tabIndex={item.seq === tabStopSeq ? 0 : -1}
+                style={snapshot.windowed ? { position: 'absolute', top: 5 + index * snapshot.stride, left: 0 } : undefined}
                 onClick={() => revealItem(item.seq)}
                 onFocus={() => { setRovingSeq(item.seq); setFocusSeq(item.seq); }}
                 onBlur={() => setFocusSeq((current) => current === item.seq ? null : current)}

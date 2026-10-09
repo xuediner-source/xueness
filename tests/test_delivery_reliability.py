@@ -6,7 +6,10 @@ from unittest.mock import patch
 from tests.fs_link_helpers import make_symlink
 from xueness.core import Store, Gate, run, assess, evidence_aliases
 from xueness.plugin_runtime import set_enabled
-from xueness.bundled_plugins.planning.delivery import check, plan, seed, normalize
+from xueness.bundled_plugins.planning.delivery import (
+    TOOLS as DELIVERY_TOOLS, _read_bounded_workspace_file, check, plan,
+    requests_file_output, seed, normalize,
+)
 from xueness.bundled_plugins.providers.activity import RequestActivity, public_activity
 
 
@@ -271,6 +274,76 @@ class DeliveryReliabilityTests(unittest.TestCase):
         session = self.store.new('Read [source](https://example.com/guide.md), write report.md', self.root)
         seed(session)
         self.assertEqual([item['path'] for item in session['delivery_requirements']], ['report.md'])
+
+    def test_reading_seven_input_files_for_a_chat_report_does_not_seed_outputs(self):
+        paths = ', '.join(fr'D:\ET\source-{index}.txt' for index in range(1, 8))
+        task = f'请读取这些输入文件：{paths}，分析并报告角色名称。'
+        session = self.store.new(task, self.root)
+        seed(session)
+        self.assertEqual(session['delivery_requirements'], [])
+        self.assertFalse(requests_file_output(task))
+        from xueness.bundled_plugins.planning import plugin
+        self.assertNotIn('call delivery_plan', plugin.completion_instructions(session))
+
+    def test_mixed_input_files_and_explicit_output_only_seed_the_output(self):
+        paths = ', '.join(fr'D:\ET\source-{index}.txt' for index in range(1, 8))
+        task = f'Read {paths}, then generate report.md with the requested names.'
+        session = self.store.new(task, self.root)
+        seed(session)
+        self.assertEqual([item['path'] for item in session['delivery_requirements']], ['report.md'])
+        self.assertTrue(requests_file_output(task))
+
+    def test_delivery_schema_and_handler_reject_label_only_items(self):
+        item_schema = DELIVERY_TOOLS[0].parameters['items']['items']
+        self.assertEqual(item_schema['required'], ['id', 'label'])
+        self.assertEqual(len(item_schema['anyOf']), 3)
+        self.assertEqual(item_schema['properties']['contains']['maxItems'], 100)
+        self.assertEqual(item_schema['properties']['min_links']['minimum'], 0)
+        self.assertEqual(item_schema['properties']['min_links']['default'], 0)
+        self.assertEqual(item_schema['anyOf'][1]['properties']['contains']['minItems'], 1)
+        self.assertEqual(item_schema['anyOf'][2]['properties']['min_links']['minimum'], 1)
+        with self.assertRaisesRegex(ValueError, 'path, at least one required content marker'):
+            normalize([{'id': 'label-only', 'label': 'Only a label'}])
+
+    def test_chat_report_does_not_request_delivery_plan_guidance(self):
+        from xueness.bundled_plugins.planning import plugin
+
+        chat_task = 'Write a research report in the chat.'
+        chat_session = self.store.new(chat_task, self.root)
+        self.assertNotIn('call delivery_plan', plugin.completion_instructions(chat_session))
+        self.assertEqual(chat_session['delivery_requirements'], [])
+
+        file_task = 'Write a research report to report.md.'
+        file_session = self.store.new(file_task, self.root)
+        self.assertIn('call delivery_plan', plugin.completion_instructions(file_session))
+        self.assertEqual([item['path'] for item in file_session['delivery_requirements']], ['report.md'])
+
+    def test_explicitly_negated_file_output_does_not_request_delivery_plan(self):
+        from xueness.bundled_plugins.planning import plugin
+
+        tasks = (
+            'Do not save a report file; answer in chat.',
+            '请只在聊天里报告角色名，不要保存报告文件。',
+        )
+        for task in tasks:
+            with self.subTest(task=task):
+                session = self.store.new(task, self.root)
+                seed(session)
+                self.assertEqual(session['delivery_requirements'], [])
+                self.assertFalse(requests_file_output(task))
+                self.assertNotIn('call delivery_plan', plugin.completion_instructions(session))
+
+    def test_negated_input_path_is_ignored_but_later_explicit_output_is_seeded(self):
+        task = 'Do not save source.md; save output.md instead.'
+        session = self.store.new(task, self.root)
+        seed(session)
+        self.assertEqual([item['path'] for item in session['delivery_requirements']], ['output.md'])
+        self.assertTrue(requests_file_output(task))
+
+    def test_bounded_workspace_reader_preserves_binary_control_and_newline_bytes(self):
+        payload = b'prefix\x1a\r\nsuffix\r\n'
+        (self.root / 'bytes.bin').write_bytes(payload)
+        self.assertEqual(payload, _read_bounded_workspace_file(self.root, 'bytes.bin'))
 
     def test_actual_usage_and_observed_phase_times_are_distinct(self):
         now = [0.0]

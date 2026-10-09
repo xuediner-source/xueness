@@ -1,9 +1,9 @@
 /* ZCode 3.14.3 outer-frame geometry, after component styles. See NOTICE.md. */
 body { -webkit-font-smoothing:auto; }
-* { scrollbar-width:auto; scrollbar-color:var(--border) transparent; }
-*::-webkit-scrollbar { width:14px; height:14px; }
+* { scrollbar-width:thin; scrollbar-color:var(--border-strong) transparent; }
+*::-webkit-scrollbar { width:10px; height:10px; }
 *::-webkit-scrollbar-track,*::-webkit-scrollbar-corner { background:transparent; }
-*::-webkit-scrollbar-thumb { min-height:32px; min-width:32px; border:3px solid transparent; border-radius:9999px; background:var(--border); background-clip:padding-box; }
+*::-webkit-scrollbar-thumb { min-height:32px; min-width:32px; border:2px solid transparent; border-radius:9999px; background:var(--border-strong); background-clip:padding-box; }
 .xn-shell-layout .xn-shell-main { padding:0; }
 .xn-shell-layout:has(.xn-settings-view) { grid-template-columns:minmax(0,1fr); }
 .xn-shell-layout .xn-shell-main__panel:has(> .xn-settings-view) { border:0; border-radius:0; background:var(--bg-window); }
@@ -16,7 +16,8 @@ body { -webkit-font-smoothing:auto; }
 .xn-shell-layout .xn-shell-nav__time { font-size:12px; }
 .xn-shell-layout .xn-shell-nav { padding:0 8px 8px; }
 .xn-shell-layout .xn-shell-sidebar__footer { padding:12px 16px; flex-wrap:nowrap; height:64px; gap:8px; }
-.xn-shell-layout .xn-hero { padding-top:calc(30vh - 9px); justify-content:flex-start; gap:44px; }
+.xn-shell-layout .xn-hero { padding-top:clamp(76px,20vh,180px); justify-content:flex-start; gap:16px; }
+.xn-shell-layout .xn-hero__hint { margin:0 0 8px; }
 .xn-shell-layout .xn-hero__greeting { margin:0; font-size:30px; font-weight:500; line-height:36px; letter-spacing:0; }
 .xn-shell-layout .xn-hero__composer { width:min(672px,100%); }
 .xn-shell-layout .xn-hero__bar { justify-content:flex-end; padding:8px; min-height:48px; }
@@ -78,4 +79,10 @@ body { -webkit-font-smoothing:auto; }
 .xn-settings-switch::after { top:1px; left:1px; width:16px; height:16px; background:var(--primary-fg); }
 .xn-settings-switch:checked::after { transform:translateX(14px); }
 .xn-subagent-settings__row-actions input.xn-settings-switch,.xn-subagent-settings__enabled input.xn-settings-switch { width:32px!important; height:18px; }
-@media(max-width:900px) { .xn-shell-layout .xn-shell-main { padding:0; }.xn-shell-layout .xn-hero { padding-top:22vh; } }
+@media(max-width:900px) { .xn-shell-layout .xn-shell-main { padding:0; } }
+/* On a short or scaled Windows window, keep the prompt and recent tasks in
+ * reach instead of devoting most of the viewport to the greeting. */
+@media(max-height:680px) {
+  .xn-shell-layout .xn-hero { padding-top:clamp(68px,16vh,108px); gap:12px; padding-bottom:24px; }
+  .xn-shell-layout .xn-hero__greeting { font-size:26px; line-height:34px; }
+}

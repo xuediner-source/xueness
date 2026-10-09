@@ -1,4 +1,5 @@
 import { projectJournalAssistantWork } from './plugins/sessions/conversationJournalProjection';
+import { t as tr } from './i18n';
 
 /**
  * Xueness workbench data layer.
@@ -24,6 +25,8 @@ export type PendingApproval = {
   name: string;
   subject: string;
   preview: string;
+  /** Live one-shot approval, bound to this exact call and subject on the host. */
+  granted?: boolean;
 };
 
 export type QueuedMessage = {
@@ -119,6 +122,8 @@ export type WorkbenchSession = {
   runtime_activity_history?: WorkbenchRuntimeActivity[] | null;
   tool_timings?: { step: number; name: string; tool_call_id: string; seconds: number; ok: boolean }[];
   pause_reason?: string | null;
+  /** Stable reason code for resumable execution-budget pauses. */
+  pause_code?: string | null;
   permission_mode?: PermissionMode;
   browser_enabled?: boolean;
   remote_connection?: { id: string; digest: string } | null;
@@ -211,8 +216,8 @@ export type FilePreview = {
 export type ToolDisplayStatus = "queued" | "running" | "ok" | "error" | "cancelled" | "stopped";
 
 export type TimelineRow =
-  | { kind: "user"; seq: number; turnId: string; text: string }
-  | { kind: "assistant"; seq: number; turnId: string; text: string; reasoning?: string; messageIndex?: number; streaming?: boolean; startedAt?: number; endedAt?: number; interrupted?: boolean }
+  | { kind: "user"; seq: number; turnId: string; text: string; messageIndex?: number; messageRevision?: string }
+  | { kind: "assistant"; seq: number; turnId: string; text: string; reasoning?: string; messageIndex?: number; messageRevision?: string; feedback?: 'like' | 'dislike'; streaming?: boolean; startedAt?: number; endedAt?: number; interrupted?: boolean }
   | {
       kind: "tool";
       seq: number;
@@ -261,10 +266,10 @@ function isEqualTimelineRow(a: TimelineRow, b: TimelineRow): boolean {
   if (a === b) return true;
   if (a.kind !== b.kind || a.seq !== b.seq) return false;
   if (a.kind === "user" && b.kind === "user") {
-    return a.turnId === b.turnId && a.text === b.text;
+    return a.turnId === b.turnId && a.text === b.text && a.messageIndex === b.messageIndex && a.messageRevision === b.messageRevision;
   }
   if (a.kind === "assistant" && b.kind === "assistant") {
-    return a.turnId === b.turnId && a.text === b.text && a.reasoning === b.reasoning && a.messageIndex === b.messageIndex && a.streaming === b.streaming
+    return a.turnId === b.turnId && a.text === b.text && a.reasoning === b.reasoning && a.messageIndex === b.messageIndex && a.messageRevision === b.messageRevision && a.feedback === b.feedback && a.streaming === b.streaming
       && a.startedAt === b.startedAt && a.endedAt === b.endedAt && a.interrupted === b.interrupted;
   }
   if (a.kind === "tool" && b.kind === "tool") {
@@ -421,6 +426,14 @@ async function requestJson<T>(path: string, init: RequestInit): Promise<T> {
   }
   if (!response.ok) {
     const detail = (payload as { error?: unknown } | null | undefined)?.error;
+    const code = (payload as { error_code?: unknown } | null | undefined)?.error_code;
+    if (code === 'yolo_confirmation_required') throw new Error(tr('发送前需要确认完全访问，请重新发送并完成确认。'));
+    if (code === 'message_action_conflict') {
+      const message = String(detail);
+      if (message.includes('conversation changed')) throw new Error(tr('会话已发生变化。请刷新后重新编辑；当前输入已保留。'));
+      if (message.includes('queued messages')) throw new Error(tr('请先处理或取消排队消息，再编辑历史。'));
+      if (message.includes('run already in progress')) throw new Error(tr('会话正在运行，结束后可修改历史。'));
+    }
     throw new Error(typeof detail === "string" && detail ? detail : `HTTP ${response.status}`);
   }
   if (!jsonParsed) throw new Error("invalid JSON response");
@@ -473,6 +486,29 @@ export async function loadSession(id: string): Promise<Result<WorkbenchSession>>
   } catch (error) {
     return { ok: false, error: toErrorMessage(error) };
   }
+}
+
+export type ConversationSnapshot = {session: WorkbenchSession; journal: Record<string, unknown>; timeline: TimelinePage};
+
+/** Reject mixed sessions and incomplete snapshots before updating the view. */
+export async function loadConversationSnapshot(id: string): Promise<Result<ConversationSnapshot>> {
+  try {
+    const payload = await requestGet<unknown>(sessionPath(id, '/conversation'));
+    if (!payload || typeof payload !== 'object' || Array.isArray(payload)) throw new Error('invalid conversation snapshot');
+    const record = payload as Record<string, unknown>;
+    const session = record.session as WorkbenchSession | null;
+    const journal = record.journal as Record<string, unknown> | null;
+    const timeline = parseEventsEnvelope(record.timeline);
+    if (!session || typeof session !== 'object' || Array.isArray(session) || session.id !== id || typeof session.status !== 'string'
+      || !journal || typeof journal !== 'object' || Array.isArray(journal) || journal.id !== id || !Array.isArray(journal.messages)
+      || typeof journal.message_revision !== 'string' || !/^sha256:[0-9a-f]{64}$/u.test(journal.message_revision)
+      || !timeline || timeline.sessionId !== id || timeline.status !== session.status || journal.status !== session.status
+      || timeline.hasMore || timeline.cursor !== 0 || timeline.events.length !== timeline.head || timeline.nextCursor !== timeline.head
+      || timeline.events.some((event, index) => event.sessionId !== id || event.seq !== index + 1)) throw new Error('invalid conversation snapshot');
+    const queued_messages = parseQueuedMessages(session.queued_messages);
+    return {ok: true, value: {session: {...session, ...(queued_messages ? {queued_messages} : {})}, journal,
+      timeline: {events: timeline.events, cursor: 0, nextCursor: timeline.nextCursor, head: timeline.head, hasMore: false}}};
+  } catch (error) { return {ok: false, error: toErrorMessage(error)}; }
 }
 
 /** Read opaque, revision-bound safe fork selectors from the server. */
@@ -761,7 +797,8 @@ export async function approvePending(
 }
 
 /**
- * Shared run body: user choices + fixed step budget + server opt-ins.
+ * Shared run body: user choices + opt-ins. Ordinary turns leave the step budget
+ * to the selected server runtime profile; goal runs keep their explicit budget.
  * readRunOptIns fails closed to {} and must never enable a capability.
  */
 async function runSessionWith(id: string, choices?: RunChoices, options?: { continueQueue?: boolean }): Promise<void> {
@@ -769,7 +806,7 @@ async function runSessionWith(id: string, choices?: RunChoices, options?: { cont
   const optIns = await readRunOptIns();
   await requestPost(sessionPath(id, "/run"), {
     ...effectiveChoices,
-    steps: effectiveChoices.goal ? 20 : 8,
+    ...(effectiveChoices.goal ? { steps: 20 } : {}),
     ...optIns,
     ...(options?.continueQueue ? { continue_queue: true } : {}),
   });
@@ -874,6 +911,20 @@ export async function runSession(id: string, choices?: RunChoices, options?: { c
   }
 }
 
+/** The journal-issued revision and message index identify one persisted row. */
+export async function updateConversationMessage(id: string,
+  row: Extract<TimelineRow, {kind: 'user' | 'assistant'}>,
+  action: {action: 'edit'; text: string} | {action: 'feedback'; feedback: 'like' | 'dislike' | null},
+): Promise<Result<void>> {
+  if (row.messageIndex === undefined || !row.messageRevision) return {ok: false, error: 'Refresh this conversation before editing its history'};
+  try {
+    await requestMutation('PATCH', sessionPath(id, '/message-actions'), {
+      revision: row.messageRevision, messageIndex: row.messageIndex, ...action,
+    });
+    return {ok: true, value: undefined};
+  } catch (error) { return {ok: false, error: toErrorMessage(error)}; }
+}
+
 // -- pure view model ---------------------------------------------------------
 
 /** Attach recorded tool content without changing the stable event sequence.
@@ -961,12 +1012,17 @@ export function hydrateTimelineJournalRows(rows: TimelineRow[], journal: unknown
       }
     }
   });
-  const hydrated = rows.map(row => {
+  const hydrated = rows.map((row): TimelineRow => {
     if (row.kind !== "user" && row.kind !== "assistant") return row;
     const full = texts.get(row.seq);
     if (!full || full.kind !== row.kind) return row;
-    if (row.kind === "user") return {...row, text:full.text};
+    const revision = typeof source.message_revision === 'string' ? source.message_revision : undefined;
+    if (row.kind === "user") return {...row, text:full.text, ...(revision ? {messageIndex:full.messageIndex, messageRevision:revision} : {})};
+    const annotations = source.message_annotations && typeof source.message_annotations === 'object'
+      ? (source.message_annotations as Record<string, unknown>)[String(full.messageIndex)] : undefined;
+    const feedback = annotations && typeof annotations === 'object' ? (annotations as Record<string, unknown>).feedback : undefined;
     return {...row, text:full.text, messageIndex:full.messageIndex,
+      ...(revision ? {messageRevision:revision, feedback:feedback === 'like' || feedback === 'dislike' ? feedback : undefined} : {}),
       ...(reasoning.has(full.messageIndex) ? { reasoning:reasoning.get(full.messageIndex) } : {})};
   });
   return projectJournalAssistantWork(hydrated, messages, history);
@@ -975,13 +1031,16 @@ export function hydrateTimelineJournalRows(rows: TimelineRow[], journal: unknown
 /** Add the journal's original task message, which events.v1 deliberately omits. */
 export function withInitialUserMessage(rows: TimelineRow[], journal: unknown, fallbackTask?: string): TimelineRow[] {
   let initialText: string | undefined;
+  let initialIndex: number | undefined;
+  const source = journal && typeof journal === 'object' && !Array.isArray(journal) ? journal as Record<string, unknown> : undefined;
   if (journal && typeof journal === "object" && !Array.isArray(journal)) {
     const messages = (journal as Record<string, unknown>).messages;
     if (Array.isArray(messages)) {
-      for (const message of messages) {
+      for (const [index, message] of messages.entries()) {
         if (!message || typeof message !== "object") continue;
         const candidate = message as Record<string, unknown>;
         if (candidate.role !== "user") continue;
+        initialIndex = index;
         if (typeof candidate.content === "string" && candidate.content.trim()) initialText = candidate.content;
         else if (Array.isArray(candidate.content)) {
           const text = candidate.content
@@ -1003,7 +1062,8 @@ export function withInitialUserMessage(rows: TimelineRow[], journal: unknown, fa
   }
   if (initialText === undefined) return rows;
   return [
-    { kind: "user", seq: 0, turnId: "turn-1", text: initialText },
+    { kind: "user", seq: 0, turnId: "turn-1", text: initialText,
+      ...(initialIndex !== undefined && typeof source?.message_revision === 'string' ? {messageIndex: initialIndex, messageRevision: source.message_revision} : {}) },
     ...rows.filter(row => row.seq !== 0),
   ];
 }

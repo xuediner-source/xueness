@@ -33,8 +33,8 @@
     },
     {
       "id": "desktop.lifecycle",
-      "name": "单实例、启动恢复与后台进程清理",
-      "nameEn": "Single instance, startup recovery and backend cleanup"
+      "name": "单实例、固定数据目录、启动恢复与后台进程清理",
+      "nameEn": "Single instance, persistent data location, startup recovery and backend cleanup"
     },
     {
       "id": "desktop.status",
@@ -71,6 +71,7 @@
   ],
   "desktopModules": [
     "src/main.cjs",
+    "src/data-directory.cjs",
     "src/backend.cjs",
     "src/security.cjs",
     "src/window-chrome.cjs",

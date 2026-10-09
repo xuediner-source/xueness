@@ -589,16 +589,11 @@ def _profile_capabilities(record: dict, model: str) -> list[str]:
 def _git_catalog(root: Path) -> dict | None:
     from ..git import git_api
     try:
-        status = git_api._git_status(str(root))
-        branches = git_api._run_git(
-            str(root), ["--no-optional-locks", "for-each-ref", "--format=%(refname:short)", "refs/heads/"]
-        ).stdout or ""
-    except git_api.GitApiError as exc:
-        if exc.status == 404:
-            return None
-        raise _ComposerError(exc.status, exc.message) from None
-    values = sorted({line.strip() for line in branches.splitlines() if line.strip()})
-    return {"branch": status.get("branch", ""), "branches": values}
+        return git_api._git_branch_catalog(str(root))
+    except git_api.GitApiError:
+        # Branch metadata is optional. A missing/slow/untrusted repository must
+        # not block model selection or switching to another workspace.
+        return None
 
 
 def _get_catalog(ctx: dict, root: Path) -> dict:

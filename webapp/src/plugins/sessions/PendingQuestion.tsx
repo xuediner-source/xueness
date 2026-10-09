@@ -131,10 +131,21 @@ export function PendingQuestion({ sessionId, pendingQuestion, enabled, disabled 
 }
 
 /** Explicit resume remains available after save-only or reopening a paused conversation. */
-export function QuestionResume({ enabled, status, pendingQuestion, disabled, onResume }: {
-  enabled: boolean; status: string; pendingQuestion?: string | null; disabled: boolean; onResume: () => Promise<unknown>;
+export function QuestionResume({ enabled, resumeBudgetEnabled = false, pauseCode, status, pendingQuestion, disabled, onResume }: {
+  /** Existing opt-in for resuming a saved answer-only pause. */
+  enabled: boolean;
+  /** Budget-paused turns are resumable whenever the sessions plugin is active. */
+  resumeBudgetEnabled?: boolean;
+  pauseCode?: string | null;
+  status: string;
+  pendingQuestion?: string | null;
+  disabled: boolean;
+  onResume: () => Promise<unknown>;
 }): React.ReactElement | null {
-  if (!enabled || status !== "paused" || pendingQuestion) return null;
+  const budgetPausedTurn = pauseCode === "step_limit_reached" || pauseCode === "wall_time_limit_reached";
+  const canResumeBudgetPause = resumeBudgetEnabled && budgetPausedTurn;
+  if ((!enabled && !canResumeBudgetPause) || status !== "paused" || pendingQuestion) return null;
+  const label = canResumeBudgetPause ? tr("继续本轮") : tr("继续任务");
   return <div className="xn-question-resume"><button type="button" className="xn-btn xn-btn--secondary xn-btn--sm" disabled={disabled}
-    onClick={() => { void onResume(); }}>{tr("继续任务")}</button></div>;
+    onClick={() => { void onResume(); }}>{label}</button></div>;
 }

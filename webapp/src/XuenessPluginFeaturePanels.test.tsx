@@ -33,7 +33,7 @@ test("automation shows supported scheduled work while the marketplace remains a 
   assert.doesNotMatch(automation, /闲时任务/);
   const marketplace = renderToStaticMarkup(<XuenessMarketplace />);
   assert.match(marketplace, /marketplace-panel/);
-  assert.match(marketplace, /不执行下载的代码/);
+  assert.match(marketplace, /在详情中查看能力和使用说明/);
 });
 
 test("MCP tools render no connection action for an empty catalog", () => {

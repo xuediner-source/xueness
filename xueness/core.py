@@ -73,6 +73,16 @@ MCP_TOOL_PREFIX = "mcp__"
 STREAM_HISTORY_MAX = 20
 STREAM_REASONING_MAX = 32_000
 REASONING_HISTORY_MAX = 20
+_STORE_REPLACE_RETRYABLE_WINERRORS = frozenset({5, 32, 33})
+_STORE_REPLACE_RETRY_DELAYS = (0.025, 0.075)
+
+
+def _annotate_store_failure(error, stage):
+    """Attach a fixed Store.save substage without retaining exception text."""
+    try:
+        error._xueness_store_stage = stage
+    except Exception:
+        pass
 
 
 def _archive_stream(session, record):
@@ -94,6 +104,26 @@ def _archive_stream(session, record):
         history.append(dict(record))
     if len(history) > STREAM_HISTORY_MAX:
         del history[:-STREAM_HISTORY_MAX]
+
+
+def _replace_session_file(source, target):
+    """Atomically replace a session file, retrying only transient Windows locks.
+
+    Antivirus/indexer/read-handle sharing collisions can briefly prevent
+    MoveFileEx/ReplaceFile on Windows. Keep this retry at the final replace
+    boundary; failures while encoding, flushing, fsyncing, or protecting the
+    private temp file are not transient replace conflicts and must surface.
+    """
+    delays = _STORE_REPLACE_RETRY_DELAYS if os.name == "nt" else ()
+    for attempt in range(len(delays) + 1):
+        try:
+            os.replace(source, target)
+            return
+        except OSError as exc:
+            if (attempt >= len(delays)
+                    or getattr(exc, "winerror", None) not in _STORE_REPLACE_RETRYABLE_WINERRORS):
+                raise
+            time.sleep(delays[attempt])
 
 
 def _reasoning_setting_enabled(state_dir) -> bool:
@@ -309,6 +339,7 @@ def _concurrent_batch_units(calls, *, gate, session, light, light_tool_names,
 
 class _StreamStopped(Exception):
     """Internal signal for a cooperative stop raised from a provider callback."""
+    _xueness_stream_control = "stop"
 
 
 def _action_signature(calls) -> str:
@@ -704,21 +735,31 @@ class Store:
         return session
 
     def save(self, session: dict) -> None:
-        path = self._path(session["id"])
-        fd, tmp = tempfile.mkstemp(prefix=".session-", dir=self.directory)
+        stage = "session_path"
+        tmp = None
         try:
+            path = self._path(session["id"])
+            stage = "temp_create"
+            fd, tmp = tempfile.mkstemp(prefix=".session-", dir=self.directory)
             try:
+                stage = "protect_temp"
                 _protect_private_file(fd)
             except BaseException:
                 os.close(fd)
                 raise
             with os.fdopen(fd, "w", encoding="utf-8") as stream:
+                stage = "serialize"
                 json.dump(session, stream, ensure_ascii=False, indent=2)
+                stage = "flush"
                 stream.flush()
                 os.fsync(stream.fileno())
-            os.replace(tmp, path)
+            stage = "replace"
+            _replace_session_file(tmp, path)
+        except Exception as exc:
+            _annotate_store_failure(exc, stage)
+            raise
         finally:
-            if os.path.exists(tmp):
+            if tmp is not None and os.path.exists(tmp):
                 os.unlink(tmp)
 
     def load(self, sid: str) -> dict:
@@ -975,6 +1016,18 @@ def compact(session: dict, max_chars: int, max_tokens: int | None = None,
     # Reasoning is display-only, keyed to a journal position. Compaction may
     # remove or move assistants; keep only the exact retained message objects.
     positions = {id(message): index for index, message in enumerate(session["messages"])}
+    # Journal annotations are display-only metadata owned by feature plugins.
+    # Retain them only with the same message object; moving a journal prefix
+    # must never assign an annotation to a different response at that index.
+    annotations = session.get("message_annotations")
+    if isinstance(annotations, dict):
+        remapped_annotations = {}
+        for key, value in annotations.items():
+            if isinstance(key, str) and key.isdecimal() and 0 <= int(key) < len(old_messages):
+                new_index = positions.get(id(old_messages[int(key)]))
+                if new_index is not None:
+                    remapped_annotations[str(new_index)] = value
+        session["message_annotations"] = remapped_annotations
     history = session.get("reasoning_history")
     if isinstance(history, list):
         remapped = []
@@ -1265,7 +1318,7 @@ def _bounded_provider_metadata(value, max_chars=4000):
     return {"truncated": True, "preview": encoded[:max_chars]}
 
 
-def _drive_run(session: dict, store: Store, provider, gate: Gate, max_steps=8, max_chars=24000,
+def _drive_run(session: dict, store: Store, provider, gate: Gate, max_steps=None, max_chars=None,
         memory: str | None = None, max_tokens: int | None = None,
         skills: str | None = None, hooks=None, mcp_tools=None, mcp_call=None,
         subagents=None, depth: int = 0, max_depth: int = 1,
@@ -1291,7 +1344,6 @@ def _drive_run(session: dict, store: Store, provider, gate: Gate, max_steps=8, m
                                          not isinstance(max_wall_seconds, (int, float)) or
                                          not 0 < max_wall_seconds <= 3600):
         raise ValueError("max_wall_seconds must be greater than zero and at most 3600")
-    deadline = time.monotonic() + max_wall_seconds if max_wall_seconds is not None else None
     if session["status"] == "completed":
         return session
     if session.get("status") == "awaiting_user" and session.get("pending_question"):
@@ -1305,16 +1357,28 @@ def _drive_run(session: dict, store: Store, provider, gate: Gate, max_steps=8, m
         provider = lightweight.prepare_provider(provider)
         light_options = provider.lightweight_options
         session['lightweight_options'] = dict(light_options)
-        max_steps = min(max_steps, light_options['stepLimit'])
+        step_limit = light_options['stepLimit']
+        max_steps = step_limit if max_steps is None else min(max_steps, step_limit)
         wall_limit = light_options.get('wallTimeSeconds')
-        if wall_limit is not None:
-            effective_wall = min(max_wall_seconds, wall_limit) if max_wall_seconds is not None else wall_limit
-            deadline = time.monotonic() + effective_wall
+        if max_wall_seconds is None:
+            effective_wall = wall_limit if wall_limit is not None else 120
+        else:
+            effective_wall = min(max_wall_seconds, wall_limit) if wall_limit is not None else max_wall_seconds
+        if max_chars is None:
+            max_chars = lightweight.default_prompt_char_limit(provider, input_cap=max_tokens)
     else:
         light_options = {}
         session.pop('lightweight_options', None)
         session.pop('runtime_budget', None)
+        max_steps = 8 if max_steps is None else max_steps
+        effective_wall = 120 if max_wall_seconds is None else max_wall_seconds
+        if max_chars is None:
+            max_chars = 24000
+    if type(max_steps) is not int or not 1 <= max_steps <= 64:
+        raise ValueError("max_steps must be an integer from 1 to 64")
+    deadline = time.monotonic() + effective_wall if effective_wall is not None else None
     session.pop('pause_reason', None)
+    session.pop('pause_code', None)
     root = Path(session["root"]).resolve()
     if root != gate.root:
         raise ValueError("session workspace differs from permission boundary")
@@ -1385,9 +1449,15 @@ def _drive_run(session: dict, store: Store, provider, gate: Gate, max_steps=8, m
                                           "steps": session.get("steps", 0)}):
             _hook_record(session, "Stop", entry)
 
+    def user_stop_requested() -> bool:
+        return bool(should_stop is not None and should_stop())
+
+    def deadline_expired() -> bool:
+        return bool(deadline is not None and time.monotonic() >= deadline)
+
     def stop_requested(*, check_deadline=True) -> bool:
-        return bool((should_stop is not None and should_stop()) or
-                    (check_deadline and deadline is not None and time.monotonic() >= deadline))
+        """Work cancellation predicate; exit handling distinguishes limits from user stops."""
+        return user_stop_requested() or (check_deadline and deadline_expired())
 
     if _subagent_coordinator is not None:
         _subagent_coordinator.configure(should_stop=stop_requested,
@@ -1395,9 +1465,27 @@ def _drive_run(session: dict, store: Store, provider, gate: Gate, max_steps=8, m
 
     def settle_stopped() -> dict:
         session["status"] = "stopped"
+        session.pop("pause_reason", None)
+        session.pop("pause_code", None)
         fire_stop()
         save_session()
         _emit_event(on_event, "status", status="stopped", steps=session.get("steps", 0))
+        return session
+
+    def settle_wall_time_limit() -> dict:
+        session["status"] = "paused"
+        session["pause_code"] = "wall_time_limit_reached"
+        session["pause_reason"] = (
+            f"本轮达到 {effective_wall:g} 秒时限，任务尚未完成；继续当前任务可接着处理。")
+        active_stream = session.get("streaming")
+        if isinstance(active_stream, dict) and active_stream.get("status") == "streaming":
+            active_stream["interrupted"] = True
+            active_stream["status"] = "interrupted"
+            active_stream["interrupted_at"] = datetime.now(timezone.utc).isoformat()
+        fire_stop()
+        save_session()
+        _emit_event(on_event, "status", status="paused", steps=session.get("steps", 0),
+                    reason=session["pause_reason"], pause_code=session["pause_code"])
         return session
 
     if hooks is not None and plugin_enabled("hooks"):
@@ -1638,8 +1726,10 @@ def _drive_run(session: dict, store: Store, provider, gate: Gate, max_steps=8, m
     for _ in range(max_steps):
         # Cooperative stop: settle at a journal boundary, not mid-tool-call.
         # This preserves call/result pairing, not transactional filesystem writes.
-        if stop_requested():
+        if user_stop_requested():
             return settle_stopped()
+        if deadline_expired():
+            return settle_wall_time_limit()
         if not plugin_enabled("providers"):
             session["status"] = "paused"
             session["pause_reason"] = "providers plugin disabled"
@@ -1908,7 +1998,17 @@ def _drive_run(session: dict, store: Store, provider, gate: Gate, max_steps=8, m
             if incomplete:
                 response = {'content': lightweight.partial_answer(
                     response, light and getattr(provider, 'tool_calling', 'native') == 'json')}
-            response = validate_message(response)
+            try:
+                response = validate_message(response)
+            except (TypeError, ValueError) as validation_error:
+                # A malformed normalized provider message is a response
+                # protocol failure, while unrelated runtime/callback failures
+                # stay local errors and must not be called provider failures.
+                from .bundled_plugins.providers.provider import ProviderRequestError
+                raise ProviderRequestError(
+                    category="invalid_response", stage="parse",
+                    exception_type=type(validation_error).__name__,
+                ) from None
         except lightweight.ContextBudgetError as exc:
             session['status'] = 'paused'
             session['pause_reason'] = str(exc)
@@ -1916,7 +2016,7 @@ def _drive_run(session: dict, store: Store, provider, gate: Gate, max_steps=8, m
             fire_stop()
             _emit_event(on_event, 'status', status='paused', steps=session.get('steps', 0), reason=str(exc))
             return session
-        except Exception:
+        except Exception as exc:
             if "stream_id" in locals() and stream_id:
                 record = session.get("streaming")
                 if isinstance(record, dict) and record.get("id") == stream_id:
@@ -1924,7 +2024,36 @@ def _drive_run(session: dict, store: Store, provider, gate: Gate, max_steps=8, m
                     record["status"] = "interrupted"
                     record["interrupted_at"] = datetime.now(timezone.utc).isoformat()
                     save_session()
-            if stop_requested(check_deadline=light):
+            from .bundled_plugins.providers.provider import (
+                ProviderCallbackError, ProviderRequestError,
+            )
+            if (getattr(exc, "_xueness_stream_control", None) == "stop"
+                    or user_stop_requested()):
+                return settle_stopped()
+            if isinstance(exc, ProviderRequestError) and deadline_expired():
+                return settle_wall_time_limit()
+            if isinstance(exc, ProviderCallbackError):
+                session["status"] = "paused"
+                session["pause_reason"] = "local stream callback failed"
+                fire_stop()
+                save_session()
+                _emit_event(on_event, "status", status="paused",
+                            steps=session.get("steps", 0),
+                            reason="local stream callback failed")
+                raise
+            if not isinstance(exc, ProviderRequestError):
+                # Provider adapters must classify their own transport and
+                # response failures. An arbitrary exception from local
+                # callbacks, runtime code, or a custom adapter is not evidence
+                # that the model service failed.
+                session["status"] = "paused"
+                session["pause_reason"] = "local run failed"
+                fire_stop()
+                save_session()
+                _emit_event(on_event, "status", status="paused",
+                            steps=session.get("steps", 0), reason="local run failed")
+                raise
+            if user_stop_requested():
                 return settle_stopped()
             session["status"] = "provider_error"
             save_session()
@@ -1934,7 +2063,7 @@ def _drive_run(session: dict, store: Store, provider, gate: Gate, max_steps=8, m
             raise
         # A stop while awaiting the provider must not start new side effects.
         # No intent was recorded yet, so discarding this response is safe.
-        if stop_requested(check_deadline=light):
+        if user_stop_requested():
             if "stream_id" in locals() and stream_id:
                 record = session.get("streaming")
                 if isinstance(record, dict) and record.get("id") == stream_id:
@@ -1943,6 +2072,10 @@ def _drive_run(session: dict, store: Store, provider, gate: Gate, max_steps=8, m
                     record["interrupted_at"] = datetime.now(timezone.utc).isoformat()
                     save_session()
             return settle_stopped()
+        # Lightweight providers receive the absolute run deadline and must not
+        # start a tool effect after returning a response beyond that deadline.
+        if light and deadline_expired():
+            return settle_wall_time_limit()
         if incomplete:
             from .bundled_plugins.providers.response_metadata import pause_message
             if light and incomplete == 'context_limit':
@@ -2232,7 +2365,7 @@ def _drive_run(session: dict, store: Store, provider, gate: Gate, max_steps=8, m
                 if isinstance(result, dict) and result.get("awaiting_user"):
                     asked = result.get("question", "")
                 _record_outcome(cid, tool_name, result, started)
-        if stop_requested():
+        if user_stop_requested():
             return settle_stopped()
         if halt_result is not None or evidence_repair_active:
             session['status'] = 'paused' if halt_result and halt_result.get('awaiting_approval') else 'needs_review'
@@ -2256,16 +2389,22 @@ def _drive_run(session: dict, store: Store, provider, gate: Gate, max_steps=8, m
             _emit_event(on_event, "status", status="awaiting_user", steps=session.get("steps", 0),
                         question=asked)
             return session
-        if stop_requested():
+        if deadline_expired():
+            return settle_wall_time_limit()
+        if user_stop_requested():
             return settle_stopped()
     session["status"] = "paused"
+    session["pause_code"] = "step_limit_reached"
+    session["pause_reason"] = (
+        f"本轮达到 {max_steps} 步上限，任务尚未完成；继续当前任务可接着处理。")
     fire_stop()
     save_session()
-    _emit_event(on_event, "status", status="paused", steps=session.get("steps", 0))
+    _emit_event(on_event, "status", status="paused", steps=session.get("steps", 0),
+                reason=session["pause_reason"], pause_code=session["pause_code"])
     return session
 
 
-def run(session: dict, store: Store, provider, gate: Gate, max_steps=8, max_chars=24000,
+def run(session: dict, store: Store, provider, gate: Gate, max_steps=None, max_chars=None,
         memory: str | None = None, max_tokens: int | None = None,
         skills: str | None = None, hooks=None, mcp_tools=None, mcp_call=None,
         subagents=None, depth: int = 0, max_depth: int = 1,

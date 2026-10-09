@@ -14,6 +14,14 @@ def execute_cli(args, deps=None):
 
 
 def dispatch(method, parts, query, data, ctx):
+    from .conversation_snapshot import dispatch as conversation_snapshot_dispatch
+    result = conversation_snapshot_dispatch(method, parts, query, data, ctx)
+    if result is not None:
+        return result
+    from .message_actions import dispatch as message_actions_dispatch
+    result = message_actions_dispatch(method, parts, query, data, ctx)
+    if result is not None:
+        return result
     from .queue import dispatch as queue_dispatch
     result = queue_dispatch(method, parts, query, data, ctx)
     if result is not None:

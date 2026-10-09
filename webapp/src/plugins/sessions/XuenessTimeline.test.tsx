@@ -352,7 +352,7 @@ test('only the known local tool envelope is hidden while streaming; user-facing 
   assert.equal(assistantTextForDisplay('{"tool":"result","detail":"visible JSON"}', true, undefined, true), '{"tool":"result","detail":"visible JSON"}');
 });
 
-test('terminal completion does not repeat the assistant answer or claim evidence for ordinary chat', () => {
+test('ordinary no-tool chat keeps its answer and omits an uninformative completion card', () => {
   const answer = 'Hello, the change is ready.';
   const html = renderToStaticMarkup(<TimelineStream rows={[
     { kind: 'user', seq: 1, turnId: 'turn-1', text: 'Please make the change.' },
@@ -360,10 +360,34 @@ test('terminal completion does not repeat the assistant answer or claim evidence
     { kind: 'completion', seq: 3, turnId: 'turn-1', verified: false, status: 'not_applicable', toolExecutionStatus: 'not_applicable', summary: answer },
   ]} />);
   assert.equal(html.split(answer).length - 1, 1);
-  assert.match(html, /运行结束/);
-  assert.match(html, /data-status="ok"/);
+  assert.doesNotMatch(html, /timeline-item-completion-/);
+  assert.doesNotMatch(html, /运行结束/);
   assert.doesNotMatch(html, /工具证据未通过验证/);
   assert.doesNotMatch(html, /查看完成详情/);
+});
+
+test('distinct completion information remains visible even when verification is not applicable', () => {
+  const html = renderToStaticMarkup(<TimelineStream rows={[{
+    kind: 'completion', seq: 3, turnId: 'turn-1', verified: false,
+    status: 'not_applicable', toolExecutionStatus: 'not_applicable',
+    deliveryStatus: 'not_assessed', summary: 'No tools were needed.',
+  }]} />);
+  assert.match(html, /timeline-item-completion-3/);
+  assert.match(html, /No tools were needed\./);
+});
+
+test('local JSON chat unwraps its answer once while an unanswered terminal row remains visible', () => {
+  const local = renderToStaticMarkup(<TimelineStream jsonToolProtocol rows={[
+    { kind: 'assistant', seq: 1, turnId: 'turn-1', text: '{"summary":"你好！","evidence":[]}' },
+    { kind: 'completion', seq: 2, turnId: 'turn-1', verified: false, status: 'not_applicable',
+      toolExecutionStatus: 'not_applicable', deliveryStatus: 'not_assessed', summary: '你好！' },
+  ]} />);
+  assert.equal(local.split('你好！').length - 1, 1);
+  assert.doesNotMatch(local, /timeline-item-completion-|&quot;summary&quot;/);
+  const unanswered = renderToStaticMarkup(<TimelineStream rows={[
+    { kind: 'completion', seq: 1, turnId: 'turn-1', verified: false, status: 'not_applicable', summary: '' },
+  ]} />);
+  assert.match(unanswered, /timeline-item-completion-1/);
 });
 
 test('unverified completion stays under review when tool execution was not applicable', () => {
@@ -384,7 +408,7 @@ test('unverified completion stays under review when tool execution was not appli
   assert.match(contradictory, /工具证据未通过验证/);
 });
 
-test('completion de-duplication is scoped to its own turn when answers repeat later', () => {
+test('ordinary repeated answers do not create a completion card on either turn', () => {
   const repeated = 'Same answer text';
   const html = renderToStaticMarkup(<TimelineStream rows={[
     { kind: 'user', seq: 1, turnId: 'turn-1', text: 'first question' },
@@ -395,8 +419,7 @@ test('completion de-duplication is scoped to its own turn when answers repeat la
     { kind: 'completion', seq: 6, turnId: 'turn-2', verified: false, status: 'not_applicable', summary: repeated },
   ]} />);
   assert.equal(html.split(repeated).length - 1, 2);
-  assert.match(html, /timeline-item-completion-3/);
-  assert.match(html, /timeline-item-completion-6/);
+  assert.doesNotMatch(html, /timeline-item-completion-3|timeline-item-completion-6/);
 });
 
 test('historical protocol envelopes unwrap only when the terminal answer confirms the summary', () => {

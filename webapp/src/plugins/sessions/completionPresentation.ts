@@ -418,3 +418,13 @@ export function isDuplicateCompletionAnswer(summary: string, answer?: string, js
   if (a.startsWith(s) && (s.length >= 15 || s.length / a.length >= 0.2)) return true;
   return false;
 }
+
+/** An ordinary chat answer owns its text; retain cards that carry an actual quality outcome. */
+export function shouldHideCompletionCard(completion: CompletionPresentationInput, answer?: string, jsonToolProtocol = false): boolean {
+  const hasQualitySignal = completion.verified ||
+    (completion.status !== undefined && completion.status !== 'not_applicable') ||
+    (completion.toolExecutionStatus !== undefined && completion.toolExecutionStatus !== 'not_applicable') ||
+    (completion.deliveryStatus !== undefined && completion.deliveryStatus !== 'not_assessed');
+  return !hasQualitySignal && Boolean(answer?.trim()) &&
+    (!completion.summary.trim() || isDuplicateCompletionAnswer(completion.summary, answer, jsonToolProtocol));
+}

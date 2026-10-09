@@ -630,7 +630,8 @@ export function XuenessComposerToolbar({
   const chooseRuntimeProfile = (profile: RuntimeProfile) => {
     if (disabled || !selectedModel?.configured || (profile === "standard" && !canSelectStandard)) return;
     onChange({ runtime_profile: runtimeProfileSelection(profile) });
-    // 档位换了会整片换掉输入区那棵树，菜单里的焦点随之丢失：像选模型一样收菜单并把焦点交回输入框。
+    // Shared composer retains its draft across profile switches. Return focus
+    // after selecting the profile, just as after selecting a model.
     closeModelMenu(true);
   };
   const isModelSelected = (model: ComposerModel) => {

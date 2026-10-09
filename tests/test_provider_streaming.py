@@ -9,7 +9,8 @@ from unittest.mock import patch
 
 from xueness.provider import AnthropicMessages, OpenAICompatible
 from xueness.bundled_plugins.providers.provider import (
-    ProviderRequestError, _openai_messages, _split_multimodal, _to_anthropic_messages,
+    ProviderCallbackError, ProviderRequestError, _openai_messages, _split_multimodal,
+    _to_anthropic_messages,
 )
 from xueness import providers_api, provider_config
 from xueness.bundled_plugins.providers import default_selection
@@ -65,6 +66,157 @@ class ProviderStreamTests(unittest.TestCase):
             self.assertEqual({"prompt_tokens": 11, "completion_tokens": 3, "total_tokens": 14}, result["_usage"])
         finally:
             server.shutdown(); server.server_close()
+
+    def test_openai_empty_done_stream_is_a_valid_empty_response(self):
+        payload = b"data: [DONE]\n\n"
+
+        class Handler(BaseHTTPRequestHandler):
+            def do_POST(self):
+                self.rfile.read(int(self.headers.get("Content-Length", 0)))
+                self.send_response(200)
+                self.send_header("Content-Type", "text/event-stream")
+                self.send_header("Content-Length", str(len(payload)))
+                self.end_headers()
+                self.wfile.write(payload)
+            def log_message(self, *args): pass
+
+        server = _server(Handler)
+        try:
+            result = self.provider(server).stream([{"role": "user", "content": "hi"}], [])
+            self.assertEqual(result["content"], "")
+            self.assertEqual(result["tool_calls"], [])
+        finally:
+            server.shutdown(); server.server_close()
+
+    def test_callback_failure_is_private_local_error_not_transport_retry(self):
+        state = {"calls": 0}
+        payload = b'data: {"choices":[{"delta":{"reasoning_content":"reasoning fixture"}}]}\n\n'
+        payload += b"data: [DONE]\n\n"
+
+        class Handler(BaseHTTPRequestHandler):
+            def do_POST(self):
+                self.rfile.read(int(self.headers.get("Content-Length", 0)))
+                state["calls"] += 1
+                self.send_response(200)
+                self.send_header("Content-Type", "text/event-stream")
+                self.send_header("Content-Length", str(len(payload)))
+                self.end_headers()
+                self.wfile.write(payload)
+            def log_message(self, *args): pass
+
+        server = _server(Handler)
+        try:
+            def fail(_value):
+                raise OSError("private path and prompt must not escape")
+
+            with self.assertRaises(ProviderCallbackError) as caught:
+                self.provider(server).stream(
+                    [{"role": "user", "content": "hi"}], [],
+                    on_reasoning_delta=fail)
+            self.assertEqual(caught.exception.exception_type, "OSError")
+            self.assertNotIn("private path", str(caught.exception))
+            self.assertEqual(state["calls"], 1)
+        finally:
+            server.shutdown(); server.server_close()
+
+    def test_http_status_and_invalid_sse_get_safe_categories(self):
+        state = {"status_calls": 0, "invalid_calls": 0}
+        body = b"private upstream response text"
+
+        class StatusHandler(BaseHTTPRequestHandler):
+            def do_POST(self):
+                self.rfile.read(int(self.headers.get("Content-Length", 0)))
+                state["status_calls"] += 1
+                self.send_response(503)
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+            def log_message(self, *args): pass
+
+        status_server = _server(StatusHandler)
+
+        class InvalidHandler(BaseHTTPRequestHandler):
+            def do_POST(self):
+                self.rfile.read(int(self.headers.get("Content-Length", 0)))
+                state["invalid_calls"] += 1
+                payload = b"data: \xff\n\ndata: [DONE]\n\n"
+                self.send_response(200)
+                self.send_header("Content-Type", "text/event-stream")
+                self.send_header("Content-Length", str(len(payload)))
+                self.end_headers()
+                self.wfile.write(payload)
+            def log_message(self, *args): pass
+
+        invalid_server = _server(InvalidHandler)
+        try:
+            with patch("xueness.bundled_plugins.providers.provider.time.sleep"):
+                with self.assertRaises(ProviderRequestError) as status_error:
+                    self.provider(status_server).stream(
+                        [{"role": "user", "content": "hi"}], [])
+            self.assertEqual(status_error.exception.status, 503)
+            self.assertEqual(status_error.exception.category, "service_unready")
+            self.assertNotIn("private upstream response text", str(status_error.exception))
+            self.assertEqual(state["status_calls"], 3)
+
+            with self.assertRaises(ProviderRequestError) as invalid_error:
+                self.provider(invalid_server).stream(
+                    [{"role": "user", "content": "hi"}], [])
+            self.assertIsNone(invalid_error.exception.status)
+            self.assertEqual(invalid_error.exception.category, "invalid_response")
+            self.assertEqual(invalid_error.exception.stage, "parse")
+            self.assertEqual(state["invalid_calls"], 1)
+        finally:
+            status_server.shutdown(); status_server.server_close()
+            invalid_server.shutdown(); invalid_server.server_close()
+
+    def test_complete_classifies_http_and_parse_errors_without_echo_or_replay(self):
+        state = {"http_calls": 0, "invalid_calls": 0}
+
+        class RejectedHandler(BaseHTTPRequestHandler):
+            def do_POST(self):
+                self.rfile.read(int(self.headers.get("Content-Length", 0)))
+                state["http_calls"] += 1
+                body = b"private upstream body"
+                self.send_response(400)
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+            def log_message(self, *args): pass
+
+        class InvalidHandler(BaseHTTPRequestHandler):
+            def do_POST(self):
+                self.rfile.read(int(self.headers.get("Content-Length", 0)))
+                state["invalid_calls"] += 1
+                body = b"not valid JSON"
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+            def log_message(self, *args): pass
+
+        rejected_server = _server(RejectedHandler)
+        invalid_server = _server(InvalidHandler)
+        try:
+            with patch("xueness.bundled_plugins.providers.provider.time.sleep"):
+                with self.assertRaises(ProviderRequestError) as rejected:
+                    self.provider(rejected_server).complete(
+                        [{"role": "user", "content": "hi"}], [])
+            self.assertEqual(rejected.exception.status, 400)
+            self.assertEqual(rejected.exception.category, "request_rejected")
+            self.assertNotIn("private upstream body", str(rejected.exception))
+            self.assertEqual(state["http_calls"], 1)
+
+            with self.assertRaises(ProviderRequestError) as invalid:
+                self.provider(invalid_server).complete(
+                    [{"role": "user", "content": "hi"}], [])
+            self.assertIsNone(invalid.exception.status)
+            self.assertEqual(invalid.exception.category, "invalid_response")
+            self.assertEqual(invalid.exception.stage, "parse")
+            self.assertEqual(state["invalid_calls"], 1)
+        finally:
+            rejected_server.shutdown(); rejected_server.server_close()
+            invalid_server.shutdown(); invalid_server.server_close()
 
     def test_json_response_usage_survives_complete_and_stream_fallback(self):
         class Handler(BaseHTTPRequestHandler):

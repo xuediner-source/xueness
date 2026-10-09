@@ -49,7 +49,9 @@
     "session_management",
     "sessions_api",
     "tooling",
-    "composer_capabilities"
+    "composer_capabilities",
+    "message_actions",
+    "conversation_snapshot"
   ],
   "features": [
     {
@@ -176,6 +178,26 @@
       "id": "sessions.yolo_confirmation",
       "name": "完全访问权限确认",
       "nameEn": "Full access permission confirmation"
+    },
+    {
+      "id": "sessions.zcode_conversation",
+      "name": "统一会话展示、折叠工作过程与消息操作",
+      "nameEn": "Unified conversation, work history and message actions"
+    },
+    {
+      "id": "sessions.message_edit",
+      "name": "历史消息行内编辑与版本冲突保护",
+      "nameEn": "Inline history editing with revision conflict protection"
+    },
+    {
+      "id": "sessions.message_feedback",
+      "name": "持久化回复反馈",
+      "nameEn": "Persistent assistant feedback"
+    },
+    {
+      "id": "sessions.consistent_snapshot",
+      "name": "正文、工具、状态与版本的一致快照",
+      "nameEn": "Consistent conversation, tools, status and revision snapshots"
     }
   ],
   "frontendModules": [
@@ -222,6 +244,8 @@
     "plugins/sessions/sessionContextUsage.ts",
     "plugins/sessions/FullAccessConfirmationDialog.tsx",
     "plugins/sessions/conversationActivity.ts",
-    "plugins/sessions/conversationJournalProjection.ts"
+    "plugins/sessions/conversationJournalProjection.ts",
+    "plugins/sessions/ZCodeConversation.tsx",
+    "plugins/sessions/useRunPermissionConfirmation.tsx"
   ]
 }

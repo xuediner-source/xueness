@@ -77,10 +77,16 @@ class LightweightSettingsTests(unittest.TestCase):
         long = lw._window_result(message, 3000)
         self.assertLess(len(short['content']), len(long['content']))
         self.assertIn('full_result_tool_call_id', short['content'])
+        short_view = json.loads(short['content'])
+        self.assertEqual(short_view['tool_result_read_default_limit'], 1200)
+        self.assertEqual(short_view['tool_result_read_max_limit'], 4000)
+        configured = json.loads(lw._window_result(message, 500, 3000)['content'])
+        self.assertEqual(configured['tool_result_read_default_limit'], 3000)
+        self.assertIn('Continue at nextOffset', configured['read_more'])
         self.assertEqual(message, original)
 
     def test_file_and_result_default_page_sizes_apply_only_in_lightweight(self):
-        (self.root / 'file.txt').write_text('字' * 1000)
+        (self.root / 'file.txt').write_text('字' * 1000, encoding='utf-8')
         session = self.store.new('read', self.root)
         session['runtime_profile'] = 'lightweight'
         session['lightweight_options'] = {'fileReadChars': 256, 'resultPageChars': 128}
@@ -111,8 +117,10 @@ class LightweightSettingsTests(unittest.TestCase):
         session = self.store.new('read', self.root)
         provider = ScriptedProvider([call('read', {'path': 'missing'})])
         provider.lightweight_options = {'stepLimit': 1}
-        run(session, self.store, provider, self.gate, max_steps=8)
+        result = run(session, self.store, provider, self.gate, max_steps=8)
         self.assertEqual(len(provider.requests), 1)
+        self.assertEqual(result['status'], 'paused')
+        self.assertEqual(result['pause_code'], 'step_limit_reached')
         session = self.store.new('read', self.root)
         provider = ScriptedProvider([{'content': 'ambiguous prose'}])
         provider.tool_calling = 'json'
@@ -139,11 +147,13 @@ class LightweightSettingsTests(unittest.TestCase):
             result = run(session, self.store, provider, Gate(self.root, allow_write=True))
         self.assertEqual(observed, [11.0])
         self.assertEqual(provider.request_deadline, 12345.0)
-        self.assertEqual(result['status'], 'stopped')
+        self.assertEqual(result['status'], 'paused')
+        self.assertEqual(result['pause_code'], 'wall_time_limit_reached')
+        self.assertIn('1 秒', result['pause_reason'])
         self.assertEqual(result['results'], {})
         self.assertFalse((self.root / 'late.txt').exists())
         self.assertEqual(result['steps'], 0)
-        self.assertEqual(result['runtime_activity']['phase'], 'stopped')
+        self.assertEqual(result['runtime_activity']['phase'], 'paused')
 
 
 if __name__ == '__main__':

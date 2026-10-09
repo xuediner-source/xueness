@@ -139,7 +139,7 @@ test("长会话历史轨道只挂载可视区附近的停靠点，垫片补齐�
   assert.ok(stopCount > 0, "窗口内应至少挂载一个停靠点");
   assert.ok(stopCount < 300, `长会话应只挂载部分停靠点，实际 ${stopCount}`);
   assert.match(html, /data-history-seq="1"/, "窗口应从第一条开始");
-  assert.match(html, /xn-conversation-history-rail__stops"[^>]*style="margin-top:0px;margin-bottom:\d+px"/, "未挂载停靠点应由底部垫片补齐");
+  assert.match(html, /xn-conversation-history-rail__stops"[^>]*style="position:relative;height:4510px;box-sizing:border-box"/, "300 个停靠点的总高度应固定，不能随挂载窗口收缩");
   // 停靠点序号（第 N 条用户消息）必须使用绝对下标，窗口平移后标注不错位。
   assert.match(html, /aria-label="跳转到第 1 条用户消息: 第 1 条用户消息"/);
 });

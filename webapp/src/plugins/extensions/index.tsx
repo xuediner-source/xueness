@@ -17,6 +17,19 @@ import "../../styles/marketplace.css";
 type MarketplaceFilter = "all" | "installed";
 type FocusTarget = { isConnected?: boolean; focus(): void };
 
+/** Local presentation copy applies only to the catalog shipped with this app. */
+export function marketplaceDisplayCopy(item: MarketplaceItem): { name: string; description: string } {
+  const bundled: Record<string, [string, string]> = {
+    skills: ['技能', '用可复用的操作指南帮助模型完成特定任务。'],
+    hooks: ['钩子', '在任务关键阶段执行你配置的自动化操作。'],
+    mcp: ['MCP 连接器', '连接外部工具和服务，拓展任务能力。'],
+    subagents: ['协作代理', '让多个代理分工处理任务，并汇总进度和结果。'],
+  };
+  const kind = typeof item.manifest.builtin === 'string' ? item.manifest.builtin : '';
+  const copy = item.source === 'bundled' && item.id === `xueness-${kind}` ? bundled[kind] : undefined;
+  return copy ? { name: tr(copy[0]), description: tr(copy[1]) } : { name: item.name, description: item.description };
+}
+
 /** Keep keyboard behavior small and testable while the component owns DOM focus. */
 export function trapMarketplaceDialogTab(
   event: { key: string; shiftKey: boolean; preventDefault(): void },
@@ -122,6 +135,7 @@ export function filterMarketplaceItems(
 function matchesSearch(item: MarketplaceItem, query: string): boolean {
   if (!query) return true;
   const searchText = [
+    ...Object.values(marketplaceDisplayCopy(item)),
     item.id,
     item.name,
     item.description,
@@ -145,6 +159,7 @@ export function MarketplaceCard({
   onAction: (item: MarketplaceItem, opener: HTMLButtonElement) => void;
   busy: boolean;
 }): React.JSX.Element {
+  const copy = marketplaceDisplayCopy(item);
   const installed = isInstalled(item);
   const updateAvailable = isUpdateAvailable(item);
   const actionLabel = !installed ? tr("安装") : updateAvailable ? tr("更新") : isCurrentVersion(item) ? tr("已是最新版本") : tr("已安装");
@@ -156,17 +171,17 @@ export function MarketplaceCard({
       data-testid="marketplace-card-detail"
       data-plugin-id={item.id}
       onClick={event => onOpen(item, event.currentTarget)}
-      aria-label={`${tr("详情")}：${item.name}`}
+      aria-label={`${tr("详情")}：${copy.name}`}
     >
       <span className="xn-marketplace__avatar" aria-hidden="true"><Package size={19} /></span>
       <span className="xn-marketplace__card-copy">
         <span className="xn-marketplace__card-title-row">
-          <span className="xn-marketplace__card-title">{item.name}</span>
+          <span className="xn-marketplace__card-title">{copy.name}</span>
           <span className="xn-marketplace__badge is-version">v{item.version}</span>
           {installed && <span className="xn-marketplace__badge is-installed"><Check size={11} aria-hidden="true" />{tr("已安装")}</span>}
           {updateAvailable && <span className="xn-marketplace__badge is-update"><RefreshCw size={11} aria-hidden="true" />{tr("更新")}</span>}
         </span>
-        <span className="xn-marketplace__description">{item.description || item.id}</span>
+        <span className="xn-marketplace__description">{copy.description || item.id}</span>
         <span className="xn-marketplace__source"><span>{tr("来源")}</span><code>{item.source}</code></span>
       </span>
       <ChevronRight className="xn-marketplace__card-chevron" size={16} aria-hidden="true" />
@@ -198,6 +213,7 @@ export function MarketplaceDetail({
   onBack: () => void;
   onAction: (item: MarketplaceItem, opener: HTMLButtonElement) => void;
 }): React.JSX.Element {
+  const copy = marketplaceDisplayCopy(item);
   const installed = isInstalled(item);
   const updateAvailable = isUpdateAvailable(item);
   const adapter = manifestString(item.manifest, "builtin");
@@ -212,13 +228,13 @@ export function MarketplaceDetail({
     <div className="xn-marketplace__detail-heading">
       <span className="xn-marketplace__avatar xn-marketplace__avatar--large" aria-hidden="true"><Package size={25} /></span>
       <div className="xn-marketplace__detail-copy">
-        <div className="xn-marketplace__detail-title-row"><h2>{item.name}</h2></div>
+        <div className="xn-marketplace__detail-title-row"><h2>{copy.name}</h2></div>
         <div className="xn-marketplace__detail-title-row">
           <span className="xn-marketplace__badge is-version">v{item.version}</span>
           {installed && <span className="xn-marketplace__badge is-installed"><Check size={11} aria-hidden="true" />{tr("已安装")}</span>}
           {updateAvailable && <span className="xn-marketplace__badge is-update"><RefreshCw size={11} aria-hidden="true" />{tr("更新")}</span>}
         </div>
-        <p>{item.description || item.id}</p>
+        <p>{copy.description || item.id}</p>
         <div className="xn-marketplace__detail-source"><span>{tr("来源")}</span><code>{item.source}</code></div>
       </div>
       <button
@@ -359,7 +375,7 @@ export function XuenessMarketplace({ onInstalled }: { onInstalled?: () => void }
     <header className="xn-marketplace__header">
       <div className="xn-marketplace__title">
         <h3>{tr("扩展市场")}</h3>
-        <p>{tr("浏览由主机信任目录提供的功能清单。安装仅写入数据清单，不执行下载的代码。")}</p>
+        <p>{tr("浏览可安装的扩展，在详情中查看能力和使用说明。")}</p>
       </div>
       <div className="xn-marketplace__header-actions">
         <button type="button" className="xn-marketplace__refresh" disabled={loading} onClick={() => void refresh()}>
@@ -422,7 +438,7 @@ export function XuenessMarketplace({ onInstalled }: { onInstalled?: () => void }
         <div className="xn-marketplace__dialog-icon"><ShieldCheck size={19} aria-hidden="true" /></div>
         <div className="xn-marketplace__dialog-copy">
           <h3 id={dialogTitleId}>{confirm.installedVersion ? tr("确认更新") : tr("确认安装")}</h3>
-          <p id={dialogDescriptionId}>{confirm.name} · {tr("将核对目录摘要并安装安全清单。不会载入或执行外部代码。")}</p>
+          <p id={dialogDescriptionId}>{marketplaceDisplayCopy(confirm).name} · {tr("将核对目录摘要并安装安全清单。不会载入或执行外部代码。")}</p>
           {error && <p className="xn-marketplace__error" role="alert">{tr("市场操作失败：")}{error}</p>}
           <code className="xn-marketplace__dialog-digest">{confirm.id} · {confirm.version} · SHA-256 {confirm.sha256}</code>
         </div>

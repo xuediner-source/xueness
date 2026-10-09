@@ -63,12 +63,6 @@
   flex: 0 0 auto;
   color: var(--fg-muted);
 }
-.xn-runtime-monitor__compact-status {
-  margin-inline-start: auto;
-  min-width: 0;
-  color: var(--fg-muted);
-  font-size: 11px;
-}
 .xn-runtime-monitor__chevron--expanded {
   transform: rotate(180deg);
 }

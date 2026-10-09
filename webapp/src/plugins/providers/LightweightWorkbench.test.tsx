@@ -524,7 +524,7 @@ test('formatTokens: 格式化 Token 计数，缺失返回「—」', () => {
   assert.equal(formatTokens(1500000), '1.5M');
 });
 
-test('LightweightStatusBar: 展示模型、路径、真实 Token 或「—」降级，支持窄屏响应式类', () => {
+test('LightweightStatusBar: 不重复模型选择器，展示路径、真实 Token 或「—」降级，支持窄屏响应式类', () => {
   // 完整数据
   const fullHtml = renderToStaticMarkup(<LightweightStatusBar
     modelName="qwen3-4b-instruct"
@@ -532,7 +532,7 @@ test('LightweightStatusBar: 展示模型、路径、真实 Token 或「—」降
     reportedUsage={{ inputTokens: 2500, outputTokens: 800, totalTokens: 3300 }}
     status="running"
   />);
-  assert.match(fullHtml, /qwen3-4b-instruct/);
+  assert.doesNotMatch(fullHtml, /qwen3-4b-instruct/);
   assert.match(fullHtml, /~\/wt-agy-c2/);
   assert.match(fullHtml, /↑2\.5k ↓800/);
   assert.match(fullHtml, /运行中/);
@@ -545,7 +545,7 @@ test('LightweightStatusBar: 展示模型、路径、真实 Token 或「—」降
     reportedUsage={null}
     status="idle"
   />);
-  assert.match(fallbackHtml, /class="[^"]*xn-lightweight-statusbar__model[^"]*"[^>]*>—<\/span>/);
+  assert.doesNotMatch(fallbackHtml, /xn-lightweight-statusbar__model/);
   assert.match(fallbackHtml, /class="[^"]*xn-lightweight-statusbar__cwd[^"]*"[^>]*>—<\/span>/);
   assert.match(fallbackHtml, /class="[^"]*xn-lightweight-statusbar__left"[^>]*role="group"/);
   assert.match(fallbackHtml, /class="[^"]*xn-lightweight-statusbar__tokens[^"]*"[^>]*><span class="xn-lightweight-statusbar__sr">暂无报告用量<\/span><span aria-hidden="true">—<\/span>/);
@@ -595,6 +595,7 @@ test('evaluateLightweightComposerKey: 键盘事件评估策略（Enter/Shift+Ent
   // Ctrl/Cmd+L 清屏式滚动到底部
   assert.equal(evaluateLightweightComposerKey({ key: 'l', ctrlKey: true }, baseCtx), 'clear_screen');
   assert.equal(evaluateLightweightComposerKey({ key: 'L', metaKey: true }, baseCtx), 'clear_screen');
+  assert.equal(evaluateLightweightComposerKey({ key: 'l', ctrlKey: true }, { ...baseCtx, hasTimeline: false }), null);
 
   // Esc 中断：运行中且未停止时触发 stop，未运行时为 null
   assert.equal(evaluateLightweightComposerKey({ key: 'Escape' }, { ...baseCtx, running: true }), 'stop');
@@ -613,12 +614,13 @@ test('evaluateLightweightComposerKey: 键盘事件评估策略（Enter/Shift+Ent
 
 test('LightweightComposer: 结构渲染包含自增高单行文本框、停止按钮与排队发送按钮', () => {
   // 空闲态：单行输入框与发送按钮。placeholder 只描述输入内容，快捷键写在说明行里。
-  const idleHtml = renderToStaticMarkup(<LightweightComposer placeholder="输入消息" />);
+  const idleHtml = renderToStaticMarkup(<LightweightComposer placeholder="输入消息" hasTimeline={false} />);
   assert.match(idleHtml, /<form class="xn-lightweight-composer"/);
   assert.match(idleHtml, /<textarea[^>]*class="xn-lightweight-composer__textarea"/);
   assert.match(idleHtml, /placeholder="输入消息"/);
   assert.match(idleHtml, /data-testid="composer-send"/);
   assert.doesNotMatch(idleHtml, /data-testid="composer-stop"/);
+  assert.doesNotMatch(idleHtml, /Ctrl\/Cmd\+L|Esc 中断/);
 
   // 运行中状态：显示停止按钮与排队发送按钮
   const runningHtml = renderToStaticMarkup(<LightweightComposer
@@ -734,15 +736,17 @@ test('lightweightComposerHint: 键盘提示跟随发送快捷键设置，并覆�
   const enterHint = lightweightComposerHint('enter', false, false);
   assert.match(enterHint, /Enter 发送/);
   assert.match(enterHint, /Shift\+Enter 换行/);
-  assert.match(enterHint, /Esc 中断/);
-  assert.match(enterHint, /Ctrl\/Cmd\+L 滚到底/);
+  assert.doesNotMatch(enterHint, /Esc|Ctrl\/Cmd\+L|排队/);
   assert.doesNotMatch(enterHint, /排队追加/);
 
   const modHint = lightweightComposerHint('mod-enter', false, false);
   assert.match(modHint, /^按 (⌘Enter|Ctrl\+Enter) 发送/);
   assert.doesNotMatch(modHint, /^Enter 发送/);
 
-  assert.match(lightweightComposerHint('enter', true, true), /排队追加/);
+  const runningHint = lightweightComposerHint('enter', true, true);
+  assert.match(runningHint, /Esc 中断/);
+  assert.match(runningHint, /可排队/);
+  assert.doesNotMatch(runningHint, /Ctrl\/Cmd\+L/);
 });
 
 test('LightweightComposer: 占位符不宣称固定发送键，键位说明随设置变化', () => {
@@ -1021,6 +1025,10 @@ test('LightweightWorkbench.css 只用既有设计令牌，并为流式指示器�
   // 文字读数不靠半透明压对比度
   assert.doesNotMatch(block('xn-lightweight-composer__hint'), /opacity:/);
   assert.doesNotMatch(block('xn-lightweight-statusbar__status-text'), /opacity:/);
+  assert.match(block('xn-lightweight-composer'), /border-radius: 16px/);
+  assert.match(block('xn-lightweight-composer'), /var\(--bg-input, var\(--bg-card\)\)/);
+  assert.match(block('xn-lightweight-composer__textarea'), /font-size: var\(--xn-ui-font-size, 14px\)/);
+  assert.match(css, /\.xn-lightweight-msg--assistant \.xn-lightweight-msg__prose\s*\{[^}]*font-size: var\(--xn-ui-font-size, 14px\)/);
 
   // 脉冲动效必须能被 prefers-reduced-motion 关掉，且静帧仍然可见
   assert.match(css, /@media \(prefers-reduced-motion: reduce\)[\s\S]*?\.xn-lightweight-streaming-dot\s*\{[^}]*animation: none/);
@@ -1126,6 +1134,66 @@ test('LightweightTimeline: 完成行沿用标准档的验证与交付判定，�
   assert.match(unverified, /工具证据未通过验证/);
   assert.match(incomplete, /回答尚未完成/);
   assert.match(incomplete, /已暂停/);
+});
+
+test('LightweightTimeline: 普通本地聊天只显示一次答复，失败提示及没有答复的终态仍保留', () => {
+  const rows: TimelineRow[] = [
+    { kind: 'assistant', seq: 1, turnId: 'turn-1', text: '{"summary":"你好！","evidence":[]}' },
+    { kind: 'completion', seq: 2, turnId: 'turn-1', verified: false, status: 'not_applicable',
+      toolExecutionStatus: 'not_applicable', deliveryStatus: 'not_assessed', summary: '你好！' },
+  ];
+  const chat = renderToStaticMarkup(<LightweightTimeline rows={rows} jsonToolProtocol />);
+  assert.equal(chat.split('你好！').length - 1, 1);
+  assert.doesNotMatch(chat, /timeline-item-completion-|&quot;summary&quot;/);
+  const failed = renderToStaticMarkup(<LightweightTimeline rows={[rows[0], {
+    kind: 'completion', seq: 2, turnId: 'turn-1', verified: false, status: 'unverified',
+    toolExecutionStatus: 'failed', summary: '你好！',
+  }]} jsonToolProtocol />);
+  assert.match(failed, /工具证据未通过验证/);
+  const unanswered = renderToStaticMarkup(<LightweightTimeline rows={[{
+    kind: 'completion', seq: 1, verified: false, status: 'not_applicable', summary: '',
+  }]} />);
+  assert.match(unanswered, /timeline-item-completion-1/);
+});
+
+test('LightweightTimeline: delivery failed 的大 Markdown 答复只显示在 assistant 行，质量卡保留状态', () => {
+  const answer = [
+    '# 交付复核报告',
+    '',
+    '唯一诊断正文片段：已按要求核对本地交付内容。',
+    '',
+    ...Array.from({ length: 36 }, (_, index) => `## 核对项 ${index + 1}\n\n第 ${index + 1} 项记录包含需要复核的交付细节。`),
+  ].join('\n');
+  const summary = `${answer.slice(0, 460)}…`;
+  const html = renderToStaticMarkup(<LightweightTimeline rows={[
+    { kind: 'assistant', seq: 31, turnId: 'turn-delivery', text: answer },
+    { kind: 'completion', seq: 32, turnId: 'turn-delivery', verified: false, status: 'unverified',
+      toolExecutionStatus: 'succeeded', deliveryStatus: 'failed', summary },
+  ]} />);
+  const completionCard = html.slice(html.indexOf('data-testid="timeline-item-completion-32"'));
+
+  assert.equal(html.split('唯一诊断正文片段').length - 1, 1);
+  assert.match(completionCard, /交付检查未通过/);
+  assert.match(completionCard, /未通过验证/);
+  assert.doesNotMatch(completionCard, /data-testid="xn-card-body"|xn-msg__prose/);
+});
+
+test('LightweightTimeline: 独立交付诊断和无 assistant 答复的总结仍显示在完成卡', () => {
+  const diagnostic = '交付检查失败：缺少最终文件清单。';
+  const withIndependentDiagnostic = renderToStaticMarkup(<LightweightTimeline rows={[
+    { kind: 'assistant', seq: 41, turnId: 'turn-diagnostic', text: '已生成草稿，请检查下一步。' },
+    { kind: 'completion', seq: 42, turnId: 'turn-diagnostic', verified: false, status: 'unverified',
+      toolExecutionStatus: 'succeeded', deliveryStatus: 'failed', summary: diagnostic },
+  ]} />);
+  const withoutAssistantAnswer = renderToStaticMarkup(<LightweightTimeline rows={[
+    { kind: 'completion', seq: 43, turnId: 'turn-empty', verified: false, status: 'unverified',
+      deliveryStatus: 'failed', summary: diagnostic },
+  ]} />);
+
+  assert.ok(withIndependentDiagnostic.includes('data-testid="xn-card-body"'));
+  assert.ok(withIndependentDiagnostic.includes(diagnostic));
+  assert.ok(withoutAssistantAnswer.includes('data-testid="xn-card-body"'));
+  assert.ok(withoutAssistantAnswer.includes(diagnostic));
 });
 
 test('轻量档按键判定: 带修饰键的组合不劫持清屏与历史翻找', () => {

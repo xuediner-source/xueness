@@ -117,6 +117,31 @@ class WebTests(unittest.TestCase):
                                    {"provider": "real", "steps": 1, "max_wall_seconds": 1})
         self.assertEqual(code, 200, body)
 
+    def test_omitted_run_limits_reach_core_as_inherited_and_pause_code_is_public(self):
+        sid = self._new_session()
+        captured = {}
+
+        def no_cost_run(session, store, provider, gate, steps, max_chars, **kwargs):
+            captured.update(steps=steps, max_chars=max_chars,
+                            max_wall_seconds=kwargs.get('max_wall_seconds'))
+            session.update(status='paused', steps=0, mode='build',
+                           pause_code='step_limit_reached',
+                           pause_reason='本轮达到配置步数上限，任务尚未完成。')
+            store.save(session)
+            return session
+
+        with patch('xueness.web.run', side_effect=no_cost_run):
+            code, body, _ = self._post(f'/api/sessions/{sid}/run', {'provider': 'real'})
+        self.assertEqual(code, 200, body)
+        self.assertEqual(captured, {'steps': None, 'max_chars': None,
+                                    'max_wall_seconds': None})
+        code, body, _ = self._req(f'/api/sessions/{sid}')
+        self.assertEqual(code, 200, body)
+        summary = json.loads(body)
+        self.assertEqual(summary['status'], 'paused')
+        self.assertEqual(summary['pause_code'], 'step_limit_reached')
+        self.assertIn('尚未完成', summary['pause_reason'])
+
     def _new_session(self, task="Create hello.txt then verify its content", root=None):
         payload = {"task": task}
         if root is not None:
@@ -286,9 +311,16 @@ class WebTests(unittest.TestCase):
         self.assertTrue(any(p["name"] == "write" for p in out["pending"]))
         # Approve the exact pending write once, then re-run to completion.
         pending_write = next(p for p in out["pending"] if p["name"] == "write")
+        self.assertFalse(pending_write.get("granted", False))
         code, body, _ = self._post(f"/api/sessions/{sid}/approvals",
                                    {"kind": "write", "subject": pending_write["subject"], "tool_call_id": pending_write["tool_call_id"]})
         self.assertEqual(code, 200, body)
+        # A failed/aborted resume must still expose the live exact grant, so the
+        # renderer offers continuation instead of asking for approval again.
+        code, body, _ = self._req(f"/api/sessions/{sid}")
+        self.assertEqual(code, 200, body)
+        self.assertTrue(next(p for p in json.loads(body)["pending"]
+                             if p["tool_call_id"] == pending_write["tool_call_id"])["granted"])
         # Approval is one-shot: a second run consumes it; a consumed approval
         # cannot be replayed, but the completed write persists on disk.
         code, body, _ = self._post(f"/api/sessions/{sid}/run",
@@ -297,6 +329,18 @@ class WebTests(unittest.TestCase):
         out2 = json.loads(body)
         self.assertEqual(out2["status"], "completed", body)
         self.assertTrue(out2["completion"]["verified"])
+
+    def test_live_approval_marker_never_uses_audit_or_other_subject_or_call(self):
+        from xueness.bundled_plugins.sessions.http_routes import _pending_approvals
+        call = {"id": "exact", "function": {"name": "exec",
+                "arguments": json.dumps({"argv": ["git", "status"]})}}
+        session = {"messages": [{"tool_calls": [call]}],
+                   "results": {"exact": {"error": "denied", "error_code": "approval_required"}},
+                   "approval_audit": [{"action": "granted", "tool_call_id": "exact"}]}
+        subject = web.pending_denials(session)[0]["subject"]
+        for grants in ({}, {"exec": {"other": subject}}, {"exec": {"exact": '["git","diff"]'}}):
+            self.assertFalse(_pending_approvals(session, grants)[0]["granted"])
+        self.assertTrue(_pending_approvals(session, {"exec": {"exact": subject}})[0]["granted"])
 
     def test_blanket_approval_never_accepted(self):
         sid = self._new_session()
@@ -602,6 +646,66 @@ class WebTests(unittest.TestCase):
             self.assertNotIn(sid, self.ctx["running"])
         code, body, _ = self._post(f"/api/sessions/{sid}/run", {"provider": "real", "steps": 1})
         self.assertEqual(code, 200, body)
+
+    def test_pre_run_store_failure_returns_safe_local_error_with_stage(self):
+        sid = self._new_session(task="isolated pre-run save failure")
+        store = self.ctx["store"]
+        failure = PermissionError("private path and contents")
+        with patch("xueness.core._replace_session_file", side_effect=failure):
+            with self.assertLogs("xueness.sessions.run", level="ERROR") as captured:
+                code, body, _ = self._post(
+                    f"/api/sessions/{sid}/run",
+                    {"provider": "real", "steps": 1, "permission_mode": "build"})
+
+        self.assertEqual(code, 500)
+        payload = json.loads(body)
+        self.assertEqual(payload["error_code"], "session_persistence_failed")
+        self.assertNotIn("private path", body)
+        self.assertNotIn("contents", body)
+        self.assertEqual(len(captured.records), 1)
+        logged = json.loads(captured.records[0].getMessage())
+        self.assertEqual(logged["runstage"], "session.persist_before_run")
+        self.assertEqual(logged["error_code"], "session_persistence_failed")
+        self.assertEqual(logged["exception_class"], "PermissionError")
+        self.assertEqual(logged["store_stage"], "replace")
+        self.assertNotIn("private path", captured.output)
+        self.assertNotIn("contents", captured.output)
+        self.assertNotIn("permission_mode", store.load(sid))
+        diagnostic_path = self.ctx["state_dir"] / "diagnostics" / "session-run-errors.jsonl"
+        saved_log_text = diagnostic_path.read_text(encoding="utf-8")
+        saved_log = json.loads(saved_log_text.splitlines()[-1])
+        self.assertEqual(saved_log["trace_id"], payload["trace_id"])
+        self.assertEqual(saved_log["store_stage"], "replace")
+        self.assertNotIn("private path", saved_log_text)
+        from tests.secret_permissions import assert_secret_file_private
+        assert_secret_file_private(self, diagnostic_path)
+
+    def test_provider_http_failures_have_safe_client_status_and_persistent_metadata(self):
+        from xueness.bundled_plugins.providers.provider import ProviderRequestError
+
+        cases = (
+            (400, 502, "provider_request_rejected"),
+            (503, 503, "provider_service_unready"),
+            (504, 504, "provider_timeout"),
+        )
+        for upstream, expected_http, expected_code in cases:
+            with self.subTest(upstream=upstream):
+                sid = self._new_session(task="isolated provider error classification")
+                failure = ProviderRequestError(upstream)
+                with patch("xueness.web.run", side_effect=failure):
+                    with self.assertLogs("xueness.sessions.run", level="ERROR") as captured:
+                        code, body, _ = self._post(
+                            f"/api/sessions/{sid}/run", {"provider": "real", "steps": 1})
+                self.assertEqual(code, expected_http)
+                payload = json.loads(body)
+                self.assertEqual(payload["error_code"], expected_code)
+                self.assertEqual(payload["upstream_status"], upstream)
+                self.assertIn(f"HTTP {upstream}", payload["error"])
+                self.assertNotIn("details suppressed", payload["error"])
+                logged = json.loads(captured.records[0].getMessage())
+                self.assertEqual(logged["runstage"], "core.run")
+                self.assertEqual(logged["upstream_status"], upstream)
+                self.assertEqual(logged["trace_id"], payload["trace_id"])
 
     def test_invalid_json_rejected(self):
         code, body, _ = self._req("/api/sessions", raw=b"{not json",

@@ -808,7 +808,6 @@ describe("xuenessWorkbench run orchestration", () => {
       mode: "build",
       permission_mode: "build",
       browser: false,
-      steps: 8,
       allow_mcp: true,
       allow_subagents: false,
       allow_hooks: false,
@@ -825,7 +824,7 @@ describe("xuenessWorkbench run orchestration", () => {
     assert.equal(runBody.provider, "real");
     assert.equal(runBody.mode, "plan");
     assert.equal(runBody.runtime_profile, "lightweight");
-    assert.equal(runBody.steps, 8);
+    assert.equal("steps" in runBody, false, "ordinary runs inherit the selected server profile budget");
   });
 
   it("createSession fails soft when the server returns no id", async () => {
@@ -835,6 +834,19 @@ describe("xuenessWorkbench run orchestration", () => {
     assert.equal(result.ok, false);
     if (!result.ok) assert.match(result.error, /no id/);
     assert.equal(callsTo("/api/sessions/new-1/run").length, 0);
+  });
+
+  it("goal runs keep their explicit budget while ordinary runs preserve explicit caller budgets", async () => {
+    stubStandardFetch({ "/api/sessions": { id: "goal-1" }, "/api/sessions/goal-1/run": {} });
+    const goalResult = await createSession("goal run", { provider: "real", mode: "build", goal: true });
+    if (!goalResult.ok) assert.fail(goalResult.error);
+    assert.equal((bodyOf(lastCall()) as Record<string, unknown>).steps, 20);
+
+    stubStandardFetch({ "/api/sessions/s-explicit/run": {} });
+    const explicitChoices = { provider: "real", mode: "build", steps: 5 } as Parameters<typeof runSession>[1] & { steps: number };
+    const explicitResult = await runSession("s-explicit", explicitChoices);
+    assert.deepEqual(explicitResult, { ok: true, value: undefined });
+    assert.equal((bodyOf(lastCall()) as Record<string, unknown>).steps, 5);
   });
 
   it("sendTurn posts {text} then runs", async () => {
@@ -956,7 +968,6 @@ describe("xuenessWorkbench run orchestration", () => {
       mode: "build",
       permission_mode: "build",
       browser: false,
-      steps: 8,
       allow_mcp: true,
       allow_subagents: false,
       allow_hooks: false,
@@ -1004,7 +1015,6 @@ describe("xuenessWorkbench run orchestration", () => {
       mode: "build",
       permission_mode: "build",
       browser: false,
-      steps: 8,
       allow_mcp: true,
       allow_subagents: false,
       allow_hooks: false,

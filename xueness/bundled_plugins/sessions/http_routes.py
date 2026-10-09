@@ -4,9 +4,145 @@ Host lookups intentionally remain dynamic for the historical web API/testing
 surface; no copied module globals can bypass a patched runner or provider.
 """
 from ... import web as host
+from ..providers.provider import ProviderCallbackError, ProviderRequestError
 from pathlib import Path
 from contextlib import contextmanager
+import json
+import logging
+import os
 import re
+import stat
+import threading
+import uuid
+from ...resources import _is_link, _protect_private_directory, _protect_private_file
+
+
+_RUN_LOG = logging.getLogger("xueness.sessions.run")
+_RUN_FILE_LOG_LOCK = threading.Lock()
+_RUN_DIAGNOSTIC_MAX_BYTES = 64 * 1024
+_RUN_DIAGNOSTIC_MAX_RECORD_BYTES = 2048
+_PROVIDER_ERROR_PRESENTATION = {
+    "request_rejected": ("provider_request_rejected", 502,
+                          "The model service rejected the request"),
+    "authentication_failed": ("provider_authentication_failed", 502,
+                               "The model service rejected authentication"),
+    "endpoint_not_found": ("provider_endpoint_not_found", 502,
+                           "The model service endpoint was not found"),
+    "timeout": ("provider_timeout", 504, "The model request timed out"),
+    "rate_limited": ("provider_rate_limited", 503,
+                     "The model service rate-limited the request"),
+    "service_unready": ("provider_service_unready", 503,
+                        "The model service is not ready"),
+    "upstream_failure": ("provider_upstream_failure", 502,
+                         "The model service returned an error"),
+    "connection_failed": ("provider_connection_failed", 502,
+                          "Could not connect to the model service"),
+    "invalid_response": ("provider_invalid_response", 502,
+                         "The model service returned an invalid response"),
+    "http_error": ("provider_http_error", 502,
+                   "The model service returned an HTTP error"),
+    "request_failed": ("provider_request_failed", 502,
+                       "The model request failed"),
+}
+
+
+def _log_run_failure(trace_id, runstage, error_code, exception_class,
+                     upstream_status=None, store_stage=None, state_dir=None):
+    """Write correlation metadata only; never log exception messages or inputs."""
+    trace_id = trace_id if isinstance(trace_id, str) and re.fullmatch(
+        r"[0-9a-f]{16}", trace_id) else uuid.uuid4().hex[:16]
+    runstage = runstage if isinstance(runstage, str) and re.fullmatch(
+        r"[a-z][a-z0-9_.]{0,63}", runstage) else "run.unknown"
+    error_code = error_code if isinstance(error_code, str) and re.fullmatch(
+        r"[a-z][a-z0-9_]{0,63}", error_code) else "run_failed"
+    exception_class = exception_class if isinstance(exception_class, str) and re.fullmatch(
+        r"_?[A-Za-z][A-Za-z0-9_]{0,79}", exception_class) else "Exception"
+    record = {
+        "event": "session_run_failed",
+        "trace_id": trace_id,
+        "runstage": runstage,
+        "error_code": error_code,
+        "exception_class": exception_class,
+    }
+    if type(upstream_status) is int and 100 <= upstream_status <= 599:
+        record["upstream_status"] = upstream_status
+    if isinstance(store_stage, str) and store_stage in {
+            "session_path", "temp_create", "protect_temp", "serialize", "flush", "replace"}:
+        record["store_stage"] = store_stage
+    safe_json = json.dumps(record, separators=(",", ":"), sort_keys=True)
+    _RUN_LOG.error(safe_json)
+    if state_dir is not None:
+        _append_run_diagnostic(state_dir, safe_json)
+
+
+def _append_run_diagnostic(state_dir, safe_json):
+    """Persist a bounded private JSONL event without changing the run response."""
+    encoded = (safe_json + "\n").encode("utf-8")
+    if len(encoded) > _RUN_DIAGNOSTIC_MAX_RECORD_BYTES:
+        return
+    try:
+        state = Path(state_dir)
+        if _is_link(state):
+            return
+        diagnostics = state / "diagnostics"
+        if _is_link(diagnostics):
+            return
+        diagnostics.mkdir(mode=0o700, exist_ok=True)
+        if _is_link(diagnostics):
+            return
+        _protect_private_directory(diagnostics)
+        path = diagnostics / "session-run-errors.jsonl"
+        if _is_link(path):
+            return
+        flags = os.O_WRONLY | os.O_CREAT | os.O_APPEND | getattr(os, "O_BINARY", 0)
+        flags |= getattr(os, "O_NOFOLLOW", 0)
+        with _RUN_FILE_LOG_LOCK:
+            fd = os.open(os.fspath(path), flags, 0o600)
+            try:
+                if not stat.S_ISREG(os.fstat(fd).st_mode):
+                    return
+                _protect_private_file(fd)
+                if os.fstat(fd).st_size + len(encoded) > _RUN_DIAGNOSTIC_MAX_BYTES:
+                    os.ftruncate(fd, 0)
+                offset = 0
+                while offset < len(encoded):
+                    offset += os.write(fd, encoded[offset:])
+                os.fsync(fd)
+            finally:
+                os.close(fd)
+    except Exception:
+        # A diagnostic write must never hide the actual run failure.
+        return
+
+
+def _provider_failure_response(error, fallback_trace_id):
+    code, http_status, message = _PROVIDER_ERROR_PRESENTATION.get(
+        error.category, _PROVIDER_ERROR_PRESENTATION["request_failed"])
+    trace_id = error.trace_id or fallback_trace_id
+    if error.context_overflow:
+        code = "provider_context_limit"
+        message = "The model service rejected the request due to a context limit"
+    upstream_status = error.status
+    if upstream_status is not None:
+        message += f" (HTTP {upstream_status})"
+    message += f" (reference {trace_id})"
+    return http_status, {
+        "error": message,
+        "error_code": code,
+        "trace_id": trace_id,
+        **({"upstream_status": upstream_status} if upstream_status is not None else {}),
+    }
+
+
+def _pending_approvals(session, buckets):
+    """Expose live one-shot grants, never infer permission from historical audit."""
+    pending = []
+    for item in host.pending_denials(session):
+        kind = item.get('kind') or item.get('name')
+        grants = buckets.get(kind, {})
+        granted = item['tool_call_id'] in grants and grants[item['tool_call_id']] == item.get('subject')
+        pending.append({**item, 'granted': granted})
+    return pending
 
 
 def _public_model_selection(session):
@@ -415,6 +551,51 @@ def _remember_workspace(ctx, root):
         # session or accepted message into an apparent failure.
         pass
 
+def public_session_payload(ctx, session):
+    with ctx['lock']:
+        buckets = ctx['approvals'].get(session['id'], {})
+        approved = {'write': sorted(buckets.get('write', {}).values()), 'edit': sorted(buckets.get('edit', {}).values()), 'exec': sorted(buckets.get('exec', {}).values()), 'mcp': sorted(buckets.get('mcp', {}).values())}
+        pending = _pending_approvals(session, buckets)
+    try:
+        from .queue import reconcile_inactive
+        queue = _message_queue(ctx)
+        reconcile_inactive(ctx, queue, session['id'])
+        queue_snapshot = queue.snapshot(session['id'])
+    except (OSError, ValueError):
+        queue_snapshot = {'queued_messages': [], 'queue_history': [],
+                          'queue_error': 'cannot read message queue'}
+    return {
+        'id': session['id'], 'task': session['task'],
+        'title': session.get('title') or session['task'], 'root': session['root'],
+        'status': session.get('status'), 'steps': session.get('steps', 0),
+        'mode': session.get('mode', 'build'), 'mode_history': session.get('mode_history', []),
+        'permission_mode': session.get('permission_mode', 'build'),
+        'permission_mode_history': session.get('permission_mode_history', []),
+        'model_selection': _public_model_selection(session),
+        'model_history': session.get('model_history', []),
+        'runtime_profile': session.get('runtime_profile'),
+        'runtime_budget': _public_runtime_budget(session),
+        'runtime_activity': _public_runtime_activity(session),
+        'runtime_activity_history': _public_runtime_activity_history(session),
+        'pause_reason': session.get('pause_reason'),
+        'pause_code': session.get('pause_code'),
+        'remote_connection': _public_remote_connection(session),
+        'browser_enabled': session.get('browser_enabled'),
+        'compactions': session.get('compactions', []), 'streaming': session.get('streaming'),
+        'reasoning_history': _public_reasoning_history(session),
+        'provider_usage': session.get('provider_usage', []),
+        'completion': session.get('completion'), 'todos': session.get('todos', []),
+        'delivery_requirements': session.get('delivery_requirements', []),
+        'goal': _public_goal(ctx, session),
+        'tool_timings': session.get('tool_timings', [])[-200:],
+        'pending_question': session.get('pending_question'),
+        'pending': pending, 'approved': approved,
+        **queue_snapshot,
+        'changed_files': host.changed_paths(session),
+        'forkParent': _public_fork_parent(session),
+    }
+
+
 def handle_GET(self, parts, path, data):
     ctx = self._ctx
     if path == '/api/sessions':
@@ -455,46 +636,7 @@ def handle_GET(self, parts, path, data):
         except (OSError, ValueError):
             self._send(404, {'error': 'session not found'})
             return True
-        with ctx['lock']:
-            buckets = ctx['approvals'].get(parts[2], {})
-            approved = {'write': sorted(buckets.get('write', {}).values()), 'edit': sorted(buckets.get('edit', {}).values()), 'exec': sorted(buckets.get('exec', {}).values()), 'mcp': sorted(buckets.get('mcp', {}).values())}
-        try:
-            from .queue import reconcile_inactive
-            queue = _message_queue(ctx)
-            reconcile_inactive(ctx, queue, parts[2])
-            queue_snapshot = queue.snapshot(parts[2])
-        except (OSError, ValueError):
-            queue_snapshot = {'queued_messages': [], 'queue_history': [],
-                              'queue_error': 'cannot read message queue'}
-        self._send(200, {
-            'id': session['id'], 'task': session['task'],
-            'title': session.get('title') or session['task'], 'root': session['root'],
-            'status': session.get('status'), 'steps': session.get('steps', 0),
-            'mode': session.get('mode', 'build'), 'mode_history': session.get('mode_history', []),
-            'permission_mode': session.get('permission_mode', 'build'),
-            'permission_mode_history': session.get('permission_mode_history', []),
-            'model_selection': _public_model_selection(session),
-            'model_history': session.get('model_history', []),
-            'runtime_profile': session.get('runtime_profile'),
-            'runtime_budget': _public_runtime_budget(session),
-            'runtime_activity': _public_runtime_activity(session),
-            'runtime_activity_history': _public_runtime_activity_history(session),
-            'pause_reason': session.get('pause_reason'),
-            'remote_connection': _public_remote_connection(session),
-            'browser_enabled': session.get('browser_enabled'),
-            'compactions': session.get('compactions', []), 'streaming': session.get('streaming'),
-            'reasoning_history': _public_reasoning_history(session),
-            'provider_usage': session.get('provider_usage', []),
-            'completion': session.get('completion'), 'todos': session.get('todos', []),
-            'delivery_requirements': session.get('delivery_requirements', []),
-            'goal': _public_goal(ctx, session),
-            'tool_timings': session.get('tool_timings', [])[-200:],
-            'pending_question': session.get('pending_question'),
-            'pending': host.pending_denials(session), 'approved': approved,
-            **queue_snapshot,
-            'changed_files': host.changed_paths(session),
-            'forkParent': _public_fork_parent(session),
-        })
+        self._send(200, public_session_payload(ctx, session))
         return True
     if len(parts) == 4 and parts[0] == 'api' and (parts[1] == 'sessions') and (parts[3] == 'events') and host._valid_sid(parts[2]):
         try:
@@ -596,7 +738,8 @@ def handle_GET(self, parts, path, data):
         except (OSError, ValueError):
             self._send(404, {'error': 'session not found'})
             return True
-        self._send(200, session)
+        from .message_actions import revision
+        self._send(200, {**session, 'message_revision': revision(session)})
         return True
     return False
 
@@ -625,7 +768,7 @@ def handle_POST(self, parts, path, data):
                     return True
                 from ..settings.workspaces_api import allowed_roots
                 root = host._allowed_root(host.Path(data['root'].strip()), ctx['web_runs'], ctx['project_dir'], allowed_roots(ctx))
-        except ValueError:
+        except ValueError as exc:
             self._send(400, {'error': 'workspace root not permitted'})
             return True
         prepared = None
@@ -784,6 +927,8 @@ def handle_POST(self, parts, path, data):
         self._send(status, payload)
         return True
     if len(parts) == 4 and parts[0] == 'api' and (parts[1] == 'sessions') and (parts[3] == 'run') and host._valid_sid(parts[2]):
+        run_trace_id = uuid.uuid4().hex[:16]
+        runstage = 'request.validation'
         continue_queue = data.get('continue_queue', False)
         if type(continue_queue) is not bool:
             self._send(400, {'error': 'continue_queue must be a boolean'})
@@ -793,12 +938,14 @@ def handle_POST(self, parts, path, data):
                                     'approve_all', 'approveAll'))):
             self._send(400, {'error': 'blanket approval is never accepted via web; approve single actions instead'})
             return True
-        steps = data.get('steps', 8)
-        max_chars = data.get('max_chars', data.get('maxChars', 24000))
-        if not isinstance(steps, int) or not 1 <= steps <= 20:
+        steps_present = 'steps' in data
+        steps = data.get('steps') if steps_present else None
+        max_chars_present = 'max_chars' in data or 'maxChars' in data
+        max_chars = data.get('max_chars', data.get('maxChars')) if max_chars_present else None
+        if steps_present and (type(steps) is not int or not 1 <= steps <= 20):
             self._send(400, {'error': 'steps must be 1..20'})
             return True
-        if not isinstance(max_chars, int) or not 1000 <= max_chars <= 100000:
+        if max_chars_present and (type(max_chars) is not int or not 1000 <= max_chars <= 100000):
             self._send(400, {'error': 'max_chars must be 1000..100000'})
             return True
         max_tokens = data.get('max_tokens', data.get('maxTokens'))
@@ -809,8 +956,11 @@ def handle_POST(self, parts, path, data):
         if requested_profile is not None and requested_profile not in ('standard', 'lightweight'):
             self._send(400, {'error': 'runtime_profile must be standard or lightweight'})
             return True
-        max_wall_seconds = data.get('max_wall_seconds', data.get('maxWallSeconds', 120))
-        if isinstance(max_wall_seconds, bool) or not isinstance(max_wall_seconds, (int, float)) or (not 0 < max_wall_seconds <= 3600):
+        wall_time_present = 'max_wall_seconds' in data or 'maxWallSeconds' in data
+        max_wall_seconds = data.get('max_wall_seconds', data.get('maxWallSeconds')) if wall_time_present else None
+        if wall_time_present and (isinstance(max_wall_seconds, bool) or
+                                  not isinstance(max_wall_seconds, (int, float)) or
+                                  not 0 < max_wall_seconds <= 3600):
             self._send(400, {'error': 'max_wall_seconds must be greater than zero and at most 3600'})
             return True
         mode = data.get('mode', 'build')
@@ -967,6 +1117,7 @@ def handle_POST(self, parts, path, data):
                 'remote_connection': saved_remote,
             }
             ctx['running'].add(parts[2])
+        runstage = 'provider.resolve'
         try:
             provider = host.provider_config.resolve(ctx['state_dir'], pid, model,
                                                    reasoning_effort=reasoning_effort,
@@ -983,10 +1134,18 @@ def handle_POST(self, parts, path, data):
             with ctx['lock']:
                 ctx['running'].discard(parts[2])
                 ctx.setdefault('running_context', {}).pop(parts[2], None)
-            self._send(400, {'error': host.provider_config.configuration_error(exc)})
+            _log_run_failure(run_trace_id, runstage, 'provider_configuration_error',
+                             type(exc).__name__, state_dir=ctx['state_dir'])
+            self._send(400, {
+                'error': host.provider_config.configuration_error(exc),
+                'error_code': 'provider_configuration_error',
+                'trace_id': run_trace_id,
+            })
             return True
         try:
+            runstage = 'session.lease'
             with _queue_run_lease(ctx, queue, session['id']):
+                runstage = 'session.reload'
                 selection = session.get('model_selection')
                 session = ctx['store'].load(parts[2])
                 if selection is not None:
@@ -996,6 +1155,7 @@ def handle_POST(self, parts, path, data):
                         and not queue.snapshot(parts[2])['queued_messages']):
                     self._send(409, {'error': 'no queued messages to continue'})
                     return True
+                runstage = 'queue.resume'
                 queue.resume_pending(parts[2], current_queue_id)
                 previous_permission_mode = session.get('permission_mode', 'build')
                 if previous_permission_mode != permission_mode:
@@ -1007,7 +1167,9 @@ def handle_POST(self, parts, path, data):
                 session['permission_mode'] = permission_mode
                 if browser is not None:
                     session['browser_enabled'] = browser
+                runstage = 'session.persist_before_run'
                 ctx['store'].save(session)
+                runstage = 'gate.initialize'
                 gate = host.WebGate(host.Path(session['root']), parts[2], ctx['approvals'], ctx['lock'], mode=mode, disallow=disallowed, session=session, permission_mode=permission_mode, plan_draft=plan_draft)
                 gate.allow_real = ctx['allow_real']
                 # /model, /effort and the app-server can retarget this run, but
@@ -1023,11 +1185,14 @@ def handle_POST(self, parts, path, data):
                              if name not in ('skills', 'hooks', 'mcp', 'subagents')]
                 raw_grants = data.get('grant_plugin_capability', data.get('grantPluginCapability'))
                 grants = [g for g in raw_grants if isinstance(g, str)] if isinstance(raw_grants, list) else []
+                runstage = 'plugin.plan'
                 plugin_plan = host.plugin_sdk.plan(ctx['state_dir'], names, grants=grants)
                 names = plugin_plan.load
                 session['skill_catalog'] = data.get('skill_catalog') is True
+                runstage = 'plugin.activate'
                 with host.activate(names, ctx['state_dir'], host.Path(session['root']), session) as ext:
                     from ..memory.catalog import load_run_memory
+                    runstage = 'memory.load'
                     run_memory = load_run_memory(ctx, session['root'])
                     out = session
                     queue_warning = None
@@ -1064,8 +1229,10 @@ def handle_POST(self, parts, path, data):
                     from .queue import MAX_PENDING_ITEMS
                     drained = 0
                     while queue_warning is None:
+                        runstage = 'approved.replay'
                         host.replay_approved(out, ctx['store'], gate, ctx['approvals'], ctx['lock'],
                                              mcp_call=ext.kwargs.get('mcp_call'))
+                        runstage = 'core.run'
                         out = host.run(
                             out, ctx['store'], provider, gate, steps, max_chars,
                             memory=run_memory, max_tokens=max_tokens,
@@ -1124,14 +1291,51 @@ def handle_POST(self, parts, path, data):
             # workspace mismatch that the generic ValueError branch reports.
             self._send(exc.status, exc.body)
             return True
-        except ValueError:
-            self._send(400, {'error': 'session workspace mismatch'})
+        except ValueError as exc:
+            # Request/configuration ValueErrors were validated above. A value
+            # failure from the execution path is an internal run failure, not
+            # a provider request failure or a workspace input error.
+            store_stage = getattr(exc, '_xueness_store_stage', None)
+            error_code = 'session_persistence_failed' if store_stage else 'run_failed'
+            _log_run_failure(run_trace_id, runstage, error_code, type(exc).__name__,
+                             store_stage=store_stage, state_dir=ctx['state_dir'])
+            message = ('Session state could not be saved locally'
+                       if store_stage else 'Run failed')
+            self._send(500, {
+                'error': f'{message} (reference {run_trace_id})',
+                'error_code': error_code, 'trace_id': run_trace_id,
+            })
             return True
-        except RuntimeError:
-            self._send(502, {'error': 'provider request failed'})
+        except ProviderCallbackError as exc:
+            _log_run_failure(exc.trace_id, runstage, 'local_stream_callback_failed',
+                             exc.exception_type, state_dir=ctx['state_dir'])
+            self._send(500, {
+                'error': f'Local stream callback failed (reference {exc.trace_id})',
+                'error_code': 'local_stream_callback_failed',
+                'trace_id': exc.trace_id,
+            })
             return True
-        except (OSError, KeyError):
-            self._send(500, {'error': 'run failed'})
+        except ProviderRequestError as exc:
+            status, payload = _provider_failure_response(exc, run_trace_id)
+            _log_run_failure(exc.trace_id or run_trace_id, runstage,
+                             payload['error_code'], exc.exception_type or type(exc).__name__,
+                             exc.status, state_dir=ctx['state_dir'])
+            self._send(status, payload)
+            return True
+        except Exception as exc:
+            store_stage = getattr(exc, '_xueness_store_stage', None)
+            error_code = ('session_persistence_failed' if store_stage else
+                          'local_io_failure' if isinstance(exc, OSError) else 'run_failed')
+            _log_run_failure(run_trace_id, runstage, error_code, type(exc).__name__,
+                             store_stage=store_stage, state_dir=ctx['state_dir'])
+            message = ('Session state could not be saved locally'
+                       if store_stage else
+                       'A local file operation failed' if isinstance(exc, OSError) else
+                       'Run failed')
+            self._send(500, {
+                'error': f'{message} (reference {run_trace_id})',
+                'error_code': error_code, 'trace_id': run_trace_id,
+            })
             return True
         finally:
             from . import model_switch

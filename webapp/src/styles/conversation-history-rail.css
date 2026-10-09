@@ -35,10 +35,11 @@
   overflow-x: hidden;
   overflow-y: auto;
   overscroll-behavior: contain;
+  overflow-anchor: none;
   scrollbar-width: none;
 }
 
-/* 停靠区承载间距；窗口化时未挂载停靠点由它的外边距补齐（见 ListVirtualWindow）。 */
+/* 停靠区承载间距；窗口化时固定总高，停靠点按实际下标定位，避免滚动范围瞬间缩短。 */
 .xn-conversation-history-rail__stops {
   display: flex;
   flex-direction: column;

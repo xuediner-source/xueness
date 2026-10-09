@@ -13,6 +13,13 @@ test('legacy evidence never silently certifies content completion', () => {
   assert.match(html, /交付内容尚未检查/); assert.doesNotMatch(html, /交付检查通过/);
 });
 
+test('compact conversation hides empty checks but retains actual delivery failures and requirements', () => {
+  assert.equal(renderToStaticMarkup(<CompletionChecks compact sessionId="plain" items={[]} onSaved={()=>{}} completion={{status:'not_applicable'}} />),'');
+  assert.equal(renderToStaticMarkup(<CompletionChecks compact sessionId="plain" items={[]} onSaved={()=>{}} completion={{status:'not_applicable',delivery_status:'not_assessed',delivery_checks:{planning:{status:'not_assessed',items:[],reason:'未登记交付清单'}}}} />),'');
+  assert.match(renderToStaticMarkup(<CompletionChecks compact sessionId="failed" items={[]} onSaved={()=>{}} completion={{delivery_status:'failed'}} />),/交付检查未通过/);
+  assert.match(renderToStaticMarkup(<CompletionChecks compact sessionId="required" items={[{id:'a',label:'deliverable',contains:[],min_links:0}]} onSaved={()=>{}} />),/交付检查/);
+});
+
 test('a run without any completion is unchecked rather than a premature evidence failure', () => {
   const html = renderToStaticMarkup(<CompletionChecks sessionId="new" items={[]} onSaved={() => {}} />);
   assert.match(html, /工具证据尚未检查/);

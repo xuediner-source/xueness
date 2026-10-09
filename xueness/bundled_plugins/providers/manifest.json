@@ -40,8 +40,8 @@
   "features": [
     {
       "id": "providers.termination",
-      "name": "生成结束原因与截断安全暂停",
-      "nameEn": "Generation termination and safe truncation pause"
+      "name": "生成结束原因、截断与步骤时限的可续暂停",
+      "nameEn": "Generation termination, truncation and resumable step or time limits"
     },
     {
       "id": "providers.budget_feedback",
@@ -95,8 +95,8 @@
     },
     {
       "id": "providers.tools",
-      "name": "精简工具、按需发现与结果分页",
-      "nameEn": "Minimal tools, discovery and result paging"
+      "name": "精简工具、按需发现与有界结果分页",
+      "nameEn": "Minimal tools, discovery and bounded result paging"
     },
     {
       "id": "providers.json",

@@ -7,6 +7,7 @@ import http.client
 import json
 import math
 import os
+import re
 import select
 import socket
 import threading
@@ -14,6 +15,7 @@ import time
 import urllib.error
 import urllib.parse
 import urllib.request
+import uuid
 
 from .runtime_options import build_openai_payload, resolve_runtime_options, validate_compatibility
 from .lightweight_config import effective_options
@@ -148,16 +150,92 @@ def _with_request_attempts(response, attempts):
     return result
 
 
-class ProviderRequestError(RuntimeError):
-    """Sanitized provider failure with safe scheduling hints for callers."""
+def _http_error_category(status):
+    if status in (400, 413, 422):
+        return "request_rejected"
+    if status in (401, 403):
+        return "authentication_failed"
+    if status == 404:
+        return "endpoint_not_found"
+    if status in (408, 504):
+        return "timeout"
+    if status == 429:
+        return "rate_limited"
+    if status in (502, 503):
+        return "service_unready"
+    if type(status) is int and 500 <= status <= 599:
+        return "upstream_failure"
+    return "http_error"
 
-    def __init__(self, status=None, retry_after=None, *, context_overflow=False):
+
+def _transport_error_category(error):
+    reason = error.reason if isinstance(error, urllib.error.URLError) else error
+    if isinstance(reason, TimeoutError):
+        return "timeout"
+    if (isinstance(reason, ConnectionRefusedError)
+            or getattr(reason, "errno", None) == errno.ECONNREFUSED
+            or getattr(reason, "winerror", None) == 10061):
+        return "service_unready"
+    return "connection_failed"
+
+
+class ProviderCallbackError(Exception):
+    """A caller's stream callback failed; it is not a provider transport error."""
+
+    def __init__(self, exception_type):
+        super().__init__("provider stream callback failed")
+        name = exception_type if isinstance(exception_type, str) else "Exception"
+        self.exception_type = name[:80]
+        self.trace_id = uuid.uuid4().hex[:16]
+        self.stage = "stream_callback"
+
+
+def _notify_stream_callback(callback, value):
+    try:
+        callback(value)
+    except Exception as exc:
+        # Cooperative cancellation is raised by core callbacks to unwind the
+        # socket read. Preserve that control signal so it can settle as
+        # "stopped" instead of becoming a callback or provider failure.
+        if getattr(exc, "_xueness_stream_control", None) == "stop":
+            raise
+        # Do not retain or stringify the callback exception: it may contain a
+        # workspace path, a prompt fragment, or other private application data.
+        raise ProviderCallbackError(type(exc).__name__) from None
+
+
+class ProviderRequestError(RuntimeError):
+    """Sanitized provider failure with safe classification for callers."""
+
+    def __init__(self, status=None, retry_after=None, *, context_overflow=False,
+                 category=None, stage="response", trace_id=None,
+                 exception_type=None):
         super().__init__("provider request failed (details suppressed)")
-        self.status = status if isinstance(status, int) else None
+        self.status = status if type(status) is int and 100 <= status <= 599 else None
+        self.category = category or (_http_error_category(self.status)
+                                     if self.status is not None else "request_failed")
+        self.stage = stage if stage in ("connect", "read", "parse", "deadline", "response") else "response"
+        self.trace_id = trace_id if isinstance(trace_id, str) and re.fullmatch(r"[0-9a-f]{16}", trace_id) else uuid.uuid4().hex[:16]
+        self.exception_type = (exception_type[:80] if isinstance(exception_type, str)
+                               else None)
         self.context_overflow = bool(context_overflow)
         retryable = self.status == 429 or (self.status is not None and 500 <= self.status <= 599)
         self.retry_after = (max(0.0, min(float(retry_after), 2.0))
                             if retryable and isinstance(retry_after, (int, float)) else None)
+
+
+def _provider_request_error(error, *, status=None, retry_after=None,
+                            context_overflow=False, stage="response"):
+    if status is not None:
+        category = _http_error_category(status)
+    elif isinstance(error, (urllib.error.URLError, OSError)):
+        category = _transport_error_category(error)
+    else:
+        category = "invalid_response"
+    return ProviderRequestError(
+        status, retry_after, context_overflow=context_overflow,
+        category=category, stage=stage, exception_type=type(error).__name__,
+    )
 
 
 class _NoRedirect(urllib.request.HTTPRedirectHandler):
@@ -507,7 +585,7 @@ class OpenAICompatible:
             deadline, attempts = self._lightweight_request_settings()
             return self._request_json(
                 body, "/chat/completions", attempts=attempts,
-                absolute_deadline=deadline, transport_only_retries=True,
+                absolute_deadline=deadline,
             )
         deadline = _explicit_request_deadline(self)
         if deadline is not None:
@@ -857,18 +935,25 @@ class OpenAICompatible:
                 if usage:
                     result["_usage"] = usage
                 return _with_request_attempts(result, attempts)
+            except ProviderCallbackError:
+                raise
             except _RetryableProviderError as exc:
                 delivered = delivered or exc.delivered
                 if delivered or attempts >= 3 or not exc.retryable:
-                    raise ProviderRequestError(
-                        exc.status, exc.delay,
-                        context_overflow=exc.context_overflow,
+                    raise _provider_request_error(
+                        exc, status=exc.status, retry_after=exc.delay,
+                        context_overflow=exc.context_overflow, stage="response",
                     ) from None
                 time.sleep(exc.delay)
-            except (urllib.error.URLError, OSError, ValueError, KeyError, IndexError, json.JSONDecodeError):
+            except (urllib.error.URLError, OSError) as exc:
                 if delivered or attempts >= 3:
-                    raise ProviderRequestError() from None
+                    raise _provider_request_error(exc, stage="read") from None
                 time.sleep(min(0.25 * (2 ** (attempts - 1)), 2.0))
+            except (ValueError, KeyError, IndexError, TypeError, AttributeError) as exc:
+                # A malformed HTTP/SSE response is a protocol error, not a
+                # transport failure. It must not be retried or reported as a
+                # connection problem.
+                raise _provider_request_error(exc, stage="parse") from None
 
     def _stream_lightweight(self, body, *, deadline, attempts, on_delta=None,
                             on_reasoning_delta=None):
@@ -911,24 +996,34 @@ class OpenAICompatible:
                     if usage:
                         result["_usage"] = usage
                     return _with_request_attempts(result, attempt + 1)
+                except ProviderCallbackError:
+                    raise
                 except _RetryableProviderError as exc:
                     delivered = delivered or exc.delivered
-                    _raise_if_deadline_expired(deadline)
                     if delivered or attempt == attempts - 1 or not exc.retryable:
-                        raise ProviderRequestError(
-                            exc.status, exc.delay,
-                            context_overflow=exc.context_overflow,
+                        raise _provider_request_error(
+                            exc, status=exc.status, retry_after=exc.delay,
+                            context_overflow=exc.context_overflow, stage="response",
                         ) from None
                     _sleep_with_deadline(exc.delay, deadline)
-                except (urllib.error.URLError, OSError):
-                    _raise_if_deadline_expired(deadline)
+                except (urllib.error.URLError, OSError) as exc:
+                    if time.monotonic() >= deadline:
+                        raise ProviderRequestError(
+                            category="timeout", stage="deadline",
+                            exception_type=type(exc).__name__,
+                        ) from None
                     if delivered or attempt == attempts - 1:
-                        raise ProviderRequestError() from None
+                        raise _provider_request_error(exc, stage="read") from None
                     _sleep_with_deadline(min(0.25 * (2 ** attempt), 2.0), deadline)
-                except (ValueError, KeyError, IndexError, json.JSONDecodeError):
+                except (ValueError, KeyError, IndexError, TypeError, AttributeError) as exc:
                     # transportRetries cover network failures only. A malformed
                     # response has already reached the client and is not replayed.
-                    raise ProviderRequestError() from None
+                    raise _provider_request_error(exc, stage="parse") from None
+        except TimeoutError as exc:
+            raise ProviderRequestError(
+                category="timeout", stage="deadline",
+                exception_type=type(exc).__name__,
+            ) from None
         finally:
             # The timer's callback may be shutting down a socket. Join it before
             # returning so the request cannot leave a watchdog thread behind.
@@ -945,7 +1040,6 @@ class OpenAICompatible:
 
     def _request_json(self, body, endpoint, *, timeout=40, attempts=3,
                       total_timeout=None, absolute_deadline=None,
-                      transport_only_retries=False,
                       max_response_bytes=MAX_PROVIDER_RESPONSE_BYTES):
         deadline = (time.monotonic() + total_timeout
                     if total_timeout is not None else absolute_deadline)
@@ -956,6 +1050,8 @@ class OpenAICompatible:
         opener = (_deadline_opener(guard, self.base) if guard is not None
                   else _provider_opener(self.base, _NoRedirect))
         last_http_error = None
+        last_transport_error = None
+        last_parse_error = None
         try:
             for attempt in range(attempts):
                 try:
@@ -986,18 +1082,23 @@ class OpenAICompatible:
                     if attempt == attempts - 1 or not exc.retryable:
                         break
                     _sleep_with_deadline(exc.delay, deadline)
-                except (urllib.error.URLError, OSError):
+                except (urllib.error.URLError, OSError) as exc:
+                    last_transport_error = exc
                     _raise_if_deadline_expired(deadline)
                     if attempt == attempts - 1:
                         break
                     _sleep_with_deadline(min(0.25 * (2 ** attempt), 2.0), deadline)
-                except (ValueError, KeyError, IndexError):
-                    if transport_only_retries:
-                        break
-                    _raise_if_deadline_expired(deadline)
-                    if attempt == attempts - 1:
-                        break
-                    _sleep_with_deadline(min(0.25 * (2 ** attempt), 2.0), deadline)
+                except (ValueError, KeyError, IndexError, TypeError, AttributeError) as exc:
+                    last_parse_error = exc
+                    # A complete response with invalid JSON/shape is not a
+                    # transport interruption. Do not repeat a potentially
+                    # billable request just to classify the same bad payload.
+                    break
+        except TimeoutError as exc:
+            raise ProviderRequestError(
+                category="timeout", stage="deadline",
+                exception_type=type(exc).__name__,
+            ) from None
         finally:
             if guard is not None:
                 guard.close()
@@ -1006,9 +1107,19 @@ class OpenAICompatible:
             raise ProviderRequestError(
                 last_http_error.status, last_http_error.delay,
                 context_overflow=last_http_error.context_overflow,
+                category=_http_error_category(last_http_error.status),
+                stage="response", exception_type=type(last_http_error).__name__,
             ) from None
-        _raise_if_deadline_expired(deadline)
-        raise RuntimeError("provider request failed (details suppressed)") from None
+        if last_transport_error is not None:
+            if deadline is not None and time.monotonic() >= deadline:
+                raise ProviderRequestError(
+                    category="timeout", stage="deadline",
+                    exception_type=type(last_transport_error).__name__,
+                ) from None
+            raise _provider_request_error(last_transport_error, stage="read") from None
+        if last_parse_error is not None:
+            raise _provider_request_error(last_parse_error, stage="parse") from None
+        raise ProviderRequestError(category="invalid_response", stage="parse") from None
 
 
 def _validated_model_list(payload, api_key):
@@ -1256,13 +1367,13 @@ def _read_openai_stream(response, on_delta, mark_delivered, on_reasoning_delta=N
             reasoning = delta.get(key)
             if isinstance(reasoning, str) and reasoning and on_reasoning_delta:
                 mark_delivered()
-                on_reasoning_delta(reasoning)
+                _notify_stream_callback(on_reasoning_delta, reasoning)
         content = delta.get("content")
         if isinstance(content, str) and content:
             text_parts.append(content)
             mark_delivered()
             if on_delta:
-                on_delta(content)
+                _notify_stream_callback(on_delta, content)
         for call in delta.get("tool_calls") or []:
             index = call.get("index", 0)
             target = calls.setdefault(index, {"id": "", "type": "function",
@@ -1502,7 +1613,7 @@ def _read_anthropic_stream(response, on_delta, mark_delivered, on_reasoning_delt
                 initial = block.get("thinking", block.get("text", ""))
                 if isinstance(initial, str) and initial and on_reasoning_delta:
                     mark_delivered()
-                    on_reasoning_delta(initial)
+                    _notify_stream_callback(on_reasoning_delta, initial)
             else:
                 blocks[index] = {"type": "text", "text": block.get("text", "")}
         elif kind == "content_block_delta":
@@ -1516,12 +1627,12 @@ def _read_anthropic_stream(response, on_delta, mark_delivered, on_reasoning_delt
                 if value:
                     mark_delivered()
                     if on_delta:
-                        on_delta(value)
+                        _notify_stream_callback(on_delta, value)
             elif delta.get("type") in ("thinking_delta", "reasoning_delta"):
                 value = delta.get("thinking", delta.get("reasoning", delta.get("text", "")))
                 if isinstance(value, str) and value and on_reasoning_delta:
                     mark_delivered()
-                    on_reasoning_delta(value)
+                    _notify_stream_callback(on_reasoning_delta, value)
             elif delta.get("type") == "input_json_delta":
                 block["json"] = block.get("json", "") + (delta.get("partial_json") or "")
         elif kind == "message_stop":
@@ -1601,11 +1712,26 @@ class AnthropicMessages:
                 request = self._request(messages, tools, False)
                 deadline, attempts = _lightweight_request_settings(self)
                 return self._complete_lightweight(request, deadline, attempts)
-            except TimeoutError:
+            except ProviderRequestError:
                 raise
-            except (urllib.error.HTTPError, urllib.error.URLError, ValueError,
-                    KeyError, OSError, TypeError, AttributeError):
-                raise RuntimeError("provider request failed (details suppressed)") from None
+            except TimeoutError as exc:
+                raise ProviderRequestError(
+                    category="timeout", stage="deadline",
+                    exception_type=type(exc).__name__,
+                ) from None
+            except urllib.error.HTTPError as exc:
+                context_overflow = _context_overflow_from_http_error(exc)
+                status = exc.code
+                delay = _retry_after(exc.headers)
+                exc.close()
+                raise _provider_request_error(
+                    exc, status=status, retry_after=delay,
+                    context_overflow=context_overflow, stage="response",
+                ) from None
+            except (urllib.error.URLError, OSError) as exc:
+                raise _provider_request_error(exc, stage="read") from None
+            except (ValueError, KeyError, IndexError, TypeError, AttributeError) as exc:
+                raise _provider_request_error(exc, stage="parse") from None
         deadline = _explicit_request_deadline(self)
         if deadline is not None:
             request = self._request(messages, tools, False)
@@ -1616,13 +1742,25 @@ class AnthropicMessages:
                 if len(raw) > 2_000_000:
                     raise ValueError("provider response too large")
             return _with_request_attempts(_anthropic_message(json.loads(raw)), 1)
-        except (urllib.error.HTTPError, urllib.error.URLError, ValueError, KeyError, OSError):
-            raise RuntimeError("provider request failed (details suppressed)") from None
+        except urllib.error.HTTPError as exc:
+            context_overflow = _context_overflow_from_http_error(exc)
+            status = exc.code
+            delay = _retry_after(exc.headers)
+            exc.close()
+            raise _provider_request_error(
+                exc, status=status, retry_after=delay,
+                context_overflow=context_overflow, stage="response",
+            ) from None
+        except (urllib.error.URLError, OSError) as exc:
+            raise _provider_request_error(exc, stage="read") from None
+        except (ValueError, KeyError, IndexError, TypeError, AttributeError) as exc:
+            raise _provider_request_error(exc, stage="parse") from None
 
     def _complete_lightweight(self, request, deadline, attempts):
         guard = _SocketDeadlineGuard(deadline)
         opener = _deadline_opener(guard, self.base)
         last_http_error = None
+        last_transport_error = None
         try:
             for attempt in range(attempts):
                 try:
@@ -1641,24 +1779,38 @@ class AnthropicMessages:
                     if attempt == attempts - 1 or not exc.retryable:
                         break
                     _sleep_with_deadline(exc.delay, deadline)
-                except (urllib.error.URLError, OSError):
+                except (urllib.error.URLError, OSError) as exc:
+                    last_transport_error = exc
                     _raise_if_deadline_expired(deadline)
                     if attempt == attempts - 1:
                         break
                     _sleep_with_deadline(min(0.25 * (2 ** attempt), 2.0), deadline)
-                except (ValueError, KeyError, IndexError, TypeError, AttributeError):
+                except (ValueError, KeyError, IndexError, TypeError, AttributeError) as exc:
                     # Once response bytes arrive, a malformed response is not
                     # a transport failure and must not be replayed.
-                    raise RuntimeError("provider request failed (details suppressed)") from None
+                    raise _provider_request_error(exc, stage="parse") from None
+        except TimeoutError as exc:
+            raise ProviderRequestError(
+                category="timeout", stage="deadline",
+                exception_type=type(exc).__name__,
+            ) from None
         finally:
             guard.close()
         if last_http_error is not None:
             raise ProviderRequestError(
                 last_http_error.status, last_http_error.delay,
                 context_overflow=last_http_error.context_overflow,
+                category=_http_error_category(last_http_error.status),
+                stage="response", exception_type=type(last_http_error).__name__,
             ) from None
-        _raise_if_deadline_expired(deadline)
-        raise RuntimeError("provider request failed (details suppressed)") from None
+        if last_transport_error is not None:
+            if time.monotonic() >= deadline:
+                raise ProviderRequestError(
+                    category="timeout", stage="deadline",
+                    exception_type=type(last_transport_error).__name__,
+                ) from None
+            raise _provider_request_error(last_transport_error, stage="read") from None
+        raise ProviderRequestError(category="invalid_response", stage="parse") from None
 
     def test_connection(self, timeout=8):
         """Make one small Messages request for an explicit profile test."""
@@ -1718,18 +1870,22 @@ class AnthropicMessages:
                 if usage:
                     result["_usage"] = usage
                 return _with_request_attempts(result, attempt + 1)
+            except ProviderCallbackError:
+                raise
             except _RetryableProviderError as exc:
                 delivered = delivered or exc.delivered
                 if delivered or attempt == 2 or not exc.retryable:
-                    raise ProviderRequestError(
-                        exc.status, exc.delay,
-                        context_overflow=exc.context_overflow,
+                    raise _provider_request_error(
+                        exc, status=exc.status, retry_after=exc.delay,
+                        context_overflow=exc.context_overflow, stage="response",
                     ) from None
                 time.sleep(exc.delay)
-            except (urllib.error.URLError, OSError, ValueError, KeyError):
+            except (urllib.error.URLError, OSError) as exc:
                 if delivered or attempt == 2:
-                    raise ProviderRequestError() from None
+                    raise _provider_request_error(exc, stage="read") from None
                 time.sleep(min(0.25 * (2 ** attempt), 2.0))
+            except (ValueError, KeyError, IndexError, TypeError, AttributeError) as exc:
+                raise _provider_request_error(exc, stage="parse") from None
 
     def _stream_lightweight(self, request, *, deadline, attempts, on_delta=None,
                             on_reasoning_delta=None):
@@ -1758,22 +1914,32 @@ class AnthropicMessages:
                     if usage:
                         result["_usage"] = usage
                     return _with_request_attempts(result, attempt + 1)
+                except ProviderCallbackError:
+                    raise
                 except _RetryableProviderError as exc:
                     delivered = delivered or exc.delivered
-                    _raise_if_deadline_expired(deadline)
                     if delivered or attempt == attempts - 1 or not exc.retryable:
-                        raise ProviderRequestError(
-                            exc.status, exc.delay,
-                            context_overflow=exc.context_overflow,
+                        raise _provider_request_error(
+                            exc, status=exc.status, retry_after=exc.delay,
+                            context_overflow=exc.context_overflow, stage="response",
                         ) from None
                     _sleep_with_deadline(exc.delay, deadline)
-                except (urllib.error.URLError, OSError):
-                    _raise_if_deadline_expired(deadline)
+                except (urllib.error.URLError, OSError) as exc:
+                    if time.monotonic() >= deadline:
+                        raise ProviderRequestError(
+                            category="timeout", stage="deadline",
+                            exception_type=type(exc).__name__,
+                        ) from None
                     if delivered or attempt == attempts - 1:
-                        raise ProviderRequestError() from None
+                        raise _provider_request_error(exc, stage="read") from None
                     _sleep_with_deadline(min(0.25 * (2 ** attempt), 2.0), deadline)
-                except (ValueError, KeyError, TypeError, AttributeError):
-                    raise ProviderRequestError() from None
+                except (ValueError, KeyError, IndexError, TypeError, AttributeError) as exc:
+                    raise _provider_request_error(exc, stage="parse") from None
+        except TimeoutError as exc:
+            raise ProviderRequestError(
+                category="timeout", stage="deadline",
+                exception_type=type(exc).__name__,
+            ) from None
         finally:
             guard.close()
         raise RuntimeError("provider request failed (details suppressed)") from None

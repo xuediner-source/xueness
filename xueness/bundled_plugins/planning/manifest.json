@@ -41,8 +41,8 @@
     },
     {
       "id": "planning.delivery",
-      "name": "交付清单与内容完整性检查",
-      "nameEn": "Delivery checklist and content completeness checks"
+      "name": "明确交付物清单与内容完整性检查",
+      "nameEn": "Explicit deliverable checklists and content completeness checks"
     },
     {
       "id": "planning.session_goal",

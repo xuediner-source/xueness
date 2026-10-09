@@ -34,12 +34,12 @@ def session_goal_view(session):
 
 
 def completion_instructions(session):
-    from .delivery import GUIDANCE, seed
+    from .delivery import GUIDANCE, requests_file_output, seed
     from .session_goal import reminder
     from .work_policy import instructions
     seed(session)
-    import re
-    guidance = GUIDANCE if session.get('delivery_requirements') or re.search(r'报告|资料|research|report', session.get('task', ''), re.I) else ''
+    guidance = (GUIDANCE if session.get('delivery_requirements')
+                or requests_file_output(session.get('task', '')) else '')
     return '\n'.join(block for block in (instructions(session), guidance, reminder(session)) if block)
 
 

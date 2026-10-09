@@ -157,6 +157,17 @@ test("Timeline: tool statuses, errorCode, completion, pending_question, and empt
   assert.match(html, /是否继续更新文档？/);
 });
 
+test('approval resume preserves granted state and disables repeat clicks while running', () => {
+  const pending: PendingApproval[] = [{ tool_call_id: 'exact', name: 'exec', subject: '["git","status"]', preview: 'git status', granted: true }];
+  const ready = renderToStaticMarkup(<Approvals pending={pending} onApprove={() => {}} />);
+  assert.match(ready, /已批准，等待执行/);
+  assert.match(ready, /继续执行/);
+  assert.doesNotMatch(ready, /批准并重试/);
+  const busy = renderToStaticMarkup(<Approvals pending={pending} busy onApprove={() => {}} />);
+  assert.match(busy, /disabled=""/);
+  assert.match(busy, /正在继续…/);
+});
+
 test("Approvals: renders items and action button; empty or no items has NO buttons", () => {
   const pendingItems: PendingApproval[] = [
     {

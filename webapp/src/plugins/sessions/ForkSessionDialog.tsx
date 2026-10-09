@@ -9,6 +9,7 @@ export type ForkSessionDialogProps = {
   open: boolean;
   sourceId: string;
   sourceTitle: string;
+  initialTurn?: number;
   onCancel: () => void;
   onFork: (result: ForkSessionResponse) => void;
 };
@@ -83,7 +84,7 @@ export function ForkBoundaryChoices({ boundaries, selectedToken, busy = false, o
 }
 
 /** Fork choices are opaque server-issued selectors. The dialog never derives an index from rendered timeline rows. */
-export function ForkSessionDialog({ open, sourceId, sourceTitle, onCancel, onFork }: ForkSessionDialogProps): React.JSX.Element | null {
+export function ForkSessionDialog({ open, sourceId, sourceTitle, initialTurn, onCancel, onFork }: ForkSessionDialogProps): React.JSX.Element | null {
   const [boundaries, setBoundaries] = React.useState<ForkBoundary[]>([]);
   const [revision, setRevision] = React.useState("");
   const [historyTruncated, setHistoryTruncated] = React.useState(false);
@@ -116,6 +117,7 @@ export function ForkSessionDialog({ open, sourceId, sourceTitle, onCancel, onFor
       setHistoryTruncated(result.value.historyTruncated);
       setTruncationReason(result.value.truncationReason);
       setHasUnclosedTurn(result.value.hasUnclosedTurn);
+      if (initialTurn !== undefined) setSelectedToken(result.value.boundaries.find(boundary => boundary.turn === initialTurn)?.token ?? '');
     } else {
       setBoundaries([]);
       setRevision("");
@@ -125,7 +127,7 @@ export function ForkSessionDialog({ open, sourceId, sourceTitle, onCancel, onFor
       setError(result.error);
     }
     setLoading(false);
-  }, [sourceId]);
+  }, [sourceId, initialTurn]);
 
   React.useEffect(() => {
     if (!open) return;

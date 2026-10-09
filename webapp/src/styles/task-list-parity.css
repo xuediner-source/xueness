@@ -1,7 +1,10 @@
-.xn-task-list__toolbar { display:flex; align-items:center; gap:4px; padding:8px 10px 12px; color:var(--fg-muted); }
+.xn-task-list__toolbar { display:flex; align-items:center; gap:3px; min-width:0; padding:8px 8px 12px; color:var(--fg-muted); }
 .xn-task-list__toolbar button,.xn-task-list__toolbar summary { display:flex; align-items:center; justify-content:center; height:28px; padding:5px; border:0; background:transparent; color:inherit; font:12px var(--font-sans); border-radius:6px; cursor:pointer; }
-.xn-task-list__segments { display:flex; gap:0; border-radius:999px; background:var(--bg-surface); margin-right:auto; padding:2px; }
-.xn-task-list__segments button { gap:4px; height:24px; padding:0 8px; border-radius:999px; }
+.xn-task-list__segments { display:flex; flex:0 0 max-content; gap:0; min-width:max-content; border-radius:999px; background:var(--bg-surface); margin-right:auto; padding:2px; }
+.xn-task-list__segments button { flex:0 0 auto; gap:4px; height:24px; min-width:max-content; padding:0 5px; border-radius:999px; white-space:nowrap; }
+.xn-task-list__segments button svg { flex:0 0 12px; width:12px; height:12px; }
+.xn-task-list__toolbar>button,.xn-task-list__sort { flex:0 0 24px; width:24px; }
+.xn-task-list__sort>summary { width:24px; box-sizing:border-box; }
 .xn-task-list__segments button[aria-pressed=true] { color:var(--fg); background:var(--bg); }
 .xn-task-list__toolbar button:hover,.xn-task-list__toolbar summary:hover { background:var(--bg-hover); color:var(--fg); }
 .xn-task-list__sort { position:relative; }.xn-task-list summary { list-style:none; }.xn-task-list summary::-webkit-details-marker { display:none; }

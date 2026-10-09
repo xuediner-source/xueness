@@ -5,7 +5,7 @@ import { flushSync } from "react-dom";
  * 等高列表窗口化（虚拟列表）规划器。
  *
  * 会话侧栏的会话行与历史轨道的停靠点都是等高条目：窗口外的条目用列表容器
- * 上的 padding（历史轨道用停靠区的外边距）补齐。等高保证垫片是精确值，滚动
+ * 上的 padding（历史轨道用固定总高与绝对定位）补齐。等高保证垫片是精确值，滚动
  * 总高恒定、条目落在各自真实位置上，因此窗口移动不需要滚动位置补偿。
  * 与 TimelineWindowModel 一样，布局依赖通过 host 注入，便于用假宿主做单元测试。
  */
@@ -29,7 +29,7 @@ export type UniformListWindowHost = {
   /** 滚动视口在视口坐标中的范围；不可测量时返回 null。 */
   readViewport(): { top: number; bottom: number } | null;
   /** 测量列表容器的首个挂载子元素（它对应当前窗口的 start 下标）；全部未挂载时返回 null。 */
-  readAnchor(): { top: number; stride: number } | null;
+  readAnchor(): { top: number; stride: number; index?: number } | null;
 };
 
 export type UniformListWindowOptions = {
@@ -171,7 +171,9 @@ export class UniformListWindowModel {
     if (anchor && Number.isFinite(anchor.top) && Number.isFinite(anchor.stride) && anchor.stride > 0) {
       this.stride = anchor.stride;
       // 首个挂载子元素对应当前窗口的 start 下标；由此反推虚拟第 0 条的位置。
-      this.item0Top = anchor.top - this.start * this.stride;
+      // A scroll may re-plan this.start before React commits that window.
+      // Measure the index actually present in the DOM, not the pending range.
+      this.item0Top = anchor.top - (anchor.index ?? this.start) * this.stride;
     }
     if (!this.windowed) {
       this.commit(0, this.count);
@@ -291,6 +293,7 @@ export function useUniformListWindow({
   estimateStridePx,
   pinned = [],
 }: UseUniformListWindowProps): UniformListWindowController {
+  const committedStart = React.useRef(0);
   const [model] = React.useState(() => new UniformListWindowModel({
     readViewport: () => {
       const list = listRef.current;
@@ -307,7 +310,10 @@ export function useUniformListWindow({
       if (!node) return null;
       const stride = node.offsetHeight + rowGapOf(list);
       if (!(stride > 0)) return null;
-      return { top: node.getBoundingClientRect().top, stride };
+      const renderedIndex = Number(node.getAttribute('data-list-window-index'));
+      const index = node.hasAttribute('data-list-window-index') && Number.isInteger(renderedIndex) && renderedIndex >= 0
+        ? renderedIndex : committedStart.current;
+      return { top: node.getBoundingClientRect().top, stride, index };
     },
   }, { pageSize, overscanPx, estimateStridePx, initialCount: count }));
 
@@ -316,6 +322,7 @@ export function useUniformListWindow({
   const snapshot = React.useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
 
   React.useLayoutEffect(() => {
+    committedStart.current = snapshot.start;
     model.setCount(count);
     model.setPinned(pinned);
     model.syncAfterCommit();

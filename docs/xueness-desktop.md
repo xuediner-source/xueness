@@ -1,5 +1,9 @@
 # Xueness 桌面端
 
+2026-10-09 Windows / macOS 会话统一：标准/轻量使用同一套 ZCode 源码参考的会话显示和完整输入工具栏；完全访问在发送前确认，取消保留草稿；消息可编辑重发、复制、保存反馈和从当前回合分叉。空交付检查收进更多菜单，实际要求与失败仍显示。后端及插件体系保留 Xueness 实现。Intel Mac 与 Apple Silicon 共用这套源码，原生窗口控制、系统授权及更新安装方式仍遵守各系统约定。见 [会话对齐与验收边界](zcode-conversation-parity.md)。
+
+自定义数据位置在 Windows 与 macOS 使用同样的启动偏好格式：系统 appData 下的 `Xueness/desktop-data-directory.json`，内容为 `{"apiVersion":1,"dataDirectory":"绝对路径"}`。Windows 的父目录通常为 `%APPDATA%`，Mac 通常为 `~/Library/Application Support`。显式 `XUENESS_DESKTOP_DATA` 优先；缺失、错误或相对路径的偏好不改变默认数据位置。更新后的直接启动沿用该偏好，不自动迁移会话、模型配置或插件开关。
+
 子代理的启用、并发派发、主代理继续工作及合理暂停条件见[子代理协作说明](xueness-subagent-coordination.md)。该能力属于 `subagents` 插件；安装包需要包含对应版本的后端与 Web 构建，源码变更不会自动改写已安装客户端。
 
 桌面端使用独立实现的 Electron 外壳，复用 Xueness 工作台与插件运行时。安装包内置平台原生的 Python 后端和预构建 Web 资产，用户不需要安装 Python、Node.js 或开发依赖。
@@ -17,6 +21,8 @@
 浏览器配置统一从「设置 → 浏览器」进入，开始界面不显示浏览器设置或启用按钮；新任务沿用设置中的默认开关，已有会话可在输入框工具栏调整本次任务的浏览器开关。浏览器设置显示实际环境检测结果；开关紧邻标题。桌面端可以选择并确认导入本机 Chrome 资料，复制到独立、跨启动保留的目录。导入要求浏览器与桌面插件启用，并先退出 Chrome；加密登录状态可能需要重新登录。使用与数据范围见[桌面浏览器资料](xueness-browser-profiles.md)。
 
 ## 数据与升级
+
+Windows 可在 `%APPDATA%\Xueness\desktop-data-directory.json` 保存 `{"apiVersion":1,"dataDirectory":"绝对数据目录"}`。直接启动和更新后启动都会使用该位置，`XUENESS_DESKTOP_DATA` 显式环境变量优先，用于隔离测试或临时选择。该文件只保存目录数据，不引入代码；无配置时仍使用 Electron 默认数据目录。
 
 会话工具栏独占一行，不遮挡交付检查或消息。运行结束记录显示静态结果；工具证据未通过验证与模型 JSON 工具协议错误分别提示，不表示仍在运行。轻量会话的本机资源面板默认收起，点击标题可展开/收起；展开后开始采样，收起、页面隐藏或禁用所属插件时停止采样并取消未完成请求。面板上的运行阶段来自会话数据，资源采样不会启动模型。
 
@@ -39,6 +45,12 @@
 Windows 托盘右键菜单与 Mac Dock 的「任务与项目」复用同一会话菜单，显示「运行中」「已固定」「最近」会话，左侧标题、右侧工作区名称；各组最多显示三个条目，其余记录在「更多」中打开。每次展开从本机后端读取最多 100 条最新会话，不持久复制用户标题或项目路径。点击会话恢复窗口并打开该记录；「新建会话」复用工作台入口；「发送反馈」打开项目的 GitHub issue 选择页，由用户填写和提交。菜单跟随中英文及浅深色设置，支持方向键、Home/End 和 Escape，失去焦点后收起。工作台执行任务时只能打开当前会话，切换与新建沿用现有忙碌限制；sessions 关闭时不读取列表，desktop 关闭时清除托盘/Dock 入口、销毁菜单及其请求。菜单页为独立 Vite 构建入口，仅暴露固定命令 IPC；后端凭据只在 Electron 主进程使用。Windows 加载菜单失败时降级到原生「打开/退出」菜单；Mac 保留原生打开/退出入口。Mac 工作台窗口关闭时清除其自定义 Dock 菜单，窗口恢复并完成插件状态同步后重新建立。
 
 工作区切换保持可点击，目录、文件与 Git 信息在后台刷新；下一次选择取消旧请求，旧响应不能覆盖当前目录。发送任务仍等待新目录的信息加载完成，超时提供重试入口。Git 只读命令不继承桌面宿主的控制管道，避免 Windows Git 启动器等待输入而阻塞工作区信息读取。
+
+Windows 工作区输入目录仅读取 Git 分支元数据，不在切换时扫描完整工作树；分支读取失败不影响文件和模型选择。真正切换分支时仍检查未提交文件和运行任务。
+
+工具批准之后，如果模型连接等后续请求失败，会话显示「已批准，等待执行」及「继续执行」。该状态只代表当前后端仍持有的精确单次批准，重启后不会从历史批准日志恢复权限；执行中的按钮会禁用，避免重复批准。Windows 命令工具注明本机平台、直接 argv 和 PowerShell 用法，隐藏附带控制台并解码 UTF-8、UTF-16 BOM 或本机 OEM 编码。交互式终端仍独立管理。
+
+工作台根节点和原生表单控件统一继承系统字体，Windows 中文优先使用微软雅黑 UI；小高度窗口收紧开始页留白。市场与自动化使用同一页面层级，市场内置能力显示可搜索的本地化名称，外部目录保留自身名称和描述。
 
 品牌图标保留原来的量子 X 造型，统一为黑底、白色实线与中性灰概率点。矢量源在 `webapp/public/xueness-icon.svg`，PNG/ICO 由 `node tools/build_brand_assets.mjs [包含 node_modules/sharp 的目录]` 生成；Sharp 只用于生成资产，不属于应用运行时。Windows 托盘使用包含 16–256px 的 ICO。
 
@@ -70,6 +82,8 @@ python desktop/scripts/checksums.py
 本机开发建议使用独立 Python 虚拟环境。构建产物在 `desktop/release/`，原生后端载荷在 `desktop/runtime/backend/`，均不提交到源码。后端分发包含 Python 许可证、PyInstaller bootloader 分发例外及适用依赖声明。安装包内置 IANA 时区数据，自动化计划不依赖 Windows 系统提供时区数据库；打包检查在关闭系统时区搜索路径后验证上海时区的定时计划。
 
 `.github/workflows/desktop-build.yml` 提供手动触发的 Windows x64、Intel Mac x64 与 Apple Silicon arm64 构建、冻结后端真实检查、打包应用检查和校验和产物。源码上传和 CI 构建不自动创建 GitHub Release 或部署服务。
+
+`npm --prefix webapp run test:browser:conversation` 使用生产资产与隔离后端验证会话、权限确认、编辑/反馈、长历史和停止队列；通过 `XUENESS_CONVERSATION_PLATFORM=windows|macos` 检查两种平台响应。`node webapp/verify-desktop-parity.mjs` 检查原生按钮避让、⌘/Ctrl 快捷键、主题及更新帮助。浏览器中的平台响应验证与既有三平台原生构建验证分别记录；fixture 不代表真实模型性能。验收不读取用户状态。
 
 打包应用检查会使用隔离数据打开完整工作台，并启动真实的浏览器 worker 验证驱动与内置 Node；构建机器需要预装 Chrome/Edge。不会发送模型请求。
 

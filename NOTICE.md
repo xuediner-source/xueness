@@ -14,6 +14,8 @@ The repository's [LICENSE](LICENSE) contains the Apache License 2.0 text and ret
 
 ## Desktop distribution
 
+The 2026-10-09 conversation adaptation in `webapp/src/plugins/sessions/ZCodeConversation.tsx` and `zcode-conversation.css` follows ZCode v3.14.3's ConversationTurnGroup, ConversationRowView, ToolSummaryRow and Reasoning. It replaces the desktop service bridge with Xueness journal projections and plugin callbacks, uses native disclosure controls and Xueness safe Markdown, and retains backend permission checks and completion assessment. Provenance and tested scope are recorded in `docs/zcode-conversation-parity.md`.
+
 Desktop browser drivers include Playwright and Playwright Core (Apache-2.0), with their LICENSE and NOTICE files retained in the driver packages. The browser plugin can use the bundled Electron Node runtime; operators still provide an installed Chrome/Edge browser for approved browser automation.
 
 The independently implemented Xueness desktop wrapper uses Electron 44.5.1 (MIT; Chromium and other bundled components retain their accompanying notices). Native frozen backends include the Python runtime under the PSF license, PyInstaller 6.22.3's bootloader under GPL-2.0 with its distribution exception, tzdata 2026.4 (Apache-2.0; IANA timezone data), and, on Windows, pywinpty 3.0.2 (MIT). Runtime license texts are included with the backend payload. electron-builder 26.15.3 (MIT) is a build dependency. DeepSeek Harness desktop was inspected as a design reference; no upstream desktop code, trademark or icon is bundled.
