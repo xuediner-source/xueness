@@ -2,7 +2,7 @@ import { GoalEditorDialog } from './plugins/planning/GoalEditorDialog';
 import { sessionContextUsage } from './plugins/sessions/sessionContextUsage';
 import { listPlugins, listResources, listCommandCatalog, setPluginEnabled, post, saveDefaultModelSelection, type XuenessPlugin } from "./xuenessApi";
 import { t as tr, tf, useLocale, setLocale } from './i18n';
-import { isMacPlatform } from './xuenessShortcutDisplay';
+import { isImeComposingEvent } from './xuenessShortcutDisplay';
 /**
  * Xueness workbench container — chat-first.
  *
@@ -116,7 +116,7 @@ import { buildSessionScrollMemoryKey, saveSessionScrollMemoryState } from "./plu
 import { createSingleFlightRefresh, useSessionPolling } from "./plugins/sessions/SessionPolling";
 import { XuenessWorkspacePickerDialog } from "./plugins/settings/XuenessWorkspacePickerDialog";
 import { CodeDisplayProvider } from "./ui/CodeContent";
-import { SHORTCUT_COMMANDS, resolveShortcutBinding } from "./xuenessShortcutCommands";
+import { SHORTCUT_COMMANDS, resolveShortcutBinding, matchesShortcut, hasGlobalShortcutConflict, type ShortcutEventLike } from "./xuenessShortcutCommands";
 import { Shell, SidebarActions } from "./XuenessShell";
 import { TaskTodos } from "./plugins/sessions/XuenessTimeline";
 import { ZCodeConversation } from "./plugins/sessions/ZCodeConversation";
@@ -221,14 +221,37 @@ const SETTINGS_DEFAULTS: SettingsMap = {
   bindings: {},
 };
 
-function matchesShortcut(event: KeyboardEvent, chord: string): boolean {
-  const parts = chord.toLowerCase().split("+").map((part) => part.trim());
-  const key = parts.at(-1);
-  if (!key || (event.key === " " ? "space" : event.altKey && /^Key[A-Z]$/.test(event.code) ? event.code.slice(3).toLowerCase() : event.key.toLowerCase()) !== key) return false;
-  const isMac = isMacPlatform();
-  const expectsCtrl = parts.includes("ctrl") || (parts.includes("mod") && !isMac);
-  const expectsMeta = parts.includes("meta") || (parts.includes("mod") && isMac);
-  return expectsCtrl === event.ctrlKey && expectsMeta === event.metaKey && parts.includes("shift") === event.shiftKey && parts.includes("alt") === event.altKey;
+export type WorkbenchGlobalKeyAction =
+  | { type: "new-session" }
+  | { type: "command-palette" }
+  | { type: "open-settings" }
+  | { type: "toggle-sidebar" }
+  | { type: "refresh-session" }
+  | null;
+
+export function evaluateWorkbenchGlobalKey(
+  event: ShortcutEventLike & { target?: unknown; defaultPrevented?: boolean },
+  context: {
+    bindings?: Record<string, string>;
+    isPluginEffective: (id: string) => boolean;
+    panel?: string;
+    busy?: boolean;
+    platform?: string;
+  },
+): WorkbenchGlobalKeyAction {
+  if (event.defaultPrevented || isImeComposingEvent(event) || event.repeat) return null;
+  const bindings = (context.bindings && typeof context.bindings === "object" ? context.bindings : {}) as Record<string, string>;
+  const command = SHORTCUT_COMMANDS.find((item) => {
+    const binding = resolveShortcutBinding(item.id, bindings);
+    return Boolean(binding && matchesShortcut(event, binding, context.platform));
+  });
+  if (!command) return null;
+  if (hasGlobalShortcutConflict(event, command.id, event.target, context.platform)) return null;
+  if ((command.id === "new-session" || command.id === "command-palette") && !context.isPluginEffective("sessions")) return null;
+  if (command.id === "open-settings" && !context.isPluginEffective("settings")) return null;
+  if (command.id === "toggle-sidebar" && context.panel === "settings") return null;
+  if (command.id === "refresh-session" && context.busy) return null;
+  return { type: command.id };
 }
 
 type Panel =
@@ -1203,19 +1226,19 @@ export function XuenessWorkbenchContainer() {
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
-      if (event.defaultPrevented || event.isComposing || event.keyCode === 229 || event.repeat) return;
-      const bindings = (settingsValues.bindings && typeof settingsValues.bindings === "object" ? settingsValues.bindings : {}) as Record<string, string>;
-      const command = SHORTCUT_COMMANDS.find(item => { const binding = resolveShortcutBinding(item.id, bindings); return binding && matchesShortcut(event, binding); });
-      if (!command) return;
-      if ((command.id === "new-session" || command.id === "command-palette") && !isPluginEffective("sessions")) return;
-      if (command.id === "open-settings" && !isPluginEffective("settings")) return;
-      if (command.id === "toggle-sidebar" && panel === "settings") return;
+      const action = evaluateWorkbenchGlobalKey(event, {
+        bindings: (settingsValues.bindings && typeof settingsValues.bindings === "object" ? settingsValues.bindings : {}) as Record<string, string>,
+        isPluginEffective,
+        panel,
+        busy,
+      });
+      if (!action) return;
       event.preventDefault();
-      if (command.id === "new-session") startNewTask();
-      else if (command.id === "command-palette") openCommandPalette();
-      else if (command.id === "open-settings") setPanel("settings");
-      else if (command.id === "toggle-sidebar") setSidebarToggleToken(value => value + 1);
-      else if (command.id === "refresh-session" && !busy) void handleRefreshAll();
+      if (action.type === "new-session") startNewTask();
+      else if (action.type === "command-palette") openCommandPalette();
+      else if (action.type === "open-settings") setPanel("settings");
+      else if (action.type === "toggle-sidebar") setSidebarToggleToken(value => value + 1);
+      else if (action.type === "refresh-session") void handleRefreshAll();
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
