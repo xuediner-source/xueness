@@ -1,233 +1,388 @@
 /*
- * Claude 风格配色层（仅颜色）。
- * Only applies when html[data-xn-palette="claude"] is set (设置 → 外观 →
- * 配色方案 = Claude 风格). A colour scheme must change colours only: every
- * declaration here is a colour property (color / background(-color) /
- * border-*-color / outline-color / text-decoration-color / fill / stroke /
- * caret-color). No size, spacing, font, radius, border width, shadow
- * geometry, transform, opacity, transition or animation is allowed, so the
- * layout is pixel-identical to the default Xueness palette.
- * claudePaletteGeometry.test.ts enforces this allowlist.
+ * Claude 风格（设置 → 外观 → 配色方案 = Claude 风格）。
+ * Only applies when html[data-xn-palette="claude"]; the default Xueness scheme
+ * is untouched (claudePaletteScheme.test.ts + the browser pixel diff guard it).
+ *
+ * Reference: Claude desktop app, 2026 (public design write-ups of claude.ai /
+ * Claude Desktop, see docs in the review report). Matched proportions:
+ *   - flat 288px sidebar, 32px rows, 14px labels, 12px muted section labels,
+ *     radius 8 rows, hairline separators, no floating panel;
+ *   - centered 768px reading column; user turns in a soft 12px-radius bubble;
+ *     assistant prose un-boxed, serif text face, 16px / 1.65;
+ *   - composer: raised card, radius 20, 16px input, quiet icon buttons,
+ *     32px clay send button with radius 8;
+ *   - start page: serif greeting 40px weight 300 in muted ink above a ~672px
+ *     composer, sparse chips and recents;
+ *   - menus radius 12, dialogs radius 16, motion <= 200ms.
+ * UI chrome keeps the user's 界面字号 (--xn-ui-font-size, 14px by default); only
+ * conversation text uses Claude's +2px reading size. Nothing sets zoom, a
+ * transform scale, or the root font size. No Anthropic logo, wordmark or font.
  */
 
-/* ── 1. App shell, sidebar and window chrome ─────────────────────────────── */
-html[data-xn-palette="claude"] .xn-shell-layout { background-color: var(--bg-window); }
-html[data-xn-palette="claude"] .xn-shell-layout .xn-shell-main { background-color: var(--bg-window); }
+/* ── 1. Shell: flat 288px sidebar, flat canvas, hairline divider ─────────── */
+html[data-xn-palette="claude"] .xn-shell-layout,
+html[data-xn-palette="claude"] .xn-shell-layout--desktop-titlebar { grid-template-columns: var(--claude-sidebar-width) minmax(0, 1fr); background: var(--bg); }
+html[data-xn-palette="claude"] .xn-shell-layout--sidebar-collapsed,
+html[data-xn-palette="claude"] .xn-shell-layout--desktop-titlebar.xn-shell-layout--sidebar-collapsed { grid-template-columns: minmax(0, 1fr); }
+html[data-xn-palette="claude"] .xn-shell-layout .xn-shell-sidebar { width: var(--claude-sidebar-width); border-right: .5px solid var(--border); background: var(--bg-sidebar); }
+html[data-xn-palette="claude"] .xn-shell-layout .xn-shell-sidebar__footer { border-top: 0; background: var(--bg-sidebar); }
+html[data-xn-palette="claude"] .xn-shell-layout .xn-shell-main { background: var(--bg); }
 html[data-xn-palette="claude"] .xn-shell-layout .xn-shell-main__panel {
-  border-color: color-mix(in oklab, var(--border) 85%, transparent);
-  background-color: var(--bg);
+  margin-left: 0;
+  border: 0;
+  border-radius: 0;
+  background: var(--bg);
+  box-shadow: none;
 }
-html[data-xn-palette="claude"] .xn-shell-layout .xn-shell-sidebar,
-html[data-xn-palette="claude"] .xn-shell-layout .xn-shell-sidebar__footer { background-color: var(--bg-sidebar); }
+html[data-xn-palette="claude"] .xn-shell-layout .xn-sidebar-brand { font-family: var(--claude-font-serif); font-size: 17px; font-weight: 500; letter-spacing: -.01em; }
 
-html[data-xn-palette="claude"] .xn-shell-layout .xn-sidebar-action { color: var(--fg-subtle); }
-html[data-xn-palette="claude"] .xn-shell-layout .xn-sidebar-action:hover { background-color: var(--bg-hover); color: var(--fg); }
+/* Sidebar rows: icon + 14px label, 32px tall, radius 8, alpha hover fill. */
+html[data-xn-palette="claude"] .xn-shell-layout .xn-sidebar-action {
+  min-height: 32px;
+  border-radius: 8px;
+  color: var(--fg);
+  font-size: var(--xn-ui-font-size, 14px);
+  transition: background-color var(--dur-fast) var(--claude-ease), color var(--dur-fast) var(--claude-ease);
+}
+html[data-xn-palette="claude"] .xn-shell-layout .xn-sidebar-action:hover { background: var(--bg-hover); }
 html[data-xn-palette="claude"] .xn-shell-layout .xn-sidebar-action__icon,
-html[data-xn-palette="claude"] .xn-shell-layout .xn-sidebar-actions svg { color: var(--fg-muted); }
-html[data-xn-palette="claude"] .xn-shell-layout .xn-sidebar-action:hover svg { color: var(--fg); }
-/* "New task" is the one sidebar row that carries the accent, as a small mark. */
-html[data-xn-palette="claude"] .xn-shell-layout [data-testid="xn-sidebar-action-new-task"] { color: var(--fg); }
+html[data-xn-palette="claude"] .xn-shell-layout .xn-sidebar-actions svg { color: var(--fg-subtle); }
+/* "New task" carries the clay mark, like Claude's new-chat row. */
+html[data-xn-palette="claude"] .xn-shell-layout [data-testid="xn-sidebar-action-new-task"] { font-weight: 500; }
 html[data-xn-palette="claude"] .xn-shell-layout [data-testid="xn-sidebar-action-new-task"] svg { color: var(--accent-brand); }
-html[data-xn-palette="claude"] .xn-shell-layout .xn-sidebar-action__shortcut { color: var(--fg-muted); }
+html[data-xn-palette="claude"] .xn-shell-layout .xn-sidebar-action__shortcut { color: var(--fg-muted); opacity: 0; transition: opacity var(--dur-fast) var(--claude-ease); }
+html[data-xn-palette="claude"] .xn-shell-layout .xn-sidebar-action:hover .xn-sidebar-action__shortcut,
+html[data-xn-palette="claude"] .xn-shell-layout .xn-sidebar-action:focus-visible .xn-sidebar-action__shortcut { opacity: 1; }
 
-html[data-xn-palette="claude"] .xn-shell-layout .xn-shell-nav__item:hover { background-color: var(--bg-hover); }
+html[data-xn-palette="claude"] .xn-shell-layout .xn-shell-nav__item,
+html[data-xn-palette="claude"] .xn-shell-layout .xn-shell-nav__link { border-radius: 8px; }
+html[data-xn-palette="claude"] .xn-shell-layout .xn-shell-nav__item { transition: background-color var(--dur-fast) var(--claude-ease); }
+html[data-xn-palette="claude"] .xn-shell-layout .xn-shell-nav__item:hover { background: var(--bg-hover); }
 html[data-xn-palette="claude"] .xn-shell-layout .xn-shell-nav__item--active,
-html[data-xn-palette="claude"] .xn-shell-layout .xn-shell-nav__item--active:hover { background-color: var(--bg-active); }
+html[data-xn-palette="claude"] .xn-shell-layout .xn-shell-nav__item--active:hover { background: var(--bg-active); }
 html[data-xn-palette="claude"] .xn-shell-layout .xn-shell-nav__link { color: var(--fg-subtle); }
 html[data-xn-palette="claude"] .xn-shell-layout .xn-shell-nav__item:hover .xn-shell-nav__link,
 html[data-xn-palette="claude"] .xn-shell-layout .xn-shell-nav__item--active .xn-shell-nav__link { color: var(--fg); }
-html[data-xn-palette="claude"] .xn-shell-layout .xn-shell-nav__time,
-html[data-xn-palette="claude"] .xn-shell-layout .xn-shell-nav__group { color: var(--fg-muted); }
-html[data-xn-palette="claude"] .xn-shell-layout .xn-sidebar-pill--active { background-color: var(--bg-active); color: var(--fg); }
-html[data-xn-palette="claude"] .xn-shell-layout .xn-sidebar-search { background-color: var(--bg-input); }
-html[data-xn-palette="claude"] .xn-shell-layout .xn-shell-sidebar__footer { border-top-color: color-mix(in oklab, var(--border) 70%, transparent); }
-html[data-xn-palette="claude"] .xn-shell-layout .xn-sidebar-account__avatar {
-  background-color: var(--accent-soft);
-  color: var(--accent-brand);
-}
-html[data-xn-palette="claude"] .xn-shell-layout .xn-shell-backdrop { background-color: rgb(28 24 16 / .28); }
+html[data-xn-palette="claude"] .xn-shell-layout .xn-shell-nav__time { color: var(--fg-muted); }
+html[data-xn-palette="claude"] .xn-shell-layout .xn-shell-nav__group { color: var(--fg-muted); font-size: 12px; font-weight: 500; }
+html[data-xn-palette="claude"] .xn-shell-layout .xn-sidebar-pill { border-radius: 8px; }
+html[data-xn-palette="claude"] .xn-shell-layout .xn-sidebar-pill--active { background: var(--bg-active); color: var(--fg); }
+html[data-xn-palette="claude"] .xn-shell-layout .xn-sidebar-search { border-radius: 8px; background: var(--bg-input); }
+html[data-xn-palette="claude"] .xn-shell-layout .xn-sidebar-account__avatar { background: var(--fg); color: var(--bg); }
+html[data-xn-palette="claude"] .xn-shell-layout .xn-sidebar-account__menu { border-radius: 12px; box-shadow: var(--shadow-lg); }
+html[data-xn-palette="claude"] .xn-shell-layout .xn-sidebar-footer__action,
+html[data-xn-palette="claude"] .xn-shell-layout .xn-sidebar-collapse,
+html[data-xn-palette="claude"] .xn-shell-layout .xn-shell-sidebar-toggle,
+html[data-xn-palette="claude"] .xn-shell-layout .xn-shell-history__button { border-radius: 8px; }
+html[data-xn-palette="claude"] .xn-shell-layout .xn-shell-backdrop { background: rgb(20 20 19 / .3); }
 
-/* Conversation header. */
-html[data-xn-palette="claude"] .xn-shell-layout .xn-conv-header__title { color: var(--fg); }
+/* Conversation header: borderless, quiet. */
+html[data-xn-palette="claude"] .xn-shell-layout .xn-conv-header { border-bottom-color: transparent; background: var(--bg); }
+html[data-xn-palette="claude"] .xn-shell-layout .xn-conv-header__title { color: var(--fg); font-weight: 500; }
 html[data-xn-palette="claude"] .xn-shell-layout .xn-conv-header__action,
-html[data-xn-palette="claude"] .xn-shell-layout .xn-view-switcher { color: var(--fg-subtle); }
+html[data-xn-palette="claude"] .xn-shell-layout .xn-view-switcher { border-radius: 8px; color: var(--fg-subtle); }
 html[data-xn-palette="claude"] .xn-shell-layout .xn-conv-header__action:hover { color: var(--fg); }
-html[data-xn-palette="claude"] .xn-shell-layout .xn-conv-header__menu { background-color: var(--bg-popover); }
+html[data-xn-palette="claude"] .xn-shell-layout .xn-conv-header__menu { border-radius: 12px; background: var(--bg-popover); }
 
-/* Native window chrome: surface colour only, platform geometry untouched. */
-html[data-xn-palette="claude"] .xn-desktop-titlebar { background-color: var(--bg-window); }
-html[data-xn-palette="claude"] .xn-desktop-titlebar__brand { color: var(--fg); }
-html[data-xn-palette="claude"] .xn-desktop-titlebar__menu { background-color: var(--bg-popover); }
+/* Native window chrome keeps the platform helper's geometry (macOS traffic
+ * lights on the left, Windows caption buttons on the right). */
+html[data-xn-palette="claude"] .xn-desktop-titlebar { background: var(--bg-sidebar); }
+html[data-xn-palette="claude"] .xn-desktop-titlebar__brand { color: var(--fg); font-family: var(--claude-font-serif); font-weight: 500; }
+html[data-xn-palette="claude"] .xn-desktop-titlebar__history button,
+html[data-xn-palette="claude"] .xn-desktop-titlebar__actions > button,
+html[data-xn-palette="claude"] .xn-desktop-titlebar__help > summary { border-radius: 8px; }
+html[data-xn-palette="claude"] .xn-desktop-titlebar__menu { border-radius: 12px; background: var(--bg-popover); box-shadow: var(--shadow-lg); }
 
-html[data-xn-palette="claude"] ::selection { background-color: color-mix(in oklab, var(--accent-brand) 22%, transparent); }
+/* One focus language: a 2px clay ring. */
+html[data-xn-palette="claude"] .xn-shell-layout button:focus-visible,
+html[data-xn-palette="claude"] .xn-shell-layout a:focus-visible,
+html[data-xn-palette="claude"] .xn-shell-layout input:focus-visible,
+html[data-xn-palette="claude"] .xn-shell-layout select:focus-visible,
+html[data-xn-palette="claude"] .xn-shell-layout summary:focus-visible,
+html[data-xn-palette="claude"] .xn-shell-layout [role="option"]:focus-visible,
+html[data-xn-palette="claude"] .xn-shell-layout [role="tab"]:focus-visible,
+html[data-xn-palette="claude"] .xn-desktop-titlebar button:focus-visible,
+html[data-xn-palette="claude"] .xn-desktop-titlebar summary:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
+html[data-xn-palette="claude"] .xn-shell-layout .xn-shell-nav__link:focus-visible,
+html[data-xn-palette="claude"] .xn-shell-layout .xn-shell-nav__list:focus-visible .xn-shell-nav__link[data-cursor="true"] { outline: 2px solid var(--focus-ring); outline-offset: -2px; }
+html[data-xn-palette="claude"] .xn-shell-layout .xn-composer textarea:focus-visible,
+html[data-xn-palette="claude"] .xn-shell-layout .xn-composer__input:focus-visible { outline: none; }
+html[data-xn-palette="claude"] ::selection { background: color-mix(in oklab, var(--accent-brand) 24%, transparent); }
 
-/* ── 2. Conversation: messages and code ───────────────────────────────────── */
-html[data-xn-palette="claude"] .xn-shell-layout .xn-zcode-conversation { color: var(--conversation-fg); }
+/* ── 2. Conversation: 768px column, bubble user turns, serif prose ──────── */
+html[data-xn-palette="claude"] .xn-shell-layout .xn-timeline-stream {
+  width: min(100%, calc(var(--claude-column) + 48px));
+  max-width: calc(var(--claude-column) + 48px);
+}
+html[data-xn-palette="claude"] .xn-shell-layout .xn-zcode-conversation { max-width: calc(var(--claude-column) + 48px); color: var(--conversation-fg); }
+html[data-xn-palette="claude"] .xn-shell-layout .xn-run-recovery { width: min(100%, calc(var(--claude-column) + 48px)); }
+
 html[data-xn-palette="claude"] .xn-shell-layout .xn-msg__bubble,
 html[data-xn-palette="claude"] .xn-shell-layout .xn-zc-user-bubble {
-  background-color: var(--conversation-user-surface);
+  max-width: min(75%, 600px);
+  padding: 10px 16px;
+  border: 0;
+  border-radius: 12px;
+  background: var(--conversation-user-surface);
+  box-shadow: none;
   color: var(--conversation-fg);
+  font-size: var(--claude-reading-size);
+  line-height: 1.5;
 }
+html[data-xn-palette="claude"] .xn-shell-layout .xn-zc-editor { border-radius: 12px; }
+
 html[data-xn-palette="claude"] .xn-shell-layout .xn-msg--assistant,
-html[data-xn-palette="claude"] .xn-shell-layout .xn-zc-answer .xn-md { color: var(--conversation-fg); }
-html[data-xn-palette="claude"] .xn-shell-layout .xn-md__heading,
+html[data-xn-palette="claude"] .xn-shell-layout .xn-zc-answer .xn-md {
+  color: var(--conversation-fg);
+  font-family: var(--claude-font-serif);
+  font-size: var(--claude-reading-size);
+  line-height: 1.65;
+}
+html[data-xn-palette="claude"] .xn-shell-layout .xn-md__paragraph,
+html[data-xn-palette="claude"] .xn-shell-layout .xn-zc-answer .xn-md p { margin: 0 0 .75em; }
+html[data-xn-palette="claude"] .xn-shell-layout .xn-md__paragraph:last-child,
+html[data-xn-palette="claude"] .xn-shell-layout .xn-zc-answer .xn-md p:last-child { margin-bottom: 0; }
+html[data-xn-palette="claude"] .xn-shell-layout .xn-md__heading { color: var(--fg); font-weight: 600; }
 html[data-xn-palette="claude"] .xn-shell-layout .xn-md strong,
-html[data-xn-palette="claude"] .xn-shell-layout .xn-md__bold { color: var(--fg); }
+html[data-xn-palette="claude"] .xn-shell-layout .xn-md__bold { color: var(--fg); font-weight: 600; }
+html[data-xn-palette="claude"] .xn-shell-layout .xn-md__list { padding-left: 1.5em; }
+html[data-xn-palette="claude"] .xn-shell-layout .xn-md__list-item { margin: .25em 0; }
 html[data-xn-palette="claude"] .xn-shell-layout .xn-md__list-item::marker { color: var(--fg-muted); }
-html[data-xn-palette="claude"] .xn-shell-layout .xn-md__blockquote { border-left-color: color-mix(in oklab, var(--accent-brand) 45%, var(--border)); color: var(--fg-subtle); }
-html[data-xn-palette="claude"] .xn-shell-layout .xn-md a { color: var(--accent-brand); text-decoration-color: color-mix(in oklab, var(--accent-brand) 40%, transparent); }
+html[data-xn-palette="claude"] .xn-shell-layout .xn-md__blockquote { border-left: 3px solid var(--border-strong); color: var(--fg-subtle); }
+html[data-xn-palette="claude"] .xn-shell-layout .xn-md a { color: var(--fg); text-decoration-color: var(--border-strong); }
 html[data-xn-palette="claude"] .xn-shell-layout .xn-md a:hover { text-decoration-color: currentColor; }
 html[data-xn-palette="claude"] .xn-shell-layout .xn-md__inline-code {
-  background-color: color-mix(in oklab, var(--fg) 7%, transparent);
-  color: var(--fg);
+  padding: .1em .35em;
+  border: .5px solid var(--border);
+  border-radius: 4px;
+  background: var(--bg-subtle);
+  color: var(--accent-danger-ink);
+  font-family: var(--font-mono);
+  font-size: .875em;
 }
+html[data-xn-palette="claude"] .xn-shell-layout .xn-md__table-wrap { border-radius: 8px; }
 html[data-xn-palette="claude"] .xn-shell-layout .xn-md__table-cell { border-color: var(--border); }
-html[data-xn-palette="claude"] .xn-shell-layout .xn-md__table-cell--head { background-color: color-mix(in oklab, var(--fg) 4%, transparent); }
+html[data-xn-palette="claude"] .xn-shell-layout .xn-md__table-cell--head { background: var(--bg-subtle); }
 
+/* Code: radius 8 card, hairline border, small sans header. Monospace text
+ * keeps the UI size so code never "zooms" with the prose. */
 html[data-xn-palette="claude"] .xn-shell-layout .xn-md__code-fence,
 html[data-xn-palette="claude"] .xn-shell-layout .xn-zc-answer .xn-md__code-fence {
-  border-color: var(--border);
-  background-color: color-mix(in oklab, var(--bg-subtle) 55%, var(--bg-card));
+  margin: 4px 0 1em;
+  border: .5px solid var(--border-strong);
+  border-radius: 8px;
+  background: var(--bg-subtle);
+  box-shadow: none;
+  font-family: var(--font-sans);
 }
 html[data-xn-palette="claude"] .xn-shell-layout .xn-md__code-header {
-  border-bottom-color: color-mix(in oklab, var(--border) 70%, transparent);
+  min-height: 32px;
+  padding: 0 6px 0 12px;
+  border-bottom: .5px solid var(--border);
+  background: transparent;
   color: var(--fg-muted);
+  font: 400 12px/1.4 var(--font-sans);
 }
-html[data-xn-palette="claude"] .xn-shell-layout .xn-md__code-header button { color: var(--fg-muted); }
-html[data-xn-palette="claude"] .xn-shell-layout .xn-md__code-header button:hover { background-color: var(--bg-hover); color: var(--fg); }
+html[data-xn-palette="claude"] .xn-shell-layout .xn-md__code-header button { border-radius: 6px; color: var(--fg-muted); }
+html[data-xn-palette="claude"] .xn-shell-layout .xn-md__code-header button:hover { background: var(--bg-hover); color: var(--fg); }
+html[data-xn-palette="claude"] .xn-shell-layout .xn-md__code-fence .xn-code-content { background: transparent; }
+html[data-xn-palette="claude"] .xn-shell-layout .xn-md__code-fence .xn-code-content pre { padding: 12px 16px; background: transparent !important; font-size: 13px; line-height: 1.6; }
 html[data-xn-palette="claude"] .xn-shell-layout .xn-md__code-fence .xn-code-content.has-line-numbers .line::before { color: var(--conversation-subtlest); }
-html[data-xn-palette="claude"] .xn-shell-layout .xn-md__code-block { background-color: color-mix(in oklab, var(--bg-subtle) 55%, var(--bg-card)); }
+html[data-xn-palette="claude"] .xn-shell-layout .xn-md__code-block { border-radius: 8px; background: var(--bg-subtle); font-size: 13px; }
 
 html[data-xn-palette="claude"] .xn-shell-layout .xn-msg__actions button,
-html[data-xn-palette="claude"] .xn-shell-layout .xn-zc-action { color: var(--conversation-muted); }
-html[data-xn-palette="claude"] .xn-shell-layout .xn-msg__actions button:hover { background-color: var(--bg-hover); color: var(--conversation-fg); }
+html[data-xn-palette="claude"] .xn-shell-layout .xn-zc-action { border-radius: 6px; color: var(--fg-muted); }
+html[data-xn-palette="claude"] .xn-shell-layout .xn-msg__actions button:hover { background: var(--bg-hover); color: var(--fg); }
 html[data-xn-palette="claude"] .xn-shell-layout .xn-conversation-work-summary,
-html[data-xn-palette="claude"] .xn-shell-layout .xn-zc-work-status { border-bottom-color: color-mix(in oklab, var(--border) 60%, transparent); color: var(--conversation-muted); }
-html[data-xn-palette="claude"] .xn-shell-layout .xn-session-back-to-bottom { background-color: var(--bg-popover); }
+html[data-xn-palette="claude"] .xn-shell-layout .xn-zc-work-status { border-bottom-color: var(--border); color: var(--fg-muted); }
+html[data-xn-palette="claude"] .xn-shell-layout .xn-session-back-to-bottom { border-radius: 9999px; background: var(--bg-popover); box-shadow: var(--shadow-md); }
 
-/* ── 3. Composer ──────────────────────────────────────────────────────────── */
-html[data-xn-palette="claude"] .xn-shell-layout .xn-composer { border-color: var(--border); }
+/* ── 3. Composer: raised card, radius 20, 16px input, clay send ─────────── */
+html[data-xn-palette="claude"] .xn-shell-layout .xn-composer {
+  border: .5px solid var(--border-strong);
+  border-radius: 20px;
+  background: var(--bg-input);
+  box-shadow: var(--claude-composer-shadow);
+  transition: border-color var(--dur-normal) var(--claude-ease), box-shadow var(--dur-normal) var(--claude-ease);
+}
 html[data-xn-palette="claude"] .xn-shell-layout .xn-composer:hover,
-html[data-xn-palette="claude"] .xn-shell-layout .xn-composer:focus-within { border-color: var(--border-strong); }
-html[data-xn-palette="claude"] .xn-shell-layout .xn-composer__input { color: var(--conversation-fg); }
+html[data-xn-palette="claude"] .xn-shell-layout .xn-composer:focus-within { border-color: var(--claude-border-hover); }
+/* Start page: the chooser sits above the card; ::before draws the card. */
+html[data-xn-palette="claude"] .xn-shell-layout .xn-composer--with-top-content,
+html[data-xn-palette="claude"] .xn-shell-layout .xn-composer--with-top-content:hover,
+html[data-xn-palette="claude"] .xn-shell-layout .xn-composer--with-top-content:focus-within { border-color: transparent; background: transparent; box-shadow: none; }
+html[data-xn-palette="claude"] .xn-shell-layout .xn-composer--with-top-content::before {
+  border: .5px solid var(--border-strong);
+  border-radius: 20px;
+  background: var(--bg-input);
+  box-shadow: var(--claude-composer-shadow);
+}
+html[data-xn-palette="claude"] .xn-shell-layout .xn-composer--with-top-content:focus-within::before { border-color: var(--claude-border-hover); }
+html[data-xn-palette="claude"] .xn-shell-layout .xn-composer-region--docked {
+  width: min(var(--claude-column), calc(100% - 48px));
+  max-width: var(--claude-column);
+  margin-bottom: 16px;
+}
+html[data-xn-palette="claude"] .xn-shell-layout .xn-composer__input {
+  color: var(--fg);
+  font-size: var(--claude-reading-size);
+  line-height: 1.5;
+}
 html[data-xn-palette="claude"] .xn-shell-layout .xn-composer__input::placeholder { color: var(--fg-muted); }
-html[data-xn-palette="claude"] .xn-shell-layout .xn-composer-toolbar__tool:hover:not(:disabled) { color: var(--fg); }
-html[data-xn-palette="claude"] .xn-shell-layout .xn-composer-toolbar__popover { background-color: var(--bg-popover); }
-/* Send is the accent's main home. */
+html[data-xn-palette="claude"] .xn-shell-layout .xn-composer-toolbar__tool,
+html[data-xn-palette="claude"] .xn-shell-layout .xn-composer__chip,
+html[data-xn-palette="claude"] .xn-shell-layout .xn-composer__context-chip { border-radius: 8px; color: var(--fg-subtle); }
+html[data-xn-palette="claude"] .xn-shell-layout .xn-composer-toolbar__tool:hover:not(:disabled) { background: var(--bg-hover); color: var(--fg); }
+html[data-xn-palette="claude"] .xn-shell-layout .xn-composer-toolbar__popover { border-radius: 12px; background: var(--bg-popover); box-shadow: var(--shadow-lg); }
 html[data-xn-palette="claude"] .xn-shell-layout .xn-composer__send {
-  background-color: var(--accent-brand);
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  background: var(--accent-brand);
   color: var(--accent-brand-fg);
+  transition: background-color var(--dur-fast) var(--claude-ease);
 }
-html[data-xn-palette="claude"] .xn-shell-layout .xn-composer__send:hover:not(:disabled) { background-color: var(--accent-brand-hover); }
-html[data-xn-palette="claude"] .xn-shell-layout .xn-composer__send:disabled { background-color: var(--bg-active); color: var(--fg-muted); }
+html[data-xn-palette="claude"] .xn-shell-layout .xn-composer__send:hover:not(:disabled) { background: var(--accent-brand-hover); }
+html[data-xn-palette="claude"] .xn-shell-layout .xn-composer__send:disabled { background: color-mix(in oklab, var(--accent-brand) 45%, var(--bg-input)); color: var(--accent-brand-fg); }
 html[data-xn-palette="claude"] .xn-shell-layout .xn-composer__stop,
-html[data-xn-palette="claude"] .xn-shell-layout .xn-composer__stop:hover:not(:disabled) { background-color: var(--primary); color: var(--primary-fg); }
+html[data-xn-palette="claude"] .xn-shell-layout .xn-composer__stop:hover:not(:disabled) { border-radius: 8px; background: var(--fg); color: var(--bg); }
 
-/* ── 4. Start page ────────────────────────────────────────────────────────── */
+/* ── 4. Start page: serif greeting, sparse layout ────────────────────────── */
 html[data-xn-palette="claude"] .xn-shell-layout .xn-hero__brand-mark { color: var(--accent-brand); }
-html[data-xn-palette="claude"] .xn-shell-layout .xn-hero__greeting { color: var(--fg); }
-html[data-xn-palette="claude"] .xn-shell-layout .xn-hero__hint { color: var(--fg-muted); }
-html[data-xn-palette="claude"] .xn-shell-layout .xn-start-page__action {
-  border-color: var(--border);
-  background-color: var(--bg-card);
-  color: var(--fg-subtle);
+html[data-xn-palette="claude"] .xn-shell-layout .xn-hero__greeting {
+  color: var(--claude-greeting);
+  font-family: var(--claude-font-serif);
+  font-size: 40px;
+  font-weight: 300;
+  line-height: 1.5;
+  letter-spacing: -.01em;
 }
-html[data-xn-palette="claude"] .xn-shell-layout .xn-start-page__action:hover { border-color: var(--border-strong); background-color: var(--bg-card); color: var(--fg); }
-html[data-xn-palette="claude"] .xn-shell-layout .xn-start-page__recent h2 { color: var(--fg-muted); }
+html[data-xn-palette="claude"] .xn-shell-layout .xn-hero__hint { color: var(--fg-muted); }
+html[data-xn-palette="claude"] .xn-shell-layout .xn-hero__composer { width: min(672px, 100%); }
+html[data-xn-palette="claude"] .xn-shell-layout .xn-start-page__action {
+  min-height: 32px;
+  padding: 6px 12px;
+  border: .5px solid var(--border-strong);
+  border-radius: 10px;
+  background: transparent;
+  color: var(--fg-subtle);
+  font-weight: 400;
+  box-shadow: none;
+}
+html[data-xn-palette="claude"] .xn-shell-layout .xn-start-page__action:hover { border-color: var(--claude-border-hover); background: var(--bg-hover); color: var(--fg); }
+html[data-xn-palette="claude"] .xn-shell-layout .xn-start-page__action-copy strong { font-weight: 400; }
+html[data-xn-palette="claude"] .xn-shell-layout .xn-start-page__recent h2 { color: var(--fg-muted); font-size: 12px; font-weight: 500; }
+html[data-xn-palette="claude"] .xn-shell-layout .xn-start-page__recent-item { border-radius: 8px; }
+html[data-xn-palette="claude"] .xn-shell-layout .xn-start-page__recent-item:hover { background: var(--bg-hover); }
 html[data-xn-palette="claude"] .xn-shell-layout .xn-start-page__recent-title { color: var(--fg); }
 
-/* ── 5. Tool steps, approvals and questions ───────────────────────────────── */
+/* ── 5. Tools, approvals and questions ───────────────────────────────────── */
 html[data-xn-palette="claude"] .xn-shell-layout .xn-msg__tool-line,
 html[data-xn-palette="claude"] .xn-shell-layout .xn-toolcall__summary,
 html[data-xn-palette="claude"] .xn-shell-layout .xn-tool-group > summary,
 html[data-xn-palette="claude"] .xn-shell-layout .xn-zc-tool > summary,
-html[data-xn-palette="claude"] .xn-shell-layout .xn-zc-reasoning > summary { color: var(--conversation-muted); }
+html[data-xn-palette="claude"] .xn-shell-layout .xn-zc-reasoning > summary { color: var(--fg-muted); }
 html[data-xn-palette="claude"] .xn-shell-layout .xn-msg__tool-line:hover,
 html[data-xn-palette="claude"] .xn-shell-layout .xn-toolcall__summary:hover,
 html[data-xn-palette="claude"] .xn-shell-layout .xn-tool-group > summary:hover,
 html[data-xn-palette="claude"] .xn-shell-layout .xn-zc-tool > summary:hover,
-html[data-xn-palette="claude"] .xn-shell-layout .xn-zc-reasoning > summary:hover { color: var(--conversation-fg); }
-html[data-xn-palette="claude"] .xn-shell-layout .xn-toolcall__content {
-  border-color: var(--border);
-  background-color: color-mix(in oklab, var(--bg-subtle) 55%, var(--bg-card));
-}
+html[data-xn-palette="claude"] .xn-shell-layout .xn-zc-reasoning > summary:hover { color: var(--fg); }
+html[data-xn-palette="claude"] .xn-shell-layout .xn-toolcall__content { border: .5px solid var(--border-strong); border-radius: 8px; background: var(--bg-subtle); }
 html[data-xn-palette="claude"] .xn-shell-layout .xn-toolcall__body,
 html[data-xn-palette="claude"] .xn-shell-layout .xn-msg__tool-detail-body { color: var(--fg-subtle); }
 html[data-xn-palette="claude"] .xn-shell-layout .xn-toolcall__terminal,
-html[data-xn-palette="claude"] .xn-shell-layout .xn-zc-tool-body pre {
-  border-color: var(--border);
-  background-color: color-mix(in oklab, var(--bg-subtle) 55%, var(--bg-card));
-}
-html[data-xn-palette="claude"] .xn-shell-layout .xn-zc-reasoning-content { border-left-color: color-mix(in oklab, var(--accent-brand) 35%, var(--border)); }
-html[data-xn-palette="claude"] .xn-shell-layout .xn-approvals { border-color: var(--border) !important; border-left-color: var(--warn) !important; }
-html[data-xn-palette="claude"] .xn-shell-layout .xn-approval-item { background-color: color-mix(in oklab, var(--bg-subtle) 45%, var(--bg-card)) !important; }
+html[data-xn-palette="claude"] .xn-shell-layout .xn-zc-tool-body pre { border-color: var(--border); border-radius: 8px; background: var(--bg-subtle); }
+html[data-xn-palette="claude"] .xn-shell-layout .xn-zc-reasoning-content { border-left-color: var(--border-strong); }
+html[data-xn-palette="claude"] .xn-shell-layout .xn-approvals { box-sizing: border-box; width: min(calc(100% - 48px), var(--claude-column)); margin-inline: auto; border: .5px solid var(--border-strong) !important; border-radius: 12px !important; box-shadow: var(--shadow-md) !important; }
+html[data-xn-palette="claude"] .xn-shell-layout .xn-approval-item { border-radius: 8px !important; background: var(--bg-subtle) !important; }
 html[data-xn-palette="claude"] .xn-shell-layout .xn-pending-question,
-html[data-xn-palette="claude"] .xn-shell-layout .xn-mcp-elicitation {
-  border-color: var(--border);
-  background-color: var(--bg-card);
-}
+html[data-xn-palette="claude"] .xn-shell-layout .xn-mcp-elicitation { width: min(100% - 48px, var(--claude-column)); border: .5px solid var(--border-strong); border-radius: 12px; background: var(--bg-input); box-shadow: var(--shadow-md); }
+html[data-xn-palette="claude"] .xn-shell-layout .xn-pending-question textarea { border-radius: 8px; }
 
-/* ── 6. Settings ──────────────────────────────────────────────────────────── */
+/* ── 6. Settings: Claude-style plain page, left list, hairline sections ─── */
+html[data-xn-palette="claude"] .xn-shell-layout .xn-shell-main__panel:has(> .xn-settings-view) { background: var(--bg); }
 html[data-xn-palette="claude"] .xn-shell-layout .xn-settings-view,
-html[data-xn-palette="claude"] .xn-shell-layout .xn-settings-view__sidebar { background-color: var(--bg-window); }
-html[data-xn-palette="claude"] .xn-shell-layout .xn-settings-view__main {
-  border-color: color-mix(in oklab, var(--border) 85%, transparent);
-  background-color: var(--bg);
-}
+html[data-xn-palette="claude"] .xn-shell-layout .xn-settings-view__sidebar,
+html[data-xn-palette="claude"] .xn-shell-layout .xn-settings-view__main { background: var(--bg); }
+html[data-xn-palette="claude"] .xn-shell-layout .xn-settings-view__main { border: 0; border-radius: 0; box-shadow: none; }
+html[data-xn-palette="claude"] .xn-shell-layout .xn-settings-view__frame { max-width: var(--claude-column); }
+html[data-xn-palette="claude"] .xn-shell-layout .xn-settings-view__header h1 { font-family: var(--claude-font-serif); font-size: 28px; font-weight: 400; line-height: 1.3; }
 html[data-xn-palette="claude"] .xn-shell-layout .xn-settings-view__description { color: var(--fg-muted); }
 html[data-xn-palette="claude"] .xn-shell-layout .xn-settings-view__nav-item,
-html[data-xn-palette="claude"] .xn-shell-layout .xn-settings-view__extensions > summary { color: var(--fg-subtle); }
-html[data-xn-palette="claude"] .xn-shell-layout .xn-settings-view__nav-item:hover { background-color: var(--bg-hover); color: var(--fg); }
-html[data-xn-palette="claude"] .xn-shell-layout .xn-settings-view__nav-item[aria-current="page"] { background-color: var(--bg-active); color: var(--fg); }
+html[data-xn-palette="claude"] .xn-shell-layout .xn-settings-view__extensions > summary { border-radius: 8px; color: var(--fg-subtle); }
+html[data-xn-palette="claude"] .xn-shell-layout .xn-settings-view__nav-item:hover { background: var(--bg-hover); color: var(--fg); }
+html[data-xn-palette="claude"] .xn-shell-layout .xn-settings-view__nav-item[aria-current="page"] { background: var(--bg-active); color: var(--fg); font-weight: 500; }
 html[data-xn-palette="claude"] .xn-shell-layout .xn-settings-view__nav-icon { color: var(--fg-muted); }
 html[data-xn-palette="claude"] .xn-shell-layout .xn-settings-view__nav-item[aria-current="page"] .xn-settings-view__nav-icon { color: var(--fg); }
-html[data-xn-palette="claude"] .xn-shell-layout .xn-settings-view__group-label { color: var(--fg-muted); }
-html[data-xn-palette="claude"] .xn-shell-layout .xn-settings-view__search input { background-color: var(--bg-input); }
-html[data-xn-palette="claude"] .xn-shell-layout .xn-settings-account { background-color: var(--bg-card); border-color: var(--border); }
+html[data-xn-palette="claude"] .xn-shell-layout .xn-settings-view__group-label { color: var(--fg-muted); font-size: 12px; font-weight: 500; }
+html[data-xn-palette="claude"] .xn-shell-layout .xn-settings-view__search input { border-radius: 8px; background: var(--bg-input); }
+html[data-xn-palette="claude"] .xn-shell-layout .xn-settings-account { border-color: var(--border); border-radius: 12px; background: var(--bg-input); }
 html[data-xn-palette="claude"] .xn-shell-layout .xn-settings-group,
 html[data-xn-palette="claude"] .xn-shell-layout .xn-plugins__list,
 html[data-xn-palette="claude"] .xn-shell-layout .xn-settings-readonly {
-  border-color: var(--border);
-  background-color: var(--bg-card);
+  border: .5px solid var(--border-strong);
+  border-radius: 12px;
+  background: var(--bg-input);
+  box-shadow: none;
 }
-html[data-xn-palette="claude"] .xn-shell-layout .xn-setting-row { border-top-color: color-mix(in oklab, var(--border) 75%, transparent); }
-html[data-xn-palette="claude"] .xn-shell-layout .xn-setting-row h3 { color: var(--fg); }
+html[data-xn-palette="claude"] .xn-shell-layout .xn-setting-row { border-top-color: var(--border); }
+html[data-xn-palette="claude"] .xn-shell-layout .xn-setting-row h3 { color: var(--fg); font-weight: 500; }
 html[data-xn-palette="claude"] .xn-shell-layout .xn-setting-control .xn-select,
 html[data-xn-palette="claude"] .xn-shell-layout .xn-setting-control input:not([type=checkbox]):not([type=radio]),
-html[data-xn-palette="claude"] .xn-shell-layout .xn-setting-control textarea { background-color: var(--bg-input); }
-html[data-xn-palette="claude"] .xn-shell-layout .xn-plugin-card__state.is-effective { color: var(--ok-fg); background-color: var(--ok-bg); }
+html[data-xn-palette="claude"] .xn-shell-layout .xn-setting-control textarea { border-radius: 8px; background: var(--bg-input); }
+html[data-xn-palette="claude"] .xn-shell-layout .xn-plugin-card__state.is-effective { color: var(--ok-fg); background: var(--ok-bg); }
 
-/* ── 7. Lightweight mode ──────────────────────────────────────────────────── */
+/* ── 7. Lightweight mode: same column, bubble, prose and composer ───────── */
+html[data-xn-palette="claude"] .xn-shell-layout .xn-lightweight-timeline,
+html[data-xn-palette="claude"] .xn-shell-layout .xn-lightweight-statusbar,
+html[data-xn-palette="claude"] .xn-shell-layout .xn-lightweight-composer { max-width: var(--claude-column); }
 html[data-xn-palette="claude"] .xn-shell-layout .xn-lightweight-msg--user .xn-lightweight-msg__bubble {
-  background-color: var(--conversation-user-surface);
+  padding: 10px 16px;
+  border: 0;
+  border-radius: 12px;
+  background: var(--conversation-user-surface);
   color: var(--conversation-fg);
+  font-size: var(--claude-reading-size);
+  line-height: 1.5;
 }
-html[data-xn-palette="claude"] .xn-shell-layout .xn-lightweight-msg--assistant .xn-lightweight-msg__prose { color: var(--conversation-fg); }
+html[data-xn-palette="claude"] .xn-shell-layout .xn-lightweight-msg--assistant .xn-lightweight-msg__prose {
+  color: var(--conversation-fg);
+  font-family: var(--claude-font-serif);
+  font-size: var(--claude-reading-size);
+  line-height: 1.65;
+}
 html[data-xn-palette="claude"] .xn-shell-layout .xn-lightweight-tool,
-html[data-xn-palette="claude"] .xn-shell-layout .xn-lightweight-tool-group {
-  border-color: var(--border);
-  background-color: color-mix(in oklab, var(--bg-subtle) 55%, var(--bg-card));
+html[data-xn-palette="claude"] .xn-shell-layout .xn-lightweight-tool-group { border-color: var(--border-strong); border-radius: 8px; background: var(--bg-subtle); }
+html[data-xn-palette="claude"] .xn-shell-layout .xn-lightweight-tool__pre { border-radius: 8px; }
+html[data-xn-palette="claude"] .xn-shell-layout .xn-lightweight-statusbar { border-top-color: transparent; background: transparent; }
+html[data-xn-palette="claude"] .xn-shell-layout .xn-lightweight-composer {
+  border: .5px solid var(--border-strong);
+  border-radius: 20px;
+  background: var(--bg-input);
+  box-shadow: var(--claude-composer-shadow);
 }
-html[data-xn-palette="claude"] .xn-shell-layout .xn-lightweight-reasoning__text { border-left-color: color-mix(in oklab, var(--accent-brand) 35%, var(--border)); }
-html[data-xn-palette="claude"] .xn-shell-layout .xn-lightweight-statusbar { border-top-color: color-mix(in oklab, var(--border) 70%, transparent); }
-html[data-xn-palette="claude"] .xn-shell-layout .xn-lightweight-composer__btn--send { border-color: var(--accent-brand); background-color: var(--accent-brand); color: var(--accent-brand-fg); }
-html[data-xn-palette="claude"] .xn-shell-layout .xn-lightweight-composer__btn--send:hover:not(:disabled) { background-color: var(--accent-brand-hover); }
+html[data-xn-palette="claude"] .xn-shell-layout .xn-lightweight-composer__textarea { font-size: var(--claude-reading-size); }
+html[data-xn-palette="claude"] .xn-shell-layout .xn-lightweight-composer__btn { border-radius: 8px; }
+html[data-xn-palette="claude"] .xn-shell-layout .xn-lightweight-composer__btn--send { border-color: var(--accent-brand); background: var(--accent-brand); color: var(--accent-brand-fg); }
+html[data-xn-palette="claude"] .xn-shell-layout .xn-lightweight-composer__btn--send:hover:not(:disabled) { background: var(--accent-brand-hover); }
 
-/* ── 8. Dialogs, menus, popovers and notices ─────────────────────────────── */
-/* Menus and dialogs may be portalled outside the shell, hence the body scope. */
+/* ── 8. Dialogs, menus and notices ───────────────────────────────────────── */
 html[data-xn-palette="claude"] body .xn-dialog-overlay,
-html[data-xn-palette="claude"] body .xn-command-overlay { background-color: rgb(28 24 16 / .38); }
+html[data-xn-palette="claude"] body .xn-command-overlay { background: rgb(20 20 19 / .4); }
 html[data-xn-palette="claude"] body .xn-dialog,
 html[data-xn-palette="claude"] body .xn-command-panel {
-  border-color: var(--border);
-  background-color: var(--bg-popover);
+  border: .5px solid var(--border-strong);
+  border-radius: 16px;
+  background: var(--bg-popover);
+  box-shadow: var(--shadow-lg);
 }
 html[data-xn-palette="claude"] body .xn-dialog__input,
-html[data-xn-palette="claude"] body .xn-command-panel input { border-color: var(--border-strong); background-color: var(--bg-input); }
-html[data-xn-palette="claude"] body .xn-select-menu {
-  border-color: var(--border);
-  background-color: var(--bg-popover);
-}
-html[data-xn-palette="claude"] body .xn-select-option[data-highlighted] { background-color: var(--bg-hover); }
+html[data-xn-palette="claude"] body .xn-command-panel input { border-color: var(--border-strong); border-radius: 8px; background: var(--bg-input); }
+html[data-xn-palette="claude"] body .xn-command-option { border-radius: 8px; }
+html[data-xn-palette="claude"] body .xn-select-menu { border-color: var(--border-strong); border-radius: 12px; background: var(--bg-popover); box-shadow: var(--shadow-lg); }
+html[data-xn-palette="claude"] body .xn-select-option { border-radius: 8px; }
+html[data-xn-palette="claude"] body .xn-select-option[data-highlighted] { background: var(--bg-hover); }
 html[data-xn-palette="claude"] body .xn-select-check { color: var(--accent-brand); }
-html[data-xn-palette="claude"] .xn-shell-layout .xn-error-banner { border-bottom-color: color-mix(in oklab, var(--error-border) 70%, transparent); background-color: color-mix(in oklab, var(--error-bg) 80%, var(--bg)); }
+html[data-xn-palette="claude"] .xn-shell-layout .xn-workbench-menu > div { border-radius: 12px; box-shadow: var(--shadow-lg); }
+html[data-xn-palette="claude"] .xn-shell-layout .xn-error-banner { border-bottom-color: var(--error-border); background: var(--error-bg); }
+html[data-xn-palette="claude"] .xn-shell-layout .xn-error-banner > button { border-radius: 8px; }
