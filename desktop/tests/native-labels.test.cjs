@@ -18,6 +18,7 @@ test('native menus use Chinese labels and retain Electron role shortcuts', () =>
   assert.equal(item(menu, '重新载入').role, 'reload');
   assert.equal(item(menu, '最小化').role, 'minimize');
   assert.equal(item(menu, '全部置于最前面').role, 'front');
+  assert.equal(item(menu, '缩放').role, 'zoom');
   assert.equal(item(menu, '关于 Xueness').role, 'about');
   assert.equal(item(menu, '退出 Xueness').role, 'quit');
   assert.equal(getNativeLabels('zh').projectFolderTitle, '选择项目文件夹');
@@ -25,7 +26,8 @@ test('native menus use Chinese labels and retain Electron role shortcuts', () =>
 
 test('native menus use English labels on Windows and expose a localized File menu', () => {
   const menu = buildApplicationMenu('en', 'win32');
-  assert.deepEqual(menu.map(entry => entry.label), ['Edit', 'View', 'Window', 'File']);
+  assert.deepEqual(menu.map(entry => entry.label), ['File', 'Edit', 'View', 'Window']);
+  assert.equal(item(menu, 'Zoom'), null, 'macOS-only zoom role is not shown on Windows');
   assert.equal(item(menu, 'Undo').role, 'undo');
   assert.equal(item(menu, 'Reload').role, 'reload');
   assert.equal(item(menu, 'Minimize').role, 'minimize');

@@ -46,6 +46,8 @@ function buildApplicationMenu(locale, platform) {
       { type: 'separator' },
       { label: labels.quit, role: 'quit' },
     ] }] : []),
+    // Windows 惯例：「文件」菜单放在最前面（Alt+F），与 macOS 的应用菜单位置对应。
+    ...(!mac ? [{ label: labels.file, submenu: [{ label: labels.quit, role: 'quit' }] }] : []),
     { label: labels.edit, submenu: [
       { label: labels.undo, role: 'undo' }, { label: labels.redo, role: 'redo' }, { type: 'separator' },
       { label: labels.cut, role: 'cut' }, { label: labels.copy, role: 'copy' },
@@ -57,10 +59,11 @@ function buildApplicationMenu(locale, platform) {
       { label: labels.fullscreen, role: 'togglefullscreen' },
     ] },
     { label: labels.window, submenu: [
-      { label: labels.minimize, role: 'minimize' }, { label: labels.zoom, role: 'zoom' }, { type: 'separator' },
-      ...(mac ? [{ label: labels.bringToFront, role: 'front' }] : [{ label: labels.closeWindow, role: 'close' }]),
+      { label: labels.minimize, role: 'minimize' },
+      // role 'zoom' / 'front' 只在 macOS 生效；Windows 上是空操作，不展示。
+      ...(mac ? [{ label: labels.zoom, role: 'zoom' }, { type: 'separator' }, { label: labels.bringToFront, role: 'front' }]
+        : [{ type: 'separator' }, { label: labels.closeWindow, role: 'close' }]),
     ] },
-    ...(!mac ? [{ label: labels.file, submenu: [{ label: labels.quit, role: 'quit' }] }] : []),
   ];
 }
 
