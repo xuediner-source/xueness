@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { get, post } from "../../xuenessApi";
 import { isImeComposingEvent } from "../../xuenessShortcutDisplay";
 import { t as tr, tf } from "../../i18n";
@@ -454,30 +454,51 @@ export function McpElicitation({ sessionId }: { sessionId: string }): React.JSX.
   const [values, setValues] = useState<ElicitationFormState>({});
   const [error, setError] = useState("");
   const [errorField, setErrorField] = useState<string | null>(null);
+  const mounted = useRef(true);
+  useEffect(() => {
+    return () => {
+      mounted.current = false;
+    };
+  }, []);
   useEffect(() => {
     if (!sessionId) return undefined;
     let stopped = false;
     let timer = 0;
+    let inFlight = false;
+    const controller = new AbortController();
     const tick = async () => {
-      if (stopped) return;
+      if (stopped || inFlight || controller.signal.aborted) return;
       if (typeof document !== "undefined" && document.visibilityState === "hidden") {
+        window.clearTimeout(timer);
         timer = window.setTimeout(() => void tick(), 1500);
         return;
       }
+      inFlight = true;
       try {
-        const body = await get<unknown>(`/api/sessions/${encodeURIComponent(sessionId)}/elicitation`);
-        if (!stopped) setPending(parsePending(body));
+        const body = await get<unknown>(`/api/sessions/${encodeURIComponent(sessionId)}/elicitation`, controller.signal);
+        if (!stopped && !controller.signal.aborted && mounted.current) setPending(parsePending(body));
       } catch {
-        if (!stopped) setPending(null);
+        if (!stopped && !controller.signal.aborted && mounted.current) setPending(null);
+      } finally {
+        inFlight = false;
+        if (!stopped && !controller.signal.aborted) {
+          window.clearTimeout(timer);
+          timer = window.setTimeout(() => void tick(), 1200);
+        }
       }
-      if (!stopped) timer = window.setTimeout(() => void tick(), 1200);
     };
     void tick();
-    const onVisible = () => { if (document.visibilityState === "visible") void tick(); };
+    const onVisible = () => {
+      if (document.visibilityState === "visible") {
+        window.clearTimeout(timer);
+        void tick();
+      }
+    };
     document.addEventListener("visibilitychange", onVisible);
     return () => {
       stopped = true;
       window.clearTimeout(timer);
+      controller.abort();
       document.removeEventListener("visibilitychange", onVisible);
     };
   }, [sessionId]);
@@ -498,8 +519,10 @@ export function McpElicitation({ sessionId }: { sessionId: string }): React.JSX.
       onResolve={body => {
         setError("");
         setErrorField(null);
-        void post(`/api/sessions/${encodeURIComponent(sessionId)}/elicitation`, body).then(() => setPending(null)).catch(() => {
-          setError(tr("没能提交这次回答，请重试。"));
+        void post(`/api/sessions/${encodeURIComponent(sessionId)}/elicitation`, body).then(() => {
+          if (mounted.current) setPending(null);
+        }).catch(() => {
+          if (mounted.current) setError(tr("没能提交这次回答，请重试。"));
         });
       }}
     />

@@ -105,10 +105,16 @@ export function WorkflowPanel({ sessionId, subagentsEnabled }: { sessionId: stri
   }, []);
   useEffect(() => { if (record) setLimit(record.concurrency); }, [record?.id]);
   useEffect(() => {
-    if (!sessionId) return;
-    let live = true;
-    get<{ root: string }>(`/api/sessions/${sessionId}`).then(s => { if (live) setRoot(s.root); }).catch(e => { if (live) setError(errorText(e)); });
-    return () => { live = false; };
+    if (!sessionId) { setRoot(''); return; }
+    const controller = new AbortController();
+    get<{ root: string }>(`/api/sessions/${sessionId}`, controller.signal)
+      .then(s => { if (mounted.current && !controller.signal.aborted) setRoot(s.root); })
+      .catch(e => {
+        if (mounted.current && !controller.signal.aborted && !(e instanceof DOMException && e.name === 'AbortError')) {
+          setError(errorText(e));
+        }
+      });
+    return () => { controller.abort(); };
   }, [sessionId]);
   useEffect(() => {
     setTasks([]);

@@ -62,35 +62,48 @@ export function TerminalPanel({ sessionId, fontSize = 13, fontFamily = "system" 
   }, []);
   useEffect(() => { setId(''); setClosed(false); setError(''); }, [sessionId]);
   useEffect(() => {
-    let live = true;
-    void get<{terminals: typeof existing}>('/api/terminals')
-      .then(r => { if (live) setExisting(r.terminals); })
-      .catch(e => { if (live) setError(errorText(e)); });
-    return () => { live = false; };
+    const controller = new AbortController();
+    void get<{terminals: typeof existing}>('/api/terminals', controller.signal)
+      .then(r => { if (mounted.current && !controller.signal.aborted) setExisting(r.terminals); })
+      .catch(e => {
+        if (mounted.current && !controller.signal.aborted && !(e instanceof DOMException && e.name === 'AbortError')) {
+          setError(errorText(e));
+        }
+      });
+    return () => { controller.abort(); };
   }, [sessionId, id]);
   useEffect(() => {
     if (!id || !host.current) return;
     let live = true, timer: ReturnType<typeof setTimeout>;
     let dispose = () => {};
+    const pollController = new AbortController();
     void (async () => {
       const { Terminal } = await import('@xterm/xterm');
       const { FitAddon } = await import('@xterm/addon-fit');
-      if (!live || !host.current) return;
+      if (!live || !host.current || pollController.signal.aborted) return;
       const terminal = new Terminal({ cursorBlink: true, convertEol: false, fontSize: textSize, fontFamily: terminalFontStack(fontFamily), theme: { background: '#161616', foreground: '#d4d4d4', cursor: '#d4d4d4', selectionBackground: '#ffffff25' } });
       terminalRef.current = terminal;
       const fit = new FitAddon(); terminal.loadAddon(fit); terminal.open(host.current); fit.fit(); terminal.focus();
       let cursor = 0, sending = Promise.resolve();
       const input = terminal.onData(text => {
         sending = sending.then(async () => {
-          if (!live) return;
+          if (!live || pollController.signal.aborted) return;
           await post(`/api/terminals/${id}/input`, { text });
-        }).catch(e => { if (live) setError(errorText(e)); });
+        }).catch(e => {
+          if (live && !pollController.signal.aborted && !(e instanceof DOMException && e.name === 'AbortError')) {
+            setError(errorText(e));
+          }
+        });
       });
       const resize = () => {
         fit.fit();
         const size = terminalResizePayload(terminal.cols, terminal.rows);
-        if (!live || !size) return;
-        void post(`/api/terminals/${id}/resize`, size).catch(e => { if (live) setError(errorText(e)); });
+        if (!live || !size || pollController.signal.aborted) return;
+        void post(`/api/terminals/${id}/resize`, size).catch(e => {
+          if (live && !pollController.signal.aborted && !(e instanceof DOMException && e.name === 'AbortError')) {
+            setError(errorText(e));
+          }
+        });
       };
       resizeRef.current = resize;
       const observer = new ResizeObserver(resize); observer.observe(host.current); resize();
@@ -98,8 +111,8 @@ export function TerminalPanel({ sessionId, fontSize = 13, fontFamily = "system" 
       let backoff = 150;
       const poll = async () => {
         try {
-          const r = await get<{data: string; cursor: number; truncated: boolean; closed: boolean}>(`/api/terminals/${id}?cursor=${cursor}`);
-          if (!live) return;
+          const r = await get<{data: string; cursor: number; truncated: boolean; closed: boolean}>(`/api/terminals/${id}?cursor=${cursor}`, pollController.signal);
+          if (!live || pollController.signal.aborted) return;
           backoff = 150;
           if (r.truncated) terminal.write('\r\n[older output truncated]\r\n');
           const bytes = decodeTerminalData(r.data);
@@ -108,7 +121,7 @@ export function TerminalPanel({ sessionId, fontSize = 13, fontFamily = "system" 
           setClosed(r.closed);
           if (!r.closed || r.data) timer = setTimeout(() => { void poll(); }, 150);
         } catch (e) {
-          if (live) {
+          if (live && !pollController.signal.aborted && !(e instanceof DOMException && e.name === 'AbortError')) {
             setError(errorText(e));
             timer = setTimeout(() => { void poll(); }, backoff);
             backoff = nextTerminalBackoff(backoff);
@@ -116,8 +129,12 @@ export function TerminalPanel({ sessionId, fontSize = 13, fontFamily = "system" 
         }
       };
       void poll();
-    })().catch(e => { if (live) setError(errorText(e)); });
-    return () => { live = false; clearTimeout(timer); dispose(); };
+    })().catch(e => {
+      if (live && !pollController.signal.aborted && !(e instanceof DOMException && e.name === 'AbortError')) {
+        setError(errorText(e));
+      }
+    });
+    return () => { live = false; clearTimeout(timer); pollController.abort(); dispose(); };
   }, [id]);
   return <section className="xn-operations xn-terminal-page">
     <OperationHeader icon={<IconTerminal size={22} />} title={tr("交互式终端")} description={tr("打开后直接在工作区执行命令，终端输入不会经过 Agent 的逐次审批。")} />

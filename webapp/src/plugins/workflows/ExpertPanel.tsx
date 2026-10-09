@@ -72,17 +72,21 @@ export function ExpertPanel({ sessionId }: { sessionId: string | null }) {
   }, []);
   useEffect(() => {
     if (!sessionId) { setRoot(''); return; }
-    let live = true;
-    get<{ root: string }>(`/api/sessions/${sessionId}`)
-      .then(s => { if (live) setRoot(s.root); })
+    const controller = new AbortController();
+    get<{ root: string }>(`/api/sessions/${sessionId}`, controller.signal)
+      .then(s => { if (mounted.current && !controller.signal.aborted) setRoot(s.root); })
       .catch(() => { /* start row stays hidden without a root */ });
-    return () => { live = false; };
+    return () => { controller.abort(); };
   }, [sessionId]);
   useEffect(() => {
+    setRuns([]);
+    setError('');
     let live = true;
+    let refreshing = false;
     const controller = new AbortController();
     const refresh = async () => {
-      if (!live) return;
+      if (!live || refreshing || controller.signal.aborted) return;
+      refreshing = true;
       try {
         await refreshExpertPanel({
           sessionId, signal: controller.signal,
@@ -90,7 +94,11 @@ export function ExpertPanel({ sessionId }: { sessionId: string | null }) {
           onRuns: setRuns,
         });
       } catch (e) {
-        if (live && !controller.signal.aborted) setError(errorText(e));
+        if (live && !controller.signal.aborted && !(e instanceof DOMException && e.name === 'AbortError')) {
+          setError(errorText(e));
+        }
+      } finally {
+        refreshing = false;
       }
     };
     void refresh();
