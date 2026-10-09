@@ -685,3 +685,40 @@ html[data-xn-palette="claude"] .xn-shell-layout .xn-error-banner > button { bord
   html[data-xn-palette="claude"] .xn-shell-layout--desktop-titlebar .xn-sidebar-footer__action:hover,
   html[data-xn-palette="claude"] .xn-shell-layout--desktop-titlebar .xn-sidebar-account > summary:hover { background: var(--codex-rail-active); color: var(--fg); }
 }
+
+/* Sidebar sheet: 90px header (Xueness wordmark at 17px in the mode-switch
+ * slot, search on the right), a 30px 新建任务 row inset 8px, a 25px muted
+ * section label whose list tools appear on hover, and 30px rows with the
+ * title at 32px and the status mark at the row end, #dddddd text. */
+@media (min-width: 901px) {
+  html[data-xn-palette="claude"] .xn-shell-layout--desktop-titlebar .xn-shell-sidebar__body::before {
+    content: "Xueness";
+    display: block;
+    height: 32px;
+    margin: 10px 0 10px 10px;
+    padding: 0 8px;
+    color: var(--codex-sidebar-fg);
+    font: 600 17px/32px var(--font-sans);
+    letter-spacing: -.01em;
+  }
+  html[data-xn-palette="claude"] .xn-shell-layout--desktop-titlebar .xn-sidebar-actions { gap: 0; padding: 0 8px; }
+  html[data-xn-palette="claude"] .xn-shell-layout--desktop-titlebar .xn-sidebar-action { padding: 0 8px; gap: 8px; color: var(--codex-sidebar-fg); }
+  html[data-xn-palette="claude"] .xn-shell-layout--desktop-titlebar .xn-task-list__toolbar { min-height: 25px; margin: 15px 0 0; padding: 0 8px 0 12px; }
+  html[data-xn-palette="claude"] .xn-shell-layout--desktop-titlebar .xn-task-list__toolbar::before { font-size: 13px; line-height: 25px; }
+  html[data-xn-palette="claude"] .xn-shell-layout--desktop-titlebar .xn-task-list__toolbar > * { opacity: 0; transition: opacity 120ms var(--codex-ease); }
+  html[data-xn-palette="claude"] .xn-shell-layout--desktop-titlebar .xn-task-list__toolbar:hover > *,
+  html[data-xn-palette="claude"] .xn-shell-layout--desktop-titlebar .xn-task-list__toolbar:focus-within > *,
+  html[data-xn-palette="claude"] .xn-shell-layout--desktop-titlebar .xn-task-list__sort[open] { opacity: 1; }
+  html[data-xn-palette="claude"] .xn-shell-layout--desktop-titlebar .xn-task-list { padding: 0 8px; }
+  html[data-xn-palette="claude"] .xn-shell-layout--desktop-titlebar .xn-task-list__toolbar,
+  html[data-xn-palette="claude"] .xn-shell-layout--desktop-titlebar .xn-task-list__group { margin-inline: 0; }
+  html[data-xn-palette="claude"] .xn-shell-layout--desktop-titlebar .xn-task-list__group-name { gap: 8px; padding: 0 8px; color: var(--codex-sidebar-fg); }
+  html[data-xn-palette="claude"] .xn-shell-layout--desktop-titlebar .xn-task-list__group-name svg { color: var(--codex-sidebar-fg); }
+  html[data-xn-palette="claude"] .xn-shell-layout--desktop-titlebar .xn-shell-nav { padding: 0; }
+  html[data-xn-palette="claude"] .xn-shell-layout--desktop-titlebar .xn-shell-nav__list { padding: 0; }
+  html[data-xn-palette="claude"] .xn-shell-layout--desktop-titlebar .xn-shell-nav__link,
+  html[data-xn-palette="claude"] .xn-shell-layout--desktop-titlebar .xn-task-list__group .xn-shell-nav__link { gap: 6px; padding: 0 8px 0 32px; color: var(--codex-sidebar-fg); }
+  html[data-xn-palette="claude"] .xn-shell-layout--desktop-titlebar .xn-shell-nav__label { order: 1; flex: 1 1 auto; min-width: 0; }
+  html[data-xn-palette="claude"] .xn-shell-layout--desktop-titlebar .xn-shell-nav__time { order: 2; }
+  html[data-xn-palette="claude"] .xn-shell-layout--desktop-titlebar .xn-shell-nav__leading { order: 3; justify-content: center; width: 14px; }
+}
