@@ -17,6 +17,7 @@ import urllib.parse
 import urllib.request
 import uuid
 
+from . import cancel_watch
 from .runtime_options import build_openai_payload, resolve_runtime_options, validate_compatibility
 from .lightweight_config import effective_options
 from .tool_protocol import NativeCallAssembler
@@ -943,7 +944,7 @@ class OpenAICompatible:
                 with _open_with_retry(opener, request, 40, lambda: delivered) as response:
                     content_type = response.headers.get("Content-Type", "")
                     if "text/event-stream" not in content_type.casefold():
-                        raw = response.read(2_000_001)
+                        raw = cancel_watch.read(response, 2_000_001)
                         if len(raw) > 2_000_000:
                             raise ValueError("provider response too large")
                         payload = json.loads(raw)
@@ -962,6 +963,7 @@ class OpenAICompatible:
             except ProviderCallbackError:
                 raise
             except _RetryableProviderError as exc:
+                cancel_watch.raise_if_active()
                 delivered = delivered or exc.delivered
                 if delivered or attempts >= 3 or not exc.retryable:
                     raise _provider_request_error(
@@ -970,11 +972,13 @@ class OpenAICompatible:
                     ) from None
                 time.sleep(exc.delay)
             except (urllib.error.URLError, OSError) as exc:
+                cancel_watch.raise_if_active()
                 if delivered or attempts >= 3:
                     raise _provider_request_error(exc, stage="read") from None
                 time.sleep(min(0.25 * (2 ** (attempts - 1)), 2.0))
             except (http.client.HTTPException, ValueError, KeyError, IndexError,
                     TypeError, AttributeError) as exc:
+                cancel_watch.raise_if_active()
                 # A malformed HTTP/SSE response is a protocol error, not a
                 # transport failure. It must not be retried or reported as a
                 # connection problem.
@@ -1024,6 +1028,7 @@ class OpenAICompatible:
                 except ProviderCallbackError:
                     raise
                 except _RetryableProviderError as exc:
+                    cancel_watch.raise_if_active()
                     delivered = delivered or exc.delivered
                     if delivered or attempt == attempts - 1 or not exc.retryable:
                         raise _provider_request_error(
@@ -1032,6 +1037,7 @@ class OpenAICompatible:
                         ) from None
                     _sleep_with_deadline(exc.delay, deadline)
                 except (urllib.error.URLError, OSError) as exc:
+                    cancel_watch.raise_if_active()
                     if time.monotonic() >= deadline:
                         raise ProviderRequestError(
                             category="timeout", stage="deadline",
@@ -1042,6 +1048,7 @@ class OpenAICompatible:
                     _sleep_with_deadline(min(0.25 * (2 ** attempt), 2.0), deadline)
                 except (http.client.HTTPException, ValueError, KeyError, IndexError,
                         TypeError, AttributeError) as exc:
+                    cancel_watch.raise_if_active()
                     _raise_if_deadline_expired(deadline)
                     # transportRetries cover network failures only. A malformed
                     # response has already reached the client and is not replayed.
@@ -1089,7 +1096,7 @@ class OpenAICompatible:
                         open_timeout = min(timeout, remaining)
                     with _open_with_retry(opener, self._request(body, endpoint), open_timeout) as response:
                         if deadline is None:
-                            payload = response.read(max_response_bytes + 1)
+                            payload = cancel_watch.read(response, max_response_bytes + 1)
                         else:
                             payload = _read_response_with_deadline(
                                 response, deadline=deadline,
@@ -1103,12 +1110,14 @@ class OpenAICompatible:
                         attempt + 1,
                     )
                 except _RetryableProviderError as exc:
+                    cancel_watch.raise_if_active()
                     last_http_error = exc
                     _raise_if_deadline_expired(deadline)
                     if attempt == attempts - 1 or not exc.retryable:
                         break
                     _sleep_with_deadline(exc.delay, deadline)
                 except (urllib.error.URLError, OSError) as exc:
+                    cancel_watch.raise_if_active()
                     last_transport_error = exc
                     _raise_if_deadline_expired(deadline)
                     if attempt == attempts - 1:
@@ -1116,6 +1125,7 @@ class OpenAICompatible:
                     _sleep_with_deadline(min(0.25 * (2 ** attempt), 2.0), deadline)
                 except (http.client.HTTPException, ValueError, KeyError, IndexError,
                         TypeError, AttributeError) as exc:
+                    cancel_watch.raise_if_active()
                     _raise_if_deadline_expired(deadline)
                     # A complete response with invalid JSON/shape is not a
                     # transport interruption. Do not repeat a potentially
@@ -1321,7 +1331,7 @@ def _read_response_with_deadline(response, *, deadline, max_bytes):
         # remaining-deadline timeout before every read.
         if not getattr(sock, "_closed", False):
             sock.settimeout(remaining)
-        chunk = reader(min(65_536, max_bytes + 1 - size))
+        chunk = cancel_watch.read1(response, reader, min(65_536, max_bytes + 1 - size))
         if not chunk:
             break
         chunks.append(chunk)
@@ -1340,7 +1350,7 @@ def _read_sse(response):
     data = []
     total = 0
     while True:
-        line = response.readline(262145)
+        line = cancel_watch.readline(response, 262145)
         if len(line) > 262144:
             raise ValueError("provider stream line too large")
         if not line:
@@ -1755,9 +1765,11 @@ class AnthropicMessages:
                     context_overflow=context_overflow, stage="response",
                 ) from None
             except (urllib.error.URLError, OSError) as exc:
+                cancel_watch.raise_if_active()
                 raise _provider_request_error(exc, stage="read") from None
             except (http.client.HTTPException, ValueError, KeyError, IndexError,
                     TypeError, AttributeError) as exc:
+                cancel_watch.raise_if_active()
                 raise _provider_request_error(exc, stage="parse") from None
         deadline = _explicit_request_deadline(self)
         if deadline is not None:
@@ -1765,7 +1777,7 @@ class AnthropicMessages:
             return self._complete_lightweight(request, deadline, attempts=1)
         try:
             with _provider_opener(self.base, _NoRedirect).open(self._request(messages, tools, False), timeout=40) as response:
-                raw = response.read(2_000_001)
+                raw = cancel_watch.read(response, 2_000_001)
                 if len(raw) > 2_000_000:
                     raise ValueError("provider response too large")
             return _with_request_attempts(_anthropic_message(json.loads(raw)), 1)
@@ -1779,9 +1791,11 @@ class AnthropicMessages:
                 context_overflow=context_overflow, stage="response",
             ) from None
         except (urllib.error.URLError, OSError) as exc:
+            cancel_watch.raise_if_active()
             raise _provider_request_error(exc, stage="read") from None
         except (http.client.HTTPException, ValueError, KeyError, IndexError,
                 TypeError, AttributeError) as exc:
+            cancel_watch.raise_if_active()
             raise _provider_request_error(exc, stage="parse") from None
 
     def _complete_lightweight(self, request, deadline, attempts):
@@ -1802,12 +1816,14 @@ class AnthropicMessages:
                         )
                     return _with_request_attempts(_anthropic_message(json.loads(raw)), attempt + 1)
                 except _RetryableProviderError as exc:
+                    cancel_watch.raise_if_active()
                     last_http_error = exc
                     _raise_if_deadline_expired(deadline)
                     if attempt == attempts - 1 or not exc.retryable:
                         break
                     _sleep_with_deadline(exc.delay, deadline)
                 except (urllib.error.URLError, OSError) as exc:
+                    cancel_watch.raise_if_active()
                     last_transport_error = exc
                     _raise_if_deadline_expired(deadline)
                     if attempt == attempts - 1:
@@ -1815,6 +1831,7 @@ class AnthropicMessages:
                     _sleep_with_deadline(min(0.25 * (2 ** attempt), 2.0), deadline)
                 except (http.client.HTTPException, ValueError, KeyError, IndexError,
                         TypeError, AttributeError) as exc:
+                    cancel_watch.raise_if_active()
                     _raise_if_deadline_expired(deadline)
                     # Once response bytes arrive, a malformed response is not
                     # a transport failure and must not be replayed.
@@ -1903,6 +1920,7 @@ class AnthropicMessages:
             except ProviderCallbackError:
                 raise
             except _RetryableProviderError as exc:
+                cancel_watch.raise_if_active()
                 delivered = delivered or exc.delivered
                 if delivered or attempt == 2 or not exc.retryable:
                     raise _provider_request_error(
@@ -1911,11 +1929,13 @@ class AnthropicMessages:
                     ) from None
                 time.sleep(exc.delay)
             except (urllib.error.URLError, OSError) as exc:
+                cancel_watch.raise_if_active()
                 if delivered or attempt == 2:
                     raise _provider_request_error(exc, stage="read") from None
                 time.sleep(min(0.25 * (2 ** attempt), 2.0))
             except (http.client.HTTPException, ValueError, KeyError, IndexError,
                     TypeError, AttributeError) as exc:
+                cancel_watch.raise_if_active()
                 raise _provider_request_error(exc, stage="parse") from None
 
     def _stream_lightweight(self, request, *, deadline, attempts, on_delta=None,
@@ -1948,6 +1968,7 @@ class AnthropicMessages:
                 except ProviderCallbackError:
                     raise
                 except _RetryableProviderError as exc:
+                    cancel_watch.raise_if_active()
                     delivered = delivered or exc.delivered
                     if delivered or attempt == attempts - 1 or not exc.retryable:
                         raise _provider_request_error(
@@ -1956,6 +1977,7 @@ class AnthropicMessages:
                         ) from None
                     _sleep_with_deadline(exc.delay, deadline)
                 except (urllib.error.URLError, OSError) as exc:
+                    cancel_watch.raise_if_active()
                     if time.monotonic() >= deadline:
                         raise ProviderRequestError(
                             category="timeout", stage="deadline",
@@ -1966,6 +1988,7 @@ class AnthropicMessages:
                     _sleep_with_deadline(min(0.25 * (2 ** attempt), 2.0), deadline)
                 except (http.client.HTTPException, ValueError, KeyError, IndexError,
                         TypeError, AttributeError) as exc:
+                    cancel_watch.raise_if_active()
                     _raise_if_deadline_expired(deadline)
                     raise _provider_request_error(exc, stage="parse") from None
         except TimeoutError as exc:

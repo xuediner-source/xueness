@@ -25,6 +25,7 @@
   ],
   "modules": [
     "activity",
+    "cancel_watch",
     "context_budget",
     "default_selection",
     "lightweight",

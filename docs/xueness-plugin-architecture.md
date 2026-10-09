@@ -1,5 +1,7 @@
 # Xueness 插件架构与功能归属
 
+2026-10-10 取消传播：目录现为 **28 个插件、170 项登记功能**。sessions 新增实验功能 `sessions.cancel_propagate`（默认关闭）。开启后，运行循环在一次模型调用（含溢出重试）期间安装停止探针；providers 的 `cancel_watch` 只是既有套接字中断助手，不另登记模型能力。开关关闭时不启线程，也不改变 provider 方法签名。见 [取消、重连与事件续传](sessions-resume-cancel.md)。
+
 2026-10-10 停止回执：目录现为 **28 个插件、169 项登记功能**。sessions 新增实验功能 `sessions.cancel_receipt`（默认关闭）。`POST /api/sessions/<sid>/stop` 仅在开关打开时额外返回 `outcome` 与每项 work 的结果；没有取消到任何东西时写明 `rejected` 或 `idle`。开关关闭时响应字段不变，HTTP 仍是 200。见 [取消、重连与事件续传](sessions-resume-cancel.md)。
 
 2026-10-10 会话事件续传：目录现为 **28 个插件、168 项登记功能**。sessions 新增实验功能 `sessions.event_resume`（默认关闭）。`GET /api/sessions/<sid>/events.resume` 用 `logEpoch + seq` 续传派生事件；前缀被改写时 409 并带尾部快照。不修改 `xueness.events.v1`。见 [取消、重连与事件续传](sessions-resume-cancel.md)。

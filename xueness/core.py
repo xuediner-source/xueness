@@ -1924,27 +1924,36 @@ def _drive_run(session: dict, store: Store, provider, gate: Gate, max_steps=None
                 return provider.complete(prompt, active_tools)
 
             extra_request_attempts = 0
+            # The stop probe is installed only when sessions.cancel_propagate
+            # is boolean true. It covers this call and the overflow retry.
+            from .bundled_plugins.sessions.cancel_propagate import begin as begin_provider_cancel
+            from .bundled_plugins.sessions.cancel_propagate import end as end_provider_cancel
+            cancel_token = begin_provider_cancel(
+                state_dir, lambda: stop_requested(check_deadline=False))
             try:
-                response = request_model()
-            except Exception as exc:
-                record = session.get('streaming') or {}
-                # A rejected request has no side effects. Never replay a stream
-                # that has emitted text, reasoning, or a previous tool exchange.
-                if (not light or not light_options['overflowRetry'] or overflow_retried or not getattr(exc, 'context_overflow', False)
-                        or record.get('text') or record.get('reasoning')):
-                    raise
-                overflow_retried = True
-                extra_request_attempts = 1
-                context_shrink = light_options['overflowRetryRatio']
-                prompt, session['runtime_budget'] = lightweight.prompt_view(
-                    session['messages'], active_tools, provider, max_chars=max_chars,
-                    max_tokens=max_tokens, injected=injected, shrink=context_shrink, repair=repair, host_instructions=host_guidance,
-                    calibration=session.get('runtime_budget_calibration'))
-                session['runtime_budget']['overflowRetry'] = True
-                if getattr(provider, 'tool_calling', 'native') == 'json':
-                    prompt = lightweight.text_messages(prompt)
-                save_session()
-                response = request_model()
+                try:
+                    response = request_model()
+                except Exception as exc:
+                    record = session.get('streaming') or {}
+                    # A rejected request has no side effects. Never replay a stream
+                    # that has emitted text, reasoning, or a previous tool exchange.
+                    if (not light or not light_options['overflowRetry'] or overflow_retried or not getattr(exc, 'context_overflow', False)
+                            or record.get('text') or record.get('reasoning')):
+                        raise
+                    overflow_retried = True
+                    extra_request_attempts = 1
+                    context_shrink = light_options['overflowRetryRatio']
+                    prompt, session['runtime_budget'] = lightweight.prompt_view(
+                        session['messages'], active_tools, provider, max_chars=max_chars,
+                        max_tokens=max_tokens, injected=injected, shrink=context_shrink, repair=repair, host_instructions=host_guidance,
+                        calibration=session.get('runtime_budget_calibration'))
+                    session['runtime_budget']['overflowRetry'] = True
+                    if getattr(provider, 'tool_calling', 'native') == 'json':
+                        prompt = lightweight.text_messages(prompt)
+                    save_session()
+                    response = request_model()
+            finally:
+                end_provider_cancel(cancel_token)
             if light and getattr(provider, 'tool_calling', 'native') == 'json':
                 response = lightweight.decode_text_response(response, active_tools)
             elif light:

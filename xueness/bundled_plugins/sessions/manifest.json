@@ -36,6 +36,7 @@
     "cli_tui",
     "answer_question",
     "cancel_receipt",
+    "cancel_propagate",
     "composer_api",
     "completion_policy",
     "deltas",
@@ -166,6 +167,11 @@
       "id": "sessions.cancel_receipt",
       "name": "停止请求的取消回执（实验，默认关闭）",
       "nameEn": "Cancel receipt on stop (experimental, off by default)"
+    },
+    {
+      "id": "sessions.cancel_propagate",
+      "name": "停止可打断阻塞中的模型读取（实验，默认关闭）",
+      "nameEn": "Stop can interrupt a blocked model read (experimental, off by default)"
     },
     {
       "id": "sessions.answer_question_experimental",
