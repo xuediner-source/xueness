@@ -34,6 +34,24 @@
 
 开关关闭时，格式合法的会话 id 也只得到 400 `sessions.event_resume not enabled`，不先查会话是否存在。`events.v1` 仍按原契约忽略超前 cursor。
 
+## 取消回执 `sessions.cancel_receipt`
+
+设置键 `general.sessionsCancelReceiptEnabled`。
+
+`POST /api/sessions/<sid>/stop`（沿用 CSRF）。开关关闭时正文只有 `id`、`stopping`、`status`、`cancelled_tasks`。开关打开时在这四个字段之外增加：
+
+| 字段 | 含义 |
+| --- | --- |
+| `schema` | `xueness.cancel-receipt.v1` |
+| `feature` | `sessions.cancel_receipt` |
+| `outcome` | `stop_requested`（会话正在跑）、`cancelled`（至少取消了一个任务）、`rejected`（有任务看起来在跑但 `cancel` 返回 false）、`idle`（没有可取消的东西） |
+| `reason` | 仅 `rejected` 时为 `not_running`，仅 `idle` 时为 `nothing_running` |
+| `works` | 先是会话一行（`kind: session`），再是每个当时状态为 `running` 的任务 |
+
+会话正在跑时，总结果是 `stop_requested`，即使同时取消了任务。每个任务行仍写自己的 `cancelled` 或 `rejected`。`cancelled_tasks` 仍是注册表里的原始 id，回执里的 `workId` 只保留可打印字符并截到 80。回执不包含任务摘要或提示词。
+
+找不到会话仍是 404。插件停用仍是 403，缺 CSRF 仍是 403。状态码不因这张回执改变。
+
 ## 尚未在本文登记的开关
 
-取消回执、阻塞读取上的取消传播，以及 stdio 帧重放，见后续提交。它们同样默认关闭。
+阻塞读取上的取消传播，以及 stdio 帧重放，见后续提交。它们同样默认关闭。

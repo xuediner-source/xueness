@@ -35,6 +35,7 @@
     "cli_interrupt",
     "cli_tui",
     "answer_question",
+    "cancel_receipt",
     "composer_api",
     "completion_policy",
     "deltas",
@@ -160,6 +161,11 @@
       "id": "sessions.event_resume",
       "name": "会话事件代际续传与重同步（实验，默认关闭）",
       "nameEn": "Session event epoch resume and resync (experimental, off by default)"
+    },
+    {
+      "id": "sessions.cancel_receipt",
+      "name": "停止请求的取消回执（实验，默认关闭）",
+      "nameEn": "Cancel receipt on stop (experimental, off by default)"
     },
     {
       "id": "sessions.answer_question_experimental",

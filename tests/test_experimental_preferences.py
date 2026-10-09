@@ -6,6 +6,7 @@ class ExperimentalPreferencesTests(unittest.TestCase):
     def test_default_off_flags_require_actual_booleans(self):
         self.assertEqual(validate('general', {}), {})
         for key in ('sessionsEventsCursorEnabled', 'sessionsEventResumeEnabled',
+                    'sessionsCancelReceiptEnabled',
                     'sessionsAnswerQuestionEnabled',
                     'toolsDryRunEnabled', 'toolsCallBudgetEnabled'):
             for value in (False, True):

@@ -1,5 +1,7 @@
 # Xueness 插件架构与功能归属
 
+2026-10-10 停止回执：目录现为 **28 个插件、169 项登记功能**。sessions 新增实验功能 `sessions.cancel_receipt`（默认关闭）。`POST /api/sessions/<sid>/stop` 仅在开关打开时额外返回 `outcome` 与每项 work 的结果；没有取消到任何东西时写明 `rejected` 或 `idle`。开关关闭时响应字段不变，HTTP 仍是 200。见 [取消、重连与事件续传](sessions-resume-cancel.md)。
+
 2026-10-10 会话事件续传：目录现为 **28 个插件、168 项登记功能**。sessions 新增实验功能 `sessions.event_resume`（默认关闭）。`GET /api/sessions/<sid>/events.resume` 用 `logEpoch + seq` 续传派生事件；前缀被改写时 409 并带尾部快照。不修改 `xueness.events.v1`。见 [取消、重连与事件续传](sessions-resume-cancel.md)。
 
 2026-10-09 会话统一与版本保护：目录现为 **28 个插件、167 项登记功能**。sessions 新登记 `sessions.zcode_conversation`、`sessions.message_edit`、`sessions.message_feedback`、`sessions.consistent_snapshot`；提供共用显示、发送前确认及版本保护的 journal 操作。planning 保留实际交付检查并将空清单入口放入更多菜单。内核仅在既有 compact 中重映射通用 `message_annotations`，属于 journal 位置维护；反馈创建、修改与显示仍归 sessions。未增加插件白名单例外。来源、测试范围与差异见 [会话对齐记录](zcode-conversation-parity.md)。

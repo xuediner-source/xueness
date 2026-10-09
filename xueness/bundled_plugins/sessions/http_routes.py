@@ -1359,10 +1359,27 @@ def handle_POST(self, parts, path, data):
             if busy:
                 ctx['stop_requested'].add(parts[2])
         cancelled_tasks = []
+        task_works = []
         for task in ctx['task_registry'].list(parts[2]):
-            if task.get('status') == 'running' and ctx['task_registry'].cancel(task['id']):
-                cancelled_tasks.append(task['id'])
-        self._send(200, {'id': parts[2], 'stopping': busy, 'status': session.get('status'), 'cancelled_tasks': cancelled_tasks})
+            if task.get('status') != 'running':
+                continue
+            task_id = task.get('id')
+            if ctx['task_registry'].cancel(task_id):
+                cancelled_tasks.append(task_id)
+                task_works.append({'workId': task_id, 'kind': 'task', 'outcome': 'cancelled'})
+            else:
+                task_works.append({
+                    'workId': task_id, 'kind': 'task', 'outcome': 'rejected',
+                    'reason': 'not_running',
+                })
+        payload = {
+            'id': parts[2], 'stopping': busy, 'status': session.get('status'),
+            'cancelled_tasks': cancelled_tasks,
+        }
+        from . import cancel_receipt
+        if cancel_receipt.enabled(ctx):
+            payload.update(cancel_receipt.build(parts[2], busy=busy, tasks=task_works))
+        self._send(200, payload)
         return True
     if len(parts) == 4 and parts[0] == 'api' and (parts[1] == 'sessions') and (parts[3] == 'answer') and host._valid_sid(parts[2]):
         try:
