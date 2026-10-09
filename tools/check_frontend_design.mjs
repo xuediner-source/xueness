@@ -35,7 +35,7 @@ function luminance(hex) {
   const channels = [1, 3, 5].map(i => parseInt(hex.slice(i, i + 2), 16) / 255).map(c => c <= .04045 ? c / 12.92 : ((c + .055) / 1.055) ** 2.4);
   return channels[0] * .2126 + channels[1] * .7152 + channels[2] * .0722;
 }
-// Resolved themes: default light/dark plus optional Claude 风格 light/dark.
+// Resolved themes: default light/dark plus optional Codex 风格 (stored as claude) light/dark.
 const themes = {
   'default-light': { ...blocks[':root'] },
   'default-dark': { ...blocks[':root'], ...blocks['.dark'] },
@@ -71,4 +71,4 @@ for (const [theme, values] of Object.entries(themes)) {
   }
 }
 if (errors.length) { console.error([...new Set(errors)].join('\n')); process.exitCode = 1; }
-else console.log(`PASS: theme variables resolve; muted/subtle/body/accent/status text contrast >= ${minimum.toFixed(2)}:1 on checked surfaces (default + Claude 风格).`);
+else console.log(`PASS: theme variables resolve; muted/subtle/body/accent/status text contrast >= ${minimum.toFixed(2)}:1 on checked surfaces (default + Codex 风格).`);

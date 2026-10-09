@@ -4,7 +4,7 @@
  * Supports both light mode and dark mode via CSS custom properties.
  * A single light/dark token source. Theme is resolved before the first paint;
  * semantic aliases stay theme-aware and retain the neutral Xueness palette by
- * default. Optional palettes (e.g. Claude 风格) override colors via
+ * default. Optional palettes (e.g. Codex 风格) override colors via
  * html[data-xn-palette="…"] without changing the default.
  */
 
@@ -242,137 +242,163 @@
   --assistant-msg-fg: var(--fg);
 }
 
-/* Optional Claude 风格 scheme: replicates the Claude desktop app (warm ivory /
- * warm gray, clay accent, serif reading face). Applied only when
- * settings → 外观 → 配色方案 = Claude 风格 (data-xn-palette="claude").
- * The --claude-* layout tokens are consumed only by styles/claude-polish.css;
- * shared tokens (--xn-ui-font-size, radius, spacing) are not changed here, so
- * nothing zooms globally. */
+/* Optional Codex 风格 scheme (settings → 外观 → 配色方案 = Codex 风格; the
+ * stored value stays data-xn-palette="claude" so existing settings keep
+ * working). Replicates the OpenAI Codex desktop app (macOS + Windows, 2026):
+ * neutral white canvas, #f3f3f3 sidebar, #0d0d0d ink, black send action, blue
+ * links. Values measured from the official Codex docs screenshots, see
+ * xueness-opt/screens/claude-ref/REFERENCE.md. --codex-* layout tokens are
+ * consumed only by styles/codex-scheme.css; shared tokens (--xn-ui-font-size,
+ * radius, spacing) are untouched, so nothing zooms globally. Muted text is a
+ * little darker than Codex (#6e6e6e vs #8f8f8f) to keep 4.5:1 contrast. */
 :root[data-xn-palette="claude"] {
-  --claude-sidebar-width: 288px;
-  --claude-column: 768px;
-  --claude-reading-size: calc(var(--xn-ui-font-size, 14px) + 2px);
-  --claude-ease: cubic-bezier(0, 0, .2, 1);
-  /* Free system serifs only (no proprietary Anthropic fonts); CJK falls back
-   * to the platform sans so Windows never lands on SimSun. */
-  --claude-font-serif: "Iowan Old Style", Charter, "Palatino Linotype", Palatino, Georgia, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei UI", "Microsoft YaHei", "Noto Sans CJK SC", serif;
-  --claude-composer-shadow: 0 4px 20px rgb(0 0 0 / .035);
-  --claude-border-hover: color-mix(in oklab, #1f1e1d 28%, transparent);
-  --claude-greeting: #3d3d3a;
-  --accent-danger-ink: #a8452b;
+  --codex-sidebar-width: 300px;
+  --codex-column: 736px;
+  --codex-row-height: 30px;
+  --codex-header-height: 46px;
+  --codex-ease: cubic-bezier(.2, 0, 0, 1);
+  --codex-faint: #8f8f8f;
+  --codex-hairline: #ececec;
+  --codex-composer-border: #e2e2e2;
+  --codex-composer-shadow: 0 1px 2px rgb(0 0 0 / .04), 0 4px 16px rgb(0 0 0 / .04);
+  --codex-send-bg: #0d0d0d;
+  --codex-send-fg: #ffffff;
+  --codex-send-disabled: #868686;
+  --codex-toggle: #0285ff;
+  --codex-knob: #ffffff;
+  --codex-user-bubble: #f3f3f3;
+  --codex-card: #f6f6f6;
+  --codex-card-row: #f3f3f3;
+  --codex-inline-code: #f3f3f3;
+  --codex-link: #0169cc;
+  --codex-added: #00a240;
+  --codex-removed: #e02e2a;
 
-  --bg-window: #f5f4ed;
-  --bg-sidebar: #f5f4ed;
-  --bg-panel: #faf9f5;
+  --bg-window: #f3f3f3;
+  --bg-sidebar: #f3f3f3;
+  --bg-panel: #ffffff;
   --bg-input: #ffffff;
   --bg-popover: #ffffff;
-  --bg: #faf9f5;
-  --bg-subtle: #f5f4ed;
+  --bg: #ffffff;
+  --bg-subtle: #f6f6f6;
   --bg-card: #ffffff;
-  --bg-hover: rgba(31, 30, 29, 0.05);
-  --bg-active: rgba(31, 30, 29, 0.08);
-  --fg: #141413;
-  --fg-subtle: #3d3d3a;
-  --fg-muted: #6b6a64;
+  --bg-hover: rgba(0, 0, 0, 0.04);
+  --bg-active: rgba(0, 0, 0, 0.05);
+  --fg: #0d0d0d;
+  --fg-subtle: #5d5d5d;
+  --fg-muted: #6e6e6e;
   --fg-inverted: #ffffff;
-  --conversation-fg: #141413;
-  --conversation-muted: color-mix(in oklab, var(--conversation-fg) 62%, transparent);
-  --conversation-subtlest: color-mix(in oklab, var(--conversation-fg) 42%, transparent);
-  --conversation-user-surface: #f0eee6;
-  --border: color-mix(in oklab, #1f1e1d 10%, transparent);
-  --border-strong: color-mix(in oklab, #1f1e1d 18%, transparent);
-  --border-focus: color-mix(in oklab, var(--accent) 55%, transparent);
-  --accent-brand: #b4532f;
-  --accent-brand-hover: #9f4828;
+  --conversation-fg: #0d0d0d;
+  --conversation-muted: #6e6e6e;
+  --conversation-subtlest: #8f8f8f;
+  --conversation-user-surface: #f3f3f3;
+  --border: rgba(13, 13, 13, 0.08);
+  --border-strong: rgba(13, 13, 13, 0.12);
+  --border-focus: rgba(2, 133, 255, 0.55);
+  --accent-brand: #0169cc;
+  --accent-brand-hover: #0158ab;
   --accent-brand-fg: #ffffff;
-  --accent-soft: color-mix(in oklab, var(--accent-brand) 12%, transparent);
-  --focus-ring: color-mix(in oklab, var(--accent-brand) 62%, transparent);
-  --primary: #141413;
-  --primary-hover: #2b2a27;
+  --accent-soft: rgba(2, 133, 255, 0.10);
+  --focus-ring: rgba(2, 133, 255, 0.6);
+  --primary: #0d0d0d;
+  --primary-hover: #262626;
   --primary-active: #000000;
   --primary-fg: #ffffff;
-  --primary-light: rgba(31, 30, 29, 0.07);
-  --ok: #3f8a4f;
-  --ok-bg: #eef6ee;
-  --ok-border: #b9dcbf;
-  --ok-fg: #2f6b3a;
-  --warn: #b7851f;
-  --warn-bg: #fbf4e2;
-  --warn-border: #e9d29a;
-  --warn-fg: #7c5a12;
-  --error: #c4442b;
-  --error-bg: #fbeeea;
-  --error-border: #eab8ab;
-  --error-fg: #a3321d;
-  --info: #3b7bab;
-  --info-bg: #eef4f8;
-  --info-border: #b6d0e2;
-  --info-fg: #2c5f86;
-  --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.04);
-  --shadow-md: 0 1px 2px rgb(0 0 0 / 0.04), 0 4px 14px -4px rgb(0 0 0 / 0.08);
-  --shadow-lg: 0 2px 6px rgb(0 0 0 / 0.04), 0 16px 36px -12px rgb(0 0 0 / 0.16);
+  --primary-light: rgba(13, 13, 13, 0.06);
+  --ok: #00a240;
+  --ok-bg: #e9f8ee;
+  --ok-border: #b5e6c5;
+  --ok-fg: #0b7a35;
+  --warn: #c98a00;
+  --warn-bg: #fdf5e1;
+  --warn-border: #f0d78f;
+  --warn-fg: #7f5700;
+  --error: #e02e2a;
+  --error-bg: #fdecec;
+  --error-border: #f4b7b5;
+  --error-fg: #b42320;
+  --info: #0285ff;
+  --info-bg: #eaf4ff;
+  --info-border: #b3d8ff;
+  --info-fg: #0160b8;
+  --shadow-sm: 0 1px 2px rgb(0 0 0 / 0.05);
+  --shadow-md: 0 1px 2px rgb(0 0 0 / 0.04), 0 6px 16px -4px rgb(0 0 0 / 0.10);
+  --shadow-lg: 0 2px 6px rgb(0 0 0 / 0.05), 0 16px 40px -12px rgb(0 0 0 / 0.18);
   --accent: var(--accent-brand);
-  --tool-accent: #b7851f;
-  --tool-result-accent: #3b7bab;
+  --tool-accent: #c98a00;
+  --tool-result-accent: #0285ff;
 }
-
 .dark[data-xn-palette="claude"] {
-  --claude-composer-shadow: none;
-  --claude-border-hover: color-mix(in oklab, #dedcd1 30%, transparent);
-  --claude-greeting: #c3c2b7;
-  --accent-danger-ink: #e8957a;
+  --codex-faint: #8a8a8a;
+  --codex-hairline: #2e2e2e;
+  --codex-composer-border: #333333;
+  --codex-composer-shadow: none;
+  --codex-send-bg: #ffffff;
+  --codex-send-fg: #0d0d0d;
+  --codex-send-disabled: #8e8e8e;
+  --codex-toggle: #339cff;
+  --codex-user-bubble: #2b2b2b;
+  --codex-card: #232323;
+  --codex-card-row: #242424;
+  --codex-inline-code: #2b2b2b;
+  --codex-link: #339cff;
+  --codex-added: #40c977;
+  --codex-removed: #ff6764;
 
-  --bg-window: #1f1e1d;
-  --bg-sidebar: #1f1e1d;
-  --bg-panel: #262624;
-  --bg-input: #30302e;
-  --bg-popover: #30302e;
-  --primary-fg: #1f1e1d;
-  --bg: #262624;
-  --bg-subtle: #1f1e1d;
-  --bg-card: #30302e;
-  --bg-hover: color-mix(in oklab, #f8f8f6 6%, transparent);
-  --bg-active: color-mix(in oklab, #f8f8f6 10%, transparent);
-  --fg: #f8f8f6;
-  --fg-subtle: #c2c0b6;
-  --fg-muted: #9c9a90;
-  --fg-inverted: #1f1e1d;
-  --conversation-fg: #f8f8f6;
-  --conversation-muted: color-mix(in oklab, var(--conversation-fg) 62%, transparent);
-  --conversation-subtlest: color-mix(in oklab, var(--conversation-fg) 34%, transparent);
-  --conversation-user-surface: #141413;
-  --border: color-mix(in oklab, #dedcd1 10%, transparent);
-  --border-strong: color-mix(in oklab, #dedcd1 18%, transparent);
-  --border-focus: color-mix(in oklab, var(--accent) 60%, transparent);
-  --accent-brand: #de8466;
-  --accent-brand-hover: #e6977c;
-  --accent-brand-fg: #1f1e1d;
-  --primary: #f8f8f6;
-  --primary-hover: #ffffff;
+  --bg-window: #1f1f1f;
+  --bg-sidebar: #1f1f1f;
+  --bg-panel: #181818;
+  --bg-input: #2d2d2d;
+  --bg-popover: #2a2a2a;
+  --primary-fg: #0d0d0d;
+  --bg: #181818;
+  --bg-subtle: #232323;
+  --bg-card: #1c1c1c;
+  --bg-hover: rgba(255, 255, 255, 0.05);
+  --bg-active: rgba(255, 255, 255, 0.08);
+  --fg: #ffffff;
+  --fg-subtle: #c8c8c8;
+  --fg-muted: #9a9a9a;
+  --fg-inverted: #0d0d0d;
+  --conversation-fg: #ffffff;
+  --conversation-muted: #9a9a9a;
+  --conversation-subtlest: #7a7a7a;
+  --conversation-user-surface: #2b2b2b;
+  --border: rgba(255, 255, 255, 0.08);
+  --border-strong: rgba(255, 255, 255, 0.12);
+  --border-focus: rgba(51, 156, 255, 0.6);
+  --accent-brand: #339cff;
+  --accent-brand-hover: #5cb0ff;
+  --accent-brand-fg: #0d0d0d;
+  --accent-soft: rgba(51, 156, 255, 0.14);
+  --focus-ring: rgba(51, 156, 255, 0.7);
+  --primary: #ffffff;
+  --primary-hover: #e6e6e6;
   --primary-active: #ffffff;
-  --primary-light: rgba(248, 248, 246, 0.08);
-  --ok: #6cbf7f;
-  --ok-bg: #1f2d22;
-  --ok-border: #35573c;
-  --ok-fg: #8fd19e;
-  --warn: #d9a845;
-  --warn-bg: #33291a;
-  --warn-border: #6b5326;
-  --warn-fg: #e9c46a;
-  --error: #e2735c;
-  --error-bg: #3a211c;
-  --error-border: #7a3a2c;
-  --error-fg: #f19a85;
-  --info: #6aa8d6;
-  --info-bg: #1d2a33;
-  --info-border: #2f5470;
-  --info-fg: #8fc3e8;
-  --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.5);
-  --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.5), 0 2px 4px -2px rgb(0 0 0 / 0.5);
-  --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.6), 0 4px 6px -4px rgb(0 0 0 / 0.5);
+  --primary-light: rgba(255, 255, 255, 0.08);
+  --ok: #40c977;
+  --ok-bg: #12291b;
+  --ok-border: #1f5a35;
+  --ok-fg: #6fdb9a;
+  --warn: #f2b84b;
+  --warn-bg: #2e2412;
+  --warn-border: #6b5222;
+  --warn-fg: #f5c96f;
+  --error: #ff6764;
+  --error-bg: #351716;
+  --error-border: #7a2c2a;
+  --error-fg: #ff8f8c;
+  --info: #339cff;
+  --info-bg: #0f2236;
+  --info-border: #1f4b78;
+  --info-fg: #7cbfff;
+  --shadow-sm: 0 1px 2px rgb(0 0 0 / 0.5);
+  --shadow-md: 0 4px 12px -2px rgb(0 0 0 / 0.5);
+  --shadow-lg: 0 16px 40px -12px rgb(0 0 0 / 0.7), 0 2px 6px rgb(0 0 0 / 0.4);
   --accent: var(--accent-brand);
-  --tool-accent: #d9a845;
-  --tool-result-accent: #6aa8d6;
+  --tool-accent: #f2b84b;
+  --tool-result-accent: #339cff;
   --active-fg: var(--fg);
   --assistant-msg-bg: var(--bg-card);
 }
+
