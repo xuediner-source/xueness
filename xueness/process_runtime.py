@@ -5,7 +5,10 @@ share this short critical section, restoring it before waiting for children.
 Permission checks and plugin switches remain responsibilities of the caller.
 
 Owned-process cleanup also lives here so Windows and macOS do not grow a
-second platform helper. POSIX (including macOS) signals the session started
+second platform helper. ``host_platform_family`` is the stable host name
+(``macos``, ``windows``, ``linux``) for that helper. Plugins that only need
+to label the machine call it instead of copying ``sys.platform`` branches.
+POSIX (including macOS) signals the session started
 with ``start_new_session`` via ``killpg``. Windows uses ``taskkill /T /F``.
 Kill-on-close Job Objects stay in the desktop host and the MCP plugin; they
 cover processes that outlive a single ``Popen`` handle. Tree signals are sent
@@ -24,6 +27,31 @@ import sys
 import threading
 import time
 import weakref
+
+
+def host_platform_family(platform=None):
+    """Return ``macos``, ``windows``, ``linux``, ``unknown``, or a raw name.
+
+    macOS is decided before Windows. ``darwin`` contains the letters ``win``,
+    so a substring check would label a Mac as Windows. The same order is what
+    the frontend ``resolveHostPlatform`` helper uses. ``sys.platform`` is the
+    default. Pass an explicit value only in tests or when the caller already
+    read the process platform once. Never classify a string a client sent.
+    """
+    raw = sys.platform if platform is None else platform
+    if not isinstance(raw, str):
+        return 'unknown'
+    text = raw.strip().lower()
+    if not text:
+        return 'unknown'
+    if text == 'darwin' or text.startswith('mac'):
+        return 'macos'
+    if text.startswith('win'):
+        return 'windows'
+    if text.startswith('linux'):
+        return 'linux'
+    return text
+
 
 _lock = threading.RLock()
 # Identity of the real subprocess.run. Callers and tests patch the subprocess

@@ -16,6 +16,7 @@
   ],
   "modules": [
     "host",
+    "host_capability",
     "bridge",
     "windows_job",
     "permissions"
@@ -60,6 +61,11 @@
       "id": "desktop.permissions",
       "name": "系统权限真实状态与受限原生授权入口",
       "nameEn": "Actual system permission status and fixed native authorization actions"
+    },
+    {
+      "id": "desktop.host_capability",
+      "name": "宿主平台与一次性能力票据（实验，默认关闭）",
+      "nameEn": "Host platform probe and one-time capability ticket (experimental, off by default)"
     }
   ],
   "frontendModules": [

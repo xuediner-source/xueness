@@ -1,5 +1,9 @@
 """Desktop metadata belongs to a feature plugin; hosting also provides recovery."""
 def dispatch(method, parts, query, data, ctx):
+    from .host_capability import dispatch as dispatch_host_capability
+    capability_result = dispatch_host_capability(method, parts, query, data, ctx)
+    if capability_result is not None:
+        return capability_result
     from .permissions import dispatch as dispatch_permissions
     permission_result = dispatch_permissions(method, parts, query, data, ctx)
     if permission_result is not None:

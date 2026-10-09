@@ -12,13 +12,12 @@ import re
 import shlex
 import shutil
 import subprocess
-import sys
 import tempfile
 import threading
 from datetime import datetime, timezone
 from pathlib import Path
 
-from ...process_runtime import run_external
+from ...process_runtime import host_platform_family, run_external
 from . import settings_store
 
 _MAX_RECENT = 10
@@ -108,20 +107,21 @@ def allowed_roots(ctx: dict) -> tuple[Path, ...]:
 
 
 def _platform_name() -> str:
-    if sys.platform == "darwin":
-        return "macos"
-    if sys.platform.startswith("win"):
-        return "windows"
-    if sys.platform.startswith("linux"):
-        return "linux"
-    return sys.platform or "unknown"
+    """Picker name. Windows and macOS share ``host_platform_family``."""
+    return host_platform_family()
 
 
-def native_picker_capability() -> dict:
-    """Describe native picker support without opening a dialog."""
-    platform_name = _platform_name()
-    executable = shutil.which("osascript") if platform_name == "macos" else None
-    return {"available": bool(executable), "platform": platform_name}
+def native_picker_capability(platform_name: str | None = None) -> dict:
+    """Describe native picker support without opening a dialog.
+
+    Pass ``platform_name`` only when the caller already resolved the family.
+    Omitted, the name still comes from ``host_platform_family``.
+    """
+    name = _platform_name() if platform_name is None else platform_name
+    if not isinstance(name, str) or not name:
+        name = "unknown"
+    executable = shutil.which("osascript") if name == "macos" else None
+    return {"available": bool(executable), "platform": name}
 
 
 def selected_roots(ctx: dict) -> tuple[Path, ...]:

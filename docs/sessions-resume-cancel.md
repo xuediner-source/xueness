@@ -78,5 +78,5 @@
 
 - 命令幂等（同一次调用重复提交不执行第二次）。
 - 进程创建时间身份。回收已退出的组长 pid 不能用来寻找孙进程，查不到也不能当成已经退出。见 `xueness/process_runtime.py` 的 `terminate_process_tree`。
-- Host capability 票据，以及向远程机器部署 Agent。
+- 一次性 host capability 票据已由 BE-Z3 以默认关闭的实验提供，消费不提升权限。见 [宿主能力](host-capability.md)。向远程机器部署 Agent 仍然没做。
 - 冻结的 `xueness.events.v1` 在 cursor 超过头部时仍返回空页。续传要用上面的实验路由。

@@ -1,5 +1,7 @@
 # Xueness 插件架构与功能归属
 
+2026-10-10 宿主能力探测：按各插件 manifest 实点，目录现为 **28 个插件、175 项登记功能**。desktop 新增实验功能 `desktop.host_capability`（默认关闭）。开启后 `GET /api/desktop/host-capability` 用既有平台 helper 报告 Windows / macOS 能力；`POST` 签发 30 秒一次性票据，消费后不提升权限。关闭时不签发，`/api/desktop/status` 字段不变。见 [宿主能力](host-capability.md)。
+
 2026-10-10 stdio 帧重放：按各插件 manifest 实点，目录现为 **28 个插件、174 项登记功能**（上文递增笔记停在 170，少计了 3 项既有功能）。remote 新增实验功能 `remote.frame_replay`（默认关闭）。开启后，app-server 为发出的帧编号并保留有界未确认队列；超过 8 MiB 或 45 秒则清空并通知放弃，客户端改走事件日志恢复。关闭时方法表和帧字段不变。见 [取消、重连与事件续传](sessions-resume-cancel.md)。
 
 2026-10-10 取消传播：目录现为 **28 个插件、170 项登记功能**。sessions 新增实验功能 `sessions.cancel_propagate`（默认关闭）。开启后，运行循环在一次模型调用（含溢出重试）期间安装停止探针；providers 的 `cancel_watch` 只是既有套接字中断助手，不另登记模型能力。开关关闭时不启线程，也不改变 provider 方法签名。见 [取消、重连与事件续传](sessions-resume-cancel.md)。

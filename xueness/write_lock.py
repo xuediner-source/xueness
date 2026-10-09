@@ -33,13 +33,22 @@ import threading
 from pathlib import Path
 
 
+def host_paths_ignore_case() -> bool:
+    """Whether write-lock keys fold case: Windows and macOS, not Linux.
+
+    ``_fold_host_path`` still uses ``normcase`` on Windows and ``casefold`` on
+    macOS. This is only that decision, so a probe does not copy it.
+    """
+    return os.name == "nt" or sys.platform == "darwin"
+
+
 def _fold_host_path(text: str) -> str:
     """Match filesystem identity: case-insensitive on Windows and macOS."""
+    if not host_paths_ignore_case():
+        return text
     if os.name == "nt":
         return os.path.normcase(text)
-    if sys.platform == "darwin":
-        return text.casefold()
-    return text
+    return text.casefold()
 
 
 def host_relative_to(child, parent):

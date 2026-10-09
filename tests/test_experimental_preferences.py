@@ -7,7 +7,7 @@ class ExperimentalPreferencesTests(unittest.TestCase):
         self.assertEqual(validate('general', {}), {})
         for key in ('sessionsEventsCursorEnabled', 'sessionsEventResumeEnabled',
                     'sessionsCancelReceiptEnabled', 'sessionsCancelPropagateEnabled',
-                    'remoteFrameReplayEnabled',
+                    'remoteFrameReplayEnabled', 'desktopHostCapabilityEnabled',
                     'sessionsAnswerQuestionEnabled',
                     'toolsDryRunEnabled', 'toolsCallBudgetEnabled'):
             for value in (False, True):

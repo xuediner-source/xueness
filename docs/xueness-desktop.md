@@ -34,6 +34,8 @@ Windows 可在 `%APPDATA%\Xueness\desktop-data-directory.json` 保存 `{"apiVers
 
 桌面集成属于第 27 个 `desktop` 插件，插件面板可看到原生目录选择、桌面状态及宿主相关能力。窗口、私有后端通道和插件恢复入口作为运行宿主基础设施保持可访问；禁用 desktop 后原生选择和桌面状态 API 停止工作，其它插件按各自开关运行。settings/sessions 的工作区授权和开关仍优先。
 
+宿主平台与能力探测是实验功能 `desktop.host_capability`，默认关闭。开启后可以查询统一的平台名和能力位，并申请 30 秒一次性票据。票据作废规则参考上游 host capability，但不替代现有桌面令牌，也不放开 Host、Origin 或 CSRF。接口见 [宿主能力](host-capability.md)。
+
 主进程创建随机 loopback 端口及独立宿主凭据。凭据通过进程环境传入后立即从后端环境移除，渲染进程没有 Node.js 或任意 Electron IPC 权限。目录选择通过私有父子进程通道交给窗口所属的系统对话框，只有系统返回的目录经后端校验后进入授权范围。
 
 两端使用相同的 40px 工作台标题栏与导航、帮助、终端和侧栏操作。Mac 左侧为原生交通灯保留至少 78px；Windows 右侧为原生窗口按钮保留至少 148px，系统报告更大的安全区域时继续扩展。Windows 按钮区背景与文字、Mac 窗口背景均跟随工作台主题，Mac 交通灯由系统绘制。隔离 preload 仅读取主题 CSS token 并发送固定颜色消息，不向页面暴露 Electron API；主进程校验窗口、主 frame、私有后端 origin 和颜色格式，窗口关闭后移除监听。窗口配色属于 `desktop.window_chrome` 的宿主恢复基础设施，关闭业务插件后仍与工作台保持一致。

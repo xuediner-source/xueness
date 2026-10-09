@@ -2,7 +2,7 @@
 
 日期：2026-10-10。只读对照，本文件不改协议、不改接口。
 
-BE-Z2 在同一分支的后续提交里补了默认关闭的实验，见 [取消、重连与事件续传](sessions-resume-cancel.md)。下文各节「本轮没有新接口」说的是 BE-Z1 这一份对照；那些句子没有改写成实现记录。已补上的是事件 `logEpoch` 续传、停止回执、阻塞读取上的取消，以及 stdio 帧的有界重放。命令幂等、进程创建时间身份、host capability 和远程 Agent 部署仍然没做。`xueness.events.v1` 和 app-server 在开关关闭时的方法表没有改。
+BE-Z2 在同一分支的后续提交里补了默认关闭的实验，见 [取消、重连与事件续传](sessions-resume-cancel.md)。BE-Z3 补了默认关闭的宿主平台探测和一次性 capability 票据，见 [宿主能力](host-capability.md)。下文各节「本轮没有新接口」说的是 BE-Z1 这一份对照；那些句子没有改写成实现记录。已补上的是事件 `logEpoch` 续传、停止回执、阻塞读取上的取消、stdio 帧的有界重放，以及不改变现有桌面令牌的宿主探测。命令幂等、进程创建时间身份和远程 Agent 部署仍然没做。票据消费不会授予新的路由权限。`xueness.events.v1` 和 app-server 在开关关闭时的方法表没有改。
 
 对照基线是本机只读树 `/workspace/refs/ZCode`，公开版本 **v3.14.3**，提交 `29628c9acdb81b703bbd4080c207a0e7ce5e276e`。Xueness 侧以当前分支 `opt/grok-be-20261010` 的 `f05a380` 为准，范围是 `xueness/`（含 `bundled_plugins/`）、`desktop/entrypoint.py`、`desktop/scripts`、`tools/`、`tests/`。前端 `webapp/` 不在本轮修改范围内。
 
@@ -166,6 +166,8 @@ Xueness `WebGate._check`：
 若以后做：保持一次性 subject 绑定、审计和「远程命令即使完全访问也要单次确认」。可以加实验中的项目规则和 alwaysAsk，默认关闭，规则拒绝必须压过 yolo。不要实现上游那种 yolo 先于 disallow 的顺序。交互回复若要并进同一次调用，必须仍由 Gate 执行，而不是由客户端回传「已允许」。本轮没有新接口。
 
 ## 6. Host capability：一次性票据把受信宿主和重放客户端分开
+
+BE-Z3（2026-10-10）把一次性票据和平台探测做成了 desktop 插件的实验接口，默认关闭。见 [宿主能力](host-capability.md)。下面的差距描述保留作对照：角色裁剪、WebSocket `/ws/host`，以及用票据代替现有桌面令牌，仍然没有做。
 
 在仍然只绑定 loopback、只有一个本机客户端时，这项的日常价值低于前五项。一旦同一后端要同时服务桌面和另一个表面，它就是安全边界，所以排在远程部署之前。
 
