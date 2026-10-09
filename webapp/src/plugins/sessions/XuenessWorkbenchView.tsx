@@ -226,6 +226,7 @@ export function Approvals({ pending, onApprove, busy = false }: ApprovalsProps) 
   return (
     <div
       aria-label={tr("待审批操作")}
+      className="xn-approvals"
       style={{
         display: "flex",
         flexDirection: "column",
@@ -246,6 +247,7 @@ export function Approvals({ pending, onApprove, busy = false }: ApprovalsProps) 
             <div
               key={p.tool_call_id}
               data-testid={`approval-item-${p.tool_call_id}`}
+              className="xn-approval-item"
               style={{
                 border: "1px solid var(--border)",
                 borderRadius: "var(--radius-md)",

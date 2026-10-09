@@ -301,3 +301,46 @@
 }
 .xn-shell-layout .xn-start-page__recent-title { color: var(--fg); font-size: 13.5px; line-height: 19px; }
 .xn-shell-layout .xn-start-page__recent-meta { font-size: 11px; line-height: 15px; }
+
+/* ── 5. Tool steps, approvals and questions: calm cards with clear headers ── */
+.xn-shell-layout .xn-msg__tool-line,
+.xn-shell-layout .xn-toolcall__summary,
+.xn-shell-layout .xn-tool-group > summary,
+.xn-shell-layout .xn-zc-tool > summary,
+.xn-shell-layout .xn-zc-reasoning > summary { color: var(--conversation-muted); transition: color var(--dur-fast) var(--ease-standard); }
+.xn-shell-layout .xn-msg__tool-line:hover,
+.xn-shell-layout .xn-toolcall__summary:hover,
+.xn-shell-layout .xn-tool-group > summary:hover,
+.xn-shell-layout .xn-zc-tool > summary:hover,
+.xn-shell-layout .xn-zc-reasoning > summary:hover { color: var(--conversation-fg); }
+.xn-shell-layout .xn-toolcall__content {
+  margin: 6px 0 2px 24px;
+  padding: 10px 14px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: color-mix(in oklab, var(--bg-subtle) 55%, var(--bg-card));
+}
+.xn-shell-layout .xn-toolcall__section-label { font-family: var(--font-sans); font-weight: 500; letter-spacing: .02em; }
+.xn-shell-layout .xn-toolcall__body,
+.xn-shell-layout .xn-msg__tool-detail-body { color: var(--fg-subtle); }
+.xn-shell-layout .xn-toolcall__terminal,
+.xn-shell-layout .xn-zc-tool-body pre {
+  border-color: var(--border);
+  border-radius: var(--radius-md);
+  background: color-mix(in oklab, var(--bg-subtle) 55%, var(--bg-card));
+}
+.xn-shell-layout .xn-zc-reasoning-content { border-left-color: color-mix(in oklab, var(--accent-brand) 35%, var(--border)); }
+
+/* Approval and question cards: a raised paper card with a status edge. */
+.xn-shell-layout .xn-approvals { border-color: var(--border) !important; border-left: 3px solid var(--warn) !important; box-shadow: var(--shadow-md) !important; }
+.xn-shell-layout .xn-approval-item { background: color-mix(in oklab, var(--bg-subtle) 45%, var(--bg-card)) !important; }
+.xn-shell-layout .xn-pending-question,
+.xn-shell-layout .xn-mcp-elicitation {
+  border-color: var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--bg-card);
+  box-shadow: var(--shadow-md);
+}
+.xn-shell-layout .xn-pending-question h3 { font-size: 15px; }
+.xn-shell-layout .xn-pending-question textarea { border-radius: var(--radius-md); }
+.xn-shell-layout .xn-pending-question textarea:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 1px; }

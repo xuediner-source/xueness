@@ -195,6 +195,9 @@ test("Approvals: renders items and action button; empty or no items has NO butto
   assert.match(htmlWith, /执行 git status 命令/);
   assert.match(htmlWith, /批准并重试/);
   assert.match(htmlWith, /<button[^>]*>批准并重试<\/button>/);
+  // 样式挂钩：审批卡片与条目有稳定类名，润饰样式不依赖 aria-label 文案。
+  assert.match(htmlWith, /class="xn-approvals"[^>]*aria-label|aria-label="[^"]*"[^>]*class="xn-approvals"/);
+  assert.equal(htmlWith.match(/class="xn-approval-item"/g)?.length, 2);
 
   // Empty pending array: asserts NO buttons exist (anti-fake button)
   const htmlEmpty = renderToStaticMarkup(
