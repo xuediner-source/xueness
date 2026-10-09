@@ -798,3 +798,28 @@ html[data-xn-palette="claude"] .xn-shell-layout .xn-error-banner > button { bord
   html[data-xn-palette="claude"] .xn-shell-layout--desktop-titlebar .xn-conv-header__tools .xn-view-switcher { min-height: 28px; height: 28px; border: 0; background: transparent; color: var(--fg-subtle); }
   html[data-xn-palette="claude"] .xn-shell-layout--desktop-titlebar .xn-conv-header__tools .xn-view-switcher:hover { background: var(--bg-hover); color: var(--fg); }
 }
+
+/* ── 11. 实测对齐：阅读栏、气泡与正文 ─────────────────────────────────────
+ * The reading column is 736px with 30px gutters (Codex: x 321–1056 in a
+ * 796px canvas); the history rail overlays the left gutter instead of taking
+ * a column. Blue user bubble (radius 16, 42px single line), 14px prose on a
+ * 23px line with 14px paragraph gaps, "用时 …" summary without a hairline. */
+html[data-xn-palette="claude"] .xn-shell-layout .xn-timeline-history-layout { grid-template-columns: minmax(0, 1fr); }
+html[data-xn-palette="claude"] .xn-shell-layout .xn-timeline-history-layout__content { grid-column: 1; }
+html[data-xn-palette="claude"] .xn-shell-layout .xn-conversation-history-rail { grid-column: 1; justify-self: start; }
+html[data-xn-palette="claude"] .xn-shell-layout .xn-zcode-conversation { max-width: calc(var(--codex-column) + 60px); line-height: 23px; }
+html[data-xn-palette="claude"] .xn-shell-layout .xn-zc-turn { gap: 14px; padding: 20px 30px 16px; }
+html[data-xn-palette="claude"] .xn-shell-layout .xn-msg__bubble,
+html[data-xn-palette="claude"] .xn-shell-layout .xn-zc-user-bubble {
+  padding: 10px 14px;
+  border-radius: 16px;
+  background: var(--codex-user-bubble);
+  color: var(--codex-user-bubble-fg);
+  line-height: 22px;
+}
+html[data-xn-palette="claude"] .xn-shell-layout .xn-msg--assistant,
+html[data-xn-palette="claude"] .xn-shell-layout .xn-zc-answer .xn-md { line-height: 23px; }
+html[data-xn-palette="claude"] .xn-shell-layout .xn-md__paragraph,
+html[data-xn-palette="claude"] .xn-shell-layout .xn-zc-answer .xn-md p { margin: 0 0 14px; }
+html[data-xn-palette="claude"] .xn-shell-layout .xn-conversation-work-summary,
+html[data-xn-palette="claude"] .xn-shell-layout .xn-zc-work-status { padding-bottom: 0; border-bottom: 0; font-size: 13px; }

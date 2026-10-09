@@ -39,10 +39,10 @@ test("Codex 风格：「任务」分区标题来自 data-section-label，默认�
   assert.match(css, /\.xn-task-list__toolbar::before \{[^}]*content: attr\(data-section-label\)/);
 });
 
-test("Codex 风格：输入框圆角 18、发送按钮 28px 圆形，用户气泡圆角 14，动效不超过 200ms", () => {
+test("Codex 风格：输入框圆角 18、发送按钮 28px 圆形，用户气泡圆角 16（实测），动效不超过 200ms", () => {
   assert.match(css, /\.xn-composer \{[^}]*border-radius: 18px/);
   assert.match(css, /\.xn-composer__send \{[^}]*width: 28px;[^}]*height: 28px;[^}]*border-radius: 999px/);
-  assert.match(css, /\.xn-zc-user-bubble \{[^}]*border-radius: 14px/);
+  assert.match(css, /\.xn-zc-user-bubble \{[^}]*border-radius: 16px/);
   for (const match of css.matchAll(/(\d+(?:\.\d+)?)ms/g)) assert.ok(Number(match[1]) <= 200, match[0]);
 });
 
