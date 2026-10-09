@@ -476,3 +476,8 @@ body .xn-command-overlay { animation: xn-polish-fade var(--dur-normal) var(--eas
   .xn-desktop-titlebar__menu { animation: none; }
   .xn-shell-layout .xn-composer__send:active:not(:disabled) { transform: none; }
 }
+
+/* ── 9. Icons: one stroke weight across shell, settings and window chrome ── */
+.xn-shell-layout svg.lucide,
+.xn-desktop-titlebar svg.lucide,
+body .xn-command-panel svg.lucide { stroke-width: 1.6; }
