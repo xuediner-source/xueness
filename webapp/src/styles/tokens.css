@@ -252,10 +252,22 @@
  * radius, spacing) are untouched, so nothing zooms globally. Muted text is a
  * little darker than Codex (#6e6e6e vs #8f8f8f) to keep 4.5:1 contrast. */
 :root[data-xn-palette="claude"] {
-  --codex-sidebar-width: 300px;
+  --codex-sidebar-width: 290px;
+  --codex-rail-width: 52px;
+  --codex-titlebar-height: 44px;
+  --codex-frame-inset: 4px;
   --codex-column: 736px;
   --codex-row-height: 30px;
   --codex-header-height: 46px;
+  --codex-frame: #ececec;
+  --codex-rail-fg: #6e6e6e;
+  --codex-rail-active: rgba(0, 0, 0, 0.07);
+  --codex-sidebar-fg: #1f1f1f;
+  --codex-composer-bg: #ffffff;
+  --codex-composer-strip: #f3f3f3;
+  --codex-placeholder: #8f8f8f;
+  --codex-user-bubble-fg: #0d0d0d;
+  --codex-start-mark: #8f8f8f;
   --codex-ease: cubic-bezier(.2, 0, 0, 1);
   --codex-faint: #8f8f8f;
   --codex-hairline: #ececec;
@@ -329,24 +341,37 @@
   --tool-result-accent: #0285ff;
 }
 .dark[data-xn-palette="claude"] {
+  /* Measured from the real Codex app (macOS dark, 2x window capture,
+   * 2026-10-10): frame/titlebar/rail #242424, sidebar #1d1d1d, canvas
+   * #181818, composer #383838, start strip #282828, blue user bubble #223d72,
+   * blue round action #3c66bf, sidebar text #dddddd, rail icons #919191. */
   --codex-faint: #8a8a8a;
-  --codex-hairline: #2e2e2e;
-  --codex-composer-border: #333333;
+  --codex-hairline: #2f2e2e;
+  --codex-composer-border: transparent;
   --codex-composer-shadow: none;
-  --codex-send-bg: #ffffff;
-  --codex-send-fg: #0d0d0d;
-  --codex-send-disabled: #8e8e8e;
+  --codex-send-bg: #3c66bf;
+  --codex-send-fg: #ffffff;
+  --codex-send-disabled: #3c66bf;
   --codex-toggle: #339cff;
-  --codex-user-bubble: #2b2b2b;
-  --codex-card: #232323;
-  --codex-card-row: #242424;
+  --codex-user-bubble: #223d72;
+  --codex-user-bubble-fg: #f7fafe;
+  --codex-card: #1f1e1e;
+  --codex-card-row: #1c1b1b;
   --codex-inline-code: #2b2b2b;
-  --codex-link: #339cff;
-  --codex-added: #40c977;
-  --codex-removed: #ff6764;
+  --codex-link: #6184cb;
+  --codex-added: #6bc67f;
+  --codex-removed: #e15046;
+  --codex-frame: #242424;
+  --codex-rail-fg: #919191;
+  --codex-rail-active: #353535;
+  --codex-sidebar-fg: #dddddd;
+  --codex-composer-bg: #383838;
+  --codex-composer-strip: #282828;
+  --codex-placeholder: #737373;
+  --codex-start-mark: #5d5d5d;
 
-  --bg-window: #1f1f1f;
-  --bg-sidebar: #1f1f1f;
+  --bg-window: #242424;
+  --bg-sidebar: #1d1d1d;
   --bg-panel: #181818;
   --bg-input: #2d2d2d;
   --bg-popover: #2a2a2a;
