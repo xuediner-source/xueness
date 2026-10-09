@@ -973,7 +973,8 @@ class OpenAICompatible:
                 if delivered or attempts >= 3:
                     raise _provider_request_error(exc, stage="read") from None
                 time.sleep(min(0.25 * (2 ** (attempts - 1)), 2.0))
-            except (ValueError, KeyError, IndexError, TypeError, AttributeError) as exc:
+            except (http.client.HTTPException, ValueError, KeyError, IndexError,
+                    TypeError, AttributeError) as exc:
                 # A malformed HTTP/SSE response is a protocol error, not a
                 # transport failure. It must not be retried or reported as a
                 # connection problem.
@@ -1039,7 +1040,9 @@ class OpenAICompatible:
                     if delivered or attempt == attempts - 1:
                         raise _provider_request_error(exc, stage="read") from None
                     _sleep_with_deadline(min(0.25 * (2 ** attempt), 2.0), deadline)
-                except (ValueError, KeyError, IndexError, TypeError, AttributeError) as exc:
+                except (http.client.HTTPException, ValueError, KeyError, IndexError,
+                        TypeError, AttributeError) as exc:
+                    _raise_if_deadline_expired(deadline)
                     # transportRetries cover network failures only. A malformed
                     # response has already reached the client and is not replayed.
                     raise _provider_request_error(exc, stage="parse") from None
@@ -1075,7 +1078,6 @@ class OpenAICompatible:
                   else _provider_opener(self.base, _NoRedirect))
         last_http_error = None
         last_transport_error = None
-        last_parse_error = None
         try:
             for attempt in range(attempts):
                 try:
@@ -1112,12 +1114,13 @@ class OpenAICompatible:
                     if attempt == attempts - 1:
                         break
                     _sleep_with_deadline(min(0.25 * (2 ** attempt), 2.0), deadline)
-                except (ValueError, KeyError, IndexError, TypeError, AttributeError) as exc:
-                    last_parse_error = exc
+                except (http.client.HTTPException, ValueError, KeyError, IndexError,
+                        TypeError, AttributeError) as exc:
+                    _raise_if_deadline_expired(deadline)
                     # A complete response with invalid JSON/shape is not a
                     # transport interruption. Do not repeat a potentially
                     # billable request just to classify the same bad payload.
-                    break
+                    raise _provider_request_error(exc, stage="parse") from None
         except TimeoutError as exc:
             raise ProviderRequestError(
                 category="timeout", stage="deadline",
@@ -1141,8 +1144,6 @@ class OpenAICompatible:
                     exception_type=type(last_transport_error).__name__,
                 ) from None
             raise _provider_request_error(last_transport_error, stage="read") from None
-        if last_parse_error is not None:
-            raise _provider_request_error(last_parse_error, stage="parse") from None
         raise ProviderRequestError(category="invalid_response", stage="parse") from None
 
 
@@ -1277,7 +1278,7 @@ def _context_overflow_from_http_error(error):
         if not isinstance(details, dict):
             return False
         return any(details.get(key) in _CONTEXT_OVERFLOW_CODES for key in ("code", "type"))
-    except (OSError, ValueError, TypeError, AttributeError):
+    except (http.client.HTTPException, OSError, ValueError, TypeError, AttributeError):
         return False
 
 
@@ -1755,7 +1756,8 @@ class AnthropicMessages:
                 ) from None
             except (urllib.error.URLError, OSError) as exc:
                 raise _provider_request_error(exc, stage="read") from None
-            except (ValueError, KeyError, IndexError, TypeError, AttributeError) as exc:
+            except (http.client.HTTPException, ValueError, KeyError, IndexError,
+                    TypeError, AttributeError) as exc:
                 raise _provider_request_error(exc, stage="parse") from None
         deadline = _explicit_request_deadline(self)
         if deadline is not None:
@@ -1778,7 +1780,8 @@ class AnthropicMessages:
             ) from None
         except (urllib.error.URLError, OSError) as exc:
             raise _provider_request_error(exc, stage="read") from None
-        except (ValueError, KeyError, IndexError, TypeError, AttributeError) as exc:
+        except (http.client.HTTPException, ValueError, KeyError, IndexError,
+                TypeError, AttributeError) as exc:
             raise _provider_request_error(exc, stage="parse") from None
 
     def _complete_lightweight(self, request, deadline, attempts):
@@ -1810,7 +1813,9 @@ class AnthropicMessages:
                     if attempt == attempts - 1:
                         break
                     _sleep_with_deadline(min(0.25 * (2 ** attempt), 2.0), deadline)
-                except (ValueError, KeyError, IndexError, TypeError, AttributeError) as exc:
+                except (http.client.HTTPException, ValueError, KeyError, IndexError,
+                        TypeError, AttributeError) as exc:
+                    _raise_if_deadline_expired(deadline)
                     # Once response bytes arrive, a malformed response is not
                     # a transport failure and must not be replayed.
                     raise _provider_request_error(exc, stage="parse") from None
@@ -1909,7 +1914,8 @@ class AnthropicMessages:
                 if delivered or attempt == 2:
                     raise _provider_request_error(exc, stage="read") from None
                 time.sleep(min(0.25 * (2 ** attempt), 2.0))
-            except (ValueError, KeyError, IndexError, TypeError, AttributeError) as exc:
+            except (http.client.HTTPException, ValueError, KeyError, IndexError,
+                    TypeError, AttributeError) as exc:
                 raise _provider_request_error(exc, stage="parse") from None
 
     def _stream_lightweight(self, request, *, deadline, attempts, on_delta=None,
@@ -1958,7 +1964,9 @@ class AnthropicMessages:
                     if delivered or attempt == attempts - 1:
                         raise _provider_request_error(exc, stage="read") from None
                     _sleep_with_deadline(min(0.25 * (2 ** attempt), 2.0), deadline)
-                except (ValueError, KeyError, IndexError, TypeError, AttributeError) as exc:
+                except (http.client.HTTPException, ValueError, KeyError, IndexError,
+                        TypeError, AttributeError) as exc:
+                    _raise_if_deadline_expired(deadline)
                     raise _provider_request_error(exc, stage="parse") from None
         except TimeoutError as exc:
             raise ProviderRequestError(

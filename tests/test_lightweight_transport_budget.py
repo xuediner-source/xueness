@@ -1,10 +1,13 @@
 """Local HTTP checks for lightweight inference deadlines and transport retries."""
 from __future__ import annotations
 
+import http.client
+import io
 import json
 import threading
 import time
 import unittest
+import urllib.error
 from contextlib import contextmanager
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from unittest.mock import patch
@@ -64,6 +67,100 @@ class LightweightTransportBudgetTests(unittest.TestCase):
     def stop(self, server):
         server.shutdown()
         server.server_close()
+
+    def _http_protocol_provider(self, kind, profile):
+        cls = OpenAICompatible if kind == "openai" else AnthropicMessages
+        provider = cls(base="https://provider.example/v1", model="fixture-model",
+                       key="fixture-private-key")
+        provider.runtime_profile = profile
+        provider.context_window = 8192
+        provider.max_output_tokens = 1024
+        provider.lightweight_options = {
+            "requestTimeoutSeconds": 5, "transportRetries": 2,
+        }
+        return provider
+
+    def test_http_protocol_errors_are_sanitized_and_never_replayed(self):
+        secret = b"fixture-private-response-must-not-escape"
+        for kind in ("openai", "anthropic"):
+            for profile in ("standard", "lightweight"):
+                for operation in ("complete", "stream"):
+                    for error in (http.client.BadStatusLine(secret.decode()),
+                                  http.client.LineTooLong(secret.decode()),
+                                  http.client.IncompleteRead(secret, 99)):
+                        with self.subTest(kind=kind, profile=profile,
+                                          operation=operation, error=type(error).__name__):
+                            provider = self._http_protocol_provider(kind, profile)
+                            with patch("xueness.bundled_plugins.providers.provider._open_with_retry",
+                                       side_effect=error) as opened, patch(
+                                    "urllib.request.OpenerDirector.open", side_effect=error) as direct:
+                                with self.assertRaises(ProviderRequestError) as caught:
+                                    getattr(provider, operation)([{"role": "user", "content": "hi"}], [])
+                            self.assertEqual(1, opened.call_count + direct.call_count)
+                            self.assertEqual("invalid_response", caught.exception.category)
+                            self.assertEqual("parse", caught.exception.stage)
+                            self.assertEqual(type(error).__name__, caught.exception.exception_type)
+                            self.assertNotIn(secret.decode(), str(caught.exception))
+                            self.assertNotIn(secret.decode(), repr(vars(caught.exception)))
+                            self.assertTrue(caught.exception.__suppress_context__)
+
+    def test_partial_status_line_at_deadline_is_timeout_without_replay(self):
+        clock = [100.0]
+
+        def expired_status(*_args, **_kwargs):
+            # Reproduce a socket watchdog interrupting http.client._read_status.
+            clock[0] = 101.0
+            raise http.client.BadStatusLine("HTTP/1.1 20")
+
+        for kind in ("openai", "anthropic"):
+            for profile in ("standard", "lightweight"):
+                for operation in ("complete", "stream"):
+                    with self.subTest(kind=kind, profile=profile, operation=operation):
+                        provider = self._http_protocol_provider(kind, profile)
+                        clock[0] = 100.0
+                        provider.request_deadline = 100.5
+                        with patch("xueness.bundled_plugins.providers.provider._open_with_retry",
+                                   side_effect=expired_status) as opened, patch(
+                                "xueness.bundled_plugins.providers.provider.time.monotonic",
+                                side_effect=lambda: clock[0]):
+                            with self.assert_timeout():
+                                getattr(provider, operation)([{"role": "user", "content": "hi"}], [])
+                        self.assertEqual(1, opened.call_count)
+
+    def test_terminal_parse_error_is_not_hidden_by_previous_transport_failure(self):
+        provider = self._http_protocol_provider("openai", "standard")
+        with patch("xueness.bundled_plugins.providers.provider._open_with_retry",
+                   side_effect=[urllib.error.URLError("fixture connection interrupted"),
+                                http.client.BadStatusLine("fixture-private-response")]) as opened, patch(
+                "xueness.bundled_plugins.providers.provider.time.sleep"):
+            with self.assertRaises(ProviderRequestError) as caught:
+                provider.complete([{"role": "user", "content": "hi"}], [])
+        self.assertEqual(2, opened.call_count)
+        self.assertEqual("invalid_response", caught.exception.category)
+        self.assertEqual("parse", caught.exception.stage)
+        self.assertEqual("BadStatusLine", caught.exception.exception_type)
+
+    def test_truncated_http_error_body_keeps_status_and_does_not_escape(self):
+        class BrokenErrorBody(io.BytesIO):
+            def read1(self, _limit):
+                raise http.client.IncompleteRead(b"fixture-private-error-body", 99)
+
+        for kind in ("openai", "anthropic"):
+            for profile in ("standard", "lightweight"):
+                for operation in ("complete", "stream"):
+                    with self.subTest(kind=kind, profile=profile, operation=operation):
+                        provider = self._http_protocol_provider(kind, profile)
+                        body = BrokenErrorBody()
+                        error = urllib.error.HTTPError(
+                            "https://provider.example/v1", 400, "fixture error", {}, body)
+                        with patch("urllib.request.OpenerDirector.open", side_effect=error) as opened:
+                            with self.assertRaises(ProviderRequestError) as caught:
+                                getattr(provider, operation)([{"role": "user", "content": "hi"}], [])
+                        self.assertEqual(1, opened.call_count)
+                        self.assertEqual(400, caught.exception.status)
+                        self.assertFalse(caught.exception.context_overflow)
+                        self.assertNotIn("fixture-private-error-body", str(caught.exception))
+                        self.assertTrue(body.closed)
 
     def test_slow_headers_are_bounded_and_zero_retries_means_one_request(self):
         state = {"calls": 0, "finished": threading.Event()}
