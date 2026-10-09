@@ -155,6 +155,13 @@ def execute_cli(args):
                               allow_real=getattr(args,'allow_real',None))
     state=Path(args.state)
     try:
+        # The connection list shares the plugin-state lock with every other
+        # plugin toggle. Approval and SSH stay outside that lock: a prompt or
+        # a 40s connection must not block configuration in this process or
+        # another one. ``_exec`` reloads the row and checks the digest, so a
+        # save that lands after the unlock fails closed instead of running
+        # the snapshot the operator no longer has.
+        pending=None
         with _config_lock(state):
             rows=_load(state)
             if args.remote_action=='list':
@@ -181,16 +188,20 @@ def execute_cli(args):
                 if row is None: raise ValueError('connection not found')
                 argv=args.argv[1:] if args.argv and args.argv[0]=='--' else args.argv
                 if not argv: raise ValueError('remote argv required after --')
-                from ...core import Gate
-                from ...tool_contract import bind_execution
-                from ...cli import _approval_prompt
-                call={'connection':args.id,'connection_digest':_digest(row),'argv':argv}
                 root=Path(args.root).resolve()
                 if not root.is_dir(): raise ValueError('approval workspace must already exist')
-                gate=Gate(root,allow_exec=bool(args.allow_exec),interactive=True,
-                          approval_prompt=_approval_prompt)
-                with bind_execution(state_dir=state):
-                    result=_exec(root,gate,call,None,None)
+                pending=(row, argv, root)
+                result=None
+        if pending is not None:
+            row, argv, root = pending
+            from ...core import Gate
+            from ...tool_contract import bind_execution
+            from ...cli import _approval_prompt
+            call={'connection':row['id'],'connection_digest':_digest(row),'argv':argv}
+            gate=Gate(root,allow_exec=bool(args.allow_exec),interactive=True,
+                      approval_prompt=_approval_prompt)
+            with bind_execution(state_dir=state):
+                result=_exec(root,gate,call,None,None)
     except (OSError,ValueError,PermissionError,subprocess.TimeoutExpired) as exc:
         print(json.dumps({'error':str(exc)},ensure_ascii=False),file=__import__('sys').stderr)
         return 1
