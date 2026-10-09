@@ -70,6 +70,21 @@ const RESERVED_SHORTCUTS = new Set([
   "mod+shift+t",
   "mod+t",
   "mod+w",
+  // 桌面端原生菜单 role 自带的加速键（编辑/视图/窗口），在 macOS 和 Windows 上都会
+  // 被菜单先吃掉或与系统编辑操作冲突；统一保留，两端行为一致。
+  "mod+a",
+  "mod+c",
+  "mod+v",
+  "mod+x",
+  "mod+z",
+  "mod+shift+z",
+  "mod+y",
+  "mod+0",
+  "mod+=",
+  "mod+-",
+  "mod+h",
+  "mod+m",
+  "mod+ctrl+f",
 ]);
 
 function canonicalKey(key: string): string | null {

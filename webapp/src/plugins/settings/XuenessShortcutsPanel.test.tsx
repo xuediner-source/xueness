@@ -50,6 +50,12 @@ test("shortcut recorder canonicalizes modifiers, uses physical keys for Alt-prod
   assert.deepEqual(recordShortcutEvent(event("q", { metaKey: true }), "MacIntel"), {
     kind: "invalid", reason: "reserved",
   });
+  // 原生编辑菜单的复制/粘贴/撤销等在两端都保留，不能被绑定成应用快捷键
+  for (const [key, extra] of [["c", {}], ["v", {}], ["z", {}], ["z", { shiftKey: true }], ["a", {}], ["m", {}]] as const) {
+    assert.deepEqual(recordShortcutEvent(event(key, { metaKey: true, ...extra }), "MacIntel"), { kind: "invalid", reason: "reserved" });
+    assert.deepEqual(recordShortcutEvent(event(key, { ctrlKey: true, ...extra }), "Win32"), { kind: "invalid", reason: "reserved" });
+  }
+  assert.deepEqual(recordShortcutEvent(event("f", { metaKey: true, ctrlKey: true }), "MacIntel"), { kind: "invalid", reason: "reserved" });
   assert.deepEqual(recordShortcutEvent(event("Delete", { ctrlKey: true, altKey: true }), "Win32"), {
     kind: "invalid", reason: "reserved",
   });
