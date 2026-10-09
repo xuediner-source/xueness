@@ -333,6 +333,8 @@
 
 /* Approval and question cards: a raised paper card with a status edge. */
 .xn-shell-layout .xn-approvals { border-color: var(--border) !important; border-left: 3px solid var(--warn) !important; box-shadow: var(--shadow-md) !important; }
+/* Keep the card on the reading column instead of spanning the whole pane. */
+.xn-shell-layout .xn-approvals { box-sizing: border-box; width: min(calc(100% - 48px), var(--conversation-width)); margin-inline: auto; }
 .xn-shell-layout .xn-approval-item { background: color-mix(in oklab, var(--bg-subtle) 45%, var(--bg-card)) !important; }
 .xn-shell-layout .xn-pending-question,
 .xn-shell-layout .xn-mcp-elicitation {
