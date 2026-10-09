@@ -1244,3 +1244,19 @@ export function deriveFileChanges(journal: unknown): FileChangeSet {
 
   return { changes, source: "session-journal" };
 }
+
+
+/**
+ * 把 argv 数组格式化成可读的命令行，用于审批卡片和时间线展示。
+ * 含空白、引号或为空的参数加双引号，避免 ["git","commit","-m","fix bug"] 与
+ * ["git","commit","-m","fix","bug"] 显示成同一串——Windows 上 "C:\Program Files\…"
+ * 这类带空格路径尤其常见。只用于展示，不用于实际执行。
+ */
+export function formatCommandArgv(argv: readonly unknown[]): string {
+  return argv.map((item) => {
+    const text = typeof item === "string" ? item : JSON.stringify(item) ?? String(item);
+    if (text !== "" && !/[\s"']/.test(text)) return text;
+    // 只转义双引号：保留 Windows 路径里的反斜杠原样可读。
+    return `"${text.replace(/"/g, '\\"')}"`;
+  }).join(" ");
+}

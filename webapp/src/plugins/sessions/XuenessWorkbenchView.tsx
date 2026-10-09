@@ -13,6 +13,7 @@ import { ComposerCapabilityMenu, MAX_SELECTED_COMPOSER_CAPABILITIES, capabilityL
 import { Search, Target, Workflow, Blocks } from 'lucide-react';
 import { completionPresentation } from './completionPresentation';
 import { displayBinding } from '../../xuenessShortcutDisplay';
+import { formatCommandArgv } from "../../xuenessWorkbench";
 
 export type TaskListProps = {
   sessions: SessionSummary[];
@@ -108,7 +109,7 @@ export function Timeline({ rows }: TimelineProps) {
             if (r.subject.startsWith("[")) {
               const parsed = JSON.parse(r.subject);
               if (Array.isArray(parsed)) {
-                formattedSubject = parsed.join(" ");
+                formattedSubject = formatCommandArgv(parsed);
               }
             }
           } catch {
@@ -200,7 +201,7 @@ export function formatSubject(name: string, subject: string): string {
     try {
       const parsed = JSON.parse(subject);
       if (Array.isArray(parsed)) {
-        return parsed.join(" ");
+        return formatCommandArgv(parsed);
       }
     } catch {
       // Return raw subject if not json

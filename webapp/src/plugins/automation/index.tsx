@@ -25,6 +25,7 @@ import {
 import "../../styles/automation.css";
 
 import { shouldDismissModalOnEscape, useModalFocusScope } from "../shared";
+import { formatCommandArgv } from "../../xuenessWorkbench";
 
 type ConfirmAction = { kind: "approve" | "delete" | "run"; record: AutomationRecord };
 
@@ -399,7 +400,7 @@ export function AutomationDetail({
                   <p>{tr("工作目录：")}<code>{typeof node.cwd === "string" ? node.cwd : "."}</code> · {tr("超时：")}{typeof node.timeout === "number" ? node.timeout : 300}{tr(" 秒")}</p>
                   {Array.isArray(node.needs) && node.needs.length > 0 && <p>{tr("依赖：")}{node.needs.join(", ")}</p>}
                   {kind === "command" ? (
-                    <pre><code>{Array.isArray(node.argv) ? node.argv.join(" ") : ""}</code></pre>
+                    <pre><code>{Array.isArray(node.argv) ? formatCommandArgv(node.argv) : ""}</code></pre>
                   ) : (
                     <>
                       <p className="xn-automation__prompt">{typeof node.prompt === "string" ? node.prompt : ""}</p>

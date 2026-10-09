@@ -1413,3 +1413,13 @@ describe("structural sharing stabilization", () => {
     assert.equal(result[0], next[0]); // s1 updated!
   });
 });
+
+test("formatCommandArgv quotes arguments with spaces so distinct argv never render the same", async () => {
+  const { formatCommandArgv } = await import("./xuenessWorkbench");
+  assert.equal(formatCommandArgv(["git", "status"]), "git status");
+  assert.equal(formatCommandArgv(["git", "commit", "-m", "fix bug"]), 'git commit -m "fix bug"');
+  assert.notEqual(formatCommandArgv(["a", "b c"]), formatCommandArgv(["a", "b", "c"]));
+  // Windows 路径保持反斜杠可读，只给带空格的段加引号
+  assert.equal(formatCommandArgv(["C:\\Program Files\\Git\\bin\\git.exe", "--version"]), '"C:\\Program Files\\Git\\bin\\git.exe" --version');
+  assert.equal(formatCommandArgv(["echo", 'say "hi"', ""]), 'echo "say \\"hi\\"" ""');
+});

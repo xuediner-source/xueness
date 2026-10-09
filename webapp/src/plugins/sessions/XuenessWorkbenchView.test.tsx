@@ -213,7 +213,9 @@ test("Approvals: renders items and action button; empty or no items has NO butto
 });
 
 test("formatSubject: formats JSON argv into readable text and keeps string paths", () => {
-  assert.equal(formatSubject("exec", '["git","commit","-m","fix bug"]'), "git commit -m fix bug");
+  // 带空格的参数要加引号，否则与 ["git","commit","-m","fix","bug"] 无法区分
+  assert.equal(formatSubject("exec", '["git","commit","-m","fix bug"]'), 'git commit -m "fix bug"');
+  assert.equal(formatSubject("exec", '["git","commit","-m","fix","bug"]'), "git commit -m fix bug");
   assert.equal(formatSubject("exec", "invalid json"), "invalid json");
   assert.equal(formatSubject("write", "docs/README.md"), "docs/README.md");
 });

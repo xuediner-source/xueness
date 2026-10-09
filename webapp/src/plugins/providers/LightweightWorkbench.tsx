@@ -16,6 +16,7 @@ import type { RunChoices } from '../../xuenessBridge';
 import { isPermissionMode, type PermissionMode } from '../sessions/permissionModes';
 import { FullAccessConfirmationDialog, requiresYoloConfirmation } from '../sessions/FullAccessConfirmationDialog';
 import './LightweightWorkbench.css';
+import { formatCommandArgv } from '../../xuenessWorkbench';
 
 /**
  * 轻量档极简工作台（providers 插件功能）。
@@ -429,7 +430,7 @@ export function extractToolKeySummary(name: string, subject?: string, input?: Re
       const cmd = input.command ?? input.cmd ?? input.CommandLine ?? input.commandLine;
       if (typeof cmd === 'string' && cmd) return cmd;
       const argv = input.argv ?? input.args;
-      if (Array.isArray(argv)) return argv.join(' ');
+      if (Array.isArray(argv)) return formatCommandArgv(argv);
     }
     if (['grep', 'grep_search', 'search', 'search_web', 'find_by_name', 'tool_search', 'web_search', 'glob'].includes(toolName)) {
       const q = input.query ?? input.Query ?? input.keywords ?? input.keyword ?? input.Pattern ?? input.pattern;
@@ -461,7 +462,7 @@ export function extractToolKeySummary(name: string, subject?: string, input?: Re
     try {
       if (subject.startsWith('{') || subject.startsWith('[')) {
         const parsed = JSON.parse(subject);
-        if (Array.isArray(parsed)) return parsed.join(' ');
+        if (Array.isArray(parsed)) return formatCommandArgv(parsed);
         if (typeof parsed === 'object' && parsed !== null) {
           return extractToolKeySummary(name, undefined, parsed as Record<string, unknown>);
         }

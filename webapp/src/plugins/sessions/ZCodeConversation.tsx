@@ -18,6 +18,7 @@ import { formatConversationWorkDuration } from './conversationWorkDuration';
 import { useTimelineVirtualWindow } from './TimelineVirtualWindow';
 import { XuenessConversationHistoryRail } from './XuenessConversationHistoryRail';
 import './zcode-conversation.css';
+import { formatCommandArgv } from '../../xuenessWorkbench';
 
 type Assistant = Extract<TimelineRow, { kind: 'assistant' }>;
 type Tool = Extract<TimelineRow, { kind: 'tool' }>;
@@ -86,8 +87,8 @@ function toolSummary(row: Tool): string {
   for (const key of ['path', 'file_path', 'query', 'pattern', 'command', 'cmd', 'url']) {
     if (typeof input?.[key] === 'string') return input[key] as string;
   }
-  if (Array.isArray(input?.argv)) return input.argv.join(' ');
-  if (Array.isArray(input)) return input.join(' ');
+  if (Array.isArray(input?.argv)) return formatCommandArgv(input.argv);
+  if (Array.isArray(input)) return formatCommandArgv(input);
   return row.subject;
 }
 

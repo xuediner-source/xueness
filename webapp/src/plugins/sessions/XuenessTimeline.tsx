@@ -23,6 +23,7 @@ import { formatConversationWorkDuration } from './conversationWorkDuration';
 import { TOOL_DISPLAY_STATUS_LABELS, TOOL_DISPLAY_STATUS_TONES, toolDisplayStatusOf } from './toolDisplayStatus';
 import "./sessions.css";
 import "../../styles/conversation-history-rail.css";
+import { formatCommandArgv } from "../../xuenessWorkbench";
 
 export { STREAM_COMMIT_INTERVAL_MS, StreamingCommitGate, useQuantizedStreamingText } from "../../ui/StreamingCommitGate";
 
@@ -181,7 +182,7 @@ function formatToolSubject(name: string, subject: string): string {
       if (subject.startsWith("[")) {
         const parsed = JSON.parse(subject);
         if (Array.isArray(parsed)) {
-          return parsed.join(" ");
+          return formatCommandArgv(parsed);
         }
       }
     } catch {
@@ -459,7 +460,7 @@ function toolPrimaryText(row: ToolPayloadRow, input: unknown): { text: string; m
     const record = isRecord(input) ? input : undefined;
     const argv = record?.argv ?? record?.args;
     if (Array.isArray(argv) && argv.every((item) => typeof item === "string")) {
-      return { text: argv.join(" "), mono: true };
+      return { text: formatCommandArgv(argv), mono: true };
     }
     return { text: formatToolSubject(row.name, row.subject), mono: true };
   }
