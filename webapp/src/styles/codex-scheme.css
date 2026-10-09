@@ -861,3 +861,14 @@ html[data-xn-palette="claude"] .xn-shell-layout .xn-composer__top-content .xn-co
 html[data-xn-palette="claude"] .xn-shell-layout .xn-composer__top-content .xn-select { color: var(--fg); font-size: 13px; }
 html[data-xn-palette="claude"] .xn-shell-layout .xn-composer--with-top-content .xn-composer__input { width: calc(100% - 19px); margin: 13px 8px 0 11px; }
 html[data-xn-palette="claude"] .xn-shell-layout .xn-composer--with-top-content .xn-composer__row { margin: 4px 8px 8px 11px; }
+
+/* ── 13. 实测对齐：起始页 ───────────────────────────────────────────────
+ * Codex: a 44px muted outline mark, ~44px gap, a 28px/34px white title, both
+ * centred in the canvas above the composer; no recent-thread list (recents
+ * live in the sidebar). Xueness keeps its greeting and the 打开项目 / 克隆仓库
+ * chips; the duplicate recent list is hidden only in this scheme. */
+html[data-xn-palette="claude"] .xn-shell-layout .xn-hero__brand { margin-bottom: 40px; }
+html[data-xn-palette="claude"] .xn-shell-layout .xn-hero__brand-mark { width: 44px; height: 44px; color: var(--codex-start-mark); }
+html[data-xn-palette="claude"] .xn-shell-layout .xn-hero__greeting { line-height: 34px; text-align: center; }
+html[data-xn-palette="claude"] .xn-shell-layout .xn-start-page__side { display: none; }
+html[data-xn-palette="claude"] .xn-shell-layout .xn-start-page { margin-bottom: 8px; }
