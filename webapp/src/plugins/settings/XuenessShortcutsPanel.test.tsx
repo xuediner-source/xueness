@@ -11,8 +11,21 @@ import {
   recordShortcutEvent,
   restoreShortcutDefault,
   SHORTCUT_COMMANDS,
+  matchesShortcut,
+  canonicalPhysicalBinding,
+  isSamePhysicalBinding,
+  isEditableTarget,
+  isTerminalTarget,
+  isEditorTarget,
+  hasGlobalShortcutConflict,
 } from "../../xuenessShortcutCommands";
-import { displayBinding, displayBindingParts, isMacPlatform } from "../../xuenessShortcutDisplay";
+import {
+  displayBinding,
+  displayBindingParts,
+  isMacPlatform,
+  isModKeyPressed,
+  isImeComposingEvent,
+} from "../../xuenessShortcutDisplay";
 
 const html = (node: React.ReactElement) => renderToStaticMarkup(node);
 
@@ -111,4 +124,94 @@ test("shortcut settings render a searchable action table with clear and restore 
   assert.match(out, /data-testid="xn-shortcut-clear-open-settings"/);
   assert.match(out, /data-testid="xn-shortcut-default-open-settings"/);
   assert.match(out, /data-testid="xn-shortcuts-reset-all"/);
+});
+
+test("isModKeyPressed distinguishes Mac Command vs Windows Ctrl across platforms", () => {
+  // macOS (darwin): 仅 metaKey 为 true 且 ctrlKey 为 false
+  assert.equal(isModKeyPressed({ metaKey: true }, "darwin"), true);
+  assert.equal(isModKeyPressed({ ctrlKey: true }, "darwin"), false);
+  assert.equal(isModKeyPressed({ metaKey: true, ctrlKey: true }, "darwin"), false);
+  assert.equal(isModKeyPressed({}, "darwin"), false);
+
+  // Windows (win32): 仅 ctrlKey 为 true 且 metaKey 为 false
+  assert.equal(isModKeyPressed({ ctrlKey: true }, "win32"), true);
+  assert.equal(isModKeyPressed({ metaKey: true }, "win32"), false);
+  assert.equal(isModKeyPressed({ ctrlKey: true, metaKey: true }, "win32"), false);
+  assert.equal(isModKeyPressed({}, "win32"), false);
+});
+
+test("matchesShortcut resolves Mod across win32 and darwin without leaking cross-platform keys", () => {
+  // darwin: Mod+N 对应 Cmd+N (metaKey: true)
+  assert.equal(matchesShortcut({ key: "n", metaKey: true }, "Mod+N", "darwin"), true);
+  assert.equal(matchesShortcut({ key: "n", ctrlKey: true }, "Mod+N", "darwin"), false);
+  assert.equal(matchesShortcut({ key: "b", metaKey: true }, "Mod+B", "darwin"), true);
+  assert.equal(matchesShortcut({ key: "b", ctrlKey: true }, "Mod+B", "darwin"), false);
+
+  // win32: Mod+N 对应 Ctrl+N (ctrlKey: true)
+  assert.equal(matchesShortcut({ key: "n", ctrlKey: true }, "Mod+N", "win32"), true);
+  assert.equal(matchesShortcut({ key: "n", metaKey: true }, "Mod+N", "win32"), false);
+  assert.equal(matchesShortcut({ key: "b", ctrlKey: true }, "Mod+B", "win32"), true);
+  assert.equal(matchesShortcut({ key: "b", metaKey: true }, "Mod+B", "win32"), false);
+
+  // Alt+Shift+R 两端一致
+  assert.equal(matchesShortcut({ key: "r", altKey: true, shiftKey: true }, "Alt+Shift+R", "darwin"), true);
+  assert.equal(matchesShortcut({ key: "r", altKey: true, shiftKey: true }, "Alt+Shift+R", "win32"), true);
+});
+
+test("canonicalPhysicalBinding and findShortcutConflict detect physical key collisions per platform", () => {
+  // win32 下 Mod+N 与 Ctrl+N 物理等价
+  assert.equal(canonicalPhysicalBinding("Mod+N", "win32"), "Ctrl+N");
+  assert.equal(canonicalPhysicalBinding("Ctrl+N", "win32"), "Ctrl+N");
+  assert.equal(isSamePhysicalBinding("Mod+N", "Ctrl+N", "win32"), true);
+  assert.equal(findShortcutConflict("Ctrl+N", "command-palette", {}, "win32"), "new-session");
+
+  // darwin 下 Mod+N 与 Meta+N 物理等价，与 Ctrl+N 不等价
+  assert.equal(canonicalPhysicalBinding("Mod+N", "darwin"), "Meta+N");
+  assert.equal(canonicalPhysicalBinding("Meta+N", "darwin"), "Meta+N");
+  assert.equal(canonicalPhysicalBinding("Ctrl+N", "darwin"), "Ctrl+N");
+  assert.equal(isSamePhysicalBinding("Mod+N", "Meta+N", "darwin"), true);
+  assert.equal(isSamePhysicalBinding("Mod+N", "Ctrl+N", "darwin"), false);
+  assert.equal(findShortcutConflict("Meta+N", "command-palette", {}, "darwin"), "new-session");
+  assert.equal(findShortcutConflict("Ctrl+N", "command-palette", {}, "darwin"), null);
+});
+
+test("hasGlobalShortcutConflict protects terminal, input, and editor from keyboard hijacking", () => {
+  const terminalHost = {
+    className: "xn-terminal-host",
+    closest: (sel: string) => sel.includes("terminal") ? terminalHost : null,
+  };
+  const inputEl = {
+    tagName: "INPUT",
+    closest: (sel: string) => sel.includes("input") ? inputEl : null,
+  };
+  const editorEl = {
+    className: "xn-zc-editor",
+    closest: (sel: string) => sel.includes("editor") ? editorEl : null,
+  };
+
+  // 1. IME 组字态一律报冲突并放行给 IME
+  assert.equal(hasGlobalShortcutConflict({ key: "n", ctrlKey: true, isComposing: true }, "new-session", terminalHost, "win32"), true);
+  assert.equal(hasGlobalShortcutConflict({ key: "k", ctrlKey: true, keyCode: 229 }, "command-palette", inputEl, "win32"), true);
+
+  // 2. 终端冲突：
+  // Windows 下 Ctrl+B (tmux)、Ctrl+K (readline kill)、Ctrl+N (readline history) 属于终端控制码，不能被全局劫持
+  assert.equal(hasGlobalShortcutConflict({ key: "b", ctrlKey: true }, "toggle-sidebar", terminalHost, "win32"), true);
+  assert.equal(hasGlobalShortcutConflict({ key: "k", ctrlKey: true }, "command-palette", terminalHost, "win32"), true);
+  assert.equal(hasGlobalShortcutConflict({ key: "n", ctrlKey: true }, "new-session", terminalHost, "win32"), true);
+  // 普通区域下 Windows Ctrl+B 不冲突，正常触发全局侧栏切换
+  assert.equal(hasGlobalShortcutConflict({ key: "b", ctrlKey: true }, "toggle-sidebar", null, "win32"), false);
+
+  // macOS 下 ⌘B、⌘K、⌘N 走 metaKey，不发送 ASCII 控制字符，不与终端 shell 的 ⌃B/⌃K/⌃N 冲突
+  assert.equal(hasGlobalShortcutConflict({ key: "b", metaKey: true }, "toggle-sidebar", terminalHost, "darwin"), false);
+  assert.equal(hasGlobalShortcutConflict({ key: "k", metaKey: true }, "command-palette", terminalHost, "darwin"), false);
+  // macOS 下若绑定了显式 Ctrl 则仍需让位终端
+  assert.equal(hasGlobalShortcutConflict({ key: "b", ctrlKey: true }, "toggle-sidebar", terminalHost, "darwin"), true);
+
+  // 3. 输入框与编辑器冲突：
+  // 正常打字（无修饰键或仅 Shift）绝不触发全局命令
+  assert.equal(hasGlobalShortcutConflict({ key: "f" }, "new-session", inputEl, "darwin"), true);
+  assert.equal(hasGlobalShortcutConflict({ key: "F", shiftKey: true }, "new-session", inputEl, "darwin"), true);
+  // 原生编辑操作（全选、复制、撤销等）不可被全局命令抢占
+  assert.equal(hasGlobalShortcutConflict({ key: "a", metaKey: true }, "new-session", editorEl, "darwin"), true);
+  assert.equal(hasGlobalShortcutConflict({ key: "z", ctrlKey: true }, "new-session", inputEl, "win32"), true);
 });

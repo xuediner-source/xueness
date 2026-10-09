@@ -35,3 +35,40 @@ export function displayBinding(shortcut: string, platform?: string): string {
   const isMac = isMacPlatform(platform);
   return displayBindingParts(shortcut, platform).join(isMac ? '' : '+');
 }
+
+/**
+ * 判断事件是否按下了主修饰键（Mod）：
+ * macOS (darwin / MacIntel) 为 Command (metaKey) 且非 Ctrl；
+ * Windows (win32 / Win32) / Linux 为 Ctrl (ctrlKey) 且非 Command。
+ * 避免两键同时按下时误触发主修饰键操作。
+ */
+export function isModKeyPressed(
+  event: { ctrlKey?: boolean; metaKey?: boolean },
+  platform?: string,
+): boolean {
+  const isMac = isMacPlatform(platform);
+  return isMac ? Boolean(event.metaKey && !event.ctrlKey) : Boolean(event.ctrlKey && !event.metaKey);
+}
+
+/**
+ * 通用的 IME 输入法组合态事件判断：
+ * 覆盖 isComposing / nativeEvent.isComposing / keyCode 229 / key "Process" / key "Dead" / compositionActive。
+ */
+export function isImeComposingEvent(event?: {
+  isComposing?: boolean;
+  nativeEvent?: { isComposing?: boolean; keyCode?: number };
+  keyCode?: number;
+  key?: string;
+  compositionActive?: boolean;
+} | null): boolean {
+  if (!event) return false;
+  return Boolean(
+    event.compositionActive ||
+    event.isComposing ||
+    event.nativeEvent?.isComposing ||
+    event.keyCode === 229 ||
+    event.nativeEvent?.keyCode === 229 ||
+    event.key === 'Process' ||
+    event.key === 'Dead'
+  );
+}

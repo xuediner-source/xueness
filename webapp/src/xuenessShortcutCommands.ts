@@ -1,5 +1,5 @@
 import { t as tr } from "./i18n";
-import { isMacPlatform } from "./xuenessShortcutDisplay";
+import { isMacPlatform, isModKeyPressed, isImeComposingEvent } from "./xuenessShortcutDisplay";
 
 export type ShortcutCommandId =
   | "new-session"
@@ -32,7 +32,19 @@ export const SHORTCUT_COMMANDS: readonly ShortcutCommand[] = [
 export const DEFAULT_SHORTCUT_BINDINGS: Readonly<Record<ShortcutCommandId, string>> =
   Object.fromEntries(SHORTCUT_COMMANDS.map((command) => [command.id, command.defaultBinding])) as Record<ShortcutCommandId, string>;
 
-export type ShortcutEventLike = Pick<KeyboardEvent, "key" | "ctrlKey" | "metaKey" | "altKey" | "shiftKey"> & { code?: string };
+export type ShortcutEventLike = {
+  key: string;
+  ctrlKey?: boolean;
+  metaKey?: boolean;
+  altKey?: boolean;
+  shiftKey?: boolean;
+  code?: string;
+  keyCode?: number;
+  isComposing?: boolean;
+  repeat?: boolean;
+  nativeEvent?: { isComposing?: boolean; keyCode?: number };
+  compositionActive?: boolean;
+};
 export type ShortcutRecordingResult =
   | { kind: "pending"; preview: string }
   | { kind: "invalid"; reason: "modifier-required" | "unsupported-key" | "reserved" }
@@ -174,19 +186,147 @@ export function resolveShortcutBinding(
   return DEFAULT_SHORTCUT_BINDINGS[commandId];
 }
 
+export function matchesShortcut(
+  event: ShortcutEventLike,
+  chord: string,
+  platform?: string,
+): boolean {
+  const parts = chord.toLowerCase().split("+").map((part) => part.trim());
+  const key = parts.at(-1);
+  if (!key) return false;
+  const eventKey = event.key === " "
+    ? "space"
+    : event.altKey && event.code && /^Key[A-Z]$/.test(event.code)
+      ? event.code.slice(3).toLowerCase()
+      : event.key.toLowerCase();
+  if (eventKey !== key) return false;
+  const isMac = isMacPlatform(platform);
+  const expectsCtrl = parts.includes("ctrl") || (parts.includes("mod") && !isMac);
+  const expectsMeta = parts.includes("meta") || (parts.includes("mod") && isMac);
+  return (
+    expectsCtrl === Boolean(event.ctrlKey) &&
+    expectsMeta === Boolean(event.metaKey) &&
+    parts.includes("shift") === Boolean(event.shiftKey) &&
+    parts.includes("alt") === Boolean(event.altKey)
+  );
+}
+
+export function canonicalPhysicalBinding(binding: string, platform?: string): string | null {
+  const normalized = normalizeShortcutBinding(binding);
+  if (!normalized) return null;
+  const isMac = isMacPlatform(platform);
+  const parts = normalized.split("+");
+  const key = parts.pop()!;
+  const mapped = parts.map((part) => {
+    if (part === "Mod") return isMac ? "Meta" : "Ctrl";
+    return part;
+  });
+  const order = isMac ? ["Meta", "Ctrl", "Alt", "Shift"] : ["Ctrl", "Meta", "Alt", "Shift"];
+  const sorted = order.filter((m) => mapped.includes(m));
+  return [...sorted, key].join("+");
+}
+
+export function isSamePhysicalBinding(a: string, b: string, platform?: string): boolean {
+  const canA = canonicalPhysicalBinding(a, platform);
+  const canB = canonicalPhysicalBinding(b, platform);
+  return canA !== null && canA === canB;
+}
+
 export function findShortcutConflict(
   binding: string,
   commandId: ShortcutCommandId,
   overrides: Readonly<Record<string, string>>,
+  platform?: string,
 ): ShortcutCommandId | null {
-  const normalized = normalizeShortcutBinding(binding);
-  if (!normalized) return null;
+  const canonical = canonicalPhysicalBinding(binding, platform);
+  if (!canonical) return null;
   for (const command of SHORTCUT_COMMANDS) {
     if (command.id === commandId) continue;
     const candidate = resolveShortcutBinding(command.id, overrides);
-    if (candidate && normalizeShortcutBinding(candidate) === normalized) return command.id;
+    if (!candidate) continue;
+    const candidateCanonical = canonicalPhysicalBinding(candidate, platform);
+    if (candidateCanonical && candidateCanonical === canonical) return command.id;
   }
   return null;
+}
+
+/** 判断目标是否为可编辑控件（input / textarea / select / contenteditable）。 */
+export function isEditableTarget(target: unknown): boolean {
+  if (!target) return false;
+  const el = target as HTMLElement;
+  if (typeof el.isContentEditable === "boolean" && el.isContentEditable) return true;
+  if (typeof el.closest === "function") {
+    return Boolean(el.closest("input, textarea, select, [contenteditable='true']"));
+  }
+  const tag = (target as { tagName?: string }).tagName?.toUpperCase();
+  return tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT";
+}
+
+/** 判断目标是否在终端区域内。 */
+export function isTerminalTarget(target: unknown): boolean {
+  if (!target) return false;
+  const el = target as HTMLElement;
+  if (typeof el.closest === "function") {
+    return Boolean(el.closest(".xn-terminal-host, .xterm, .xterm-helper-textarea, [data-testid='terminal-pane']"));
+  }
+  const className = typeof el.className === "string" ? el.className : "";
+  return className.includes("xterm") || className.includes("xn-terminal");
+}
+
+/** 判断目标是否在代码/diff/多行消息编辑器内。 */
+export function isEditorTarget(target: unknown): boolean {
+  if (!target) return false;
+  const el = target as HTMLElement;
+  if (typeof el.closest === "function") {
+    return Boolean(el.closest(".xn-zc-editor, .xn-diff-view, [data-editor], .monaco-editor, .cm-editor"));
+  }
+  const className = typeof el.className === "string" ? el.className : "";
+  return className.includes("editor") || className.includes("diff");
+}
+
+const EDITING_OPERATIONS = new Set(["a", "c", "v", "x", "z", "y"]);
+
+/**
+ * 检查全局快捷键与当前焦点所在的输入框、终端、编辑器之间是否存在冲突。
+ * 若返回 true，全局快捷键分发应放行该事件，由宿主控件处理。
+ */
+export function hasGlobalShortcutConflict(
+  event: ShortcutEventLike,
+  commandId: ShortcutCommandId,
+  target: unknown,
+  platform?: string,
+): boolean {
+  if (isImeComposingEvent(event)) return true;
+
+  const isMac = isMacPlatform(platform);
+
+  // 终端冲突：
+  // 终端依赖 Ctrl 控制码（Ctrl+A~Z）。
+  // Windows/Linux 下 Mod 即 Ctrl，全局快捷键若劫持 Ctrl+B/Ctrl+K/Ctrl+N 会破坏 shell/tmux 控制。
+  // macOS 下 Mod 为 ⌘ (metaKey)，与终端 shell 的 Ctrl (ctrlKey) 物理隔离；但若绑定显式 Ctrl 仍需放行。
+  if (isTerminalTarget(target)) {
+    if (!isMac) {
+      if (event.ctrlKey && !event.altKey) return true;
+    } else {
+      if (event.ctrlKey && !event.metaKey) return true;
+    }
+  }
+
+  // 输入框与编辑器冲突：
+  if (isEditableTarget(target) || isEditorTarget(target)) {
+    if (!event.ctrlKey && !event.metaKey && !event.altKey) return true;
+    if (event.shiftKey && !event.ctrlKey && !event.metaKey && !event.altKey) return true;
+
+    const keyLower = event.key.toLowerCase();
+    const isPrimaryMod = isModKeyPressed(event, platform);
+    if (isPrimaryMod && EDITING_OPERATIONS.has(keyLower)) return true;
+
+    if (["arrowleft", "arrowright", "arrowup", "arrowdown", "home", "end", "backspace", "delete"].includes(keyLower)) {
+      return true;
+    }
+  }
+
+  return false;
 }
 
 export function filterShortcutCommands(
