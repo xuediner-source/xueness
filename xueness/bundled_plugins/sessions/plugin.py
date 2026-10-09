@@ -38,6 +38,10 @@ def dispatch(method, parts, query, data, ctx):
     result = delta_dispatch(method, parts, query, data, ctx)
     if result is not None:
         return result
+    from .event_resume import dispatch as event_resume_dispatch
+    result = event_resume_dispatch(method, parts, query, data, ctx)
+    if result is not None:
+        return result
     from .sessions_api import dispatch as session_dispatch
     result = session_dispatch(method, parts, query, data, ctx)
     if result is not None:

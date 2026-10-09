@@ -39,6 +39,7 @@
     "completion_policy",
     "deltas",
     "events_cursor",
+    "event_resume",
     "forking",
     "http_routes",
     "manual_compact",
@@ -154,6 +155,11 @@
       "id": "sessions.events_cursor",
       "name": "会话事件增量游标拉取（实验，默认关闭）",
       "nameEn": "Incremental session event cursor polling (experimental, off by default)"
+    },
+    {
+      "id": "sessions.event_resume",
+      "name": "会话事件代际续传与重同步（实验，默认关闭）",
+      "nameEn": "Session event epoch resume and resync (experimental, off by default)"
     },
     {
       "id": "sessions.answer_question_experimental",

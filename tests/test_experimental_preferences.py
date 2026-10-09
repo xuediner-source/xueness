@@ -5,7 +5,8 @@ from xueness.bundled_plugins.settings.preferences import validate
 class ExperimentalPreferencesTests(unittest.TestCase):
     def test_default_off_flags_require_actual_booleans(self):
         self.assertEqual(validate('general', {}), {})
-        for key in ('sessionsEventsCursorEnabled', 'sessionsAnswerQuestionEnabled',
+        for key in ('sessionsEventsCursorEnabled', 'sessionsEventResumeEnabled',
+                    'sessionsAnswerQuestionEnabled',
                     'toolsDryRunEnabled', 'toolsCallBudgetEnabled'):
             for value in (False, True):
                 self.assertEqual(validate('general', {key: value}), {key: value})
