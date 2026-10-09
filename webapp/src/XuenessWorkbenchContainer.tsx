@@ -140,7 +140,7 @@ import {
 import { CapabilitiesPanel, type CapabilitySectionProps } from "./XuenessCapabilitiesPanel";
 import { XuenessCapabilityDialog } from "./XuenessCapabilityDialog";
 import { shouldDismissModalOnEscape, useModalFocusScope } from "./plugins/shared";
-import { applyDocumentTheme } from "./plugins/settings/themeBoot";
+import { applyDocumentTheme, applyDocumentColorPalette } from "./plugins/settings/themeBoot";
 import { FeatureUnavailable, XuenessPluginManager, XuenessPluginSettingsPanel } from "./XuenessPluginManager";
 import {
   CAPABILITY_PLUGIN_BY_KIND,
@@ -203,6 +203,7 @@ const SETTINGS_DEFAULTS: SettingsMap = {
   allowHooks: false,
   subagentCancelOneEnabled: false,
   theme: "system",
+  colorPalette: "xueness",
   fontSize: 14,
   tabSize: 2,
   wordWrap: true,
@@ -866,6 +867,11 @@ export function XuenessWorkbenchContainer() {
     query.addEventListener?.("change", apply);
     return () => query.removeEventListener?.("change", apply);
   }, [settingsValues.theme, settingsLoading]);
+
+  useEffect(() => {
+    if (!settingsHaveLoaded.current || settingsLoading) return;
+    applyDocumentColorPalette(settingsValues.colorPalette);
+  }, [settingsValues.colorPalette, settingsLoading]);
 
   useEffect(() => {
     setSession(null);

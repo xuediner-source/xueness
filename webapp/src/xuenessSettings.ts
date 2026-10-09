@@ -16,7 +16,7 @@ import { getSettings, saveSettingsSection } from "./xuenessApi";
 
 const SETTINGS_SECTIONS = ["general", "appearance", "shortcuts", "browser", "agent"] as const;
 const SECTION_OF_KEY: Record<string, string> = {
-  theme: "appearance", fontSize: "appearance", tabSize: "appearance", wordWrap: "appearance", terminalFontSize: "appearance",
+  theme: "appearance", colorPalette: "appearance", fontSize: "appearance", tabSize: "appearance", wordWrap: "appearance", terminalFontSize: "appearance",
   codePreviewSettings: "appearance",
   bindings: "shortcuts", sendShortcut: "shortcuts", browserControlEnabled: "browser",
   allowMcp: "agent", allowSubagents: "agent", allowHooks: "agent", subagentCancelOneEnabled: "agent",

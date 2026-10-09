@@ -402,3 +402,12 @@ class WorkspaceApiTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+    def test_preferences_validate_color_palette(self):
+        self.assertEqual(preferences.validate("appearance", {"colorPalette": "xueness"}),
+                         {"colorPalette": "xueness"})
+        self.assertEqual(preferences.validate("appearance", {"colorPalette": "claude"}),
+                         {"colorPalette": "claude"})
+        with self.assertRaises(ValueError):
+            preferences.validate("appearance", {"colorPalette": "warm"})
+
+

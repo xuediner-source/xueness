@@ -39,8 +39,12 @@ export function applyDocumentColorPalette(value: unknown, cache = true): void {
   const root = document.documentElement;
   if (palette === 'xueness') delete root.dataset.xnPalette;
   else root.dataset.xnPalette = palette;
-  // Refresh theme-color meta for the active light/dark + palette pair.
-  applyDocumentTheme(localStorage.getItem('xueness.theme'), false);
+  const theme = root.classList.contains('dark') ? 'dark' : 'light';
+  const meta = document.querySelector<HTMLMetaElement>('meta[name="theme-color"]');
+  if (meta) {
+    if (palette === 'claude') meta.content = theme === 'dark' ? '#1d1c1a' : '#f2f0e9';
+    else meta.content = theme === 'dark' ? '#161616' : '#fafafa';
+  }
   if (cache) {
     try { localStorage.setItem('xueness.colorPalette', palette); } catch { /* Private browsing. */ }
   }

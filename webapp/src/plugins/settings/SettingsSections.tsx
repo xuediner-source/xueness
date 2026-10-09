@@ -262,6 +262,14 @@ export function SettingsSections({
           </>, (next) => { void update("theme", next); })}
         />
         <SettingsRow
+          label={tr("配色方案")}
+          description={tr("默认使用 Xueness 中性配色；Claude 风格为可选的暖色阅读室方案，浅色与深色均可。")}
+          control={select("配色方案", values.colorPalette === "claude" ? "claude" : "xueness", <>
+            <option value="xueness">{tr("默认")}</option>
+            <option value="claude">{tr("Claude 风格")}</option>
+          </>, (next) => { void update("colorPalette", next); })}
+        />
+        <SettingsRow
           label={tr("界面字号")}
           description={tr("调整应用界面的文字大小，图标和布局尺寸不受影响。")}
           control={<SettingsFontSizeInput label={tr("界面字号")} value={Number(values.fontSize ?? 14)} disabled={!onUpdateSetting || saving} min={12} max={20} onCommit={(next) => update("fontSize", next)} />}
