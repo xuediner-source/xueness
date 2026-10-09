@@ -25,6 +25,17 @@ import {
   clearSubmittedComposerDraft,
   restoreSubmittedComposerDraft,
   type ComposerDraftState,
+  extractFilesFromClipboard,
+  isFileDragEvent,
+  MAX_PROMPT_HISTORY,
+  appendPromptHistoryEntry,
+  navigatePromptHistory,
+  readPromptHistoryEntries,
+  persistPromptHistoryEntries,
+  readPersistedDraft,
+  persistDraft,
+  clearPersistedDraft,
+  type StorageLike,
 } from "./XuenessWorkbenchView";
 import type {
   WorkbenchSession,
@@ -662,4 +673,180 @@ test("Composer Escape handling: ignores IME composition and retains onStop for n
   assert.equal(handleComposerEscapeAction(nonImeEvent, { ...baseState, running: true, stopping: true }), true);
   assert.equal(prevented, true);
   assert.deepEqual(calls, []);
+
+  // 7. Non-IME Escape while in history browsing exits history and does NOT stop task
+  let exitHistoryCalled = false;
+  calls.length = 0;
+  prevented = false;
+  assert.equal(handleComposerEscapeAction(nonImeEvent, { ...baseState, running: true, hasHistory: true, onExitHistory: () => { exitHistoryCalled = true; } }), true);
+  assert.equal(prevented, true);
+  assert.equal(exitHistoryCalled, true);
+  assert.deepEqual(calls, []);
+});
+
+test("extractFilesFromClipboard: extracts from files or items", () => {
+  const dummyFile = { name: "test.png", size: 100, type: "image/png" } as unknown as File;
+
+  // 1. files array present
+  const withFiles = { files: [dummyFile], types: ["Files"] } as unknown as DataTransfer;
+  assert.deepEqual(extractFilesFromClipboard(withFiles), [dummyFile]);
+
+  // 2. items array present (fallback for clipboard screenshots)
+  const withItems = {
+    files: [],
+    items: [{ kind: "file", getAsFile: () => dummyFile }],
+    types: ["image/png"],
+  } as unknown as DataTransfer;
+  assert.deepEqual(extractFilesFromClipboard(withItems), [dummyFile]);
+
+  // 3. empty / null
+  assert.deepEqual(extractFilesFromClipboard(null), []);
+  assert.deepEqual(extractFilesFromClipboard({ files: [], items: [] } as unknown as DataTransfer), []);
+});
+
+test("isFileDragEvent: identifies file dragging across formats", () => {
+  assert.equal(isFileDragEvent({ types: ["Files"] } as unknown as DataTransfer), true);
+  assert.equal(isFileDragEvent({ types: ["files"] } as unknown as DataTransfer), true);
+  assert.equal(isFileDragEvent({ types: ["application/x-moz-file"] } as unknown as DataTransfer), true);
+  assert.equal(isFileDragEvent({ types: ["text/plain"] } as unknown as DataTransfer), false);
+  assert.equal(isFileDragEvent(null), false);
+});
+
+test("promptHistory: append and navigate prompt history (ZCode promptHistory parity)", () => {
+  // 1. append ignores empty and whitespace
+  let history = appendPromptHistoryEntry([], "");
+  assert.deepEqual(history, []);
+  history = appendPromptHistoryEntry(history, "   ");
+  assert.deepEqual(history, []);
+
+  // 2. append adds trimmed text
+  history = appendPromptHistoryEntry(history, "first command");
+  assert.deepEqual(history, ["first command"]);
+
+  // 3. consecutive duplicate is ignored
+  history = appendPromptHistoryEntry(history, "first command");
+  assert.deepEqual(history, ["first command"]);
+
+  // 4. distinct entry appends
+  history = appendPromptHistoryEntry(history, "second command");
+  assert.deepEqual(history, ["first command", "second command"]);
+
+  // 5. non-consecutive duplicate is allowed
+  history = appendPromptHistoryEntry(history, "first command");
+  assert.deepEqual(history, ["first command", "second command", "first command"]);
+
+  // 6. limit is enforced
+  let full = Array.from({ length: 35 }, (_, i) => `item-${i}`);
+  const limited = appendPromptHistoryEntry(full, "new-item", 30);
+  assert.equal(limited.length, 30);
+  assert.equal(limited.at(-1), "new-item");
+
+  // 7. navigation up and down
+  const entries = ["entry-1", "entry-2", "entry-3"];
+  // Up from null (initial) -> last entry
+  const up1 = navigatePromptHistory(entries, null, "up");
+  assert.deepEqual(up1, { nextIndex: 2, nextValue: "entry-3", shouldHandle: true });
+
+  // Up again -> previous entry
+  const up2 = navigatePromptHistory(entries, 2, "up");
+  assert.deepEqual(up2, { nextIndex: 1, nextValue: "entry-2", shouldHandle: true });
+
+  // Up to top boundary -> clamp at 0
+  const up3 = navigatePromptHistory(entries, 0, "up");
+  assert.deepEqual(up3, { nextIndex: 0, nextValue: "entry-1", shouldHandle: true });
+
+  // Down -> next entry
+  const down1 = navigatePromptHistory(entries, 1, "down");
+  assert.deepEqual(down1, { nextIndex: 2, nextValue: "entry-3", shouldHandle: true });
+
+  // Down past newest -> nextIndex is null, nextValue is ""
+  const down2 = navigatePromptHistory(entries, 2, "down");
+  assert.deepEqual(down2, { nextIndex: null, nextValue: "", shouldHandle: true });
+
+  // Empty entries -> shouldHandle is false
+  const emptyNav = navigatePromptHistory([], null, "up");
+  assert.equal(emptyNav.shouldHandle, false);
+});
+
+test("promptHistoryStorage: persists and reads prompt history isolated by workspace", () => {
+  const store = new Map<string, string>();
+  const mockStorage: StorageLike = {
+    getItem: (key) => store.get(key) ?? null,
+    setItem: (key, val) => { store.set(key, val); },
+  };
+
+  persistPromptHistoryEntries("ws-a", ["prompt-a1", "prompt-a2"], mockStorage);
+  persistPromptHistoryEntries("ws-b", ["prompt-b1"], mockStorage);
+
+  assert.deepEqual(readPromptHistoryEntries("ws-a", mockStorage), ["prompt-a1", "prompt-a2"]);
+  assert.deepEqual(readPromptHistoryEntries("ws-b", mockStorage), ["prompt-b1"]);
+  assert.deepEqual(readPromptHistoryEntries("ws-c", mockStorage), []);
+});
+
+test("composerDraftStore: persists, reads, and clears per-session drafts (ZCode composerDraftStore parity)", () => {
+  const store = new Map<string, string>();
+  const mockStorage: StorageLike = {
+    getItem: (key) => store.get(key) ?? null,
+    setItem: (key, val) => { store.set(key, val); },
+    removeItem: (key) => { store.delete(key); },
+  };
+
+  const draftState: Pick<ComposerDraftState, "text" | "goal" | "selectedCapabilities" | "selectedContext"> = {
+    text: "active draft message",
+    goal: true,
+    selectedCapabilities: ["office.composer_pdf"],
+    selectedContext: { files: ["main.ts"], sessions: [], skills: [], plugins: [] },
+  };
+
+  // 1. Persist draft for session:1 in ws-1
+  persistDraft("ws-1", "session:1", draftState, mockStorage);
+  const read = readPersistedDraft("ws-1", "session:1", mockStorage);
+  assert.equal(read?.text, "active draft message");
+  assert.equal(read?.goal, true);
+  assert.deepEqual(read?.selectedContext?.files, ["main.ts"]);
+
+  // 2. Another session in ws-1 or ws-2 is isolated
+  assert.equal(readPersistedDraft("ws-1", "session:2", mockStorage), null);
+  assert.equal(readPersistedDraft("ws-2", "session:1", mockStorage), null);
+
+  // 3. Clear draft for session:1
+  clearPersistedDraft("ws-1", "session:1", mockStorage);
+  assert.equal(readPersistedDraft("ws-1", "session:1", mockStorage), null);
+});
+
+test("cursor-aware autocomplete and slash command normalization", () => {
+  const commands = [
+    { id: "/init", description: "初始化项目" },
+    { id: "deploy", description: "发布部署" },
+  ];
+  const mentions = [
+    { id: "src/main.ts", label: "main.ts", kind: "file" as const },
+    { id: "src/utils.ts", label: "utils.ts", kind: "file" as const },
+  ];
+
+  // 1. Slash command with leading slash is normalized and matches "/in"
+  const slashSuggestions = contextComposerSuggestions("/in", commands, mentions);
+  assert.equal(slashSuggestions.length, 1);
+  assert.equal(slashSuggestions[0].token, "init");
+  assert.equal(slashSuggestions[0].kind, "command");
+
+  // 2. Cursor in the middle of text: cursorOffset aware
+  const midText = "请检查 /in 相关的配置";
+  // cursor at index 7 (immediately after /in)
+  const midSlash = contextComposerSuggestions(midText, commands, mentions, undefined, 7);
+  assert.equal(midSlash.length, 1);
+  assert.equal(midSlash[0].token, "init");
+
+  // 3. Applying midText suggestion preserves following text
+  const appliedMid = applyContextSuggestion(midText, midSlash[0], 7);
+  assert.equal(appliedMid, "请检查 /init  相关的配置");
+
+  // 4. Cursor in the middle for @-mention
+  const midAtText = "查看 @util 的逻辑";
+  // cursor at index 8 (immediately after @util)
+  const midAt = contextComposerSuggestions(midAtText, commands, mentions, undefined, 8);
+  assert.equal(midAt.length, 1);
+  assert.equal(midAt[0].token, "src/utils.ts");
+  const appliedAt = applyContextSuggestion(midAtText, midAt[0], 8);
+  assert.equal(appliedAt, "查看  的逻辑");
 });

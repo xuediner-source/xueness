@@ -392,14 +392,19 @@ export function contextComposerSuggestions(
   commands: { id: string; description?: string }[],
   mentions: ComposerMention[],
   actions?: Pick<ComposerStartActions, "canGoal" | "canWorkflow" | "canCompact">,
+  cursorOffset?: number,
 ): ContextComposerSuggestion[] {
-  const slash = /(?:^|\s)\/([A-Za-z0-9._-]*)$/.exec(text);
+  const textBefore = typeof cursorOffset === "number" ? text.slice(0, cursorOffset) : text;
+  const slash = /(?:^|\s)\/([A-Za-z0-9._-]*)$/.exec(textBefore);
   if (slash) {
     const prefix = slash[1].toLowerCase();
     const items: ContextComposerSuggestion[] = commands
-      .filter((command) => command.id.toLowerCase().startsWith(prefix))
+      .filter((command) => {
+        const norm = command.id.replace(/^\/+/, "").toLowerCase();
+        return norm.startsWith(prefix) || (prefix.length > 0 && command.description?.toLowerCase().includes(prefix));
+      })
       .slice(0, 6)
-      .map((command) => ({ kind: "command", token: command.id, description: command.description }));
+      .map((command) => ({ kind: "command", token: command.id.replace(/^\/+/, ""), description: command.description }));
     if (actions?.canGoal && "goal".startsWith(prefix)) items.push({ kind: "goal", token: "goal", description: tr("标记为目标任务") });
     if (actions?.canWorkflow && "workflow".startsWith(prefix)) items.push({ kind: "workflow", token: "workflow", description: tr("创建工作流") });
     // /compact is a host command, not a user-defined one: it only appears while
@@ -409,13 +414,13 @@ export function contextComposerSuggestions(
     }
     return items.slice(0, 8);
   }
-  const trigger = /(?:^|\s)([@$])([^\s@#$]*)$/.exec(text);
+  const trigger = /(?:^|\s)([@$])([^\s@#$]*)$/.exec(textBefore);
   if (!trigger) return [];
   const kind = trigger[1] === "$" ? "skill" : null;
   const needle = trigger[2].toLowerCase();
   return mentions
     .filter((mention) => (kind === null || mention.kind === kind) &&
-      (mention.label.toLowerCase().includes(needle) || mention.id.toLowerCase().includes(needle)))
+      (mention.label.toLowerCase().includes(needle) || mention.id.toLowerCase().includes(needle) || (mention.description && mention.description.toLowerCase().includes(needle))))
     .slice(0, 8)
     .map((mention) => ({
       kind: mention.kind,
@@ -425,19 +430,30 @@ export function contextComposerSuggestions(
     }));
 }
 
-export function applyContextSuggestion(text: string, suggestion: ContextComposerSuggestion): string {
+export function applyContextSuggestion(
+  text: string,
+  suggestion: ContextComposerSuggestion,
+  cursorOffset?: number,
+): string {
+  const offset = typeof cursorOffset === "number" ? cursorOffset : text.length;
+  const before = text.slice(0, offset);
+  const after = text.slice(offset);
+
   if (suggestion.kind === "command") {
-    return text.replace(/(?:^|\s)\/[A-Za-z0-9._-]*$/, (match) =>
+    const replaced = before.replace(/(?:^|\s)\/[A-Za-z0-9._-]*$/, (match) =>
       (match.match(/^\s*/)?.[0] ?? "") + "/" + suggestion.token + " ",
     );
+    return replaced + after;
   }
   if (suggestion.kind === "goal" || suggestion.kind === "workflow") {
-    return text.replace(/(?:^|\s)\/[A-Za-z0-9._-]*$/, (match) => match.match(/^\s*/)?.[0] ?? "");
+    const replaced = before.replace(/(?:^|\s)\/[A-Za-z0-9._-]*$/, (match) => match.match(/^\s*/)?.[0] ?? "");
+    return replaced + after;
   }
   const expression = suggestion.kind === "skill"
     ? /(?:^|\s)\$([^\s@#$]*)$/
     : /(?:^|\s)@[^\s@#$]*$/;
-  return text.replace(expression, (match) => match.match(/^\s*/)?.[0] ?? "");
+  const replaced = before.replace(expression, (match) => match.match(/^\s*/)?.[0] ?? "");
+  return replaced + after;
 }
 
 export const COMPOSER_ATTACHMENT_LIMITS = {
@@ -462,6 +478,257 @@ async function encodeComposerFile(file: File): Promise<string> {
   return btoa(binary);
 }
 
+export function extractFilesFromClipboard(clipboardData: DataTransfer | null): File[] {
+  if (!clipboardData) return [];
+  const files: File[] = [];
+  if (clipboardData.files && clipboardData.files.length > 0) {
+    for (let i = 0; i < clipboardData.files.length; i++) {
+      const file = clipboardData.files[i];
+      if (file) files.push(file);
+    }
+  } else if (clipboardData.items) {
+    for (let i = 0; i < clipboardData.items.length; i++) {
+      const item = clipboardData.items[i];
+      if (item.kind === "file") {
+        const file = item.getAsFile();
+        if (file) files.push(file);
+      }
+    }
+  }
+  return files;
+}
+
+export function isFileDragEvent(dataTransfer: DataTransfer | null): boolean {
+  if (!dataTransfer?.types) return false;
+  return Array.from(dataTransfer.types).some(
+    (type) => type.toLowerCase() === "files" || type === "application/x-moz-file",
+  );
+}
+
+export const MAX_PROMPT_HISTORY = 30;
+
+export function appendPromptHistoryEntry(
+  entries: readonly string[],
+  entry: string,
+  limit = MAX_PROMPT_HISTORY,
+): string[] {
+  const trimmed = entry.trim();
+  if (!trimmed) {
+    return [...entries];
+  }
+  if (entries.at(-1)?.trim() === trimmed) {
+    return [...entries];
+  }
+  const normalizedLimit = Math.max(1, Math.trunc(limit));
+  return [...entries, trimmed].slice(-normalizedLimit);
+}
+
+export function navigatePromptHistory(
+  entries: readonly string[],
+  currentIndex: number | null,
+  direction: "up" | "down",
+): {
+  nextIndex: number | null;
+  nextValue: string;
+  shouldHandle: boolean;
+} {
+  if (entries.length === 0) {
+    return {
+      nextIndex: currentIndex,
+      nextValue: "",
+      shouldHandle: false,
+    };
+  }
+
+  if (direction === "up") {
+    const nextIndex = currentIndex === null ? entries.length - 1 : Math.max(currentIndex - 1, 0);
+    return {
+      nextIndex,
+      nextValue: entries[nextIndex] ?? "",
+      shouldHandle: true,
+    };
+  }
+
+  if (currentIndex === null) {
+    const nextIndex = entries.length - 1;
+    return {
+      nextIndex,
+      nextValue: entries[nextIndex] ?? "",
+      shouldHandle: true,
+    };
+  }
+
+  if (currentIndex >= entries.length - 1) {
+    return {
+      nextIndex: null,
+      nextValue: "",
+      shouldHandle: true,
+    };
+  }
+
+  const nextIndex = currentIndex + 1;
+  return {
+    nextIndex,
+    nextValue: entries[nextIndex] ?? "",
+    shouldHandle: true,
+  };
+}
+
+export interface StorageLike {
+  getItem(key: string): string | null;
+  setItem(key: string, value: string): void;
+  removeItem?(key: string): void;
+}
+
+export function getBrowserStorage(): StorageLike | null {
+  if (typeof window === "undefined") return null;
+  try {
+    return window.localStorage;
+  } catch {
+    return null;
+  }
+}
+
+export const PROMPT_HISTORY_STORAGE_KEY_PREFIX = "xueness:chat-prompt-history:";
+
+export function readPromptHistoryEntries(
+  workspaceKey: string,
+  storage: StorageLike | null = getBrowserStorage(),
+): string[] {
+  if (!storage) return [];
+  try {
+    const raw = storage.getItem(`${PROMPT_HISTORY_STORAGE_KEY_PREFIX}${encodeURIComponent(workspaceKey)}`);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+    return parsed
+      .filter((item): item is string => typeof item === "string")
+      .map((item) => item.trim())
+      .filter((item) => item.length > 0)
+      .slice(-MAX_PROMPT_HISTORY);
+  } catch {
+    return [];
+  }
+}
+
+export function persistPromptHistoryEntries(
+  workspaceKey: string,
+  entries: readonly string[],
+  storage: StorageLike | null = getBrowserStorage(),
+): void {
+  if (!storage) return;
+  try {
+    const normalized = entries
+      .filter((item): item is string => typeof item === "string")
+      .map((item) => item.trim())
+      .filter((item) => item.length > 0)
+      .slice(-MAX_PROMPT_HISTORY);
+    storage.setItem(`${PROMPT_HISTORY_STORAGE_KEY_PREFIX}${encodeURIComponent(workspaceKey)}`, JSON.stringify(normalized));
+  } catch {}
+}
+
+export const COMPOSER_DRAFT_STORAGE_KEY_PREFIX = "xueness:composer-drafts:v1:";
+
+export type PersistedComposerDraft = {
+  text: string;
+  goal?: boolean;
+  selectedCapabilities?: string[];
+  selectedContext?: {
+    files: string[];
+    sessions: string[];
+    skills: string[];
+    plugins: string[];
+  };
+  updatedAt?: number;
+};
+
+export function readPersistedDraft(
+  workspaceKey: string,
+  scope: string,
+  storage: StorageLike | null = getBrowserStorage(),
+): PersistedComposerDraft | null {
+  if (!storage) return null;
+  try {
+    const raw = storage.getItem(`${COMPOSER_DRAFT_STORAGE_KEY_PREFIX}${encodeURIComponent(workspaceKey)}`);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== "object" || !parsed.scopes) return null;
+    const scopeData = parsed.scopes[scope];
+    if (!scopeData || typeof scopeData.text !== "string") return null;
+    return scopeData;
+  } catch {
+    return null;
+  }
+}
+
+export function persistDraft(
+  workspaceKey: string,
+  scope: string,
+  draft: Pick<ComposerDraftState, "text" | "goal" | "selectedCapabilities" | "selectedContext">,
+  storage: StorageLike | null = getBrowserStorage(),
+): void {
+  if (!storage) return;
+  try {
+    const storageKey = `${COMPOSER_DRAFT_STORAGE_KEY_PREFIX}${encodeURIComponent(workspaceKey)}`;
+    const raw = storage.getItem(storageKey);
+    let file = { version: 1, scopes: {} as Record<string, PersistedComposerDraft> };
+    if (raw) {
+      try {
+        const parsed = JSON.parse(raw);
+        if (parsed && typeof parsed === "object" && parsed.scopes) file = parsed;
+      } catch {}
+    }
+    const hasContent = Boolean(
+      draft.text.trim() ||
+      draft.goal ||
+      draft.selectedCapabilities?.length ||
+      draft.selectedContext.files.length ||
+      draft.selectedContext.sessions.length ||
+      draft.selectedContext.skills.length ||
+      draft.selectedContext.plugins.length,
+    );
+    if (!hasContent) {
+      delete file.scopes[scope];
+    } else {
+      file.scopes[scope] = {
+        text: draft.text,
+        goal: draft.goal,
+        selectedCapabilities: draft.selectedCapabilities,
+        selectedContext: draft.selectedContext,
+        updatedAt: Date.now(),
+      };
+    }
+    if (Object.keys(file.scopes).length === 0) {
+      if (storage.removeItem) storage.removeItem(storageKey);
+      else storage.setItem(storageKey, "");
+    } else {
+      storage.setItem(storageKey, JSON.stringify(file));
+    }
+  } catch {}
+}
+
+export function clearPersistedDraft(
+  workspaceKey: string,
+  scope: string,
+  storage: StorageLike | null = getBrowserStorage(),
+): void {
+  if (!storage) return;
+  try {
+    const storageKey = `${COMPOSER_DRAFT_STORAGE_KEY_PREFIX}${encodeURIComponent(workspaceKey)}`;
+    const raw = storage.getItem(storageKey);
+    if (!raw) return;
+    const parsed = JSON.parse(raw);
+    if (!parsed || !parsed.scopes || !parsed.scopes[scope]) return;
+    delete parsed.scopes[scope];
+    if (Object.keys(parsed.scopes).length === 0) {
+      if (storage.removeItem) storage.removeItem(storageKey);
+      else storage.setItem(storageKey, "");
+    } else {
+      storage.setItem(storageKey, JSON.stringify(parsed));
+    }
+  } catch {}
+}
+
 export type ComposerProps = {
   sendShortcut?: "enter" | "mod-enter";
   onSend?: (text: string, input?: ComposerInput, onAccepted?: () => void) => boolean | void | Promise<boolean | void>;
@@ -478,6 +745,8 @@ export type ComposerProps = {
   draftKey?: string;
   /** Parent-owned store retains per-session drafts while loading or changing views. */
   draftStore?: React.MutableRefObject<Map<string, ComposerDraftState>>;
+  /** Workspace scope key for persisting prompt history and session drafts. */
+  workspaceKey?: string;
   placeholder?: string;
   defaultValue?: string;
   /** "hero" renders the centered new-task card; "docked" the bottom composer. */
@@ -599,6 +868,8 @@ export function handleComposerEscapeAction(
     running: boolean;
     stopping: boolean;
     onStop?: () => void;
+    hasHistory?: boolean;
+    onExitHistory?: () => void;
   },
 ): boolean {
   if (e.key !== "Escape") return false;
@@ -610,6 +881,10 @@ export function handleComposerEscapeAction(
   }
   if (state.plusOpen) {
     state.onClosePlus();
+    return true;
+  }
+  if (state.hasHistory && state.onExitHistory) {
+    state.onExitHistory();
     return true;
   }
   if (state.running && state.onStop && !state.stopping) {
@@ -632,6 +907,7 @@ export function Composer({
   onStop,
   draftKey = "default",
   draftStore,
+  workspaceKey,
   placeholder = tr("输入消息或指令..."),
   defaultValue = "",
   variant = "docked",
@@ -650,11 +926,38 @@ export function Composer({
 }: ComposerProps) {
   const localDraftsRef = useRef<Map<string, ComposerDraftState>>(new Map());
   const draftsRef = draftStore ?? localDraftsRef;
+  const resolvedWorkspaceKey = workspaceKey ?? "default";
   const [draftRenderVersion, setDraftRenderVersion] = useState(0);
   const pendingSubmissionsRef = useRef(new Map<string, number>());
   const submissionTicketRef = useRef(0);
   const compositionActiveRef = useRef(false);
-  if (!draftsRef.current.has(draftKey)) draftsRef.current.set(draftKey, emptyComposerDraft(defaultValue));
+  const historyIndexRef = useRef<number | null>(null);
+  const savedDraftTextRef = useRef<string>("");
+  const [cursorOffset, setCursorOffset] = useState<number | null>(null);
+  const [isDraggingOver, setIsDraggingOver] = useState(false);
+
+  if (!draftsRef.current.has(draftKey)) {
+    const persisted = readPersistedDraft(resolvedWorkspaceKey, draftKey);
+    if (persisted) {
+      draftsRef.current.set(draftKey, {
+        text: persisted.text,
+        attachments: [],
+        goal: Boolean(persisted.goal),
+        selectedCapabilities: persisted.selectedCapabilities ?? [],
+        selectedContext: {
+          files: persisted.selectedContext?.files ?? [],
+          sessions: persisted.selectedContext?.sessions ?? [],
+          skills: persisted.selectedContext?.skills ?? [],
+          plugins: persisted.selectedContext?.plugins ?? [],
+        },
+        submissionError: "",
+        attachmentError: "",
+        revision: 0,
+      });
+    } else {
+      draftsRef.current.set(draftKey, emptyComposerDraft(defaultValue));
+    }
+  }
   const draft = draftsRef.current.get(draftKey)!;
   // State lives in a per-scope map so late handlers keep writing to the draft
   // they submitted, even after this component has switched to another session.
@@ -671,6 +974,7 @@ export function Composer({
     const nextDrafts = new Map(draftsRef.current);
     nextDrafts.set(scope, nextDraft);
     draftsRef.current = nextDrafts;
+    persistDraft(resolvedWorkspaceKey, scope, nextDraft);
     setDraftRenderVersion(version => version + 1);
     return nextDraft;
   };
@@ -852,7 +1156,7 @@ export function Composer({
       canGoal: canOfferGoal,
       canWorkflow: canOfferWorkflow,
       canCompact: Boolean(startActions?.canCompact),
-    })
+    }, cursorOffset ?? text.length)
     : [];
   const [activeSuggestion, setActiveSuggestion] = useState(0);
   const currentSuggestion = suggestions.length > 0 ? Math.min(activeSuggestion, suggestions.length - 1) : -1;
@@ -898,21 +1202,25 @@ export function Composer({
   }, [text, variant]);
 
   const acceptSuggestion = (suggestion: ContextComposerSuggestion) => {
+    const cursor = localInputRef.current?.selectionStart ?? cursorOffset ?? text.length;
     if (suggestion.kind === "goal") {
       if (startActions?.onGoal) startActions.onGoal();
       else setGoal((current) => !current);
-      setText((prev) => applyContextSuggestion(prev, suggestion));
+      setText((prev) => applyContextSuggestion(prev, suggestion, cursor));
     } else if (suggestion.kind === "workflow") {
       startActions?.onWorkflow();
-      setText((prev) => applyContextSuggestion(prev, suggestion));
+      setText((prev) => applyContextSuggestion(prev, suggestion, cursor));
     } else if (suggestion.kind === "command") {
-      setText((prev) => applyContextSuggestion(prev, suggestion));
+      setText((prev) => applyContextSuggestion(prev, suggestion, cursor));
     } else {
       addContext(selectedMention(suggestion.kind, suggestion.token));
-      setText((prev) => applyContextSuggestion(prev, suggestion));
+      setText((prev) => applyContextSuggestion(prev, suggestion, cursor));
     }
     setSuggestDismissed(false);
     setActiveSuggestion(0);
+    setTimeout(() => {
+      localInputRef.current?.focus();
+    }, 0);
   };
 
   const handleSend = async () => {
@@ -931,6 +1239,13 @@ export function Composer({
     };
     const ticket = ++submissionTicketRef.current;
     pendingSubmissionsRef.current.set(draftKey, ticket);
+    clearPersistedDraft(resolvedWorkspaceKey, draftKey);
+    const submittedText = submittedDraft.text.trim();
+    if (submittedText) {
+      const history = readPromptHistoryEntries(resolvedWorkspaceKey);
+      persistPromptHistoryEntries(resolvedWorkspaceKey, appendPromptHistoryEntry(history, submittedText));
+    }
+    historyIndexRef.current = null;
     // Move the complete submission out of the editor before the async run can
     // promote/remount the composer. A rejection restores this frozen snapshot.
     draftsRef.current = clearSubmittedComposerDraft(draftsRef.current, draftKey, submittedRevision);
@@ -946,7 +1261,11 @@ export function Composer({
     const restore = (error = "") => {
       if (accepted) return;
       const next = restoreSubmittedComposerDraft(draftsRef.current, draftKey, clearedRevision, submittedDraft, error);
-      if (next !== draftsRef.current) { draftsRef.current = next; setDraftRenderVersion(version => version + 1); }
+      if (next !== draftsRef.current) {
+        draftsRef.current = next;
+        persistDraft(resolvedWorkspaceKey, draftKey, submittedDraft);
+        setDraftRenderVersion(version => version + 1);
+      }
     };
     try {
       const sent = await onSend(submittedDraft.text.trim(), draft, acknowledge);
@@ -969,15 +1288,57 @@ export function Composer({
         closePlusMenu(true);
         return;
       }
+      if (historyIndexRef.current !== null) {
+        setText(savedDraftTextRef.current);
+        historyIndexRef.current = null;
+        return;
+      }
       if (running && onStop && !stopping) onStop();
-    } else if (e.key === "ArrowDown" && suggestions.length > 0) {
+    } else if (e.key === "Tab" && suggestions.length > 0 && currentSuggestion >= 0) {
       if (isComposing) return;
       e.preventDefault();
-      setActiveSuggestion((currentSuggestion + 1) % suggestions.length);
-    } else if (e.key === "ArrowUp" && suggestions.length > 0) {
+      acceptSuggestion(suggestions[currentSuggestion]);
+    } else if (e.key === "ArrowDown") {
       if (isComposing) return;
-      e.preventDefault();
-      setActiveSuggestion((currentSuggestion - 1 + suggestions.length) % suggestions.length);
+      if (suggestions.length > 0) {
+        e.preventDefault();
+        setActiveSuggestion((currentSuggestion + 1) % suggestions.length);
+      } else if (!e.shiftKey && !e.ctrlKey && !e.metaKey && !e.altKey && historyIndexRef.current !== null) {
+        e.preventDefault();
+        const entries = readPromptHistoryEntries(resolvedWorkspaceKey);
+        const result = navigatePromptHistory(entries, historyIndexRef.current, "down");
+        if (result.nextIndex === null) {
+          setText(savedDraftTextRef.current);
+          historyIndexRef.current = null;
+        } else {
+          historyIndexRef.current = result.nextIndex;
+          setText(result.nextValue);
+        }
+      }
+    } else if (e.key === "ArrowUp") {
+      if (isComposing) return;
+      if (suggestions.length > 0) {
+        e.preventDefault();
+        setActiveSuggestion((currentSuggestion - 1 + suggestions.length) % suggestions.length);
+      } else if (!e.shiftKey && !e.ctrlKey && !e.metaKey && !e.altKey) {
+        const entries = readPromptHistoryEntries(resolvedWorkspaceKey);
+        if (historyIndexRef.current === null && text.length === 0) {
+          savedDraftTextRef.current = text;
+          const result = navigatePromptHistory(entries, null, "up");
+          if (result.shouldHandle) {
+            e.preventDefault();
+            historyIndexRef.current = result.nextIndex;
+            setText(result.nextValue);
+          }
+        } else if (historyIndexRef.current !== null) {
+          const result = navigatePromptHistory(entries, historyIndexRef.current, "up");
+          if (result.shouldHandle) {
+            e.preventDefault();
+            historyIndexRef.current = result.nextIndex;
+            setText(result.nextValue);
+          }
+        }
+      }
     } else {
       const intent = composerEnterIntent(
         { ...e, compositionActive: compositionActiveRef.current },
@@ -995,19 +1356,44 @@ export function Composer({
     }
   };
 
+  const handlePasteEvent = (event: React.ClipboardEvent) => {
+    const pastedFiles = extractFilesFromClipboard(event.clipboardData);
+    if (pastedFiles.length > 0) {
+      event.preventDefault();
+      event.stopPropagation();
+      void addAttachmentFiles(pastedFiles);
+    }
+  };
+
   return (
     <div className={`xn-composer-region xn-composer-region--${variant}`}>
       <form
       aria-label={tr("消息编写器")}
       className={`xn-composer xn-composer--${variant}${topContent ? " xn-composer--with-top-content" : ""}`}
+      data-drag-over={isDraggingOver ? "true" : undefined}
       onSubmit={(e) => {
         e.preventDefault();
         void handleSend();
       }}
+      onPaste={handlePasteEvent}
       onDragOver={(event) => {
-        if (event.dataTransfer.types.includes("Files")) event.preventDefault();
+        if (isFileDragEvent(event.dataTransfer)) {
+          event.preventDefault();
+          event.dataTransfer.dropEffect = "copy";
+        }
+      }}
+      onDragEnter={(event) => {
+        if (isFileDragEvent(event.dataTransfer)) {
+          event.preventDefault();
+          setIsDraggingOver(true);
+        }
+      }}
+      onDragLeave={(event) => {
+        if (event.currentTarget.contains(event.relatedTarget as Node)) return;
+        setIsDraggingOver(false);
       }}
       onDrop={(event) => {
+        setIsDraggingOver(false);
         if (event.dataTransfer.files.length > 0) {
           event.preventDefault();
           void addAttachmentFiles(event.dataTransfer.files);
@@ -1105,10 +1491,15 @@ export function Composer({
         value={text}
         onChange={(e) => {
           setText(e.target.value);
+          setCursorOffset(e.target.selectionStart);
+          historyIndexRef.current = null;
           setSuggestDismissed(false);
           setActiveSuggestion(0);
           setSubmissionError("");
         }}
+        onSelect={(e) => setCursorOffset(e.currentTarget.selectionStart)}
+        onClick={(e) => setCursorOffset(e.currentTarget.selectionStart)}
+        onKeyUp={(e) => setCursorOffset(e.currentTarget.selectionStart)}
         onKeyDown={handleKeyDown}
         onCompositionStart={(event) => {
           compositionActiveRef.current = true;
@@ -1121,11 +1512,11 @@ export function Composer({
             el?.removeAttribute("data-composing");
           });
         }}
-        onPaste={(event) => {
-          const pastedFiles = event.clipboardData.files;
-          if (pastedFiles.length > 0) {
+        onPaste={handlePasteEvent}
+        onDragOver={(event) => {
+          if (isFileDragEvent(event.dataTransfer)) {
             event.preventDefault();
-            void addAttachmentFiles(pastedFiles);
+            event.dataTransfer.dropEffect = "copy";
           }
         }}
         disabled={disabled}
@@ -1302,15 +1693,15 @@ export function Composer({
                 </svg>
               )}
             </button>
-          ) : !running && (
+          ) : (
             <button
               type="submit"
               disabled={isSendDisabled}
               className="xn-composer__send"
-              aria-label={tr("发送")}
-              title={tr("发送")}
+              aria-label={tr(pendingSubmissionsRef.current.has(draftKey) ? "正在发送…" : "发送")}
+              title={tr(pendingSubmissionsRef.current.has(draftKey) ? "正在发送…" : "发送")}
             >
-              <IconArrowUp size={16} />
+              {pendingSubmissionsRef.current.has(draftKey) ? <IconLoader size={16} /> : <IconArrowUp size={16} />}
             </button>
           )}
         </div>

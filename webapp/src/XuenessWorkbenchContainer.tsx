@@ -2411,6 +2411,7 @@ export function XuenessWorkbenchContainer() {
             <Composer
               draftKey={`session:${session.id}`}
               draftStore={composerDraftStore}
+              workspaceKey={commandRoot || "default"}
               inputRef={heroInputRef}
               platform={resolveHostPlatform()}
               sendShortcut={settingsValues.sendShortcut === "mod-enter" ? "mod-enter" : "enter"}
@@ -2469,6 +2470,7 @@ export function XuenessWorkbenchContainer() {
               <Composer
                 draftKey="new-task"
                 draftStore={composerDraftStore}
+                workspaceKey={commandRoot || "default"}
                 platform={resolveHostPlatform()}
                 sendShortcut={settingsValues.sendShortcut === "mod-enter" ? "mod-enter" : "enter"}
                 variant="hero"
@@ -2487,6 +2489,7 @@ export function XuenessWorkbenchContainer() {
           capabilities={(composerCatalog.capabilities ?? []).map(item => ({ ...item, available: item.available !== false && isPluginEffective(item.pluginId) }))}
                 mentions={composerMentions}
                 commands={isPluginEffective("commands") ? commandItems : []}
+                files={files.map((f) => f.path)}
               />
             {!composerCatalogLoading && !composerModelReady && (composerCatalogError || composerCatalog.models.some(model => model.configured) && !composerCatalog.allowReal) && <div className="xn-composer-model-setup" role="status">
               <span>{tr(composerCatalogError ? "模型列表加载失败，请重试。" : composerCatalog.models.some(model => model.configured) && !composerCatalog.allowReal ? "服务端已关闭模型请求。" : "配置一个模型即可开始对话。")}</span>
