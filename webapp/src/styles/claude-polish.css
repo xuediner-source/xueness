@@ -422,3 +422,57 @@
 .xn-shell-layout .xn-lightweight-composer__btn { border-radius: 9px; }
 .xn-shell-layout .xn-lightweight-composer__btn--send { border-color: var(--accent-brand); background: var(--accent-brand); color: var(--accent-brand-fg); }
 .xn-shell-layout .xn-lightweight-composer__btn--send:hover:not(:disabled) { background: var(--accent-brand-hover); }
+
+/* ── 8. Dialogs, menus, popovers and notices ─────────────────────────────── */
+/* Menus and dialogs may be portalled outside the shell, hence the body scope. */
+body .xn-dialog-overlay,
+body .xn-command-overlay { background: rgb(28 24 16 / .38); backdrop-filter: blur(2px); }
+body .xn-dialog,
+body .xn-command-panel {
+  border-color: var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--bg-popover);
+  box-shadow: var(--shadow-lg);
+}
+body .xn-dialog { padding: 20px; }
+body .xn-dialog__title { font-size: 15px; }
+body .xn-dialog__input,
+body .xn-command-panel input { border-color: var(--border-strong); border-radius: 10px; background: var(--bg-input); }
+body .xn-dialog__input:focus-visible { outline: 2px solid var(--focus-ring); }
+body .xn-command-option { border-radius: 8px; }
+body .xn-select-menu {
+  border-color: var(--border);
+  border-radius: var(--radius-md);
+  background: var(--bg-popover);
+  box-shadow: var(--shadow-lg);
+}
+body .xn-select-option { border-radius: 7px; }
+body .xn-select-option[data-highlighted] { background: var(--bg-hover); }
+body .xn-select-check { color: var(--accent-brand); }
+.xn-shell-layout .xn-workbench-menu > div { border-radius: var(--radius-md); box-shadow: var(--shadow-lg); }
+
+/* Short, subtle entrance for anything that pops over the page. */
+@keyframes xn-polish-pop { from { opacity: 0; transform: translateY(-2px) scale(.985); } to { opacity: 1; transform: none; } }
+@keyframes xn-polish-fade { from { opacity: 0; } to { opacity: 1; } }
+body .xn-dialog,
+body .xn-command-panel,
+body .xn-select-menu,
+.xn-shell-layout .xn-conv-header__menu,
+.xn-shell-layout .xn-sidebar-account__menu,
+.xn-shell-layout .xn-composer-toolbar__popover,
+.xn-shell-layout .xn-workbench-menu > div,
+.xn-desktop-titlebar__menu { animation: xn-polish-pop var(--dur-slow) var(--ease-standard); }
+body .xn-dialog-overlay,
+body .xn-command-overlay { animation: xn-polish-fade var(--dur-normal) var(--ease-standard); }
+
+/* Notices: a soft tinted strip instead of a hard red bar. */
+.xn-shell-layout .xn-error-banner { border-bottom-color: color-mix(in oklab, var(--error-border) 70%, transparent); background: color-mix(in oklab, var(--error-bg) 80%, var(--bg)); }
+.xn-shell-layout .xn-error-banner > button { border-radius: 8px; }
+
+@media (prefers-reduced-motion: reduce) {
+  body .xn-dialog, body .xn-command-panel, body .xn-select-menu, body .xn-dialog-overlay, body .xn-command-overlay,
+  .xn-shell-layout .xn-conv-header__menu, .xn-shell-layout .xn-sidebar-account__menu,
+  .xn-shell-layout .xn-composer-toolbar__popover, .xn-shell-layout .xn-workbench-menu > div,
+  .xn-desktop-titlebar__menu { animation: none; }
+  .xn-shell-layout .xn-composer__send:active:not(:disabled) { transform: none; }
+}
