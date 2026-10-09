@@ -64,6 +64,19 @@
 
 `providers/cancel_watch.py` 只提供这次传输中断，不表示新的模型能力。功能登记在 `sessions.cancel_propagate`。
 
-## 尚未在本文登记的开关
+## stdio 帧重放 `remote.frame_replay`
 
-stdio 帧重放见后续提交。它同样默认关闭。
+设置键 `general.remoteFrameReplayEnabled`。remote 插件默认关闭；本开关再默认关闭。服务器把设置缓存最多一秒，避免每个事件都读盘。
+
+只影响 `xueness app-server` 的 stdio JSON-RPC。不改 `protocolVersion`。浏览器 `/ws` 没有这层确认。开关关闭时帧里没有 `xuenessSeq`，方法表也不含 `transport/ack`、`transport/replay`、`transport/status`。
+
+开关打开后，每条写出的帧带整数 `xuenessSeq`（从 1 递增）。对端用入站对象上的 `xuenessAck`，或 `transport/ack` 的 `ack`，确认已经拿到的序号。布尔值不是整数，会被拒绝。序号超过已发送的最大值也会被拒绝。`transport/replay` 把尚未确认的帧按原序号再写一遍。`transport/status` 返回当前水位。
+
+未确认字节超过 1 MiB 时，事件泵暂停新的 `session/event`，并且不推进游标。确认降到高水位的四分之一以下后继续。`turn/started` 和 `turn/finished` 在饱和或放弃之后仍然写出，包括刚好触发放弃的那一次发送。硬上限是 8 MiB，最老的未确认帧超过 45 秒也会放弃。放弃会清空队列，只发一条 `transport/abandoned`（`reason: replay_limit`）。触发放弃的那条 `session/event` 以及之后的 `session/event` 都不写出、不再重放，事件泵也不把游标移过没送达的序号。没有 5 秒心跳，也没有独立的确认超时线程；45 秒是在下一次发送或接收时检查的。放弃之后要从事件日志恢复，而不是继续要这一段帧。
+
+## 本轮没有做的相邻缺口
+
+- 命令幂等（同一次调用重复提交不执行第二次）。
+- 进程创建时间身份。回收已退出的组长 pid 不能用来寻找孙进程，查不到也不能当成已经退出。见 `xueness/process_runtime.py` 的 `terminate_process_tree`。
+- Host capability 票据，以及向远程机器部署 Agent。
+- 冻结的 `xueness.events.v1` 在 cursor 超过头部时仍返回空页。续传要用上面的实验路由。

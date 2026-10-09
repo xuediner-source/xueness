@@ -22,13 +22,19 @@
     "remote"
   ],
   "modules": [
-    "app_server"
+    "app_server",
+    "frame_replay"
   ],
   "features": [
     {
       "id": "remote.app_server",
       "name": "stdio JSON-RPC app-server 入口",
       "nameEn": "Stdio JSON-RPC app-server entry point"
+    },
+    {
+      "id": "remote.frame_replay",
+      "name": "stdio 帧有界重放（实验，默认关闭）",
+      "nameEn": "Bounded stdio frame replay (experimental, off by default)"
     },
     {
       "id": "remote.connections",

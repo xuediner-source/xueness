@@ -126,6 +126,12 @@ class _LogStream:
         return False
 
 
+def encode_frame(payload) -> str:
+    """One stdout line. Replay uses the same bytes it counts."""
+    return json.dumps(payload, ensure_ascii=False, separators=(",", ":"),
+                      default=str) + "\n"
+
+
 class _Frames:
     """Line-delimited frame writer. The only thing allowed on stdout."""
 
@@ -133,19 +139,44 @@ class _Frames:
         self._stream = stream
         self._lock = threading.Lock()
         self._closed = False
+        self._replay = None
 
-    def send(self, payload) -> None:
-        data = json.dumps(payload, ensure_ascii=False, separators=(",", ":"),
-                          default=str) + "\n"
+    def bind_replay(self, replay):
+        self._replay = replay
+        replay.bind_frames(self)
+
+    def send(self, payload):
+        """Write ``payload``. Return the frames that actually left the process."""
+        replay = self._replay
+        if replay is not None and replay.active():
+            outgoing = replay.admit(payload)
+        else:
+            outgoing = (payload,)
+        written = []
+        with self._lock:
+            if self._closed:
+                return written
+            for item in outgoing:
+                try:
+                    _write_bytes(self._stream, encode_frame(item))
+                    self._stream.flush()
+                except (ValueError, OSError):
+                    # The parent closed the pipe. Turn threads keep running until the
+                    # route returns; they must not die printing on the real stderr.
+                    self._closed = True
+                    return written
+                written.append(item)
+        return written
+
+    def write_replay(self, payload) -> None:
+        """Write a frame that already has its sequence number. Do not queue it again."""
         with self._lock:
             if self._closed:
                 return
             try:
-                _write_bytes(self._stream, data)
+                _write_bytes(self._stream, encode_frame(payload))
                 self._stream.flush()
             except (ValueError, OSError):
-                # The parent closed the pipe. Turn threads keep running until the
-                # route returns; they must not die printing on the real stderr.
                 self._closed = True
 
     def response(self, request_id, result) -> None:
@@ -157,8 +188,8 @@ class _Frames:
             error["data"] = data
         self.send({"jsonrpc": "2.0", "id": request_id, "error": error})
 
-    def notification(self, method, params) -> None:
-        self.send({"jsonrpc": "2.0", "method": method, "params": params})
+    def notification(self, method, params):
+        return self.send({"jsonrpc": "2.0", "method": method, "params": params})
 
 
 def read_frame(source, limit=MAX_FRAME_BYTES):
@@ -247,6 +278,11 @@ class AppServer:
         self._turns = {}
         self._turns_lock = threading.Lock()
         self._stopping = threading.Event()
+        from .frame_replay import Replay
+        self.replay = Replay(ctx)
+        bind = getattr(frames, "bind_replay", None)
+        if bind is not None:
+            bind(self.replay)
         self._methods = {
             "initialize": self._initialize,
             "session/list": self._session_list,
@@ -312,7 +348,7 @@ class AppServer:
             },
             "limits": {"maxFrameBytes": MAX_FRAME_BYTES,
                        "notificationMethods": ["session/event", "turn/started", "turn/finished"]},
-            "methods": sorted(self._methods),
+            "methods": self._known_methods(),
             "plugins": [{"id": item["id"], "enabled": item["enabled"],
                          "effective": item["effective"],
                          "blockedBy": item.get("blockedBy", []),
@@ -517,10 +553,19 @@ class AppServer:
             self.frames.error(request_id, INVALID_PARAMS, _METHOD_STATUS[INVALID_PARAMS],
                               {"reason": "params must be an object"})
             return
+        if self.replay.active():
+            from .frame_replay import ReplayRejected
+            try:
+                self.replay.observe(message)
+            except ReplayRejected as exc:
+                self.frames.error(request_id, INVALID_PARAMS, str(exc))
+                return
         handler = self._methods.get(method)
+        if handler is None and self.replay.active():
+            handler = self.replay.rpc(method)
         if handler is None:
             self.frames.error(request_id, METHOD_NOT_FOUND, _METHOD_STATUS[METHOD_NOT_FOUND],
-                              {"method": method, "known": sorted(self._methods)})
+                              {"method": method, "known": self._known_methods()})
             return
         if method not in ("shutdown", "exit", "turn/cancel") and (
                 self._stopping.is_set() or not self._owner_enabled()):
@@ -541,6 +586,13 @@ class AppServer:
             return
         if request_id is not None:
             self.frames.response(request_id, result)
+
+    def _known_methods(self):
+        names = set(self._methods)
+        if self.replay.active():
+            from .frame_replay import TRANSPORT_METHODS
+            names.update(TRANSPORT_METHODS)
+        return sorted(names)
 
 
 class _TurnWorker:
@@ -622,10 +674,38 @@ class _TurnWorker:
         except Exception as exc:
             self.server.log("app-server: event derivation failed: %s" % exc)
             return cursor
+        replay = getattr(self.server, "replay", None)
+        sent = cursor
         for event in envelope["events"]:
-            self.server.frames.notification("session/event",
-                                            {"sessionId": self.sid, "event": event})
+            if replay is not None and replay.blocks_new_events():
+                return sent
+            written = self.server.frames.notification(
+                "session/event", {"sessionId": self.sid, "event": event})
+            # Saturation still delivered this event. Abandon replaces it with
+            # transport/abandoned; do not move the cursor past a frame the
+            # peer never received.
+            if not _session_event_written(written, event):
+                return sent
+            seq = event.get("seq")
+            if type(seq) is int and seq > sent:
+                sent = seq
         return envelope["nextCursor"]
+
+
+def _session_event_written(written, event) -> bool:
+    if not written:
+        return False
+    want = event.get("seq")
+    for item in written:
+        if not isinstance(item, dict) or item.get("method") != "session/event":
+            continue
+        params = item.get("params")
+        if not isinstance(params, dict):
+            continue
+        body = params.get("event")
+        if isinstance(body, dict) and body.get("seq") == want:
+            return True
+    return False
 
 
 def _head_seq(ctx, sid):

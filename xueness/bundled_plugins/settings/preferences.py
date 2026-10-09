@@ -93,6 +93,7 @@ def validate(section,values):
                     'messageStreamShowReasoning', 'memoryEnabled',
                     'sessionsEventsCursorEnabled', 'sessionsEventResumeEnabled',
                     'sessionsCancelReceiptEnabled', 'sessionsCancelPropagateEnabled',
+                    'remoteFrameReplayEnabled',
                     'sessionsAnswerQuestionEnabled', 'toolsCallBudgetEnabled',
                     'toolsDryRunEnabled'):
             if key in values and type(values[key]) is not bool:

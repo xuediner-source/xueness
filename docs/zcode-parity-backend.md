@@ -2,6 +2,8 @@
 
 日期：2026-10-10。只读对照，本文件不改协议、不改接口。
 
+BE-Z2 在同一分支的后续提交里补了默认关闭的实验，见 [取消、重连与事件续传](sessions-resume-cancel.md)。下文各节「本轮没有新接口」说的是 BE-Z1 这一份对照；那些句子没有改写成实现记录。已补上的是事件 `logEpoch` 续传、停止回执、阻塞读取上的取消，以及 stdio 帧的有界重放。命令幂等、进程创建时间身份、host capability 和远程 Agent 部署仍然没做。`xueness.events.v1` 和 app-server 在开关关闭时的方法表没有改。
+
 对照基线是本机只读树 `/workspace/refs/ZCode`，公开版本 **v3.14.3**，提交 `29628c9acdb81b703bbd4080c207a0e7ce5e276e`。Xueness 侧以当前分支 `opt/grok-be-20261010` 的 `f05a380` 为准，范围是 `xueness/`（含 `bundled_plugins/`）、`desktop/entrypoint.py`、`desktop/scripts`、`tools/`、`tests/`。前端 `webapp/` 不在本轮修改范围内。
 
 上游协议与传输是 Apache-2.0，版权归 Z.AI Co., Ltd.（见上游 `LICENSE`、`NOTICE.md`）。本文只记录结构与行为差距，不摘录上游实现，不使用上游产品名作为 Xueness 的界面文案。仓库既有归属说明见 [NOTICE.md](../NOTICE.md)。若以后直接移植大段代码，必须在文件头保留来源与许可证，并更新 NOTICE。
