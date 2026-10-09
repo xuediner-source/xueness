@@ -71,7 +71,7 @@ def list_sessions(store, *, root=None, search='', archived=False):
     for item in items:
         source = store.directory / 'deleted-sessions' if archived else store.directory
         try:
-            session = json.loads((source / (item['id'] + '.json')).read_text())
+            session = json.loads((source / (item['id'] + '.json')).read_text(encoding='utf-8'))
             if root and Path(session['root']).resolve() != Path(root).resolve():
                 continue
             item['root'] = session['root']

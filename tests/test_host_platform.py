@@ -1,13 +1,22 @@
 """Host differences for text pipes, pinned to mocked Windows and macOS."""
+import json
+import os
 import subprocess
 import sys
+import tempfile
 import unittest
+from pathlib import Path
+from types import SimpleNamespace
 from unittest import mock
 
 from xueness import process_runtime
 from xueness.bundled_plugins.git.actions import _git, _nul_paths
 from xueness.bundled_plugins.git.git_api import GitApiError
+from xueness.bundled_plugins.memory import editor
+from xueness.bundled_plugins.sessions.operator_cli import list_sessions
 from xueness.bundled_plugins.shell import tooling
+from xueness.bundled_plugins.workflows.workflow_cli import execute as execute_workflow
+from xueness.core import Store
 
 
 _GBK_OUTPUT = '本机输出'.encode('gbk')
@@ -102,3 +111,76 @@ class GitMutationEncodingTests(unittest.TestCase):
         with mock.patch('xueness.bundled_plugins.git.actions.subprocess.run', side_effect=fake_run):
             self.assertEqual(_nul_paths('/workspace', ['ls-files', '-z']), {'Notes.md', 'notes.md'})
             self.assertEqual(_git('/workspace', ['rev-parse', 'HEAD']), 'abc')
+
+
+def _gbk_read_text(original):
+    def read_text(self, encoding=None, errors=None, newline=None):
+        # Chinese Windows resolves omitted encodings to GBK. macOS is exercised
+        # with the same omission so a non-UTF-8 locale cannot drop the file.
+        return original(self, 'gbk' if encoding is None else encoding, errors, newline)
+    return read_text
+
+
+_real_fdopen = os.fdopen
+
+
+def _gbk_crlf_fdopen(fd, mode='r', buffering=-1, encoding=None, errors=None,
+                     newline=None, closefd=True, opener=None):
+    if 'b' not in mode:
+        if encoding is None:
+            encoding = 'gbk'
+        if newline is None:
+            newline = '\r\n'
+    return _real_fdopen(fd, mode, buffering, encoding, errors, newline, closefd, opener)
+
+
+class LocaleTextTests(unittest.TestCase):
+    def test_memory_track_stays_utf8_lf_when_the_locale_is_gbk(self):
+        content = '价格 €\n下一行'
+        for platform_name in ('win32', 'darwin'):
+            with self.subTest(platform=platform_name), tempfile.TemporaryDirectory() as temporary:
+                base = Path(temporary)
+                workspace = base / 'project'
+                workspace.mkdir()
+                memory = base / 'memory'
+                memory.mkdir()
+                ctx = {'project_dir': workspace, 'state_dir': base / 'state',
+                       'store': Store(base / 'sessions'), 'workspace_roots': (workspace,)}
+                parts = ['api', 'memory', 'tracks', 'key']
+                with mock.patch.dict(os.environ, {'XUENESS_MEMORY_ROOT': str(memory)}), \
+                     mock.patch.object(sys, 'platform', platform_name):
+                    status, document = editor.dispatch('GET', parts, {'root': str(workspace)}, {}, ctx)
+                    self.assertEqual(status, 200)
+                    with mock.patch('xueness.bundled_plugins.memory.editor.os.fdopen', side_effect=_gbk_crlf_fdopen):
+                        status, saved = editor.dispatch(
+                            'POST', parts, {'root': str(workspace)},
+                            {**document, 'content': content, 'confirmed': True}, ctx)
+                    self.assertEqual(status, 200, saved)
+                    self.assertEqual(saved['content'], content)
+                    raw = editor._path(ctx, 'key').read_bytes()
+                self.assertEqual(raw.decode('utf-8'), content)
+                self.assertNotIn(b'\r', raw)
+
+    def test_session_list_and_workflow_plan_keep_utf8_under_gbk_locale(self):
+        payload = '{"task": "价格 €", "root": "/tmp/ws"}'
+        self.assertRaises(UnicodeDecodeError, payload.encode('utf-8').decode, 'gbk')
+        original = Path.read_text
+        for platform_name in ('win32', 'darwin'):
+            with self.subTest(platform=platform_name), tempfile.TemporaryDirectory() as temporary:
+                base = Path(temporary)
+                workspace = base / 'workspace'
+                workspace.mkdir()
+                store = Store(base / 'state')
+                session = store.new('价格 €', workspace)
+                plan = base / 'plan.json'
+                plan.write_bytes(json.dumps(
+                    {'name': '价格 €', 'nodes': [{'id': 'run', 'argv': ['echo', 'ok']}]},
+                    ensure_ascii=False).encode('utf-8'))
+                args = SimpleNamespace(state=base / 'flows', cmd='workflow', action='create',
+                                       file=plan, root=workspace, reuse=None)
+                with mock.patch.object(sys, 'platform', platform_name), \
+                     mock.patch.object(Path, 'read_text', _gbk_read_text(original)):
+                    listed = list_sessions(store, root=workspace)
+                    created = execute_workflow(args)
+                self.assertEqual([item['id'] for item in listed], [session['id']])
+                self.assertEqual(created['plan']['name'], '价格 €')

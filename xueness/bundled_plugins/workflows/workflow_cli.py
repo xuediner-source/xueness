@@ -72,7 +72,7 @@ def execute(args):
         record = store.create(plan, args.root)
         return store.launch(record['id'], approved=True)
     if action == 'create':
-        source = args.file.read_text()
+        source = args.file.read_text(encoding='utf-8')
         if args.file.suffix.casefold() == '.py':
             from .dsl import compile_workflow_script
             plan = compile_workflow_script(source, args.root, args.file.stem)

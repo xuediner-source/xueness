@@ -35,7 +35,7 @@ def write(ctx,name,data):
         _path(ctx,name)
         fd,name_tmp=tempfile.mkstemp(prefix='.memory-',dir=target.parent)
         try:
-            with os.fdopen(fd,'w') as stream: stream.write(content);stream.flush();os.fsync(stream.fileno())
+            with os.fdopen(fd,'w',encoding='utf-8',newline='\n') as stream: stream.write(content);stream.flush();os.fsync(stream.fileno())
             os.replace(name_tmp,target)
         finally:
             if os.path.exists(name_tmp): os.unlink(name_tmp)
