@@ -19,7 +19,10 @@ LOCKED=('stage','unstage','commit','branch','stash','checkpoints','init')
 
 def _git(root,argv,env=None,stdin=None,raw=False):
     try:
-        proc=run_external(subprocess.run,['git',*argv],cwd=root,env={**os.environ,**(env or {}),'GIT_TERMINAL_PROMPT':'0'},input=stdin,text=True,capture_output=True,timeout=15,creationflags=getattr(subprocess,'CREATE_NO_WINDOW',0) if os.name=='nt' else 0)
+        # Path lists drive restore overlap checks. Replacement characters would
+        # hide a real conflict, so invalid UTF-8 fails closed instead.
+        proc=run_external(subprocess.run,['git',*argv],cwd=root,env={**os.environ,**(env or {}),'GIT_TERMINAL_PROMPT':'0'},input=stdin,text=True,errors='strict',capture_output=True,timeout=15,creationflags=getattr(subprocess,'CREATE_NO_WINDOW',0) if os.name=='nt' else 0)
+    except UnicodeError: raise GitApiError(400,'Git output is not valid UTF-8') from None
     except (OSError,subprocess.TimeoutExpired): raise GitApiError(400,'Git operation failed') from None
     if proc.returncode: raise GitApiError(409,'Git operation failed; review repository state')
     return proc.stdout if raw else proc.stdout.strip()

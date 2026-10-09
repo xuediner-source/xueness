@@ -5,19 +5,8 @@ from ...tool_contract import BuiltinTool
 
 
 def _decode_output(value):
-    if isinstance(value, str):
-        return value
-    if not value:
-        return ""
-    if value.startswith((b'\xff\xfe', b'\xfe\xff')):
-        return value.decode('utf-16', errors='replace')
-    try:
-        return value.decode('utf-8-sig')
-    except UnicodeDecodeError:
-        if os.name == 'nt':
-            import ctypes
-            return value.decode(f'cp{ctypes.windll.kernel32.GetOEMCP()}', errors='replace')
-        return value.decode('utf-8', errors='replace')
+    from ...process_runtime import decode_subprocess_output
+    return decode_subprocess_output(value)
 
 
 def _description():

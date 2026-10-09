@@ -34,7 +34,49 @@ def _prepare_environment(kwargs):
         kwargs['env'] = windows_environment(kwargs['env'])
 
 
+def configure_subprocess_text(kwargs):
+    """Use UTF-8 for text pipes on every host.
+
+    Locale encodings such as GBK/cp936 otherwise change what the same bytes
+    mean. An explicit ``encoding`` is left alone, and an explicit ``errors``
+    value (including ``strict``) is not overwritten.
+    """
+    if (kwargs.get('text') or kwargs.get('universal_newlines')) and 'encoding' not in kwargs:
+        kwargs['encoding'] = 'utf-8'
+        kwargs.setdefault('errors', 'replace')
+
+
+def windows_oem_encoding():
+    """Console OEM code page. Only Windows publishes one."""
+    if os.name != 'nt':
+        raise OSError('OEM code page is a Windows console property')
+    import ctypes
+    return f'cp{int(ctypes.windll.kernel32.GetOEMCP())}'
+
+
+def decode_subprocess_output(value):
+    """Decode captured bytes the way a console would, without raising.
+
+    UTF-8 (with or without BOM) and UTF-16 BOM win. Anything else uses the
+    Windows OEM code page when this process is Windows, and UTF-8 replacement
+    on every other host.
+    """
+    if isinstance(value, str):
+        return value
+    if not value:
+        return ''
+    if value.startswith((b'\xff\xfe', b'\xfe\xff')):
+        return value.decode('utf-16', errors='replace')
+    try:
+        return value.decode('utf-8-sig')
+    except UnicodeDecodeError:
+        if os.name == 'nt':
+            return value.decode(windows_oem_encoding(), errors='replace')
+        return value.decode('utf-8', errors='replace')
+
+
 def spawn_external(factory, *args, **kwargs):
+    configure_subprocess_text(kwargs)
     _prepare_environment(kwargs)
     if os.name != 'nt' or not getattr(sys, 'frozen', False):
         return factory(*args, **kwargs)
@@ -63,6 +105,7 @@ def spawn_external(factory, *args, **kwargs):
 
 
 def run_external(factory, *args, **kwargs):
+    configure_subprocess_text(kwargs)
     _prepare_environment(kwargs)
     if os.name != 'nt' or not getattr(sys, 'frozen', False):
         return factory(*args, **kwargs)
