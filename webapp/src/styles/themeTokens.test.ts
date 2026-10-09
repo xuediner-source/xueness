@@ -4,13 +4,27 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
 const tokens = readFileSync(resolve(process.cwd(), "src/styles/tokens.css"), "utf8");
-const block = (selector: string) => new RegExp(`${selector.replace(".", "\\.")}\\s*\\{([^}]+)\\}`).exec(tokens)?.[1] ?? "";
+const block = (selector: string) => {
+  const escaped = selector.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return new RegExp(`${escaped}\\s*\\{([^}]+)\\}`).exec(tokens)?.[1] ?? "";
+};
 const value = (source: string, name: string) => new RegExp(`--${name}:\\s*([^;]+);`).exec(source)?.[1]?.trim() ?? "";
 const rgb = (hex: string) => [1, 3, 5].map(i => parseInt(hex.slice(i, i + 2), 16));
 
-test("暖色主题：浅色象牙白、深色暖灰，背景不偏蓝", () => {
-  for (const selector of [":root", ".dark"]) {
-    const source = block(selector);
+test("默认配色：中性 Xueness 浅色/深色，不是暖色象牙白", () => {
+  assert.equal(value(block(":root"), "bg"), "#fafafa");
+  assert.equal(value(block(":root"), "bg-window"), "#ececee");
+  assert.equal(value(block(".dark"), "bg"), "#161616");
+  assert.equal(value(block(":root"), "accent"), "var(--info-fg)");
+  assert.equal(value(block(":root"), "accent-brand"), "#0369a1");
+});
+
+test("Claude 风格：暖色象牙白/暖灰与 clay 强调色，仅在 data-xn-palette=claude 下生效", () => {
+  const light = block(':root[data-xn-palette="claude"]');
+  const dark = block('.dark[data-xn-palette="claude"]');
+  assert.ok(light, "claude light block");
+  assert.ok(dark, "claude dark block");
+  for (const [selector, source] of [['claude-light', light], ['claude-dark', dark]] as const) {
     for (const name of ["bg", "bg-window", "bg-card", "bg-panel"]) {
       const hex = value(source, name);
       assert.match(hex, /^#[0-9a-f]{6}$/i, `${selector} --${name}`);
@@ -18,19 +32,12 @@ test("暖色主题：浅色象牙白、深色暖灰，背景不偏蓝", () => {
       assert.ok(r >= b, `${selector} --${name} ${hex} should be warm (red >= blue)`);
     }
   }
+  assert.equal(value(light, "accent-brand"), "#b05336");
+  assert.equal(value(dark, "accent-brand"), "#dc8a69");
+  assert.equal(value(light, "accent"), "var(--accent-brand)");
 });
 
-test("单一强调色：--accent 指向 clay 强调色，两套主题都有自己的值与前景色", () => {
-  const root = block(":root");
-  assert.equal(value(root, "accent"), "var(--accent-brand)");
-  for (const selector of [":root", ".dark"]) {
-    assert.match(value(block(selector), "accent-brand"), /^#[0-9a-f]{6}$/i);
-    assert.match(value(block(selector), "accent-brand-fg"), /^#[0-9a-f]{6}$/i);
-  }
-  assert.match(value(root, "focus-ring"), /accent-brand/);
-});
-
-test("阅读宽度、正文行高、圆角与动效令牌存在", () => {
+test("共享布局令牌：阅读宽度、行高、圆角、动效与衬线字体存在", () => {
   const root = block(":root");
   assert.equal(value(root, "conversation-width"), "768px");
   assert.ok(Number(value(root, "leading-prose")) >= 1.6);
@@ -38,6 +45,7 @@ test("阅读宽度、正文行高、圆角与动效令牌存在", () => {
   const slow = Number.parseInt(value(root, "dur-slow"), 10);
   assert.ok(slow <= 200, "motion stays subtle");
   assert.ok(value(root, "ease-standard").startsWith("cubic-bezier"));
+  assert.match(value(root, "focus-ring"), /accent-brand/);
 });
 
 test("衬线问候字体在 Windows 回退到雅黑而不是宋体", () => {

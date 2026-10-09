@@ -3,10 +3,9 @@
  * See NOTICE.md; product identity belongs to Xueness.
  * Supports both light mode and dark mode via CSS custom properties.
  * A single light/dark token source. Theme is resolved before the first paint;
- * semantic aliases stay theme-aware.
- * 2026-10-10: palette moved to a warm, calm "reading room" direction (ivory
- * light / warm-gray dark, one restrained clay accent). Values are Xueness'
- * own; no third-party brand assets or proprietary fonts are used.
+ * semantic aliases stay theme-aware and retain the neutral Xueness palette by
+ * default. Optional palettes (e.g. Claude 风格) override colors via
+ * html[data-xn-palette="…"] without changing the default.
  */
 
 :root {
@@ -14,25 +13,24 @@
   /* Windows 补 Cascadia Mono；中文字符回退到各平台 CJK 字体，避免 Windows 代码块里的中文落到宋体。 */
   --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, "Cascadia Mono", Consolas, "Liberation Mono", "Noto Sans Mono CJK SC", "PingFang SC", "Microsoft YaHei UI", "Courier New", monospace;
 
-  /* Display serif for moments of address (start greeting). Latin falls back to
-   * system serifs; CJK lands on a real Song/Ming face on macOS and on YaHei on
-   * Windows (SimSun is deliberately never reached). */
+
+  /* Optional display serif (used by the Claude 风格 polish layer). */
   --font-serif: "Iowan Old Style", "Charter", "Palatino Linotype", Palatino, Georgia, "Source Han Serif SC", "Noto Serif CJK SC", "Songti SC", "STSong", "Microsoft YaHei UI", "Microsoft YaHei", serif;
 
   --workbench-content-width: 672px;
-  /* Comfortable reading measure for the conversation column and docked composer. */
+  /* Shared layout tokens; Claude 风格 polish opts into the wider reading column. */
   --conversation-width: 768px;
   --leading-prose: 1.7;
   --workbench-page-width: 896px;
   --sidebar-width: 270px;
 
   color-scheme: light;
-  --bg-window: #f2f0e9;
-  --bg-sidebar: #f2f0e9;
+  --bg-window: #ececee;
+  --bg-sidebar: #ececee;
   --bg-surface: color-mix(in srgb, var(--fg) 3%, transparent);
-  --bg-panel: #fbfaf7;
+  --bg-panel: #ffffff;
   --bg-input: #ffffff;
-  --bg-popover: #fffefb;
+  --bg-popover: #ffffff;
 
   --space-1: 4px;
   --space-2: 8px;
@@ -49,7 +47,7 @@
   --text-xl: 20px;
   --text-heading: 30px;
   --dur-fast: 120ms;
-  --dur-normal: 160ms;
+  --dur-normal: 150ms;
   --dur-slow: 200ms;
   --ease-standard: cubic-bezier(.2, 0, 0, 1);
   --z-content: 10;
@@ -64,70 +62,68 @@
   --xn-ui-font-size: 14px;
 
   /* Color tokens - Light */
-  --bg: #fbfaf7;
-  --bg-subtle: #f2f0e9;
+  --bg: #fafafa;
+  --bg-subtle: #f1f1f1;
   --bg-card: #ffffff;
-  --bg-hover: rgba(61, 55, 40, 0.06);
-  --bg-active: rgba(61, 55, 40, 0.08);
+  --bg-hover: rgba(13, 13, 13, 0.05);
+  --bg-active: rgba(13, 13, 13, 0.05);
 
-  --fg: #22211e;
-  --fg-subtle: #4b4943;
-  --fg-muted: #66645c;
+  --fg: #262626;
+  --fg-subtle: #535353;
+  --fg-muted: #626262;
   --fg-inverted: #ffffff;
-  --conversation-fg: #2b2a26;
-  --conversation-muted: color-mix(in oklab, var(--conversation-fg) 62%, transparent);
-  --conversation-subtlest: color-mix(in oklab, var(--conversation-fg) 42%, transparent);
-  --conversation-user-surface: #efece4;
+  --conversation-fg: #404040;
+  --conversation-muted: color-mix(in oklab, var(--conversation-fg) 60%, transparent);
+  --conversation-subtlest: color-mix(in oklab, var(--conversation-fg) 40%, transparent);
+  --conversation-user-surface: color-mix(in oklab, #0a0a0a 3%, transparent);
 
-  --border: color-mix(in oklab, #3d3828 12%, transparent);
-  --border-strong: color-mix(in oklab, #3d3828 22%, transparent);
-  --border-focus: color-mix(in oklab, var(--accent) 55%, transparent);
+  --border: color-mix(in oklab, #0a0a0a 10%, transparent);
+  --border-strong: color-mix(in oklab, #0a0a0a 20%, transparent);
+  --border-focus: rgba(13, 13, 13, 0.15);
 
-  /* One restrained accent: clay. Used for the send action, focus rings,
-   * active indicators and links; never for large fills. */
-  --accent-brand: #b05336;
-  --accent-brand-hover: #9a4630;
+  /* Default accent follows the original info blue; Claude 风格 overrides to clay. */
+  --accent-brand: #0369a1;
+  --accent-brand-hover: #025a8a;
   --accent-brand-fg: #ffffff;
   --accent-soft: color-mix(in oklab, var(--accent-brand) 12%, transparent);
   --focus-ring: color-mix(in oklab, var(--accent-brand) 62%, transparent);
 
-  --primary: #22211e;
-  --primary-hover: #34322d;
+  --primary: #262626;
+  --primary-hover: #333333;
   --primary-active: #000000;
   --primary-fg: #ffffff;
-  --primary-light: rgba(61, 55, 40, 0.07);
+  --primary-light: rgba(13, 13, 13, 0.05);
 
-  /* Semantic colours are muted to sit with the warm palette. */
-  --ok: #3f8a4f;
-  --ok-bg: #eef6ee;
-  --ok-border: #b9dcbf;
-  --ok-fg: #2f6b3a;
+  --ok: #16a34a;
+  --ok-bg: #f0fdf4;
+  --ok-border: #86efac;
+  --ok-fg: #15803d;
 
-  --warn: #b7851f;
-  --warn-bg: #fbf4e2;
-  --warn-border: #e9d29a;
-  --warn-fg: #7c5a12;
+  --warn: #ca8a04;
+  --warn-bg: #fefce8;
+  --warn-border: #fde047;
+  --warn-fg: #854d0e;
 
-  --error: #c4442b;
-  --error-bg: #fbeeea;
-  --error-border: #eab8ab;
-  --error-fg: #a3321d;
+  --error: #dc2626;
+  --error-bg: #fef2f2;
+  --error-border: #fca5a5;
+  --error-fg: #991b1b;
 
-  --info: #3b7bab;
-  --info-bg: #eef4f8;
-  --info-border: #b6d0e2;
-  --info-fg: #2c5f86;
+  --info: #0284c7;
+  --info-bg: #f0f9ff;
+  --info-border: #7dd3fc;
+  --info-fg: #0369a1;
 
-  /* Shadows: short, low-contrast and warm-tinted; borders carry structure. */
-  --shadow-sm: 0 1px 2px 0 rgb(48 40 24 / 0.05);
-  --shadow-md: 0 1px 2px rgb(48 40 24 / 0.04), 0 4px 12px -4px rgb(48 40 24 / 0.10);
-  --shadow-lg: 0 2px 6px rgb(48 40 24 / 0.05), 0 16px 36px -12px rgb(48 40 24 / 0.18);
-  --shadow-composer: 0 1px 2px rgb(48 40 24 / 0.04), 0 6px 24px -10px rgb(48 40 24 / 0.14);
+  /* Shadows */
+  --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+  --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+  --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
+  --shadow-composer: 0 1px 2px rgb(0 0 0 / 0.05), 0 6px 20px -10px rgb(0 0 0 / 0.12);
 
   /* Radius */
   --radius-sm: 6px;
-  --radius-md: 10px;
-  --radius-lg: 14px;
+  --radius-md: 9px;
+  --radius-lg: 12px;
   --radius-xl: 20px;
   --radius-full: 9999px;
 
@@ -139,7 +135,7 @@
   --fill-secondary: var(--bg-subtle);
   --fill-hover: var(--bg-hover);
   --muted: var(--fg-muted);
-  --accent: var(--accent-brand);
+  --accent: var(--info-fg);
   --danger: var(--error-fg);
   --danger-fg: var(--error-fg);
   --danger-bg: var(--error-bg);
@@ -163,8 +159,8 @@
   --active-fg: var(--primary);
   --card-bg: var(--bg-card);
   --sidebar-bg: var(--bg-sidebar);
-  --tool-accent: #b7851f;
-  --tool-result-accent: #3b7bab;
+  --tool-accent: #d97706;
+  --tool-result-accent: #0284c7;
   --assistant-accent: var(--fg-subtle);
   --header-bg: var(--bg);
   --user-msg-bg: var(--bg-subtle);
@@ -174,69 +170,71 @@
 
 .dark {
   color-scheme: dark;
-  --bg-window: #1d1c1a;
-  --bg-sidebar: #1d1c1a;
+  --bg-window: #2b2b2b;
+  --bg-sidebar: #252525;
   --bg-surface: color-mix(in srgb, var(--fg) 5%, transparent);
-  --bg-panel: #252422;
-  --bg-input: #2f2e2b;
-  --bg-popover: #32312d;
-  --primary-fg: #1d1c1a;
+  --bg-panel: #202020;
+  --bg-input: #2b2b2b;
+  --bg-popover: #2b2b2b;
+  --primary-fg: #000000;
   /* Quiet neutral surfaces for the native workbench. Semantic status colors
    * are independent of the monochrome navigation and primary actions. */
   /* Color tokens - Dark */
-  --bg: #252422;
-  --bg-subtle: #1d1c1a;
-  --bg-card: #2f2e2b;
-  --bg-hover: color-mix(in oklab, #f5f1e3 8%, transparent);
-  --bg-active: #3a3935;
+  --bg: #161616;
+  --bg-subtle: #161616;
+  --bg-card: #2b2b2b;
+  --bg-hover: color-mix(in oklab, white 10%, transparent);
+  --bg-active: #404040;
 
-  --fg: #ecebe5;
-  --fg-subtle: #cdcbc1;
-  --fg-muted: #adaba0;
-  --fg-inverted: #1d1c1a;
-  --conversation-fg: #eceae3;
-  --conversation-muted: color-mix(in oklab, var(--conversation-fg) 62%, transparent);
-  --conversation-subtlest: color-mix(in oklab, var(--conversation-fg) 34%, transparent);
-  --conversation-user-surface: #34332f;
+  --fg: #d4d4d4;
+  --fg-subtle: #c0c0c0;
+  --fg-muted: #b3b3b3;
+  --fg-inverted: #0a0a0a;
+  --conversation-fg: #e5e5e5;
+  --conversation-muted: color-mix(in oklab, var(--conversation-fg) 60%, transparent);
+  --conversation-subtlest: color-mix(in oklab, var(--conversation-fg) 30%, transparent);
+  --conversation-user-surface: color-mix(in oklab, white 5%, transparent);
 
-  --border: color-mix(in oklab, #e8e4d4 12%, transparent);
-  --border-strong: color-mix(in oklab, #e8e4d4 26%, transparent);
-  --border-focus: color-mix(in oklab, var(--accent) 60%, transparent);
+  --border: color-mix(in oklab, #fafafa 10%, transparent);
+  --border-strong: color-mix(in oklab, #fafafa 30%, transparent);
+  --border-focus: rgba(255, 255, 255, 0.15);
 
-  --accent-brand: #dc8a69;
-  --accent-brand-hover: #e69c7e;
-  --accent-brand-fg: #1d1c1a;
+  --accent-brand: #7dd3fc;
+  --accent-brand-hover: #9ae0fd;
+  --accent-brand-fg: #082f49;
+  --accent-soft: color-mix(in oklab, var(--accent-brand) 18%, transparent);
+  --focus-ring: color-mix(in oklab, var(--accent-brand) 62%, transparent);
 
-  --primary: #ecebe5;
-  --primary-hover: #f7f6f1;
+  --primary: #d4d4d4;
+  --primary-hover: #eeeeee;
   --primary-active: #ffffff;
-  --primary-light: rgba(245, 241, 227, 0.09);
+  --primary-light: rgba(255, 255, 255, 0.1);
 
-  --ok: #6cbf7f;
-  --ok-bg: #1f2d22;
-  --ok-border: #35573c;
-  --ok-fg: #8fd19e;
+  --ok: #22c55e;
+  --ok-bg: #052e16;
+  --ok-border: #14532d;
+  --ok-fg: #4ade80;
 
-  --warn: #d9a845;
-  --warn-bg: #33291a;
-  --warn-border: #6b5326;
-  --warn-fg: #e9c46a;
+  --warn: #eab308;
+  --warn-bg: #422006;
+  --warn-border: #713f12;
+  --warn-fg: #facc15;
 
-  --error: #e2735c;
-  --error-bg: #3a211c;
-  --error-border: #7a3a2c;
-  --error-fg: #f19a85;
+  --error: #ef4444;
+  --error-bg: #450a0a;
+  --error-border: #7f1d1d;
+  --error-fg: #f87171;
 
-  --info: #6aa8d6;
-  --info-bg: #1d2a33;
-  --info-border: #2f5470;
-  --info-fg: #8fc3e8;
+  --info: #38bdf8;
+  --info-bg: #082f49;
+  --info-border: #075985;
+  --info-fg: #7dd3fc;
 
   /* Shadows */
-  --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.35);
-  --shadow-md: 0 1px 2px rgb(0 0 0 / 0.3), 0 6px 16px -6px rgb(0 0 0 / 0.45);
-  --shadow-lg: 0 2px 6px rgb(0 0 0 / 0.3), 0 18px 40px -12px rgb(0 0 0 / 0.6);
-  --shadow-composer: 0 1px 2px rgb(0 0 0 / 0.25), 0 8px 28px -12px rgb(0 0 0 / 0.55);
+  --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.5);
+  --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.5), 0 2px 4px -2px rgb(0 0 0 / 0.5);
+  --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.6), 0 4px 6px -4px rgb(0 0 0 / 0.5);
+  --shadow-composer: 0 1px 2px rgb(0 0 0 / 0.35), 0 8px 28px -12px rgb(0 0 0 / 0.55);
 
   /* Aliases matching existing inline variables */
   --background: var(--bg);
@@ -247,10 +245,129 @@
   --card-bg: var(--bg-card);
   --header-bg: var(--bg);
   --sidebar-bg: var(--bg-sidebar);
-  --tool-accent: #d9a845;
-  --tool-result-accent: #6aa8d6;
+  --tool-accent: #f59e0b;
+  --tool-result-accent: #38bdf8;
   --assistant-accent: var(--fg-subtle);
   --user-msg-bg: var(--bg-subtle);
   --assistant-msg-bg: var(--bg-card);
   --assistant-msg-fg: var(--fg);
+}
+
+/* Optional Claude 风格 palette: warm ivory / clay accent. Applied only when
+ * settings → 外观 → 配色方案 = Claude 风格 (data-xn-palette="claude"). */
+:root[data-xn-palette="claude"] {
+  --bg-window: #f2f0e9;
+  --bg-sidebar: #f2f0e9;
+  --bg-panel: #fbfaf7;
+  --bg-input: #ffffff;
+  --bg-popover: #fffefb;
+  --dur-normal: 160ms;
+  --bg: #fbfaf7;
+  --bg-subtle: #f2f0e9;
+  --bg-card: #ffffff;
+  --bg-hover: rgba(61, 55, 40, 0.06);
+  --bg-active: rgba(61, 55, 40, 0.08);
+  --fg: #22211e;
+  --fg-subtle: #4b4943;
+  --fg-muted: #66645c;
+  --fg-inverted: #ffffff;
+  --conversation-fg: #2b2a26;
+  --conversation-muted: color-mix(in oklab, var(--conversation-fg) 62%, transparent);
+  --conversation-subtlest: color-mix(in oklab, var(--conversation-fg) 42%, transparent);
+  --conversation-user-surface: #efece4;
+  --border: color-mix(in oklab, #3d3828 12%, transparent);
+  --border-strong: color-mix(in oklab, #3d3828 22%, transparent);
+  --border-focus: color-mix(in oklab, var(--accent) 55%, transparent);
+  --accent-brand: #b05336;
+  --accent-brand-hover: #9a4630;
+  --accent-brand-fg: #ffffff;
+  --accent-soft: color-mix(in oklab, var(--accent-brand) 12%, transparent);
+  --focus-ring: color-mix(in oklab, var(--accent-brand) 62%, transparent);
+  --primary: #22211e;
+  --primary-hover: #34322d;
+  --primary-active: #000000;
+  --primary-fg: #ffffff;
+  --primary-light: rgba(61, 55, 40, 0.07);
+  --ok: #3f8a4f;
+  --ok-bg: #eef6ee;
+  --ok-border: #b9dcbf;
+  --ok-fg: #2f6b3a;
+  --warn: #b7851f;
+  --warn-bg: #fbf4e2;
+  --warn-border: #e9d29a;
+  --warn-fg: #7c5a12;
+  --error: #c4442b;
+  --error-bg: #fbeeea;
+  --error-border: #eab8ab;
+  --error-fg: #a3321d;
+  --info: #3b7bab;
+  --info-bg: #eef4f8;
+  --info-border: #b6d0e2;
+  --info-fg: #2c5f86;
+  --shadow-sm: 0 1px 2px 0 rgb(48 40 24 / 0.05);
+  --shadow-md: 0 1px 2px rgb(48 40 24 / 0.04), 0 4px 12px -4px rgb(48 40 24 / 0.10);
+  --shadow-lg: 0 2px 6px rgb(48 40 24 / 0.05), 0 16px 36px -12px rgb(48 40 24 / 0.18);
+  --shadow-composer: 0 1px 2px rgb(48 40 24 / 0.04), 0 6px 24px -10px rgb(48 40 24 / 0.14);
+  --radius-md: 10px;
+  --radius-lg: 14px;
+  --accent: var(--accent-brand);
+  --tool-accent: #b7851f;
+  --tool-result-accent: #3b7bab;
+}
+
+.dark[data-xn-palette="claude"] {
+  --bg-window: #1d1c1a;
+  --bg-sidebar: #1d1c1a;
+  --bg-panel: #252422;
+  --bg-input: #2f2e2b;
+  --bg-popover: #32312d;
+  --primary-fg: #1d1c1a;
+  --bg: #252422;
+  --bg-subtle: #1d1c1a;
+  --bg-card: #2f2e2b;
+  --bg-hover: color-mix(in oklab, #f5f1e3 8%, transparent);
+  --bg-active: #3a3935;
+  --fg: #ecebe5;
+  --fg-subtle: #cdcbc1;
+  --fg-muted: #adaba0;
+  --fg-inverted: #1d1c1a;
+  --conversation-fg: #eceae3;
+  --conversation-muted: color-mix(in oklab, var(--conversation-fg) 62%, transparent);
+  --conversation-subtlest: color-mix(in oklab, var(--conversation-fg) 34%, transparent);
+  --conversation-user-surface: #34332f;
+  --border: color-mix(in oklab, #e8e4d4 12%, transparent);
+  --border-strong: color-mix(in oklab, #e8e4d4 26%, transparent);
+  --border-focus: color-mix(in oklab, var(--accent) 60%, transparent);
+  --accent-brand: #dc8a69;
+  --accent-brand-hover: #e69c7e;
+  --accent-brand-fg: #1d1c1a;
+  --primary: #ecebe5;
+  --primary-hover: #f7f6f1;
+  --primary-active: #ffffff;
+  --primary-light: rgba(245, 241, 227, 0.09);
+  --ok: #6cbf7f;
+  --ok-bg: #1f2d22;
+  --ok-border: #35573c;
+  --ok-fg: #8fd19e;
+  --warn: #d9a845;
+  --warn-bg: #33291a;
+  --warn-border: #6b5326;
+  --warn-fg: #e9c46a;
+  --error: #e2735c;
+  --error-bg: #3a211c;
+  --error-border: #7a3a2c;
+  --error-fg: #f19a85;
+  --info: #6aa8d6;
+  --info-bg: #1d2a33;
+  --info-border: #2f5470;
+  --info-fg: #8fc3e8;
+  --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.35);
+  --shadow-md: 0 1px 2px rgb(0 0 0 / 0.3), 0 6px 16px -6px rgb(0 0 0 / 0.45);
+  --shadow-lg: 0 2px 6px rgb(0 0 0 / 0.3), 0 18px 40px -12px rgb(0 0 0 / 0.6);
+  --shadow-composer: 0 1px 2px rgb(0 0 0 / 0.25), 0 8px 28px -12px rgb(0 0 0 / 0.55);
+  --accent: var(--accent-brand);
+  --tool-accent: #d9a845;
+  --tool-result-accent: #6aa8d6;
+  --active-fg: var(--fg);
+  --assistant-msg-bg: var(--bg-card);
 }
