@@ -8,7 +8,10 @@ won, silently, and the loser's tool result still said ``ok``.
 
 The lock key is the **resolved absolute path**, so ``a/../notes.md``,
 ``./notes.md`` and a symlink that lands on ``notes.md`` all contend for the same
-lock. Anything coarser (per-session, per-run) would not catch that.
+lock. Windows and macOS compare that key without case, because those file
+systems do. Linux keeps the case. The key is fixed when the lock is acquired,
+so a later symlink swap cannot drop a different path. Anything coarser
+(per-session, per-run) would not catch the shared file.
 
 Scope and limits, stated plainly:
 
@@ -22,8 +25,19 @@ Scope and limits, stated plainly:
 """
 from __future__ import annotations
 
+import os
+import sys
 import threading
 from pathlib import Path
+
+
+def _fold_host_path(text: str) -> str:
+    """Match filesystem identity: case-insensitive on Windows and macOS."""
+    if os.name == "nt":
+        return os.path.normcase(text)
+    if sys.platform == "darwin":
+        return text.casefold()
+    return text
 
 
 class WriteLocks:
@@ -36,11 +50,16 @@ class WriteLocks:
         self._guard = threading.Lock()
         #: resolved path string -> set of owners currently holding it
         self._holders: dict[str, set] = {}
+        #: (owner, stable spelling) -> key captured at acquire time
+        self._acquired: dict[tuple, str] = {}
 
-    @staticmethod
-    def _key(path) -> str:
+    def _key(self, path) -> str:
         """Resolved absolute path, so every spelling of one file maps to one key."""
-        return str(Path(path).resolve())
+        return _fold_host_path(os.path.normpath(str(Path(path).resolve())))
+
+    def _stable(self, path) -> str:
+        """Spelling identity that does not follow symlinks, for the acquire pin."""
+        return _fold_host_path(os.path.normpath(os.path.abspath(os.fspath(path))))
 
     def acquire(self, path, owner) -> bool:
         """Take the lock, or report that someone else holds it.
@@ -49,17 +68,22 @@ class WriteLocks:
         twice is not a conflict with itself.
         """
         key = self._key(path)
+        stable = self._stable(path)
         with self._guard:
             holders = self._holders.setdefault(key, set())
             if holders and owner not in holders:
                 return False
             holders.add(owner)
+            self._acquired[(owner, stable)] = key
             return True
 
     def release(self, path, owner) -> None:
         """Drop this owner's hold; a no-op when it held nothing."""
-        key = self._key(path)
+        stable = self._stable(path)
         with self._guard:
+            key = self._acquired.pop((owner, stable), None)
+            if key is None:
+                key = self._key(path)
             holders = self._holders.get(key)
             if not holders:
                 return
@@ -67,6 +91,9 @@ class WriteLocks:
             if not holders:
                 # Remove the entry entirely so the map cannot grow without bound.
                 self._holders.pop(key, None)
+                stale = [pin for pin, held in self._acquired.items() if held == key]
+                for pin in stale:
+                    self._acquired.pop(pin, None)
 
     def holder(self, path):
         """One current holder, or ``None``. Diagnostics and tests only."""
@@ -81,6 +108,7 @@ class WriteLocks:
         """Drop every lock. For tests and shutdown; not a normal code path."""
         with self._guard:
             self._holders.clear()
+            self._acquired.clear()
 
 
 #: Process-wide locks for the builtin write/edit tools.

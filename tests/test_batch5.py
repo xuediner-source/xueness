@@ -25,6 +25,7 @@ from xueness.task_registry import (
     TaskRegistry,
     mirror,
 )
+from xueness import write_lock
 from xueness.write_lock import WriteLocks, owner_for
 
 
@@ -322,6 +323,56 @@ class WriteLockTests(unittest.TestCase):
         make_symlink(link, target)
         self.assertTrue(self.locks.acquire(target, "s1"))
         self.assertFalse(self.locks.acquire(link, "s2"))
+
+    def test_release_uses_the_key_captured_at_acquire(self):
+        keys = iter(["/tmp/key-a", "/tmp/key-b"])
+        self.locks._key = lambda path: next(keys)
+        self.assertTrue(self.locks.acquire("/tmp/a", "s1"))
+        self.locks.release("/tmp/a", "s1")
+        self.assertEqual(self.locks._holders, {})
+
+    def test_case_variants_share_a_lock_on_windows_and_macos_only(self):
+        holder = tempfile.TemporaryDirectory()
+        self.addCleanup(holder.cleanup)
+        base = Path(holder.name)
+        left, right = base / "Notes.md", base / "notes.md"
+        linux = WriteLocks()
+        self.assertTrue(linux.acquire(left, "s1"))
+        self.assertTrue(linux.acquire(right, "s2"))
+        linux.release(right, "s1")
+        self.assertEqual(linux.holder(left), "s1")
+
+        with self.subTest(platform="darwin"), patch.object(write_lock.sys, "platform", "darwin"):
+            locks = WriteLocks()
+            self.assertTrue(locks.acquire(left, "s1"))
+            self.assertFalse(locks.acquire(right, "s2"))
+            self.assertEqual(locks.holder(right), "s1")
+            locks.release(right, "s1")
+            self.assertIsNone(locks.holder(left))
+
+        with self.subTest(platform="win32"), \
+                patch.object(write_lock.os, "name", "nt"), \
+                patch.object(write_lock.os.path, "normcase", str.lower):
+            folded = write_lock._fold_host_path(r"C:\Work\Notes.md")
+            self.assertEqual(folded, r"c:\work\notes.md")
+            self.assertEqual(write_lock._fold_host_path(r"\\Server\Share\Notes.md"),
+                             r"\\server\share\notes.md")
+
+        original_fold = write_lock._fold_host_path
+
+        def windows_fold(text):
+            with patch.object(write_lock.os, "name", "nt"), \
+                    patch.object(write_lock.os.path, "normcase", str.lower):
+                return original_fold(text)
+
+        with self.subTest(platform="win32-acquire"), \
+                patch.object(write_lock, "_fold_host_path", side_effect=windows_fold):
+            locks = WriteLocks()
+            self.assertTrue(locks.acquire(left, "s1"))
+            self.assertFalse(locks.acquire(right, "s2"))
+            self.assertEqual(locks.holder(right), "s1")
+            locks.release(right, "s1")
+            self.assertIsNone(locks.holder(left))
 
     def test_owner_for_uses_session_id(self):
         self.assertEqual(owner_for({"id": "abc"}), "abc")
