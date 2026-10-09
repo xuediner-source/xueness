@@ -24,7 +24,7 @@ Xueness 还有第二套更硬的旋钮：内核 `mode` 只有 `plan|build`（`co
 | 工作区 write / edit | 询问 | 自动允许 | 自动允许 | 拒绝 | build 询问；edit 自动改工作区文件；yolo 少确认；plan 拒绝写入 | 一致。Xueness 的 yolo 仍遵守 disallow 名单 |
 | 计划草稿 `<状态目录>/plan-drafts/<会话 id>.md` | 拒绝（按普通区外写入） | 拒绝 | 拒绝 | 仅精确绝对路径允许；内核 `mode=plan` 或 disallow write 时连草稿也拒绝 | plan 连工作流草稿也不写 | **有意更严/不同**：Xueness 给本会话留一份状态目录草稿，ZCode plan 不写任何文件 |
 | 本地 exec | 询问 | 询问 | 自动允许 | 拒绝 | yolo 少确认；plan 拒绝有副作用的命令 | 一致 |
-| 远程 exec（subject 含 connection、connection_digest、argv） | 询问 | 询问 | **仍询问** | 拒绝 | yolo 会跳过确认 | **有意更严**：yolo 不自动放行远程 SSH。单独的旧参数 `--allow-exec`（未带 `--permission-mode yolo`）仍按原语义放行，包括远程 |
+| 远程 exec（subject 含 connection、connection_digest、argv） | 询问 | 询问 | **仍询问** | 拒绝 | yolo 会跳过确认 | **有意更严**：yolo 不自动放行远程 SSH。单独的旧参数 `--allow-exec`（未带 `--permission-mode yolo`）仍按原语义放行，包括远程。命令只按 POSIX shell 加引号。连接可选 `system`：缺省或 `posix` 保持原行为；`windows` 表示远端是 cmd 或 PowerShell，在批准和 SSH 之前拒绝。HTTP/CLI 保存若省略 `system`，已保存的值保留 |
 | mcp 调用 | 询问 | 询问 | 自动允许（连接进程仍要 `--allow-mcp` 或 Web 的逐次批准路径之外的既有开关） | 拒绝 | plan 允许非破坏性 MCP | **有意更严**：plan 拒绝 MCP |
 | web_fetch / web_search | 询问 | 询问 | 自动允许 | 拒绝 | plan 把 WebFetch/WebSearch 当只读 | **有意更严**：plan 拒绝网页工具 |
 | browser_*（gate 种类是 exec，主体不是远程形状） | 询问 | 询问 | 自动允许 | 拒绝 | 视规则；plan 通常拒绝有副作用的浏览器动作 | 一致：按 exec 处理，不把浏览器误判成远程 SSH |
