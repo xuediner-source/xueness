@@ -263,7 +263,7 @@ export function SettingsSections({
         />
         <SettingsRow
           label={tr("配色方案")}
-          description={tr("默认使用 Xueness 中性配色；Claude 风格为可选的暖色阅读室方案，浅色与深色均可。")}
+          description={tr("默认保持 Xueness 原版界面；Claude 风格按 Claude 桌面端的布局、字号和配色重排整个界面，浅色与深色均可。")}
           control={select("配色方案", values.colorPalette === "claude" ? "claude" : "xueness", <>
             <option value="xueness">{tr("默认")}</option>
             <option value="claude">{tr("Claude 风格")}</option>

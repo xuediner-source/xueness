@@ -282,7 +282,7 @@ export const messages: Record<string, string> = {
   "界面主题": "Theme",
   "配色方案": "Color scheme",
   "Claude 风格": "Claude style",
-  "默认使用 Xueness 中性配色；Claude 风格为可选的暖色阅读室方案，浅色与深色均可。": "Use the neutral Xueness palette by default. Claude style is an optional warm reading-room scheme for both light and dark.",
+  "默认保持 Xueness 原版界面；Claude 风格按 Claude 桌面端的布局、字号和配色重排整个界面，浅色与深色均可。": "Keeps the original Xueness interface by default. Claude style re-lays out the whole interface after the Claude desktop app (layout, type sizes and colors), in light and dark.",
   "界面设置": "Interface settings",
   "选择浅色、深色或跟随系统主题。": "Choose light, dark or system theme.",
   "设置应用主题和界面文字大小。": "Set the app theme and interface font size.",
