@@ -24,6 +24,7 @@ import { TOOL_DISPLAY_STATUS_LABELS, TOOL_DISPLAY_STATUS_TONES, toolDisplayStatu
 import "./sessions.css";
 import "../../styles/conversation-history-rail.css";
 import { formatCommandArgv } from "../../xuenessWorkbench";
+import { parseDiffPreview } from "./XuenessWorkbenchView";
 
 export { STREAM_COMMIT_INTERVAL_MS, StreamingCommitGate, useQuantizedStreamingText } from "../../ui/StreamingCommitGate";
 
@@ -48,6 +49,8 @@ export type TimelineStreamProps = {
   virtualizeFromTail?: boolean;
   /** Group contents already belong to their parent work segment. */
   nested?: boolean;
+  /** 失败工具重试回调 */
+  onRetry?: (row?: Extract<TimelineRow, { kind: "tool" }>) => void | Promise<unknown>;
 };
 
 type ToolGroupKind = "explore" | "terminal" | "changes";
@@ -536,10 +539,24 @@ export function FoldablePayloadTextView({ text, expanded, onToggle }: {
   );
 }
 
-function FoldablePayloadText({ text }: { text: string }): React.JSX.Element {
-  const [expanded, setExpanded] = React.useState(false);
+export const toolPayloadOpenState = new Map<string, boolean>();
+
+function FoldablePayloadText({ text, payloadKey }: { text: string; payloadKey?: string }): React.JSX.Element {
+  const [expanded, setExpanded] = React.useState(() => (payloadKey ? toolPayloadOpenState.get(payloadKey) ?? false : false));
   if (text.length <= TOOL_PAYLOAD_FOLD_THRESHOLD) return <pre className="xn-toolcall__body">{text}</pre>;
-  return <FoldablePayloadTextView text={text} expanded={expanded} onToggle={() => setExpanded((value) => !value)} />;
+  return (
+    <FoldablePayloadTextView
+      text={text}
+      expanded={expanded}
+      onToggle={() => {
+        setExpanded((value) => {
+          const next = !value;
+          if (payloadKey) toolPayloadOpenState.set(payloadKey, next);
+          return next;
+        });
+      }}
+    />
+  );
 }
 
 function RawToolPayload({ input, output }: { input: unknown; output: unknown }): React.JSX.Element {
@@ -668,9 +685,11 @@ function FailureCopyTooltip({ text, label }: { text: string; label: React.ReactN
 const ToolTimelineCard = React.memo(function ToolTimelineCard({
   row,
   collapseTools,
+  onRetry,
 }: {
   row: ToolPayloadRow;
   collapseTools: boolean;
+  onRetry?: (row?: ToolPayloadRow) => void | Promise<unknown>;
 }): React.JSX.Element {
   const parsedInput = row.input ?? parseSubjectArguments(row.subject);
   const input = parsedInput ?? {};
@@ -678,7 +697,33 @@ const ToolTimelineCard = React.memo(function ToolTimelineCard({
   const inputText = parsedInput ? stringifyPayload(parsedInput) : undefined;
   const outputText = stringifyPayload(row.output);
   const terminal = ['exec', 'exec_start'].includes(row.name.toLowerCase()) ? terminalResultForDisplay(row.output) : null;
-  const hasDetails = Boolean(inputText || outputText);
+  const diff = React.useMemo(() => {
+    if (row.name !== "write" && row.name !== "edit") return null;
+    const inp = row.input && typeof row.input === "object" ? row.input as Record<string, unknown> : null;
+    if (typeof inp?.old_str === "string" && typeof inp?.new_str === "string") {
+      const oldLines = inp.old_str.split(/\r?\n/);
+      const newLines = inp.new_str.split(/\r?\n/);
+      const lines = [
+        ...oldLines.map(t => ({ kind: "remove" as const, text: t })),
+        ...newLines.map(t => ({ kind: "add" as const, text: t })),
+      ];
+      return { isDiff: true, added: newLines.length, removed: oldLines.length, lines };
+    }
+    if (typeof row.output === "string") {
+      const parsed = parseDiffPreview(row.output);
+      if (parsed.isDiff) return parsed;
+    }
+    if (typeof inp?.patch === "string") {
+      const parsed = parseDiffPreview(inp.patch);
+      if (parsed.isDiff) return parsed;
+    }
+    if (typeof inp?.diff === "string") {
+      const parsed = parseDiffPreview(inp.diff);
+      if (parsed.isDiff) return parsed;
+    }
+    return null;
+  }, [row.name, row.input, row.output]);
+  const hasDetails = Boolean(inputText || outputText || (diff && diff.lines.length > 0));
   const status = toolDisplayStatus(row);
   const tone = TOOL_DISPLAY_STATUS_TONES[status];
   const statusLabel = tr(TOOL_DISPLAY_STATUS_LABELS[status]);
@@ -702,7 +747,29 @@ const ToolTimelineCard = React.memo(function ToolTimelineCard({
       <span className="xn-toolcall__kind-icon" aria-hidden="true"><ToolKindIcon name={row.name} /></span>
       <span className="xn-msg__tool-name xn-toolcall__kind">{kindLabel}</span>
       <StreamingPrimaryText text={primary.text} mono={primary.mono} />
+      {diff && (diff.added > 0 || diff.removed > 0) && (
+        <span className="xn-diff-stat" aria-label={tf("改动：+{0} -{1}", [diff.added, diff.removed])}>
+          <span className="xn-diff-stat--add">+{diff.added}</span>{" "}
+          <span className="xn-diff-stat--remove">-{diff.removed}</span>
+        </span>
+      )}
       <span className="xn-msg__tool-trailing xn-toolcall__trailing">
+        {row.status === "error" && onRetry && (
+          <button
+            type="button"
+            className="xn-zc-retry-btn"
+            data-testid={`tool-retry-${row.seq}`}
+            aria-label={tr("重试此工具")}
+            title={tr("重试此工具")}
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              void onRetry(row);
+            }}
+          >
+            {tr("重试")}
+          </button>
+        )}
         {row.status === "error" && row.errorCode && <span className="xn-card__meta">{tf("错误码: {0}", [row.errorCode])}</span>}
         {statusNode}
         {hasDetails && <span className="xn-toolcall__chevron" aria-hidden="true">›</span>}
@@ -736,22 +803,52 @@ const ToolTimelineCard = React.memo(function ToolTimelineCard({
             {terminal ? <>
               <section className="xn-toolcall__terminal" aria-label={tr('终端输出')}>
                 <pre className="xn-toolcall__command">$ {primary.text}</pre>
-                {terminal.output && <FoldablePayloadText text={terminal.output} />}
-                {terminal.stderr && <section className="xn-toolcall__section xn-toolcall__stderr"><span className="xn-toolcall__section-label">{tr('标准错误')}</span><FoldablePayloadText text={terminal.stderr} /></section>}
+                {terminal.output && <FoldablePayloadText text={terminal.output} payloadKey={`term-out:${row.toolCallId}`} />}
+                {terminal.stderr && <section className="xn-toolcall__section xn-toolcall__stderr"><span className="xn-toolcall__section-label">{tr('标准错误')}</span><FoldablePayloadText text={terminal.stderr} payloadKey={`term-err:${row.toolCallId}`} /></section>}
                 {terminal.exitCode !== undefined && <span className="xn-toolcall__exit-code">{tf('退出码 {0}', [terminal.exitCode])}</span>}
               </section>
               <RawToolPayload input={parsedInput} output={row.output} />
             </> : <>
+            {diff && diff.lines.length > 0 && (
+              <section className="xn-toolcall__section" aria-label={tr("文件改动差异")}>
+                <div
+                  className="xn-unified-diff"
+                  style={{
+                    maxHeight: 180,
+                    overflowY: "auto",
+                    background: "var(--bg-card)",
+                    padding: "4px 6px",
+                    borderRadius: "var(--radius-sm)",
+                    border: "1px solid var(--border)",
+                  }}
+                >
+                  <table aria-label={tr("文件改动差异")}>
+                    <tbody>
+                      {diff.lines.map((dl, i) => (
+                        <tr key={i} className={`xn-diff-line xn-diff-line--${dl.kind}`}>
+                          <td className="xn-diff-line__marker" aria-hidden="true">
+                            {dl.kind === "add" ? "+" : dl.kind === "remove" ? "−" : dl.kind === "hunk" ? "@@" : " "}
+                          </td>
+                          <td className="xn-diff-line__content">
+                            <code>{dl.text}</code>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </section>
+            )}
             {inputText && (
               <section className="xn-toolcall__section">
                 <span className="xn-toolcall__section-label">{tr("输入参数")}</span>
-                <FoldablePayloadText text={inputText} />
+                <FoldablePayloadText text={inputText} payloadKey={`in:${row.toolCallId}`} />
               </section>
             )}
             {outputText && (
               <section className="xn-toolcall__section">
                 <span className="xn-toolcall__section-label">{tr("工具结果")}</span>
-                <FoldablePayloadText text={outputText} />
+                <FoldablePayloadText text={outputText} payloadKey={`out:${row.toolCallId}`} />
               </section>
             )}
             </>}
@@ -887,10 +984,11 @@ const AssistantTimelineItem = React.memo(function AssistantTimelineItem({ row, w
   );
 });
 
-const ToolTimelineItem = React.memo(function ToolTimelineItem({ row, windowIndex, collapseTools }: {
+const ToolTimelineItem = React.memo(function ToolTimelineItem({ row, windowIndex, collapseTools, onRetry }: {
   row: Extract<TimelineRow, { kind: "tool" }>;
   windowIndex: TimelineWindowIndex;
   collapseTools: boolean;
+  onRetry?: (row?: Extract<TimelineRow, { kind: "tool" }>) => void | Promise<unknown>;
 }): React.JSX.Element {
   return (
     <div
@@ -900,7 +998,7 @@ const ToolTimelineItem = React.memo(function ToolTimelineItem({ row, windowIndex
       data-window-index={windowIndex}
       className={`xn-timeline-item xn-timeline-item--tool xn-timeline-item--${toolDisplayStatus(row)}`}
     >
-      <ToolTimelineCard row={row} collapseTools={collapseTools} />
+      <ToolTimelineCard row={row} collapseTools={collapseTools} onRetry={onRetry} />
     </div>
   );
 });
@@ -947,7 +1045,7 @@ const CompletionTimelineItem = React.memo(function CompletionTimelineItem({ row,
   );
 });
 
-function ToolGroupTimelineItem({ entry, collapseTools, windowIndex }: { entry: ToolGroupEntry; collapseTools: boolean; windowIndex?: number }): React.JSX.Element {
+function ToolGroupTimelineItem({ entry, collapseTools, windowIndex, onRetry }: { entry: ToolGroupEntry; collapseTools: boolean; windowIndex?: number; onRetry?: (row?: Extract<TimelineRow, { kind: "tool" }>) => void | Promise<unknown> }): React.JSX.Element {
   const [open, setOpen] = useToolCallOpenState(`group:${entry.rows[0].kind === 'tool' ? entry.rows[0].toolCallId : entry.rows[0].seq}`, !collapseTools);
   const label = entry.category === 'explore' ? tr('探索工作区') : entry.category === 'terminal' ? tr('终端操作') : tr('文件修改');
   const errors = entry.rows.filter(row => row.kind === 'tool' && toolDisplayStatus(row) === 'error').length;
@@ -966,11 +1064,11 @@ function ToolGroupTimelineItem({ entry, collapseTools, windowIndex }: { entry: T
       {running && <span className="xn-tool-group__running">{tr('执行中')}</span>}
       <ChevronDown size={13} className="xn-tool-group__chevron" aria-hidden="true" />
     </summary>
-    <TimelineStream rows={entry.rows} collapseTools={collapseTools} nested />
+    <TimelineStream rows={entry.rows} collapseTools={collapseTools} nested onRetry={onRetry} />
   </details>;
 }
 
-export function TimelineStream({ rows, emptyText = tr("暂无事件"), collapseTools = true, grouping, messageStreamShowReasoning = true, jsonToolProtocol = false, protocolModePending = false, streamingPending = false, activityPhase, virtualize = false, virtualizeFromTail = false, nested = false }: TimelineStreamProps): React.JSX.Element {
+export function TimelineStream({ rows, emptyText = tr("暂无事件"), collapseTools = true, grouping, messageStreamShowReasoning = true, jsonToolProtocol = false, protocolModePending = false, streamingPending = false, activityPhase, virtualize = false, virtualizeFromTail = false, nested = false, onRetry }: TimelineStreamProps): React.JSX.Element {
   const timelineRootRef = React.useRef<HTMLDivElement>(null);
   const [workOpenOverrides, setWorkOpenOverrides] = React.useState(() => new Map<string, boolean>());
   const conversationIndexes = React.useMemo(() => indexConversationRows(rows ?? []), [rows]);
@@ -1039,7 +1137,7 @@ export function TimelineStream({ rows, emptyText = tr("暂无事件"), collapseT
           </div>;
         }
         if (r.kind === "tool-group") {
-          return <ToolGroupTimelineItem key={`group-${r.rows[0].seq}`} entry={r} collapseTools={collapseTools} windowIndex={windowIndexAttribute(entryIndex)} />;
+          return <ToolGroupTimelineItem key={`group-${r.rows[0].seq}`} entry={r} collapseTools={collapseTools} windowIndex={windowIndexAttribute(entryIndex)} onRetry={onRetry} />;
         }
         const key = `${r.kind}-${r.seq}-${entryIndex}`;
         const windowIndex = windowIndexAttribute(entryIndex);
@@ -1066,7 +1164,7 @@ export function TimelineStream({ rows, emptyText = tr("暂无事件"), collapseT
         }
 
         if (r.kind === "tool") {
-          return <ToolTimelineItem key={key} row={r} windowIndex={windowIndex} collapseTools={collapseTools} />;
+          return <ToolTimelineItem key={key} row={r} windowIndex={windowIndex} collapseTools={collapseTools} onRetry={onRetry} />;
         }
 
         if (r.kind === "completion") {

@@ -1,5 +1,5 @@
 import { t as tr, tf } from '../../i18n';
-import React, { useEffect, useId, useRef, useState } from "react";
+import React, { useEffect, useId, useMemo, useRef, useState } from "react";
 import type {
   WorkbenchSession,
   SessionSummary,
@@ -210,22 +210,250 @@ export function formatSubject(name: string, subject: string): string {
   return subject;
 }
 
+export type DiffPreviewLine = {
+  kind: "add" | "remove" | "context" | "hunk";
+  text: string;
+};
+
+export type DiffPreviewSummary = {
+  isDiff: boolean;
+  added: number;
+  removed: number;
+  lines: DiffPreviewLine[];
+};
+
+export function parseDiffPreview(text: string): DiffPreviewSummary {
+  if (!text || typeof text !== "string") {
+    return { isDiff: false, added: 0, removed: 0, lines: [] };
+  }
+  const rawLines = text.split(/\r?\n/);
+  const hasHunk = rawLines.some(l => /^@@ -\d+.* \+\d+.* @@/.test(l));
+  const hasDiffHeader = rawLines.some(l => /^diff --git|^--- [ab]\/|^\+\+\+ [ab]\//.test(l));
+  const addLines = rawLines.filter(l => l.startsWith("+") && !l.startsWith("+++"));
+  const removeLines = rawLines.filter(l => l.startsWith("-") && !l.startsWith("---"));
+  const isDiff = hasHunk || hasDiffHeader || (addLines.length > 0 && removeLines.length > 0);
+
+  if (!isDiff) {
+    return { isDiff: false, added: 0, removed: 0, lines: [] };
+  }
+
+  let added = 0;
+  let removed = 0;
+  const lines: DiffPreviewLine[] = [];
+
+  for (const line of rawLines) {
+    if (line.startsWith("diff --git") || line.startsWith("index ") || line.startsWith("---") || line.startsWith("+++")) {
+      lines.push({ kind: "hunk", text: line });
+    } else if (line.startsWith("@@")) {
+      lines.push({ kind: "hunk", text: line });
+    } else if (line.startsWith("+")) {
+      added++;
+      lines.push({ kind: "add", text: line.slice(1) || " " });
+    } else if (line.startsWith("-")) {
+      removed++;
+      lines.push({ kind: "remove", text: line.slice(1) || " " });
+    } else if (line.startsWith(" ")) {
+      lines.push({ kind: "context", text: line.slice(1) || " " });
+    } else {
+      lines.push({ kind: "context", text: line });
+    }
+  }
+
+  return { isDiff: true, added, removed, lines };
+}
+
+export const approvalPreviewOpenState = new Map<string, boolean>();
+
+function ApprovalItemPreview({
+  preview,
+  toolCallId,
+}: {
+  preview: string;
+  toolCallId: string;
+}) {
+  const diff = useMemo(() => parseDiffPreview(preview), [preview]);
+  const [isOpen, setIsOpen] = useState(() => approvalPreviewOpenState.get(toolCallId) ?? true);
+
+  const toggleOpen = () => {
+    const next = !isOpen;
+    approvalPreviewOpenState.set(toolCallId, next);
+    setIsOpen(next);
+  };
+
+  const lineCount = preview.split(/\r?\n/).length;
+  const canFold = lineCount > 6 || preview.length > 280;
+
+  if (diff.isDiff) {
+    return (
+      <div className="xn-approval-diff" data-testid={`approval-diff-${toolCallId}`}>
+        <div className="xn-approval-diff__toolbar">
+          <span className="xn-diff-stat" aria-label={tf("改动：+{0} -{1}", [diff.added, diff.removed])}>
+            <span className="xn-diff-stat--add">+{diff.added}</span>{" "}
+            <span className="xn-diff-stat--remove">-{diff.removed}</span>
+          </span>
+          {canFold && (
+            <button
+              type="button"
+              className="xn-approval-preview-toggle"
+              onClick={toggleOpen}
+              aria-expanded={isOpen}
+            >
+              {tr(isOpen ? "收起预览" : "展开预览")}
+            </button>
+          )}
+        </div>
+        {isOpen && (
+          <div
+            className="xn-unified-diff"
+            style={{
+              maxHeight: 160,
+              overflowY: "auto",
+              background: "var(--bg-card)",
+              padding: "4px 6px",
+              borderRadius: "var(--radius-sm)",
+              border: "1px solid var(--border)",
+            }}
+          >
+            <table aria-label={tr("文件改动差异")}>
+              <tbody>
+                {diff.lines.map((dl, i) => (
+                  <tr key={i} className={`xn-diff-line xn-diff-line--${dl.kind}`}>
+                    <td className="xn-diff-line__marker" aria-hidden="true">
+                      {dl.kind === "add" ? "+" : dl.kind === "remove" ? "−" : dl.kind === "hunk" ? "@@" : " "}
+                    </td>
+                    <td className="xn-diff-line__text"><code>{dl.text}</code></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+      {canFold && (
+        <div style={{ display: "flex", justifyContent: "flex-end" }}>
+          <button
+            type="button"
+            className="xn-approval-preview-toggle"
+            onClick={toggleOpen}
+            aria-expanded={isOpen}
+          >
+            {tr(isOpen ? "收起预览" : "展开预览")}
+          </button>
+        </div>
+      )}
+      {isOpen && (
+        <div
+          style={{
+            color: "var(--fg-subtle)",
+            fontSize: 11,
+            fontFamily: "var(--font-mono)",
+            whiteSpace: "pre-wrap",
+            maxHeight: 120,
+            overflowY: "auto",
+            background: "var(--bg-card)",
+            padding: "6px 8px",
+            borderRadius: "var(--radius-sm)",
+            border: "1px solid var(--border)",
+          }}
+        >
+          {preview}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export type ApprovalsProps = {
   pending: PendingApproval[];
   onApprove?: (pending: PendingApproval) => void | Promise<unknown>;
+  onApproveAll?: (items: PendingApproval[]) => void | Promise<unknown>;
   busy?: boolean;
 };
 
-export function Approvals({ pending, onApprove, busy = false }: ApprovalsProps) {
+export function Approvals({ pending, onApprove, onApproveAll, busy = false }: ApprovalsProps) {
+  const [focusedIndex, setFocusedIndex] = useState(0);
+  const containerRef = useRef<HTMLDivElement>(null);
+
   if (!pending || pending.length === 0) {
     return (
       <div data-testid="approvals-empty" className="p-2 text-xs text-[var(--fg-muted)]">{tr("无待审批")}</div>
     );
   }
 
+  const activeIndex = Math.min(Math.max(0, focusedIndex), pending.length - 1);
+  const allGranted = pending.every(p => p.granted);
+
+  const handleBatchApprove = async () => {
+    if (busy || allGranted) return;
+    if (onApproveAll) {
+      await onApproveAll(pending);
+    } else if (onApprove) {
+      for (const p of pending.filter(item => !item.granted)) {
+        await onApprove(p);
+      }
+    }
+  };
+
+  const handleKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
+    if (event.nativeEvent.isComposing) return;
+    const targetEl = event.target as HTMLElement | null;
+    if (targetEl && (targetEl.tagName === "INPUT" || targetEl.tagName === "TEXTAREA")) return;
+
+    // Number keys 1..9: directly approve corresponding pending item
+    if (/^[1-9]$/.test(event.key)) {
+      const idx = Number(event.key) - 1;
+      if (idx < pending.length) {
+        event.preventDefault();
+        setFocusedIndex(idx);
+        const item = pending[idx];
+        if (item && onApprove && !busy) {
+          void onApprove(item);
+        }
+        return;
+      }
+    }
+
+    // A or Ctrl/Cmd+Enter: batch approve
+    if ((event.key === "a" || event.key === "A" || (event.key === "Enter" && (event.ctrlKey || event.metaKey))) && pending.length > 1) {
+      event.preventDefault();
+      void handleBatchApprove();
+      return;
+    }
+
+    // Arrow navigation
+    if (event.key === "ArrowDown" || event.key === "ArrowRight") {
+      event.preventDefault();
+      setFocusedIndex(i => (i + 1) % pending.length);
+      return;
+    }
+    if (event.key === "ArrowUp" || event.key === "ArrowLeft") {
+      event.preventDefault();
+      setFocusedIndex(i => (i - 1 + pending.length) % pending.length);
+      return;
+    }
+
+    // Enter on active item
+    if (event.key === "Enter" && !event.ctrlKey && !event.metaKey) {
+      const item = pending[activeIndex];
+      if (item && onApprove && !busy) {
+        event.preventDefault();
+        void onApprove(item);
+      }
+    }
+  };
+
   return (
     <div
+      ref={containerRef}
+      tabIndex={0}
+      role="region"
       aria-label={tr("待审批操作")}
+      onKeyDown={handleKeyDown}
       className="xn-approvals"
       style={{
         display: "flex",
@@ -238,18 +466,39 @@ export function Approvals({ pending, onApprove, busy = false }: ApprovalsProps) 
         boxShadow: "var(--shadow-sm)",
       }}
     >
-      <div style={{ fontWeight: 600, fontSize: 13, color: "var(--warn-fg)" }}>{tr("需要审批的操作 (")}{pending.length})
+      <div className="xn-approvals__header" style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+        <div className="xn-approvals__title" style={{ fontWeight: 600, fontSize: 13, color: "var(--warn-fg)", display: "flex", alignItems: "center", gap: 8 }}>
+          <span>{tr("需要审批的操作 (")}{pending.length})</span>
+        </div>
+        {pending.length > 1 && (onApproveAll || onApprove) && (
+          <div className="xn-approvals__batch-actions" style={{ display: "flex", alignItems: "center", gap: 6 }}>
+            <span className="xn-approval-kbd" title={tr("快捷键：A 或 Ctrl+Enter 批量批准")} aria-hidden="true">A</span>
+            <Button
+              variant="secondary"
+              size="sm"
+              disabled={busy || allGranted}
+              onClick={() => void handleBatchApprove()}
+              data-testid="approvals-batch-button"
+            >
+              {allGranted ? tr("全部已批准") : busy ? tr("正在继续…") : tf("全部批准 ({0})", [pending.length])}
+            </Button>
+          </div>
+        )}
       </div>
+
       <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-        {pending.map((p) => {
+        {pending.map((p, index) => {
           const readableSubject = formatSubject(p.kind ?? p.name, p.subject);
+          const isFocused = index === activeIndex;
           return (
             <div
               key={p.tool_call_id}
               data-testid={`approval-item-${p.tool_call_id}`}
+              data-focused={isFocused ? "true" : undefined}
               className="xn-approval-item"
+              onClick={() => setFocusedIndex(index)}
               style={{
-                border: "1px solid var(--border)",
+                border: isFocused ? "1px solid var(--primary)" : "1px solid var(--border)",
                 borderRadius: "var(--radius-md)",
                 padding: "8px 12px",
                 fontSize: 12,
@@ -283,32 +532,22 @@ export function Approvals({ pending, onApprove, busy = false }: ApprovalsProps) 
                 </span>
               </div>
               {p.preview && (
-                <div
-                  style={{
-                    color: "var(--fg-subtle)",
-                    fontSize: 11,
-                    fontFamily: "var(--font-mono)",
-                    whiteSpace: "pre-wrap",
-                    maxHeight: 120,
-                    overflowY: "auto",
-                    background: "var(--bg-card)",
-                    padding: "6px 8px",
-                    borderRadius: "var(--radius-sm)",
-                    border: "1px solid var(--border)",
-                  }}
-                >
-                  {p.preview}
-                </div>
+                <ApprovalItemPreview preview={p.preview} toolCallId={p.tool_call_id} />
               )}
               {onApprove && (
-                <div style={{ marginTop: 4, display: "flex", justifyContent: "flex-end" }}>
+                <div style={{ marginTop: 4, display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 8 }}>
+                  <span className="xn-approval-shortcut" aria-hidden="true" title={tf("按数字键 {0} 快速批准", [index + 1])}>
+                    {index + 1}
+                  </span>
                   {p.granted && <span className="xn-approval-granted" role="status">{tr("已批准，等待执行")}</span>}
                   <Button
                     variant="primary"
                     size="sm"
                     disabled={busy}
                     onClick={() => void onApprove(p)}
-                  >{tr(busy ? "正在继续…" : p.granted ? "继续执行" : "批准并重试")}</Button>
+                  >
+                    {tr(busy ? "正在继续…" : p.granted ? "继续执行" : "批准并重试")}
+                  </Button>
                 </div>
               )}
             </div>
@@ -1880,6 +2119,7 @@ export type XuenessWorkbenchProps = {
   pendingApprovals?: PendingApproval[];
   onSelectSession?: (id: string) => void;
   onApprove?: (pending: PendingApproval) => void | Promise<unknown>;
+  onApproveAll?: (items: PendingApproval[]) => void | Promise<unknown>;
   onSend?: (text: string) => boolean | void | Promise<boolean | void>;
   onRefresh?: () => void | Promise<unknown>;
   composerDisabled?: boolean;
@@ -1893,6 +2133,7 @@ export function XuenessWorkbench({
   pendingApprovals = activeSession?.pending ?? [],
   onSelectSession,
   onApprove,
+  onApproveAll,
   onSend,
   onRefresh,
   composerDisabled = false,
@@ -1951,7 +2192,7 @@ export function XuenessWorkbench({
 
           {pendingApprovals && pendingApprovals.length > 0 && (
             <div style={{ padding: "12px 16px 0" }}>
-              <Approvals pending={pendingApprovals} onApprove={onApprove} />
+              <Approvals pending={pendingApprovals} onApprove={onApprove} onApproveAll={onApproveAll} />
             </div>
           )}
 

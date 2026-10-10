@@ -493,3 +493,148 @@
 @media (prefers-reduced-motion: reduce) {
   .xn-toolcall__primary--pulse { animation: none; }
 }
+
+/* ---- 审批交互与批量审批 ---- */
+.xn-approvals {
+  outline: none;
+}
+.xn-approvals:focus-visible {
+  outline: 2px solid var(--border-focus);
+  outline-offset: 2px;
+}
+.xn-approvals__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+.xn-approvals__title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+  font-size: 13px;
+  color: var(--warn-fg);
+}
+.xn-approvals__batch-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.xn-approval-kbd {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1px 5px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--bg-card);
+  color: var(--fg-muted);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  line-height: 1.2;
+}
+.xn-approval-shortcut {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  margin-right: 6px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--bg-card);
+  color: var(--fg-muted);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1;
+}
+.xn-approval-item {
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+.xn-approval-item[data-focused="true"] {
+  border-color: var(--primary) !important;
+  box-shadow: 0 0 0 1px var(--primary);
+}
+.xn-approval-item:focus-within {
+  border-color: var(--primary);
+}
+
+/* ---- 审批与卡片 Diff 预览 ---- */
+.xn-approval-diff {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 4px;
+}
+.xn-approval-diff__toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 11px;
+}
+.xn-diff-stat {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 600;
+}
+.xn-diff-stat--add, .xn-diff-added {
+  color: var(--ok-fg);
+}
+.xn-diff-stat--remove, .xn-diff-removed {
+  color: var(--error-fg);
+}
+.xn-approval-preview-toggle {
+  padding: 2px 6px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--bg-card);
+  color: var(--fg-subtle);
+  font-size: 11px;
+  cursor: pointer;
+}
+.xn-approval-preview-toggle:hover {
+  background: var(--bg-hover);
+  color: var(--fg);
+}
+
+/* ---- 工具重试与 Diff ---- */
+.xn-zc-retry-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2px 8px;
+  margin-left: 8px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--bg-card);
+  color: var(--fg-subtle);
+  font-size: 11px;
+  cursor: pointer;
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+.xn-zc-retry-btn:hover {
+  background: var(--bg-hover);
+  color: var(--fg);
+}
+.xn-zc-diff-count {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: 6px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 500;
+}
+.xn-zc-tool-diff {
+  margin: 8px 0;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  overflow: hidden;
+}
+

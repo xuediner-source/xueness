@@ -1020,6 +1020,23 @@ export function XuenessWorkbenchContainer() {
     [activeId, isPluginEffective, run, runSessionRequest, loadActive, refreshList],
   );
 
+  const handleApproveAll = useCallback(
+    async (items?: PendingApproval[]) => {
+      const targetSessionId = activeId;
+      if (!targetSessionId || runRequestSessionsRef.current.has(targetSessionId) || !isPluginEffective("sessions")) return;
+      const list = items ?? session?.pending ?? [];
+      const ungranted = list.filter(p => !p.granted);
+      for (const p of ungranted) {
+        const granted = await run(() => approvePending(targetSessionId, p));
+        if (!granted) return;
+      }
+      await runSessionRequest(targetSessionId, selected => runSession(targetSessionId, selected));
+      await loadActive(targetSessionId);
+      await refreshList();
+    },
+    [activeId, isPluginEffective, run, runSessionRequest, loadActive, refreshList, session?.pending],
+  );
+
   const handleSend = useCallback(
     async (text: string, input?: ComposerInput, onAccepted?: () => void) => {
       const targetSessionId = activeId;
@@ -2361,7 +2378,7 @@ export function XuenessWorkbenchContainer() {
             <LocalRuntimeMonitor lightweight session={runtimeMonitorSession} />}
           {session.pending && session.pending.length > 0 && (
             <div className="xn-conversation__approvals">
-              <Approvals pending={session.pending} onApprove={handleApprove} busy={busy || runRequestSessions.has(session.id)} />
+              <Approvals pending={session.pending} onApprove={handleApprove} onApproveAll={handleApproveAll} busy={busy || runRequestSessions.has(session.id)} />
             </div>
           )}
           {isPluginEffective("mcp") && <McpElicitation sessionId={session.id} />}
@@ -2385,6 +2402,7 @@ export function XuenessWorkbenchContainer() {
               jsonToolProtocol={session.model_selection?.tool_calling === "json" && activeRuntimeProfile === "lightweight" && session.streaming?.text_format !== "markdown"}
               streamingPending={activeSessionRunning} activityPhase={session.runtime_activity?.phase}
               pendingToolIds={new Set((session.pending ?? []).map(item => item.tool_call_id))}
+              onRetry={!busy && !activeSessionRunning ? handleRetryRun : undefined}
               onEdit={!busy && !activeSessionRunning ? handleMessageEdit : undefined}
               onFeedback={!busy && !activeSessionRunning ? handleMessageFeedback : undefined}
               onFork={!busy && !activeSessionRunning ? row => beginFork(/^turn-[1-9][0-9]*$/u.test(row.turnId) ? Number(row.turnId.slice(5)) : undefined) : undefined} />

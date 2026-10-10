@@ -36,6 +36,8 @@ import {
   persistDraft,
   clearPersistedDraft,
   type StorageLike,
+  parseDiffPreview,
+  approvalPreviewOpenState,
 } from "./XuenessWorkbenchView";
 import type {
   WorkbenchSession,
@@ -936,3 +938,71 @@ test("Suggestion code prefix renders / for goal and workflow, not @", () => {
   assert.equal(prefix(workflowSuggestions[0].kind), "/");
 });
 
+test("Approvals: renders batch approve button and shortcut badges when multiple pending items exist", () => {
+  const pendingItems: PendingApproval[] = [
+    {
+      tool_call_id: "ap-batch-1",
+      name: "exec",
+      subject: '["git","status"]',
+      preview: "执行 git status 命令",
+    },
+    {
+      tool_call_id: "ap-batch-2",
+      name: "write",
+      subject: "test.txt",
+      preview: "写入 test.txt 内容",
+    },
+  ];
+
+  // Multiple items: shows batch button with count and keyboard hint badge
+  const html = renderToStaticMarkup(
+    <Approvals pending={pendingItems} onApprove={() => {}} onApproveAll={() => {}} />,
+  );
+  assert.match(html, /class="xn-approvals__batch-actions"/);
+  assert.match(html, /全部批准 \(2\)/);
+  assert.match(html, /class="xn-approval-kbd"/);
+  assert.match(html, /class="xn-approval-shortcut"/);
+
+  // Single item: does not show batch button
+  const singleHtml = renderToStaticMarkup(
+    <Approvals pending={[pendingItems[0]]} onApprove={() => {}} onApproveAll={() => {}} />,
+  );
+  assert.doesNotMatch(singleHtml, /class="xn-approvals__batch-actions"/);
+  assert.doesNotMatch(singleHtml, /全部批准/);
+});
+
+test("parseDiffPreview: correctly parses unified diff format, lines and statistics", () => {
+  const diffText = `--- a/src/index.ts
++++ b/src/index.ts
+@@ -1,3 +1,4 @@
+ import React from 'react';
+-const oldVal = 1;
++const newVal = 2;
++const addedVal = 3;
+ export default {};`;
+
+  const parsed = parseDiffPreview(diffText);
+  assert.equal(parsed.isDiff, true);
+  assert.equal(parsed.added, 2);
+  assert.equal(parsed.removed, 1);
+  assert.equal(parsed.lines.some(l => l.kind === "add" && l.text.includes("newVal")), true);
+  assert.equal(parsed.lines.some(l => l.kind === "remove" && l.text.includes("oldVal")), true);
+  assert.equal(parsed.lines.some(l => l.kind === "hunk"), true);
+
+  const plainText = "This is just a regular sentence without diff markers.";
+  const plainParsed = parseDiffPreview(plainText);
+  assert.equal(plainParsed.isDiff, false);
+});
+
+test("approvalPreviewOpenState: stores toggle state per tool_call_id", () => {
+  const callId = "test-call-state-id";
+  try {
+    assert.equal(approvalPreviewOpenState.get(callId), undefined);
+    approvalPreviewOpenState.set(callId, false);
+    assert.equal(approvalPreviewOpenState.get(callId), false);
+    approvalPreviewOpenState.set(callId, true);
+    assert.equal(approvalPreviewOpenState.get(callId), true);
+  } finally {
+    approvalPreviewOpenState.delete(callId);
+  }
+});

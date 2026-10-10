@@ -3,7 +3,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { renderToStaticMarkup } from "react-dom/server";
 
-import { TimelineStream, TaskTodos, groupTimelineRows, buildConversationWorkEntries, assistantTextForDisplay, StreamingCommitGate, STREAM_COMMIT_INTERVAL_MS, FoldablePayloadTextView, TOOL_PAYLOAD_FOLD_THRESHOLD, toolCallOpenState, copyFailureText, terminalResultForDisplay } from "./XuenessTimeline";
+import { TimelineStream, TaskTodos, groupTimelineRows, buildConversationWorkEntries, assistantTextForDisplay, StreamingCommitGate, STREAM_COMMIT_INTERVAL_MS, FoldablePayloadTextView, TOOL_PAYLOAD_FOLD_THRESHOLD, toolCallOpenState, toolPayloadOpenState, copyFailureText, terminalResultForDisplay } from "./XuenessTimeline";
 import { unwrapProtocolEnvelopeText, isDuplicateCompletionAnswer, completionPresentation } from "./completionPresentation";
 import type { TimelineRow } from "../../xuenessWorkbench";
 
@@ -970,3 +970,63 @@ test("failure copy reports success only after the clipboard write succeeds", asy
   assert.equal(await copyFailureText({ writeText: async () => {} }, "error details"), true);
   assert.equal(await copyFailureText({ writeText: async () => {} }, "  "), false);
 });
+
+test("toolPayloadOpenState persists payload fold state across remounts", () => {
+  const payloadKey = "test:tool:payload:key";
+  try {
+    assert.equal(toolPayloadOpenState.get(payloadKey), undefined);
+    toolPayloadOpenState.set(payloadKey, true);
+    assert.equal(toolPayloadOpenState.get(payloadKey), true);
+    toolPayloadOpenState.set(payloadKey, false);
+    assert.equal(toolPayloadOpenState.get(payloadKey), false);
+  } finally {
+    toolPayloadOpenState.delete(payloadKey);
+  }
+});
+
+test("write and edit tool rows render diff stats and diff unified table", () => {
+  const row: TimelineRow = {
+    kind: "tool",
+    seq: 12,
+    turnId: "t-diff",
+    toolCallId: "tool-edit-diff",
+    name: "edit",
+    subject: "src/main.ts",
+    status: "ok",
+    error: "",
+    errorCode: "",
+    input: {
+      old_str: "line 1\nline 2",
+      new_str: "line 1\nmodified line 2\nadded line 3",
+    },
+    output: "ok",
+  };
+  const html = renderToStaticMarkup(<TimelineStream rows={[row]} collapseTools={false} />);
+  assert.match(html, /class="xn-diff-stat"/);
+  assert.match(html, /\+3/);
+  assert.match(html, /-2/);
+  assert.match(html, /class="xn-unified-diff"/);
+});
+
+test("failed tool row renders retry button when onRetry is provided", () => {
+  const failedRow: TimelineRow = {
+    kind: "tool",
+    seq: 13,
+    turnId: "t-retry",
+    toolCallId: "tool-fail-exec",
+    name: "exec",
+    subject: "cargo check",
+    status: "error",
+    error: "compilation failed",
+    errorCode: "ECOMPILE",
+  };
+  const withRetry = renderToStaticMarkup(<TimelineStream rows={[failedRow]} onRetry={() => {}} />);
+  assert.match(withRetry, /data-testid="tool-retry-13"/);
+  assert.match(withRetry, /class="xn-zc-retry-btn"/);
+  assert.match(withRetry, /重试/);
+
+  const withoutRetry = renderToStaticMarkup(<TimelineStream rows={[failedRow]} />);
+  assert.doesNotMatch(withoutRetry, /data-testid="tool-retry-13"/);
+  assert.doesNotMatch(withoutRetry, /class="xn-zc-retry-btn"/);
+});
+

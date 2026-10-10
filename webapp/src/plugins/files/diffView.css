@@ -99,6 +99,7 @@
 .xn-diff-line--context { background: var(--bg-card); }
 .xn-diff-line--add { color: var(--ok-fg); background: var(--ok-bg); }
 .xn-diff-line--remove { color: var(--error-fg); background: var(--error-bg); }
+.xn-diff-line--hunk { color: var(--fg-muted); background: var(--bg-subtle); }
 
 .xn-diff-context-disclosure > td {
   border-top: 1px solid var(--border);

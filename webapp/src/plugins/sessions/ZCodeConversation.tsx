@@ -19,7 +19,9 @@ import { useTimelineVirtualWindow } from './TimelineVirtualWindow';
 import { XuenessConversationHistoryRail } from './XuenessConversationHistoryRail';
 import { deferCompositionEnd, isImeComposingEvent, isModKeyPressed } from '../../xuenessShortcutDisplay';
 import './zcode-conversation.css';
+import './sessions.css';
 import { formatCommandArgv } from '../../xuenessWorkbench';
+import { parseDiffPreview } from './XuenessWorkbenchView';
 
 export function evaluateUserMessageEditKey(
   event: {
@@ -47,15 +49,16 @@ type Completion = Extract<TimelineRow, { kind: 'completion' }>;
 type User = Extract<TimelineRow, { kind: 'user' }>;
 const streamingMarkdown: MarkdownRenderOptions = { codeHighlightTiming: 'after-stream', cacheParseResults: false };
 const settledMarkdown: MarkdownRenderOptions = { codeHighlightTiming: 'on-visible', cacheParseResults: true };
+export const zcodeConversationDisclosures = new Map<string, boolean>();
 const DisclosureContext = React.createContext<Map<string, boolean> | null>(null);
 
 function useDisclosure(key: string, defaultOpen = false) {
-  const saved = React.useContext(DisclosureContext);
-  const [override, setOpen] = React.useState<boolean | undefined>(() => saved?.get(key));
+  const saved = React.useContext(DisclosureContext) ?? zcodeConversationDisclosures;
+  const [override, setOpen] = React.useState<boolean | undefined>(() => saved.get(key));
   const open = override ?? defaultOpen;
   return { open, onToggle: (event: React.SyntheticEvent<HTMLDetailsElement>) => {
     const next = event.currentTarget.open;
-    if (next !== open) { saved?.set(key, next); setOpen(next); }
+    if (next !== open) { saved.set(key, next); zcodeConversationDisclosures.set(key, next); setOpen(next); }
   } };
 }
 export type ConversationTurn = { key: string; rows: TimelineRow[]; userSeq?: number };
@@ -124,7 +127,7 @@ function toolSummary(row: Tool): string {
 
 const toolKinds: Record<string, string> = { read: '读取', list: '列出', glob: '查找', grep: '搜索',
   exec: '执行', exec_start: '执行', write: '写入', edit: '修改', search_web: '搜索网页', web_search: '搜索网页', web_fetch: '读取网页' };
-function ToolRow({ row, pending, defaultOpen }: { row: Tool; pending: boolean; defaultOpen: boolean }) {
+function ToolRow({ row, pending, defaultOpen, onRetry }: { row: Tool; pending: boolean; defaultOpen: boolean; onRetry?: (row: Tool) => void | Promise<unknown> }) {
   const disclosure = useDisclosure(`tool:${row.toolCallId}`, defaultOpen);
   const Icon = /exec|bash|shell/u.test(row.name) ? SquareTerminal : /write|edit/u.test(row.name) ? Pencil : /search|grep|glob/u.test(row.name) ? Search : FileText;
   const running = row.status === 'running' || row.status === 'queued';
@@ -138,13 +141,91 @@ function ToolRow({ row, pending, defaultOpen }: { row: Tool; pending: boolean; d
   const terminal = /^(exec|exec_start|exec_poll)$/u.test(row.name) ? terminalResultForDisplay(row.output) : null;
   const textResult = !terminal && row.output && typeof row.output === 'object'
     ? ['text', 'output', 'content'].map(key => (row.output as Record<string, unknown>)[key]).find(value => typeof value === 'string') : undefined;
+
+  const diff = React.useMemo(() => {
+    if (row.name !== "write" && row.name !== "edit") return null;
+    const input = row.input && typeof row.input === "object" ? row.input as Record<string, unknown> : null;
+    if (typeof input?.old_str === "string" && typeof input?.new_str === "string") {
+      const oldLines = input.old_str.split(/\r?\n/);
+      const newLines = input.new_str.split(/\r?\n/);
+      const lines = [
+        ...oldLines.map(t => ({ kind: "remove" as const, text: t })),
+        ...newLines.map(t => ({ kind: "add" as const, text: t })),
+      ];
+      return { isDiff: true, added: newLines.length, removed: oldLines.length, lines };
+    }
+    if (typeof row.output === "string") {
+      const parsed = parseDiffPreview(row.output);
+      if (parsed.isDiff) return parsed;
+    }
+    if (typeof input?.patch === "string") {
+      const parsed = parseDiffPreview(input.patch);
+      if (parsed.isDiff) return parsed;
+    }
+    if (typeof input?.diff === "string") {
+      const parsed = parseDiffPreview(input.diff);
+      if (parsed.isDiff) return parsed;
+    }
+    return null;
+  }, [row.name, row.input, row.output]);
+
   return <details className="xn-zc-tool" {...disclosure} data-tool-call-id={row.toolCallId}
     data-status={pending ? 'pendingApproval' : row.status} data-testid={`timeline-item-tool-${row.seq}`}>
     <summary><Icon size={16} /><span className="xn-zc-kind" data-running={running && !pending || undefined}>{tr(toolKinds[row.name] ?? row.name)}</span>
       <span className="xn-zc-tool-primary" title={toolSummary(row)}>{toolSummary(row)}</span>
+      {diff && (diff.added > 0 || diff.removed > 0) && (
+        <span className="xn-zc-diff-count" aria-label={tf("改动：+{0} -{1}", [diff.added, diff.removed])}>
+          <span className="xn-diff-added">+{diff.added}</span>{" "}
+          <span className="xn-diff-removed">-{diff.removed}</span>
+        </span>
+      )}
       {status && <span className="xn-zc-tool-state" data-failed={failed || undefined}>{status}</span>}
+      {failed && onRetry && (
+        <button
+          type="button"
+          className="xn-zc-retry-btn"
+          data-testid={`tool-retry-${row.seq}`}
+          aria-label={tr("重试此工具")}
+          title={tr("重试此工具")}
+          onClick={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            void onRetry(row);
+          }}
+        >
+          {tr("重试")}
+        </button>
+      )}
       <ChevronRight size={16} className="xn-zc-chevron" /></summary>
     {disclosure.open && <div className="xn-zc-tool-body">
+      {diff && diff.lines.length > 0 && (
+        <section className="xn-zc-tool-diff" aria-label={tr("文件改动差异")}>
+          <div
+            className="xn-unified-diff"
+            style={{
+              maxHeight: 180,
+              overflowY: "auto",
+              background: "var(--bg-card)",
+              padding: "4px 6px",
+              borderRadius: "var(--radius-sm)",
+              border: "1px solid var(--border)",
+            }}
+          >
+            <table>
+              <tbody>
+                {diff.lines.map((dl, i) => (
+                  <tr key={i} className={`xn-diff-line xn-diff-line--${dl.kind}`}>
+                    <td className="xn-diff-line__marker" aria-hidden="true">
+                      {dl.kind === "add" ? "+" : dl.kind === "remove" ? "−" : dl.kind === "hunk" ? "@@" : " "}
+                    </td>
+                    <td className="xn-diff-line__text"><code>{dl.text}</code></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      )}
       {row.input && <details><summary>{tr('输入参数')}</summary><pre>{summarize(row.input)}</pre></details>}
       {row.error && <p role="alert">{row.errorCode ? `[${row.errorCode}] ` : ''}{row.error}</p>}
       {terminal ? <section aria-label={tr('终端输出')}><pre className="xn-zc-command">$ {toolSummary(row)}</pre>
@@ -196,6 +277,7 @@ export type ZCodeConversationProps = {
   onFork?(row: Assistant): void;
   onFeedback?(row: Assistant, feedback: 'like' | 'dislike' | null): Promise<void>;
   onEdit?(row: User, text: string, onAccepted: () => void): Promise<boolean>;
+  onRetry?(row?: Tool): void | Promise<unknown>;
 };
 
 function UserMessage({ row, onEdit }: { row: User; onEdit?: ZCodeConversationProps['onEdit'] }) {
@@ -273,7 +355,7 @@ function FeedbackActions({ row, onFeedback }: { row: Assistant; onFeedback: NonN
 }
 
 function Turn({ turn, latest, props }: { turn: ConversationTurn; latest: boolean; props: ZCodeConversationProps }) {
-  const { showReasoning = true, jsonToolProtocol = false, pendingToolIds, onFork, onFeedback, onEdit } = props;
+  const { showReasoning = true, jsonToolProtocol = false, pendingToolIds, onFork, onFeedback, onEdit, onRetry } = props;
   const assistantRows = turn.rows.filter((row): row is Assistant => row.kind === 'assistant');
   const completion = turn.rows.findLast((row): row is Completion => row.kind === 'completion');
   const final = assistantRows.findLast(row => Boolean(assistantTextForDisplay(row.text, row.streaming, completion?.summary, jsonToolProtocol).trim()));
@@ -291,7 +373,7 @@ function Turn({ turn, latest, props }: { turn: ConversationTurn; latest: boolean
   const answer = final ? assistantTextForDisplay(final.text, final.streaming, completion?.summary, jsonToolProtocol) : '';
   const copyText = assistantRows.map(row => assistantTextForDisplay(row.text, row.streaming, completion?.summary, jsonToolProtocol)).filter(text => text.trim()).join('\n\n');
   const workRows = work.map(row => row.kind === 'tool'
-    ? <ToolRow key={`tool:${row.toolCallId}`} row={row} pending={pendingToolIds?.has(row.toolCallId) ?? false} defaultOpen={props.collapseTools === false || row.status === 'error' && !pendingToolIds?.has(row.toolCallId)} />
+    ? <ToolRow key={`tool:${row.toolCallId}`} row={row} pending={pendingToolIds?.has(row.toolCallId) ?? false} defaultOpen={props.collapseTools === false || row.status === 'error' && !pendingToolIds?.has(row.toolCallId)} onRetry={onRetry} />
     : row.kind === 'assistant' ? <div key={`response:${row.messageIndex ?? row.seq}`} className="xn-zc-work-response">
       {showReasoning && row.reasoning && <Reasoning row={row} activityPhase={props.activityPhase} />}
       <AssistantText row={row} summary={completion?.summary} protocol={jsonToolProtocol} />
@@ -317,7 +399,7 @@ function Turn({ turn, latest, props }: { turn: ConversationTurn; latest: boolean
 
 /** Standard and lightweight runtimes use exactly the same conversation view. */
 export function ZCodeConversation(props: ZCodeConversationProps) {
-  const [disclosures] = React.useState(() => new Map<string, boolean>());
+  const [disclosures] = React.useState(() => zcodeConversationDisclosures);
   const turns = React.useMemo(() => buildConversationTurns(props.rows), [props.rows]);
   const { snapshot, streamRef, reveal } = useTimelineVirtualWindow({ count: turns.length, enabled: true, initialTail: props.autoScroll !== false });
   const rootRef = React.useRef<HTMLDivElement>(null);

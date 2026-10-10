@@ -2,7 +2,7 @@ import React from 'react';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { ZCodeConversation, buildConversationTurns, evaluateUserMessageEditKey } from './ZCodeConversation';
+import { ZCodeConversation, buildConversationTurns, evaluateUserMessageEditKey, zcodeConversationDisclosures } from './ZCodeConversation';
 import type { TimelineRow } from '../../xuenessWorkbench';
 
 const revision = `sha256:${'a'.repeat(64)}`;
@@ -102,4 +102,69 @@ test('evaluateUserMessageEditKey: handles Escape and Mod+Enter with IME and plat
   assert.equal(evaluateUserMessageEditKey({ key: 'Enter', ctrlKey: true, nativeEvent: { keyCode: 229 } }, { platform: 'win32' }), null);
   assert.equal(evaluateUserMessageEditKey({ key: 'Enter', ctrlKey: true, compositionActive: true }, { platform: 'win32' }), null);
   assert.equal(evaluateUserMessageEditKey({ key: 'Process', ctrlKey: true }, { platform: 'win32' }), null);
+});
+
+test('write and edit tools render diff count statistics and unified diff preview', () => {
+  const diffRows: TimelineRow[] = [
+    {
+      kind: 'tool',
+      seq: 1,
+      turnId: 'turn-diff',
+      toolCallId: 'edit-1',
+      name: 'edit',
+      subject: 'src/app.ts',
+      status: 'ok',
+      error: '',
+      errorCode: '',
+      input: {
+        old_str: 'const a = 1;',
+        new_str: 'const a = 2;\nconst b = 3;',
+      },
+      output: 'ok',
+    },
+  ];
+
+  const html = renderToStaticMarkup(<ZCodeConversation rows={diffRows} collapseTools={false} />);
+  assert.match(html, /class="xn-zc-diff-count"/);
+  assert.match(html, /\+2/);
+  assert.match(html, /-1/);
+  assert.match(html, /class="xn-unified-diff"/);
+});
+
+test('failed tool renders retry button when onRetry is provided', () => {
+  const failedRows: TimelineRow[] = [
+    {
+      kind: 'tool',
+      seq: 2,
+      turnId: 'turn-retry',
+      toolCallId: 'exec-fail',
+      name: 'exec',
+      subject: 'npm test',
+      status: 'error',
+      error: 'process exit 1',
+      errorCode: 'ECMD',
+    },
+  ];
+
+  const withRetryHtml = renderToStaticMarkup(<ZCodeConversation rows={failedRows} onRetry={() => {}} />);
+  assert.match(withRetryHtml, /data-testid="tool-retry-2"/);
+  assert.match(withRetryHtml, /class="xn-zc-retry-btn"/);
+  assert.match(withRetryHtml, /重试/);
+
+  const withoutRetryHtml = renderToStaticMarkup(<ZCodeConversation rows={failedRows} />);
+  assert.doesNotMatch(withoutRetryHtml, /data-testid="tool-retry-2"/);
+  assert.doesNotMatch(withoutRetryHtml, /class="xn-zc-retry-btn"/);
+});
+
+test('zcodeConversationDisclosures stores disclosure states across turns and re-renders', () => {
+  const key = 'test:disclosure:key';
+  try {
+    assert.equal(zcodeConversationDisclosures.get(key), undefined);
+    zcodeConversationDisclosures.set(key, true);
+    assert.equal(zcodeConversationDisclosures.get(key), true);
+    zcodeConversationDisclosures.set(key, false);
+    assert.equal(zcodeConversationDisclosures.get(key), false);
+  } finally {
+    zcodeConversationDisclosures.delete(key);
+  }
 });
