@@ -99,6 +99,7 @@ import {
 } from "./plugins/providers/LightweightWorkbench";
 import { ForkSessionDialog } from "./plugins/sessions";
 import { SessionQueue } from "./plugins/sessions/SessionQueue";
+import { editQueuedMessage } from "./plugins/sessions/queueApi";
 import { Approvals, Composer, WorkbenchHeader, heroGreeting, type ComposerDraftState } from "./plugins/sessions/XuenessWorkbenchView";
 import { XuenessStartPage, type StartPageAction } from "./plugins/sessions/XuenessStartPage";
 import { XuenessCloneDialog } from "./plugins/git/XuenessCloneDialog";
@@ -1141,6 +1142,13 @@ export function XuenessWorkbenchContainer() {
     }
   }, [activeId, session, isPluginEffective, runSessionRequest, refreshList, loadActive]);
 
+  const handleEditQueuedMessage = useCallback(async (queueId: string, text: string, expectedText: string) => {
+    const target = activeId;
+    if (!target || !isPluginEffective("sessions")) throw new Error(tr("会话不可用"));
+    try { await editQueuedMessage(target, queueId, text, expectedText); }
+    finally { await loadActive(target, false); }
+  }, [activeId, isPluginEffective, loadActive]);
+
   /** Hero composer: create the task and run it in one round trip pair. */
   const handleCreate = useCallback(
     async (text: string, input?: ComposerInput, onAccepted?: () => void) => {
@@ -1248,9 +1256,10 @@ export function XuenessWorkbenchContainer() {
     await refreshList();
     if (!continueRun || !isCurrent() || activeIdRef.current !== targetSessionId || !pluginEffectiveRef.current("sessions")
       || runRequestSessionsRef.current.has(targetSessionId)) return;
-    await runSessionRequest(targetSessionId, selected => runSession(targetSessionId, selected));
+    const continued = await runSessionRequest(targetSessionId, selected => runSession(targetSessionId, selected));
     await loadActive(targetSessionId);
     await refreshList();
+    if (!continued.ok) throw new Error(continued.error || tr("运行失败，请检查服务器配置与任务状态"));
   }, [loadActive, refreshList, runSessionRequest]);
 
   const handleMessageFeedback = useCallback(async (row: Extract<TimelineRow, {kind: 'assistant'}>, feedback: 'like' | 'dislike' | null) => {
@@ -2413,7 +2422,7 @@ export function XuenessWorkbenchContainer() {
           )}
           {isPluginEffective("mcp") && <McpElicitation sessionId={session.id} />}
           <PendingQuestion sessionId={session.id} pendingQuestion={session.status === "awaiting_user" ? session.pending_question : null}
-            enabled={isPluginEffective("sessions") && settingsValues.sessionsAnswerQuestionEnabled === true}
+            enabled={isPluginEffective("sessions")}
             disabled={busy || runRequestSessions.has(session.id)} onSubmitted={handleQuestionSubmitted} />
           <ToolCallBudgetStatus sessionId={session.id} enabled={isPluginEffective("tools") && settingsValues.toolsCallBudgetEnabled === true} revision={session} />
           <ConversationTimelineViewport
@@ -2438,7 +2447,7 @@ export function XuenessWorkbenchContainer() {
               onFork={!busy && !activeSessionRunning ? row => beginFork(/^turn-[1-9][0-9]*$/u.test(row.turnId) ? Number(row.turnId.slice(5)) : undefined) : undefined} />
             {session.streaming?.status === "interrupted" && session.streaming.text && <p role="status" className="xn-run-error">{tr("输出已中断，已保留收到的内容。")}</p>}
           </ConversationTimelineViewport>
-          <QuestionResume enabled={isPluginEffective("sessions") && settingsValues.sessionsAnswerQuestionEnabled === true}
+          <QuestionResume enabled={isPluginEffective("sessions")}
             resumeBudgetEnabled={isPluginEffective("sessions")} pauseCode={session.pause_code}
             status={session.status} pendingQuestion={session.pending_question} disabled={busy || runRequestSessions.has(session.id)} onResume={handleRetryRun} />
           {(runError || session.status === "provider_error" || (!busy && !runRequestSessions.has(session.id) && session.status === "pending")) && (
@@ -2450,7 +2459,8 @@ export function XuenessWorkbenchContainer() {
           {/* 队列 bottom dock：贴在 composer 上方，与输入框融合成底 dock（对标 ZCode -mb-7 pb-7 磨砂贴合）。 */}
           {((session.queued_messages?.length ?? 0) > 0 || queueError?.sessionId === session.id) && (
             <div className="xn-queue-dock" data-testid="session-queue-dock">
-              <SessionQueue items={session.queued_messages ?? []} cancellingId={queueCancelling?.sessionId === session.id ? queueCancelling.queueId : null} onCancel={handleCancelQueuedTurn}
+              <SessionQueue key={session.id} items={session.queued_messages ?? []} cancellingId={queueCancelling?.sessionId === session.id ? queueCancelling.queueId : null} onCancel={handleCancelQueuedTurn}
+                onEdit={handleEditQueuedMessage} disabled={busy || !isPluginEffective("sessions")}
                 canContinue={session.status !== "running" && session.streaming?.status !== "streaming" && (session.queued_messages ?? []).some(item => item.status === "paused")}
                 continuing={queueContinuingSessions.has(session.id)} onContinue={handleContinueQueuedMessages} />
               {queueError?.sessionId === session.id && <p className="xn-session-queue__error" role="alert">{queueError.message}</p>}

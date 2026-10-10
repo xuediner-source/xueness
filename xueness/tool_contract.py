@@ -80,6 +80,9 @@ class BuiltinTool:
     #: edit, exec, terminal, network-write, subagent and MCP tools stay serial
     #: regardless of this flag.
     concurrency_safe: bool = False
+    #: Optional pure schema transformer owned by the contributing plugin. It
+    #: receives the bound state directory after effective plugin filtering.
+    schema_for_state: Callable[[dict, Path], dict] | None = None
 
     def schema(self) -> dict:
         return {"type": "function", "function": {

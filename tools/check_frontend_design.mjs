@@ -23,7 +23,7 @@ for (const [file, source] of sources) for (const match of source.matchAll(/var\(
 }
 const tokens = readFileSync(resolve(src, 'styles/tokens.css'), 'utf8');
 const blocks = {};
-const tokenSelectors = [':root', '.dark', ':root[data-xn-palette="claude"]', '.dark[data-xn-palette="claude"]'];
+const tokenSelectors = [':root', '.dark', ':root[data-xn-palette="claudex"]', '.dark[data-xn-palette="claudex"]'];
 for (const selector of tokenSelectors) {
   const escaped = selector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   const matches = [...tokens.matchAll(new RegExp(`${escaped}\\s*\\{([^}]+)\\}`, 'g'))];
@@ -35,12 +35,12 @@ function luminance(hex) {
   const channels = [1, 3, 5].map(i => parseInt(hex.slice(i, i + 2), 16) / 255).map(c => c <= .04045 ? c / 12.92 : ((c + .055) / 1.055) ** 2.4);
   return channels[0] * .2126 + channels[1] * .7152 + channels[2] * .0722;
 }
-// Resolved themes: default light/dark plus optional Codex 风格 (stored as claude) light/dark.
+// Resolved themes: default light/dark plus optional Claudex appearance light/dark.
 const themes = {
   'default-light': { ...blocks[':root'] },
   'default-dark': { ...blocks[':root'], ...blocks['.dark'] },
-  'claude-light': { ...blocks[':root'], ...blocks[':root[data-xn-palette="claude"]'] },
-  'claude-dark': { ...blocks[':root'], ...blocks['.dark'], ...blocks['.dark[data-xn-palette="claude"]'] },
+  'claudex-light': { ...blocks[':root'], ...blocks[':root[data-xn-palette="claudex"]'] },
+  'claudex-dark': { ...blocks[':root'], ...blocks['.dark'], ...blocks['.dark[data-xn-palette="claudex"]'] },
 };
 let minimum = Infinity;
 for (const [theme, values] of Object.entries(themes)) {
@@ -71,4 +71,4 @@ for (const [theme, values] of Object.entries(themes)) {
   }
 }
 if (errors.length) { console.error([...new Set(errors)].join('\n')); process.exitCode = 1; }
-else console.log(`PASS: theme variables resolve; muted/subtle/body/accent/status text contrast >= ${minimum.toFixed(2)}:1 on checked surfaces (default + Codex 风格).`);
+else console.log(`PASS: theme variables resolve; muted/subtle/body/accent/status text contrast >= ${minimum.toFixed(2)}:1 on checked surfaces (default + Claudex 外观).`);

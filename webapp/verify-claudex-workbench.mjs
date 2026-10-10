@@ -1,0 +1,193 @@
+#!/usr/bin/env node
+// Built UI and real local APIs. No user's state, credentials or real model.
+import assert from 'node:assert/strict';
+import { spawn } from 'node:child_process';
+import { mkdtemp, mkdir, realpath, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join, resolve, relative } from 'node:path';
+import { chromium } from 'playwright';
+
+const repo = resolve(import.meta.dirname, '..');
+const output = process.env.XUENESS_CLAUDEX_OUTPUT || join(repo, 'claudex-review');
+await mkdir(output, { recursive: true });
+const fixture = await mkdtemp(join(tmpdir(), 'xn-claudex-review-'));
+const source = String.raw`
+import json,sys,threading
+from pathlib import Path
+from xueness import web, plugin_runtime
+from xueness.bundled_plugins.settings.settings_store import save_settings
+from xueness.bundled_plugins.sessions.structured_questions import normalize_questions
+from xueness.bundled_plugins.sessions.queue import MessageQueue
+base,repo=map(Path,sys.argv[1:]);workspace=base/'workspace';workspace.mkdir();state=base/'state'
+ctx=web.build_context(state,base/'runs',workspace,allow_real=False)
+ctx['webapp_dir']=repo/'webapp/dist'
+save_settings(state,{'general':{'language':'zh','sessionsAnswerQuestionEnabled':False},'appearance':{'theme':'light','colorPalette':'claude'}})
+for name in ('onboarding','diagnostics','updates'):plugin_runtime.set_enabled(state,name,False)
+store=ctx['store']
+cards=normalize_questions([{'id':'destination','header':'部署位置','question':'你要部署在哪里？','options':[{'label':'本机','description':'仅在当前设备运行'},{'label':'服务器','description':'部署到已配置的服务器'}]},{'id':'details','header':'补充信息','question':'请提供任务需要的补充说明。'}])
+question=store.new('结构化提问验收',workspace)
+question.update(status='awaiting_user',pending_question='完成这两项选择后继续。',mode='default')
+question['messages'].append({'role':'assistant','content':'','tool_calls':[{'id':'ask-cl','type':'function','function':{'name':'ask_user','arguments':'{}'}}]})
+question['results']['ask-cl']={'ok':True,'awaiting_user':True,'question':question['pending_question'],'questions':cards};store.save(question)
+queued=store.new('队列安全编辑验收',workspace);queued.update(status='paused',mode='default');store.save(queued)
+queue=MessageQueue(store);queue.set_accepting(queued['id'],True)
+item=queue.enqueue(queued['id'],'原排队文字',{'text':'原排队文字\n\n保留的附件上下文','metadata':{},'edit_prefix':'原排队文字'},active_run=True)
+queue.enqueue(queued['id'],'第二条排队消息',active_run=True);queue.pause_pending(queued['id']);queue.set_accepting(queued['id'],False)
+history=store.new('资料记录 A',workspace);history.update(status='completed',mode='default')
+history['messages'].append({'role':'assistant','content':'这是只存在于会话正文的独特关键词。<b>按文字显示</b>'});store.save(history)
+server=web.create_server(0,ctx);worker=threading.Thread(target=server.serve_forever,daemon=True);worker.start()
+print(json.dumps({'port':server.server_address[1],'question':question['id'],'queued':queued['id'],'queueItem':item['id'],'history':history['id']}),flush=True)
+try:sys.stdin.buffer.read()
+finally:server.shutdown();server.server_close();worker.join(timeout=5)
+`;
+const child = spawn(process.env.PYTHON || 'python3', ['-u', '-c', source, fixture, repo], {
+  cwd: repo, windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'],
+  env: { ...process.env, XUENESS_API_KEY: '', ANTHROPIC_API_KEY: '', XUENESS_MODEL: '', XUENESS_API_BASE: '', XUENESS_PROVIDER: '', XUENESS_WORKSPACE_ROOTS: '' },
+});
+const exited = new Promise(done => child.once('exit', done));
+const report = { pageErrors: [], externalRequests: [], settingsWrites: [], modelRuns: 0, views: [], interactions: [] };
+let browser;
+try {
+  const info = await new Promise((done, reject) => {
+    let text = '', stderr = '';
+    const timer = setTimeout(() => reject(new Error('Fixture startup timed out: ' + stderr)), 15000);
+    child.stderr.on('data', chunk => stderr = (stderr + chunk).slice(-5000));
+    child.once('exit', code => { clearTimeout(timer); reject(new Error(`Fixture exited ${code}: ${stderr}`)); });
+    child.stdout.on('data', chunk => { text += chunk; const line = text.split('\n').find(value => value.startsWith('{')); if (line) { clearTimeout(timer); done(JSON.parse(line)); } });
+  });
+  const base = `http://127.0.0.1:${info.port}`;
+  const api = async (path, method='GET', body) => {
+    const headers = { Origin: base };
+    if (body !== undefined) { headers['Content-Type']='application/json'; headers['X-CSRF-Token']=(await (await fetch(base+'/api/csrf')).json()).csrfToken; }
+    const response = await fetch(base+path, { method, headers, ...(body === undefined ? {} : { body: JSON.stringify(body) }) });
+    assert.ok(response.ok, `${method} ${path}: ${response.status}`);
+    return response.json();
+  };
+  browser = await chromium.launch({ channel: process.env.PLAYWRIGHT_CHANNEL || 'chrome', headless: true });
+  const page = await browser.newPage({ viewport: { width: 1280, height: 900 } });
+  page.on('pageerror', error => report.pageErrors.push(error.message));
+  page.on('request', request => {
+    const path = new URL(request.url()).pathname;
+    if (path.startsWith('/api/settings/') && request.method()==='POST') report.settingsWrites.push(path);
+  });
+  await page.route('**/*', route => {
+    const url = new URL(route.request().url());
+    if (url.origin !== base) { report.externalRequests.push(url.href); return route.abort(); }
+    if (/\/run$/.test(url.pathname) && route.request().method()==='POST') report.modelRuns++;
+    return route.continue();
+  });
+  const select = async sid => {
+    const row = page.getByTestId(`xn-sidebar-item-${sid}`);
+    await row.waitFor({ state: 'attached' });
+    if (!await row.isVisible()) await page.locator('[data-testid="xn-shell-sidebar-toggle"]:visible, [data-testid="xn-desktop-titlebar-sidebar"]:visible').click();
+    await row.click();
+  };
+  const snapshot = async name => {
+    const geometry = await page.evaluate(() => ({ width: innerWidth, scrollWidth: document.documentElement.scrollWidth,
+      palette: document.documentElement.dataset.xnPalette || 'xueness', theme: document.documentElement.dataset.xnTheme,
+      background: getComputedStyle(document.documentElement).getPropertyValue('--bg-window').trim(), meta: document.querySelector('meta[name="theme-color"]')?.content }));
+    assert.ok(geometry.scrollWidth <= geometry.width + 1, JSON.stringify(geometry));
+    assert.equal(geometry.meta, geometry.background);
+    await page.screenshot({ path: join(output, `${name}.png`), fullPage: true });
+    report.views.push({ name, ...geometry });
+  };
+  await page.goto(base);
+  await page.waitForSelector('.xn-shell-layout');
+  await page.waitForFunction(() => document.documentElement.dataset.xnPalette==='claudex');
+  await page.getByTestId(`xn-sidebar-item-${info.history}`).waitFor();
+  await snapshot('claudex-light-home');
+
+  await page.keyboard.press('Control+k');
+  const search = page.getByRole('combobox', { name: '搜索任务或命令' });
+  await search.fill('独特关键词');
+  await page.getByTestId(`palette-session-${info.history}`).waitFor();
+  await page.getByTestId(`palette-session-${info.history}`).locator('.xn-command-option__snippet').waitFor();
+  assert.ok((await page.getByTestId(`palette-session-${info.history}`).innerText()).includes('会话正文'));
+  assert.equal(await page.locator('.xn-command-option__snippet b').count(), 0);
+  await snapshot('claudex-content-search');
+  await page.keyboard.press('Escape');
+  report.interactions.push('full-text search, escaped snippet and Escape');
+
+  await select(info.question);
+  await page.getByRole('radio', { name: /本机/ }).waitFor();
+  const save = page.getByRole('button', { name: '仅保存答复', exact: true });
+  assert.equal(await save.isDisabled(), true);
+  assert.equal(await page.getByRole('radio', { name: /本机/ }).isChecked(), false);
+  await page.getByRole('radio', { name: /本机/ }).check();
+  await page.locator(`[id="question-custom-${info.question}-details"]`).fill('完整验收说明');
+  assert.equal(await save.isEnabled(), true);
+  await snapshot('claudex-light-question');
+  await save.click();
+  await page.getByRole('button', { name: '继续任务', exact: true }).waitFor();
+  assert.equal(report.modelRuns, 0, 'save-only must not start a model run');
+  const saved = await api(`/api/sessions/${info.question}`);
+  assert.equal(saved.session?.status || saved.status, 'paused');
+  report.interactions.push('no preselected choice, all questions required, save-only and explicit resume');
+
+  await select(info.queued);
+  await page.getByTestId('session-queue').waitFor();
+  const toggle = page.locator('.xn-session-queue__toggle');
+  await toggle.click(); assert.equal(await toggle.getAttribute('aria-expanded'), 'false');
+  assert.equal(await page.locator('.xn-session-queue__items').isVisible(), false);
+  await toggle.click();
+  await page.getByRole('button', { name: '编辑排队消息', exact: true }).first().click();
+  await page.getByRole('textbox', { name: '编辑排队消息', exact: true }).fill('修改后的排队文字');
+  const queueResponse = page.waitForResponse(response => response.url().includes(`/queue/${info.queueItem}`) && response.request().method()==='PATCH');
+  await page.locator('.xn-session-queue__editor').getByRole('button', { name: '保存', exact: true }).click();
+  const patched = await queueResponse;
+  assert.ok(patched.ok(), JSON.stringify(await patched.json()));
+  await page.locator('.xn-session-queue__editor').waitFor({ state: 'hidden' });
+  await page.getByText('修改后的排队文字', { exact: true }).waitFor();
+  assert.equal((await api(`/api/sessions/${info.queued}/queue`)).queued_messages[0].text, '修改后的排队文字');
+  await snapshot('claudex-queue-edited');
+  report.interactions.push('queue collapse, edit through PATCH API, authoritative reload');
+
+  await page.locator('.xn-sidebar-footer__action[data-sidebar-navigate="true"]').click();
+  await page.getByTestId('xn-settings-nav-appearance').click();
+  const appearance = page.getByRole('radiogroup', { name: '外观', exact: true });
+  await appearance.waitFor();
+  await page.waitForFunction(() => document.querySelector('.xn-appearance-choice input[value="claudex"]')?.checked);
+  await snapshot('claudex-appearance-before');
+  const savedXueness = page.waitForResponse(response => response.url().endsWith('/api/settings/appearance') && response.request().method()==='POST').catch(error => { throw error; });
+  // Register a rejection handler immediately; a blocked click must preserve
+  // the fixture report instead of ending Node on an unhandled rejection.
+  void savedXueness.catch(() => {});
+  await appearance.locator('.xn-appearance-choice').filter({ hasText: 'Xueness' }).click({ timeout: 5000 });
+  assert.ok((await savedXueness).ok());
+  await page.waitForFunction(() => !document.documentElement.dataset.xnPalette);
+  assert.equal((await api('/api/settings/appearance')).values.colorPalette, 'xueness');
+  const savedClaudex = page.waitForResponse(response => response.url().endsWith('/api/settings/appearance') && response.request().method()==='POST');
+  void savedClaudex.catch(() => {});
+  await appearance.locator('.xn-appearance-choice').filter({ hasText: 'Claudex' }).click();
+  assert.ok((await savedClaudex).ok());
+  await page.waitForFunction(() => document.documentElement.dataset.xnPalette==='claudex');
+  await snapshot('claudex-appearance-settings');
+  report.interactions.push('appearance radio cards persist through the production settings API');
+
+  for (const palette of ['claudex', 'xueness']) for (const theme of ['light', 'dark']) {
+    await api('/api/settings/appearance', 'POST', { values: { colorPalette: palette, theme } });
+    await page.reload();
+    await select(info.question);
+    await page.getByRole('button', { name: '继续任务', exact: true }).waitFor();
+    await page.waitForFunction(({palette,theme}) => (document.documentElement.dataset.xnPalette || 'xueness')===palette && document.documentElement.dataset.xnTheme===theme, {palette,theme});
+    await snapshot(`${palette}-${theme}-conversation`);
+    await page.setViewportSize({ width: 420, height: 860 });
+    await page.waitForFunction(() => document.querySelector('.xn-shell-main')?.getBoundingClientRect().width >= innerWidth - 20);
+    assert.equal(await page.getByRole('button', { name: '继续任务', exact: true }).isVisible(), true);
+    await snapshot(`${palette}-${theme}-narrow`);
+    await page.setViewportSize({ width: 1280, height: 900 });
+  }
+  assert.deepEqual(report.pageErrors, []);
+  assert.deepEqual(report.externalRequests, []);
+  console.log(`PASS: Claudex and Xueness built UI, ${report.views.length} views, ${report.interactions.length} interaction groups; no model runs.`);
+} finally {
+  await writeFile(join(output, 'ui-report.json'), JSON.stringify(report, null, 2));
+  await browser?.close();
+  child.stdin.end();
+  await Promise.race([exited, new Promise(done => setTimeout(done, 6000))]);
+  if (child.exitCode === null) { child.kill(); await exited; }
+  const resolved = await realpath(fixture);
+  assert.equal(resolved, resolve(fixture));
+  assert.ok(relative(tmpdir(), resolved).startsWith('xn-claudex-review-'));
+  await rm(resolved, { recursive: true, force: true });
+}

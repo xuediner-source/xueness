@@ -14,6 +14,7 @@ from pathlib import Path
 from ... import plugin_runtime
 from ... import web as host
 from ..settings.settings_store import load_settings
+from .structured_questions import available, pending_questions, normalize_answers, answer_digest_source, format_answers
 
 FEATURE_ID = 'sessions.answer_question_experimental'
 SETTINGS_KEY = 'sessionsAnswerQuestionEnabled'
@@ -52,6 +53,8 @@ def _question_id(session: dict, question: str) -> str:
                         and isinstance(result, dict) and result.get('awaiting_user') is True
                         and result.get('question') == question):
                     anchor = ['ask_user', message_index, call_id, question]
+                    if 'questions' in result:
+                        anchor.append(result['questions'])
                     break
             else:
                 continue
@@ -95,35 +98,46 @@ def _load(ctx, sid):
         return None
 
 
-def _question_payload(session: dict, is_enabled: bool):
+def _question_payload(session: dict, is_enabled: bool, *, structured_allowed=False):
     text = session.get('pending_question')
     pending = None
     if (is_enabled and session.get('status') == 'awaiting_user'
             and isinstance(text, str) and text.strip()):
         pending = {'id': _question_id(session, text), 'text': text}
+        questions = pending_questions(session) if structured_allowed else []
+        if questions:
+            pending['questions'] = questions
     return {'id': session['id'], 'enabled': is_enabled, 'question': pending}
 
 
 def _post_answer(ctx, sid: str, data):
-    if not isinstance(data, dict) or set(data) != {'questionId', 'answer'}:
-        return _error(400, 'expected questionId and answer', 'sessions.answer_question.invalid_request')
+    if not isinstance(data, dict) or set(data) not in ({'questionId', 'answer'}, {'questionId', 'answers'}):
+        return _error(400, 'expected questionId and either answer or answers', 'sessions.answer_question.invalid_request')
     question_id, answer = data.get('questionId'), data.get('answer')
+    structured = 'answers' in data
+    answers = None
     if not isinstance(question_id, str) or not _QUESTION_ID.fullmatch(question_id):
         return _error(400, 'invalid questionId', 'sessions.answer_question.invalid_request')
-    if not isinstance(answer, str):
+    if not structured and not isinstance(answer, str):
         return _error(400, 'answer must be 1..5000 characters',
                       'sessions.answer_question.invalid_answer')
     try:
-        normalized = answer.strip()
-        if not 1 <= len(normalized) <= _MAX_ANSWER_CHARS:
+        if structured:
+            answers = normalize_answers(data['answers'])
+            normalized = answer_digest_source(answers)
+        else:
+            normalized = answer.strip()
+        if not structured and not 1 <= len(normalized) <= _MAX_ANSWER_CHARS:
             return _error(400, 'answer must be 1..5000 characters',
                           'sessions.answer_question.invalid_answer')
         answer_digest = hashlib.sha256(normalized.encode('utf-8')).hexdigest()
     except UnicodeEncodeError:
         return _error(400, 'answer must be valid UTF-8',
                       'sessions.answer_question.invalid_answer')
+    except ValueError as error:
+        return _error(400, str(error), 'sessions.answer_question.invalid_answer')
 
-    if not enabled(ctx):
+    if (structured and not available(ctx.get('state_dir'))) or (not structured and not enabled(ctx)):
         return 403, {'error': FEATURE_ID + ' not enabled', 'feature': FEATURE_ID}
     with ctx['lock']:
         if sid in ctx.get('running', {}):
@@ -133,9 +147,10 @@ def _post_answer(ctx, sid: str, data):
         with host.lease(ctx['store'], sid):
             # Re-check both switches and the journal while holding the same
             # cross-process lease used by the run and legacy answer route.
-            if not enabled(ctx):
+            if (structured and not available(ctx.get('state_dir'))) or (not structured and not enabled(ctx)):
                 return 403, {'error': FEATURE_ID + ' not enabled', 'feature': FEATURE_ID}
             session = ctx['store'].load(sid)
+            questions = pending_questions(session)
             try:
                 _validate_workspace(ctx, session)
             except (OSError, ValueError):
@@ -164,6 +179,17 @@ def _post_answer(ctx, sid: str, data):
             if current_id != question_id:
                 return _error(409, 'question is stale',
                               'sessions.answer_question.question_stale')
+
+            if structured:
+                if not available(ctx.get('state_dir')):
+                    return 403, {'error': 'structured questions are unavailable', 'feature': 'sessions.structured_questions'}
+                try:
+                    normalized = format_answers(questions, answers)
+                except ValueError as error:
+                    return _error(400, str(error), 'sessions.answer_question.invalid_answer')
+            elif not enabled(ctx):
+                # Preserve the explicit opt-in for legacy free-text questions.
+                return 403, {'error': FEATURE_ID + ' not enabled', 'feature': FEATURE_ID}
 
             session.setdefault('question_answer_records', {})[question_id] = answer_digest
             result = host.answer_session(session, ctx['store'], normalized)
@@ -200,5 +226,6 @@ def dispatch(method, parts, query, data, ctx):
     except (OSError, ValueError):
         return _error(400, 'workspace root not permitted',
                       'sessions.answer_question.workspace_not_permitted')
-    active = enabled(ctx)
-    return 200, _question_payload(session, active)
+    structured_allowed = available(ctx.get('state_dir'))
+    active = enabled(ctx) or (structured_allowed and bool(pending_questions(session)))
+    return 200, _question_payload(session, active, structured_allowed=structured_allowed)

@@ -19,27 +19,24 @@ test("默认配色：中性 Xueness 浅色/深色，不是暖色象牙白", () =
   assert.equal(value(block(":root"), "accent-brand"), "#0369a1");
 });
 
-test("Codex 风格：中性白色画布、#f3f3f3 侧栏、#0d0d0d 文字，仅在 data-xn-palette=claude 下生效", () => {
-  const light = block(':root[data-xn-palette="claude"]');
-  const dark = block('.dark[data-xn-palette="claude"]');
-  assert.ok(light, "codex light block");
-  assert.ok(dark, "codex dark block");
-  for (const [selector, source] of [['codex-light', light], ['codex-dark', dark]] as const) {
+test("Claudex uses warm surfaces and keeps the same native chrome token source", () => {
+  const light = block(':root[data-xn-palette="claudex"]');
+  const dark = block('.dark[data-xn-palette="claudex"]');
+  assert.ok(light, "Claudex light block");
+  assert.ok(dark, "Claudex dark block");
+  for (const [selector, source] of [['claudex-light', light], ['claudex-dark', dark]] as const) {
     for (const name of ["bg", "bg-window", "bg-sidebar", "bg-card", "bg-panel"]) {
       const hex = value(source, name);
       assert.match(hex, /^#[0-9a-f]{6}$/i, `${selector} --${name}`);
       const [r, g, b] = rgb(hex);
-      assert.ok(r === g && g === b, `${selector} --${name} ${hex} should be neutral gray like Codex`);
+      assert.ok(r >= g && g >= b, `${selector} --${name} ${hex} should have a warm neutral hierarchy`);
     }
   }
-  assert.equal(value(light, "bg"), "#ffffff");
-  assert.equal(value(light, "bg-sidebar"), "#f3f3f3");
-  assert.equal(value(light, "fg"), "#0d0d0d");
-  assert.equal(value(light, "codex-user-bubble"), "#f3f3f3");
-  assert.equal(value(dark, "bg"), "#181818");
-  assert.equal(value(dark, "fg"), "#ffffff");
-  assert.equal(value(light, "codex-toggle"), "#0285ff");
-  assert.equal(value(dark, "codex-toggle"), "#339cff");
+  assert.equal(value(light, "xn-native-titlebar-color"), "var(--claudex-frame)");
+  assert.equal(value(light, "bg-window"), value(light, "claudex-frame"));
+  assert.equal(value(dark, "bg-window"), value(dark, "claudex-frame"));
+  assert.notEqual(value(light, "bg"), value(light, "bg-sidebar"));
+  assert.notEqual(value(dark, "bg"), value(dark, "bg-sidebar"));
   assert.equal(value(light, "accent"), "var(--accent-brand)");
 });
 

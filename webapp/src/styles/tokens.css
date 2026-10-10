@@ -4,7 +4,7 @@
  * Supports both light mode and dark mode via CSS custom properties.
  * A single light/dark token source. Theme is resolved before the first paint;
  * semantic aliases stay theme-aware and retain the neutral Xueness palette by
- * default. Optional palettes (e.g. Codex 风格) override colors via
+ * default. Optional palettes (e.g. Claudex 外观) override colors via
  * html[data-xn-palette="…"] without changing the default.
  */
 
@@ -242,83 +242,76 @@
   --assistant-msg-fg: var(--fg);
 }
 
-/* Optional Codex 风格 scheme (settings → 外观 → 配色方案 = Codex 风格; the
- * stored value stays data-xn-palette="claude" so existing settings keep
- * working). Replicates the OpenAI Codex desktop app (macOS + Windows, 2026):
- * neutral white canvas, #f3f3f3 sidebar, #0d0d0d ink, black send action, blue
- * links. Values measured from the official Codex docs screenshots, see
- * xueness-opt/screens/claude-ref/REFERENCE.md. --codex-* layout tokens are
- * consumed only by styles/codex-scheme.css; shared tokens (--xn-ui-font-size,
- * radius, spacing) are untouched, so nothing zooms globally. Muted text is a
- * little darker than Codex (#6e6e6e vs #8f8f8f) to keep 4.5:1 contrast. */
-:root[data-xn-palette="claude"] {
-  --codex-sidebar-width: 290px;
-  --codex-rail-width: 52px;
-  --codex-titlebar-height: 44px;
-  /* Read by the desktop preload on wide windows (>=901px, where the Codex
-   * title bar applies) to size and colour the native window controls. */
-  --xn-native-titlebar-height: var(--codex-titlebar-height);
-  --xn-native-titlebar-color: var(--codex-frame);
-  --codex-frame-inset: 4px;
-  --codex-column: 736px;
-  --codex-row-height: 30px;
-  --codex-header-height: 46px;
-  --codex-frame: #ececec;
-  --codex-rail-fg: #6e6e6e;
-  --codex-rail-active: rgba(0, 0, 0, 0.07);
-  --codex-sidebar-fg: #1f1f1f;
-  --codex-composer-bg: #ffffff;
-  --codex-composer-strip: #f3f3f3;
-  --codex-placeholder: #8f8f8f;
-  --codex-user-bubble-fg: #0d0d0d;
-  --codex-start-mark: #8f8f8f;
-  --codex-ease: cubic-bezier(.2, 0, 0, 1);
-  --codex-faint: #8f8f8f;
-  --codex-hairline: #ececec;
-  --codex-composer-border: #e2e2e2;
-  --codex-composer-shadow: 0 1px 2px rgb(0 0 0 / .04), 0 4px 16px rgb(0 0 0 / .04);
-  --codex-send-bg: #0d0d0d;
-  --codex-send-fg: #ffffff;
-  --codex-send-disabled: #868686;
-  --codex-toggle: #0285ff;
-  --codex-knob: #ffffff;
-  --codex-user-bubble: #f3f3f3;
-  --codex-card: #f6f6f6;
-  --codex-card-row: #f3f3f3;
-  --codex-inline-code: #f3f3f3;
-  --codex-link: #0169cc;
-  --codex-added: #00a240;
-  --codex-removed: #e02e2a;
+/* Claudex: warm paper surfaces with a compact workbench. Appearance only.
+ * Legacy `claude` settings are normalized by themeBoot. Both platforms read
+ * these tokens for native chrome; no provider or permission depends on them. */
+:root[data-xn-palette="claudex"] {
+  --claudex-sidebar-width: 268px;
+  --claudex-rail-width: 48px;
+  --claudex-titlebar-height: 44px;
 
-  --bg-window: #f3f3f3;
-  --bg-sidebar: #f3f3f3;
+  --xn-native-titlebar-height: var(--claudex-titlebar-height);
+  --xn-native-titlebar-color: var(--claudex-frame);
+  --claudex-frame-inset: 4px;
+  --claudex-column: 760px;
+  --claudex-row-height: 32px;
+  --claudex-header-height: 46px;
+  --claudex-frame: #eeeae4;
+  --claudex-rail-fg: #6b655d;
+  --claudex-rail-active: rgba(0, 0, 0, 0.07);
+  --claudex-sidebar-fg: #3b3731;
+  --claudex-composer-bg: #ffffff;
+  --claudex-composer-strip: #f4f2ed;
+  --claudex-placeholder: #797268;
+  --claudex-user-bubble-fg: #24211d;
+  --claudex-start-mark: #9a4f34;
+  --claudex-ease: cubic-bezier(.2, 0, 0, 1);
+  --claudex-faint: #797268;
+  --claudex-hairline: #e5e0d7;
+  --claudex-composer-border: #ded8ce;
+  --claudex-composer-shadow: 0 1px 2px rgb(0 0 0 / .04), 0 4px 16px rgb(0 0 0 / .04);
+  --claudex-send-bg: #29251f;
+  --claudex-send-fg: #ffffff;
+  --claudex-send-disabled: #868078;
+  --claudex-toggle: #9a4f34;
+  --claudex-knob: #ffffff;
+  --claudex-user-bubble: #f0ede6;
+  --claudex-card: #f5f3ed;
+  --claudex-card-row: #f0ede6;
+  --claudex-inline-code: #f0ede6;
+  --claudex-link: #895037;
+  --claudex-added: #00a240;
+  --claudex-removed: #e02e2a;
+
+  --bg-window: #eeeae4;
+  --bg-sidebar: #f0eee8;
   --bg-panel: #ffffff;
   --bg-input: #ffffff;
   --bg-popover: #ffffff;
-  --bg: #ffffff;
-  --bg-subtle: #f6f6f6;
+  --bg: #faf9f5;
+  --bg-subtle: #f5f3ed;
   --bg-card: #ffffff;
   --bg-hover: rgba(0, 0, 0, 0.04);
   --bg-active: rgba(0, 0, 0, 0.05);
-  --fg: #0d0d0d;
-  --fg-subtle: #5d5d5d;
-  --fg-muted: #6e6e6e;
+  --fg: #24211d;
+  --fg-subtle: #554f48;
+  --fg-muted: #6b655d;
   --fg-inverted: #ffffff;
-  --conversation-fg: #0d0d0d;
-  --conversation-muted: #6e6e6e;
-  --conversation-subtlest: #8f8f8f;
-  --conversation-user-surface: #f3f3f3;
-  --border: rgba(13, 13, 13, 0.08);
-  --border-strong: rgba(13, 13, 13, 0.12);
-  --border-focus: rgba(2, 133, 255, 0.55);
-  --accent-brand: #0169cc;
-  --accent-brand-hover: #0158ab;
+  --conversation-fg: #24211d;
+  --conversation-muted: #6b655d;
+  --conversation-subtlest: #797268;
+  --conversation-user-surface: #f0ede6;
+  --border: rgba(47, 40, 30, 0.10);
+  --border-strong: rgba(47, 40, 30, 0.17);
+  --border-focus: rgba(154, 79, 52, 0.55);
+  --accent-brand: #9a4f34;
+  --accent-brand-hover: #80412b;
   --accent-brand-fg: #ffffff;
-  --accent-soft: rgba(2, 133, 255, 0.10);
-  --focus-ring: rgba(2, 133, 255, 0.6);
-  --primary: #0d0d0d;
-  --primary-hover: #262626;
-  --primary-active: #000000;
+  --accent-soft: rgba(154, 79, 52, 0.08);
+  --focus-ring: rgba(154, 79, 52, 0.7);
+  --primary: #29251f;
+  --primary-hover: #403930;
+  --primary-active: #211e19;
   --primary-fg: #ffffff;
   --primary-light: rgba(13, 13, 13, 0.06);
   --ok: #00a240;
@@ -344,66 +337,63 @@
   --tool-accent: #c98a00;
   --tool-result-accent: #0285ff;
 }
-.dark[data-xn-palette="claude"] {
-  /* Measured from the real Codex app (macOS dark, 2x window capture,
-   * 2026-10-10): frame/titlebar/rail #242424, sidebar #1d1d1d, canvas
-   * #181818, composer #383838, start strip #282828, blue user bubble #223d72,
-   * blue round action #3c66bf, sidebar text #dddddd, rail icons #919191. */
-  --codex-faint: #8a8a8a;
-  --codex-hairline: #2f2e2e;
-  --codex-composer-border: transparent;
-  --codex-composer-shadow: none;
-  --codex-send-bg: #3c66bf;
-  --codex-send-fg: #ffffff;
-  --codex-send-disabled: #3c66bf;
-  --codex-toggle: #339cff;
-  --codex-user-bubble: #223d72;
-  --codex-user-bubble-fg: #f7fafe;
-  --codex-card: #1f1e1e;
-  --codex-card-row: #1c1b1b;
-  --codex-inline-code: #2b2b2b;
-  --codex-link: #6184cb;
-  --codex-added: #6bc67f;
-  --codex-removed: #e15046;
-  --codex-frame: #242424;
-  --codex-rail-fg: #919191;
-  --codex-rail-active: #353535;
-  --codex-sidebar-fg: #dddddd;
-  --codex-composer-bg: #383838;
-  --codex-composer-strip: #282828;
-  --codex-placeholder: #737373;
-  --codex-start-mark: #5d5d5d;
+.dark[data-xn-palette="claudex"] {
 
-  --bg-window: #242424;
-  --bg-sidebar: #1d1d1d;
-  --bg-panel: #181818;
-  --bg-input: #2d2d2d;
-  --bg-popover: #2a2a2a;
-  --primary-fg: #0d0d0d;
-  --bg: #181818;
-  --bg-subtle: #232323;
-  --bg-card: #1c1c1c;
+  --claudex-faint: #aaa397;
+  --claudex-hairline: #3a3630;
+  --claudex-composer-border: #4c4740;
+  --claudex-composer-shadow: none;
+  --claudex-send-bg: #ded8cc;
+  --claudex-send-fg: #24211d;
+  --claudex-send-disabled: #797268;
+  --claudex-toggle: #dfab86;
+  --claudex-user-bubble: #36332d;
+  --claudex-user-bubble-fg: #eeebe4;
+  --claudex-card: #282621;
+  --claudex-card-row: #24231f;
+  --claudex-inline-code: #36332d;
+  --claudex-link: #dfab86;
+  --claudex-added: #6bc67f;
+  --claudex-removed: #e15046;
+  --claudex-frame: #262522;
+  --claudex-rail-fg: #aba69d;
+  --claudex-rail-active: #35322c;
+  --claudex-sidebar-fg: #dedad2;
+  --claudex-composer-bg: #302e29;
+  --claudex-composer-strip: #282621;
+  --claudex-placeholder: #aaa397;
+  --claudex-start-mark: #dfab86;
+
+  --bg-window: #262522;
+  --bg-sidebar: #252420;
+  --bg-panel: #24231f;
+  --bg-input: #302e29;
+  --bg-popover: #302e29;
+  --primary-fg: #24211d;
+  --bg: #1f1e1b;
+  --bg-subtle: #282621;
+  --bg-card: #24231f;
   --bg-hover: rgba(255, 255, 255, 0.05);
   --bg-active: rgba(255, 255, 255, 0.08);
-  --fg: #ffffff;
-  --fg-subtle: #c8c8c8;
-  --fg-muted: #9a9a9a;
-  --fg-inverted: #0d0d0d;
-  --conversation-fg: #ffffff;
-  --conversation-muted: #9a9a9a;
-  --conversation-subtlest: #7a7a7a;
-  --conversation-user-surface: #2b2b2b;
-  --border: rgba(255, 255, 255, 0.08);
-  --border-strong: rgba(255, 255, 255, 0.12);
-  --border-focus: rgba(51, 156, 255, 0.6);
-  --accent-brand: #339cff;
-  --accent-brand-hover: #5cb0ff;
-  --accent-brand-fg: #0d0d0d;
-  --accent-soft: rgba(51, 156, 255, 0.14);
-  --focus-ring: rgba(51, 156, 255, 0.7);
-  --primary: #ffffff;
-  --primary-hover: #e6e6e6;
-  --primary-active: #ffffff;
+  --fg: #eeebe4;
+  --fg-subtle: #c8c2b7;
+  --fg-muted: #aba69d;
+  --fg-inverted: #24211d;
+  --conversation-fg: #eeebe4;
+  --conversation-muted: #aba69d;
+  --conversation-subtlest: #aaa397;
+  --conversation-user-surface: #36332d;
+  --border: rgba(238, 235, 228, 0.10);
+  --border-strong: rgba(238, 235, 228, 0.17);
+  --border-focus: rgba(223, 171, 134, 0.6);
+  --accent-brand: #dfab86;
+  --accent-brand-hover: #ecc0a0;
+  --accent-brand-fg: #24211d;
+  --accent-soft: rgba(223, 171, 134, 0.10);
+  --focus-ring: rgba(223, 171, 134, 0.7);
+  --primary: #eeebe4;
+  --primary-hover: #ded8cc;
+  --primary-active: #f8f5ef;
   --primary-light: rgba(255, 255, 255, 0.08);
   --ok: #40c977;
   --ok-bg: #12291b;

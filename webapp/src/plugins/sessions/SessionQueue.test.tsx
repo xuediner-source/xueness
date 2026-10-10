@@ -24,3 +24,13 @@ test("queue panel shows FIFO positions, supports paused cancellation and exposes
 test("an empty queue adds no timeline noise", () => {
   assert.equal(renderToStaticMarkup(<SessionQueue items={[]} onCancel={() => {}} />), "");
 });
+
+test("queue can collapse and editing is offered only for safely replaceable pending messages", () => {
+  const html = renderToStaticMarkup(<SessionQueue items={[
+    { id: "q1", text: "pending", status: "queued", editable: true },
+    { id: "q2", text: "active", status: "running", editable: false },
+    { id: "q3", text: "/expanded", status: "paused", editable: false },
+  ]} onCancel={() => {}} onEdit={async () => {}} />);
+  assert.match(html, /aria-expanded="true"/);
+  assert.equal((html.match(/aria-label="编辑排队消息"/g) ?? []).length, 1);
+});

@@ -65,6 +65,7 @@
     "xuenessSettingsNavigation.ts",
     "xuenessShortcutCommands.ts",
     "xuenessWorkspaces.ts",
-    "plugins/settings/themeBoot.ts"
+    "plugins/settings/themeBoot.ts",
+    "plugins/settings/AppearancePicker.tsx"
   ]
 }

@@ -1,5 +1,5 @@
 const TITLEBAR_HEIGHT = 40;
-// Codex 风格 uses a 44px title bar on wide windows; any other value keeps 40.
+// Claudex appearance uses a 44px title bar on wide windows; any other value keeps 40.
 const TITLEBAR_HEIGHTS = new Set([TITLEBAR_HEIGHT, 44]);
 const MAC_TRAFFIC_LIGHT_X = 14;
 // Native traffic lights are about 16px tall; keep them vertically centred.

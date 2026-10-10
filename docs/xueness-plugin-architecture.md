@@ -1,5 +1,7 @@
 # Xueness 插件架构与功能归属
 
+2026-10-10 Claudex 外观与全局会话改进：目录现为 **28 个插件、178 项登记功能**。Claudex 归属既有 `settings.appearance`，只修改外观；`sessions.full_text_search` 和 `sessions.structured_questions` 新增有界正文搜索及结构化答复，`sessions.message_queue` 扩展安全编辑与折叠。新 Python/前端文件均登记于原插件 manifest。`BuiltinTool.schema_for_state` 是工具契约的可选纯数据转换接口，用于在持久插件过滤后调用所属插件的 schema 贡献；提问业务与开关判断留在 planning/sessions，不扩大共享白名单。使用方法、参考源码和兼容边界见 [Claudex 与会话改进](claudex-reference-review.md)。
+
 2026-10-10 远程握手：按各插件 manifest 实点，目录现为 **28 个插件、176 项登记功能**。remote 新增实验功能 `remote.handshake`（默认关闭）。开启后，已批准的 POSIX SSH 先跑固定探测，再决定是否发送操作者命令；探测到 Windows 壳则拒绝。声明为 `system=windows` 的主机仍在 SSH 之前拒绝。见 [远程握手](remote-handshake.md)。
 
 2026-10-10 宿主能力探测：按各插件 manifest 实点，目录现为 **28 个插件、175 项登记功能**。desktop 新增实验功能 `desktop.host_capability`（默认关闭）。开启后 `GET /api/desktop/host-capability` 用既有平台 helper 报告 Windows / macOS 能力；`POST` 签发 30 秒一次性票据，消费后不提升权限。关闭时不签发，`/api/desktop/status` 字段不变。见 [宿主能力](host-capability.md)。

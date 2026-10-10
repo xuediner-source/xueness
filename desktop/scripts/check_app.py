@@ -19,6 +19,7 @@ expected_plugins = len(PLUGIN_IDS)
 expected_features = sum(len(json.loads((ROOT/'xueness/bundled_plugins'/ident/'manifest.json').read_text(encoding='utf-8'))['features']) for ident in PLUGIN_IDS)
 parser = argparse.ArgumentParser()
 parser.add_argument('--executable', type=Path, help='check this packaged application executable')
+parser.add_argument('--screenshots', type=Path, help='save native appearance screenshots in this directory')
 args = parser.parse_args()
 if args.executable:
     executable = args.executable.expanduser().resolve()
@@ -41,6 +42,9 @@ with tempfile.TemporaryDirectory(prefix='xueness-app-check-') as temporary:
     plugin_state.write_text(json.dumps({'apiVersion': 1, 'enabled': {'updates': False}}), encoding='utf-8')
     env = {**os.environ, 'XUENESS_DESKTOP_DATA': str(isolated_data),
            'XUENESS_DESKTOP_SMOKE_FILE': str(report), 'XUENESS_ALLOW_REAL': '0'}
+    if args.screenshots:
+        args.screenshots.mkdir(parents=True, exist_ok=True)
+        env['XUENESS_DESKTOP_SMOKE_SCREENSHOTS'] = str(args.screenshots.resolve())
     result = subprocess.run([str(executable)], env=env, capture_output=True, timeout=90)
     if result.returncode or not report.exists():
         detail = json.loads(report.read_text(encoding='utf-8')).get('reason', '') if report.exists() else ''
@@ -64,12 +68,23 @@ with tempfile.TemporaryDirectory(prefix='xueness-app-check-') as temporary:
             assert state.get('dockTaskPopupReady') is True, state
         else:
             assert 10 <= insets.get('brandLeft', 0) < 30 and insets.get('actionsRight', 0) >= 148, state
-        assert state.get('nativeBackground', '').lower() == state.get('windowBgToken', '').lower(), state
+        appearances = state.get('appearanceChecks', [])
+        assert len(appearances) == 4, state
+        assert {(row['palette'], row['theme']) for row in appearances} == {
+            (palette, theme) for palette in ('xueness', 'claudex') for theme in ('light', 'dark')}, state
+        for row in appearances:
+            assert row['nativeBackground'].lower() == row['chromeToken'].lower(), row
+            assert row['meta'].lower() == row['windowBgToken'].lower() and row['nodeAccess'] is False, row
+            if sys.platform == 'darwin':
+                assert row['historyLeft'] >= 78 and 10 <= row['actionsRight'] < 30, row
+            else:
+                assert row['historyLeft'] >= 10 and row['actionsRight'] >= 148, row
         native_menus = set(state.get('nativeMenuLabels', []))
         assert {'编辑', '视图', '窗口'} <= native_menus or {'Edit', 'View', 'Window'} <= native_menus, state
     print(f'PASS: packaged Electron workbench renders, {expected_plugins} plugins/{expected_features} features, isolated renderer and clean exit')
     if sys.platform in ('darwin', 'win32'):
         print('PASS: native window caption safe areas, workbench background theme and localized application menu')
+        print('PASS: Claudex and Xueness light/dark native caption colors and renderer safe areas')
     if sys.platform == 'darwin':
         print('PASS: macOS Dock opens the shared production task popup')
     resources = executable.parent/'resources' if os.name == 'nt' else executable.parents[1]/'Resources'

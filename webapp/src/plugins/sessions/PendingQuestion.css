@@ -2,7 +2,7 @@
 .xn-pending-question header, .xn-pending-question footer { display: flex; gap: 12px; align-items: center; justify-content: space-between; }
 .xn-pending-question h3 { margin: 0; font-size: 14px; font-weight: 600; }
 .xn-pending-question header span, .xn-pending-question small { color: var(--fg-muted); font-size: 12px; }
-.xn-pending-question__text { white-space: pre-wrap; overflow-wrap: anywhere; box-sizing: border-box; width: min(100% - var(--space-8), var(--workbench-content-width)); margin: 12px auto; }
+.xn-pending-question__text { white-space: pre-wrap; overflow-wrap: anywhere; box-sizing: border-box; width: 100%; margin: 12px 0; }
 .xn-pending-question__label { display: block; font-size: 12px; color: var(--fg-muted); margin-bottom: 6px; }
 .xn-pending-question textarea { box-sizing: border-box; width: 100%; resize: vertical; min-height: 80px; padding: 10px 12px; color: var(--fg); background: var(--bg-input); border: 1px solid var(--border); border-radius: 9px; font: inherit; }
 .xn-pending-question textarea:focus-visible { outline: 2px solid var(--fg); outline-offset: 2px; }
@@ -12,3 +12,15 @@
 
 
 .xn-question-resume { width: min(100% - var(--space-8), var(--workbench-content-width)); margin: 8px auto; display: flex; justify-content: flex-end; }
+.xn-question-cards { display: grid; gap: 18px; }
+.xn-question-card { margin: 0; padding: 0; border: 0; min-width: 0; }
+.xn-question-card legend { display: grid; gap: 6px; padding: 0; color: var(--fg); font-size: 14px; line-height: 1.6; }
+.xn-question-card legend > span { color: var(--fg-muted); font-size: 12px; }
+.xn-question-card__options { display: grid; gap: 8px; margin: 12px 0; }
+.xn-question-card__choice { display: flex; gap: 10px; align-items: start; padding: 12px; border: 1px solid var(--border-strong); border-radius: 10px; background: var(--bg-card); cursor: pointer; }
+.xn-question-card__choice[data-selected="true"] { border-color: var(--accent-brand); background: var(--accent-soft); }
+.xn-question-card__choice input { margin-top: 3px; accent-color: var(--accent-brand); }
+.xn-question-card__choice > span { display: grid; gap: 4px; }
+.xn-question-card__choice strong { font-size: 13px; font-weight: 600; color: var(--fg); }
+.xn-question-card__choice > span > span { font-size: 12px; color: var(--fg-muted); line-height: 1.5; }
+.xn-question-card > label { display: block; margin-top: 8px; font-size: 12px; color: var(--fg-muted); }

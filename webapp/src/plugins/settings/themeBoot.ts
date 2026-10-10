@@ -1,8 +1,7 @@
 /** The same theme resolver runs in the document head and the React settings host. */
 export type ThemePreference = 'light' | 'dark' | 'system';
-/** Optional UI color palette. Default Xueness is the original look; the stored
- * value `claude` keeps older settings working and is shown as 「Codex 风格」. */
-export type ColorPalettePreference = 'xueness' | 'claude';
+/** Appearance only: it never changes the provider, tools or permission mode. */
+export type ColorPalettePreference = 'xueness' | 'claudex';
 
 export function normalizeTheme(value: unknown): ThemePreference {
   return value === 'light' || value === 'dark' ? value : 'system';
@@ -12,7 +11,17 @@ export function resolveTheme(value: unknown, systemDark: boolean): 'light' | 'da
   return theme === 'system' ? (systemDark ? 'dark' : 'light') : theme;
 }
 export function normalizeColorPalette(value: unknown): ColorPalettePreference {
-  return value === 'claude' ? 'claude' : 'xueness';
+  // `claude` was the persisted identifier of the former Codex appearance.
+  return value === 'claudex' || value === 'claude' ? 'claudex' : 'xueness';
+}
+
+/** The document and native caption buttons read the CSS palette. Before the
+ * stylesheet loads we keep the existing meta value; DOMContentLoaded syncs it. */
+export function syncDocumentThemeColor(): void {
+  if (typeof document === 'undefined' || typeof getComputedStyle === 'undefined') return;
+  const meta = document.querySelector<HTMLMetaElement>('meta[name="theme-color"]');
+  const color = getComputedStyle(document.documentElement).getPropertyValue('--bg-window').trim();
+  if (meta && /^#[0-9a-f]{6}$/i.test(color)) meta.content = color;
 }
 
 export function applyDocumentTheme(value: unknown, cache = true): void {
@@ -23,12 +32,7 @@ export function applyDocumentTheme(value: unknown, cache = true): void {
   root.classList.toggle('dark', theme === 'dark');
   root.style.colorScheme = theme;
   root.dataset.xnTheme = theme;
-  const meta = document.querySelector<HTMLMetaElement>('meta[name="theme-color"]');
-  if (meta) {
-    const palette = normalizeColorPalette(root.dataset.xnPalette);
-    if (palette === 'claude') meta.content = theme === 'dark' ? '#1d1c1a' : '#f2f0e9';
-    else meta.content = theme === 'dark' ? '#161616' : '#fafafa';
-  }
+  syncDocumentThemeColor();
   if (cache) {
     try { localStorage.setItem('xueness.theme', preference); } catch { /* Private browsing: use the in-memory theme. */ }
   }
@@ -40,12 +44,7 @@ export function applyDocumentColorPalette(value: unknown, cache = true): void {
   const root = document.documentElement;
   if (palette === 'xueness') delete root.dataset.xnPalette;
   else root.dataset.xnPalette = palette;
-  const theme = root.classList.contains('dark') ? 'dark' : 'light';
-  const meta = document.querySelector<HTMLMetaElement>('meta[name="theme-color"]');
-  if (meta) {
-    if (palette === 'claude') meta.content = theme === 'dark' ? '#1d1c1a' : '#f2f0e9';
-    else meta.content = theme === 'dark' ? '#161616' : '#fafafa';
-  }
+  syncDocumentThemeColor();
   if (cache) {
     try { localStorage.setItem('xueness.colorPalette', palette); } catch { /* Private browsing. */ }
   }
@@ -63,4 +62,5 @@ if (typeof window !== 'undefined' && typeof document !== 'undefined') {
   // Palette before theme so theme-color meta sees the active scheme.
   applyDocumentColorPalette(cachedPalette, false);
   applyDocumentTheme(cachedTheme, false);
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', syncDocumentThemeColor, { once: true });
 }

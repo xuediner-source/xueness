@@ -38,6 +38,49 @@ class MessageQueueTests(unittest.TestCase):
         self.queue.enqueue(self.sid, 'private queued input', active_run=True)
         assert_secret_file_private(self, self.queue._path(self.sid))
 
+    def test_edit_preserves_attachment_suffix_and_updates_actual_claimed_input(self):
+        suffix = '\n\nUntrusted file context\n\n__XUENESS_MEDIA_JSON__: [{"image":"snapshot"}]'
+        item = self.queue.enqueue(self.sid, 'original', {'text': 'original' + suffix, 'metadata': {'attachments': ['fixture']}, 'edit_prefix': 'original'}, active_run=True)
+        self.assertTrue(item['editable'])
+        self.queue.edit(self.sid, item['id'], 'changed', 'original')
+        claimed = self.queue.claim_next(self.sid)
+        self.assertEqual(claimed['text'], 'changed')
+        self.assertEqual(claimed['prepared']['text'], 'changed' + suffix)
+        self.assertEqual(claimed['prepared']['metadata'], {'attachments': ['fixture']})
+        with self.assertRaises(QueueConflict):
+            self.queue.edit(self.sid, item['id'], 'too late', 'changed')
+
+    def test_edit_is_optimistic_and_refuses_paused_current_turn_or_expanded_commands(self):
+        item = self.queue.enqueue(self.sid, 'original', active_run=True)
+        self.queue.edit(self.sid, item['id'], 'new text', 'original')
+        with self.assertRaises(QueueConflict):
+            self.queue.edit(self.sid, item['id'], 'stale draft', 'original')
+        self.queue.pause_pending(self.sid)
+        with self.assertRaises(QueueConflict):
+            self.queue.edit(self.sid, item['id'], 'changed', 'new text', item['id'])
+        self.queue.set_accepting(self.sid, True)
+        expanded = self.queue.enqueue(self.sid, '/review', {'text': 'Expanded command body', 'metadata': {}}, active_run=True)
+        self.assertFalse(expanded['editable'])
+        with self.assertRaises(QueueConflict):
+            self.queue.edit(self.sid, expanded['id'], 'new command', '/review')
+        for prefix in ('', 'unrelated prefix', 123):
+            with self.subTest(prefix=prefix):
+                record = self.queue._read(self.sid)
+                row = next(row for row in record['items'] if row['id'] == expanded['id'])
+                row['prepared']['edit_prefix'] = prefix
+                self.queue._atomic_save(self.sid, record)
+                self.assertFalse(self.queue.snapshot(self.sid)['queued_messages'][-1]['editable'])
+                with self.assertRaises(QueueConflict):
+                    self.queue.edit(self.sid, expanded['id'], 'new command', '/review')
+                self.assertEqual(self.queue.get(self.sid, expanded['id'])['prepared']['text'], 'Expanded command body')
+
+    def test_edit_storage_failure_does_not_discard_old_message(self):
+        item = self.queue.enqueue(self.sid, 'original', active_run=True)
+        with patch('xueness.bundled_plugins.sessions.queue._protect_private_file', side_effect=OSError('ACL failed')):
+            with self.assertRaises(OSError):
+                self.queue.edit(self.sid, item['id'], 'changed', 'original')
+        self.assertEqual(self.queue.get(self.sid, item['id'])['text'], 'original')
+
     def test_failed_private_file_protection_preserves_old_queue_and_cleans_empty_temp(self):
         self.queue.enqueue(self.sid, 'already durable', active_run=True)
         path = self.queue._path(self.sid)

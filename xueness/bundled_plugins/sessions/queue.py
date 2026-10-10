@@ -201,9 +201,27 @@ class MessageQueue:
         return active + history
 
     @staticmethod
+    def _editable_prefix(item):
+        prepared = item.get('prepared')
+        if not isinstance(prepared, dict):
+            return None
+        prepared_text = prepared.get('text')
+        prefix = prepared.get('edit_prefix')
+        if prefix is None and prepared_text == item.get('text'):
+            prefix = item.get('text')
+        if (not isinstance(prefix, str) or not prefix or len(prefix) > 5000
+                or prefix != item.get('text') or not isinstance(prepared_text, str)
+                or not prepared_text.startswith(prefix)):
+            return None
+        return prefix
+
+    @staticmethod
     def _public_item(item, position=None):
         public = {key: item[key] for key in ("id", "text", "status", "created_at", "updated_at")
                   if key in item}
+        prepared = item.get('prepared')
+        public['editable'] = item.get('status') in ('queued', 'paused') and (
+            prepared is None or MessageQueue._editable_prefix(item) is not None)
         if position is not None:
             public["position"] = position
         if isinstance(item.get("pause_reason"), str):
@@ -313,6 +331,44 @@ class MessageQueue:
             item["updated_at"] = datetime.now(timezone.utc).isoformat()
             self._atomic_save(session_id, record)
             return dict(item)
+
+    def edit(self, session_id, queue_id, text, expected_text, current_queue_id=None):
+        with self._locked(session_id):
+            return self._edit_locked(session_id, queue_id, text, expected_text, current_queue_id)
+
+    def _edit_locked(self, session_id, queue_id, text, expected_text, current_queue_id=None):
+        if not isinstance(queue_id, str) or not _QUEUE_ID.fullmatch(queue_id):
+            raise ValueError('invalid queue id')
+        if (not isinstance(text, str) or not 1 <= len(text.strip()) <= 5000
+                or '\x00' in text or not isinstance(expected_text, str) or len(expected_text) > 5000):
+            raise ValueError('message must be 1..5000 characters')
+        text = text.strip()
+        record = self._read(session_id)
+        item = next((row for row in record['items'] if row['id'] == queue_id), None)
+        if item is None:
+            raise FileNotFoundError('queued message not found')
+        if item['status'] not in ('queued', 'paused') or queue_id == current_queue_id:
+            raise QueueConflict('queued message is already claimed')
+        if item['text'] != expected_text:
+            raise QueueConflict('queued message changed; refresh before editing')
+        prepared = item.get('prepared')
+        updated_prepared = None
+        if prepared is not None:
+            prefix = self._editable_prefix(item)
+            if prefix is None:
+                raise QueueConflict('this message needs fresh context preparation; cancel it and send again')
+            updated_prepared = {**prepared, 'text': text + prepared['text'][len(prefix):], 'edit_prefix': text}
+        replacement_size = len(text.encode('utf-8')) + len((updated_prepared or {}).get('text', '').encode('utf-8'))
+        other_size = sum(len(row['text'].encode('utf-8')) + len((row.get('prepared') or {}).get('text', '').encode('utf-8'))
+                         for row in record['items'] if row['id'] != queue_id and row['status'] in ACTIVE_STATUSES)
+        if replacement_size > MAX_ITEM_BYTES or replacement_size + other_size > MAX_PENDING_BYTES:
+            raise ValueError('queued message is too large')
+        item['text'] = text
+        if updated_prepared is not None:
+            item['prepared'] = updated_prepared
+        item['updated_at'] = datetime.now(timezone.utc).isoformat()
+        self._atomic_save(session_id, record)
+        return {'id': queue_id, 'item': self._public_item(item)}
 
     def update(self, session_id, queue_id, status, completion=None):
         if status not in VALID_STATUSES:
@@ -479,6 +535,24 @@ def dispatch(method, parts, query, data, ctx):
 
     if len(parts) == 5:
         queue_id = parts[4]
+        if method == 'PATCH':
+            if not isinstance(data, dict) or set(data) != {'text', 'expectedText'}:
+                return 400, {'error': 'expected text and expectedText'}
+            from .answer_question import _validate_workspace
+            try:
+                with ctx['lock']:
+                    with queue.session_lock(sid):
+                        session = store.load(sid)
+                        _validate_workspace(ctx, session)
+                        return 200, queue._edit_locked(sid, queue_id, data['text'], data['expectedText'], session.get('current_queue_item_id'))
+            except FileNotFoundError:
+                return 404, {'error': 'queued message not found'}
+            except QueueConflict as error:
+                return 409, {'error': str(error)}
+            except (ValueError, UnicodeError) as error:
+                return 400, {'error': str(error)}
+            except OSError:
+                return 503, {'error': 'cannot update message queue'}
         if method != "DELETE":
             return 405, {"error": "method not allowed"}
         if data and (not isinstance(data, dict) or data):
@@ -556,7 +630,8 @@ def dispatch(method, parts, query, data, ctx):
                     if prepared_remote != current_remote:
                         return 409, {"error": "queued turn must use the active remote connection"}
                     prepared = {"text": prepared["text"], "metadata": prepared["metadata"],
-                                "goal": prepared.get("goal")}
+                                "goal": prepared.get("goal"),
+                                **({'edit_prefix': prepared['edit_prefix']} if 'edit_prefix' in prepared else {})}
                 except (KeyError, TypeError, ValueError) as exc:
                     return 400, {"error": str(exc) if "prepared" not in str(exc).lower()
                                  else "prepared input invalid or expired"}

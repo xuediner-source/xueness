@@ -285,6 +285,47 @@ async function start() {
         nodeAccess: typeof window.require !== 'undefined', workbenchReady, body: document.body.textContent.length,
         clipWriteGranted: clipWrite.state === 'granted', clipReadDenied: clipRead.state === 'denied' };
     })()`);
+    const initialNativeBackground = window.getBackgroundColor?.() || null;
+    const appearanceChecks = [];
+    for (const palette of ['claudex', 'xueness']) for (const theme of ['light', 'dark']) {
+      // Only the isolated packaged smoke run writes these fixture settings.
+      await window.webContents.executeJavaScript(`(async () => {
+        const csrf = await (await fetch('/api/csrf')).json();
+        const response = await fetch('/api/settings/appearance', { method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrf.csrfToken },
+          body: JSON.stringify({ values: { colorPalette: ${JSON.stringify(palette)}, theme: ${JSON.stringify(theme)} } }) });
+        if (!response.ok) throw new Error('Appearance fixture could not be saved');
+      })()`);
+      await window.loadURL(`${origin}/?xuenessDesktop=1`);
+      const appearance = await window.webContents.executeJavaScript(`(async () => {
+        for (let n=0;n<100;n++) {
+          if (document.querySelector('[data-testid=xn-shell] [data-testid=xn-sidebar-action-new-task]')
+              && (document.documentElement.dataset.xnPalette || 'xueness') === ${JSON.stringify(palette)}
+              && document.documentElement.dataset.xnTheme === ${JSON.stringify(theme)}) break;
+          await new Promise(resolve => setTimeout(resolve,100));
+        }
+        const root = document.documentElement;
+        const css = getComputedStyle(root);
+        const history = document.querySelector('.xn-desktop-titlebar__history button');
+        const actions = document.querySelector('.xn-desktop-titlebar__actions');
+        const token = css.getPropertyValue('--bg-window').trim();
+        return { palette: root.dataset.xnPalette || 'xueness', theme: root.dataset.xnTheme,
+          windowBgToken: token, chromeToken: css.getPropertyValue('--xn-native-titlebar-color').trim() || token,
+          meta: document.querySelector('meta[name="theme-color"]')?.content,
+          historyLeft: history?.getBoundingClientRect().left,
+          actionsRight: actions ? innerWidth - actions.getBoundingClientRect().right : null,
+          nodeAccess: typeof window.require !== 'undefined' };
+      })()`);
+      if (typeof window.getBackgroundColor === 'function') {
+        for (let n=0;n<50 && window.getBackgroundColor().toLowerCase() !== appearance.chromeToken?.toLowerCase();n++)
+          await new Promise(resolve => setTimeout(resolve,20));
+      }
+      appearanceChecks.push({ ...appearance, nativeBackground: window.getBackgroundColor?.() || null });
+      if (process.env.XUENESS_DESKTOP_SMOKE_SCREENSHOTS) {
+        const captured = await window.webContents.capturePage();
+        writeFileSync(join(process.env.XUENESS_DESKTOP_SMOKE_SCREENSHOTS, `${palette}-${theme}.png`), captured.toPNG());
+      }
+    }
     let dockTaskPopupReady = null;
     if (process.platform === 'darwin') {
       const tasks = app.dock?.getMenu?.()?.items?.find(item => ['任务与项目', 'Tasks and projects'].includes(item.label));
@@ -304,7 +345,8 @@ async function start() {
     }
     writeFileSync(process.env.XUENESS_DESKTOP_SMOKE_FILE, JSON.stringify({ ...result,
       dockTaskPopupReady,
-      nativeBackground: window.getBackgroundColor?.() || null,
+      nativeBackground: initialNativeBackground,
+      appearanceChecks,
       nativeMenuLabels: Menu.getApplicationMenu?.()?.items?.map(item => item.label) || [],
       dockMenuLabels: app.dock?.getMenu?.()?.items?.map(item => item.label) || [],
       permissionPostRequests: smokePermissionPostRequests, noPermissionRequests: smokePermissionPostRequests === 0,

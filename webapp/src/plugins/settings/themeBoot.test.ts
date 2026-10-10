@@ -11,11 +11,12 @@ test('prepaint theme uses explicit preferences and otherwise follows the operati
   assert.equal(resolveTheme(null, false), 'light');
 });
 
-test('color palette defaults to Xueness and only accepts the Codex 风格 value (stored as claude)', () => {
+test('appearance migrates the legacy value without changing runtime settings', () => {
   assert.equal(normalizeColorPalette(undefined), 'xueness');
   assert.equal(normalizeColorPalette(null), 'xueness');
   assert.equal(normalizeColorPalette('xueness'), 'xueness');
-  assert.equal(normalizeColorPalette('claude'), 'claude');
+  assert.equal(normalizeColorPalette('claude'), 'claudex');
+  assert.equal(normalizeColorPalette('claudex'), 'claudex');
   assert.equal(normalizeColorPalette('warm'), 'xueness');
   assert.equal(normalizeColorPalette(''), 'xueness');
 });

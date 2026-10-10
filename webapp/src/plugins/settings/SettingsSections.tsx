@@ -10,6 +10,7 @@ import { XuenessShortcutsPanel } from "./XuenessShortcutsPanel";
 import { SettingsGroup, SettingsRow } from "./SettingsPrimitives";
 import { CODE_PREVIEW_THEME_OPTIONS, CodePreview, isCodePreviewTheme, type CodePreviewTheme } from "../../ui/CodePreview";
 import { displayBinding, isImeComposingEvent } from "../../xuenessShortcutDisplay";
+import { AppearancePicker } from "./AppearancePicker";
 
 // ============================================================================
 // 5. SettingsSections
@@ -263,12 +264,9 @@ export function SettingsSections({
           </>, (next) => { void update("theme", next); })}
         />
         <SettingsRow
-          label={tr("配色方案")}
-          description={tr("默认保持 Xueness 原版界面；Codex 风格按 Codex 桌面端的侧栏、布局、字号和配色重排整个界面，浅色与深色均可。")}
-          control={select("配色方案", values.colorPalette === "claude" ? "claude" : "xueness", <>
-            <option value="xueness">{tr("默认")}</option>
-            <option value="claude">{tr("Codex 风格")}</option>
-          </>, (next) => { void update("colorPalette", next); })}
+          label={tr("外观")}
+          description={tr("Claudex 结合温润配色与简洁布局，支持浅色和深色。所有外观共用相同功能与运行设置。")}
+          control={<AppearancePicker value={values.colorPalette} disabled={!onUpdateSetting || saving} onChange={(next) => { void update("colorPalette", next); }} />}
         />
         <SettingsRow
           label={tr("界面字号")}

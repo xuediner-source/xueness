@@ -3,56 +3,56 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
-const css = readFileSync(resolve(process.cwd(), "src/styles/codex-scheme.css"), "utf8");
+const css = readFileSync(resolve(process.cwd(), "src/styles/claudex-scheme.css"), "utf8");
 const main = readFileSync(resolve(process.cwd(), "src/main.tsx"), "utf8");
 const taskList = readFileSync(resolve(process.cwd(), "src/plugins/sessions/XuenessTaskList.tsx"), "utf8");
-const GATE = 'html[data-xn-palette="claude"]';
+const GATE = 'html[data-xn-palette="claudex"]';
 const strip = (source: string) => source.replace(/\/\*[\s\S]*?\*\//g, "");
 
-test("Codex 风格样式层最后加载，才能覆盖其余工作台样式", () => {
+test("Claudex 外观样式层最后加载，才能覆盖其余工作台样式", () => {
   const imports = [...main.matchAll(/^import\s+"(\.\/[^"]+\.css)";/gm)].map(match => match[1]);
-  assert.equal(imports.at(-1), "./styles/codex-scheme.css");
+  assert.equal(imports.at(-1), "./styles/claudex-scheme.css");
 });
 
-test("Codex 风格样式层仅在配色方案 = Codex 风格时生效", () => {
+test("Claudex 外观样式层仅在配色方案 = Claudex 外观时生效", () => {
   assert.ok(css.includes(GATE));
-  assert.ok((css.match(/html\[data-xn-palette="claude"\]/g) ?? []).length >= 20);
+  assert.ok((css.match(/html\[data-xn-palette="claudex"\]/g) ?? []).length >= 20);
   assert.doesNotMatch(css, /(?:^|})\s*\.xn-shell-layout\b/);
 });
 
-test("Codex 风格样式层只用设计令牌，不写死十六进制颜色", () => {
+test("Claudex 外观样式层只用设计令牌，不写死十六进制颜色", () => {
   assert.deepEqual(strip(css).match(/#[0-9a-f]{3,8}\b/gi) ?? [], []);
 });
 
-test("Codex 风格：300px 侧栏、30px 行高、736px 阅读栏，对话与输入框共用阅读栏", () => {
-  assert.match(css, /\.xn-shell-sidebar \{ width: var\(--codex-sidebar-width\)/);
-  assert.match(css, /\.xn-sidebar-action \{[^}]*height: var\(--codex-row-height\)/);
-  assert.match(css, /\.xn-shell-nav__link \{[^}]*height: var\(--codex-row-height\)/);
+test("Claudex 外观：紧凑侧栏与行高，对话与输入框共用阅读栏", () => {
+  assert.match(css, /\.xn-shell-sidebar \{ width: var\(--claudex-sidebar-width\)/);
+  assert.match(css, /\.xn-sidebar-action \{[^}]*height: var\(--claudex-row-height\)/);
+  assert.match(css, /\.xn-shell-nav__link \{[^}]*height: var\(--claudex-row-height\)/);
   for (const selector of [".xn-timeline-stream", ".xn-composer-region--docked", ".xn-lightweight-composer", ".xn-hero__composer"]) {
     assert.ok(css.includes(selector), selector);
   }
-  assert.ok((strip(css).match(/var\(--codex-column\)/g) ?? []).length >= 6);
+  assert.ok((strip(css).match(/var\(--claudex-column\)/g) ?? []).length >= 6);
 });
 
-test("Codex 风格：「任务」分区标题来自 data-section-label，默认配色不显示", () => {
+test("Claudex 外观：「任务」分区标题来自 data-section-label，默认配色不显示", () => {
   assert.match(taskList, /className="xn-task-list__toolbar" data-section-label=\{tr\('任务'\)\}/);
   assert.match(css, /\.xn-task-list__toolbar::before \{[^}]*content: attr\(data-section-label\)/);
 });
 
-test("Codex 风格：输入框圆角 20（实测）、发送按钮 28px 圆形，用户气泡圆角 16（实测），动效不超过 200ms", () => {
+test("Claudex 外观：输入框圆角 20（实测）、发送按钮 28px 圆形，用户气泡圆角 16（实测），动效不超过 200ms", () => {
   assert.match(css, /\.xn-composer,[^{]*\{[^}]*border-radius: 20px/);
   assert.match(css, /\.xn-composer__send \{[^}]*width: 28px;[^}]*height: 28px;[^}]*border-radius: 999px/);
   assert.match(css, /\.xn-zc-user-bubble \{[^}]*border-radius: 16px/);
   for (const match of css.matchAll(/(\d+(?:\.\d+)?)ms/g)) assert.ok(Number(match[1]) <= 200, match[0]);
 });
 
-test("Codex 风格：开关用蓝色轨道，焦点环统一使用强调色令牌", () => {
-  assert.match(css, /\.xn-settings-switch:checked,[\s\S]*?background: var\(--codex-toggle\)/);
+test("Claudex 外观：开关用蓝色轨道，焦点环统一使用强调色令牌", () => {
+  assert.match(css, /\.xn-settings-switch:checked,[\s\S]*?background: var\(--claudex-toggle\)/);
   assert.match(css, /button:focus-visible[\s\S]*?outline: 2px solid var\(--focus-ring\)/);
   assert.match(css, /\.xn-composer__input:focus-visible \{ outline: none; \}/);
 });
 
-test("Codex 风格：会话头在 Windows 避开系统窗口按钮，收起侧栏时避开导航按钮（选择器能命中真实 DOM）", () => {
+test("Claudex 外观：会话头在 Windows 避开系统窗口按钮，收起侧栏时避开导航按钮（选择器能命中真实 DOM）", () => {
   assert.doesNotMatch(css, /\.xn-conversation > \.xn-conversation/);
   assert.match(css, /data-platform="windows"\]\) \.xn-conversation > \.xn-conv-header \{ padding-right: calc\(max\(148px, calc\(100vw - env\(titlebar-area-width, 100vw\) \+ 10px\)\) \+ 74px\); \}/);
   assert.match(css, /sidebar-collapsed:has\(\.xn-desktop-titlebar\[data-platform="macos"\]\) \.xn-conversation > \.xn-conv-header \{ padding-left: 190px; \}/);

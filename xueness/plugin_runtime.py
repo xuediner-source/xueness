@@ -693,7 +693,15 @@ def tool_owner(name):
 def tool_schemas(state_dir):
     from .tool_registry import REGISTRY
     effective = {p['id'] for p in catalog(state_dir) if p['effective']}
-    return [tool.schema() for tool in REGISTRY if tool_owner(tool.name) in effective]
+    schemas = []
+    for tool in REGISTRY:
+        if tool_owner(tool.name) not in effective:
+            continue
+        schema = tool.schema()
+        if tool.schema_for_state is not None:
+            schema = tool.schema_for_state(schema, state_dir)
+        schemas.append(schema)
+    return schemas
 
 
 def cli_owner(command, args=None):

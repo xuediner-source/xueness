@@ -41,6 +41,26 @@ class ComposerApiTests(unittest.TestCase):
         body = {"text": "Inspect this workspace", **payload}
         return self.call("POST", ["api", "composer", "prepare"], body)
 
+    def test_prepared_queue_edit_prefix_survives_context_and_consumption(self):
+        (self.project / 'note.txt').write_text('immutable attachment context', encoding='utf-8')
+        status, result = self.prepare(text='original draft', root=str(self.project), input={'files': ['note.txt']})
+        self.assertEqual(status, 200)
+        prepared = composer_api.consume_prepared(self.ctx, result['token'], str(self.project))
+        self.assertEqual(prepared['edit_prefix'], 'original draft')
+        self.assertTrue(prepared['text'].startswith(prepared['edit_prefix']))
+        self.assertIn('immutable attachment context', prepared['text'])
+
+    def test_read_session_rejects_opened_file_replacement(self):
+        session = self.ctx['store'].new('public conversation', self.project)
+        path = self.ctx['store']._path(session['id'])
+        alternate = Path(self.temp.name) / 'alternate.json'
+        alternate.write_text(json.dumps({**session, 'task': 'private replacement'}), encoding='utf-8')
+        actual_open = os.open
+        def redirect(name, flags, *args, **kwargs):
+            return actual_open(alternate if Path(name) == path else name, flags, *args, **kwargs)
+        with patch.object(composer_api.os, 'open', side_effect=redirect):
+            self.assertIsNone(composer_api._read_session(self.ctx, session['id']))
+
     def test_catalog_is_root_scoped_and_isolated_root_has_no_shared_choices(self):
         (self.project / "note.txt").write_text("hello", encoding="utf-8")
         other = self.runs / "other-session"

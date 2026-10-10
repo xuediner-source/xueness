@@ -4,11 +4,37 @@ import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { PendingQuestion, PendingQuestionModel, QuestionResume } from "./PendingQuestion";
 import { evaluatePendingQuestionKey } from "../shared";
-import { parseQuestionResponse } from "./questionApi";
+import { parseQuestionResponse, questionCardsComplete, type QuestionCard } from "./questionApi";
 
 const question = (id = "q1", sessionId = "s1") => ({ id: sessionId, enabled: true, question: { id, text: "Which folder?" } });
 const accepted = (id = "q1", sessionId = "s1") => ({ id: sessionId, status: "paused", questionId: id, accepted: true as const, alreadyAnswered: false });
 function deferred<T>() { let resolve!: (value: T) => void; const promise = new Promise<T>(done => { resolve = done; }); return { promise, resolve }; }
+const cards: QuestionCard[] = [{ id: "location", header: "部署", question: "部署在哪里？", multiSelect: false,
+  options: [{ label: "本机", description: "当前设备" }, { label: "服务器", description: "已配置主机" }] }];
+
+test("structured questions require an explicit choice or custom answer, and retain failed drafts", async () => {
+  let calls = 0;
+  const model = new PendingQuestionModel({ load: async () => ({ ...question(), question: { ...question().question, questions: cards } }),
+    answer: async () => { throw new Error("must use structured transport"); },
+    answerCards: async (_sid, _qid, answers) => { calls++; assert.deepEqual(answers.location.selected, ["本机"]); if (calls === 1) throw new Error("uncertain result"); return accepted(); } });
+  await model.activate("s1", true);
+  assert.equal(await model.submit(), false);
+  assert.equal(calls, 0);
+  model.setCardAnswer("location", { selected: ["本机"], text: "" });
+  assert.equal(await model.submit(), false);
+  assert.equal(model.snapshot().answers.location.selected[0], "本机");
+  assert.equal(await model.submit(), true);
+  assert.equal(calls, 2);
+});
+
+test("question card contracts reject duplicate ids and allow bounded Unicode freeform answers", () => {
+  const response = { ...question(), question: { ...question().question, questions: cards } };
+  assert.deepEqual(parseQuestionResponse(response, "s1"), response);
+  assert.throws(() => parseQuestionResponse({ ...response, question: { ...response.question, questions: [cards[0], cards[0]] } }, "s1"));
+  assert.equal(questionCardsComplete(cards, { location: { selected: [], text: "😀".repeat(1000) } }), true);
+  assert.equal(questionCardsComplete(cards, { location: { selected: [], text: "😀".repeat(1001) } }), false);
+  assert.equal(questionCardsComplete(cards, { location: { selected: ["本机", "服务器"], text: "" } }), false);
+});
 
 test("question response rejects wrong sessions and malformed question IDs", () => {
   assert.deepEqual(parseQuestionResponse(question(), "s1"), question());

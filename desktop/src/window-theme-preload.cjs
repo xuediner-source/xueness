@@ -13,7 +13,7 @@ if ((process.platform === 'win32' || process.platform === 'darwin') && window.to
     const sync = () => {
       const style = getComputedStyle(root);
       // A scheme may paint the wide-window title bar differently from
-      // --bg-window (Codex 风格: --xn-native-titlebar-color / -height).
+      // --bg-window (Claudex appearance: --xn-native-titlebar-color / -height).
       const isWide = !wide || wide.matches;
       const chromeColor = isWide ? style.getPropertyValue('--xn-native-titlebar-color').trim() : '';
       const color = /^#[0-9a-f]{6}$/i.test(chromeColor) ? chromeColor : style.getPropertyValue('--bg-window').trim();

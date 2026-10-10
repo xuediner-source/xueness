@@ -5,20 +5,22 @@ import { fuzzyFilter } from "../../xuenessFuzzy";
 import type { SessionSummary } from "../../xuenessWorkbench";
 import { createDebouncer } from "./debounce";
 import { deferCompositionEnd, isImeComposingEvent } from "../../xuenessShortcutDisplay";
+import { searchTranscripts, type TranscriptHit, type TranscriptSearchState } from "./sessionSearch";
 import "./sessions.css";
 
 type PaletteCommand = { id: string; label: string; description: string };
 type CommandEntry = { kind: "command"; id: string; label: string; description: string };
-type SessionEntry = { kind: "session"; id: string; session: SessionSummary; label: string; description: string; disabled: boolean };
+type SessionEntry = { kind: "session"; id: string; session: SessionSummary; label: string; description: string; disabled: boolean; snippet?: string };
 export type CommandPaletteEntry = CommandEntry | SessionEntry;
 type ElementRef<T extends HTMLElement> = { current: T | null };
 
 const SESSION_STATUS_LABELS: Record<string, string> = {
-  created: "待执行", pending: "等待中", queued: "已排队", running: "运行中",
+  created: "待执行", pending: "等待中", queued: "已排队", running: "运行中", awaiting_user: "等待答复",
   pausing: "正在暂停", paused: "已暂停", stopping: "正在取消", cancelled: "已取消",
   completed: "已完成", failed: "失败", interrupted: "已中断", blocked: "受阻",
   closed: "已关闭", needs_review: "需要审核", provider_error: "供应商错误",
 };
+const EMPTY_TRANSCRIPT_HITS: TranscriptHit[] = [];
 
 export function commandPaletteStatusLabel(status: string): string {
   return tr(SESSION_STATUS_LABELS[status] ?? status);
@@ -42,18 +44,23 @@ export function buildCommandPaletteResults(
   commands: PaletteCommand[],
   sessions: SessionSummary[],
   busy: boolean,
+  transcriptHits: TranscriptHit[] = [],
 ): CommandPaletteEntry[] {
   const normalizedNeedle = needle.trim();
   const commandHits = fuzzyFilter(commands, item => `${item.label} ${item.description}`, normalizedNeedle)
     .map(({ item }) => ({ kind: "command" as const, ...item }));
-  const sessionHits = fuzzyFilter(sessions, item => `${item.title || ""} ${item.task || ""} ${item.root || ""}`, normalizedNeedle)
-    .map(({ item }) => ({
+  const contentHits = new Map(normalizedNeedle ? transcriptHits.map(hit => [hit.session.id, hit]) : []);
+  const metadataHits = fuzzyFilter(sessions, item => `${item.title || ""} ${item.task || ""} ${item.root || ""}`, normalizedNeedle).map(({ item }) => item);
+  const metadataIds = new Set(metadataHits.map(item => item.id));
+  const allSessions = [...metadataHits, ...[...contentHits.values()].filter(hit => !metadataIds.has(hit.session.id)).map(hit => hit.session)];
+  const sessionHits = allSessions.map(item => ({
       kind: "session" as const,
       id: item.id,
       session: item,
       label: item.title || item.task || tr("未命名任务"),
       description: commandPaletteStatusLabel(item.status),
       disabled: busy,
+      snippet: contentHits.get(item.id)?.snippet,
     }));
   return [...commandHits, ...sessionHits];
 }
@@ -127,16 +134,31 @@ export function CommandPalette({ dialogRef, inputRef, sessions, busy, sessionsEn
   const listboxId = `xn-command-palette-listbox-${useId().replace(/[^a-zA-Z0-9_-]/g, "")}`;
   const [search, setSearch] = useState("");
   const [needle, setNeedle] = useState("");
+  const [transcripts, setTranscripts] = useState<TranscriptSearchState | null>(null);
+  const [searchLoading, setSearchLoading] = useState(false);
+  const [searchError, setSearchError] = useState("");
   const searchRef = useRef(search);
   searchRef.current = search;
   const compositionActiveRef = useRef(false);
   const debouncerRef = useRef<ReturnType<typeof createDebouncer> | null>(null);
   if (debouncerRef.current === null) {
-    debouncerRef.current = createDebouncer(SEARCH_DEBOUNCE_MS, () => setNeedle(searchRef.current));
+    debouncerRef.current = createDebouncer(SEARCH_DEBOUNCE_MS, () => { if (!compositionActiveRef.current) setNeedle(searchRef.current); });
   }
   useEffect(() => () => debouncerRef.current?.cancel(), []);
   const commands = useMemo(() => makePaletteCommands(settingsEnabled), [settingsEnabled, locale]);
-  const results = useMemo(() => buildCommandPaletteResults(needle, commands, sessions, busy), [needle, commands, sessions, busy]);
+  useEffect(() => {
+    const query = needle.trim();
+    setTranscripts(null); setSearchError(""); setSearchLoading(false);
+    if (!sessionsEnabled || !query) return;
+    const controller = new AbortController();
+    setSearchLoading(true);
+    void searchTranscripts(query, controller.signal, setTranscripts)
+      .catch(error => { if (!controller.signal.aborted) setSearchError(error instanceof Error ? error.message : String(error)); })
+      .finally(() => { if (!controller.signal.aborted) setSearchLoading(false); });
+    return () => controller.abort();
+  }, [needle, sessionsEnabled]);
+  const contentHits = transcripts?.query === needle.trim() ? transcripts.matches : EMPTY_TRANSCRIPT_HITS;
+  const results = useMemo(() => buildCommandPaletteResults(needle, commands, sessions, busy, contentHits), [needle, commands, sessions, busy, contentHits]);
   const enabledIndices = useMemo(() => results.flatMap((entry, index) => entry.kind === "command" || !entry.disabled ? [index] : []), [results]);
   const [activeIndex, setActiveIndex] = useState<number | null>(() => 0);
 
@@ -223,6 +245,7 @@ export function CommandPalette({ dialogRef, inputRef, sessions, busy, sessionsEn
           aria-activedescendant={activeDescendant}
           placeholder={tr("搜索任务或命令…")}
           value={search}
+          maxLength={200}
           onChange={event => onSearchChange(event.target.value)}
           onKeyDown={onKeyDown}
           onCompositionStart={(event) => {
@@ -234,6 +257,7 @@ export function CommandPalette({ dialogRef, inputRef, sessions, busy, sessionsEn
             deferCompositionEnd(() => {
               compositionActiveRef.current = false;
               el?.removeAttribute("data-composing");
+              debouncerRef.current?.push();
             });
           }}
         />
@@ -295,6 +319,7 @@ export function CommandPalette({ dialogRef, inputRef, sessions, busy, sessionsEn
                     onClick={() => choose(index)}
                   >
                     <span className="xn-command-option__title">{entry.label}</span>
+                    {entry.snippet && <span className="xn-command-option__snippet">{entry.snippet}</span>}
                     <span className="xn-command-option__meta">
                       <span className="xn-command-option__status">{entry.description}</span>
                       {workspace && <span className="xn-command-option__detail" title={entry.session.root}><Folder size={12} aria-hidden="true" />{workspace}</span>}
@@ -305,7 +330,11 @@ export function CommandPalette({ dialogRef, inputRef, sessions, busy, sessionsEn
               })}
             </div>
           )}
-          {results.length === 0 && <div className="xn-command-empty" role="status">{tr("无匹配结果")}</div>}
+          {results.length === 0 && !searchLoading && <div className="xn-command-empty" role="status">{tr("无匹配结果")}</div>}
+          {searchLoading && <div className="xn-command-search-status" role="status">{tr("正在搜索会话正文…")}</div>}
+          {searchError && <div className="xn-command-search-status" role="alert">{tf("正文搜索失败：{0}", [searchError])}</div>}
+          {transcripts?.truncated && <div className="xn-command-search-status" role="status">{tr("结果较多，请输入更具体的关键词。")}</div>}
+          {Boolean(transcripts?.skipped) && <div className="xn-command-search-status" role="status">{tr("部分会话过大、不可读或不在允许的工作区，已跳过。")}</div>}
         </div>
         <div className="xn-command-hint" aria-hidden="true"><kbd>↑</kbd><kbd>↓</kbd> {tr("选择")} <kbd>↵</kbd> {tr("打开")}</div>
       </div>

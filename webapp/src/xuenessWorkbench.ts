@@ -37,6 +37,7 @@ export type QueuedMessage = {
   created_at?: string;
   updated_at?: string;
   pause_reason?: string;
+  editable?: boolean;
 };
 
 const QUEUED_MESSAGE_STATUSES = ["queued", "running", "paused", "completed", "needs_review", "failed", "cancelled"] as const;
@@ -52,7 +53,8 @@ function parseQueuedMessages(value: unknown): QueuedMessage[] | undefined {
       || (record.position !== undefined && (!Number.isInteger(record.position) || (record.position as number) < 0))
       || (record.created_at !== undefined && typeof record.created_at !== "string")
       || (record.updated_at !== undefined && typeof record.updated_at !== "string")
-      || (record.pause_reason !== undefined && typeof record.pause_reason !== "string")) {
+      || (record.pause_reason !== undefined && typeof record.pause_reason !== "string")
+      || (record.editable !== undefined && typeof record.editable !== "boolean")) {
       throw new Error("invalid queued messages response");
     }
     return {
@@ -63,6 +65,7 @@ function parseQueuedMessages(value: unknown): QueuedMessage[] | undefined {
       ...(typeof record.created_at === "string" ? { created_at: record.created_at } : {}),
       ...(typeof record.updated_at === "string" ? { updated_at: record.updated_at } : {}),
       ...(typeof record.pause_reason === "string" ? { pause_reason: record.pause_reason } : {}),
+      ...(typeof record.editable === "boolean" ? { editable: record.editable } : {}),
     };
   });
 }
@@ -445,7 +448,7 @@ function requestGet<T>(path: string, signal?: AbortSignal): Promise<T> {
 }
 
 /** Every mutation fetches a fresh CSRF token first and sends it as a header. */
-async function requestMutation<T>(method: "POST" | "PATCH" | "DELETE", path: string, body: unknown, signal?: AbortSignal): Promise<T> {
+export async function requestMutation<T>(method: "POST" | "PATCH" | "DELETE", path: string, body: unknown, signal?: AbortSignal): Promise<T> {
   const token = await requestGet<{ csrfToken?: string }>("/api/csrf", signal);
   const csrfToken = typeof token?.csrfToken === "string" ? token.csrfToken : "";
   if (!csrfToken) throw new Error("missing csrf token");

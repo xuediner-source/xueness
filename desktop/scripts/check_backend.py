@@ -395,6 +395,12 @@ def main():
                     'tests.test_session_lease', 'tests.test_session_journal_durability',
                     'tests.test_provider_cancel_propagate', 'tests.test_process_tree',
                     'tests.test_frame_replay', 'tests.test_host_path_identity',
+                    'tests.test_sessions_search', 'tests.test_structured_questions',
+                    'tests.test_message_queue.MessageQueueTests.test_edit_preserves_attachment_suffix_and_updates_actual_claimed_input',
+                    'tests.test_message_queue.MessageQueueTests.test_edit_is_optimistic_and_refuses_paused_current_turn_or_expanded_commands',
+                    'tests.test_message_queue.MessageQueueTests.test_edit_storage_failure_does_not_discard_old_message',
+                    'tests.test_composer_api.ComposerApiTests.test_prepared_queue_edit_prefix_survives_context_and_consumption',
+                    'tests.test_composer_api.ComposerApiTests.test_read_session_rejects_opened_file_replacement',
                     'tests.test_workflows.WorkflowTests.test_settled_status_waits_for_runner_release_and_allows_immediate_resume',
                     '-q'], cwd=ROOT, check=True)
     executable = args.executable or ROOT/'desktop/runtime/backend'/('xueness-backend.exe' if os.name == 'nt' else 'xueness-backend')

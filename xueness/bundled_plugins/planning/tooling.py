@@ -52,7 +52,19 @@ def _ask_user(root, gate, args, session, call_id) -> dict:
     question = args.get("question")
     if not isinstance(question, str) or not question.strip() or len(question) > 2000:
         raise ValueError("question must be 1..2000 characters")
-    return {"ok": True, "awaiting_user": True, "question": question.strip()}
+    result = {"ok": True, "awaiting_user": True, "question": question.strip()}
+    if 'questions' in args:
+        from ...tool_contract import execution_context
+        from ..sessions.structured_questions import available, normalize_questions
+        if not available(execution_context().get('state_dir')):
+            raise ValueError('structured questions require the planning and sessions plugins')
+        result['questions'] = normalize_questions(args['questions'])
+    return result
+
+
+def _ask_user_schema(schema, state_dir):
+    from ..sessions.structured_questions import augment_schema
+    return augment_schema(schema, state_dir)
 
 
 REGISTRY: tuple[BuiltinTool, ...] = (
@@ -63,5 +75,6 @@ REGISTRY: tuple[BuiltinTool, ...] = (
                 {"todos": {"type": "array", "items": {"type": "object"}}}, ("todos",),
                 "todo_write", False, _todo_write),
     BuiltinTool("ask_user", "Ask the operator a question; pauses the run until answered",
-                {"question": {"type": "string"}}, ("question",), "ask_user", False, _ask_user),
+                {"question": {"type": "string"}}, ("question",), "ask_user", False, _ask_user,
+                schema_for_state=_ask_user_schema),
 )

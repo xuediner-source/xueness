@@ -55,7 +55,9 @@
     "composer_capabilities",
     "message_actions",
     "conversation_snapshot",
-    "native_evidence"
+    "native_evidence",
+    "search",
+    "structured_questions"
   ],
   "features": [
     {
@@ -110,8 +112,8 @@
     },
     {
       "id": "sessions.message_queue",
-      "name": "运行期间排队发送后续消息",
-      "nameEn": "Queue follow-up messages during a run"
+      "name": "运行期间排队发送、折叠列表与安全编辑后续消息",
+      "nameEn": "Queue follow-ups, collapse the list and safely edit pending messages"
     },
     {
       "id": "sessions.tui",
@@ -222,6 +224,16 @@
       "id": "sessions.consistent_snapshot",
       "name": "正文、工具、状态与版本的一致快照",
       "nameEn": "Consistent conversation, tools, status and revision snapshots"
+    },
+    {
+      "id": "sessions.full_text_search",
+      "name": "分批搜索会话正文与已压缩历史",
+      "nameEn": "Paged transcript and compacted history search"
+    },
+    {
+      "id": "sessions.structured_questions",
+      "name": "结构化问题、选项、自定义答复与幂等保存",
+      "nameEn": "Structured questions, choices, custom answers and idempotent saving"
     }
   ],
   "frontendModules": [
@@ -270,6 +282,8 @@
     "plugins/sessions/conversationActivity.ts",
     "plugins/sessions/conversationJournalProjection.ts",
     "plugins/sessions/ZCodeConversation.tsx",
-    "plugins/sessions/useRunPermissionConfirmation.tsx"
+    "plugins/sessions/useRunPermissionConfirmation.tsx",
+    "plugins/sessions/sessionSearch.ts",
+    "plugins/sessions/queueApi.ts"
   ]
 }

@@ -115,13 +115,17 @@ def _read_session(ctx: dict, sid: str) -> dict | None:
         return None
     try:
         path = store._path(sid)
+        original = path.lstat()
+        if not stat.S_ISREG(original.st_mode) or getattr(original, 'st_file_attributes', 0) & getattr(stat, 'FILE_ATTRIBUTE_REPARSE_POINT', 0):
+            return None
         flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_NONBLOCK", 0)
         fd = os.open(path, flags)
     except (OSError, ValueError, AttributeError):
         return None
     try:
         info = os.fstat(fd)
-        if not stat.S_ISREG(info.st_mode) or info.st_size > _MAX_SESSION_FILE_BYTES:
+        if (not stat.S_ISREG(info.st_mode) or info.st_size > _MAX_SESSION_FILE_BYTES
+                or (original.st_dev, original.st_ino) != (info.st_dev, info.st_ino)):
             return None
         with os.fdopen(fd, "rb", closefd=False) as stream:
             raw = stream.read(_MAX_SESSION_FILE_BYTES + 1)
@@ -1019,7 +1023,10 @@ def _prepare(ctx: dict, data: dict) -> tuple[int, dict]:
     }
     if remote_metadata is not None:
         metadata["remote"] = remote_metadata
-    token = _cache_prepared(ctx, str(root), prepared_text, metadata, goal)
+    # Only plain draft text has a replaceable prefix. Expanded /commands need
+    # fresh preparation; editing them must not retain an obsolete expansion.
+    editable_prefix = prompt_text if prompt_text == data.get('text', '').strip() else None
+    token = _cache_prepared(ctx, str(root), prepared_text, metadata, goal, edit_prefix=editable_prefix)
     return 200, {"token": token, "text": prepared_text, "root": str(root),
                  "metadata": metadata, "goal": goal}
 
@@ -1039,7 +1046,7 @@ def _prune_cache(cache: dict, now: float) -> None:
             cache.pop(token, None)
 
 
-def _cache_prepared(ctx: dict, root: str, text: str, metadata: dict, goal: bool) -> str:
+def _cache_prepared(ctx: dict, root: str, text: str, metadata: dict, goal: bool, *, edit_prefix=None) -> str:
     if len(text) > _MAX_PREPARED_CHARS:
         raise _ComposerError(400, "prepared input exceeds the size limit")
     lock = _cache_lock(ctx)
@@ -1054,6 +1061,8 @@ def _cache_prepared(ctx: dict, root: str, text: str, metadata: dict, goal: bool)
             token = secrets.token_hex(16)
         cache[token] = {"root": root, "text": text, "metadata": metadata,
                         "goal": goal, "expiresAt": now + _CACHE_TTL_SECONDS}
+        if isinstance(edit_prefix, str) and text.startswith(edit_prefix):
+            cache[token]['edit_prefix'] = edit_prefix
         return token
 
 
@@ -1093,7 +1102,8 @@ def consume_prepared(ctx: dict, token: str, root: Path) -> dict:
             raise ValueError("prepared input invalid or expired")
         cache.pop(token, None)
         return {"text": prepared["text"], "root": prepared["root"],
-                "metadata": prepared["metadata"], "goal": prepared["goal"]}
+                "metadata": prepared["metadata"], "goal": prepared["goal"],
+                **({'edit_prefix': prepared['edit_prefix']} if 'edit_prefix' in prepared else {})}
 
 
 def _running_same_root(ctx: dict, root: Path) -> bool:

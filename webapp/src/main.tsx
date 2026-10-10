@@ -11,7 +11,7 @@ import "./styles/composer-workspace.css";
 import "./styles/composer-toolbar.css";
 import "./styles/parity-final.css";
 // Warm, calm visual polish layer; must stay last.
-import "./styles/codex-scheme.css";
+import "./styles/claudex-scheme.css";
 
 function mount(): void {
   const rootElement = document.getElementById("root");

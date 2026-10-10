@@ -14,6 +14,10 @@ def execute_cli(args, deps=None):
 
 
 def dispatch(method, parts, query, data, ctx):
+    from .search import dispatch as search_dispatch
+    result = search_dispatch(method, parts, query, data, ctx)
+    if result is not None:
+        return result
     from .conversation_snapshot import dispatch as conversation_snapshot_dispatch
     result = conversation_snapshot_dispatch(method, parts, query, data, ctx)
     if result is not None:
