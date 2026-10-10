@@ -255,6 +255,10 @@
   --codex-sidebar-width: 290px;
   --codex-rail-width: 52px;
   --codex-titlebar-height: 44px;
+  /* Read by the desktop preload on wide windows (>=901px, where the Codex
+   * title bar applies) to size and colour the native window controls. */
+  --xn-native-titlebar-height: var(--codex-titlebar-height);
+  --xn-native-titlebar-color: var(--codex-frame);
   --codex-frame-inset: 4px;
   --codex-column: 736px;
   --codex-row-height: 30px;

@@ -4,7 +4,7 @@ const { EventEmitter } = require('node:events');
 const { readFileSync } = require('node:fs');
 const { join } = require('node:path');
 const { runInNewContext } = require('node:vm');
-const { getWindowChromeOptions, installWindowThemeSync, TITLEBAR_HEIGHT } = require('../src/window-chrome.cjs');
+const { getWindowChromeOptions, installWindowThemeSync, TITLEBAR_HEIGHT, macTrafficLightPosition } = require('../src/window-chrome.cjs');
 
 test('macOS keeps native traffic lights and reserves their native area', () => {
   assert.deepEqual(getWindowChromeOptions('darwin'), {
@@ -115,7 +115,7 @@ test('isolated preload follows theme mutations, deduplicates unrelated changes a
     window: page,
     getComputedStyle: element => {
       assert.equal(element, root);
-      return { getPropertyValue: name => name === '--bg-window' ? color : symbolColor };
+      return { getPropertyValue: name => name === '--bg-window' ? color : name === '--fg' ? symbolColor : '' };
     },
     MutationObserver: class {
       constructor(callback) { sync = callback; }
@@ -126,7 +126,7 @@ test('isolated preload follows theme mutations, deduplicates unrelated changes a
   assert.equal(sent.length, 0);
   callbacks.get('DOMContentLoaded')();
   assert.equal(observed.element, root);
-  assert.deepEqual(Array.from(observed.options.attributeFilter), ['class', 'style', 'data-xn-desktop-enabled', 'data-xn-desktop-tray-state']);
+  assert.deepEqual(Array.from(observed.options.attributeFilter), ['class', 'style', 'data-xn-palette', 'data-xn-desktop-enabled', 'data-xn-desktop-tray-state']);
   sync();
   assert.equal(sent.length, 1);
   color = '#2b2b2b'; symbolColor = '#d4d4d4'; sync();
@@ -180,7 +180,7 @@ test('macOS preload sends localized host policy and tray state for Dock integrat
     process: { platform: 'darwin' },
     document: { readyState: 'loading', documentElement: root },
     window: page,
-    getComputedStyle: () => ({ getPropertyValue: name => name === '--bg-window' ? color : symbolColor }),
+    getComputedStyle: () => ({ getPropertyValue: name => name === '--bg-window' ? color : name === '--fg' ? symbolColor : '' }),
     MutationObserver: class {
       constructor(callback) { sync = callback; }
       observe(element, options) { observed = { element, options }; }
@@ -204,4 +204,64 @@ test('macOS preload sends localized host policy and tray state for Dock integrat
   assert.deepEqual(JSON.parse(JSON.stringify(sent.slice(-2))), [
     ['xueness:desktop-tray-state', JSON.parse(trayState)], ['xueness:desktop-locale', 'zh'],
   ]);
+});
+
+test('Codex 风格 44px title bar resizes Windows caption buttons and recentres macOS traffic lights', () => {
+  const host = themeHost();
+  host.send({ color: '#242424', symbolColor: '#dddddd', height: 44 });
+  host.send({ color: '#242424', symbolColor: '#dddddd', height: 41 });
+  assert.deepEqual(host.overlays, [
+    { color: '#242424', symbolColor: '#dddddd', height: 44 },
+    { color: '#242424', symbolColor: '#dddddd', height: TITLEBAR_HEIGHT },
+  ]);
+  const ipcMain = new EventEmitter();
+  const window = new EventEmitter();
+  window.webContents = { mainFrame: { url: 'http://127.0.0.1:45678/?xuenessDesktop=1' } };
+  window.isDestroyed = () => false;
+  const positions = [];
+  window.setBackgroundColor = () => {};
+  window.setWindowButtonPosition = value => positions.push(value);
+  installWindowThemeSync({ ipcMain, window, getOrigin: () => 'http://127.0.0.1:45678', platform: 'darwin' });
+  const event = { sender: window.webContents, senderFrame: window.webContents.mainFrame };
+  ipcMain.emit('xueness:window-colors', event, { color: '#ececee', symbolColor: '#262626' });
+  ipcMain.emit('xueness:window-colors', event, { color: '#242424', symbolColor: '#dddddd', height: 44 });
+  ipcMain.emit('xueness:window-colors', event, { color: '#181818', symbolColor: '#dddddd', height: 44 });
+  ipcMain.emit('xueness:window-colors', event, { color: '#ececee', symbolColor: '#262626' });
+  assert.deepEqual(positions, [macTrafficLightPosition(44), macTrafficLightPosition(TITLEBAR_HEIGHT)]);
+  assert.deepEqual(macTrafficLightPosition(TITLEBAR_HEIGHT), { x: 14, y: 12 });
+  assert.deepEqual(macTrafficLightPosition(44), { x: 14, y: 14 });
+});
+
+test('preload prefers the scheme title bar colour and reports the 44px height only when set', () => {
+  const callbacks = new Map(), sent = [], media = new Map();
+  let chrome = '', height = '', isWide = true, sync;
+  const root = { getAttribute: () => null };
+  const ipcRenderer = new EventEmitter(); ipcRenderer.send = (...args) => sent.push(args);
+  const page = {
+    addEventListener: (name, callback) => callbacks.set(name, callback),
+    matchMedia: query => ({ get matches() { return isWide; }, addEventListener: (name, cb) => media.set(query, cb), removeEventListener: () => media.delete('(min-width: 901px)') }),
+  };
+  page.top = page;
+  runInNewContext(readFileSync(join(__dirname, '../src/window-theme-preload.cjs'), 'utf8'), {
+    require: () => ({ ipcRenderer }), process: { platform: 'win32' },
+    document: { readyState: 'loading', documentElement: root }, window: page,
+    getComputedStyle: () => ({ getPropertyValue: name => ({ '--bg-window': '#f3f3f3', '--fg': '#0d0d0d',
+      '--xn-native-titlebar-color': chrome, '--xn-native-titlebar-height': height })[name] || '' }),
+    MutationObserver: class { constructor(cb) { sync = cb; } observe() {} disconnect() {} },
+    CustomEvent: class {},
+  });
+  callbacks.get('DOMContentLoaded')();
+  chrome = ' #ececec'; height = ' 44px'; media.get('(min-width: 901px)')();
+  isWide = false; media.get('(min-width: 901px)')();
+  isWide = true; sync();
+  chrome = ''; height = ''; sync();
+  assert.deepEqual(JSON.parse(JSON.stringify(sent)), [
+    ['xueness:window-colors', { color: '#f3f3f3', symbolColor: '#0d0d0d' }],
+    ['xueness:window-colors', { color: '#ececec', symbolColor: '#0d0d0d', height: 44 }],
+    ['xueness:window-colors', { color: '#f3f3f3', symbolColor: '#0d0d0d' }],
+    ['xueness:window-colors', { color: '#ececec', symbolColor: '#0d0d0d', height: 44 }],
+    ['xueness:window-colors', { color: '#f3f3f3', symbolColor: '#0d0d0d' }],
+  ]);
+  callbacks.get('pagehide')();
+  assert.equal(media.size, 0);
 });

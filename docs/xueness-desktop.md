@@ -38,7 +38,7 @@ Windows 可在 `%APPDATA%\Xueness\desktop-data-directory.json` 保存 `{"apiVers
 
 主进程创建随机 loopback 端口及独立宿主凭据。凭据通过进程环境传入后立即从后端环境移除，渲染进程没有 Node.js 或任意 Electron IPC 权限。目录选择通过私有父子进程通道交给窗口所属的系统对话框，只有系统返回的目录经后端校验后进入授权范围。
 
-两端使用相同的 40px 工作台标题栏与导航、帮助、终端和侧栏操作。Mac 左侧为原生交通灯保留至少 78px；Windows 右侧为原生窗口按钮保留至少 148px，系统报告更大的安全区域时继续扩展。Windows 按钮区背景与文字、Mac 窗口背景均跟随工作台主题，Mac 交通灯由系统绘制。隔离 preload 仅读取主题 CSS token 并发送固定颜色消息，不向页面暴露 Electron API；主进程校验窗口、主 frame、私有后端 origin 和颜色格式，窗口关闭后移除监听。窗口配色属于 `desktop.window_chrome` 的宿主恢复基础设施，关闭业务插件后仍与工作台保持一致。
+两端使用相同的 40px 工作台标题栏与导航、帮助、终端和侧栏操作；可选的「Codex 风格」配色方案在宽窗口（≥901px）下改用 44px 标题栏，preload 在宽窗口时读取 `--xn-native-titlebar-height` / `--xn-native-titlebar-color`，Windows 原生按钮区高度与颜色、Mac 交通灯垂直位置随之同步，切回默认配色或窄窗口时恢复 40px。Mac 左侧为原生交通灯保留至少 78px；Windows 右侧为原生窗口按钮保留至少 148px，系统报告更大的安全区域时继续扩展。Windows 按钮区背景与文字、Mac 窗口背景均跟随工作台主题，Mac 交通灯由系统绘制。隔离 preload 仅读取主题 CSS token 并发送固定颜色消息，不向页面暴露 Electron API；主进程校验窗口、主 frame、私有后端 origin 和颜色格式，窗口关闭后移除监听。窗口配色属于 `desktop.window_chrome` 的宿主恢复基础设施，关闭业务插件后仍与工作台保持一致。
 
 快捷键操作保持一致，显示和录制使用同一平台判定：Mac 为 ⌘，Windows 为 Ctrl。界面语言同步到原生编辑/视图/窗口/退出菜单、项目目录选择和宿主错误，托盘/Dock 菜单同步中英文。系统权限页只列出当前平台实际支持的入口；Windows 不显示 Mac 的完全磁盘访问授权步骤。默认 Shell 按后端探测到的可用 Shell 顺序选择，载入失败不假定存在 `/bin/sh`，已有手动选择仍保留。
 

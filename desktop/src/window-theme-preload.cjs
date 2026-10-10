@@ -4,19 +4,26 @@ const { ipcRenderer } = require('electron');
 if ((process.platform === 'win32' || process.platform === 'darwin') && window.top === window) {
   const observeTheme = () => {
     const root = document.documentElement;
+    // Scheme title bar height depends on the window width (wide layout only).
+    const wide = typeof window.matchMedia === 'function' ? window.matchMedia('(min-width: 901px)') : null;
     let previous = '';
     let previousPolicy;
     let previousTrayState = '';
     let previousLocale;
     const sync = () => {
       const style = getComputedStyle(root);
-      const color = style.getPropertyValue('--bg-window').trim();
+      // A scheme may paint the wide-window title bar differently from
+      // --bg-window (Codex 风格: --xn-native-titlebar-color / -height).
+      const isWide = !wide || wide.matches;
+      const chromeColor = isWide ? style.getPropertyValue('--xn-native-titlebar-color').trim() : '';
+      const color = /^#[0-9a-f]{6}$/i.test(chromeColor) ? chromeColor : style.getPropertyValue('--bg-window').trim();
       const symbolColor = style.getPropertyValue('--fg').trim();
+      const height = isWide && style.getPropertyValue('--xn-native-titlebar-height').trim() === '44px' ? 44 : undefined;
       if (/^#[0-9a-f]{6}$/i.test(color) && /^#[0-9a-f]{6}$/i.test(symbolColor)) {
-        const signature = `${color}:${symbolColor}`;
+        const signature = `${color}:${symbolColor}:${height || ''}`;
         if (signature !== previous) {
           previous = signature;
-          ipcRenderer.send('xueness:window-colors', { color, symbolColor });
+          ipcRenderer.send('xueness:window-colors', height ? { color, symbolColor, height } : { color, symbolColor });
         }
       }
       const policy = root.getAttribute('data-xn-desktop-enabled');
@@ -38,7 +45,8 @@ if ((process.platform === 'win32' || process.platform === 'darwin') && window.to
       }
     };
     const observer = new MutationObserver(sync);
-    observer.observe(root, { attributes: true, attributeFilter: ['class', 'style', 'data-xn-desktop-enabled', 'data-xn-desktop-tray-state'] });
+    observer.observe(root, { attributes: true, attributeFilter: ['class', 'style', 'data-xn-palette', 'data-xn-desktop-enabled', 'data-xn-desktop-tray-state'] });
+    wide?.addEventListener?.('change', sync);
     sync();
     const command = (_event, action) => {
       if (!action || typeof action !== 'object') return;
@@ -47,7 +55,10 @@ if ((process.platform === 'win32' || process.platform === 'darwin') && window.to
       }
     };
     ipcRenderer.on('xueness:desktop-command', command);
-    window.addEventListener('pagehide', () => { observer.disconnect(); ipcRenderer.removeListener('xueness:desktop-command', command); }, { once: true });
+    window.addEventListener('pagehide', () => {
+      observer.disconnect(); wide?.removeEventListener?.('change', sync);
+      ipcRenderer.removeListener('xueness:desktop-command', command);
+    }, { once: true });
   };
   if (document.readyState === 'loading') window.addEventListener('DOMContentLoaded', observeTheme, { once: true });
   else observeTheme();
