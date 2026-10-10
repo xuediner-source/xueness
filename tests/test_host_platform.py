@@ -156,7 +156,9 @@ class LocaleTextTests(unittest.TestCase):
         for platform_name in ('win32', 'darwin'):
             with self.subTest(platform=platform_name), tempfile.TemporaryDirectory() as temporary:
                 base = Path(temporary)
-                workspace = base / 'project'
+                # HTTP scopes memory by the canonical workspace. Native CI
+                # temporary roots can use a symlink or a Windows short name.
+                workspace = (base / 'project').resolve()
                 workspace.mkdir()
                 memory = base / 'memory'
                 memory.mkdir()
