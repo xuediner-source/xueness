@@ -10,4 +10,7 @@
 .xn-appearance-choice__copy > span { color: var(--fg-muted); font-size: 12px; line-height: 1.5; }
 .xn-appearance-choice__check { width: 12px; height: 12px; margin-inline-start: auto; flex: 0 0 auto; border: 1px solid var(--border-strong); border-radius: 50%; }
 .xn-appearance-choice[data-selected="true"] .xn-appearance-choice__check { border: 3px solid var(--accent-brand); }
+.xn-setting-row:has(.xn-appearance-picker) { grid-template-columns: minmax(0, 1fr); }
+.xn-setting-row:has(.xn-appearance-picker) .xn-setting-control { justify-content: flex-start; }
+.xn-appearance-choice__copy strong { white-space: nowrap; }
 @media (max-width: 520px) { .xn-appearance-picker { grid-template-columns: 1fr; } }

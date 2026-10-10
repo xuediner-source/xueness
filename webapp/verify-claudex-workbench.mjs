@@ -28,7 +28,9 @@ cards=normalize_questions([{'id':'destination','header':'部署位置','question
 question=store.new('结构化提问验收',workspace)
 question.update(status='awaiting_user',pending_question='完成这两项选择后继续。',mode='default')
 question['messages'].append({'role':'assistant','content':'','tool_calls':[{'id':'ask-cl','type':'function','function':{'name':'ask_user','arguments':'{}'}}]})
-question['results']['ask-cl']={'ok':True,'awaiting_user':True,'question':question['pending_question'],'questions':cards};store.save(question)
+question['results']['ask-cl']={'ok':True,'awaiting_user':True,'question':question['pending_question'],'questions':cards}
+question['messages'].append({'role':'tool','tool_call_id':'ask-cl','content':json.dumps(question['results']['ask-cl'],ensure_ascii=False)})
+store.save(question)
 queued=store.new('队列安全编辑验收',workspace);queued.update(status='paused',mode='default');store.save(queued)
 queue=MessageQueue(store);queue.set_accepting(queued['id'],True)
 item=queue.enqueue(queued['id'],'原排队文字',{'text':'原排队文字\n\n保留的附件上下文','metadata':{},'edit_prefix':'原排队文字'},active_run=True)
@@ -161,6 +163,7 @@ try {
   await appearance.locator('.xn-appearance-choice').filter({ hasText: 'Claudex' }).click();
   assert.ok((await savedClaudex).ok());
   await page.waitForFunction(() => document.documentElement.dataset.xnPalette==='claudex');
+  await page.waitForFunction(() => !document.querySelector('.xn-appearance-choice input[value="claudex"]')?.disabled);
   await snapshot('claudex-appearance-settings');
   report.interactions.push('appearance radio cards persist through the production settings API');
 
