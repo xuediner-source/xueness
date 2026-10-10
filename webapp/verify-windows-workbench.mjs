@@ -74,7 +74,7 @@ try {
       return selectors.map(selector => {
         const node = document.querySelector(selector); if (!node) return { selector, absent: true };
         const style = getComputedStyle(node);
-        return { selector, fontFamily: style.fontFamily, fontSize: style.fontSize, fontWeight: style.fontWeight, fontToken: style.getPropertyValue('--font-sans').trim(), serifToken: style.getPropertyValue('--font-serif').trim() };
+        return { selector, fontFamily: style.fontFamily, fontSize: style.fontSize, fontWeight: style.fontWeight, fontToken: style.getPropertyValue('--font-sans').trim(), monoToken: style.getPropertyValue('--font-mono').trim() };
       });
     });
     const cdp = await context.newCDPSession(page);
@@ -86,8 +86,10 @@ try {
       actualFonts.push({ selector, fonts: nodeId ? (await cdp.send('CSS.getPlatformFontsForNode', { nodeId })).fonts : [] });
     }
     if (!process.env.XUENESS_WINDOWS_BASELINE) {
-      // 默认配色下问候语也是系统无衬线；Claude 风格才启用 --font-serif。令牌本身仍须保留中文回退。
-      assert.ok(fonts.some(font => font.serifToken && font.serifToken.includes('Microsoft YaHei UI') && !/SimSun/.test(font.serifToken)), 'font-serif CJK fallback');
+      // Codex 风格已不再使用衬线令牌；无衬线与等宽令牌须保留 Windows 中文回退且不落到宋体。
+      for (const token of ['fontToken', 'monoToken']) {
+        assert.ok(fonts.some(font => font[token] && font[token].includes('Microsoft YaHei UI') && !/SimSun/.test(font[token])), `${token} CJK fallback`);
+      }
       for (const font of fonts.filter(font => !font.absent)) {
         assert.ok(font.fontFamily.startsWith('system-ui'), `Inconsistent font: ${JSON.stringify(font)}`);
       }
