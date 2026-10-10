@@ -12,9 +12,11 @@ import logging
 import os
 import re
 import stat
+import tempfile
 import threading
 import uuid
-from ...resources import _is_link, _protect_private_directory, _protect_private_file
+from ...resources import _is_link, _protect_private_directory, _protect_private_file, replace_file
+from ...session_lease import exclusive_lock
 
 
 _RUN_LOG = logging.getLogger("xueness.sessions.run")
@@ -67,7 +69,7 @@ def _log_run_failure(trace_id, runstage, error_code, exception_class,
     if type(upstream_status) is int and 100 <= upstream_status <= 599:
         record["upstream_status"] = upstream_status
     if isinstance(store_stage, str) and store_stage in {
-            "session_path", "temp_create", "protect_temp", "serialize", "flush", "replace"}:
+            "session_path", "lock", "temp_create", "protect_temp", "serialize", "flush", "replace"}:
         record["store_stage"] = store_stage
     safe_json = json.dumps(record, separators=(",", ":"), sort_keys=True)
     _RUN_LOG.error(safe_json)
@@ -75,10 +77,190 @@ def _log_run_failure(trace_id, runstage, error_code, exception_class,
         _append_run_diagnostic(state_dir, safe_json)
 
 
+def _write_all(fd, payload: bytes) -> None:
+    view = memoryview(payload)
+    while view:
+        written = os.write(fd, view)
+        if written <= 0:
+            raise OSError("diagnostic write made no progress")
+        view = view[written:]
+
+
+def _fsync_directory(directory) -> None:
+    flags = os.O_RDONLY | getattr(os, "O_DIRECTORY", 0)
+    try:
+        fd = os.open(os.fspath(directory), flags)
+    except OSError:
+        return
+    try:
+        try:
+            os.fsync(fd)
+        except OSError:
+            pass
+    finally:
+        os.close(fd)
+
+
+def _jsonl_body(raw: bytes) -> bytes:
+    """Drop a torn tail and normalize CRLF to LF.
+
+    A power loss can persist a prefix of the last ``write``. That prefix is
+    not a record. Complete lines stay. ZCode's JSONL reader in
+    ``apps/zcode-cli/packages/debug/server/sources.ts`` likewise splits on
+    ``\\r?\\n`` and does not treat a broken line as fatal to the lines before it.
+    """
+    if raw and not raw.endswith(b"\n"):
+        raw = raw[:raw.rfind(b"\n") + 1]
+    return raw.replace(b"\r\n", b"\n").replace(b"\r", b"\n")
+
+
+def _jsonl_records(raw: bytes) -> list:
+    body = _jsonl_body(raw)
+    return [line for line in body.split(b"\n") if line]
+
+
+def _plan_jsonl(existing: bytes, encoded: bytes, max_bytes: int, *, rewrite: bool):
+    """Choose an append that cannot replace complete lines with a partial write.
+
+    ``append`` keeps the live file and only cuts an unterminated tail first.
+    ``replace`` publishes a new file with ``os.replace``; a crash before that
+    rename leaves the previous complete lines in place. The old in-place
+    ``ftruncate(0)`` deleted those lines before the new record was durable.
+    """
+    torn = bool(existing) and not existing.endswith(b"\n")
+    body = existing[:existing.rfind(b"\n") + 1] if torn else existing
+    normalized = body.replace(b"\r\n", b"\n").replace(b"\r", b"\n")
+    lines = [line for line in normalized.split(b"\n") if line]
+    while lines and sum(len(line) + 1 for line in lines) + len(encoded) > max_bytes:
+        lines.pop(0)
+    prefix = b"".join(line + b"\n" for line in lines)
+    if not rewrite and prefix == body and normalized == body:
+        return ("append", None if not torn else len(body))
+    return ("replace", prefix + encoded)
+
+
+def _read_diagnostic_window(fd):
+    """Return ``(bytes, discarded_prefix)``. A huge file keeps its tail only."""
+    hard_cap = 1024 * 1024
+    size = os.fstat(fd).st_size
+    discarded = size > hard_cap
+    os.lseek(fd, size - hard_cap if discarded else 0, os.SEEK_SET)
+    chunks = []
+    while True:
+        block = os.read(fd, 65536)
+        if not block:
+            break
+        chunks.append(block)
+    raw = b"".join(chunks)
+    if discarded:
+        newline = raw.find(b"\n")
+        raw = raw[newline + 1:] if newline >= 0 else b""
+    return raw, discarded
+
+
+def _replace_diagnostic_bytes(directory, path, body: bytes) -> None:
+    fd, temporary = tempfile.mkstemp(prefix=".run-errors-", dir=os.fspath(directory))
+    try:
+        try:
+            _protect_private_file(fd)
+        except BaseException:
+            os.close(fd)
+            fd = None
+            raise
+        _write_all(fd, body)
+        os.fsync(fd)
+        os.close(fd)
+        fd = None
+        replace_file(temporary, path)
+        _fsync_directory(directory)
+    finally:
+        if fd is not None:
+            try:
+                os.close(fd)
+            except OSError:
+                pass
+        if os.path.exists(temporary):
+            try:
+                os.unlink(temporary)
+            except OSError:
+                pass
+
+
+def _write_diagnostic_line(directory, path, encoded: bytes) -> None:
+    flags = (os.O_RDWR | os.O_CREAT | getattr(os, "O_BINARY", 0)
+             | getattr(os, "O_NONBLOCK", 0))
+    nofollow = getattr(os, "O_NOFOLLOW", 0)
+    if nofollow:
+        flags |= nofollow
+    fd = os.open(os.fspath(path), flags, 0o600)
+    try:
+        if not stat.S_ISREG(os.fstat(fd).st_mode):
+            return
+        _protect_private_file(fd)
+        existing, rewrite = _read_diagnostic_window(fd)
+        mode, argument = _plan_jsonl(
+            existing, encoded, _RUN_DIAGNOSTIC_MAX_BYTES, rewrite=rewrite)
+        if mode == "append":
+            if argument is not None:
+                os.ftruncate(fd, argument)
+            os.lseek(fd, 0, os.SEEK_END)
+            _write_all(fd, encoded)
+            os.fsync(fd)
+            _fsync_directory(directory)
+            return
+        os.close(fd)
+        fd = None
+        _replace_diagnostic_bytes(directory, path, argument)
+    finally:
+        if fd is not None:
+            os.close(fd)
+
+
+def _read_run_diagnostics(state_dir) -> list:
+    """Complete diagnostic records. A torn last line is ignored, not fatal."""
+    state = Path(state_dir)
+    path = state / "diagnostics" / "session-run-errors.jsonl"
+    if _is_link(state) or _is_link(path) or not path.is_file():
+        return []
+    try:
+        locks = state / "diagnostics" / ".locks"
+        with _RUN_FILE_LOG_LOCK:
+            with exclusive_lock(locks, "session-run-errors.lock"):
+                flags = (os.O_RDONLY | getattr(os, "O_BINARY", 0)
+                         | getattr(os, "O_NONBLOCK", 0))
+                nofollow = getattr(os, "O_NOFOLLOW", 0)
+                if nofollow:
+                    flags |= nofollow
+                fd = os.open(os.fspath(path), flags)
+                try:
+                    if not stat.S_ISREG(os.fstat(fd).st_mode):
+                        return []
+                    raw, _discarded = _read_diagnostic_window(fd)
+                finally:
+                    os.close(fd)
+    except (OSError, TimeoutError, ValueError):
+        return []
+    records = []
+    for line in _jsonl_records(raw):
+        try:
+            item = json.loads(line.decode("utf-8"))
+        except (UnicodeError, ValueError):
+            continue
+        if isinstance(item, dict):
+            records.append(item)
+    return records
+
+
 def _append_run_diagnostic(state_dir, safe_json):
-    """Persist a bounded private JSONL event without changing the run response."""
+    """Persist one private JSONL event without changing the run response.
+
+    The line is UTF-8 and ends in LF on every platform. A cross-process lock
+    covers the read-modify-write so two windows cannot interleave or truncate
+    the file out from under each other. Bytes already ended by LF survive a
+    crash in the next append.
+    """
     encoded = (safe_json + "\n").encode("utf-8")
-    if len(encoded) > _RUN_DIAGNOSTIC_MAX_RECORD_BYTES:
+    if len(encoded) > _RUN_DIAGNOSTIC_MAX_RECORD_BYTES or b"\n" in encoded[:-1] or b"\r" in encoded:
         return
     try:
         state = Path(state_dir)
@@ -94,22 +276,13 @@ def _append_run_diagnostic(state_dir, safe_json):
         path = diagnostics / "session-run-errors.jsonl"
         if _is_link(path):
             return
-        flags = os.O_WRONLY | os.O_CREAT | os.O_APPEND | getattr(os, "O_BINARY", 0)
-        flags |= getattr(os, "O_NOFOLLOW", 0)
+        # A FIFO or directory must not be opened: a blocking read end would
+        # stall the run-failure path that this log is not allowed to delay.
+        if path.exists() and not path.is_file():
+            return
         with _RUN_FILE_LOG_LOCK:
-            fd = os.open(os.fspath(path), flags, 0o600)
-            try:
-                if not stat.S_ISREG(os.fstat(fd).st_mode):
-                    return
-                _protect_private_file(fd)
-                if os.fstat(fd).st_size + len(encoded) > _RUN_DIAGNOSTIC_MAX_BYTES:
-                    os.ftruncate(fd, 0)
-                offset = 0
-                while offset < len(encoded):
-                    offset += os.write(fd, encoded[offset:])
-                os.fsync(fd)
-            finally:
-                os.close(fd)
+            with exclusive_lock(diagnostics / ".locks", "session-run-errors.lock"):
+                _write_diagnostic_line(diagnostics, path, encoded)
     except Exception:
         # A diagnostic write must never hide the actual run failure.
         return
@@ -598,6 +771,23 @@ def public_session_payload(ctx, session):
     }
 
 
+def _load_live_session(handler, store, sid):
+    """Return the journal, or send the read-route error and return None.
+
+    A missing journal is a 404. Timing out on the journal lock is not: the
+    session is still there, and another writer has held the lock past the
+    wait. That uses the same 409 the run lease already returns.
+    """
+    try:
+        return store.load(sid)
+    except TimeoutError:
+        # TimeoutError is an OSError. It must not fall through to 404.
+        handler._send(409, {'error': 'session is in use by another process'})
+    except (OSError, ValueError):
+        handler._send(404, {'error': 'session not found'})
+    return None
+
+
 def handle_GET(self, parts, path, data):
     ctx = self._ctx
     if path == '/api/sessions':
@@ -633,18 +823,14 @@ def handle_GET(self, parts, path, data):
             host.session_management.mark_viewed(ctx['store'], parts[2])
         except (BlockingIOError, OSError, ValueError):
             pass
-        try:
-            session = ctx['store'].load(parts[2])
-        except (OSError, ValueError):
-            self._send(404, {'error': 'session not found'})
+        session = _load_live_session(self, ctx['store'], parts[2])
+        if session is None:
             return True
         self._send(200, public_session_payload(ctx, session))
         return True
     if len(parts) == 4 and parts[0] == 'api' and (parts[1] == 'sessions') and (parts[3] == 'events') and host._valid_sid(parts[2]):
-        try:
-            session = ctx['store'].load(parts[2])
-        except (OSError, ValueError):
-            self._send(404, {'error': 'session not found'})
+        session = _load_live_session(self, ctx['store'], parts[2])
+        if session is None:
             return True
         query = host.urllib.parse.parse_qs(host.urllib.parse.urlparse(self.path).query)
         from . import events_cursor
@@ -703,10 +889,8 @@ def handle_GET(self, parts, path, data):
         self._send(200, {'id': session['id'], 'status': session.get('status'), 'steps': session.get('steps', 0), 'events': events})
         return True
     if len(parts) == 4 and parts[0] == 'api' and (parts[1] == 'sessions') and (parts[3] == 'events.v1') and host._valid_sid(parts[2]):
-        try:
-            session = ctx['store'].load(parts[2])
-        except (OSError, ValueError):
-            self._send(404, {'error': 'session not found'})
+        session = _load_live_session(self, ctx['store'], parts[2])
+        if session is None:
             return True
         query = host.urllib.parse.parse_qs(host.urllib.parse.urlparse(self.path).query)
         try:
@@ -735,10 +919,8 @@ def handle_GET(self, parts, path, data):
         self._send(status, payload)
         return True
     if len(parts) == 4 and parts[0] == 'api' and (parts[1] == 'sessions') and (parts[3] == 'journal') and host._valid_sid(parts[2]):
-        try:
-            session = ctx['store'].load(parts[2])
-        except (OSError, ValueError):
-            self._send(404, {'error': 'session not found'})
+        session = _load_live_session(self, ctx['store'], parts[2])
+        if session is None:
             return True
         from .message_actions import revision
         self._send(200, {**session, 'message_revision': revision(session)})

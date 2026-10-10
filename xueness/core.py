@@ -1,11 +1,14 @@
 """Local task loop, durable journal, permission boundary, and verification."""
 from __future__ import annotations
 
+import errno
 import json
 import inspect
 import os
 import re
+import stat
 import tempfile
+import threading
 import time
 import uuid
 from concurrent.futures import ThreadPoolExecutor
@@ -15,6 +18,8 @@ from pathlib import Path
 from .memory import UNTRUSTED_PREAMBLE
 from .tool_contract import permission_result
 from .resources import _is_link, _protect_private_file, replace_file
+from .session_lease import journal_lock
+from .write_lock import _fold_host_path
 from .cli_input import with_attachments, record_attachments
 # Base tool registration/dispatch now lives in the Xueness-owned registry. These
 # names stay importable from ``core`` for compatibility: ``KNOWN_TOOLS`` and
@@ -111,6 +116,121 @@ def _replace_session_file(source, target):
     private temp file are not transient replace conflicts and must surface.
     """
     replace_file(source, target)
+
+
+_STALE_SESSION_TEMP_SECONDS = 60
+
+
+def _write_all(fd, payload: bytes) -> None:
+    view = memoryview(payload)
+    while view:
+        written = os.write(fd, view)
+        if written <= 0:
+            raise OSError("session journal write made no progress")
+        view = view[written:]
+
+
+def _fsync_directory(directory) -> None:
+    """Make a rename or hardlink durable across power loss. Best effort."""
+    flags = os.O_RDONLY | getattr(os, "O_DIRECTORY", 0)
+    try:
+        fd = os.open(os.fspath(directory), flags)
+    except OSError:
+        return
+    try:
+        try:
+            os.fsync(fd)
+        except OSError:
+            pass
+    finally:
+        os.close(fd)
+
+
+def _read_regular_bytes(path: Path) -> bytes:
+    """Read a regular file as bytes, without newline translation or following a link."""
+    flags = os.O_RDONLY | getattr(os, "O_BINARY", 0) | getattr(os, "O_NONBLOCK", 0)
+    nofollow = getattr(os, "O_NOFOLLOW", 0)
+    if nofollow:
+        flags |= nofollow
+    try:
+        fd = os.open(os.fspath(path), flags)
+    except OSError as exc:
+        if nofollow and exc.errno in (errno.ELOOP, errno.ENOTDIR):
+            raise ValueError("session file is a symbolic link or reparse point") from exc
+        raise
+    try:
+        if not stat.S_ISREG(os.fstat(fd).st_mode):
+            raise ValueError("session file is a symbolic link or reparse point")
+        chunks = []
+        while True:
+            block = os.read(fd, 1024 * 1024)
+            if not block:
+                break
+            chunks.append(block)
+        return b"".join(chunks)
+    finally:
+        os.close(fd)
+
+
+def _cleanup_stale_session_temps(directory: Path) -> None:
+    """Remove journal temps left by a crash. Skip links and anything still fresh.
+
+    A live writer uses the same ``.session-`` prefix. Age is the only signal
+    that distinguishes it from a temp whose process died before ``replace``.
+    ZCode drops stale temps the same way in ``atomicFileUtils.ts``.
+    """
+    cutoff = time.time() - _STALE_SESSION_TEMP_SECONDS
+    try:
+        entries = list(directory.iterdir())
+    except OSError:
+        return
+    for entry in entries:
+        if not entry.name.startswith(".session-") or _is_link(entry):
+            continue
+        try:
+            info = entry.lstat()
+            if not stat.S_ISREG(info.st_mode) or info.st_mtime >= cutoff:
+                continue
+            os.unlink(entry)
+        except OSError:
+            continue
+
+
+def _rotate_journal_backup(path: Path) -> None:
+    """Point ``path + '.bak'`` at the current inode, before that inode is replaced.
+
+    A crash after the link is durable and before replace leaves both names on
+    the previous complete journal. A crash after replace leaves the backup on
+    that previous journal even if the new file is torn. Failures are ignored:
+    the caller still publishes the new file, and a missing backup only means
+    a later torn read cannot roll back.
+    """
+    backup = Path(str(path) + ".bak")
+    if _is_link(path) or _is_link(backup):
+        return
+    try:
+        if backup.exists():
+            os.unlink(backup)
+        os.link(os.fspath(path), os.fspath(backup), follow_symlinks=False)
+    except OSError:
+        return
+    _fsync_directory(path.parent)
+
+
+def _backup_session(path: Path, sid: str):
+    """Return the previous complete journal, or None when it cannot be trusted."""
+    backup = Path(str(path) + ".bak")
+    if _is_link(backup):
+        return None
+    try:
+        if not backup.is_file():
+            return None
+        session = json.loads(_read_regular_bytes(backup).decode("utf-8"))
+    except (OSError, UnicodeError, ValueError):
+        return None
+    if not isinstance(session, dict) or session.get("id") != sid:
+        return None
+    return session
 
 
 def _reasoning_setting_enabled(state_dir) -> bool:
@@ -700,11 +820,29 @@ def execute(root: Path, gate: Gate, name: str, args: dict, session: dict | None 
 
 
 class Store:
+    """Durable session journals.
+
+    Writes are UTF-8 bytes with LF newlines, published by replace on the same
+    directory, then the directory is fsynced. A hardlink backup keeps the
+    previous complete file so a torn or truncated replacement can be restored.
+    Reads accept CRLF. The in-process lock key uses ``write_lock``'s host
+    path folding (Windows and macOS ignore case). The cross-process lock is
+    ``journal_lock``, not the run lease.
+    """
+
+    _journal_thread_locks: dict = {}
+    _journal_thread_guard = threading.Lock()
+
     def __init__(self, directory: Path):
         if _is_link(directory):
             raise ValueError("session directory is a symbolic link or reparse point")
         self.directory = directory.resolve()
         self.directory.mkdir(parents=True, exist_ok=True)
+
+    def _thread_lock(self, sid: str):
+        key = _fold_host_path(os.path.normpath(os.path.join(os.fspath(self.directory), sid)))
+        with Store._journal_thread_guard:
+            return Store._journal_thread_locks.setdefault(key, threading.Lock())
 
     def _path(self, sid: str) -> Path:
         if not re.fullmatch(r"[0-9a-f]{32}", sid):
@@ -727,44 +865,101 @@ class Store:
 
     def save(self, session: dict) -> None:
         stage = "session_path"
+        try:
+            sid = session["id"]
+            self._path(sid)
+            stage = "lock"
+            with self._thread_lock(sid), journal_lock(self, sid):
+                self._write_journal(session)
+        except Exception as exc:
+            if getattr(exc, "_xueness_store_stage", None) is None:
+                _annotate_store_failure(exc, stage)
+            raise
+
+    def _write_journal(self, session: dict, *, preserve_backup: bool = False) -> None:
+        """Publish ``session``. Caller holds the journal lock."""
+        stage = "session_path"
         tmp = None
+        fd = None
         try:
             path = self._path(session["id"])
+            _cleanup_stale_session_temps(self.directory)
             stage = "temp_create"
             fd, tmp = tempfile.mkstemp(prefix=".session-", dir=self.directory)
+            stage = "protect_temp"
             try:
-                stage = "protect_temp"
                 _protect_private_file(fd)
             except BaseException:
                 os.close(fd)
+                fd = None
                 raise
-            with os.fdopen(fd, "w", encoding="utf-8") as stream:
-                stage = "serialize"
-                json.dump(session, stream, ensure_ascii=False, indent=2)
-                stage = "flush"
-                stream.flush()
-                os.fsync(stream.fileno())
+            stage = "serialize"
+            encoded = json.dumps(session, ensure_ascii=False, indent=2).encode("utf-8")
+            _write_all(fd, encoded)
+            stage = "flush"
+            os.fsync(fd)
+            os.close(fd)
+            fd = None
+            if not preserve_backup and path.is_file() and not _is_link(path):
+                _rotate_journal_backup(path)
             stage = "replace"
             _replace_session_file(tmp, path)
+            _fsync_directory(self.directory)
         except Exception as exc:
             _annotate_store_failure(exc, stage)
             raise
         finally:
+            if fd is not None:
+                try:
+                    os.close(fd)
+                except OSError:
+                    pass
             if tmp is not None and os.path.exists(tmp):
-                os.unlink(tmp)
+                try:
+                    os.unlink(tmp)
+                except OSError:
+                    pass
 
     def load(self, sid: str) -> dict:
-        return json.loads(self._path(sid).read_text(encoding="utf-8"))
+        self._path(sid)
+        with self._thread_lock(sid), journal_lock(self, sid):
+            return self._read_journal(sid)
+
+    def _read_journal(self, sid: str) -> dict:
+        """Return the journal, restoring the backup when the live file is torn.
+
+        A missing file stays missing. A truncated or half-written replacement
+        is not a reason to invent an empty session; the hardlink backup is the
+        last complete version. Restoring it does not rotate that backup onto
+        the torn bytes.
+        """
+        path = self._path(sid)
+        raw = _read_regular_bytes(path)
+        try:
+            return json.loads(raw.decode("utf-8"))
+        except (UnicodeError, json.JSONDecodeError) as error:
+            recovered = _backup_session(path, sid)
+            if recovered is None:
+                raise error
+            try:
+                self._write_journal(recovered, preserve_backup=True)
+            except Exception:
+                pass
+            return recovered
 
     def list(self) -> list:
         if _is_link(self.directory):
             return []
         result = []
-        for path in sorted(self.directory.glob("[0-9a-f]" * 32 + ".json")):
+        try:
+            paths = sorted(self.directory.glob("[0-9a-f]" * 32 + ".json"))
+        except OSError:
+            return []
+        for path in paths:
             if _is_link(path) or not path.is_file():
                 continue
             try:
-                session = json.loads(path.read_text(encoding="utf-8"))
+                session = self.load(path.stem)
                 if not isinstance(session, dict) or session.get("id") != path.stem:
                     continue
                 result.append({"id": session["id"], "task": session["task"],

@@ -174,7 +174,14 @@ class WindowsReparseGuardTests(unittest.TestCase):
         session = store.new("test lease boundary", workspace)
         outside = self.base / "outside-locks"
         outside.mkdir()
-        self.junction(store.directory / ".locks", outside)
+        # Journal save creates the real lock directory. A junction fixture has
+        # to replace that directory; mklink refuses an existing path.
+        locks = store.directory / ".locks"
+        if locks.exists() and not locks.is_symlink():
+            for child in locks.iterdir():
+                child.unlink()
+            locks.rmdir()
+        self.junction(locks, outside)
 
         with self.assertRaisesRegex(ValueError, "lock directory"):
             with lease(store, session["id"]):

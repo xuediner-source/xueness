@@ -69,7 +69,14 @@ class PosixLeaseTests(unittest.TestCase):
                 store, sid = _store(base)
                 outside = base / 'outside'
                 outside.mkdir()
-                (store.directory / '.locks').symlink_to(outside, target_is_directory=True)
+                # A journal save creates the real lock directory. Replace it
+                # so this fixture is the symlink the opener must refuse.
+                locks = store.directory / '.locks'
+                if locks.exists() and not locks.is_symlink():
+                    for child in locks.iterdir():
+                        child.unlink()
+                    locks.rmdir()
+                locks.symlink_to(outside, target_is_directory=True)
                 with mock.patch('sys.platform', platform_name):
                     with self.assertRaisesRegex(ValueError, 'invalid lock directory'):
                         with lease(store, sid):

@@ -1,26 +1,74 @@
-"""Nonblocking cross-process single-writer lease for a session.
+"""Cross-process locks for a session.
 
-The lock file is opened and then checked. A path check before the open is not
-the guard: on Windows ``O_NOFOLLOW`` is 0, so a symlink or junction swapped in
-between ``lstat`` and ``open`` would be followed. POSIX opens the lock
-directory with ``O_DIRECTORY | O_NOFOLLOW`` and opens the lock file relative
-to that descriptor. Windows opens the directory without following its own
-reparse point, creates the lock file relative to that handle, then rejects a
-reparse point or a non-regular file using the handle's attributes and
-``fstat``.
+``lease`` is the nonblocking single-writer lock for a whole turn. ``journal_lock``
+is a separate, short, blocking lock around one durable read or write of that
+session's journal. They use different files on purpose. On this platform a
+second ``flock`` of the same file waits, and closing one descriptor must not
+be what releases the other; nesting the journal write on the run-lease file
+would either time out or drop the turn lock.
+
+Both open the lock file and then check it. A path check before the open is
+not the guard: on Windows ``O_NOFOLLOW`` is 0, so a symlink or junction
+swapped in between ``lstat`` and ``open`` would be followed. POSIX opens the
+lock directory with ``O_DIRECTORY | O_NOFOLLOW`` and opens the lock file
+relative to that descriptor. Windows opens the directory without following
+its own reparse point, creates the lock file relative to that handle, then
+rejects a reparse point or a non-regular file using the handle's attributes
+and ``fstat``.
+
+The multi-window file lock and the atomic rename it protects follow the
+approach in ZCode ``packages/services/src/fs/atomicFileUtils.ts`` and
+``packages/shared/src/node/atomicFileLock.ts`` (Apache-2.0). The lock is the
+open descriptor: process exit releases it, and the lock file is not deleted
+out from under a waiter.
 """
 from contextlib import contextmanager
 import errno
 import os
 import stat
+import time
 
 from . import file_lock as fcntl
+
+_LOCK_TIMEOUT_SECONDS = 8.0
 
 
 _FILE_ATTRIBUTE_DIRECTORY = 0x10
 _FILE_ATTRIBUTE_REPARSE_POINT = 0x400
 _DIRECTORY_LINK_ERRNOS = frozenset({errno.ELOOP, errno.ENOTDIR})
 _FILE_LINK_ERRNOS = frozenset({errno.ELOOP, errno.ENOTDIR, errno.EISDIR})
+
+
+def _acquire_exclusive(fd, timeout):
+    """Wait until ``fd`` holds an exclusive lock, or raise ``TimeoutError``.
+
+    Non-blocking attempts keep a same-thread re-entry from sleeping forever
+    on a lock this thread already holds. A crash closes ``fd`` and releases
+    the lock without an explicit unlock.
+    """
+    if isinstance(timeout, bool) or not isinstance(timeout, (int, float)) or timeout < 0:
+        raise ValueError('invalid lock timeout')
+    deadline = time.monotonic() + timeout
+    while True:
+        try:
+            fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            return
+        except BlockingIOError:
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                raise TimeoutError('timed out waiting for a file lock') from None
+            time.sleep(min(0.02, remaining))
+
+
+@contextmanager
+def exclusive_lock(directory, name, *, timeout=_LOCK_TIMEOUT_SECONDS):
+    """Block for the named lock, using the same open path as ``lease``."""
+    fd = _open_session_lock(directory, name)
+    try:
+        _acquire_exclusive(fd, timeout)
+        yield
+    finally:
+        os.close(fd)
 
 
 @contextmanager
@@ -33,6 +81,18 @@ def lease(store, sid):
         yield
     finally:
         os.close(fd)
+
+
+@contextmanager
+def journal_lock(store, sid, *, timeout=_LOCK_TIMEOUT_SECONDS):
+    """Serialize one journal read or write. Not the run lease.
+
+    Callers that already hold ``lease`` can take this lock. It must not be
+    entered again on the same thread while that entry is still active.
+    """
+    store._path(sid)
+    with exclusive_lock(store.directory / '.locks', sid + '.journal.lock', timeout=timeout):
+        yield
 
 
 def _lock_name(name: str) -> None:
