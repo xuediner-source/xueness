@@ -237,6 +237,7 @@
     }
   ],
   "frontendModules": [
+    "plugins/sessions/ClaudexSidebar.tsx",
     "plugins/sessions/XuenessComposerToolbar.tsx",
     "plugins/sessions/ReasoningEffortSlider.tsx",
     "plugins/sessions/XuenessConversationHistoryRail.tsx",

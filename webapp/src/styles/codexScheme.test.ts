@@ -25,7 +25,7 @@ test("Claudex 外观样式层只用设计令牌，不写死十六进制颜色", 
 });
 
 test("Claudex 外观：紧凑侧栏与行高，对话与输入框共用阅读栏", () => {
-  assert.match(css, /\.xn-shell-sidebar \{ width: var\(--claudex-sidebar-width\)/);
+  assert.match(css, /\.xn-shell-sidebar \{ width: calc\(var\(--claudex-sidebar-width\) \+ var\(--claudex-rail-width\)\)/);
   assert.match(css, /\.xn-sidebar-action \{[^}]*height: var\(--claudex-row-height\)/);
   assert.match(css, /\.xn-shell-nav__link \{[^}]*height: var\(--claudex-row-height\)/);
   for (const selector of [".xn-timeline-stream", ".xn-composer-region--docked", ".xn-lightweight-composer", ".xn-hero__composer"]) {
@@ -40,7 +40,7 @@ test("Claudex 外观：「任务」分区标题来自 data-section-label，默�
 });
 
 test("Claudex 外观：输入框圆角 20（实测）、发送按钮 28px 圆形，用户气泡圆角 16（实测），动效不超过 200ms", () => {
-  assert.match(css, /\.xn-composer,[^{]*\{[^}]*border-radius: 20px/);
+  assert.match(css, /\.xn-composer\s*\{[^}]*border-radius: 20px/);
   assert.match(css, /\.xn-composer__send \{[^}]*width: 28px;[^}]*height: 28px;[^}]*border-radius: 999px/);
   assert.match(css, /\.xn-zc-user-bubble \{[^}]*border-radius: 16px/);
   for (const match of css.matchAll(/(\d+(?:\.\d+)?)ms/g)) assert.ok(Number(match[1]) <= 200, match[0]);
@@ -52,8 +52,9 @@ test("Claudex 外观：开关用蓝色轨道，焦点环统一使用强调色令
   assert.match(css, /\.xn-composer__input:focus-visible \{ outline: none; \}/);
 });
 
-test("Claudex 外观：会话头在 Windows 避开系统窗口按钮，收起侧栏时避开导航按钮（选择器能命中真实 DOM）", () => {
+test("Claudex 外观：会话头在原生标题栏下面，不用跨行覆盖和平台固定空白避让", () => {
   assert.doesNotMatch(css, /\.xn-conversation > \.xn-conversation/);
-  assert.match(css, /data-platform="windows"\]\) \.xn-conversation > \.xn-conv-header \{ padding-right: calc\(max\(148px, calc\(100vw - env\(titlebar-area-width, 100vw\) \+ 10px\)\) \+ 74px\); \}/);
-  assert.match(css, /sidebar-collapsed:has\(\.xn-desktop-titlebar\[data-platform="macos"\]\) \.xn-conversation > \.xn-conv-header \{ padding-left: 190px; \}/);
+  assert.doesNotMatch(css, /grid-row:\s*1\s*\/\s*3/);
+  assert.doesNotMatch(css, /padding-right:\s*calc\(max\(148px/);
+  assert.match(css, /\.xn-conversation > \.xn-conv-header \{ height: var\(--claudex-header-height\); flex: 0 0 auto;/);
 });

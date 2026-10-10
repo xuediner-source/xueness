@@ -18,24 +18,32 @@ from xueness import web, plugin_runtime
 from xueness.bundled_plugins.settings.settings_store import save_settings
 from xueness.bundled_plugins.sessions.structured_questions import normalize_questions
 from xueness.bundled_plugins.sessions.queue import MessageQueue
+from xueness.bundled_plugins.providers import providers_api, default_selection
 base,repo=map(Path,sys.argv[1:]);workspace=base/'workspace';workspace.mkdir();state=base/'state'
 ctx=web.build_context(state,base/'runs',workspace,allow_real=False)
 ctx['webapp_dir']=repo/'webapp/dist'
 save_settings(state,{'general':{'language':'zh','sessionsAnswerQuestionEnabled':False},'appearance':{'theme':'light','colorPalette':'claude'}})
 for name in ('onboarding','diagnostics','updates'):plugin_runtime.set_enabled(state,name,False)
+status,result=providers_api._handle_save(ctx,{'id':'layout-fixture','name':'Bonsai 27B 无审查 · 本地轻量验收','baseUrl':'https://127.0.0.1:9/v1','model':'fixture-model','apiKey':'fixture-only','contextWindow':65536,'maxOutputTokens':4096,'reasoningLevels':['none','low','medium','high','xhigh','max']})
+assert status==200,result
+default_selection.save(state,{'providerId':'layout-fixture','model':'fixture-model'})
 store=ctx['store']
+def new_fixture(title):
+    record=store.new(title,workspace)
+    record['model_selection']={'provider_id':'layout-fixture','model':'fixture-model','reasoning_effort':'high'}
+    return record
 cards=normalize_questions([{'id':'destination','header':'部署位置','question':'你要部署在哪里？','options':[{'label':'本机','description':'仅在当前设备运行'},{'label':'服务器','description':'部署到已配置的服务器'}]},{'id':'details','header':'补充信息','question':'请提供任务需要的补充说明。'}])
-question=store.new('结构化提问验收',workspace)
+question=new_fixture('结构化提问验收')
 question.update(status='awaiting_user',pending_question='完成这两项选择后继续。',mode='default')
 question['messages'].append({'role':'assistant','content':'','tool_calls':[{'id':'ask-cl','type':'function','function':{'name':'ask_user','arguments':'{}'}}]})
 question['results']['ask-cl']={'ok':True,'awaiting_user':True,'question':question['pending_question'],'questions':cards}
 question['messages'].append({'role':'tool','tool_call_id':'ask-cl','content':json.dumps(question['results']['ask-cl'],ensure_ascii=False)})
 store.save(question)
-queued=store.new('队列安全编辑验收',workspace);queued.update(status='paused',mode='default');store.save(queued)
+queued=new_fixture('队列安全编辑验收');queued.update(status='paused',mode='default');store.save(queued)
 queue=MessageQueue(store);queue.set_accepting(queued['id'],True)
 item=queue.enqueue(queued['id'],'原排队文字',{'text':'原排队文字\n\n保留的附件上下文','metadata':{},'edit_prefix':'原排队文字'},active_run=True)
 queue.enqueue(queued['id'],'第二条排队消息',active_run=True);queue.pause_pending(queued['id']);queue.set_accepting(queued['id'],False)
-history=store.new('资料记录 A',workspace);history.update(status='completed',mode='default')
+history=new_fixture('资料记录 A');history.update(status='completed',mode='default')
 history['messages'].append({'role':'assistant','content':'这是只存在于会话正文的独特关键词。<b>按文字显示</b>'});store.save(history)
 server=web.create_server(0,ctx);worker=threading.Thread(target=server.serve_forever,daemon=True);worker.start()
 print(json.dumps({'port':server.server_address[1],'question':question['id'],'queued':queued['id'],'queueItem':item['id'],'history':history['id']}),flush=True)
@@ -98,6 +106,19 @@ try {
   await page.waitForFunction(() => document.documentElement.dataset.xnPalette==='claudex');
   await page.getByTestId(`xn-sidebar-item-${info.history}`).waitFor();
   await snapshot('claudex-light-home');
+
+  const taskOptions = page.getByRole('button', { name: '任务操作', exact: true });
+  await taskOptions.click();
+  await page.getByRole('menu', { name: '任务操作', exact: true }).waitFor();
+  await page.keyboard.press('Shift+Tab');
+  assert.equal(await taskOptions.evaluate(el => el === document.activeElement), true);
+  await page.keyboard.press('Shift+Tab');
+  await page.getByRole('menu', { name: '任务操作', exact: true }).waitFor({ state: 'hidden' });
+  await taskOptions.click();
+  await page.keyboard.press('Escape');
+  assert.equal(await taskOptions.evaluate(el => el === document.activeElement), true);
+  assert.equal(await taskOptions.getAttribute('aria-expanded'), 'false');
+  report.interactions.push('compact task menu: reverse Tab dismissal and Escape focus return');
 
   await page.keyboard.press('Control+k');
   const search = page.getByRole('combobox', { name: '搜索任务或命令' });
@@ -174,10 +195,40 @@ try {
     await page.getByRole('button', { name: '继续任务', exact: true }).waitFor();
     await page.waitForFunction(({palette,theme}) => (document.documentElement.dataset.xnPalette || 'xueness')===palette && document.documentElement.dataset.xnTheme===theme, {palette,theme});
     await snapshot(`${palette}-${theme}-conversation`);
+    if (palette === 'claudex' && theme === 'light') {
+      await page.waitForFunction(() => document.querySelector('.xn-composer-toolbar__model-trigger')?.textContent.includes('Bonsai 27B'));
+      await page.setViewportSize({ width: 940, height: 900 });
+      await snapshot('claudex-light-compact-desktop');
+      const footer = await page.evaluate(() => {
+        const tools = document.querySelector('.xn-composer__tools').getBoundingClientRect();
+        const model = document.querySelector('.xn-composer-toolbar__right').getBoundingClientRect();
+        const usage = document.querySelector('.xn-usage-quick').getBoundingClientRect();
+        return { toolsRight: tools.right, modelRight: model.right, usageLeft: usage.left, usageRight: usage.right };
+      });
+      assert.ok(footer.modelRight <= footer.usageLeft + 1 && footer.usageRight <= footer.toolsRight + 1, JSON.stringify(footer));
+    }
     await page.setViewportSize({ width: 420, height: 860 });
     await page.waitForFunction(() => document.querySelector('.xn-shell-main')?.getBoundingClientRect().width >= innerWidth - 20);
     assert.equal(await page.getByRole('button', { name: '继续任务', exact: true }).isVisible(), true);
     await snapshot(`${palette}-${theme}-narrow`);
+    if (palette === 'claudex' && theme === 'light') {
+      const toggle = page.getByTestId('xn-shell-sidebar-toggle');
+      await toggle.click();
+      await page.getByRole('dialog', { name: '侧边栏导航', exact: true }).waitFor();
+      await snapshot('claudex-light-narrow-sidebar');
+      const placement = await page.evaluate(() => {
+        const drawer = document.querySelector('#xn-shell-sidebar').getBoundingClientRect();
+        const button = document.querySelector('[data-testid="xn-shell-sidebar-toggle"]').getBoundingClientRect();
+        return { drawerRight: drawer.right, buttonLeft: button.left, buttonRight: button.right, width: innerWidth };
+      });
+      assert.ok(placement.buttonLeft >= placement.drawerRight && placement.buttonRight <= placement.width, JSON.stringify(placement));
+      await page.getByTestId('xn-sidebar-action-search').click();
+      await page.getByRole('dialog', { name: '命令面板', exact: true }).waitFor();
+      await page.keyboard.press('Escape');
+      await page.waitForFunction(() => document.activeElement?.getAttribute('data-testid') === 'xn-shell-sidebar-toggle');
+      assert.equal(await toggle.isVisible(), true);
+      report.interactions.push('narrow drawer placement, search dismissal and visible toggle focus return');
+    }
     await page.setViewportSize({ width: 1280, height: 900 });
   }
   assert.deepEqual(report.pageErrors, []);

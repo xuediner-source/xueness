@@ -4,13 +4,13 @@
  * See docs/claudex-reference-review.md for source provenance and scope. */
 /* Shell: compact sidebar, paper canvas, no inset panel. */
 html[data-xn-palette="claudex"] .xn-shell-layout,
-html[data-xn-palette="claudex"] .xn-shell-layout--desktop-titlebar { grid-template-columns: var(--claudex-sidebar-width) minmax(0, 1fr); background: var(--bg-sidebar); }
+html[data-xn-palette="claudex"] .xn-shell-layout--desktop-titlebar { grid-template-columns: calc(var(--claudex-sidebar-width) + var(--claudex-rail-width)) minmax(0, 1fr); background: var(--bg-sidebar); }
 html[data-xn-palette="claudex"] .xn-shell-layout--sidebar-collapsed,
 html[data-xn-palette="claudex"] .xn-shell-layout--desktop-titlebar.xn-shell-layout--sidebar-collapsed { grid-template-columns: minmax(0, 1fr); }
 html[data-xn-palette="claudex"] .xn-shell-layout:has(.xn-settings-view),
 html[data-xn-palette="claudex"] .xn-shell-layout--no-sidebar { grid-template-columns: minmax(0, 1fr); }
 html[data-xn-palette="claudex"] .xn-shell-layout:has(.xn-settings-view) .xn-shell-main { grid-column: 1; }
-html[data-xn-palette="claudex"] .xn-shell-layout .xn-shell-sidebar { width: var(--claudex-sidebar-width); border-right: 0; background: var(--bg-sidebar); }
+html[data-xn-palette="claudex"] .xn-shell-layout .xn-shell-sidebar { width: calc(var(--claudex-sidebar-width) + var(--claudex-rail-width)); border-right: 0; background: var(--bg-sidebar); }
 html[data-xn-palette="claudex"] .xn-shell-layout .xn-shell-main { padding: 0; background: var(--bg-sidebar); }
 html[data-xn-palette="claudex"] .xn-shell-layout .xn-shell-main__panel {
   margin: 0;
@@ -180,14 +180,14 @@ html[data-xn-palette="claudex"] ::selection { background: var(--accent-soft); }
 html[data-xn-palette="claudex"] .xn-shell-layout .xn-conversation > .xn-conv-header,
 html[data-xn-palette="claudex"] .xn-shell-layout .xn-conv-header {
   min-height: var(--claudex-header-height);
-  padding: 0 12px 0 20px;
+  padding: 0 16px 0 20px;
   gap: 8px;
-  justify-content: center;
+  justify-content: space-between;
   border-bottom: 0;
   background: var(--bg);
 }
 html[data-xn-palette="claudex"] .xn-shell-layout--sidebar-collapsed .xn-conversation > .xn-conv-header { padding-inline-start: 52px; }
-html[data-xn-palette="claudex"] .xn-shell-layout .xn-conv-header__title { color: var(--fg); font-size: var(--xn-ui-font-size, 14px); font-weight: 600; line-height: 20px; }
+html[data-xn-palette="claudex"] .xn-shell-layout .xn-conv-header__title { color: var(--fg); font-size: var(--xn-ui-font-size, 14px); font-weight: 400; line-height: 20px; }
 html[data-xn-palette="claudex"] .xn-shell-layout .xn-conv-header__tools { gap: 6px; }
 html[data-xn-palette="claudex"] .xn-shell-layout .xn-conv-header__action,
 html[data-xn-palette="claudex"] .xn-shell-layout .xn-view-switcher {
@@ -212,27 +212,27 @@ html[data-xn-palette="claudex"] .xn-shell-layout .xn-timeline-stream {
   width: min(100%, calc(var(--claudex-column) + 48px));
   max-width: calc(var(--claudex-column) + 48px);
 }
-html[data-xn-palette="claudex"] .xn-shell-layout .xn-zcode-conversation { max-width: calc(var(--claudex-column) + 48px); color: var(--conversation-fg); line-height: 1.5; }
+html[data-xn-palette="claudex"] .xn-shell-layout .xn-zcode-conversation { max-width: calc(var(--claudex-column) + 48px); color: var(--conversation-fg); line-height: 1.625; }
 html[data-xn-palette="claudex"] .xn-shell-layout .xn-zc-turn { gap: 16px; padding: 24px 24px 16px; }
 html[data-xn-palette="claudex"] .xn-shell-layout .xn-run-recovery { width: min(100%, calc(var(--claudex-column) + 48px)); }
 
 html[data-xn-palette="claudex"] .xn-shell-layout .xn-msg__bubble,
 html[data-xn-palette="claudex"] .xn-shell-layout .xn-zc-user-bubble {
   max-width: min(80%, 560px);
-  padding: 7px 14px;
+  padding: 10px 14px;
   border: 0;
-  border-radius: 14px;
+  border-radius: 16px;
   background: var(--claudex-user-bubble);
   box-shadow: none;
   color: var(--conversation-fg);
   font-size: var(--xn-ui-font-size, 14px);
-  line-height: 1.5;
+  line-height: 1.625;
 }
 html[data-xn-palette="claudex"] .xn-shell-layout .xn-zc-editor { border-radius: 14px; }
 
 /* "Worked for 13m 9s ›" over a full-width hairline. */
 html[data-xn-palette="claudex"] .xn-shell-layout .xn-conversation-work-summary,
-html[data-xn-palette="claudex"] .xn-shell-layout .xn-zc-work-status { padding-bottom: 8px; border-bottom: 1px solid var(--claudex-hairline); color: var(--fg-muted); }
+html[data-xn-palette="claudex"] .xn-shell-layout .xn-zc-work-status { padding-bottom: 0; border-bottom: 0; color: var(--fg-muted); }
 html[data-xn-palette="claudex"] .xn-shell-layout .xn-zc-work-content { gap: 12px; padding-top: 12px; }
 html[data-xn-palette="claudex"] .xn-shell-layout .xn-zc-tool > summary,
 html[data-xn-palette="claudex"] .xn-shell-layout .xn-zc-reasoning > summary { color: var(--claudex-faint); }
@@ -248,10 +248,10 @@ html[data-xn-palette="claudex"] .xn-shell-layout .xn-zc-answer .xn-md {
   color: var(--conversation-fg);
   font-family: var(--font-sans);
   font-size: var(--xn-ui-font-size, 14px);
-  line-height: 1.5;
+  line-height: 1.625;
 }
 html[data-xn-palette="claudex"] .xn-shell-layout .xn-md__paragraph,
-html[data-xn-palette="claudex"] .xn-shell-layout .xn-zc-answer .xn-md p { margin: 0 0 10px; }
+html[data-xn-palette="claudex"] .xn-shell-layout .xn-zc-answer .xn-md p { margin: 0 0 14px; }
 html[data-xn-palette="claudex"] .xn-shell-layout .xn-md__paragraph:last-child,
 html[data-xn-palette="claudex"] .xn-shell-layout .xn-zc-answer .xn-md p:last-child { margin-bottom: 0; }
 html[data-xn-palette="claudex"] .xn-shell-layout .xn-md__heading,
@@ -261,7 +261,7 @@ html[data-xn-palette="claudex"] .xn-shell-layout .xn-zc-answer .xn-md__heading--
 html[data-xn-palette="claudex"] .xn-shell-layout .xn-zc-answer .xn-md__heading--3 { font-size: 15px; }
 html[data-xn-palette="claudex"] .xn-shell-layout .xn-md strong,
 html[data-xn-palette="claudex"] .xn-shell-layout .xn-md__bold { color: var(--fg); font-weight: 600; }
-html[data-xn-palette="claudex"] .xn-shell-layout .xn-md__list { margin: 0 0 10px; padding-left: 1.4em; }
+html[data-xn-palette="claudex"] .xn-shell-layout .xn-md__list { margin: 0 0 14px; padding-left: 1.4em; }
 html[data-xn-palette="claudex"] .xn-shell-layout .xn-md__list-item { margin: 4px 0; }
 html[data-xn-palette="claudex"] .xn-shell-layout .xn-md__list-item::marker { color: var(--fg); }
 html[data-xn-palette="claudex"] .xn-shell-layout .xn-md__blockquote { border-left: 2px solid var(--claudex-hairline); color: var(--fg-subtle); }
@@ -315,10 +315,10 @@ html[data-xn-palette="claudex"] .xn-shell-layout .xn-session-back-to-bottom { bo
 
 /* ── 4. Composer: white card, radius 18, round black send ───────────────── */
 html[data-xn-palette="claudex"] .xn-shell-layout .xn-composer {
-  gap: 8px;
-  padding: 12px 10px 10px 14px;
+  gap: 4px;
+  padding: 12px 8px 8px 12px;
   border: 1px solid var(--claudex-composer-border);
-  border-radius: 18px;
+  border-radius: 20px;
   background: var(--bg-input);
   box-shadow: var(--claudex-composer-shadow);
   transition: border-color 150ms var(--claudex-ease);
@@ -331,11 +331,11 @@ html[data-xn-palette="claudex"] .xn-shell-layout .xn-composer-region--docked {
   margin-bottom: 16px;
 }
 html[data-xn-palette="claudex"] .xn-shell-layout .xn-composer__input {
-  min-height: 42px;
+  min-height: 44px;
   padding: 0;
   color: var(--fg);
   font-size: var(--xn-ui-font-size, 14px);
-  line-height: 21px;
+  line-height: 20px;
 }
 html[data-xn-palette="claudex"] .xn-shell-layout .xn-composer__input::placeholder { color: var(--claudex-faint); }
 html[data-xn-palette="claudex"] .xn-shell-layout .xn-composer__row { min-height: 28px; }
@@ -370,60 +370,50 @@ html[data-xn-palette="claudex"] .xn-shell-layout .xn-composer__stop,
 html[data-xn-palette="claudex"] .xn-shell-layout .xn-composer__stop:hover:not(:disabled) { width: 28px; height: 28px; border-radius: 999px; background: var(--claudex-send-bg); color: var(--claudex-send-fg); }
 
 /* Project strip: the workspace chooser sits on a grey band behind the card. */
-html[data-xn-palette="claudex"] .xn-shell-layout .xn-composer--with-top-content,
-html[data-xn-palette="claudex"] .xn-shell-layout .xn-composer--with-top-content:hover,
-html[data-xn-palette="claudex"] .xn-shell-layout .xn-composer--with-top-content:focus-within {
-  gap: 0;
-  padding: 0;
-  border: 0;
-  border-radius: 18px;
-  background: var(--claudex-card-row);
-  box-shadow: none;
-}
-html[data-xn-palette="claudex"] .xn-shell-layout .xn-composer--with-top-content::before {
-  content: "";
-  position: absolute;
-  inset: 36px 0 0;
-  border: 1px solid var(--claudex-composer-border);
-  border-radius: 18px;
-  background: var(--bg-input);
-  box-shadow: var(--claudex-composer-shadow);
-  pointer-events: none;
-}
-html[data-xn-palette="claudex"] .xn-shell-layout .xn-composer--with-top-content > * { position: relative; }
-html[data-xn-palette="claudex"] .xn-shell-layout .xn-composer__top-content { min-height: 36px; padding: 4px 10px; }
-html[data-xn-palette="claudex"] .xn-shell-layout .xn-composer__top-content .xn-composer-workspace { color: var(--fg-muted); font-size: 13px; }
-html[data-xn-palette="claudex"] .xn-shell-layout .xn-composer__top-content .xn-select { height: 28px; color: var(--fg-subtle); font-size: 13px; }
-html[data-xn-palette="claudex"] .xn-shell-layout .xn-composer--with-top-content .xn-composer__input { width: calc(100% - 28px); margin: 12px 14px 0; }
-html[data-xn-palette="claudex"] .xn-shell-layout .xn-composer--with-top-content .xn-composer__row { margin: 8px 10px 10px 14px; }
+html[data-xn-palette="claudex"] .xn-shell-layout .xn-composer--with-top-content::before { content: none; }
+html[data-xn-palette="claudex"] .xn-shell-layout .xn-composer--with-top-content { padding: 12px 8px 8px 12px; background: var(--bg-input); }
+html[data-xn-palette="claudex"] .xn-shell-layout .xn-composer__top-content { min-height: 28px; padding: 0 0 8px; margin: 0; border-bottom: 1px solid var(--border); }
+html[data-xn-palette="claudex"] .xn-shell-layout .xn-composer__top-content .xn-select { height: 28px; font-size: 13px; }
+html[data-xn-palette="claudex"] .xn-shell-layout .xn-composer--with-top-content .xn-composer__input { width: 100%; margin: 4px 0 0; }
+html[data-xn-palette="claudex"] .xn-shell-layout .xn-composer--with-top-content .xn-composer__row { margin: 0; }
 
-/* ── 5. Start page: mark + title, suggestion rows, bottom-docked composer ─ */
+/* Start: a single introductory group above the input, anchored by viewport
+ * height as in the source home-composer-anchor. The product mark stays our own. */
 html[data-xn-palette="claudex"] .xn-shell-layout .xn-hero {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
   justify-content: flex-start;
   gap: 0;
-  padding: 0 24px 16px;
+  overflow-y: auto;
+  padding: 0 24px 32px;
 }
-html[data-xn-palette="claudex"] .xn-shell-layout .xn-hero__bar { order: 0; align-self: stretch; }
-html[data-xn-palette="claudex"] .xn-shell-layout .xn-hero__brand { order: 1; margin-top: auto; margin-bottom: 14px; }
-html[data-xn-palette="claudex"] .xn-shell-layout .xn-hero__brand-mark { width: 40px; height: 40px; color: var(--fg); }
+html[data-xn-palette="claudex"] .xn-shell-layout .xn-hero__bar { align-self: stretch; flex: 0 0 auto; }
+html[data-xn-palette="claudex"] .xn-shell-layout .xn-hero__intro {
+  display: flex;
+  flex: 0 0 auto;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 112px;
+  gap: 24px;
+  margin: clamp(20px, calc(42svh - 216px), 220px) 0 32px;
+}
+html[data-xn-palette="claudex"] .xn-shell-layout .xn-hero__brand { margin: 0; }
+html[data-xn-palette="claudex"] .xn-shell-layout .xn-hero__brand-mark { width: 56px; height: 56px; color: var(--fg); opacity: .3; }
 html[data-xn-palette="claudex"] .xn-shell-layout .xn-hero__greeting {
-  order: 2;
   margin: 0;
   color: var(--fg);
   font-family: var(--font-sans);
   font-size: 28px;
   font-weight: 400;
-  line-height: 36px;
+  line-height: 1.2;
   letter-spacing: -.01em;
+  text-align: center;
 }
 html[data-xn-palette="claudex"] .xn-shell-layout .xn-hero__hint { display: none; }
-html[data-xn-palette="claudex"] .xn-shell-layout .xn-start-page {
-  order: 3;
-  width: min(var(--claudex-column), 100%);
-  margin-top: auto;
-  margin-bottom: 14px;
-}
-html[data-xn-palette="claudex"] .xn-shell-layout .xn-hero__composer { order: 4; width: min(var(--claudex-column), 100%); }
+html[data-xn-palette="claudex"] .xn-shell-layout .xn-start-page { width: min(var(--claudex-column), 100%); margin: 20px 0 0; }
+html[data-xn-palette="claudex"] .xn-shell-layout .xn-hero__composer { width: min(var(--claudex-column), 100%); margin: 0; }
 html[data-xn-palette="claudex"] .xn-shell-layout .xn-composer-region--hero,
 html[data-xn-palette="claudex"] .xn-shell-layout .xn-composer--hero { max-width: var(--claudex-column); }
 html[data-xn-palette="claudex"] .xn-shell-layout .xn-start-page__actions { justify-content: flex-start; gap: 4px; margin-bottom: 6px; padding: 0 4px; }
@@ -526,19 +516,19 @@ html[data-xn-palette="claudex"] .xn-shell-layout .xn-lightweight-timeline,
 html[data-xn-palette="claudex"] .xn-shell-layout .xn-lightweight-statusbar,
 html[data-xn-palette="claudex"] .xn-shell-layout .xn-lightweight-composer { max-width: var(--claudex-column); }
 html[data-xn-palette="claudex"] .xn-shell-layout .xn-lightweight-msg--user .xn-lightweight-msg__bubble {
-  padding: 7px 14px;
+  padding: 10px 14px;
   border: 0;
-  border-radius: 14px;
+  border-radius: 16px;
   background: var(--claudex-user-bubble);
   color: var(--conversation-fg);
   font-size: var(--xn-ui-font-size, 14px);
-  line-height: 1.5;
+  line-height: 1.625;
 }
 html[data-xn-palette="claudex"] .xn-shell-layout .xn-lightweight-msg--assistant .xn-lightweight-msg__prose {
   color: var(--conversation-fg);
   font-family: var(--font-sans);
   font-size: var(--xn-ui-font-size, 14px);
-  line-height: 1.5;
+  line-height: 1.625;
 }
 html[data-xn-palette="claudex"] .xn-shell-layout .xn-lightweight-tool,
 html[data-xn-palette="claudex"] .xn-shell-layout .xn-lightweight-tool-group { border: 0; border-radius: 10px; background: var(--claudex-card); }
@@ -546,7 +536,7 @@ html[data-xn-palette="claudex"] .xn-shell-layout .xn-lightweight-tool__pre { bor
 html[data-xn-palette="claudex"] .xn-shell-layout .xn-lightweight-statusbar { border-top-color: transparent; background: transparent; color: var(--fg-muted); }
 html[data-xn-palette="claudex"] .xn-shell-layout .xn-lightweight-composer {
   border: 1px solid var(--claudex-composer-border);
-  border-radius: 18px;
+  border-radius: 20px;
   background: var(--bg-input);
   box-shadow: var(--claudex-composer-shadow);
 }
@@ -584,296 +574,62 @@ html[data-xn-palette="claudex"] .xn-shell-layout .xn-error-banner > button { bor
   html[data-xn-palette="claudex"] .xn-shell-layout .xn-composer__send { transition: none; }
 }
 
-/* ── 10. 实测对齐：Codex 桌面端（macOS 深色，2x 窗口截图实测，2026-10-10） ──
- * Desktop window chrome (?xuenessDesktop=1) only, wide windows only. Values
- * in xueness-opt/screens/codex-real/MEASURE.md: 44px title bar in the frame
- * colour, a 52px icon rail, a 238px sidebar sheet with a 10px top-left corner,
- * and a 4px frame on the right and bottom of the canvas. */
-@media (min-width: 901px) {
-  html[data-xn-palette="claudex"] .xn-shell-layout--desktop-titlebar { grid-template-rows: var(--claudex-titlebar-height) minmax(0, 1fr); background: var(--claudex-frame); }
-  html[data-xn-palette="claudex"] .xn-shell-layout--desktop-titlebar .xn-shell-layout__titlebar { height: var(--claudex-titlebar-height); background: var(--claudex-frame); }
-  html[data-xn-palette="claudex"] .xn-shell-layout--desktop-titlebar .xn-desktop-titlebar { height: var(--claudex-titlebar-height); background: transparent; }
-  html[data-xn-palette="claudex"] .xn-shell-layout--desktop-titlebar .xn-shell-sidebar {
-    position: relative;
-    padding: 0 0 var(--claudex-frame-inset) var(--claudex-rail-width);
-    background: var(--claudex-frame);
-  }
-  html[data-xn-palette="claudex"] .xn-shell-layout--desktop-titlebar .xn-shell-sidebar__body { border-top-left-radius: 10px; background: var(--bg-sidebar); }
-  html[data-xn-palette="claudex"] .xn-shell-layout--desktop-titlebar .xn-shell-main { padding: 0 var(--claudex-frame-inset) var(--claudex-frame-inset) 0; background: var(--claudex-frame); }
-  html[data-xn-palette="claudex"] .xn-shell-layout--desktop-titlebar .xn-shell-main__panel { border-radius: 0 0 6px; }
-  html[data-xn-palette="claudex"] .xn-shell-layout--desktop-titlebar.xn-shell-layout--sidebar-collapsed .xn-shell-main__panel { border-radius: 10px 0 6px; }
-}
-
-/* Icon rail (52px, frame colour): 自动化 / 插件市场 on top as 36px icon
- * buttons stepping 44px, account avatar and settings at the bottom. The rows
- * keep their accessible names; only the visible label is clipped. 搜索 moves to
- * the sidebar header's right edge like Codex's search icon. */
-@media (min-width: 901px) {
-  html[data-xn-palette="claudex"] .xn-shell-layout--desktop-titlebar .xn-sidebar-action[data-testid="xn-sidebar-action-automations"],
-  html[data-xn-palette="claudex"] .xn-shell-layout--desktop-titlebar .xn-sidebar-action[data-testid="xn-sidebar-action-marketplace"],
-  html[data-xn-palette="claudex"] .xn-shell-layout--desktop-titlebar .xn-sidebar-action[data-testid="xn-sidebar-action-search"] {
-    position: absolute;
-    z-index: 2;
-    justify-content: center;
-    width: 36px;
-    height: 36px;
-    min-height: 36px;
-    padding: 0;
-    gap: 0;
-    border-radius: 8px;
-    color: var(--claudex-rail-fg);
-  }
-  html[data-xn-palette="claudex"] .xn-shell-layout--desktop-titlebar .xn-sidebar-action[data-testid="xn-sidebar-action-automations"] { top: 8px; left: 8px; }
-  html[data-xn-palette="claudex"] .xn-shell-layout--desktop-titlebar .xn-sidebar-action[data-testid="xn-sidebar-action-marketplace"] { top: 52px; left: 8px; }
-  html[data-xn-palette="claudex"] .xn-shell-layout--desktop-titlebar .xn-sidebar-action[data-testid="xn-sidebar-action-search"] { top: 12px; left: 250px; width: 28px; height: 28px; min-height: 28px; }
-  html[data-xn-palette="claudex"] .xn-shell-layout--desktop-titlebar .xn-sidebar-action[data-testid="xn-sidebar-action-automations"]:hover,
-  html[data-xn-palette="claudex"] .xn-shell-layout--desktop-titlebar .xn-sidebar-action[data-testid="xn-sidebar-action-marketplace"]:hover { background: var(--claudex-rail-active); color: var(--fg); }
-  html[data-xn-palette="claudex"] .xn-shell-layout--desktop-titlebar .xn-sidebar-action[data-testid="xn-sidebar-action-search"]:hover { background: var(--bg-hover); color: var(--fg); }
-  html[data-xn-palette="claudex"] .xn-shell-layout--desktop-titlebar .xn-sidebar-action[data-testid="xn-sidebar-action-automations"] .xn-sidebar-action__label,
-  html[data-xn-palette="claudex"] .xn-shell-layout--desktop-titlebar .xn-sidebar-action[data-testid="xn-sidebar-action-marketplace"] .xn-sidebar-action__label,
-  html[data-xn-palette="claudex"] .xn-shell-layout--desktop-titlebar .xn-sidebar-action[data-testid="xn-sidebar-action-search"] .xn-sidebar-action__label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
-  html[data-xn-palette="claudex"] .xn-shell-layout--desktop-titlebar .xn-sidebar-action[data-testid="xn-sidebar-action-automations"] .xn-sidebar-action__icon,
-  html[data-xn-palette="claudex"] .xn-shell-layout--desktop-titlebar .xn-sidebar-action[data-testid="xn-sidebar-action-marketplace"] .xn-sidebar-action__icon,
-  html[data-xn-palette="claudex"] .xn-shell-layout--desktop-titlebar .xn-sidebar-action[data-testid="xn-sidebar-action-search"] .xn-sidebar-action__icon { display: inline-flex; align-items: center; justify-content: center; width: 18px; color: inherit; }
-  html[data-xn-palette="claudex"] .xn-shell-layout--desktop-titlebar .xn-sidebar-action[data-testid="xn-sidebar-action-automations"] .xn-sidebar-action__icon svg,
-  html[data-xn-palette="claudex"] .xn-shell-layout--desktop-titlebar .xn-sidebar-action[data-testid="xn-sidebar-action-marketplace"] .xn-sidebar-action__icon svg { width: 18px; height: 18px; }
-
-  html[data-xn-palette="claudex"] .xn-shell-layout--desktop-titlebar .xn-shell-sidebar__footer {
-    position: absolute;
-    bottom: 8px;
-    left: 0;
-    flex-direction: column-reverse;
-    justify-content: flex-start;
-    width: var(--claudex-rail-width);
-    height: auto;
-    min-height: 0;
-    padding: 0;
-    gap: 8px;
-    border: 0;
-    background: transparent;
-  }
-  html[data-xn-palette="claudex"] .xn-shell-layout--desktop-titlebar .xn-sidebar-account { flex: 0 0 auto; }
-  html[data-xn-palette="claudex"] .xn-shell-layout--desktop-titlebar .xn-sidebar-account > summary {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 36px;
-    height: 36px;
-    padding: 0;
-    border-radius: 8px;
-  }
-  html[data-xn-palette="claudex"] .xn-shell-layout--desktop-titlebar .xn-sidebar-account > summary > :not(.xn-sidebar-account__avatar) { display: none; }
-  html[data-xn-palette="claudex"] .xn-shell-layout--desktop-titlebar .xn-sidebar-account__avatar { width: 24px; height: 24px; }
-  html[data-xn-palette="claudex"] .xn-shell-layout--desktop-titlebar .xn-sidebar-account__menu { left: 8px; bottom: 44px; }
-  html[data-xn-palette="claudex"] .xn-shell-layout--desktop-titlebar .xn-sidebar-footer__action { width: 36px; height: 36px; border-radius: 8px; color: var(--claudex-rail-fg); }
-  html[data-xn-palette="claudex"] .xn-shell-layout--desktop-titlebar .xn-sidebar-footer__action:hover,
-  html[data-xn-palette="claudex"] .xn-shell-layout--desktop-titlebar .xn-sidebar-account > summary:hover { background: var(--claudex-rail-active); color: var(--fg); }
-}
-
-/* Sidebar sheet: 90px header (Xueness wordmark at 17px in the mode-switch
- * slot, search on the right), a 30px 新建任务 row inset 8px, a 25px muted
- * section label whose list tools appear on hover, and 30px rows with the
- * title at 32px and the status mark at the row end, #dddddd text. */
-@media (min-width: 901px) {
-  html[data-xn-palette="claudex"] .xn-shell-layout--desktop-titlebar .xn-shell-sidebar__body::before {
-    content: "Xueness";
-    display: block;
-    height: 32px;
-    margin: 10px 0 10px 10px;
-    padding: 0 8px;
-    color: var(--claudex-sidebar-fg);
-    font: 600 17px/32px var(--font-sans);
-    letter-spacing: -.01em;
-  }
-  html[data-xn-palette="claudex"] .xn-shell-layout--desktop-titlebar .xn-sidebar-actions { gap: 0; padding: 0 8px; }
-  html[data-xn-palette="claudex"] .xn-shell-layout--desktop-titlebar .xn-sidebar-action { padding: 0 8px; gap: 8px; color: var(--claudex-sidebar-fg); }
-  html[data-xn-palette="claudex"] .xn-shell-layout--desktop-titlebar .xn-task-list__toolbar { min-height: 25px; margin: 15px 0 0; padding: 0 8px 0 12px; }
-  html[data-xn-palette="claudex"] .xn-shell-layout--desktop-titlebar .xn-task-list__toolbar::before { font-size: 13px; line-height: 25px; }
-  html[data-xn-palette="claudex"] .xn-shell-layout--desktop-titlebar .xn-task-list__toolbar > * { opacity: 0; transition: opacity 120ms var(--claudex-ease); }
-  html[data-xn-palette="claudex"] .xn-shell-layout--desktop-titlebar .xn-task-list__toolbar:hover > *,
-  html[data-xn-palette="claudex"] .xn-shell-layout--desktop-titlebar .xn-task-list__toolbar:focus-within > *,
-  html[data-xn-palette="claudex"] .xn-shell-layout--desktop-titlebar .xn-task-list__sort[open] { opacity: 1; }
-  html[data-xn-palette="claudex"] .xn-shell-layout--desktop-titlebar .xn-task-list { padding: 0 8px; }
-  html[data-xn-palette="claudex"] .xn-shell-layout--desktop-titlebar .xn-task-list__toolbar,
-  html[data-xn-palette="claudex"] .xn-shell-layout--desktop-titlebar .xn-task-list__group { margin-inline: 0; }
-  html[data-xn-palette="claudex"] .xn-shell-layout--desktop-titlebar .xn-task-list__group-name { gap: 8px; padding: 0 8px; color: var(--claudex-sidebar-fg); }
-  html[data-xn-palette="claudex"] .xn-shell-layout--desktop-titlebar .xn-task-list__group-name svg { color: var(--claudex-sidebar-fg); }
-  html[data-xn-palette="claudex"] .xn-shell-layout--desktop-titlebar .xn-shell-nav { padding: 0; }
-  html[data-xn-palette="claudex"] .xn-shell-layout--desktop-titlebar .xn-shell-nav__list { padding: 0; }
-  html[data-xn-palette="claudex"] .xn-shell-layout--desktop-titlebar .xn-shell-nav__link,
-  html[data-xn-palette="claudex"] .xn-shell-layout--desktop-titlebar .xn-task-list__group .xn-shell-nav__link { gap: 6px; padding: 0 8px 0 32px; color: var(--claudex-sidebar-fg); }
-  html[data-xn-palette="claudex"] .xn-shell-layout--desktop-titlebar .xn-shell-nav__label { order: 1; flex: 1 1 auto; min-width: 0; }
-  html[data-xn-palette="claudex"] .xn-shell-layout--desktop-titlebar .xn-shell-nav__time { order: 2; }
-  html[data-xn-palette="claudex"] .xn-shell-layout--desktop-titlebar .xn-shell-nav__leading { order: 3; justify-content: center; width: 14px; }
-}
-
-/* Title bar: back / forward / sidebar toggle as 28px buttons at x=88/122/156
- * (Windows: from the left edge), no wordmark. With a conversation open the
- * header joins the title bar row like Codex: project mark at main+8, the title
- * at main+44 in 14px, actions on the right clear of the window controls. */
-@media (min-width: 901px) {
-  html[data-xn-palette="claudex"] .xn-shell-layout--desktop-titlebar .xn-shell-layout__titlebar { background: transparent; pointer-events: none; }
-  html[data-xn-palette="claudex"] .xn-shell-layout--desktop-titlebar .xn-desktop-titlebar { position: relative; gap: 6px; }
-  html[data-xn-palette="claudex"] .xn-shell-layout--desktop-titlebar .xn-desktop-titlebar[data-platform="macos"] { padding-inline-start: 88px; }
-  html[data-xn-palette="claudex"] .xn-shell-layout--desktop-titlebar .xn-desktop-titlebar__brand { display: none; }
-  html[data-xn-palette="claudex"] .xn-shell-layout--desktop-titlebar .xn-desktop-titlebar__history { gap: 6px; }
-  html[data-xn-palette="claudex"] .xn-shell-layout--desktop-titlebar .xn-desktop-titlebar__history button,
-  html[data-xn-palette="claudex"] .xn-shell-layout--desktop-titlebar .xn-desktop-titlebar__actions > button,
-  html[data-xn-palette="claudex"] .xn-shell-layout--desktop-titlebar .xn-desktop-titlebar__help > summary { width: 28px; height: 28px; border-radius: 8px; pointer-events: auto; }
-  html[data-xn-palette="claudex"] .xn-shell-layout--desktop-titlebar .xn-desktop-titlebar__help { pointer-events: auto; }
-  html[data-xn-palette="claudex"] .xn-shell-layout--desktop-titlebar [data-testid="xn-desktop-titlebar-sidebar"] { position: absolute; top: 8px; left: 156px; }
-  html[data-xn-palette="claudex"] .xn-shell-layout--desktop-titlebar .xn-desktop-titlebar[data-platform="windows"] [data-testid="xn-desktop-titlebar-sidebar"],
-  html[data-xn-palette="claudex"] .xn-shell-layout--desktop-titlebar .xn-desktop-titlebar[data-platform="other"] [data-testid="xn-desktop-titlebar-sidebar"] { left: 78px; }
-
-  html[data-xn-palette="claudex"] .xn-shell-layout--desktop-titlebar .xn-shell-main:has(.xn-conv-header) { grid-column: 2; grid-row: 1 / 3; }
-  html[data-xn-palette="claudex"] .xn-shell-layout--desktop-titlebar.xn-shell-layout--sidebar-collapsed .xn-shell-main:has(.xn-conv-header),
-  html[data-xn-palette="claudex"] .xn-shell-layout--desktop-titlebar.xn-shell-layout--no-sidebar .xn-shell-main:has(.xn-conv-header) { grid-column: 1; }
-  html[data-xn-palette="claudex"] .xn-shell-layout--desktop-titlebar .xn-shell-main:has(.xn-conv-header) .xn-shell-main__panel { background: var(--bg); }
-  html[data-xn-palette="claudex"] .xn-shell-layout--desktop-titlebar .xn-conversation > .xn-conv-header {
-    box-sizing: border-box;
-    min-height: var(--claudex-titlebar-height);
-    height: var(--claudex-titlebar-height);
-    margin-right: calc(-1 * var(--claudex-frame-inset));
-    padding: 0 84px 0 8px;
-    gap: 8px;
-    border: 0;
-    background: var(--claudex-frame);
-    -webkit-app-region: drag;
-  }
-  /* Windows: header actions stay clear of the native caption buttons and the
-   * title bar's own 工作台/终端 buttons (caption safe area + 74px; 222px at the
-   * standard 138px caption width). Collapsed sidebar: the title starts
-   * after the back / forward / sidebar buttons (macOS 88–184px, Windows 10–106px). */
-  html[data-xn-palette="claudex"] .xn-shell-layout--desktop-titlebar:has(.xn-desktop-titlebar[data-platform="windows"]) .xn-conversation > .xn-conv-header { padding-right: calc(max(148px, calc(100vw - env(titlebar-area-width, 100vw) + 10px)) + 74px); }
-  html[data-xn-palette="claudex"] .xn-shell-layout--desktop-titlebar.xn-shell-layout--sidebar-collapsed .xn-conversation > .xn-conv-header { padding-left: 112px; }
-  html[data-xn-palette="claudex"] .xn-shell-layout--desktop-titlebar.xn-shell-layout--sidebar-collapsed:has(.xn-desktop-titlebar[data-platform="macos"]) .xn-conversation > .xn-conv-header { padding-left: 190px; }
-  html[data-xn-palette="claudex"] .xn-shell-layout--desktop-titlebar .xn-conv-header__main,
-  html[data-xn-palette="claudex"] .xn-shell-layout--desktop-titlebar .xn-conv-header__tools,
-  html[data-xn-palette="claudex"] .xn-shell-layout--desktop-titlebar .xn-conv-header__more { -webkit-app-region: no-drag; }
-  html[data-xn-palette="claudex"] .xn-shell-layout--desktop-titlebar .xn-conv-header__title {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    min-width: 0;
-    color: var(--fg);
-    font-size: var(--xn-ui-font-size, 14px);
-    font-weight: 400;
-    line-height: 20px;
-  }
-  html[data-xn-palette="claudex"] .xn-shell-layout--desktop-titlebar .xn-conv-header__title[data-project]::before {
-    content: "";
-    flex: 0 0 28px;
-    height: 28px;
-    background: var(--fg);
-    -webkit-mask: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='-6 -6 36 36' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z'/></svg>") center / 28px 28px no-repeat;
-    mask: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='-6 -6 36 36' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z'/></svg>") center / 28px 28px no-repeat;
-  }
-  html[data-xn-palette="claudex"] .xn-shell-layout--desktop-titlebar .xn-conv-header__title:not([data-project]) { padding-left: 36px; }
-  /* Header actions read as quiet 28px icons, like Codex's "…" and summary toggles; names stay for assistive tech. */
-  html[data-xn-palette="claudex"] .xn-shell-layout--desktop-titlebar .xn-conv-header__tools > .xn-conv-header__action {
-    justify-content: center;
-    width: 28px;
-    min-width: 28px;
-    height: 28px;
-    min-height: 28px;
-    padding: 0;
-    border: 0;
-    border-radius: 8px;
-    background: transparent;
-    color: var(--fg-subtle);
-  }
-  html[data-xn-palette="claudex"] .xn-shell-layout--desktop-titlebar .xn-conv-header__tools > .xn-conv-header__action:hover { background: var(--bg-hover); color: var(--fg); }
-  html[data-xn-palette="claudex"] .xn-shell-layout--desktop-titlebar .xn-conv-header__tools > .xn-conv-header__action > span { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
-  html[data-xn-palette="claudex"] .xn-shell-layout--desktop-titlebar .xn-conv-header__tools .xn-view-switcher { min-height: 28px; height: 28px; border: 0; background: transparent; color: var(--fg-subtle); }
-  html[data-xn-palette="claudex"] .xn-shell-layout--desktop-titlebar .xn-conv-header__tools .xn-view-switcher:hover { background: var(--bg-hover); color: var(--fg); }
-}
-
-/* ── 11. 实测对齐：阅读栏、气泡与正文 ─────────────────────────────────────
- * The reading column is 736px with 30px gutters (Codex: x 321–1056 in a
- * 796px canvas); the history rail overlays the left gutter instead of taking
- * a column. Blue user bubble (radius 16, 42px single line), 14px prose on a
- * 23px line with 14px paragraph gaps, "用时 …" summary without a hairline. */
+/* Desktop shell and thread header have separate, real rows. Platform caption
+ * safe areas remain on the existing native title bar, never on conversation text. */
+html[data-xn-palette="claudex"] .xn-shell-layout--desktop-titlebar { grid-template-rows: var(--claudex-titlebar-height) minmax(0, 1fr); background: var(--claudex-frame); }
+html[data-xn-palette="claudex"] .xn-shell-layout--desktop-titlebar .xn-shell-layout__titlebar,
+html[data-xn-palette="claudex"] .xn-shell-layout--desktop-titlebar .xn-desktop-titlebar { height: var(--claudex-titlebar-height); background: var(--claudex-frame); }
+html[data-xn-palette="claudex"] .xn-shell-layout--desktop-titlebar .xn-desktop-titlebar__brand { display: none; }
+html[data-xn-palette="claudex"] .xn-shell-layout--desktop-titlebar .xn-shell-main { padding: 0 var(--claudex-frame-inset) var(--claudex-frame-inset) 0; background: var(--claudex-frame); }
+html[data-xn-palette="claudex"] .xn-shell-layout--desktop-titlebar .xn-shell-main__panel { border-radius: 12px 12px 6px 6px; }
+html[data-xn-palette="claudex"] .xn-shell-layout .xn-conversation > .xn-conv-header { height: var(--claudex-header-height); flex: 0 0 auto; }
+html[data-xn-palette="claudex"] .xn-shell-layout .xn-conv-header__title { display: flex; align-items: center; gap: 12px; }
+html[data-xn-palette="claudex"] .xn-shell-layout .xn-conv-header__title > svg { display: block; flex: 0 0 auto; }
+html[data-xn-palette="claudex"] .xn-shell-layout .xn-conv-header__title > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+html[data-xn-palette="claudex"] .xn-shell-layout .xn-conv-header__tools > .xn-conv-header__action { width: 28px; min-width: 28px; padding: 0; border: 0; background: transparent; justify-content: center; }
+html[data-xn-palette="claudex"] .xn-shell-layout .xn-conv-header__tools > .xn-conv-header__action > span { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+html[data-xn-palette="claudex"] .xn-shell-layout .xn-view-switcher { border: 0; background: transparent; }
 html[data-xn-palette="claudex"] .xn-shell-layout .xn-timeline-history-layout { grid-template-columns: minmax(0, 1fr); }
 html[data-xn-palette="claudex"] .xn-shell-layout .xn-timeline-history-layout__content { grid-column: 1; }
 html[data-xn-palette="claudex"] .xn-shell-layout .xn-conversation-history-rail { grid-column: 1; justify-self: start; }
-html[data-xn-palette="claudex"] .xn-shell-layout .xn-zcode-conversation { max-width: calc(var(--claudex-column) + 60px); line-height: 23px; }
-html[data-xn-palette="claudex"] .xn-shell-layout .xn-zc-turn { gap: 14px; padding: 20px 30px 16px; }
-html[data-xn-palette="claudex"] .xn-shell-layout .xn-msg__bubble,
-html[data-xn-palette="claudex"] .xn-shell-layout .xn-zc-user-bubble {
-  padding: 10px 14px;
-  border-radius: 16px;
-  background: var(--claudex-user-bubble);
-  color: var(--claudex-user-bubble-fg);
-  line-height: 22px;
+
+/* Two footer groups, with width allocated to the model group. All extra
+ * capabilities stay in menus; an attachment shortcut need not be duplicated. */
+html[data-xn-palette="claudex"] .xn-shell-layout [data-testid="composer-attachment"] { display: none; }
+html[data-xn-palette="claudex"] .xn-shell-layout .xn-composer-toolbar__model-trigger { max-width: 164px; min-width: 0; }
+html[data-xn-palette="claudex"] .xn-shell-layout .xn-composer-toolbar__model-trigger > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+html[data-xn-palette="claudex"] .xn-shell-layout .xn-composer-toolbar__browser { width: 28px; padding: 0; justify-content: center; }
+html[data-xn-palette="claudex"] .xn-shell-layout .xn-composer-toolbar__browser > span { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+html[data-xn-palette="claudex"] .xn-shell-layout .xn-composer-toolbar__browser > svg { display: block; }
+html[data-xn-palette="claudex"] .xn-shell-layout .xn-composer-toolbar__browser[aria-pressed="true"] { color: var(--accent-brand); background: var(--accent-soft); }
+html[data-xn-palette="claudex"] .xn-shell-layout .xn-usage-quick__trigger { width: 28px; padding: 0; justify-content: center; }
+html[data-xn-palette="claudex"] .xn-shell-layout .xn-usage-quick__trigger > span { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+
+@media (min-width: 681px) {
+  html[data-xn-palette="claudex"] .xn-shell-layout .xn-composer__tools { display: grid; grid-template-columns: auto auto minmax(0, 1fr) auto; align-items: center; gap: 4px; }
+  html[data-xn-palette="claudex"] .xn-shell-layout .xn-composer__actions { grid-column: 1; }
+  html[data-xn-palette="claudex"] .xn-shell-layout .xn-composer-toolbar__left { grid-column: 2; }
+  html[data-xn-palette="claudex"] .xn-shell-layout .xn-composer-toolbar__right { grid-column: 3; justify-self: end; }
+  html[data-xn-palette="claudex"] .xn-shell-layout .xn-usage-quick { grid-column: 4; }
+  html[data-xn-palette="claudex"] .xn-shell-layout .xn-composer-toolbar__left,
+  html[data-xn-palette="claudex"] .xn-shell-layout .xn-composer-toolbar__right { flex-wrap: nowrap; gap: 4px; min-width: 0; }
+  html[data-xn-palette="claudex"] .xn-shell-layout .xn-composer-toolbar__right { margin-left: 0; }
 }
-html[data-xn-palette="claudex"] .xn-shell-layout .xn-msg--assistant,
-html[data-xn-palette="claudex"] .xn-shell-layout .xn-zc-answer .xn-md { line-height: 23px; }
-html[data-xn-palette="claudex"] .xn-shell-layout .xn-md__paragraph,
-html[data-xn-palette="claudex"] .xn-shell-layout .xn-zc-answer .xn-md p { margin: 0 0 14px; }
-html[data-xn-palette="claudex"] .xn-shell-layout .xn-conversation-work-summary,
-html[data-xn-palette="claudex"] .xn-shell-layout .xn-zc-work-status { padding-bottom: 0; border-bottom: 0; font-size: 13px; }
 
-/* ── 12. 实测对齐：输入框 ───────────────────────────────────────────────
- * Codex composer: same 736px column, 97px tall resting, #383838 fill with no
- * border or shadow, radius 20; text at +11/+13 on a 44px input, a 28px tool
- * row 4px below and 8px from the bottom; 17px above the canvas edge. On the
- * start page a #282828 strip (38px, inset 15px, rounded top) carries the
- * project / run-location chips above the card. */
-html[data-xn-palette="claudex"] .xn-shell-layout .xn-composer-region--docked { width: min(var(--claudex-column), calc(100% - 60px)); margin-bottom: 13px; }
-html[data-xn-palette="claudex"] .xn-shell-layout .xn-composer,
-html[data-xn-palette="claudex"] .xn-shell-layout .xn-composer:hover,
-html[data-xn-palette="claudex"] .xn-shell-layout .xn-composer:focus-within {
-  gap: 4px;
-  padding: 13px 8px 8px 11px;
-  border-color: var(--claudex-composer-border);
-  border-radius: 20px;
-  background: var(--claudex-composer-bg);
-  box-shadow: var(--claudex-composer-shadow);
-}
-html[data-xn-palette="claudex"] .xn-shell-layout .xn-composer__input { min-height: 44px; line-height: 20px; }
-html[data-xn-palette="claudex"] .xn-shell-layout .xn-composer__input::placeholder { color: var(--claudex-placeholder); }
-html[data-xn-palette="claudex"] .xn-shell-layout .xn-composer__row { min-height: 28px; }
-html[data-xn-palette="claudex"] .xn-shell-layout .xn-composer--with-top-content,
-html[data-xn-palette="claudex"] .xn-shell-layout .xn-composer--with-top-content:hover,
-html[data-xn-palette="claudex"] .xn-shell-layout .xn-composer--with-top-content:focus-within { padding: 0; border-radius: 20px; background: transparent; }
-html[data-xn-palette="claudex"] .xn-shell-layout .xn-composer--with-top-content::before { inset: 38px 0 0; border: 1px solid var(--claudex-composer-border); border-radius: 20px; background: var(--claudex-composer-bg); box-shadow: var(--claudex-composer-shadow); }
-html[data-xn-palette="claudex"] .xn-shell-layout .xn-composer__top-content {
-  box-sizing: border-box;
-  min-height: 38px;
-  height: 38px;
-  margin: 0 15px;
-  padding: 0 8px 4px;
-  border: 1px solid var(--claudex-composer-border);
-  border-bottom: 0;
-  border-radius: 12px 12px 0 0;
-  background: var(--claudex-composer-strip);
-}
-html[data-xn-palette="claudex"] .xn-shell-layout .xn-composer__top-content .xn-composer-workspace,
-html[data-xn-palette="claudex"] .xn-shell-layout .xn-composer__top-content .xn-select { color: var(--fg); font-size: 13px; }
-html[data-xn-palette="claudex"] .xn-shell-layout .xn-composer--with-top-content .xn-composer__input { width: calc(100% - 19px); margin: 13px 8px 0 11px; }
-html[data-xn-palette="claudex"] .xn-shell-layout .xn-composer--with-top-content .xn-composer__row { margin: 4px 8px 8px 11px; }
-
-/* ── 13. 实测对齐：起始页 ───────────────────────────────────────────────
- * Codex: a 44px muted outline mark, ~44px gap, a 28px/34px white title, both
- * centred in the canvas above the composer; no recent-thread list (recents
- * live in the sidebar). Xueness keeps its greeting and the 打开项目 / 克隆仓库
- * chips and the recent task list. */
-html[data-xn-palette="claudex"] .xn-shell-layout .xn-hero__brand { margin-bottom: 40px; }
-html[data-xn-palette="claudex"] .xn-shell-layout .xn-hero__brand-mark { width: 44px; height: 44px; color: var(--claudex-start-mark); }
-html[data-xn-palette="claudex"] .xn-shell-layout .xn-hero__greeting { line-height: 34px; text-align: center; }
-
-html[data-xn-palette="claudex"] .xn-shell-layout .xn-start-page { margin-bottom: 8px; }
-
-html[data-xn-palette="claudex"] .xn-shell-layout .xn-task-list__toolbar { flex-wrap: wrap; gap: 2px; }
-html[data-xn-palette="claudex"] .xn-shell-layout .xn-task-list__toolbar::before { flex: 0 0 100%; }
-
-/* The wide appearance must not override the shell's single-column drawer. */
 @media (max-width: 900px) {
   html[data-xn-palette="claudex"] .xn-shell-layout,
   html[data-xn-palette="claudex"] .xn-shell-layout--desktop-titlebar { grid-template-columns: minmax(0, 1fr); }
-  html[data-xn-palette="claudex"] .xn-shell-layout .xn-shell-sidebar { width: min(300px, 84vw); }
+  html[data-xn-palette="claudex"] .xn-shell-layout .xn-shell-sidebar { width: var(--claudex-drawer-width); }
+  html[data-xn-palette="claudex"] .xn-shell-layout--sidebar-open .xn-shell-sidebar-toggle { left: calc(var(--claudex-drawer-width) + 10px); }
   html[data-xn-palette="claudex"] .xn-shell-layout .xn-shell-main { grid-column: 1; }
   html[data-xn-palette="claudex"] .xn-shell-layout .xn-composer-region--docked { width: calc(100% - 24px); }
   html[data-xn-palette="claudex"] .xn-shell-layout .xn-zc-turn { padding-inline: 12px; }
   html[data-xn-palette="claudex"] .xn-shell-layout .xn-pending-question { margin-inline: 12px; }
+  html[data-xn-palette="claudex"] .xn-shell-layout .xn-hero__intro { margin-top: 20px; }
+  html[data-xn-palette="claudex"] .xn-shell-layout .xn-hero { padding-inline: 12px; }
+  html[data-xn-palette="claudex"] .xn-shell-layout .xn-composer-toolbar__model-trigger { max-width: 124px; }
+  html[data-xn-palette="claudex"] .xn-shell-layout:not(.xn-shell-layout--desktop-titlebar) .xn-conv-header,
+  html[data-xn-palette="claudex"] .xn-shell-layout:not(.xn-shell-layout--desktop-titlebar) .xn-hero__bar { padding-left: 56px; }
 }
+html[data-xn-palette="claudex"] .xn-shell-layout--sidebar-collapsed:not(.xn-shell-layout--desktop-titlebar) .xn-conv-header,
+html[data-xn-palette="claudex"] .xn-shell-layout--sidebar-collapsed:not(.xn-shell-layout--desktop-titlebar) .xn-hero__bar { padding-left: 56px; }

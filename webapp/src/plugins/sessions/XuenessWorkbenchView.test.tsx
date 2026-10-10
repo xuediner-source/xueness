@@ -316,7 +316,8 @@ test("WorkbenchHeader: 标题带项目文件夹名供 Codex 风格显示项目�
   const base: WorkbenchSession = { id: "s", task: "检查构建", status: "completed", steps: 1, mode: "build", changed_files: [], pending: [], approved: { write: [], edit: [], exec: [], mcp: [] } };
   for (const root of ["/Users/me/code/xueness", "/Users/me/code/xueness/", "E:\\models\\apps\\xueness"]) {
     const html = renderToStaticMarkup(<WorkbenchHeader session={{ ...base, root }} />);
-    assert.match(html, /<h2 class="xn-conv-header__title" data-project="xueness">检查构建<\/h2>/, root);
+    assert.match(html, /<h2 class="xn-conv-header__title" data-project="xueness">[\s\S]*<span>检查构建<\/span><\/h2>/, root);
+    assert.match(html, /xn-conv-header__project-icon/);
   }
   assert.doesNotMatch(renderToStaticMarkup(<WorkbenchHeader session={base} />), /data-project/);
 });

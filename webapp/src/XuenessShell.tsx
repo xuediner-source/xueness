@@ -33,6 +33,10 @@ export type ShellProps = {
   sidebar: React.ReactNode;
   /** Sidebar footer: brand + settings entry. */
   sidebarFooter?: React.ReactNode;
+  /** Optional presentation slots. A real rail keeps navigation outside the
+   * scrolling task sheet without changing any navigation capability. */
+  sidebarRail?: React.ReactNode;
+  sidebarHeader?: React.ReactNode;
   /** Navigation changes dismiss a narrow drawer, including keyboard actions. */
   navigationKey?: string;
   sidebarToggleToken?: number;
@@ -52,6 +56,8 @@ export function Shell({
   titlebar,
   sidebar,
   sidebarFooter,
+  sidebarRail,
+  sidebarHeader,
   navigationKey,
   sidebarToggleToken = 0,
   initialSidebarCollapsed = false,
@@ -178,7 +184,7 @@ export function Shell({
           ref={asideRef}
           id="xn-shell-sidebar"
           tabIndex={narrow && sidebarOpen ? -1 : undefined}
-          className="xn-shell-sidebar"
+          className={`xn-shell-sidebar${sidebarRail ? " xn-shell-sidebar--with-rail" : ""}`}
           data-testid="xn-shell-sidebar"
           aria-label={tr("侧边栏导航")}
           role={narrow && sidebarOpen ? "dialog" : undefined}
@@ -190,6 +196,11 @@ export function Shell({
             }
           }}
         >
+          {sidebarRail && <div className="xn-shell-sidebar__rail" data-testid="xn-sidebar-rail">
+            <div className="xn-shell-sidebar__rail-actions">{sidebarRail}</div>
+            {sidebarFooter && <div className="xn-shell-sidebar__rail-footer" data-testid="xn-shell-sidebar-footer">{sidebarFooter}</div>}
+          </div>}
+          <div className={sidebarRail ? "xn-shell-sidebar__sheet" : "xn-shell-sidebar__classic-sheet"}>
           {!titlebar && <div className="xn-shell-sidebar__head">
             <span className="xn-sidebar-brand">
               <IconXuenessMark size={18} className="xn-sidebar-brand__mark" />
@@ -227,12 +238,14 @@ export function Shell({
               </button>
             </div>
           </div>}
+          {sidebarHeader}
           <div className="xn-shell-sidebar__body">{sidebar}</div>
-          {sidebarFooter && (
+          {!sidebarRail && sidebarFooter && (
             <div className="xn-shell-sidebar__footer" data-testid="xn-shell-sidebar-footer">
               {sidebarFooter}
             </div>
           )}
+          </div>
         </aside>
       )}
 

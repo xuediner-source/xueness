@@ -1292,6 +1292,9 @@ code, kbd, samp, pre {
   text-align: center;
 }
 
+.xn-hero__intro { display: contents; }
+.xn-conv-header__project-icon { display: none; }
+
 .xn-hero__hint {
   margin: 0 0 14px;
   font-size: 13px;

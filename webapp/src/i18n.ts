@@ -4,6 +4,7 @@ const listeners = new Set<() => void>();
 let locale: Locale = 'zh';
 try { if (typeof localStorage !== 'undefined' && localStorage.getItem('xueness.language') === 'en') locale = 'en'; } catch { /* Private browsing. */ }
 export const messages: Record<string, string> = {
+  "账户菜单": "Account menu",
   "编辑消息": "Edit message",
   "有帮助": "Helpful",
   "没有帮助": "Not helpful",

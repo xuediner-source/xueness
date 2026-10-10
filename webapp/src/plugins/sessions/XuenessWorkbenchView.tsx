@@ -10,7 +10,7 @@ import { Button, Badge, EmptyState } from "../../ui/primitives";
 import { IconArrowUp, IconLoader, IconPaperclip, IconPencil, IconPin, IconRefresh, IconTrash, IconX } from "../../ui/icons";
 import type { ComposerCapability, ComposerInput } from "../../xuenessComposer";
 import { ComposerCapabilityMenu, MAX_SELECTED_COMPOSER_CAPABILITIES, capabilityLabel, matchesComposerSearch } from './ComposerCapabilityMenu';
-import { Search, Target, Workflow, Blocks } from 'lucide-react';
+import { Search, Target, Workflow, Blocks, Folder } from 'lucide-react';
 import { completionPresentation } from './completionPresentation';
 import { deferCompositionEnd, displayBinding, isModKeyPressed, isImeComposingEvent } from '../../xuenessShortcutDisplay';
 import { formatCommandArgv } from "../../xuenessWorkbench";
@@ -2304,7 +2304,10 @@ export function WorkbenchHeader({
       aria-label={title}
       className="xn-conv-header"
     >
-      <h2 className="xn-conv-header__title" data-project={project}>{title}</h2>
+      <h2 className="xn-conv-header__title" data-project={project}>
+        {project && <Folder size={16} className="xn-conv-header__project-icon" aria-hidden="true" />}
+        <span>{title}</span>
+      </h2>
       <div className="xn-conv-header__main">
         <div className="xn-conv-header__spacer" />
         <div className="xn-conv-header__tools">

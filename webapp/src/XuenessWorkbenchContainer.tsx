@@ -118,7 +118,8 @@ import { createSingleFlightRefresh, useSessionPolling } from "./plugins/sessions
 import { XuenessWorkspacePickerDialog } from "./plugins/settings/XuenessWorkspacePickerDialog";
 import { CodeDisplayProvider } from "./ui/CodeContent";
 import { SHORTCUT_COMMANDS, resolveShortcutBinding, matchesShortcut, hasGlobalShortcutConflict, type ShortcutEventLike } from "./xuenessShortcutCommands";
-import { Shell, SidebarActions } from "./XuenessShell";
+import { Shell, SidebarActions, type SidebarAction } from "./XuenessShell";
+import { ClaudexSidebarHeader, ClaudexSidebarRail } from "./plugins/sessions/ClaudexSidebar";
 import { TaskTodos } from "./plugins/sessions/XuenessTimeline";
 import { ZCodeConversation } from "./plugins/sessions/ZCodeConversation";
 import { updateConversationMessage, loadConversationSnapshot } from './xuenessWorkbench';
@@ -141,7 +142,7 @@ import {
 import { CapabilitiesPanel, type CapabilitySectionProps } from "./XuenessCapabilitiesPanel";
 import { XuenessCapabilityDialog } from "./XuenessCapabilityDialog";
 import { shouldDismissModalOnEscape, useModalFocusScope } from "./plugins/shared";
-import { applyDocumentTheme, applyDocumentColorPalette } from "./plugins/settings/themeBoot";
+import { applyDocumentTheme, applyDocumentColorPalette, normalizeColorPalette } from "./plugins/settings/themeBoot";
 import { FeatureUnavailable, XuenessPluginManager, XuenessPluginSettingsPanel } from "./XuenessPluginManager";
 import {
   CAPABILITY_PLUGIN_BY_KIND,
@@ -570,7 +571,11 @@ export function XuenessWorkbenchContainer() {
 
   const openCommandPalette = useCallback((returnFocusTo?: HTMLElement | null) => {
     if (!isPluginEffective("sessions") || commandOpen) return;
-    commandOpenerRef.current = returnFocusTo ?? (document.activeElement instanceof HTMLElement ? document.activeElement : null);
+    const opener = returnFocusTo ?? (document.activeElement instanceof HTMLElement ? document.activeElement : null);
+    // Search closes the narrow sidebar. Return focus to its visible toggle.
+    commandOpenerRef.current = opener?.closest('#xn-shell-sidebar') && window.matchMedia('(max-width: 900px)').matches
+      ? document.querySelector<HTMLButtonElement>('[data-testid="xn-desktop-titlebar-sidebar"], [data-testid="xn-shell-sidebar-toggle"]')
+      : opener;
     setCommandOpen(true);
   }, [commandOpen, isPluginEffective]);
 
@@ -2221,7 +2226,16 @@ export function XuenessWorkbenchContainer() {
   }, [sessions, stoppingSessions, runRequestSessions, activeId, session?.id, session?.status, session?.streaming?.status]);
 
   const displayTimelineRows = useMemo(() => withAssistantStream(rows, session?.streaming), [rows, session?.streaming]);
-
+  const claudexAppearance = normalizeColorPalette(settingsLoading && typeof document !== 'undefined'
+    ? document.documentElement.dataset.xnPalette : settingsValues.colorPalette) === 'claudex';
+  const sidebarActions: SidebarAction[] = [
+    ...(isPluginEffective("sessions") ? [
+      { id: "new-task", icon: <MessageCirclePlus size={16} />, label: tr("新建任务"), shortcut: resolveShortcutBinding("new-session", (settingsValues.bindings && typeof settingsValues.bindings === "object" ? settingsValues.bindings : {}) as Record<string, string>), onClick: startNewTask },
+      { id: "search", icon: <IconSearch size={15} />, label: tr("搜索"), shortcut: resolveShortcutBinding("command-palette", (settingsValues.bindings && typeof settingsValues.bindings === "object" ? settingsValues.bindings : {}) as Record<string, string>), onClick: (event: React.MouseEvent<HTMLButtonElement>) => openCommandPalette(event.currentTarget) },
+    ] : []),
+    ...(isPluginEffective("automation") ? [{ id: "automations", icon: <CalendarClock size={16} />, label: tr("自动化"), onClick: () => setPanel("automations") }] : []),
+    ...(isPluginEffective("extensions") ? [{ id: "marketplace", icon: <Blocks size={16} />, label: tr("插件市场"), onClick: () => setPanel("marketplace") }] : []),
+  ];
 
   return (
     <CodeDisplayProvider settings={settingsValues.codePreviewSettings} dark={String(settingsValues.theme) === "dark" || (settingsValues.theme === "system" && systemDark)}>
@@ -2250,20 +2264,19 @@ export function XuenessWorkbenchContainer() {
       canGoBack={!busy && historyPosition.cursor > 0}
       canGoForward={!busy && historyPosition.cursor < historyPosition.length - 1}
       onGoBack={() => navigateHistory(-1)} onGoForward={() => navigateHistory(1)}
+      sidebarRail={claudexAppearance && panel !== 'settings' ? <ClaudexSidebarRail
+        actions={sidebarActions.filter(action => action.id === 'automations' || action.id === 'marketplace')}
+        activeId={panel === 'automations' ? 'automations' : panel === 'marketplace' ? 'marketplace' : undefined}
+        platform={resolveHostPlatform()} /> : undefined}
+      sidebarHeader={claudexAppearance ? <ClaudexSidebarHeader
+        search={sidebarActions.find(action => action.id === 'search')} platform={resolveHostPlatform()} /> : undefined}
       sidebar={panel === "settings" ? null : (
         <>
           <SidebarActions
-            actions={[
-              ...(isPluginEffective("sessions") ? [
-                { id: "new-task", icon: <MessageCirclePlus size={16} />, label: tr("新建任务"), shortcut: resolveShortcutBinding("new-session", (settingsValues.bindings && typeof settingsValues.bindings === "object" ? settingsValues.bindings : {}) as Record<string, string>), onClick: startNewTask },
-                { id: "search", icon: <IconSearch size={15} />, label: tr("搜索"), shortcut: resolveShortcutBinding("command-palette", (settingsValues.bindings && typeof settingsValues.bindings === "object" ? settingsValues.bindings : {}) as Record<string, string>), onClick: (event: React.MouseEvent<HTMLButtonElement>) => openCommandPalette(event.currentTarget) },
-              ] : []),
-              ...(isPluginEffective("automation") ? [{ id: "automations", icon: <CalendarClock size={16} />, label: tr("自动化"), onClick: () => setPanel("automations") }] : []),
-              ...(isPluginEffective("extensions") ? [{ id: "marketplace", icon: <Blocks size={16} />, label: tr("插件市场"), onClick: () => setPanel("marketplace") }] : []),
-            ]}
+            actions={claudexAppearance ? sidebarActions.filter(action => action.id === 'new-task') : sidebarActions}
           />
           {isPluginEffective("sessions") && <>
-          <XuenessTaskList sessions={liveSessions} activeId={activeId} busy={busy}
+          <XuenessTaskList sessions={liveSessions} activeId={activeId} busy={busy} compact={claudexAppearance}
             projectRoots={composerCatalog.roots.filter(root => root.path !== composerCatalog.isolatedRoot)}
             onAddProject={isPluginEffective("files") && isPluginEffective("settings") ? trigger => {
               if (busy) return;
@@ -2316,7 +2329,7 @@ export function XuenessWorkbenchContainer() {
         <>
           <DesktopUpdates compact enabled={isPluginEffective('updates') && isPluginEffective('desktop')} onManage={() => { setSettingsSection('updates'); setPanel('settings'); }} />
           <details className="xn-sidebar-account">
-            <summary><span className="xn-sidebar-account__avatar"><UserRound size={16} /></span><span>Xueness</span><ChevronDown size={12} /></summary>
+            <summary aria-label={tr("账户菜单")} title={tr("账户菜单")}><span className="xn-sidebar-account__avatar" aria-hidden="true"><UserRound size={16} /></span><span>Xueness</span><ChevronDown size={12} /></summary>
             <div className="xn-sidebar-account__menu">
               <Select aria-label="Language / 语言" value={locale} onChange={e => { setLocale(e.target.value as "zh" | "en"); void handleUpdateSetting("language",e.target.value); }}><option value="zh">中文简体</option><option value="en">English</option></Select>
               <button type="button" onClick={() => setPanel("plugins")}>{tr("插件管理")}</button>
@@ -2515,11 +2528,13 @@ export function XuenessWorkbenchContainer() {
       ) : (
         <div className="xn-hero" data-testid="xn-hero">
           {!lightweightLayout && <div className="xn-hero__bar"><details className="xn-workbench-menu"><summary aria-label={tr("工作台")}><CircleHelp size={16} /></summary><div>{viewSwitcher}</div></details></div>}
-          <div className="xn-hero__brand" aria-hidden="true">
-            <IconXuenessMark size={34} className="xn-hero__brand-mark" />
+          <div className="xn-hero__intro">
+            <div className="xn-hero__brand" aria-hidden="true">
+              <IconXuenessMark size={34} className="xn-hero__brand-mark" />
+            </div>
+            <h1 className="xn-hero__greeting">{heroGreeting(new Date())}</h1>
+            <p className="xn-hero__hint">{tr("描述你想完成的事，Xueness 会在你的工作区里执行。")}</p>
           </div>
-          <h1 className="xn-hero__greeting">{heroGreeting(new Date())}</h1>
-          <p className="xn-hero__hint">{tr("描述你想完成的事，Xueness 会在你的工作区里执行。")}</p>
 
           <div className="xn-hero__composer">
             {runError && (

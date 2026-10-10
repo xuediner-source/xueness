@@ -246,16 +246,17 @@
  * Legacy `claude` settings are normalized by themeBoot. Both platforms read
  * these tokens for native chrome; no provider or permission depends on them. */
 :root[data-xn-palette="claudex"] {
-  --claudex-sidebar-width: 268px;
+  --claudex-sidebar-width: 275px;
   --claudex-rail-width: 48px;
+  --claudex-drawer-width: min(calc(var(--claudex-sidebar-width) + var(--claudex-rail-width)), calc(100vw - 52px));
   --claudex-titlebar-height: 44px;
 
   --xn-native-titlebar-height: var(--claudex-titlebar-height);
   --xn-native-titlebar-color: var(--claudex-frame);
   --claudex-frame-inset: 4px;
-  --claudex-column: 760px;
+  --claudex-column: 736px;
   --claudex-row-height: 32px;
-  --claudex-header-height: 46px;
+  --claudex-header-height: 44px;
   --claudex-frame: #eeeae4;
   --claudex-rail-fg: #6b655d;
   --claudex-rail-active: rgba(0, 0, 0, 0.07);

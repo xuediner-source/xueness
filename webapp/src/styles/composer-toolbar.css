@@ -214,6 +214,8 @@
   justify-content: flex-end;
 }
 
+.xn-composer-toolbar__browser > svg { display: none; }
+
 
 
 .xn-composer-toolbar__mode-control {

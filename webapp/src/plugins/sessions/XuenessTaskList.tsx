@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Archive, ArrowDownWideNarrow, ChevronsDownUp, ChevronDown, Folder, Hash, Plus, Pencil, Pin, Trash2 } from 'lucide-react';
+import { Archive, ArrowDownWideNarrow, Check, ChevronsDownUp, ChevronDown, Folder, Hash, MoreHorizontal, Plus, Pencil, Pin, Trash2 } from 'lucide-react';
 import { SidebarNav } from './SidebarNav';
 import { Select } from '../../ui/Select';
 import { isImeComposingEvent } from '../../xuenessShortcutDisplay';
@@ -42,6 +42,8 @@ export interface XuenessTaskListProps {
   sessions: SessionSummary[];
   activeId: string | null;
   busy: boolean;
+  /** Compact presentation keeps all list operations in a single options menu. */
+  compact?: boolean;
   preferences?: SidebarPreferences;
   onPreferences: (value: SidebarPreferences) => void;
   onSelect: (id: string) => void;
@@ -132,6 +134,7 @@ export function XuenessTaskList({
   sessions,
   activeId,
   busy,
+  compact = false,
   preferences = {},
   onPreferences,
   onSelect,
@@ -145,6 +148,10 @@ export function XuenessTaskList({
 }: XuenessTaskListProps) {
   const [menu,setMenu]=useState<{id:string;x:number;y:number}|null>(null);
   const [editor,setEditor]=useState<{id?:string;label:string}|null>(null);
+  const [optionsOpen, setOptionsOpen] = useState(false);
+  const optionsRef = useRef<HTMLDivElement>(null);
+  const optionsTriggerRef = useRef<HTMLButtonElement>(null);
+  const optionsMenuId = React.useId();
   const menuRef=useRef<HTMLDivElement|null>(null);
   const menuReturnFocusRef=useRef<HTMLElement|null>(null);
   const dialogRef=useRef<HTMLFormElement|null>(null);
@@ -208,6 +215,28 @@ export function XuenessTaskList({
     });
   };
   const editorOpen=editor!==null;
+
+  const closeOptions = (returnFocus = false) => {
+    setOptionsOpen(false);
+    if (returnFocus) optionsTriggerRef.current?.focus({ preventScroll: true });
+  };
+  useEffect(() => {
+    if (!optionsOpen) return;
+    if (!compact) { setOptionsOpen(false); return; }
+    optionsRef.current?.querySelector<HTMLButtonElement>('[role="menuitemradio"], [role="menuitem"]')?.focus();
+    const dismiss = (event: PointerEvent) => {
+      if (!optionsRef.current?.contains(event.target as Node)) setOptionsOpen(false);
+    };
+    document.addEventListener('pointerdown', dismiss);
+    return () => document.removeEventListener('pointerdown', dismiss);
+  }, [optionsOpen, compact]);
+  const handleOptionsKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
+    if (isImeComposingEvent(event)) return;
+    if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); closeOptions(true); return; }
+    const buttons = Array.from(event.currentTarget.querySelectorAll<HTMLButtonElement>('[role="menuitemradio"]:not(:disabled), [role="menuitem"]:not(:disabled)'));
+    const next = nextSidebarMenuIndex(buttons.indexOf(document.activeElement as HTMLButtonElement), buttons.length, event.key);
+    if (next !== null) { event.preventDefault(); buttons[next]?.focus(); }
+  };
 
   useEffect(()=>{
     if(!menu)return;
@@ -276,7 +305,49 @@ export function XuenessTaskList({
     if(next!==null)items[next]?.focus();
   };
   return <div className="xn-task-list">
-    <div className="xn-task-list__toolbar" data-section-label={tr('任务')}>
+    {compact ? <div className="xn-task-list__toolbar xn-task-list__toolbar--compact">
+      <span className="xn-task-list__toolbar-label">{tr('任务')}</span>
+      {view === 'projects' && onAddProject && <button type="button" className="xn-task-list__toolbar-add-project"
+        data-testid="xn-task-add-project" title={tr('添加项目')} aria-label={tr('添加项目')} disabled={busy}
+        onClick={event => onAddProject(event.currentTarget)}><Plus size={14} /></button>}
+      {view === 'groups' && <button type="button" title={tr('新建分组')} aria-label={tr('新建分组')}
+        onClick={event => beginGroupEditor({ label: '' }, event.currentTarget)}><Plus size={14} /></button>}
+      <div className="xn-task-list__options" ref={optionsRef} onBlur={event => {
+        if (!event.relatedTarget || !event.currentTarget.contains(event.relatedTarget as Node)) closeOptions();
+      }}>
+        <button type="button" ref={optionsTriggerRef} className="xn-task-list__options-trigger"
+          aria-label={tr('任务操作')} title={tr('任务操作')} aria-haspopup="menu" aria-expanded={optionsOpen}
+          aria-controls={optionsOpen ? optionsMenuId : undefined} onClick={() => setOptionsOpen(open => !open)}
+          onKeyDown={event => {
+            if (isImeComposingEvent(event)) return;
+            if (event.key === 'ArrowDown') { event.preventDefault(); setOptionsOpen(true); }
+            else if (event.key === 'Escape' && optionsOpen) { event.preventDefault(); event.stopPropagation(); closeOptions(true); }
+          }}>
+          <MoreHorizontal size={16} />
+        </button>
+        {optionsOpen && <div id={optionsMenuId} className="xn-task-list__options-menu" role="menu" aria-label={tr('任务操作')}
+          onKeyDown={handleOptionsKeyDown}>
+          <div className="xn-task-list__options-menu-label">{tr('列表分组方式')}</div>
+          {(['groups', 'projects'] as const).map(value => <button key={value} type="button" role="menuitemradio"
+            aria-checked={view === value} onClick={() => { save({ view: value }); closeOptions(true); }}>
+            {value === 'groups' ? <Hash size={14} /> : <Folder size={14} />}<span>{tr(value === 'groups' ? '分组' : '项目')}</span>
+            {view === value && <Check size={14} />}
+          </button>)}
+          <div role="separator" />
+          <div className="xn-task-list__options-menu-label">{tr('排序')}</div>
+          {(['recent', 'oldest', 'name'] as const).map(value => <button key={value} type="button" role="menuitemradio"
+            aria-checked={(preferences.sort ?? 'recent') === value} onClick={() => { save({ sort: value }); closeOptions(true); }}>
+            <span>{tr(value === 'recent' ? '最新' : value === 'oldest' ? '最早' : '名称')}</span>
+            {(preferences.sort ?? 'recent') === value && <Check size={14} />}
+          </button>)}
+          <div role="separator" />
+          <button type="button" role="menuitem" onClick={() => { save({ collapsed: collapsed.length ? [] : buckets.map(group => group.id) }); closeOptions(true); }}>
+            <ChevronsDownUp size={14} /><span>{tr(collapsed.length ? '展开全部' : '折叠全部')}</span>
+          </button>
+          <button type="button" role="menuitem" onClick={() => { onOpenArchived(); closeOptions(true); }}><Archive size={14} /><span>{tr('已归档')}</span></button>
+        </div>}
+      </div>
+    </div> : <div className="xn-task-list__toolbar" data-section-label={tr('任务')}>
       <div className="xn-task-list__segments" role="group" aria-label={tr('列表分组方式')}>
         <button aria-pressed={view==='groups'} onClick={()=>save({view:'groups'})}><Hash size={12}/>{tr('分组')}</button>
         <button aria-pressed={view==='projects'} onClick={()=>save({view:'projects'})}><Folder size={12}/>{tr('项目')}</button>
@@ -285,7 +356,7 @@ export function XuenessTaskList({
       <button title={tr(collapsed.length?'展开全部':'折叠全部')} aria-label={tr(collapsed.length?'展开全部':'折叠全部')} onClick={()=>save({collapsed:collapsed.length?[]:buckets.map(g=>g.id)})}><ChevronsDownUp size={14}/></button>
       <details className="xn-task-list__sort"><summary aria-label={tr('排序')}><ArrowDownWideNarrow size={14}/></summary><div>{(['recent','oldest','name'] as const).map(v=><button key={v} aria-pressed={(preferences.sort??'recent')===v} onClick={e=>{save({sort:v});e.currentTarget.closest('details')!.open=false;}}>{tr(v==='recent'?'最新':v==='oldest'?'最早':'名称')}</button>)}</div></details>
       <button title={tr('已归档')} aria-label={tr('已归档')} onClick={onOpenArchived}><Archive size={14}/></button>
-    </div>
+    </div>}
     {renderRows(sorted.filter(s=>s.pinned))}
     {buckets.map(group=>{
       const isCollapsed=collapsed.includes(group.id);

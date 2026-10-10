@@ -1,6 +1,6 @@
 import { ContextUsageRing, type ContextUsageReading } from './ContextUsageRing';
 import React, { useCallback, useEffect, useRef, useState } from "react";
-import { ClipboardList, Hand, Lightbulb, ShieldAlert, ShieldCheck } from "lucide-react";
+import { ClipboardList, Globe, Hand, Lightbulb, ShieldAlert, ShieldCheck } from "lucide-react";
 import { t as tr, tf } from "../../i18n";
 import { IconCheck, IconChevronDown, IconPencil, IconRefresh, IconX } from "../../ui/icons";
 import { normalizeReasoningLevels, ReasoningEffortControl } from "./ReasoningEffortSlider";
@@ -808,11 +808,13 @@ export function XuenessComposerToolbar({
         {onToggleBrowser && (
           <button
             type="button"
-            className="xn-composer-toolbar__tool"
+            className="xn-composer-toolbar__tool xn-composer-toolbar__browser"
+            aria-label={browserIsEnabled ? tr("浏览器已启用") : tr("启用浏览器")}
+            title={browserIsEnabled ? tr("浏览器已启用") : tr("启用浏览器")}
             aria-pressed={browserIsEnabled}
             disabled={disabled}
             onClick={() => onToggleBrowser(!browserIsEnabled)}
-          >{browserIsEnabled ? tr("浏览器已启用") : tr("启用浏览器")}</button>
+          ><Globe size={15} aria-hidden="true" /><span>{browserIsEnabled ? tr("浏览器已启用") : tr("启用浏览器")}</span></button>
         )}
         {onBackground && backgroundCount > 0 && (
           <button type="button" className="xn-composer-toolbar__tool" disabled={disabled} onClick={onBackground}>
