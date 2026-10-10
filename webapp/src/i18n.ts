@@ -766,6 +766,7 @@ export const messages: Record<string, string> = {
   "批量批准": "Batch approve",
   "按数字键 {0} 快速批准": "Press number key {0} to quickly approve",
   "快捷键：A 或 Ctrl+Enter 批量批准": "Shortcut: A or Ctrl+Enter to batch approve",
+  "快捷键：A 或 {0} 批量批准": "Shortcut: A or {0} to batch approve",
   "重试此工具": "Retry this tool",
   "收起预览": "Collapse preview",
   "展开预览": "Expand preview",

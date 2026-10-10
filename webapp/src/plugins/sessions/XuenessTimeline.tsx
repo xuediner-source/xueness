@@ -24,7 +24,7 @@ import { TOOL_DISPLAY_STATUS_LABELS, TOOL_DISPLAY_STATUS_TONES, toolDisplayStatu
 import "./sessions.css";
 import "../../styles/conversation-history-rail.css";
 import { formatCommandArgv } from "../../xuenessWorkbench";
-import { parseDiffPreview } from "./XuenessWorkbenchView";
+import { parseDiffPreview, extractToolDiff, setPersistedDisclosure } from "./XuenessWorkbenchView";
 
 export { STREAM_COMMIT_INTERVAL_MS, StreamingCommitGate, useQuantizedStreamingText } from "../../ui/StreamingCommitGate";
 
@@ -551,7 +551,7 @@ function FoldablePayloadText({ text, payloadKey }: { text: string; payloadKey?: 
       onToggle={() => {
         setExpanded((value) => {
           const next = !value;
-          if (payloadKey) toolPayloadOpenState.set(payloadKey, next);
+          if (payloadKey) setPersistedDisclosure(toolPayloadOpenState, payloadKey, next);
           return next;
         });
       }}
@@ -582,7 +582,7 @@ export const toolCallOpenState = new Map<string, boolean>();
 function useToolCallOpenState(toolCallId: string, defaultOpen: boolean): [boolean, (next: boolean) => void] {
   const [open, setOpen] = React.useState(() => toolCallOpenState.get(toolCallId) ?? defaultOpen);
   const setPersistedOpen = React.useCallback((next: boolean) => {
-    toolCallOpenState.set(toolCallId, next);
+    setPersistedDisclosure(toolCallOpenState, toolCallId, next);
     setOpen(next);
   }, [toolCallId]);
   return [open, setPersistedOpen];
@@ -697,32 +697,7 @@ const ToolTimelineCard = React.memo(function ToolTimelineCard({
   const inputText = parsedInput ? stringifyPayload(parsedInput) : undefined;
   const outputText = stringifyPayload(row.output);
   const terminal = ['exec', 'exec_start'].includes(row.name.toLowerCase()) ? terminalResultForDisplay(row.output) : null;
-  const diff = React.useMemo(() => {
-    if (row.name !== "write" && row.name !== "edit") return null;
-    const inp = row.input && typeof row.input === "object" ? row.input as Record<string, unknown> : null;
-    if (typeof inp?.old_str === "string" && typeof inp?.new_str === "string") {
-      const oldLines = inp.old_str.split(/\r?\n/);
-      const newLines = inp.new_str.split(/\r?\n/);
-      const lines = [
-        ...oldLines.map(t => ({ kind: "remove" as const, text: t })),
-        ...newLines.map(t => ({ kind: "add" as const, text: t })),
-      ];
-      return { isDiff: true, added: newLines.length, removed: oldLines.length, lines };
-    }
-    if (typeof row.output === "string") {
-      const parsed = parseDiffPreview(row.output);
-      if (parsed.isDiff) return parsed;
-    }
-    if (typeof inp?.patch === "string") {
-      const parsed = parseDiffPreview(inp.patch);
-      if (parsed.isDiff) return parsed;
-    }
-    if (typeof inp?.diff === "string") {
-      const parsed = parseDiffPreview(inp.diff);
-      if (parsed.isDiff) return parsed;
-    }
-    return null;
-  }, [row.name, row.input, row.output]);
+  const diff = React.useMemo(() => extractToolDiff(row), [row]);
   const hasDetails = Boolean(inputText || outputText || (diff && diff.lines.length > 0));
   const status = toolDisplayStatus(row);
   const tone = TOOL_DISPLAY_STATUS_TONES[status];
@@ -765,6 +740,11 @@ const ToolTimelineCard = React.memo(function ToolTimelineCard({
               e.preventDefault();
               e.stopPropagation();
               void onRetry(row);
+            }}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.stopPropagation();
+              }
             }}
           >
             {tr("重试")}
@@ -829,8 +809,8 @@ const ToolTimelineCard = React.memo(function ToolTimelineCard({
                           <td className="xn-diff-line__marker" aria-hidden="true">
                             {dl.kind === "add" ? "+" : dl.kind === "remove" ? "−" : dl.kind === "hunk" ? "@@" : " "}
                           </td>
-                          <td className="xn-diff-line__content">
-                            <code>{dl.text}</code>
+                          <td className="xn-diff-line__text">
+                            <code>{dl.text || " "}</code>
                           </td>
                         </tr>
                       ))}

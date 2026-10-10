@@ -37,7 +37,10 @@ import {
   clearPersistedDraft,
   type StorageLike,
   parseDiffPreview,
+  extractToolDiff,
+  setPersistedDisclosure,
   approvalPreviewOpenState,
+  evaluateApprovalsKeyDown,
 } from "./XuenessWorkbenchView";
 import type {
   WorkbenchSession,
@@ -994,15 +997,312 @@ test("parseDiffPreview: correctly parses unified diff format, lines and statisti
   assert.equal(plainParsed.isDiff, false);
 });
 
-test("approvalPreviewOpenState: stores toggle state per tool_call_id", () => {
+test("approvalPreviewOpenState: stores toggle state per tool_call_id and obeys LRU bounds", () => {
   const callId = "test-call-state-id";
   try {
     assert.equal(approvalPreviewOpenState.get(callId), undefined);
-    approvalPreviewOpenState.set(callId, false);
+    setPersistedDisclosure(approvalPreviewOpenState, callId, false);
     assert.equal(approvalPreviewOpenState.get(callId), false);
-    approvalPreviewOpenState.set(callId, true);
+    setPersistedDisclosure(approvalPreviewOpenState, callId, true);
     assert.equal(approvalPreviewOpenState.get(callId), true);
   } finally {
     approvalPreviewOpenState.delete(callId);
   }
+
+  // LRU bounding test
+  const testMap = new Map<string, boolean>();
+  for (let i = 0; i < 505; i++) {
+    setPersistedDisclosure(testMap, `key-${i}`, true);
+  }
+  assert.equal(testMap.size, 500);
+  assert.equal(testMap.has("key-0"), false);
+  assert.equal(testMap.has("key-504"), true);
+});
+
+test("parseDiffPreview: correctly parses deletions starting with -- (SQL comments and code decrements)", () => {
+  const sqlDiff = `--- a/query.sql
++++ b/query.sql
+@@ -1,3 +1,3 @@
+ SELECT 1;
+--- old sql comment
++-- new sql comment
+---x;
+ SELECT 2;`;
+
+  const parsed = parseDiffPreview(sqlDiff);
+  assert.equal(parsed.isDiff, true);
+  assert.equal(parsed.removed, 2);
+  assert.equal(parsed.added, 1);
+  const removedLines = parsed.lines.filter(l => l.kind === "remove");
+  assert.equal(removedLines[0].text, "-- old sql comment");
+  assert.equal(removedLines[1].text, "--x;");
+});
+
+test("parseDiffPreview: parses created file and deleted file unified diffs with /dev/null", () => {
+  const createdDiff = `--- /dev/null
++++ b/created.txt
+@@ -0,0 +1,2 @@
++line 1
++line 2`;
+
+  const parsedCreated = parseDiffPreview(createdDiff);
+  assert.equal(parsedCreated.isDiff, true);
+  assert.equal(parsedCreated.added, 2);
+  assert.equal(parsedCreated.removed, 0);
+
+  const deletedDiff = `--- a/deleted.txt
++++ /dev/null
+@@ -1,2 +0,0 @@
+-line 1
+-line 2`;
+
+  const parsedDeleted = parseDiffPreview(deletedDiff);
+  assert.equal(parsedDeleted.isDiff, true);
+  assert.equal(parsedDeleted.added, 0);
+  assert.equal(parsedDeleted.removed, 2);
+});
+
+test("extractToolDiff: extracts diff from replace_file_content and write_to_file with intelligent line comparison", () => {
+  // replace_file_content with TargetContent and ReplacementContent
+  const replaceTool = {
+    name: "replace_file_content",
+    input: {
+      TargetFile: "main.ts",
+      TargetContent: "const a = 1;\nconst b = 2;\nreturn a + b;",
+      ReplacementContent: "const a = 1;\nconst b = 20;\nreturn a + b;",
+    },
+  };
+
+  const replaceDiff = extractToolDiff(replaceTool);
+  assert.notEqual(replaceDiff, null);
+  assert.equal(replaceDiff?.isDiff, true);
+  assert.equal(replaceDiff?.added, 1);
+  assert.equal(replaceDiff?.removed, 1);
+  assert.equal(replaceDiff?.lines.some(l => l.kind === "context" && l.text === "const a = 1;"), true);
+  assert.equal(replaceDiff?.lines.some(l => l.kind === "remove" && l.text === "const b = 2;"), true);
+  assert.equal(replaceDiff?.lines.some(l => l.kind === "add" && l.text === "const b = 20;"), true);
+
+  // write_to_file with CodeContent (new file additions)
+  const writeTool = {
+    name: "write_to_file",
+    input: {
+      TargetFile: "new_file.ts",
+      CodeContent: "export const x = 100;\nexport const y = 200;",
+    },
+  };
+
+  const writeDiff = extractToolDiff(writeTool);
+  assert.notEqual(writeDiff, null);
+  assert.equal(writeDiff?.isDiff, true);
+  assert.equal(writeDiff?.added, 2);
+  assert.equal(writeDiff?.removed, 0);
+
+  // output containing unified diff
+  const gitTool = {
+    name: "exec",
+    output: "diff --git a/f b/f\n--- a/f\n+++ b/f\n@@ -1 +1 @@\n-old\n+new",
+  };
+  const gitDiff = extractToolDiff(gitTool);
+  assert.notEqual(gitDiff, null);
+  assert.equal(gitDiff?.added, 1);
+  assert.equal(gitDiff?.removed, 1);
+});
+
+test("Approvals keyboard handling: avoids hijacking buttons, text selection and browser tab keys", () => {
+  const pendingItems: PendingApproval[] = [
+    { tool_call_id: "ap-1", name: "write", subject: "a.ts", preview: "write a.ts" },
+    { tool_call_id: "ap-2", name: "exec", subject: '["ls"]', preview: "exec ls" },
+  ];
+
+  // 1. Target inside a button / input / link -> ignores event
+  const fakeButtonEvent = {
+    key: "Enter",
+    nativeEvent: { isComposing: false },
+    target: { closest: (selector: string) => selector.includes("button") ? {} : null },
+  };
+  assert.equal(evaluateApprovalsKeyDown(fakeButtonEvent, { pending: pendingItems, activeIndex: 0 }), null);
+
+  // 2. IME composing -> ignores event
+  const composingEvent = {
+    key: "Enter",
+    nativeEvent: { isComposing: true },
+  };
+  assert.equal(evaluateApprovalsKeyDown(composingEvent, { pending: pendingItems, activeIndex: 0 }), null);
+
+  // 3. Ctrl+A (Select All) -> should NOT trigger batch approve!
+  const ctrlAEvent = {
+    key: "a",
+    ctrlKey: true,
+    metaKey: false,
+    altKey: false,
+    nativeEvent: { isComposing: false },
+  };
+  assert.equal(evaluateApprovalsKeyDown(ctrlAEvent, { pending: pendingItems, activeIndex: 0 }), null);
+
+  // 4. Ctrl+1 (Browser Tab Switch) -> should NOT trigger item 1 approve!
+  const ctrl1Event = {
+    key: "1",
+    ctrlKey: true,
+    metaKey: false,
+    altKey: false,
+    nativeEvent: { isComposing: false },
+  };
+  assert.equal(evaluateApprovalsKeyDown(ctrl1Event, { pending: pendingItems, activeIndex: 0 }), null);
+
+  // 5. Plain 'a' -> triggers batch approve when items > 1
+  const plainAEvent = {
+    key: "a",
+    ctrlKey: false,
+    metaKey: false,
+    altKey: false,
+    nativeEvent: { isComposing: false },
+  };
+  assert.deepEqual(
+    evaluateApprovalsKeyDown(plainAEvent, { pending: pendingItems, activeIndex: 0 }),
+    { type: "approve-all" },
+  );
+
+  // 6. Plain 'a' on single pending item -> does NOT trigger batch approve
+  assert.equal(
+    evaluateApprovalsKeyDown(plainAEvent, { pending: [pendingItems[0]], activeIndex: 0 }),
+    null,
+  );
+
+  // 7. Mod+Enter: platform aware (macOS metaKey vs Windows ctrlKey)
+  const macModEnter = {
+    key: "Enter",
+    ctrlKey: false,
+    metaKey: true,
+    nativeEvent: { isComposing: false },
+  };
+  assert.deepEqual(
+    evaluateApprovalsKeyDown(macModEnter, { pending: pendingItems, activeIndex: 0, platform: "darwin" }),
+    { type: "approve-all" },
+  );
+  assert.equal(
+    evaluateApprovalsKeyDown(macModEnter, { pending: pendingItems, activeIndex: 0, platform: "win32" }),
+    null,
+  );
+
+  const winModEnter = {
+    key: "Enter",
+    ctrlKey: true,
+    metaKey: false,
+    nativeEvent: { isComposing: false },
+  };
+  assert.deepEqual(
+    evaluateApprovalsKeyDown(winModEnter, { pending: pendingItems, activeIndex: 0, platform: "win32" }),
+    { type: "approve-all" },
+  );
+  assert.equal(
+    evaluateApprovalsKeyDown(winModEnter, { pending: pendingItems, activeIndex: 0, platform: "darwin" }),
+    null,
+  );
+
+  // 8. Plain '1' -> triggers item 1 approve
+  const plain1Event = {
+    key: "1",
+    ctrlKey: false,
+    metaKey: false,
+    altKey: false,
+    nativeEvent: { isComposing: false },
+  };
+  assert.deepEqual(
+    evaluateApprovalsKeyDown(plain1Event, { pending: pendingItems, activeIndex: 0 }),
+    { type: "approve-item", index: 0, item: pendingItems[0] },
+  );
+
+  // 9. Plain '2' -> triggers item 2 approve
+  const plain2Event = {
+    key: "2",
+    ctrlKey: false,
+    metaKey: false,
+    altKey: false,
+    nativeEvent: { isComposing: false },
+  };
+  assert.deepEqual(
+    evaluateApprovalsKeyDown(plain2Event, { pending: pendingItems, activeIndex: 0 }),
+    { type: "approve-item", index: 1, item: pendingItems[1] },
+  );
+
+  // 10. Plain '9' -> out of range returns null
+  const plain9Event = {
+    key: "9",
+    ctrlKey: false,
+    metaKey: false,
+    altKey: false,
+    nativeEvent: { isComposing: false },
+  };
+  assert.equal(
+    evaluateApprovalsKeyDown(plain9Event, { pending: pendingItems, activeIndex: 0 }),
+    null,
+  );
+
+  // 11. Plain Enter on active item -> triggers active item approve
+  const plainEnterEvent = {
+    key: "Enter",
+    ctrlKey: false,
+    metaKey: false,
+    altKey: false,
+    nativeEvent: { isComposing: false },
+  };
+  assert.deepEqual(
+    evaluateApprovalsKeyDown(plainEnterEvent, { pending: pendingItems, activeIndex: 1 }),
+    { type: "approve-active", index: 1, item: pendingItems[1] },
+  );
+
+  // 12. ArrowDown / ArrowUp navigation
+  assert.deepEqual(
+    evaluateApprovalsKeyDown({ key: "ArrowDown" }, { pending: pendingItems, activeIndex: 0 }),
+    { type: "next" },
+  );
+  assert.deepEqual(
+    evaluateApprovalsKeyDown({ key: "ArrowUp" }, { pending: pendingItems, activeIndex: 0 }),
+    { type: "prev" },
+  );
+});
+
+test("parseDiffPreview and extractToolDiff: handles multi-file diffs and identical content correctly", () => {
+  // Multi-file unified diff without diff --git
+  const multiDiff = `--- a/file1.txt
++++ b/file1.txt
+@@ -1,2 +1,2 @@
+-old1
++new1
+--- a/file2.txt
++++ b/file2.txt
+@@ -1,2 +1,2 @@
+-old2
++new2`;
+
+  const parsed = parseDiffPreview(multiDiff);
+  assert.equal(parsed.isDiff, true);
+  assert.equal(parsed.added, 2);
+  assert.equal(parsed.removed, 2);
+  const hunks = parsed.lines.filter(l => l.kind === "hunk");
+  assert.equal(hunks.length >= 4, true);
+
+  // Identical content should return null / isDiff: false
+  const identicalTool = {
+    name: "replace_file_content",
+    input: {
+      TargetFile: "test.ts",
+      TargetContent: "const x = 1;",
+      ReplacementContent: "const x = 1;",
+    },
+  };
+  assert.equal(extractToolDiff(identicalTool), null);
+
+  // JSON string input should be parsed and diff extracted
+  const jsonStringTool = {
+    name: "edit",
+    input: JSON.stringify({
+      old_str: "hello",
+      new_str: "world",
+    }),
+  };
+  const jsonDiff = extractToolDiff(jsonStringTool);
+  assert.notEqual(jsonDiff, null);
+  assert.equal(jsonDiff?.added, 1);
+  assert.equal(jsonDiff?.removed, 1);
 });

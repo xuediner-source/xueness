@@ -984,7 +984,7 @@ test("toolPayloadOpenState persists payload fold state across remounts", () => {
   }
 });
 
-test("write and edit tool rows render diff stats and diff unified table", () => {
+test("write, edit and replace_file_content tool rows render diff stats and diff unified table", () => {
   const row: TimelineRow = {
     kind: "tool",
     seq: 12,
@@ -1003,9 +1003,31 @@ test("write and edit tool rows render diff stats and diff unified table", () => 
   };
   const html = renderToStaticMarkup(<TimelineStream rows={[row]} collapseTools={false} />);
   assert.match(html, /class="xn-diff-stat"/);
-  assert.match(html, /\+3/);
-  assert.match(html, /-2/);
+  assert.match(html, /\+2/);
+  assert.match(html, /-1/);
   assert.match(html, /class="xn-unified-diff"/);
+
+  const replaceRow: TimelineRow = {
+    kind: "tool",
+    seq: 14,
+    turnId: "t-diff-2",
+    toolCallId: "tool-replace-diff",
+    name: "replace_file_content",
+    subject: "src/app.ts",
+    status: "ok",
+    error: "",
+    errorCode: "",
+    input: {
+      TargetFile: "src/app.ts",
+      TargetContent: "const x = 10;\nconst y = 20;",
+      ReplacementContent: "const x = 10;\nconst y = 30;\nconst z = 40;",
+    },
+    output: "ok",
+  };
+  const replaceHtml = renderToStaticMarkup(<TimelineStream rows={[replaceRow]} collapseTools={false} />);
+  assert.match(replaceHtml, /class="xn-diff-stat"/);
+  assert.match(replaceHtml, /\+2/);
+  assert.match(replaceHtml, /-1/);
 });
 
 test("failed tool row renders retry button when onRetry is provided", () => {

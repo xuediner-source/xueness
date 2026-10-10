@@ -21,7 +21,7 @@ import { deferCompositionEnd, isImeComposingEvent, isModKeyPressed } from '../..
 import './zcode-conversation.css';
 import './sessions.css';
 import { formatCommandArgv } from '../../xuenessWorkbench';
-import { parseDiffPreview } from './XuenessWorkbenchView';
+import { parseDiffPreview, extractToolDiff, setPersistedDisclosure } from './XuenessWorkbenchView';
 
 export function evaluateUserMessageEditKey(
   event: {
@@ -51,14 +51,24 @@ const streamingMarkdown: MarkdownRenderOptions = { codeHighlightTiming: 'after-s
 const settledMarkdown: MarkdownRenderOptions = { codeHighlightTiming: 'on-visible', cacheParseResults: true };
 export const zcodeConversationDisclosures = new Map<string, boolean>();
 const DisclosureContext = React.createContext<Map<string, boolean> | null>(null);
+const SessionIdContext = React.createContext<string | undefined>(undefined);
 
 function useDisclosure(key: string, defaultOpen = false) {
+  const sessionId = React.useContext(SessionIdContext);
+  const fullKey = sessionId ? `${sessionId}:${key}` : key;
   const saved = React.useContext(DisclosureContext) ?? zcodeConversationDisclosures;
-  const [override, setOpen] = React.useState<boolean | undefined>(() => saved.get(key));
+  const [override, setOpen] = React.useState<boolean | undefined>(() => saved.get(fullKey) ?? saved.get(key));
+  React.useEffect(() => {
+    setOpen(saved.get(fullKey) ?? saved.get(key));
+  }, [fullKey, key, saved]);
   const open = override ?? defaultOpen;
   return { open, onToggle: (event: React.SyntheticEvent<HTMLDetailsElement>) => {
     const next = event.currentTarget.open;
-    if (next !== open) { saved.set(key, next); zcodeConversationDisclosures.set(key, next); setOpen(next); }
+    if (next !== open) {
+      setPersistedDisclosure(saved, fullKey, next);
+      setPersistedDisclosure(zcodeConversationDisclosures, fullKey, next);
+      setOpen(next);
+    }
   } };
 }
 export type ConversationTurn = { key: string; rows: TimelineRow[]; userSeq?: number };
@@ -142,32 +152,7 @@ function ToolRow({ row, pending, defaultOpen, onRetry }: { row: Tool; pending: b
   const textResult = !terminal && row.output && typeof row.output === 'object'
     ? ['text', 'output', 'content'].map(key => (row.output as Record<string, unknown>)[key]).find(value => typeof value === 'string') : undefined;
 
-  const diff = React.useMemo(() => {
-    if (row.name !== "write" && row.name !== "edit") return null;
-    const input = row.input && typeof row.input === "object" ? row.input as Record<string, unknown> : null;
-    if (typeof input?.old_str === "string" && typeof input?.new_str === "string") {
-      const oldLines = input.old_str.split(/\r?\n/);
-      const newLines = input.new_str.split(/\r?\n/);
-      const lines = [
-        ...oldLines.map(t => ({ kind: "remove" as const, text: t })),
-        ...newLines.map(t => ({ kind: "add" as const, text: t })),
-      ];
-      return { isDiff: true, added: newLines.length, removed: oldLines.length, lines };
-    }
-    if (typeof row.output === "string") {
-      const parsed = parseDiffPreview(row.output);
-      if (parsed.isDiff) return parsed;
-    }
-    if (typeof input?.patch === "string") {
-      const parsed = parseDiffPreview(input.patch);
-      if (parsed.isDiff) return parsed;
-    }
-    if (typeof input?.diff === "string") {
-      const parsed = parseDiffPreview(input.diff);
-      if (parsed.isDiff) return parsed;
-    }
-    return null;
-  }, [row.name, row.input, row.output]);
+  const diff = React.useMemo(() => extractToolDiff(row), [row]);
 
   return <details className="xn-zc-tool" {...disclosure} data-tool-call-id={row.toolCallId}
     data-status={pending ? 'pendingApproval' : row.status} data-testid={`timeline-item-tool-${row.seq}`}>
@@ -191,6 +176,11 @@ function ToolRow({ row, pending, defaultOpen, onRetry }: { row: Tool; pending: b
             e.preventDefault();
             e.stopPropagation();
             void onRetry(row);
+          }}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" || e.key === " ") {
+              e.stopPropagation();
+            }
           }}
         >
           {tr("重试")}
@@ -218,7 +208,7 @@ function ToolRow({ row, pending, defaultOpen, onRetry }: { row: Tool; pending: b
                     <td className="xn-diff-line__marker" aria-hidden="true">
                       {dl.kind === "add" ? "+" : dl.kind === "remove" ? "−" : dl.kind === "hunk" ? "@@" : " "}
                     </td>
-                    <td className="xn-diff-line__text"><code>{dl.text}</code></td>
+                    <td className="xn-diff-line__text"><code>{dl.text || " "}</code></td>
                   </tr>
                 ))}
               </tbody>
@@ -266,6 +256,7 @@ function CompletionCheck({ row, answer, protocol }: { row: Completion; answer: s
 }
 
 export type ZCodeConversationProps = {
+  sessionId?: string;
   rows: TimelineRow[];
   streamingPending?: boolean;
   activityPhase?: string;
@@ -407,17 +398,21 @@ export function ZCodeConversation(props: ZCodeConversationProps) {
     const index = turns.findIndex(turn => turn.userSeq === seq);
     if (index >= 0) reveal(index);
   }, [turns, reveal]);
-  return <DisclosureContext.Provider value={disclosures}><div className="xn-timeline-history-layout xn-zc-layout" data-testid="timeline-history-layout">
-    <XuenessConversationHistoryRail rows={props.rows} timelineRootRef={rootRef} requestReveal={requestReveal} />
-    <div className="xn-timeline-history-layout__content" ref={rootRef}>
-      <div className="xn-zcode-conversation" data-testid="zcode-conversation" ref={streamRef} aria-label={tr('会话')}>
-        {snapshot.topPad > 0 && <div aria-hidden="true" style={{ height: snapshot.topPad }} />}
-        {turns.slice(snapshot.start, snapshot.end).map((turn, offset) => <div data-window-index={snapshot.start + offset} key={turn.key}>
-          <Turn turn={turn} latest={snapshot.start + offset === turns.length - 1} props={props} />
-        </div>)}
-        {snapshot.bottomPad > 0 && <div aria-hidden="true" style={{ height: snapshot.bottomPad }} />}
-        {!turns.length && props.streamingPending && <p className="xn-zc-live" role="status">{tr(conversationActivityLabel(props.activityPhase))}</p>}
+  return <DisclosureContext.Provider value={disclosures}>
+    <SessionIdContext.Provider value={props.sessionId}>
+      <div className="xn-timeline-history-layout xn-zc-layout" data-testid="timeline-history-layout">
+        <XuenessConversationHistoryRail rows={props.rows} timelineRootRef={rootRef} requestReveal={requestReveal} />
+        <div className="xn-timeline-history-layout__content" ref={rootRef}>
+          <div className="xn-zcode-conversation" data-testid="zcode-conversation" ref={streamRef} aria-label={tr('会话')}>
+            {snapshot.topPad > 0 && <div aria-hidden="true" style={{ height: snapshot.topPad }} />}
+            {turns.slice(snapshot.start, snapshot.end).map((turn, offset) => <div data-window-index={snapshot.start + offset} key={turn.key}>
+              <Turn turn={turn} latest={snapshot.start + offset === turns.length - 1} props={props} />
+            </div>)}
+            {snapshot.bottomPad > 0 && <div aria-hidden="true" style={{ height: snapshot.bottomPad }} />}
+            {!turns.length && props.streamingPending && <p className="xn-zc-live" role="status">{tr(conversationActivityLabel(props.activityPhase))}</p>}
+          </div>
+        </div>
       </div>
-    </div>
-  </div></DisclosureContext.Provider>;
+    </SessionIdContext.Provider>
+  </DisclosureContext.Provider>;
 }

@@ -228,7 +228,7 @@ export function parseDiffPreview(text: string): DiffPreviewSummary {
   }
   const rawLines = text.split(/\r?\n/);
   const hasHunk = rawLines.some(l => /^@@ -\d+.* \+\d+.* @@/.test(l));
-  const hasDiffHeader = rawLines.some(l => /^diff --git|^--- [ab]\/|^\+\+\+ [ab]\//.test(l));
+  const hasDiffHeader = rawLines.some(l => /^(?:diff --git|---\s+\S|\+\+\+\s+\S)/.test(l));
   const addLines = rawLines.filter(l => l.startsWith("+") && !l.startsWith("+++"));
   const removeLines = rawLines.filter(l => l.startsWith("-") && !l.startsWith("---"));
   const isDiff = hasHunk || hasDiffHeader || (addLines.length > 0 && removeLines.length > 0);
@@ -240,26 +240,235 @@ export function parseDiffPreview(text: string): DiffPreviewSummary {
   let added = 0;
   let removed = 0;
   const lines: DiffPreviewLine[] = [];
+  let inHunk = false;
 
   for (const line of rawLines) {
-    if (line.startsWith("diff --git") || line.startsWith("index ") || line.startsWith("---") || line.startsWith("+++")) {
+    if (line.startsWith("@@")) {
+      inHunk = true;
       lines.push({ kind: "hunk", text: line });
-    } else if (line.startsWith("@@")) {
+    } else if (line.startsWith("diff --git")) {
+      inHunk = false;
+      lines.push({ kind: "hunk", text: line });
+    } else if (/^---\s+(?:[ab]\/|\/dev\/null)/.test(line) || /^\+\+\+\s+(?:[ab]\/|\/dev\/null)/.test(line)) {
+      inHunk = false;
+      lines.push({ kind: "hunk", text: line });
+    } else if (!inHunk && (line.startsWith("index ") || /^---\s+\S/.test(line) || /^\+\+\+\s+\S/.test(line))) {
       lines.push({ kind: "hunk", text: line });
     } else if (line.startsWith("+")) {
       added++;
-      lines.push({ kind: "add", text: line.slice(1) || " " });
+      lines.push({ kind: "add", text: line.slice(1) });
     } else if (line.startsWith("-")) {
       removed++;
-      lines.push({ kind: "remove", text: line.slice(1) || " " });
+      lines.push({ kind: "remove", text: line.slice(1) });
     } else if (line.startsWith(" ")) {
-      lines.push({ kind: "context", text: line.slice(1) || " " });
+      lines.push({ kind: "context", text: line.slice(1) });
+    } else if (line.startsWith("\\")) {
+      lines.push({ kind: "hunk", text: line });
     } else {
       lines.push({ kind: "context", text: line });
     }
   }
 
   return { isDiff: true, added, removed, lines };
+}
+
+function findFirstStringField(obj: Record<string, unknown>, keys: readonly string[]): string | undefined {
+  for (const k of keys) {
+    const val = obj[k];
+    if (typeof val === "string") return val;
+  }
+  return undefined;
+}
+
+function computeLineDiff(before: string, after: string): DiffPreviewSummary {
+  const beforeLines = before.split(/\r?\n/);
+  const afterLines = after.split(/\r?\n/);
+
+  let prefixCount = 0;
+  while (
+    prefixCount < beforeLines.length &&
+    prefixCount < afterLines.length &&
+    beforeLines[prefixCount] === afterLines[prefixCount]
+  ) {
+    prefixCount++;
+  }
+
+  let suffixCount = 0;
+  while (
+    suffixCount < beforeLines.length - prefixCount &&
+    suffixCount < afterLines.length - prefixCount &&
+    beforeLines[beforeLines.length - 1 - suffixCount] === afterLines[afterLines.length - 1 - suffixCount]
+  ) {
+    suffixCount++;
+  }
+
+  const beforeMiddle = beforeLines.slice(prefixCount, beforeLines.length - suffixCount);
+  const afterMiddle = afterLines.slice(prefixCount, afterLines.length - suffixCount);
+
+  const contextLimit = 3;
+  const leadContextStart = Math.max(0, prefixCount - contextLimit);
+  const trailContextEnd = Math.min(suffixCount, contextLimit);
+
+  const lines: DiffPreviewLine[] = [];
+
+  for (let i = leadContextStart; i < prefixCount; i++) {
+    lines.push({ kind: "context", text: beforeLines[i] ?? "" });
+  }
+
+  const cells = (beforeMiddle.length + 1) * (afterMiddle.length + 1);
+  let added = 0;
+  let removed = 0;
+
+  if (cells <= 40000 && beforeMiddle.length > 0 && afterMiddle.length > 0) {
+    const cols = afterMiddle.length + 1;
+    const table = new Uint16Array(cells);
+    for (let bi = beforeMiddle.length - 1; bi >= 0; bi--) {
+      const row = bi * cols;
+      const nextRow = (bi + 1) * cols;
+      for (let ai = afterMiddle.length - 1; ai >= 0; ai--) {
+        table[row + ai] = beforeMiddle[bi] === afterMiddle[ai]
+          ? table[nextRow + ai + 1] + 1
+          : Math.max(table[nextRow + ai], table[row + ai + 1]);
+      }
+    }
+    let bi = 0;
+    let ai = 0;
+    while (bi < beforeMiddle.length || ai < afterMiddle.length) {
+      if (bi < beforeMiddle.length && ai < afterMiddle.length && beforeMiddle[bi] === afterMiddle[ai]) {
+        lines.push({ kind: "context", text: beforeMiddle[bi] ?? "" });
+        bi++;
+        ai++;
+      } else {
+        const remScore = bi < beforeMiddle.length ? table[(bi + 1) * cols + ai] : -1;
+        const addScore = ai < afterMiddle.length ? table[bi * cols + ai + 1] : -1;
+        if (bi < beforeMiddle.length && (ai >= afterMiddle.length || remScore >= addScore)) {
+          removed++;
+          lines.push({ kind: "remove", text: beforeMiddle[bi] ?? "" });
+          bi++;
+        } else {
+          added++;
+          lines.push({ kind: "add", text: afterMiddle[ai] ?? "" });
+          ai++;
+        }
+      }
+    }
+  } else {
+    for (const bLine of beforeMiddle) {
+      removed++;
+      lines.push({ kind: "remove", text: bLine });
+    }
+    for (const aLine of afterMiddle) {
+      added++;
+      lines.push({ kind: "add", text: aLine });
+    }
+  }
+
+  const suffixStartIndex = beforeLines.length - suffixCount;
+  for (let i = 0; i < trailContextEnd; i++) {
+    lines.push({ kind: "context", text: beforeLines[suffixStartIndex + i] ?? "" });
+  }
+
+  if (added === 0 && removed === 0) {
+    return { isDiff: false, added: 0, removed: 0, lines: [] };
+  }
+
+  return { isDiff: true, added, removed, lines };
+}
+
+const BEFORE_DIFF_KEYS = [
+  "before",
+  "old_str",
+  "old_string",
+  "oldString",
+  "oldText",
+  "old_text",
+  "oldContent",
+  "TargetContent",
+] as const;
+
+const AFTER_DIFF_KEYS = [
+  "after",
+  "new_str",
+  "new_string",
+  "newString",
+  "newText",
+  "new_text",
+  "newContent",
+  "ReplacementContent",
+  "CodeContent",
+  "content",
+] as const;
+
+export function extractToolDiff(row: {
+  name?: string;
+  input?: unknown;
+  output?: unknown;
+}): DiffPreviewSummary | null {
+  if (!row) return null;
+  const name = (row.name ?? "").toLowerCase();
+
+  if (typeof row.output === "string") {
+    const parsed = parseDiffPreview(row.output);
+    if (parsed.isDiff) return parsed;
+  }
+
+  let input: Record<string, unknown> | null =
+    row.input && typeof row.input === "object" && !Array.isArray(row.input)
+      ? (row.input as Record<string, unknown>)
+      : null;
+  if (!input && typeof row.input === "string" && row.input.trim().startsWith("{")) {
+    try {
+      const parsed = JSON.parse(row.input);
+      if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+        input = parsed as Record<string, unknown>;
+      }
+    } catch {
+      // Ignore malformed JSON input
+    }
+  }
+
+  if (input) {
+    if (typeof input.patch === "string") {
+      const parsed = parseDiffPreview(input.patch);
+      if (parsed.isDiff) return parsed;
+    }
+    if (typeof input.diff === "string") {
+      const parsed = parseDiffPreview(input.diff);
+      if (parsed.isDiff) return parsed;
+    }
+
+    const before = findFirstStringField(input, BEFORE_DIFF_KEYS);
+    const after = findFirstStringField(input, AFTER_DIFF_KEYS);
+
+    if (before !== undefined && after !== undefined) {
+      const diff = computeLineDiff(before, after);
+      if (diff.isDiff) return diff;
+      return null;
+    }
+
+    if (after !== undefined && (/(write|create|save|patch|edit|replace)/i.test(name) || input.TargetFile || input.file_path || input.path)) {
+      const lines = after.split(/\r?\n/).map(text => ({ kind: "add" as const, text }));
+      return { isDiff: true, added: lines.length, removed: 0, lines };
+    }
+
+    if (before !== undefined && (/(delete|remove|patch|edit|replace)/i.test(name) || input.TargetFile || input.file_path || input.path)) {
+      const lines = before.split(/\r?\n/).map(text => ({ kind: "remove" as const, text }));
+      return { isDiff: true, added: 0, removed: lines.length, lines };
+    }
+  }
+
+  return null;
+}
+
+const MAX_DISCLOSURE_ENTRIES = 500;
+export function setPersistedDisclosure(map: Map<string, boolean>, key: string, value: boolean): void {
+  map.delete(key);
+  map.set(key, value);
+  while (map.size > MAX_DISCLOSURE_ENTRIES) {
+    const oldest = map.keys().next().value;
+    if (oldest === undefined) break;
+    map.delete(oldest);
+  }
 }
 
 export const approvalPreviewOpenState = new Map<string, boolean>();
@@ -276,7 +485,7 @@ function ApprovalItemPreview({
 
   const toggleOpen = () => {
     const next = !isOpen;
-    approvalPreviewOpenState.set(toolCallId, next);
+    setPersistedDisclosure(approvalPreviewOpenState, toolCallId, next);
     setIsOpen(next);
   };
 
@@ -321,7 +530,7 @@ function ApprovalItemPreview({
                     <td className="xn-diff-line__marker" aria-hidden="true">
                       {dl.kind === "add" ? "+" : dl.kind === "remove" ? "−" : dl.kind === "hunk" ? "@@" : " "}
                     </td>
-                    <td className="xn-diff-line__text"><code>{dl.text}</code></td>
+                    <td className="xn-diff-line__text"><code>{dl.text || " "}</code></td>
                   </tr>
                 ))}
               </tbody>
@@ -375,6 +584,74 @@ export type ApprovalsProps = {
   busy?: boolean;
 };
 
+export type ApprovalsKeyAction =
+  | { type: "approve-item"; index: number; item: PendingApproval }
+  | { type: "approve-all" }
+  | { type: "approve-active"; index: number; item: PendingApproval }
+  | { type: "next" }
+  | { type: "prev" }
+  | null;
+
+export function evaluateApprovalsKeyDown(
+  event: {
+    key: string;
+    ctrlKey?: boolean;
+    metaKey?: boolean;
+    altKey?: boolean;
+    nativeEvent?: { isComposing?: boolean };
+    target?: unknown;
+    preventDefault?: () => void;
+  },
+  options: {
+    pending: PendingApproval[];
+    activeIndex: number;
+    platform?: string;
+  },
+): ApprovalsKeyAction {
+  if (event.nativeEvent?.isComposing) return null;
+  const targetEl = event.target as { closest?: (selector: string) => unknown } | null;
+  if (targetEl && typeof targetEl.closest === "function") {
+    if (targetEl.closest("input, textarea, select, button, a")) {
+      return null;
+    }
+  }
+
+  const isPlainKey = !event.ctrlKey && !event.metaKey && !event.altKey;
+
+  // Number keys 1..9: directly approve corresponding pending item (no modifier keys)
+  if (isPlainKey && /^[1-9]$/.test(event.key)) {
+    const idx = Number(event.key) - 1;
+    if (idx < options.pending.length) {
+      const item = options.pending[idx];
+      return item ? { type: "approve-item", index: idx, item } : null;
+    }
+  }
+
+  // A or Mod+Enter: batch approve
+  const isBatchKey =
+    (isPlainKey && (event.key === "a" || event.key === "A")) ||
+    (event.key === "Enter" && isModKeyPressed(event, options.platform));
+  if (isBatchKey && options.pending.length > 1) {
+    return { type: "approve-all" };
+  }
+
+  // Arrow navigation
+  if (event.key === "ArrowDown" || event.key === "ArrowRight") {
+    return { type: "next" };
+  }
+  if (event.key === "ArrowUp" || event.key === "ArrowLeft") {
+    return { type: "prev" };
+  }
+
+  // Enter on active item (plain Enter only, non-button target)
+  if (event.key === "Enter" && isPlainKey) {
+    const item = options.pending[options.activeIndex];
+    return item ? { type: "approve-active", index: options.activeIndex, item } : null;
+  }
+
+  return null;
+}
+
 export function Approvals({ pending, onApprove, onApproveAll, busy = false }: ApprovalsProps) {
   const [focusedIndex, setFocusedIndex] = useState(0);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -399,51 +676,40 @@ export function Approvals({ pending, onApprove, onApproveAll, busy = false }: Ap
     }
   };
 
-  const handleKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
-    if (event.nativeEvent.isComposing) return;
-    const targetEl = event.target as HTMLElement | null;
-    if (targetEl && (targetEl.tagName === "INPUT" || targetEl.tagName === "TEXTAREA")) return;
-
-    // Number keys 1..9: directly approve corresponding pending item
-    if (/^[1-9]$/.test(event.key)) {
-      const idx = Number(event.key) - 1;
-      if (idx < pending.length) {
-        event.preventDefault();
-        setFocusedIndex(idx);
-        const item = pending[idx];
-        if (item && onApprove && !busy) {
-          void onApprove(item);
-        }
-        return;
-      }
+  useEffect(() => {
+    if (focusedIndex >= 0 && containerRef.current) {
+      const el = containerRef.current.querySelector<HTMLElement>('[data-focused="true"]');
+      el?.scrollIntoView?.({ block: "nearest" });
     }
+  }, [focusedIndex]);
 
-    // A or Ctrl/Cmd+Enter: batch approve
-    if ((event.key === "a" || event.key === "A" || (event.key === "Enter" && (event.ctrlKey || event.metaKey))) && pending.length > 1) {
+  const handleKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
+    const action = evaluateApprovalsKeyDown(event, {
+      pending,
+      activeIndex,
+    });
+    if (!action) return;
+
+    if (action.type === "approve-item") {
+      event.preventDefault();
+      setFocusedIndex(action.index);
+      if (onApprove && !busy) {
+        void onApprove(action.item);
+      }
+    } else if (action.type === "approve-all") {
       event.preventDefault();
       void handleBatchApprove();
-      return;
-    }
-
-    // Arrow navigation
-    if (event.key === "ArrowDown" || event.key === "ArrowRight") {
+    } else if (action.type === "approve-active") {
+      if (onApprove && !busy) {
+        event.preventDefault();
+        void onApprove(action.item);
+      }
+    } else if (action.type === "next") {
       event.preventDefault();
       setFocusedIndex(i => (i + 1) % pending.length);
-      return;
-    }
-    if (event.key === "ArrowUp" || event.key === "ArrowLeft") {
+    } else if (action.type === "prev") {
       event.preventDefault();
       setFocusedIndex(i => (i - 1 + pending.length) % pending.length);
-      return;
-    }
-
-    // Enter on active item
-    if (event.key === "Enter" && !event.ctrlKey && !event.metaKey) {
-      const item = pending[activeIndex];
-      if (item && onApprove && !busy) {
-        event.preventDefault();
-        void onApprove(item);
-      }
     }
   };
 
@@ -472,7 +738,7 @@ export function Approvals({ pending, onApprove, onApproveAll, busy = false }: Ap
         </div>
         {pending.length > 1 && (onApproveAll || onApprove) && (
           <div className="xn-approvals__batch-actions" style={{ display: "flex", alignItems: "center", gap: 6 }}>
-            <span className="xn-approval-kbd" title={tr("快捷键：A 或 Ctrl+Enter 批量批准")} aria-hidden="true">A</span>
+            <span className="xn-approval-kbd" title={tf("快捷键：A 或 {0} 批量批准", [displayBinding("Mod+Enter")])} aria-hidden="true">A</span>
             <Button
               variant="secondary"
               size="sm"
@@ -2192,7 +2458,7 @@ export function XuenessWorkbench({
 
           {pendingApprovals && pendingApprovals.length > 0 && (
             <div style={{ padding: "12px 16px 0" }}>
-              <Approvals pending={pendingApprovals} onApprove={onApprove} onApproveAll={onApproveAll} />
+              <Approvals pending={pendingApprovals} onApprove={onApprove} onApproveAll={onApproveAll} busy={composerDisabled} />
             </div>
           )}
 

@@ -1025,16 +1025,31 @@ export function XuenessWorkbenchContainer() {
       const targetSessionId = activeId;
       if (!targetSessionId || runRequestSessionsRef.current.has(targetSessionId) || !isPluginEffective("sessions")) return;
       const list = items ?? session?.pending ?? [];
+      if (list.length === 0) return;
       const ungranted = list.filter(p => !p.granted);
-      for (const p of ungranted) {
-        const granted = await run(() => approvePending(targetSessionId, p));
-        if (!granted) return;
+      setBusy(true);
+      setError("");
+      let allSucceeded = true;
+      try {
+        for (const p of ungranted) {
+          const res = await approvePending(targetSessionId, p);
+          if (!res.ok) {
+            setError(res.error);
+            allSucceeded = false;
+            break;
+          }
+        }
+      } finally {
+        setBusy(false);
       }
+      await loadActive(targetSessionId);
+      await refreshList();
+      if (!allSucceeded) return;
       await runSessionRequest(targetSessionId, selected => runSession(targetSessionId, selected));
       await loadActive(targetSessionId);
       await refreshList();
     },
-    [activeId, isPluginEffective, run, runSessionRequest, loadActive, refreshList, session?.pending],
+    [activeId, isPluginEffective, runSessionRequest, loadActive, refreshList, session?.pending],
   );
 
   const handleSend = useCallback(
@@ -1211,6 +1226,21 @@ export function XuenessWorkbenchContainer() {
     await loadActive(targetSessionId);
     await refreshList();
   }, [activeId, session?.id, busy, runSessionRequest, loadActive, refreshList]);
+
+  const handleRetryTool = useCallback(async (row?: { toolCallId?: string }) => {
+    if (!activeId || session?.id !== activeId || busy || runRequestSessionsRef.current.has(activeId) || !isPluginEffective("sessions")) return;
+    const targetSessionId = activeId;
+    if (row?.toolCallId && session?.pending) {
+      const match = session.pending.find(p => p.tool_call_id === row.toolCallId);
+      if (match && !match.granted) {
+        const granted = await run(() => approvePending(targetSessionId, match));
+        if (!granted) return;
+      }
+    }
+    await runSessionRequest(targetSessionId, selected => runSession(targetSessionId, selected));
+    await loadActive(targetSessionId);
+    await refreshList();
+  }, [activeId, session?.id, session?.pending, busy, isPluginEffective, run, runSessionRequest, loadActive, refreshList]);
 
   const handleQuestionSubmitted = useCallback(async (targetSessionId: string, continueRun: boolean, isCurrent: () => boolean) => {
     if (!isCurrent() || activeIdRef.current !== targetSessionId || !pluginEffectiveRef.current("sessions")) return;
@@ -2395,14 +2425,14 @@ export function XuenessWorkbenchContainer() {
             queuedMessages={session.queued_messages}
           >
             {settingsValues.showTodos !== false && !lightweightLayout && <TaskTodos todos={session.todos ?? []} />}
-            <ZCodeConversation rows={displayTimelineRows}
+            <ZCodeConversation sessionId={session.id} rows={displayTimelineRows}
               collapseTools={settingsValues.collapseTools !== false}
               showReasoning={settingsValues.messageStreamShowReasoning !== false}
               autoScroll={settingsValues.autoScroll !== false}
               jsonToolProtocol={session.model_selection?.tool_calling === "json" && activeRuntimeProfile === "lightweight" && session.streaming?.text_format !== "markdown"}
               streamingPending={activeSessionRunning} activityPhase={session.runtime_activity?.phase}
               pendingToolIds={new Set((session.pending ?? []).map(item => item.tool_call_id))}
-              onRetry={!busy && !activeSessionRunning ? handleRetryRun : undefined}
+              onRetry={!busy && !activeSessionRunning ? handleRetryTool : undefined}
               onEdit={!busy && !activeSessionRunning ? handleMessageEdit : undefined}
               onFeedback={!busy && !activeSessionRunning ? handleMessageFeedback : undefined}
               onFork={!busy && !activeSessionRunning ? row => beginFork(/^turn-[1-9][0-9]*$/u.test(row.turnId) ? Number(row.turnId.slice(5)) : undefined) : undefined} />

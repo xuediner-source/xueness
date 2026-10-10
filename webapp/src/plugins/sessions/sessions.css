@@ -638,3 +638,49 @@
   overflow: hidden;
 }
 
+/* ---- 统一 Diff 表格与行样式 ---- */
+.xn-unified-diff {
+  overflow: auto;
+  max-width: 100%;
+  color: var(--fg);
+  background: var(--bg-card);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.xn-unified-diff table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: auto;
+}
+
+.xn-unified-diff td {
+  padding: 0;
+  vertical-align: top;
+}
+
+.xn-diff-line__marker {
+  width: 1.5em;
+  color: var(--fg-subtle);
+  text-align: center;
+  user-select: none;
+}
+
+.xn-diff-line__text,
+.xn-diff-line__content {
+  width: 100%;
+  padding: 0 12px 0 4px !important;
+  white-space: pre;
+}
+
+.xn-diff-line__text code,
+.xn-diff-line__content code {
+  font: inherit;
+}
+
+.xn-diff-line--context { background: var(--bg-card); }
+.xn-diff-line--add { color: var(--ok-fg); background: var(--ok-bg); }
+.xn-diff-line--remove { color: var(--error-fg); background: var(--error-bg); }
+.xn-diff-line--hunk { color: var(--fg-muted); background: var(--bg-subtle); font-style: italic; }
+

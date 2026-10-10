@@ -156,15 +156,52 @@ test('failed tool renders retry button when onRetry is provided', () => {
   assert.doesNotMatch(withoutRetryHtml, /class="xn-zc-retry-btn"/);
 });
 
-test('zcodeConversationDisclosures stores disclosure states across turns and re-renders', () => {
-  const key = 'test:disclosure:key';
+test('zcodeConversationDisclosures stores disclosure states across turns and re-renders with session scoping', () => {
+  const toolRows: TimelineRow[] = [
+    {
+      kind: 'tool',
+      seq: 10,
+      turnId: 'turn-1',
+      toolCallId: 'tool-call-10',
+      name: 'replace_file_content',
+      subject: 'src/main.ts',
+      status: 'ok',
+      error: '',
+      errorCode: '',
+      input: {
+        TargetFile: 'src/main.ts',
+        TargetContent: 'const a = 1;',
+        ReplacementContent: 'const a = 2;',
+      },
+    },
+  ];
+
+  // 1. Tool diff renders for replace_file_content
+  const html = renderToStaticMarkup(<ZCodeConversation rows={toolRows} />);
+  assert.match(html, /class="xn-zc-diff-count"/);
+  assert.match(html, /class="xn-diff-added">/);
+
+  // 2. Default state: not open
+  assert.doesNotMatch(html, /class="xn-zc-tool-body"/);
+
+  // 3. When disclosure is persisted as open:
+  zcodeConversationDisclosures.set('tool:tool-call-10', true);
   try {
-    assert.equal(zcodeConversationDisclosures.get(key), undefined);
-    zcodeConversationDisclosures.set(key, true);
-    assert.equal(zcodeConversationDisclosures.get(key), true);
-    zcodeConversationDisclosures.set(key, false);
-    assert.equal(zcodeConversationDisclosures.get(key), false);
+    const openHtml = renderToStaticMarkup(<ZCodeConversation rows={toolRows} />);
+    assert.match(openHtml, /class="xn-zc-tool-body"/);
+    assert.match(openHtml, /class="xn-zc-tool-diff"/);
   } finally {
-    zcodeConversationDisclosures.delete(key);
+    zcodeConversationDisclosures.delete('tool:tool-call-10');
+  }
+
+  // 4. Session scoping isolation
+  const sess1Key = 'sess-1:reasoning:1';
+  const sess2Key = 'sess-2:reasoning:1';
+  zcodeConversationDisclosures.set(sess1Key, true);
+  try {
+    assert.equal(zcodeConversationDisclosures.get(sess1Key), true);
+    assert.equal(zcodeConversationDisclosures.get(sess2Key), undefined);
+  } finally {
+    zcodeConversationDisclosures.delete(sess1Key);
   }
 });
