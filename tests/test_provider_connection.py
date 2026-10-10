@@ -377,7 +377,9 @@ class ProviderConnectionTests(unittest.TestCase):
             with self.assertRaises(urllib.error.HTTPError) as caught:
                 urllib.request.urlopen(request, timeout=3)
             self.assertEqual(403, caught.exception.code)
-            self.assertEqual({"error": "csrf token required"}, json.loads(caught.exception.read()))
+            self.assertEqual(
+                {"error": "csrf token required", "code": "csrf_required", "status": 403},
+                json.loads(caught.exception.read()))
             caught.exception.close()
         finally:
             server.shutdown()

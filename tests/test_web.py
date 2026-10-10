@@ -199,7 +199,11 @@ class WebTests(unittest.TestCase):
         self.ctx["webapp_dir"] = self.project_dir / "missing-dist"
         code, body, _ = self._req("/")
         self.assertEqual(code, 503, body)
-        self.assertEqual(json.loads(body), {"error": "ui asset missing"})
+        self.assertEqual(json.loads(body), {
+            "error": "ui asset missing",
+            "code": "unavailable",
+            "status": 503,
+        })
 
     def test_material_icons_route_is_retired(self):
         """The retired shell's icon directory is no longer a public asset route."""

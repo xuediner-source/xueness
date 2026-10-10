@@ -122,7 +122,11 @@ class DesktopPermissionTests(unittest.TestCase):
         self.bridge.response = {'id': 'bad', 'state': {'platform': 'darwin', 'permissions': PERMISSION_ROWS}}
         status, body = self.request('GET', '/api/desktop/permissions')
         self.assertEqual(status, 503)
-        self.assertEqual(body, {'error': 'invalid desktop permission response'})
+        self.assertEqual(body, {
+            'error': 'invalid desktop permission response',
+            'code': 'unavailable',
+            'status': 503,
+        })
 
         self.bridge.response = {
             'id': 'a' * 32,

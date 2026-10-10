@@ -2,10 +2,12 @@
 
 Serves a single self-contained page plus a small JSON API. The server binds
 127.0.0.1 only, validates Host/Origin against loopback, requires a
-same-origin CSRF token for every POST, and never takes blanket
-allow-write/allow-edit/allow-exec from the browser. Writes, edits, and
-subprocesses run only after an explicit per-action approval that is
-consumed on first use.
+same-origin CSRF token for every state-changing method, and never takes
+blanket allow-write/allow-edit/allow-exec from the browser. Writes, edits,
+and subprocesses run only after an explicit per-action approval that is
+consumed on first use. Request intake is bounded: an oversized body is 413,
+a stalled header or body is 408, and every gateway failure is a JSON object
+with ``error``, ``code``, and ``status``.
 
 Real providers are never reachable with a key sent over HTTP: the ``real``
 option selects a model configured on the server. The server enables online
@@ -19,7 +21,9 @@ import json
 import mimetypes
 import os
 import secrets
+import socket
 import threading
+import traceback
 import urllib.parse
 from datetime import datetime, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -39,7 +43,7 @@ from .plugins import activate
 from . import plugin_sdk, task_registry
 from . import events as events_protocol, session_management, provider_config, plugin_runtime
 from .session_lease import lease
-from .http_contract import HANDLED_RESPONSE
+from .http_contract import HANDLED_RESPONSE, normalize_error
 
 HOST = "127.0.0.1"
 DEFAULT_PORT = 8137
@@ -55,6 +59,29 @@ _SID_PATTERN = _re.compile(r"[0-9a-f]{32}")
 _MAX_BODY = 1_000_000
 _MAX_COMPOSER_BODY = 6_000_000
 _MAX_TASK = 5000
+# Idle and absolute limits for reading a request. They bound a slow client
+# that trickles bytes; they are not applied to the handler once the body has
+# been accepted. A long model run does not touch the socket until it replies.
+_HEADER_IDLE_SECONDS = 15
+_HEADER_DEADLINE_SECONDS = 20
+_BODY_IDLE_SECONDS = 15
+_BODY_DEADLINE_SECONDS = 30
+_RESPONSE_IDLE_SECONDS = 60
+_WRITE_METHODS = frozenset({"POST", "PUT", "PATCH", "DELETE"})
+_ALLOWED_FETCH_SITES = frozenset({"none", "same-origin"})
+# Fixed phrases only. Protocol errors must not echo the request line.
+_PROTOCOL_ERRORS = {
+    400: ("bad_request", "bad request"),
+    408: ("request_timeout", "request timed out"),
+    411: ("length_required", "Content-Length is required"),
+    413: ("payload_too_large", "request body is too large"),
+    414: ("uri_too_long", "request uri too long"),
+    417: ("expectation_failed", "Expect is not supported"),
+    431: ("request_header_fields_too_large", "request headers are too large"),
+    500: ("internal_error", "internal error"),
+    501: ("not_implemented", "method not implemented"),
+    505: ("http_version_not_supported", "http version not supported"),
+}
 
 # Vite copies ``public/`` to the dist root by original filename. These are the
 # only root-level files the server will serve, with their content types; an
@@ -97,44 +124,152 @@ def _split_host(value: str) -> str:
     return value
 
 
+def _origin_authority(raw: str):
+    """Loopback origin as ``(hostname, port)``, or None when it is not usable.
+
+    A path or query on Referer is normal. Userinfo, a non-loopback host, an
+    explicit port of 0, and control characters are not. Port 0 must not fall
+    through to the scheme default, or ``Host: 127.0.0.1:0`` would compare
+    equal to ``http://127.0.0.1``.
+    """
+    if not raw or any(ord(char) < 32 or ord(char) == 127 for char in raw):
+        return None
+    try:
+        parsed = urllib.parse.urlsplit(raw.strip())
+    except ValueError:
+        return None
+    if parsed.scheme not in ("http", "https") or not parsed.hostname:
+        return None
+    if parsed.username is not None or parsed.password is not None or "%" in parsed.hostname:
+        return None
+    if not _loopback_host(parsed.hostname):
+        return None
+    try:
+        parsed_port = parsed.port
+    except ValueError:
+        return None
+    if parsed_port is None:
+        port = 443 if parsed.scheme == "https" else 80
+    elif 1 <= parsed_port <= 65535:
+        port = parsed_port
+    else:
+        return None
+    return parsed.hostname.lower(), port
+
+
+def _header_values(headers, name) -> list:
+    values = headers.get_all(name) if hasattr(headers, "get_all") else None
+    if values is None:
+        raw = headers.get(name) if hasattr(headers, "get") else None
+        return [] if raw is None else [raw]
+    return list(values)
+
+
 def _origin_ok(headers) -> bool:
-    expected = _parse_authority(headers.get("Host", ""))
+    hosts = _header_values(headers, "Host")
+    if len(hosts) != 1:
+        return False
+    expected = _parse_authority(hosts[0])
     if expected is None:
         return False
     for key in ("Origin", "Referer"):
-        raw = headers.get(key)
-        if not raw:
-            continue
-        try:
-            parsed = urllib.parse.urlsplit(raw)
-            if parsed.scheme not in ("http", "https") or not parsed.netloc or parsed.username is not None or parsed.password is not None:
-                return False
-            authority = ((parsed.hostname or "").lower(), parsed.port or (443 if parsed.scheme == "https" else 80))
-        except ValueError:
+        values = _header_values(headers, key)
+        if len(values) > 1:
             return False
-        if authority != expected:
+        if not values or not values[0]:
+            continue
+        if _origin_authority(values[0]) != expected:
             return False
     return True
 
 
 def _parse_authority(value: str):
     value = (value or "").strip()
-    if not value or any(c in value for c in " /\\\t\r\n"):
+    if (not value or any(char in value for char in " /\\?#@\t\r\n%")
+            or any(ord(char) < 32 or ord(char) == 127 for char in value)):
         return None
     try:
         parsed = urllib.parse.urlsplit("//" + value)
-        if not parsed.hostname or parsed.path or parsed.query or parsed.fragment or parsed.username is not None:
-            return None
-        hostname, port = parsed.hostname.lower(), parsed.port or 80
-        if not _loopback_host(hostname) or not 1 <= port <= 65535:
-            return None
-        return hostname, port
     except ValueError:
         return None
+    if (not parsed.hostname or parsed.username is not None or parsed.password is not None
+            or parsed.path or parsed.query or parsed.fragment):
+        return None
+    hostname = parsed.hostname.lower()
+    if not _loopback_host(hostname):
+        return None
+    if value.startswith("["):
+        end = value.find("]")
+        rest = value[end + 1:] if end != -1 else ""
+        has_port = rest.startswith(":")
+    else:
+        has_port = ":" in value
+    if not has_port:
+        return hostname, 80
+    try:
+        parsed_port = parsed.port
+    except ValueError:
+        return None
+    if parsed_port is None or not 1 <= parsed_port <= 65535:
+        return None
+    return hostname, parsed_port
 
 
 def _host_ok(headers) -> bool:
-    return _parse_authority(headers.get("Host", "")) is not None
+    # ``get`` returns only the first value. A second Host must not be ignored.
+    values = _header_values(headers, "Host")
+    return len(values) == 1 and _parse_authority(values[0]) is not None
+
+
+def _fetch_site_ok(headers) -> bool:
+    """Browsers tag cross-site loopback calls; non-browser clients omit the header.
+
+    ``Sec-Fetch-Site`` is a forbidden request header, so page script cannot
+    clear a ``cross-site`` or ``same-site`` value. The app is served from this
+    origin, so ``same-origin`` and ``none`` (address-bar navigation) stay.
+    Another port on 127.0.0.1 is ``same-site`` and must not archive or mark
+    sessions via a side-effecting GET. A second header is not folded away.
+    """
+    values = _header_values(headers, "Sec-Fetch-Site")
+    if not values:
+        return True
+    if len(values) != 1:
+        return False
+    return values[0].strip().lower() in _ALLOWED_FETCH_SITES
+
+
+class _RequestRejected(Exception):
+    def __init__(self, status: int, code: str, message: str):
+        super().__init__(message)
+        self.status = status
+        self.code = code
+        self.message = message
+
+
+class _IntakeDeadline:
+    """Stop a trickling read without closing the write side of the socket.
+
+    Shutting the socket down completely would also drop the 408 response.
+    ``SHUT_RD`` unblocks ``recv`` and still lets the handler write the status.
+    The same call is used on Windows and POSIX; there is no second platform path.
+    """
+
+    def __init__(self, connection, seconds: float):
+        self.expired = threading.Event()
+        self._connection = connection
+        self._timer = threading.Timer(max(0.0, float(seconds)), self._expire)
+        self._timer.daemon = True
+        self._timer.start()
+
+    def _expire(self):
+        self.expired.set()
+        try:
+            self._connection.shutdown(socket.SHUT_RD)
+        except OSError:
+            pass
+
+    def cancel(self):
+        self._timer.cancel()
 
 
 KNOWN_TOOLS = _core_known_tools
@@ -415,47 +550,171 @@ class Handler(BaseHTTPRequestHandler):
 
     # injected by serve()
     _ctx: dict = {}  # type: ignore
+    _response_started = False
+    _body_consumed = True
+    _request_started = False
 
     def log_message(self, *args):  # quiet; MVP
         pass
 
     # -- helpers ---------------------------------------------------------
     def _send(self, code: int, payload, content_type="application/json") -> None:
+        if (isinstance(content_type, str) and content_type.startswith("application/json")
+                and isinstance(payload, dict) and code >= 400):
+            payload = normalize_error(code, payload)
+        if self._response_started:
+            self.close_connection = True
+            return
         body = payload if isinstance(payload, bytes) else json.dumps(payload, ensure_ascii=False).encode()
+        self._response_started = True
+        # parse_request leaves the default HTTP/0.9 version in place when it
+        # rejects HTTP/2+ or a bad version, and the stdlib then omits the
+        # status line. Every answer from this server names its status.
+        if getattr(self, "request_version", None) in (None, "", "HTTP/0.9"):
+            self.request_version = "HTTP/1.1"
         self.send_response(code)
         self.send_header("Content-Type", content_type)
         self.send_header("Content-Length", str(len(body)))
         self.send_header("Cache-Control", "no-store")
         self.send_header("X-Content-Type-Options", "nosniff")
+        if not self._body_consumed:
+            self.send_header("Connection", "close")
         self.end_headers()
-        self.wfile.write(body)
+        try:
+            self.wfile.write(body)
+            self.wfile.flush()
+        except (TimeoutError, OSError):
+            self.close_connection = True
+
+    def handle_expect_100(self):
+        # The stdlib sends 100 Continue before Host, CSRF, or the body limit.
+        # Defer that answer until the upload is actually acceptable.
+        return True
+
+    def send_error(self, code, message=None, explain=None):
+        # The stdlib writer emits HTML and copies the request into the body.
+        status = int(getattr(code, "value", code))
+        token, text = _PROTOCOL_ERRORS.get(status, ("error", "request failed"))
+        self._body_consumed = False
+        self._reject(status, token, text)
+
+    def _reject(self, status: int, code: str, message: str) -> None:
+        self.close_connection = True
+        try:
+            self._send(status, {"error": message, "code": code})
+        except (OSError, TimeoutError):
+            self.close_connection = True
 
     def handle_one_request(self):
         self._mutation_id = None
+        self._response_started = False
+        self._body_consumed = True
+        self._request_started = False
         try:
-            return super().handle_one_request()
+            self._read_request_head()
+        except _RequestRejected as exc:
+            self._reject(exc.status, exc.code, exc.message)
+        except TimeoutError:
+            self.close_connection = True
+            if self._request_started and not self._response_started:
+                self._reject(408, "request_timeout", "request timed out")
+        except Exception:
+            # The client sees a fixed body. The traceback stays on stderr so a
+            # fault is not discarded with the connection.
+            traceback.print_exc()
+            self.close_connection = True
+            if not self._response_started:
+                self._reject(500, "internal_error", "internal error")
         finally:
             if self._mutation_id is not None:
                 with self._ctx['lock']:
                     self._ctx.get('active_mutations', {}).pop(self._mutation_id, None)
 
+    def _read_request_head(self):
+        try:
+            self.connection.settimeout(_HEADER_IDLE_SECONDS)
+        except OSError:
+            self.close_connection = True
+            return
+        intake = _IntakeDeadline(self.connection, _HEADER_DEADLINE_SECONDS)
+        expired = False
+        try:
+            try:
+                self.raw_requestline = self.rfile.readline(65537)
+            except TimeoutError:
+                self.close_connection = True
+                return
+            except OSError:
+                self.close_connection = True
+                expired = intake.expired.is_set()
+                if expired and self._request_started and not self._response_started:
+                    self._reject(408, "request_timeout", "request timed out")
+                return
+            if len(self.raw_requestline) > 65536:
+                self.requestline = ""
+                self.request_version = ""
+                self.command = ""
+                self._request_started = True
+                self.send_error(414)
+                return
+            if not self.raw_requestline:
+                self.close_connection = True
+                if intake.expired.is_set() and self._request_started and not self._response_started:
+                    self._reject(408, "request_timeout", "request timed out")
+                return
+            self._request_started = True
+            if not self.parse_request():
+                return
+            expired = intake.expired.is_set()
+        finally:
+            intake.cancel()
+        if expired:
+            self.close_connection = True
+            if not self._response_started:
+                self._reject(408, "request_timeout", "request timed out")
+            return
+        if self.command not in {"GET", "HEAD", *_WRITE_METHODS}:
+            self._body_consumed = False
+            self.send_error(501)
+            return
+        if self.command == "HEAD":
+            # HEAD would replay GET side effects (archive, read marks). Refuse it.
+            self._body_consumed = False
+            self.send_error(501)
+            return
+        try:
+            self.connection.settimeout(_RESPONSE_IDLE_SECONDS)
+        except OSError:
+            self.close_connection = True
+            return
+        getattr(self, "do_" + self.command)()
+        try:
+            self.wfile.flush()
+        except (TimeoutError, OSError):
+            self.close_connection = True
+
     def _guard(self, need_csrf=False) -> bool:
         desktop_token = self._ctx.get('desktop_token')
-        if desktop_token and not secrets.compare_digest(
-                self.headers.get('X-Xueness-Desktop-Token', ''), desktop_token):
-            self._send(403, {'error': 'desktop host authentication required'})
-            return False
-        if not _host_ok(self.headers) or not _origin_ok(self.headers):
-            self._send(403, {"error": "host not permitted"})
+        if desktop_token:
+            presented = _header_values(self.headers, 'X-Xueness-Desktop-Token')
+            if (len(presented) != 1 or not presented[0]
+                    or not secrets.compare_digest(presented[0], desktop_token)):
+                self._send(403, {'error': 'desktop host authentication required',
+                                 'code': 'desktop_auth_required'})
+                return False
+        if not _host_ok(self.headers) or not _origin_ok(self.headers) or not _fetch_site_ok(self.headers):
+            self._send(403, {"error": "host not permitted", "code": "host_not_permitted"})
             return False
         if need_csrf:
-            token = self.headers.get("X-CSRF-Token", "")
-            if not token or not secrets.compare_digest(token, self._ctx["csrf"]):
-                self._send(403, {"error": "csrf token required"})
+            tokens = _header_values(self.headers, "X-CSRF-Token")
+            if (len(tokens) != 1 or not tokens[0]
+                    or not secrets.compare_digest(tokens[0], self._ctx["csrf"])):
+                self._send(403, {"error": "csrf token required", "code": "csrf_required"})
                 return False
             with self._ctx['lock']:
                 if self._ctx.get('admission_closed'):
-                    self._send(503, {'error': '服务即将重启，暂不接收新操作。'})
+                    self._send(503, {'error': '服务即将重启，暂不接收新操作。',
+                                     'code': 'admission_closed'})
                     return False
                 if getattr(self, '_mutation_id', None) is None:
                     self._mutation_id = str(id(self))
@@ -465,31 +724,127 @@ class Handler(BaseHTTPRequestHandler):
         parts = [p for p in parsed.path.split('/') if p]
         owner = plugin_runtime.route_owner(parts)
         if owner and not plugin_runtime.is_enabled(self._ctx['state_dir'], owner):
-            self._send(403, {'error': 'plugin disabled or dependency unavailable: ' + owner, 'plugin': owner})
+            self._send(403, {'error': 'plugin disabled or dependency unavailable: ' + owner,
+                             'plugin': owner, 'code': 'plugin_disabled'})
             return False
         if owner == 'files' and len(parts) == 4 and parts[3] == 'file':
             name = urllib.parse.parse_qs(parsed.query).get('path', [''])[0]
             if Path(name).suffix.lower() in ('.docx', '.xlsx', '.pptx') and not plugin_runtime.is_enabled(self._ctx['state_dir'], 'office'):
-                self._send(403, {'error': 'plugin disabled or dependency unavailable: office', 'plugin': 'office'})
+                self._send(403, {'error': 'plugin disabled or dependency unavailable: office',
+                                 'plugin': 'office', 'code': 'plugin_disabled'})
                 return False
         return True
 
-    def _body(self):
+    def _body_limit(self) -> int:
+        path = urllib.parse.urlparse(self.path).path
+        if path == "/api/composer/prepare":
+            return _MAX_COMPOSER_BODY
+        return _MAX_BODY
+
+    def _declared_length(self) -> tuple:
+        """Return ``(length, explicit)``. Never reads the body.
+
+        Chunked encoding and a second Content-Length are rejected. Treating
+        either as an empty object would apply a write the client did not send
+        and leave unread bytes on a keep-alive connection.
+        """
+        transfers = self.headers.get_all("Transfer-Encoding") or []
+        if any(item.strip() for item in transfers):
+            raise _RequestRejected(411, "length_required", "Content-Length is required")
+        lengths = self.headers.get_all("Content-Length") or []
+        if not lengths:
+            return 0, False
+        if len(lengths) != 1:
+            raise _RequestRejected(400, "invalid_content_length", "invalid Content-Length")
+        raw = lengths[0].strip()
+        if len(raw) > 10 or not raw.isdigit() or (len(raw) > 1 and raw[0] == "0"):
+            raise _RequestRejected(400, "invalid_content_length", "invalid Content-Length")
+        length = int(raw)
+        if length > self._body_limit():
+            raise _RequestRejected(413, "payload_too_large", "request body is too large")
+        return length, True
+
+    def _check_expect(self, length: int) -> None:
+        values = self.headers.get_all("Expect") or []
+        if not values:
+            return
+        if len(values) != 1 or values[0].strip().lower() != "100-continue":
+            raise _RequestRejected(417, "expectation_failed", "Expect is not supported")
+        if length <= 0 or self._response_started:
+            return
+        self.wfile.write(b"HTTP/1.1 100 Continue\r\n\r\n")
+        self.wfile.flush()
+
+    def _read_exact(self, length: int) -> bytes:
+        if length == 0:
+            self._body_consumed = True
+            return b""
+        intake = _IntakeDeadline(self.connection, _BODY_DEADLINE_SECONDS)
+        chunks = []
+        remaining = length
         try:
-            length = int(self.headers.get("Content-Length") or 0)
-        except ValueError:
-            return None
-        body_limit = _MAX_COMPOSER_BODY if urllib.parse.urlparse(self.path).path == '/api/composer/prepare' else _MAX_BODY
-        if length < 0 or length > body_limit:
-            return None
-        raw = self.rfile.read(length) if length else b""
+            while remaining:
+                try:
+                    self.connection.settimeout(min(
+                        _BODY_IDLE_SECONDS,
+                        max(0.01, _BODY_DEADLINE_SECONDS),
+                    ))
+                    block = self.rfile.read(min(remaining, 65536))
+                except TimeoutError:
+                    raise _RequestRejected(408, "request_timeout", "request timed out") from None
+                except OSError:
+                    if intake.expired.is_set():
+                        raise _RequestRejected(408, "request_timeout", "request timed out") from None
+                    raise _RequestRejected(400, "truncated_body", "request body ended early") from None
+                if not block:
+                    if intake.expired.is_set():
+                        raise _RequestRejected(408, "request_timeout", "request timed out")
+                    raise _RequestRejected(400, "truncated_body", "request body ended early")
+                chunks.append(block)
+                remaining -= len(block)
+        finally:
+            intake.cancel()
+        self._body_consumed = True
+        if intake.expired.is_set():
+            # The read side may already be shut. Finish this response, then close.
+            self._body_consumed = False
+            self.close_connection = True
+        return b"".join(chunks)
+
+    def _parse_object(self, raw: bytes):
         if not raw:
             return {}
         try:
             data = json.loads(raw.decode("utf-8"))
         except (ValueError, UnicodeDecodeError):
-            return None
-        return data if isinstance(data, dict) else None
+            raise _RequestRejected(400, "invalid_json", "invalid json body") from None
+        if not isinstance(data, dict):
+            raise _RequestRejected(400, "invalid_json", "invalid json body")
+        return data
+
+    def _prepare_read(self) -> bool:
+        """Reject a malformed GET/HEAD body framing. Do not apply its bytes."""
+        self._body_consumed = True
+        try:
+            length, explicit = self._declared_length()
+        except _RequestRejected as exc:
+            self._body_consumed = False
+            self._reject(exc.status, exc.code, exc.message)
+            return False
+        if explicit and length > 0:
+            # Leaving the bytes unread would desync the next keep-alive request.
+            self._body_consumed = False
+        return True
+
+    def _read_json_body(self):
+        length, explicit = self._declared_length()
+        self._check_expect(length if explicit else 0)
+        if not explicit:
+            # No length and no chunking: there is no body to apply. Close so a
+            # smuggled following request cannot be parsed on this connection.
+            self._body_consumed = False
+            return {}
+        return self._parse_object(self._read_exact(length))
 
     # -- stage 2 modules --------------------------------------------------
     def _dispatch_stage2(self, method: str, data: dict) -> bool:
@@ -511,7 +866,8 @@ class Handler(BaseHTTPRequestHandler):
         try:
             result = plugin_runtime.dispatch_http(method, parts, query, data, {**self._ctx, "handler": self})
         except Exception:
-            self._send(500, {"error": "internal error"})
+            traceback.print_exc()
+            self._send(500, {"error": "internal error", "code": "internal_error"})
             return True
         if result is HANDLED_RESPONSE:
             return True
@@ -523,7 +879,7 @@ class Handler(BaseHTTPRequestHandler):
 
     # -- routing ----------------------------------------------------------
     def do_GET(self):
-        if not self._guard():
+        if not self._prepare_read() or not self._guard():
             return
         ctx = self._ctx
         path = urllib.parse.urlparse(self.path).path
@@ -585,60 +941,37 @@ class Handler(BaseHTTPRequestHandler):
             return
         self._send(404, {"error": "not found"})
 
-    def do_POST(self):
+    def _handle_write(self, method: str):
+        # Framing is checked after the host and CSRF gates so a forbidden
+        # caller is refused before we describe the body limit. The body is
+        # still not read on that path, and the connection is closed.
+        self._body_consumed = False
         if not self._guard(need_csrf=True):
             return
-        ctx = self._ctx
-        path = urllib.parse.urlparse(self.path).path
-        data = self._body()
-        if data is None:
-            self._send(400, {"error": "invalid json body"})
+        try:
+            data = self._read_json_body()
+        except _RequestRejected as exc:
+            self._reject(exc.status, exc.code, exc.message)
             return
-        parts = [p for p in path.split("/") if p]
-        if self._dispatch_stage2("POST", data):
+        if self._dispatch_stage2(method, data):
             return
-        self._send(404, {"error": "not found"})
+        self._send(404, {"error": "not found", "code": "not_found"})
+
+    def do_POST(self):
+        self._handle_write("POST")
 
     def do_DELETE(self):
         # DELETE mutates persisted state, so it carries the same CSRF
         # requirement as POST rather than the read-only guard.
-        if not self._guard(need_csrf=True):
-            return
-        data = self._body()
-        if data is None:
-            self._send(400, {"error": "invalid json body"})
-            return
-        path = urllib.parse.urlparse(self.path).path
-        parts = path.split("/")
-        if self._dispatch_stage2("DELETE", data):
-            return
-        self._send(404, {"error": "not found"})
+        self._handle_write("DELETE")
 
     def do_PATCH(self):
         # PATCH merges fields into persisted state: same CSRF requirement.
-        if not self._guard(need_csrf=True):
-            return
-        data = self._body()
-        if data is None:
-            self._send(400, {"error": "invalid json body"})
-            return
-        path = urllib.parse.urlparse(self.path).path
-        parts = path.split("/")
-        if self._dispatch_stage2("PATCH", data):
-            return
-        self._send(404, {"error": "not found"})
+        self._handle_write("PATCH")
 
     def do_PUT(self):
         # PUT replaces a whole resource list: same CSRF requirement.
-        if not self._guard(need_csrf=True):
-            return
-        data = self._body()
-        if data is None:
-            self._send(400, {"error": "invalid json body"})
-            return
-        if self._dispatch_stage2("PUT", data):
-            return
-        self._send(404, {"error": "not found"})
+        self._handle_write("PUT")
 
 
 def _declared_workspace_roots(additional=()) -> tuple:

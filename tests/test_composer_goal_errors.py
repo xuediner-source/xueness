@@ -28,8 +28,8 @@ from tests.fake_provider_fixture import inject_provider
 #: 越靠近 planning 的那条检查用它的真实拒绝验证状态映射，不放宽任何真实上限。
 TOO_LONG = session_goal.MAX_GOAL_CHARS + 1
 DISABLED = {'error': 'plugin disabled or dependency unavailable: planning',
-            'plugin': 'planning'}
-TOO_LONG_BODY = {'error': '会话目标最长 5000 个字符'}
+            'plugin': 'planning', 'code': 'forbidden', 'status': 403}
+TOO_LONG_BODY = {'error': '会话目标最长 5000 个字符', 'code': 'bad_request', 'status': 400}
 
 
 class GoalHttpHarness(unittest.TestCase):

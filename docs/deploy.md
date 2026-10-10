@@ -23,7 +23,9 @@
 - Web 为单人本地工具，没有多用户认证、TLS 或操作系统沙箱。默认保持 loopback 绑定。
 - 非 loopback 绑定要求显式设置 `XUENESS_ALLOW_REMOTE=1`；公开暴露还必须另行设计认证与 TLS，该变量不提供认证。
 - 模型请求仅在任务发送后开始；`XUENESS_ALLOW_REAL=0` 可在主机层关闭模型请求。凭据由运行主机提供。
-- 所有 POST 使用 CSRF 防护，Host/Origin 检查及工作区范围仍生效；启用插件不替代执行批准。
+- 所有会改状态的方法（POST、PUT、PATCH、DELETE）都要带 CSRF 令牌。GET 不带 CSRF。Host 必须是本机回环地址；带了 Origin 或 Referer 时，主机和端口必须与 Host 一致。浏览器送来的 `Sec-Fetch-Site` 只接受缺失、`none` 或 `same-origin`。重复的 Host、Origin、CSRF 或桌面令牌按拒绝处理。
+- 请求体要带单一的 Content-Length。`Transfer-Encoding`（含分块）返回 411。超过上限返回 413 并关闭连接：普通接口 1000000 字节，仅路径 `/api/composer/prepare` 为 6000000 字节。请求行、请求头和请求体有空闲时间与总时限，超时返回 408；模型运行本身不占这套时限。
+- 网关失败统一为 JSON：`{"error": "说明", "code": "稳定代号", "status": HTTP状态}`。`error` 仍是原有说明。失败不会以 200 或 HTML 返回。启用插件不替代执行批准，工作区范围检查仍然生效。
 
 ## 发布状态
 
