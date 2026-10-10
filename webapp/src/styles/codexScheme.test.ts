@@ -51,3 +51,9 @@ test("Codex 风格：开关用蓝色轨道，焦点环统一使用强调色令�
   assert.match(css, /button:focus-visible[\s\S]*?outline: 2px solid var\(--focus-ring\)/);
   assert.match(css, /\.xn-composer__input:focus-visible \{ outline: none; \}/);
 });
+
+test("Codex 风格：会话头在 Windows 避开系统窗口按钮，收起侧栏时避开导航按钮（选择器能命中真实 DOM）", () => {
+  assert.doesNotMatch(css, /\.xn-conversation > \.xn-conversation/);
+  assert.match(css, /data-platform="windows"\]\) \.xn-conversation > \.xn-conv-header \{ padding-right: calc\(max\(148px, calc\(100vw - env\(titlebar-area-width, 100vw\) \+ 10px\)\) \+ 74px\); \}/);
+  assert.match(css, /sidebar-collapsed:has\(\.xn-desktop-titlebar\[data-platform="macos"\]\) \.xn-conversation > \.xn-conv-header \{ padding-left: 190px; \}/);
+});

@@ -756,8 +756,13 @@ html[data-xn-palette="claude"] .xn-shell-layout .xn-error-banner > button { bord
     background: var(--codex-frame);
     -webkit-app-region: drag;
   }
-  html[data-xn-palette="claude"] .xn-shell-layout--desktop-titlebar:has(.xn-desktop-titlebar[data-platform="windows"]) .xn-conversation > .xn-conversation > .xn-conv-header { padding-right: 222px; }
-  html[data-xn-palette="claude"] .xn-shell-layout--desktop-titlebar.xn-shell-layout--sidebar-collapsed .xn-conversation > .xn-conversation > .xn-conv-header { padding-left: 190px; }
+  /* Windows: header actions stay clear of the native caption buttons and the
+   * title bar's own 工作台/终端 buttons (caption safe area + 74px; 222px at the
+   * standard 138px caption width). Collapsed sidebar: the title starts
+   * after the back / forward / sidebar buttons (macOS 88–184px, Windows 10–106px). */
+  html[data-xn-palette="claude"] .xn-shell-layout--desktop-titlebar:has(.xn-desktop-titlebar[data-platform="windows"]) .xn-conversation > .xn-conv-header { padding-right: calc(max(148px, calc(100vw - env(titlebar-area-width, 100vw) + 10px)) + 74px); }
+  html[data-xn-palette="claude"] .xn-shell-layout--desktop-titlebar.xn-shell-layout--sidebar-collapsed .xn-conversation > .xn-conv-header { padding-left: 112px; }
+  html[data-xn-palette="claude"] .xn-shell-layout--desktop-titlebar.xn-shell-layout--sidebar-collapsed:has(.xn-desktop-titlebar[data-platform="macos"]) .xn-conversation > .xn-conv-header { padding-left: 190px; }
   html[data-xn-palette="claude"] .xn-shell-layout--desktop-titlebar .xn-conv-header__main,
   html[data-xn-palette="claude"] .xn-shell-layout--desktop-titlebar .xn-conv-header__tools,
   html[data-xn-palette="claude"] .xn-shell-layout--desktop-titlebar .xn-conv-header__more { -webkit-app-region: no-drag; }
