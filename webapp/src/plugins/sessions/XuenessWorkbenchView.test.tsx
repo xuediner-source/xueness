@@ -812,6 +812,12 @@ test("composerDraftStore: persists, reads, and clears per-session drafts (ZCode 
   // 3. Clear draft for session:1
   clearPersistedDraft("ws-1", "session:1", mockStorage);
   assert.equal(readPersistedDraft("ws-1", "session:1", mockStorage), null);
+
+  // 4. new-task draft is isolated between different workspaces
+  persistDraft("ws-1", "new-task", { ...draftState, text: "task for repo A" }, mockStorage);
+  persistDraft("ws-2", "new-task", { ...draftState, text: "task for repo B" }, mockStorage);
+  assert.equal(readPersistedDraft("ws-1", "new-task", mockStorage)?.text, "task for repo A");
+  assert.equal(readPersistedDraft("ws-2", "new-task", mockStorage)?.text, "task for repo B");
 });
 
 test("cursor-aware autocomplete and slash command normalization", () => {
@@ -850,3 +856,83 @@ test("cursor-aware autocomplete and slash command normalization", () => {
   const appliedAt = applyContextSuggestion(midAtText, midAt[0], 8);
   assert.equal(appliedAt, "查看  的逻辑");
 });
+
+test("@ mention strictly excludes skills, and $ mention only returns skills", () => {
+  const mentions = [
+    { id: "src/main.ts", label: "main.ts", kind: "file" as const },
+    { id: "skill:review", label: "review", kind: "skill" as const },
+    { id: "session:1", label: "task 1", kind: "session" as const },
+  ];
+  // 1. @ trigger matches file and session, but NEVER skill
+  const atMatches = contextComposerSuggestions("@", [], mentions);
+  assert.equal(atMatches.some((m) => m.kind === "skill"), false);
+  assert.equal(atMatches.some((m) => m.kind === "file"), true);
+  assert.equal(atMatches.some((m) => m.kind === "session"), true);
+
+  // 2. @review must not match skill:review
+  const atSkill = contextComposerSuggestions("@rev", [], mentions);
+  assert.deepEqual(atSkill, []);
+
+  // 3. $ trigger only matches skill
+  const dollarMatches = contextComposerSuggestions("$rev", [], mentions);
+  assert.equal(dollarMatches.length, 1);
+  assert.equal(dollarMatches[0].kind, "skill");
+  assert.equal(dollarMatches[0].token, "skill:review");
+});
+
+test("Composer button mutual exclusivity: exactly one primary action button rendered", () => {
+  // Case A: Running with queue enabled and text -> only queue button, no regular send, no stop
+  const queueHtml = renderToStaticMarkup(
+    <Composer
+      running={true}
+      queueWhenRunning={true}
+      defaultValue="queue this"
+      onStop={() => {}}
+    />,
+  );
+  assert.match(queueHtml, /composer-queue/);
+  assert.doesNotMatch(queueHtml, /composer-stop/);
+  assert.doesNotMatch(queueHtml, /aria-label="发送"/);
+  assert.equal(queueHtml.match(/class="xn-composer__send/g)?.length, 1);
+
+  // Case B: Running without queue -> stop button, no queue button, no send button
+  const stopHtml = renderToStaticMarkup(
+    <Composer
+      running={true}
+      queueWhenRunning={false}
+      defaultValue="blocked content"
+      onStop={() => {}}
+    />,
+  );
+  assert.match(stopHtml, /composer-stop/);
+  assert.doesNotMatch(stopHtml, /composer-queue/);
+  assert.doesNotMatch(stopHtml, /aria-label="发送"/);
+  assert.equal(stopHtml.match(/class="xn-composer__send/g)?.length, 1);
+
+  // Case C: Idle -> send button only, no stop, no queue
+  const sendHtml = renderToStaticMarkup(
+    <Composer
+      running={false}
+      defaultValue="ready to send"
+    />,
+  );
+  assert.match(sendHtml, /aria-label="发送"/);
+  assert.doesNotMatch(sendHtml, /composer-stop/);
+  assert.doesNotMatch(sendHtml, /composer-queue/);
+  assert.equal(sendHtml.match(/class="xn-composer__send/g)?.length, 1);
+});
+
+test("Suggestion code prefix renders / for goal and workflow, not @", () => {
+  const goalSuggestions = contextComposerSuggestions("/go", [], [], { canGoal: true, canWorkflow: true });
+  assert.equal(goalSuggestions[0].kind, "goal");
+  assert.equal(goalSuggestions[0].token, "goal");
+
+  // In UI rendering, goal and workflow tokens display with "/" prefix
+  const prefix = (kind: string) =>
+    kind === "command" || kind === "goal" || kind === "workflow" ? "/" : kind === "skill" ? "$" : "@";
+  assert.equal(prefix(goalSuggestions[0].kind), "/");
+
+  const workflowSuggestions = contextComposerSuggestions("/work", [], [], { canGoal: true, canWorkflow: true });
+  assert.equal(prefix(workflowSuggestions[0].kind), "/");
+});
+

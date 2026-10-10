@@ -416,10 +416,10 @@ export function contextComposerSuggestions(
   }
   const trigger = /(?:^|\s)([@$])([^\s@#$]*)$/.exec(textBefore);
   if (!trigger) return [];
-  const kind = trigger[1] === "$" ? "skill" : null;
+  const isSkillTrigger = trigger[1] === "$";
   const needle = trigger[2].toLowerCase();
   return mentions
-    .filter((mention) => (kind === null || mention.kind === kind) &&
+    .filter((mention) => (isSkillTrigger ? mention.kind === "skill" : mention.kind !== "skill") &&
       (mention.label.toLowerCase().includes(needle) || mention.id.toLowerCase().includes(needle) || (mention.description && mention.description.toLowerCase().includes(needle))))
     .slice(0, 8)
     .map((mention) => ({
@@ -927,6 +927,7 @@ export function Composer({
   const localDraftsRef = useRef<Map<string, ComposerDraftState>>(new Map());
   const draftsRef = draftStore ?? localDraftsRef;
   const resolvedWorkspaceKey = workspaceKey ?? "default";
+  const scopedDraftKey = `${resolvedWorkspaceKey}:${draftKey}`;
   const [draftRenderVersion, setDraftRenderVersion] = useState(0);
   const pendingSubmissionsRef = useRef(new Map<string, number>());
   const submissionTicketRef = useRef(0);
@@ -936,10 +937,18 @@ export function Composer({
   const [cursorOffset, setCursorOffset] = useState<number | null>(null);
   const [isDraggingOver, setIsDraggingOver] = useState(false);
 
-  if (!draftsRef.current.has(draftKey)) {
+  useEffect(() => {
+    historyIndexRef.current = null;
+    savedDraftTextRef.current = "";
+    setCursorOffset(null);
+    setSuggestDismissed(false);
+    setActiveSuggestion(0);
+  }, [draftKey, resolvedWorkspaceKey]);
+
+  if (!draftsRef.current.has(scopedDraftKey)) {
     const persisted = readPersistedDraft(resolvedWorkspaceKey, draftKey);
     if (persisted) {
-      draftsRef.current.set(draftKey, {
+      draftsRef.current.set(scopedDraftKey, {
         text: persisted.text,
         attachments: [],
         goal: Boolean(persisted.goal),
@@ -955,10 +964,10 @@ export function Composer({
         revision: 0,
       });
     } else {
-      draftsRef.current.set(draftKey, emptyComposerDraft(defaultValue));
+      draftsRef.current.set(scopedDraftKey, emptyComposerDraft(defaultValue));
     }
   }
-  const draft = draftsRef.current.get(draftKey)!;
+  const draft = draftsRef.current.get(scopedDraftKey)!;
   // State lives in a per-scope map so late handlers keep writing to the draft
   // they submitted, even after this component has switched to another session.
   void draftRenderVersion;
@@ -974,12 +983,12 @@ export function Composer({
     const nextDrafts = new Map(draftsRef.current);
     nextDrafts.set(scope, nextDraft);
     draftsRef.current = nextDrafts;
-    persistDraft(resolvedWorkspaceKey, scope, nextDraft);
+    persistDraft(resolvedWorkspaceKey, draftKey, nextDraft);
     setDraftRenderVersion(version => version + 1);
     return nextDraft;
   };
   const updateCurrentDraft = (update: (current: ComposerDraftState) => ComposerDraftState, contentChanged = true) =>
-    updateDraftFor(draftKey, update, contentChanged);
+    updateDraftFor(scopedDraftKey, update, contentChanged);
   const { text, attachments, goal, selectedContext, submissionError, attachmentError } = draft;
   const selectedCapabilities = draft.selectedCapabilities ?? [];
   const toggleCapability = (item: ComposerCapability) => {
@@ -1144,14 +1153,14 @@ export function Composer({
   const canOfferGoal = Boolean(startActions?.canGoal);
   const canOfferWorkflow = Boolean(startActions?.canWorkflow);
   const hasSendableContent = trimmed.length > 0 || attachments.length > 0 || selectedContextCount > 0;
-  const isSendDisabled = disabled || sendDisabled || queueBusy || pendingSubmissionsRef.current.has(draftKey) || (running && !queueWhenRunning) || attachmentBusy || !hasSendableContent;
+  const isSendDisabled = disabled || sendDisabled || queueBusy || pendingSubmissionsRef.current.has(scopedDraftKey) || (running && !queueWhenRunning) || attachmentBusy || !hasSendableContent;
   // 停止/发送互斥（对标 ZCode showStopControl = canStop && !hasDraftToSubmit）：
   // 运行中且草稿为空时，停止按钮独占发送槽位；有草稿时显示排队发送键。
   // queueWhenRunning=false 时发送键在运行中没有排队语义，停止键始终保留。
   const canStop = running && Boolean(onStop);
   const showStopControl = canStop && (!queueWhenRunning || !hasSendableContent);
   const showQueueControl = running && queueWhenRunning && hasSendableContent;
-  const suggestions = !disabled && !suggestDismissed
+  const suggestions = !disabled && !suggestDismissed && historyIndexRef.current === null
     ? contextComposerSuggestions(text, commands, availableMentions, {
       canGoal: canOfferGoal,
       canWorkflow: canOfferWorkflow,
@@ -1203,30 +1212,56 @@ export function Composer({
 
   const acceptSuggestion = (suggestion: ContextComposerSuggestion) => {
     const cursor = localInputRef.current?.selectionStart ?? cursorOffset ?? text.length;
+    let nextText = text;
+    let nextCursor = cursor;
+
+    const offset = cursor;
+    const before = text.slice(0, offset);
+    const after = text.slice(offset);
+
     if (suggestion.kind === "goal") {
       if (startActions?.onGoal) startActions.onGoal();
       else setGoal((current) => !current);
-      setText((prev) => applyContextSuggestion(prev, suggestion, cursor));
+      const replaced = before.replace(/(?:^|\s)\/[A-Za-z0-9._-]*$/, (match) => match.match(/^\s*/)?.[0] ?? "");
+      nextText = replaced + after;
+      nextCursor = replaced.length;
     } else if (suggestion.kind === "workflow") {
       startActions?.onWorkflow();
-      setText((prev) => applyContextSuggestion(prev, suggestion, cursor));
+      const replaced = before.replace(/(?:^|\s)\/[A-Za-z0-9._-]*$/, (match) => match.match(/^\s*/)?.[0] ?? "");
+      nextText = replaced + after;
+      nextCursor = replaced.length;
     } else if (suggestion.kind === "command") {
-      setText((prev) => applyContextSuggestion(prev, suggestion, cursor));
+      const replaced = before.replace(/(?:^|\s)\/[A-Za-z0-9._-]*$/, (match) =>
+        (match.match(/^\s*/)?.[0] ?? "") + "/" + suggestion.token + " ",
+      );
+      nextText = replaced + after;
+      nextCursor = replaced.length;
     } else {
       addContext(selectedMention(suggestion.kind, suggestion.token));
-      setText((prev) => applyContextSuggestion(prev, suggestion, cursor));
+      const expression = suggestion.kind === "skill"
+        ? /(?:^|\s)\$([^\s@#$]*)$/
+        : /(?:^|\s)@[^\s@#$]*$/;
+      const replaced = before.replace(expression, (match) => match.match(/^\s*/)?.[0] ?? "");
+      nextText = replaced + after;
+      nextCursor = replaced.length;
     }
+
+    setText(nextText);
+    setCursorOffset(nextCursor);
     setSuggestDismissed(false);
     setActiveSuggestion(0);
     setTimeout(() => {
       localInputRef.current?.focus();
+      try {
+        localInputRef.current?.setSelectionRange(nextCursor, nextCursor);
+      } catch {}
     }, 0);
   };
 
   const handleSend = async () => {
-    if (isSendDisabled || pendingSubmissionsRef.current.has(draftKey) || !onSend) return;
+    if (isSendDisabled || pendingSubmissionsRef.current.has(scopedDraftKey) || !onSend) return;
     setSubmissionError("");
-    const submittedDraft = draftsRef.current.get(draftKey) ?? emptyComposerDraft(defaultValue);
+    const submittedDraft = draftsRef.current.get(scopedDraftKey) ?? emptyComposerDraft(defaultValue);
     const submittedRevision = submittedDraft.revision;
     const draft: ComposerInput = {
       attachments: submittedDraft.attachments,
@@ -1238,7 +1273,7 @@ export function Composer({
       goal: submittedDraft.goal,
     };
     const ticket = ++submissionTicketRef.current;
-    pendingSubmissionsRef.current.set(draftKey, ticket);
+    pendingSubmissionsRef.current.set(scopedDraftKey, ticket);
     clearPersistedDraft(resolvedWorkspaceKey, draftKey);
     const submittedText = submittedDraft.text.trim();
     if (submittedText) {
@@ -1248,19 +1283,19 @@ export function Composer({
     historyIndexRef.current = null;
     // Move the complete submission out of the editor before the async run can
     // promote/remount the composer. A rejection restores this frozen snapshot.
-    draftsRef.current = clearSubmittedComposerDraft(draftsRef.current, draftKey, submittedRevision);
-    const clearedRevision = draftsRef.current.get(draftKey)!.revision;
+    draftsRef.current = clearSubmittedComposerDraft(draftsRef.current, scopedDraftKey, submittedRevision);
+    const clearedRevision = draftsRef.current.get(scopedDraftKey)!.revision;
     setDraftRenderVersion(version => version + 1);
     let accepted = false;
     const release = () => {
-      if (pendingSubmissionsRef.current.get(draftKey) !== ticket) return;
-      pendingSubmissionsRef.current.delete(draftKey);
+      if (pendingSubmissionsRef.current.get(scopedDraftKey) !== ticket) return;
+      pendingSubmissionsRef.current.delete(scopedDraftKey);
       setDraftRenderVersion(version => version + 1);
     };
     const acknowledge = () => { accepted = true; release(); };
     const restore = (error = "") => {
       if (accepted) return;
-      const next = restoreSubmittedComposerDraft(draftsRef.current, draftKey, clearedRevision, submittedDraft, error);
+      const next = restoreSubmittedComposerDraft(draftsRef.current, scopedDraftKey, clearedRevision, submittedDraft, error);
       if (next !== draftsRef.current) {
         draftsRef.current = next;
         persistDraft(resolvedWorkspaceKey, draftKey, submittedDraft);
@@ -1365,6 +1400,16 @@ export function Composer({
     }
   };
 
+  const handleDropEvent = (event: React.DragEvent) => {
+    setIsDraggingOver(false);
+    const files = extractFilesFromClipboard(event.dataTransfer);
+    if (files.length > 0) {
+      event.preventDefault();
+      event.stopPropagation();
+      void addAttachmentFiles(files);
+    }
+  };
+
   return (
     <div className={`xn-composer-region xn-composer-region--${variant}`}>
       <form
@@ -1392,13 +1437,7 @@ export function Composer({
         if (event.currentTarget.contains(event.relatedTarget as Node)) return;
         setIsDraggingOver(false);
       }}
-      onDrop={(event) => {
-        setIsDraggingOver(false);
-        if (event.dataTransfer.files.length > 0) {
-          event.preventDefault();
-          void addAttachmentFiles(event.dataTransfer.files);
-        }
-      }}
+      onDrop={handleDropEvent}
     >
       <input
         ref={attachInputRef}
@@ -1430,7 +1469,7 @@ export function Composer({
                   setActiveSuggestion(0);
                 }}
               >
-                <code>{(s.kind === "command" ? "/" : s.kind === "skill" ? "$" : "@") + (s.label ?? s.token)}</code>
+                <code>{(s.kind === "command" || s.kind === "goal" || s.kind === "workflow" ? "/" : s.kind === "skill" ? "$" : "@") + (s.label ?? s.token)}</code>
                 {s.description && <span>{s.description}</span>}
               </button>
             </li>
@@ -1519,6 +1558,7 @@ export function Composer({
             event.dataTransfer.dropEffect = "copy";
           }
         }}
+        onDrop={handleDropEvent}
         disabled={disabled}
         placeholder={placeholder}
         rows={2}
@@ -1693,15 +1733,15 @@ export function Composer({
                 </svg>
               )}
             </button>
-          ) : (
+          ) : !running && (
             <button
               type="submit"
               disabled={isSendDisabled}
               className="xn-composer__send"
-              aria-label={tr(pendingSubmissionsRef.current.has(draftKey) ? "正在发送…" : "发送")}
-              title={tr(pendingSubmissionsRef.current.has(draftKey) ? "正在发送…" : "发送")}
+              aria-label={tr(pendingSubmissionsRef.current.has(scopedDraftKey) ? "正在发送…" : "发送")}
+              title={tr(pendingSubmissionsRef.current.has(scopedDraftKey) ? "正在发送…" : "发送")}
             >
-              {pendingSubmissionsRef.current.has(draftKey) ? <IconLoader size={16} /> : <IconArrowUp size={16} />}
+              {pendingSubmissionsRef.current.has(scopedDraftKey) ? <IconLoader size={16} /> : <IconArrowUp size={16} />}
             </button>
           )}
         </div>
