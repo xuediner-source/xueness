@@ -9,7 +9,7 @@
  */
 
 :root {
-  --font-sans: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI Variable", "Segoe UI", "Microsoft YaHei UI", "Microsoft YaHei", "PingFang SC", "Hiragino Sans GB", "Noto Sans CJK SC", "Noto Sans", Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji";
+  --font-sans: "Segoe UI Variable", "Segoe UI", "Microsoft YaHei UI", "Microsoft YaHei", -apple-system, BlinkMacSystemFont, "PingFang SC", "Hiragino Sans GB", "Noto Sans CJK SC", "Noto Sans", Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji";
   /* Windows 补 Cascadia Mono；中文字符回退到各平台 CJK 字体，避免 Windows 代码块里的中文落到宋体。 */
   --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, "Cascadia Mono", Consolas, "Liberation Mono", "Noto Sans Mono CJK SC", "PingFang SC", "Microsoft YaHei UI", "Courier New", monospace;
 
@@ -52,6 +52,45 @@
   --z-select: 1200;
   --xn-tab-size: 2;
   --xn-ui-font-size: 14px;
+
+  /* Geometry belongs to the shared workbench. Palette switches change colors,
+   * never the content width, text scale, caption inset or navigation layout. */
+  --claudex-sidebar-width: 288px;
+  --claudex-rail-width: 52px;
+  --claudex-drawer-width: min(calc(var(--claudex-sidebar-width) + var(--claudex-rail-width)), calc(100vw - 52px));
+  --claudex-titlebar-height: 44px;
+  --xn-native-titlebar-height: 44px;
+  --xn-native-titlebar-color: var(--bg-window);
+  --claudex-frame-inset: 4px;
+  --claudex-column: 736px;
+  --claudex-row-height: 32px;
+  --claudex-header-height: 44px;
+  --claudex-frame: var(--bg-window);
+  --claudex-rail-fg: var(--fg-muted);
+  --claudex-rail-active: var(--bg-active);
+  --claudex-sidebar-fg: var(--fg-subtle);
+  --claudex-composer-bg: var(--bg-input);
+  --claudex-composer-strip: var(--bg-subtle);
+  --claudex-placeholder: var(--fg-muted);
+  --claudex-user-bubble-fg: var(--conversation-fg);
+  --claudex-start-mark: var(--fg-muted);
+  --claudex-ease: cubic-bezier(.2, 0, 0, 1);
+  --claudex-faint: var(--fg-muted);
+  --claudex-hairline: var(--border);
+  --claudex-composer-border: var(--border-strong);
+  --claudex-composer-shadow: 0 1px 2px rgb(0 0 0 / .04), 0 4px 16px rgb(0 0 0 / .04);
+  --claudex-send-bg: var(--primary);
+  --claudex-send-fg: var(--primary-fg);
+  --claudex-send-disabled: var(--fg-muted);
+  --claudex-toggle: var(--accent-brand);
+  --claudex-knob: var(--bg-input);
+  --claudex-user-bubble: var(--conversation-user-surface);
+  --claudex-card: var(--bg-subtle);
+  --claudex-card-row: var(--bg-subtle);
+  --claudex-inline-code: var(--bg-subtle);
+  --claudex-link: var(--accent-brand);
+  --claudex-added: var(--ok);
+  --claudex-removed: var(--error);
 
   /* Color tokens - Light */
   --bg: #fafafa;
@@ -246,17 +285,7 @@
  * Legacy `claude` settings are normalized by themeBoot. Both platforms read
  * these tokens for native chrome; no provider or permission depends on them. */
 :root[data-xn-palette="claudex"] {
-  --claudex-sidebar-width: 275px;
-  --claudex-rail-width: 48px;
-  --claudex-drawer-width: min(calc(var(--claudex-sidebar-width) + var(--claudex-rail-width)), calc(100vw - 52px));
-  --claudex-titlebar-height: 44px;
-
-  --xn-native-titlebar-height: var(--claudex-titlebar-height);
   --xn-native-titlebar-color: var(--claudex-frame);
-  --claudex-frame-inset: 4px;
-  --claudex-column: 736px;
-  --claudex-row-height: 32px;
-  --claudex-header-height: 44px;
   --claudex-frame: #eeeae4;
   --claudex-rail-fg: #6b655d;
   --claudex-rail-active: rgba(0, 0, 0, 0.07);

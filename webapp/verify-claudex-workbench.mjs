@@ -45,8 +45,21 @@ item=queue.enqueue(queued['id'],'原排队文字',{'text':'原排队文字\n\n�
 queue.enqueue(queued['id'],'第二条排队消息',active_run=True);queue.pause_pending(queued['id']);queue.set_accepting(queued['id'],False)
 history=new_fixture('资料记录 A');history.update(status='completed',mode='default')
 history['messages'].append({'role':'assistant','content':'这是只存在于会话正文的独特关键词。<b>按文字显示</b>'});store.save(history)
+pinned=new_fixture('置顶会话对照');pinned.update(status='completed',pinned=True);store.save(pinned)
+context=new_fixture('会话信息与来源对照');context.update(status='completed')
+(workspace/'result.md').write_text('# 验收输出\n',encoding='utf-8')
+for index,(name,args,result) in enumerate([
+    ('write',{'path':'result.md','content':'# 验收输出'},{'ok':True}),
+    ('read',{'path':'result.md'},{'ok':True,'content':'# 验收输出'}),
+    ('web_search',{'query':'验收'},{'ok':True,'results':[{'title':f'资料来源 {i+1}','url':f'https://example.com/source/{i+1}'} for i in range(4)]})
+]):
+    call_id=f'fixture-tool-{index}'
+    context['messages'].append({'role':'assistant','content':'','tool_calls':[{'id':call_id,'type':'function','function':{'name':name,'arguments':json.dumps(args)}}]})
+    context['results'][call_id]=result
+    context['messages'].append({'role':'tool','tool_call_id':call_id,'content':json.dumps(result,ensure_ascii=False)})
+context['messages'].append({'role':'assistant','content':'验收资料已经整理。'});store.save(context)
 server=web.create_server(0,ctx);worker=threading.Thread(target=server.serve_forever,daemon=True);worker.start()
-print(json.dumps({'port':server.server_address[1],'question':question['id'],'queued':queued['id'],'queueItem':item['id'],'history':history['id']}),flush=True)
+print(json.dumps({'port':server.server_address[1],'question':question['id'],'queued':queued['id'],'queueItem':item['id'],'history':history['id'],'context':context['id']}),flush=True)
 try:sys.stdin.buffer.read()
 finally:server.shutdown();server.server_close();worker.join(timeout=5)
 `;
@@ -106,6 +119,24 @@ try {
   await page.waitForFunction(() => document.documentElement.dataset.xnPalette==='claudex');
   await page.getByTestId(`xn-sidebar-item-${info.history}`).waitFor();
   await snapshot('claudex-light-home');
+  await page.getByRole('button', {name:'首页',exact:true}).waitFor();
+  await page.locator('.xn-task-list__recent').waitFor();
+  assert.equal(await page.locator('.xn-task-list .xn-shell-nav__time').count(),0);
+  const homeLayout = await page.evaluate(() => {
+    const rect = document.querySelector('.xn-hero__composer').getBoundingClientRect();
+    const pane = document.querySelector('.xn-shell-main__panel').getBoundingClientRect();
+    return { bottomGap: pane.bottom-rect.bottom, width:rect.width };
+  });
+  assert.ok(homeLayout.bottomGap <= 40,JSON.stringify(homeLayout));
+  const cdp = await page.context().newCDPSession(page);
+  await cdp.send('DOM.enable');await cdp.send('CSS.enable');
+  const documentNode = await cdp.send('DOM.getDocument');
+  report.platformFonts = {};
+  for (const selector of ['.xn-shell-nav__label','.xn-claudex-sidebar-head__brand','.xn-hero__greeting','.xn-composer__input']) {
+    const fontNode = await cdp.send('DOM.querySelector',{nodeId:documentNode.root.nodeId,selector});
+    report.platformFonts[selector] = (await cdp.send('CSS.getPlatformFontsForNode',{nodeId:fontNode.nodeId})).fonts.map(font=>font.familyName);
+    assert.ok(report.platformFonts[selector].every(font=>! /SimSun|Times New Roman/i.test(font)),JSON.stringify(report.platformFonts));
+  }
 
   const taskOptions = page.getByRole('button', { name: '任务操作', exact: true });
   await taskOptions.click();
@@ -119,6 +150,16 @@ try {
   assert.equal(await taskOptions.evaluate(el => el === document.activeElement), true);
   assert.equal(await taskOptions.getAttribute('aria-expanded'), 'false');
   report.interactions.push('compact task menu: reverse Tab dismissal and Escape focus return');
+  await page.locator('.xn-claudex-sidebar-head__brand').click();
+  assert.equal(await page.locator('.xn-claudex-sidebar-head__brand-menu').getAttribute('open'),'');
+  await snapshot('claudex-brand-menu');
+  await page.keyboard.press('Escape');
+  assert.equal(await page.locator('.xn-claudex-sidebar-head__brand-menu').getAttribute('open'),null);
+  await page.locator('.xn-claudex-sidebar-head__activity > summary').click();
+  await snapshot('claudex-sidebar-activity');
+  await page.locator('.xn-hero__intro').click();
+  assert.equal(await page.locator('.xn-claudex-sidebar-head__activity').getAttribute('open'),null);
+  report.interactions.push('brand/activity menus: Escape focus return and outside dismissal');
 
   await page.keyboard.press('Control+k');
   const search = page.getByRole('combobox', { name: '搜索任务或命令' });
@@ -170,7 +211,14 @@ try {
   const appearance = page.getByRole('radiogroup', { name: '外观', exact: true });
   await appearance.waitFor();
   await page.waitForFunction(() => document.querySelector('.xn-appearance-choice input[value="claudex"]')?.checked);
+  await page.waitForFunction(() => !document.querySelector('.xn-code-preview-card__loading'));
+  await page.evaluate(()=>document.fonts.ready);
   await snapshot('claudex-appearance-before');
+  const settingsGeometry = () => page.evaluate(() => Object.fromEntries(['.xn-settings-view','.xn-settings-view__sidebar','.xn-settings-view__frame','.xn-settings-view__header h1','.xn-settings-view__search'].map(selector=>{
+    const node=document.querySelector(selector),rect=node.getBoundingClientRect(),style=getComputedStyle(node);
+    return [selector,{x:rect.x,y:rect.y,width:rect.width,height:rect.height,fontSize:style.fontSize,lineHeight:style.lineHeight}];
+  })));
+  const claudexGeometry = await settingsGeometry();
   const savedXueness = page.waitForResponse(response => response.url().endsWith('/api/settings/appearance') && response.request().method()==='POST').catch(error => { throw error; });
   // Register a rejection handler immediately; a blocked click must preserve
   // the fixture report instead of ending Node on an unhandled rejection.
@@ -179,6 +227,11 @@ try {
   assert.ok((await savedXueness).ok());
   await page.waitForFunction(() => !document.documentElement.dataset.xnPalette);
   assert.equal((await api('/api/settings/appearance')).values.colorPalette, 'xueness');
+  await page.waitForFunction(() => !document.querySelector('.xn-appearance-choice input[value="xueness"]')?.disabled);
+  const xuenessGeometry = await settingsGeometry();
+  assert.deepEqual(xuenessGeometry,claudexGeometry,'Appearance switches must preserve settings geometry');
+  report.appearanceGeometry={claudex:claudexGeometry,xueness:xuenessGeometry};
+  await snapshot('xueness-appearance-settings');
   const savedClaudex = page.waitForResponse(response => response.url().endsWith('/api/settings/appearance') && response.request().method()==='POST');
   void savedClaudex.catch(() => {});
   await appearance.locator('.xn-appearance-choice').filter({ hasText: 'Claudex' }).click();
@@ -187,6 +240,25 @@ try {
   await page.waitForFunction(() => !document.querySelector('.xn-appearance-choice input[value="claudex"]')?.disabled);
   await snapshot('claudex-appearance-settings');
   report.interactions.push('appearance radio cards persist through the production settings API');
+
+  await page.getByRole('button',{name:'返回工作区',exact:true}).click();
+  await select(info.context);
+  await page.getByRole('button',{name:'会话信息',exact:true}).click();
+  const contextPane=page.getByTestId('session-context-pane');
+  await contextPane.waitFor();
+  await contextPane.getByRole('button',{name:'result.md',exact:true}).first().waitFor();
+  await contextPane.getByRole('link',{name:'资料来源 1',exact:true}).waitFor();
+  await contextPane.getByRole('button',{name:'查看全部',exact:true}).click();
+  await contextPane.getByRole('link',{name:'资料来源 4',exact:true}).waitFor();
+  await snapshot('claudex-context-pane');
+  await contextPane.getByRole('button',{name:'关闭侧栏',exact:true}).click();
+  assert.equal(await contextPane.isVisible(),false);
+  await page.getByRole('button',{name:'会话信息',exact:true}).click();
+  await contextPane.getByRole('button',{name:'关闭侧栏',exact:true}).focus();
+  await page.keyboard.press('Escape');
+  await contextPane.waitFor({state:'hidden'});
+  assert.equal(await page.getByRole('button',{name:'会话信息',exact:true}).evaluate(el=>el===document.activeElement),true);
+  report.interactions.push('live output/source context, source expansion, pane close and explicit file controls');
 
   for (const palette of ['claudex', 'xueness']) for (const theme of ['light', 'dark']) {
     await api('/api/settings/appearance', 'POST', { values: { colorPalette: palette, theme } });
@@ -231,6 +303,27 @@ try {
     }
     await page.setViewportSize({ width: 1280, height: 900 });
   }
+  await page.setViewportSize({width:1280,height:900});
+  const nativeGeometry=[];
+  for(const palette of ['claudex','xueness']) {
+    await api('/api/settings/appearance','POST',{values:{colorPalette:palette,theme:'light'}});
+    await page.goto(base+'/?xuenessDesktop=1');
+    await page.locator('.xn-sidebar-footer__action[data-sidebar-navigate="true"]').click();
+    await page.getByTestId('xn-settings-nav-appearance').click();
+    await page.waitForFunction(()=>!document.querySelector('.xn-code-preview-card__loading'));
+    await page.waitForFunction(()=>!document.querySelector('.xn-appearance-choice input')?.disabled);
+    const geometry=await settingsGeometry();
+    geometry.titlebar=await page.locator('.xn-desktop-titlebar').evaluate(node=>({height:node.getBoundingClientRect().height,fontSize:getComputedStyle(node).fontSize}));
+    nativeGeometry.push(geometry);
+    await snapshot(`${palette}-desktop-chrome-settings`);
+  }
+  assert.deepEqual(nativeGeometry[0],nativeGeometry[1]);
+  assert.equal(nativeGeometry[0].titlebar.height,44);
+  report.desktopAppearanceGeometry=nativeGeometry;
+  await page.setViewportSize({width:420,height:860});
+  assert.equal(await page.locator('.xn-desktop-titlebar').evaluate(node=>node.getBoundingClientRect().height),40);
+  await snapshot('xueness-desktop-chrome-narrow-settings');
+  report.interactions.push('desktop captions and settings geometry: identical palettes, 44px wide and 40px narrow');
   assert.deepEqual(report.pageErrors, []);
   assert.deepEqual(report.externalRequests, []);
   console.log(`PASS: Claudex and Xueness built UI, ${report.views.length} views, ${report.interactions.length} interaction groups; no model runs.`);

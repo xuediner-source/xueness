@@ -265,7 +265,7 @@ export function SettingsSections({
         />
         <SettingsRow
           label={tr("外观")}
-          description={tr("Claudex 结合温润配色与简洁布局，支持浅色和深色。所有外观共用相同功能与运行设置。")}
+          description={tr("切换配色与材质。所有外观共用相同布局、字号、功能与运行设置。")}
           control={<AppearancePicker value={values.colorPalette} disabled={!onUpdateSetting || saving} onChange={(next) => { void update("colorPalette", next); }} />}
         />
         <SettingsRow

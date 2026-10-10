@@ -6,7 +6,6 @@ import { resolve } from "node:path";
 const css = readFileSync(resolve(process.cwd(), "src/styles/claudex-scheme.css"), "utf8");
 const main = readFileSync(resolve(process.cwd(), "src/main.tsx"), "utf8");
 const taskList = readFileSync(resolve(process.cwd(), "src/plugins/sessions/XuenessTaskList.tsx"), "utf8");
-const GATE = 'html[data-xn-palette="claudex"]';
 const strip = (source: string) => source.replace(/\/\*[\s\S]*?\*\//g, "");
 
 test("Claudex 外观样式层最后加载，才能覆盖其余工作台样式", () => {
@@ -14,10 +13,9 @@ test("Claudex 外观样式层最后加载，才能覆盖其余工作台样式", 
   assert.equal(imports.at(-1), "./styles/claudex-scheme.css");
 });
 
-test("Claudex 外观样式层仅在配色方案 = Claudex 外观时生效", () => {
-  assert.ok(css.includes(GATE));
-  assert.ok((css.match(/html\[data-xn-palette="claudex"\]/g) ?? []).length >= 20);
-  assert.doesNotMatch(css, /(?:^|})\s*\.xn-shell-layout\b/);
+test("共享工作台样式不由外观选择控制布局", () => {
+  assert.doesNotMatch(strip(css), /data-xn-palette/);
+  assert.match(css, /html \.xn-shell-layout/);
 });
 
 test("Claudex 外观样式层只用设计令牌，不写死十六进制颜色", () => {

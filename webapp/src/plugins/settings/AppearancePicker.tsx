@@ -5,8 +5,8 @@ import { normalizeColorPalette, type ColorPalettePreference } from "./themeBoot"
 import "./appearance.css";
 
 const APPEARANCES = [
-  { id: "xueness", name: "Xueness", description: "中性配色，经典工作台", Icon: PanelLeft },
-  { id: "claudex", name: "Claudex", description: "温润纸色，简洁工作台", Icon: Sparkles },
+  { id: "xueness", name: "Xueness", description: "中性配色", Icon: PanelLeft },
+  { id: "claudex", name: "Claudex", description: "温润纸色", Icon: Sparkles },
 ] as const;
 
 export function AppearancePicker({ value, disabled, onChange }: {

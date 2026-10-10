@@ -62,12 +62,15 @@ with tempfile.TemporaryDirectory(prefix='xueness-app-check-') as temporary:
     if sys.platform in ('darwin', 'win32'):
         assert state.get('titlebarPlatform') == ('macos' if sys.platform == 'darwin' else 'windows'), state
         insets = state.get('titlebarInsets', {})
+        # The shared caption hides the duplicate wordmark. Navigation, rather
+        # than the hidden brand's zero rect, must clear the native controls.
+        assert insets.get('brandLeft') == 0, state
         if sys.platform == 'darwin':
-            assert insets.get('brandLeft', 0) >= 78 and 10 <= insets.get('actionsRight', 0) < 30, state
+            assert 10 <= insets.get('actionsRight', 0) < 30, state
             assert any(label in state.get('dockMenuLabels', []) for label in ('任务与项目', 'Tasks and projects')), state
             assert state.get('dockTaskPopupReady') is True, state
         else:
-            assert 10 <= insets.get('brandLeft', 0) < 30 and insets.get('actionsRight', 0) >= 148, state
+            assert insets.get('actionsRight', 0) >= 148, state
         appearances = state.get('appearanceChecks', [])
         assert len(appearances) == 4, state
         assert {(row['palette'], row['theme']) for row in appearances} == {

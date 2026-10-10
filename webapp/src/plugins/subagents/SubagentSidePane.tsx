@@ -31,7 +31,8 @@ export type SubagentSidePaneProps = {
   subagentsEnabled?: boolean;
   cancelOneEnabled?: boolean;
   lightweight?: boolean;
-  mode?: "sidepane" | "panel";
+  mode?: "sidepane" | "panel" | "summary";
+  onOpenTasks?: () => void;
   pollIntervalMs?: number;
   initialTasks?: SubagentTaskItem[];
   onCancelTask?: (taskId: string) => Promise<void>;
@@ -80,6 +81,7 @@ export function SubagentSidePane({
   cancelOneEnabled = false,
   lightweight = false,
   mode = "sidepane",
+  onOpenTasks,
   pollIntervalMs = 2000,
   initialTasks,
   onCancelTask,
@@ -227,6 +229,9 @@ export function SubagentSidePane({
     };
   }, [isLightweight, isOpen, sessionId, subagentsEnabled, pollIntervalMs, loadTasks]);
 
+  const runningTasks = useMemo(() => tasks.filter(t => t.status === "running"), [tasks]);
+  const endedTasks = useMemo(() => tasks.filter(t => t.status !== "running"), [tasks]);
+
   if (isLightweight) {
     return null;
   }
@@ -235,8 +240,16 @@ export function SubagentSidePane({
     return null;
   }
 
-  const runningTasks = useMemo(() => tasks.filter(t => t.status === "running"), [tasks]);
-  const endedTasks = useMemo(() => tasks.filter(t => t.status !== "running"), [tasks]);
+  if (mode === 'summary') return <section className="xn-subagent-context-summary" aria-label={tr('子智能体')}>
+    <header><h2>{tr('子智能体')}</h2></header>
+    {error ? <p role="alert">{error}</p> : loading && !tasks.length ? <p>{tr('正在加载子任务…')}</p> : !tasks.length ? <p>{tr('暂无子任务')}</p> :
+      <button type="button" className="xn-session-context__item" onClick={onOpenTasks} disabled={!onOpenTasks}>
+        <span className="xn-subagent-context-summary__agents" aria-hidden="true">{tasks.slice(0,4).map((task,index)=><Bot key={task.id} size={15} data-agent-color={index} />)}</span>
+        <span>{runningTasks.length > 0 ? `${runningTasks.length} ${tr('运行中')}` : `${tasks.filter(task=>task.status==='completed').length} ${tr('已完成')}`}
+          {tasks.some(task=>task.status==='failed') && ` · ${tasks.filter(task=>task.status==='failed').length} ${tr('失败')}`}
+          {tasks.some(task=>task.status==='cancelled') && ` · ${tasks.filter(task=>task.status==='cancelled').length} ${tr('已取消')}`}</span>
+      </button>}
+  </section>;
 
   return (
     <aside

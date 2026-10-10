@@ -1,5 +1,11 @@
 /* Subagent runtime sidepane styles. Conversation layout lives in sessions.css,
    which is always loaded with the session viewport. */
+.xn-subagent-context-summary > p { margin: 5px 6px; color: var(--fg-muted); font-size: 12px; }
+.xn-subagent-context-summary__agents { display: inline-flex; flex-shrink: 0; gap: 4px; }
+.xn-subagent-context-summary__agents [data-agent-color="0"] { color: #38b99a; }
+.xn-subagent-context-summary__agents [data-agent-color="1"] { color: #cd7fa7; }
+.xn-subagent-context-summary__agents [data-agent-color="2"] { color: #c77a71; }
+.xn-subagent-context-summary__agents [data-agent-color="3"] { color: #9d86d1; }
 
 .xn-subagent-sidepane {
   display: flex;

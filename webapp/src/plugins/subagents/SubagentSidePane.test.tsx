@@ -9,6 +9,16 @@ import {
   type SubagentTaskItem,
 } from "./SubagentSidePane";
 
+test('context summary distinguishes completed, failed and cancelled tasks without inventing completion',()=>{
+  const initialTasks=['completed','failed','cancelled'].map((status,index)=>({id:String(index),status,steps:0}));
+  const html=renderToStaticMarkup(<SubagentSidePane mode="summary" sessionId="session" initialTasks={initialTasks} onOpenTasks={()=>undefined} />);
+  assert.match(html,/1 已完成/u);
+  assert.match(html,/1 失败/u);
+  assert.match(html,/1 已取消/u);
+  assert.doesNotMatch(html,/3 已完成/u);
+  assert.equal(renderToStaticMarkup(<SubagentSidePane mode="summary" lightweight initialTasks={initialTasks} />),'');
+});
+
 test("formatTaskDuration formats various durations properly", () => {
   assert.equal(formatTaskDuration(null, null), "-");
   assert.equal(formatTaskDuration(undefined, undefined), "-");

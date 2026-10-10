@@ -61,6 +61,11 @@
   ],
   "features": [
     {
+      "id": "sessions.context_pane",
+      "name": "会话信息侧栏：输出文件、工具来源与子智能体摘要",
+      "nameEn": "Session context pane: output files, tool sources and subagent summary"
+    },
+    {
       "id": "sessions.native_evidence",
       "name": "原生工具回答的 Markdown 与真实证据引用",
       "nameEn": "Native tool answers with Markdown and genuine evidence references"
@@ -237,6 +242,7 @@
     }
   ],
   "frontendModules": [
+    "plugins/sessions/SessionContextPane.tsx",
     "plugins/sessions/ClaudexSidebar.tsx",
     "plugins/sessions/XuenessComposerToolbar.tsx",
     "plugins/sessions/ReasoningEffortSlider.tsx",

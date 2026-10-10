@@ -14,12 +14,11 @@ const block = (selector: string) => {
 const names = (body: string) => [...body.matchAll(/(--[\w-]+)\s*:/g)].map(match => match[1]);
 const value = (body: string, name: string) => new RegExp(`${name}:\\s*([^;]+);`).exec(body)?.[1]?.trim() ?? "";
 
-test("Claudex 外观样式全部受 data-xn-palette=claudex 门控，默认配色不受影响", () => {
-  const selectors = [...strip(polish).matchAll(/([^{}]+)\{[^{}]*\}/g)].map(match => match[1].trim());
-  assert.ok(selectors.length > 60);
-  for (const group of selectors) {
-    for (const selector of group.split(",")) assert.match(selector.trim(), /^html\[data-xn-palette="claudex"\]/, selector);
-  }
+test("两种外观共用布局，配色覆盖中不允许存在尺寸令牌", () => {
+  assert.doesNotMatch(strip(polish), /data-xn-palette/);
+  const palette = block(':root[data-xn-palette="claudex"]') + block('.dark[data-xn-palette="claudex"]');
+  for (const name of names(palette)) assert.doesNotMatch(name, /(?:width|height|inset|column|row-height|drawer-width)$/, name);
+  assert.equal(value(block(":root"), "--xn-native-titlebar-height"), "44px");
 });
 
 test("默认 :root / .dark 几何令牌与原版一致，且不含 Claudex 外观专用令牌", () => {

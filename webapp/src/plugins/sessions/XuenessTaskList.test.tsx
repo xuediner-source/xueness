@@ -20,6 +20,20 @@ const groupFixtures:TaskGroup[]=[
   {id:'two',label:'Two',taskIds:['task-c']},
 ];
 
+test('Compact task list keeps pinned/projects/recent hierarchy, bounded recents and unique row/menu hooks',()=>{
+  const sessions = Array.from({length:12},(_,index)=>({id:`recent-${index}`,task:`Task ${index}`,status:'completed',root:'/work/project',updatedAt:new Date(1700000000000+index*1000).toISOString()}));
+  sessions.push({id:'pinned',task:'Pinned task',status:'completed',root:'/work/project',updatedAt:new Date(1700000000000).toISOString(),pinned:true} as typeof sessions[number] & {pinned:true});
+  const html=renderToStaticMarkup(<XuenessTaskList compact sessions={sessions} activeId="recent-11" busy={false}
+    onPreferences={()=>undefined} onSelect={()=>undefined} onRename={()=>undefined} onArchive={()=>undefined} onPin={()=>undefined} onOpenArchived={()=>undefined} />);
+  assert.ok(html.indexOf('xn-sidebar-item-pinned')<html.indexOf('xn-task-list__toolbar'));
+  assert.ok(html.indexOf('data-project-root')<html.indexOf('xn-task-list__recent'));
+  assert.equal((html.match(/data-testid="xn-sidebar-recent-item-/gu)??[]).length,8);
+  assert.ok(html.indexOf('xn-sidebar-recent-item-recent-11')<html.indexOf('xn-sidebar-recent-item-recent-10'));
+  assert.doesNotMatch(html,/xn-shell-nav__time|xn-sidebar-rename-|xn-sidebar-delete-/u);
+  const hooks=[...html.matchAll(/data-testid="(xn-sidebar-(?:recent-)?(?:item|menu)-[^"]+)"/gu)].map(match=>match[1]);
+  assert.equal(new Set(hooks).size,hooks.length);
+});
+
 test('Sidebar task context menu opens from ContextMenu and Shift+F10 only',()=>{
   assert.equal(isTaskContextMenuShortcut('ContextMenu'),true);
   assert.equal(isTaskContextMenuShortcut('F10',true),true);

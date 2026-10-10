@@ -161,7 +161,7 @@ export function XuenessTaskList({
   const view=preferences.view??'projects';
   const sorted=[...sessions].sort((a,b)=> preferences.sort==='name' ? (a.title||a.task).localeCompare(b.title||b.task) : ((Date.parse(b.updatedAt??'')||0)-(Date.parse(a.updatedAt??'')||0))*(preferences.sort==='oldest'?-1:1));
   const save=(patch:Partial<SidebarPreferences>)=>onPreferences({...preferences,...patch});
-  const rowItems=(items:SessionSummary[])=>items.map(s=>({id:s.id,label:s.title||s.task||tr('未命名任务'),active:s.id===activeId,status:s.status,pinned:s.pinned,timeLabel:taskRelativeTime(s.updatedAt)}));
+  const rowItems=(items:SessionSummary[])=>items.map(s=>({id:s.id,label:s.title||s.task||tr('未命名任务'),active:s.id===activeId,status:s.status,pinned:s.pinned,timeLabel:compact ? undefined : taskRelativeTime(s.updatedAt)}));
   const openTaskMenu=(id:string,x:number,y:number,returnFocus:HTMLElement|null)=>{
     menuReturnFocusRef.current=returnFocus;
     setMenu({id,x:Math.max(4,Math.min(x,window.innerWidth-220)),y:Math.max(4,Math.min(y,window.innerHeight-190))});
@@ -170,32 +170,34 @@ export function XuenessTaskList({
     setMenu(null);
     if(restoreFocus) requestAnimationFrame(()=>restoreSidebarFocus(menuReturnFocusRef.current));
   };
-  const renderRows=(items:SessionSummary[])=> <div
+  const renderRows=(items:SessionSummary[], recent=false)=> <div
     onContextMenu={e=>{
-      const el=(e.target as HTMLElement).closest<HTMLElement>('[data-testid^="xn-sidebar-item-"]');
+      const el=(e.target as HTMLElement).closest<HTMLElement>('[data-session-id]');
       if(!el)return;
       e.preventDefault();
-      openTaskMenu(el.dataset.testid!.replace('xn-sidebar-item-',''),e.clientX,e.clientY,el);
+      openTaskMenu(el.dataset.sessionId!,e.clientX,e.clientY,el);
     }}
     onKeyDown={e=>{
       if(!isTaskContextMenuShortcut(e.key,e.shiftKey))return;
       const target=e.target as HTMLElement;
       // 焦点在 listbox 容器上时（键盘导航），经 aria-activedescendant 找到光标行。
-      let el=target.closest<HTMLElement>('[data-testid^="xn-sidebar-item-"]');
+      let el=target.closest<HTMLElement>('[data-session-id]');
       if(!el&&target.getAttribute){
         const cursorId=target.getAttribute('aria-activedescendant');
-        if(cursorId)el=document.getElementById(cursorId)?.closest<HTMLElement>('[data-testid^="xn-sidebar-item-"]')??null;
+        if(cursorId)el=document.getElementById(cursorId)?.closest<HTMLElement>('[data-session-id]')??null;
       }
       if(!el)return;
       e.preventDefault();
       const bounds=el.getBoundingClientRect();
-      openTaskMenu(el.dataset.testid!.replace('xn-sidebar-item-',''),bounds.left,bounds.bottom,el);
+      openTaskMenu(el.dataset.sessionId!,bounds.left,bounds.bottom,el);
     }}
     onDragStart={e=>{
-      const el=(e.target as HTMLElement).closest<HTMLElement>('[data-testid^="xn-sidebar-item-"]');
-      if(el)e.dataTransfer.setData(TASK_GROUP_DRAG_MIME,el.dataset.testid!.replace('xn-sidebar-item-',''));
+      const el=(e.target as HTMLElement).closest<HTMLElement>('[data-session-id]');
+      if(el)e.dataTransfer.setData(TASK_GROUP_DRAG_MIME,el.dataset.sessionId!);
     }}
-  ><SidebarNav items={rowItems(items)} onSelect={onSelect} onRename={onRename} onDelete={onArchive}/></div>;
+  ><SidebarNav items={rowItems(items)} onSelect={onSelect} onRename={compact ? undefined : onRename} onDelete={compact ? undefined : onArchive}
+    followSelection={!recent} testIdPrefix={recent ? 'xn-sidebar-recent-item-' : undefined} label={recent ? tr('最近会话') : undefined}
+    onMenu={compact ? (id, trigger) => { const bounds=trigger.getBoundingClientRect(); openTaskMenu(id,bounds.left,bounds.bottom,trigger); } : undefined}/></div>;
   const unpinned=sorted.filter(s=>!s.pinned);
   const buckets=view==='projects' ? mergeProjectBuckets(unpinned, projectRoots) : [
     ...groups.map(g=>({...g,items:unpinned.filter(s=>g.taskIds.includes(s.id)),project:false})),
@@ -305,8 +307,9 @@ export function XuenessTaskList({
     if(next!==null)items[next]?.focus();
   };
   return <div className="xn-task-list">
+    {compact && renderRows(sorted.filter(s=>s.pinned))}
     {compact ? <div className="xn-task-list__toolbar xn-task-list__toolbar--compact">
-      <span className="xn-task-list__toolbar-label">{tr('任务')}</span>
+      <span className="xn-task-list__toolbar-label">{tr(view === 'projects' ? '项目' : '分组')}</span>
       {view === 'projects' && onAddProject && <button type="button" className="xn-task-list__toolbar-add-project"
         data-testid="xn-task-add-project" title={tr('添加项目')} aria-label={tr('添加项目')} disabled={busy}
         onClick={event => onAddProject(event.currentTarget)}><Plus size={14} /></button>}
@@ -357,7 +360,7 @@ export function XuenessTaskList({
       <details className="xn-task-list__sort"><summary aria-label={tr('排序')}><ArrowDownWideNarrow size={14}/></summary><div>{(['recent','oldest','name'] as const).map(v=><button key={v} aria-pressed={(preferences.sort??'recent')===v} onClick={e=>{save({sort:v});e.currentTarget.closest('details')!.open=false;}}>{tr(v==='recent'?'最新':v==='oldest'?'最早':'名称')}</button>)}</div></details>
       <button title={tr('已归档')} aria-label={tr('已归档')} onClick={onOpenArchived}><Archive size={14}/></button>
     </div>}
-    {renderRows(sorted.filter(s=>s.pinned))}
+    {!compact && renderRows(sorted.filter(s=>s.pinned))}
     {buckets.map(group=>{
       const isCollapsed=collapsed.includes(group.id);
       const canStartProject=group.project&&group.id!==''&&onStartProject!==undefined;
@@ -371,6 +374,10 @@ export function XuenessTaskList({
         {!isCollapsed&&group.items.length>0&&renderRows(group.items)}
       </section>;
     })}
+    {compact && unpinned.length > 0 && <section className="xn-task-list__recent" aria-label={tr('最近会话')}>
+      <h2 className="xn-task-list__section-label">{tr('最近')}</h2>
+      {renderRows([...unpinned].sort((a,b)=>(Date.parse(b.updatedAt??'')||0)-(Date.parse(a.updatedAt??'')||0)).slice(0,8),true)}
+    </section>}
     {view==='groups'&&<button className="xn-task-list__new-group" onClick={e=>beginGroupEditor({label:''},e.currentTarget)}><Plus size={14}/>{tr('新建分组')}</button>}
     {menu&&current&&<><button className="xn-task-list__menu-backdrop" aria-label={tr('关闭')} onClick={()=>closeTaskMenu()}/><div ref={menuRef} className="xn-task-list__context" role="menu" aria-label={tr('任务操作')} style={{left:menu.x,top:menu.y}} onKeyDown={handleTaskMenuKeyDown} onBlur={e=>{const target=e.relatedTarget as HTMLElement|null;if(target?.closest('.xn-select-menu'))return;if(!e.currentTarget.contains(target))closeTaskMenu();}}>
       <button type="button" role="menuitem" disabled={busy} onClick={()=>{onPin(current.id,!current.pinned);closeTaskMenu(true);}}><Pin size={14}/>{tr(current.pinned?'取消置顶':'置顶')}</button>

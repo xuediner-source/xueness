@@ -100,13 +100,13 @@ import {
 import { ForkSessionDialog } from "./plugins/sessions";
 import { SessionQueue } from "./plugins/sessions/SessionQueue";
 import { editQueuedMessage } from "./plugins/sessions/queueApi";
-import { Approvals, Composer, WorkbenchHeader, heroGreeting, type ComposerDraftState } from "./plugins/sessions/XuenessWorkbenchView";
+import { Approvals, Composer, WorkbenchHeader, type ComposerDraftState } from "./plugins/sessions/XuenessWorkbenchView";
 import { XuenessStartPage, type StartPageAction } from "./plugins/sessions/XuenessStartPage";
 import { XuenessCloneDialog } from "./plugins/git/XuenessCloneDialog";
 import { loadWorkspaceCatalog, type RecentWorkspaceDirectory } from "./xuenessWorkspaces";
 import { XuenessUsageQuickCard } from "./plugins/usage/XuenessUsageQuickCard";
 import { IconBack, IconGear, IconNewTask, IconSearch, IconWorkflow, IconModel, IconXuenessMark } from "./ui/icons";
-import { CalendarClock, Archive, ArrowDownWideNarrow, ChevronsDownUp, Folder, FolderOpen, Hash, MessageCirclePlus, UserRound, CircleHelp, ChevronDown, Blocks, GitBranch, Bot, Server } from "lucide-react";
+import { CalendarClock, Archive, ArrowDownWideNarrow, ChevronsDownUp, Folder, FolderOpen, Hash, MessageCirclePlus, UserRound, CircleHelp, ChevronDown, Blocks, GitBranch, Bot, Server, House, MessagesSquare, Library, Brain, Monitor, SquarePen, PanelRight } from "lucide-react";
 import { Select } from "./ui/Select";
 import { RegionBoundary } from "./ui/primitives";
 import { XuenessWorkspaceSettings } from "./plugins/settings/XuenessWorkspaceSettings";
@@ -120,6 +120,7 @@ import { CodeDisplayProvider } from "./ui/CodeContent";
 import { SHORTCUT_COMMANDS, resolveShortcutBinding, matchesShortcut, hasGlobalShortcutConflict, type ShortcutEventLike } from "./xuenessShortcutCommands";
 import { Shell, SidebarActions, type SidebarAction } from "./XuenessShell";
 import { ClaudexSidebarHeader, ClaudexSidebarRail } from "./plugins/sessions/ClaudexSidebar";
+import { SessionContextPane } from './plugins/sessions/SessionContextPane';
 import { TaskTodos } from "./plugins/sessions/XuenessTimeline";
 import { ZCodeConversation } from "./plugins/sessions/ZCodeConversation";
 import { updateConversationMessage, loadConversationSnapshot } from './xuenessWorkbench';
@@ -142,7 +143,7 @@ import {
 import { CapabilitiesPanel, type CapabilitySectionProps } from "./XuenessCapabilitiesPanel";
 import { XuenessCapabilityDialog } from "./XuenessCapabilityDialog";
 import { shouldDismissModalOnEscape, useModalFocusScope } from "./plugins/shared";
-import { applyDocumentTheme, applyDocumentColorPalette, normalizeColorPalette } from "./plugins/settings/themeBoot";
+import { applyDocumentTheme, applyDocumentColorPalette } from "./plugins/settings/themeBoot";
 import { FeatureUnavailable, XuenessPluginManager, XuenessPluginSettingsPanel } from "./XuenessPluginManager";
 import {
   CAPABILITY_PLUGIN_BY_KIND,
@@ -477,7 +478,7 @@ export function XuenessWorkbenchContainer() {
   const [grouped, setGrouped] = useState(false);
   // 斜杠命令候选：与能力面板同源的 commands 资源。
   const [commandItems, setCommandItems] = useState<{ id: string; description?: string }[]>([]);
-  const [subagentsSidepaneOpen, setSubagentsSidepaneOpen] = useState(false);
+  const [contextSidepaneOpen, setContextSidepaneOpen] = useState(false);
 
   const pluginAvailability = derivePluginAvailability(pluginCatalog, pluginCatalogReady);
   const allowedPanels: Panel[] = ["plugins", ...pluginAvailability.panels];
@@ -2226,15 +2227,34 @@ export function XuenessWorkbenchContainer() {
   }, [sessions, stoppingSessions, runRequestSessions, activeId, session?.id, session?.status, session?.streaming?.status]);
 
   const displayTimelineRows = useMemo(() => withAssistantStream(rows, session?.streaming), [rows, session?.streaming]);
-  const claudexAppearance = normalizeColorPalette(settingsLoading && typeof document !== 'undefined'
-    ? document.documentElement.dataset.xnPalette : settingsValues.colorPalette) === 'claudex';
   const sidebarActions: SidebarAction[] = [
     ...(isPluginEffective("sessions") ? [
-      { id: "new-task", icon: <MessageCirclePlus size={16} />, label: tr("新建任务"), shortcut: resolveShortcutBinding("new-session", (settingsValues.bindings && typeof settingsValues.bindings === "object" ? settingsValues.bindings : {}) as Record<string, string>), onClick: startNewTask },
+      { id: "new-task", icon: <SquarePen size={16} />, label: tr("新聊天"), shortcut: resolveShortcutBinding("new-session", (settingsValues.bindings && typeof settingsValues.bindings === "object" ? settingsValues.bindings : {}) as Record<string, string>), onClick: startNewTask },
       { id: "search", icon: <IconSearch size={15} />, label: tr("搜索"), shortcut: resolveShortcutBinding("command-palette", (settingsValues.bindings && typeof settingsValues.bindings === "object" ? settingsValues.bindings : {}) as Record<string, string>), onClick: (event: React.MouseEvent<HTMLButtonElement>) => openCommandPalette(event.currentTarget) },
     ] : []),
     ...(isPluginEffective("automation") ? [{ id: "automations", icon: <CalendarClock size={16} />, label: tr("自动化"), onClick: () => setPanel("automations") }] : []),
     ...(isPluginEffective("extensions") ? [{ id: "marketplace", icon: <Blocks size={16} />, label: tr("插件市场"), onClick: () => setPanel("marketplace") }] : []),
+  ];
+
+
+  const railActions: SidebarAction[] = [
+    { id: 'home', icon: <House size={18} />, label: tr('首页'), onClick: startNewTask },
+    ...(isPluginEffective('sessions') ? [{ id: 'chat', icon: <MessagesSquare size={18} />, label: tr('搜索会话'), onClick: (event: React.MouseEvent<HTMLButtonElement>) => openCommandPalette(event.currentTarget) }] : []),
+    ...sidebarActions.filter(action => action.id === 'automations'),
+    ...(canShowPanel('capabilities') ? [{ id: 'capabilities', icon: <Library size={18} />, label: tr('能力'), onClick: () => setPanel('capabilities') }] : []),
+    ...(isPluginEffective('memory') ? [{ id: 'memory', icon: <Brain size={18} />, label: tr('记忆'), onClick: () => setPanel('memory') }] : []),
+  ];
+  const railSecondaryActions: SidebarAction[] = [
+    ...(isPluginEffective('git') ? [{ id: 'git', icon: <GitBranch size={18} />, label: tr('Git'), onClick: () => setPanel('git') }] : []),
+    ...sidebarActions.filter(action => action.id === 'marketplace'),
+  ];
+  const railMoreActions: SidebarAction[] = allowedPanels.filter(id => !['chat','capabilities','memory','git','automations','marketplace','settings'].includes(id)).map(id => ({
+    id, icon: id === 'files' || id === 'directory' ? <Folder size={16} /> : id === 'subagents' ? <Bot size={16} /> : <CircleHelp size={16} />,
+    label: PANEL_LABELS()[id], onClick: () => setPanel(id),
+  }));
+  const sidebarMenuActions: SidebarAction[] = [...sidebarActions.filter(action => action.id !== 'search'),
+    ...(isPluginEffective('settings') ? [{ id: 'settings', icon: <IconGear size={16} />, label: tr('设置'), onClick: () => setPanel('settings') }] : []),
+    { id: 'plugins', icon: <Blocks size={16} />, label: tr('插件管理'), onClick: () => setPanel('plugins') },
   ];
 
   return (
@@ -2264,19 +2284,21 @@ export function XuenessWorkbenchContainer() {
       canGoBack={!busy && historyPosition.cursor > 0}
       canGoForward={!busy && historyPosition.cursor < historyPosition.length - 1}
       onGoBack={() => navigateHistory(-1)} onGoForward={() => navigateHistory(1)}
-      sidebarRail={claudexAppearance && panel !== 'settings' ? <ClaudexSidebarRail
-        actions={sidebarActions.filter(action => action.id === 'automations' || action.id === 'marketplace')}
-        activeId={panel === 'automations' ? 'automations' : panel === 'marketplace' ? 'marketplace' : undefined}
+      sidebarRail={panel !== 'settings' ? <ClaudexSidebarRail
+        actions={railActions}
+        secondaryActions={railSecondaryActions} moreActions={railMoreActions}
+        activeId={panel === 'chat' && !activeId ? 'home' : panel}
         platform={resolveHostPlatform()} /> : undefined}
-      sidebarHeader={claudexAppearance ? <ClaudexSidebarHeader
-        search={sidebarActions.find(action => action.id === 'search')} platform={resolveHostPlatform()} /> : undefined}
+      sidebarHeader={panel !== "settings" ? <ClaudexSidebarHeader
+        search={sidebarActions.find(action => action.id === 'search')} platform={resolveHostPlatform()}
+        menuActions={sidebarMenuActions} activity={liveSessions.filter(item => ['running','stopping','awaiting_user','needs_review','failed','provider_error'].includes(item.status)).slice(0,12)} onSelectSession={selectSession} /> : undefined}
       sidebar={panel === "settings" ? null : (
         <>
           <SidebarActions
-            actions={claudexAppearance ? sidebarActions.filter(action => action.id === 'new-task') : sidebarActions}
+            actions={sidebarActions.filter(action => action.id === 'new-task')}
           />
           {isPluginEffective("sessions") && <>
-          <XuenessTaskList sessions={liveSessions} activeId={activeId} busy={busy} compact={claudexAppearance}
+          <XuenessTaskList sessions={liveSessions} activeId={activeId} busy={busy} compact
             projectRoots={composerCatalog.roots.filter(root => root.path !== composerCatalog.isolatedRoot)}
             onAddProject={isPluginEffective("files") && isPluginEffective("settings") ? trigger => {
               if (busy) return;
@@ -2383,25 +2405,11 @@ export function XuenessWorkbenchContainer() {
           <div className="xn-conversation">
             <WorkbenchHeader
               session={session}
-              actions={!lightweightLayout && (
-                <>
-                  {viewSwitcher}
-                  {isPluginEffective("subagents") && (
-                    <button
-                      type="button"
-                      className={`xn-conv-header__action xn-conv-header__subagents ${subagentsSidepaneOpen ? "xn-conv-header__action--active" : ""}`}
-                      aria-label={tr("子代理运行态侧栏")}
-                      title={tr("子代理运行态侧栏")}
-                      aria-pressed={subagentsSidepaneOpen}
-                      onClick={() => setSubagentsSidepaneOpen(prev => !prev)}
-                    >
-                      <Bot size={14} aria-hidden="true" />
-                      <span>{tr("子代理")}</span>
-                    </button>
-                  )}
-                  <button type="button" className="xn-conv-header__action xn-conv-header__fork" aria-label={tr("分叉会话")} title={tr("分叉会话")} disabled={busy || session.status === "running" || session.streaming?.status === "streaming"} onClick={() => beginFork()}><GitBranch size={14} aria-hidden="true" /><span>{tr("分叉会话")}</span></button>
-                </>
-              )}
+              actions={<>
+                {!lightweightLayout && <>{viewSwitcher}<button type="button" className="xn-conv-header__action xn-conv-header__fork" aria-label={tr("分叉会话")} title={tr("分叉会话")} disabled={busy || session.status === "running" || session.streaming?.status === "streaming"} onClick={() => beginFork()}><GitBranch size={14} aria-hidden="true" /><span>{tr("分叉会话")}</span></button></>}
+                <button type="button" className="xn-conv-header__action" aria-label={tr("会话信息")} title={tr("会话信息")}
+                  aria-pressed={contextSidepaneOpen} onClick={() => { setContextSidepaneOpen(value => !value); }}><PanelRight size={16} aria-hidden="true" /></button>
+              </>}
             pinned={session.pinned === true}
             onTogglePin={() => activeId && void togglePin(activeId, session.pinned !== true)}
             onRefresh={() => void handleRefreshAll()}
@@ -2509,21 +2517,12 @@ export function XuenessWorkbenchContainer() {
               stopping={stoppingSessions.has(session.id)} interrupted={session.streaming?.status === "interrupted"}
               queueCount={(session.queued_messages ?? []).length} />}
           </div>
-          {subagentsSidepaneOpen && isPluginEffective("subagents") && !lightweightLayout && (
-            <Suspense fallback={null}>
-              <SubagentSidePane
-                sessionId={session.id}
-                isOpen={subagentsSidepaneOpen}
-                onClose={() => setSubagentsSidepaneOpen(false)}
-                activeRuntimeProfile={activeRuntimeProfile}
-                subagentsEnabled={isPluginEffective("subagents")}
-                cancelOneEnabled={settingsValues.subagentCancelOneEnabled === true}
-                lightweight={lightweightLayout}
-                mode="sidepane"
-                onStopSession={handleStop}
-              />
-            </Suspense>
-          )}
+          {contextSidepaneOpen && <SessionContextPane key={session.id} session={session} rows={displayTimelineRows}
+            filesEnabled={isPluginEffective('files')} onOpenFile={path => { void handleSelectFile(path); setPanel('files'); }}
+            onBrowseFiles={isPluginEffective('files') ? () => setPanel('files') : undefined} onClose={() => setContextSidepaneOpen(false)}
+            subagents={isPluginEffective('subagents') && !lightweightLayout ? <Suspense fallback={null}><SubagentSidePane
+              sessionId={session.id} mode="summary" activeRuntimeProfile={activeRuntimeProfile} subagentsEnabled={isPluginEffective('subagents')}
+              onOpenTasks={() => setPanel('subagents')} /></Suspense> : undefined} />}
         </div>
       ) : (
         <div className="xn-hero" data-testid="xn-hero">
@@ -2532,11 +2531,12 @@ export function XuenessWorkbenchContainer() {
             <div className="xn-hero__brand" aria-hidden="true">
               <IconXuenessMark size={34} className="xn-hero__brand-mark" />
             </div>
-            <h1 className="xn-hero__greeting">{heroGreeting(new Date())}</h1>
+            <h1 className="xn-hero__greeting">{tf("我们应该在 {0} 中做些什么？", [composerCatalog.roots.find(item => item.path === (draftRoot ?? composerCatalog.root))?.name ?? (draftRoot ?? composerCatalog.root)?.split(/[/\\]/u).filter(Boolean).pop() ?? "Xueness"])}</h1>
             <p className="xn-hero__hint">{tr("描述你想完成的事，Xueness 会在你的工作区里执行。")}</p>
           </div>
 
           <div className="xn-hero__composer">
+            <div className="xn-hero__workspace">{workspaceContext}<span className="xn-composer-workspace__host"><Monitor size={15} aria-hidden="true" />{choices.remote ? tr("SSH 工作区") : tr("此计算机")}</span></div>
             {runError && (
               <p role="alert" className="xn-run-error">{runError}</p>
             )}
@@ -2547,7 +2547,6 @@ export function XuenessWorkbenchContainer() {
                 platform={resolveHostPlatform()}
                 sendShortcut={settingsValues.sendShortcut === "mod-enter" ? "mod-enter" : "enter"}
                 variant="hero"
-                  topContent={workspaceContext}
                 inputRef={heroInputRef}
                 onSend={handleCreate}
                 disabled={busy || creatingSession || !commandRoot || !isPluginEffective("sessions")}

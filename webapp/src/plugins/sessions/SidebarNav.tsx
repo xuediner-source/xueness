@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useId, useRef, useState } from "react";
 import { IconLoader, IconPencil, IconPin, IconTrash, IconX } from "../../ui/icons";
+import { MoreHorizontal } from 'lucide-react';
 import { t as tr } from "../../i18n";
 import { isImeComposingEvent } from "../../xuenessShortcutDisplay";
 import { useUniformListWindow } from "./ListVirtualWindow";
@@ -40,6 +41,10 @@ export type SidebarNavProps = {
   onSelect?: (id: string) => void;
   onRename?: (id: string, returnFocusTo?: HTMLElement | null) => void;
   onDelete?: (id: string) => void;
+  onMenu?: (id: string, trigger: HTMLElement) => void;
+  testIdPrefix?: string;
+  label?: string;
+  followSelection?: boolean;
   /** 侧栏宽度（px），默认 270 */
   width?: number;
 };
@@ -66,6 +71,8 @@ type SidebarNavItemProps = {
   onSelect?: (id: string) => void;
   onRename?: (id: string, returnFocusTo?: HTMLElement | null) => void;
   onDelete?: (id: string) => void;
+  onMenu?: (id: string, trigger: HTMLElement) => void;
+  testIdPrefix?: string;
   /** 行被点击后回调（把焦点交回列表容器，键盘导航得以继续）。 */
   onActivated?: () => void;
 };
@@ -87,6 +94,8 @@ export function sidebarNavItemPropsEqual(a: SidebarNavItemProps, b: SidebarNavIt
     && a.onSelect === b.onSelect
     && a.onRename === b.onRename
     && a.onDelete === b.onDelete
+    && a.onMenu === b.onMenu
+    && a.testIdPrefix === b.testIdPrefix
     && a.onActivated === b.onActivated;
 }
 
@@ -117,6 +126,8 @@ function SidebarNavItemBase({
   onSelect,
   onRename,
   onDelete,
+  onMenu,
+  testIdPrefix = 'xn-sidebar-item-',
   onActivated,
 }: SidebarNavItemProps): React.JSX.Element {
   const isCurrent = item.active;
@@ -137,7 +148,9 @@ function SidebarNavItemBase({
           data-active={isCurrent ? "true" : undefined}
           data-cursor={listbox && cursor ? "true" : undefined}
           data-option-index={listbox ? optionPosition - 1 : undefined}
-          data-testid={`xn-sidebar-item-${item.id}`}
+          data-testid={`${testIdPrefix}${item.id}`}
+          data-session-id={item.id}
+          title={item.label}
           tabIndex={listbox ? -1 : undefined}
           onClick={() => { onSelect(item.id); onActivated?.(); }}
           data-sidebar-navigate="true"
@@ -155,7 +168,9 @@ function SidebarNavItemBase({
           aria-haspopup="menu"
           aria-keyshortcuts="Shift+F10"
           data-active={isCurrent ? "true" : undefined}
-          data-testid={`xn-sidebar-item-${item.id}`}
+          data-testid={`${testIdPrefix}${item.id}`}
+          data-session-id={item.id}
+          title={item.label}
         >
           <span className="xn-shell-nav__leading" aria-hidden="true">
             {item.pinned ? <IconPin size={12} /> : <StatusDot status={item.status} />}
@@ -164,9 +179,12 @@ function SidebarNavItemBase({
           {item.timeLabel && <time className="xn-shell-nav__time">{item.timeLabel}</time>}
         </div>
       )}
-      {(onRename || onDelete) && (
+      {(onMenu || onRename || onDelete) && (
         <span className="xn-shell-nav__item-actions">
-          {onRename && (
+          {onMenu && <button type="button" className="xn-shell-nav__action" aria-label={`${tr('任务操作')}: ${item.label}`}
+            title={tr('任务操作')} aria-haspopup="menu" data-testid={`${testIdPrefix.replace('item-', 'menu-')}${item.id}`}
+            onClick={event => onMenu(item.id, event.currentTarget)}><MoreHorizontal size={16} /></button>}
+          {!onMenu && onRename && (
             <button
               type="button"
               className="xn-shell-nav__action"
@@ -178,7 +196,7 @@ function SidebarNavItemBase({
               <IconPencil size={13} />
             </button>
           )}
-          {onDelete && (
+          {!onMenu && onDelete && (
             <button
               type="button"
               className="xn-shell-nav__action"
@@ -211,6 +229,10 @@ export function SidebarNav({
   onSelect,
   onRename,
   onDelete,
+  onMenu,
+  testIdPrefix,
+  label,
+  followSelection = true,
   width = 270,
 }: SidebarNavProps): React.JSX.Element {
   // Pinned sessions lead the list under their own group label; with nothing
@@ -267,6 +289,9 @@ export function SidebarNav({
   const handleSelect = useCallback((id: string) => onSelectRef.current?.(id), []);
   const handleRename = useCallback((id: string, returnFocusTo?: HTMLElement | null) => onRenameRef.current?.(id, returnFocusTo), []);
   const handleDelete = useCallback((id: string) => onDeleteRef.current?.(id), []);
+  const onMenuRef = useRef(onMenu);
+  onMenuRef.current = onMenu;
+  const handleMenu = useCallback((id: string, trigger: HTMLElement) => onMenuRef.current?.(id, trigger), []);
   const handleActivated = useCallback(() => {
     listRef.current?.focus({ preventScroll: true });
   }, []);
@@ -284,6 +309,7 @@ export function SidebarNav({
   // palette). Bring its virtual option into the DOM and viewport before
   // publishing it as the active descendant.
   useEffect(() => {
+    if (!followSelection) return;
     if (!followReadyRef.current) {
       followReadyRef.current = true;
       return;
@@ -301,7 +327,7 @@ export function SidebarNav({
     });
     pendingRevealFrameRef.current = frame;
     return cancelPendingReveal;
-  }, [activeId, activeIndex, cancelPendingReveal, listbox]);
+  }, [activeId, activeIndex, cancelPendingReveal, listbox, followSelection]);
 
   // If the user scrolls the sidebar while the listbox owns focus, move its
   // virtual cursor with the visible rows. This keeps aria-activedescendant
@@ -422,7 +448,7 @@ export function SidebarNav({
         ref={listRef}
         className="xn-shell-nav__list"
         role={listbox ? "listbox" : undefined}
-        aria-label={listbox ? tr("任务列表") : undefined}
+        aria-label={listbox ? label ?? tr("任务列表") : undefined}
         tabIndex={listbox ? 0 : undefined}
         aria-activedescendant={listbox && cursor >= snapshot.start && cursor < snapshot.end
           ? optionIdAt(cursor)
@@ -443,6 +469,8 @@ export function SidebarNav({
             onSelect={listbox ? handleSelect : undefined}
             onRename={onRename ? handleRename : undefined}
             onDelete={onDelete ? handleDelete : undefined}
+            onMenu={onMenu ? handleMenu : undefined}
+            testIdPrefix={testIdPrefix}
             onActivated={handleActivated}
           />
         ))}
