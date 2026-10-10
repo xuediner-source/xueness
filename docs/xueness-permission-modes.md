@@ -37,6 +37,19 @@ Xueness 还有第二套更硬的旋钮：内核 `mode` 只有 `plan|build`（`co
 
 todo_write、ask_user、planning（含 workflow_create / workflow_amend）、tool_search 不属于工作区写入。plan 下仍允许，这样会话可以记待办和起草工作流，但不能 `workflow_run`（那是 exec）。
 
+## Windows/macOS 工作区文件路径
+
+内置 read、list、glob、grep、write 和 edit 支持当前工作区内的绝对路径与相对路径，
+例如工作区为 `D:\ET` 时，`D:\ET\filelist.txt`、`D:/ET/filelist.txt` 与
+`filelist.txt` 指向同一文件。glob 的 pattern 仍使用相对模式，path 可以是绝对目录。
+macOS/Linux 使用本机路径规则，例如 `/Users/name/project/filelist.txt` 与工作区内的
+`filelist.txt`；Windows 的设备名和文件流限制不会套用到 POSIX 文件名。
+
+路径检查只排除合法绝对盘符前缀中的冒号，继续检查各文件和目录组件的备用数据流、
+设备名、末尾空格和点，并验证解析后的目标位于工作区内。`D:filelist.txt` 这样的
+盘符相对路径依赖进程当前目录，因此拒绝。相对路径专用的指导文件读取器仍只接受
+相对路径；build/plan 审批规则及 yolo 的工作区边界保持适用。
+
 ## 本轮修过的不一致
 
 - CLI `run`/`chat` 没有统一的 `--permission-mode build|edit|yolo|plan`。plan 映射为只读加草稿；yolo 不自动放行远程执行；`--allow-*` 与 `--mode` 仍可用。

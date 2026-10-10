@@ -394,7 +394,7 @@ def main():
                     'tests.test_office_tools', 'tests.test_lightweight_transport_budget',
                     'tests.test_session_lease', 'tests.test_session_journal_durability',
                     'tests.test_provider_cancel_propagate', 'tests.test_process_tree',
-                    'tests.test_frame_replay', 'tests.test_host_path_identity',
+                    'tests.test_frame_replay', 'tests.test_host_path_identity', 'tests.test_host_platform',
                     'tests.test_sessions_search', 'tests.test_structured_questions',
                     'tests.test_message_queue.MessageQueueTests.test_edit_preserves_attachment_suffix_and_updates_actual_claimed_input',
                     'tests.test_message_queue.MessageQueueTests.test_edit_is_optimistic_and_refuses_paused_current_turn_or_expanded_commands',
@@ -404,6 +404,8 @@ def main():
                     'tests.test_workflows.WorkflowTests.test_settled_status_waits_for_runner_release_and_allows_immediate_resume',
                     '-q'], cwd=ROOT, check=True)
     executable = args.executable or ROOT/'desktop/runtime/backend'/('xueness-backend.exe' if os.name == 'nt' else 'xueness-backend')
+    subprocess.run([sys.executable, str(ROOT/'desktop/scripts/check_file_paths.py'),
+                    '--executable', str(executable)], cwd=ROOT, check=True)
     with tempfile.TemporaryDirectory(prefix='xueness-frozen-check-', ignore_cleanup_errors=True) as temporary:
         data = Path(temporary)/'data'
         token = secrets.token_hex(32)

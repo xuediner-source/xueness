@@ -6,7 +6,7 @@ swap between inspection and CreateFile cannot redirect a read outside root.
 import ctypes
 from ctypes import wintypes
 import os
-from pathlib import Path, PurePosixPath
+from pathlib import Path, PurePosixPath, PureWindowsPath
 import stat
 
 _RESERVED_BASENAMES = frozenset(
@@ -32,6 +32,26 @@ def windows_relative_alias(relative: str):
         if part.split(".", 1)[0].upper() in _RESERVED_BASENAMES:
             return part
     return None
+
+
+def windows_path_alias(name: str):
+    """Check a workspace path without treating its drive delimiter as an ADS.
+
+    Only a fully rooted, ordinary drive prefix is excluded from the component
+    check. Drive-relative names remain ambiguous and refused. The relative-only
+    checker stays strict for guidance/profile readers; workspace containment is
+    still checked independently by ``path_in`` after resolving the target.
+    """
+    if os.name != "nt" or not isinstance(name, str):
+        return None
+    path = PureWindowsPath(name)
+    drive = path.drive
+    if (len(drive) == 2 and drive[1] == ":"
+            and drive[0] in "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"):
+        if not path.root:
+            return drive
+        name = name[2:]
+    return windows_relative_alias(name)
 
 
 def open_regular_file(root: Path, relative: str):

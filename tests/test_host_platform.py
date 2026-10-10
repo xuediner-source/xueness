@@ -4,6 +4,7 @@ import os
 import subprocess
 import sys
 import tempfile
+import threading
 import unittest
 from pathlib import Path
 from types import SimpleNamespace
@@ -202,6 +203,123 @@ class LocaleTextTests(unittest.TestCase):
 
 
 class WindowsPathAliasTests(unittest.TestCase):
+    def test_drive_delimiter_is_allowed_only_for_rooted_workspace_paths(self):
+        from xueness.bundled_plugins.files import windows_paths
+        with mock.patch.object(windows_paths.os, 'name', 'nt'):
+            for name in (r'D:\ET\filelist.txt', 'd:/ET/fl3.txt', 'C:\\',
+                         'notes.txt', r'sub\notes.txt', r'\\server\share\notes.txt'):
+                with self.subTest(allowed=name):
+                    self.assertIsNone(windows_paths.windows_path_alias(name))
+            for name in (r'D:\ET\notes.txt:stream', 'D:/ET/notes.txt::$DATA',
+                         r'D:\ET\dir:stream\notes.txt', r'D:\ET\CON.txt',
+                         r'D:\ET\COM1.log', r'D:\ET\notes.txt.',
+                         'D:/ET/notes.txt ', 'D:/ET/dir./notes.txt',
+                         'D:notes.txt', 'D:', r'\\?\D:\ET\notes.txt'):
+                with self.subTest(denied=name):
+                    self.assertIsNotNone(windows_paths.windows_path_alias(name))
+            # Relative-only readers must not start accepting absolute paths.
+            self.assertEqual(windows_paths.windows_relative_alias(r'D:\ET\notes.txt'), 'D:')
+
+    def test_absolute_paths_work_for_all_file_tools_through_cli_and_web_gates(self):
+        from xueness.core import Gate, execute
+        from xueness.web import WebGate
+        with tempfile.TemporaryDirectory() as temporary:
+            base = Path(temporary)
+            root = base / '工作区'
+            root.mkdir()
+            state = Store(base / 'state')
+            sample = root / 'sample.txt'
+            for gate in (Gate(root, permission_mode='yolo'),
+                         WebGate(root, 'fixture', {}, threading.Lock(), permission_mode='yolo')):
+                sample.write_text('before 中文', encoding='utf-8')
+                for name in (str(sample), sample.as_posix(), 'sample.txt'):
+                    with self.subTest(gate=type(gate).__name__, tool='read', path=name):
+                        result = execute(root, gate, 'read', {'path': name}, state_dir=state.directory)
+                        self.assertTrue(result['ok'], result)
+                        self.assertEqual(result['output'], 'before 中文')
+                for name in (str(root), root.as_posix(), '.'):
+                    for tool, extra in (('list', {}), ('glob', {'pattern': '*.txt'}),
+                                        ('grep', {'pattern': 'before', 'include': '*.txt'})):
+                        with self.subTest(gate=type(gate).__name__, tool=tool, path=name):
+                            result = execute(root, gate, tool, {'path': name, **extra},
+                                             state_dir=state.directory)
+                            self.assertTrue(result['ok'], result)
+                            self.assertTrue(result['output'], result)
+                written = root / 'written.txt'
+                result = execute(root, gate, 'write', {'path': str(written), 'content': 'original'},
+                                 state_dir=state.directory)
+                self.assertTrue(result['ok'], result)
+                self.assertEqual(written.read_text(encoding='utf-8'), 'original')
+                result = execute(root, gate, 'edit', {'path': written.as_posix(),
+                                                     'old': 'original', 'new': 'changed'},
+                                 state_dir=state.directory)
+                self.assertTrue(result['ok'], result)
+                self.assertEqual(written.read_text(encoding='utf-8'), 'changed')
+
+    def test_absolute_paths_keep_approvals_alias_checks_and_workspace_boundaries(self):
+        from xueness.core import Gate, execute
+        from xueness.web import WebGate
+        with tempfile.TemporaryDirectory() as temporary:
+            base = Path(temporary)
+            root = base / 'workspace'
+            root.mkdir()
+            state = Store(base / 'state')
+            sample = root / 'notes.txt'
+            sample.write_text('kept', encoding='utf-8')
+            outside = base / 'outside.txt'
+            outside.write_text('outside', encoding='utf-8')
+            for mode in ('build', 'edit', 'yolo', 'plan'):
+                for gate in (Gate(root, permission_mode=mode),
+                             WebGate(root, 'fixture', {}, threading.Lock(), permission_mode=mode)):
+                    with self.subTest(mode=mode, gate=type(gate).__name__):
+                        result = execute(root, gate, 'read', {'path': str(sample)},
+                                         state_dir=state.directory)
+                        self.assertTrue(result['ok'], result)
+                        if mode in ('build', 'plan'):
+                            result = execute(root, gate, 'write', {'path': str(sample), 'content': 'bad'},
+                                             state_dir=state.directory)
+                            self.assertFalse(result['ok'], result)
+            for gate in (Gate(root, permission_mode='yolo'),
+                         WebGate(root, 'fixture', {}, threading.Lock(), permission_mode='yolo')):
+                paths = (str(outside), '../outside.txt')
+                if _NATIVE_WINDOWS:
+                    paths += (str(sample) + ':stream', str(sample) + '.', str(sample) + ' ',
+                              str(root / 'CON.txt'), str(root / 'COM1.log'),
+                              root.drive + 'notes.txt')
+                for name in paths:
+                    for tool, extra in (('read', {}), ('list', {}),
+                                        ('glob', {'pattern': '*'}), ('grep', {'pattern': '.'}),
+                                        ('write', {'content': 'bad'}),
+                                        ('edit', {'old': 'kept', 'new': 'bad'})):
+                        with self.subTest(gate=type(gate).__name__, tool=tool, path=name):
+                            result = execute(root, gate, tool, {'path': name, **extra},
+                                             state_dir=state.directory)
+                            self.assertFalse(result['ok'], result)
+                            self.assertEqual(result['error_code'], 'permission_denied', result)
+            self.assertEqual(sample.read_text(encoding='utf-8'), 'kept')
+            self.assertEqual(outside.read_text(encoding='utf-8'), 'outside')
+            self.assertEqual(list(root.iterdir()), [sample])
+
+    @unittest.skipIf(_NATIVE_WINDOWS, 'native POSIX filenames')
+    def test_macos_and_linux_do_not_apply_windows_filename_alias_rules(self):
+        from xueness.core import Gate, execute
+        from xueness.web import WebGate
+        with tempfile.TemporaryDirectory() as temporary:
+            base = Path(temporary)
+            root = base / 'workspace'
+            root.mkdir()
+            state = Store(base / 'state')
+            for name in ('NUL.txt', 'notes.txt:stream', 'notes.txt.', 'notes.txt '):
+                sample = root / name
+                sample.write_text('literal POSIX name', encoding='utf-8')
+                for gate in (Gate(root, permission_mode='yolo'),
+                             WebGate(root, 'fixture', {}, threading.Lock(), permission_mode='yolo')):
+                    with self.subTest(gate=type(gate).__name__, path=str(sample)):
+                        result = execute(root, gate, 'read', {'path': str(sample)},
+                                         state_dir=state.directory)
+                        self.assertTrue(result['ok'], result)
+                        self.assertEqual(result['output'], 'literal POSIX name')
+
     def test_windows_aliases_are_outside_the_workspace_and_macos_keeps_the_name(self):
         from xueness.bundled_plugins.files import builtin_tools, windows_paths
         with tempfile.TemporaryDirectory() as temporary:

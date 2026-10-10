@@ -51,8 +51,8 @@ MAX_GREP_PER_FILE = 20
 
 def path_in(root: Path, name: str) -> Path:
     if os.name == "nt":
-        from .windows_paths import windows_relative_alias
-        if windows_relative_alias(name):
+        from .windows_paths import windows_path_alias
+        if windows_path_alias(name):
             raise PermissionError("path outside workspace")
     target = (root / name).resolve()
     if not target.is_relative_to(root.resolve()):
