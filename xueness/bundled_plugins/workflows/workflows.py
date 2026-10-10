@@ -5,7 +5,7 @@ Command nodes hold a workspace lease; their argv is explicitly approved when
 starting the immutable plan. This is process control, not an OS sandbox.
 """
 from __future__ import annotations
-from contextlib import contextmanager
+from contextlib import ExitStack, contextmanager
 from concurrent.futures import ThreadPoolExecutor
 from ... import file_lock as fcntl
 from ...resources import replace_file
@@ -696,7 +696,8 @@ def _execute(store, record, spec):
 
 def drive(store, wid, executor=None):
     execute = executor or _execute
-    with store.lock(wid, '.runner'):
+    with ExitStack() as runner:
+        runner.enter_context(store.lock(wid, '.runner'))
         record = store.load(wid)
         if record['status'] != 'queued':
             return
@@ -754,14 +755,20 @@ def drive(store, wid, executor=None):
                         status = 'completed'
                     else:
                         status = 'failed'
-                    def settle(row):
-                        row.update(status=status)
-                        for n in row['nodes'].values():
-                            if n['status'] == 'pending' and status == 'failed':
-                                n['status'] = 'blocked'
-                        store.event(row, 'settled', status=status)
-                        if status not in ACTIVE:
-                            row['cache_fingerprint'] = workspace_fingerprint(row['root'], store.state)
-                    store.update(wid, settle)
-                    return
+                    break
                 time.sleep(.05)
+        # Join the executor before publishing a settled run. Hold the record
+        # lock until the runner lock is released, so readers cannot offer a
+        # resume while the previous owner still prevents it. A new launcher
+        # may acquire .runner now, but waits on this record lock before it can
+        # queue the next run.
+        with store.lock(wid):
+            row = store._load_unlocked(wid)
+            row.update(status=status, updated_at=time.time())
+            for n in row['nodes'].values():
+                if n['status'] == 'pending' and status == 'failed':
+                    n['status'] = 'blocked'
+            store.event(row, 'settled', status=status)
+            row['cache_fingerprint'] = workspace_fingerprint(row['root'], store.state)
+            store._save_unlocked(row)
+            runner.close()

@@ -6,6 +6,7 @@ import tempfile
 import threading
 import time
 import unittest
+from contextlib import contextmanager
 from unittest.mock import Mock, patch
 from pathlib import Path
 from xueness import resources
@@ -50,6 +51,65 @@ class WorkflowTests(unittest.TestCase):
         self.assertEqual(r['status'], 'completed')
         self.assertEqual((self.root/'count').read_text(), 'x')
         self.assertEqual(r['nodes']['second']['attempts'], 2)
+
+    def test_settled_status_waits_for_runner_release_and_allows_immediate_resume(self):
+        record = self.store.create({'nodes': [self.node('a')]}, self.root)
+        wid = record['id']
+        self.store.update(wid, lambda row: row.update(status='queued'))
+        releasing, release, reading, read_done = (threading.Event() for _ in range(4))
+        result, errors = [], []
+        original_lock = self.store.lock
+
+        @contextmanager
+        def delayed_release(*args, **kwargs):
+            with original_lock(*args, **kwargs):
+                try:
+                    yield
+                finally:
+                    if len(args) > 1 and args[1] == '.runner':
+                        releasing.set()
+                        if not release.wait(5):
+                            raise RuntimeError('test did not release runner')
+
+        def own():
+            try:
+                drive(self.store, wid, lambda *args: {'status': 'failed'})
+            except Exception as error:
+                errors.append(error)
+
+        def observe_and_resume():
+            reading.set()
+            try:
+                row = self.store.load(wid)
+                result.append(row['status'])
+                # Once the settled record is observable, the old owner's
+                # nonblocking lock must be available to an immediate resume.
+                with original_lock(wid, '.runner', blocking=False):
+                    self.store.update(wid, lambda row: row.update(status='queued'))
+            except Exception as error:
+                errors.append(error)
+            finally:
+                read_done.set()
+
+        owner = threading.Thread(target=own)
+        reader = threading.Thread(target=observe_and_resume)
+        with patch.object(self.store, 'lock', delayed_release):
+            owner.start()
+            try:
+                self.assertTrue(releasing.wait(5), 'owner never started releasing its lock')
+                reader.start()
+                self.assertTrue(reading.wait(5))
+                self.assertFalse(read_done.wait(.1), 'settled record was exposed before owner release')
+            finally:
+                release.set()
+                owner.join(5)
+                if reader.ident is not None:
+                    reader.join(5)
+        self.assertFalse(owner.is_alive())
+        self.assertFalse(reader.is_alive())
+        self.assertEqual(errors, [])
+        self.assertEqual(result, ['failed'])
+        self.assertEqual(self.store.load(wid)['status'], 'queued')
 
     def test_detached_cli_workflow_survives_its_short_lived_launcher(self):
         # CLI launchers exit as soon as the worker is queued. The detached
