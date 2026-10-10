@@ -32,6 +32,7 @@ def _windows_fold(text):
 
 @unittest.skipIf(os.name == 'nt', 'POSIX path semantics cannot be emulated by native Windows pathlib')
 class HostPathIdentityTests(unittest.TestCase):
+    @patch.object(write_lock.sys, "platform", "linux")
     def test_linux_keeps_case_and_rejects_siblings_and_dotdot(self):
         self.assertEqual(host_relative_to("/tmp/workspace/a/b", "/tmp/workspace"), "a/b")
         self.assertEqual(host_relative_to("/tmp/workspace", "/tmp/workspace"), ".")
@@ -48,6 +49,12 @@ class HostPathIdentityTests(unittest.TestCase):
     def test_macos_and_windows_fold_case_without_crossing_a_sibling(self):
         child = Path("/tmp/Workspace/Notes.md")
         parent = Path("/tmp/workspace")
+        # Check the actual POSIX host before the explicit platform matrix.
+        # In particular, a native Mac must not inherit a Linux-only expectation.
+        for wrapper in (host_path_contained, command_contained, skill_contained, hook_contained):
+            self.assertEqual(write_lock.sys.platform == "darwin", wrapper(child, parent))
+            self.assertFalse(wrapper(Path("/tmp/workspace-extra/Notes.md"), parent))
+            self.assertFalse(wrapper(Path("/tmp/Workspace/../secret"), parent))
         with self.subTest(platform="darwin"), patch.object(write_lock.sys, "platform", "darwin"):
             self.assertEqual(host_relative_to(child, parent), "Notes.md")
             self.assertTrue(host_path_contained(child, parent))
@@ -70,6 +77,7 @@ class HostPathIdentityTests(unittest.TestCase):
             self.assertIsNone(host_relative_to("/tmp/workspace/file", "/tmp/workspace"))
             self.assertFalse(host_path_contained("/tmp/workspace", "/tmp/workspace"))
 
+    @patch.object(write_lock.sys, "platform", "linux")
     def test_command_skill_and_hook_wrappers_follow_the_same_helper(self):
         child = Path("/tmp/Workspace/item")
         parent = Path("/tmp/workspace")
@@ -116,6 +124,7 @@ class HostPathIdentityTests(unittest.TestCase):
             windows = codes(patch.object(write_lock, "_fold_host_path", side_effect=_windows_fold))
             self.assertNotIn("hook_escapes_workspace", windows)
 
+    @patch.object(write_lock.sys, "platform", "linux")
     def test_plan_draft_matches_case_variants_only_on_macos_and_windows(self):
         sid = "ab" * 16
         path = Path("/state/plan-drafts") / (sid + ".md")
