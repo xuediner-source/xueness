@@ -53,18 +53,10 @@
   --xn-tab-size: 2;
   --xn-ui-font-size: 14px;
 
-  /* Geometry belongs to the shared workbench. Palette switches change colors,
-   * never the content width, text scale, caption inset or navigation layout. */
-  --claudex-sidebar-width: 288px;
-  --claudex-rail-width: 52px;
-  --claudex-drawer-width: min(calc(var(--claudex-sidebar-width) + var(--claudex-rail-width)), calc(100vw - 52px));
-  --claudex-titlebar-height: 44px;
+  /* Native caption scale stays stable across appearances. Claudex metrics
+   * below are consumed only by its scoped presentation components. */
   --xn-native-titlebar-height: 44px;
   --xn-native-titlebar-color: var(--bg-window);
-  --claudex-frame-inset: 4px;
-  --claudex-column: 736px;
-  --claudex-row-height: 32px;
-  --claudex-header-height: 44px;
   --claudex-frame: var(--bg-window);
   --claudex-rail-fg: var(--fg-muted);
   --claudex-rail-active: var(--bg-active);
@@ -285,6 +277,14 @@
  * Legacy `claude` settings are normalized by themeBoot. Both platforms read
  * these tokens for native chrome; no provider or permission depends on them. */
 :root[data-xn-palette="claudex"] {
+  --claudex-sidebar-width: 288px;
+  --claudex-rail-width: 52px;
+  --claudex-drawer-width: min(var(--xn-shell-sidebar-width, calc(var(--claudex-sidebar-width) + var(--claudex-rail-width))), calc(100vw - 52px));
+  --claudex-titlebar-height: 44px;
+  --claudex-frame-inset: 4px;
+  --claudex-column: 736px;
+  --claudex-row-height: 32px;
+  --claudex-header-height: 44px;
   --xn-native-titlebar-color: var(--claudex-frame);
   --claudex-frame: #eeeae4;
   --claudex-rail-fg: #6b655d;

@@ -61,6 +61,11 @@
   ],
   "features": [
     {
+      "id": "sessions.sidebar_resize",
+      "name": "侧栏宽度拖动调整、键盘控制与分外观记忆",
+      "nameEn": "Resizable sidebar with keyboard controls and per-appearance width memory"
+    },
+    {
       "id": "sessions.context_pane",
       "name": "会话信息侧栏：输出文件、工具来源与子智能体摘要",
       "nameEn": "Session context pane: output files, tool sources and subagent summary"
@@ -242,6 +247,7 @@
     }
   ],
   "frontendModules": [
+    "plugins/sessions/SidebarResizeHandle.tsx",
     "plugins/sessions/SessionContextPane.tsx",
     "plugins/sessions/ClaudexSidebar.tsx",
     "plugins/sessions/XuenessComposerToolbar.tsx",

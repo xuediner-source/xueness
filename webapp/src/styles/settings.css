@@ -342,7 +342,7 @@
 .xn-settings-view__frame {
   box-sizing: border-box;
   width: 100%;
-  max-width: 896px;
+  max-width: 720px;
   min-height: 100%;
   margin: 0 auto;
   padding: 0 32px 40px;
@@ -363,10 +363,11 @@
   min-width: 0;
   margin: 0;
   color: var(--fg);
-  font-size: 30px;
-  line-height: 36px;
+  font-family: var(--font-sans);
+  font-size: 20px;
+  line-height: 28px;
   font-weight: 600;
-  letter-spacing: -0.035em;
+  letter-spacing: 0;
 }
 
 .xn-settings-view__description {
@@ -903,7 +904,7 @@
 @media (max-width: 700px) {
   .xn-settings-view__frame { padding-right: 20px; padding-left: 20px; }
   .xn-settings-view__header { margin-bottom: 22px; }
-  .xn-settings-view__header h1 { font-size: 25px; line-height: 32px; }
+  .xn-settings-view__header h1 { font-size: 20px; line-height: 28px; }
   .xn-setting-row { grid-template-columns: minmax(0, 1fr); align-items: start; gap: 10px; padding: 12px 14px; }
   .xn-setting-control { justify-content: flex-start; }
   .xn-settings-select-wrap,

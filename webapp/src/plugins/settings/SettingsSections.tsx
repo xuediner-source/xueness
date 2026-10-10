@@ -265,7 +265,7 @@ export function SettingsSections({
         />
         <SettingsRow
           label={tr("外观")}
-          description={tr("切换配色与材质。所有外观共用相同布局、字号、功能与运行设置。")}
+          description={tr("选择经典 Xueness 或 Claudex 工作台样式。两种外观共用功能、模型配置和运行设置。")}
           control={<AppearancePicker value={values.colorPalette} disabled={!onUpdateSetting || saving} onChange={(next) => { void update("colorPalette", next); }} />}
         />
         <SettingsRow

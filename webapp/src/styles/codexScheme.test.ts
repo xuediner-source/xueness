@@ -13,9 +13,13 @@ test("Claudex 外观样式层最后加载，才能覆盖其余工作台样式", 
   assert.equal(imports.at(-1), "./styles/claudex-scheme.css");
 });
 
-test("共享工作台样式不由外观选择控制布局", () => {
-  assert.doesNotMatch(strip(css), /data-xn-palette/);
-  assert.match(css, /html \.xn-shell-layout/);
+test("Claudex 工作台样式仅作用于所选外观，经典样式不会被覆盖", () => {
+  const sidebar = readFileSync(resolve(process.cwd(), 'src/plugins/sessions/ClaudexSidebar.css'), 'utf8');
+  for (const source of [css, sidebar]) {
+    const selectors = strip(source).split(/[{}]/).filter(part => part.includes('html'));
+    assert.ok(selectors.length > 0);
+    for (const selector of selectors) assert.doesNotMatch(selector, /html(?!\[data-xn-palette="claudex"\])/);
+  }
 });
 
 test("Claudex 外观样式层只用设计令牌，不写死十六进制颜色", () => {
@@ -23,7 +27,7 @@ test("Claudex 外观样式层只用设计令牌，不写死十六进制颜色", 
 });
 
 test("Claudex 外观：紧凑侧栏与行高，对话与输入框共用阅读栏", () => {
-  assert.match(css, /\.xn-shell-sidebar \{ width: calc\(var\(--claudex-sidebar-width\) \+ var\(--claudex-rail-width\)\)/);
+  assert.match(css, /\.xn-shell-sidebar \{ width: var\(--xn-shell-sidebar-width, calc\(var\(--claudex-sidebar-width\) \+ var\(--claudex-rail-width\)\)\)/);
   assert.match(css, /\.xn-sidebar-action \{[^}]*height: var\(--claudex-row-height\)/);
   assert.match(css, /\.xn-shell-nav__link \{[^}]*height: var\(--claudex-row-height\)/);
   for (const selector of [".xn-timeline-stream", ".xn-composer-region--docked", ".xn-lightweight-composer", ".xn-hero__composer"]) {

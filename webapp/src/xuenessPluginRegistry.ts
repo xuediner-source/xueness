@@ -23,7 +23,7 @@ export type PluginPanel =
   | "subagents";
 
 export const XUENESS_PLUGIN_REGISTRY = {
-  sessions: { name: "会话", description: "会话列表、Agent 对话与历史分叉", panels: ["chat"] },
+  sessions: { name: "会话", description: "会话列表、侧栏宽度调整、Agent 对话与历史分叉", panels: ["chat"] },
   files: { name: "文件", description: "工作区文件、改动和目录浏览", panels: ["files", "changes", "directory"] },
   git: { name: "Git", description: "工作区状态、差异和提交记录", panels: ["git"] },
   providers: { name: "供应商", description: "模型配置、模型发现、本地轻量模式与接口兼容诊断", panels: ["providers"] },

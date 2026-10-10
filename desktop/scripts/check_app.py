@@ -62,20 +62,23 @@ with tempfile.TemporaryDirectory(prefix='xueness-app-check-') as temporary:
     if sys.platform in ('darwin', 'win32'):
         assert state.get('titlebarPlatform') == ('macos' if sys.platform == 'darwin' else 'windows'), state
         insets = state.get('titlebarInsets', {})
-        # The shared caption hides the duplicate wordmark. Navigation, rather
-        # than the hidden brand's zero rect, must clear the native controls.
-        assert insets.get('brandLeft') == 0, state
         if sys.platform == 'darwin':
-            assert 10 <= insets.get('actionsRight', 0) < 30, state
+            assert insets.get('brandLeft', 0) >= 78 and 10 <= insets.get('actionsRight', 0) < 30, state
             assert any(label in state.get('dockMenuLabels', []) for label in ('任务与项目', 'Tasks and projects')), state
             assert state.get('dockTaskPopupReady') is True, state
         else:
-            assert insets.get('actionsRight', 0) >= 148, state
+            assert 10 <= insets.get('brandLeft', 0) < 30 and insets.get('actionsRight', 0) >= 148, state
         appearances = state.get('appearanceChecks', [])
         assert len(appearances) == 4, state
         assert {(row['palette'], row['theme']) for row in appearances} == {
             (palette, theme) for palette in ('xueness', 'claudex') for theme in ('light', 'dark')}, state
         for row in appearances:
+            claudex = row['palette'] == 'claudex'
+            assert row['sidebarWidth'] == (340 if claudex else 270), row
+            assert row['sidebarRail'] is claudex and row['compactTasks'] is claudex, row
+            assert row['classicTasks'] is (not claudex), row
+            assert row['workspaceStrip'] is claudex and row['composerWorkspace'] is (not claudex), row
+            assert row['resizeHandle'] is True and row['titlebarHeight'] == 44, row
             assert row['nativeBackground'].lower() == row['chromeToken'].lower(), row
             assert row['meta'].lower() == row['windowBgToken'].lower() and row['nodeAccess'] is False, row
             if sys.platform == 'darwin':
@@ -88,6 +91,7 @@ with tempfile.TemporaryDirectory(prefix='xueness-app-check-') as temporary:
     if sys.platform in ('darwin', 'win32'):
         print('PASS: native window caption safe areas, workbench background theme and localized application menu')
         print('PASS: Claudex and Xueness light/dark native caption colors and renderer safe areas')
+        print('PASS: distinct classic/Claudex sidebars, home composers and resize handles in both native themes')
     if sys.platform == 'darwin':
         print('PASS: macOS Dock opens the shared production task popup')
     resources = executable.parent/'resources' if os.name == 'nt' else executable.parents[1]/'Resources'

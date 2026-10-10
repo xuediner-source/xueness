@@ -26,7 +26,6 @@ body { -webkit-font-smoothing:auto; }
 .xn-composer-workspace .xn-select>span { flex:initial; text-align:left; }
 .xn-composer-workspace>.xn-select:first-child { max-width:280px; }
 .xn-settings-view__header { min-height:36px; margin-bottom:32px; }
-.xn-settings-view__header h1 { font-size:30px; line-height:36px; font-weight:600; letter-spacing:-.025em; }
 .xn-settings-view__main { background:var(--bg-panel); border-radius:12px; }
 .xn-settings-view__frame:has(.xn-settings-general-locale) .xn-settings-view__header { margin-bottom:12px; }
 .xn-settings-controls { gap:32px; }

@@ -1,7 +1,7 @@
 /* Native workbench chrome: quiet surfaces, readable controls and bounded pages. */
-.xn-shell-layout { height: 100dvh; grid-template-columns: 270px minmax(0, 1fr); background: var(--bg-window, var(--bg)); }
+.xn-shell-layout { height: 100dvh; grid-template-columns: var(--xn-shell-sidebar-width, 270px) minmax(0, 1fr); background: var(--bg-window, var(--bg)); }
 .xn-shell-layout .xn-shell-main { height: 100dvh; outline: none; padding: 0 6px 6px 0; box-sizing: border-box; background: var(--bg-window, var(--bg)); }
-.xn-shell-layout .xn-shell-sidebar { width: 270px; box-sizing: border-box; background: var(--bg-sidebar, var(--sidebar-bg)); }
+.xn-shell-layout .xn-shell-sidebar { width: var(--xn-shell-sidebar-width, 270px); box-sizing: border-box; background: var(--bg-sidebar, var(--sidebar-bg)); }
 .xn-shell-layout .xn-shell-sidebar__head { display: flex; align-items: center; justify-content: space-between; padding: 10px 10px 8px 18px; min-height: 48px; box-sizing: border-box; }
 .xn-shell-layout .xn-shell-sidebar__head-actions { display: flex; align-items: center; gap: 2px; }
 .xn-shell-layout .xn-sidebar-brand { letter-spacing: -.02em; font-size: 14px; }
@@ -120,15 +120,15 @@
 
 /* Native desktop window chrome spans the app and reserves its own top row. */
 .xn-shell-layout--desktop-titlebar {
-  grid-template-rows: 40px minmax(0, 1fr);
-  grid-template-columns: 270px minmax(0, 1fr);
+  grid-template-rows: var(--xn-native-titlebar-height, 44px) minmax(0, 1fr);
+  grid-template-columns: var(--xn-shell-sidebar-width, 270px) minmax(0, 1fr);
 }
 .xn-shell-layout--desktop-titlebar .xn-shell-layout__titlebar {
   grid-column: 1 / -1;
   grid-row: 1;
   z-index: 50;
   min-width: 0;
-  height: 40px;
+  height: var(--xn-native-titlebar-height, 44px);
   overflow: visible;
   background: var(--bg-window, #171717);
 }
@@ -148,6 +148,7 @@
 
 @media (max-width: 900px) {
   .xn-shell-layout--desktop-titlebar { grid-template-rows: 40px minmax(0, 1fr); grid-template-columns: minmax(0, 1fr); }
+  .xn-shell-layout--desktop-titlebar .xn-shell-layout__titlebar { height: 40px; }
   .xn-shell-layout--desktop-titlebar .xn-shell-sidebar { grid-row: 2; inset-block-start: 40px; height: calc(100dvh - 40px); }
   .xn-shell-layout--desktop-titlebar .xn-shell-main { grid-column: 1; grid-row: 2; height: auto; }
   .xn-shell-layout--desktop-titlebar .xn-shell-sidebar-toggle { display: none; }

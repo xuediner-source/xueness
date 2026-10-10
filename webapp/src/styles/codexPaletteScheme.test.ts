@@ -14,11 +14,15 @@ const block = (selector: string) => {
 const names = (body: string) => [...body.matchAll(/(--[\w-]+)\s*:/g)].map(match => match[1]);
 const value = (body: string, name: string) => new RegExp(`${name}:\\s*([^;]+);`).exec(body)?.[1]?.trim() ?? "";
 
-test("两种外观共用布局，配色覆盖中不允许存在尺寸令牌", () => {
-  assert.doesNotMatch(strip(polish), /data-xn-palette/);
-  const palette = block(':root[data-xn-palette="claudex"]') + block('.dark[data-xn-palette="claudex"]');
-  for (const name of names(palette)) assert.doesNotMatch(name, /(?:width|height|inset|column|row-height|drawer-width)$/, name);
+test("两种外观保留独立布局，原生窗口栏与设置页阅读比例稳定", () => {
+  assert.match(strip(polish), /html\[data-xn-palette="claudex"\] \.xn-shell-layout/);
+  assert.doesNotMatch(strip(polish), /(?:^|\n)\s*html \.xn-shell-layout/);
+  assert.equal(value(block(':root[data-xn-palette="claudex"]'), '--claudex-sidebar-width'), '288px');
+  assert.equal(value(block(':root[data-xn-palette="claudex"]'), '--claudex-rail-width'), '52px');
   assert.equal(value(block(":root"), "--xn-native-titlebar-height"), "44px");
+  const settings = strip(readFileSync(resolve(process.cwd(), 'src/styles/settings.css'), 'utf8'));
+  assert.match(settings, /\.xn-settings-view__frame\s*\{[^}]*max-width:\s*720px/);
+  assert.match(settings, /\.xn-settings-view__header h1\s*\{[^}]*font-size:\s*20px/);
 });
 
 test("默认 :root / .dark 几何令牌与原版一致，且不含 Claudex 外观专用令牌", () => {

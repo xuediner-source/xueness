@@ -4,7 +4,7 @@
   align-items: center;
   gap: 8px;
   width: 100%;
-  height: 40px;
+  height: var(--xn-native-titlebar-height, 44px);
   padding: 0 10px;
   color: var(--fg, #f4f4f5);
   background: var(--bg-window, #171717);
@@ -53,6 +53,10 @@
 }
 
 .xn-desktop-titlebar__spacer { flex: 1 1 auto; min-width: 12px; }
+
+@media (max-width: 900px) {
+  .xn-desktop-titlebar { height: 40px; }
+}
 
 .xn-desktop-titlebar__history button,
 .xn-desktop-titlebar__actions > button,

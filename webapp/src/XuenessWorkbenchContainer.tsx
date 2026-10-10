@@ -100,7 +100,7 @@ import {
 import { ForkSessionDialog } from "./plugins/sessions";
 import { SessionQueue } from "./plugins/sessions/SessionQueue";
 import { editQueuedMessage } from "./plugins/sessions/queueApi";
-import { Approvals, Composer, WorkbenchHeader, type ComposerDraftState } from "./plugins/sessions/XuenessWorkbenchView";
+import { Approvals, Composer, WorkbenchHeader, heroGreeting, type ComposerDraftState } from "./plugins/sessions/XuenessWorkbenchView";
 import { XuenessStartPage, type StartPageAction } from "./plugins/sessions/XuenessStartPage";
 import { XuenessCloneDialog } from "./plugins/git/XuenessCloneDialog";
 import { loadWorkspaceCatalog, type RecentWorkspaceDirectory } from "./xuenessWorkspaces";
@@ -120,6 +120,7 @@ import { CodeDisplayProvider } from "./ui/CodeContent";
 import { SHORTCUT_COMMANDS, resolveShortcutBinding, matchesShortcut, hasGlobalShortcutConflict, type ShortcutEventLike } from "./xuenessShortcutCommands";
 import { Shell, SidebarActions, type SidebarAction } from "./XuenessShell";
 import { ClaudexSidebarHeader, ClaudexSidebarRail } from "./plugins/sessions/ClaudexSidebar";
+import { SidebarResizeHandle, useSessionSidebarWidth } from './plugins/sessions/SidebarResizeHandle';
 import { SessionContextPane } from './plugins/sessions/SessionContextPane';
 import { TaskTodos } from "./plugins/sessions/XuenessTimeline";
 import { ZCodeConversation } from "./plugins/sessions/ZCodeConversation";
@@ -143,7 +144,7 @@ import {
 import { CapabilitiesPanel, type CapabilitySectionProps } from "./XuenessCapabilitiesPanel";
 import { XuenessCapabilityDialog } from "./XuenessCapabilityDialog";
 import { shouldDismissModalOnEscape, useModalFocusScope } from "./plugins/shared";
-import { applyDocumentTheme, applyDocumentColorPalette } from "./plugins/settings/themeBoot";
+import { applyDocumentTheme, applyDocumentColorPalette, normalizeColorPalette } from "./plugins/settings/themeBoot";
 import { FeatureUnavailable, XuenessPluginManager, XuenessPluginSettingsPanel } from "./XuenessPluginManager";
 import {
   CAPABILITY_PLUGIN_BY_KIND,
@@ -2227,9 +2228,13 @@ export function XuenessWorkbenchContainer() {
   }, [sessions, stoppingSessions, runRequestSessions, activeId, session?.id, session?.status, session?.streaming?.status]);
 
   const displayTimelineRows = useMemo(() => withAssistantStream(rows, session?.streaming), [rows, session?.streaming]);
+  const claudexAppearance = normalizeColorPalette(settingsLoading && typeof document !== 'undefined'
+    ? document.documentElement.dataset.xnPalette : settingsValues.colorPalette) === 'claudex';
+  const sidebarAppearance = claudexAppearance ? 'claudex' : 'xueness';
+  const sidebarSizing = useSessionSidebarWidth(sidebarAppearance, isPluginEffective('sessions'));
   const sidebarActions: SidebarAction[] = [
     ...(isPluginEffective("sessions") ? [
-      { id: "new-task", icon: <SquarePen size={16} />, label: tr("新聊天"), shortcut: resolveShortcutBinding("new-session", (settingsValues.bindings && typeof settingsValues.bindings === "object" ? settingsValues.bindings : {}) as Record<string, string>), onClick: startNewTask },
+      { id: "new-task", icon: claudexAppearance ? <SquarePen size={16} /> : <IconNewTask size={16} />, label: tr(claudexAppearance ? "新聊天" : "新建任务"), shortcut: resolveShortcutBinding("new-session", (settingsValues.bindings && typeof settingsValues.bindings === "object" ? settingsValues.bindings : {}) as Record<string, string>), onClick: startNewTask },
       { id: "search", icon: <IconSearch size={15} />, label: tr("搜索"), shortcut: resolveShortcutBinding("command-palette", (settingsValues.bindings && typeof settingsValues.bindings === "object" ? settingsValues.bindings : {}) as Record<string, string>), onClick: (event: React.MouseEvent<HTMLButtonElement>) => openCommandPalette(event.currentTarget) },
     ] : []),
     ...(isPluginEffective("automation") ? [{ id: "automations", icon: <CalendarClock size={16} />, label: tr("自动化"), onClick: () => setPanel("automations") }] : []),
@@ -2281,24 +2286,27 @@ export function XuenessWorkbenchContainer() {
       navigationKey={`${panel}:${activeId ?? ""}:${commandOpen}:${workspacePicking}:${heroFocusTick}`}
       sidebarToggleToken={sidebarToggleToken}
       initialSidebarCollapsed={lightweightLayout}
+      sidebarWidth={sidebarSizing.width}
+      sidebarResize={isPluginEffective('sessions') && sidebarSizing.width !== undefined ? <SidebarResizeHandle
+        appearance={sidebarAppearance} width={sidebarSizing.width} min={sidebarSizing.limits.min} max={sidebarSizing.limits.max} onChange={sidebarSizing.onChange} /> : undefined}
       canGoBack={!busy && historyPosition.cursor > 0}
       canGoForward={!busy && historyPosition.cursor < historyPosition.length - 1}
       onGoBack={() => navigateHistory(-1)} onGoForward={() => navigateHistory(1)}
-      sidebarRail={panel !== 'settings' ? <ClaudexSidebarRail
+      sidebarRail={claudexAppearance && panel !== 'settings' ? <ClaudexSidebarRail
         actions={railActions}
         secondaryActions={railSecondaryActions} moreActions={railMoreActions}
         activeId={panel === 'chat' && !activeId ? 'home' : panel}
         platform={resolveHostPlatform()} /> : undefined}
-      sidebarHeader={panel !== "settings" ? <ClaudexSidebarHeader
+      sidebarHeader={claudexAppearance && panel !== "settings" ? <ClaudexSidebarHeader
         search={sidebarActions.find(action => action.id === 'search')} platform={resolveHostPlatform()}
         menuActions={sidebarMenuActions} activity={liveSessions.filter(item => ['running','stopping','awaiting_user','needs_review','failed','provider_error'].includes(item.status)).slice(0,12)} onSelectSession={selectSession} /> : undefined}
       sidebar={panel === "settings" ? null : (
         <>
           <SidebarActions
-            actions={sidebarActions.filter(action => action.id === 'new-task')}
+            actions={claudexAppearance ? sidebarActions.filter(action => action.id === 'new-task') : sidebarActions}
           />
           {isPluginEffective("sessions") && <>
-          <XuenessTaskList sessions={liveSessions} activeId={activeId} busy={busy} compact
+          <XuenessTaskList sessions={liveSessions} activeId={activeId} busy={busy} compact={claudexAppearance}
             projectRoots={composerCatalog.roots.filter(root => root.path !== composerCatalog.isolatedRoot)}
             onAddProject={isPluginEffective("files") && isPluginEffective("settings") ? trigger => {
               if (busy) return;
@@ -2531,12 +2539,12 @@ export function XuenessWorkbenchContainer() {
             <div className="xn-hero__brand" aria-hidden="true">
               <IconXuenessMark size={34} className="xn-hero__brand-mark" />
             </div>
-            <h1 className="xn-hero__greeting">{tf("我们应该在 {0} 中做些什么？", [composerCatalog.roots.find(item => item.path === (draftRoot ?? composerCatalog.root))?.name ?? (draftRoot ?? composerCatalog.root)?.split(/[/\\]/u).filter(Boolean).pop() ?? "Xueness"])}</h1>
+            <h1 className="xn-hero__greeting">{claudexAppearance ? tf("我们应该在 {0} 中做些什么？", [composerCatalog.roots.find(item => item.path === (draftRoot ?? composerCatalog.root))?.name ?? (draftRoot ?? composerCatalog.root)?.split(/[/\\]/u).filter(Boolean).pop() ?? "Xueness"]) : heroGreeting(new Date())}</h1>
             <p className="xn-hero__hint">{tr("描述你想完成的事，Xueness 会在你的工作区里执行。")}</p>
           </div>
 
           <div className="xn-hero__composer">
-            <div className="xn-hero__workspace">{workspaceContext}<span className="xn-composer-workspace__host"><Monitor size={15} aria-hidden="true" />{choices.remote ? tr("SSH 工作区") : tr("此计算机")}</span></div>
+            {claudexAppearance && <div className="xn-hero__workspace">{workspaceContext}<span className="xn-composer-workspace__host"><Monitor size={15} aria-hidden="true" />{choices.remote ? tr("SSH 工作区") : tr("此计算机")}</span></div>}
             {runError && (
               <p role="alert" className="xn-run-error">{runError}</p>
             )}
@@ -2547,6 +2555,7 @@ export function XuenessWorkbenchContainer() {
                 platform={resolveHostPlatform()}
                 sendShortcut={settingsValues.sendShortcut === "mod-enter" ? "mod-enter" : "enter"}
                 variant="hero"
+                topContent={claudexAppearance ? undefined : workspaceContext}
                 inputRef={heroInputRef}
                 onSend={handleCreate}
                 disabled={busy || creatingSession || !commandRoot || !isPluginEffective("sessions")}

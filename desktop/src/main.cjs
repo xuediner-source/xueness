@@ -314,6 +314,14 @@ async function start() {
           meta: document.querySelector('meta[name="theme-color"]')?.content,
           historyLeft: history?.getBoundingClientRect().left,
           actionsRight: actions ? innerWidth - actions.getBoundingClientRect().right : null,
+          sidebarWidth: document.querySelector('#xn-shell-sidebar')?.getBoundingClientRect().width,
+          sidebarRail: !!document.querySelector('.xn-shell-sidebar--with-rail'),
+          compactTasks: !!document.querySelector('.xn-task-list__toolbar--compact'),
+          classicTasks: !!document.querySelector('.xn-task-list__segments'),
+          resizeHandle: !!document.querySelector('[data-testid=xn-sidebar-resizer]'),
+          titlebarHeight: document.querySelector('.xn-desktop-titlebar')?.getBoundingClientRect().height,
+          workspaceStrip: !!document.querySelector('.xn-hero__workspace'),
+          composerWorkspace: !!document.querySelector('.xn-hero .xn-composer__top-content'),
           nodeAccess: typeof window.require !== 'undefined' };
       })()`);
       if (typeof window.getBackgroundColor === 'function') {

@@ -114,10 +114,58 @@ try {
     await page.screenshot({ path: join(output, `${name}.png`), fullPage: true });
     report.views.push({ name, ...geometry });
   };
+  const openAppearance = async () => {
+    await page.getByRole('button', { name: '打开设置', exact: true }).click();
+    await page.getByTestId('xn-settings-nav-appearance').click();
+    await page.getByRole('radiogroup', { name: '外观', exact: true }).waitFor();
+    await page.waitForFunction(() => !document.querySelector('.xn-appearance-choice input')?.disabled);
+  };
+  const switchAppearance = async palette => {
+    const response = page.waitForResponse(item => item.url().endsWith('/api/settings/appearance') && item.request().method()==='POST');
+    void response.catch(() => {});
+    await page.getByRole('radiogroup', { name: '外观', exact: true }).locator(`.xn-appearance-choice:has(input[value="${palette}"])`).click();
+    assert.ok((await response).ok());
+    await page.waitForFunction(palette => (document.documentElement.dataset.xnPalette || 'xueness')===palette, palette);
+    await page.waitForFunction(() => !document.querySelector('.xn-appearance-choice input')?.disabled);
+    assert.equal((await api('/api/settings/appearance')).values.colorPalette, palette);
+  };
+  const assertPresentation = async (palette, expectedWidth) => {
+    await page.getByTestId(`xn-sidebar-item-${info.history}`).waitFor({state:'attached'});
+    const claudex = palette==='claudex';
+    assert.equal(await page.locator('.xn-shell-sidebar--with-rail').count(), claudex ? 1 : 0);
+    assert.equal(await page.locator('.xn-claudex-sidebar-head').count(), claudex ? 1 : 0);
+    assert.equal(await page.locator('.xn-task-list__toolbar--compact').count(), claudex ? 1 : 0);
+    assert.equal(await page.locator('.xn-task-list__segments').count(), claudex ? 0 : 1);
+    if (claudex) {
+      await page.getByRole('button', {name:'首页',exact:true}).waitFor();
+      await page.locator('.xn-task-list__recent').waitFor();
+      assert.equal(await page.locator('.xn-task-list .xn-shell-nav__time').count(),0);
+    } else {
+      await page.locator('.xn-sidebar-brand').waitFor();
+      for (const id of ['new-task','search','automations','marketplace']) await page.getByTestId(`xn-sidebar-action-${id}`).waitFor();
+      assert.ok(await page.locator('.xn-task-list .xn-shell-nav__time').count()>0);
+      assert.ok(await page.locator('.xn-task-list .xn-shell-nav__item-actions button').count()>0);
+    }
+    const geometry = await page.evaluate(() => ({
+      sidebar: document.querySelector('#xn-shell-sidebar').getBoundingClientRect().width,
+      fontSize: getComputedStyle(document.documentElement).getPropertyValue('--xn-ui-font-size').trim(),
+      bodyFont: getComputedStyle(document.body).fontSize,
+    }));
+    assert.equal(geometry.sidebar,expectedWidth ?? (claudex ? 340 : 270));
+    assert.equal(geometry.fontSize,'14px');
+    report.presentations ??= [];
+    report.presentations.push({palette,...geometry});
+    if (await page.getByTestId('xn-hero').count()) {
+      assert.equal(await page.locator('.xn-hero__workspace').count(),claudex ? 1 : 0);
+      assert.equal(await page.locator('.xn-hero__composer .xn-composer__top-content').count(),claudex ? 0 : 1);
+      if (claudex) await page.getByText('此计算机',{exact:true}).waitFor();
+    }
+  };
   await page.goto(base);
   await page.waitForSelector('.xn-shell-layout');
   await page.waitForFunction(() => document.documentElement.dataset.xnPalette==='claudex');
   await page.getByTestId(`xn-sidebar-item-${info.history}`).waitFor();
+  await assertPresentation('claudex');
   await snapshot('claudex-light-home');
   await page.getByRole('button', {name:'首页',exact:true}).waitFor();
   await page.locator('.xn-task-list__recent').waitFor();
@@ -229,7 +277,11 @@ try {
   assert.equal((await api('/api/settings/appearance')).values.colorPalette, 'xueness');
   await page.waitForFunction(() => !document.querySelector('.xn-appearance-choice input[value="xueness"]')?.disabled);
   const xuenessGeometry = await settingsGeometry();
-  assert.deepEqual(xuenessGeometry,claudexGeometry,'Appearance switches must preserve settings geometry');
+  for (const geometry of [xuenessGeometry,claudexGeometry]) {
+    assert.equal(geometry['.xn-settings-view__frame'].width,720);
+    assert.equal(geometry['.xn-settings-view__header h1'].fontSize,'20px');
+    assert.equal(geometry['.xn-settings-view__header h1'].lineHeight,'28px');
+  }
   report.appearanceGeometry={claudex:claudexGeometry,xueness:xuenessGeometry};
   await snapshot('xueness-appearance-settings');
   const savedClaudex = page.waitForResponse(response => response.url().endsWith('/api/settings/appearance') && response.request().method()==='POST');
@@ -260,12 +312,103 @@ try {
   assert.equal(await page.getByRole('button',{name:'会话信息',exact:true}).evaluate(el=>el===document.activeElement),true);
   report.interactions.push('live output/source context, source expansion, pane close and explicit file controls');
 
+  await page.getByTestId('xn-sidebar-action-new-task').click();
+  await page.getByTestId('xn-hero').waitFor();
+  const draft='外观切换时保留的草稿';
+  await page.locator('.xn-hero .xn-composer__input').fill(draft);
+  const modelBefore=await page.locator('.xn-composer-toolbar__model-trigger').innerText();
+  const permissionsBefore=await page.locator('.xn-composer-toolbar__left').innerText();
+  for (const palette of ['xueness','claudex','xueness']) {
+    await openAppearance();
+    await switchAppearance(palette);
+    await page.getByRole('button',{name:'返回工作区',exact:true}).click();
+    await page.getByTestId('xn-hero').waitFor();
+    await assertPresentation(palette);
+    assert.equal(await page.locator('.xn-hero .xn-composer__input').inputValue(),draft);
+    assert.equal(await page.locator('.xn-composer-toolbar__model-trigger').innerText(),modelBefore);
+    assert.equal(await page.locator('.xn-composer-toolbar__left').innerText(),permissionsBefore);
+    await snapshot(`${palette}-switched-home`);
+  }
+  await page.reload();
+  await page.getByTestId('xn-hero').waitFor();
+  await page.waitForFunction(()=>!document.documentElement.dataset.xnPalette);
+  await assertPresentation('xueness');
+  await snapshot('xueness-reloaded-home');
+  report.interactions.push('three live appearance switches: distinct sidebars/home, draft/model/permissions preserved, classic survives reload');
+
+  const sidebarWidth = () => page.getByTestId('xn-shell-sidebar').evaluate(node=>node.getBoundingClientRect().width);
+  const dragSidebar = async delta => {
+    const bounds=await page.getByTestId('xn-sidebar-resizer').boundingBox();
+    assert.ok(bounds);
+    await page.mouse.move(bounds.x+bounds.width/2,bounds.y+120);
+    await page.mouse.down();
+    await page.mouse.move(bounds.x+bounds.width/2+delta,bounds.y+120,{steps:8});
+    await page.mouse.up();
+  };
+  await dragSidebar(50);
+  assert.equal(await sidebarWidth(),320);
+  const savedWidths=await page.evaluate(()=>localStorage.getItem('xueness.sidebar-widths.v1'));
+  const cancelBounds=await page.getByTestId('xn-sidebar-resizer').boundingBox();
+  await page.mouse.move(cancelBounds.x+3,cancelBounds.y+120);await page.mouse.down();
+  await page.mouse.move(cancelBounds.x+53,cancelBounds.y+120,{steps:8});
+  await page.keyboard.press('Escape');await page.mouse.up();
+  assert.equal(await sidebarWidth(),320);
+  assert.equal(await page.evaluate(()=>localStorage.getItem('xueness.sidebar-widths.v1')),savedWidths);
+  await snapshot('xueness-resized-sidebar');
+  await page.reload();await page.getByTestId('xn-hero').waitFor();
+  await assertPresentation('xueness',320);
+  await openAppearance();await switchAppearance('claudex');
+  await page.getByRole('button',{name:'返回工作区',exact:true}).click();
+  await assertPresentation('claudex',340);
+  await dragSidebar(180);
+  assert.equal(await sidebarWidth(),520);
+  assert.equal(await page.locator('.xn-shell-sidebar__rail').evaluate(node=>node.getBoundingClientRect().width),52);
+  await snapshot('claudex-resized-sidebar');
+  await page.setViewportSize({width:940,height:900});
+  await page.waitForFunction(()=>document.querySelector('#xn-shell-sidebar')?.getBoundingClientRect().width===460);
+  await snapshot('claudex-resized-compact');
+  await page.setViewportSize({width:420,height:860});
+  await page.getByTestId('xn-sidebar-resizer').waitFor({state:'hidden'});
+  await page.setViewportSize({width:1280,height:900});
+  await page.waitForFunction(()=>document.querySelector('#xn-shell-sidebar')?.getBoundingClientRect().width===520);
+  await page.getByTestId('xn-sidebar-resizer').focus();
+  await page.keyboard.press('ArrowLeft');assert.equal(await sidebarWidth(),510);
+  await page.keyboard.press('Home');assert.equal(await sidebarWidth(),280);
+  await page.keyboard.press('End');assert.equal(await sidebarWidth(),560);
+  await page.keyboard.press('Enter');assert.equal(await sidebarWidth(),340);
+  await openAppearance();await switchAppearance('xueness');
+  await page.getByRole('button',{name:'返回工作区',exact:true}).click();
+  await assertPresentation('xueness',320);
+  await page.getByTestId('xn-sidebar-resizer').dblclick();
+  assert.equal(await sidebarWidth(),270);
+  await page.getByTestId('xn-sidebar-resizer').focus();
+  await page.keyboard.press('Home');assert.equal(await sidebarWidth(),220);
+  const minSidebar=await page.locator('.xn-shell-sidebar__body').evaluate(node=>({width:node.clientWidth,scroll:node.scrollWidth}));
+  assert.ok(minSidebar.scroll<=minSidebar.width+1,JSON.stringify(minSidebar));
+  await snapshot('xueness-minimum-sidebar');
+  await page.keyboard.press('Enter');assert.equal(await sidebarWidth(),270);
+  await page.getByRole('button',{name:'收起侧栏',exact:true}).first().click();
+  assert.equal(await page.getByTestId('xn-sidebar-resizer').isVisible(),false);
+  await page.getByTestId('xn-shell-sidebar-toggle').click();
+  await page.getByTestId('xn-sidebar-resizer').waitFor();
+  report.interactions.push('both sidebars: pointer drag, Escape cancellation, independent reload memory, viewport clamps, fixed rail, keyboard bounds, double-click reset and collapse');
+  const widthsBeforeDisable=await page.evaluate(()=>localStorage.getItem('xueness.sidebar-widths.v1'));
+  await api('/api/plugins/sessions','POST',{enabled:false});
+  await page.reload();
+  await page.getByRole('button',{name:'打开设置',exact:true}).waitFor();
+  assert.equal(await page.getByTestId('xn-sidebar-resizer').count(),0);
+  assert.equal(await page.evaluate(()=>localStorage.getItem('xueness.sidebar-widths.v1')),widthsBeforeDisable);
+  await api('/api/plugins/sessions','POST',{enabled:true});
+  await page.reload();await page.getByTestId('xn-sidebar-resizer').waitFor();
+  report.interactions.push('sessions plugin disabled: resize handle removed and presentation preferences unchanged');
+
   for (const palette of ['claudex', 'xueness']) for (const theme of ['light', 'dark']) {
     await api('/api/settings/appearance', 'POST', { values: { colorPalette: palette, theme } });
     await page.reload();
     await select(info.question);
     await page.getByRole('button', { name: '继续任务', exact: true }).waitFor();
     await page.waitForFunction(({palette,theme}) => (document.documentElement.dataset.xnPalette || 'xueness')===palette && document.documentElement.dataset.xnTheme===theme, {palette,theme});
+    await assertPresentation(palette);
     await snapshot(`${palette}-${theme}-conversation`);
     if (palette === 'claudex' && theme === 'light') {
       await page.waitForFunction(() => document.querySelector('.xn-composer-toolbar__model-trigger')?.textContent.includes('Bonsai 27B'));
@@ -283,23 +426,24 @@ try {
     await page.waitForFunction(() => document.querySelector('.xn-shell-main')?.getBoundingClientRect().width >= innerWidth - 20);
     assert.equal(await page.getByRole('button', { name: '继续任务', exact: true }).isVisible(), true);
     await snapshot(`${palette}-${theme}-narrow`);
-    if (palette === 'claudex' && theme === 'light') {
+    if (theme === 'light') {
       const toggle = page.getByTestId('xn-shell-sidebar-toggle');
       await toggle.click();
       await page.getByRole('dialog', { name: '侧边栏导航', exact: true }).waitFor();
-      await snapshot('claudex-light-narrow-sidebar');
+      await snapshot(`${palette}-light-narrow-sidebar`);
       const placement = await page.evaluate(() => {
         const drawer = document.querySelector('#xn-shell-sidebar').getBoundingClientRect();
         const button = document.querySelector('[data-testid="xn-shell-sidebar-toggle"]').getBoundingClientRect();
         return { drawerRight: drawer.right, buttonLeft: button.left, buttonRight: button.right, width: innerWidth };
       });
-      assert.ok(placement.buttonLeft >= placement.drawerRight && placement.buttonRight <= placement.width, JSON.stringify(placement));
+      assert.ok(placement.buttonRight <= placement.width, JSON.stringify(placement));
+      if (palette==='claudex') assert.ok(placement.buttonLeft >= placement.drawerRight, JSON.stringify(placement));
       await page.getByTestId('xn-sidebar-action-search').click();
       await page.getByRole('dialog', { name: '命令面板', exact: true }).waitFor();
       await page.keyboard.press('Escape');
       await page.waitForFunction(() => document.activeElement?.getAttribute('data-testid') === 'xn-shell-sidebar-toggle');
       assert.equal(await toggle.isVisible(), true);
-      report.interactions.push('narrow drawer placement, search dismissal and visible toggle focus return');
+      report.interactions.push(`${palette}: narrow drawer, search dismissal and visible toggle focus return`);
     }
     await page.setViewportSize({ width: 1280, height: 900 });
   }
@@ -317,16 +461,34 @@ try {
     nativeGeometry.push(geometry);
     await snapshot(`${palette}-desktop-chrome-settings`);
   }
-  assert.deepEqual(nativeGeometry[0],nativeGeometry[1]);
-  assert.equal(nativeGeometry[0].titlebar.height,44);
+  for (const geometry of nativeGeometry) {
+    assert.equal(geometry.titlebar.height,44);
+    assert.equal(geometry['.xn-settings-view__frame'].width,720);
+    assert.equal(geometry['.xn-settings-view__header h1'].fontSize,'20px');
+  }
   report.desktopAppearanceGeometry=nativeGeometry;
   await page.setViewportSize({width:420,height:860});
   assert.equal(await page.locator('.xn-desktop-titlebar').evaluate(node=>node.getBoundingClientRect().height),40);
   await snapshot('xueness-desktop-chrome-narrow-settings');
-  report.interactions.push('desktop captions and settings geometry: identical palettes, 44px wide and 40px narrow');
+  report.interactions.push('desktop captions and shared reading scale: 720px settings, 20px headings, 44px wide / 40px narrow captions');
   assert.deepEqual(report.pageErrors, []);
   assert.deepEqual(report.externalRequests, []);
   console.log(`PASS: Claudex and Xueness built UI, ${report.views.length} views, ${report.interactions.length} interaction groups; no model runs.`);
+} catch (error) {
+  report.failure=String(error);
+  if (browser) {
+    const failedPage=browser.contexts()[0]?.pages()[0];
+    if (failedPage) {
+      await failedPage.screenshot({path:join(output,'failure.png')});
+      report.failureLayout=await failedPage.evaluate(()=>Object.fromEntries(['.xn-shell-layout','#xn-shell-sidebar','.xn-shell-sidebar__sheet'].map(selector=>{
+        const node=document.querySelector(selector);if(!node)return [selector,null];
+        const css=getComputedStyle(node),rect=node.getBoundingClientRect();
+        return [selector,{class:node.className,width:rect.width,height:rect.height,display:css.display,grid:css.gridTemplateColumns,
+          sidebar:css.getPropertyValue('--xn-shell-sidebar-width'),drawer:css.getPropertyValue('--claudex-drawer-width')}];
+      })));
+    }
+  }
+  throw error;
 } finally {
   await writeFile(join(output, 'ui-report.json'), JSON.stringify(report, null, 2));
   await browser?.close();

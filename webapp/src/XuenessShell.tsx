@@ -37,6 +37,9 @@ export type ShellProps = {
    * scrolling task sheet without changing any navigation capability. */
   sidebarRail?: React.ReactNode;
   sidebarHeader?: React.ReactNode;
+  /** Plugin-owned resize control and selected width; shell only lays them out. */
+  sidebarResize?: React.ReactNode;
+  sidebarWidth?: number;
   /** Navigation changes dismiss a narrow drawer, including keyboard actions. */
   navigationKey?: string;
   sidebarToggleToken?: number;
@@ -58,6 +61,8 @@ export function Shell({
   sidebarFooter,
   sidebarRail,
   sidebarHeader,
+  sidebarResize,
+  sidebarWidth,
   navigationKey,
   sidebarToggleToken = 0,
   initialSidebarCollapsed = false,
@@ -177,6 +182,7 @@ export function Shell({
       className={`xn-shell-layout ${titlebar ? "xn-shell-layout--desktop-titlebar" : ""} ${titlebar && !sidebar ? "xn-shell-layout--no-sidebar" : ""} ${narrow && sidebarOpen ? "xn-shell-layout--sidebar-open" : ""} ${!narrow && sidebarCollapsed ? "xn-shell-layout--sidebar-collapsed" : ""}`}
       data-testid="xn-shell"
       data-sidebar-open={sidebarOpen}
+      style={sidebarWidth === undefined ? undefined : { '--xn-shell-sidebar-width': `${sidebarWidth}px` } as React.CSSProperties}
     >
       {titlebar && <div className="xn-shell-layout__titlebar" data-testid="xn-shell-titlebar-host">{titlebar}</div>}
       {sidebar && (
@@ -246,6 +252,7 @@ export function Shell({
             </div>
           )}
           </div>
+          {!narrow && expanded && sidebarResize}
         </aside>
       )}
 
