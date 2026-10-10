@@ -298,12 +298,20 @@ async function start() {
       })()`);
       await window.loadURL(`${origin}/?xuenessDesktop=1`);
       const appearance = await window.webContents.executeJavaScript(`(async () => {
+        let settled = false;
         for (let n=0;n<100;n++) {
+          const sidebar = document.querySelector('#xn-shell-sidebar');
           if (document.querySelector('[data-testid=xn-shell] [data-testid=xn-sidebar-action-new-task]')
               && (document.documentElement.dataset.xnPalette || 'xueness') === ${JSON.stringify(palette)}
-              && document.documentElement.dataset.xnTheme === ${JSON.stringify(theme)}) break;
+              && document.documentElement.dataset.xnTheme === ${JSON.stringify(theme)}
+              // Cached document colors precede React settings and sidebar sizing.
+              && sidebar && Math.abs(sidebar.getBoundingClientRect().width - ${palette === 'claudex' ? 340 : 270}) < 0.1) {
+            settled = true;
+            break;
+          }
           await new Promise(resolve => setTimeout(resolve,100));
         }
+        if (!settled) throw new Error('Appearance fixture sidebar did not settle');
         const root = document.documentElement;
         const css = getComputedStyle(root);
         const history = document.querySelector('.xn-desktop-titlebar__history button');
