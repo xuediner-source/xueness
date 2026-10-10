@@ -12,6 +12,7 @@ import time
 import unittest
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+from unittest import mock
 
 from xueness.core import Gate, Store, run
 from xueness.provider import AnthropicMessages, OpenAICompatible
@@ -74,6 +75,41 @@ class CallbackTests(unittest.TestCase):
 
 
 class WatchTests(unittest.TestCase):
+    def test_deadline_interrupts_the_owned_socket_handle(self):
+        from xueness.bundled_plugins.providers.provider import _SocketDeadlineGuard
+        client, peer = _pair()
+        client.settimeout(3)
+        guard = _SocketDeadlineGuard(time.monotonic() + 0.2)
+        guard.register(client)
+        started = time.monotonic()
+        try:
+            try:
+                data = client.recv(16)
+                self.assertEqual(data, b'')
+            except OSError:
+                pass
+            self.assertLess(time.monotonic() - started, 1.0)
+        finally:
+            guard.close()
+            client.close()
+            peer.close()
+
+    def test_posix_ssl_socket_uses_an_owned_raw_duplicate(self):
+        from xueness.bundled_plugins.providers import cancel_watch
+        ssl_socket = mock.Mock(family=socket.AF_INET, type=socket.SOCK_STREAM, proto=0)
+        ssl_socket.dup.side_effect = NotImplementedError
+        ssl_socket.fileno.return_value = 321
+        duplicate = mock.Mock()
+        binding = bind_provider_cancel(lambda: False)
+        try:
+            with mock.patch.object(cancel_watch.os, 'name', 'posix'), \
+                    mock.patch.object(cancel_watch.socket, 'fromfd', return_value=duplicate) as fromfd:
+                binding.watch.attach(_SocketResponse(ssl_socket))
+            fromfd.assert_called_once_with(321, socket.AF_INET, socket.SOCK_STREAM, 0)
+        finally:
+            unbind_provider_cancel(binding)
+        duplicate.close.assert_called_once()
+
     def _read(self, client, callback):
         """Bind on the reading thread. A new thread does not inherit the probe."""
         client.settimeout(3)

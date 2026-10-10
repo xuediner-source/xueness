@@ -30,6 +30,7 @@ def _windows_fold(text):
         return _ORIGINAL_FOLD(text)
 
 
+@unittest.skipIf(os.name == 'nt', 'POSIX path semantics cannot be emulated by native Windows pathlib')
 class HostPathIdentityTests(unittest.TestCase):
     def test_linux_keeps_case_and_rejects_siblings_and_dotdot(self):
         self.assertEqual(host_relative_to("/tmp/workspace/a/b", "/tmp/workspace"), "a/b")
@@ -137,6 +138,31 @@ class HostPathIdentityTests(unittest.TestCase):
             self.assertTrue(policy.matches(os.fspath(upper)))
             self.assertFalse(policy.matches("/state/plan-drafts"))
             self.assertFalse(policy.matches(os.fspath(path) + ".bak"))
+
+
+@unittest.skipUnless(os.name == 'nt', 'native Windows path identity')
+class NativeWindowsHostPathIdentityTests(unittest.TestCase):
+    def test_containment_wrappers_ignore_case_but_refuse_siblings_and_traversal(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            parent = Path(temporary) / 'Workspace'
+            child = parent / 'Notes.md'
+            variant = Path(str(child).upper())
+            for wrapper in (host_path_contained, command_contained, skill_contained, hook_contained):
+                self.assertTrue(wrapper(variant, parent))
+                self.assertFalse(wrapper(parent.with_name('Workspace-extra') / 'Notes.md', parent))
+                self.assertFalse(wrapper(parent / '..' / 'secret', parent))
+            self.assertEqual(host_relative_to(variant, parent), 'NOTES.MD')
+
+    def test_absolute_plan_draft_case_variants_match_only_the_same_file(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            path = Path(temporary) / 'plan-drafts' / ('ab' * 16 + '.md')
+            policy = DraftPolicy(path)
+            self.assertTrue(policy.matches(str(path)))
+            self.assertTrue(policy.matches(str(path).upper()))
+            self.assertFalse(policy.matches(str(path) + '.bak'))
+            self.assertFalse(policy.matches(str(path.parent)))
+            self.assertFalse(policy.matches(path.name))
+            self.assertFalse(policy.matches(str(path.parent / '..' / 'secret.md')))
 
 
 if __name__ == "__main__":

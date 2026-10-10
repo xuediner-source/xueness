@@ -2525,7 +2525,7 @@ export function XuenessWorkbenchContainer() {
                   topContent={workspaceContext}
                 inputRef={heroInputRef}
                 onSend={handleCreate}
-                disabled={busy || creatingSession || !isPluginEffective("sessions")}
+                disabled={busy || creatingSession || !commandRoot || !isPluginEffective("sessions")}
                 sendDisabled={!composerModelReady || composerCatalogLoading}
                 sendDisabledReason={composerSendDisabledReason}
                 running={composerRunning}

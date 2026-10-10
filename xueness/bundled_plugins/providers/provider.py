@@ -252,12 +252,22 @@ class _NoRedirect(urllib.request.HTTPRedirectHandler):
         raise urllib.error.URLError(f"provider redirect blocked ({code})")
 
 
-def _interrupt_socket(sock):
-    """Shut down a duplicated provider socket, suppressing cleanup errors."""
+def _interrupt_socket(sock, *, blocked_socket=None):
+    """Interrupt an owned request, suppressing cleanup errors.
+
+    Winsock shutdown does not wake a select/recv already waiting on another
+    handle. Close the request's original native socket on Windows as well;
+    socket.close() alone can defer that close while HTTP's SocketIO owns it.
+    """
     try:
         sock.shutdown(socket.SHUT_RDWR)
     except OSError:
         pass
+    if os.name == 'nt' and blocked_socket is not None:
+        try:
+            socket.SocketType.close(blocked_socket)
+        except (OSError, TypeError):
+            pass
     try:
         sock.close()
     except OSError:
@@ -271,8 +281,8 @@ class _SocketDeadlineGuard:
     response object, so body-level deadline checks alone cannot bound a peer
     that trickles headers. The watchdog only shuts down registered sockets; it
     never reads provider data. It is cancelled and joined before the call
-    returns, and it keeps duplicated descriptors so urllib may close its own
-    socket reference without disabling the deadline.
+    returns. POSIX keeps duplicated descriptors; Windows keeps live socket
+    objects and closes their original handles to wake outstanding reads.
     """
 
     def __init__(self, deadline):
@@ -289,6 +299,16 @@ class _SocketDeadlineGuard:
         return max(0.0, self.deadline - time.monotonic())
 
     def register(self, sock):
+        # An extra Winsock handle prevents closing the original from waking a
+        # blocked read. Keep its object alive without making another handle.
+        if os.name == 'nt':
+            with self._lock:
+                close_now = self._expired
+                if not close_now:
+                    self._sockets.append((None, sock))
+            if close_now:
+                _interrupt_socket(sock, blocked_socket=sock)
+            return
         try:
             duplicate = sock.dup()
         except (OSError, NotImplementedError):
@@ -299,7 +319,7 @@ class _SocketDeadlineGuard:
             if self._expired:
                 close_now = True
             else:
-                self._sockets.append(duplicate)
+                self._sockets.append((duplicate, sock))
                 close_now = False
         if close_now:
             _interrupt_socket(duplicate)
@@ -308,15 +328,17 @@ class _SocketDeadlineGuard:
         with self._lock:
             self._expired = True
             sockets = list(self._sockets)
-        for sock in sockets:
-            _interrupt_socket(sock)
+        for duplicate, original in sockets:
+            _interrupt_socket(duplicate or original, blocked_socket=original)
 
     def close(self):
         self._timer.cancel()
         self._timer.join()
         with self._lock:
             sockets, self._sockets = self._sockets, []
-        for sock in sockets:
+        for sock, _original in sockets:
+            if sock is None:
+                continue
             try:
                 sock.close()
             except OSError:
@@ -424,6 +446,8 @@ class _DeadlineHTTPSConnection(_DeadlineConnectionMixin, http.client.HTTPSConnec
         server_hostname = self._tunnel_host or self.host
         self.sock = self._context.wrap_socket(self.sock, server_hostname=server_hostname)
         if self._deadline_guard is not None:
+            if os.name == 'nt':
+                self._deadline_guard.register(self.sock)
             # The raw TCP descriptor was duplicated before wrapping; duplicating
             # an SSLSocket is unsupported and unnecessary for shutdown.
             self.sock.settimeout(self._remaining())

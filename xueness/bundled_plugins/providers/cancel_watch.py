@@ -5,9 +5,11 @@ here starts unless ``bind_provider_cancel`` installed a callback in this
 context. With no callback, ``read`` / ``readline`` / ``read1`` call the
 response object directly and do not start a thread.
 
-The probe runs on one joined daemon thread and only shuts down a duplicate
-of a socket this request already holds, through the same ``_interrupt_socket``
-helper the deadline guard uses. Header waits stay on the existing open
+The probe runs on one joined daemon thread and only interrupts a socket this
+request already holds, through the same ``_interrupt_socket`` helper the
+deadline guard uses. POSIX keeps a duplicate; Windows holds the original
+object because an extra Winsock handle prevents waking the blocked reader.
+Header waits stay on the existing open
 timeout: the response object, and therefore its socket, does not exist until
 the status line arrives. A body that then stalls is what this closes.
 
@@ -23,6 +25,8 @@ transport helper, not a second process terminator.
 from __future__ import annotations
 
 import contextvars
+import os
+import socket
 import threading
 
 _CURRENT = contextvars.ContextVar('xueness_provider_cancel', default=None)
@@ -70,7 +74,7 @@ class _Watch:
         self._thread.start()
 
     def attach(self, response):
-        """Dup the response socket once so a later stop can shut it down."""
+        """Keep this request's socket once so a later stop can interrupt it."""
         from .provider import _interrupt_socket, _response_socket
         sock = _response_socket(response)
         if sock is None:
@@ -79,23 +83,32 @@ class _Watch:
         with self._lock:
             if self._closed or key in self._seen:
                 return
-        try:
-            duplicate = sock.dup()
-        except (AttributeError, OSError, NotImplementedError):
-            return
+        duplicate = None
+        if os.name != 'nt':
+            try:
+                duplicate = sock.dup()
+            except NotImplementedError:
+                # SSLSocket forbids dup(); a raw duplicate can still shut down
+                # its owned connection without touching SSL's buffered reader.
+                try:
+                    duplicate = socket.fromfd(sock.fileno(), sock.family, sock.type, sock.proto)
+                except (AttributeError, OSError):
+                    return
+            except (AttributeError, OSError):
+                return
         with self._lock:
             if self._closed or key in self._seen:
                 discard = True
                 interrupt = self._cancelled or self._error is not None
             else:
                 self._seen.add(key)
-                self._sockets.append(duplicate)
+                self._sockets.append((duplicate, sock))
                 discard = False
                 interrupt = self._cancelled or self._error is not None
         if discard or interrupt:
             if interrupt:
-                _interrupt_socket(duplicate)
-            else:
+                _interrupt_socket(duplicate or sock, blocked_socket=sock)
+            elif duplicate is not None:
                 try:
                     duplicate.close()
                 except OSError:
@@ -118,7 +131,9 @@ class _Watch:
         self._stop.set()
         if self._thread is not threading.current_thread():
             self._thread.join(timeout=2.0)
-        for sock in sockets:
+        for sock, _original in sockets:
+            if sock is None:
+                continue
             try:
                 sock.close()
             except OSError:
@@ -146,8 +161,8 @@ class _Watch:
             else:
                 self._cancelled = True
             sockets = list(self._sockets)
-        for sock in sockets:
-            _interrupt_socket(sock)
+        for sock, original in sockets:
+            _interrupt_socket(sock or original, blocked_socket=original)
 
 
 def bind_provider_cancel(callback):

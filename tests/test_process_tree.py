@@ -67,6 +67,25 @@ def _kill_leader(pid):
 
 
 class ProcessTreeSignalTests(unittest.TestCase):
+    def setUp(self):
+        # Simulated POSIX branches need their APIs even on a Windows runner.
+        # All group signals in this class are mocked, never sent to real PIDs.
+        for target, name, value in ((signal, 'SIGKILL', 9), (os, 'killpg', None)):
+            if not hasattr(target, name):
+                patcher = mock.patch.object(target, name, value, create=True)
+                patcher.start()
+                self.addCleanup(patcher.stop)
+
+    def test_windows_fallback_does_not_require_posix_signals(self):
+        from types import SimpleNamespace
+        proc = mock.Mock(pid=4242, returncode=None)
+        proc.wait.side_effect = [subprocess.TimeoutExpired(['child'], 0), 0]
+        with mock.patch.object(process_runtime.os, 'name', 'nt'), \
+             mock.patch.object(process_runtime, 'signal', SimpleNamespace(SIGTERM=15)), \
+             mock.patch.object(process_runtime, '_windows_tree'):
+            self.assertTrue(process_runtime.terminate_process_tree(proc, grace=0))
+        proc.kill.assert_called_once_with()
+
     def test_reaped_process_is_not_signaled_on_either_platform(self):
         for os_name in ('posix', 'nt'):
             with self.subTest(os_name=os_name):

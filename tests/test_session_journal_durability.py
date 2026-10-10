@@ -428,6 +428,7 @@ class JournalDurabilityTests(unittest.TestCase):
         self.assertIs(win_left, win_right)
         self.assertEqual(session_lease.os.name, os.name)
 
+    @unittest.skipIf(os.name == 'nt', 'POSIX nofollow capability check')
     def test_missing_nofollow_fails_closed_for_the_journal_lock(self):
         session = self.store.new("nofollow", self.root)
         with mock.patch.object(session_lease.os, "O_NOFOLLOW", 0), \

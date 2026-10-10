@@ -158,6 +158,59 @@ class FrameReplayTests(unittest.TestCase):
         self.assertEqual(status["acked"], 0)
         self.assertGreater(status["sent"], 0)
 
+    def test_concurrent_senders_write_in_sequence_order(self):
+        server, buf = self.make(enabled=True)
+        first_admitted = threading.Event()
+        release_first = threading.Event()
+        second_started = threading.Event()
+        second_finished = threading.Event()
+        errors = []
+        original_admit = server.replay.admit
+
+        def delayed_admit(payload):
+            frames = original_admit(payload)
+            if payload["id"] == 1:
+                first_admitted.set()
+                if not release_first.wait(5):
+                    raise TimeoutError("test did not release the first sender")
+            return frames
+
+        server.replay.admit = delayed_admit
+
+        def send(number):
+            if number == 2:
+                second_started.set()
+            try:
+                server.frames.send({"jsonrpc": "2.0", "id": number, "result": {}})
+            except Exception as exc:
+                errors.append(exc)
+            finally:
+                if number == 2:
+                    second_finished.set()
+
+        first = threading.Thread(target=send, args=(1,), daemon=True)
+        second = threading.Thread(target=send, args=(2,), daemon=True)
+        first.start()
+        try:
+            self.assertTrue(first_admitted.wait(5))
+            second.start()
+            self.assertTrue(second_started.wait(5))
+            # Give the competing sender a chance to overtake the admitted frame.
+            second_finished.wait(0.2)
+        finally:
+            release_first.set()
+            first.join(5)
+            if second.ident is not None:
+                second.join(5)
+        self.assertFalse(first.is_alive())
+        self.assertFalse(second.is_alive())
+        self.assertEqual(errors, [])
+        written = self.drain(buf)
+        self.assertEqual([frame["xuenessSeq"] for frame in written], [1, 2])
+        self.assertEqual([frame["id"] for frame in written], [1, 2])
+        server.replay.apply_ack(1)
+        self.assertEqual([frame["id"] for frame in server.replay.pending_payloads()], [2])
+
     def test_ack_drops_the_prefix_and_replay_keeps_the_original_seq(self):
         server, buf = self.make(enabled=True, limits=WIDE)
         sid = "ab" * 16

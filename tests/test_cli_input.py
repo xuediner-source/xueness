@@ -270,7 +270,9 @@ class InputTests(unittest.TestCase):
 
     def test_macos_clipboard_path_stays_argv_for_windows_and_macos_names(self):
         png = b"\x89PNG\r\n\x1a\nprivate"
-        hostile = self.root / 'say "hello"\nbeep'
+        # Windows cannot create quotes/newlines in a filename. Keep shell
+        # metacharacters in its native fixture, and the POSIX hostile spelling.
+        hostile = self.root / ('say hello & beep ; literal' if os.name == 'nt' else 'say "hello"\nbeep')
         hostile.mkdir()
         captured = {}
 

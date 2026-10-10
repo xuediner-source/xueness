@@ -1545,7 +1545,7 @@ export function Composer({
     attachmentBusyRef.current = true;
     setAttachmentBusy(true);
     setAttachmentError("");
-    const currentAttachments = (draftsRef.current.get(draftKey) ?? emptyComposerDraft()).attachments;
+    const currentAttachments = (draftsRef.current.get(scopedDraftKey) ?? emptyComposerDraft()).attachments;
     let next = [...currentAttachments];
     const initialCount = next.length;
     let totalBytes = next.reduce((sum, item) => sum + composerAttachmentBytes(item.data), 0);

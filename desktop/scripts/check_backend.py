@@ -392,6 +392,9 @@ def main():
                     'tests.test_tool_protocol_recovery', 'tests.test_native_evidence',
                     'tests.test_app_server', 'tests.test_git_clone',
                     'tests.test_office_tools', 'tests.test_lightweight_transport_budget',
+                    'tests.test_session_lease', 'tests.test_session_journal_durability',
+                    'tests.test_provider_cancel_propagate', 'tests.test_process_tree',
+                    'tests.test_frame_replay', 'tests.test_host_path_identity',
                     '-q'], cwd=ROOT, check=True)
     executable = args.executable or ROOT/'desktop/runtime/backend'/('xueness-backend.exe' if os.name == 'nt' else 'xueness-backend')
     with tempfile.TemporaryDirectory(prefix='xueness-frozen-check-', ignore_cleanup_errors=True) as temporary:

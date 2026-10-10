@@ -25,6 +25,7 @@ def _store(base: Path):
     return store, session['id']
 
 
+@unittest.skipIf(os.name == 'nt', 'real POSIX nofollow/dir_fd semantics')
 class PosixLeaseTests(unittest.TestCase):
     def test_macos_and_posix_open_relative_to_a_nofollow_directory(self):
         for platform_name in ('darwin', 'linux'):
@@ -138,6 +139,35 @@ class PosixLeaseTests(unittest.TestCase):
                     with lease(store, sid):
                         self.fail('opened a lock without O_NOFOLLOW')
             self.assertFalse((store.directory / '.locks' / (sid + '.lock')).exists())
+
+
+@unittest.skipUnless(os.name == 'nt', 'native Windows lock handles')
+class NativeWindowsLeaseTests(unittest.TestCase):
+    def test_journal_and_lease_use_real_windows_handles_and_release_on_close(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            store, sid = _store(Path(temporary))
+            with lease(store, sid):
+                with self.assertRaises(BlockingIOError):
+                    with lease(store, sid):
+                        self.fail('second lease acquired the same file')
+                session = store.load(sid)
+                session['task'] = 'native Windows save'
+                store.save(session)
+                self.assertEqual(store.load(sid)['task'], 'native Windows save')
+            with lease(store, sid):
+                self.assertEqual(store.load(sid)['task'], 'native Windows save')
+
+    def test_native_create_failure_preserves_os_error_instead_of_overflowing(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            (Path(temporary) / 'directory.lock').mkdir()
+            handle = session_lease._win32_open_directory(temporary)
+            try:
+                with self.assertRaises(OSError) as raised:
+                    session_lease._win32_create_relative(handle, 'directory.lock')
+                self.assertGreater(raised.exception.ntstatus, 0x7fffffff)
+                self.assertGreater(raised.exception.winerror, 0)
+            finally:
+                session_lease._close_handle(handle)
 
 
 class WindowsLeaseTests(unittest.TestCase):

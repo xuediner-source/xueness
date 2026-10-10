@@ -279,7 +279,9 @@ def _win32_create_relative(directory_handle, name: str):
     attributes.Attributes = 0x40  # OBJ_CASE_INSENSITIVE
     status_block = IO_STATUS_BLOCK()
     file_handle = wintypes.HANDLE()
-    generic_read_write = 0x80000000 | 0x40000000
+    # NtCreateFile requires explicit SYNCHRONIZE access for synchronous I/O;
+    # generic read/write alone returns STATUS_INVALID_PARAMETER on Windows.
+    generic_read_write = 0x80000000 | 0x40000000 | 0x00100000
     share_all = 0x0001 | 0x0002 | 0x0004
     file_open_if = 3
     file_attribute_normal = 0x80
@@ -290,9 +292,18 @@ def _win32_create_relative(directory_handle, name: str):
         ctypes.byref(file_handle), generic_read_write, ctypes.byref(attributes),
         ctypes.byref(status_block), None, file_attribute_normal, share_all,
         file_open_if, file_non_directory | file_open_reparse | synchronous, None, 0)
-    if status & 0x80000000 or _invalid_handle(file_handle.value):
-        raise OSError(None, 'session lock file could not be opened relative to its directory',
-                      None, status)
+    if status & 0x80000000:
+        # NTSTATUS is unsigned here. Passing it as OSError's Win32 error code
+        # overflows Python's signed C long and hides the actual failure.
+        to_dos_error = ntdll.RtlNtStatusToDosError
+        to_dos_error.argtypes = [wintypes.DWORD]
+        to_dos_error.restype = wintypes.DWORD
+        error = ctypes.WinError(to_dos_error(status),
+                                'session lock file could not be opened relative to its directory')
+        error.ntstatus = status
+        raise error
+    if _invalid_handle(file_handle.value):
+        raise OSError('session lock file returned an invalid handle')
     return file_handle.value
 
 

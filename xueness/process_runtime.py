@@ -166,7 +166,10 @@ def _windows_pid_alive(pid):
             return True
         return code.value == still_active
     finally:
-        kernel.CloseHandle(handle)
+        close = kernel.CloseHandle
+        close.argtypes = [wintypes.HANDLE]
+        close.restype = wintypes.BOOL
+        close(handle)
 
 
 def process_running(proc):
@@ -201,8 +204,8 @@ def _signal_group(pid, sig):
         pass
 
 
-def _signal_direct(proc, sig):
-    if sig == signal.SIGKILL:
+def _signal_direct(proc, sig, *, force=False):
+    if force or sig == getattr(signal, 'SIGKILL', None):
         method = getattr(proc, 'kill', None)
     else:
         method = getattr(proc, 'terminate', None)
@@ -322,7 +325,9 @@ def terminate_process_tree(proc, *, group=None, grace=2.0, sig=None):
     if _wait_proc(proc, grace):
         return True
     if os.name == 'nt':
-        _signal_direct(proc, signal.SIGKILL)
+        # Windows has no signal.SIGKILL. Popen.kill is the native fallback
+        # when taskkill failed or the process did not stop within grace.
+        _signal_direct(proc, signal.SIGTERM, force=True)
     elif leader and isinstance(pid, int) and _returncode(proc) is None:
         _signal_group(pid, signal.SIGKILL)
     else:
@@ -493,12 +498,32 @@ def _owned_run(*popen_args, tree, **kwargs):
         if kwargs.get('stdin') is not None:
             raise ValueError('input cannot be combined with stdin')
         kwargs['stdin'] = subprocess.PIPE
+    pipe_encoding = pipe_errors = None
+    if os.name == 'nt' and (kwargs.get('text') or kwargs.get('universal_newlines')
+                           or kwargs.get('encoding') or kwargs.get('errors')):
+        # Windows Popen decodes in background reader threads. A strict decode
+        # error there is only printed; communicate() can return None as success.
+        # Collect bytes and decode in this caller so failures reach the gate.
+        pipe_encoding = kwargs.pop('encoding', None) or 'utf-8'
+        pipe_errors = kwargs.pop('errors', None) or 'strict'
+        kwargs['text'] = False
+        kwargs['universal_newlines'] = False
+        if input_value is not None:
+            if not isinstance(input_value, str):
+                raise TypeError('text-mode input must be a string')
+            input_value = input_value.encode(pipe_encoding, pipe_errors)
     with spawn_external(subprocess.Popen, *popen_args, **kwargs) as proc:
         if tree:
             note_owned_process(proc, group=group)
         try:
             try:
                 stdout, stderr = _communicate(proc, input_value, timeout, cancel if tree else None)
+                if pipe_encoding is not None:
+                    def decode_pipe(value):
+                        if not isinstance(value, bytes):
+                            return value
+                        return value.decode(pipe_encoding, pipe_errors).replace('\r\n', '\n').replace('\r', '\n')
+                    stdout, stderr = decode_pipe(stdout), decode_pipe(stderr)
             except subprocess.TimeoutExpired as exc:
                 _stop_run(proc, group=group and tree, tree=tree)
                 exc.stdout, exc.stderr = _drain(proc)

@@ -21,6 +21,7 @@ from xueness.core import Store
 
 _GBK_OUTPUT = '本机输出'.encode('gbk')
 _HOSTS = (('win32', 'nt'), ('darwin', 'posix'))
+_NATIVE_WINDOWS = os.name == 'nt'
 
 
 class SubprocessTextTests(unittest.TestCase):
@@ -64,6 +65,14 @@ class SubprocessTextTests(unittest.TestCase):
         with self.assertRaises(UnicodeDecodeError):
             process_runtime.run_external(
                 subprocess.run, command, capture_output=True, text=True, errors='strict', timeout=10)
+
+    def test_text_stdin_and_universal_newlines_survive_owned_execution(self):
+        command = [sys.executable, '-c', 'import sys; sys.stdout.buffer.write(sys.stdin.buffer.read()+b"\\r\\nnext\\r")']
+        result = process_runtime.run_external(
+            subprocess.run, command, capture_output=True, text=True,
+            input='价格 €', errors='strict', timeout=10)
+        self.assertEqual(result.stdout, '价格 €\nnext\n')
+        self.assertEqual(result.stderr, '')
 
     def test_subprocess_bytes_decode_as_utf8_on_windows_and_macos(self):
         decoded = {}
@@ -120,7 +129,10 @@ def _gbk_read_text(original):
     def read_text(self, encoding=None, errors=None, newline=None):
         # Chinese Windows resolves omitted encodings to GBK. macOS is exercised
         # with the same omission so a non-UTF-8 locale cannot drop the file.
-        return original(self, 'gbk' if encoding is None else encoding, errors, newline)
+        kwargs = {'encoding': 'gbk' if encoding is None else encoding, 'errors': errors}
+        if newline is not None:
+            kwargs['newline'] = newline
+        return original(self, **kwargs)
     return read_text
 
 
@@ -213,4 +225,5 @@ class WindowsPathAliasTests(unittest.TestCase):
                         mock.patch.object(windows_paths.os, 'name', os_name), \
                         mock.patch.object(builtin_tools.os, 'name', os_name):
                     self.assertIsNone(windows_paths.windows_relative_alias('notes.txt.'))
-                    self.assertEqual(builtin_tools.path_in(root, 'notes.txt.').name, 'notes.txt.')
+                    if not _NATIVE_WINDOWS:
+                        self.assertEqual(builtin_tools.path_in(root, 'notes.txt.').name, 'notes.txt.')

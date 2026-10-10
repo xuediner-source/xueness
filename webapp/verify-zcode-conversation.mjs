@@ -162,6 +162,19 @@ try {
       await page.getByTestId('zcode-conversation').waitFor();await page.getByText('已完成隔离验证。',{exact:true}).waitFor();
       assert.equal(report.runBodies.length,before+1);assert.equal(report.runBodies.at(-1).acknowledge_yolo,true);
       report.interactions.push('clipboard','cancel edit','edit existing turn','persist feedback across reload','fork selected turn','cancel full access retains draft and creates no task','confirm full access submits once');
+      // Incremental selections must count attachments already held by this
+      // workspace/session draft, rather than resetting the size/count budget.
+      await page.waitForFunction(()=>document.querySelector('.xn-composer__input')?.disabled===false && !document.querySelector('.xn-composer-toolbar__model-trigger')?.getAttribute('aria-busy'));
+      const files=page.locator('.xn-composer input[type="file"]');
+      for(let index=0;index<4;index++) {
+        await files.setInputFiles({name:`fixture-${index}.txt`,mimeType:'text/plain',buffer:Buffer.from('fixture')});
+        await page.waitForFunction(count=>document.querySelectorAll('[data-testid="composer-attachment-chip"]').length===count,index+1);
+      }
+      await files.setInputFiles({name:'overflow.txt',mimeType:'text/plain',buffer:Buffer.from('fixture')});
+      await page.locator('.xn-composer__error').filter({hasText:'附件最多 4 个'}).waitFor();
+      assert.equal(await page.getByTestId('composer-attachment-chip').count(),4);
+      for(let index=0;index<4;index++)await page.getByRole('button',{name:`移除附件：fixture-${index}.txt`,exact:true}).click();
+      report.interactions.push('incremental attachments preserve the four-file limit');
       await page.locator('.xn-conv-header__more > summary').click();
       await page.getByRole('button',{name:'编辑交付清单',exact:true}).click();
       await page.locator('.xn-delivery-checks__body').waitFor();
@@ -219,7 +232,7 @@ try {
 } catch(error) {
   if(lastPage&&!lastPage.isClosed())report.failureFocus = await lastPage.evaluate(()=>{
     const track=document.querySelector('.xn-conversation-history-rail__track'),stops=document.querySelector('.xn-conversation-history-rail__stops');
-    return {focus:document.activeElement?.getAttribute('aria-label'),track:{scrollTop:track?.scrollTop,height:track?.clientHeight,scrollHeight:track?.scrollHeight},stops:[...document.querySelectorAll('[data-history-seq]')].map(e=>e.getAttribute('data-history-seq'))};
+    return {focus:document.activeElement?.getAttribute('aria-label'),input:document.querySelector('.xn-composer__input')?.value,send:[...document.querySelectorAll('.xn-composer__send')].map(e=>({disabled:e.disabled,title:e.title,text:e.textContent})),drafts:Object.keys(localStorage).filter(k=>k.includes('draft')).map(k=>({key:k,value:localStorage.getItem(k)})),track:{scrollTop:track?.scrollTop,height:track?.clientHeight,scrollHeight:track?.scrollHeight},stops:[...document.querySelectorAll('[data-history-seq]')].map(e=>e.getAttribute('data-history-seq'))};
   });
   if(lastPage&&!lastPage.isClosed())await lastPage.screenshot({path:join(output,'failure.png')});
   throw error;

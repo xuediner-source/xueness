@@ -148,14 +148,15 @@ class _Frames:
     def send(self, payload):
         """Write ``payload``. Return the frames that actually left the process."""
         replay = self._replay
-        if replay is not None and replay.active():
-            outgoing = replay.admit(payload)
-        else:
-            outgoing = (payload,)
+        replay_enabled = replay is not None and replay.active()
         written = []
         with self._lock:
             if self._closed:
                 return written
+            # Sequence assignment and output must be one ordered operation.
+            # Otherwise a second sender can write (and receive an ack for)
+            # seq N+1 before the admitted seq N reaches stdout.
+            outgoing = replay.admit(payload) if replay_enabled else (payload,)
             for item in outgoing:
                 try:
                     _write_bytes(self._stream, encode_frame(item))
