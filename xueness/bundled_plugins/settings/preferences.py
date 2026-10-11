@@ -95,7 +95,8 @@ def validate(section,values):
                     'sessionsCancelReceiptEnabled', 'sessionsCancelPropagateEnabled',
                     'remoteFrameReplayEnabled', 'remoteHandshakeEnabled',
                     'desktopHostCapabilityEnabled', 'desktopNotificationsEnabled',
-                    'sessionsAnswerQuestionEnabled', 'toolsCallBudgetEnabled',
+                    'sessionsAnswerQuestionEnabled', 'sessionsAutoTitleEnabled',
+                    'toolsCallBudgetEnabled',
                     'toolsDryRunEnabled'):
             if key in values and type(values[key]) is not bool:
                 raise ValueError(f'{key} must be boolean')

@@ -417,3 +417,28 @@ test("renders custom title alongside agent label and summary fallbacks", () => {
   assert.match(htmlPanel, /aria-label="关闭面板"/);
 });
 
+
+test("per-task cancel button only appears when the cancel_one experiment is on and the task is running", () => {
+  const running: SubagentTaskItem[] = [{ id: "task-running-1", status: "running", steps: 2 }];
+  const ended: SubagentTaskItem[] = [{ id: "task-ended-1", status: "completed", steps: 4 }];
+
+  // 实验开关开启：运行中的子任务行提供独立取消按钮，指向既有 cancel_one 入口。
+  const htmlEnabled = renderToStaticMarkup(
+    <SubagentSidePane sessionId="sess-1" isOpen={true} mode="sidepane" cancelOneEnabled={true} initialTasks={running} />
+  );
+  assert.match(htmlEnabled, /data-testid="subagent-cancel-task-running-1"/u);
+  assert.match(htmlEnabled, /取消此项/u);
+  assert.match(htmlEnabled, /只取消此子任务；主会话和其他子任务继续运行。/u);
+
+  // 开关关闭（后端 agent.subagentCancelOneEnabled 默认关）：按钮降级隐藏。
+  const htmlDisabled = renderToStaticMarkup(
+    <SubagentSidePane sessionId="sess-1" isOpen={true} mode="sidepane" initialTasks={running} />
+  );
+  assert.doesNotMatch(htmlDisabled, /subagent-cancel-task-running-1/u);
+
+  // 已结束的子任务不可取消，即使开关开启。
+  const htmlEnded = renderToStaticMarkup(
+    <SubagentSidePane sessionId="sess-1" isOpen={true} mode="sidepane" cancelOneEnabled={true} initialTasks={ended} />
+  );
+  assert.doesNotMatch(htmlEnded, /subagent-cancel-task-ended-1/u);
+});

@@ -1,6 +1,8 @@
 # Xueness 插件架构与功能归属
 
-2026-10-12 桌面系统通知：desktop 新增 `desktop.notifications`（默认开启，可在设置中关闭）。会话转入等待审批、等待回答、失败或完成时，复用既有会话列表刷新作为触发源，经 `DesktopNotificationsBridge.tsx` 发布有界请求，由 desktop 的 `window-theme-preload.cjs` 在插件生效时转发，`desktop/src/notifications.cjs` 在主进程再次校验并弹出 Electron 系统通知；点击通知聚焦主窗口并复用托盘命令选中会话。禁用 desktop 或关闭通知开关后，bridge、preload 与主进程三处触发路径均停止。前端实现登记于 desktop 插件 `frontendModules`，设置开关沿用既有 settings 面板分组（默认开）。目录为 **30 个插件、205 项登记功能**。
+2026-10-12 会话自动命名：sessions 新增 `sessions.auto_title`（默认开启，设置键 `sessionsAutoTitleEnabled`）。首个助手回答完成结算后（共享执行器既有 `settle_turn` 插件挂点），对仍是默认任务文本且未被手动改名的会话，发起一次有界、无工具的短标题请求；实现位于 `sessions/auto_title.py`，请求构造沿用 providers 语义压缩的结构化纯文本模式，只送首条用户消息与首条回答的截断文本，失败、超时或无有效模型绑定时静默保留原标题。手动重命名（含分享导入标题）写入 `title_source='manual'`，永不被覆盖；生成的标题写 `title` 与 `title_source='generated'`，前端侧栏继续读取既有 `title` 字段，无需改动。目录为 **30 个插件、212 项登记功能**。
+
+2026-10-12 桌面系统通知：desktop 新增 `desktop.notifications`（默认开启，可在设置中关闭）。会话转入等待审批、等待回答、失败或完成时，复用既有会话列表刷新作为触发源，经 `DesktopNotificationsBridge.tsx` 发布有界请求，由 desktop 的 `window-theme-preload.cjs` 在插件生效时转发，`desktop/src/notifications.cjs` 在主进程再次校验并弹出 Electron 系统通知；点击通知聚焦主窗口并复用托盘命令选中会话。禁用 desktop 或关闭通知开关后，bridge、preload 与主进程三处触发路径均停止。前端实现登记于 desktop 插件 `frontendModules`，设置开关沿用既有 settings 面板分组（默认开）。目录为 **30 个插件、212 项登记功能**。
 
 2026-10-12 会话执行与交互补齐：目录现为 **30 个插件、204 项登记功能**。sessions 提供当前轮引导、立即发送、稳定修订与实时补丁、长历史分页、会话内查找、文本选择和分享导入；providers 提供结构化语义压缩；planning 提供有预算及独立核验的目标继续；subagents 提供持久子会话、恢复收件箱和只读正文查看。共享执行器仅接入插件生命周期，未扩大共享白名单。验收缩减与本地主机分享边界见 [实施记录](session-runtime-upgrade-2026-10-12.md)。
 
@@ -245,7 +247,7 @@ providers 的 CLI parser/handler 已迁入 `xueness/bundled_plugins/providers/op
 | settings | 工作区登记、项目选择与默认目录；主题、语言、字体与代码显示；快捷键配置、验证与冲突检测；Agent 运行与能力偏好；设置项搜索 |
 | usage | 会话、步骤与日期统计；供应商实际报告的 Token 统计；实际报告成本与模型维度统计；工作台用量速览卡片 |
 | git | 状态、差异、日志与分支查看；克隆远程仓库到已授权目录；批准后的暂存、提交、分支与 stash；检查点、恢复预览与恢复前备份；轮次首个改动前自动检查点；回退工作区到指定轮次检查点 |
-| workflows | DAG、声明式 DSL 与模型编排；只读及已批准可写 actor 与问答；持久恢复、结果复用与文件校验；动态并发、限流退避与跨运行调度；后台命令、日志、状态与取消；专家工作流（调研、计划、实现、审查）；按会话列出、取消与恢复动态工作流运行 |
+| workflows | DAG、声明式 DSL 与模型编排；只读及已批准可写 actor 与问答；持久恢复、结果复用与文件校验；动态并发、限流退避与跨运行调度；后台命令、日志、状态与取消；专家工作流（调研、计划、实现、审查）；按会话列出、取消与恢复动态工作流运行；已保存工作流模板库（保存、列出、按名运行） |
 | terminal | 工作区交互式 POSIX PTY 与 Windows ConPTY；终端尺寸、日志、关闭与服务清理；默认 Shell 与终端偏好 |
 | office | DOCX 页面与嵌入图片预览；PPTX 幻灯片、图片与缓存图表；XLSX 工作表与缓存单元格值 |
 | commands | 自定义斜杠提示模板；内建 /init（生成或更新 AGENTS.md）；命令资源创建、编辑与开关；目录型 Markdown 命令发现与位置参数展开；commands list/inspect 命令与聊天 /commands |
@@ -869,3 +871,11 @@ diagnostics 插件登记 `diagnostics.doctor` 并认领 `doctor` CLI 命令（`d
 providers 登记 `providers.introspection` 与只读工具 `list_models`（`providers/tooling.py`）：向模型提供已保存模型档位的脱敏概要（`hasKey` 而非密钥，沿用 providers 公开视图）与本会话已记录的模型选择；纯读、`concurrency_safe=True`，不发起任何网络请求，也不允许模型自行切换模型——切换仍是操作者动作（/model、/effort 或设置页）。sessions 登记 `sessions.read_state` 与只读工具 `read_state`（`sessions/tooling.py`）：投影当前会话自身的运行状态（id、status、mode、permission_mode、steps、title、任务行、待办列表与是否挂起提问），不含消息正文；纯读、`concurrency_safe=True`，待办投影有界。
 
 两个工具按 `tool_registry` 既有只读工具模式注册，Gate 新只读 kind（`list_models`、`read_state`）在 core 既有只读放行清单登记（仅策略接线，无业务逻辑），禁用所属插件后 dispatch 直接拒绝。回归见 `tests/test_model_introspection.py`（注册提示、脱敏、有界投影、禁用边界）。
+
+## 已保存工作流模板库（workflows.saved_library，2026-10-12）
+
+workflows 插件登记 `workflows.saved_library`（新模块 `bundled_plugins/workflows/saved_library.py`），对标 ZCode 的具名工作流模板：把已验证的声明式 DAG 存为具名模板，跨会话复用。模板是数据不是代码：入库前经既有 `validate_plan` 按保存时工作区校验（节点字段、依赖无环、cwd 在根内），存储为 `<状态目录>/workflows/saved/<name>.json` 每模板一个原子私有 JSON（复用共享 `_atomic_write_json`），名字限定 `[A-Za-z0-9][A-Za-z0-9._-]{0,63}` 并拒绝 Windows 保留设备名，任何名字都无法越过库目录。同名覆盖必须显式 `overwrite`；模板摘要 `plan_digest` 绑定计划内容，模板改动后旧审批不再可重放。
+
+三个模型工具按 `tool_registry` 既有模式登记（`tools.py`，manifest `tools` 同步）：`save_workflow`（planning；来源四选一——字面 plan、DSL script、本工作区既有运行 id、`latest` 最近一次运行，运行来源校验 root 归属）、`list_saved_workflows`（planning、只读、`concurrency_safe=True`；只投影名字/描述/节点数/并发/保存时间）、`run_saved_workflow`（exec、需操作者批准；批准 subject 绑定模板名+计划摘要+allow_real，实例化复用既有 `WorkflowStore.create/launch`——创建时按目标工作区重新 validate_plan，launch 自身维持命令计划审批与真实模型开关，运行前保留 web 宿主 real-provider 硬天花检查；有 owner 会话时照常写入 `owner_session`，引擎运行时继续执行既有的权限天花重读）。没有新增 Gate kind、没有第二套运行时、没有权限绕过。
+
+CLI 为新顶层命令 `xueness workflows save|list|run`（manifest `commands` 登记 `workflows`，parser/执行在 `saved_library.py`，插件 `register_cli`/`execute_cli` 既有分发接线）：`save <name> [file] --root DIR [--description] [--overwrite] [--from-run ID] [--latest]`，`list`，`run <name> --root DIR [--approve] [--allow-real]`，语义与 `workflow create/start` 一致（命令节点仍需 `--approve`）。插件禁用后三个工具由 dispatch 既有边界拒绝、CLI 在 `_require_cli_plugins` 拒绝。回归见 `tests/test_workflows_saved.py`（24 项：存/列/按名运行端到端、覆盖需显式、非法名、坏 DAG 拒绝且零写入、跨工作区拒绝、exec subject 精确性、宿主天花、禁用停用工具与 CLI、CLI 往返），`tests/test_workflows.py` 全模块维持原有通过。

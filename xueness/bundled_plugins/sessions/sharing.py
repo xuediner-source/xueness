@@ -137,7 +137,9 @@ def import_share(ctx, share_id, data):
     if not messages or messages[0]['role'] != 'user':
         messages.insert(0, {'role': 'user', 'content': title})
     session.update(messages=[{'role': 'system', 'content': SYSTEM}, *messages], status='paused',
-                   title=title, task=messages[0]['content'], imported_share={'id': share_id, 'title': title})
+                   title=title, task=messages[0]['content'], imported_share={'id': share_id, 'title': title},
+                   # A shared-in title is operator-provided; sessions.auto_title keeps it.
+                   title_source='manual')
     ctx['store'].save(session)
     return 201, {'id': session['id']}
 

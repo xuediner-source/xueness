@@ -111,4 +111,7 @@ def before_model_request(session, store, state_dir=None, **kwargs):
 
 def settle_turn(session, store, turn_id=None):
     from .steering import settle_turn as settle
-    return settle(session, store, turn_id)
+    settled = settle(session, store, turn_id)
+    from .auto_title import settle_auto_title
+    settle_auto_title(session, store, turn_id)
+    return settled

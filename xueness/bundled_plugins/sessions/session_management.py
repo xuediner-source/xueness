@@ -199,6 +199,8 @@ def rename(store: Store, sid: str, title: str) -> dict:
     if old_title != title:
         _audit(session, "renamed", previous_title=old_title, title=title)
         session["title"] = title
+        # An operator-provided title wins over sessions.auto_title forever.
+        session["title_source"] = "manual"
         store.save(session)
     return session
 

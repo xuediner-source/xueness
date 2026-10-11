@@ -32,6 +32,7 @@
     "conversation_shares"
   ],
   "modules": [
+    "auto_title",
     "cli",
     "cli_input",
     "cli_interrupt",
@@ -66,6 +67,11 @@
     "sharing"
   ],
   "features": [
+    {
+      "id": "sessions.auto_title",
+      "name": "会话自动命名：首个回答后生成短标题",
+      "nameEn": "Automatic session naming: short title after the first answer"
+    },
     {
       "id": "sessions.sidebar_resize",
       "name": "侧栏宽度拖动调整、键盘控制与分外观记忆",

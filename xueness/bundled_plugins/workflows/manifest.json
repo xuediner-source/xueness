@@ -15,6 +15,9 @@
     "workflow_amend",
     "workflow_run",
     "workflow_status",
+    "save_workflow",
+    "list_saved_workflows",
+    "run_saved_workflow",
     "background_exec",
     "background_status",
     "background_cancel",
@@ -23,6 +26,7 @@
   ],
   "commands": [
     "workflow",
+    "workflows",
     "jobs",
     "expert"
   ],
@@ -41,6 +45,7 @@
     "dynamic_runs",
     "expert",
     "operations_api",
+    "saved_library",
     "tools",
     "workflow_cli",
     "workflow_worker",
@@ -83,6 +88,11 @@
       "id": "workflows.dynamic_runs",
       "name": "按会话列出、取消与恢复动态工作流运行",
       "nameEn": "Per-session dynamic workflow run listing, cancellation and resume"
+    },
+    {
+      "id": "workflows.saved_library",
+      "name": "已保存工作流模板库（保存、列出、按名运行）",
+      "nameEn": "Saved workflow template library (save, list, run by name)"
     }
   ],
   "frontendModules": [

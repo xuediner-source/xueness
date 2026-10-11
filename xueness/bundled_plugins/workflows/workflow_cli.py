@@ -54,6 +54,10 @@ def add_parsers(commands):
 
 
 def execute(args):
+    if args.cmd == 'workflows':
+        # Named saved-workflow templates: same library the model tools use.
+        from .saved_library import execute_cli
+        return execute_cli(args)
     if args.cmd == 'expert':
         from . import expert
         return expert.execute_cli(args)

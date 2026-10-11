@@ -6,6 +6,8 @@ def dispatch(method, parts, query, data, ctx):
 def register_cli(commands):
     from .workflow_cli import add_parsers
     add_parsers(commands)
+    from .saved_library import add_parsers as add_saved_parsers
+    add_saved_parsers(commands)
 
 
 def execute_cli(args, deps=None):

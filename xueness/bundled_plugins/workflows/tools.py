@@ -12,12 +12,18 @@ from pathlib import Path
 
 from ...tool_contract import BuiltinTool, execution_context
 from .dynamic_runs import owner_session_id
+from .saved_library import SavedWorkflowLibrary, template_plan_digest
 from .workflows import WorkflowStore
 
 
 def _store():
     context = execution_context()
     return WorkflowStore(context["state_dir"])
+
+
+def _library():
+    context = execution_context()
+    return SavedWorkflowLibrary(context["state_dir"])
 
 
 def _subject(value):
@@ -40,6 +46,74 @@ def _cancel_subject(args):
 
 def _answer_subject(args):
     return _subject(["workflow_answer_actor", args["workflow_id"], args["node_id"], args["answer"]])
+
+
+def _saved_source(args, workspace):
+    """Exactly one template source: plan, script, an existing run, or the latest run."""
+    latest = args.get("latest", False)
+    if type(latest) is not bool:
+        raise ValueError("latest must be a boolean")
+    sources = [key for key in ("plan", "script", "workflow_id") if key in args]
+    if latest:
+        sources.append("latest")
+    if len(sources) != 1:
+        raise ValueError("provide exactly one of plan, script, workflow_id or latest")
+    if sources[0] in ("plan", "script"):
+        return _plan(args, workspace), {"kind": sources[0]}
+    from .saved_library import _latest_run_plan, _source_plan
+    state = _store().state
+    if sources[0] == "workflow_id":
+        return _source_plan(state, args["workflow_id"], workspace)
+    return _latest_run_plan(state, workspace)
+
+
+def _save_workflow(root, gate, args, session, call_id):
+    gate.check("planning", "save_workflow", call_id)
+    workspace = _root(session)
+    plan, source = _saved_source(args, workspace)
+    saved = _library().save(plan, args["name"], workspace,
+                            description=args.get("description"),
+                            overwrite=args.get("overwrite", False), source=source)
+    return {"ok": True, "saved": saved}
+
+
+def _list_saved_workflows(root, gate, args, session, call_id):
+    gate.check("planning", "list_saved_workflows", call_id)
+    return {"ok": True, "saved": _library().list()}
+
+
+def _saved_subject(record, args):
+    return _subject({"saved_workflow": record["name"], "approved": True,
+                     "allow_real": args.get("allow_real", False),
+                     "plan_digest": template_plan_digest(record["plan"])})
+
+
+def _run_saved_workflow_subject(args):
+    # Approval replay recomputes the subject from the template's current
+    # content, so a template changed after approval is no longer approvable.
+    return _saved_subject(_library().load(args["name"]), args)
+
+
+def _run_saved_workflow(root, gate, args, session, call_id):
+    library = _library()
+    record = library.load(args["name"])
+    workspace = _root(session)
+    allow_real = args.get("allow_real", False)
+    # Same host ceiling as workflow_run: the web real-provider switch stays a
+    # hard ceiling for model-generated launches, checked before Gate approval.
+    if (allow_real and getattr(gate, "web_approval_gate", False)
+            and not getattr(gate, "allow_real", False)):
+        return {"ok": False, "error": "real provider disabled by host"}
+    # The subject is computed from the already-loaded record, so the approval
+    # binds exactly the plan object handed to create below.
+    gate.check("exec", _saved_subject(record, args), call_id)
+    store = _store()
+    # Instantiation reuses the exact create/launch path of a hand-written plan:
+    # validate_plan runs again against this workspace inside create, and
+    # launch enforces command-plan approval and the real-model opt-in itself.
+    created = store.create(record["plan"], workspace, owner_session=owner_session_id(session))
+    row = store.launch(created["id"], approved=True, allow_real=allow_real)
+    return {"ok": True, "saved_workflow": record["name"], "workflow": row}
 
 
 def _root(session):
@@ -204,4 +278,21 @@ REGISTRY = (
                 {"workflow_id": _string("Workflow id", 32), "node_id": _string("Actor node id", 64),
                  "answer": _string("Operator answer", 5000)},
                 ("workflow_id", "node_id", "answer"), "exec", True, _answer_actor, _answer_subject),
+    BuiltinTool("save_workflow", "Save a validated workflow DAG as a named reusable template (pure data, no code)",
+                {"name": _string("Template name: letters/digits/dot/dash/underscore, 1..64 chars, "
+                                 "starting with a letter or digit", 64),
+                 "plan": {"type": "object", "description": "Literal declarative DAG; one source only"},
+                 "script": {"type": "string", "maxLength": 32000,
+                            "description": "Safe phase/agent/parallel/pipeline DSL; one source only"},
+                 "workflow_id": _string("Save the plan of this settled run in the current workspace", 32),
+                 "latest": {"type": "boolean", "description": "Save the most recent run in the current workspace"},
+                 "description": _string("Human-readable template description", 500),
+                 "overwrite": {"type": "boolean", "description": "Explicitly replace an existing template of the same name"}},
+                ("name",), "planning", False, _save_workflow),
+    BuiltinTool("list_saved_workflows", "List saved workflow templates: name, description, node count and save time",
+                {}, (), "planning", False, _list_saved_workflows, None, True),
+    BuiltinTool("run_saved_workflow", "Instantiate a saved workflow template in this workspace and start it; requires operator approval",
+                {"name": _string("Saved template name", 64),
+                 "allow_real": {"type": "boolean", "description": "Opt in to real model calls by actor nodes"}},
+                ("name",), "exec", True, _run_saved_workflow, _run_saved_workflow_subject),
 )
