@@ -240,6 +240,11 @@ def handle(method, parts, data, ctx):
         return None
     if len(parts) not in (4, 6):
         return None
+    if len(parts) == 6 and parts[5] not in ('resume', 'message', 'messages', 'transcript'):
+        # Sibling actions on the tasks sub-resource (cancel_one) own their flag
+        # and state checks; resolving the session here would preempt the
+        # disabled answer and turn id validation into the wrong status code.
+        return None
     try:
         session, root = _session(ctx, parts[2])
     except FileNotFoundError:

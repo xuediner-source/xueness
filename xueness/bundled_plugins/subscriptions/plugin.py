@@ -3,6 +3,8 @@ from ...plugin_contract import Plugin
 
 
 class SubscriptionsPlugin(Plugin):
+    kind = "subscriptions"
+
     def load(self, state_dir, root, session):
         # A marketplace resource never becomes an executable model adapter.
         # Provider resolution is owned by this bundled feature instead.

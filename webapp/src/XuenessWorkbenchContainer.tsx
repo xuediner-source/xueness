@@ -87,6 +87,8 @@ import { ComposerWorkspaceSelect } from './plugins/sessions/ComposerWorkspaceSel
 import { XuenessComposerToolbar } from "./plugins/sessions/XuenessComposerToolbar";
 import { DesktopTitlebar } from "./plugins/desktop/DesktopTitlebar";
 import { DesktopTrayBridge } from './plugins/desktop/DesktopTrayBridge';
+import { DesktopNotificationsBridge } from './plugins/desktop/DesktopNotificationsBridge';
+import { DesktopNotificationSettings } from './plugins/desktop/DesktopNotificationSettings';
 import { settingsNavigation } from "./xuenessSettingsNavigation";
 import { CompletionChecks } from './plugins/planning/CompletionChecks';
 import { SessionGoal } from './plugins/planning/SessionGoal';
@@ -131,6 +133,7 @@ import { SidebarResizeHandle, useSessionSidebarWidth } from './plugins/sessions/
 import { SessionContextPane } from './plugins/sessions/SessionContextPane';
 import { TaskTodos } from "./plugins/sessions/XuenessTimeline";
 import { ZCodeConversation } from "./plugins/sessions/ZCodeConversation";
+import { conversationCompactionBoundary } from './plugins/sessions/conversationCompaction';
 import { ConversationSelectionActions, type ConversationTextSelection } from './plugins/sessions/ConversationSelectionActions';
 import { buildConversationFindMatches } from './plugins/sessions/ConversationFind';
 import { ConversationShareDialog } from './plugins/sessions/ConversationSharing';
@@ -2397,6 +2400,7 @@ export function XuenessWorkbenchContainer() {
       pluginSettings={settingsSection === "general" ? <>
         {isPluginEffective("sessions") && <SessionExperimentSettings values={settingsValues} disabled={settingsSaving} onUpdate={handleUpdateSetting} />}
         {isPluginEffective("tools") && <ToolExecutionSettings values={settingsValues} disabled={settingsSaving} onUpdate={handleUpdateSetting} />}
+        {isPluginEffective("desktop") && <DesktopNotificationSettings values={settingsValues} disabled={settingsSaving} onUpdate={handleUpdateSetting} />}
       </> : undefined} />;
     if (settingsSection === "workspace") return <><XuenessWorkspaceSettings currentRoot={session?.root ?? draftRoot ?? composerCatalog.root}
       onDefaultChanged={() => { if (!activeId) { setDraftRoot(undefined); setIsolatedWorkspace(false); updateChoices({remote:undefined}); } void refreshComposerCatalog(); }} /><SettingsSections embedded sections={[]} activeSection="workspace-display" values={settingsValues} capabilities={capabilities} onUpdateSetting={handleUpdateSetting} saving={settingsSaving} /></>;
@@ -2558,6 +2562,11 @@ export function XuenessWorkbenchContainer() {
   }, [sessions, stoppingSessions, runRequestSessions, activeId, session?.id, session?.status, session?.streaming?.status]);
 
   const displayTimelineRows = useMemo(() => withAssistantStream(rows, session?.streaming), [rows, session?.streaming]);
+  // 上下文压缩边界：由 sessions 插件从合并后的行与 compactions 记录推导；
+  // 行集合随轮询、更早分页与推送快照更新时自动重算。
+  const compactionMarker = useMemo(() => session && session.id === activeId
+    ? conversationCompactionBoundary(displayTimelineRows, session.compactions)
+    : null, [displayTimelineRows, session, activeId]);
   const claudexAppearance = normalizeColorPalette(settingsLoading && typeof document !== 'undefined'
     ? document.documentElement.dataset.xnPalette : settingsValues.colorPalette) === 'claudex';
   const sidebarAppearance = claudexAppearance ? 'claudex' : 'xueness';
@@ -2600,6 +2609,7 @@ export function XuenessWorkbenchContainer() {
     <DesktopTrayBridge enabled={isPluginEffective('desktop')} sessionsEnabled={isPluginEffective('sessions')} busy={busy}
       activeId={activeId} locale={locale} dark={String(settingsValues.theme) === 'dark' || (settingsValues.theme === 'system' && systemDark)}
       onNew={startNewTask} onSession={selectTraySession} />
+    <DesktopNotificationsBridge enabled={isPluginEffective('desktop')} sessions={liveSessions} activeId={activeId} locale={locale} />
     <Shell
       titlebar={typeof window !== "undefined" && new URLSearchParams(window.location.search).get("xuenessDesktop") === "1" ? <DesktopTitlebar
         desktopEnabled={isPluginEffective('desktop')}
@@ -2790,6 +2800,7 @@ export function XuenessWorkbenchContainer() {
                 {olderTranscript.error && <p role="alert">{olderTranscript.error}</p>}
               </div>}
             <ZCodeConversation sessionId={session.id} rows={displayTimelineRows}
+              compactionMarker={compactionMarker}
               findRequest={conversationFindRequest?.sessionId === session.id ? conversationFindRequest : undefined}
               collapseTools={settingsValues.collapseTools !== false}
               showReasoning={settingsValues.messageStreamShowReasoning !== false}

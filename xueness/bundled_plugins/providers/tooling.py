@@ -1,10 +1,13 @@
-"""Discover currently enabled tools and page this session's recorded results."""
+"""Discover currently enabled tools, page this session's recorded results and
+introspect the saved model configuration."""
 import json
 import re
 from ...tool_contract import BuiltinTool, execution_context
 from .lightweight_config import session_options
 
 RESULT_PAGE_MAX_CHARS = 4000
+#: The introspection tool summarizes saved profiles, bounded for one reply.
+LIST_MODELS_MAX_PROFILES = 64
 
 
 def _page_error(error_code, user_reason, **metadata):
@@ -81,6 +84,38 @@ def _read_result(root, gate, args, session, call_id):
             'totalChars': len(text), 'nextOffset': next_offset, 'pageComplete': next_offset is None}
 
 
+def _list_models(root, gate, args, session, call_id):
+    """Redacted saved-profile summary plus this session's recorded selection.
+
+    Pure read: no request leaves the machine, stored keys are reduced to the
+    public ``hasKey`` flag, and switching a model stays an operator action.
+    """
+    gate.check('list_models', '')
+    state_dir = execution_context().get('state_dir')
+    profiles = []
+    if state_dir is not None:
+        from . import providers_api
+        try:
+            records = providers_api._list({'state_dir': state_dir})
+        except (OSError, ValueError):
+            records = []
+        for record in records[:LIST_MODELS_MAX_PROFILES]:
+            if isinstance(record, dict) and isinstance(record.get('id'), str):
+                profiles.append({'id': record.get('id'), 'name': record.get('name'),
+                                 'model': record.get('model'),
+                                 'protocol': record.get('protocol', 'openai'),
+                                 'hasKey': bool(record.get('hasKey'))})
+    selection = (session or {}).get('model_selection') if isinstance(session, dict) else None
+    current = None
+    if isinstance(selection, dict):
+        current = {'provider_id': selection.get('provider_id'),
+                   'model': selection.get('model'),
+                   'reasoning_effort': selection.get('reasoning_effort')}
+    return {'ok': True, 'current': current, 'profiles': profiles,
+            'note': '已保存模型档位的脱敏概要；切换模型或推理档位是操作者动作'
+                    '（/model、/effort 或设置页），工具不能自行切换。'}
+
+
 REGISTRY = (
     BuiltinTool('tool_search', 'Discover optional enabled tools by name or purpose; matched tools become available next turn. Try keywords such as browser, workflow, MCP or todo.',
                 {'query': {'type': 'string'}}, ('query',), 'tool_search', False, _search),
@@ -93,4 +128,6 @@ REGISTRY = (
                            'description': 'Maximum 4000 characters per page; default is configured page size.'}},
                 ('tool_call_id',), 'tool_result_read', False, _read_result,
                 concurrency_safe=True),
+    BuiltinTool('list_models', 'Introspect the saved model profiles (redacted: never the API key) and the current model selection recorded for this session. Read-only; switching models is an operator action.',
+                {}, (), 'list_models', False, _list_models, concurrency_safe=True),
 )

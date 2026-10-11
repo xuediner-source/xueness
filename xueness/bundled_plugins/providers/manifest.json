@@ -8,7 +8,8 @@
   "dependencies": [],
   "tools": [
     "tool_search",
-    "tool_result_read"
+    "tool_result_read",
+    "list_models"
   ],
   "commands": [
     "providers"
@@ -137,6 +138,11 @@
       "id": "providers.custom_empty",
       "name": "自定义模型空状态",
       "nameEn": "Custom model empty state"
+    },
+    {
+      "id": "providers.introspection",
+      "name": "模型配置内省工具（list_models）",
+      "nameEn": "Model configuration introspection tool (list_models)"
     }
   ],
   "frontendModules": [

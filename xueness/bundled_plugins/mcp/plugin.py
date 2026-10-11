@@ -122,8 +122,23 @@ def register_cli(commands):
 
 
 def execute_cli(args, deps=None):
+    if getattr(args, "cmd", None) == "mcp":
+        from .command_cli import execute
+        return execute(args)
     from .operator_cli import execute_cli as execute
     return execute(args, deps)
+
+
+def execute_slash(name, argument, ctx):
+    """In-chat ``/mcp`` entry contributed through plugin_runtime.dispatch_slash.
+
+    Only ``mcp`` is claimed here; ``mcp-check`` keeps its CLI-only surface and
+    any other name returns ``None`` so the chat loop keeps its behavior.
+    """
+    if name != "mcp":
+        return None
+    from .command_cli import handle_slash
+    return handle_slash(argument, ctx)
 
 
 def dispatch(method, parts, query, data, ctx):

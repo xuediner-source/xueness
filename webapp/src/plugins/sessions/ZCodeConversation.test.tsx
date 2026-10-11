@@ -205,3 +205,30 @@ test('zcodeConversationDisclosures stores disclosure states across turns and re-
     zcodeConversationDisclosures.delete(sess1Key);
   }
 });
+
+test('compaction boundary renders once at the top of the first live turn', () => {
+  // 归档行保留压缩前的轮次身份（真实快照里是 turn-1），与任务行（turn-2）不同轮。
+  const archived: TimelineRow[] = [
+    { kind: 'assistant', seq: 1, turnId: 'turn-1', text: '被压缩掉的回答' },
+    { kind: 'tool', seq: 2, turnId: 'turn-1', toolCallId: 'call-c', name: 'exec', subject: 'pwd', status: 'ok', error: '', errorCode: '' },
+  ];
+  const merged: TimelineRow[] = [...archived,
+    { kind: 'user', seq: 3, turnId: 'turn-2', text: '原始任务', messageIndex: 2, messageRevision: revision },
+    { kind: 'assistant', seq: 4, turnId: 'turn-2', text: '仍在上下文中的回答', messageIndex: 3 },
+    { kind: 'completion', seq: 5, turnId: 'turn-2', verified: true, status: 'verified', summary: '仍在上下文中的回答' }];
+  const marker = { boundarySeq: 3, removed: 2, masked: 1 };
+  const html = renderToStaticMarkup(<ZCodeConversation rows={merged} compactionMarker={marker} />);
+  // 分隔行只出现一次，位于归档内容之后、仍在上下文中的任务消息之前。
+  assert.equal((html.match(/data-testid="timeline-compaction-boundary"/gu) || []).length, 1);
+  assert.match(html, /已压缩 2 条较早消息，另有 1 条旧输出已掩码/);
+  assert.match(html, /role="note"/);
+  const archivedAt = html.indexOf('被压缩掉的回答');
+  const boundaryAt = html.indexOf('timeline-compaction-boundary');
+  // 从边界之后找任务气泡，避开顶部历史导航条 aria-label 里的同名文本。
+  const liveAt = html.indexOf('原始任务', boundaryAt);
+  assert.ok(archivedAt >= 0 && archivedAt < boundaryAt && liveAt > boundaryAt);
+  // 没有压缩记录时不渲染分隔行；边界行不在当前行集（虚拟窗口/陈旧标记）时也不出现。
+  assert.doesNotMatch(renderToStaticMarkup(<ZCodeConversation rows={merged} />), /timeline-compaction-boundary/);
+  assert.doesNotMatch(renderToStaticMarkup(<ZCodeConversation rows={rows}
+    compactionMarker={{ boundarySeq: 999, removed: 2, masked: 0 }} />), /timeline-compaction-boundary/);
+});

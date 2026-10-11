@@ -314,6 +314,10 @@ export const messages: Record<string, string> = {
   "启用带版本校验的事件分页接口；历史发生变化时要求重新同步。": "Enable revision-checked event pagination. Changes to earlier history require resynchronization.",
   "结构化问题答复": "Structured question answers",
   "显示独立答复表单，校验问题编号并防止重复提交；同时支持标准和轻量模式。": "Show an answer form with question ID validation and duplicate protection in both standard and lightweight modes.",
+  "桌面通知": "Desktop notifications",
+  "任务等待审批、需要回答或运行结束时发送系统通知；点击通知可回到对应会话。仅桌面端生效。": "Send system notifications when a task waits for approval, needs an answer or finishes running. Clicking a notification returns to that chat. Desktop only.",
+  "系统通知": "System notifications",
+  "等待审批、提问和运行完成或失败时提醒。": "Notify on approvals, questions and completed or failed runs.",
   "请输入 1 到 10000 之间的整数。": "Enter an integer between 1 and 10,000.",
   "工具执行实验功能": "Tool execution experiments",
   "实验开关不会授予工具权限；所有操作仍需通过原有审批。": "Experimental switches do not grant tool permissions. Existing approvals still apply.",
@@ -2366,4 +2370,28 @@ Object.assign(messages, {
   "继续任务的消息（可选）": "Follow-up for the task (optional)",
   "会话已切换，请重试。": "The conversation changed. Please try again.",
   "子代理停在未完成的工具调用，当前无法安全恢复。": "The subagent stopped during an unfinished tool call and cannot be resumed safely.",
+});
+
+// 会话时间线的上下文压缩可见性：归档历史与仍在上下文中的消息之间的边界标记。
+Object.assign(messages, {
+  "已压缩 {0} 条较早消息": "Compacted {0} earlier messages",
+  "已压缩 {0} 条较早消息，另有 {1} 条旧输出已掩码": "Compacted {0} earlier messages and masked {1} older tool outputs",
+  "已掩码 {0} 条较早的工具输出": "Masked {0} older tool outputs",
+  "较早历史已压缩出上下文": "Earlier history was compacted out of the context",
+  "此边界以上的历史已压缩或掩码出模型上下文，原文保留在会话日志。": "History above this boundary was compacted or masked out of the model context; the full text remains in the session journal.",
+});
+
+// 0.1.6 队列与目标预算文案的英文补齐（i18n 覆盖检查的欠账）。
+Object.assign(messages, {
+  "无法立即发送：当前轮次已结束。消息已保留在队列中。": "Cannot send now: the current turn has ended. The message stays in the queue.",
+  "消息已排到最前，并将在当前轮停止后启动。": "Message moved to the front; it will start after the current turn stops.",
+  "原附件或上下文不会恢复，请重新添加。": "Attachments and context are not restored; add them again.",
+  "正在等待当前轮停止。保留的立即发送消息可在队列中查看。": "Waiting for the current turn to stop. The kept send-now message stays visible in the queue.",
+  "立即发送未能启动，请刷新队列后重试。": "Send-now could not start; refresh the queue and try again.",
+  "目标运行预算": "Goal run budget",
+  "最多轮数": "Maximum turns",
+  "最多秒数": "Maximum seconds",
+  "最多 token（可选）": "Maximum tokens (optional)",
+  "更新失败": "Update failed",
+  "目标受轮次和时间预算限制；完成需要独立核验与交付检查。": "Goals are bounded by turn and time budgets; completion requires independent verification and delivery checks.",
 });

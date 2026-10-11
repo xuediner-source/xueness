@@ -100,8 +100,10 @@ test('Linux does not install an unsupported window theme listener', () => {
 
 test('isolated preload follows theme mutations, deduplicates unrelated changes and cleans up', () => {
   const callbacks = new Map(), sent = [];
-  let policy = null, trayState = null;
-  const root = { getAttribute: name => name === 'data-xn-desktop-enabled' ? policy : name === 'data-xn-desktop-tray-state' ? trayState : null };
+  let policy = null, trayState = null, notifyRequest = null;
+  const root = { getAttribute: name => name === 'data-xn-desktop-enabled' ? policy
+    : name === 'data-xn-desktop-tray-state' ? trayState
+    : name === 'data-xn-desktop-notify-request' ? notifyRequest : null };
   let color = '#ececee', symbolColor = '#262626', observed, disconnected = false, sync;
   const ipcRenderer = new EventEmitter(); ipcRenderer.send = (...args) => sent.push(args);
   const dispatched = [];
@@ -125,8 +127,8 @@ test('isolated preload follows theme mutations, deduplicates unrelated changes a
   });
   assert.equal(sent.length, 0);
   callbacks.get('DOMContentLoaded')();
-  assert.equal(observed.element, root);
-  assert.deepEqual(Array.from(observed.options.attributeFilter), ['class', 'style', 'data-xn-palette', 'data-xn-desktop-enabled', 'data-xn-desktop-tray-state']);
+  assert.deepEqual(observed.element, root);
+  assert.deepEqual(Array.from(observed.options.attributeFilter), ['class', 'style', 'data-xn-palette', 'data-xn-desktop-enabled', 'data-xn-desktop-tray-state', 'data-xn-desktop-notify-request']);
   sync();
   assert.equal(sent.length, 1);
   color = '#2b2b2b'; symbolColor = '#d4d4d4'; sync();
@@ -151,6 +153,20 @@ test('isolated preload follows theme mutations, deduplicates unrelated changes a
     ['xueness:desktop-tray-state', JSON.parse(trayState)],
     ['xueness:desktop-locale', 'en'],
   ]);
+  // Notification requests forward only while the desktop plugin is effective;
+  // a request published while disabled stays dropped.
+  const notifySent = () => sent.filter(entry => entry[0] === 'xueness:desktop-notify');
+  const dropped = JSON.stringify({ seq: 10, locale: 'zh', items: [{ kind: 'approval', sessionTitle: '任务', sessionId: 'a'.repeat(32) }] });
+  policy = 'false'; sync();
+  notifyRequest = dropped; sync();
+  assert.equal(notifySent().length, 0);
+  policy = 'true'; sync();
+  assert.equal(notifySent().length, 0, 'a request dropped while disabled is not replayed on enable');
+  notifyRequest = JSON.stringify({ seq: 11, locale: 'zh', items: [{ kind: 'question', sessionTitle: '任务' }] }); sync(); sync();
+  assert.deepEqual(JSON.parse(JSON.stringify(notifySent())), [['xueness:desktop-notify', { seq: 11, locale: 'zh', items: [{ kind: 'question', sessionTitle: '任务' }] }]]);
+  notifyRequest = 'x'.repeat(3000); sync();
+  notifyRequest = '{bad'; sync();
+  assert.equal(notifySent().length, 1, 'oversized and unparsable requests are not forwarded');
   const id = 'a'.repeat(32);
   ipcRenderer.emit('xueness:desktop-command', {}, { kind: 'session', id, secret: 'discard' });
   ipcRenderer.emit('xueness:desktop-command', {}, { kind: 'new', url: 'https://example.com' });

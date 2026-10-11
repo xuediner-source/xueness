@@ -1,5 +1,7 @@
 # Xueness 插件架构与功能归属
 
+2026-10-12 桌面系统通知：desktop 新增 `desktop.notifications`（默认开启，可在设置中关闭）。会话转入等待审批、等待回答、失败或完成时，复用既有会话列表刷新作为触发源，经 `DesktopNotificationsBridge.tsx` 发布有界请求，由 desktop 的 `window-theme-preload.cjs` 在插件生效时转发，`desktop/src/notifications.cjs` 在主进程再次校验并弹出 Electron 系统通知；点击通知聚焦主窗口并复用托盘命令选中会话。禁用 desktop 或关闭通知开关后，bridge、preload 与主进程三处触发路径均停止。前端实现登记于 desktop 插件 `frontendModules`，设置开关沿用既有 settings 面板分组（默认开）。目录为 **30 个插件、205 项登记功能**。
+
 2026-10-12 会话执行与交互补齐：目录现为 **30 个插件、204 项登记功能**。sessions 提供当前轮引导、立即发送、稳定修订与实时补丁、长历史分页、会话内查找、文本选择和分享导入；providers 提供结构化语义压缩；planning 提供有预算及独立核验的目标继续；subagents 提供持久子会话、恢复收件箱和只读正文查看。共享执行器仅接入插件生命周期，未扩大共享白名单。验收缩减与本地主机分享边界见 [实施记录](session-runtime-upgrade-2026-10-12.md)。
 
 2026-10-12 订阅账号范围修正：`subscriptions` 仅保留账号授权、CLI 登录导入与订阅账号凭证。移除 API／套餐 Key／网关目录及手动 API 接入路径，原有存储保留但不进入订阅目录或会话模型；Command Code 仅接受明确的 CLI 登录导入，Qoder 不再读取 9Router 数据库。既有 6 个功能 ID 保持稳定，目录仍为 **30 个插件、192 项登记功能**，未扩大共享边界。详见[范围与验证说明](subscription-account-scope-2026-10-12.md)。
@@ -95,7 +97,7 @@ flowchart LR
 | automation | `OffPeakTasks.tsx`、`automationModel.ts`、`index.tsx`、`offPeakModel.ts` |
 | browser | `BrowserSettings.tsx`、`DesktopBrowserImport.tsx` |
 | onboarding | `DesktopPermissionOnboarding.tsx` |
-| desktop | `DesktopAbout.tsx`、`DesktopTitlebar.tsx`、`DesktopTrayBridge.tsx`、`DesktopTrayMenu.tsx`、`tray-main.tsx` |
+| desktop | `DesktopAbout.tsx`、`DesktopTitlebar.tsx`、`DesktopTrayBridge.tsx`、`DesktopTrayMenu.tsx`、`tray-main.tsx`、`DesktopNotificationsBridge.tsx`、`DesktopNotificationSettings.tsx` |
 | diagnostics | `index.tsx` |
 | extensions | `PluginProfilePicker.tsx`、`index.tsx` |
 | network | `NetworkSettings.tsx` |
@@ -135,7 +137,7 @@ flowchart LR
 | bots | Telegram 白名单收件箱和明确回复 | sessions | **关** |
 | onboarding | 隐藏密钥输入的配置向导、首次启动权限引导 | providers | 开 |
 | updates | 源仓库快进更新与桌面客户端更新 | — | 开 |
-| desktop | 原生窗口、目录选择、状态、标题栏与系统权限入口 | — | 开 |
+| desktop | 原生窗口、目录选择、状态、标题栏、系统通知与系统权限入口 | — | 开 |
 | tools | 工具干跑及每轮工具调用预算（实验开关默认关闭） | — | 开 |
 
 “开”指模块可用。Hooks/MCP/子代理等运行 opt-in 仍默认关闭；Web 写操作继续逐调用批准。禁用依赖不会改写其他开关，但会让依赖者 `effective=false`。重新启用依赖后，原来启用的依赖者恢复；显式关闭的插件保持关闭。文件禁用不影响独立 PTY，但 shell 或 sessions 禁用会关闭终端。
@@ -260,7 +262,7 @@ providers 的 CLI parser/handler 已迁入 `xueness/bundled_plugins/providers/op
 | bots | Telegram 白名单收件箱；明确批准的消息回复 |
 | onboarding | 模型与工作区初次配置向导；隐藏密钥输入与配置保存；首次启动当前平台支持的系统权限引导及进度保存 |
 | updates | 源仓库版本与更新检查；明确批准的干净仓库快进更新；桌面客户端检查、下载、取消与安装控制 |
-| desktop | Windows/macOS 桌面宿主集成；原生目录选择与平台状态；集成标题栏、窗口控制、双语菜单及主题同步；单实例、启动恢复与后台进程清理；Windows 托盘/macOS Dock 后台运行与恢复；共用会话分组、快速打开、新建与反馈入口；系统权限真实状态与固定原生授权入口 |
+| desktop | Windows/macOS 桌面宿主集成；原生目录选择与平台状态；集成标题栏、窗口控制、双语菜单及主题同步；单实例、启动恢复与后台进程清理；Windows 托盘/macOS Dock 后台运行与恢复；共用会话分组、快速打开、新建与反馈入口；系统权限真实状态与固定原生授权入口；等待审批、提问与运行结果的系统通知 |
 | tools | 副作用工具调用的干跑预览（写/编辑给出目标路径与差异摘要，执行给出 argv 与工作目录；实验，默认关闭） |
 
 计划权限模式 `sessions.plan_mode` 在 build/edit/yolo 之外补上第四种模式。四种取值的单一来源是 `sessions/plan_mode.PERMISSION_MODES`（前端为 `plugins/sessions/permissionModes.ts`）；WebGate、专家工作流、app-server 与 CLI 都引用它。`plan` 下读取、搜索类工具照常，写/编辑/执行/网页工具一律拒绝，唯一例外是本会话专属的计划草稿 `<状态目录>/plan-drafts/<会话 id>.md`（在状态目录内按会话划分，不在工作区内）。草稿路径布局与中英双语拒绝文案都由 `sessions/plan_mode.py` 决定，WebGate 与 CLI 使用的内核 Gate 只按该插件给出的凭据精确匹配放行一次写入，files 的写/编辑解析也先问 Gate，因此工作区 jail 未被放宽、没有新增内建工具。拒绝结果带 `plan_mode_denied`，不会伪装成可批准的等待项；sessions 禁用或依赖不可用时 `plan` 值被拒绝，从 plan 切回 build/edit/yolo 沿用既有 `permission_mode_history` 审计。内核 `mode=plan` 仍是更硬的天花，连草稿一并拒绝，也压过 `permission_mode=yolo`。CLI `run`/`chat` 增加 `--permission-mode build|edit|yolo|plan`：plan 映射为只读加草稿，yolo 仍不自动放行远程 SSH，旧的 `--allow-*` 与 `--mode` 保持兼容；省略该参数时只继承已保存的 plan，不把已保存的 edit/yolo 静默套到 CLI 上。聊天 `/mode plan` 继续设置内核天花。完整格子见 `docs/xueness-permission-modes.md`。草稿路径、命令、技能和钩子的包含判断与写锁共用主机路径比较：Windows 与 macOS 忽略大小写，Linux 保持区分；比较不上仍是拒绝，不会放宽 jail。
@@ -838,3 +840,32 @@ Office 内容交付检查复用 `office.tooling.delivery_content_text` 的有界
 `sessions.native_evidence` 拥有原生 Markdown 回答末尾的显式证据引用行；实现为 sessions 的 `native_evidence`。内核仍负责统一 journal、真实结果验证、审批及停止边界，引用只允许当前轮真实成功证据，关闭 sessions 后不能借此通过验证。前端复用已有 providers 编辑器和 sessions 请求阶段，不新增布局容器或共享例外。详见 [工具调用审查](tool-protocol-audit-2026-10-09.md)。
 
 既有 `git.clone` 复用共享 reparse 检查拒绝 Windows junction。既有 Office authoring 的原子替换复用 `resources.replace_file`：仅 Windows 的 WinError 5/32/33 在约半秒内重试，每次尝试前仍核对读取时的 sha256；其它平台和其它错误立即失败。期间外部编辑、路径重定向和永久拒绝继续失败。这是现有工具执行的跨平台修复，不增加工具或共享业务例外。
+
+## 会话时间线压缩可见性（sessions.compaction_visibility，2026-10-12）
+
+后端 `core.compact` 早已把移出请求上下文的消息存进 `archived_messages` 并在 `session.compactions` 追加 `{removed, masked, previous_chars, estimatedTokens}` 记录，`/api/sessions/<sid>/conversation` 的快照也原样携带这两份数据，但前端此前对 `compactions` 零引用，用户无法解释「模型为什么忘了」。新功能把这条边界画到时间线上：归档历史（完整原文按展示顺序排在最前）与仍在模型上下文中的消息之间渲染一条浅色虚线分隔行，说明「已压缩 N 条较早消息 / 另有 M 条旧输出已掩码」。
+
+实现全部在 sessions 插件内：`plugins/sessions/conversationCompaction.ts` 解析 compactions 记录并在合并后的时间线行上定位边界——窗口化 journal 水合时上下文内消息保留重映射后的 `messageIndex`、归档行剥离该字段，所以「第一条带 `messageIndex` 的行」就是仍在上下文中的开头；journal 未窗口化或本页看不到归档前缀时不渲染标记、不猜测位置。`ZCodeConversation.tsx` 在边界行所属轮次顶部挂 `role="note"` 分隔行（无动画，reduced-motion 无差异），容器只以 `useMemo` 调用插件函数并把结果作为 prop 传入，业务逻辑不进容器。文案走 `i18n.ts` 中英双语，配色沿用 `--conversation-muted`/`--border` 既有令牌。登记为 sessions manifest 的 `sessions.compaction_visibility` 与 `frontendModules` 一项；回归见 `webapp/src/plugins/sessions/conversationCompaction.test.ts` 与 `ZCodeConversation.test.tsx` 的边界渲染断言。
+
+## 「/mcp」连接管理命令（mcp.command，2026-10-12）
+
+mcp 插件登记 `mcp.command` 并认领 `mcp` 命令（`command_cli.py`）。ZCode TUI 的 `/mcp list|status|connect|disconnect` 对齐为同一插件的两个入口：聊天内 `plugin_runtime.dispatch_slash` 路由的 `/mcp`，与 CLI `xueness mcp list|status [id]|connect <id>|disconnect <id> [--json]`。一个格式化函数同时服务聊天回复与终端输出，文案按 ctx 的 `language` 提供中英两份。
+
+- `list` 只读配置：枚举本插件 `mcp` 资源 kind 的全部条目（含停用），显示 id、传输方式与目标，不启动任何服务器进程。
+- `status [id]` 走既有 `check_mcp` 缝（`mcp-check` CLI 与 Web 确认路由共用），显式连接并报告协商协议与工具名；一次最多探测 8 个已启用服务器，超出部分提示单独查看。
+- `connect <id>` 走既有 `lifecycle.Pool`：`with Pool(root)` 保证子进程在任何路径上都关闭，失败只给元数据（与 `mcp-check` 一致，不回显子进程输出）。
+- `disconnect <id>` 释放传入 pool 仍持有的客户端；Xueness 的 MCP 连接按运行轮创建并随轮关闭，聊天轮与轮之间没有常驻连接，此时如实说明而不是假装停止。
+
+无新增连接实现、工具或共享内核例外；CLI 面由 CLI 宿主的既有插件开关检查拦截（`cli_owner('mcp')`），聊天面由 `dispatch_slash` 的 `is_enabled` 检查拦截。回归见 `tests/test_mcp.py` 的 `McpCommandTestCase`（含真实 fake server 的 Pool 连接、探测上限、禁用回退与双语输出断言）。
+
+## 只读健康体检 doctor（diagnostics.doctor，2026-10-12）
+
+diagnostics 插件登记 `diagnostics.doctor` 并认领 `doctor` CLI 命令（`doctor.py`）。`xueness doctor [--json] [--root PATH] [--ping]` 聚合一次只读体检：版本信息（xueness/Python/平台）、插件目录与依赖状态（catalog 的 installed/effective/blockedBy 汇总，配置损坏报 configurationError）、状态目录与工作区可写性（临时探测文件写入后立即删除，不创建缺失目录、拒绝符号链接目录并单独标注），以及模型配置解析。默认路径**不发起任何网络请求**：按「已保存默认选择 → 环境 → 第一个已保存 profile」的顺序走 `provider_config.resolve` 的纯构造校验；`--ping` 是操作者对一次有界 `GET /models` 模型发现的显式选择，且要求 providers 插件生效，失败时沿用「details suppressed」的脱敏措辞。
+
+凭据永不打印：profile 概要来自 providers 插件的公开脱敏视图（`hasKey` 而非密钥），错误文案复用 run 启动同一条凭据安全指引。未配置任何模型时报「no model provider is configured」而不是客户端构造器的原始校验错误。文本与 `--json` 共用同一份结构化报告；CLI 面由 CLI 宿主既有插件开关检查拦截。回归见 `tests/test_diagnostics_doctor.py`（报告形状、脱敏断言、ping 门与协议回退、双语输出与退出码）。
+
+## 模型与会话内省工具（providers.introspection / sessions.read_state，2026-10-12）
+
+providers 登记 `providers.introspection` 与只读工具 `list_models`（`providers/tooling.py`）：向模型提供已保存模型档位的脱敏概要（`hasKey` 而非密钥，沿用 providers 公开视图）与本会话已记录的模型选择；纯读、`concurrency_safe=True`，不发起任何网络请求，也不允许模型自行切换模型——切换仍是操作者动作（/model、/effort 或设置页）。sessions 登记 `sessions.read_state` 与只读工具 `read_state`（`sessions/tooling.py`）：投影当前会话自身的运行状态（id、status、mode、permission_mode、steps、title、任务行、待办列表与是否挂起提问），不含消息正文；纯读、`concurrency_safe=True`，待办投影有界。
+
+两个工具按 `tool_registry` 既有只读工具模式注册，Gate 新只读 kind（`list_models`、`read_state`）在 core 既有只读放行清单登记（仅策略接线，无业务逻辑），禁用所属插件后 dispatch 直接拒绝。回归见 `tests/test_model_introspection.py`（注册提示、脱敏、有界投影、禁用边界）。

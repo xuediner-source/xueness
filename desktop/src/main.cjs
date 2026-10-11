@@ -1,4 +1,4 @@
-const { app, BrowserWindow, Menu, dialog, shell, net, ipcMain, Tray, screen, systemPreferences } = require('electron');
+const { app, BrowserWindow, Menu, dialog, shell, net, ipcMain, Tray, screen, systemPreferences, Notification } = require('electron');
 const { join, resolve } = require('node:path');
 const { existsSync, mkdirSync, writeFileSync } = require('node:fs');
 const { Backend } = require('./backend.cjs');
@@ -8,11 +8,12 @@ const { createDesktopBackground, handleSecondInstance } = require('./desktop-bac
 const { UpdateCoordinator } = require('./update-coordinator.cjs');
 const { createElectronAssetRequest } = require('./electron-net-asset.cjs');
 const { createPermissionsHandler } = require('./permissions.cjs');
+const { createDesktopNotifications } = require('./notifications.cjs');
 const { buildApplicationMenu, getNativeLabels } = require('./native-labels.cjs');
 const { autoUpdater } = require('electron-updater');
 const { configuredDataDirectory } = require('./data-directory.cjs');
 
-let window, backend, updater, background, quitting = false;
+let window, backend, updater, background, notifications, quitting = false;
 let updatePolicy = false, autoDownloadUpdates = true;
 let desktopLocale = 'zh', applicationMenuReady = false;
 app.setName('Xueness');
@@ -34,6 +35,7 @@ else {
   }));
   app.on('before-quit', event => {
     background?.dispose();
+    notifications?.dispose();
     void updater?.dispose();
     if (!quitting && backend) {
       event.preventDefault(); quitting = true;
@@ -182,6 +184,8 @@ async function start() {
     await window.loadFile(join(__dirname, 'loading.html'));
   }
   attachWindowSecurity(window, origin);
+  notifications = createDesktopNotifications({ app, Notification: Notification, ipcMain,
+    getWindow: () => window, getOrigin: () => backend.origin, showMain: showMainWindow });
   let choosing = false;
   backend.on('dialog', async message => {
     if (choosing || !window || window.isDestroyed()) { backend.reply({ id: message.id, error: 'unavailable' }); return; }

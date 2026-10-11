@@ -29,6 +29,7 @@ from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
 from tests.fs_link_helpers import make_directory_boundary_link, make_symlink
+from xueness.bundled_plugins.mcp import command_cli
 from xueness.mcp import (DEFAULT_OUTPUT_CAP, DEFAULT_TIMEOUT, MCP_PREFIX,
                          TIMEOUT_CAP, TRUNCATION_SUFFIX, McpClient, load,
                          namespaced, parse_namespaced, tool_schema)
@@ -823,6 +824,172 @@ class McpTestCase(unittest.TestCase):
         self.assertTrue(result["ok"])
         self.assertNotIn("SUPER-SECRET-VALUE-42", result["content"])
         self.assertIn("LEAK=None", result["content"])
+
+
+class McpCommandTestCase(unittest.TestCase):
+    """`/mcp` and `xueness mcp`: listing, explicit connect/status/disconnect."""
+
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temp.cleanup)
+        self.root = Path(self.temp.name)
+        self.state_dir = self.root / "state"
+        self.mcp_dir = self.state_dir / "resources" / "mcp"
+        self.mcp_dir.mkdir(parents=True)
+        self.work = self.root / "work"
+        self.work.mkdir()
+        self.script = self.root / "fake_server.py"
+        self.script.write_text(FAKE_SERVER, encoding="utf-8")
+        self.log = self.root / "requests.jsonl"
+
+    def write_server(self, server_id="srv", *, enabled=None, extra=None):
+        item = {"id": server_id, "name": server_id,
+                "command": sys.executable, "args": [str(self.script), str(self.log)]}
+        if enabled is not None:
+            item["enabled"] = enabled
+        if extra:
+            item.update(extra)
+        path = self.mcp_dir / (server_id + ".json")
+        path.write_text(json.dumps(item), encoding="utf-8")
+        return path
+
+    def ctx(self, **extra):
+        base = {"state_dir": self.state_dir, "root": str(self.work), "language": None}
+        base.update(extra)
+        return base
+
+    # --- list ---------------------------------------------------------------
+
+    def test_list_reports_configured_servers_without_starting_any(self):
+        self.write_server("srv")
+        self.write_server("off", enabled=False)
+        result = command_cli.run(self.state_dir, "list", root=self.work)
+        self.assertIn("srv", result["text"])
+        self.assertIn("off", result["text"])
+        self.assertIn("stdio", result["text"])
+        self.assertEqual([row["id"] for row in result["document"]], ["off", "srv"])
+        self.assertFalse(self.log.exists(), "list must not start any server")
+
+    def test_list_empty_state_has_a_hint(self):
+        text = command_cli.run(self.state_dir, "", root=self.work)["text"]
+        self.assertIn("未配置 MCP 服务器", text)
+
+    def test_list_english_labels(self):
+        self.write_server("srv")
+        text = command_cli.run(self.state_dir, "list", root=self.work, language="en")["text"]
+        self.assertIn("MCP servers (1)", text)
+
+    # --- connect ------------------------------------------------------------
+
+    def test_connect_starts_the_pool_client_and_lists_tools(self):
+        self.write_server("srv")
+        result = command_cli.run(self.state_dir, "connect srv", root=self.work)
+        self.assertEqual(result["action"], "connect")
+        row = result["document"]["results"][0]
+        self.assertTrue(row["ok"])
+        self.assertEqual(row["protocol"], "2024-11-05")
+        self.assertEqual(row["tools"], ["echo", "boom", "slow", "env", "long"])
+        self.assertIn("已连接", result["text"])
+        self.assertIn("echo", result["text"])
+
+    def test_connect_unknown_server_is_an_operator_error(self):
+        with self.assertRaises(ValueError):
+            command_cli.run(self.state_dir, "connect missing", root=self.work)
+
+    def test_connect_disabled_server_is_not_found(self):
+        self.write_server("off", enabled=False)
+        with self.assertRaises(ValueError):
+            command_cli.run(self.state_dir, "connect off", root=self.work)
+
+    def test_connect_failure_is_metadata_only(self):
+        self.write_server("bad", extra={"command": "definitely-not-a-real-command-42"})
+        result = command_cli.run(self.state_dir, "status bad", root=self.work)
+        row = result["document"]["results"][0]
+        self.assertFalse(row["ok"])
+        self.assertIn("连接失败", result["text"])
+        self.assertNotIn("definitely-not-a-real-command-42", result["text"])
+
+    # --- status -------------------------------------------------------------
+
+    def test_status_checks_every_enabled_server_with_a_cap(self):
+        for index in range(command_cli.MAX_STATUS_PROBES + 2):
+            self.write_server("srv%02d" % index)
+        document = command_cli.status_all(self.state_dir, self.work, None)
+        self.assertEqual(document["probed"], command_cli.MAX_STATUS_PROBES)
+        self.assertTrue(document["truncated"])
+
+    def test_status_single_unknown_id_raises(self):
+        self.write_server("srv")
+        with self.assertRaises(ValueError):
+            command_cli.status_all(self.state_dir, self.work, "missing")
+
+    # --- disconnect ---------------------------------------------------------
+
+    def test_disconnect_reports_the_run_scoped_connection_model(self):
+        result = command_cli.run(self.state_dir, "disconnect srv", root=self.work)
+        self.assertFalse(result["document"]["released"])
+        self.assertIn("随每轮结束自动关闭", result["text"])
+
+    def test_disconnect_releases_a_supplied_pool_client(self):
+        pool = Mock()
+        result = command_cli.disconnect(self.state_dir, "srv", pool=pool)
+        self.assertTrue(result["released"])
+        pool.discard.assert_called_once_with("srv")
+
+    # --- slash dispatch -----------------------------------------------------
+
+    def test_slash_reply_and_unknown_subcommand_stay_strings(self):
+        from xueness import plugin_runtime
+        self.write_server("srv")
+        reply = plugin_runtime.dispatch_slash("/mcp list", self.ctx())
+        self.assertIn("srv", reply)
+        reply = plugin_runtime.dispatch_slash("/mcp totally-odd", self.ctx())
+        self.assertIn("未知子命令", reply)
+        # A disabled plugin must fall into neither execution nor the model prompt.
+        plugin_runtime.set_enabled(self.state_dir, "mcp", False)
+        self.addCleanup(plugin_runtime.set_enabled, self.state_dir, "mcp", True)
+        self.assertEqual(
+            plugin_runtime.dispatch_slash("/mcp list", self.ctx()),
+            "plugin disabled or dependency unavailable: mcp")
+
+    def test_slash_disconnect_and_english_language_flow(self):
+        from xueness import plugin_runtime
+        reply = plugin_runtime.dispatch_slash("/mcp disconnect srv",
+                                              self.ctx(language="en"))
+        self.assertIn("No persistent connection", reply)
+
+    # --- CLI ----------------------------------------------------------------
+
+    def test_cli_execute_prints_listing_and_json_rows(self):
+        import contextlib
+        import io
+        self.write_server("srv")
+        parser_args = SimpleNamespace(cmd="mcp", state=self.state_dir, mcp_action="list",
+                                      json=False, root=None, language=None)
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            code = command_cli.execute(parser_args)
+        self.assertEqual(code, 0)
+        self.assertIn("srv", out.getvalue())
+        parser_args = SimpleNamespace(cmd="mcp", state=self.state_dir, mcp_action="list",
+                                      json=True, root=None, language=None)
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            code = command_cli.execute(parser_args)
+        self.assertEqual(code, 0)
+        rows = json.loads(out.getvalue())
+        self.assertEqual([row["id"] for row in rows], ["srv"])
+
+    def test_cli_execute_connect_failure_exits_nonzero(self):
+        import contextlib
+        import io
+        self.write_server("bad", extra={"command": "definitely-not-a-real-command-42"})
+        parser_args = SimpleNamespace(cmd="mcp", state=self.state_dir, mcp_action="status",
+                                      json=False, root=None, language=None)
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            code = command_cli.execute(parser_args)
+        self.assertEqual(code, 1)
 
 
 if __name__ == "__main__":

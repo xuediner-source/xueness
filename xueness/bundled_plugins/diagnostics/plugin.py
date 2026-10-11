@@ -7,6 +7,16 @@ from ...plugin_runtime import catalog
 from . import runtime_metrics
 
 
+def register_cli(commands):
+    from .doctor import add_parser
+    add_parser(commands)
+
+
+def execute_cli(args, deps=None):
+    from .doctor import execute
+    return execute(args)
+
+
 def report(ctx):
     root=Path(ctx['state_dir']).resolve();groups={}
     for group in ('sessions','workflows','resources','mcp-oauth'):

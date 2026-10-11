@@ -9,6 +9,7 @@ if ((process.platform === 'win32' || process.platform === 'darwin') && window.to
     let previous = '';
     let previousPolicy;
     let previousTrayState = '';
+    let previousNotifyRequest = '';
     let previousLocale;
     const sync = () => {
       const style = getComputedStyle(root);
@@ -43,9 +44,21 @@ if ((process.platform === 'win32' || process.platform === 'darwin') && window.to
           previousTrayState = trayState;
         } catch { /* Ignore incomplete state mutations. */ }
       }
+      // Notification requests are one-shot values published by the desktop
+      // notifications bridge. Forward them only while the desktop plugin is
+      // effective (`data-xn-desktop-enabled`), so a disabled plugin also stops
+      // the preload side of the trigger path.
+      const notifyRequest = root.getAttribute('data-xn-desktop-notify-request');
+      if (notifyRequest && notifyRequest.length < 2048 && notifyRequest !== previousNotifyRequest) {
+        previousNotifyRequest = notifyRequest;
+        if (root.getAttribute('data-xn-desktop-enabled') === 'true') {
+          try { ipcRenderer.send('xueness:desktop-notify', JSON.parse(notifyRequest)); }
+          catch { /* Ignore incomplete state mutations. */ }
+        }
+      }
     };
     const observer = new MutationObserver(sync);
-    observer.observe(root, { attributes: true, attributeFilter: ['class', 'style', 'data-xn-palette', 'data-xn-desktop-enabled', 'data-xn-desktop-tray-state'] });
+    observer.observe(root, { attributes: true, attributeFilter: ['class', 'style', 'data-xn-palette', 'data-xn-desktop-enabled', 'data-xn-desktop-tray-state', 'data-xn-desktop-notify-request'] });
     wide?.addEventListener?.('change', sync);
     sync();
     const command = (_event, action) => {

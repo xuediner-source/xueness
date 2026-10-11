@@ -12,6 +12,7 @@ import type { TimelineRow } from '../../xuenessWorkbench';
 import { SimpleMarkdown, MarkdownRenderOptionsContext, type MarkdownRenderOptions } from '../../XuenessShell';
 import { useQuantizedStreamingText } from '../../ui/StreamingCommitGate';
 import { assistantTextForDisplay, terminalResultForDisplay } from './XuenessTimeline';
+import { conversationCompactionLabel, type ConversationCompactionMarker } from './conversationCompaction';
 import { completionPresentation, isDuplicateCompletionAnswer, shouldHideCompletionCard } from './completionPresentation';
 import { conversationActivityLabel, reasoningIsActive } from './conversationActivity';
 import { formatConversationWorkDuration } from './conversationWorkDuration';
@@ -290,6 +291,8 @@ function CompletionCheck({ row, answer, protocol, findActive = false }: { row: C
 export type ZCodeConversationProps = {
   sessionId?: string;
   rows: TimelineRow[];
+  /** 上下文压缩边界（由快照的 compactions 与归档行推导）；缺省不渲染分隔行。 */
+  compactionMarker?: ConversationCompactionMarker | null;
   findQuery?: string;
   onFindQueryChange?(query: string): void;
   findRequest?: { id: string; query: string; rowKey?: string; occurrence?: number };
@@ -381,7 +384,18 @@ function FeedbackActions({ row, onFeedback }: { row: Assistant; onFeedback: NonN
     {error && <span className="xn-zc-action-error" role="alert">{error}</span>}</>;
 }
 
-function Turn({ turn, latest, props, activeFindRowKey }: { turn: ConversationTurn; latest: boolean; props: ZCodeConversationProps; activeFindRowKey: string | null }) {
+/** 上下文压缩边界：归档历史与仍在模型上下文中的消息之间的浅色分隔行。
+ * 纯展示、无动画；文案与计数由 sessions 插件的 compaction 记录推导。 */
+function CompactionBoundary({ marker }: { marker: ConversationCompactionMarker }): React.JSX.Element {
+  const label = conversationCompactionLabel(marker);
+  const note = tr('此边界以上的历史已压缩或掩码出模型上下文，原文保留在会话日志。');
+  return <div className="xn-zc-compaction" data-testid="timeline-compaction-boundary" role="note"
+    aria-label={`${label} ${note}`} title={note}>
+    <span className="xn-zc-compaction__label">{label}</span>
+  </div>;
+}
+
+function Turn({ turn, latest, props, activeFindRowKey, compactionMarker }: { turn: ConversationTurn; latest: boolean; props: ZCodeConversationProps; activeFindRowKey: string | null; compactionMarker?: ConversationCompactionMarker | null }) {
   const { showReasoning = true, jsonToolProtocol = false, pendingToolIds, onFork, onFeedback, onEdit, onRetry } = props;
   const assistantRows = turn.rows.filter((row): row is Assistant => row.kind === 'assistant');
   const completion = turn.rows.findLast((row): row is Completion => row.kind === 'completion');
@@ -409,6 +423,7 @@ function Turn({ turn, latest, props, activeFindRowKey }: { turn: ConversationTur
     </div> : null);
   const stableTurnId = turn.rows.map(timelineRowTurnId).find(Boolean) ?? turn.key;
   return <section className="xn-zc-turn" data-turn-key={turn.key} data-zcode-turn-id={stableTurnId}>
+    {compactionMarker && <CompactionBoundary marker={compactionMarker} />}
     {turn.rows.filter((row): row is User => row.kind === 'user').map(row => <div key={`user:${row.messageId ?? row.messageIndex ?? row.seq}`} {...rowData(row)}><UserMessage row={row} onEdit={onEdit} /></div>)}
     {work.length > 0 && (running || !final ? <div className="xn-zc-work"><div className="xn-zc-work-status" role="status">{workLabel}</div><div className="xn-zc-work-content">{workRows}</div></div>
       : <details className="xn-zc-work" open={workOpen} onToggle={workDisclosure.onToggle}><summary className="xn-zc-work-status"><span>{workLabel}</span><ChevronRight size={16} className="xn-zc-chevron" /></summary>
@@ -431,6 +446,10 @@ function Turn({ turn, latest, props, activeFindRowKey }: { turn: ConversationTur
 export function ZCodeConversation(props: ZCodeConversationProps) {
   const [disclosures] = React.useState(() => zcodeConversationDisclosures);
   const turns = React.useMemo(() => buildConversationTurns(props.rows), [props.rows]);
+  // 压缩边界挂在「第一条仍在模型上下文内的行」所属轮次的顶部；归档轮次在前。
+  const markerTurnIndex = React.useMemo(() => props.compactionMarker
+    ? turns.findIndex(turn => turn.rows.some(row => row.seq >= props.compactionMarker!.boundarySeq))
+    : -1, [turns, props.compactionMarker]);
   const { snapshot, streamRef, reveal } = useTimelineVirtualWindow({ count: turns.length, enabled: true, initialTail: props.autoScroll !== false });
   const rootRef = React.useRef<HTMLDivElement>(null);
   const [internalFindQuery, setInternalFindQuery] = React.useState("");
@@ -573,7 +592,9 @@ export function ZCodeConversation(props: ZCodeConversationProps) {
               onMouseDown={event => event.preventDefault()}>{props.renderSelectionAction(selection)}</div>}
             {snapshot.topPad > 0 && <div aria-hidden="true" style={{ height: snapshot.topPad }} />}
             {turns.slice(snapshot.start, snapshot.end).map((turn, offset) => <div data-window-index={snapshot.start + offset} key={turn.key}>
-              <Turn turn={turn} latest={snapshot.start + offset === turns.length - 1} props={props} activeFindRowKey={activeFindMatch?.rowKey ?? null} />
+              <Turn turn={turn} latest={snapshot.start + offset === turns.length - 1} props={props}
+                activeFindRowKey={activeFindMatch?.rowKey ?? null}
+                compactionMarker={snapshot.start + offset === markerTurnIndex ? props.compactionMarker : null} />
             </div>)}
             {snapshot.bottomPad > 0 && <div aria-hidden="true" style={{ height: snapshot.bottomPad }} />}
             {!turns.length && props.streamingPending && <p className="xn-zc-live" role="status">{tr(conversationActivityLabel(props.activityPhase))}</p>}

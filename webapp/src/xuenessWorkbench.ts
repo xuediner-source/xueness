@@ -154,6 +154,8 @@ export type WorkbenchSession = {
   browser_enabled?: boolean;
   remote_connection?: { id: string; digest: string } | null;
   forkParent?: ForkParentInfo | null;
+  /** 上下文压缩记录（progressive compaction）；形状由 sessions 插件解析。 */
+  compactions?: import('./plugins/sessions/conversationCompaction').SessionCompactionRecord[];
 };
 
 export type SessionSummary = { id: string; task: string; title?: string; status: string; pinned?: boolean; root?: string; updatedAt?: string };

@@ -7,7 +7,8 @@
   "defaultEnabled": true,
   "dependencies": [],
   "tools": [
-    "read_session_context"
+    "read_session_context",
+    "read_state"
   ],
   "commands": [
     "new",
@@ -166,6 +167,11 @@
       "nameEn": "Manual context compaction (/compact with instructions)"
     },
     {
+      "id": "sessions.compaction_visibility",
+      "name": "时间线压缩标记：归档历史边界与旧输出掩码提示",
+      "nameEn": "Timeline compaction markers: archived-history boundary and masked older outputs"
+    },
+    {
       "id": "sessions.tool_concurrency",
       "name": "依赖感知的工具并发调度",
       "nameEn": "Dependency-aware tool concurrency"
@@ -299,6 +305,11 @@
       "id": "sessions.transcript_paging",
       "name": "长会话分段加载与原始历史恢复",
       "nameEn": "Long-transcript paging and original history recovery"
+    },
+    {
+      "id": "sessions.read_state",
+      "name": "会话运行状态内省工具（read_state）",
+      "nameEn": "Session run-state introspection tool (read_state)"
     }
   ],
   "frontendModules": [
@@ -354,6 +365,7 @@
     "plugins/sessions/FullAccessConfirmationDialog.tsx",
     "plugins/sessions/conversationActivity.ts",
     "plugins/sessions/conversationJournalProjection.ts",
+    "plugins/sessions/conversationCompaction.ts",
     "plugins/sessions/ZCodeConversation.tsx",
     "plugins/sessions/useRunPermissionConfirmation.tsx",
     "plugins/sessions/sessionSearch.ts",

@@ -66,6 +66,11 @@
       "id": "desktop.host_capability",
       "name": "宿主平台与一次性能力票据（实验，默认关闭）",
       "nameEn": "Host platform probe and one-time capability ticket (experimental, off by default)"
+    },
+    {
+      "id": "desktop.notifications",
+      "name": "等待审批、提问与运行结果的系统通知",
+      "nameEn": "System notifications for approvals, questions and run results"
     }
   ],
   "frontendModules": [
@@ -73,7 +78,9 @@
     "plugins/desktop/DesktopTitlebar.tsx",
     "plugins/desktop/DesktopTrayBridge.tsx",
     "plugins/desktop/DesktopTrayMenu.tsx",
-    "plugins/desktop/tray-main.tsx"
+    "plugins/desktop/tray-main.tsx",
+    "plugins/desktop/DesktopNotificationsBridge.tsx",
+    "plugins/desktop/DesktopNotificationSettings.tsx"
   ],
   "desktopModules": [
     "src/main.cjs",
@@ -87,6 +94,7 @@
     "src/tray-menu-preload.cjs",
     "src/loading.html",
     "src/permissions.cjs",
-    "src/native-labels.cjs"
+    "src/native-labels.cjs",
+    "src/notifications.cjs"
   ]
 }

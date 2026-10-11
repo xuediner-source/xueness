@@ -692,7 +692,8 @@ class Gate:
                 return
             raise PermissionError(f"{kind} requires explicit approval")
         if kind in ("read", "list", "glob", "grep", "todo_read", "todo_write",
-                    "ask_user", "read_session_context", "planning", "tool_search", "tool_result_read"):
+                    "ask_user", "read_session_context", "planning", "tool_search", "tool_result_read",
+                    "list_models", "read_state"):
             return
         # A new contributor gate kind must receive an explicit policy here;
         # merely appearing in the trusted registry cannot grant it access.

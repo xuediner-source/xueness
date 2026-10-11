@@ -22,7 +22,8 @@ from xueness import plugins
 class RegistryTests(unittest.TestCase):
     def test_registry_covers_every_opt_in_capability(self):
         self.assertEqual(set(plugins.PLUGINS),
-                         {"skills", "hooks", "subagents", "mcp"})
+                         {"skills", "hooks", "subagents", "mcp",
+                          "subscriptions", "model_monitor"})
 
     def test_every_plugin_declares_its_resource_kind(self):
         for name, cls in plugins.PLUGINS.items():

@@ -10,6 +10,8 @@ def add_parsers(commands):
         "mcp-check", help="explicitly connect to an enabled MCP server and list tools")
     check.add_argument("id")
     check.add_argument("--root", type=Path, default=Path.cwd())
+    from .command_cli import add_parser
+    add_parser(commands)
 
 
 def execute_cli(args, deps=None):

@@ -80,3 +80,9 @@
 @media (max-width: 640px) { .xn-zc-turn { padding-inline: 16px; } .xn-zc-user-bubble { max-width: 100%; } }
 @media (hover: none) { .xn-zc-actions { opacity: 1; } }
 @media (prefers-reduced-motion: reduce) { .xn-zc-actions, .xn-zc-chevron { transition: none; } }
+
+/* 上下文压缩边界：归档历史与仍在模型上下文中的消息之间的浅色分隔行。
+   纯静态展示（无过渡/动画），reduced-motion 下行为一致。 */
+.xn-zc-compaction { display: flex; align-items: center; gap: 10px; min-width: 0; color: var(--conversation-muted); font-size: 12px; line-height: 1.4; }
+.xn-zc-compaction::before, .xn-zc-compaction::after { content: ""; flex: 1 1 24px; border-top: 1px dashed color-mix(in oklab, var(--border) 80%, transparent); }
+.xn-zc-compaction__label { flex: 0 1 auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

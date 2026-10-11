@@ -404,6 +404,22 @@ def _safe_model_config(source: dict) -> dict:
     return config
 
 
+def _preserve_message_identity(clean: dict, raw: dict) -> None:
+    """Copied turns keep their stable private ids across a fork.
+
+    The 0.1.6 stable-history contract mints ``_message_id``/``_turn_id`` once
+    per message; a fork is a copy of the same turns, so re-minting would give
+    two forks of one checkpoint divergent identities for identical content.
+    Invalid or duplicated ids are re-minted by the store on save.
+    """
+    mid = raw.get("_message_id")
+    if isinstance(mid, str) and re.fullmatch(r"[0-9a-f]{32}", mid):
+        clean["_message_id"] = mid
+    tid = raw.get("_turn_id")
+    if isinstance(tid, str) and re.fullmatch(r"turn-[1-9][0-9]*", tid):
+        clean["_turn_id"] = tid
+
+
 def _make_fork(store: Store, source: dict, revision: str, boundary: dict,
                *, title: str | None, root: Path, checkpoint: dict | None = None) -> dict:
     end_index = boundary["endIndex"]
@@ -414,6 +430,7 @@ def _make_fork(store: Store, source: dict, revision: str, boundary: dict,
         clean = _canonical_message(raw)
         if clean["role"] == "system":
             continue
+        _preserve_message_identity(clean, raw)
         copied_messages.append(clean)
         for call in clean.get("tool_calls", []):
             referenced_ids.add(call["id"])
@@ -433,6 +450,12 @@ def _make_fork(store: Store, source: dict, revision: str, boundary: dict,
         raise ForkError("selected boundary contains a partial tool call")
 
     system_message = {"role": "system", "content": SYSTEM}
+    source_system = messages[0] if messages and isinstance(messages[0], dict) else None
+    if source_system is not None and source_system.get("role") == "system":
+        # The fork ships the current canonical prompt, but the row is still the
+        # source's opening message; keeping its identity stops every fork from
+        # minting a fresh system id on save.
+        _preserve_message_identity(system_message, source_system)
     all_messages = [system_message, *copied_messages]
     encoded = json.dumps(all_messages, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
     if len(encoded) > MAX_PREFIX_BYTES:

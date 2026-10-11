@@ -97,7 +97,7 @@ export function SessionQueue({ items, cancellingId, currentId, onCancel, canCont
         onDragOver={event => { if (dragRef.current && !mutationDisabled && pendingIds.includes(item.id)) event.preventDefault(); }}
         onDrop={event => { event.preventDefault(); void dropItem(item.id); }}>
         {onReorder && pendingIds.length > 1 && pendingIds.includes(item.id) && <span className="xn-session-queue__drag"
-          draggable={!mutationDisabled} aria-label={tr('调整队列顺序')} title={tr('调整队列顺序')}
+          aria-label={tr('调整队列顺序')} title={tr('调整队列顺序')} draggable={!mutationDisabled}
           onDragStart={event => { if (mutationDisabled) { event.preventDefault(); return; }
             dragRef.current = { id: item.id, expected: [...pendingIds] }; event.dataTransfer.effectAllowed = 'move';
             event.dataTransfer.setData('text/plain', item.id); }} onDragEnd={() => { dragRef.current = null; }}><GripVertical size={13} aria-hidden="true" /></span>}
@@ -125,9 +125,6 @@ export function SessionQueue({ items, cancellingId, currentId, onCancel, canCont
         {onWithdraw && pendingIds.includes(item.id) && <button type="button" className="xn-session-queue__edit"
           aria-label={tr('撤回到输入框')} title={tr('撤回到输入框')} disabled={mutationDisabled}
           onClick={() => void dispatchItem(item.id, onWithdraw)}><CornerUpLeft size={13} aria-hidden="true" /></button>}
-        {!onWithdraw && onEdit && item.id !== currentId && item.editable !== false && (item.status === "queued" || item.status === "paused") && <button type="button" className="xn-session-queue__edit"
-          aria-label={tr("编辑排队消息")} title={tr("编辑排队消息")} disabled={mutationDisabled}
-          onClick={() => { setEditing({ id: item.id, draft: item.text, original: item.text }); setError(""); }}><Pencil size={13} aria-hidden="true" /></button>}
         {item.id !== currentId && (item.status === "queued" || item.status === "paused") && <button type="button" className="xn-session-queue__cancel"
           aria-label={tr("取消排队")} title={tr("取消排队")} disabled={mutationDisabled}
           onClick={() => onCancel(item.id)}>{tr(cancellingId === item.id ? "正在取消…" : "取消排队")}</button>}

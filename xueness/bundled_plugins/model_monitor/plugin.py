@@ -8,6 +8,8 @@ MARKET_MANIFEST = {'id': PACKAGE_ID, 'version': '1.0.0', 'apiVersion': 1,
 
 
 class ModelMonitorPlugin(Plugin):
+    kind = "model_monitor"
+
     def load(self, state_dir, root, session):
         return {}
 

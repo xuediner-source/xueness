@@ -10,6 +10,7 @@
     "mcp__*"
   ],
   "commands": [
+    "mcp",
     "mcp-check"
   ],
   "panels": [
@@ -28,6 +29,7 @@
     "sessions/*/elicitation"
   ],
   "modules": [
+    "command_cli",
     "diagnostics",
     "elicitation",
     "lifecycle",
@@ -58,6 +60,11 @@
       "id": "mcp.recovery",
       "name": "连接诊断、失效恢复与设置",
       "nameEn": "Connection diagnostics, recovery and settings"
+    },
+    {
+      "id": "mcp.command",
+      "name": "「/mcp」连接管理命令",
+      "nameEn": "In-chat /mcp connection command"
     },
     {
       "id": "mcp.elicitation",
