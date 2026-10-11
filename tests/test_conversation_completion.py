@@ -25,6 +25,9 @@ class ConversationCompletionTests(unittest.TestCase):
         self.addCleanup(self.temp.cleanup)
         self.root = Path(self.temp.name)
         self.store = Store(self.root / 'state')
+        # Fast runs race the settled auto-title daemon thread at teardown.
+        from xueness.bundled_plugins.settings.settings_store import save_settings
+        save_settings(self.root / 'state', {'general': {'sessionsAutoTitleEnabled': False}})
 
     def finish(self, prompt, content):
         session = self.store.new(prompt, self.root)

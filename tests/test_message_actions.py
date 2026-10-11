@@ -133,6 +133,12 @@ class MessageActionTests(unittest.TestCase):
         with urllib.request.urlopen(f'{origin}/api/sessions/{self.sid}/journal',timeout=5) as response:
             journal=json.load(response)
         self.assertEqual(journal['message_revision'],actions.revision(self.session))
+        self.assertTrue(journal['truncated'] is False and journal['next_cursor'] is None)
+        # The journal GET is windowed (truncated/next_cursor/total_messages);
+        # the conversation snapshot embeds the full journal without the
+        # paging envelope, so compare the shared view only.
+        for envelope in ('truncated','next_cursor','total_messages'):
+            journal.pop(envelope,None)
         with urllib.request.urlopen(f'{origin}/api/sessions/{self.sid}/conversation',timeout=5) as response:
             snapshot=json.load(response)
         self.assertEqual(snapshot['journal'],journal)

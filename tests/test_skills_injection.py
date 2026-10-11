@@ -53,6 +53,9 @@ class SkillsReachModelContextTests(unittest.TestCase):
         self.state.mkdir(parents=True)
         self.workspace.mkdir(parents=True)
         self.store = Store(self.state)
+        # Fast runs race the settled auto-title daemon thread at teardown.
+        from xueness.bundled_plugins.settings.settings_store import save_settings
+        save_settings(self.state, {'general': {'sessionsAutoTitleEnabled': False}})
 
     def tearDown(self):
         self._tmp.cleanup()
