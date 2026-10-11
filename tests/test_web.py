@@ -233,6 +233,84 @@ class WebTests(unittest.TestCase):
         self.assertIn("messages", journal)
         self.assertIn("results", journal)
 
+    # -- journal bounded paging ---------------------------------------------
+    def _seed_journal(self, count):
+        sid = self._new_session()
+        session = self.ctx["store"].load(sid)
+        session["messages"] = [{"role": "user", "content": f"m{i}"} for i in range(count)]
+        self.ctx["store"].save(session)
+        return sid
+
+    def test_journal_default_is_bounded_to_the_newest_tail_window(self):
+        sid = self._seed_journal(450)
+        code, body, _ = self._req(f"/api/sessions/{sid}/journal")
+        self.assertEqual(code, 200, body)
+        journal = json.loads(body)
+        # A long session no longer ships its full transcript by default: the
+        # default page is the newest 200 messages plus an older-history cursor.
+        self.assertEqual(journal["total_messages"], 450)
+        self.assertTrue(journal["truncated"])
+        self.assertEqual(len(journal["messages"]), 200)
+        self.assertEqual(journal["messages"][0]["content"], "m250")
+        self.assertEqual(journal["messages"][-1]["content"], "m449")
+        self.assertEqual(journal["next_cursor"], "250")
+        # Session meta other than messages stays in full, and the revision
+        # digest still covers the whole underlying session.
+        self.assertEqual(journal["id"], sid)
+        self.assertEqual(journal["task"], "Create hello.txt then verify its content")
+        self.assertIn("results", journal)
+        self.assertIn("status", journal)
+        self.assertTrue(journal["message_revision"].startswith("sha256:"))
+        from xueness.bundled_plugins.sessions.message_actions import revision
+        self.assertEqual(journal["message_revision"], revision(self.ctx["store"].load(sid)))
+
+    def test_journal_short_session_reports_no_truncation(self):
+        sid = self._new_session()
+        code, body, _ = self._req(f"/api/sessions/{sid}/journal")
+        self.assertEqual(code, 200)
+        journal = json.loads(body)
+        self.assertFalse(journal["truncated"])
+        self.assertIsNone(journal["next_cursor"])
+        self.assertEqual(journal["total_messages"], len(journal["messages"]))
+
+    def test_journal_cursor_pages_back_toward_the_head(self):
+        sid = self._seed_journal(9)
+        code, body, _ = self._req(f"/api/sessions/{sid}/journal?limit=4")
+        page1 = json.loads(body)
+        self.assertEqual([m["content"] for m in page1["messages"]], ["m5", "m6", "m7", "m8"])
+        self.assertEqual(page1["next_cursor"], "5")
+        self.assertTrue(page1["truncated"])
+        code, body, _ = self._req(f"/api/sessions/{sid}/journal?limit=4&cursor=5")
+        page2 = json.loads(body)
+        self.assertEqual([m["content"] for m in page2["messages"]], ["m1", "m2", "m3", "m4"])
+        self.assertEqual(page2["next_cursor"], "1")
+        self.assertTrue(page2["truncated"])
+        code, body, _ = self._req(f"/api/sessions/{sid}/journal?limit=4&cursor=1")
+        page3 = json.loads(body)
+        self.assertEqual([m["content"] for m in page3["messages"]], ["m0"])
+        self.assertIsNone(page3["next_cursor"])
+        # The head page still misses the tail, so it stays marked truncated.
+        self.assertTrue(page3["truncated"])
+
+    def test_journal_limit_beyond_default_is_capped_and_explicit(self):
+        sid = self._seed_journal(430)
+        code, body, _ = self._req(f"/api/sessions/{sid}/journal?limit=400")
+        journal = json.loads(body)
+        self.assertEqual(len(journal["messages"]), 400)
+        self.assertEqual(journal["next_cursor"], "30")
+
+    def test_journal_rejects_invalid_paging_parameters(self):
+        sid = self._new_session()
+        for query in ("?limit=0", "?limit=501", "?limit=abc", "?limit=",
+                      "?cursor=-1", "?cursor=abc", "?cursor=99999"):
+            code, body, _ = self._req(f"/api/sessions/{sid}/journal{query}")
+            self.assertEqual(code, 400, query)
+            self.assertIn("error", json.loads(body))
+        # An in-range cursor at the newest boundary stays a valid page.
+        code, body, _ = self._req(f"/api/sessions/{sid}/journal?cursor=2")
+        self.assertEqual(code, 200, body)
+        self.assertFalse(json.loads(body)["truncated"])
+
     def test_rename_preserves_original_task_and_audits_change(self):
         sid = self._new_session("original instruction")
         code, result = self._mutation("PATCH", f"/api/sessions/{sid}", {"title": "  New label  "})

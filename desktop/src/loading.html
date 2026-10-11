@@ -1,3 +1,68 @@
 <!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'"><title>Xueness</title><style>
-html,body{height:100%;margin:0;background:#171717;color:#ededed;font-family:system-ui,sans-serif}main{height:100%;display:grid;place-content:center;text-align:center;gap:14px}h1{font-size:26px;font-weight:500;margin:0}p{font-size:14px;color:#a0a0a0;margin:0}.spinner{width:20px;height:20px;margin:auto;border:2px solid #444;border-top-color:#ddd;border-radius:50%;animation:turn 1s linear infinite}@keyframes turn{to{transform:rotate(360deg)}}@media(prefers-reduced-motion:reduce){.spinner{animation:none}}
-</style></head><body><main><div class="spinner" aria-hidden="true"></div><h1>Xueness</h1><p>正在启动本地工作台…</p></main></body></html>
+html,body{height:100%;margin:0;background:#171717;color:#ededed;font-family:system-ui,sans-serif}
+.shell{height:100%;display:grid;grid-template-columns:250px 1fr}
+/* sidebar skeleton */
+.sidebar{display:flex;flex-direction:column;gap:16px;padding:16px 14px;background:#1e1e1e;border-right:1px solid #2a2a2a}
+.brand,.row,.user{display:flex;align-items:center;gap:10px}
+.brand .logo{width:22px;height:22px;border-radius:7px}
+.bar{height:12px;border-radius:6px}
+.sq{width:16px;height:16px;border-radius:5px;flex:none}
+.grow{flex:1}
+.nav{display:flex;flex-direction:column;gap:12px;margin-top:6px}
+.sessions{flex:1;display:flex;flex-direction:column;gap:10px;margin-top:4px}
+.session{height:14px;border-radius:7px}
+.user{margin-top:auto}
+.user .avatar{width:28px;height:28px;border-radius:50%;flex:none}
+/* main area skeleton */
+.main{display:flex;flex-direction:column}
+.topbar{display:flex;align-items:center;justify-content:space-between;padding:12px 18px;border-bottom:1px solid #2a2a2a}
+.topbar .bar{height:10px;width:120px}
+.dots i{display:inline-block;width:10px;height:10px;border-radius:50%;background:#2a2a2a;margin-left:8px}
+.content{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:28px;padding:24px}
+.hint{display:grid;justify-items:center;gap:10px;text-align:center}
+h1{font-size:26px;font-weight:500;margin:0}
+p{font-size:14px;color:#a0a0a0;margin:0}
+.spinner{width:20px;height:20px;border:2px solid #444;border-top-color:#ddd;border-radius:50%;animation:turn 1s linear infinite}
+@keyframes turn{to{transform:rotate(360deg)}}
+.bubbles{width:min(620px,78%);display:flex;flex-direction:column;gap:12px}
+.bubble{height:44px;border-radius:14px}
+.bubble.left{align-self:flex-start;width:70%;border-bottom-left-radius:6px}
+.bubble.right{align-self:flex-end;width:52%;border-bottom-right-radius:6px}
+/* shimmer */
+.sk{background:linear-gradient(90deg,#2a2a2a 25%,#363636 37%,#2a2a2a 63%);background-size:400% 100%;animation:shimmer 1.4s ease-in-out infinite}
+@keyframes shimmer{from{background-position:100% 0}to{background-position:-100% 0}}
+@media(prefers-reduced-motion:reduce){.sk,.spinner{animation:none}}
+</style></head><body><main class="shell">
+<aside class="sidebar" aria-hidden="true">
+  <div class="brand"><span class="logo sk"></span><span class="bar sk grow" style="width:55%"></span></div>
+  <div class="nav">
+    <div class="row"><span class="sq sk"></span><span class="bar sk grow"></span></div>
+    <div class="row"><span class="sq sk"></span><span class="bar sk grow" style="width:70%"></span></div>
+    <div class="row"><span class="sq sk"></span><span class="bar sk grow" style="width:60%"></span></div>
+    <div class="row"><span class="sq sk"></span><span class="bar sk grow" style="width:75%"></span></div>
+  </div>
+  <span class="bar sk" style="width:64px"></span>
+  <div class="sessions">
+    <div class="session sk" style="width:92%"></div>
+    <div class="session sk" style="width:80%"></div>
+    <div class="session sk" style="width:86%"></div>
+    <div class="session sk" style="width:68%"></div>
+    <div class="session sk" style="width:78%"></div>
+  </div>
+  <div class="user"><span class="avatar sk"></span><span class="bar sk grow"></span></div>
+</aside>
+<section class="main">
+  <header class="topbar" aria-hidden="true"><span class="bar sk"></span><span class="dots"><i></i><i></i><i></i></span></header>
+  <div class="content">
+    <div class="hint">
+      <div class="spinner" aria-hidden="true"></div>
+      <h1>Xueness</h1>
+      <p>正在启动本地工作台…</p>
+    </div>
+    <div class="bubbles" aria-hidden="true">
+      <div class="bubble left sk"></div>
+      <div class="bubble right sk"></div>
+    </div>
+  </div>
+</section>
+</main></body></html>

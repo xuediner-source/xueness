@@ -801,6 +801,62 @@ def _load_live_session(handler, store, sid):
     return None
 
 
+#: The journal stays the private full-fidelity read, but shipping a whole long
+#: transcript on every poll is not affordable. Pages read backwards from the
+#: tail: the default response is the newest window plus a cursor chain toward
+#: the head, so tail-following consumers keep working and full exports page
+#: with ``limit``/``cursor`` (or use the CLI journal export).
+JOURNAL_DEFAULT_LIMIT = 200
+JOURNAL_MAX_LIMIT = 500
+
+
+def _journal_query_one(query, name):
+    value = query.get(name)
+    if isinstance(value, (tuple, list)):
+        value = value[0] if value else None
+    return value
+
+
+def journal_page(session, query):
+    """Return the journal payload bounded to one page of active messages.
+
+    ``cursor`` pages toward the head: it is the exclusive end index of the
+    next older page, and ``next_cursor`` repeats that contract for the page
+    before this one, so ``?cursor=<next_cursor>`` is the only paging call a
+    client needs until it returns ``null``. Session meta other than
+    ``messages`` (task, status, usage, results, archived rows, ...) stays in
+    full; archived and compacted rows live in their own fields and never
+    enter the window, matching the journal's existing ``messages`` meaning.
+    A shrunken transcript (compaction between pages) invalidates an old
+    cursor as a plain 400 instead of silently returning the wrong page.
+    """
+    messages = session.get('messages')
+    if not isinstance(messages, list):
+        messages = []
+    total = len(messages)
+
+    def bounded(raw, name, floor, ceiling):
+        try:
+            value = int(raw)
+        except (TypeError, ValueError):
+            raise ValueError('invalid journal ' + name) from None
+        if not floor <= value <= ceiling:
+            raise ValueError('invalid journal ' + name)
+        return value
+
+    raw_limit = _journal_query_one(query, 'limit')
+    limit = (JOURNAL_DEFAULT_LIMIT if raw_limit is None
+             else bounded(raw_limit, 'limit', 1, JOURNAL_MAX_LIMIT))
+    raw_cursor = _journal_query_one(query, 'cursor')
+    end = total if raw_cursor is None else bounded(raw_cursor, 'cursor', 0, total)
+    start = max(0, end - limit)
+    return {**session,
+            'messages': messages[start:end],
+            'truncated': start > 0 or end < total,
+            'next_cursor': str(start) if start > 0 else None,
+            'total_messages': total}
+
+
 def handle_GET(self, parts, path, data):
     ctx = self._ctx
     if path == '/api/sessions':
@@ -935,8 +991,16 @@ def handle_GET(self, parts, path, data):
         session = _load_live_session(self, ctx['store'], parts[2])
         if session is None:
             return True
+        query = host.urllib.parse.parse_qs(host.urllib.parse.urlparse(self.path).query,
+                                           keep_blank_values=True)
+        try:
+            payload = journal_page(session, query)
+        except ValueError as exc:
+            self._send(400, {'error': str(exc)})
+            return True
         from .message_actions import revision
-        self._send(200, {**session, 'message_revision': revision(session)})
+        payload['message_revision'] = revision(session)
+        self._send(200, payload)
         return True
     return False
 
