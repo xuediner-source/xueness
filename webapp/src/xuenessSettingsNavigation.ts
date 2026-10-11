@@ -39,6 +39,8 @@ const definitions: readonly SectionDefinition[] = [
   ['modules', '功能模块', '启用或停用 Xueness 内置功能模块。', 'extensions'],
   ['agent', 'Agent 访问', '控制 MCP、子代理和 Hooks 的运行权限。', 'extensions', 'settings'],
   ['marketplace', '扩展市场', '查看并安装可信扩展资源。', 'extensions', 'extensions'],
+  ['subscriptions', '订阅中心', '通过账号授权或订阅凭证接入，查看实际额度。', 'extensions', 'subscriptions'],
+  ['model-monitor', '返回模型监测', '对比请求型号与上游返回型号。', 'extensions', 'model_monitor'],
   ['remote', 'SSH 工作区', '管理远程工作区连接。', 'extensions', 'remote'],
   ['automations', '自动化', '管理定时任务与审批。', 'extensions', 'automation'],
   ['about', '关于 Xueness', '查看应用版本和本机数据位置。', 'extensions', 'desktop'],

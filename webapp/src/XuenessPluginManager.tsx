@@ -4,6 +4,15 @@ import type { XuenessPlugin, XuenessPluginFeature } from "./xuenessApi";
 import { XUENESS_PLUGIN_REGISTRY } from "./xuenessPluginRegistry";
 import { isImeComposingEvent } from "./xuenessShortcutDisplay";
 import "./styles/plugins.css";
+import { ArrowRight, Puzzle } from 'lucide-react';
+
+/** Generic optional-plugin discovery; no disabled feature effects mount here. */
+export function PluginHomeEntry({ plugin, onManage }: { plugin?: XuenessPlugin; onManage: () => void }) {
+  if (!plugin || plugin.effective) return null;
+  return <button type="button" className="xn-plugin-home-entry" data-testid="optional-plugin-home-entry" onClick={onManage}>
+    <Puzzle size={17} aria-hidden="true" /><span><strong>{tr(plugin.name)}</strong><small>{tr(plugin.installed === false ? '可选插件 · 在插件市场安装' : '在插件管理中启用')}</small></span><ArrowRight size={15} aria-hidden="true" />
+  </button>;
+}
 
 export type XuenessPluginManagerProps = {
   plugins: XuenessPlugin[];
@@ -199,6 +208,7 @@ export function XuenessPluginManager({ plugins, loading, error, onRefresh, onTog
                   <span className={`xn-plugin-card__state ${state === "active" ? "is-effective" : ""}`}>
                     {state === "active" ? tr("生效中") : state === "disabled" ? tr("已禁用") :
                       state === "blocked" ? tr("等待依赖") : tr("不可用")}
+                  {plugin.installed === false && <span className="xn-plugin-card__state">{tr('可从插件市场安装')}</span>}
                   </span>
                 </div>
                 <p>{description}</p>
@@ -255,7 +265,7 @@ export function XuenessPluginManager({ plugins, loading, error, onRefresh, onTog
                   aria-label={`${tr("启用插件")}: ${name}`}
                   aria-describedby={blocked ? `${plugin.id}-blocked` : undefined}
                   checked={plugin.enabled}
-                  disabled={loading || busyId !== null}
+                  disabled={loading || busyId !== null || plugin.installed === false}
                   onChange={() => void toggle(plugin)}
                 />
               </label>

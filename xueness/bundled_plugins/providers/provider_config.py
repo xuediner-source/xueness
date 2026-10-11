@@ -70,18 +70,26 @@ def _validate_reasoning_effort(model, configured, effort, base_url=None):
         raise ValueError('selected model does not declare support for reasoning effort ' + effort)
 
 
-def resolve(state_dir, provider_id=None, model=None, reasoning_effort=None, runtime_profile=None):
-    if (provider_id is None and model is None and reasoning_effort is None):
-        # An unqualified request honours the saved default (providers
-        # .default_selection) before falling back to the host environment.
-        # Any explicit part keeps its own meaning, so partial selections never
-        # get silently re-pointed at another profile.
+def resolve(state_dir, provider_id=None, model=None, reasoning_effort=None, runtime_profile=None, *, session_id=None):
+    if provider_id is None and model is None and reasoning_effort is None:
+        # Resolve once so response observers use the same saved profile as the
+        # client. Explicit partial selections retain their existing meaning.
         from .default_selection import load as _load_default
         saved = _load_default(state_dir)
         if saved:
             provider_id = saved.get('providerId')
             model = saved.get('model')
             reasoning_effort = saved.get('reasoningEffort')
+    provider = _resolve(state_dir, provider_id, model, reasoning_effort, runtime_profile)
+    # Opaque conversation identity preserves subscription thread continuity.
+    from ..subscriptions.provider import NativeProvider
+    if isinstance(provider, NativeProvider):
+        provider.session_id = session_id
+    from ..model_monitor.observer import wrap
+    return wrap(state_dir, provider_id, provider, session_id)
+
+
+def _resolve(state_dir, provider_id=None, model=None, reasoning_effort=None, runtime_profile=None):
     if provider_id:
         with providers_api.PROVIDER_STORE_LOCK:
             if not providers_api._valid_id(provider_id):
@@ -90,6 +98,11 @@ def resolve(state_dir, provider_id=None, model=None, reasoning_effort=None, runt
             path = providers_api._path_for(directory, provider_id)
             record = providers_api._read_record(path) if path else None
             if not record:
+                from ..subscriptions.state import provider_record
+                subscription = provider_record(state_dir, provider_id)
+                if subscription:
+                    from ..subscriptions.provider import resolve as resolve_subscription
+                    return resolve_subscription(state_dir, subscription, model, reasoning_effort, runtime_profile)
                 raise ValueError('provider profile not found')
             protocol = record.get('protocol', 'openai')
             effective_record = record

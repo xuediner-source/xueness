@@ -3,6 +3,7 @@ import json
 import tempfile
 import threading
 import unittest
+from contextlib import contextmanager
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from unittest.mock import patch
@@ -21,6 +22,126 @@ def _server(handler):
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
     return server
+
+
+class ProviderStreamErrorTests(unittest.TestCase):
+    @contextmanager
+    def endpoint(self, payloads):
+        state = {'requests': 0}
+
+        class Handler(BaseHTTPRequestHandler):
+            def do_POST(self):
+                self.rfile.read(int(self.headers.get('Content-Length', 0)))
+                payload = payloads[min(state['requests'], len(payloads) - 1)]
+                state['requests'] += 1
+                self.send_response(200)
+                self.send_header('Content-Type', 'text/event-stream')
+                self.send_header('Content-Length', str(len(payload)))
+                self.end_headers()
+                self.wfile.write(payload)
+
+            def log_message(self, *args):
+                pass
+
+        server = _server(Handler)
+        try:
+            yield f'http://127.0.0.1:{server.server_port}/v1', state
+        finally:
+            server.shutdown()
+            server.server_close()
+
+    def event(self, payload):
+        return ('data: ' + json.dumps(payload) + '\n\n').encode()
+
+    def client(self, base, *, profile='lightweight', retries=0):
+        return OpenAICompatible(base=base, model='local-test', key='test-key',
+                                allow_loopback_http=True, runtime_profile=profile,
+                                lightweight_options={'transportRetries': retries})
+
+    def test_stream_error_followed_by_done_is_not_a_success(self):
+        payload = self.event({'error': {'code': 500, 'message': 'private upstream key/path'}})
+        payload += b'data: [DONE]\n\n'
+        with self.endpoint([payload]) as (base, state):
+            with self.assertRaises(ProviderRequestError) as caught:
+                self.client(base).stream([{'role': 'user', 'content': 'hi'}], [])
+            self.assertEqual(state['requests'], 1)
+            self.assertEqual(caught.exception.status, 500)
+            self.assertEqual(caught.exception.category, 'upstream_failure')
+            self.assertEqual(caught.exception.stage, 'response')
+            self.assertNotIn('private upstream', str(caught.exception))
+            self.assertNotIn('private upstream', repr(vars(caught.exception)))
+
+    def test_transient_stream_error_retries_before_output_within_configured_limit(self):
+        failed = self.event({'error': {'status': 503, 'message': 'private body'}})
+        good = self.event({'choices': [{'delta': {'content': 'ok'}, 'finish_reason': 'stop'}]})
+        good += b'data: [DONE]\n\n'
+        for profile in ('standard', 'lightweight'):
+            with self.subTest(profile=profile), self.endpoint([failed, good]) as (base, state):
+                deltas = []
+                result = self.client(base, profile=profile, retries=1).stream(
+                    [{'role': 'user', 'content': 'hi'}], [], deltas.append)
+                self.assertEqual(state['requests'], 2)
+                self.assertEqual(result['content'], 'ok')
+                self.assertEqual(result['_request_attempts'], 2)
+                self.assertEqual(deltas, ['ok'])
+
+    def test_stream_error_after_text_or_reasoning_is_never_replayed(self):
+        for profile in ('standard', 'lightweight'):
+            for channel in ('content', 'reasoning_content'):
+                prefix = self.event({'choices': [{'delta': {channel: 'partial'}}]})
+                failed = self.event({'error': {'code': 500}}) + b'data: [DONE]\n\n'
+                with self.subTest(profile=profile, channel=channel):
+                    with self.endpoint([prefix + failed]) as (base, state):
+                        text, reasoning = [], []
+                        with self.assertRaises(ProviderRequestError) as caught:
+                            self.client(base, profile=profile, retries=2).stream(
+                                [{'role': 'user', 'content': 'hi'}], [], text.append,
+                                on_reasoning_delta=reasoning.append)
+                        self.assertEqual(state['requests'], 1)
+                        self.assertEqual(caught.exception.status, 500)
+                        self.assertEqual(text if channel == 'content' else reasoning, ['partial'])
+
+    def test_structured_stream_error_codes_are_classified_without_messages(self):
+        cases = (
+            ({'type': 'authentication_error'}, 401, 'authentication_failed', False),
+            ({'code': 'rate_limit_exceeded'}, 429, 'rate_limited', False),
+            ({'type': 'server_error'}, 500, 'upstream_failure', False),
+            ({'code': 'context_length_exceeded'}, 400, 'request_rejected', True),
+            ({'code': 400, 'type': 'context_length_exceeded'}, 400, 'request_rejected', True),
+            ({'code': 'unknown_private_code', 'message': 'private key'}, None, 'upstream_failure', False),
+            ({'status': True, 'code': 200, 'message': 'HTTP 500'}, None, 'upstream_failure', False),
+        )
+        for error, status, category, overflow in cases:
+            with self.subTest(error=error), self.endpoint([self.event({'error': error})]) as (base, state):
+                with self.assertRaises(ProviderRequestError) as caught:
+                    self.client(base).stream([{'role': 'user', 'content': 'hi'}], [])
+                self.assertEqual(state['requests'], 1)
+                self.assertEqual(caught.exception.status, status)
+                self.assertEqual(caught.exception.category, category)
+                self.assertEqual(caught.exception.context_overflow, overflow)
+                self.assertNotIn('private', str(caught.exception))
+
+    def test_anthropic_error_events_obey_retry_and_delivery_boundaries(self):
+        failed = self.event({'type': 'error', 'error': {'type': 'overloaded_error', 'message': 'private body'}})
+        text = self.event({'type': 'content_block_delta', 'index': 0,
+                           'delta': {'type': 'text_delta', 'text': 'ok'}})
+        good = text + self.event({'type': 'message_stop'})
+        for delivered in (False, True):
+            with self.subTest(delivered=delivered):
+                with self.endpoint([(text if delivered else b'') + failed, good]) as (base, state):
+                    client = AnthropicMessages(base=base.removesuffix('/v1'), model='claude-test',
+                                               key='test-key', allow_loopback_http=True)
+                    deltas = []
+                    if delivered:
+                        with self.assertRaises(ProviderRequestError) as caught:
+                            client.stream([{'role': 'user', 'content': 'hi'}], [], deltas.append)
+                        self.assertEqual(caught.exception.status, 503)
+                        self.assertEqual(state['requests'], 1)
+                    else:
+                        result = client.stream([{'role': 'user', 'content': 'hi'}], [], deltas.append)
+                        self.assertEqual(result['content'], 'ok')
+                        self.assertEqual(state['requests'], 2)
+                    self.assertEqual(deltas, ['ok'])
 
 
 class ProviderStreamTests(unittest.TestCase):

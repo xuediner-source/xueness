@@ -14,10 +14,27 @@ ROOT = Path(__file__).resolve().parents[2]
 DESKTOP = ROOT/'desktop'
 
 
+def _validate_native_target():
+    """Reject cross-platform or cross-architecture frozen runtimes in CI."""
+    expected_platform = os.environ.get('XUENESS_BUILD_PLATFORM')
+    expected_arch = os.environ.get('XUENESS_BUILD_ARCH')
+    actual_platform = {'win32': 'win32', 'darwin': 'darwin'}.get(sys.platform, sys.platform)
+    machine = platform.machine().lower()
+    actual_arch = {
+        'amd64': 'x64', 'x86_64': 'x64', 'x64': 'x64',
+        'arm64': 'arm64', 'aarch64': 'arm64',
+    }.get(machine, machine)
+    if expected_platform and expected_platform != actual_platform:
+        raise SystemExit(f'Native backend target mismatch: expected {expected_platform}, running on {actual_platform}.')
+    if expected_arch and expected_arch != actual_arch:
+        raise SystemExit(f'Native backend architecture mismatch: expected {expected_arch}, Python is {actual_arch}.')
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--python', default=sys.executable)
     args = parser.parse_args()
+    _validate_native_target()
     subprocess.run([args.python, str(ROOT/'tools/check_plugin_architecture.py')], check=True)
     if not (ROOT/'webapp/dist/index.html').is_file():
         raise SystemExit('Build the Web workbench before preparing the desktop runtime.')

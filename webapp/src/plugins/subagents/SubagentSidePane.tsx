@@ -1,9 +1,10 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AlertTriangle, Bot, Check, ChevronDown, ChevronRight, LoaderCircle, RefreshCw, X } from "lucide-react";
-import { cancelSubagentTask, get, post } from "../../xuenessApi";
+import { cancelSubagentTask, get, newSubagentRequestId, post, resumeSubagentTask, sendSubagentMessage } from "../../xuenessApi";
 import { t as tr, tf } from "../../i18n";
 import { isImeComposingEvent } from "../../xuenessShortcutDisplay";
 import { startSessionPolling } from "../sessions/SessionPolling";
+import { SubagentTranscript } from "./SubagentTranscript";
 import "../../styles/subagent-sidepane.css";
 
 export type SubagentTaskItem = {
@@ -21,6 +22,11 @@ export type SubagentTaskItem = {
   promptChars?: number;
   workerActive?: boolean;
   root?: string | null;
+  childSessionId?: string;
+  canResume?: boolean;
+  canResumeNow?: boolean;
+  canGuide?: boolean;
+  recoveryReason?: string;
 };
 
 export type SubagentSidePaneProps = {
@@ -37,6 +43,7 @@ export type SubagentSidePaneProps = {
   initialTasks?: SubagentTaskItem[];
   onCancelTask?: (taskId: string) => Promise<void>;
   onStopSession?: () => Promise<void>;
+  onRequestResumeChild?: (taskId: string) => void;
   fetchTasksFn?: (sessionId: string, signal?: AbortSignal) => Promise<{ tasks: SubagentTaskItem[] }>;
 };
 
@@ -86,6 +93,7 @@ export function SubagentSidePane({
   initialTasks,
   onCancelTask,
   onStopSession,
+  onRequestResumeChild,
   fetchTasksFn,
 }: SubagentSidePaneProps): React.JSX.Element | null {
   const isLightweight = lightweight || activeRuntimeProfile === "lightweight";
@@ -186,6 +194,20 @@ export function SubagentSidePane({
       if (isScopeCurrent(scope)) setStoppingSession(false);
     }
   }, [cancellingId, stoppingSession, isScopeCurrent, onStopSession, loadTasks]);
+
+  const handleSendChildMessage = useCallback(async (taskId: string, message: string, requestId: string) => {
+    const scope = requestScope.current;
+    if (!scope || !isScopeCurrent(scope)) throw new Error(tr("会话已切换，请重试。"));
+    await sendSubagentMessage(scope.sessionId, taskId, message, requestId);
+    if (isScopeCurrent(scope)) await loadTasks(false);
+  }, [isScopeCurrent, loadTasks]);
+
+  const handleResumeChild = useCallback(async (taskId: string, message: string | undefined, requestId: string) => {
+    const scope = requestScope.current;
+    if (!scope || !isScopeCurrent(scope)) throw new Error(tr("会话已切换，请重试。"));
+    await resumeSubagentTask(scope.sessionId, taskId, message, requestId);
+    if (isScopeCurrent(scope)) await loadTasks(false);
+  }, [isScopeCurrent, loadTasks]);
 
   useEffect(() => {
     setTasks(initialTasks ?? []);
@@ -353,14 +375,21 @@ export function SubagentSidePane({
                 </h3>
                 {runningTasks.map(task => (
                   <TaskCard
-                    key={task.id}
+                    key={`${task.id}:${task.childSessionId ?? ""}`}
                     task={task}
+                    parentSessionId={sessionId}
                     isExpanded={expandedIds.has(task.id)}
                     canCancel={cancelOneEnabled}
                     isCancelling={cancellingId === task.id}
                     actionsDisabled={stoppingSession || cancellingId !== null}
                     onToggleExpand={() => toggleExpand(task.id)}
                     onCancel={() => handleCancelTask(task.id)}
+                    canGuide={task.canGuide === true}
+                    canResume={task.canResume === true && task.canResumeNow === true}
+                    canResumeWhenParentActive={task.canResume === true && task.canResumeNow !== true}
+                    onRequestResume={onRequestResumeChild ? () => onRequestResumeChild(task.id) : undefined}
+                    onSendMessage={handleSendChildMessage}
+                    onResume={handleResumeChild}
                   />
                 ))}
               </section>
@@ -373,14 +402,21 @@ export function SubagentSidePane({
                 </h3>
                 {endedTasks.map(task => (
                   <TaskCard
-                    key={task.id}
+                    key={`${task.id}:${task.childSessionId ?? ""}`}
                     task={task}
+                    parentSessionId={sessionId}
                     isExpanded={expandedIds.has(task.id)}
                     canCancel={false}
                     isCancelling={false}
                     actionsDisabled={stoppingSession || cancellingId !== null}
                     onToggleExpand={() => toggleExpand(task.id)}
                     onCancel={() => undefined}
+                    canGuide={false}
+                    canResume={task.canResume === true && task.canResumeNow === true}
+                    canResumeWhenParentActive={task.canResume === true && task.canResumeNow !== true}
+                    onRequestResume={onRequestResumeChild ? () => onRequestResumeChild(task.id) : undefined}
+                    onSendMessage={handleSendChildMessage}
+                    onResume={handleResumeChild}
                   />
                 ))}
               </section>
@@ -394,21 +430,41 @@ export function SubagentSidePane({
 
 function TaskCard({
   task,
+  parentSessionId,
   isExpanded,
   canCancel,
   isCancelling,
   actionsDisabled,
   onToggleExpand,
   onCancel,
+  canGuide,
+  canResume,
+  canResumeWhenParentActive,
+  onRequestResume,
+  onSendMessage,
+  onResume,
 }: {
   task: SubagentTaskItem;
+  parentSessionId?: string | null;
   isExpanded: boolean;
   canCancel: boolean;
   isCancelling: boolean;
   actionsDisabled: boolean;
   onToggleExpand: () => void;
   onCancel: () => void;
+  canGuide: boolean;
+  canResume: boolean;
+  canResumeWhenParentActive: boolean;
+  onRequestResume?: () => void;
+  onSendMessage: (taskId: string, message: string, requestId: string) => Promise<void>;
+  onResume: (taskId: string, message: string | undefined, requestId: string) => Promise<void>;
 }): React.JSX.Element {
+  const [draft, setDraft] = useState("");
+  const [showTranscript, setShowTranscript] = useState(false);
+  const [action, setAction] = useState<"message" | "resume" | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
+  const actionRequestId = useRef<string | null>(null);
+  const actionRequestText = useRef<string | null>(null);
   const statusInfo = formatTaskStatus(task.status);
   const duration = formatTaskDuration(task.startedAt, task.endedAt);
   const agentLabel = task.agent || "general-purpose";
@@ -519,6 +575,57 @@ function TaskCard({
         </div>
       ) : null}
 
+      {(canGuide || canResume) && (
+        <form
+          className="xn-subagent-card__followup"
+          onSubmit={event => {
+            event.preventDefault();
+            const text = draft.trim();
+            const resumeNeedsMessage = !canGuide && task.recoveryReason === "followup_required";
+            if (action || (canGuide && !text) || (resumeNeedsMessage && !text)) return;
+            if (actionRequestText.current !== text) {
+              actionRequestText.current = text;
+              actionRequestId.current = null;
+            }
+            const requestId = actionRequestId.current ?? (actionRequestId.current = newSubagentRequestId());
+            const kind = canGuide ? "message" : "resume";
+            setAction(kind);
+            setActionError(null);
+            void (kind === "message"
+              ? onSendMessage(task.id, text, requestId)
+              : onResume(task.id, text || undefined, requestId))
+              .then(() => {
+                setDraft("");
+                actionRequestId.current = null;
+                actionRequestText.current = null;
+              })
+              .catch((err: unknown) => setActionError(err instanceof Error ? err.message : String(err)))
+              .finally(() => setAction(null));
+          }}
+          data-testid={`${canGuide ? "subagent-message" : "subagent-resume"}-${task.id}`}
+        >
+          <textarea
+            value={draft}
+            onChange={event => setDraft(event.currentTarget.value)}
+            maxLength={24000}
+            rows={2}
+            aria-label={canGuide ? tr("给子代理发送消息") : tr("继续任务")}
+            placeholder={canGuide ? tr("在下一个安全边界发送消息") : tr("继续任务的消息（可选）")}
+          />
+          {canGuide ? (
+            <button type="submit" disabled={actionsDisabled || action !== null || !draft.trim()}>
+              {action === "message" ? tr("正在发送…") : tr("发送")}
+            </button>
+          ) : (
+            <button type="submit" disabled={actionsDisabled || action !== null ||
+              (task.recoveryReason === "followup_required" && !draft.trim())}>
+              {action === "resume" ? tr("正在继续…") : tr("继续")}
+            </button>
+          )}
+          {actionError && <span role="alert">{actionError}</span>}
+        </form>
+      )}
+
       {isExpanded && (
         <div className="xn-subagent-card__expanded-details" data-testid={`subagent-details-${task.id}`}>
           {task.error && (
@@ -561,6 +668,24 @@ function TaskCard({
               </div>
             )}
           </div>
+          {task.childSessionId && parentSessionId && (
+            <div className="xn-subagent-transcript-launch">
+              {!showTranscript && <button type="button" onClick={() => setShowTranscript(true)}
+                data-testid={`subagent-transcript-open-${task.id}`}>{tr("查看子会话记录")}</button>}
+              {showTranscript && <SubagentTranscript key={`${parentSessionId}:${task.id}:${task.childSessionId}`}
+                parentSessionId={parentSessionId} taskId={task.id} childSessionId={task.childSessionId}
+                onClose={() => setShowTranscript(false)} />}
+            </div>
+          )}
+          {canResumeWhenParentActive && (
+            <div className="xn-subagent-card__parent-resume">
+              <p>{tr("子任务可在主会话下一轮恢复。恢复指令只会放入主会话输入框，不会自动发送。")}</p>
+              <button type="button" disabled={!onRequestResume}
+                onClick={() => onRequestResume?.()} data-testid={`subagent-parent-resume-${task.id}`}>
+                {tr("在主会话中继续")}
+              </button>
+            </div>
+          )}
         </div>
       )}
     </article>

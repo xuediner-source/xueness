@@ -7,6 +7,7 @@ flight stops cooperatively at the next provider/tool boundary.
 from __future__ import annotations
 
 import json
+import hashlib
 import re
 import threading
 import time
@@ -37,9 +38,14 @@ def _turn_records(session):
     messages = messages if isinstance(messages, list) else []
     # Compaction keeps human turns but may archive older tool exchanges.
     # Count the human boundary, rather than relying only on surviving calls.
-    marker = sum(isinstance(m, dict) and m.get('role') == 'user' for m in messages)
+    human_messages = [m for m in messages if isinstance(m, dict) and m.get('role') == 'user'
+                      and m.get('_input_kind') != 'guide']
+    identity = human_messages[-1].get('_turn_id') if human_messages else None
+    marker = (int(identity[5:]) if isinstance(identity, str) and re.fullmatch(r'turn-[1-9][0-9]*', identity)
+              else len(human_messages))
     last_user = max((i for i, m in enumerate(messages)
-                     if isinstance(m, dict) and m.get('role') == 'user'), default=0)
+                     if isinstance(m, dict) and m.get('role') == 'user'
+                     and m.get('_input_kind') != 'guide'), default=0)
     calls = set()
     for message in messages[last_user + 1:]:
         if not isinstance(message, dict) or not isinstance(message.get('tool_calls'), list):
@@ -98,6 +104,9 @@ class TaskCoordinator:
         self.should_stop = lambda: False
         self.enabled = lambda: True
         self._closed = False
+        self._executor = None
+        self._state_dir = None
+        self._coordinator_bound = False
         # Restore only this human turn, never silently replay interrupted work.
         self.turn, self.records = _turn_records(session)
         session['subagent_coordination'] = self.records
@@ -111,6 +120,17 @@ class TaskCoordinator:
 
     def configure(self, *, should_stop, enabled):
         self.should_stop, self.enabled = should_stop, enabled
+
+    def bind_executor(self, execute, *, state_dir=None):
+        """Bind a configured parent runner, never reconstruct provider credentials."""
+        self._executor, self._state_dir = execute, state_dir
+        binder = getattr(self.registry, 'bind_parent', None)
+        if callable(binder):
+            self._coordinator_bound = binder(self.session['id'], self) is not False
+
+    def can_resume_now(self):
+        return (self._coordinator_bound and not self._closed and not self.stopped()
+                and callable(self._executor) and self._state_dir is not None)
 
     def stopped(self):
         return self._cancel.is_set() or self.should_stop() or not self.enabled()
@@ -189,6 +209,104 @@ class TaskCoordinator:
                 'evidence_eligible': False,
                 'next': 'Continue independent work; collect findings with task_collect before finishing.'}
 
+    def resume(self, call_id, args, *, before_start=None):
+        """Explicitly continue a retained child under this parent's bound policy."""
+        from .child_sessions import ChildStore, prepare_resume
+        from copy import deepcopy
+        tid = args.get('task_id')
+        request_id = call_id if isinstance(call_id, str) and call_id else None
+        message = args.get('message')
+        digest = hashlib.sha256((message if isinstance(message, str) else '').encode('utf-8')).hexdigest()
+        if self._closed or self.stopped() or not callable(self._executor) or self._state_dir is None:
+            return {'ok': False, 'error': 'child recovery requires an enabled parent run'}
+        rows = {row.get('id'): row for row in self.session.get('task_runs') or [] if isinstance(row, dict)}
+        row = self.registry.get(tid) or rows.get(tid)
+        if (not isinstance(tid, str) or not isinstance(row, dict)
+                or row.get('parent', self.session['id']) != self.session['id']
+                or row.get('status') == CANCELLED or row.get('workerActive') is True):
+            return {'ok': False, 'error': 'task unavailable for recovery in this parent'}
+        try:
+            child_store = ChildStore(self._state_dir, self.session['id'], task_id=tid, root=self.session['root'])
+            child = child_store.find_task(tid)
+            if row.get('childSessionId') not in (None, child['id']):
+                raise ValueError('stale child identity')
+            if request_id and row.get('lastResumeRequestId') == request_id:
+                if row.get('lastResumeRequestDigest') != digest:
+                    return {'ok': False, 'error': 'requestId already names a different resume'}
+                return {'ok': True, 'task_id': tid, 'childSessionId': child['id'],
+                        'status': row.get('status', RUNNING),
+                        'background': row.get('workerActive') is True,
+                        'evidence_eligible': False}
+            prepare_resume(deepcopy(child), message)
+        except (OSError, TypeError, ValueError):
+            return {'ok': False, 'error': 'child history is unavailable or unsafe for recovery'}
+        if sum(worker.is_alive() for worker in self._workers.values()) >= MAX_CONCURRENT or not _WORKER_SLOTS.acquire(blocking=False):
+            return {'ok': False, 'error': 'subagent concurrency limit reached (4)'}
+        if before_start is not None:
+            try:
+                denial = before_start()
+            except Exception:
+                denial = {'ok': False, 'error': 'tool execution policy unavailable'}
+            if denial is not None:
+                _WORKER_SLOTS.release()
+                return denial
+        if self.registry.get(tid) is None:
+            self.registry.restore(tid, parent_session=self.session['id'], root=self.session['root'], record=row)
+        if not self.registry.restart(tid):
+            _WORKER_SLOTS.release()
+            return {'ok': False, 'error': 'child task is already active or cancelled'}
+        if request_id:
+            self.registry.update(tid, lastResumeRequestId=request_id,
+                                 lastResumeRequestDigest=digest)
+        self.records[tid] = {'call_id': call_id, 'collected': False, 'turn': self.turn,
+                             'childSessionId': child['id']}
+        child_args = {'prompt': message, 'agent': child['delegation'].get('agent'),
+                      'resume_session_id': child['id']}
+        def work():
+            try:
+                result = self._executor(tid, self.stopped, child_args)
+                if self.stopped():
+                    self.registry.cancel(tid)
+                current = self.registry.get(tid)
+                if current and current['status'] == RUNNING:
+                    self.registry.finish(tid, ok=result.get('ok') is True,
+                                         summary=result.get('summary', ''), error=result.get('error', ''),
+                                         steps=result.get('steps', 0))
+            except Exception:
+                self.registry.finish(tid, ok=False, error='child recovery failed')
+            finally:
+                self.registry.update(tid, workerActive=False)
+                _WORKER_SLOTS.release()
+                self._changed.set()
+        worker = threading.Thread(target=work, name='xueness-resume-' + tid, daemon=True)
+        self._workers[tid] = worker
+        try:
+            worker.start()
+        except Exception:
+            self.registry.finish(tid, ok=False, error='child recovery worker could not start')
+            self.registry.update(tid, workerActive=False)
+            _WORKER_SLOTS.release()
+            return {'ok': False, 'error': 'child recovery worker could not start'}
+        return {'ok': True, 'task_id': tid, 'childSessionId': child['id'],
+                'status': RUNNING, 'background': True, 'evidence_eligible': False}
+
+    def send_message(self, args, *, request_id):
+        from .child_sessions import ChildStore, enqueue_message
+        tid = args.get('task_id')
+        row = self.registry.get(tid)
+        if (self.stopped() or self._state_dir is None or not isinstance(row, dict)
+                or row.get('parent') != self.session['id'] or row.get('status') != RUNNING
+                or row.get('workerActive') is not True):
+            return {'ok': False, 'error': 'send_message requires this parent\'s active child; use task_resume for followup'}
+        try:
+            store = ChildStore(self._state_dir, self.session['id'], task_id=tid, root=self.session['root'])
+            child = store.find_task(tid)
+            receipt = enqueue_message(store, child, args.get('message'), request_id)
+        except (OSError, TypeError, ValueError):
+            return {'ok': False, 'error': 'child message could not be admitted'}
+        return {'ok': True, 'task_id': tid, 'childSessionId': child['id'],
+                'receipt': receipt, 'delivery': 'guide', 'evidence_eligible': False}
+
     def collect(self, args):
         tids = args.get('task_ids', list(self.records))
         if (not isinstance(tids, list) or not tids or len(tids) > MAX_TASKS_PER_TURN
@@ -242,6 +360,10 @@ class TaskCoordinator:
     def close(self):
         self._closed = True
         self._cancel.set()
+        unbinder = getattr(self.registry, 'unbind_parent', None)
+        if callable(unbinder):
+            unbinder(self.session['id'], self)
+        self._coordinator_bound = False
         self.sync()
         # Bound shutdown; network requests cooperate at their next boundary.
         end = time.monotonic() + .2

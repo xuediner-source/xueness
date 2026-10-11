@@ -1,7 +1,7 @@
 import { ContextUsageRing, type ContextUsageReading } from './ContextUsageRing';
 import React, { useCallback, useEffect, useRef, useState } from "react";
-import { ClipboardList, Globe, Hand, Lightbulb, ShieldAlert, ShieldCheck } from "lucide-react";
-import { t as tr, tf } from "../../i18n";
+import { ArrowLeft, ChevronRight, ClipboardList, Globe, Hand, Lightbulb, Search, ShieldAlert, ShieldCheck } from "lucide-react";
+import { t as tr, tf, useLocale } from "../../i18n";
 import { IconCheck, IconChevronDown, IconPencil, IconRefresh, IconX } from "../../ui/icons";
 import { normalizeReasoningLevels, ReasoningEffortControl } from "./ReasoningEffortSlider";
 import { canUseRuntimeProfile, effectiveRuntimeProfile, runtimeProfileSelection, type ComposerModel, type RuntimeProfile } from "../../xuenessComposer";
@@ -44,6 +44,18 @@ export type ComposerToolbarProps = {
   minimal?: boolean;
   minimalPermissionControl?: React.ReactNode;
 };
+
+export function groupComposerModels(models: ComposerModel[], locale: 'zh' | 'en' = 'zh') {
+  const groups = new Map<string, { id: string; name: string; models: ComposerModel[] }>();
+  for (const model of models) {
+    const id = model.supplierId || (model.id === '' ? 'environment' : 'saved');
+    const name = (locale === 'en' ? model.supplierNameEn : model.supplierName) || model.supplierName
+      || tr(id === 'environment' ? '环境模型' : '已保存的配置');
+    if (!groups.has(id)) groups.set(id, { id, name, models: [] });
+    groups.get(id)!.models.push(model);
+  }
+  return [...groups.values()];
+}
 
 const permissionChoiceMeta: Record<PermissionMode, {
   label: string;
@@ -304,10 +316,11 @@ export type ComposerModelMenuProps = {
   onRequestClose(restoreInput?: boolean): void;
   /** Renders the detail card for this row key without a pointer event (tests). */
   detailKey?: string;
+  initialSupplierId?: string;
 };
 
 /**
- * 模型弹层直接列出环境模型与已保存配置，不按来源或推测的能力分档。
+ * 模型弹层按目录声明的供应商提供两级导航，不推测能力等级。
  * 模型行只在目录给出成本倍率时显示它。悬停或键盘聚焦弹出详情卡。
  * 「标准 / 本地轻量」仍是既有运行档位开关。Esc 关闭并把焦点还给触发按钮。
  */
@@ -332,7 +345,16 @@ export function ComposerModelMenu({
   defaultSaved = false,
   onRequestClose,
   detailKey,
+  initialSupplierId,
 }: ComposerModelMenuProps): React.JSX.Element {
+  const locale = useLocale();
+  const [supplierId, setSupplierId] = useState(initialSupplierId ?? '');
+  const [query, setQuery] = useState('');
+  const groups = groupComposerModels(models, locale);
+  const supplier = groups.find(group => group.id === supplierId);
+  const needle = query.trim().toLocaleLowerCase();
+  const visibleModels = (supplier?.models ?? models).filter(model =>
+    !needle || [model.name, model.model, model.supplierName, model.supplierNameEn].join(' ').toLocaleLowerCase().includes(needle));
   /** Row the detail card is anchored to; set on hover or keyboard focus. */
   const [modelDetail, setModelDetail] = useState<{
     key: string;
@@ -374,9 +396,28 @@ export function ComposerModelMenu({
     });
   };
   useEffect(() => () => cancelDetailClose(), []);
+  useEffect(() => {
+    if (!supplierId) return;
+    popoverElementRef.current?.querySelector<HTMLButtonElement>('[data-model-row]:not(:disabled)')?.focus();
+  }, [supplierId]);
+
+  const goBack = () => {
+    const previous = supplierId;
+    setSupplierId(''); clearModelDetail();
+    requestAnimationFrame(() => Array.from(popoverElementRef.current?.querySelectorAll<HTMLButtonElement>('[data-supplier-row]') ?? [])
+      .find(button => button.dataset.supplierRow === previous)?.focus());
+  };
 
   const onKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
+    if (isImeComposingEvent(event)) return;
+    if (event.key === 'ArrowLeft' && supplier && !(event.target instanceof HTMLInputElement)) { event.preventDefault(); goBack(); return; }
+    if (event.key === 'ArrowRight' && (event.target as HTMLElement).dataset.supplierRow) {
+      event.preventDefault(); setSupplierId((event.target as HTMLElement).dataset.supplierRow!); clearModelDetail(); return;
+    }
+    if (event.key === 'Escape' && needle) { event.preventDefault(); event.stopPropagation(); setQuery(''); clearModelDetail(); return; }
+    if (event.key === 'Escape' && supplier) { event.preventDefault(); event.stopPropagation(); goBack(); return; }
     if (handlePopoverEscape(event, onRequestClose, triggerRef?.current ?? null)) return;
+    if (event.target instanceof HTMLInputElement && ['Home', 'End'].includes(event.key)) return;
     if (!["ArrowDown", "ArrowUp", "Home", "End"].includes(event.key)) return;
     const items = Array.from(event.currentTarget.querySelectorAll<HTMLButtonElement>("[role='menuitemradio']:not(:disabled), [role='menuitem']:not(:disabled)"));
     if (!items.length) return;
@@ -393,6 +434,7 @@ export function ComposerModelMenu({
     <div
       ref={setMenuElement}
       className="xn-composer-toolbar__popover xn-composer-toolbar__model-popover"
+      data-supplier-navigation="true"
       role="menu"
       aria-label={tr("可用模型")}
       onKeyDown={onKeyDown}
@@ -437,6 +479,12 @@ export function ComposerModelMenu({
           </button>
         </div>
       )}
+      <label className="xn-composer-toolbar__model-search"><Search size={14} aria-hidden="true" />
+        <input type="search" aria-label={tr('搜索供应商或模型')} placeholder={tr('搜索供应商或模型')} value={query}
+          onChange={event => { setQuery(event.target.value); clearModelDetail(); }} /></label>
+      {supplier ? <button type="button" role="menuitem" className="xn-composer-toolbar__supplier-back" onClick={goBack}>
+        <ArrowLeft size={14} aria-hidden="true" /><span>{supplier.name}</span><small>{supplier.models.length}</small>
+      </button> : <div className="xn-composer-toolbar__supplier-heading">{tr(needle ? '搜索结果' : '按供应商选择')}<span>{needle ? visibleModels.length : groups.length}</span></div>}
       {!loading && !error && models.length === 0 && (
         <div className="xn-composer-toolbar__message">{tr("暂无可用模型")}</div>
       )}
@@ -448,7 +496,14 @@ export function ComposerModelMenu({
           data-testid="composer-model-options"
           onScroll={clearModelDetail}
         >
-          {models.map((model) => {
+          {!supplier && !needle ? groups.map(group => <button type="button" role="menuitem" aria-haspopup="menu" aria-expanded="false"
+            className="xn-composer-toolbar__supplier-option" key={group.id} data-supplier-row={group.id} disabled={disabled}
+            onClick={() => { setSupplierId(group.id); clearModelDetail(); }}>
+            <span className="xn-composer-toolbar__supplier-mark" aria-hidden="true">{group.name.slice(0, 1).toUpperCase()}</span>
+            <span className="xn-composer-toolbar__supplier-copy"><strong title={group.name}>{group.name}</strong><small>{tf('{0} 个模型', [group.models.length])}
+              {group.models.some(isSelected) && <span className="xn-composer-toolbar__supplier-current"> · {tr('当前选择')}</span>}</small></span>
+            <ChevronRight size={15} aria-hidden="true" />
+          </button>) : visibleModels.map((model) => {
             const selected = isSelected(model);
             const rowKey = model.id + ":" + model.model;
             const costLabel = formatCostMultiplier(reportedCostMultiplier(model));
@@ -478,9 +533,11 @@ export function ComposerModelMenu({
                   if (next && event.currentTarget.parentElement?.contains(next)) return;
                   scheduleDetailClose();
                 }}
-                title={!model.configured ? tr("该模型尚未配置") : model.model}
+                title={!model.configured ? tr("该模型尚未配置") : `${model.name} · ${model.model}`}
               >
-                <span className="xn-composer-toolbar__model-name">{model.name}</span>
+                <span className="xn-composer-toolbar__model-name">{supplier && model.supplierName && model.name.startsWith(model.supplierName + ' · ')
+                  ? model.name.slice(model.supplierName.length + 3) : model.name}
+                  {needle && !supplier && model.supplierName && <small>{locale === 'en' ? model.supplierNameEn ?? model.supplierName : model.supplierName}</small>}</span>
                 {!model.configured && <small>{tr("未配置")}</small>}
                 {costLabel && (
                   <span className="xn-composer-toolbar__model-cost" data-testid="model-row-cost" title={tr("成本倍率")}>{costLabel}</span>
@@ -491,6 +548,7 @@ export function ComposerModelMenu({
               </button>
             );
           })}
+          {(supplier || needle) && visibleModels.length === 0 && <div className="xn-composer-toolbar__message">{tr('没有匹配的模型')}</div>}
         </div>
       )}
       {(selectedModel || runtimeBudget || pauseReason) && <div className="xn-composer-toolbar__budget-hint" aria-label={tr("运行预算估算")}>
@@ -676,7 +734,7 @@ export function XuenessComposerToolbar({
     if (!modelMenuOpen) return;
     // Land on the first model row so the detail card follows the initial focus.
     const menu = modelMenuRef.current;
-    const target = menu?.querySelector<HTMLButtonElement>("[role='menuitemradio'][data-model-row]:not(:disabled)")
+    const target = menu?.querySelector<HTMLButtonElement>("[data-supplier-row]:not(:disabled), [role='menuitemradio'][data-model-row]:not(:disabled)")
       ?? menu?.querySelector<HTMLButtonElement>("[role='menuitemradio']:not(:disabled)");
     target?.focus();
   }, [modelMenuOpen]);
@@ -702,7 +760,7 @@ export function XuenessComposerToolbar({
     if (key) requestAnimationFrame(() => {
       const items = Array.from(modelMenuRef.current?.querySelectorAll<HTMLButtonElement>("[role='menuitemradio']:not(:disabled), [role='menuitem']:not(:disabled)") ?? []);
       if (key === "ArrowUp") items[items.length - 1]?.focus();
-      else (items.find(item => item.dataset.modelRow !== undefined) ?? items[0])?.focus();
+      else (items.find(item => item.dataset.supplierRow !== undefined || item.dataset.modelRow !== undefined) ?? items[0])?.focus();
     });
   };
 

@@ -832,7 +832,7 @@ describe("xuenessWorkbench run orchestration", () => {
 
     const result = await createSession("no id");
     assert.equal(result.ok, false);
-    if (!result.ok) assert.match(result.error, /no id/);
+    if (!result.ok) assert.equal(result.outcomeUnknown, true);
     assert.equal(callsTo("/api/sessions/new-1/run").length, 0);
   });
 
@@ -903,7 +903,9 @@ describe("xuenessWorkbench run orchestration", () => {
     assert.deepEqual(recorded.map(call => call.url), ["/api/csrf", "/api/sessions/s9/queue"]);
     assert.equal(recorded[1].init.method, "POST");
     assert.equal(headerOf(recorded[1], "X-CSRF-Token"), "test-csrf-token");
-    assert.deepEqual(bodyOf(recorded[1]), { text: "follow-up", prepared_token: "prepared-once" });
+    const body = bodyOf(recorded[1]) as Record<string, unknown>;
+    assert.match(body.request_id as string, /^[0-9a-f]{32}$/u);
+    assert.deepEqual(body, { text: "follow-up", prepared_token: "prepared-once", request_id: body.request_id });
   });
 
   it("queueTurn accepts a paused 202 response without treating the submitted turn as failed", async () => {
@@ -925,7 +927,7 @@ describe("xuenessWorkbench run orchestration", () => {
     } } });
     const result = await queueTurn("s9", "follow-up");
     assert.equal(result.ok, false);
-    if (!result.ok) assert.match(result.error, /invalid queue response/i);
+    if (!result.ok) assert.equal(result.outcomeUnknown, true);
   });
 
   it("cancelQueuedTurn sends an authenticated DELETE for only the selected queue ID", async () => {
@@ -1019,6 +1021,29 @@ describe("xuenessWorkbench run orchestration", () => {
       allow_subagents: false,
       allow_hooks: false,
       continue_queue: true,
+    });
+  });
+
+  it('runSession attaches the durable send-now receipt to an explicit promoted turn', async () => {
+    stubStandardFetch({ "/api/sessions/s5/run": {} });
+
+    const result = await runSession("s5", undefined, {
+      continueQueue: true,
+      promotionRequestId: "9".repeat(32),
+    });
+    assert.deepEqual(result, { ok: true, value: undefined });
+    const runCall = recorded.find(call => call.url === "/api/sessions/s5/run");
+    assert.ok(runCall);
+    assert.deepEqual(bodyOf(runCall), {
+      provider: "real",
+      mode: "build",
+      permission_mode: "build",
+      browser: false,
+      allow_mcp: true,
+      allow_subagents: false,
+      allow_hooks: false,
+      continue_queue: true,
+      promotion_request_id: "9".repeat(32),
     });
   });
 });
@@ -1435,11 +1460,11 @@ test("loadSession and loadFiles forward AbortSignal to fetch and handle aborts g
   const controller = new AbortController();
   const sessionRes = await loadSession("s1", controller.signal);
   assert.equal(sessionRes.ok, true);
-  assert.equal(callsTo("/api/sessions/s1")[0].init.signal, controller.signal);
+  assert.equal(callsTo("/api/sessions/s1")[0].init.signal?.aborted, false);
 
   const filesRes = await loadFiles("s1", controller.signal);
   assert.equal(filesRes.ok, true);
-  assert.equal(callsTo("/api/sessions/s1/files")[0].init.signal, controller.signal);
+  assert.equal(callsTo("/api/sessions/s1/files")[0].init.signal?.aborted, false);
 
   controller.abort();
   const abortedRes = await loadSession("s1", controller.signal);

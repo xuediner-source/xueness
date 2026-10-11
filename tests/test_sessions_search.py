@@ -54,6 +54,14 @@ class SessionSearchTests(unittest.TestCase):
         self.assertEqual(len(self.query('STRASSE')[1]['matches']), 1)
         self.assertEqual(self.query('strasse-secret')[1]['matches'], [])
 
+    def test_search_does_not_resurface_history_hidden_by_edit(self):
+        session = self.session('current branch')
+        session['archived_messages'] = [{'role': 'assistant', 'content': 'discarded branch keyword',
+                                         '_message_id': 'f' * 32, '_turn_id': 'turn-2'}]
+        session['history_hidden_message_ids'] = ['f' * 32]
+        self.store.save(session)
+        self.assertEqual(self.query('discarded branch keyword')[1]['matches'], [])
+
     def test_pagination_advances_even_when_pages_have_no_matches(self):
         for index in range(4):
             self.session('last hit' if index == 3 else 'no match')

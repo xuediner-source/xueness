@@ -15,7 +15,4 @@
 .xn-session-context__empty { margin: 5px 6px; color: var(--fg-muted); font-size: 12px; }
 .xn-session-context__more { margin-top: 6px; color: var(--fg-muted); }
 .xn-session-context button:focus-visible, .xn-session-context a:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 1px; }
-.xn-hero__workspace { display: flex; align-items: center; gap: 12px; }
-.xn-hero__workspace .xn-composer-workspace { min-width: 0; }
-.xn-composer-workspace__host { flex: 0 0 auto; white-space: nowrap; }
 @media (max-width: 1100px) { .xn-session-context { position: absolute; top: 44px; right: 0; bottom: 0; height: auto; z-index: 31; width: min(320px, calc(100% - 24px)); border-left: 1px solid var(--border); box-shadow: var(--shadow-md); } }

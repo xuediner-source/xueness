@@ -84,6 +84,26 @@ export function timelineWheelScrollIntent(deltaY: number): TimelineUserScrollInt
   return "none";
 }
 
+/** Scrolling a code block/tool result must not release the conversation's anchor. */
+export function descendantConsumesTimelineScroll(container: HTMLElement | null, target: EventTarget | null, deltaY: number): boolean {
+  if (!container || !(target instanceof Element) || !container.contains(target)) return false;
+  for (let node: Element | null = target; node && node !== container; node = node.parentElement) {
+    if (!(node instanceof HTMLElement) || node.scrollHeight <= node.clientHeight + 1) continue;
+    const style = getComputedStyle(node);
+    if (style.overflowY !== 'auto' && style.overflowY !== 'scroll') continue;
+    if (style.overscrollBehaviorY === 'contain' || style.overscrollBehaviorY === 'none'
+      || (deltaY < 0 && node.scrollTop > 0)
+      || (deltaY > 0 && node.scrollTop < node.scrollHeight - node.clientHeight - 1)) return true;
+  }
+  return false;
+}
+
+export function timelineKeyboardScrollIntent(key: string, shiftKey = false): TimelineUserScrollIntent {
+  if (['ArrowUp', 'PageUp', 'Home'].includes(key) || (key === ' ' && shiftKey)) return 'awayFromBottom';
+  if (['ArrowDown', 'PageDown', 'End', ' '].includes(key)) return 'towardBottom';
+  return 'none';
+}
+
 /** touch 手指位移与 scrollTop 反向：手指下移表示阅读更早内容。 */
 export function timelineTouchScrollIntent(
   previousClientY: number,

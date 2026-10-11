@@ -301,7 +301,7 @@ class ComposerApiTests(unittest.TestCase):
         self.assertEqual(status, 200)
         model = next(item for item in result["models"] if item["id"] == "gpt6")
         self.assertEqual(model["reasoningLevels"], payload["reasoningLevels"])
-        self.assertEqual(set(model), {"id", "name", "model", "configured", "protocol", "capabilities", "reasoningLevels"})
+        self.assertEqual(set(model), {"id", "name", "model", "configured", "protocol", "capabilities", "reasoningLevels", "supplierId", "supplierName", "supplierNameEn"})
         self.assertNotIn("profile-secret", json.dumps(result))
         status, prepared = self.call("POST", ["api", "composer", "prepare"], {
             "text": "Use the selected reasoning", "provider_id": "gpt6", "model": "gpt-6-sol",

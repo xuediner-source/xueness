@@ -396,6 +396,7 @@ def main():
                     'tests.test_provider_cancel_propagate', 'tests.test_process_tree',
                     'tests.test_frame_replay', 'tests.test_host_path_identity', 'tests.test_host_platform',
                     'tests.test_sessions_search', 'tests.test_structured_questions',
+                    'tests.test_archived_session_delete',
                     'tests.test_message_queue.MessageQueueTests.test_edit_preserves_attachment_suffix_and_updates_actual_claimed_input',
                     'tests.test_message_queue.MessageQueueTests.test_edit_is_optimistic_and_refuses_paused_current_turn_or_expanded_commands',
                     'tests.test_message_queue.MessageQueueTests.test_edit_storage_failure_does_not_discard_old_message',
@@ -433,12 +434,12 @@ def main():
             assert ready['type'] == 'ready', ready
             url = ready['url']
 
-            def request(path, body=None):
+            def request(path, body=None, method=None):
                 payload = json.dumps(body).encode() if body is not None else None
                 headers = {'X-Xueness-Desktop-Token': token, 'Content-Type': 'application/json'}
                 if payload is not None:
                     headers['X-CSRF-Token'] = json.loads(request('/api/csrf'))['csrfToken']
-                req = urllib.request.Request(url+path, data=payload, headers=headers)
+                req = urllib.request.Request(url+path, data=payload, headers=headers, method=method)
                 try:
                     with urllib.request.urlopen(req, timeout=15) as response:
                         return response.read()
@@ -464,6 +465,26 @@ def main():
             workspace = data/'workspace'
             session = json.loads(request('/api/sessions', {'task': 'packaged terminal smoke', 'root': str(workspace)}))
             sid = session.get('id') or session['session']['id']
+            # Exercise permanent deletion through the actual frozen transport,
+            # using only this fixture's archive and workspace.
+            archive_task = json.loads(request('/api/sessions', {'task': 'packaged archive deletion fixture', 'root': str(workspace)}))
+            archive_sid = archive_task.get('id') or archive_task['session']['id']
+            keep_file = workspace / 'archive-delete-keep.txt'
+            keep_file.write_bytes(b'workspace output retained')
+            request('/api/sessions/' + archive_sid, {}, 'DELETE')
+            entry = next(item for item in json.loads(request('/api/sessions/archived'))['sessions'] if item['id'] == archive_sid)
+            archive_path = '/api/sessions/archived/' + archive_sid
+            try:
+                request(archive_path, {'confirmed': False, 'expectedRevision': entry['revision']}, 'DELETE')
+                raise AssertionError('unconfirmed permanent deletion accepted')
+            except urllib.error.HTTPError as exc:
+                assert exc.code == 400
+            deleted = json.loads(request(archive_path, {'confirmed': True, 'expectedRevision': entry['revision']}, 'DELETE'))
+            assert deleted == {'id': archive_sid, 'deleted': True, 'permanent': True}
+            assert not any(item['id'] == archive_sid for item in json.loads(request('/api/sessions/archived'))['sessions'])
+            assert any(item['id'] == sid for item in json.loads(request('/api/sessions'))['sessions'])
+            assert keep_file.read_bytes() == b'workspace output retained'
+            print('PASS: frozen archived deletion, explicit confirmation and workspace/active-session preservation')
             for terminal_round in range(3):
                 term = json.loads(request('/api/terminals', {'session_id': sid, 'open': True}))
                 def terminal_wait(marker):

@@ -181,6 +181,7 @@ def _prepare_agent(args, parser, store, session):
         runtime_override = getattr(args, 'runtime_profile', None)
         provider = provider_config.resolve(args.state, pid, model,
                                            reasoning_effort=reasoning_effort,
+                                           session_id=session.get('id'),
                                            **({'runtime_profile': runtime_override} if runtime_override is not None else {}))
         from ..providers.lightweight import profile_for
         if runtime_override is None and (pid != selection.get('provider_id') or model != selection.get('model')):

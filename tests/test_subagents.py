@@ -334,7 +334,7 @@ class SubagentsTests(unittest.TestCase):
         gate = Gate(self.root, allow_write=True, mode="build")
         gate.allowed_tool_names = frozenset({"read"})
         session = {
-            "id": "sub-fixture", "root": str(self.root), "status": "pending",
+            "id": "f" * 32, "root": str(self.root), "status": "pending",
             "messages": [{"role": "system", "content": "fixture"},
                          {"role": "user", "content": "write a file"}],
             "results": {}, "steps": 0,
@@ -673,9 +673,11 @@ class SubagentsTests(unittest.TestCase):
 
         params = fn["parameters"]
         self.assertEqual(params["type"], "object")
-        self.assertEqual(set(params["properties"]), {"prompt", "agent"})
+        self.assertEqual(set(params["properties"]), {"prompt", "agent", "inherit_history"})
         self.assertEqual(params["properties"]["prompt"], {"type": "string"})
         self.assertEqual(params["properties"]["agent"], {"type": "string"})
+        self.assertEqual(params["properties"]["inherit_history"]["type"], "boolean")
+        self.assertIn("explicitly", params["properties"]["inherit_history"]["description"].lower())
         self.assertEqual(params["required"], ["prompt"])
         self.assertIs(params["additionalProperties"], False)
 

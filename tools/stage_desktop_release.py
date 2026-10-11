@@ -38,8 +38,8 @@ def main():
         raise ValueError('all three native build jobs must succeed')
     for target in targets:
         job = next(job for job in jobs if target in job['name'])
-        required = ['Check feature ownership and portable backend behavior',
-                    'Freeze and exercise the actual backend', 'Verify packaged Electron workbench']
+        required = ['Run extended release test suite', 'Freeze the native backend',
+                    'Exercise the actual backend integration suite', 'Verify packaged Electron workbench']
         if target == 'windows-x64':
             required += ['Exercise the installed NSIS in-app update path',
                          'Verify public GitHub Windows installer download']

@@ -24,6 +24,8 @@ Xueness 的固定开发规则是：**每项产品功能归属于插件，并在�
 
 ## 禁用与资源释放
 
+会话运行生命周期使用 `plugin_runtime.before_model_request`、`before_run`、`after_run` 和 `settle_run`：共享执行器只提供关闭工具批次后的调用点、取消信号和截止时间，当前轮输入、语义摘要、目标判定及继续策略分别留在 sessions/providers/planning 插件。Store 的 `prepare_session_save`/`commit_session_save` 在同一 journal 锁内发布兼容 JSON 和插件有序修订；稳定消息身份及私有字段过滤属于 journal/提供商协议基础设施。修订、SSE 投影、收件箱和子会话记录全部保留各自插件归属，不扩大共享代码白名单。
+
 检查前端挂载和 effect、服务端工具/CLI/HTTP 的实际生效状态。组合界面须逐项检查所有参与插件；例如关闭 diagnostics 应停止本机资源采样，不能连带停用独立 providers 功能。禁用依赖只阻塞依赖者，不自动改写开关。
 
 轮询、子进程、连接和后台任务必须有明确停止与卸载路径；禁用后不启动新工作。正在发生的外部副作用不会因禁用而自动撤回。运行入口和直接工具调用必须绑定相同状态目录，不能通过未绑定的旧兼容 API 绕过持久开关。

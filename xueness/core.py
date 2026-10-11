@@ -819,6 +819,36 @@ def execute(root: Path, gate: Gate, name: str, args: dict, session: dict | None 
     return dispatch(root, gate, name, args, session)
 
 
+def _ensure_message_identity(session):
+    """Private identities survive compaction/edit; provider wire excludes them."""
+    count, current, seen = 0, 'turn-1', set()
+    persisted = session.get('_turn_count', 0)
+    persisted = persisted if type(persisted) is int and persisted >= 0 else 0
+    # Seed new turns from every known identity, including archived turns.
+    highest = max([persisted, *[int(m['_turn_id'][5:]) for m in session.get('messages') or ()
+                               if isinstance(m, dict) and isinstance(m.get('_turn_id'), str)
+                               and re.fullmatch(r'turn-[1-9][0-9]*', m['_turn_id'])]])
+    for message in session.get('messages') or ():
+        if not isinstance(message, dict):
+            continue
+        existing = message.get('_turn_id')
+        if message.get('role') == 'user' and message.get('_input_kind') != 'guide':
+            if isinstance(existing, str) and re.fullmatch(r'turn-[1-9][0-9]*', existing):
+                count = max(count, int(existing[5:]))
+                current = existing
+            else:
+                count = max(count, highest) + 1
+                current = f'turn-{count}'
+                highest = count
+        if not isinstance(existing, str) or not re.fullmatch(r'turn-[1-9][0-9]*', existing):
+            message['_turn_id'] = current
+        mid = message.get('_message_id')
+        if not isinstance(mid, str) or not re.fullmatch(r'[0-9a-f]{32}', mid) or mid in seen:
+            mid = message['_message_id'] = uuid.uuid4().hex
+        seen.add(mid)
+    session['_turn_count'] = max(count, highest)
+
+
 class Store:
     """Durable session journals.
 
@@ -870,7 +900,11 @@ class Store:
             self._path(sid)
             stage = "lock"
             with self._thread_lock(sid), journal_lock(self, sid):
+                _ensure_message_identity(session)
+                from .plugin_runtime import prepare_session_save, commit_session_save
+                tokens = prepare_session_save(self.directory, self, session)
                 self._write_journal(session)
+                commit_session_save(tokens)
         except Exception as exc:
             if getattr(exc, "_xueness_store_stage", None) is None:
                 _annotate_store_failure(exc, stage)
@@ -1300,7 +1334,8 @@ def _current_turn_tool_ids(session: dict) -> list[str]:
     """Tool calls belonging to the most recent user turn, in journal order."""
     messages = session.get("messages") or []
     last_user = max((index for index, item in enumerate(messages)
-                     if isinstance(item, dict) and item.get("role") == "user"), default=0)
+                     if isinstance(item, dict) and item.get("role") == "user"
+                     and item.get('_input_kind') != 'guide'), default=0)
     result = []
     for message in messages[last_user + 1:]:
         if not isinstance(message, dict) or message.get("role") != "assistant":
@@ -1357,7 +1392,13 @@ def _tool_execution_status(session: dict, call_ids: list[str]) -> str:
 
 def _turn_id(session: dict) -> str:
     messages = session.get("messages") or []
-    count = sum(1 for item in messages if isinstance(item, dict) and item.get("role") == "user")
+    for item in reversed(messages):
+        if isinstance(item, dict) and item.get('role') == 'user' and item.get('_input_kind') != 'guide':
+            if isinstance(item.get('_turn_id'), str):
+                return item['_turn_id']
+            break
+    count = sum(1 for item in messages if isinstance(item, dict) and item.get("role") == "user"
+                and item.get('_input_kind') != 'guide')
     return f"turn-{max(1, count)}"
 
 
@@ -1466,7 +1507,8 @@ def record_approval(session, action: str, kind: str, tool_call_id, subject) -> N
 def _run_subagent(gate: Gate, provider, agents, prompt, agent_name,
                   *, depth: int, max_depth: int, max_chars: int = 24000,
                   registry=None, parent_session=None, parent_should_stop=None,
-                  state_dir=None, parent_model_selection=None, task_id=None) -> dict:
+                  state_dir=None, parent_model_selection=None, task_id=None,
+                  resume_session_id=None, inherit_history=False, parent_context=None) -> dict:
     """Compatibility bridge to the subagents plugin's child-run executor."""
     from .plugin_runtime import entrypoint
     return entrypoint("subagents").run_task(
@@ -1474,7 +1516,8 @@ def _run_subagent(gate: Gate, provider, agents, prompt, agent_name,
         max_depth=max_depth, max_chars=max_chars, registry=registry,
         parent_session=parent_session, parent_should_stop=parent_should_stop,
         state_dir=state_dir, parent_model_selection=parent_model_selection,
-        task_id=task_id,
+        task_id=task_id, resume_session_id=resume_session_id,
+        inherit_history=inherit_history, parent_context=parent_context,
         Gate=Gate, run=run, system=SYSTEM, max_steps=SUBAGENT_MAX_STEPS,
         summary_max=SUBAGENT_SUMMARY_MAX)
 
@@ -1614,6 +1657,8 @@ def _drive_run(session: dict, store: Store, provider, gate: Gate, max_steps=None
     session.setdefault("todos", [])
     session.setdefault("pending_question", None)
     session["status"] = "running"
+    _ensure_message_identity(session)
+    session['active_turn_id'] = _turn_id(session)
     session["mode"] = getattr(gate, "mode", "build")
     session.setdefault("mode_history", [])
     if not session["mode_history"] or session["mode_history"][-1].get("mode") != session["mode"]:
@@ -1654,6 +1699,17 @@ def _drive_run(session: dict, store: Store, provider, gate: Gate, max_steps=None
     if _subagent_coordinator is not None:
         _subagent_coordinator.configure(should_stop=stop_requested,
                                        enabled=lambda: plugin_enabled('subagents') and plugin_enabled('providers'))
+        def execute_child(task_id, child_stop, child_args):
+            return _run_subagent(gate, provider, subagents,
+                                 child_args.get('prompt'), child_args.get('agent'),
+                                 depth=depth, max_depth=max_depth, max_chars=max_chars,
+                                 registry=registry, parent_session=session.get('id'),
+                                 parent_should_stop=child_stop, state_dir=state_dir,
+                                 parent_model_selection=session.get('model_selection'), task_id=task_id,
+                                 resume_session_id=child_args.get('resume_session_id'),
+                                 inherit_history=child_args.get('inherit_history', False),
+                                 parent_context=session)
+        _subagent_coordinator.bind_executor(execute_child, state_dir=state_dir)
 
     def settle_stopped() -> dict:
         session["status"] = "stopped"
@@ -1829,13 +1885,8 @@ def _drive_run(session: dict, store: Store, provider, gate: Gate, max_steps=None
                 and depth < max_depth and _subagent_coordinator is not None):
             capability_call = True
             # Freeze per-call arguments: the worker outlives this dispatch iteration.
-            def execute_child(task_id, child_stop, child_args=dict(arguments)):
-                return _run_subagent(gate, provider, subagents,
-                                     child_args.get('prompt'), child_args.get('agent'),
-                                     depth=depth, max_depth=max_depth, max_chars=max_chars,
-                                     registry=registry, parent_session=session.get('id'),
-                                     parent_should_stop=child_stop, state_dir=state_dir,
-                                     parent_model_selection=session.get('model_selection'), task_id=task_id)
+            def execute_admitted_child(task_id, child_stop, child_args=dict(arguments)):
+                return execute_child(task_id, child_stop, child_args)
             from .tool_contract import (authorize_tool_effect,
                                         bind_tool_call_context)
             with bind_tool_call_context(
@@ -1847,7 +1898,7 @@ def _drive_run(session: dict, store: Store, provider, gate: Gate, max_steps=None
                         state_dir, session, store, tool_name, 'planning',
                         arguments.get('prompt'), cid)
                 result = _subagent_coordinator.dispatch(
-                    cid, arguments, execute_child, before_start=before_start)
+                    cid, arguments, execute_admitted_child, before_start=before_start)
         else:
             result = _dispatch_registry_tool(cid, tool_name, arguments)
         if not isinstance(result, dict):
@@ -1941,22 +1992,25 @@ def _drive_run(session: dict, store: Store, provider, gate: Gate, max_steps=None
             _emit_event(on_event, "status", status="paused", steps=session.get("steps", 0),
                         reason="providers plugin disabled")
             return session
-        guidance_loader = getattr(plugin_runtime, 'completion_instructions', None)
-        host_guidance = guidance_loader(state_dir, session) if callable(guidance_loader) else []
-        if _subagent_coordinator is not None and plugin_enabled('subagents'):
-            from .bundled_plugins.subagents.coordinator import GUIDANCE
-            host_guidance = [*host_guidance, GUIDANCE]
-        if not light:
-            overhead = len(json.dumps(host_guidance, ensure_ascii=False)) if host_guidance else 0
-            compact(session, max(256, max_chars - overhead), max_tokens)
-        save_session()
-        if on_step is not None:
-            try:
-                on_step(session.get("steps", 0))
-            except Exception:
-                # Progress reporting must never take down a run it only observes.
-                pass
         try:
+            plugin_runtime.before_model_request(
+                state_dir, session, store, provider, gate, max_chars=max_chars,
+                max_tokens=max_tokens, request_deadline=deadline,
+                should_stop=stop_requested, on_event=on_event)
+            guidance_loader = getattr(plugin_runtime, 'completion_instructions', None)
+            host_guidance = guidance_loader(state_dir, session) if callable(guidance_loader) else []
+            if _subagent_coordinator is not None and plugin_enabled('subagents'):
+                from .bundled_plugins.subagents.coordinator import GUIDANCE
+                host_guidance = [*host_guidance, GUIDANCE]
+            if not light:
+                overhead = len(json.dumps(host_guidance, ensure_ascii=False)) if host_guidance else 0
+                compact(session, max(256, max_chars - overhead), max_tokens)
+            save_session()
+            if on_step is not None:
+                try:
+                    on_step(session.get("steps", 0))
+                except Exception:
+                    pass
             # Memory and enabled skills are injected only into the prompt view,
             # fresh each run and never persisted: the journal keeps no copy of
             # either, so nothing untrusted can be replayed from disk later.
@@ -2017,6 +2071,8 @@ def _drive_run(session: dict, store: Store, provider, gate: Gate, max_steps=None
             # the serial policy chain (replaces the per-call set comprehension).
             light_tool_names = ({lightweight.tool_name(s) for s in active_tools}
                                 if light else frozenset())
+            prompt = [{key: value for key, value in message.items() if not key.startswith('_')}
+                      for message in prompt]
             stream = getattr(provider, "stream", None)
             hide_structured_stream = bool(
                 light and getattr(provider, "tool_calling", "native") == "json")
@@ -2645,7 +2701,7 @@ def _drive_run(session: dict, store: Store, provider, gate: Gate, max_steps=None
     return session
 
 
-def run(session: dict, store: Store, provider, gate: Gate, max_steps=None, max_chars=None,
+def _run_once(session: dict, store: Store, provider, gate: Gate, max_steps=None, max_chars=None,
         memory: str | None = None, max_tokens: int | None = None,
         skills: str | None = None, hooks=None, mcp_tools=None, mcp_call=None,
         subagents=None, depth: int = 0, max_depth: int = 1,
@@ -2674,7 +2730,66 @@ def run(session: dict, store: Store, provider, gate: Gate, max_steps=None, max_c
         returned = True
         return result
     finally:
-        if coordinator is not None:
-            coordinator.close()
-            if returned or coordinator.records:
-                store.save(session)
+        from .plugin_runtime import settle_run
+        try:
+            settle_run(state_dir, session, store, session.get('active_turn_id'))
+        finally:
+            session.pop('active_turn_id', None)
+            try:
+                if returned:
+                    store.save(session)
+            finally:
+                if coordinator is not None:
+                    coordinator.close()
+                    if returned or coordinator.records:
+                        store.save(session)
+
+
+def run(session, store, provider, gate, max_steps=None, max_chars=None,
+        memory=None, max_tokens=None, skills=None, hooks=None, mcp_tools=None,
+        mcp_call=None, subagents=None, depth=0, max_depth=1, should_stop=None,
+        on_step=None, registry=None, max_wall_seconds=None, on_event=None,
+        skill_reader=None, policy_state_dir=None, runtime_profile=None):
+    """Drive bounded plugin continuations, each using the normal persisted turn."""
+    from .plugin_runtime import before_run, after_run
+    options = {key: value for key, value in locals().copy().items()
+               if key not in ('session', 'store', 'provider', 'gate', 'before_run', 'after_run')}
+    state_dir = options.get('policy_state_dir') or getattr(store, 'directory', None)
+    lifecycle = before_run(state_dir, session)
+    if lifecycle.get('needs_save'):
+        store.save(session)
+    if lifecycle.get('stop'):
+        return session
+    if not lifecycle.get('enabled'):
+        return _run_once(session, store, provider, gate, **options)
+    store.save(session)
+    remaining = lifecycle.get('deadline_seconds')
+    requested = options.get('max_wall_seconds')
+    if requested is not None:
+        remaining = min(remaining, requested) if remaining is not None else requested
+    deadline = time.monotonic() + max(0, remaining) if remaining is not None else None
+    invocation_started = time.monotonic()
+    while True:
+        started = time.monotonic()
+        available = deadline - started if deadline is not None else None
+        if available is not None and available <= 0:
+            after_run(state_dir, session, provider, root=gate.root, gate=gate,
+                      should_stop=options.get('should_stop'), request_deadline=deadline,
+                      elapsed_seconds=time.monotonic() - invocation_started)
+            store.save(session)
+            return session
+        iteration = dict(options)
+        if available is not None:
+            iteration['max_wall_seconds'] = min(3600, available)
+        result = _run_once(session, store, provider, gate, **iteration)
+        decision = after_run(state_dir, result, provider, root=gate.root, gate=gate,
+                             should_stop=options.get('should_stop'), request_deadline=deadline,
+                             elapsed_seconds=time.monotonic() - invocation_started)
+        store.save(result)
+        if decision.get('action') != 'continue':
+            return result
+        text = decision.get('prompt')
+        if not isinstance(text, str) or not text.strip():
+            return result
+        append_user_turn(result, store, text)
+        gate.session = result

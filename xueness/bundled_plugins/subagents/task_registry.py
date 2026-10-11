@@ -41,6 +41,7 @@ class TaskRegistry:
     def __init__(self):
         self._guard = threading.Lock()
         self._tasks: dict[str, dict] = {}
+        self._coordinators: dict[str, object] = {}
 
     @staticmethod
     def new_id() -> str:
@@ -117,6 +118,19 @@ class TaskRegistry:
                           else 'interrupted before result collection'),
                 'workerActive': False,
             }
+            for key in ('childSessionId', 'parentSessionId', 'rootSessionId', 'canResume',
+                        'recoveryReason', 'childStatus'):
+                if key in record:
+                    self._tasks[task_id][key] = record[key]
+
+    def restart(self, task_id) -> bool:
+        """Reserve explicit recovery; cancellation remains a terminal decision."""
+        with self._guard:
+            task = self._tasks.get(task_id)
+            if task is None or task.get('workerActive') is True or task.get('status') == CANCELLED:
+                return False
+            task.update(status=RUNNING, workerActive=True, endedAt=None, error='', summary='')
+            return True
 
     def finish(self, task_id, *, ok, summary="", error="", steps=None) -> dict:
         """Terminal transition. Returns the final record (or an empty dict)."""
@@ -176,6 +190,27 @@ class TaskRegistry:
         """Drop everything. Tests only."""
         with self._guard:
             self._tasks.clear()
+            self._coordinators.clear()
+
+    def bind_parent(self, parent_session, coordinator) -> bool:
+        """Expose only the currently running parent coordinator to plugin HTTP routes."""
+        if not isinstance(parent_session, str) or coordinator is None:
+            return False
+        with self._guard:
+            existing = self._coordinators.get(parent_session)
+            if existing is not None and existing is not coordinator:
+                return False
+            self._coordinators[parent_session] = coordinator
+            return True
+
+    def unbind_parent(self, parent_session, coordinator) -> None:
+        with self._guard:
+            if self._coordinators.get(parent_session) is coordinator:
+                self._coordinators.pop(parent_session, None)
+
+    def parent_for(self, parent_session):
+        with self._guard:
+            return self._coordinators.get(parent_session)
 
 
 def mirror(registry, parent_session) -> list:

@@ -2,6 +2,19 @@
    Geometry: max-w-4xl, turn px-4/@md:px-6 pt-14 pb-5 gap-5;
    bubble max-w-xl px-4 py-3 rounded-xl rounded-tr-xs; summary gap-2 size-4. */
 .xn-zcode-conversation { width: 100%; max-width: 896px; margin-inline: auto; box-sizing: border-box; color: var(--conversation-fg); font: var(--xn-ui-font-size, 14px)/1.5 var(--font-sans); }
+.xn-zc-find__dock { position: sticky; top: 0; z-index: 3; display: flex; justify-content: flex-end; min-height: 0; padding: 8px 16px 0; pointer-events: none; }
+.xn-zc-find__toggle, .xn-zc-find button { display: inline-flex; align-items: center; justify-content: center; width: 30px; height: 30px; border: 1px solid var(--border); border-radius: 7px; background: var(--bg-card); color: var(--conversation-muted); cursor: pointer; }
+.xn-zc-find__toggle { pointer-events: auto; }
+.xn-zc-find { display: flex; align-items: center; gap: 5px; max-width: min(100%, 420px); padding: 4px; border: 1px solid var(--border); border-radius: 9px; background: var(--bg-card); box-shadow: var(--shadow-sm); pointer-events: auto; }
+.xn-zc-find > svg { flex: 0 0 auto; color: var(--conversation-muted); margin-inline-start: 4px; }
+.xn-zc-find input { width: min(34vw, 220px); min-width: 90px; height: 28px; border: 0; outline: 0; background: transparent; color: var(--conversation-fg); font: inherit; }
+.xn-zc-find button { width: 26px; height: 26px; border-color: transparent; background: transparent; }
+.xn-zc-find button:hover:not(:disabled), .xn-zc-find__toggle:hover { color: var(--conversation-fg); background: var(--bg-hover); }
+.xn-zc-find button:disabled { opacity: .4; cursor: default; }
+.xn-zc-find__count { min-width: 38px; color: var(--conversation-muted); text-align: center; font-size: 12px; font-variant-numeric: tabular-nums; }
+.xn-zc-find__match { border-radius: 2px; background: color-mix(in oklab, var(--warning-bg) 72%, transparent); color: inherit; }
+.xn-zc-find__match[data-xueness-find-active] { background: var(--warning-bg); outline: 1px solid color-mix(in oklab, var(--warning-fg) 65%, transparent); }
+.xn-zc-selection-action { position: sticky; top: 42px; z-index: 4; display: flex; justify-content: center; width: fit-content; max-width: 100%; margin: 0 auto; }
 .xn-zc-turn { min-width: 0; display: flex; flex-direction: column; gap: 20px; padding: 56px 24px 20px; }
 .xn-zc-user { display: flex; flex-direction: column; align-items: flex-end; min-width: 0; }
 .xn-zc-user-bubble { box-sizing: border-box; max-width: min(100%, 576px); padding: 12px 16px; border: 1px solid var(--border); border-radius: 12px 2px 12px 12px; background: var(--conversation-user-surface); white-space: pre-wrap; overflow-wrap: anywhere; }

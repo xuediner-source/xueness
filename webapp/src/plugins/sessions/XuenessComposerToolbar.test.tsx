@@ -16,6 +16,7 @@ import {
   modelDetailSentence,
   modelDetailCardStyle,
   nextIndex,
+  groupComposerModels,
 } from "./XuenessComposerToolbar";
 import type { ComposerModel } from "../../xuenessComposer";
 import type { RunChoices } from "../../xuenessBridge";
@@ -163,7 +164,24 @@ const menuProps = {
   onReload: () => {},
   onManageModels: () => {},
   onRequestClose: () => {},
+  initialSupplierId: 'saved',
 };
+
+test('supplier root groups catalog profiles without changing their selection identities', () => {
+  const models = [{ ...model, supplierId: 'subscription:google', supplierName: 'Google', supplierNameEn: 'Google', id: 'one' },
+    { ...model, supplierId: 'subscription:google', supplierName: 'Google', id: 'two', model: 'other' },
+    { ...model, supplierId: 'local', supplierName: '本机', supplierNameEn: 'Local', id: 'three' }];
+  const groups = groupComposerModels(models, 'en');
+  assert.deepEqual(groups.map(group => group.models.map(item => item.id)), [['one', 'two'], ['three']]);
+  assert.equal(groups[1].name, 'Local');
+  const root = renderToStaticMarkup(<ComposerModelMenu {...menuProps} initialSupplierId={undefined} models={models} />);
+  assert.match(root, /data-supplier-row="subscription:google"/);
+  assert.match(root, /2 个模型/); assert.doesNotMatch(root, /data-model-row=/);
+  const submenu = renderToStaticMarkup(<ComposerModelMenu {...menuProps} initialSupplierId="subscription:google" models={models} />);
+  assert.match(submenu, /data-model-row="one:model-default"/);
+  assert.match(submenu, /data-model-row="two:other"/);
+  assert.doesNotMatch(submenu, /data-model-row="three:/);
+});
 
 test("Toolbar: profile tiers lead the popover and model rows keep menu keyboard semantics", () => {
   const html = renderToStaticMarkup(
@@ -317,7 +335,7 @@ test("ComposerModelDetailCard: Edit calls the settings callback", () => {
   assert.equal(edits, 1);
 });
 
-test("Toolbar: environment and saved models share one accessible list without inferred categories", () => {
+test("Toolbar: legacy environment and saved profiles have accessible submenus without inferred capability tiers", () => {
   const environment = { ...model, id: "", name: "Environment", model: "env-model" };
   const custom = { ...model, id: "provider-a", name: "Default model", model: "model-default" };
   const unavailable = { ...model, id: "missing", name: "Missing credentials", model: "missing-model", configured: false };
@@ -325,7 +343,9 @@ test("Toolbar: environment and saved models share one accessible list without in
     <ComposerModelMenu {...menuProps} models={[environment, custom, unavailable]} />,
   );
   assert.match(html, /data-testid="composer-model-options"/);
-  assert.match(html, /data-model-row=":env-model"/);
+  const environmentMenu = renderToStaticMarkup(<ComposerModelMenu {...menuProps} initialSupplierId="environment" models={[environment, custom, unavailable]} />);
+  assert.match(environmentMenu, /data-model-row=":env-model"/);
+  assert.doesNotMatch(html, /data-model-row=":env-model"/);
   assert.match(html, /data-model-row="provider-a:model-default"/);
   assert.match(html, /data-model-row="missing:missing-model"/);
   const unavailableButton = html.match(/<button[^>]*data-model-row="missing:missing-model"[^>]*>/)?.[0] ?? "";

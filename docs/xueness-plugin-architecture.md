@@ -1,5 +1,17 @@
 # Xueness 插件架构与功能归属
 
+2026-10-12 会话执行与交互补齐：目录现为 **30 个插件、204 项登记功能**。sessions 提供当前轮引导、立即发送、稳定修订与实时补丁、长历史分页、会话内查找、文本选择和分享导入；providers 提供结构化语义压缩；planning 提供有预算及独立核验的目标继续；subagents 提供持久子会话、恢复收件箱和只读正文查看。共享执行器仅接入插件生命周期，未扩大共享白名单。验收缩减与本地主机分享边界见 [实施记录](session-runtime-upgrade-2026-10-12.md)。
+
+2026-10-12 订阅账号范围修正：`subscriptions` 仅保留账号授权、CLI 登录导入与订阅账号凭证。移除 API／套餐 Key／网关目录及手动 API 接入路径，原有存储保留但不进入订阅目录或会话模型；Command Code 仅接受明确的 CLI 登录导入，Qoder 不再读取 9Router 数据库。既有 6 个功能 ID 保持稳定，目录仍为 **30 个插件、192 项登记功能**，未扩大共享边界。详见[范围与验证说明](subscription-account-scope-2026-10-12.md)。
+
+2026-10-11 会话主页与模型导航：`model_monitor.home` 将监测卡挂载到新会话和当前会话主页，按会话 ID 隔离新记录；既有 `sessions.model_picker` 改为供应商子菜单与搜索，providers 仅贡献脱敏分组信息；`usage.costs` 增加稳定模型配色的每日堆叠图与宽松卡片布局。未安装／停用监测时的入口使用共享插件管理组件，只提供安装／恢复导航，不挂载业务或发起轮询。订阅 worker 上游错误保留类别与 HTTP 状态，并与既有运行失败契约衔接。没有扩大共享白名单，详细归属与验证见[会话主页与模型导航](conversation-home-and-model-navigation-2026-10-11.md)。
+
+2026-10-11 可选账号与监测插件：目录现为 **30 个插件、192 项登记功能**。新增 `subscriptions`（6 项功能）与 `model_monitor`（4 项功能），默认未安装、未启用；可信市场资源安装标记只决定固定构建插件的可用性，不加载清单中的外部代码。原生协议、凭据、额度与 worker 生命周期归 subscriptions；返回型号元数据的被动记录与比较归 model_monitor。模型目录与请求入口保留描述性接缝，安装／开关管理继续属于既有共享基础设施，权限检查不变。详见[使用与验证说明](subscriptions-and-model-monitor-2026-10-11.md)。
+
+2026-10-11 归档管理：目录现为 **28 个插件、182 项登记功能**。新增 `sessions.archived_delete`，归档列表在恢复旁提供带版本确认的永久删除；组件、API、租约与路径校验均归 sessions。使用及数据范围见[归档会话管理](archived-session-delete-2026-10-11.md)。
+
+2026-10-11 会话可靠性：目录现为 **28 个插件、181 项登记功能**。新增 `sessions.refresh_recovery`，扩展 `sessions.composer` 的待确认提交、草稿恢复与重挂载对账，扩展 `sessions.message_queue` 的原子回执、预览及并发安全重排，扩展 `sessions.timeline_follow` 的键盘与内层滚动处理。新增前端文件均登记于 sessions manifest；通用 API 只补状态码、预检结果和读取截止，不增加业务入口或共享白名单。见[使用与验证说明](session-experience-2026-10-11.md)。
+
 2026-10-10 双外观与侧栏宽度：目录现为 **28 个插件、180 项登记功能**。`sessions.sidebar_resize` 归属 `SidebarResizeHandle.tsx`，提供拖动、键盘、取消和分外观本机记忆。Shell 仅新增宽度值与展示槽，不处理保存或拖动业务；禁用 sessions 后停止偏好读写及监听。经典与 Claudex 使用独立组件和样式，但共享后端、用户字号与稳定的设置页阅读比例。见 [外观与使用方法](claudex-reference-review.md)。
 
 2026-10-10 Claudex 外观与全局会话改进：目录现为 **28 个插件、178 项登记功能**。Claudex 归属既有 `settings.appearance`，只修改外观；`sessions.full_text_search` 和 `sessions.structured_questions` 新增有界正文搜索及结构化答复，`sessions.message_queue` 扩展安全编辑与折叠。新 Python/前端文件均登记于原插件 manifest。`BuiltinTool.schema_for_state` 是工具契约的可选纯数据转换接口，用于在持久插件过滤后调用所属插件的 schema 贡献；提问业务与开关判断留在 planning/sessions，不扩大共享白名单。使用方法、参考源码和兼容边界见 [Claudex 与会话改进](claudex-reference-review.md)。

@@ -48,7 +48,7 @@ test("切换 Claudex 外观不做全局缩放：不改根字号、界面字号�
   assert.doesNotMatch(css, /html\[data-xn-palette="claudex"\]\s*(?:body\s*)?\{/, "不得直接给 html/body 设样式");
   assert.doesNotMatch(css, /--xn-ui-font-size\s*:/);
   // Codex 正文与界面同为用户界面字号（默认 14px），不另设放大的阅读字号。
-  assert.doesNotMatch(css, /--xn-ui-font-size,\s*14px\)\s*\+/);
+  assert.doesNotMatch(css, /font-size:\s*calc\([^;{}]*--xn-ui-font-size,\s*14px\)\s*\+/);
   const fixedSizes = [...css.matchAll(/font-size:\s*(\d+)px/g)].map(match => Number(match[1]));
   for (const size of fixedSizes) assert.ok(size <= 40, `${size}px`);
 });

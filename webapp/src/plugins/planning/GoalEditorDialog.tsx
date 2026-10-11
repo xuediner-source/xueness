@@ -13,16 +13,26 @@ export function GoalEditorDialog({ sessionId, goal, onClose, onSaved }: {
   const inputRef = useRef<HTMLTextAreaElement | null>(null);
   const compositionActiveRef = useRef(false);
   const [text, setText] = useState(goal?.text ?? '');
+  const [maxRounds, setMaxRounds] = useState(goal?.budget?.maxRounds ?? 8);
+  const [maxWallSeconds, setMaxWallSeconds] = useState(goal?.budget?.maxWallSeconds ?? 600);
+  const [maxTokens, setMaxTokens] = useState(goal?.budget?.maxTokens?.toString() ?? '');
   const [replace, setReplace] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const occupied = Boolean(goal && goal.status !== 'cleared');
+  const tokenBudget = maxTokens.trim() ? Number(maxTokens) : undefined;
+  const budgetValid = Number.isInteger(maxRounds) && maxRounds >= 1 && maxRounds <= 64
+    && Number.isInteger(maxWallSeconds) && maxWallSeconds >= 1 && maxWallSeconds <= 3600
+    && (tokenBudget === undefined || Number.isInteger(tokenBudget) && tokenBudget >= 128 && tokenBudget <= 10000000);
   useModalFocusScope({ open: true, dialogRef: ref, initialFocusRef: inputRef });
   const save = async () => {
     if (busy || !text.trim() || occupied && !replace) return;
     setBusy(true); setError('');
     try {
-      await post(`/api/sessions/${encodeURIComponent(sessionId)}/goal`, { text: text.trim(), replace });
+      await post(`/api/sessions/${encodeURIComponent(sessionId)}/goal`, {
+        text: text.trim(), replace,
+        budget: { maxRounds, maxWallSeconds, ...(tokenBudget === undefined ? {} : { maxTokens: tokenBudget }) },
+      });
       onSaved(); onClose();
     } catch (cause) { setError(cause instanceof Error ? cause.message : String(cause)); }
     finally { setBusy(false); }
@@ -37,11 +47,20 @@ export function GoalEditorDialog({ sessionId, goal, onClose, onSaved }: {
       maxLength={5000} rows={5} disabled={busy} onChange={event => setText(event.target.value)}
       onCompositionStart={(e) => { compositionActiveRef.current = true; e.currentTarget.setAttribute('data-composing', 'true'); }}
       onCompositionEnd={(e) => { const el = e.currentTarget; deferCompositionEnd(() => { compositionActiveRef.current = false; el?.removeAttribute('data-composing'); }); }} />
+    <fieldset className="xn-goal-editor__budgets" disabled={busy}>
+      <legend>{t('目标运行预算')}</legend>
+      <label>{t('最多轮数')}<input type="number" min={1} max={64} value={maxRounds}
+        onChange={event => setMaxRounds(Number(event.target.value))} /></label>
+      <label>{t('最多秒数')}<input type="number" min={1} max={3600} value={maxWallSeconds}
+        onChange={event => setMaxWallSeconds(Number(event.target.value))} /></label>
+      <label>{t('最多 token（可选）')}<input type="number" min={128} max={10000000}
+        value={maxTokens} onChange={event => setMaxTokens(event.target.value)} /></label>
+    </fieldset>
     {occupied && <label><input type="checkbox" checked={replace} disabled={busy} onChange={event => setReplace(event.target.checked)} />{t('确认替换现有目标')}</label>}
     {error && <p role="alert">{error}</p>}
     <div className="xn-dialog__actions">
       <button type="button" className="xn-btn xn-btn--md xn-btn--secondary" disabled={busy} onClick={onClose}>{t('取消')}</button>
-      <button type="button" className="xn-btn xn-btn--md xn-btn--primary" disabled={busy || !text.trim() || occupied && !replace} onClick={() => void save()}>{t(busy ? '保存中…' : '保存目标')}</button>
+      <button type="button" className="xn-btn xn-btn--md xn-btn--primary" disabled={busy || !text.trim() || !budgetValid || occupied && !replace} onClick={() => void save()}>{t(busy ? '保存中…' : '保存目标')}</button>
     </div>
   </section></div>;
 }

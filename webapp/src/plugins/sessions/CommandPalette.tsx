@@ -122,7 +122,7 @@ export type CommandPaletteProps = {
   settingsEnabled: boolean;
   onClose: () => void;
   onRunCommand: (id: string) => void;
-  onSelectSession: (id: string) => void;
+  onSelectSession: (id: string, query?: string) => void;
 };
 
 /** 会话很多时，模糊过滤按防抖后的输入执行；清空输入立即恢复，不拖尾。 */
@@ -190,7 +190,7 @@ export function CommandPalette({ dialogRef, inputRef, sessions, busy, sessionsEn
     if (!entry || (entry.kind === "session" && entry.disabled)) return;
     onClose();
     if (entry.kind === "command") onRunCommand(entry.id);
-    else onSelectSession(entry.session.id);
+    else onSelectSession(entry.session.id, entry.snippet ? needle.trim() : undefined);
   };
 
   const onKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {

@@ -213,5 +213,12 @@
 .xn-plugin-settings__views button:focus-visible { outline: 2px solid var(--border-focus); outline-offset: 2px; }
 .xn-plugin-settings__views button span { color: var(--fg-muted); font-variant-numeric: tabular-nums; }
 .xn-plugin-settings__views .xn-plugin-settings__browse { margin-left: auto; }
+.xn-plugin-home-entry { display: flex; align-items: center; gap: 10px; width: 100%; min-width: 0; margin: 0 0 14px; padding: 12px 14px; border: 1px dashed var(--border); border-radius: 12px; background: var(--bg-card); color: var(--fg-muted); text-align: left; font: inherit; cursor: pointer; }
+.xn-plugin-home-entry > span { display: flex; min-width: 0; flex: 1; flex-direction: column; gap: 4px; }
+.xn-plugin-home-entry strong { color: var(--fg); font-size: 12px; font-weight: 550; }
+.xn-plugin-home-entry small { font-size: 10px; }
+.xn-plugin-home-entry:hover { background: var(--bg-hover); border-style: solid; }
+.xn-plugin-home-entry:focus-visible { outline: 2px solid var(--border-focus); outline-offset: 2px; }
+.xn-conversation > .xn-plugin-home-entry { width: auto; margin: 8px 20px; }
 .xn-plugin-settings__resources { min-width: 0; }
 .xn-plugin-settings__resources > p { padding: 24px; color: var(--fg-muted); font-size: 13px; }

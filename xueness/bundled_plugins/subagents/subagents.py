@@ -425,6 +425,7 @@ def task_tool_schema() -> dict:
                 "properties": {
                     "prompt": {"type": "string"},
                     "agent": {"type": "string"},
+                    "inherit_history": {"type": "boolean", "description": "Explicitly copy the parent's completed conversation context into this child."},
                 },
                 "required": ["prompt"],
                 "additionalProperties": False,

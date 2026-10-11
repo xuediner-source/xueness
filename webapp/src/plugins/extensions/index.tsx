@@ -25,9 +25,11 @@ export function marketplaceDisplayCopy(item: MarketplaceItem): { name: string; d
     hooks: ['钩子', '在任务关键阶段执行你配置的自动化操作。'],
     mcp: ['MCP 连接器', '连接外部工具和服务，拓展任务能力。'],
     subagents: ['协作代理', '让多个代理分工处理任务，并汇总进度和结果。'],
+    subscriptions: ['订阅中心', '通过账号授权或登录凭证接入 Claude、Codex 等订阅账号，查询真实额度并用于会话。'],
+    model_monitor: ['返回模型监测', '随会话显示请求型号与上游返回型号，判断一致或不同；不自动发送额外请求。'],
   };
   const kind = typeof item.manifest.builtin === 'string' ? item.manifest.builtin : '';
-  const copy = item.source === 'bundled' && item.id === `xueness-${kind}` ? bundled[kind] : undefined;
+  const copy = item.source === 'bundled' && item.id === (kind === 'model_monitor' ? 'xueness-model-monitor' : `xueness-${kind}`) ? bundled[kind] : undefined;
   return copy ? { name: tr(copy[0]), description: tr(copy[1]) } : { name: item.name, description: item.description };
 }
 
@@ -274,7 +276,7 @@ export function MarketplaceDetail({
   </div>;
 }
 
-export function XuenessMarketplace({ onInstalled }: { onInstalled?: () => void }): React.JSX.Element {
+export function XuenessMarketplace({ onInstalled, onOpenOptional }: { onInstalled?: () => void; onOpenOptional?: (id: string) => Promise<void> }): React.JSX.Element {
   const [items, setItems] = useState<MarketplaceItem[]>([]);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState("");
@@ -401,6 +403,10 @@ export function XuenessMarketplace({ onInstalled }: { onInstalled?: () => void }
       </div>
     </header>
     {error && <p className="xn-marketplace__error" role="alert">{tr("市场操作失败：")}{error}</p>}
+    {onOpenOptional && items.filter(item => item.installedVersion && ['subscriptions', 'model_monitor'].includes(String(item.manifest.builtin))).map(item => <button
+      className="xn-marketplace__refresh" type="button" key={item.id} disabled={Boolean(busy)} data-testid={`marketplace-open-${item.id}`}
+      onClick={() => { setBusy(item.id); setError(''); void onOpenOptional(String(item.manifest.builtin)).catch(reason => { if (mountedRef.current) setError(errorText(reason)); }).finally(() => { if (mountedRef.current) setBusy(''); }); }}
+    >{tf('启用并打开 {0}', [marketplaceDisplayCopy(item).name])}</button>)}
 
     {detailItem ? <MarketplaceDetail item={detailItem} busy={busy === detailItem.id} onBack={backToList} onAction={openConfirm} /> : <>
       <div className="xn-marketplace__toolbar">

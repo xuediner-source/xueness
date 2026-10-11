@@ -7,6 +7,7 @@
 import React from "react";
 import { XuenessWorkbenchContainer } from "./XuenessWorkbenchContainer";
 import { RegionBoundary } from "./ui/primitives";
+import { ConversationSharePage } from "./plugins/sessions/ConversationSharing";
 
 /** Base styling for the standalone workbench. */
 const BASE_STYLE = `
@@ -16,13 +17,20 @@ const BASE_STYLE = `
 `;
 
 export function XuenessApp() {
+  const shareMatch = typeof window === 'undefined' ? null : /^\/share\/([^/]+)\/?$/u.exec(window.location.pathname);
+  let shareId: string | null = null;
+  if (shareMatch?.[1]) {
+    try { shareId = decodeURIComponent(shareMatch[1]); } catch { shareId = null; }
+  }
   return (
     <>
       <style>{BASE_STYLE}</style>
       <div className="xn-app" data-testid="xn-app">
         {/* The workbench owns the whole shell: sidebar + chat-first main area. */}
         <RegionBoundary onReload={() => window.location.reload()}>
-          <XuenessWorkbenchContainer />
+          {shareId ? <ConversationSharePage shareId={shareId} onImported={id => {
+            window.location.assign(`/?session=${encodeURIComponent(id)}`);
+          }} /> : <XuenessWorkbenchContainer />}
         </RegionBoundary>
       </div>
     </>

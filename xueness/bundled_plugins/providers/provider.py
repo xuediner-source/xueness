@@ -129,6 +129,9 @@ def _with_reported_usage(message, payload):
     result = dict(message)
     result.pop('_usage', None)
     result.pop('_finish_reason', None)
+    result.pop('_response_models', None)
+    from .response_metadata import reported_model
+    reported_model(result, payload.get('model'))
     usage = reported_usage(payload.get('usage'))
     if usage:
         result['_usage'] = usage
@@ -1286,6 +1289,59 @@ _CONTEXT_OVERFLOW_CODES = frozenset({
 })
 
 
+_STREAM_ERROR_STATUSES = {
+    "invalid_request_error": 400,
+    "authentication_error": 401,
+    "invalid_api_key": 401,
+    "permission_error": 403,
+    "permission_denied": 403,
+    "not_found_error": 404,
+    "rate_limit_error": 429,
+    "rate_limit_exceeded": 429,
+    "server_error": 500,
+    "internal_error": 500,
+    "api_error": 500,
+    "overloaded_error": 503,
+}
+
+
+def _raise_stream_error(payload):
+    """Classify a stream's error envelope without retaining upstream text.
+
+    A streaming server may have sent HTTP 200 before generation fails. Treat
+    its structured error like an HTTP error, so the existing attempt budget
+    and public-output guard still decide whether the request may be retried.
+    Unknown errors fail closed without guessing a status from their message.
+    """
+    details = payload.get("error")
+    status = None
+    overflow = False
+    if isinstance(details, dict):
+        for field in ("status", "code", "type"):
+            value = details.get(field)
+            if type(value) is int and 400 <= value <= 599:
+                status = value
+                break
+        codes = [details.get(field) for field in ("code", "type")
+                 if isinstance(details.get(field), str)]
+        if status is None:
+            for code in codes:
+                if code in _CONTEXT_OVERFLOW_CODES:
+                    status = 400
+                else:
+                    status = _STREAM_ERROR_STATUSES.get(code)
+                if status is not None:
+                    break
+        overflow = status in (400, 413) and any(
+            code in _CONTEXT_OVERFLOW_CODES for code in codes)
+    if status is None:
+        raise ProviderRequestError(category="upstream_failure", stage="response") from None
+    raise _RetryableProviderError(
+        retryable=status == 429 or 500 <= status <= 599,
+        status=status, context_overflow=overflow,
+    ) from None
+
+
 def _context_overflow_from_http_error(error):
     """Inspect only a small 400/413 JSON error body for known context codes."""
     if getattr(error, "code", None) not in (400, 413):
@@ -1410,6 +1466,10 @@ def _read_openai_stream(response, on_delta, mark_delivered, on_reasoning_delta=N
         item = json.loads(payload)
         if not isinstance(item, dict):
             raise ValueError('provider SSE event must be an object')
+        if item.get("error") is not None:
+            _raise_stream_error(item)
+        from .response_metadata import reported_model
+        reported_model(finish_metadata, item.get('model'))
         raw_usage = item.get("usage")
         if isinstance(raw_usage, dict):
             usage = {**(usage or {}), **reported_usage(raw_usage)}
@@ -1651,8 +1711,14 @@ def _read_anthropic_stream(response, on_delta, mark_delivered, on_reasoning_delt
     usage = {}
     for payload in _read_sse(response):
         event = json.loads(payload)
+        if not isinstance(event, dict):
+            raise ValueError('provider SSE event must be an object')
         kind = event.get("type")
+        if kind == "error" or event.get("error") is not None:
+            _raise_stream_error(event)
         if kind == "message_start":
+            from .response_metadata import reported_model
+            reported_model(finish_metadata, (event.get('message') or {}).get('model'))
             raw_usage = ((event.get("message") or {}).get("usage") or {})
             usage.update(reported_usage(raw_usage))
         elif kind == "message_delta":

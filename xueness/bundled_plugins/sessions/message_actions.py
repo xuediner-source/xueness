@@ -87,7 +87,12 @@ def update(ctx, sid, data):
             if queue['queued_messages']:
                 raise ForkError('cancel queued messages before editing history', 409)
             if (any(not isinstance(session.get(key, []), list) for key in ('reasoning_history', 'completion_history'))
-                    or not isinstance(session.get('message_annotations', {}), dict)):
+                    or not isinstance(session.get('message_annotations', {}), dict)
+                    or not isinstance(session.get('archived_messages', []), list)
+                    or not isinstance(session.get('history_hidden_message_ids', []), list)):
+                raise ForkError('saved conversation metadata is invalid', 409)
+            hidden_ids = session.get('history_hidden_message_ids', [])
+            if any(not isinstance(item, str) or not item for item in hidden_ids):
                 raise ForkError('saved conversation metadata is invalid', 409)
             prefix = messages[:index]
             if any(not isinstance(item, dict) or not isinstance(item.get('tool_calls', []), list) for item in prefix):
@@ -97,6 +102,32 @@ def update(ctx, sid, data):
             turn = 1 + sum(1 for item in prefix if item.get('role') == 'user')
             if turn == 1 and len(text) > 5000:
                 raise ForkError('initial task exceeds 5000 characters')
+            # Archived output survives compaction, but an edit intentionally
+            # discards the later transcript. Persist identities for the old
+            # active suffix and archived rows at or after this turn so a later
+            # history page cannot resurrect the removed branch.
+            target_id = message.get('_message_id')
+            target_turn = message.get('_turn_id')
+            target_turn_number = int(target_turn[5:]) if isinstance(target_turn, str) and re.fullmatch(
+                r'turn-[1-9][0-9]*', target_turn) else turn
+            hidden = set(hidden_ids)
+            for removed in messages[index + 1:]:
+                identity = removed.get('_message_id') if isinstance(removed, dict) else None
+                if isinstance(identity, str) and identity and identity != target_id:
+                    hidden.add(identity)
+            for archived in session.get('archived_messages', []):
+                if not isinstance(archived, dict):
+                    continue
+                identity = archived.get('_message_id')
+                archived_turn = archived.get('_turn_id')
+                if (isinstance(identity, str) and identity and identity != target_id
+                        and isinstance(archived_turn, str)
+                        and re.fullmatch(r'turn-[1-9][0-9]*', archived_turn)
+                        and int(archived_turn[5:]) >= target_turn_number):
+                    hidden.add(identity)
+            if target_id in hidden:
+                hidden.discard(target_id)
+            session['history_hidden_message_ids'] = sorted(hidden)
             edited = copy.deepcopy(message)
             if isinstance(message.get('content'), list):
                 # Preserve images and other attachment parts on text-only edits.

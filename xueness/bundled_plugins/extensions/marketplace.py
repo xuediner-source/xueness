@@ -22,6 +22,12 @@ def catalog(state):
     else:
         rows=[{'id':f'xueness-{kind}','name':kind.title(),'description':'Trusted '+kind+' capability adapter','manifest':{'id':f'xueness-{kind}','version':'1.0.0','apiVersion':1,'builtin':kind,'capabilities':[],'enabled':False}} for kind in ('skills','hooks','mcp','subagents')]
     if not isinstance(rows,list) or len(rows)>100: raise ValueError('invalid marketplace catalog')
+    from ..subscriptions.state import MARKET_MANIFEST, PACKAGE_ID
+    rows=[row for row in rows if not isinstance(row,dict) or row.get('id')!=PACKAGE_ID]
+    rows.append({'id':PACKAGE_ID,'name':'订阅中心','description':'可选安装。通过账号授权或登录凭证接入 Claude、Codex 等订阅账号，查询真实额度并用于会话。','manifest':MARKET_MANIFEST,'source':'bundled'})
+    from ..model_monitor.plugin import MARKET_MANIFEST as MONITOR_MANIFEST, PACKAGE_ID as MONITOR_ID
+    rows=[row for row in rows if not isinstance(row,dict) or row.get('id')!=MONITOR_ID]
+    rows.append({'id':MONITOR_ID,'name':'返回模型监测','description':'可选安装。随会话显示请求型号与上游返回型号，判断一致或不同；不自动发送额外请求。','manifest':MONITOR_MANIFEST,'source':'bundled'})
     installed={x.get('id'):x for x in plugin_sdk.load_manifests(state)}
     output=[];seen=set()
     for row in rows:
@@ -31,7 +37,7 @@ def catalog(state):
         seen.add(manifest['id']);item_digest=digest(row['manifest'])
         if row.get('sha256',item_digest)!=item_digest: raise ValueError('marketplace digest mismatch')
         current=installed.get(manifest['id'])
-        output.append({'id':manifest['id'],'name':str(row.get('name',manifest['id']))[:120],'description':str(row.get('description',''))[:500],'version':manifest['version'],'sha256':item_digest,'installedVersion':current.get('version') if current else None,'manifest':row['manifest'],'source':url or 'bundled'})
+        output.append({'id':manifest['id'],'name':str(row.get('name',manifest['id']))[:120],'description':str(row.get('description',''))[:500],'version':manifest['version'],'sha256':item_digest,'installedVersion':current.get('version') if current else None,'manifest':row['manifest'],'source':row.get('source') if manifest['id'] in (PACKAGE_ID,MONITOR_ID) else url or 'bundled'})
     return output
 
 def install(state,pid,expected,update=False):

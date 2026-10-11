@@ -28,7 +28,7 @@ from .resources import _atomic_write_json, _is_link
 API_VERSION = 1
 PLUGIN_IDS = ('sessions', 'files', 'shell', 'planning', 'providers', 'memory',
               'settings', 'usage', 'git', 'workflows', 'terminal', 'office',
-              'commands', 'skills', 'hooks', 'mcp', 'subagents', 'network', 'automation', 'extensions', 'diagnostics', 'browser', 'remote', 'bots', 'onboarding', 'updates', 'desktop', 'tools')
+              'commands', 'skills', 'hooks', 'mcp', 'subagents', 'network', 'automation', 'extensions', 'diagnostics', 'browser', 'remote', 'bots', 'onboarding', 'updates', 'desktop', 'tools', 'subscriptions', 'model_monitor')
 PACKAGE_ROOT = Path(__file__).with_name('bundled_plugins')
 CONFIG_NAME = 'plugin-state.json'
 MAX_STATE_BYTES = 65536
@@ -134,15 +134,23 @@ def _chooser(manifests, switches, overlay):
     return chosen
 
 
-def _resolve_items(manifests, chosen, error):
+def _resolve_items(manifests, chosen, error, state_dir=None):
     effective = {}
+    # Optional feature packages still load only trusted bundled code. Their
+    # marketplace marker grants availability, never an import or a permission.
+    packages = set()
+    if any(item.get('installPackage') for item in manifests.values()) and state_dir is not None:
+        from .plugin_sdk import load_manifests
+        packages = {(item['id'], item['builtin']) for item in load_manifests(state_dir)}
+    installed = {pid: not item.get('installPackage') or (item['installPackage'], pid) in packages
+                 for pid, item in manifests.items()}
 
     def resolve(pid, visiting=()):
         if pid in effective:
             return effective[pid]
         if pid in visiting:
             raise ValueError('cyclic plugin dependencies')
-        available = chosen(pid) and all(resolve(dep, visiting + (pid,))
+        available = installed[pid] and chosen(pid) and all(resolve(dep, visiting + (pid,))
                                         for dep in manifests[pid]['dependencies'])
         effective[pid] = available
         return available
@@ -150,7 +158,7 @@ def _resolve_items(manifests, chosen, error):
     for pid in PLUGIN_IDS:
         resolve(pid)
     items = [{**manifest, 'enabled': chosen(pid),
-              'effective': effective[pid],
+              'effective': effective[pid], 'installed': installed[pid],
               'blockedBy': [dep for dep in manifest['dependencies'] if not effective[dep]],
               **({'configurationError': error} if error else {})}
              for pid, manifest in manifests.items()]
@@ -176,7 +184,7 @@ def catalog(state_dir):
         state = _broken_state()
         error = 'invalid plugin configuration; repair plugin-state.json'
     return _resolve_items(manifests,
-                          _chooser(manifests, state['enabled'], state['profile']['overlay']), error)
+                          _chooser(manifests, state['enabled'], state['profile']['overlay']), error, state_dir)
 
 
 def preview(state_dir, overlay=None):
@@ -194,7 +202,7 @@ def preview(state_dir, overlay=None):
         error = 'invalid plugin configuration; repair plugin-state.json'
     layer = state['profile']['overlay'] if overlay is None else _switch_map(
         overlay, 'invalid plugin profile switches')
-    return _resolve_items(manifests, _chooser(manifests, state['enabled'], layer), error)
+    return _resolve_items(manifests, _chooser(manifests, state['enabled'], layer), error, state_dir)
 
 
 def is_enabled(state_dir, plugin_id):
@@ -235,7 +243,10 @@ def set_enabled(state_dir, plugin_id, enabled):
         state = _read_state(state_dir)
         switches = state['enabled']
         if enabled:
-            unavailable = next(p for p in catalog(state_dir) if p['id'] == plugin_id)['blockedBy']
+            item = next(p for p in catalog(state_dir) if p['id'] == plugin_id)
+            if not item['installed']:
+                raise ValueError('install the optional package from the marketplace first')
+            unavailable = item['blockedBy']
             if unavailable:
                 raise ValueError('enable dependencies first: ' + ', '.join(unavailable))
         switches[plugin_id] = enabled
@@ -296,6 +307,70 @@ def completion_checks(state_dir, root, gate, session, summary):
             if callable(callback):
                 checks[item['id']] = callback(root, gate, session, summary, state_dir=state_dir)
     return checks
+
+
+def prepare_session_save(state_dir, store, session):
+    """Allow effective storage projections to stage a checkpoint publication."""
+    tokens = []
+    for item in catalog(state_dir):
+        if item['effective']:
+            callback = getattr(entrypoint(item['id']), 'prepare_session_save', None)
+            if callable(callback):
+                tokens.append((item['id'], callback(store, session)))
+    return tokens
+
+
+def commit_session_save(tokens):
+    for plugin_id, token in tokens:
+        callback = getattr(entrypoint(plugin_id), 'commit_session_save', None)
+        if callable(callback):
+            callback(token)
+
+
+def before_model_request(state_dir, session, store, provider, gate, **options):
+    """Plugin-owned admission/compaction at a closed tool boundary."""
+    for item in catalog(state_dir):
+        if item['effective']:
+            callback = getattr(entrypoint(item['id']), 'before_model_request', None)
+            if callable(callback):
+                callback(session, store=store, provider=provider, gate=gate,
+                         state_dir=state_dir, **options)
+
+
+def before_run(state_dir, session):
+    options = {'enabled': False, 'deadline_seconds': None}
+    for item in catalog(state_dir):
+        callback = getattr(entrypoint(item['id']), 'before_run', None) if item['effective'] else None
+        if callable(callback):
+            result = callback(session, state_dir)
+            if isinstance(result, dict):
+                for field in ('stop', 'needs_save'):
+                    if result.get(field) is True:
+                        options[field] = True
+            if isinstance(result, dict) and result.get('enabled') is True:
+                options['enabled'] = True
+                remaining = result.get('deadline_seconds')
+                if type(remaining) in (int, float):
+                    options['deadline_seconds'] = min(options['deadline_seconds'], remaining) if options['deadline_seconds'] is not None else remaining
+    return options
+
+
+def after_run(state_dir, session, provider, **options):
+    decision = {'action': 'stop'}
+    for item in catalog(state_dir):
+        callback = getattr(entrypoint(item['id']), 'after_run', None) if item['effective'] else None
+        if callable(callback):
+            result = callback(session, provider, state_dir=state_dir, **options)
+            if isinstance(result, dict):
+                decision = result
+    return decision
+
+
+def settle_run(state_dir, session, store, turn_id):
+    for item in catalog(state_dir):
+        callback = getattr(entrypoint(item['id']), 'settle_turn', None) if item['effective'] else None
+        if callable(callback):
+            callback(session, store, turn_id)
 
 
 def completion_requires_evidence(state_dir, session, call_ids=()):
@@ -816,6 +891,14 @@ def _plugin_owned_segments():
 
 
 def dispatch_http(method, parts, query, data, ctx):
+    # Trusted plugins may own a browser entry page as well as JSON API routes.
+    if method == 'GET' and parts and parts[0] != 'api':
+        for item in catalog(ctx['state_dir']):
+            callback = getattr(entrypoint(item['id']), 'dispatch_page', None) if item['effective'] else None
+            if callback:
+                result = callback(parts, ctx)
+                if result is not None:
+                    return result
     if parts[:2] == ['api', 'plugins'] and (len(parts) < 3 or parts[2] not in _plugin_owned_segments()):
         if len(parts) == 2 and method == 'GET':
             return 200, {'plugins': catalog(ctx['state_dir'])}

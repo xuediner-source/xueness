@@ -746,7 +746,7 @@ export function ProviderEditor({
       <div className="xn-provider-editor__title-row">
         <span className="xn-provider-editor__icon"><Cpu size={19} aria-hidden="true" /></span>
         <div className="xn-provider-editor__title-copy">
-          <h3>{isNew ? tr('新建配置') : (draft.name || original.name)}</h3>
+          <h3 title={isNew ? tr('新建配置') : (draft.name || original.name)}>{isNew ? tr('新建配置') : (draft.name || original.name)}</h3>
           <p>{isNew ? tr('配置一个可用于当前运行的模型服务商。') : `${tr('自定义模型服务商')} · ${original.id}`}</p>
         </div>
       </div>
@@ -1012,7 +1012,7 @@ export function ModelManager({ onSelect, runtimeMonitorEnabled = false, focusPro
     try {
       const result = await listProviders();
       if (!mountedRef.current) return;
-      setItems(result.providers);
+      setItems(result.providers.filter(provider => provider.source !== 'subscription'));
       if (selectedKey !== ENVIRONMENT_KEY && selectedKey !== NEW_PROVIDER_KEY && !result.providers.some(provider => provider.id === selectedKey)) {
         setSelectedKey(ENVIRONMENT_KEY);
         setDraft(emptyProviderDraft());

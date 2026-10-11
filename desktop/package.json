@@ -1,6 +1,6 @@
 {
   "name": "xueness-desktop",
-  "version": "0.1.5",
+  "version": "0.1.6",
   "private": true,
   "description": "Xueness desktop Agent CLI workbench",
   "license": "Apache-2.0",
@@ -10,8 +10,8 @@
     "start": "electron .",
     "test": "node --test tests/*.test.cjs",
     "prepare:backend": "python scripts/build_backend.py",
-    "dist:mac": "electron-builder --mac --publish never",
-    "dist:win": "electron-builder --win --publish never",
+    "dist:mac": "node scripts/check-native-build.cjs darwin && electron-builder --mac --publish never",
+    "dist:win": "node scripts/check-native-build.cjs win32 && electron-builder --win --publish never",
     "dist:dir": "electron-builder --dir --publish never"
   },
   "devDependencies": {

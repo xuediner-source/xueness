@@ -1,4 +1,5 @@
 import { projectJournalAssistantWork } from './plugins/sessions/conversationJournalProjection';
+import { submitQueuedTurn, couldHaveBeenAccepted, DeliveryUnconfirmedError } from './plugins/sessions/submissionTransport';
 import { t as tr } from './i18n';
 
 /**
@@ -17,6 +18,7 @@ import type { RunChoices } from "./xuenessBridge";
 import type { XuenessEventV1 } from "./xuenessEvents";
 import { getRunChoices, readRunOptIns } from "./xuenessBridge";
 import { parseEventsEnvelope } from "./xuenessEvents";
+import type { PendingGuidance } from './plugins/sessions/CurrentTurnInput';
 
 export type PendingApproval = {
   tool_call_id: string;
@@ -38,6 +40,9 @@ export type QueuedMessage = {
   updated_at?: string;
   pause_reason?: string;
   editable?: boolean;
+  has_attachments?: boolean;
+  has_context?: boolean;
+  promotion?: { id?: string; state?: 'reserved' | 'claimed' | 'released' | 'settled' };
 };
 
 const QUEUED_MESSAGE_STATUSES = ["queued", "running", "paused", "completed", "needs_review", "failed", "cancelled"] as const;
@@ -54,7 +59,13 @@ function parseQueuedMessages(value: unknown): QueuedMessage[] | undefined {
       || (record.created_at !== undefined && typeof record.created_at !== "string")
       || (record.updated_at !== undefined && typeof record.updated_at !== "string")
       || (record.pause_reason !== undefined && typeof record.pause_reason !== "string")
-      || (record.editable !== undefined && typeof record.editable !== "boolean")) {
+      || (record.editable !== undefined && typeof record.editable !== "boolean")
+      || (record.has_attachments !== undefined && typeof record.has_attachments !== 'boolean')
+      || (record.has_context !== undefined && typeof record.has_context !== 'boolean')
+      || (record.promotion !== undefined && (!record.promotion || typeof record.promotion !== 'object'
+        || Array.isArray(record.promotion)
+        || (record.promotion as Record<string, unknown>).id !== undefined && typeof (record.promotion as Record<string, unknown>).id !== 'string'
+        || !['reserved', 'claimed', 'released', 'settled'].includes(String((record.promotion as Record<string, unknown>).state))))) {
       throw new Error("invalid queued messages response");
     }
     return {
@@ -66,6 +77,11 @@ function parseQueuedMessages(value: unknown): QueuedMessage[] | undefined {
       ...(typeof record.updated_at === "string" ? { updated_at: record.updated_at } : {}),
       ...(typeof record.pause_reason === "string" ? { pause_reason: record.pause_reason } : {}),
       ...(typeof record.editable === "boolean" ? { editable: record.editable } : {}),
+      ...(typeof record.has_attachments === 'boolean' ? { has_attachments: record.has_attachments } : {}),
+      ...(typeof record.has_context === 'boolean' ? { has_context: record.has_context } : {}),
+      ...(record.promotion && typeof record.promotion === 'object' && !Array.isArray(record.promotion)
+        ? { promotion: { ...((record.promotion as Record<string, unknown>).id ? { id: (record.promotion as Record<string, unknown>).id as string } : {}),
+          state: (record.promotion as Record<string, unknown>).state as NonNullable<QueuedMessage['promotion']>['state'] } } : {}),
     };
   });
 }
@@ -90,6 +106,10 @@ export type WorkbenchSession = {
   title?: string;
   root?: string;
   status: string;
+  active_turn_id?: string | null;
+  history_revision?: number;
+  /** Full journal message digest used to reject shares created from stale history. */
+  message_revision?: string;
   pinned?: boolean;
   steps: number;
   mode: string;
@@ -97,6 +117,9 @@ export type WorkbenchSession = {
   delivery_requirements?: import('./plugins/planning/CompletionChecks').DeliveryRequirement[];
   goal?: import('./plugins/planning/SessionGoal').SessionGoalRecord | null;
   queued_messages?: QueuedMessage[];
+  pending_guidance?: PendingGuidance[];
+  guidance_history?: PendingGuidance[];
+  current_queue_item_id?: string | null;
   todos?: unknown[];
   pending_question?: string | null;
   /** Bounded provider reasoning, keyed by the assistant message's journal index. */
@@ -135,7 +158,7 @@ export type WorkbenchSession = {
 
 export type SessionSummary = { id: string; task: string; title?: string; status: string; pinned?: boolean; root?: string; updatedAt?: string };
 
-export type ArchivedSummary = { id: string; task: string; title?: string; archivedAt?: string };
+export type ArchivedSummary = { id: string; task: string; title?: string; archivedAt?: string; revision?: string };
 
 export type ForkBoundary = { token: string; turn: number; endIndex: number; preview: string };
 export type ForkParentInfo = {
@@ -173,7 +196,7 @@ export type TimelinePage = {
 export type Result<T> = { ok: true; value: T } | { ok: false; error: string };
 export type ReasoningHistoryEntry = { message_index: number; text: string };
 /** A saved turn survives a later run failure and must not be submitted twice. */
-export type SubmissionResult<T> = Result<T> & { accepted?: boolean; id?: string };
+export type SubmissionResult<T> = Result<T> & { accepted?: boolean; id?: string; outcomeUnknown?: boolean };
 
 export type WorkspaceListing = {
   files: { path: string; size: number }[];
@@ -219,8 +242,8 @@ export type FilePreview = {
 export type ToolDisplayStatus = "queued" | "running" | "ok" | "error" | "cancelled" | "stopped";
 
 export type TimelineRow =
-  | { kind: "user"; seq: number; turnId: string; text: string; messageIndex?: number; messageRevision?: string }
-  | { kind: "assistant"; seq: number; turnId: string; text: string; reasoning?: string; messageIndex?: number; messageRevision?: string; feedback?: 'like' | 'dislike'; streaming?: boolean; startedAt?: number; endedAt?: number; interrupted?: boolean }
+  | { kind: "user"; seq: number; turnId: string; text: string; messageId?: string; messageIndex?: number; messageRevision?: string }
+  | { kind: "assistant"; seq: number; turnId: string; text: string; reasoning?: string; messageId?: string; messageIndex?: number; messageRevision?: string; feedback?: 'like' | 'dislike'; streaming?: boolean; startedAt?: number; endedAt?: number; interrupted?: boolean }
   | {
       kind: "tool";
       seq: number;
@@ -253,6 +276,51 @@ export function withAssistantStream(rows: TimelineRow[], stream: WorkbenchSessio
     streaming: stream.status === "streaming", ...(stream.status === "interrupted" ? { interrupted: true } : {}) }];
 }
 
+function parsePendingGuidance(value: unknown): PendingGuidance[] | undefined {
+  if (value === undefined) return undefined;
+  if (!Array.isArray(value)) throw new Error('invalid current-turn guidance response');
+  return value.map(candidate => {
+    if (!candidate || typeof candidate !== 'object' || Array.isArray(candidate)) {
+      throw new Error('invalid current-turn guidance response');
+    }
+    const item = candidate as Record<string, unknown>;
+    const statuses = ['queued', 'running', 'paused', 'completed', 'needs_review', 'failed', 'cancelled'];
+    if (typeof item.id !== 'string' || !item.id || typeof item.text !== 'string'
+      || typeof item.status !== 'string' || !statuses.includes(item.status)
+      || (item.targetTurnId !== undefined && typeof item.targetTurnId !== 'string')
+      || (item.pause_reason !== undefined && typeof item.pause_reason !== 'string')
+      || (item.has_attachments !== undefined && typeof item.has_attachments !== 'boolean')
+      || (item.has_context !== undefined && typeof item.has_context !== 'boolean')
+      || (item.position !== undefined && (!Number.isInteger(item.position) || (item.position as number) < 0))) {
+      throw new Error('invalid current-turn guidance response');
+    }
+    return { id: item.id, text: item.text, status: item.status as PendingGuidance['status'],
+      ...(typeof item.targetTurnId === 'string' ? { targetTurnId: item.targetTurnId } : {}),
+      ...(typeof item.pause_reason === 'string' ? { pause_reason: item.pause_reason } : {}),
+      ...(item.has_attachments === true ? { has_attachments: true } : {}),
+      ...(item.has_context === true ? { has_context: true } : {}),
+      ...(Number.isInteger(item.position) ? { position: item.position as number } : {}) };
+  });
+}
+
+function parseSessionInboxFields(value: Record<string, unknown>): Partial<WorkbenchSession> {
+  const historyRevision = value.history_revision;
+  if (historyRevision !== undefined && (!Number.isInteger(historyRevision) || (historyRevision as number) < 0)) {
+    throw new Error('invalid session history revision');
+  }
+  if (value.active_turn_id !== undefined && value.active_turn_id !== null
+    && (typeof value.active_turn_id !== 'string' || !value.active_turn_id)) {
+    throw new Error('invalid active turn id');
+  }
+  const pendingGuidance = parsePendingGuidance(value.pending_guidance);
+  const guidanceHistory = parsePendingGuidance(value.guidance_history);
+  return { ...(typeof value.active_turn_id === 'string' || value.active_turn_id === null
+      ? { active_turn_id: value.active_turn_id } : {}),
+    ...(typeof historyRevision === 'number' ? { history_revision: historyRevision } : {}),
+    ...(pendingGuidance ? { pending_guidance: pendingGuidance } : {}),
+    ...(guidanceHistory ? { guidance_history: guidanceHistory } : {}) };
+}
+
 function shallowEqualRecords(a: Record<string, unknown> | undefined | null, b: Record<string, unknown> | undefined | null): boolean {
   if (a === b) return true;
   if (!a || !b) return false;
@@ -269,10 +337,10 @@ function isEqualTimelineRow(a: TimelineRow, b: TimelineRow): boolean {
   if (a === b) return true;
   if (a.kind !== b.kind || a.seq !== b.seq) return false;
   if (a.kind === "user" && b.kind === "user") {
-    return a.turnId === b.turnId && a.text === b.text && a.messageIndex === b.messageIndex && a.messageRevision === b.messageRevision;
+    return a.turnId === b.turnId && a.text === b.text && a.messageId === b.messageId && a.messageIndex === b.messageIndex && a.messageRevision === b.messageRevision;
   }
   if (a.kind === "assistant" && b.kind === "assistant") {
-    return a.turnId === b.turnId && a.text === b.text && a.reasoning === b.reasoning && a.messageIndex === b.messageIndex && a.messageRevision === b.messageRevision && a.feedback === b.feedback && a.streaming === b.streaming
+    return a.turnId === b.turnId && a.text === b.text && a.reasoning === b.reasoning && a.messageId === b.messageId && a.messageIndex === b.messageIndex && a.messageRevision === b.messageRevision && a.feedback === b.feedback && a.streaming === b.streaming
       && a.startedAt === b.startedAt && a.endedAt === b.endedAt && a.interrupted === b.interrupted;
   }
   if (a.kind === "tool" && b.kind === "tool") {
@@ -314,6 +382,20 @@ export function stabilizeTimelineRows(prevRows: TimelineRow[] | undefined, nextR
     }
   }
   return allReused ? prevRows : result;
+}
+
+/** Merge overlapping transcript windows by durable row identity, preferring
+ * the newest tail values while preserving global display order. */
+export function mergeTimelineRowsByIdentity(...pages: TimelineRow[][]): TimelineRow[] {
+  const rows = new Map<string, TimelineRow>();
+  for (const page of pages) for (const row of page) {
+    const identity = row.kind === 'tool' ? `tool:${row.toolCallId}`
+      : (row.kind === 'user' || row.kind === 'assistant') && row.messageId ? `${row.kind}:${row.messageId}`
+      : row.kind === 'completion' ? `completion:${row.turnId ?? ''}:${row.summary}`
+      : row.kind === 'pending_question' ? `question:${row.question}` : `${row.kind}:${row.seq}`;
+    rows.set(identity, row);
+  }
+  return [...rows.values()].sort((left, right) => left.seq - right.seq);
 }
 
 function areSessionSummariesEqual(a: SessionSummary, b: SessionSummary): boolean {
@@ -424,7 +506,8 @@ async function requestJson<T>(path: string, init: RequestInit): Promise<T> {
   let jsonParsed = true;
   try {
     payload = await response.json();
-  } catch {
+  } catch (error) {
+    if (init.signal?.aborted) throw init.signal.reason ?? error;
     jsonParsed = false;
   }
   if (!response.ok) {
@@ -437,19 +520,31 @@ async function requestJson<T>(path: string, init: RequestInit): Promise<T> {
       if (message.includes('queued messages')) throw new Error(tr('请先处理或取消排队消息，再编辑历史。'));
       if (message.includes('run already in progress')) throw new Error(tr('会话正在运行，结束后可修改历史。'));
     }
-    throw new Error(typeof detail === "string" && detail ? detail : `HTTP ${response.status}`);
+    throw Object.assign(new Error(typeof detail === "string" && detail ? detail : `HTTP ${response.status}`), { status: response.status });
   }
   if (!jsonParsed) throw new Error("invalid JSON response");
   return payload as T;
 }
 
-function requestGet<T>(path: string, signal?: AbortSignal): Promise<T> {
-  return requestJson<T>(path, { credentials: "same-origin", cache: "no-store", ...(signal ? { signal } : {}) });
+async function requestGet<T>(path: string, signal?: AbortSignal): Promise<T> {
+  const controller = new AbortController();
+  const cancel = () => controller.abort(signal?.reason);
+  signal?.addEventListener('abort', cancel, { once: true });
+  if (signal?.aborted) cancel();
+  const timer = setTimeout(() => controller.abort(new DOMException(tr('读取超时，请稍后重试。'), 'TimeoutError')), 20000);
+  try {
+    return await requestJson<T>(path, { credentials: "same-origin", cache: "no-store", signal: controller.signal });
+  } finally {
+    clearTimeout(timer);
+    signal?.removeEventListener('abort', cancel);
+  }
 }
 
 /** Every mutation fetches a fresh CSRF token first and sends it as a header. */
 export async function requestMutation<T>(method: "POST" | "PATCH" | "DELETE", path: string, body: unknown, signal?: AbortSignal): Promise<T> {
-  const token = await requestGet<{ csrfToken?: string }>("/api/csrf", signal);
+  let token: { csrfToken?: string };
+  try { token = await requestGet<{ csrfToken?: string }>("/api/csrf", signal); }
+  catch (error) { if (error instanceof Error) Object.assign(error, { requestNotSent: true }); throw error; }
   const csrfToken = typeof token?.csrfToken === "string" ? token.csrfToken : "";
   if (!csrfToken) throw new Error("missing csrf token");
   return requestJson<T>(path, {
@@ -485,24 +580,74 @@ export async function loadSession(id: string, signal?: AbortSignal): Promise<Res
     const payload = await requestGet<unknown>(sessionPath(id), signal);
     if (!payload || typeof payload !== "object" || Array.isArray(payload)) throw new Error("invalid session response");
     const value = payload as WorkbenchSession;
-    const queuedMessages = parseQueuedMessages((payload as Record<string, unknown>).queued_messages);
-    return { ok: true, value: { ...value, ...(queuedMessages ? { queued_messages: queuedMessages } : {}) } };
+    const record = payload as Record<string, unknown>;
+    const queuedMessages = parseQueuedMessages(record.queued_messages);
+    const inboxFields = parseSessionInboxFields(record);
+    return { ok: true, value: { ...value, ...inboxFields, ...(queuedMessages ? { queued_messages: queuedMessages } : {}) } };
   } catch (error) {
     return { ok: false, error: toErrorMessage(error) };
   }
 }
 
-export type ConversationSnapshot = {session: WorkbenchSession; journal: Record<string, unknown>; timeline: TimelinePage};
+export type ConversationSnapshotWindow = {
+  start: number; end: number; total: number; hasOlder: boolean; olderCursor: number | null;
+  messageRevision: string; historyRevision: number;
+};
+export type ConversationSnapshotRequest = {tail?: number; before?: number; limit?: number; revision?: string};
+export type ConversationSnapshot = {session: WorkbenchSession; journal: Record<string, unknown>; timeline: TimelinePage; window?: ConversationSnapshotWindow};
 
 /** Reject mixed sessions and incomplete snapshots before updating the view. */
-export async function loadConversationSnapshot(id: string, signal?: AbortSignal): Promise<Result<ConversationSnapshot>> {
+export async function loadConversationSnapshot(id: string, signal?: AbortSignal,
+  window?: ConversationSnapshotRequest): Promise<Result<ConversationSnapshot>> {
   try {
-    const payload = await requestGet<unknown>(sessionPath(id, '/conversation'), signal);
+    const query = new URLSearchParams();
+    if (window?.tail !== undefined) query.set('tail', String(window.tail));
+    if (window?.before !== undefined) query.set('before', String(window.before));
+    if (window?.limit !== undefined) query.set('limit', String(window.limit));
+    if (window?.revision) query.set('revision', window.revision);
+    const suffix = `/conversation${query.size ? `?${query.toString()}` : ''}`;
+    const payload = await requestGet<unknown>(sessionPath(id, suffix), signal);
+    return {ok: true, value: parseConversationSnapshot(id, payload)};
+  } catch (error) { return {ok: false, error: toErrorMessage(error)}; }
+}
+
+export async function loadOlderConversationPage(id: string, before: number, revision: string,
+  signal?: AbortSignal, limit = 80): Promise<Result<ConversationSnapshot>> {
+  return loadConversationSnapshot(id, signal, {before, limit, revision});
+}
+
+export function parseConversationSnapshot(id: string, payload: unknown): ConversationSnapshot {
     if (!payload || typeof payload !== 'object' || Array.isArray(payload)) throw new Error('invalid conversation snapshot');
     const record = payload as Record<string, unknown>;
     const session = record.session as WorkbenchSession | null;
     const journal = record.journal as Record<string, unknown> | null;
     const timeline = parseEventsEnvelope(record.timeline);
+    let window: ConversationSnapshotWindow | undefined;
+    if (record.window !== undefined) {
+      if (!record.window || typeof record.window !== 'object' || Array.isArray(record.window)) throw new Error('invalid conversation window');
+      const raw = record.window as Record<string, unknown>;
+      const messageWindow = journal?.message_window;
+      if (!messageWindow || typeof messageWindow !== 'object' || Array.isArray(messageWindow)) throw new Error('invalid conversation window');
+      const page = messageWindow as Record<string, unknown>;
+      if (!Number.isSafeInteger(raw.start) || !Number.isSafeInteger(raw.end) || !Number.isSafeInteger(raw.total)
+        || (raw.start as number) < 0 || (raw.end as number) < (raw.start as number) || (raw.total as number) < (raw.end as number)
+        || typeof raw.hasOlder !== 'boolean' || raw.hasOlder !== ((raw.start as number) > 0)
+        || (raw.olderCursor !== null && raw.olderCursor !== raw.start)
+        || typeof raw.messageRevision !== 'string' || raw.messageRevision !== journal?.message_revision
+        || !Number.isSafeInteger(raw.historyRevision) || (raw.historyRevision as number) < 0
+        || raw.historyRevision !== journal?.history_revision
+        || page.start !== raw.start || page.end !== raw.end || page.total !== raw.total
+        || page.hasOlder !== raw.hasOlder || page.olderCursor !== raw.olderCursor
+        || page.messageRevision !== raw.messageRevision || !Array.isArray(page.messageIndices)
+        || page.messageIndices.length !== (journal?.messages as unknown[] | undefined)?.length
+        || (raw.end as number) - (raw.start as number) !== page.messageIndices.length
+        || page.messageIndices.some(value => value !== null && (!Number.isSafeInteger(value) || (value as number) < 0))) {
+        throw new Error('invalid conversation window');
+      }
+      window = {start: raw.start as number, end: raw.end as number, total: raw.total as number,
+        hasOlder: raw.hasOlder, olderCursor: raw.olderCursor as number | null,
+        messageRevision: raw.messageRevision, historyRevision: raw.historyRevision as number};
+    }
     if (!session || typeof session !== 'object' || Array.isArray(session) || session.id !== id || typeof session.status !== 'string'
       || !journal || typeof journal !== 'object' || Array.isArray(journal) || journal.id !== id || !Array.isArray(journal.messages)
       || typeof journal.message_revision !== 'string' || !/^sha256:[0-9a-f]{64}$/u.test(journal.message_revision)
@@ -510,9 +655,11 @@ export async function loadConversationSnapshot(id: string, signal?: AbortSignal)
       || timeline.hasMore || timeline.cursor !== 0 || timeline.events.length !== timeline.head || timeline.nextCursor !== timeline.head
       || timeline.events.some((event, index) => event.sessionId !== id || event.seq !== index + 1)) throw new Error('invalid conversation snapshot');
     const queued_messages = parseQueuedMessages(session.queued_messages);
-    return {ok: true, value: {session: {...session, ...(queued_messages ? {queued_messages} : {})}, journal,
-      timeline: {events: timeline.events, cursor: 0, nextCursor: timeline.nextCursor, head: timeline.head, hasMore: false}}};
-  } catch (error) { return {ok: false, error: toErrorMessage(error)}; }
+    const inboxFields = parseSessionInboxFields(session as unknown as Record<string, unknown>);
+    return {session: {...session, ...inboxFields, ...(queued_messages ? {queued_messages} : {}),
+      message_revision: journal.message_revision}, journal,
+      timeline: {events: timeline.events, cursor: 0, nextCursor: timeline.nextCursor, head: timeline.head, hasMore: false},
+      ...(window ? {window} : {})};
 }
 
 /** Read opaque, revision-bound safe fork selectors from the server. */
@@ -592,6 +739,126 @@ export async function forkSession(
   } catch (error) {
     return { ok: false, error: toErrorMessage(error) };
   }
+}
+
+export type ConversationShareRow = {
+  id: string;
+  turnId: string;
+  role: 'user' | 'assistant';
+  text: string;
+};
+
+export type ConversationShare = {
+  schema: 'xueness.conversation-share.v1';
+  id: string;
+  title: string;
+  createdAt: string;
+  rows: ConversationShareRow[];
+};
+
+export type CreatedConversationShare = { id: string; url: string; title: string };
+
+export type ConversationSharePreview = {
+  title: string;
+  rows: ConversationShareRow[];
+  message_revision: string;
+};
+
+/** Read the complete, sanitized transcript and the exact revision to publish. */
+export async function loadConversationSharePreview(
+  sessionId: string,
+  signal?: AbortSignal,
+): Promise<Result<ConversationSharePreview>> {
+  try {
+    const payload = await requestGet<unknown>(sessionPath(sessionId, '/share'), signal);
+    if (!payload || typeof payload !== 'object' || Array.isArray(payload)) throw new Error('invalid conversation share preview');
+    const record = payload as Record<string, unknown>;
+    if (typeof record.title !== 'string' || !record.title
+      || typeof record.message_revision !== 'string' || !/^sha256:[0-9a-f]{64}$/u.test(record.message_revision)
+      || !Array.isArray(record.rows)) throw new Error('invalid conversation share preview');
+    const rows = record.rows.map((value): ConversationShareRow => {
+      if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('invalid conversation share preview row');
+      const row = value as Record<string, unknown>;
+      if (typeof row.id !== 'string' || !row.id || typeof row.turnId !== 'string' || !/^turn-[1-9][0-9]*$/u.test(row.turnId)
+        || (row.role !== 'user' && row.role !== 'assistant') || typeof row.text !== 'string') {
+        throw new Error('invalid conversation share preview row');
+      }
+      return { id: row.id, turnId: row.turnId, role: row.role, text: row.text };
+    });
+    return { ok: true, value: { title: record.title, rows, message_revision: record.message_revision } };
+  } catch (error) { return { ok: false, error: toErrorMessage(error) }; }
+}
+
+/** Create a same-host, read-only transcript share tied to one exact journal revision. */
+export async function createConversationShare(
+  sessionId: string,
+  expectedRevision: string,
+  turnIds?: string[],
+  title?: string,
+): Promise<Result<CreatedConversationShare>> {
+  if (!/^sha256:[0-9a-f]{64}$/u.test(expectedRevision)) {
+    return { ok: false, error: 'Refresh this conversation before creating a share link.' };
+  }
+  const cleanTitle = title?.trim();
+  try {
+    const payload = await requestPost<unknown>(sessionPath(sessionId, '/share'), {
+      expected_revision: expectedRevision,
+      ...(cleanTitle ? { title: cleanTitle } : {}),
+      ...(turnIds ? { turn_ids: turnIds } : {}),
+    });
+    if (!payload || typeof payload !== 'object' || Array.isArray(payload)) throw new Error('invalid conversation share response');
+    const record = payload as Record<string, unknown>;
+    if (typeof record.id !== 'string' || !record.id || typeof record.title !== 'string' || typeof record.url !== 'string'
+      || record.url !== `/share/${encodeURIComponent(record.id)}`) throw new Error('invalid conversation share response');
+    return { ok: true, value: { id: record.id, url: record.url, title: record.title } };
+  } catch (error) { return { ok: false, error: toErrorMessage(error) }; }
+}
+
+/** Read the sanitized, read-only projection at the local share URL. */
+export async function loadConversationShare(id: string, signal?: AbortSignal): Promise<Result<ConversationShare>> {
+  try {
+    const payload = await requestGet<unknown>(`/api/conversation_shares/${encodeURIComponent(id)}`, signal);
+    if (!payload || typeof payload !== 'object' || Array.isArray(payload)) throw new Error('invalid conversation share');
+    const record = payload as Record<string, unknown>;
+    if (record.schema !== 'xueness.conversation-share.v1' || record.id !== id || typeof record.title !== 'string'
+      || typeof record.createdAt !== 'string' || !Array.isArray(record.rows)) throw new Error('invalid conversation share');
+    const rows = record.rows.map((value): ConversationShareRow => {
+      if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('invalid conversation share row');
+      const row = value as Record<string, unknown>;
+      if (typeof row.id !== 'string' || !row.id || typeof row.turnId !== 'string' || !row.turnId
+        || (row.role !== 'user' && row.role !== 'assistant') || typeof row.text !== 'string') throw new Error('invalid conversation share row');
+      return { id: row.id, turnId: row.turnId, role: row.role, text: row.text };
+    });
+    return { ok: true, value: { schema: 'xueness.conversation-share.v1', id, title: record.title,
+      createdAt: record.createdAt, rows } };
+  } catch (error) { return { ok: false, error: toErrorMessage(error) }; }
+}
+
+export async function revokeConversationShare(id: string): Promise<Result<void>> {
+  try {
+    const payload = await requestMutation<unknown>('DELETE', `/api/conversation_shares/${encodeURIComponent(id)}`, undefined);
+    if (!payload || typeof payload !== 'object' || Array.isArray(payload) || (payload as Record<string, unknown>).revoked !== true) {
+      throw new Error('invalid conversation share revoke response');
+    }
+    return { ok: true, value: undefined };
+  } catch (error) { return { ok: false, error: toErrorMessage(error) }; }
+}
+
+export async function importConversationShare(
+  id: string,
+  options: { root?: string; title?: string } = {},
+): Promise<Result<string>> {
+  try {
+    const cleanTitle = options.title?.trim();
+    const payload = await requestPost<unknown>(`/api/conversation_shares/${encodeURIComponent(id)}/import`, {
+      ...(options.root ? { root: options.root } : {}),
+      ...(cleanTitle ? { title: cleanTitle } : {}),
+    });
+    if (!payload || typeof payload !== 'object' || Array.isArray(payload) || typeof (payload as Record<string, unknown>).id !== 'string') {
+      throw new Error('invalid imported conversation response');
+    }
+    return { ok: true, value: (payload as Record<string, unknown>).id as string };
+  } catch (error) { return { ok: false, error: toErrorMessage(error) }; }
 }
 
 export async function loadTimeline(
@@ -742,9 +1009,9 @@ export async function listArchivedSessions(signal?: AbortSignal): Promise<Result
 }
 
 /** Moves an archived session back into the active list. */
-export async function restoreSession(id: string): Promise<Result<void>> {
+export async function restoreSession(id: string, signal?: AbortSignal): Promise<Result<void>> {
   try {
-    await requestPost(sessionPath(id, "/restore"), {});
+    await requestPost(sessionPath(id, "/restore"), {}, signal);
     return { ok: true, value: undefined };
   } catch (error) {
     return { ok: false, error: toErrorMessage(error) };
@@ -806,7 +1073,7 @@ export async function approvePending(
  * to the selected server runtime profile; goal runs keep their explicit budget.
  * readRunOptIns fails closed to {} and must never enable a capability.
  */
-async function runSessionWith(id: string, choices?: RunChoices, options?: { continueQueue?: boolean }): Promise<void> {
+async function runSessionWith(id: string, choices?: RunChoices, options?: { continueQueue?: boolean; promotionRequestId?: string }): Promise<void> {
   const effectiveChoices = choices ?? getRunChoices();
   const optIns = await readRunOptIns();
   await requestPost(sessionPath(id, "/run"), {
@@ -814,6 +1081,7 @@ async function runSessionWith(id: string, choices?: RunChoices, options?: { cont
     ...(effectiveChoices.goal ? { steps: 20 } : {}),
     ...optIns,
     ...(options?.continueQueue ? { continue_queue: true } : {}),
+    ...(options?.promotionRequestId ? { promotion_request_id: options.promotionRequestId } : {}),
   });
 }
 
@@ -826,15 +1094,17 @@ export async function createSession(
   let createdId = "";
   try {
     // No root: sessions default to the host workspace root.
-    const created = await requestPost<{ id?: string }>("/api/sessions", { task, ...context });
+    const created = await requestPost<{ id?: string }>("/api/sessions", { task, ...context }, AbortSignal.timeout(20000));
     const id = typeof created?.id === "string" ? created.id : "";
-    if (!id) throw new Error("create session returned no id");
+    if (!id) throw new DeliveryUnconfirmedError();
     createdId = id;
     onCreated?.(id);
     await runSessionWith(id, choices);
     return { ok: true, value: id };
   } catch (error) {
-    return { ok: false, error: toErrorMessage(error), ...(createdId ? { accepted: true, id: createdId } : {}) };
+    const outcomeUnknown = !createdId && couldHaveBeenAccepted(error);
+    return { ok: false, error: toErrorMessage(outcomeUnknown ? new DeliveryUnconfirmedError() : error),
+      ...(createdId ? { accepted: true, id: createdId } : outcomeUnknown ? { outcomeUnknown: true } : {}) };
   }
 }
 
@@ -847,24 +1117,23 @@ export async function sendTurn(
 ): Promise<SubmissionResult<void>> {
   let accepted = false;
   try {
-    await requestPost(sessionPath(id, "/messages"), { text, ...(preparedToken ? { prepared_token: preparedToken } : {}) });
+    await requestPost(sessionPath(id, "/messages"), { text, ...(preparedToken ? { prepared_token: preparedToken } : {}) }, AbortSignal.timeout(20000));
     accepted = true;
     onAccepted?.();
     await runSessionWith(id, choices);
     return { ok: true, value: undefined };
   } catch (error) {
-    return { ok: false, error: toErrorMessage(error), ...(accepted ? { accepted: true } : {}) };
+    const outcomeUnknown = !accepted && couldHaveBeenAccepted(error);
+    return { ok: false, error: toErrorMessage(outcomeUnknown ? new DeliveryUnconfirmedError() : error),
+      ...(accepted ? { accepted: true } : outcomeUnknown ? { outcomeUnknown: true } : {}) };
   }
 }
 
 /** Add a user turn to the active run's FIFO queue. The prepared token is one-use. */
-export async function queueTurn(id: string, text: string, preparedToken?: string): Promise<Result<QueuedMessage>> {
+export async function queueTurn(id: string, text: string, preparedToken?: string): Promise<SubmissionResult<QueuedMessage>> {
   try {
-    const payload = await requestPost<unknown>(sessionPath(id, "/queue"), {
-      text,
-      ...(preparedToken ? { prepared_token: preparedToken } : {}),
-    });
-    if (!payload || typeof payload !== "object" || Array.isArray(payload)) throw new Error("invalid queue response");
+    const payload = await submitQueuedTurn((path, body, signal) => requestPost(path, body, signal), id, text, preparedToken);
+    if (!payload || typeof payload !== "object" || Array.isArray(payload)) throw new DeliveryUnconfirmedError();
     const record = payload as Record<string, unknown>;
     const item = record.item && typeof record.item === "object" && !Array.isArray(record.item)
       ? record.item as Record<string, unknown>
@@ -872,7 +1141,7 @@ export async function queueTurn(id: string, text: string, preparedToken?: string
     if (typeof record.id !== "string" || !record.id || !item || typeof item.id !== "string" || item.id !== record.id || typeof item.text !== "string"
       || typeof item.status !== "string" || (item.status !== "queued" && item.status !== "paused") || !Number.isInteger(item.position) || (item.position as number) < 0
       || (item.created_at !== undefined && typeof item.created_at !== "string")
-      || (item.updated_at !== undefined && typeof item.updated_at !== "string")) throw new Error("invalid queue response");
+      || (item.updated_at !== undefined && typeof item.updated_at !== "string")) throw new DeliveryUnconfirmedError();
     return { ok: true, value: {
       id: record.id,
       text: item.text,
@@ -883,7 +1152,7 @@ export async function queueTurn(id: string, text: string, preparedToken?: string
       ...(typeof item.pause_reason === "string" ? { pause_reason: item.pause_reason } : {}),
     } };
   } catch (error) {
-    return { ok: false, error: toErrorMessage(error) };
+    return { ok: false, error: toErrorMessage(error), ...(error instanceof DeliveryUnconfirmedError ? { outcomeUnknown: true } : {}) };
   }
 }
 
@@ -907,7 +1176,7 @@ export async function answerQuestion(id: string, answer: string): Promise<Result
   }
 }
 
-export async function runSession(id: string, choices?: RunChoices, options?: { continueQueue?: boolean }): Promise<Result<void>> {
+export async function runSession(id: string, choices?: RunChoices, options?: { continueQueue?: boolean; promotionRequestId?: string }): Promise<Result<void>> {
   try {
     await runSessionWith(id, choices, options);
     return { ok: true, value: undefined };
@@ -990,7 +1259,7 @@ export function hydrateTimelineJournalRows(rows: TimelineRow[], journal: unknown
   if (!Array.isArray(messages)) return rows;
   const reasoning = new Map(history.filter(item => Number.isInteger(item?.message_index) && typeof item?.text === "string")
     .map(item => [item.message_index, item.text.slice(0, 32_000)]));
-  const texts = new Map<number, { kind: "user" | "assistant"; text: string; messageIndex: number }>();
+  const texts = new Map<number, { kind: "user" | "assistant"; text: string; messageIndex: number; messageId?: string }>();
   // events.v1 inserts historical completion records before the next user
   // message. Ignoring them shifts every later message and its reasoning.
   const completionCounts = new Map<string, number>();
@@ -998,22 +1267,41 @@ export function hydrateTimelineJournalRows(rows: TimelineRow[], journal: unknown
     if (!record || typeof record !== 'object' || Array.isArray(record) || typeof record.turn_id !== 'string' || !/^turn-[1-9][0-9]*$/u.test(record.turn_id)) continue;
     completionCounts.set(record.turn_id, (completionCounts.get(record.turn_id) ?? 0) + 1);
   }
-  let seq = 1, firstUser = true, turn = 1;
+  const messageWindow = source.message_window && typeof source.message_window === 'object'
+    ? source.message_window as Record<string, unknown> : undefined;
+  const pagedStart = Number.isSafeInteger(messageWindow?.start) ? messageWindow!.start as number : 0;
+  const messageIndices = Array.isArray(messageWindow?.messageIndices) ? messageWindow!.messageIndices as unknown[] : undefined;
+  let seq = 1, firstUser = pagedStart === 0, turn = 1;
+  if (pagedStart > 0) {
+    const firstVisibleUser = messages.find((message): message is Record<string, unknown> =>
+      Boolean(message && typeof message === 'object' && (message as Record<string, unknown>).role === 'user'));
+    const firstVisible = firstVisibleUser?._turn_id;
+    if (typeof firstVisible === 'string' && /^turn-[1-9][0-9]*$/u.test(firstVisible)) {
+      const turnNumber = Number(firstVisible.slice(5));
+      turn = firstVisibleUser?._input_kind === 'guide' ? turnNumber : Math.max(1, turnNumber - 1);
+    }
+  }
   messages.forEach((message, messageIndex) => {
     if (!message || typeof message !== "object") return;
+    const identity = typeof message._message_id === 'string' ? {messageId: message._message_id} : {};
     if (message.role === "assistant") {
       for (const call of Array.isArray(message.tool_calls) ? message.tool_calls : []) if (call && typeof call === "object") seq++;
-      if (message.content) texts.set(++seq, { kind:"assistant", text:String(message.content), messageIndex });
+      if (message.content) texts.set(++seq, { kind:"assistant", text:String(message.content), messageIndex, ...identity });
     } else if (message.role === "tool") seq++;
     else if (message.role === "user") {
-      if (firstUser) firstUser = false;
+      if (firstUser) {
+        firstUser = false;
+        if (typeof message._turn_id === 'string' && /^turn-[1-9][0-9]*$/u.test(message._turn_id)) turn = Number(message._turn_id.slice(5));
+      }
       else {
-        seq += completionCounts.get(`turn-${turn}`) ?? 0;
-        turn += 1;
+        if (message._input_kind !== 'guide') {
+          seq += completionCounts.get(`turn-${turn}`) ?? 0;
+          turn = typeof message._turn_id === 'string' && /^turn-[1-9][0-9]*$/u.test(message._turn_id) ? Number(message._turn_id.slice(5)) : turn + 1;
+        }
         const content = Array.isArray(message.content) ? message.content.filter((part: unknown) =>
           part && typeof part === 'object' && (part as Record<string, unknown>).type === 'text' && typeof (part as Record<string, unknown>).text === 'string')
           .map((part: { text: string }) => part.text).join('\n') : String(message.content ?? '');
-        texts.set(++seq, { kind:"user", text:content, messageIndex });
+        texts.set(++seq, { kind:"user", text:content, messageIndex, ...identity });
       }
     }
   });
@@ -1022,22 +1310,45 @@ export function hydrateTimelineJournalRows(rows: TimelineRow[], journal: unknown
     const full = texts.get(row.seq);
     if (!full || full.kind !== row.kind) return row;
     const revision = typeof source.message_revision === 'string' ? source.message_revision : undefined;
-    if (row.kind === "user") return {...row, text:full.text, ...(revision ? {messageIndex:full.messageIndex, messageRevision:revision} : {})};
+    if (row.kind === "user") return {...row, text:full.text, messageId:full.messageId, ...(revision ? {messageIndex:full.messageIndex, messageRevision:revision} : {})};
     const annotations = source.message_annotations && typeof source.message_annotations === 'object'
       ? (source.message_annotations as Record<string, unknown>)[String(full.messageIndex)] : undefined;
     const feedback = annotations && typeof annotations === 'object' ? (annotations as Record<string, unknown>).feedback : undefined;
-    return {...row, text:full.text, messageIndex:full.messageIndex,
+    return {...row, text:full.text, messageIndex:full.messageIndex, messageId:full.messageId,
       ...(revision ? {messageRevision:revision, feedback:feedback === 'like' || feedback === 'dislike' ? feedback : undefined} : {}),
       ...(reasoning.has(full.messageIndex) ? { reasoning:reasoning.get(full.messageIndex) } : {})};
   });
-  return projectJournalAssistantWork(hydrated, messages, history);
+  let projected = projectJournalAssistantWork(hydrated, messages, history);
+  if (messageIndices) {
+    projected = projected.map(row => {
+      if ((row.kind !== 'user' && row.kind !== 'assistant') || row.messageIndex === undefined) return row;
+      const currentIndex = messageIndices[row.messageIndex];
+      if (Number.isSafeInteger(currentIndex) && (currentIndex as number) >= 0) {
+        return {...row, messageIndex: currentIndex as number,
+          ...(typeof source.message_revision === 'string' ? {messageRevision: source.message_revision} : {})};
+      }
+      if (row.kind === 'assistant') {
+        const {messageIndex: _index, messageRevision: _revision, feedback: _feedback, ...readonlyRow} = row;
+        return readonlyRow;
+      }
+      const {messageIndex: _index, messageRevision: _revision, ...readonlyRow} = row;
+      return readonlyRow;
+    });
+  }
+  const offset = pagedStart * 1_000_000;
+  return pagedStart ? projected.map(row => ({...row, seq: row.seq + offset})) : projected;
 }
 
 /** Add the journal's original task message, which events.v1 deliberately omits. */
 export function withInitialUserMessage(rows: TimelineRow[], journal: unknown, fallbackTask?: string): TimelineRow[] {
   let initialText: string | undefined;
   let initialIndex: number | undefined;
+  let initialTurnId = 'turn-1';
+  let initialMessageId: string | undefined;
   const source = journal && typeof journal === 'object' && !Array.isArray(journal) ? journal as Record<string, unknown> : undefined;
+  const messageWindow = source?.message_window && typeof source.message_window === 'object'
+    ? source.message_window as Record<string, unknown> : undefined;
+  if (Number.isSafeInteger(messageWindow?.start) && (messageWindow!.start as number) > 0) return rows;
   if (journal && typeof journal === "object" && !Array.isArray(journal)) {
     const messages = (journal as Record<string, unknown>).messages;
     if (Array.isArray(messages)) {
@@ -1046,6 +1357,8 @@ export function withInitialUserMessage(rows: TimelineRow[], journal: unknown, fa
         const candidate = message as Record<string, unknown>;
         if (candidate.role !== "user") continue;
         initialIndex = index;
+        if (typeof candidate._turn_id === 'string') initialTurnId = candidate._turn_id;
+        if (typeof candidate._message_id === 'string') initialMessageId = candidate._message_id;
         if (typeof candidate.content === "string" && candidate.content.trim()) initialText = candidate.content;
         else if (Array.isArray(candidate.content)) {
           const text = candidate.content
@@ -1066,9 +1379,14 @@ export function withInitialUserMessage(rows: TimelineRow[], journal: unknown, fa
     initialText = fallbackTask;
   }
   if (initialText === undefined) return rows;
+  const indices = Array.isArray(messageWindow?.messageIndices) ? messageWindow!.messageIndices as unknown[] : undefined;
+  const activeIndex = indices?.[initialIndex ?? 0];
   return [
-    { kind: "user", seq: 0, turnId: "turn-1", text: initialText,
-      ...(initialIndex !== undefined && typeof source?.message_revision === 'string' ? {messageIndex: initialIndex, messageRevision: source.message_revision} : {}) },
+    { kind: "user", seq: 0, turnId: initialTurnId, text: initialText,
+      ...(initialMessageId ? {messageId: initialMessageId} : {}),
+      ...(initialIndex !== undefined && typeof source?.message_revision === 'string'
+        && (indices === undefined || Number.isSafeInteger(activeIndex) && (activeIndex as number) >= 0)
+        ? {messageIndex: indices ? activeIndex as number : initialIndex, messageRevision: source.message_revision} : {}) },
     ...rows.filter(row => row.seq !== 0),
   ];
 }

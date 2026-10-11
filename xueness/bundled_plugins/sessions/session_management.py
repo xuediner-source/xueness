@@ -1,6 +1,7 @@
-"""Safe session metadata mutations; workspaces and journals are never erased."""
+"""Session management; permanent deletion is limited to archived journals."""
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import re
@@ -10,8 +11,8 @@ import time
 from datetime import datetime, timezone
 from pathlib import Path
 
-from ...core import Store
-from ...session_lease import lease
+from ...core import Store, _read_regular_bytes, _fsync_directory
+from ...session_lease import journal_lock, lease
 from ...resources import _is_link, replace_file
 
 MAX_TITLE = 120
@@ -294,10 +295,11 @@ def list_archived(store: Store) -> list[dict]:
         if not re.fullmatch(r"[0-9a-f]{32}", stem):
             continue
         try:
-            session = json.loads(path.read_text(encoding="utf-8"))
-        except (OSError, UnicodeDecodeError, json.JSONDecodeError):
+            raw = _read_regular_bytes(path)
+            session = json.loads(raw.decode("utf-8"))
+        except (OSError, ValueError, UnicodeDecodeError):
             continue
-        if not isinstance(session, dict):
+        if not isinstance(session, dict) or session.get("id") != stem:
             continue
         archived_at = None
         for record in session.get("management_history") or []:
@@ -313,10 +315,64 @@ def list_archived(store: Store) -> list[dict]:
             "task": session.get("task", ""),
             "title": session.get("title") or session.get("task", ""),
             "archivedAt": archived_at,
+            "revision": hashlib.sha256(raw).hexdigest(),
         })
     # ISO timestamps in one timezone sort lexicographically by instant.
     entries.sort(key=lambda entry: entry["archivedAt"], reverse=True)
     return entries[:200]
+
+
+def delete_archived(store: Store, sid: str, expected_revision: str) -> None:
+    """Remove one confirmed archived journal and its journal recovery copies.
+
+    The caller holds the context lock and run lease shared with restore/archive.
+    Journal locks also exclude direct Store writes. Validate all paths and the
+    displayed revision before unlinking anything; remove recovery copies first
+    so a cleanup failure leaves the primary archive visible and retryable.
+    Workspaces, run evidence, queue receipts and lock files are never removed.
+    """
+    live = store._path(sid)
+    if not isinstance(expected_revision, str) or not re.fullmatch(r"[0-9a-f]{64}", expected_revision):
+        raise ValueError("invalid archived session revision")
+    archive_dir = store.directory / "deleted-sessions"
+    if _is_link(archive_dir):
+        raise ValueError("archive directory is a symbolic link or reparse point")
+    source = archive_dir / live.name
+    if _is_link(source):
+        raise ValueError("archived session is a symbolic link or reparse point")
+    if not source.is_file():
+        raise FileNotFoundError("archived session not found")
+    archived_store = Store(archive_dir)
+    with store._thread_lock(sid), journal_lock(store, sid), journal_lock(archived_store, sid):
+        if live.exists() or _is_link(live):
+            raise FileExistsError("session is live; archive deletion refused")
+        raw = _read_regular_bytes(source)
+        session = json.loads(raw.decode("utf-8"))
+        if not isinstance(session, dict) or session.get("id") != sid:
+            raise ValueError("invalid archived session identity")
+        if hashlib.sha256(raw).hexdigest() != expected_revision:
+            raise FileExistsError("archived session changed; refresh before deleting")
+        backups = [Path(str(live) + ".bak"), Path(str(source) + ".bak")]
+        # Revision logs retain the original transcript after edits/compaction.
+        # Permanent deletion must remove those conversation copies as well.
+        histories = [store.directory / (sid + '.history.jsonl'), archive_dir / (sid + '.history.jsonl')]
+        for history_path in histories:
+            if _is_link(history_path) or history_path.exists() and not history_path.is_file():
+                raise ValueError('session history is not a regular file')
+        for backup in backups:
+            if _is_link(backup):
+                raise ValueError("session backup is a symbolic link or reparse point")
+            if backup.exists():
+                value = json.loads(_read_regular_bytes(backup).decode("utf-8"))
+                if not isinstance(value, dict) or value.get("id") != sid:
+                    raise ValueError("invalid archived session backup identity")
+        for backup in backups:
+            backup.unlink(missing_ok=True)
+        for history_path in histories:
+            history_path.unlink(missing_ok=True)
+        source.unlink()
+        _fsync_directory(archive_dir)
+        _fsync_directory(store.directory)
 
 
 def restore(store: Store, sid: str) -> dict:

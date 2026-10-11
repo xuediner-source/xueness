@@ -1,0 +1,9 @@
+.xn-composer-recovery { margin: 0 12px 8px; padding: 8px 10px; border: 1px solid var(--border); border-radius: 8px; color: var(--fg); font-size: 12px; }
+.xn-composer-recovery summary { cursor: pointer; }
+.xn-composer-recovery p { margin: 6px 0; }
+.xn-composer-recovery ul { list-style: none; margin: 8px 0 0; padding: 0; max-height: 180px; overflow-y: auto; overscroll-behavior: contain; }
+.xn-composer-recovery li + li { border-top: 1px solid var(--border); margin-top: 8px; padding-top: 8px; }
+.xn-composer-recovery__preview { white-space: pre-wrap; overflow-wrap: anywhere; max-height: 90px; overflow-y: auto; }
+.xn-composer-recovery__error { color: var(--fg-muted); overflow-wrap: anywhere; }
+.xn-composer-recovery button { background: transparent; color: inherit; border: 1px solid var(--border); border-radius: 5px; padding: 4px 8px; margin: 6px 8px 0 0; cursor: pointer; }
+.xn-composer-recovery button:focus-visible, .xn-composer-recovery summary:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }

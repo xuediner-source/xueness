@@ -15,6 +15,7 @@ export type UsageChartDay = {
   outputTokens: number;
   requestCount: number;
   unknownRequests: number;
+  models: UsageModelSummary[];
 };
 
 export type UsageHeatmapCell = {
@@ -62,8 +63,32 @@ export function buildUsageChartDays(
       outputTokens: value?.outputTokens ?? 0,
       requestCount: value?.requestCount ?? 0,
       unknownRequests: value?.unknownRequests ?? 0,
+      models: value?.models ?? [],
     };
   });
+}
+
+/** Model identity determines its color across charts, ranges and refreshes. */
+export function usageModelColor(model: Pick<UsageModelSummary, 'model' | 'protocol'>): string {
+  if (!model.model) return '#89919d';
+  let hash = 2166136261;
+  for (const char of `${model.protocol ?? ''}:${model.model}`) hash = Math.imul(hash ^ char.charCodeAt(0), 16777619) >>> 0;
+  return `hsl(${hash % 360} 62% 49%)`;
+}
+
+export function usageDaySegments(day: Pick<UsageChartDay, 'totalTokens' | 'models'>) {
+  // Missing attribution stays a neutral remainder; it is never allocated to
+  // another model. A malformed over-count cannot grow beyond the day total.
+  let remaining = Math.max(0, day.totalTokens);
+  const segments: { key: string; model: string | null; tokens: number; color: string }[] = [];
+  for (const model of day.models.slice().sort((a, b) => `${a.protocol}:${a.model}`.localeCompare(`${b.protocol}:${b.model}`))) {
+    const tokens = Math.min(remaining, Number.isFinite(model.totalTokens) ? Math.max(0, model.totalTokens) : 0);
+    if (!tokens) continue;
+    segments.push({ key: `${model.protocol}:${model.model}`, model: model.model, tokens, color: usageModelColor(model) });
+    remaining -= tokens;
+  }
+  if (remaining > 0) segments.push({ key: 'unattributed', model: null, tokens: remaining, color: usageModelColor({ model: null, protocol: null }) });
+  return segments;
 }
 
 export function buildUsageHeatmapWeeks(
@@ -326,7 +351,9 @@ export function XuenessUsageSettingsView({
                             style={{ height: `${height}%` }}
                             title={`${day.date}: ${formatCount(day.totalTokens, locale)} ${tr("Token")} · ${formatCount(day.requestCount, locale)} ${tr("次请求")}`}
                             aria-hidden="true"
-                          />
+                          >{usageDaySegments(day).map(segment => <span className="xn-usage-settings__chart-segment" key={segment.key}
+                            data-model={segment.model ?? 'unknown'} style={{ height: `${segment.tokens / day.totalTokens * 100}%`, background: segment.color }}
+                            title={`${segment.model ?? tr('未报告模型')} · ${formatCount(segment.tokens, locale)} ${tr('Token')}`} />)}</span>
                         </div>
                         <span className="xn-usage-settings__chart-label" title={day.date}>{formatDate(day.date, locale, { year: undefined })}</span>
                       </div>
@@ -334,12 +361,17 @@ export function XuenessUsageSettingsView({
                   })}
                 </div>
                 <ul className="xn-usage-settings__sr-only" aria-label={tr("每日用量数据列表")}>
-                  {chartDays.map((day) => <li key={day.date}>{day.date}: {formatCount(day.totalTokens, locale)} {tr("Token")}, {formatCount(day.requestCount, locale)} {tr("次请求")}</li>)}
+                  {chartDays.map((day) => <li key={day.date}>{day.date}: {formatCount(day.totalTokens, locale)} {tr("Token")}, {formatCount(day.requestCount, locale)} {tr("次请求")}
+                    {usageDaySegments(day).map(segment => <span key={segment.key}> · {segment.model ?? tr('未报告模型')}: {formatCount(segment.tokens, locale)}</span>)}</li>)}
                 </ul>
               </div>
             ) : (
               <div className="xn-usage-settings__empty-chart">{hasReportedUsage(usage) ? tr("此周期没有完整报告的 Token 总量") : tr("服务商尚未报告 Token 用量")}</div>
             )}
+            {models.some(model => model.totalTokens > 0) && <div className="xn-usage-settings__legend" aria-label={tr('模型颜色图例')}>
+              {models.filter(model => model.totalTokens > 0).map((model, index) => <span key={`${model.protocol}:${model.model}:${index}`} title={model.model ?? tr('未报告模型')}>
+                <i aria-hidden="true" style={{ background: usageModelColor(model) }} /><span>{model.model ?? tr('未报告模型')}</span></span>)}
+            </div>}
             <div className="xn-usage-settings__period-detail">
               <span>{tr("会话")} <strong>{formatCount(usage.totals.sessions, locale)}</strong></span>
               <span>{tr("步骤")} <strong>{formatCount(usage.totals.steps, locale)}</strong></span>
@@ -384,7 +416,7 @@ function UsageModelRow({ model, locale, maxTokens }: { model: UsageModelSummary;
   const label = model.model ?? tr("未报告模型");
   const total = model.totalTokens;
   return (
-    <div className="xn-usage-settings__model" role="listitem">
+    <div className="xn-usage-settings__model" role="listitem" style={{ '--model-color': usageModelColor(model) } as React.CSSProperties}>
       <div className="xn-usage-settings__model-identity">
         <span className="xn-usage-settings__model-dot" aria-hidden="true" />
         <strong title={label}>{label}</strong>

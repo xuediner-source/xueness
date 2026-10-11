@@ -26,6 +26,8 @@ from .bundled_plugins.skills.plugin import SkillsPlugin  # noqa: E402
 from .bundled_plugins.hooks.plugin import HooksPlugin  # noqa: E402
 from .bundled_plugins.subagents.plugin import SubagentsPlugin  # noqa: E402
 from .bundled_plugins.mcp.plugin import McpPlugin  # noqa: E402
+from .bundled_plugins.subscriptions.plugin import SubscriptionsPlugin  # noqa: E402
+from .bundled_plugins.model_monitor.plugin import ModelMonitorPlugin  # noqa: E402
 
 
 #: Registry. Keys are the names callers opt in with (CLI flag / web body key).
@@ -34,6 +36,8 @@ PLUGINS: dict[str, type[Plugin]] = {
     "hooks": HooksPlugin,
     "subagents": SubagentsPlugin,
     "mcp": McpPlugin,
+    "subscriptions": SubscriptionsPlugin,
+    "model_monitor": ModelMonitorPlugin,
 }
 
 

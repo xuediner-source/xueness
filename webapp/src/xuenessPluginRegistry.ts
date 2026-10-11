@@ -10,6 +10,8 @@ export type PluginPanel =
   | "git"
   | "directory"
   | "providers"
+  | "subscriptions"
+  | "model-monitor"
   | "usage"
   | "memory"
   | "capabilities"
@@ -23,10 +25,12 @@ export type PluginPanel =
   | "subagents";
 
 export const XUENESS_PLUGIN_REGISTRY = {
-  sessions: { name: "会话", description: "会话列表、侧栏宽度调整、Agent 对话与历史分叉", panels: ["chat"] },
+  sessions: { name: "会话", description: "会话列表、归档恢复与永久删除、侧栏宽度调整、Agent 对话与历史分叉", panels: ["chat"] },
   files: { name: "文件", description: "工作区文件、改动和目录浏览", panels: ["files", "changes", "directory"] },
   git: { name: "Git", description: "工作区状态、差异和提交记录", panels: ["git"] },
   providers: { name: "供应商", description: "模型配置、模型发现、本地轻量模式与接口兼容诊断", panels: ["providers"] },
+  subscriptions: { name: "订阅中心", description: "选择安装后通过账号授权、CLI 登录或订阅凭证接入，在会话中使用模型并查询上游真实额度。", panels: ["subscriptions"] },
+  model_monitor: { name: "返回模型监测", description: "随会话记录请求型号与上游返回型号，标记一致、不同及未报告。不会自动发起额外模型请求。", panels: ["model-monitor"] },
   usage: { name: "用量", description: "会话和步骤用量统计", panels: ["usage"] },
   memory: { name: "记忆", description: "记忆文件轨道状态", panels: ["memory"] },
   settings: { name: "设置", description: "工作台和运行设置", panels: ["settings"] },
@@ -63,6 +67,8 @@ export const PLUGIN_PANEL_LABELS: Record<PluginPanel, string> = {
   git: "Git",
   directory: "目录",
   providers: "供应商",
+  subscriptions: "订阅中心",
+  "model-monitor": "返回模型监测",
   usage: "用量",
   memory: "记忆",
   capabilities: "能力",

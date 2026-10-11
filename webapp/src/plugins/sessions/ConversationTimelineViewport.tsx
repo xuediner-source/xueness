@@ -9,6 +9,8 @@ import {
   shouldShowBackToBottom,
   timelineTouchScrollIntent,
   timelineWheelScrollIntent,
+  timelineKeyboardScrollIntent,
+  descendantConsumesTimelineScroll,
   type TimelineUserScrollIntent,
 } from "./timelineScrollAnchor";
 import {
@@ -87,6 +89,8 @@ export function ConversationTimelineViewport({ children, autoScroll, rowsVersion
   sessionIdRef.current = sessionId?.trim() ? sessionId.trim() : null;
   const pendingRestoreRef = useRef<{ kind: "pinned" } | { kind: "position"; scrollTop: number } | null>(null);
   const [awayFromTail, setAwayFromTail] = useState(false);
+  const [unseenOutput, setUnseenOutput] = useState(false);
+  const observedOutputRef = useRef({ rowsVersion, streamingText });
 
   const rowCount = Array.isArray(rowsVersion) ? rowsVersion.length : 1;
   const rowCountRef = useRef(rowCount);
@@ -97,10 +101,17 @@ export function ConversationTimelineViewport({ children, autoScroll, rowsVersion
   const initialTailOverride = initialMemoryState?.wasPinnedToBottom === false ? false : null;
 
   const commitFollowing = useCallback((next: boolean) => {
+    if (next) setUnseenOutput(false);
     if (followingRef.current === next) return;
     followingRef.current = next;
     setAwayFromTail(shouldShowBackToBottom(next, rowCountRef.current));
   }, []);
+
+  useEffect(() => {
+    const previous = observedOutputRef.current;
+    observedOutputRef.current = { rowsVersion, streamingText };
+    if (!followingRef.current && (previous.rowsVersion !== rowsVersion || previous.streamingText !== streamingText)) setUnseenOutput(true);
+  }, [rowsVersion, streamingText]);
 
   const clearSmoothScrollTimer = useCallback(() => {
     if (smoothScrollTimerRef.current === undefined) return;
@@ -359,12 +370,12 @@ export function ConversationTimelineViewport({ children, autoScroll, rowsVersion
   };
 
   const handleWheelCapture = (e: React.WheelEvent) => {
+    if (e.deltaY === 0 || descendantConsumesTimelineScroll(scrollerRef.current, e.target, e.deltaY)) return;
     cancelSmoothScroll();
     markUserScrollIntent(timelineWheelScrollIntent(e.deltaY));
   };
 
   const handleTouchStart = (e: React.TouchEvent) => {
-    cancelSmoothScroll();
     const touch = e.touches[0];
     touchClientYRef.current = touch ? touch.clientY : null;
   };
@@ -373,7 +384,11 @@ export function ConversationTimelineViewport({ children, autoScroll, rowsVersion
     const touch = e.touches[0];
     const previousClientY = touchClientYRef.current;
     if (touch && previousClientY !== null) {
-      markUserScrollIntent(timelineTouchScrollIntent(previousClientY, touch.clientY));
+      const delta = previousClientY - touch.clientY;
+      if (delta !== 0 && !descendantConsumesTimelineScroll(scrollerRef.current, e.target, delta)) {
+        cancelSmoothScroll();
+        markUserScrollIntent(timelineTouchScrollIntent(previousClientY, touch.clientY));
+      }
     }
     if (touch) touchClientYRef.current = touch.clientY;
   };
@@ -389,7 +404,15 @@ export function ConversationTimelineViewport({ children, autoScroll, rowsVersion
         className="xn-conversation__stream xn-session-timeline-viewport__scroll"
         onScroll={handleScroll}
         onWheelCapture={handleWheelCapture}
-        onWheel={cancelSmoothScroll}
+        tabIndex={0}
+        aria-label={tr('会话消息')}
+        onKeyDownCapture={event => {
+          if (event.defaultPrevented || event.ctrlKey || event.metaKey || event.altKey || event.nativeEvent.isComposing) return;
+          if (event.target instanceof Element && event.target.closest('input, textarea, select, [contenteditable]:not([contenteditable="false"]), button, a, summary, [role="button"]')) return;
+          const intent = timelineKeyboardScrollIntent(event.key, event.shiftKey);
+          if (intent === 'none' || descendantConsumesTimelineScroll(scrollerRef.current, event.target, intent === 'awayFromBottom' ? -1 : 1)) return;
+          cancelSmoothScroll(); markUserScrollIntent(intent);
+        }}
         onTouchStart={handleTouchStart}
         onTouchMove={handleTouchMove}
         onTouchEnd={handleTouchEnd}
@@ -407,7 +430,7 @@ export function ConversationTimelineViewport({ children, autoScroll, rowsVersion
         aria-label={tr("回到底部")}
         title={tr("回到底部")}
         onClick={backToBottom}
-      ><ArrowDown size={15} aria-hidden="true" /><span>{tr("回到底部")}</span></button>}
+      ><ArrowDown size={15} aria-hidden="true" /><span>{tr(unseenOutput ? '有新内容 · 回到底部' : '回到底部')}</span></button>}
     </div>
   );
 }

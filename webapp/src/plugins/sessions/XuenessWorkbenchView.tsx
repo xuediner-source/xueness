@@ -10,6 +10,10 @@ import { Button, Badge, EmptyState } from "../../ui/primitives";
 import { IconArrowUp, IconLoader, IconPaperclip, IconPencil, IconPin, IconRefresh, IconTrash, IconX } from "../../ui/icons";
 import type { ComposerCapability, ComposerInput } from "../../xuenessComposer";
 import { ComposerCapabilityMenu, MAX_SELECTED_COMPOSER_CAPABILITIES, capabilityLabel, matchesComposerSearch } from './ComposerCapabilityMenu';
+import { retainRejectedComposerDraft, recoverComposerDraft, composerDraftContent, subscribeComposerDrafts, notifyComposerDrafts } from './composerRecovery';
+import { DeliveryUnconfirmedError } from './submissionTransport';
+import { ComposerRecoveryPanel } from './ComposerRecoveryPanel';
+import { CurrentTurnInput, followupDelivery, followupPointerDelivery, type FollowupMode, type InputDelivery } from './CurrentTurnInput';
 import { Search, Target, Workflow, Blocks, Folder } from 'lucide-react';
 import { completionPresentation } from './completionPresentation';
 import { deferCompositionEnd, displayBinding, isModKeyPressed, isImeComposingEvent } from '../../xuenessShortcutDisplay';
@@ -1145,7 +1149,37 @@ export type PersistedComposerDraft = {
     plugins: string[];
   };
   updatedAt?: number;
+  recoverableDrafts?: PersistedComposerDraft[];
+  hadAttachments?: boolean;
+  deliveryUnconfirmed?: boolean;
+  pendingSubmission?: PersistedComposerDraft;
 };
+
+export function restoredDraft(value: PersistedComposerDraft): ComposerDraftState {
+  const recovered = value.recoverableDrafts?.map(item => restoredDraft({ ...item, recoverableDrafts: undefined, pendingSubmission: undefined })) ?? [];
+  if (value.pendingSubmission) recovered.push(restoredDraft({ ...value.pendingSubmission, deliveryUnconfirmed: true,
+    recoverableDrafts: undefined, pendingSubmission: undefined }));
+  return { ...emptyComposerDraft(value.text), goal: value.goal === true,
+    selectedCapabilities: value.selectedCapabilities ?? [],
+    selectedContext: value.selectedContext ?? { files: [], sessions: [], skills: [], plugins: [] },
+    attachmentError: value.hadAttachments ? tr('重新打开后请重新添加附件。') : '',
+    hadAttachments: value.hadAttachments === true, deliveryUnconfirmed: value.deliveryUnconfirmed === true,
+    recoverableDrafts: recovered };
+}
+
+function readStoredDraft(value: unknown, includeRecovery = true): PersistedComposerDraft | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value) || !('text' in value) || typeof value.text !== 'string') return null;
+  const input = value as PersistedComposerDraft;
+  const strings = (items: unknown): string[] => Array.isArray(items) ? items.filter((item): item is string => typeof item === 'string') : [];
+  return { text: input.text, goal: input.goal === true, selectedCapabilities: strings(input.selectedCapabilities),
+    selectedContext: { files: strings(input.selectedContext?.files), sessions: strings(input.selectedContext?.sessions),
+      skills: strings(input.selectedContext?.skills), plugins: strings(input.selectedContext?.plugins) },
+    ...(input.hadAttachments === true ? { hadAttachments: true } : {}),
+    ...(input.deliveryUnconfirmed === true ? { deliveryUnconfirmed: true } : {}),
+    ...(includeRecovery && input.pendingSubmission ? { pendingSubmission: readStoredDraft(input.pendingSubmission, false) ?? undefined } : {}),
+    ...(includeRecovery && Array.isArray(input.recoverableDrafts) ? { recoverableDrafts: input.recoverableDrafts
+      .map(item => readStoredDraft(item, false)).filter((item): item is PersistedComposerDraft => item !== null) } : {}) };
+}
 
 export function readPersistedDraft(
   workspaceKey: string,
@@ -1159,8 +1193,7 @@ export function readPersistedDraft(
     const parsed = JSON.parse(raw);
     if (!parsed || typeof parsed !== "object" || !parsed.scopes) return null;
     const scopeData = parsed.scopes[scope];
-    if (!scopeData || typeof scopeData.text !== "string") return null;
-    return scopeData;
+    return readStoredDraft(scopeData);
   } catch {
     return null;
   }
@@ -1169,7 +1202,7 @@ export function readPersistedDraft(
 export function persistDraft(
   workspaceKey: string,
   scope: string,
-  draft: Pick<ComposerDraftState, "text" | "goal" | "selectedCapabilities" | "selectedContext">,
+  draft: Pick<ComposerDraftState, "text" | "goal" | "selectedCapabilities" | "selectedContext" | "recoverableDrafts"> & Partial<Pick<ComposerDraftState, 'attachments' | 'pendingSubmission' | 'deliveryUnconfirmed' | 'hadAttachments'>>,
   storage: StorageLike | null = getBrowserStorage(),
 ): void {
   if (!storage) return;
@@ -1185,6 +1218,7 @@ export function persistDraft(
     }
     const hasContent = Boolean(
       draft.text.trim() ||
+      draft.recoverableDrafts?.length || draft.attachments?.length || draft.pendingSubmission || draft.hadAttachments ||
       draft.goal ||
       draft.selectedCapabilities?.length ||
       draft.selectedContext.files.length ||
@@ -1195,11 +1229,18 @@ export function persistDraft(
     if (!hasContent) {
       delete file.scopes[scope];
     } else {
+      const snapshot = (item: typeof draft): PersistedComposerDraft => ({ text: item.text, goal: item.goal,
+        selectedCapabilities: item.selectedCapabilities, selectedContext: item.selectedContext,
+        hadAttachments: Boolean(item.attachments?.length || item.hadAttachments), deliveryUnconfirmed: item.deliveryUnconfirmed === true });
       file.scopes[scope] = {
         text: draft.text,
         goal: draft.goal,
         selectedCapabilities: draft.selectedCapabilities,
         selectedContext: draft.selectedContext,
+        hadAttachments: Boolean(draft.attachments?.length || draft.hadAttachments),
+        deliveryUnconfirmed: draft.deliveryUnconfirmed === true,
+        recoverableDrafts: draft.recoverableDrafts?.map(snapshot),
+        pendingSubmission: draft.pendingSubmission ? snapshot(draft.pendingSubmission.draft) : undefined,
         updatedAt: Date.now(),
       };
     }
@@ -1236,13 +1277,16 @@ export function clearPersistedDraft(
 
 export type ComposerProps = {
   sendShortcut?: "enter" | "mod-enter";
-  onSend?: (text: string, input?: ComposerInput, onAccepted?: () => void) => boolean | void | Promise<boolean | void>;
+  onSend?: (text: string, input?: ComposerInput, onAccepted?: () => void, delivery?: InputDelivery) => boolean | void | Promise<boolean | void>;
   disabled?: boolean;
   /** Disable sending while keeping the prompt editable (for model/permission gates). */
   sendDisabled?: boolean;
   sendDisabledReason?: string;
   running?: boolean;
   queueWhenRunning?: boolean;
+  guideWhenRunning?: boolean;
+  followupMode?: FollowupMode;
+  onFollowupModeChange?: (mode: FollowupMode) => void;
   queueBusy?: boolean;
   stopping?: boolean;
   onStop?: () => void;
@@ -1281,6 +1325,10 @@ export type ComposerProps = {
 };
 
 export type ComposerDraftState = {
+  recoverableDrafts?: import('./composerRecovery').RecoverableComposerDraft[];
+  pendingSubmission?: { id: string; draft: import('./composerRecovery').RecoverableComposerDraft };
+  deliveryUnconfirmed?: boolean;
+  hadAttachments?: boolean;
   text: string;
   attachments: ComposerInput["attachments"];
   goal: boolean;
@@ -1313,7 +1361,7 @@ export function clearSubmittedComposerDraft(
   const current = drafts.get(draftKey);
   if (!current || current.revision !== submittedRevision) return drafts;
   const next = new Map(drafts);
-  next.set(draftKey, { ...emptyComposerDraft(), revision: current.revision + 1 });
+  next.set(draftKey, { ...emptyComposerDraft(), recoverableDrafts: current.recoverableDrafts, pendingSubmission: current.pendingSubmission, revision: current.revision + 1 });
   return next;
 }
 
@@ -1407,6 +1455,9 @@ export function Composer({
   sendDisabledReason,
   running = false,
   queueWhenRunning = false,
+  guideWhenRunning = false,
+  followupMode,
+  onFollowupModeChange,
   queueBusy = false,
   stopping = false,
   onStop,
@@ -1430,12 +1481,14 @@ export function Composer({
   platform,
 }: ComposerProps) {
   const localDraftsRef = useRef<Map<string, ComposerDraftState>>(new Map());
+  const [localFollowupMode, setLocalFollowupMode] = useState<FollowupMode>('guide');
+  const effectiveFollowupMode = guideWhenRunning ? followupMode ?? localFollowupMode : 'queue';
+  const pointerDeliveryRef = useRef<InputDelivery | undefined>(undefined);
   const draftsRef = draftStore ?? localDraftsRef;
   const resolvedWorkspaceKey = workspaceKey ?? "default";
   const scopedDraftKey = `${resolvedWorkspaceKey}:${draftKey}`;
   const [draftRenderVersion, setDraftRenderVersion] = useState(0);
-  const pendingSubmissionsRef = useRef(new Map<string, number>());
-  const submissionTicketRef = useRef(0);
+  useEffect(() => subscribeComposerDrafts(draftsRef, () => setDraftRenderVersion(version => version + 1)), [draftsRef]);
   const compositionActiveRef = useRef(false);
   const historyIndexRef = useRef<number | null>(null);
   const savedDraftTextRef = useRef<string>("");
@@ -1453,21 +1506,7 @@ export function Composer({
   if (!draftsRef.current.has(scopedDraftKey)) {
     const persisted = readPersistedDraft(resolvedWorkspaceKey, draftKey);
     if (persisted) {
-      draftsRef.current.set(scopedDraftKey, {
-        text: persisted.text,
-        attachments: [],
-        goal: Boolean(persisted.goal),
-        selectedCapabilities: persisted.selectedCapabilities ?? [],
-        selectedContext: {
-          files: persisted.selectedContext?.files ?? [],
-          sessions: persisted.selectedContext?.sessions ?? [],
-          skills: persisted.selectedContext?.skills ?? [],
-          plugins: persisted.selectedContext?.plugins ?? [],
-        },
-        submissionError: "",
-        attachmentError: "",
-        revision: 0,
-      });
+      draftsRef.current.set(scopedDraftKey, restoredDraft(persisted));
     } else {
       draftsRef.current.set(scopedDraftKey, emptyComposerDraft(defaultValue));
     }
@@ -1489,7 +1528,7 @@ export function Composer({
     nextDrafts.set(scope, nextDraft);
     draftsRef.current = nextDrafts;
     persistDraft(resolvedWorkspaceKey, draftKey, nextDraft);
-    setDraftRenderVersion(version => version + 1);
+    notifyComposerDrafts(draftsRef);
     return nextDraft;
   };
   const updateCurrentDraft = (update: (current: ComposerDraftState) => ComposerDraftState, contentChanged = true) =>
@@ -1534,7 +1573,7 @@ export function Composer({
     }
   };
   const updateAttachments = (next: ComposerInput["attachments"]) => updateCurrentDraft(current =>
-    current.attachments === next ? current : { ...current, attachments: next });
+    current.attachments === next ? current : { ...current, attachments: next, hadAttachments: false });
   const setAttachmentError = (message: string) => updateCurrentDraft(current =>
     current.attachmentError === message ? current : { ...current, attachmentError: message }, false);
   const setSubmissionError = (message: string) => updateCurrentDraft(current =>
@@ -1658,7 +1697,7 @@ export function Composer({
   const canOfferGoal = Boolean(startActions?.canGoal);
   const canOfferWorkflow = Boolean(startActions?.canWorkflow);
   const hasSendableContent = trimmed.length > 0 || attachments.length > 0 || selectedContextCount > 0;
-  const isSendDisabled = disabled || sendDisabled || queueBusy || pendingSubmissionsRef.current.has(scopedDraftKey) || (running && !queueWhenRunning) || attachmentBusy || !hasSendableContent;
+  const isSendDisabled = disabled || sendDisabled || queueBusy || Boolean(draft.pendingSubmission) || (running && !queueWhenRunning) || attachmentBusy || !hasSendableContent;
   // 停止/发送互斥（对标 ZCode showStopControl = canStop && !hasDraftToSubmit）：
   // 运行中且草稿为空时，停止按钮独占发送槽位；有草稿时显示排队发送键。
   // queueWhenRunning=false 时发送键在运行中没有排队语义，停止键始终保留。
@@ -1763,8 +1802,8 @@ export function Composer({
     }, 0);
   };
 
-  const handleSend = async () => {
-    if (isSendDisabled || pendingSubmissionsRef.current.has(scopedDraftKey) || !onSend) return;
+  const handleSend = async (requestedDelivery?: InputDelivery) => {
+    if (isSendDisabled || draftsRef.current.get(scopedDraftKey)?.pendingSubmission || !onSend) return;
     setSubmissionError("");
     const submittedDraft = draftsRef.current.get(scopedDraftKey) ?? emptyComposerDraft(defaultValue);
     const submittedRevision = submittedDraft.revision;
@@ -1777,9 +1816,7 @@ export function Composer({
       capabilities: submittedDraft.selectedCapabilities ?? [],
       goal: submittedDraft.goal,
     };
-    const ticket = ++submissionTicketRef.current;
-    pendingSubmissionsRef.current.set(scopedDraftKey, ticket);
-    clearPersistedDraft(resolvedWorkspaceKey, draftKey);
+    const ticket = crypto.randomUUID();
     const submittedText = submittedDraft.text.trim();
     if (submittedText) {
       const history = readPromptHistoryEntries(resolvedWorkspaceKey);
@@ -1790,28 +1827,40 @@ export function Composer({
     // promote/remount the composer. A rejection restores this frozen snapshot.
     draftsRef.current = clearSubmittedComposerDraft(draftsRef.current, scopedDraftKey, submittedRevision);
     const clearedRevision = draftsRef.current.get(scopedDraftKey)!.revision;
-    setDraftRenderVersion(version => version + 1);
+    draftsRef.current.set(scopedDraftKey, { ...draftsRef.current.get(scopedDraftKey)!,
+      pendingSubmission: { id: ticket, draft: composerDraftContent(submittedDraft) } });
+    persistDraft(resolvedWorkspaceKey, draftKey, draftsRef.current.get(scopedDraftKey)!);
+    notifyComposerDrafts(draftsRef);
     let accepted = false;
     const release = () => {
-      if (pendingSubmissionsRef.current.get(scopedDraftKey) !== ticket) return;
-      pendingSubmissionsRef.current.delete(scopedDraftKey);
-      setDraftRenderVersion(version => version + 1);
+      const current = draftsRef.current.get(scopedDraftKey);
+      if (current?.pendingSubmission?.id !== ticket) return;
+      const next = { ...current, pendingSubmission: undefined };
+      draftsRef.current.set(scopedDraftKey, next);
+      persistDraft(resolvedWorkspaceKey, draftKey, next);
+      notifyComposerDrafts(draftsRef);
     };
     const acknowledge = () => { accepted = true; release(); };
-    const restore = (error = "") => {
+    const restore = (error = "", deliveryUnconfirmed = false) => {
       if (accepted) return;
-      const next = restoreSubmittedComposerDraft(draftsRef.current, scopedDraftKey, clearedRevision, submittedDraft, error);
+      // An unknown delivery stays saved beside the editor, so it cannot be
+      // resent by a second Enter press before the user checks the conversation.
+      const next = deliveryUnconfirmed ? draftsRef.current : restoreSubmittedComposerDraft(draftsRef.current, scopedDraftKey, clearedRevision, submittedDraft, error);
       if (next !== draftsRef.current) {
         draftsRef.current = next;
-        persistDraft(resolvedWorkspaceKey, draftKey, submittedDraft);
-        setDraftRenderVersion(version => version + 1);
+        persistDraft(resolvedWorkspaceKey, draftKey, next.get(scopedDraftKey)!);
+        notifyComposerDrafts(draftsRef);
+      } else {
+        updateDraftFor(scopedDraftKey, current => retainRejectedComposerDraft(current, submittedDraft, error, deliveryUnconfirmed));
       }
     };
     try {
-      const sent = await onSend(submittedDraft.text.trim(), draft, acknowledge);
+      const delivery = running && queueWhenRunning ? requestedDelivery ?? followupDelivery(effectiveFollowupMode) : undefined;
+      const sent = await onSend(submittedDraft.text.trim(), draft, acknowledge, delivery);
       if (sent === false) restore();
+      else acknowledge();
     } catch (error) {
-      restore(error instanceof Error ? error.message : tr("发送失败，草稿已保留。"));
+      restore(error instanceof Error ? error.message : tr("发送失败，草稿已保留。"), error instanceof DeliveryUnconfirmedError);
     } finally { release(); }
   };
 
@@ -1880,6 +1929,12 @@ export function Composer({
         }
       }
     } else {
+      if (running && queueWhenRunning && e.key === 'Enter' && isModKeyPressed(e, platform)
+          && !e.shiftKey && !e.altKey && !isComposing) {
+        e.preventDefault();
+        void handleSend(followupDelivery(effectiveFollowupMode, true));
+        return;
+      }
       const intent = composerEnterIntent(
         { ...e, compositionActive: compositionActiveRef.current },
         sendShortcut,
@@ -1923,7 +1978,9 @@ export function Composer({
       data-drag-over={isDraggingOver ? "true" : undefined}
       onSubmit={(e) => {
         e.preventDefault();
-        void handleSend();
+        const delivery = pointerDeliveryRef.current;
+        pointerDeliveryRef.current = undefined;
+        void handleSend(delivery);
       }}
       onPaste={handlePasteEvent}
       onDragOver={(event) => {
@@ -2029,6 +2086,15 @@ export function Composer({
         {startActions?.onModels && <button type="button" onClick={startActions.onModels}>{tr('配置模型')}</button>}
       </div>}
       {submissionError && <div className="xn-composer__error" role="alert">{submissionError}</div>}
+      {draft.deliveryUnconfirmed && <div className="xn-composer__error" role="status">{tr('消息接收状态暂时无法确认，请先查看会话与队列再重试。')}</div>}
+      {draft.pendingSubmission && <div className="xn-composer-recovery" data-testid="composer-sending" role="status">
+        <span>{tr('正在发送…')}</span>
+        <p className="xn-composer-recovery__preview">{draft.pendingSubmission.draft.text || tr('附件与上下文')}</p>
+      </div>}
+      <ComposerRecoveryPanel drafts={draft.recoverableDrafts ?? []}
+        onRestore={index => { updateCurrentDraft(current => recoverComposerDraft(current, index)); localInputRef.current?.focus(); }}
+        onDiscard={index => updateCurrentDraft(current => ({ ...current,
+          recoverableDrafts: current.recoverableDrafts?.filter((_, position) => position !== index) }))} />
       <textarea
         ref={attachRef}
         className="xn-composer__input"
@@ -2209,16 +2275,21 @@ export function Composer({
             </div>
           </div>}
           {(controls || footer) && <div className="xn-composer__settings" role="group" aria-label={tr("运行选项")}>{controls ?? footer}</div>}
+          {running && queueWhenRunning && guideWhenRunning && <CurrentTurnInput mode={effectiveFollowupMode}
+            disabled={disabled || queueBusy || Boolean(draft.pendingSubmission)}
+            onChange={mode => { setLocalFollowupMode(mode); onFollowupModeChange?.(mode); }} />}
           {!minimal && <span id={`${suggestionListId}-keyboard-help`} className="xn-composer__keyboard-help">
             {queueWhenRunning && running
-              ? sendShortcut === "mod-enter" ? tf("{0} 排队 · Enter 换行", [displayBinding("Mod+Enter")]) : tr("Enter 排队 · Shift+Enter 换行")
+              ? guideWhenRunning ? `${effectiveFollowupMode === 'guide' ? tr('引导当前轮') : tr('加入队列')} · ${displayBinding('Mod+Enter', platform)} ${effectiveFollowupMode === 'guide' ? tr('加入队列') : tr('立即发送')}`
+                : sendShortcut === "mod-enter" ? tf("{0} 排队 · Enter 换行", [displayBinding("Mod+Enter")]) : tr("Enter 排队 · Shift+Enter 换行")
               : sendShortcut === "mod-enter" ? tf("{0} 发送 · Enter 换行", [displayBinding("Mod+Enter")]) : tr("Enter 发送 · Shift+Enter 换行")}
           </span>}
         </div>
         <div className="xn-composer__submit-actions">
           {showQueueControl && <button type="submit" disabled={isSendDisabled}
-            className="xn-composer__send xn-composer__queue" aria-label={tr(queueBusy ? "正在排队…" : "加入队列")}
-            title={tr(queueBusy ? "正在排队…" : "加入队列")} data-testid="composer-queue">
+            onClick={event => { pointerDeliveryRef.current = followupPointerDelivery(effectiveFollowupMode, event, platform); }}
+            className="xn-composer__send xn-composer__queue" aria-label={tr(queueBusy ? "正在排队…" : effectiveFollowupMode === 'guide' ? '引导当前轮' : "加入队列")}
+            title={tr(queueBusy ? "正在排队…" : effectiveFollowupMode === 'guide' ? '引导当前轮' : "加入队列")} data-testid="composer-queue">
             {queueBusy ? <IconLoader size={16} /> : <IconArrowUp size={16} />}
           </button>}
           {showStopControl ? (
@@ -2243,10 +2314,10 @@ export function Composer({
               type="submit"
               disabled={isSendDisabled}
               className="xn-composer__send"
-              aria-label={tr(pendingSubmissionsRef.current.has(scopedDraftKey) ? "正在发送…" : "发送")}
-              title={tr(pendingSubmissionsRef.current.has(scopedDraftKey) ? "正在发送…" : "发送")}
+              aria-label={tr(draft.pendingSubmission ? "正在发送…" : "发送")}
+              title={tr(draft.pendingSubmission ? "正在发送…" : "发送")}
             >
-              {pendingSubmissionsRef.current.has(scopedDraftKey) ? <IconLoader size={16} /> : <IconArrowUp size={16} />}
+              {draft.pendingSubmission ? <IconLoader size={16} /> : <IconArrowUp size={16} />}
             </button>
           )}
         </div>

@@ -11,7 +11,9 @@
   ],
   "tools": [
     "task",
-    "task_collect"
+    "task_collect",
+    "task_resume",
+    "task_send_message"
   ],
   "commands": [],
   "panels": [
@@ -34,7 +36,9 @@
     "runner",
     "subagents",
     "task_registry",
-    "cancel_one"
+    "cancel_one",
+    "child_sessions",
+    "child_api"
   ],
   "features": [
     {
@@ -63,6 +67,21 @@
       "nameEn": "Uncollected subtask state restoration after compaction"
     },
     {
+      "id": "subagents.durable_children",
+      "name": "持久化子会话与显式恢复",
+      "nameEn": "Durable child sessions and explicit recovery"
+    },
+    {
+      "id": "subagents.child_inbox",
+      "name": "安全边界子任务消息",
+      "nameEn": "Safe-boundary child messages"
+    },
+    {
+      "id": "subagents.child_transcript",
+      "name": "只读子会话记录",
+      "nameEn": "Read-only child conversation transcript"
+    },
+    {
       "id": "subagents.settings",
       "name": "子代理资源与能力配置",
       "nameEn": "Subagent resources and capability settings"
@@ -75,6 +94,7 @@
   ],
   "frontendModules": [
     "plugins/subagents/SubagentSettings.tsx",
-    "plugins/subagents/SubagentSidePane.tsx"
+    "plugins/subagents/SubagentSidePane.tsx",
+    "plugins/subagents/SubagentTranscript.tsx"
   ]
 }

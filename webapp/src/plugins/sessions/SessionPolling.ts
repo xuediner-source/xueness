@@ -9,6 +9,7 @@ export type SessionPollingOptions = {
   refresh: () => Promise<unknown>;
   isVisible?: () => boolean;
   subscribeVisibility?: (listener: () => void) => () => void;
+  isOnline?: () => boolean;
   schedule?: SessionPollSchedule;
   visibleDelayMs?: number;
   hiddenDelayMs?: number;
@@ -18,10 +19,23 @@ function browserVisibility(): boolean {
   return typeof document === "undefined" || document.visibilityState === "visible";
 }
 
+/** Internet connectivity does not determine reachability of the desktop API. */
+export function sessionPollingNetworkAvailable(online: boolean, hostname: string): boolean {
+  return online || ['localhost', '127.0.0.1', '[::1]', '::1'].includes(hostname);
+}
+
 function subscribeBrowserVisibility(listener: () => void): () => void {
   if (typeof document === "undefined") return () => undefined;
   document.addEventListener("visibilitychange", listener);
-  return () => document.removeEventListener("visibilitychange", listener);
+  window.addEventListener("focus", listener);
+  window.addEventListener("online", listener);
+  window.addEventListener("offline", listener);
+  return () => {
+    document.removeEventListener("visibilitychange", listener);
+    window.removeEventListener("focus", listener);
+    window.removeEventListener("online", listener);
+    window.removeEventListener("offline", listener);
+  };
 }
 
 /** Polls sequentially, slows background tabs, and runs promptly when they return. */
@@ -29,6 +43,8 @@ export function startSessionPolling({
   refresh,
   isVisible = browserVisibility,
   subscribeVisibility = subscribeBrowserVisibility,
+  isOnline = () => sessionPollingNetworkAvailable(typeof navigator === 'undefined' || navigator.onLine !== false,
+    typeof window === 'undefined' ? '' : window.location.hostname),
   schedule = { setTimeout: (callback, delay) => window.setTimeout(callback, delay), clearTimeout: handle => window.clearTimeout(handle as number) },
   visibleDelayMs = 1000,
   hiddenDelayMs = 5000,
@@ -44,14 +60,14 @@ export function startSessionPolling({
     timer = undefined;
   };
   const scheduleNext = (delay: number) => {
-    if (stopped || timer !== undefined) return;
+    if (stopped || timer !== undefined || !isOnline()) return;
     timer = schedule.setTimeout(() => {
       timer = undefined;
       void poll();
     }, delay);
   };
   const poll = async () => {
-    if (stopped || inFlight) return;
+    if (stopped || inFlight || !isOnline()) return;
     inFlight = true;
     try {
       await refresh();
@@ -65,12 +81,13 @@ export function startSessionPolling({
         scheduleNext(0);
       } else {
         refreshWhenFinished = false;
-        scheduleNext(isVisible() ? visibleDelayMs : hiddenDelayMs);
+        scheduleNext(isVisible() ? visibleDelayMs : Math.max(hiddenDelayMs, visibleDelayMs));
       }
     }
   };
   const onVisibility = () => {
     if (stopped) return;
+    if (!isOnline()) { clearTimer(); refreshWhenFinished = false; return; }
     if (isVisible()) {
       if (inFlight) refreshWhenFinished = true;
       else {
@@ -79,12 +96,12 @@ export function startSessionPolling({
       }
     } else if (!inFlight) {
       clearTimer();
-      scheduleNext(hiddenDelayMs);
+      scheduleNext(Math.max(hiddenDelayMs, visibleDelayMs));
     }
   };
 
   const unsubscribe = subscribeVisibility(onVisibility);
-  scheduleNext(isVisible() ? visibleDelayMs : hiddenDelayMs);
+  scheduleNext(isVisible() ? visibleDelayMs : Math.max(hiddenDelayMs, visibleDelayMs));
   return () => {
     stopped = true;
     clearTimer();
@@ -104,10 +121,14 @@ export function createSingleFlightRefresh<Args extends unknown[]>(refresh: (...a
       return inFlight;
     }
     const operation = (async () => {
+      let failure: unknown;
+      let failed = false;
       do {
         refreshAgain = false;
-        await refresh(...latestArgs);
+        try { await refresh(...latestArgs); failed = false; }
+        catch (error) { failure = error; failed = true; }
       } while (refreshAgain);
+      if (failed) throw failure;
     })();
     inFlight = operation.finally(() => { inFlight = null; });
     return inFlight;

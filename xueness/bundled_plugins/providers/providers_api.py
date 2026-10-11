@@ -146,7 +146,11 @@ def profile_record(state_dir, provider_id):
     try:
         with PROVIDER_STORE_LOCK:
             path = _path_for(_providers_dir({"state_dir": state_dir}), provider_id)
-            return _read_record(path) if path else None
+            record = _read_record(path) if path else None
+        if record:
+            return record
+        from ..subscriptions.state import provider_record
+        return provider_record(state_dir, provider_id)
     except (OSError, ValueError):
         return None
 
@@ -550,12 +554,39 @@ def _atomic_write(path: Path, payload: dict) -> None:
             os.unlink(tmp)
 
 
+def model_supplier_metadata(record: dict) -> dict:
+    """Descriptive grouping only: no URL credentials, paths or routing changes."""
+    if record.get('source') == 'subscription':
+        from ..subscriptions.state import definition
+        account = definition(record.get('subscriptionId'))
+        if account:
+            return {'supplierId': 'subscription:' + account['id'], 'supplierName': account['name'],
+                    'supplierNameEn': account.get('nameEn', account['name'])}
+    try:
+        url = urlsplit(record.get('baseUrl') or '')
+        host = url.hostname or ''
+        authority = host.lower() + (':' + str(url.port) if url.port else '')
+    except (ValueError, TypeError):
+        authority, host = '', ''
+    if not authority:
+        return {'supplierId': 'environment', 'supplierName': '环境模型', 'supplierNameEn': 'Environment models'}
+    if host.lower() in ('localhost', '127.0.0.1', '::1'):
+        name, name_en = '本机模型 · ' + authority, 'Local models · ' + authority
+    else:
+        name = name_en = authority
+        from ..subscriptions.state import definitions
+        for account in definitions():
+            if urlsplit(account.get('baseUrl') or '').hostname == host:
+                name, name_en = account['name'], account.get('nameEn', account['name'])
+                break
+    return {'supplierId': 'endpoint:' + hashlib.sha256(authority.encode()).hexdigest()[:16],
+            'supplierName': name[:160], 'supplierNameEn': name_en[:160]}
+
+
 def _list(ctx: dict) -> list:
     directory = _providers_dir(ctx)
     out: list = []
-    if not directory.is_dir():
-        return out
-    for entry in sorted(directory.glob("*.json")):
+    for entry in sorted(directory.glob("*.json")) if directory.is_dir() else ():
         if _is_link(entry):
             continue
         record = _read_record(entry)
@@ -565,7 +596,10 @@ def _list(ctx: dict) -> list:
         if not _valid_id(pid):
             continue
         out.append(_public(record))
-    out.sort(key=lambda item: item["id"])
+    from ..subscriptions.state import provider_records
+    existing = {item['id'] for item in out}
+    out.extend(record for record in provider_records(ctx['state_dir']) if record['id'] not in existing)
+    out.sort(key=lambda item: (item.get('source') == 'subscription', item["id"]))
     return out
 
 

@@ -26,8 +26,6 @@ import {
   deleteSession,
   renameSession,
   pinSession,
-  listArchivedSessions,
-  restoreSession,
   deriveFileChanges,
   listSessions,
   loadFilePreview,
@@ -44,10 +42,12 @@ import {
   withInitialUserMessage,
   loadCompleteTimeline,
   withAssistantStream,
+  loadConversationSnapshot,
+  loadOlderConversationPage,
+  mergeTimelineRowsByIdentity,
   stabilizeSession,
   stabilizeSessionList,
   stabilizeTimelineRows,
-  type ArchivedSummary,
   type ForkSessionResponse,
   type FileChangeSet,
   type FilePreview,
@@ -56,7 +56,9 @@ import {
   type SessionSummary,
   type TimelineRow,
   type WorkbenchSession,
+  type ConversationSnapshot,
 } from "./xuenessWorkbench";
+import { ArchivedSessions } from './plugins/sessions/ArchivedSessions';
 import {
   capabilityPatch,
   loadWorkbenchSettings,
@@ -99,14 +101,18 @@ import {
 } from "./plugins/providers/LightweightWorkbench";
 import { ForkSessionDialog } from "./plugins/sessions";
 import { SessionQueue } from "./plugins/sessions/SessionQueue";
-import { editQueuedMessage } from "./plugins/sessions/queueApi";
-import { Approvals, Composer, WorkbenchHeader, heroGreeting, type ComposerDraftState } from "./plugins/sessions/XuenessWorkbenchView";
+import { editQueuedMessage, reorderQueuedMessages } from "./plugins/sessions/queueApi";
+import { DeliveryUnconfirmedError } from './plugins/sessions/submissionTransport';
+import { guideCurrentTurn, reserveQueuedMessageNow, withdrawGuidance } from './plugins/sessions/steeringApi';
+import { PendingGuidancePanel, type InputDelivery } from './plugins/sessions/CurrentTurnInput';
+import { composerDraftContent, hasComposerDraftContent, notifyComposerDrafts } from './plugins/sessions/composerRecovery';
+import { Approvals, Composer, WorkbenchHeader, heroGreeting, persistDraft, type ComposerDraftState } from "./plugins/sessions/XuenessWorkbenchView";
 import { XuenessStartPage, type StartPageAction } from "./plugins/sessions/XuenessStartPage";
 import { XuenessCloneDialog } from "./plugins/git/XuenessCloneDialog";
 import { loadWorkspaceCatalog, type RecentWorkspaceDirectory } from "./xuenessWorkspaces";
 import { XuenessUsageQuickCard } from "./plugins/usage/XuenessUsageQuickCard";
 import { IconBack, IconGear, IconNewTask, IconSearch, IconWorkflow, IconModel, IconXuenessMark } from "./ui/icons";
-import { CalendarClock, Archive, ArrowDownWideNarrow, ChevronsDownUp, Folder, FolderOpen, Hash, MessageCirclePlus, UserRound, CircleHelp, ChevronDown, Blocks, GitBranch, Bot, Server, House, MessagesSquare, Library, Brain, Monitor, SquarePen, PanelRight } from "lucide-react";
+import { CalendarClock, Archive, ArrowDownWideNarrow, ChevronsDownUp, Folder, FolderOpen, Hash, MessageCirclePlus, UserRound, CircleHelp, ChevronDown, Blocks, GitBranch, Bot, Server, House, MessagesSquare, Library, Brain, Monitor, SquarePen, PanelRight, Share2 } from "lucide-react";
 import { Select } from "./ui/Select";
 import { RegionBoundary } from "./ui/primitives";
 import { XuenessWorkspaceSettings } from "./plugins/settings/XuenessWorkspaceSettings";
@@ -114,6 +120,7 @@ import { XuenessTaskList, type SidebarPreferences } from "./plugins/sessions/Xue
 import { CommandPalette } from "./plugins/sessions/CommandPalette";
 import { ConversationTimelineViewport, isAwayFromTimelineTail } from "./plugins/sessions/ConversationTimelineViewport";
 import { buildSessionScrollMemoryKey, saveSessionScrollMemoryState } from "./plugins/sessions/sessionScrollMemory";
+import { useConversationUpdates } from './plugins/sessions/LiveConversation';
 import { createSingleFlightRefresh, useSessionPolling } from "./plugins/sessions/SessionPolling";
 import { XuenessWorkspacePickerDialog } from "./plugins/settings/XuenessWorkspacePickerDialog";
 import { CodeDisplayProvider } from "./ui/CodeContent";
@@ -124,7 +131,10 @@ import { SidebarResizeHandle, useSessionSidebarWidth } from './plugins/sessions/
 import { SessionContextPane } from './plugins/sessions/SessionContextPane';
 import { TaskTodos } from "./plugins/sessions/XuenessTimeline";
 import { ZCodeConversation } from "./plugins/sessions/ZCodeConversation";
-import { updateConversationMessage, loadConversationSnapshot } from './xuenessWorkbench';
+import { ConversationSelectionActions, type ConversationTextSelection } from './plugins/sessions/ConversationSelectionActions';
+import { buildConversationFindMatches } from './plugins/sessions/ConversationFind';
+import { ConversationShareDialog } from './plugins/sessions/ConversationSharing';
+import { updateConversationMessage, parseConversationSnapshot } from './xuenessWorkbench';
 import { McpElicitation } from "./plugins/mcp/ElicitationForm";
 import { PendingQuestion, QuestionResume } from "./plugins/sessions/PendingQuestion";
 import { SessionExperimentSettings } from "./plugins/sessions/SessionExperimentSettings";
@@ -145,7 +155,7 @@ import { CapabilitiesPanel, type CapabilitySectionProps } from "./XuenessCapabil
 import { XuenessCapabilityDialog } from "./XuenessCapabilityDialog";
 import { shouldDismissModalOnEscape, useModalFocusScope } from "./plugins/shared";
 import { applyDocumentTheme, applyDocumentColorPalette, normalizeColorPalette } from "./plugins/settings/themeBoot";
-import { FeatureUnavailable, XuenessPluginManager, XuenessPluginSettingsPanel } from "./XuenessPluginManager";
+import { FeatureUnavailable, PluginHomeEntry, XuenessPluginManager, XuenessPluginSettingsPanel } from "./XuenessPluginManager";
 import {
   CAPABILITY_PLUGIN_BY_KIND,
   PLUGIN_PANEL_LABELS,
@@ -184,6 +194,9 @@ const NetworkSettings = lazy(() => import("./plugins/network/NetworkSettings").t
 const DesktopUpdates = lazy(() => import("./plugins/updates/DesktopUpdates").then(module => ({ default: module.DesktopUpdates })));
 const WorkflowPanel = lazy(() => import("./plugins/workflows").then(module => ({ default: module.WorkflowPanel })));
 const ModelManager = lazy(() => import("./plugins/providers").then(module => ({ default: module.ModelManager })));
+const SubscriptionsPanel = lazy(() => import('./plugins/subscriptions').then(module => ({ default: module.SubscriptionsPanel })));
+const ModelMonitorPanel = lazy(() => import('./plugins/model_monitor').then(module => ({ default: module.ModelMonitorPanel })));
+const ModelMonitorHome = lazy(() => import('./plugins/model_monitor/ModelMonitorHome').then(module => ({ default: module.ModelMonitorHome })));
 const PluginProfilePicker = lazy(() => import("./plugins/extensions/PluginProfilePicker")
   .then(module => ({ default: module.PluginProfilePicker })));
 const TerminalPanel = lazy(() => import("./plugins/terminal").then(module => ({ default: module.TerminalPanel })));
@@ -259,6 +272,8 @@ export function evaluateWorkbenchGlobalKey(
 }
 
 type Panel =
+  | 'subscriptions'
+  | 'model-monitor'
   | "chat"
   | "files"
   | "changes"
@@ -327,6 +342,31 @@ export function createCleanSessionTransientState() {
     gitCheckpointError: "",
     runError: "",
   };
+}
+
+function selectedTextPrompt(sourceTitle: string, turnId: string, text: string, sideChat = false): string {
+  const turnNumber = /^turn-([1-9][0-9]*)$/u.exec(turnId)?.[1] ?? turnId;
+  const quote = text.split(/\r?\n/u).map(line => `> ${line}`).join('\n');
+  const heading = sideChat
+    ? tf('请围绕“{0}”第 {1} 轮中的选段提问：', [sourceTitle, turnNumber])
+    : tf('引用自“{0}”第 {1} 轮：', [sourceTitle, turnNumber]);
+  return `${heading}\n\n${quote}`;
+}
+
+function rowsFromConversationSnapshot(snapshot: ConversationSnapshot): TimelineRow[] {
+  const journal = snapshot.journal;
+  const history = Array.isArray(journal.reasoning_history)
+    ? journal.reasoning_history as {message_index: number; text: string}[]
+    : snapshot.session.reasoning_history ?? [];
+  return withInitialUserMessage(
+    hydrateTimelineJournalRows(
+      hydrateTimelineTools(toTimelineRows(snapshot.timeline.events), journal),
+      journal,
+      history,
+    ),
+    journal,
+    snapshot.session.task,
+  );
 }
 
 export function XuenessWorkbenchContainer() {
@@ -398,7 +438,10 @@ export function XuenessWorkbenchContainer() {
     }
   }, [refreshPluginCatalog]);
   const [sessions, setSessions] = useState<SessionSummary[]>([]);
-  const [activeId, setActiveId] = useState<string | null>(null);
+  const [activeId, setActiveId] = useState<string | null>(() => {
+    if (typeof window === 'undefined') return null;
+    return new URLSearchParams(window.location.search).get('session')?.trim() || null;
+  });
   const activeIdRef = useRef<string | null>(activeId);
   activeIdRef.current = activeId;
   const composerDraftStore = useRef(new Map<string, ComposerDraftState>());
@@ -406,7 +449,14 @@ export function XuenessWorkbenchContainer() {
   const sessionSnapshotRef = useRef(session);
   sessionSnapshotRef.current = session;
   const [rows, setRows] = useState<TimelineRow[]>([]);
-  const [forkSource, setForkSource] = useState<{ id: string; title: string; turn?: number } | null>(null);
+  const [conversationFindRequest, setConversationFindRequest] = useState<{sessionId: string; id: string; query: string} | null>(null);
+  const [olderTranscript, setOlderTranscript] = useState<{sessionId: string; hasOlder: boolean; loading: boolean; error: string}>({
+    sessionId: '', hasOlder: false, loading: false, error: '',
+  });
+  const olderRowsRef = useRef<{sessionId: string; rows: TimelineRow[]; before: number} | null>(null);
+  const transcriptWindowRef = useRef<{sessionId: string; start: number; total: number; revision: string} | null>(null);
+  const olderAbortRef = useRef<AbortController | null>(null);
+  const [forkSource, setForkSource] = useState<{ id: string; title: string; turn?: number; root?: string; selectedText?: string; selectedTurnId?: string } | null>(null);
   const [error, setError] = useState("");
   const [dataErrors, setDataErrors] = useState({ list: "", active: "" });
   const [runError, setRunError] = useState("");
@@ -480,6 +530,8 @@ export function XuenessWorkbenchContainer() {
   // 斜杠命令候选：与能力面板同源的 commands 资源。
   const [commandItems, setCommandItems] = useState<{ id: string; description?: string }[]>([]);
   const [contextSidepaneOpen, setContextSidepaneOpen] = useState(false);
+  const [shareDialogOpen, setShareDialogOpen] = useState(false);
+  useEffect(() => { setShareDialogOpen(false); }, [activeId]);
 
   const pluginAvailability = derivePluginAvailability(pluginCatalog, pluginCatalogReady);
   const allowedPanels: Panel[] = ["plugins", ...pluginAvailability.panels];
@@ -611,6 +663,56 @@ export function XuenessWorkbenchContainer() {
   listLoaderRef.current = refreshListSnapshot;
   const refreshList = useMemo(() => createSingleFlightRefresh(() => listLoaderRef.current()), []);
 
+  const appendTextToComposer = useCallback((targetSessionId: string, text: string, workspaceRoot?: string) => {
+    const root = workspaceRoot ?? (sessionSnapshotRef.current?.id === targetSessionId
+      ? sessionSnapshotRef.current.root ?? draftRoot ?? composerCatalog.root
+      : draftRoot ?? composerCatalog.root);
+    const workspaceKey = root || 'default';
+    const draftKey = `session:${targetSessionId}`;
+    const scopedKey = `${workspaceKey}:${draftKey}`;
+    const current = composerDraftStore.current.get(scopedKey) ?? {
+      text: '', attachments: [], goal: false,
+      selectedContext: { files: [], sessions: [], skills: [], plugins: [] },
+      selectedCapabilities: [], submissionError: '', attachmentError: '', revision: 0,
+    };
+    const previousText = current.text.trimEnd();
+    const next: ComposerDraftState = {
+      ...current,
+      text: previousText ? `${previousText}\n\n${text}` : text,
+      submissionError: '',
+      revision: current.revision + 1,
+    };
+    composerDraftStore.current.set(scopedKey, next);
+    persistDraft(workspaceKey, draftKey, next);
+    notifyComposerDrafts(composerDraftStore);
+    if (activeIdRef.current === targetSessionId) {
+      window.requestAnimationFrame(() => {
+        const input = heroInputRef.current;
+        if (!input) return;
+        input.focus();
+        input.setSelectionRange(input.value.length, input.value.length);
+      });
+    }
+  }, [draftRoot, composerCatalog.root]);
+
+  const handleAddSelectionToCurrentTask = useCallback((selection: ConversationTextSelection) => {
+    const targetSessionId = activeId;
+    const current = sessionSnapshotRef.current;
+    if (!targetSessionId || !current || current.id !== targetSessionId || !isPluginEffective('sessions')) return;
+    appendTextToComposer(targetSessionId, selectedTextPrompt(current.title || current.task, selection.turnId, selection.text));
+  }, [activeId, appendTextToComposer, isPluginEffective]);
+
+  const handleAskSelectionInSideChat = useCallback((selection: ConversationTextSelection) => {
+    const targetSessionId = activeId;
+    const current = sessionSnapshotRef.current;
+    if (!targetSessionId || !current || current.id !== targetSessionId || !isPluginEffective('sessions')
+      || current.status === 'running' || current.streaming?.status === 'streaming' || busy) return;
+    const turn = /^turn-([1-9][0-9]*)$/u.exec(selection.turnId);
+    setForkSource({ id: targetSessionId, title: current.title || current.task || tr('未命名任务'),
+      ...(current.root ? { root: current.root } : {}), ...(turn ? { turn: Number(turn[1]) } : {}),
+      selectedText: selection.text, selectedTurnId: selection.turnId });
+  }, [activeId, busy, isPluginEffective]);
+
   const beginFork = useCallback((turn?: number) => {
     const isRunning = session?.status === "running" || session?.streaming?.status === "streaming";
     if (!activeId || session?.id !== activeId || busy || isRunning || !isPluginEffective("sessions")) return;
@@ -648,6 +750,9 @@ export function XuenessWorkbenchContainer() {
     if (!source || result.sourceId !== source.id) return;
     const child = result.session;
     const title = child.title || tr("未命名任务");
+    if (source.selectedText) {
+      appendTextToComposer(child.id, selectedTextPrompt(source.title, source.selectedTurnId ?? `turn-${source.turn ?? 1}`, source.selectedText, true), child.root ?? source.root);
+    }
     setSessions(previous => [{ id: child.id, task: title, title, status: child.status, root: child.root }, ...previous.filter(item => item.id !== child.id)]);
     void refreshList();
     // The modal is bound to its opening session. A slow fork must not steal focus
@@ -657,38 +762,57 @@ export function XuenessWorkbenchContainer() {
     setRunError("");
     setPanel("chat");
     setActiveId(child.id);
-  }, [forkSource, refreshList]);
+  }, [forkSource, refreshList, appendTextToComposer]);
 
-  const loadActiveSnapshot = useCallback(async (id: string, includeFiles = true) => {
-    if (!pluginEffectiveRef.current("sessions")) return;
+  const acceptedSnapshotRevision = useRef<{id: string; revision: number} | null>(null);
+  const loadActiveSnapshot = useCallback(async (id: string, includeFiles = true, pushedSnapshot?: unknown) => {
+    if (!pluginEffectiveRef.current("sessions") || id !== activeIdRef.current) return;
     activeAbortRef.current?.abort();
     const controller = new AbortController();
     activeAbortRef.current = controller;
     // Detail carries pending/approved/changed_files; the timeline carries the
     // real tool_call/tool_result sequence. Both come from the server; neither is
     // reconstructed client-side.
-    const snapshot = await loadConversationSnapshot(id, controller.signal);
+    const snapshot = pushedSnapshot === undefined ? await loadConversationSnapshot(id, controller.signal, {tail: 80})
+      : {ok: true as const, value: parseConversationSnapshot(id, pushedSnapshot)};
     const detail = snapshot.ok ? {ok: true as const, value: snapshot.value.session} : snapshot;
     const timeline = snapshot.ok ? {ok: true as const, value: snapshot.value.timeline} : snapshot;
     const journal = snapshot.ok ? {ok: true as const, value: snapshot.value.journal} : snapshot;
     if (shouldIgnoreSessionResponse(id, activeIdRef.current, mountedRef.current, controller.signal) || !pluginEffectiveRef.current("sessions")) return;
+    if (snapshot.ok) {
+      const revision = snapshot.value.window?.historyRevision ?? snapshot.value.journal.history_revision;
+      if (typeof revision === 'number' && Number.isSafeInteger(revision)) {
+        const accepted = acceptedSnapshotRevision.current;
+        if (accepted?.id === id && accepted.revision > revision) return;
+        acceptedSnapshotRevision.current = {id, revision};
+      }
+      const window = snapshot.value.window;
+      if (window) {
+        if (olderRowsRef.current?.sessionId !== id) {
+          olderAbortRef.current?.abort();
+          olderRowsRef.current = {sessionId: id, rows: [], before: window.start};
+        }
+        transcriptWindowRef.current = {sessionId: id, start: window.start, total: window.total,
+          revision: window.messageRevision};
+      } else {
+        olderRowsRef.current = {sessionId: id, rows: [], before: 0};
+        transcriptWindowRef.current = null;
+      }
+    }
     if (detail.ok) {
       setSession(prev => stabilizeSession(prev, detail.value));
       if (detail.value.status !== "running" && detail.value.streaming?.status !== "streaming") {
         trackSessionId(stoppingSessionsRef, setStoppingSessions, id, false);
       }
     }
-    if (timeline.ok) {
-      const nextRows = withInitialUserMessage(
-        hydrateTimelineJournalRows(
-          hydrateTimelineTools(toTimelineRows(timeline.value.events), journal.ok ? journal.value : null),
-          journal.ok ? journal.value : null,
-          detail.ok ? detail.value.reasoning_history : []
-        ),
-        journal.ok ? journal.value : null,
-        detail.ok ? detail.value.task : undefined
-      );
-      setRows(prevRows => stabilizeTimelineRows(prevRows, nextRows));
+    if (snapshot.ok && timeline.ok) {
+      const nextRows = rowsFromConversationSnapshot(snapshot.value);
+      const prefix = olderRowsRef.current?.sessionId === id ? olderRowsRef.current : null;
+      const mergedRows = mergeTimelineRowsByIdentity(prefix?.rows ?? [], nextRows);
+      setRows(prevRows => stabilizeTimelineRows(prevRows, mergedRows));
+      const hasOlder = prefix ? prefix.before > 0 : Boolean(snapshot.value.window?.hasOlder);
+      setOlderTranscript(previous => ({sessionId: id, hasOlder,
+        loading: previous.sessionId === id && previous.loading, error: previous.sessionId === id ? previous.error : ''}));
     }
     setDataErrors(previous => {
       const nextActive = !detail.ok ? detail.error : !timeline.ok ? timeline.error : "";
@@ -704,16 +828,69 @@ export function XuenessWorkbenchContainer() {
       }
     }
   }, [isPluginEffective]);
+  const loadOlderTranscript = useCallback(async () => {
+    const id = activeIdRef.current;
+    const latest = transcriptWindowRef.current;
+    if (!id || !latest || latest.sessionId !== id || !isPluginEffective('sessions')) return;
+    const prefix = olderRowsRef.current?.sessionId === id ? olderRowsRef.current : null;
+    const before = prefix ? prefix.before : latest.start;
+    if (before <= 0 || olderTranscript.loading) return;
+    olderAbortRef.current?.abort();
+    const controller = new AbortController();
+    olderAbortRef.current = controller;
+    setOlderTranscript(previous => ({sessionId: id, hasOlder: true, loading: true, error: ''}));
+    const result = await loadOlderConversationPage(id, before, latest.revision, controller.signal);
+    if (controller.signal.aborted || activeIdRef.current !== id || !mountedRef.current) return;
+    if (!result.ok || !result.value.window) {
+      setOlderTranscript(previous => ({sessionId: id, hasOlder: true, loading: false,
+        error: result.ok ? tr('无法读取更早的会话记录，请刷新后重试。') : result.error}));
+      return;
+    }
+    const current = transcriptWindowRef.current;
+    if (current?.sessionId !== id || current.revision !== result.value.window.messageRevision) {
+      setOlderTranscript(previous => ({sessionId: id, hasOlder: true, loading: false,
+        error: tr('会话内容已变化，请重试加载。')}));
+      return;
+    }
+    const pageRows = rowsFromConversationSnapshot(result.value);
+    const nextPrefix = mergeTimelineRowsByIdentity(pageRows, prefix?.rows ?? []);
+    olderRowsRef.current = {sessionId: id, rows: nextPrefix, before: result.value.window.start};
+    setRows(previous => stabilizeTimelineRows(previous,
+      mergeTimelineRowsByIdentity(nextPrefix, previous)));
+    setOlderTranscript({sessionId: id, hasOlder: result.value.window.hasOlder,
+      loading: false, error: ''});
+  }, [isPluginEffective, olderTranscript.loading]);
   const activeLoaderRef = useRef(loadActiveSnapshot);
   activeLoaderRef.current = loadActiveSnapshot;
-  const loadActive = useMemo(() => createSingleFlightRefresh((id: string, includeFiles?: boolean) => activeLoaderRef.current(id, includeFiles)), []);
+  const loadActive = useMemo(() => {
+    const refresh = createSingleFlightRefresh((id: string, includeFiles?: boolean) => activeLoaderRef.current(id, includeFiles));
+    return (id: string, includeFiles?: boolean) => id === activeIdRef.current ? refresh(id, includeFiles) : Promise.resolve();
+  }, []);
 
   const pollActiveSession = useCallback(() => activeId ? loadActive(activeId, false) : Promise.resolve(), [activeId, loadActive]);
+  useEffect(() => {
+    if (conversationFindRequest?.sessionId !== activeId || session?.id !== activeId
+        || !conversationFindRequest.query || olderTranscript.sessionId !== activeId
+        || !olderTranscript.hasOlder || olderTranscript.loading || olderTranscript.error
+        || buildConversationFindMatches(rows, conversationFindRequest.query).length) return;
+    void loadOlderTranscript();
+  }, [conversationFindRequest, activeId, session?.id, olderTranscript, rows, loadOlderTranscript]);
   const activeSessionNeedsPolling = Boolean(activeId && (
     busy || stoppingSessions.has(activeId) || runRequestSessions.has(activeId)
     || session?.status === "running" || session?.streaming?.status === "streaming"
   ));
-  useSessionPolling(isPluginEffective("sessions") && activeSessionNeedsPolling, pollActiveSession);
+  const acceptPushedSnapshot = useCallback((value: unknown) => {
+    const id = activeIdRef.current;
+    if (id) {
+      parseConversationSnapshot(id, value);
+      void activeLoaderRef.current(id, false, value).catch(() => {
+        if (activeIdRef.current === id) setDataErrors(previous => ({...previous, active: tr('会话更新失败，请刷新后重试。')}));
+      });
+    }
+  }, []);
+  const liveConversationConnected = useConversationUpdates(activeId, isPluginEffective("sessions"), acceptPushedSnapshot);
+  useSessionPolling(isPluginEffective("sessions") && Boolean(activeId) && !liveConversationConnected, pollActiveSession,
+    activeSessionNeedsPolling || !session || Boolean(dataErrors.active) ? 1000 : 15000);
   useEffect(() => {
     if (session?.id === activeId && session?.status !== "running" && session?.streaming?.status !== "streaming") {
       trackSessionId(stoppingSessionsRef, setStoppingSessions, activeId, false);
@@ -721,7 +898,8 @@ export function XuenessWorkbenchContainer() {
   }, [activeId, session?.id, session?.status, session?.streaming?.status]);
 
   const anySessionRunning = sessions.some(s => s.status === "running");
-  useSessionPolling(isPluginEffective("sessions") && (executingSessions.size > 0 || runRequestSessions.size > 0 || stoppingSessions.size > 0 || anySessionRunning), refreshList, 2000);
+  useSessionPolling(isPluginEffective("sessions"), refreshList,
+    executingSessions.size > 0 || runRequestSessions.size > 0 || stoppingSessions.size > 0 || anySessionRunning || dataErrors.list ? 2000 : 15000);
 
   useEffect(() => {
     void refreshPluginCatalog();
@@ -794,7 +972,7 @@ export function XuenessWorkbenchContainer() {
       if (!result.ok) {
         if (activeIdRef.current === id) setRunError(result.error);
         const accepted = Boolean((result as Result<unknown> & { accepted?: boolean }).accepted);
-        return { ok: accepted, accepted, error: result.error };
+        return { ok: accepted, accepted, error: result.error, outcomeUnknown: Boolean((result as { outcomeUnknown?: boolean }).outcomeUnknown) };
       }
       return { ok: true };
     } catch (reason) {
@@ -1061,7 +1239,7 @@ export function XuenessWorkbenchContainer() {
   );
 
   const handleSend = useCallback(
-    async (text: string, input?: ComposerInput, onAccepted?: () => void) => {
+    async (text: string, input?: ComposerInput, onAccepted?: () => void, delivery?: InputDelivery) => {
       const targetSessionId = activeId;
       const running = Boolean(targetSessionId && session?.id === targetSessionId && (
         session.status === "running" || session.streaming?.status === "streaming" || runRequestSessions.has(targetSessionId)
@@ -1069,6 +1247,7 @@ export function XuenessWorkbenchContainer() {
       if (!targetSessionId || session?.id !== targetSessionId || (busy && !running) || !isPluginEffective("sessions")) return false;
       const value = text.trim() || tr("附件与上下文");
       if (running) {
+        const selectedDelivery = delivery ?? 'guide';
         if (queueSubmittingSessionsRef.current.has(targetSessionId)) return false;
         queueSubmittingSessionsRef.current.add(targetSessionId);
         setQueueSubmittingSessions(new Set(queueSubmittingSessionsRef.current));
@@ -1082,12 +1261,36 @@ export function XuenessWorkbenchContainer() {
             model: selected.model,
             reasoning_effort: selected.reasoning_effort,
           });
+          if (selectedDelivery === 'guide' && session?.active_turn_id) {
+            const guided = await guideCurrentTurn(targetSessionId, session.active_turn_id, value, prepared.token);
+            if (!guided.ok) {
+              await loadActive(targetSessionId, false);
+              throw guided.outcomeUnknown ? new DeliveryUnconfirmedError() : new Error(guided.error);
+            }
+            onAccepted?.();
+            await loadActive(targetSessionId, false);
+            await refreshList();
+            return true;
+          }
           const queued = await queueTurn(targetSessionId, value, prepared.token);
           if (!queued.ok) {
             await loadActive(targetSessionId, false);
-            throw new Error(queued.error);
+            throw queued.outcomeUnknown ? new DeliveryUnconfirmedError() : new Error(queued.error);
           }
           onAccepted?.();
+          if (selectedDelivery === 'startNow') {
+            const turnId = session?.active_turn_id;
+            if (!turnId) {
+              setQueueError({ sessionId: targetSessionId, message: tr('无法立即发送：当前轮次已结束。消息已保留在队列中。') });
+            } else {
+              const reserved = await reserveQueuedMessageNow(targetSessionId, queued.value.id, turnId);
+              if (!reserved.ok) {
+                setQueueError({ sessionId: targetSessionId, message: reserved.error });
+              } else {
+                setQueueError({ sessionId: targetSessionId, message: tr('消息已排到最前，并将在当前轮停止后启动。') });
+              }
+            }
+          }
           await loadActive(targetSessionId, false);
           await refreshList();
           return true;
@@ -1108,10 +1311,38 @@ export function XuenessWorkbenchContainer() {
         await loadActive(targetSessionId);
         await refreshList();
       }
+      if (!requestResult.ok && !accepted && requestResult.error) {
+        await loadActive(targetSessionId, false);
+        throw requestResult.outcomeUnknown ? new DeliveryUnconfirmedError() : new Error(requestResult.error);
+      }
       return requestResult.ok || accepted;
     },
     [activeId, session, busy, runRequestSessions, isPluginEffective, run, runSessionRequest, loadActive, refreshList],
   );
+
+  const moveTextIntoComposer = useCallback((targetSessionId: string, text: string, hasContext = false) => {
+    const workspaceKey = commandRoot || 'default';
+    const draftKey = `session:${targetSessionId}`;
+    const scopedKey = `${workspaceKey}:${draftKey}`;
+    const current = composerDraftStore.current.get(scopedKey) ?? {
+      text: '', attachments: [], goal: false,
+      selectedContext: { files: [], sessions: [], skills: [], plugins: [] },
+      selectedCapabilities: [], submissionError: '', attachmentError: '', revision: 0,
+    };
+    const recoverableDrafts = [...(current.recoverableDrafts ?? [])];
+    const currentContent = composerDraftContent(current);
+    if (hasComposerDraftContent(currentContent)) recoverableDrafts.push(currentContent);
+    const next: ComposerDraftState = {
+      ...current, text, attachments: [], goal: false, selectedCapabilities: [],
+      selectedContext: { files: [], sessions: [], skills: [], plugins: [] },
+      submissionError: '', attachmentError: hasContext ? tr('原附件或上下文不会恢复，请重新添加。') : '',
+      hadAttachments: Boolean(current.hadAttachments || hasContext), recoverableDrafts,
+      revision: current.revision + 1,
+    };
+    composerDraftStore.current.set(scopedKey, next);
+    persistDraft(workspaceKey, draftKey, next);
+    notifyComposerDrafts(composerDraftStore);
+  }, [commandRoot]);
 
   const handleCancelQueuedTurn = useCallback(async (queueId: string) => {
     const targetSessionId = activeId;
@@ -1126,6 +1357,110 @@ export function XuenessWorkbenchContainer() {
     await refreshList();
     setQueueCancelling(current => current?.sessionId === targetSessionId && current.queueId === queueId ? null : current);
   }, [activeId, queueCancelling, loadActive, refreshList]);
+
+  const handleWithdrawQueuedTurn = useCallback(async (queueId: string) => {
+    const targetSessionId = activeId;
+    const item = sessionSnapshotRef.current?.queued_messages?.find(row => row.id === queueId);
+    if (!targetSessionId || !item || queueCancelling?.sessionId === targetSessionId) return;
+    moveTextIntoComposer(targetSessionId, item.text, item.has_context === true || item.has_attachments === true);
+    setQueueCancelling({ sessionId: targetSessionId, queueId });
+    setQueueError(previous => previous?.sessionId === targetSessionId ? null : previous);
+    try {
+      const result = await cancelQueuedTurn(targetSessionId, queueId);
+      await loadActive(targetSessionId, false);
+      if (!result.ok && activeIdRef.current === targetSessionId) setQueueError({ sessionId: targetSessionId, message: result.error });
+      await refreshList();
+    } finally {
+      setQueueCancelling(current => current?.sessionId === targetSessionId && current.queueId === queueId ? null : current);
+    }
+  }, [activeId, queueCancelling, moveTextIntoComposer, loadActive, refreshList]);
+
+  const handleWithdrawGuidance = useCallback(async (inputId: string) => {
+    const targetSessionId = activeId;
+    const item = sessionSnapshotRef.current?.pending_guidance?.find(row => row.id === inputId);
+    if (!targetSessionId || !item || queueCancelling?.sessionId === targetSessionId) return;
+    moveTextIntoComposer(targetSessionId, item.text, item.has_context === true || item.has_attachments === true);
+    setQueueCancelling({ sessionId: targetSessionId, queueId: inputId });
+    setQueueError(previous => previous?.sessionId === targetSessionId ? null : previous);
+    try {
+      await withdrawGuidance(targetSessionId, inputId);
+      await loadActive(targetSessionId, false);
+      await refreshList();
+    } catch (reason) {
+      if (activeIdRef.current === targetSessionId) setQueueError({ sessionId: targetSessionId,
+        message: reason instanceof Error ? reason.message : String(reason) });
+      await loadActive(targetSessionId, false);
+    } finally {
+      setQueueCancelling(current => current?.sessionId === targetSessionId && current.queueId === inputId ? null : current);
+    }
+  }, [activeId, queueCancelling, moveTextIntoComposer, loadActive, refreshList]);
+
+  const handleSendNowQueuedTurn = useCallback(async (queueId: string) => {
+    const targetSessionId = activeId;
+    const snapshot = sessionSnapshotRef.current;
+    const turnId = snapshot?.id === targetSessionId ? snapshot.active_turn_id : undefined;
+    if (!targetSessionId || !turnId || !snapshot || snapshot.id !== targetSessionId
+      || !isPluginEffective('sessions') || queueContinuingSessionsRef.current.has(targetSessionId)) return;
+    queueContinuingSessionsRef.current.add(targetSessionId);
+    setQueueContinuingSessions(new Set(queueContinuingSessionsRef.current));
+    setQueueError(previous => previous?.sessionId === targetSessionId ? null : previous);
+    try {
+      // Confirm the settings for the new human turn before requesting a stop.
+      const selected = await runPermission.ensure(getRunChoices(), snapshot.permission_mode);
+      if (!selected || activeIdRef.current !== targetSessionId || !pluginEffectiveRef.current('sessions')) return;
+      setRunChoices(selected);
+      setChoices(selected);
+      const reservation = await reserveQueuedMessageNow(targetSessionId, queueId, turnId);
+      if (!reservation.ok) throw new Error(reservation.error);
+      await loadActive(targetSessionId, false);
+
+      const deadline = Date.now() + 180_000;
+      let idle = false;
+      while (Date.now() < deadline) {
+        const latest = await loadSession(targetSessionId);
+        if (!latest.ok) throw new Error(latest.error);
+        if (latest.value.status !== 'running' && !latest.value.active_turn_id
+          && latest.value.streaming?.status !== 'streaming') {
+          idle = true;
+          break;
+        }
+        await new Promise(resolve => window.setTimeout(resolve, 250));
+      }
+      if (!idle) throw new Error(tr('正在等待当前轮停止。保留的立即发送消息可在队列中查看。'));
+
+      // A completed core turn can be visible before the route releases its
+      // lease. Retry only that boundary conflict; the durable receipt makes
+      // each retry refer to the same reserved user message.
+      let started = false;
+      let lastError = '';
+      trackSessionId(runRequestSessionsRef, setRunRequestSessions, targetSessionId, true);
+      trackSessionId(executingSessionsRef, setExecutingSessions, targetSessionId, true);
+      for (let attempt = 0; attempt < 12 && !started; attempt++) {
+        const result = await runSession(targetSessionId, selected,
+          { continueQueue: true, promotionRequestId: reservation.value.request_id });
+        if (result.ok) { started = true; break; }
+        lastError = result.error;
+        const latest = await loadSession(targetSessionId);
+        if (latest.ok && (latest.value.current_queue_item_id === queueId
+          || latest.value.queued_messages?.some(item => item.id === queueId
+            && ['claimed', 'settled'].includes(item.promotion?.state ?? '')))) { started = true; break; }
+        if (!/already in progress|in use by another process/iu.test(result.error)) break;
+        await new Promise(resolve => window.setTimeout(resolve, 300));
+      }
+      if (!started) throw new Error(lastError || tr('立即发送未能启动，请刷新队列后重试。'));
+      await loadActive(targetSessionId, false);
+      await refreshList();
+    } catch (reason) {
+      const message = reason instanceof Error ? reason.message : String(reason);
+      if (activeIdRef.current === targetSessionId) setQueueError({ sessionId: targetSessionId, message });
+    } finally {
+      trackSessionId(runRequestSessionsRef, setRunRequestSessions, targetSessionId, false);
+      trackSessionId(executingSessionsRef, setExecutingSessions, targetSessionId, false);
+      queueContinuingSessionsRef.current.delete(targetSessionId);
+      setQueueContinuingSessions(new Set(queueContinuingSessionsRef.current));
+      await loadActive(targetSessionId, false);
+    }
+  }, [activeId, isPluginEffective, runPermission.ensure, loadActive, refreshList]);
 
   const handleContinueQueuedMessages = useCallback(async () => {
     const targetSessionId = activeId;
@@ -1153,6 +1488,13 @@ export function XuenessWorkbenchContainer() {
     const target = activeId;
     if (!target || !isPluginEffective("sessions")) throw new Error(tr("会话不可用"));
     try { await editQueuedMessage(target, queueId, text, expectedText); }
+    finally { await loadActive(target, false); }
+  }, [activeId, isPluginEffective, loadActive]);
+
+  const handleReorderQueuedMessages = useCallback(async (ids: string[], expectedIds: string[]) => {
+    const target = activeId;
+    if (!target || !isPluginEffective('sessions')) throw new Error(tr('会话不可用'));
+    try { await reorderQueuedMessages(target, ids, expectedIds); }
     finally { await loadActive(target, false); }
   }, [activeId, isPluginEffective, loadActive]);
 
@@ -1203,12 +1545,15 @@ export function XuenessWorkbenchContainer() {
           return true;
         }
         if (createError && activeIdRef.current === originSessionId) setRunError(createError);
+        if (!result.ok && result.outcomeUnknown) { await refreshList(); throw new DeliveryUnconfirmedError(); }
+        if (createError) throw new Error(createError);
         return false;
       } catch (reason) {
         const message = reason instanceof Error ? reason.message : String(reason);
         if (activeIdRef.current === createdId && createdId) setRunError(message);
         else if (activeIdRef.current === originSessionId) setRunError(message);
-        return Boolean(createdId);
+        if (!createdId) throw reason;
+        return true;
       } finally {
         releaseCreateLock();
         if (createdId) {
@@ -1331,37 +1676,13 @@ export function XuenessWorkbenchContainer() {
   );
 
   const [archivedOpen, setArchivedOpen] = useState(false);
-  const [archived, setArchived] = useState<ArchivedSummary[]>([]);
-  const [archivedError, setArchivedError] = useState("");
-
-  const loadArchived = useCallback(async () => {
-    const res = await listArchivedSessions();
-    if (res.ok) {
-      setArchived(res.value);
-      setArchivedError("");
-    } else {
-      setArchivedError(res.error);
-    }
-  }, []);
-
-  useEffect(() => {
-    if (archivedOpen) void loadArchived();
-  }, [archivedOpen, loadArchived]);
-
-  const restoreById = useCallback(
-    async (id: string) => {
-      if (await run(() => restoreSession(id))) {
-        await refreshList();
-        await loadArchived();
-      }
-    },
-    [run, refreshList, loadArchived],
-  );
+  const [archivedRevision, setArchivedRevision] = useState(0);
 
   const deleteById = useCallback(
     async (id: string) => {
       if (busy || !window.confirm(tr("从列表移除该任务？会话记录会归档，工作区文件不会删除。"))) return;
       if (await run(() => deleteSession(id))) {
+        setArchivedRevision(previous => previous + 1);
         if (id === activeId) {
           setActiveId(null);
           setSession(null);
@@ -2068,7 +2389,7 @@ export function XuenessWorkbenchContainer() {
         if (!activeIdRef.current) updateChoices({ browser: enabled });
         await handleUpdateSetting("browserControlEnabled", enabled);
       }} />;
-    const pluginId = ({providers:"providers",browser:"browser",memory:"memory",subagents:"subagents",mcp:"mcp",skills:"skills",commands:"commands",hooks:"hooks",usage:"usage"} as Record<string,string>)[settingsSection];
+    const pluginId = ({providers:"providers",subscriptions:'subscriptions','model-monitor':'model_monitor',browser:"browser",memory:"memory",subagents:"subagents",mcp:"mcp",skills:"skills",commands:"commands",hooks:"hooks",usage:"usage"} as Record<string,string>)[settingsSection];
     if (pluginId && !isPluginEffective(pluginId)) return <FeatureUnavailable feature={settingsSections.find(section => section.id === settingsSection)?.label ?? settingsSection} onManage={() => setSettingsSection("modules")} />;
     if (inlineSettings) return <SettingsSections embedded sections={[]} activeSection={settingsSection}
       values={{...settingsValues, language: settingsValues.language ?? locale}} capabilities={capabilities}
@@ -2099,7 +2420,9 @@ export function XuenessWorkbenchContainer() {
     />;
     if (pluginAvailability.capabilityKinds.includes(settingsSection as CapabilityKind)) return <CapabilitiesPanel sections={capSections.filter(section => section.kind === settingsSection)} />;
     if (settingsSection === "modules") return <XuenessPluginManager plugins={pluginCatalog} loading={pluginCatalogLoading} error={pluginCatalogError} onRefresh={refreshPluginCatalog} onToggle={togglePlugin} />;
-    if (settingsSection === "marketplace") return <XuenessMarketplace onInstalled={() => void refreshPluginCatalog()} />;
+    if (settingsSection === 'subscriptions') return <SubscriptionsPanel embedded onChanged={() => void refreshComposerCatalog()} onSelectModel={id => { updateChoices({ provider: 'real', provider_id: id, model: undefined, reasoning_effort: undefined }); void refreshComposerCatalog(); setPanel('chat'); }} />;
+    if (settingsSection === 'model-monitor') return <ModelMonitorPanel embedded />;
+    if (settingsSection === "marketplace") return <XuenessMarketplace onInstalled={() => void refreshPluginCatalog()} onOpenOptional={async id => { await togglePlugin(id, true); setSettingsSection(id === 'model_monitor' ? 'model-monitor' : 'subscriptions'); }} />;
     if (settingsSection === "memory") return <XuenessMemorySettings enabled={settingsValues.memoryEnabled !== false} onEnabledChange={value => void handleUpdateSetting("memoryEnabled", value)} />;
     if (settingsSection === "usage") return <XuenessUsageSettings />;
     if (settingsSection === "automations") return <XuenessAutomationsPanel offPeakEnabled={isPluginEffective("automation")} />;
@@ -2138,6 +2461,11 @@ export function XuenessWorkbenchContainer() {
           lightweight={lightweightLayout}
           mode="panel"
           onStopSession={handleStop}
+          onRequestResumeChild={taskId => {
+            if (!activeId || !isPluginEffective('sessions') || !isPluginEffective('subagents')) return;
+            appendTextToComposer(activeId, tf('请恢复已保留的子任务 {0}，沿用它的历史与只读权限，继续处理并收集结果。', [taskId]));
+            setPanel('chat');
+          }}
         />
       </Suspense>
     ),
@@ -2153,7 +2481,9 @@ export function XuenessWorkbenchContainer() {
     workflows: <WorkflowPanel sessionId={activeId} subagentsEnabled={isPluginEffective("subagents")} />,
     terminal: <TerminalPanel sessionId={activeId} fontSize={Number(settingsValues.terminalFontSize ?? 13)} fontFamily={String(settingsValues.terminalFontFamily ?? "system")} />,
     automations: <XuenessAutomationsPanel offPeakEnabled={isPluginEffective("automation")} />,
-    marketplace: <XuenessMarketplace onInstalled={() => void refreshPluginCatalog()} />,
+    marketplace: <XuenessMarketplace onInstalled={() => void refreshPluginCatalog()} onOpenOptional={async id => { await togglePlugin(id, true); setPanel(id === 'model_monitor' ? 'chat' : 'subscriptions'); }} />,
+    subscriptions: <SubscriptionsPanel onChanged={() => void refreshComposerCatalog()} onSelectModel={id => { updateChoices({ provider: 'real', provider_id: id, model: undefined, reasoning_effort: undefined }); void refreshComposerCatalog(); setPanel('chat'); }} />,
+    'model-monitor': <ModelMonitorPanel />,
     diagnostics: <XuenessDiagnosticsPanel />,
     files: (
       <FileBrowser
@@ -2321,37 +2651,8 @@ export function XuenessWorkbenchContainer() {
             onRename={requestRename} onArchive={id => { void deleteById(id); }}
             onPin={(id, pinned) => { void togglePin(id, pinned); }}
             onOpenArchived={() => setArchivedOpen(previous => !previous)} />
-          <div className="xn-sidebar-archived" data-testid="xn-sidebar-archived" hidden={!archivedOpen}>
-            <button
-              type="button"
-              className="xn-sidebar-archived__toggle"
-              aria-expanded={archivedOpen}
-              onClick={() => setArchivedOpen((prev) => !prev)}
-            >{tr("已归档")}{archivedOpen && archived.length > 0 ? ` (${archived.length})` : ""}
-            </button>
-            {archivedOpen && (
-              <div className="xn-sidebar-archived__body">
-                {archivedError && <p role="alert" className="xn-sidebar-archived__error">{archivedError}</p>}
-                {!archivedError && archived.length === 0 && (
-                  <p className="xn-sidebar-archived__empty">{tr("没有归档任务")}</p>
-                )}
-                {archived.map((entry) => (
-                  <div key={entry.id} className="xn-sidebar-archived__item">
-                    <span className="xn-sidebar-archived__title" title={entry.title || entry.task}>
-                      {entry.title || entry.task || tr("未命名任务")}
-                    </span>
-                    <button
-                      type="button"
-                      className="xn-sidebar-archived__restore"
-                      aria-label={tf("恢复任务 {0}", [entry.title || entry.task])}
-                      data-testid={`xn-archived-restore-${entry.id}`}
-                      onClick={() => void restoreById(entry.id)}
-                    >{tr("↩ 恢复")}</button>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
+          <ArchivedSessions open={archivedOpen} disabled={busy} reloadKey={archivedRevision}
+            onClose={() => setArchivedOpen(false)} onRestored={refreshList} />
           </>}
         </>
       )}
@@ -2379,7 +2680,10 @@ export function XuenessWorkbenchContainer() {
         settingsEnabled={isPluginEffective("settings")}
         onClose={() => setCommandOpen(false)}
         onRunCommand={runPaletteCommand}
-        onSelectSession={selectSession}
+        onSelectSession={(id, query) => {
+          selectSession(id);
+          setConversationFindRequest(query ? {sessionId: id, id: crypto.randomUUID(), query} : null);
+        }}
       />}
 
       {(error || dataErrors.active || dataErrors.list) && (
@@ -2423,11 +2727,24 @@ export function XuenessWorkbenchContainer() {
             onRefresh={() => void handleRefreshAll()}
             onRename={() => activeId && requestRename(activeId)}
             onDelete={() => activeId && void deleteById(activeId)}
-            menuItems={isPluginEffective('planning') && <button type="button" className="xn-conv-header__action"
-              disabled={busy || activeSessionRunning}
-              onClick={() => setDeliveryEditorRequest(previous => ({id: session.id, version: (previous?.version ?? 0) + 1}))}>
-              {tr('编辑交付清单')}</button>}
+            menuItems={<>
+              {isPluginEffective('planning') && <button type="button" className="xn-conv-header__action"
+                disabled={busy || activeSessionRunning}
+                onClick={() => setDeliveryEditorRequest(previous => ({id: session.id, version: (previous?.version ?? 0) + 1}))}>
+                {tr('编辑交付清单')}</button>}
+              {isPluginEffective('sessions') && <button type="button" className="xn-conv-header__action"
+                disabled={busy || activeSessionRunning}
+                onClick={() => setShareDialogOpen(true)}>
+                <Share2 size={14} aria-hidden="true" /><span>{tr('分享会话')}</span></button>}
+            </>}
           />
+          <ConversationShareDialog key={session.id} open={shareDialogOpen} session={session}
+            onClose={() => setShareDialogOpen(false)} />
+          {isPluginEffective('model_monitor') && <Suspense fallback={null}><ModelMonitorHome key={session.id} sessionId={session.id}
+            providerId={choices.provider_id} requestedModel={choices.model ?? selectedComposerModel?.model} providerName={selectedComposerModel?.supplierName ?? selectedComposerModel?.name}
+            running={activeSessionRunning} onOpenHistory={() => setPanel('model-monitor')} /></Suspense>}
+          {!isPluginEffective('model_monitor') && <PluginHomeEntry plugin={pluginCatalog.find(plugin => plugin.id === 'model_monitor')}
+            onManage={() => setPanel(pluginCatalog.find(plugin => plugin.id === 'model_monitor')?.installed === false && isPluginEffective('extensions') ? 'marketplace' : 'plugins')} />}
           {goalEditorOpen && activeId && session?.id === activeId && isPluginEffective('planning') &&
             <GoalEditorDialog key={`goal-editor:${activeId}`} sessionId={activeId} goal={session.goal}
               onClose={() => setGoalEditorOpen(false)} onSaved={() => void loadActive(activeId)} />}
@@ -2463,7 +2780,17 @@ export function XuenessWorkbenchContainer() {
             queuedMessages={session.queued_messages}
           >
             {settingsValues.showTodos !== false && !lightweightLayout && <TaskTodos todos={session.todos ?? []} />}
+            {olderTranscript.sessionId === session.id && (olderTranscript.hasOlder || olderTranscript.loading || olderTranscript.error) &&
+              <div className="xn-session-history-older" data-testid="conversation-load-older">
+                {olderTranscript.hasOlder && <button type="button" className="xn-zc-retry-btn"
+                  disabled={olderTranscript.loading} aria-busy={olderTranscript.loading}
+                  onClick={() => void loadOlderTranscript()}>
+                  {tr(olderTranscript.loading ? '正在加载更早的消息…' : '加载更早的消息')}
+                </button>}
+                {olderTranscript.error && <p role="alert">{olderTranscript.error}</p>}
+              </div>}
             <ZCodeConversation sessionId={session.id} rows={displayTimelineRows}
+              findRequest={conversationFindRequest?.sessionId === session.id ? conversationFindRequest : undefined}
               collapseTools={settingsValues.collapseTools !== false}
               showReasoning={settingsValues.messageStreamShowReasoning !== false}
               autoScroll={settingsValues.autoScroll !== false}
@@ -2473,7 +2800,9 @@ export function XuenessWorkbenchContainer() {
               onRetry={!busy && !activeSessionRunning ? handleRetryTool : undefined}
               onEdit={!busy && !activeSessionRunning ? handleMessageEdit : undefined}
               onFeedback={!busy && !activeSessionRunning ? handleMessageFeedback : undefined}
-              onFork={!busy && !activeSessionRunning ? row => beginFork(/^turn-[1-9][0-9]*$/u.test(row.turnId) ? Number(row.turnId.slice(5)) : undefined) : undefined} />
+              onFork={!busy && !activeSessionRunning ? row => beginFork(/^turn-[1-9][0-9]*$/u.test(row.turnId) ? Number(row.turnId.slice(5)) : undefined) : undefined}
+              renderSelectionAction={selection => <ConversationSelectionActions key={`${selection.rowKey}:${selection.text}`} selection={selection}
+                sideActionDisabled={busy || activeSessionRunning} onAdd={handleAddSelectionToCurrentTask} onAsk={handleAskSelectionInSideChat} />} />
             {session.streaming?.status === "interrupted" && session.streaming.text && <p role="status" className="xn-run-error">{tr("输出已中断，已保留收到的内容。")}</p>}
           </ConversationTimelineViewport>
           <QuestionResume enabled={isPluginEffective("sessions")}
@@ -2486,10 +2815,15 @@ export function XuenessWorkbenchContainer() {
             </div>
           )}
           {/* 队列 bottom dock：贴在 composer 上方，与输入框融合成底 dock（对标 ZCode -mb-7 pb-7 磨砂贴合）。 */}
-          {((session.queued_messages?.length ?? 0) > 0 || queueError?.sessionId === session.id) && (
+          {((session.queued_messages?.length ?? 0) > 0 || (session.pending_guidance?.length ?? 0) > 0 || queueError?.sessionId === session.id) && (
             <div className="xn-queue-dock" data-testid="session-queue-dock">
+              <PendingGuidancePanel items={session.pending_guidance ?? []}
+                onWithdraw={handleWithdrawGuidance} busyId={queueCancelling?.sessionId === session.id ? queueCancelling.queueId : null}
+                disabled={busy || queueSubmittingSessions.has(session.id) || !isPluginEffective('sessions')} />
               <SessionQueue key={session.id} items={session.queued_messages ?? []} cancellingId={queueCancelling?.sessionId === session.id ? queueCancelling.queueId : null} onCancel={handleCancelQueuedTurn}
-                onEdit={handleEditQueuedMessage} disabled={busy || !isPluginEffective("sessions")}
+                onWithdraw={handleWithdrawQueuedTurn}
+                onSendNow={activeSessionRunning && session.active_turn_id ? handleSendNowQueuedTurn : undefined}
+                onEdit={handleEditQueuedMessage} onReorder={handleReorderQueuedMessages} currentId={session.current_queue_item_id} disabled={busy || queueSubmittingSessions.has(session.id) || !isPluginEffective("sessions")}
                 canContinue={session.status !== "running" && session.streaming?.status !== "streaming" && (session.queued_messages ?? []).some(item => item.status === "paused")}
                 continuing={queueContinuingSessions.has(session.id)} onContinue={handleContinueQueuedMessages} />
               {queueError?.sessionId === session.id && <p className="xn-session-queue__error" role="alert">{queueError.message}</p>}
@@ -2503,12 +2837,13 @@ export function XuenessWorkbenchContainer() {
               platform={resolveHostPlatform()}
               sendShortcut={settingsValues.sendShortcut === "mod-enter" ? "mod-enter" : "enter"}
               onSend={handleSend}
-              disabled={composerDisabled || queueSubmittingSessions.has(session.id)}
+              disabled={composerDisabled}
               sendDisabled={!composerModelReady || composerCatalogLoading}
               sendDisabledReason={composerSendDisabledReason}
               running={composerRunning}
               queueWhenRunning
-              queueBusy={queueSubmittingSessions.has(session.id)}
+              guideWhenRunning={Boolean(session.active_turn_id)}
+              queueBusy={queueSubmittingSessions.has(session.id) || queueContinuingSessions.has(session.id)}
               stopping={stoppingSessions.has(session.id)}
               onStop={handleStop}
               placeholder={tr("继续描述任务（/ 命令，@ 上下文，$ 技能）")}
@@ -2544,6 +2879,10 @@ export function XuenessWorkbenchContainer() {
           </div>
 
           <div className="xn-hero__composer">
+            {isPluginEffective('model_monitor') ? <Suspense fallback={null}><ModelMonitorHome key="new-chat"
+              providerId={choices.provider_id} requestedModel={choices.model ?? selectedComposerModel?.model} providerName={selectedComposerModel?.supplierName ?? selectedComposerModel?.name}
+              onOpenHistory={() => setPanel('model-monitor')} /></Suspense> : <PluginHomeEntry plugin={pluginCatalog.find(plugin => plugin.id === 'model_monitor')}
+              onManage={() => setPanel(pluginCatalog.find(plugin => plugin.id === 'model_monitor')?.installed === false && isPluginEffective('extensions') ? 'marketplace' : 'plugins')} />}
             {claudexAppearance && <div className="xn-hero__workspace">{workspaceContext}<span className="xn-composer-workspace__host"><Monitor size={15} aria-hidden="true" />{choices.remote ? tr("SSH 工作区") : tr("此计算机")}</span></div>}
             {runError && (
               <p role="alert" className="xn-run-error">{runError}</p>
@@ -2558,8 +2897,8 @@ export function XuenessWorkbenchContainer() {
                 topContent={claudexAppearance ? undefined : workspaceContext}
                 inputRef={heroInputRef}
                 onSend={handleCreate}
-                disabled={busy || creatingSession || !commandRoot || !isPluginEffective("sessions")}
-                sendDisabled={!composerModelReady || composerCatalogLoading}
+                disabled={busy || !commandRoot || !isPluginEffective("sessions")}
+                sendDisabled={creatingSession || !composerModelReady || composerCatalogLoading}
                 sendDisabledReason={composerSendDisabledReason}
                 running={composerRunning}
                 stopping={activeId ? stoppingSessions.has(activeId) : false}

@@ -510,15 +510,13 @@ def _provider_catalog(ctx: dict) -> tuple[list[dict], dict[str, dict]]:
     options: list[dict] = []
     internal: dict[str, dict] = {}
     seen: set[str] = set()
-    for item in public[:100]:
+    for item in public[:500]:
         pid = item.get("id") if isinstance(item, dict) else None
         if not isinstance(pid, str) or not pid or pid in seen:
             continue
         seen.add(pid)
         try:
-            directory = providers_api._providers_dir({"state_dir": ctx["state_dir"]})
-            path = providers_api._path_for(directory, pid)
-            record = providers_api._read_record(path) if path is not None else None
+            record = providers_api.profile_record(ctx['state_dir'], pid)
         except (OSError, ValueError):
             record = None
         if not isinstance(record, dict):
@@ -549,6 +547,7 @@ def _provider_catalog(ctx: dict) -> tuple[list[dict], dict[str, dict]]:
         }
         option.update({key: item[key] for key in ('runtimeProfile', 'contextWindow', 'maxOutputTokens',
                        'toolCalling', 'compatibility') if key in item})
+        option.update(providers_api.model_supplier_metadata(record))
         options.append(option)
         internal[pid] = {**option, "_resolved": resolved if configured else None}
 

@@ -24,6 +24,9 @@ _RUN_FILE_LOG_LOCK = threading.Lock()
 _RUN_DIAGNOSTIC_MAX_BYTES = 64 * 1024
 _RUN_DIAGNOSTIC_MAX_RECORD_BYTES = 2048
 _PROVIDER_ERROR_PRESENTATION = {
+    "quota_exhausted": ("provider_quota_exhausted", 503, "The subscription quota is exhausted; check its reset time or select another model"),
+    "unsupported_region": ("provider_unsupported_region", 502, "The model service is unavailable from this network region"),
+    "context_overflow": ("provider_context_overflow", 502, "The conversation exceeds the model context limit; compact it or start a new conversation"),
     "request_rejected": ("provider_request_rejected", 502,
                           "The model service rejected the request"),
     "authentication_failed": ("provider_authentication_failed", 502,
@@ -738,10 +741,19 @@ def public_session_payload(ctx, session):
     except (OSError, ValueError):
         queue_snapshot = {'queued_messages': [], 'queue_history': [],
                           'queue_error': 'cannot read message queue'}
+    from .steering import pending_snapshot
+    try:
+        guidance = pending_snapshot(ctx['store'], session)
+    except (OSError, ValueError):
+        guidance = {'pending_guidance': [], 'guidance_history': [], 'guidance_error': 'cannot read current-turn input'}
     return {
         'id': session['id'], 'task': session['task'],
         'title': session.get('title') or session['task'], 'root': session['root'],
         'status': session.get('status'), 'steps': session.get('steps', 0),
+        'active_turn_id': session.get('active_turn_id'),
+        'history_revision': session.get('history_revision', 0),
+        'history_hash': session.get('history_hash'),
+        'current_queue_item_id': session.get('current_queue_item_id'),
         'mode': session.get('mode', 'build'), 'mode_history': session.get('mode_history', []),
         'permission_mode': session.get('permission_mode', 'build'),
         'permission_mode_history': session.get('permission_mode_history', []),
@@ -766,6 +778,7 @@ def public_session_payload(ctx, session):
         'pending_question': session.get('pending_question'),
         'pending': pending, 'approved': approved,
         **queue_snapshot,
+        **guidance,
         'changed_files': host.changed_paths(session),
         'forkParent': _public_fork_parent(session),
     }
@@ -1117,6 +1130,15 @@ def handle_POST(self, parts, path, data):
         if type(continue_queue) is not bool:
             self._send(400, {'error': 'continue_queue must be a boolean'})
             return True
+        promotion_request_id = data.get('promotion_request_id')
+        if promotion_request_id is not None:
+            if (not isinstance(promotion_request_id, str)
+                    or not re.fullmatch(r'[0-9a-f]{32}', promotion_request_id)):
+                self._send(400, {'error': 'promotion_request_id must be a valid send-now receipt'})
+                return True
+            if not continue_queue:
+                self._send(400, {'error': 'promotion_request_id requires continue_queue=true'})
+                return True
         if any((k in data for k in ('allow_write', 'allowWrite', 'allow_exec', 'allowExec',
                                     'allow_edit', 'allowEdit', 'allow_network', 'allowNetwork',
                                     'approve_all', 'approveAll'))):
@@ -1225,6 +1247,9 @@ def handle_POST(self, parts, path, data):
             self._send(400, {'error': 'invalid model selection'})
             return True
         queue = _message_queue(ctx)
+        promotion_item_id = None
+        promotion_claimed = False
+        promotion_resume = False
         with ctx['lock']:
             if parts[2] in ctx['running']:
                 self._send(409, {'error': 'session run already in progress'})
@@ -1234,6 +1259,34 @@ def handle_POST(self, parts, path, data):
             except (OSError, ValueError):
                 self._send(404, {'error': 'session not found'})
                 return True
+            if promotion_request_id is not None:
+                try:
+                    with queue.session_lock(parts[2]):
+                        promotion_row = next((row for row in queue._read(parts[2])['items']
+                            if isinstance(row.get('promotion'), dict)
+                            and row['promotion'].get('id') == promotion_request_id), None)
+                except (OSError, ValueError):
+                    self._send(500, {'error': 'cannot read send-now reservation'})
+                    return True
+                if promotion_row is None:
+                    self._send(409, {'error': 'send-now reservation is no longer available'})
+                    return True
+                promotion = promotion_row['promotion']
+                if promotion.get('state') == 'settled':
+                    # The response to a completed promoted run may have been
+                    # lost. A retry acknowledges the same receipt without
+                    # appending or executing that user turn a second time.
+                    self._send(200, {'id': session['id'], 'status': session.get('status'),
+                                     'steps': session.get('steps', 0),
+                                     'completion': session.get('completion')})
+                    return True
+                if (promotion.get('state') not in ('reserved', 'claimed')
+                        or promotion_row.get('status') not in ('queued', 'running', 'paused')):
+                    self._send(409, {'error': 'send-now reservation has already been claimed'})
+                    return True
+                promotion_item_id = promotion_row['id']
+                promotion_resume = (promotion.get('state') == 'claimed'
+                                    and session.get('current_queue_item_id') == promotion_item_id)
             try:
                 host.provider_config.reject_legacy_fake_session(session)
             except ValueError as exc:
@@ -1305,6 +1358,7 @@ def handle_POST(self, parts, path, data):
         try:
             provider = host.provider_config.resolve(ctx['state_dir'], pid, model,
                                                    reasoning_effort=reasoning_effort,
+                                                   session_id=parts[2],
                                                    **({'runtime_profile': requested_profile} if requested_profile is not None else {}))
             from ..providers.lightweight import profile_for
             if requested_profile is None and (pid != selection.get('provider_id') or model != selection.get('model')):
@@ -1318,6 +1372,12 @@ def handle_POST(self, parts, path, data):
             with ctx['lock']:
                 ctx['running'].discard(parts[2])
                 ctx.setdefault('running_context', {}).pop(parts[2], None)
+            if promotion_request_id is not None and not promotion_claimed and not promotion_resume:
+                from .steering import release_promotion
+                try:
+                    release_promotion(queue, parts[2], promotion_request_id)
+                except (OSError, ValueError):
+                    pass
             _log_run_failure(run_trace_id, runstage, 'provider_configuration_error',
                              type(exc).__name__, state_dir=ctx['state_dir'])
             self._send(400, {
@@ -1335,6 +1395,18 @@ def handle_POST(self, parts, path, data):
                 if selection is not None:
                     session['model_selection'] = selection
                 current_queue_id = session.get('current_queue_item_id')
+                if promotion_request_id is not None:
+                    if current_queue_id and current_queue_id != promotion_item_id:
+                        # A send-now reservation replaces the interrupted
+                        # queued predecessor. Keep its journal row, mark its
+                        # queue receipt stopped, and never resume that turn.
+                        queue.update(parts[2], current_queue_id, 'cancelled', {
+                            'status': 'stopped', 'delivery_status': 'replaced_by_send_now'})
+                        session.pop('current_queue_item_id', None)
+                        current_queue_id = None
+                    elif current_queue_id != promotion_item_id:
+                        session.pop('current_queue_item_id', None)
+                        current_queue_id = None
                 if (continue_queue and current_queue_id is None
                         and not queue.snapshot(parts[2])['queued_messages']):
                     self._send(409, {'error': 'no queued messages to continue'})
@@ -1391,11 +1463,56 @@ def handle_POST(self, parts, path, data):
                         ctx['store'].save(out)
                         current_queue_id = None
 
+                    if promotion_request_id is not None and current_queue_id is None:
+                        completed_promotion = queue.get(parts[2], promotion_item_id)
+                        completed_state = (completed_promotion.get('promotion') or {}).get('state') if completed_promotion else None
+                        if completed_state == 'settled':
+                            self._send(200, {'id': out['id'], 'status': out.get('status'),
+                                             'steps': out.get('steps', 0),
+                                             'completion': out.get('completion')})
+                            return True
+
+                    if promotion_request_id is not None:
+                        # The row is already at the head from reservation.
+                        # Validate its prepared model/remote binding before
+                        # changing the durable receipt to claimed.
+                        candidate = queue.get(parts[2], promotion_item_id)
+                        candidate_promotion = candidate.get('promotion') if isinstance(candidate, dict) else None
+                        if (candidate is None or not isinstance(candidate_promotion, dict)
+                                or candidate_promotion.get('id') != promotion_request_id
+                                or candidate_promotion.get('state') not in ('reserved', 'claimed')
+                                or not _queued_context_matches(ctx, out, candidate)):
+                            from .steering import release_promotion
+                            release_promotion(queue, parts[2], promotion_request_id)
+                            queue.pause_pending(parts[2], 'Send-now input needs fresh model or remote preparation.')
+                            self._send(409, {'error': 'prepared send-now input no longer matches this session; prepare it again'})
+                            return True
+                        promotion_claimed = True
+                        if promotion_resume:
+                            # The prior request appended this exact promoted
+                            # human turn before its response was lost. Continue
+                            # that turn from its journal marker.
+                            current_queue_id = promotion_item_id
+                        else:
+                            item = queue.claim_next(parts[2])
+                            if item is None or item.get('id') != promotion_item_id:
+                                if item is not None:
+                                    queue.update(parts[2], item['id'], 'paused')
+                                from .steering import release_promotion
+                                release_promotion(queue, parts[2], promotion_request_id)
+                                promotion_claimed = False
+                                self._send(409, {'error': 'send-now reservation changed; refresh the queue'})
+                                return True
+                            out = _append_queued_turn(ctx, queue, out, item)
+                            gate.session = out
+                            current_queue_id = item['id']
+
                     # A completed session with pending queue work starts at the
                     # next queued user message; it never asks the model to repeat
                     # the already completed active turn.
-                    if current_queue_id is None and (out.get('status') == 'completed'
-                            or (out.get('status') == 'needs_review' and continue_queue)):
+                    if (promotion_request_id is None and current_queue_id is None
+                            and (out.get('status') == 'completed'
+                                 or (out.get('status') == 'needs_review' and continue_queue))):
                         item = queue.claim_next(parts[2])
                         if item is None and continue_queue:
                             self._send(409, {'error': 'no queued messages to continue'})
@@ -1445,6 +1562,12 @@ def handle_POST(self, parts, path, data):
                                 or parts[2] in ctx.get('stop_requested', set())
                                 or not host.plugin_runtime.is_enabled(ctx['state_dir'], 'sessions')):
                             queue.pause_pending(parts[2], 'Waiting for user action or sessions plugin availability.')
+                            break
+                        if promotion_request_id is not None:
+                            # Send-now starts one explicit human turn. Leave
+                            # older/later FIFO work paused for a separate
+                            # continuation instead of resuming the stopped run.
+                            queue.pause_pending(parts[2], 'Waiting for an explicit queue continuation after send-now.')
                             break
                         if drained >= MAX_PENDING_ITEMS:
                             queue.pause_pending(parts[2], 'Run limit reached; continue to process remaining queued messages.')
@@ -1524,6 +1647,12 @@ def handle_POST(self, parts, path, data):
         finally:
             from . import model_switch
             model_switch.unregister(ctx, parts[2])
+            if promotion_request_id is not None and not promotion_claimed and not promotion_resume:
+                from .steering import release_promotion
+                try:
+                    release_promotion(queue, parts[2], promotion_request_id)
+                except (OSError, ValueError):
+                    pass
             with ctx['lock']:
                 ctx['running'].discard(parts[2])
                 ctx['stop_requested'].discard(parts[2])
@@ -1719,6 +1848,39 @@ def handle_POST(self, parts, path, data):
 def handle_DELETE(self, parts, path, data):
     parts = path.split("/")
     ctx = self._ctx
+    if len(parts) == 5 and parts[:4] == ['', 'api', 'sessions', 'archived'] and host._valid_sid(parts[4]):
+        sid = parts[4]
+        if (set(data) != {'confirmed', 'expectedRevision'} or data.get('confirmed') is not True
+                or not isinstance(data.get('expectedRevision'), str)
+                or not re.fullmatch(r'[0-9a-f]{64}', data['expectedRevision'])):
+            self._send(400, {'error': 'explicit confirmation and archived revision required'})
+            return True
+        with ctx['lock']:
+            if sid in ctx['running']:
+                self._send(409, {'error': 'session run already in progress'})
+                return True
+            try:
+                with host.lease(ctx['store'], sid):
+                    host.session_management.delete_archived(ctx['store'], sid, data['expectedRevision'])
+            except FileNotFoundError:
+                self._send(404, {'error': 'archived session not found'})
+                return True
+            except FileExistsError as exc:
+                self._send(409, {'error': str(exc)})
+                return True
+            except BlockingIOError:
+                self._send(409, {'error': 'session is in use by another process'})
+                return True
+            except (ValueError, UnicodeError) as exc:
+                self._send(400, {'error': str(exc)})
+                return True
+            except OSError:
+                self._send(500, {'error': 'cannot permanently delete archived session'})
+                return True
+            ctx['approvals'].pop(sid, None)
+            ctx['stop_requested'].discard(sid)
+        self._send(200, {'id': sid, 'deleted': True, 'permanent': True})
+        return True
     if len(parts) == 4 and parts[:3] == ['', 'api', 'sessions'] and host._valid_sid(parts[3]):
         ctx = self._ctx
         sid = parts[3]

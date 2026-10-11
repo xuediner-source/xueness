@@ -798,22 +798,38 @@ code, kbd, samp, pre {
 }
 
 .xn-sidebar-action__icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
   width: 18px;
-  text-align: center;
+  height: 18px;
+  line-height: 1;
   color: var(--fg-muted);
 }
 
+.xn-sidebar-action__icon svg { display: block; width: 18px; height: 18px; flex: 0 0 auto; }
+
 .xn-sidebar-action__label {
   flex: 1;
+  min-width: 0;
+  line-height: 1.4;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .xn-sidebar-action__shortcut {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  white-space: nowrap;
   font-size: 11px;
   color: var(--fg-subtle);
   border: 1px solid var(--border);
   border-radius: 4px;
   padding: 0 5px;
-  line-height: 1.6;
+  line-height: 20px;
 }
 
 .xn-sidebar-brand {

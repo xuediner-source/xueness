@@ -61,7 +61,8 @@ def run_subagent(gate, provider, agents, prompt, agent_name, *, depth: int,
                  max_depth: int, max_chars: int = 24000, registry=None,
                  parent_session=None, parent_should_stop=None, state_dir=None,
                  parent_model_selection=None, task_id=None, gate_class, run_fn,
-                 base_system, max_steps, summary_max) -> dict:
+                 base_system, max_steps, summary_max, resume_session_id=None,
+                 inherit_history=False, parent_context=None) -> dict:
     """Run one delegated sub-task in a read-only, bounded child session.
 
     The supplied harness dependencies keep this plugin independently owned
@@ -98,8 +99,32 @@ def run_subagent(gate, provider, agents, prompt, agent_name, *, depth: int,
                 registry.finish(supplied_task_id, ok=False, error=error, steps=0)
         return result
 
-    if not isinstance(prompt, str) or not prompt.strip():
+    from .child_sessions import ChildStore, valid_parent, prepare_resume, inherit_context, apply_messages
+    durable = state_dir is not None and valid_parent(parent_session)
+    child = None
+    child_store = None
+    if resume_session_id is not None:
+        if not durable or supplied_task_id is None:
+            return fail_before_run('child recovery requires a durable parent and task')
+        try:
+            child_store = ChildStore(state_dir, parent_session, task_id=task_id, root=gate.root)
+            child = child_store.load(resume_session_id)
+            if registry is not None and registry.is_cancelled(task_id):
+                return fail_before_run('cancelled child cannot be resumed')
+            saved_agent = child['delegation'].get('agent')
+            if agent_name is not None and agent_name != saved_agent:
+                return fail_before_run('resume cannot change the child agent')
+            agent_name = saved_agent
+            parent_model_selection = child['delegation'].get('modelSelection')
+            from copy import deepcopy
+            prepare_resume(deepcopy(child), prompt)
+        except (OSError, TypeError, ValueError):
+            return fail_before_run('child session not found or does not belong to task')
+    elif not isinstance(prompt, str) or not prompt.strip():
         return fail_before_run("prompt must be a non-empty string")
+
+    if type(inherit_history) is not bool:
+        return fail_before_run('inherit_history must be a boolean')
 
     if agent_name is not None and (not isinstance(agent_name, str) or not agent_name.strip()):
         return fail_before_run("sub-agent selector must be a non-empty string")
@@ -138,14 +163,30 @@ def run_subagent(gate, provider, agents, prompt, agent_name, *, depth: int,
         from ..providers.lightweight import SYSTEM as LIGHT_SYSTEM
         read_only_system = LIGHT_SYSTEM + '\nThis delegated task is read-only. Inspect and report; do not edit, write, execute commands or delegate.'
         system = build_system_prompt(agent, read_only_system) if agent is not None else read_only_system
-    child = {
-        "id": "sub-" + uuid.uuid4().hex,
+    if child is None:
+        inherited = []
+        if inherit_history:
+            try:
+                inherited = inherit_context(parent_context)
+            except (TypeError, ValueError):
+                return fail_before_run('parent context cannot be safely inherited')
+        inherited_results = {}
+        if inherited:
+            from copy import deepcopy
+            source_results = parent_context.get('results') or {}
+            inherited_ids = {call['id'] for row in inherited for call in row.get('tool_calls') or []}
+            inherited_results = {cid: deepcopy(source_results[cid]) for cid in inherited_ids}
+        child = {
+        # Session hooks validate IDs even for ephemeral child runs. Use the
+        # canonical opaque UUID form on both paths; durability is still gated
+        # exclusively by a valid parent ID and an available state directory.
+        "id": uuid.uuid4().hex,
         "task": prompt,
         "root": str(gate.root),
         "status": "pending",
-        "messages": [{"role": "system", "content": system},
+        "messages": [{"role": "system", "content": system}, *inherited,
                      {"role": "user", "content": prompt}],
-        "results": {}, "compactions": [], "archived_messages": [], "steps": 0,
+        "results": inherited_results, "compactions": [], "archived_messages": [], "steps": 0,
         "completion": None, "todos": [], "pending_question": None,
         # Output offloading writes files, so child bookkeeping is mutation-free.
         # Children stay on the plan ceiling. They do not inherit edit/yolo,
@@ -153,7 +194,7 @@ def run_subagent(gate, provider, agents, prompt, agent_name, *, depth: int,
         "read_only": True,
         "permission_mode": "plan",
         "mode": "plan",
-    }
+        }
     # Keep the delegation id distinct from the internal child session id.
     if task_id is None:
         task_id = registry.new_id() if registry is not None else "task-" + uuid.uuid4().hex
@@ -163,11 +204,35 @@ def run_subagent(gate, provider, agents, prompt, agent_name, *, depth: int,
                         agent=(agent.get("id") if isinstance(agent, dict) else None),
                         prompt=prompt, root=gate.root)
 
+    if durable and resume_session_id is None:
+        child_store = ChildStore(state_dir, parent_session, task_id=task_id, root=gate.root)
+        selection = parent_model_selection if isinstance(parent_model_selection, dict) else {}
+        bound_selection = {key: selection[key] for key in ('provider_id', 'model', 'reasoning_effort')
+                           if isinstance(selection.get(key), str)}
+        if isinstance(agent, dict):
+            for source, target in (('providerId', 'provider_id'), ('model', 'model'),
+                                   ('reasoningEffort', 'reasoning_effort')):
+                if isinstance(agent.get(source), str) and agent[source].strip():
+                    bound_selection[target] = agent[source].strip()
+        child['delegation'] = {'taskId': task_id, 'parentSessionId': parent_session,
+                               'rootSessionId': (parent_context or {}).get('delegation', {}).get('rootSessionId', parent_session),
+                               'agent': agent.get('id') if isinstance(agent, dict) else None,
+                               'modelSelection': bound_selection, 'createdAt': time.time(),
+                               'contextInherited': bool(inherit_history), 'resumeCount': 0}
+        child['model_selection'] = bound_selection
+    if child_store is not None and registry is not None:
+        registry.update(task_id, childSessionId=child['id'],
+                        parentSessionId=parent_session,
+                        rootSessionId=child['delegation']['rootSessionId'],
+                        canResume=True, recoveryReason='safe_boundary')
+
     def _cancelled() -> bool:
         return bool((parent_should_stop and parent_should_stop()) or
                     (registry is not None and registry.is_cancelled(task_id)))
 
     def _on_step(steps: int) -> None:
+        if child_store is not None and not _cancelled():
+            apply_messages(child_store, child)
         if registry is not None:
             registry.update(task_id, steps=steps)
 
@@ -194,18 +259,47 @@ def run_subagent(gate, provider, agents, prompt, agent_name, *, depth: int,
         read_only.denied_tool_names = (
             SUBAGENT_DENIED_TOOL_NAMES | frozenset(parent_disallowed) | frozenset(agent_disallowed)
         )
+        # Parent host policy remains authoritative even for a recovered child.
+        read_only.allow_real = getattr(gate, 'allow_real', True)
         if not _cancelled():
-            run_fn(child, _NullStore(state_dir), child_provider, read_only,
-                   max_steps=max_steps, max_chars=max_chars, depth=depth + 1,
-                   max_depth=max_depth, should_stop=_cancelled, on_step=_on_step,
-                   policy_state_dir=state_dir,
-                   max_wall_seconds=SUBAGENT_MAX_WALL_SECONDS)
+            from contextlib import nullcontext
+            from ...session_lease import lease
+            with (lease(child_store, child['id']) if child_store is not None else nullcontext()):
+                if resume_session_id is not None:
+                    # Reload under the run lease: a competing recovery can no
+                    # longer alter the boundary checked by prepare_resume.
+                    child = child_store.load(resume_session_id)
+                    prepare_resume(child, prompt)
+                    apply_messages(child_store, child)
+                if child_store is not None:
+                    child_store.save(child)
+                try:
+                    run_fn(child, child_store or _NullStore(state_dir), child_provider, read_only,
+                           max_steps=max_steps, max_chars=max_chars, depth=depth + 1,
+                           max_depth=max_depth, should_stop=_cancelled, on_step=_on_step,
+                           policy_state_dir=state_dir,
+                           max_wall_seconds=SUBAGENT_MAX_WALL_SECONDS)
+                except Exception:
+                    run_error = True
+                if child_store is not None:
+                    if _cancelled():
+                        child['status'] = 'stopped'
+                        child['delegation']['cancelled'] = True
+                    elif run_error:
+                        child['status'] = 'paused'
+                        child['pause_reason'] = 'child execution interrupted; explicit recovery required'
+                    child['delegation']['endedAt'] = time.time()
+                    child_store.save(child)
     except Exception:
         # Provider failures are one child failure, not a failure of the parent
         # session. The registry and parent both receive a bounded safe result.
         run_error = True
 
     cancelled = _cancelled()
+    if child_store is not None:
+        from .child_sessions import recovery_info
+        if registry is not None:
+            registry.update(task_id, **recovery_info(child))
     summary = ""
     completion = child.get("completion")
     if isinstance(completion, dict) and isinstance(completion.get("summary"), str):
@@ -239,6 +333,8 @@ def run_subagent(gate, provider, agents, prompt, agent_name, *, depth: int,
     result = {"ok": ok, "task_id": task_id, "summary": summary[:summary_max],
               "steps": child.get("steps", 0),
               "agent": (agent.get("id") if isinstance(agent, dict) else None)}
+    if child_store is not None:
+        result['childSessionId'] = child['id']
     if error:
         result["error"] = error
     return result

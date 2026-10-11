@@ -41,6 +41,8 @@ export type ProviderCompatibilityDiagnosticGroup = {
 };
 
 export type ProviderSummary = {
+  source?: 'subscription';
+  subscriptionId?: string;
   id: string;
   name: string;
   baseUrl: string;
@@ -169,6 +171,7 @@ export type XuenessPluginFeature = {
  * never contain executable frontend code. The UI maps IDs through its own
  * allowlisted registry before exposing panels. */
 export type XuenessPlugin = {
+  installed?: boolean;
   id: string;
   name: string;
   description: string;
@@ -297,6 +300,33 @@ export async function cancelSubagentTask(sessionId: string, taskId: string): Pro
     `/api/sessions/${encodeURIComponent(sessionId)}/tasks/${encodeURIComponent(taskId)}/cancel`,
     {},
   );
+}
+
+export type SubagentActionReceipt = {
+  task_id: string;
+  childSessionId: string;
+  status?: string;
+  background?: boolean;
+  evidence_eligible?: false;
+};
+
+export async function sendSubagentMessage(
+  sessionId: string, taskId: string, message: string, requestId: string,
+): Promise<{ task_id: string; childSessionId: string; receipt: { id: string; status: string }; delivery: string }> {
+  return post<{ task_id: string; childSessionId: string; receipt: { id: string; status: string }; delivery: string }>(
+    `/api/sessions/${encodeURIComponent(sessionId)}/tasks/${encodeURIComponent(taskId)}/messages`,
+    { message, requestId });
+}
+
+export async function resumeSubagentTask(
+  sessionId: string, taskId: string, message: string | undefined, requestId: string,
+): Promise<SubagentActionReceipt> {
+  return post<SubagentActionReceipt>(`/api/sessions/${encodeURIComponent(sessionId)}/tasks/${encodeURIComponent(taskId)}/resume`,
+    { ...(message ? { message } : {}), requestId });
+}
+
+export function newSubagentRequestId(): string {
+  return globalThis.crypto?.randomUUID?.() ?? `web-${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
 }
 
 async function patch<T>(path: string, body: object, signal?: AbortSignal): Promise<T> {

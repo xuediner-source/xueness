@@ -203,9 +203,13 @@ def derive_events(session: dict) -> list[dict]:
         elif role == "user":
             if not first_user_seen:
                 first_user_seen = True
+                if isinstance(message.get('_turn_id'), str) and re.fullmatch(r'turn-[1-9][0-9]*', message['_turn_id']):
+                    turn = int(message['_turn_id'][5:])
                 continue
-            settle_turn()
-            turn += 1
+            if message.get('_input_kind') != 'guide':
+                settle_turn()
+                turn = (int(message['_turn_id'][5:]) if isinstance(message.get('_turn_id'), str)
+                        and re.fullmatch(r'turn-[1-9][0-9]*', message['_turn_id']) else turn + 1)
             content = message.get('content', '')
             if isinstance(content, list):
                 content = '\n'.join(item['text'] for item in content

@@ -6,6 +6,8 @@ import {
   buildUsageChartDays,
   buildUsageHeatmapWeeks,
   XuenessUsageSettingsView,
+  usageModelColor,
+  usageDaySegments,
 } from "./XuenessUsageSettings";
 import type { UsageSummary } from "../../xuenessApi";
 
@@ -43,6 +45,19 @@ test("usage chart fills missing calendar days without inventing token counts", (
   assert.equal(days.at(-1)?.date, "2026-10-01");
   assert.equal(days.find((day) => day.date === "2026-10-01")?.totalTokens, 100);
   assert.equal(days.find((day) => day.date === "2026-09-30")?.totalTokens, 0);
+});
+
+test('daily stacks preserve per-model tokens and stable colors, with neutral missing attribution', () => {
+  const first = makeUsage('7d').models![0];
+  const second = { ...first, model: 'model-b', totalTokens: 30 };
+  assert.notEqual(usageModelColor(first), usageModelColor(second));
+  const refreshed = { ...first, totalTokens: 900 };
+  assert.equal(usageModelColor(first), usageModelColor(refreshed));
+  const parts = usageDaySegments({ totalTokens: 150, models: [second, first] });
+  assert.equal(parts.reduce((sum, part) => sum + part.tokens, 0), 150);
+  assert.equal(parts.find(part => part.model === null)?.tokens, 20);
+  assert.equal(parts.find(part => part.model === 'model-a')?.color, usageModelColor(first));
+  assert.equal(usageDaySegments({ totalTokens: 10, models: [first] })[0].tokens, 10);
 });
 
 test("year heatmap has aligned 52-week columns and reports empty days as zero", () => {

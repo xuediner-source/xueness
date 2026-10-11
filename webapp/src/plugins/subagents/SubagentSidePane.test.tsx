@@ -211,6 +211,35 @@ test("renders running, completed, failed, and cancelled tasks", () => {
   assert.doesNotMatch(html, /目前没有单个子任务的取消接口/);
 });
 
+test("offers safe-boundary messages only for active durable children", () => {
+  const html = renderToStaticMarkup(
+    <SubagentSidePane sessionId="sess-1" isOpen={true} subagentsEnabled={true}
+      initialTasks={[
+        { id: "task-active-child", status: "running", steps: 2, canGuide: true, workerActive: true },
+        { id: "task-inactive-child", status: "running", steps: 1, canGuide: false, workerActive: false },
+      ]} />
+  );
+  assert.match(html, /data-testid="subagent-message-task-active-child"/);
+  assert.doesNotMatch(html, /subagent-message-task-inactive-child/);
+  assert.match(html, /在下一个安全边界发送消息/);
+});
+
+test("completed children require a follow-up before the resume button is enabled", () => {
+  const html = renderToStaticMarkup(
+    <SubagentSidePane sessionId="sess-1" isOpen={true} subagentsEnabled={true}
+      initialTasks={[
+        { id: "task-resumable", status: "completed", steps: 3, canResume: true,
+          canResumeNow: true, recoveryReason: "followup_required" },
+        { id: "task-cancelled", status: "cancelled", steps: 1, canResume: false,
+          canResumeNow: true, recoveryReason: "cancelled" },
+      ]} />
+  );
+  assert.match(html, /data-testid="subagent-resume-task-resumable"/);
+  assert.match(html, /继续任务的消息（可选）/);
+  assert.match(html, /<button type="submit" disabled="">继续<\/button>/);
+  assert.doesNotMatch(html, /subagent-resume-task-cancelled/);
+});
+
 const MIXED_TASKS: SubagentTaskItem[] = [
   { id: "task-live-1", agent: "explorer", status: "running", steps: 3, startedAt: 1000, endedAt: null },
   { id: "task-live-2", agent: "reviewer", status: "running", steps: 1, startedAt: 1001, endedAt: null },

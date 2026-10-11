@@ -35,8 +35,8 @@
     },
     {
       "id": "usage.costs",
-      "name": "实际报告成本与模型维度统计",
-      "nameEn": "Reported costs and per-model statistics"
+      "name": "实际成本与模型维度统计、稳定配色的每日堆叠图",
+      "nameEn": "Reported costs, per-model statistics and daily stacked charts with stable colors"
     },
     {
       "id": "usage.quick_card",

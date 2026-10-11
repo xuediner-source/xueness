@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { createSingleFlightRefresh, startSessionPolling } from "./SessionPolling";
+import { createSingleFlightRefresh, startSessionPolling, sessionPollingNetworkAvailable } from "./SessionPolling";
 
 type TimerTask = { id: number; delay: number; callback: () => void };
 function fakeScheduler() {
@@ -116,4 +116,49 @@ test("single-flight active refreshes serialize and repeat once for newer callers
   second.resolve();
   await Promise.all([one, two]);
   assert.equal(calls, 2);
+});
+
+test('offline pauses requests, reconnect refreshes once, and stopped pollers stay stopped', async () => {
+  const clock = fakeScheduler();
+  let online = false, calls = 0;
+  let changed = () => {};
+  const stop = startSessionPolling({ refresh: async () => { calls++; }, schedule: clock, isOnline: () => online,
+    subscribeVisibility: listener => { changed = listener; return () => {}; } });
+  assert.deepEqual(clock.delays, []);
+  online = true; changed(); changed();
+  assert.deepEqual(clock.delays, [0]);
+  clock.runNext(); await flush();
+  assert.equal(calls, 1);
+  online = false; changed();
+  assert.deepEqual(clock.delays, []);
+  stop(); online = true; changed();
+  assert.deepEqual(clock.delays, []);
+});
+
+test('an old session read failing cannot swallow a queued read for the newly selected session', async () => {
+  let reject!: (reason: Error) => void;
+  const failed = new Promise<void>((_, fail) => { reject = fail; });
+  const seen: string[] = [];
+  const refresh = createSingleFlightRefresh(async (id: string) => { seen.push(id); if (id === 'old') await failed; });
+  const one = refresh('old'); const two = refresh('new');
+  reject(new Error('old read interrupted'));
+  await Promise.all([one, two]);
+  assert.deepEqual(seen, ['old', 'new']);
+});
+
+test('background idle conversations never poll faster than foreground idle conversations', () => {
+  const clock = fakeScheduler();
+  const stop = startSessionPolling({ refresh: async () => {}, schedule: clock, isVisible: () => false,
+    visibleDelayMs: 15000, subscribeVisibility: () => () => {} });
+  assert.deepEqual(clock.delays, [15000]); stop();
+});
+
+test('Internet offline events cannot suspend local-model conversation polling', () => {
+  for (const hostname of ['127.0.0.1', 'localhost', '[::1]']) {
+    const clock = fakeScheduler();
+    const stop = startSessionPolling({ refresh: async () => {}, schedule: clock, isVisible: () => true,
+      isOnline: () => sessionPollingNetworkAvailable(false, hostname), subscribeVisibility: () => () => {} });
+    assert.deepEqual(clock.delays, [1000]); stop();
+  }
+  assert.equal(sessionPollingNetworkAvailable(false, 'remote.example'), false);
 });

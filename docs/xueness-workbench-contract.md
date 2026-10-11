@@ -1,5 +1,9 @@
 # Xueness 工作台契约（第三批冻结）
 
+2026-10-11 可选插件增量：`subscriptions` 与 `model_monitor` 只有安装市场资源并启用且依赖有效时才挂载。`GET /api/subscriptions` 返回白名单供应商、型号与实际额度视图，不含凭据；账号动作使用既有 Origin／CSRF 保护。受订阅中心管理的模型具有稳定 `subscription.*` ID，通过既有 composer 模型目录与选择接缝进入会话。`GET /api/model_monitor` 读取最近 200 条型号元数据，`POST /api/model_monitor/clear` 要求 `{confirmed:true}`；不发送额外模型请求或存储对话正文。接口及生命周期见[订阅与监测说明](subscriptions-and-model-monitor-2026-10-11.md)。
+
+2026-10-11 归档接口增量：归档列表增加 `revision`；`DELETE /api/sessions/archived/{id}` 通过 `{confirmed:true,expectedRevision}` 永久删除已确认的归档及恢复副本，和原有活动会话 DELETE 的可恢复归档语义分开。请求及保护规则见[归档会话管理](archived-session-delete-2026-10-11.md)。
+
 > 第二十三批扩展（2026-09-30）：本文件下文保留第三批基线。原生首页现为 Xueness 工作台；公开运行只接受配置模型。`createSession` 追加可选 `{root, prepared_token}` 与 `onCreated`，`sendTurn` 追加可选准备 token，原有参数顺序兼容。两者在保存成功、后续运行失败时返回 `{ok:false,error,accepted:true,id?}`：界面应清空已接收的草稿并刷新记录，通过“重试运行”恢复，不能再次追加相同消息。会话详情增加模型选择、权限、浏览器与远程连接摘要；输入准备的新接口见 [开始界面说明](xueness-start-interface.md)。
 
 日期：2026-09-27。本文件冻结**第三批**的接缝：Xueness 自有的工作台数据层，以及
@@ -140,6 +144,8 @@ export function toTimelineRows(events: XuenessEventV1[]): TimelineRow[];
 - **不得**放无实现的占位按钮。
 
 ## 7. 验收口径
+
+2026-10-11 接口增量：`SubmissionResult<T>` 增加可选 `outcomeUnknown`，用于已发出但无法确认接收的请求；`WorkbenchSession` 增加 `current_queue_item_id`。队列 POST 的可选 `request_id` 与 PATCH 的 `{ids, expectedIds}`、草稿恢复及接收截止约定见[会话体验说明](session-experience-2026-10-11.md)。本轮明确包含前后端适配；下面保留最初仅前端阶段的验收口径。
 
 - 数据层：单测覆盖 §4/§5 全部易错分支；`tsc` 新文件零错误。
 - UI 层：`renderToStaticMarkup` 断言关键文本；`npm run build` 成功；

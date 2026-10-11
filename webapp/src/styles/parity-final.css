@@ -9,7 +9,7 @@ body { -webkit-font-smoothing:auto; }
 .xn-shell-layout .xn-shell-main__panel:has(> .xn-settings-view) { border:0; border-radius:0; background:var(--bg-window); }
 .xn-shell-layout .xn-shell-sidebar,.xn-shell-layout .xn-shell-sidebar__footer,.xn-settings-view__sidebar { background:var(--bg-window); }
 .xn-shell-layout .xn-shell-sidebar__head { padding:8px 4px; min-height:48px; }
-.xn-shell-layout .xn-sidebar-action { min-height:32px; height:32px; padding:0 10px; }
+.xn-shell-layout .xn-sidebar-action { min-height:max(32px, calc(var(--xn-ui-font-size, 14px) + 14px)); height:auto; padding:0 10px; }
 .xn-shell-layout .xn-sidebar-actions { padding:12px 13px 8px 8px; gap:4px; }
 .xn-shell-layout .xn-shell-nav__link { min-height:32px; padding:4px 10px; gap:8px; font-size:14px; }
 .xn-shell-layout .xn-shell-nav__group { padding:8px 10px; font-size:14px; }

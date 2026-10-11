@@ -1,10 +1,10 @@
 import React, { useState } from 'react';
-import { del } from '../../xuenessApi';
+import { del, post } from '../../xuenessApi';
 import { t } from '../../i18n';
 import './SessionGoal.css';
 
 export type SessionGoalHistoryEntry = {
-  action: 'set' | 'replace' | 'clear' | 'achieved';
+  action: 'set' | 'replace' | 'clear' | 'achieved' | 'complete' | 'pause' | 'resume' | 'blocked' | 'budget_limited';
   at: string;
   text?: string;
   source?: string;
@@ -12,14 +12,20 @@ export type SessionGoalHistoryEntry = {
 
 export type SessionGoalRecord = {
   text: string;
-  status: 'active' | 'achieved' | 'cleared';
+  status: 'active' | 'paused' | 'blocked' | 'budget_limited' | 'complete' | 'achieved' | 'cleared';
   setAt: string;
   updatedAt: string;
   history: SessionGoalHistoryEntry[];
+  budget?: { maxRounds: number; maxWallSeconds: number; maxTokens?: number };
+  runtime?: { reason?: string };
 };
 
 const STATUS_LABEL: Record<SessionGoalRecord['status'], string> = {
   active: '进行中',
+  paused: '已暂停',
+  blocked: '受阻',
+  budget_limited: '达到预算',
+  complete: '已完成',
   achieved: '已达成',
   cleared: '已清除',
 };
@@ -29,6 +35,11 @@ const ACTION_LABEL: Record<SessionGoalHistoryEntry['action'], string> = {
   replace: '替换目标',
   clear: '清除目标',
   achieved: '达成目标',
+  complete: '完成目标',
+  pause: '暂停目标',
+  resume: '继续目标',
+  blocked: '目标受阻',
+  budget_limited: '达到目标预算',
 };
 
 /** 会话目标的一行徽标：摘要只显示状态与文本，展开后查看完整目标、变更历史和清除。 */
@@ -54,6 +65,20 @@ export function SessionGoal({ sessionId, goal, disabled, onChanged }: {
       setBusy(false);
     }
   };
+  const transition = async (action: 'pause' | 'resume') => {
+    setBusy(true);
+    setError('');
+    try {
+      await post(`/api/sessions/${encodeURIComponent(sessionId)}/goal`, { action });
+      onChanged();
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : t('更新失败'));
+    } finally {
+      setBusy(false);
+    }
+  };
+  const canPause = goal.status === 'active';
+  const canResume = ['paused', 'blocked', 'budget_limited'].includes(goal.status);
   return (
     <details className="xn-session-goal" data-status={goal.status} data-testid="session-goal">
       <summary className="xn-session-goal__bar">
@@ -74,8 +99,17 @@ export function SessionGoal({ sessionId, goal, disabled, onChanged }: {
           </ul>
         )}
         <p className="xn-session-goal__scope">
-          {t('目标每轮注入模型，运行结束时由主机核对；未声明达成则需要复核。')}
+          {t('目标受轮次和时间预算限制；完成需要独立核验与交付检查。')}
         </p>
+        {goal.runtime?.reason && <p className="xn-session-goal__reason">{goal.runtime.reason}</p>}
+        {canPause && <button className="xn-session-goal__button" type="button"
+          disabled={disabled || busy} onClick={() => void transition('pause')}>
+          {t(busy ? '更新中…' : '暂停目标')}
+        </button>}
+        {canResume && <button className="xn-session-goal__button" type="button"
+          disabled={disabled || busy} onClick={() => void transition('resume')}>
+          {t(busy ? '更新中…' : '继续目标')}
+        </button>}
         <button className="xn-session-goal__button" type="button" disabled={disabled || busy} onClick={() => void clear()}>
           {t(busy ? '清除中…' : '清除目标')}
         </button>

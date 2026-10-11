@@ -155,6 +155,52 @@ class MessageActionTests(unittest.TestCase):
         self.assertEqual(value['timeline']['nextCursor'],value['timeline']['head'])
         self.assertEqual(value['journal']['message_revision'],actions.revision(self.session))
 
+    def test_conversation_windows_page_and_guard_the_retained_history(self):
+        from xueness.bundled_plugins.sessions.conversation_snapshot import dispatch
+        self.session['messages'] = []
+        for turn in range(1, 61):
+            self.session['messages'].extend([
+                {'role':'user','content':f'user {turn}','_turn_id':f'turn-{turn}','_message_id':f'u{turn}'},
+                {'role':'assistant','content':f'assistant {turn}','_turn_id':f'turn-{turn}','_message_id':f'a{turn}'},
+            ])
+        self.store.save(self.session)
+        tail = dispatch('GET', ['api','sessions',self.sid,'conversation'],
+                        {'tail':['20']}, {}, self.ctx)
+        self.assertEqual(tail[0], 200)
+        value = tail[1]
+        self.assertEqual(value['window']['total'], 120)
+        self.assertTrue(value['window']['hasOlder'])
+        self.assertEqual(len(value['journal']['messages']), 20)
+        revision = value['window']['messageRevision']
+        before = value['window']['start']
+        older = dispatch('GET', ['api','sessions',self.sid,'conversation'],
+                         {'before':[str(before)], 'limit':['20'], 'revision':[revision]}, {}, self.ctx)
+        self.assertEqual(older[0], 200)
+        self.assertEqual(older[1]['window']['end'], before)
+        self.assertEqual(len(older[1]['journal']['messages']), 20)
+        self.assertEqual(older[1]['journal']['message_window']['messageIndices'], list(range(before-20, before)))
+        changed = self.store.load(self.sid)
+        changed['messages'][0]['content'] = 'edited outside the active tail'
+        self.store.save(changed)
+        stale = dispatch('GET', ['api','sessions',self.sid,'conversation'],
+                         {'before':[str(before)], 'limit':['20'], 'revision':[revision]}, {}, self.ctx)
+        self.assertEqual(stale[0], 409)
+
+    def test_edit_hides_archived_suffix_but_keeps_the_live_edited_user(self):
+        from xueness.bundled_plugins.sessions.conversation_snapshot import dispatch
+        self.session['archived_messages'] = [copy.deepcopy(self.session['messages'][2]),
+            copy.deepcopy(self.session['messages'][3]), copy.deepcopy(self.session['messages'][4])]
+        self.store.save(self.session)
+        self.update(3, text='edited second user')
+        response = dispatch('GET', ['api','sessions',self.sid,'conversation'],
+                            {'tail':['80']}, {}, self.ctx)
+        self.assertEqual(response[0], 200)
+        messages = response[1]['journal']['messages']
+        contents = [message.get('content') for message in messages if isinstance(message, dict)]
+        self.assertIn('edited second user', contents)
+        self.assertIn('first answer', contents)
+        self.assertNotIn('second answer', contents)
+
     def test_malformed_saved_metadata_refuses_edit_without_changing_journal(self):
         for field, value in [('streaming', 'broken'), ('reasoning_history', {}),
                              ('completion_history', 'broken'), ('message_annotations', [])]:

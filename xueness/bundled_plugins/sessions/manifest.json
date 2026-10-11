@@ -27,7 +27,8 @@
   "httpFamilies": [
     "composer",
     "sessions",
-    "sessions/*/model"
+    "sessions/*/model",
+    "conversation_shares"
   ],
   "modules": [
     "cli",
@@ -57,7 +58,11 @@
     "conversation_snapshot",
     "native_evidence",
     "search",
-    "structured_questions"
+    "structured_questions",
+    "history",
+    "live_updates",
+    "steering",
+    "sharing"
   ],
   "features": [
     {
@@ -91,6 +96,11 @@
       "nameEn": "Select, search, rename, pin and archive"
     },
     {
+      "id": "sessions.archived_delete",
+      "name": "归档会话恢复与带版本确认的永久删除",
+      "nameEn": "Restore archived conversations and permanently delete with revision confirmation"
+    },
+    {
       "id": "sessions.history",
       "name": "会话历史预览、阅读位置记忆与跨会话上下文检索",
       "nameEn": "History previews, reading-position memory and session context search"
@@ -117,13 +127,18 @@
     },
     {
       "id": "sessions.composer",
-      "name": "附件、上下文引用、发送即时清空与拒绝恢复草稿",
-      "nameEn": "Attachments, context mentions, immediate submission clearing and rejected draft recovery"
+      "name": "附件、上下文引用、即时发送反馈与未发送草稿找回",
+      "nameEn": "Attachments, context mentions, immediate send feedback and unsent draft recovery"
     },
     {
       "id": "sessions.message_queue",
-      "name": "运行期间排队发送、折叠列表与安全编辑后续消息",
-      "nameEn": "Queue follow-ups, collapse the list and safely edit pending messages"
+      "name": "运行期间排队发送、接收回执去重、完整预览、安全编辑与顺序调整",
+      "nameEn": "Queue follow-ups with deduplicated receipts, full previews, safe editing and reordering"
+    },
+    {
+      "id": "sessions.refresh_recovery",
+      "name": "加载失败恢复、网络重连与前后台会话同步",
+      "nameEn": "Load recovery, network reconnection and foreground/background session sync"
     },
     {
       "id": "sessions.tui",
@@ -162,8 +177,8 @@
     },
     {
       "id": "sessions.model_picker",
-      "name": "统一模型选择与详情卡",
-      "nameEn": "Unified model picker and detail card"
+      "name": "供应商子菜单、模型搜索与详情卡",
+      "nameEn": "Supplier submenus, model search and detail cards"
     },
     {
       "id": "sessions.events_cursor",
@@ -244,9 +259,54 @@
       "id": "sessions.structured_questions",
       "name": "结构化问题、选项、自定义答复与幂等保存",
       "nameEn": "Structured questions, choices, custom answers and idempotent saving"
+    },
+    {
+      "id": "sessions.stable_history",
+      "name": "稳定消息身份与可回放修订历史",
+      "nameEn": "Stable message identity and replayable revision history"
+    },
+    {
+      "id": "sessions.live_updates",
+      "name": "会话增量推送、断线重连与快照重建",
+      "nameEn": "Incremental conversation push, reconnect and snapshot recovery"
+    },
+    {
+      "id": "sessions.current_turn_guidance",
+      "name": "当前轮引导",
+      "nameEn": "Current-turn guidance"
+    },
+    {
+      "id": "sessions.start_now",
+      "name": "立即发送排队消息",
+      "nameEn": "Send queued messages now"
+    },
+    {
+      "id": "sessions.conversation_selection",
+      "name": "当前任务引用选中文本与辅助会话提问",
+      "nameEn": "Add selected text to the current task or ask in a forked side chat"
+    },
+    {
+      "id": "sessions.conversation_find",
+      "name": "在当前对话中查找并定位匹配内容",
+      "nameEn": "Find and navigate matching text in the current conversation"
+    },
+    {
+      "id": "sessions.conversation_share",
+      "name": "选定轮次分享、撤销与导入",
+      "nameEn": "Selected-turn sharing, revocation and import"
+    },
+    {
+      "id": "sessions.transcript_paging",
+      "name": "长会话分段加载与原始历史恢复",
+      "nameEn": "Long-transcript paging and original history recovery"
     }
   ],
   "frontendModules": [
+    "plugins/sessions/ArchivedSessions.tsx",
+    "plugins/sessions/archiveApi.ts",
+    "plugins/sessions/composerRecovery.ts",
+    "plugins/sessions/submissionTransport.ts",
+    "plugins/sessions/ComposerRecoveryPanel.tsx",
     "plugins/sessions/SidebarResizeHandle.tsx",
     "plugins/sessions/SessionContextPane.tsx",
     "plugins/sessions/ClaudexSidebar.tsx",
@@ -297,6 +357,12 @@
     "plugins/sessions/ZCodeConversation.tsx",
     "plugins/sessions/useRunPermissionConfirmation.tsx",
     "plugins/sessions/sessionSearch.ts",
-    "plugins/sessions/queueApi.ts"
+    "plugins/sessions/queueApi.ts",
+    "plugins/sessions/LiveConversation.ts",
+    "plugins/sessions/CurrentTurnInput.tsx",
+    "plugins/sessions/steeringApi.ts",
+    "plugins/sessions/ConversationFind.tsx",
+    "plugins/sessions/ConversationSelectionActions.tsx",
+    "plugins/sessions/ConversationSharing.tsx"
   ]
 }

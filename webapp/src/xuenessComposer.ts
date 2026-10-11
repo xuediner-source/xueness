@@ -19,6 +19,10 @@ export type ComposerModel = {
   protocol: "openai" | "anthropic";
   capabilities: string[];
   reasoningLevels: string[];
+  /** Public catalog identity for navigation; never changes profile selection. */
+  supplierId?: string;
+  supplierName?: string;
+  supplierNameEn?: string;
   runtimeProfile?: "standard" | "lightweight";
   contextWindow?: number;
   maxOutputTokens?: number;

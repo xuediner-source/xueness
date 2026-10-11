@@ -9,6 +9,7 @@ from __future__ import annotations
 from contextlib import contextmanager
 from datetime import datetime, timezone
 import json
+import hashlib
 import os
 from pathlib import Path
 import re
@@ -33,6 +34,7 @@ FINAL_STATUSES = frozenset({"completed", "needs_review", "failed", "cancelled"})
 VALID_STATUSES = ACTIVE_STATUSES | FINAL_STATUSES
 _SESSION_ID = re.compile(r"[0-9a-f]{32}\Z")
 _QUEUE_ID = re.compile(r"[0-9a-f]{32}\Z")
+_REQUEST_ID = re.compile(r"[0-9a-f]{32}\Z")
 _REPARSE_POINT = 0x400
 _THREAD_LOCKS = {}
 _THREAD_LOCKS_GUARD = threading.Lock()
@@ -157,6 +159,40 @@ class MessageQueue:
             prepared = item.get("prepared")
             if prepared is not None and not isinstance(prepared, dict):
                 raise ValueError("message queue context is invalid")
+            promotion = item.get('promotion')
+            if promotion is not None:
+                if (not isinstance(promotion, dict)
+                        or not isinstance(promotion.get('id'), str) or not _REQUEST_ID.fullmatch(promotion['id'])
+                        or not isinstance(promotion.get('fingerprint'), str) or not re.fullmatch(r'[0-9a-f]{64}', promotion['fingerprint'])
+                        or promotion.get('state') not in ('reserved', 'claimed', 'released', 'settled')
+                        or not isinstance(promotion.get('receipt'), dict)
+                        or promotion['receipt'].get('id') != item['id']
+                        or promotion['receipt'].get('request_id') != promotion['id']
+                        or promotion['receipt'].get('delivery') != 'startNow'
+                        or promotion['receipt'].get('state') != 'reserved'
+                        or (promotion['receipt'].get('targetTurnId') is not None
+                            and (not isinstance(promotion['receipt'].get('targetTurnId'), str)
+                                 or not promotion['receipt']['targetTurnId']
+                                 or len(promotion['receipt']['targetTurnId']) > 128))
+                        or not isinstance(promotion.get('previous_ids'), list)
+                        or len(promotion['previous_ids']) > MAX_PENDING_ITEMS
+                        or any(not isinstance(value, str) or not _QUEUE_ID.fullmatch(value) for value in promotion['previous_ids'])
+                        or len(set(promotion['previous_ids'])) != len(promotion['previous_ids'])
+                        or item['id'] not in promotion['previous_ids']):
+                    raise ValueError('message queue promotion is invalid')
+            submission = item.get('submission')
+            if submission is not None:
+                receipt = submission.get('receipt') if isinstance(submission, dict) else None
+                if (not isinstance(submission, dict)
+                        or not isinstance(submission.get('id'), str)
+                        or not _REQUEST_ID.fullmatch(submission['id'])
+                        or not isinstance(submission.get('fingerprint'), str)
+                        or not re.fullmatch(r'[0-9a-f]{64}', submission['fingerprint'])
+                        or not isinstance(receipt, dict) or receipt.get('id') != item['id']
+                        or receipt.get('status') not in ('queued', 'paused')
+                        or not isinstance(receipt.get('text'), str)
+                        or type(receipt.get('position')) is not int or receipt['position'] < 0):
+                    raise ValueError('message queue receipt is invalid')
         return {"schema": SCHEMA, "accepting": record.get("accepting", False), "items": items}
 
     def _atomic_save(self, session_id, record):
@@ -220,12 +256,22 @@ class MessageQueue:
         public = {key: item[key] for key in ("id", "text", "status", "created_at", "updated_at")
                   if key in item}
         prepared = item.get('prepared')
+        metadata = prepared.get('metadata') if isinstance(prepared, dict) else None
+        if isinstance(metadata, dict):
+            public['has_attachments'] = bool(metadata.get('attachments') or metadata.get('files'))
+            public['has_context'] = bool(any(metadata.get(key) for key in (
+                'attachments', 'files', 'sessions', 'skills', 'plugins', 'capabilities')))
         public['editable'] = item.get('status') in ('queued', 'paused') and (
             prepared is None or MessageQueue._editable_prefix(item) is not None)
         if position is not None:
             public["position"] = position
         if isinstance(item.get("pause_reason"), str):
             public["pause_reason"] = item["pause_reason"][:500]
+        promotion = item.get('promotion')
+        if isinstance(promotion, dict):
+            public['promotion'] = {key: promotion[key] for key in ('id', 'state') if key in promotion}
+            if promotion.get('state') in ('reserved', 'claimed'):
+                public['editable'] = False
         completion = item.get("completion")
         if isinstance(completion, dict):
             public["completion"] = {
@@ -256,6 +302,21 @@ class MessageQueue:
             "queue_history": [self._public_item(item) for item in history[-HISTORY_LIMIT:]],
         }
 
+    def _replay_submission_locked(self, session_id, request_id, fingerprint):
+        """Replay the receipt, including after claim/edit/cancel, without new work."""
+        if request_id is None:
+            return None
+        for item in self._read(session_id)['items']:
+            submission = item.get('submission')
+            if not isinstance(submission, dict) or submission.get('id') != request_id:
+                continue
+            if submission.get('fingerprint') != fingerprint:
+                raise QueueConflict('request_id already used for different input')
+            # 原始收据和队列项同次原子落盘；响应丢失后，即使消息已执行或取消，
+            # 也只确认第一次接收，不重新消费 prepared token 或再次入队。
+            return submission['receipt']
+        return None
+
     def enqueue(self, session_id, text, prepared=None, *, active_run=False):
         if not isinstance(text, str) or not text.strip():
             raise ValueError("message must contain text")
@@ -276,7 +337,11 @@ class MessageQueue:
             return self._enqueue_locked(session_id, text, prepared,
                                         active_run=active_run)
 
-    def _enqueue_locked(self, session_id, text, prepared=None, *, active_run=False):
+    def _enqueue_locked(self, session_id, text, prepared=None, *, active_run=False,
+                        request_id=None, fingerprint=None):
+        replay = self._replay_submission_locked(session_id, request_id, fingerprint)
+        if replay is not None:
+            return replay
         record = self._read(session_id)
         items = self._trim_history(record["items"])
         active = [item for item in items if item["status"] in ACTIVE_STATUSES]
@@ -307,12 +372,16 @@ class MessageQueue:
         }
         if prepared is not None:
             item["prepared"] = prepared
+        position = 1 + sum(1 for row in active if row["status"] in ("queued", "paused"))
+        receipt = self._public_item(item, position)
+        if request_id is not None:
+            item['submission'] = {'id': request_id, 'fingerprint': fingerprint,
+                                  'receipt': receipt}
         items.insert(len(active), item)
         self._atomic_save(session_id, {"schema": SCHEMA,
                                        "accepting": record.get("accepting", False),
                                        "items": items})
-        position = 1 + sum(1 for row in active if row["status"] in ("queued", "paused"))
-        return self._public_item(item, position)
+        return receipt
 
     def get(self, session_id, queue_id):
         if not isinstance(queue_id, str) or not _QUEUE_ID.fullmatch(queue_id):
@@ -329,12 +398,42 @@ class MessageQueue:
                 return None
             item["status"] = "running"
             item["updated_at"] = datetime.now(timezone.utc).isoformat()
+            if isinstance(item.get('promotion'), dict) and item['promotion'].get('state') == 'reserved':
+                item['promotion']['state'] = 'claimed'
             self._atomic_save(session_id, record)
             return dict(item)
 
     def edit(self, session_id, queue_id, text, expected_text, current_queue_id=None):
         with self._locked(session_id):
             return self._edit_locked(session_id, queue_id, text, expected_text, current_queue_id)
+
+    def reorder(self, session_id, ids, expected_ids, current_queue_id=None):
+        with self._locked(session_id):
+            return self._reorder_locked(session_id, ids, expected_ids, current_queue_id)
+
+    def _reorder_locked(self, session_id, ids, expected_ids, current_queue_id=None):
+        for values in (ids, expected_ids):
+            if (not isinstance(values, list) or len(values) > MAX_PENDING_ITEMS
+                    or any(not isinstance(value, str) or not _QUEUE_ID.fullmatch(value) for value in values)
+                    or len(set(values)) != len(values)):
+                raise ValueError('expected unique pending queue ids')
+        if set(ids) != set(expected_ids):
+            raise ValueError('reordering must preserve every pending message')
+        record = self._read(session_id)
+        pending = [item for item in record['items']
+                   if item['status'] in ('queued', 'paused') and item['id'] != current_queue_id]
+        if any(isinstance(item.get('promotion'), dict) and item['promotion'].get('state') in ('reserved', 'claimed') for item in pending):
+            raise QueueConflict('a queued message is being sent now')
+        if [item['id'] for item in pending] != expected_ids:
+            raise QueueConflict('message queue changed; refresh before reordering')
+        if ids != expected_ids:
+            by_id = {item['id']: item for item in pending}
+            reordered = iter(by_id[item_id] for item_id in ids)
+            # Keep claimed turns and history in place; move whole pending records
+            # so prepared context, attachments and original receipts stay bound.
+            record['items'] = [next(reordered) if item['id'] in by_id else item for item in record['items']]
+            self._atomic_save(session_id, record)
+        return {'ids': ids}
 
     def _edit_locked(self, session_id, queue_id, text, expected_text, current_queue_id=None):
         if not isinstance(queue_id, str) or not _QUEUE_ID.fullmatch(queue_id):
@@ -347,7 +446,8 @@ class MessageQueue:
         item = next((row for row in record['items'] if row['id'] == queue_id), None)
         if item is None:
             raise FileNotFoundError('queued message not found')
-        if item['status'] not in ('queued', 'paused') or queue_id == current_queue_id:
+        if (item['status'] not in ('queued', 'paused') or queue_id == current_queue_id
+                or isinstance(item.get('promotion'), dict) and item['promotion'].get('state') in ('reserved', 'claimed')):
             raise QueueConflict('queued message is already claimed')
         if item['text'] != expected_text:
             raise QueueConflict('queued message changed; refresh before editing')
@@ -390,6 +490,8 @@ class MessageQueue:
                 text = item.get("text", "")
                 item["text"] = text[:HISTORY_PREVIEW_CHARS]
                 item.pop("prepared", None)
+                if isinstance(item.get('promotion'), dict):
+                    item['promotion']['state'] = 'settled'
             items = self._trim_history(record["items"])
             self._atomic_save(session_id, {"schema": SCHEMA,
                                            "accepting": record.get("accepting", False),
@@ -405,7 +507,8 @@ class MessageQueue:
         item = next((row for row in record["items"] if row["id"] == queue_id), None)
         if item is None:
             return "not_found"
-        if item["status"] not in ("queued", "paused") or queue_id == claimed_id:
+        if (item["status"] not in ("queued", "paused") or queue_id == claimed_id
+                or isinstance(item.get('promotion'), dict) and item['promotion'].get('state') in ('reserved', 'claimed')):
             return "claimed"
         item["status"] = "cancelled"
         item["updated_at"] = datetime.now(timezone.utc).isoformat()
@@ -572,6 +675,24 @@ def dispatch(method, parts, query, data, ctx):
             return 409, {"error": "queued message is already claimed"}
         return 200, result
 
+    if method == 'PATCH':
+        if not isinstance(data, dict) or set(data) != {'ids', 'expectedIds'}:
+            return 400, {'error': 'expected ids and expectedIds'}
+        from .answer_question import _validate_workspace
+        try:
+            with ctx['lock']:
+                with queue.session_lock(sid):
+                    session = store.load(sid)
+                    _validate_workspace(ctx, session)
+                    return 200, queue._reorder_locked(sid, data['ids'], data['expectedIds'], session.get('current_queue_item_id'))
+        except FileNotFoundError:
+            return 404, {'error': 'session not found'}
+        except QueueConflict as error:
+            return 409, {'error': str(error)}
+        except ValueError as error:
+            return 400, {'error': str(error)}
+        except OSError:
+            return 503, {'error': 'cannot update message queue'}
     if method == "GET":
         try:
             if not reconcile_inactive(ctx, queue, sid):
@@ -586,14 +707,20 @@ def dispatch(method, parts, query, data, ctx):
     if method != "POST":
         return 405, {"error": "method not allowed"}
     body = data if isinstance(data, dict) else {}
-    if set(body) - {"text", "prepared_token"}:
-        return 400, {"error": "expected text and optional prepared_token only"}
+    if set(body) - {"text", "prepared_token", "request_id"}:
+        return 400, {"error": "expected text and optional prepared_token/request_id only"}
+    request_id = body.get('request_id')
+    if 'request_id' in body and (not isinstance(request_id, str) or not _REQUEST_ID.fullmatch(request_id)):
+        return 400, {'error': 'request_id must be 32 lowercase hexadecimal characters'}
     text = body.get("text")
     if not isinstance(text, str) or not text.strip() or len(text) > 5000:
         return 400, {"error": "message must be 1..5000 characters"}
     token = body.get("prepared_token")
     if token is not None and (not isinstance(token, str) or len(token) > 128):
         return 400, {"error": "prepared input invalid or expired"}
+    fingerprint = hashlib.sha256(json.dumps(
+        {'text': text, 'prepared_token': token}, ensure_ascii=True,
+        sort_keys=True, separators=(',', ':')).encode('utf-8')).hexdigest()
     from . import http_routes
     try:
         if not reconcile_inactive(ctx, queue, sid):
@@ -608,7 +735,12 @@ def dispatch(method, parts, query, data, ctx):
                 return 404, {"error": "session not found"}
             active = sid in ctx.get("running", set())
             try:
+                replay = queue._replay_submission_locked(sid, request_id, fingerprint)
+                if replay is not None:
+                    return 202, {'id': replay['id'], 'item': replay, 'replayed': True}
                 snapshot = queue._snapshot_locked(sid)
+            except QueueConflict as exc:
+                return 409, {'error': str(exc)}
             except (OSError, ValueError):
                 return 500, {"error": "cannot read message queue"}
             if not active and not snapshot["queued_messages"]:
@@ -636,7 +768,8 @@ def dispatch(method, parts, query, data, ctx):
                     return 400, {"error": str(exc) if "prepared" not in str(exc).lower()
                                  else "prepared input invalid or expired"}
             try:
-                item = queue._enqueue_locked(sid, text, prepared, active_run=active)
+                item = queue._enqueue_locked(sid, text, prepared, active_run=active,
+                                             request_id=request_id, fingerprint=fingerprint)
             except QueueConflict as exc:
                 return 409, {"error": str(exc)}
             except (OSError, ValueError) as exc:

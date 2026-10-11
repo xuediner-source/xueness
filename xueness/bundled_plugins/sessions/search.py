@@ -47,12 +47,19 @@ def _snippet(text, needle):
 def _match(session, needle):
     # Compacted history remains searchable; tools, system instructions and
     # internal reasoning are not exposed as conversation search results.
+    hidden_value = session.get('history_hidden_message_ids', [])
+    hidden_ids = (set(hidden_value) if isinstance(hidden_value, list)
+                  and all(isinstance(identity, str) and identity for identity in hidden_value) else None)
     sources = [('messages', False), ('archived_messages', True)]
     for key, archived in sources:
         messages = session.get(key, [])
         if not isinstance(messages, list):
             continue
         for index in range(len(messages) - 1, -1, -1):
+            if archived:
+                identity = messages[index].get('_message_id') if isinstance(messages[index], dict) else None
+                if hidden_ids is None or identity in hidden_ids:
+                    continue
             text = _text(messages[index])
             if text and needle.casefold() in text.casefold():
                 return {'snippet': _snippet(text, needle), 'messageIndex': index,

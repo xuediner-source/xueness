@@ -33,6 +33,20 @@ def session_goal_view(session):
     return public(session)
 
 
+def before_run(session, state_dir):
+    """Planning's admission and per-goal wall-time budget for the host loop."""
+    from .goal_driver import before_run as prepare
+    return prepare(session, state_dir)
+
+
+def after_run(session, provider, state_dir, root, gate, should_stop,
+              request_deadline, elapsed_seconds):
+    """Planning's independent verifier and bounded continuation decision."""
+    from .goal_driver import after_run as assess
+    return assess(session, provider, state_dir, root, gate, should_stop,
+                  request_deadline, elapsed_seconds)
+
+
 def completion_instructions(session):
     from .delivery import GUIDANCE, requests_file_output, seed
     from .session_goal import reminder

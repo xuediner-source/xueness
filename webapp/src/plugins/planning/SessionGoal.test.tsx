@@ -28,6 +28,19 @@ test('an achieved goal stays visible as achieved and a cleared one disappears', 
   assert.equal(renderToStaticMarkup(<SessionGoal sessionId="abc" onChanged={() => {}} />), '');
 });
 
+test('a paused or exhausted goal exposes resume, while an active goal exposes pause', () => {
+  const active = renderToStaticMarkup(<SessionGoal sessionId="abc" goal={goal()} onChanged={() => {}} />);
+  assert.match(active, /暂停目标/);
+  for (const status of ['paused', 'blocked', 'budget_limited'] as const) {
+    const html = renderToStaticMarkup(<SessionGoal sessionId="abc" goal={goal({ status })}
+      onChanged={() => {}} />);
+    assert.match(html, /继续目标/);
+    assert.match(html, new RegExp(`data-status="${status}"`));
+  }
+  assert.match(renderToStaticMarkup(<SessionGoal sessionId="abc" goal={goal({ status: 'complete' })}
+    onChanged={() => {}} />), /已完成/);
+});
+
 test('clearing is offered but never while the session is busy', () => {
   const open = renderToStaticMarkup(<SessionGoal sessionId="abc" goal={goal()} onChanged={() => {}} />);
   assert.match(open, /清除目标/);

@@ -11,6 +11,16 @@ FINISH_REASONS = frozenset({'stop', 'length', 'tool_calls', 'content_filter',
                             'context_limit', 'paused', 'unknown'})
 
 
+def reported_model(metadata, value):
+    """Capture only the wire envelope's bounded model ID, never assistant prose."""
+    if (metadata is None or not isinstance(value, str) or not value or len(value) > 256
+            or any(ord(ch) < 32 for ch in value)):
+        return
+    models = metadata.setdefault('_response_models', [])
+    if value not in models and len(models) < 8:
+        models.append(value)
+
+
 def token_count(value):
     return type(value) is int and 0 <= value <= 1_000_000_000
 

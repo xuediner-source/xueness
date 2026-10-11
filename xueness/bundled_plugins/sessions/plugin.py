@@ -14,6 +14,22 @@ def execute_cli(args, deps=None):
 
 
 def dispatch(method, parts, query, data, ctx):
+    from .sharing import dispatch as sharing_dispatch
+    result = sharing_dispatch(method, parts, query, data, ctx)
+    if result is not None:
+        return result
+    from .history import dispatch as history_dispatch
+    result = history_dispatch(method, parts, query, data, ctx)
+    if result is not None:
+        return result
+    from .live_updates import dispatch as live_dispatch
+    result = live_dispatch(method, parts, query, data, ctx)
+    if result is not None:
+        return result
+    from .steering import dispatch as steering_dispatch
+    result = steering_dispatch(method, parts, query, data, ctx)
+    if result is not None:
+        return result
     from .search import dispatch as search_dispatch
     result = search_dispatch(method, parts, query, data, ctx)
     if result is not None:
@@ -58,6 +74,11 @@ def dispatch(method, parts, query, data, ctx):
     return http_dispatch(method, parts, query, data, ctx)
 
 
+def dispatch_page(parts, ctx):
+    from .sharing import dispatch_page as share_page
+    return share_page(parts, ctx)
+
+
 def tools():
     from .tooling import REGISTRY
     return REGISTRY
@@ -71,3 +92,23 @@ def completion_requires_evidence(session, call_ids=()):
 def composer_capabilities():
     from .composer_capabilities import CAPABILITIES
     return CAPABILITIES
+
+
+def prepare_session_save(store, session):
+    from .history import prepare
+    return prepare(store, session)
+
+
+def commit_session_save(token):
+    from .history import commit
+    commit(token)
+
+
+def before_model_request(session, store, state_dir=None, **kwargs):
+    from .steering import before_model_request as splice
+    return splice(session, store, state_dir, **kwargs)
+
+
+def settle_turn(session, store, turn_id=None):
+    from .steering import settle_turn as settle
+    return settle(session, store, turn_id)
