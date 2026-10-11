@@ -5,11 +5,13 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { ToolCallBudgetStatus, ToolExecutionSettings, parseToolBudget } from "./ToolExecutionSettings";
 import { SessionExperimentSettings } from "../sessions/SessionExperimentSettings";
 
-test("all experimental controls default off and are unavailable without a save handler", () => {
+test("experimental controls default off; auto-titling defaults on, both need a save handler", () => {
   const html = renderToStaticMarkup(<><SessionExperimentSettings values={{}} /><ToolExecutionSettings values={{}} /></>);
-  assert.equal((html.match(/role="switch"/g) ?? []).length, 4);
-  assert.doesNotMatch(html, /checked=""/);
-  assert.equal((html.match(/disabled=""/g) ?? []).length, 5);
+  assert.equal((html.match(/role="switch"/g) ?? []).length, 5);
+  // 会话自动命名 is not an experiment and ships on by default; the
+  // experimental switches stay off until individually enabled.
+  assert.equal((html.match(/checked=""/g) ?? []).length, 1);
+  assert.equal((html.match(/disabled=""/g) ?? []).length, 6);
 });
 
 test("tool budget validates actual counts rather than inventing unavailable data", () => {
