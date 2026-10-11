@@ -15,6 +15,7 @@ from unittest.mock import patch
 
 from tests.fake_provider_fixture import inject_provider
 from xueness import web
+from xueness.bundled_plugins.settings.settings_store import save_settings
 
 
 class DesktopSubagentHttpTests(unittest.TestCase):
@@ -23,6 +24,9 @@ class DesktopSubagentHttpTests(unittest.TestCase):
         self.addCleanup(self.temp.cleanup)
         base = Path(self.temp.name)
         self.state = base / "state"
+        # The outcome markers below must reflect the parent's own model turns;
+        # the sessions.auto_title naming call after settle is a side channel.
+        save_settings(self.state, {'general': {'sessionsAutoTitleEnabled': False}})
         self.web_runs = base / "web-runs"
         self.project = base / "project"
         self.workspace = base / "workspace"

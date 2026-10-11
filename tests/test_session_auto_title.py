@@ -128,6 +128,36 @@ class AutoTitleTests(unittest.TestCase):
         self.addCleanup(plugin_runtime.set_enabled, self.state, 'sessions', True)
         self.assertFalse(auto_title.enabled(self.state))
 
+    def test_child_sessions_never_get_automatic_titles(self):
+        """Delegated children keep their task name; no thread touches their journal."""
+        child = dict(self.session)
+        child['parent'] = self.session['id']
+        child['delegation'] = {'taskId': 'task-probe', 'parentSessionId': self.session['id'],
+                               'rootSessionId': self.session['id']}
+        self.assertTrue(auto_title.is_child_session(child))
+        with patch('xueness.provider_config.resolve') as resolve:
+            auto_title.settle_auto_title(child, self.store, synchronous=True)
+            resolve.assert_not_called()
+        self.assertIsNone(self.reload().get('title'))
+        # Forks are root sessions: the fork_parent marker must not exclude them.
+        fork = dict(self.session)
+        fork['fork_parent'] = {'sessionId': self.session['id']}
+        self.assertFalse(auto_title.is_child_session(fork))
+
+    def test_lightweight_profile_never_gets_automatic_titles(self):
+        """The lightweight profile's bounded request budget excludes naming calls."""
+        light = dict(self.session)
+        light['runtime_profile'] = 'lightweight'
+        with patch('xueness.provider_config.resolve') as resolve:
+            auto_title.settle_auto_title(light, self.store, synchronous=True)
+            resolve.assert_not_called()
+        self.assertIsNone(self.reload().get('title'))
+        standard = dict(self.session)
+        standard['runtime_profile'] = 'standard'
+        with patch('xueness.provider_config.resolve', return_value=None) as resolve:
+            auto_title.settle_auto_title(standard, self.store, synchronous=True)
+            self.assertEqual(resolve.call_count, 1)
+
     def test_failures_are_silent_and_bounded(self):
         provider = TitleProvider(error=RuntimeError('quota exhausted'))
         for _ in range(auto_title.MAX_FAILURES_PER_SESSION):

@@ -5,7 +5,10 @@ default task text receives one short model-generated title. The request is a
 bounded, tool-free structured plain-text call modeled on the providers plugin's
 semantic compaction request construction. Every failure path is silent and
 keeps the existing title; a user rename (``title_source='manual'``) always
-wins and is never overwritten.
+wins and is never overwritten. Only root sessions on the standard runtime
+profile are named: delegated child sessions keep their task text and short
+lifecycle, and the lightweight profile's bounded request budget never pays
+for a naming call.
 """
 from __future__ import annotations
 
@@ -76,6 +79,23 @@ def needs_title(session) -> bool:
     if isinstance(title, str) and title.strip() and title != session.get('task'):
         return False
     return True
+
+
+def is_child_session(session) -> bool:
+    """True for delegated subagent sessions, which are never auto-named.
+
+    A child keeps the dispatch prompt as its name: the name is set at creation,
+    the lifecycle is short, and the settled parent run must not leave a daemon
+    thread holding the child journal. Both lineage markers written by the
+    subagent runner are honored (``parent`` on every child, ``delegation`` on
+    durable ones); forks use ``fork_parent`` and stay root sessions here.
+    """
+    if not isinstance(session, dict):
+        return False
+    lineage = session.get('delegation')
+    if isinstance(lineage, dict) and lineage.get('parentSessionId'):
+        return True
+    return bool(session.get('parent'))
 
 
 def first_exchange(session):
@@ -275,6 +295,10 @@ def settle_auto_title(session, store, turn_id=None, *, synchronous=False):
             return
         sid = session.get('id')
         if not isinstance(sid, str) or not _SESSION_ID.fullmatch(sid):
+            return
+        # Delegated children keep their task name, and the lightweight profile
+        # owns its model-request budget: neither ever pays for a naming call.
+        if is_child_session(session) or session.get('runtime_profile') == 'lightweight':
             return
         if not enabled(state_dir) or not needs_title(session):
             return

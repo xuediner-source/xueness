@@ -13,6 +13,7 @@ from unittest.mock import patch
 from xueness import plugin_runtime, provider_config, providers_api, web
 from xueness.bundled_plugins.providers import default_selection
 from xueness.bundled_plugins.sessions import model_switch
+from xueness.bundled_plugins.settings.settings_store import save_settings
 from xueness.core import Gate, Store, run
 from xueness.plugin_runtime import set_enabled
 
@@ -78,6 +79,9 @@ class RuntimeModelSwitchTests(unittest.TestCase):
         self.store = Store(self.state)
         self.ctx = web.build_context(self.state, base / "runs", base / "proj", allow_real=True)
         self.log = []
+        # This module pins mid-run switch semantics for main-loop requests only;
+        # the sessions.auto_title naming call after settle is out of scope here.
+        save_settings(self.state, {'general': {'sessionsAutoTitleEnabled': False}})
         for record in (
             {"id": "first", "name": "First", "baseUrl": "https://models.example.test/v1",
              "model": FIRST, "apiKey": "test-only-key", "reasoningLevels": LEVELS},

@@ -20,6 +20,17 @@ from pathlib import Path
 
 from xueness.core import Gate, Store, append_user_turn, run
 from xueness.memory import UNTRUSTED_PREAMBLE  # noqa: F401  (kept for clarity)
+from xueness.bundled_plugins.settings.settings_store import save_settings
+
+
+def _no_auto_title(state_dir) -> None:
+    """These fixtures race TemporaryDirectory cleanup right after fast runs.
+
+    sessions.auto_title performs its settled naming request on a daemon thread,
+    which may still touch the state directory during tearDown; the behavior is
+    not what this module pins, so the toggle is off in its fixtures.
+    """
+    save_settings(state_dir, {'general': {'sessionsAutoTitleEnabled': False}})
 
 
 def _write(state_dir: Path, kind: str, rid: str, **fields) -> None:
@@ -92,6 +103,7 @@ class CommandExpansionTests(unittest.TestCase):
         self.state.mkdir(parents=True)
         self.workspace.mkdir(parents=True)
         self.store = Store(self.state)
+        _no_auto_title(self.state)
 
     def tearDown(self):
         self._tmp.cleanup()
@@ -132,6 +144,7 @@ class McpLoopTests(unittest.TestCase):
         self.server_py.write_text(FAKE_MCP_SERVER, encoding="utf-8")
         _write(self.state, "mcp", "srv", name="srv", command=sys.executable,
                args=[str(self.server_py)])
+        _no_auto_title(self.state)
 
     def tearDown(self):
         self._tmp.cleanup()
@@ -268,6 +281,7 @@ class SubagentLoopTests(unittest.TestCase):
         self.store = Store(self.state)
         _write(self.state, "subagents", "reviewer", name="Reviewer",
                systemPrompt="You review things carefully.")
+        _no_auto_title(self.state)
 
     def tearDown(self):
         self._tmp.cleanup()
@@ -409,6 +423,7 @@ class DefaultsUnchangedTests(unittest.TestCase):
         self.state.mkdir(parents=True)
         self.workspace.mkdir(parents=True)
         self.store = Store(self.state)
+        _no_auto_title(self.state)
 
     def tearDown(self):
         self._tmp.cleanup()
