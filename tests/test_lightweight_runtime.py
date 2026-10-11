@@ -58,7 +58,9 @@ class LightweightTests(unittest.TestCase):
         self.assertEqual(self.provider.compatibility, {})
 
     def test_small_window_reduces_initial_tools(self):
-        self.provider.context_window = 2048
+        # 3072 仍走 <4096 的缩减工具集路径，同时在 Windows 的 exec 平台指导文案
+        # 下也给固定系统提示与工具 schema 留出预算余量。
+        self.provider.context_window = 3072
         self.provider.max_output_tokens = 512
         _, tools = lw.select_tools(tool_schemas(), self.session(), self.gate, self.provider)
         self.assertEqual({lw.tool_name(t) for t in tools}, {'read', 'exec', 'ask_user', 'tool_search'})

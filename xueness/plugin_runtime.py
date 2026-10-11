@@ -177,6 +177,14 @@ def _broken_state():
 
 def catalog(state_dir):
     manifests = _manifests()
+    if state_dir is None:
+        # Ephemeral runs without a policy directory (e.g. delegated child
+        # sessions) carry no configuration to read. Like an unreadable state
+        # file this fails closed: no plugin is effective, so no callback can
+        # reach for a state directory that does not exist.
+        broken = _broken_state()
+        return _resolve_items(manifests,
+                              _chooser(manifests, broken['enabled'], broken['profile']['overlay']), '')
     error = ''
     try:
         state = _read_state(state_dir)

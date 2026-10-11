@@ -114,9 +114,14 @@ class AnswerQuestionRouteTests(unittest.TestCase):
                                     'alreadyAnswered': False})
         session = self.ctx['store'].load(self.sid)
         self.assertIsNone(session['pending_question'])
-        self.assertEqual(session['messages'][-1], {
-            'role': 'user', 'content': 'Operator answer: ~/workspace',
-        })
+        # 0.1.6 会话稳定历史：消息持久化时携带私有身份（_turn_id/_message_id），
+        # 公开形状（role/content）不变，provider 请求会剔除下划线字段。
+        answer = session['messages'][-1]
+        self.assertEqual({key: value for key, value in answer.items()
+                          if not key.startswith('_')},
+                         {'role': 'user', 'content': 'Operator answer: ~/workspace'})
+        self.assertEqual(answer['_turn_id'], 'turn-2')
+        self.assertRegex(answer['_message_id'], r'^[0-9a-f]{32}$')
         self.assertEqual(session['question_answer_records'][question_id],
                          hashlib.sha256(b'~/workspace').hexdigest())
 

@@ -43,7 +43,13 @@ class MessageActionTests(unittest.TestCase):
         self.update(3, text='new second user')
         result = self.store.load(self.sid)
         self.assertEqual(result['messages'][:-1], self.session['messages'][:3])
-        self.assertEqual(result['messages'][-1], {'role':'user','content':'new second user'})
+        # 0.1.6 会话稳定历史：编辑后的消息携带私有身份，且保留目标轮 _turn_id。
+        edited = result['messages'][-1]
+        self.assertEqual({key: value for key, value in edited.items()
+                          if not key.startswith('_')},
+                         {'role': 'user', 'content': 'new second user'})
+        self.assertEqual(edited['_turn_id'], 'turn-2')
+        self.assertRegex(edited['_message_id'], r'^[0-9a-f]{32}$')
         self.assertEqual(result['completion_history'], self.session['completion_history'][:1])
         self.assertEqual(result['reasoning_history'], self.session['reasoning_history'][:1])
         self.assertEqual(result['message_annotations'], {'2':{'feedback':'like'}})

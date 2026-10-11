@@ -102,7 +102,8 @@ class AgentWorkPolicyTests(unittest.TestCase):
             block = plugin.completion_instructions(session)
             self.assertIn('call delivery_plan', block)
             self.assertIn('会话目标：Specific requested outcome', block)
-            self.assertTrue(block.endswith('/“Goal achieved”；未达成请说明剩余工作并继续。）'))
+            # 0.1.6 起目标提醒改为「完成措辞不能替代核验」的独立核验话术。
+            self.assertTrue(block.endswith('尚未达成请继续，受阻请说明原因。）'))
             self.assertLessEqual(len(block), 6000)
 
     def test_policy_is_fixed_and_does_not_interpolate_or_mutate_session_data(self):

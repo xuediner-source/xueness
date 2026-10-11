@@ -43,6 +43,28 @@ class Refusal:
         raise SystemExit(2)
 
 
+class VerifiedProvider:
+    """Main turns get the canned content; the planning verifier gets a verdict.
+
+    0.1.6 起完成措辞本身不构成证据：goal_driver 在安全边界用同一 provider 做
+    一次不带工具的独立核验，这里按请求特征返回核验裁决 JSON。
+    """
+
+    def __init__(self, content, verdict):
+        self.content = content
+        self.verdict = verdict
+
+    def complete(self, messages, tools):
+        if (messages and isinstance(messages[0], dict)
+                and 'independent completion verifier' in str(messages[0].get('content', ''))):
+            context = json.loads(messages[1]['content'])
+            evidence = [row['id'] for row in context.get('evidence', [])
+                        if isinstance(row, dict) and isinstance(row.get('id'), str)]
+            return {'role': 'assistant', 'content': json.dumps(
+                {**self.verdict, 'evidenceIds': evidence[:1]}, ensure_ascii=False)}
+        return {'role': 'assistant', 'content': self.content}
+
+
 class GoalStateTests(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
@@ -154,12 +176,13 @@ class CompletionVerificationTests(unittest.TestCase):
         self.state = self.root / 'state'
         self.store = Store(self.state)
 
-    def finish(self, prompt, content, goal=None):
+    def finish(self, prompt, content, goal=None, verdict=None):
         session = self.store.new(prompt, self.root)
         if goal is not None:
             session_goal.set_goal(session, goal, state_dir=self.state)
             self.store.save(session)
-        return run(session, self.store, AnswerProvider(content), Gate(self.root))
+        provider = VerifiedProvider(content, verdict) if verdict is not None else AnswerProvider(content)
+        return run(session, self.store, provider, Gate(self.root))
 
     def planning_checks(self, result):
         checks = result['completion']['delivery_checks']['planning']
@@ -169,32 +192,44 @@ class CompletionVerificationTests(unittest.TestCase):
     def test_silent_finish_is_reported_instead_of_assumed_done(self):
         result = self.finish('你好，请用一句中文打招呼。', '你好！有什么可以帮你的？',
                              goal='把首屏降到 1 秒内')
-        self.assertEqual(result['status'], 'needs_review')
+        # 0.1.6 契约：主机交付层面照常判定，但目标本身不得冒领完成。
+        # 核验无法完成（provider 未返回裁决 JSON）时目标转为受阻，等待用户继续。
+        self.assertEqual(result['status'], 'completed')
         item, checks = self.planning_checks(result)
         self.assertFalse(item['passed'])
-        self.assertIn('目标已完成', item['missing'][0])
-        self.assertEqual(checks['status'], 'failed')
-        self.assertEqual(session_goal.current(result)['status'], 'active')
-        self.assertEqual(self.store.load(result['id'])['goal']['status'], 'active')
+        self.assertIn('独立核验', item['missing'][0])
+        self.assertEqual(checks['status'], 'not_assessed')
+        goal = session_goal.current(result)
+        self.assertEqual(goal['status'], 'blocked')
+        self.assertIn('独立核验', goal['runtime']['reason'])
+        self.assertEqual(self.store.load(result['id'])['goal']['status'], 'blocked')
 
     def test_explicit_declaration_achieves_the_goal_and_completes_the_run(self):
         for content in ('目标已完成：首屏 0.8 秒。', 'Goal achieved. The page renders in 0.8s.'):
             with self.subTest(content=content):
-                result = self.finish('你好，请用一句中文打招呼。', content, goal='把首屏降到 1 秒内')
+                result = self.finish('你好，请用一句中文打招呼。', content, goal='把首屏降到 1 秒内',
+                                     verdict={'passed': True, 'reason': '答案与目标一致。',
+                                              'remaining': []})
                 self.assertEqual(result['status'], 'completed')
                 item, checks = self.planning_checks(result)
+                # 完成声明只是核验输入：目标由独立核验裁决写为完成，主机交付
+                # 清单本身仍未登记。
                 self.assertTrue(item['passed'])
-                # 交付清单本身仍未登记，所以整体不冒领「交付检查通过」，只记录目标达成。
-                self.assertEqual(checks['status'], 'not_assessed')
-                self.assertEqual(checks['goal'], {'status': 'achieved', 'text': '把首屏降到 1 秒内'})
-                self.assertEqual(session_goal.current(result)['status'], 'achieved')
-                self.assertEqual(self.store.load(result['id'])['goal']['status'], 'achieved')
+                self.assertEqual(checks['goal']['text'], '把首屏降到 1 秒内')
+                goal = session_goal.current(result)
+                self.assertEqual(goal['status'], 'complete')
+                self.assertTrue(goal['verification']['passed'])
+                self.assertEqual(self.store.load(result['id'])['goal']['status'], 'complete')
 
     def test_negated_declaration_does_not_achieve_the_goal(self):
         result = self.finish('你好，请用一句中文打招呼。', '我还没确认目标已完成，需要人工复核。',
                              goal='把首屏降到 1 秒内')
-        self.assertEqual(result['status'], 'needs_review')
-        self.assertEqual(session_goal.current(result)['status'], 'active')
+        # 否定声明既不能完成目标也拿不到核验通过；核验无法完成时目标受阻。
+        self.assertEqual(result['status'], 'completed')
+        goal = session_goal.current(result)
+        self.assertEqual(goal['status'], 'blocked')
+        self.assertIn('独立核验', goal['runtime']['reason'])
+        self.assertEqual(self.store.load(result['id'])['goal']['status'], 'blocked')
 
     def test_a_session_without_goal_is_assessed_as_before(self):
         result = self.finish('你好，请用一句中文打招呼。', '你好！')
