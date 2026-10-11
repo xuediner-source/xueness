@@ -1,7 +1,14 @@
 name: Desktop installers
 on:
+  push:
+    branches:
+      - main
   workflow_dispatch:
     inputs:
+      fast_build:
+        description: 'Run focused ownership, platform parity and package checks; set false for the extended test suite'
+        type: boolean
+        default: true
       skip_windows_update_smoke:
         description: 'Owner-approved release only: skip the unverified installed Windows update rehearsal'
         type: boolean
@@ -15,12 +22,15 @@ jobs:
       matrix:
         include:
           - runner: windows-2025
+            platform: win32
             arch: x64
             target: windows-x64
           - runner: macos-15-intel
+            platform: darwin
             arch: x64
             target: macos-x64
           - runner: macos-15
+            platform: darwin
             arch: arm64
             target: macos-arm64
     runs-on: ${{ matrix.runner }}
@@ -32,6 +42,8 @@ jobs:
       PYTHONUTF8: '1'
       XUENESS_ALLOW_REAL: '0'
       CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+      XUENESS_BUILD_PLATFORM: ${{ matrix.platform }}
+      XUENESS_BUILD_ARCH: ${{ matrix.arch }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
@@ -47,7 +59,16 @@ jobs:
           npm ci --prefix webapp --no-audit --no-fund
           npm ci --prefix desktop --no-audit --no-fund
           node desktop/node_modules/electron/install.js
-      - name: Check feature ownership and portable backend behavior
+      - name: Check feature ownership and focused native parity
+        if: ${{ github.event_name == 'push' || inputs.fast_build != false }}
+        run: |
+          python tools/check_plugin_architecture.py
+          node --test desktop/tests/native-build-guard.test.cjs desktop/tests/native-labels.test.cjs desktop/tests/window-chrome.test.cjs desktop/tests/main-lifecycle.test.cjs desktop/tests/data-directory.test.cjs
+          python -m unittest tests.test_plugin_architecture tests.test_host_platform tests.test_host_path_identity -q
+          npm --prefix webapp run typecheck
+          npm --prefix webapp run build
+      - name: Run extended release test suite
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.fast_build == false }}
         run: |
           python tools/check_plugin_architecture.py
           node desktop/scripts/check_electron_update_transport.cjs
@@ -62,9 +83,12 @@ jobs:
       - name: Verify public GitHub Windows installer download
         if: runner.os == 'Windows'
         run: node desktop/scripts/check_windows_github_download.cjs
-      - name: Freeze and exercise the actual backend
+      - name: Freeze the native backend
         run: |
           python desktop/scripts/build_backend.py
+      - name: Exercise the actual backend integration suite
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.fast_build == false }}
+        run: |
           python desktop/scripts/check_backend.py
           python desktop/scripts/check_backend.py --force-exit
       - name: Build Windows installer and portable ZIP
@@ -76,7 +100,7 @@ jobs:
       - name: Verify packaged Electron workbench
         run: python desktop/scripts/check_app.py
       - name: Exercise the installed NSIS in-app update path
-        if: runner.os == 'Windows' && !inputs.skip_windows_update_smoke
+        if: ${{ runner.os == 'Windows' && github.event_name == 'workflow_dispatch' && inputs.fast_build == false && !inputs.skip_windows_update_smoke }}
         run: python desktop/scripts/check_windows_update.py
       - name: Upload Windows update smoke diagnostics
         if: ${{ always() && runner.os == 'Windows' }}
@@ -98,7 +122,7 @@ jobs:
         with:
           name: Xueness-${{ matrix.target }}
           compression-level: 0
-          retention-days: 1
+          retention-days: 14
           if-no-files-found: error
           path: |
             desktop/release/*.exe
