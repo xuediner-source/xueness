@@ -3,7 +3,7 @@ on:
   workflow_dispatch:
     inputs:
       build_run_id:
-        description: 'Successful native desktop build of this exact commit'
+        description: 'Successful full native build (workflow_dispatch with fast_build=false) for this exact commit'
         type: string
         required: true
 permissions:
@@ -12,7 +12,7 @@ permissions:
 jobs:
   stage:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 30
     env:
       GH_TOKEN: ${{ github.token }}
       XUENESS_BUILD_RUN: ${{ inputs.build_run_id }}
