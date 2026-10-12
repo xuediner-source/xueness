@@ -9,10 +9,6 @@ on:
         description: 'Run focused ownership, platform parity and package checks; set false for the extended test suite'
         type: boolean
         default: true
-      skip_windows_update_smoke:
-        description: 'Owner-approved release only: skip the unverified installed Windows update rehearsal'
-        type: boolean
-        default: false
 permissions:
   contents: read
 jobs:
@@ -34,7 +30,7 @@ jobs:
             arch: arm64
             target: macos-arm64
     runs-on: ${{ matrix.runner }}
-    timeout-minutes: 30
+    timeout-minutes: 60
     defaults:
       run:
         shell: bash
@@ -72,10 +68,9 @@ jobs:
         run: |
           python tools/check_plugin_architecture.py
           node desktop/scripts/check_electron_update_transport.cjs
-          python -m unittest tests.test_desktop tests.test_desktop_updates tests.test_plugin_architecture tests.test_workspace_instructions tests.test_terminal_profiles -q
-          python -m unittest tests.test_workflows.WorkflowTests.test_real_background_dag_failure_then_resume_without_replaying_success tests.test_mcp.McpTestCase.test_start_performs_the_initialize_handshake -q
-          python -m unittest tests.test_desktop_subagents tests.test_subagent_coordination tests.test_subagents tests.test_subagent_deadlines tests.test_context_continuity tests.test_agent_work_policy -q
-          python -m unittest discover -s desktop/tests -p 'test_windows_update_smoke.py' -q
+          python -m unittest discover -s tests -q
+          node --test tests/*.test.mjs
+          python -m unittest discover -s desktop/tests -p 'test_*.py' -q
           npm --prefix desktop test
           npm --prefix webapp test
           npm --prefix webapp run typecheck
@@ -100,7 +95,7 @@ jobs:
       - name: Verify packaged Electron workbench
         run: python desktop/scripts/check_app.py
       - name: Exercise the installed NSIS in-app update path
-        if: ${{ runner.os == 'Windows' && github.event_name == 'workflow_dispatch' && inputs.fast_build == false && !inputs.skip_windows_update_smoke }}
+        if: ${{ runner.os == 'Windows' && github.event_name == 'workflow_dispatch' && inputs.fast_build == false }}
         run: python desktop/scripts/check_windows_update.py
       - name: Upload Windows update smoke diagnostics
         if: ${{ always() && runner.os == 'Windows' }}
