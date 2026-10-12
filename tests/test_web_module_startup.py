@@ -87,18 +87,48 @@ class WebModuleStartupTests(unittest.TestCase):
             "--web-runs", str(self.web_runs),
             "--workspace-root", str(self.workspace),
         ]
+        # A child whose output pipes are not drained can block while starting.
+        # File-backed logs keep startup independent of pipe-buffer size and are
+        # still available in the failure message below.
+        self.stdout_log_path = base / "web.stdout.log"
+        self.stderr_log_path = base / "web.stderr.log"
+        self.stdout_log = self.stdout_log_path.open("w+b")
+        self.stderr_log = self.stderr_log_path.open("w+b")
+        self.addCleanup(self.stdout_log.close)
+        self.addCleanup(self.stderr_log.close)
         self.process = subprocess.Popen(
             command,
             cwd=REPOSITORY_ROOT,
             env=environment,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            text=True,
+            stdout=self.stdout_log,
+            stderr=self.stderr_log,
         )
         self.process_output = ("", "")
         self.addCleanup(self._stop_server)
         self.base_url = f"http://127.0.0.1:{self.port}"
+        # This fixture only talks to its own loopback server. Ignore system and
+        # environment proxy settings so a developer or CI proxy cannot capture
+        # a health check that is intended to stay local.
+        self.opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
         self._wait_until_ready()
+
+    @staticmethod
+    def _read_log(path, limit=16 * 1024):
+        # Read through an independent handle so this diagnostic snapshot does
+        # not move a Windows child writer's shared file offset.
+        with path.open("rb") as stream:
+            stream.seek(0, os.SEEK_END)
+            size = stream.tell()
+            stream.seek(max(0, size - limit), os.SEEK_SET)
+            raw = stream.read(limit)
+        return raw.decode("utf-8", errors="replace")
+
+    def _capture_process_output(self):
+        self.process_output = (
+            self._read_log(self.stdout_log_path),
+            self._read_log(self.stderr_log_path),
+        )
+        return self.process_output
 
     def _stop_server(self):
         process = getattr(self, "process", None)
@@ -107,31 +137,43 @@ class WebModuleStartupTests(unittest.TestCase):
         if process.poll() is None:
             process.terminate()
         try:
-            self.process_output = process.communicate(timeout=5)
+            process.wait(timeout=5)
         except subprocess.TimeoutExpired:
             process.kill()
-            self.process_output = process.communicate(timeout=5)
+            process.wait(timeout=5)
+        self._capture_process_output()
 
     def _wait_until_ready(self):
         deadline = time.monotonic() + 10
         last_error = None
         while time.monotonic() < deadline:
             if self.process.poll() is not None:
-                stdout, stderr = self.process.communicate()
-                self.process_output = (stdout, stderr)
-                self.fail(f"web module exited during startup: {stderr or stdout}")
+                stdout, stderr = self._capture_process_output()
+                self.fail(
+                    "web module exited during startup "
+                    f"(return code {self.process.returncode}): {stderr or stdout or '<no output>'}"
+                )
             try:
-                status, body, _ = self._get("/api/health")
+                status, body, _ = self._get(
+                    "/api/health",
+                    timeout=max(0.1, min(1.0, deadline - time.monotonic())),
+                )
                 if status == 200 and json.loads(body).get("service") == "xueness-web":
                     return
             except (OSError, urllib.error.URLError, ValueError) as exc:
                 last_error = exc
                 time.sleep(0.05)
-        self.fail(f"web module did not become ready: {last_error!r}")
+        stdout, stderr = self._capture_process_output()
+        self.fail(
+            "web module did not become ready within 10 seconds "
+            f"(pid {self.process.pid}, return code {self.process.poll()}, "
+            f"last health error {last_error!r}); "
+            f"stdout tail: {stdout or '<empty>'}; stderr tail: {stderr or '<empty>'}"
+        )
 
-    def _get(self, path, headers=None):
+    def _get(self, path, headers=None, timeout=5):
         request = urllib.request.Request(self.base_url + path, headers=headers or {})
-        with urllib.request.urlopen(request, timeout=5) as response:
+        with self.opener.open(request, timeout=timeout) as response:
             return response.status, response.read().decode("utf-8"), dict(response.headers)
 
     def test_plugin_routes_work_through_module_entrypoint_and_completed_delta_sse(self):

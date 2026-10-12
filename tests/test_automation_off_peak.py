@@ -77,7 +77,7 @@ class OffPeakTests(unittest.TestCase):
 
     def task(self, **overrides):
         data = {'prompt': '整理本周的构建日志', 'name': '周报', 'root': str(self.root),
-                'confirm': True, 'allowReal': True}
+                'confirm': True, 'allowReal': True, 'timezone': TZ}
         data.update(overrides)
         return self.queue().add(data)
 

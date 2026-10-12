@@ -337,13 +337,14 @@ class WriteLockTests(unittest.TestCase):
         base = Path(holder.name)
         left, right = base / "Notes.md", base / "notes.md"
         if os.name != "nt":
-            # Native Windows paths already ignore case, even with sys.platform
-            # mocked to Linux; it cannot emulate a POSIX path comparison here.
-            linux = WriteLocks()
-            self.assertTrue(linux.acquire(left, "s1"))
-            self.assertTrue(linux.acquire(right, "s2"))
-            linux.release(right, "s1")
-            self.assertEqual(linux.holder(left), "s1")
+            # Select Linux semantics explicitly so a macOS runner's Darwin
+            # platform does not leak into this Linux-only assertion.
+            with self.subTest(platform="linux"), patch.object(write_lock.sys, "platform", "linux"):
+                linux = WriteLocks()
+                self.assertTrue(linux.acquire(left, "s1"))
+                self.assertTrue(linux.acquire(right, "s2"))
+                linux.release(right, "s1")
+                self.assertEqual(linux.holder(left), "s1")
 
         with self.subTest(platform="darwin"), patch.object(write_lock.sys, "platform", "darwin"):
             locks = WriteLocks()
