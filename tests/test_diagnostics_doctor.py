@@ -68,6 +68,22 @@ class DoctorTestCase(unittest.TestCase):
         self.assertFalse((self.base / "nowhere").exists())
         self.assertFalse(document["ok"])
 
+    def test_unwritable_workspace_keeps_the_overall_result_failed(self):
+        os.environ["XUENESS_API_BASE"] = "https://api.example.com/v1"
+        os.environ["XUENESS_MODEL"] = "test-model"
+        os.environ["XUENESS_API_KEY"] = "test-key"
+        document = doctor.report(self.state, root=self.base / "nowhere")
+        self.assertTrue(document["model"]["resolvable"])
+        self.assertFalse(document["storage"]["workspace"]["writable"])
+        self.assertFalse(document["ok"])
+
+    def test_failed_probe_write_removes_its_temporary_file(self):
+        with patch("xueness.bundled_plugins.diagnostics.doctor.os.write",
+                   side_effect=PermissionError("fixture")):
+            result = doctor._probe_directory(self.work)
+        self.assertFalse(result["writable"])
+        self.assertEqual(list(self.work.glob(".xueness-doctor-*")), [])
+
     def test_model_resolves_from_environment_without_a_request(self):
         os.environ["XUENESS_API_BASE"] = "https://api.example.com/v1"
         os.environ["XUENESS_MODEL"] = "test-model"
@@ -119,6 +135,17 @@ class DoctorTestCase(unittest.TestCase):
         self.assertFalse(document["model"]["ping"]["ok"])
         self.assertEqual(document["model"]["ping"]["error"],
                          "provider model discovery failed (details suppressed)")
+        self.assertTrue(document["model"]["resolvable"])
+        self.assertFalse(document["ok"])
+
+        args = SimpleNamespace(state=self.state, root=self.work, ping=True, json=True,
+                               language=None)
+        output = io.StringIO()
+        with patch("xueness.bundled_plugins.providers.provider_config.resolve",
+                   return_value=resolved), contextlib.redirect_stdout(output):
+            code = doctor.execute(args)
+        self.assertEqual(code, 1)
+        self.assertFalse(json.loads(output.getvalue())["ok"])
 
     def test_ping_without_discovery_support_reports_the_protocol(self):
         self.write_provider()

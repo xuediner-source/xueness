@@ -810,6 +810,10 @@ JOURNAL_DEFAULT_LIMIT = 200
 JOURNAL_MAX_LIMIT = 500
 
 
+class StaleJournalCursor(ValueError):
+    """A page cursor was created for a different journal revision."""
+
+
 def _journal_query_one(query, name):
     value = query.get(name)
     if isinstance(value, (tuple, list)):
@@ -817,23 +821,26 @@ def _journal_query_one(query, name):
     return value
 
 
-def journal_page(session, query):
+def journal_page(session, query, message_revision=None):
     """Return the journal payload bounded to one page of active messages.
 
     ``cursor`` pages toward the head: it is the exclusive end index of the
     next older page, and ``next_cursor`` repeats that contract for the page
-    before this one, so ``?cursor=<next_cursor>`` is the only paging call a
-    client needs until it returns ``null``. Session meta other than
+    before this one. Every cursor request must also send the
+    ``message_revision`` returned with the first page; a changed journal gets
+    409 even when compaction leaves the old numeric offset in range. Session
+    meta other than
     ``messages`` (task, status, usage, results, archived rows, ...) stays in
     full; archived and compacted rows live in their own fields and never
     enter the window, matching the journal's existing ``messages`` meaning.
-    A shrunken transcript (compaction between pages) invalidates an old
-    cursor as a plain 400 instead of silently returning the wrong page.
     """
     messages = session.get('messages')
     if not isinstance(messages, list):
         messages = []
     total = len(messages)
+    if message_revision is None:
+        from .message_actions import revision
+        message_revision = revision(session)
 
     def bounded(raw, name, floor, ceiling):
         try:
@@ -848,13 +855,22 @@ def journal_page(session, query):
     limit = (JOURNAL_DEFAULT_LIMIT if raw_limit is None
              else bounded(raw_limit, 'limit', 1, JOURNAL_MAX_LIMIT))
     raw_cursor = _journal_query_one(query, 'cursor')
-    end = total if raw_cursor is None else bounded(raw_cursor, 'cursor', 0, total)
+    if raw_cursor is None:
+        end = total
+    else:
+        requested_revision = _journal_query_one(query, 'message_revision')
+        if not isinstance(requested_revision, str) or not requested_revision:
+            raise ValueError('journal cursor requires message_revision')
+        if requested_revision != message_revision:
+            raise StaleJournalCursor('journal changed; restart paging from the newest page')
+        end = bounded(raw_cursor, 'cursor', 0, total)
     start = max(0, end - limit)
     return {**session,
             'messages': messages[start:end],
             'truncated': start > 0 or end < total,
             'next_cursor': str(start) if start > 0 else None,
-            'total_messages': total}
+            'total_messages': total,
+            'message_revision': message_revision}
 
 
 def handle_GET(self, parts, path, data):
@@ -994,12 +1010,15 @@ def handle_GET(self, parts, path, data):
         query = host.urllib.parse.parse_qs(host.urllib.parse.urlparse(self.path).query,
                                            keep_blank_values=True)
         try:
-            payload = journal_page(session, query)
+            from .message_actions import revision
+            current_revision = revision(session)
+            payload = journal_page(session, query, current_revision)
+        except StaleJournalCursor as exc:
+            self._send(409, {'error': str(exc)})
+            return True
         except ValueError as exc:
             self._send(400, {'error': str(exc)})
             return True
-        from .message_actions import revision
-        payload['message_revision'] = revision(session)
         self._send(200, payload)
         return True
     return False

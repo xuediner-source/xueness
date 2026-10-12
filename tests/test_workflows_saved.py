@@ -16,6 +16,7 @@ import threading
 import time
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from xueness import plugin_runtime
 from xueness.bundled_plugins.workflows import saved_library, tools as workflow_tools
@@ -83,6 +84,71 @@ class SavedWorkflowLibraryTests(unittest.TestCase):
         self.assertEqual(replaced['plan_name'], 'after')
         self.assertEqual([row['name'] for row in self.library.list()], ['flow'])
         self.assertEqual(self.library.load('flow')['plan']['name'], 'after')
+
+    def test_concurrent_create_does_not_silently_overwrite_a_template(self):
+        original_write = saved_library._atomic_write_json
+        first_writer_entered = threading.Event()
+        release_first_writer = threading.Event()
+        second_call_started = threading.Event()
+        second_path_checked = threading.Event()
+        write_lock = threading.Lock()
+        writes = 0
+        results = []
+        errors = []
+        original_path = self.library.path
+
+        def pause_first_write(path, record):
+            nonlocal writes
+            with write_lock:
+                writes += 1
+                current = writes
+            if current == 1:
+                first_writer_entered.set()
+                if not release_first_writer.wait(5):
+                    raise TimeoutError('first template write was not released')
+            original_write(path, record)
+
+        def track_path(name):
+            if threading.current_thread().name == 'saved-workflow-second':
+                second_path_checked.set()
+            return original_path(name)
+
+        def save(plan_name):
+            try:
+                results.append(self.library.save(self.plan(name=plan_name), 'shared',
+                                                 self.workspace))
+            except Exception as exc:
+                errors.append(exc)
+
+        with patch.object(saved_library, '_atomic_write_json', side_effect=pause_first_write), \
+                patch.object(self.library, 'path', side_effect=track_path):
+            first = threading.Thread(target=save, args=('first',),
+                                     name='saved-workflow-first')
+            first.start()
+            self.assertTrue(first_writer_entered.wait(2), 'first writer did not reach publication')
+
+            def save_second():
+                second_call_started.set()
+                save('second')
+
+            second = threading.Thread(target=save_second, name='saved-workflow-second')
+            second.start()
+            self.assertTrue(second_call_started.wait(2), 'second writer did not start')
+            # The second writer has entered save while the first publication is
+            # paused. It must wait for the per-name lock before checking exists.
+            self.assertFalse(second_path_checked.wait(.1),
+                             'second writer checked the name outside its lock')
+            release_first_writer.set()
+            first.join(5)
+            second.join(5)
+
+        self.assertFalse(first.is_alive())
+        self.assertFalse(second.is_alive())
+        self.assertEqual(len(results), 1)
+        self.assertEqual(len(errors), 1)
+        self.assertIsInstance(errors[0], ValueError)
+        self.assertIn('already exists', str(errors[0]))
+        self.assertIn(self.library.load('shared')['plan']['name'], ('first', 'second'))
 
     def test_invalid_names_are_refused_and_write_nothing(self):
         bad = ['', 'a' * 65, 'a' * 64 + 'x', '.hidden', '../escape', 'a/b', 'a\\b',

@@ -109,9 +109,13 @@ def before_model_request(session, store, state_dir=None, **kwargs):
     return splice(session, store, state_dir, **kwargs)
 
 
-def settle_turn(session, store, turn_id=None):
+def settle_turn(session, store, turn_id=None, **run_context):
     from .steering import settle_turn as settle
     settled = settle(session, store, turn_id)
     from .auto_title import settle_auto_title
-    settle_auto_title(session, store, turn_id)
+    settle_auto_title(
+        session, store, turn_id,
+        provider=run_context.get('provider'),
+        allow_model_requests=run_context.get('allow_model_requests') is True,
+    )
     return settled

@@ -48,6 +48,7 @@ _QUOTES = (('「', '」'), ('『', '』'), ('“', '”'), ('‘', '’'), ('《
 _FAILURE_LOCK = threading.Lock()
 _FAILURES: dict = {}
 _INFLIGHT: set = set()
+_SCHEDULED: set = set()
 
 
 def encoded(value):
@@ -181,15 +182,19 @@ def _record_failure(sid):
         _FAILURES[sid] = _FAILURES.get(sid, 0) + 1
 
 
-def _resolve_provider(state_dir, session, sid):
-    """Silently refuse when no valid model binding exists."""
+def _bound_model_provider(provider):
+    """Return the real adapter bound to this run, unwrapping runtime switching."""
+    if provider is None:
+        return None
     try:
-        selection = session.get('model_selection')
-        selection = selection if isinstance(selection, dict) else {}
-        return provider_config.resolve(
-            state_dir, selection.get('provider_id'), selection.get('model'),
-            reasoning_effort=selection.get('reasoning_effort'), session_id=sid)
-    except Exception:
+        from ..providers.provider import AnthropicMessages, OpenAICompatible
+        from ..subscriptions.provider import NativeProvider
+        from .model_switch import SwitchableProvider
+        if isinstance(provider, SwitchableProvider):
+            provider = object.__getattribute__(provider, '_current')
+        return (provider if isinstance(provider, (AnthropicMessages, OpenAICompatible,
+                                                  NativeProvider)) else None)
+    except (ImportError, AttributeError, TypeError):
         return None
 
 
@@ -233,11 +238,12 @@ def _request_title(provider, prompt):
 def generate_and_store(sid, store, state_dir, *, provider=None):
     """Generate one title and persist it; returns the title or None.
 
-    All failures are silent and keep the current title. The journal is
-    re-read before saving so a manual rename that lands meanwhile wins.
+    All failures are silent and keep the current title. Publication checks the
+    latest journal under its write lock, so a concurrent manual rename wins.
     """
     with _FAILURE_LOCK:
-        if _FAILURES.get(sid, 0) >= MAX_FAILURES_PER_SESSION or sid in _INFLIGHT:
+        if (_FAILURES.get(sid, 0) >= MAX_FAILURES_PER_SESSION or sid in _INFLIGHT
+                or sid in _SCHEDULED):
             return None
         _INFLIGHT.add(sid)
     try:
@@ -249,30 +255,55 @@ def generate_and_store(sid, store, state_dir, *, provider=None):
 
 def _generate_locked(sid, store, state_dir, provider):
     try:
+        if not enabled(state_dir):
+            return None
         fresh = store.load(sid)
         if not needs_title(fresh) or fresh.get('status') == 'running':
             return None
         exchange = first_exchange(fresh)
         if exchange is None:
             return None
+        # Automatic naming must use the provider bound to this completed run.
+        # Resolving a missing session selection here could silently fall back
+        # to a saved default or host environment and make an unrelated request.
         if provider is None:
-            provider = _resolve_provider(state_dir, fresh, sid)
-            if provider is None:
-                _record_failure(sid)
-                return None
-        user_text, assistant_text = exchange
-        prompt = build_prompt(fresh.get('task'), user_text, assistant_text)
-        title = title_from_model(_request_title(provider, prompt))
-        if not title:
-            _record_failure(sid)
+            return None
+        # Provider construction and a queued worker can outlive the snapshot
+        # above. Re-read so a manual rename or a new active run suppresses the
+        # request itself, then check plugin state as close to dispatch as the
+        # provider interface permits.
+        if not enabled(state_dir):
             return None
         fresh = store.load(sid)
         if not needs_title(fresh) or fresh.get('status') == 'running':
             return None
-        fresh['title'] = title
-        fresh['title_source'] = 'generated'
-        fresh['title_generated_at'] = datetime.now(timezone.utc).isoformat(timespec='milliseconds')
-        store.save(fresh)
+        exchange = first_exchange(fresh)
+        if exchange is None:
+            return None
+        user_text, assistant_text = exchange
+        prompt = build_prompt(fresh.get('task'), user_text, assistant_text)
+        if not enabled(state_dir):
+            return None
+        title = title_from_model(_request_title(provider, prompt))
+        if not title:
+            _record_failure(sid)
+            return None
+
+        def apply_title(current):
+            # This predicate and mutation run in one Store journal transaction:
+            # a manual rename cannot land between the check and publication.
+            if (not enabled(state_dir) or not needs_title(current)
+                    or current.get('status') == 'running'):
+                return False
+            current['title'] = title
+            current['title_source'] = 'generated'
+            current['title_generated_at'] = datetime.now(timezone.utc).isoformat(
+                timespec='milliseconds')
+            return True
+
+        fresh = store.update(sid, apply_title)
+        if fresh.get('title_source') != 'generated' or fresh.get('title') != title:
+            return None
         with _FAILURE_LOCK:
             _FAILURES.pop(sid, None)
         return title
@@ -281,11 +312,13 @@ def _generate_locked(sid, store, state_dir, provider):
         return None
 
 
-def settle_auto_title(session, store, turn_id=None, *, synchronous=False):
+def settle_auto_title(session, store, turn_id=None, *, provider=None,
+                      allow_model_requests=False, synchronous=False):
     """Settlement hook: schedule one title generation after the first answer.
 
-    Never raises and never blocks the run; a detached daemon thread performs
-    the request so the settled turn result is unaffected.
+    The host authorization and bound real adapter are required; this hook never
+    resolves a global default or environment provider. It never raises or
+    blocks the run; a detached daemon thread keeps settlement unaffected.
     """
     try:
         if not isinstance(session, dict) or not isinstance(store, object):
@@ -296,6 +329,9 @@ def settle_auto_title(session, store, turn_id=None, *, synchronous=False):
         sid = session.get('id')
         if not isinstance(sid, str) or not _SESSION_ID.fullmatch(sid):
             return
+        provider = _bound_model_provider(provider)
+        if allow_model_requests is not True or provider is None:
+            return
         # Delegated children keep their task name, and the lightweight profile
         # owns its model-request budget: neither ever pays for a naming call.
         if is_child_session(session) or session.get('runtime_profile') == 'lightweight':
@@ -305,16 +341,41 @@ def settle_auto_title(session, store, turn_id=None, *, synchronous=False):
         if first_exchange(session) is None:
             return
         if synchronous:
-            generate_and_store(sid, store, state_dir)
+            generate_and_store(sid, store, state_dir, provider=provider)
             return
-        threading.Thread(target=_worker, args=(sid, store, state_dir),
-                         name='session-auto-title', daemon=True).start()
+        with _FAILURE_LOCK:
+            if (_FAILURES.get(sid, 0) >= MAX_FAILURES_PER_SESSION or sid in _INFLIGHT
+                    or sid in _SCHEDULED):
+                return
+            _SCHEDULED.add(sid)
+        try:
+            threading.Thread(target=_worker, args=(sid, store, state_dir, provider),
+                             name='session-auto-title', daemon=True).start()
+        except Exception:
+            with _FAILURE_LOCK:
+                _SCHEDULED.discard(sid)
     except Exception:
         pass
 
 
-def _worker(sid, store, state_dir):
+def _worker(sid, store, state_dir, provider):
     try:
-        generate_and_store(sid, store, state_dir)
+        if enabled(state_dir):
+            with _FAILURE_LOCK:
+                scheduled = sid in _SCHEDULED and sid not in _INFLIGHT
+                if scheduled:
+                    # Convert the queue reservation to an active request under
+                    # one lock so another settle callback cannot slip in.
+                    _SCHEDULED.remove(sid)
+                    _INFLIGHT.add(sid)
+            if scheduled:
+                try:
+                    _generate_locked(sid, store, state_dir, provider)
+                finally:
+                    with _FAILURE_LOCK:
+                        _INFLIGHT.discard(sid)
     except Exception:
         pass
+    finally:
+        with _FAILURE_LOCK:
+            _SCHEDULED.discard(sid)

@@ -17,6 +17,11 @@ from .task_registry import TaskRegistry, RUNNING, COMPLETED, FAILED, CANCELLED
 MAX_CONCURRENT = 4
 MAX_TASKS_PER_TURN = 8
 MAX_WAIT_SECONDS = 30
+# A child provider request is bounded to 120 seconds by runner.py. Allow one
+# journal-lock timeout for the final durable write after that request returns.
+# Coordinator shutdown must wait for the child lease to be released, but must
+# not turn a stuck/uncooperative provider into an unbounded parent shutdown.
+_WORKER_SHUTDOWN_GRACE_SECONDS = 130.0
 # Also bound outstanding provider requests across resumed parent runs. A
 # cancelled worker still holds its slot until the request actually exits.
 _WORKER_SLOTS = threading.BoundedSemaphore(MAX_CONCURRENT)
@@ -99,6 +104,8 @@ class TaskCoordinator:
         self.session = session
         self.registry = registry if registry is not None else TaskRegistry()
         self._workers = {}
+        self._worker_deadlines = {}
+        self._lifecycle_lock = threading.RLock()
         self._cancel = threading.Event()
         self._changed = threading.Event()
         self.should_stop = lambda: False
@@ -150,12 +157,13 @@ class TaskCoordinator:
             return {'ok': False, 'error': 'prompt must contain 1..24000 characters'}
         if agent is not None and (not isinstance(agent, str) or not agent.strip()):
             return {'ok': False, 'error': 'agent must be a non-empty string'}
-        if self._closed or self.stopped():
-            return {'ok': False, 'error': 'delegation stopped', 'retryable': False}
-        if len(self.records) >= MAX_TASKS_PER_TURN:
-            return {'ok': False, 'error': 'subagent task budget reached (8 per human turn)'}
-        if sum(worker.is_alive() for worker in self._workers.values()) >= MAX_CONCURRENT:
-            return {'ok': False, 'error': 'subagent concurrency limit reached (4); collect existing tasks first'}
+        with self._lifecycle_lock:
+            if self._closed or self.stopped():
+                return {'ok': False, 'error': 'delegation stopped', 'retryable': False}
+            if len(self.records) >= MAX_TASKS_PER_TURN:
+                return {'ok': False, 'error': 'subagent task budget reached (8 per human turn)'}
+            if sum(worker.is_alive() for worker in self._workers.values()) >= MAX_CONCURRENT:
+                return {'ok': False, 'error': 'subagent concurrency limit reached (4); collect existing tasks first'}
         if not _WORKER_SLOTS.acquire(blocking=False):
             return {'ok': False, 'error': 'subagent workers are busy (4); wait for existing requests to finish'}
         if before_start is not None:
@@ -169,42 +177,57 @@ class TaskCoordinator:
                 return denial if isinstance(denial, dict) else {
                     'ok': False, 'error': 'tool execution policy unavailable',
                     'error_code': 'tool_policy_unavailable', 'retryable': False}
-        tid = self.registry.new_id()
-        self.registry.record(tid, parent_session=self.session['id'], agent=agent,
-                             prompt=prompt, root=self.session['root'])
-        self.records[tid] = {'call_id': call_id, 'collected': False, 'turn': self.turn}
-        self.registry.update(tid, workerActive=True)
+        # Keep registration and start atomic with close(). A resume route can
+        # race the parent run's teardown; close must see every accepted worker.
+        with self._lifecycle_lock:
+            if self._closed or self.stopped():
+                _WORKER_SLOTS.release()
+                return {'ok': False, 'error': 'delegation stopped', 'retryable': False}
+            if len(self.records) >= MAX_TASKS_PER_TURN:
+                _WORKER_SLOTS.release()
+                return {'ok': False, 'error': 'subagent task budget reached (8 per human turn)'}
+            if sum(worker.is_alive() for worker in self._workers.values()) >= MAX_CONCURRENT:
+                _WORKER_SLOTS.release()
+                return {'ok': False, 'error': 'subagent concurrency limit reached (4); collect existing tasks first'}
+            tid = self.registry.new_id()
+            self.registry.record(tid, parent_session=self.session['id'], agent=agent,
+                                 prompt=prompt, root=self.session['root'])
+            self.records[tid] = {'call_id': call_id, 'collected': False, 'turn': self.turn}
+            self.registry.update(tid, workerActive=True)
 
-        def work():
+            def work():
+                try:
+                    if self.stopped():
+                        self.registry.cancel(tid)
+                        return
+                    result = execute(tid, self.stopped)
+                    if self.stopped():
+                        self.registry.cancel(tid)
+                    current = self.registry.get(tid)
+                    if current and current['status'] == RUNNING:
+                        self.registry.finish(tid, ok=result.get('ok') is True,
+                                             summary=result.get('summary', ''), error=result.get('error', ''),
+                                             steps=result.get('steps', 0))
+                except Exception:
+                    # Do not leak provider URLs, credentials or exception payloads.
+                    self.registry.finish(tid, ok=False, error='subagent execution failed')
+                finally:
+                    self.registry.update(tid, workerActive=False)
+                    _WORKER_SLOTS.release()
+                    self._changed.set()
+
+            worker = threading.Thread(target=work, name='xueness-' + tid, daemon=True)
+            self._workers[tid] = worker
+            self._worker_deadlines[tid] = time.monotonic() + _WORKER_SHUTDOWN_GRACE_SECONDS
             try:
-                if self.stopped():
-                    self.registry.cancel(tid)
-                    return
-                result = execute(tid, self.stopped)
-                if self.stopped():
-                    self.registry.cancel(tid)
-                current = self.registry.get(tid)
-                if current and current['status'] == RUNNING:
-                    self.registry.finish(tid, ok=result.get('ok') is True,
-                                         summary=result.get('summary', ''), error=result.get('error', ''),
-                                         steps=result.get('steps', 0))
+                worker.start()
             except Exception:
-                # Do not leak provider URLs, credentials or exception payloads.
-                self.registry.finish(tid, ok=False, error='subagent execution failed')
-            finally:
+                self._workers.pop(tid, None)
+                self._worker_deadlines.pop(tid, None)
+                self.registry.finish(tid, ok=False, error='subagent worker could not start')
                 self.registry.update(tid, workerActive=False)
                 _WORKER_SLOTS.release()
-                self._changed.set()
-
-        worker = threading.Thread(target=work, name='xueness-' + tid, daemon=True)
-        self._workers[tid] = worker
-        try:
-            worker.start()
-        except Exception:
-            self.registry.finish(tid, ok=False, error='subagent worker could not start')
-            self.registry.update(tid, workerActive=False)
-            _WORKER_SLOTS.release()
-            return {'ok': False, 'task_id': tid, 'error': 'subagent worker could not start'}
+                return {'ok': False, 'task_id': tid, 'error': 'subagent worker could not start'}
         return {'ok': True, 'task_id': tid, 'status': 'running', 'background': True,
                 'evidence_eligible': False,
                 'next': 'Continue independent work; collect findings with task_collect before finishing.'}
@@ -250,43 +273,50 @@ class TaskCoordinator:
             if denial is not None:
                 _WORKER_SLOTS.release()
                 return denial
-        if self.registry.get(tid) is None:
-            self.registry.restore(tid, parent_session=self.session['id'], root=self.session['root'], record=row)
-        if not self.registry.restart(tid):
-            _WORKER_SLOTS.release()
-            return {'ok': False, 'error': 'child task is already active or cancelled'}
-        if request_id:
-            self.registry.update(tid, lastResumeRequestId=request_id,
-                                 lastResumeRequestDigest=digest)
-        self.records[tid] = {'call_id': call_id, 'collected': False, 'turn': self.turn,
-                             'childSessionId': child['id']}
-        child_args = {'prompt': message, 'agent': child['delegation'].get('agent'),
-                      'resume_session_id': child['id']}
-        def work():
+        with self._lifecycle_lock:
+            if self._closed or self.stopped():
+                _WORKER_SLOTS.release()
+                return {'ok': False, 'error': 'child recovery requires an enabled parent run'}
+            if self.registry.get(tid) is None:
+                self.registry.restore(tid, parent_session=self.session['id'], root=self.session['root'], record=row)
+            if not self.registry.restart(tid):
+                _WORKER_SLOTS.release()
+                return {'ok': False, 'error': 'child task is already active or cancelled'}
+            if request_id:
+                self.registry.update(tid, lastResumeRequestId=request_id,
+                                     lastResumeRequestDigest=digest)
+            self.records[tid] = {'call_id': call_id, 'collected': False, 'turn': self.turn,
+                                 'childSessionId': child['id']}
+            child_args = {'prompt': message, 'agent': child['delegation'].get('agent'),
+                          'resume_session_id': child['id']}
+            def work():
+                try:
+                    result = self._executor(tid, self.stopped, child_args)
+                    if self.stopped():
+                        self.registry.cancel(tid)
+                    current = self.registry.get(tid)
+                    if current and current['status'] == RUNNING:
+                        self.registry.finish(tid, ok=result.get('ok') is True,
+                                             summary=result.get('summary', ''), error=result.get('error', ''),
+                                             steps=result.get('steps', 0))
+                except Exception:
+                    self.registry.finish(tid, ok=False, error='child recovery failed')
+                finally:
+                    self.registry.update(tid, workerActive=False)
+                    _WORKER_SLOTS.release()
+                    self._changed.set()
+            worker = threading.Thread(target=work, name='xueness-resume-' + tid, daemon=True)
+            self._workers[tid] = worker
+            self._worker_deadlines[tid] = time.monotonic() + _WORKER_SHUTDOWN_GRACE_SECONDS
             try:
-                result = self._executor(tid, self.stopped, child_args)
-                if self.stopped():
-                    self.registry.cancel(tid)
-                current = self.registry.get(tid)
-                if current and current['status'] == RUNNING:
-                    self.registry.finish(tid, ok=result.get('ok') is True,
-                                         summary=result.get('summary', ''), error=result.get('error', ''),
-                                         steps=result.get('steps', 0))
+                worker.start()
             except Exception:
-                self.registry.finish(tid, ok=False, error='child recovery failed')
-            finally:
+                self._workers.pop(tid, None)
+                self._worker_deadlines.pop(tid, None)
+                self.registry.finish(tid, ok=False, error='child recovery worker could not start')
                 self.registry.update(tid, workerActive=False)
                 _WORKER_SLOTS.release()
-                self._changed.set()
-        worker = threading.Thread(target=work, name='xueness-resume-' + tid, daemon=True)
-        self._workers[tid] = worker
-        try:
-            worker.start()
-        except Exception:
-            self.registry.finish(tid, ok=False, error='child recovery worker could not start')
-            self.registry.update(tid, workerActive=False)
-            _WORKER_SLOTS.release()
-            return {'ok': False, 'error': 'child recovery worker could not start'}
+                return {'ok': False, 'error': 'child recovery worker could not start'}
         return {'ok': True, 'task_id': tid, 'childSessionId': child['id'],
                 'status': RUNNING, 'background': True, 'evidence_eligible': False}
 
@@ -358,18 +388,36 @@ class TaskCoordinator:
                 'A dispatch receipt is not evidence of completed work.')
 
     def close(self):
-        self._closed = True
-        self._cancel.set()
-        unbinder = getattr(self.registry, 'unbind_parent', None)
-        if callable(unbinder):
-            unbinder(self.session['id'], self)
-        self._coordinator_bound = False
+        with self._lifecycle_lock:
+            self._closed = True
+            self._cancel.set()
+            unbinder = getattr(self.registry, 'unbind_parent', None)
+            if callable(unbinder):
+                unbinder(self.session['id'], self)
+            self._coordinator_bound = False
+            workers = tuple(self._workers.items())
+            self.sync()
+        # Children hold a session lease while running so a recovery cannot
+        # become a second writer. Wait for cancellation to reach the next
+        # provider/tool boundary and for the final child save to release that
+        # lease. Provider requests are capped at 120s; the extra bound covers
+        # the journal lock and final settlement. Never join without a deadline.
+        now = time.monotonic()
+        end = max((self._worker_deadlines.get(tid, now) for tid, worker in workers
+                   if worker.is_alive()), default=now)
+        for tid, worker in workers:
+            if worker is threading.current_thread():
+                continue
+            if worker.ident is None:
+                continue
+            worker.join(max(0, self._worker_deadlines.get(tid, end) - time.monotonic()))
+        alive = [worker.name for tid, worker in workers
+                 if worker is not threading.current_thread() and worker.ident is not None
+                 and worker.is_alive()]
         self.sync()
-        # Bound shutdown; network requests cooperate at their next boundary.
-        end = time.monotonic() + .2
-        for worker in self._workers.values():
-            worker.join(max(0, end - time.monotonic()))
-        self.sync()
+        if alive:
+            raise TimeoutError('subagent workers did not stop before the bounded shutdown deadline: '
+                               + ', '.join(alive))
 
 
 def completion_check(session):

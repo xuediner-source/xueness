@@ -901,15 +901,50 @@ class Store:
             self._path(sid)
             stage = "lock"
             with self._thread_lock(sid), journal_lock(self, sid):
-                _ensure_message_identity(session)
-                from .plugin_runtime import prepare_session_save, commit_session_save
-                tokens = prepare_session_save(self.directory, self, session)
-                self._write_journal(session)
-                commit_session_save(tokens)
+                self._save_locked(session)
         except Exception as exc:
             if getattr(exc, "_xueness_store_stage", None) is None:
                 _annotate_store_failure(exc, stage)
             raise
+
+    def update(self, sid: str, mutate) -> dict:
+        """Atomically mutate the latest journal while holding its write lock.
+
+        ``mutate`` receives the loaded session and must return a bool indicating
+        whether it changed the session. A false result skips publication. The
+        callback runs under the per-session thread and journal locks, so it
+        must be short, local, and must not call back into this Store. Changed
+        sessions pass through the same plugin prepare/commit hooks as ``save``.
+        """
+        if not callable(mutate):
+            raise TypeError("session update callback must be callable")
+        stage = "session_path"
+        try:
+            self._path(sid)
+            stage = "lock"
+            with self._thread_lock(sid), journal_lock(self, sid):
+                stage = "read"
+                session = self._read_journal(sid)
+                stage = "mutate"
+                changed = mutate(session)
+                if type(changed) is not bool:
+                    raise TypeError("session update callback must return a boolean")
+                if changed:
+                    stage = "save"
+                    self._save_locked(session)
+                return session
+        except Exception as exc:
+            if getattr(exc, "_xueness_store_stage", None) is None:
+                _annotate_store_failure(exc, stage)
+            raise
+
+    def _save_locked(self, session: dict) -> None:
+        """Run the normal save lifecycle; caller holds the journal lock."""
+        _ensure_message_identity(session)
+        from .plugin_runtime import prepare_session_save, commit_session_save
+        tokens = prepare_session_save(self.directory, self, session)
+        self._write_journal(session)
+        commit_session_save(tokens)
 
     def _write_journal(self, session: dict, *, preserve_backup: bool = False) -> None:
         """Publish ``session``. Caller holds the journal lock."""
@@ -2733,7 +2768,11 @@ def _run_once(session: dict, store: Store, provider, gate: Gate, max_steps=None,
     finally:
         from .plugin_runtime import settle_run
         try:
-            settle_run(state_dir, session, store, session.get('active_turn_id'))
+            settle_run(
+                state_dir, session, store, session.get('active_turn_id'),
+                provider=provider,
+                allow_model_requests=getattr(gate, 'allow_real', True) is True,
+            )
         finally:
             session.pop('active_turn_id', None)
             try:

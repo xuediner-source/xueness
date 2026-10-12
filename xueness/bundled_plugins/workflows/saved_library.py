@@ -16,7 +16,8 @@ import re
 import time
 from pathlib import Path
 
-from ...resources import _atomic_write_json, _is_link
+from ...resources import _atomic_write_json, _is_link, _protect_private_directory
+from ...session_lease import exclusive_lock
 from .workflows import WorkflowStore, validate_plan
 
 #: Template names are file names, so the charset is deliberately narrow: no
@@ -71,7 +72,10 @@ class SavedWorkflowLibrary:
     """Per-template JSON storage under ``<state>/workflows/saved``."""
 
     def __init__(self, state):
-        self.state = Path(state).resolve()
+        state_path = Path(state)
+        if _is_link(state_path):
+            raise ValueError('saved workflow state directory cannot be a symlink')
+        self.state = state_path.resolve()
         self.directory = self.state / 'workflows' / 'saved'
         # The parent directories are checked before mkdir: a junction or
         # symlinked component would redirect the whole library.
@@ -79,12 +83,24 @@ class SavedWorkflowLibrary:
         if _is_link(parent) or _is_link(self.directory):
             raise ValueError('saved workflow library cannot be a symlink')
         self.directory.mkdir(parents=True, exist_ok=True, mode=0o700)
+        _protect_private_directory(self.directory)
+
+    def _ensure_safe_directories(self):
+        if (_is_link(self.state) or _is_link(self.state / 'workflows')
+                or _is_link(self.directory)):
+            raise ValueError('saved workflow library cannot be a symlink')
 
     def path(self, name):
+        self._ensure_safe_directories()
         path = self.directory / (validate_name(name) + '.json')
-        if path.is_symlink():
+        if _is_link(path):
             raise ValueError('saved workflow file cannot be a symlink')
         return path
+
+    def _lock(self, name):
+        """Coordinate one template's reads and replacements across processes."""
+        self._ensure_safe_directories()
+        return exclusive_lock(self.directory / '.locks', 'saved-' + validate_name(name) + '.lock')
 
     def save(self, plan, name, root, *, description=None, overwrite=False, source=None):
         """Validate a plan against ``root`` and persist it as one named template.
@@ -103,36 +119,45 @@ class SavedWorkflowLibrary:
         if not isinstance(description, str) or len(description) > MAX_DESCRIPTION:
             raise ValueError('description must be a string up to %d characters' % MAX_DESCRIPTION)
         description = description.strip()
-        path = self.path(name)
-        if path.exists() and not overwrite:
-            raise ValueError("saved workflow '%s' already exists; pass overwrite to replace it" % name)
         record = {'name': name, 'description': description, 'plan': plan,
                   'plan_digest': template_plan_digest(plan), 'node_count': len(plan['nodes']),
                   'concurrency': plan['concurrency'], 'saved_at': time.time(),
                   'updated_at': time.time()}
         if isinstance(source, dict):
             record['source'] = source
-        _atomic_write_json(path, record)
+        with self._lock(name):
+            path = self.path(name)
+            if path.exists() and not overwrite:
+                raise ValueError("saved workflow '%s' already exists; pass overwrite to replace it" % name)
+            _atomic_write_json(path, record)
         return self.view(record)
 
     def load(self, name):
-        path = self.path(name)
-        try:
-            record = json.loads(path.read_text(encoding='utf-8'))
-        except FileNotFoundError:
-            raise ValueError('unknown saved workflow: %s' % name) from None
+        name = validate_name(name)
+        with self._lock(name):
+            path = self.path(name)
+            try:
+                record = json.loads(path.read_text(encoding='utf-8'))
+            except FileNotFoundError:
+                raise ValueError('unknown saved workflow: %s' % name) from None
         if not isinstance(record, dict) or not isinstance(record.get('plan'), dict):
             raise ValueError('saved workflow record is damaged: %s' % name)
         return record
 
     def list(self):
+        self._ensure_safe_directories()
         rows = []
         for path in self.directory.glob('*.json'):
-            if path.is_symlink():
+            try:
+                name = validate_name(path.stem)
+            except ValueError:
                 continue
             try:
-                rows.append(self.view(json.loads(path.read_text(encoding='utf-8'))))
-            except (OSError, ValueError, KeyError):
+                with self._lock(name):
+                    record_path = self.path(name)
+                    record = json.loads(record_path.read_text(encoding='utf-8'))
+                rows.append(self.view(record))
+            except (OSError, ValueError, KeyError, TypeError):
                 continue
         return sorted(rows, key=lambda row: row['updated_at'], reverse=True)
 

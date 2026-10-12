@@ -152,6 +152,28 @@ class CoordinationTests(unittest.TestCase):
         c.close()
         self.assertEqual({row['status'] for row in c.registry.list()}, {'cancelled'})
 
+    def test_close_reports_an_unresponsive_worker_at_its_deadline(self):
+        started, release, exited = threading.Event(), threading.Event(), threading.Event()
+        c = TaskCoordinator(self.session)
+        self.addCleanup(release.set)
+        self.addCleanup(c.close)
+
+        def child(_tid, _stop):
+            started.set()
+            release.wait(2)
+            exited.set()
+            return {'ok': False, 'error': 'cancelled'}
+
+        with patch('xueness.bundled_plugins.subagents.coordinator._WORKER_SHUTDOWN_GRACE_SECONDS', .05):
+            self.assertTrue(c.dispatch('blocked', {'prompt': 'inspect'}, child)['ok'])
+            self.assertTrue(started.wait(1))
+            with self.assertRaisesRegex(TimeoutError, 'bounded shutdown deadline'):
+                c.close()
+        release.set()
+        self.assertTrue(exited.wait(1))
+        next(iter(c._workers.values())).join(1)
+        self.assertFalse(next(iter(c._workers.values())).is_alive())
+
     def test_plugin_disabled_during_run_cancels_child_no_new_calls(self):
         started, exited = threading.Event(), threading.Event()
         def child(*args, **kwargs):

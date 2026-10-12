@@ -9,6 +9,7 @@ from unittest.mock import patch
 from pathlib import Path
 from tests.fs_link_helpers import make_directory_boundary_link, make_symlink
 from tests.secret_permissions import assert_secret_file_private
+from xueness.bundled_plugins.settings.settings_store import save_settings
 from xueness.core import Gate, Store, answer_session, assess, compact, execute, normalize_todos, run, session_events
 from xueness.provider import FakeProvider, OpenAICompatible, _NoRedirect
 
@@ -342,6 +343,7 @@ class SearchEditModeTests(unittest.TestCase):
         self.temp = tempfile.TemporaryDirectory()
         self.root = Path(self.temp.name)
         self.store = Store(self.root / "state")
+        save_settings(self.store.directory, {"general": {"sessionsAutoTitleEnabled": False}})
 
     def tearDown(self):
         self.temp.cleanup()

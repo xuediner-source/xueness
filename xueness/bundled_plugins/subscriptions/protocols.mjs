@@ -40,6 +40,59 @@ export async function* parseFrames(stream, { ndjson = false, signal, onActivity 
 }
 
 export function finite(value) { return typeof value === 'number' && Number.isFinite(value) && value >= 0 ? value : undefined; }
+
+// Cloud Code's function `parameters` accepts Google's Schema message, not an
+// arbitrary JSON Schema. Host-side validation keeps the original constraints.
+export function toGeminiTools(tools) {
+  const allowed = new Set(['type', 'format', 'title', 'description', 'nullable', 'enum',
+    'maximum', 'minimum', 'maxItems', 'minItems', 'maxLength', 'minLength', 'pattern',
+    'maxProperties', 'minProperties', 'propertyOrdering', 'default', 'example']);
+  return tools.map(tool => {
+    const fn = tool.function ?? tool, definitions = fn.parameters?.$defs ?? fn.parameters?.definitions ?? {};
+    let remaining = 4096;
+    const convert = (schema, depth = 0, references = new Set()) => {
+      if (--remaining < 0 || depth > 32 || !schema || typeof schema !== 'object' || Array.isArray(schema)) throw new Error('Unsupported subscription tool schema');
+      if (schema.$ref !== undefined) {
+        const match = /^#\/(?:\$defs|definitions)\/([^/]+)$/.exec(schema.$ref);
+        if (!match || references.has(schema.$ref) || !Object.hasOwn(definitions, match[1])) throw new Error('Unsupported subscription tool schema reference');
+        const next = new Set(references); next.add(schema.$ref);
+        const { $ref, ...extra } = schema;
+        return convert({ ...definitions[match[1]], ...extra }, depth + 1, next);
+      }
+      const output = {};
+      for (const [key, value] of Object.entries(schema)) if (allowed.has(key)) output[key] = value;
+      if (Array.isArray(schema.type)) {
+        const types = schema.type.filter(type => type !== 'null');
+        if (schema.type.includes('null')) output.nullable = true;
+        if (types.length === 1) output.type = types[0];
+        else { delete output.type; output.anyOf = types.map(type => ({ type })); }
+      }
+      if (output.type === 'null') { delete output.type; output.nullable = true; }
+      if (schema.const !== undefined) output.enum = [schema.const];
+      if (schema.properties !== undefined) {
+        if (!schema.properties || typeof schema.properties !== 'object' || Array.isArray(schema.properties)) throw new Error('Unsupported subscription tool properties');
+        output.properties = Object.fromEntries(Object.entries(schema.properties).map(([key, value]) => [key, convert(value, depth + 1, references)]));
+      }
+      if (schema.required !== undefined) output.required = schema.required;
+      if (schema.items !== undefined) output.items = convert(schema.items, depth + 1, references);
+      if (schema.anyOf !== undefined || schema.oneOf !== undefined) {
+        const variants = schema.anyOf ?? schema.oneOf;
+        if (!Array.isArray(variants)) throw new Error('Unsupported subscription tool alternatives');
+        output.anyOf = variants.map(value => convert(value, depth + 1, references));
+      }
+      if (typeof output.type === 'string') output.type = output.type.toUpperCase();
+      if (output.anyOf) output.anyOf = output.anyOf.map(value => typeof value.type === 'string' ? { ...value, type: value.type.toUpperCase() } : value);
+      return output;
+    };
+    const { parameters, ...rest } = fn;
+    if (parameters === undefined) return rest;
+    const converted = convert(parameters);
+    // Parameterless functions need no empty OBJECT declaration.
+    if (converted.type === 'OBJECT' && !Object.keys(converted.properties ?? {}).length
+        && !(converted.required?.length) && !converted.anyOf) return rest;
+    return { ...rest, parameters: converted };
+  });
+}
 export function normalizeUsage(raw, format = 'openai') {
   if (!raw || typeof raw !== 'object') return undefined;
   const keys = format === 'native'

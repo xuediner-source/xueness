@@ -24,6 +24,7 @@ from unittest.mock import patch
 
 from xueness import plugin_runtime
 from xueness.core import Gate, Store, run
+from xueness.bundled_plugins.settings.settings_store import save_settings
 from xueness.plugin_contract import tool_events_field_errors
 from xueness.tool_registry import REGISTRY_BY_NAME
 
@@ -76,6 +77,7 @@ class ToolEventTests(unittest.TestCase):
         self.root = base / "ws"
         self.root.mkdir()
         self.store = Store(base / "state")
+        save_settings(self.store.directory, {'general': {'sessionsAutoTitleEnabled': False}})
         self.patches = []
 
     def tearDown(self):

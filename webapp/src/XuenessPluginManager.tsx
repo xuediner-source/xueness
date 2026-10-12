@@ -57,14 +57,18 @@ export function XuenessPluginSettingsPanel({ resourceContent, onBrowse, ...manag
   return <section className="xn-plugin-settings" data-testid="xn-plugin-settings">
     <nav className="xn-plugin-settings__views" aria-label={tr("插件目录视图")}>
       <button type="button" aria-pressed={view === "installed"} onClick={() => setView("installed")}>
-        {tr("已安装功能插件")}<span>{managerProps.plugins.length}</span>
+        {tr("功能插件目录")}<span>{managerProps.plugins.length}</span>
       </button>
       <button type="button" aria-pressed={view === "resources"} onClick={() => setView("resources")}>
         {tr("资源清单")}
       </button>
       {onBrowse && <button type="button" className="xn-plugin-settings__browse" onClick={onBrowse}>{tr("浏览扩展市场")}</button>}
     </nav>
-    {view === "installed" ? <XuenessPluginManager {...managerProps} /> : <div className="xn-plugin-settings__resources">
+    {view === "installed" ? <>
+      <p className="xn-plugin-settings__note">{tr("此目录列出完整功能插件；卡片开关控制功能启用。市场清单安装和资源清单启用分别管理。")}</p>
+      <XuenessPluginManager {...managerProps} />
+    </> : <div className="xn-plugin-settings__resources">
+      <p className="xn-plugin-settings__note">{tr("资源清单是否已安装、清单自身是否启用、对应功能插件是否启用是三个独立状态。")}</p>
       {resourceContent ?? <p role="status">{tr("资源清单由扩展插件管理；启用扩展插件后可查看。")}</p>}
     </div>}
   </section>;

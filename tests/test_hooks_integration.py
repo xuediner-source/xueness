@@ -20,6 +20,7 @@ from pathlib import Path
 
 from xueness.core import Gate, Store, run
 from xueness.hooks import HookRunner
+from xueness.bundled_plugins.settings.settings_store import save_settings
 
 
 def _write_hook(state_dir: Path, rid: str, **fields) -> None:
@@ -64,6 +65,7 @@ class HookLoopIntegrationTests(unittest.TestCase):
         self.state.mkdir(parents=True)
         self.workspace.mkdir(parents=True)
         self.store = Store(self.state)
+        save_settings(self.state, {'general': {'sessionsAutoTitleEnabled': False}})
 
     def tearDown(self):
         self._tmp.cleanup()

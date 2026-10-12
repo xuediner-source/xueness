@@ -64,6 +64,33 @@ test('SSE handles split UTF-8, multiline data, CRLF and a final unterminated fra
   const frames = []; for await (const frame of protocol.parseFrames(stream)) frames.push(frame);
   assert.deepEqual(frames, [{ event: 'item', data: '第一行\n第二行' }, { data: '[DONE]' }]);
 });
+
+test('Antigravity adapts strict JSON schemas and parameterless functions before sending', async () => {
+  const original = { type: 'object', additionalProperties: false, $schema: 'https://json-schema.org/draft/2020-12/schema',
+    $defs: { target: { type: ['string', 'null'], description: 'Target', const: 'fixture' } },
+    properties: { target: { $ref: '#/$defs/target' }, nested: { type: 'object', additionalProperties: false,
+      properties: { count: { type: 'integer', minimum: 0 } }, required: ['count'] } }, required: ['target'] };
+  const snapshot = JSON.stringify(original);
+  globalThis.fetch = async (_url, init) => {
+    const declarations = JSON.parse(init.body).request.tools[0].functionDeclarations;
+    assert.deepEqual(declarations[0].parameters, { type: 'OBJECT', properties: {
+      target: { type: 'STRING', nullable: true, description: 'Target', enum: ['fixture'] },
+      nested: { type: 'OBJECT', properties: { count: { type: 'INTEGER', minimum: 0 } }, required: ['count'] },
+    }, required: ['target'] });
+    assert.equal(Object.hasOwn(declarations[1], 'parameters'), false);
+    return response([{ response: { candidates: [{ content: { parts: [{ text: 'answer' }] }, finishReason: 'STOP' }] } }]);
+  };
+  const result = await worker.handle('generate', 'antigravity', { ...data('gemini-3.8-flash-high'), tools: [
+    { type: 'function', function: { name: 'fixture', parameters: original } },
+    { type: 'function', function: { name: 'read_state', parameters: { type: 'object', properties: {}, required: [], additionalProperties: false } } },
+  ] }, signal(), () => {});
+  assert.equal(result.content, 'answer'); assert.equal(JSON.stringify(original), snapshot);
+});
+
+test('Gemini schema references fail locally instead of sending malformed or cyclic declarations', () => {
+  assert.throws(() => protocol.toGeminiTools([{ name: 'fixture', parameters: { $ref: 'https://example.invalid/schema' } }]), /schema reference/);
+  assert.throws(() => protocol.toGeminiTools([{ name: 'fixture', parameters: { $defs: { x: { $ref: '#/$defs/x' } }, $ref: '#/$defs/x' } }]), /schema reference/);
+});
 test('unknown token measurements stay absent and cache counts are not double-counted', () => {
   assert.equal(protocol.normalizeUsage({}), undefined);
   assert.deepEqual(protocol.normalizeUsage({ inputTokens: 8, outputTokens: 2, cacheReadTokens: 4 }, 'native'), { input_tokens: 8, output_tokens: 2, cache_read_input_tokens: 4, prompt_tokens: 12, completion_tokens: 2, total_tokens: 14 });

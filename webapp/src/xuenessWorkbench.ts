@@ -256,6 +256,8 @@ export type TimelineRow =
       status: ToolDisplayStatus;
       error: string;
       errorCode: string;
+      /** Display provenance used by the sessions compaction boundary. */
+      archivedForCompaction?: boolean;
       input?: Record<string, unknown>;
       output?: unknown;
     }
@@ -346,7 +348,7 @@ function isEqualTimelineRow(a: TimelineRow, b: TimelineRow): boolean {
       && a.startedAt === b.startedAt && a.endedAt === b.endedAt && a.interrupted === b.interrupted;
   }
   if (a.kind === "tool" && b.kind === "tool") {
-    if (a.turnId !== b.turnId || a.toolCallId !== b.toolCallId || a.name !== b.name || a.subject !== b.subject || a.status !== b.status || a.error !== b.error || a.errorCode !== b.errorCode) return false;
+    if (a.turnId !== b.turnId || a.toolCallId !== b.toolCallId || a.name !== b.name || a.subject !== b.subject || a.status !== b.status || a.error !== b.error || a.errorCode !== b.errorCode || a.archivedForCompaction !== b.archivedForCompaction) return false;
     if (!shallowEqualRecords(a.input, b.input)) return false;
     if (a.output !== b.output) {
       if (typeof a.output === "object" && typeof b.output === "object" && a.output !== null && b.output !== null) {

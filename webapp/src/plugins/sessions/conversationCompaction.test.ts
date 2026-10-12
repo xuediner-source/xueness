@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {
   conversationCompactionBoundary,
   conversationCompactionLabel,
+  markArchivedToolRows,
   parseSessionCompactions,
 } from './conversationCompaction';
 import type { TimelineRow } from '../../xuenessWorkbench';
@@ -43,6 +44,27 @@ test('streaming appends stay in the live context and keep the boundary visible',
   ];
   const marker = conversationCompactionBoundary(rows, [{ removed: 1 }]);
   assert.deepEqual(marker, { boundarySeq: 4, removed: 1, masked: 0 });
+});
+
+test('a masked archived tool result supplies the boundary when no text row was archived', () => {
+  const rows: TimelineRow[] = [
+    { kind: 'tool', seq: 1, turnId: 'turn-1', toolCallId: 'archived-call', name: 'exec', subject: 'pwd', status: 'ok', error: '', errorCode: '' },
+    { kind: 'user', seq: 2, turnId: 'turn-1', text: '原始任务', messageIndex: 2 },
+    { kind: 'assistant', seq: 3, turnId: 'turn-1', text: '仍在上下文中的回答', messageIndex: 3 },
+  ];
+  const journal = {
+    messages: [
+      { role: 'tool', tool_call_id: 'archived-call', content: '旧输出' },
+      { role: 'assistant', tool_calls: [{ id: 'active-call' }] },
+    ],
+    message_window: { messageIndices: [null, 4] },
+  };
+  const marked = markArchivedToolRows(rows, journal);
+  assert.equal(marked[0].kind === 'tool' && marked[0].archivedForCompaction, true);
+  assert.deepEqual(conversationCompactionBoundary(marked, [{ removed: 0, masked: 1 }]),
+    { boundarySeq: 2, removed: 0, masked: 1 });
+  assert.equal(markArchivedToolRows(rows, { ...journal, message_window: { messageIndices: [3, 4] } }), rows,
+    'active tool rows do not create an archive boundary');
 });
 
 test('projected fractional assistant rows keep their own seq below the boundary', () => {

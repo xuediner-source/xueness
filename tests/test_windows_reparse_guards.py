@@ -14,6 +14,7 @@ from tests.fs_link_helpers import make_directory_junction, remove_directory_junc
 from xueness import plugin_sdk, resources
 from xueness.bundled_plugins.sessions import session_management
 from xueness.bundled_plugins.sessions.operator_cli import export_session
+from xueness.bundled_plugins.workflows.saved_library import SavedWorkflowLibrary
 from xueness.core import Gate, Store, execute
 from xueness.session_lease import lease
 from xueness.skills import load as load_skills
@@ -186,6 +187,31 @@ class WindowsReparseGuardTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "lock directory"):
             with lease(store, session["id"]):
                 self.fail("lease unexpectedly followed a junction")
+        self.assertEqual(list(outside.iterdir()), [])
+
+    def test_saved_workflow_library_rejects_state_junction_before_resolving(self):
+        target = self.base / "actual-workflow-state"
+        target.mkdir()
+        redirected = self.base / "redirected-workflow-state"
+        self.junction(redirected, target)
+
+        with self.assertRaisesRegex(ValueError, "state directory"):
+            SavedWorkflowLibrary(redirected)
+
+        self.assertEqual(list(target.iterdir()), [])
+
+    def test_saved_workflow_library_rechecks_its_directory_before_reads(self):
+        state = self.base / "saved-library-state"
+        library = SavedWorkflowLibrary(state)
+        outside = self.base / "outside-saved-workflows"
+        outside.mkdir()
+        library.directory.rmdir()
+        self.junction(library.directory, outside)
+
+        with self.assertRaisesRegex(ValueError, "library"):
+            library.list()
+        with self.assertRaisesRegex(ValueError, "library"):
+            library.load("anything")
         self.assertEqual(list(outside.iterdir()), [])
 
     def test_store_rejects_junctioned_session_root_before_resolving(self):

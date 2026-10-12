@@ -20,6 +20,7 @@ from unittest import mock
 from xueness.cli import main as cli_main
 from xueness.core import Gate, Store, run
 from xueness.provider import FakeProvider
+from xueness.bundled_plugins.settings.settings_store import save_settings
 
 
 class OnEventStreamTests(unittest.TestCase):
@@ -118,6 +119,7 @@ class ChatLoopTests(unittest.TestCase):
         self.temp = tempfile.TemporaryDirectory()
         self.root = Path(self.temp.name)
         self.state = str(self.root / "state")
+        save_settings(self.state, {'general': {'sessionsAutoTitleEnabled': False}})
         from tests.fake_provider_fixture import patch_provider_resolution
         patch_provider_resolution(self)
         stdout = io.StringIO()

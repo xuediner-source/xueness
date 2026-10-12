@@ -54,11 +54,11 @@ test("marketplace filters use only returned items and match source, id, descript
   assert.deepEqual(filterMarketplaceItems(items, "installed", "hooks"), []);
 });
 
-test("marketplace cards show real source and keep the installed update affordance", () => {
+test("marketplace cards label manifest installation separately from plugin activation", () => {
   const html = renderToStaticMarkup(<MarketplaceCard item={items[0]!} busy={false} onOpen={() => {}} onAction={() => {}} />);
   assert.match(html, /Trusted skills/);
   assert.match(html, /bundled/);
-  assert.match(html, /已安装/);
+  assert.match(html, /清单已安装/);
   assert.match(html, /更新/);
   assert.match(html, /xn-marketplace__badge is-version/);
   assert.match(html, /xn-marketplace__badge is-update/);
@@ -67,8 +67,12 @@ test("marketplace cards show real source and keep the installed update affordanc
 
   const catalogBehindInstall = { ...items[0]!, installedVersion: "2.0.0" };
   const current = renderToStaticMarkup(<MarketplaceCard item={catalogBehindInstall} busy={false} onOpen={() => {}} onAction={() => {}} />);
-  assert.match(current, />已安装<\/button>/);
+  assert.match(current, />清单已安装<\/button>/);
   assert.doesNotMatch(current, /更新/);
+
+  const sameVersion = renderToStaticMarkup(<MarketplaceCard item={{ ...items[0]!, installedVersion: items[0]!.version }}
+    busy={false} onOpen={() => {}} onAction={() => {}} />);
+  assert.match(sameVersion, /清单已是最新版本/);
 });
 
 test("marketplace loading and header use the recovered installed structure", () => {
@@ -77,6 +81,8 @@ test("marketplace loading and header use the recovered installed structure", () 
   assert.match(html, /xn-marketplace__header-actions/);
   assert.match(html, /xn-marketplace__empty-icon/);
   assert.match(html, /正在加载市场清单/);
+  assert.match(html, /市场安装和更新的是数据清单/);
+  assert.match(html, /市场安装状态、资源清单开关和功能插件开关彼此独立/);
 });
 
 test("marketplace detail shows allowlisted manifest fields and never renders arbitrary manifest values", () => {
@@ -87,6 +93,7 @@ test("marketplace detail shows allowlisted manifest fields and never renders arb
   assert.match(html, /sha256:feedface/);
   assert.match(html, /xn-marketplace__badge is-version/);
   assert.match(html, /xn-marketplace__badge is-update/);
+  assert.match(html, /已安装清单版本/);
   assert.doesNotMatch(html, /never-show-this/);
   assert.match(html, /默认停用|安装仅写入数据清单/);
 });

@@ -12,6 +12,7 @@ from xueness.cli import main
 from xueness.cli_interrupt import RunInterrupt
 from xueness.core import Gate, Store, append_user_turn, run
 from xueness.provider import FakeProvider
+from xueness.bundled_plugins.settings.settings_store import save_settings
 
 
 class InterruptTests(unittest.TestCase):
@@ -20,6 +21,7 @@ class InterruptTests(unittest.TestCase):
         self.addCleanup(holder.cleanup)
         self.root = Path(holder.name)
         self.store = Store(self.root / "state")
+        save_settings(self.store.directory, {'general': {'sessionsAutoTitleEnabled': False}})
         self.gate = Gate(self.root, allow_write=True)
 
     def test_provider_interrupt_discards_unrecorded_intent_then_resumes(self):

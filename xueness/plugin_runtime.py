@@ -374,11 +374,17 @@ def after_run(state_dir, session, provider, **options):
     return decision
 
 
-def settle_run(state_dir, session, store, turn_id):
+def settle_run(state_dir, session, store, turn_id, **options):
+    """Settle effective plugins with the completed run's generic context.
+
+    ``options`` may include run-scoped capabilities such as the bound provider
+    and whether the host authorized model requests. Product plugins decide
+    whether those capabilities apply to their own settlement work.
+    """
     for item in catalog(state_dir):
         callback = getattr(entrypoint(item['id']), 'settle_turn', None) if item['effective'] else None
         if callable(callback):
-            callback(session, store, turn_id)
+            callback(session, store, turn_id, **options)
 
 
 def completion_requires_evidence(state_dir, session, call_ids=()):

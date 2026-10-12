@@ -11,6 +11,7 @@ from pathlib import Path
 from unittest import mock
 
 from tests.fs_link_helpers import make_symlink
+from xueness.bundled_plugins.settings.settings_store import save_settings
 from xueness.cli import main
 from xueness.cli_input import (
     _MACOS_CLIPBOARD_SCRIPT, capture_clipboard_image, enqueue, multiline, snapshot, with_attachments,
@@ -26,6 +27,7 @@ class InputTests(unittest.TestCase):
         self.root = self.base / "workspace"
         self.root.mkdir()
         self.store = Store(self.base / "state")
+        save_settings(self.store.directory, {"general": {"sessionsAutoTitleEnabled": False}})
         from tests.fake_provider_fixture import patch_provider_resolution
         patch_provider_resolution(self)
 

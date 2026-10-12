@@ -12,6 +12,7 @@ import unittest
 from pathlib import Path
 
 from tests.fs_link_helpers import make_symlink
+from xueness.bundled_plugins.settings.settings_store import save_settings
 from xueness.core import SYSTEM, Gate, Store, run
 from xueness.memory import (ENTRY_DELIMITER, TOTAL_MAX_CHARS, TRACK_BUDGETS,
                             UNTRUSTED_PREAMBLE, clip, load, project_hash,
@@ -38,6 +39,7 @@ class MemoryTests(unittest.TestCase):
         self.memory_root.mkdir()
         self.workspace = self.root / "workspace"
         self.workspace.mkdir()
+        save_settings(self.root / "state", {"general": {"sessionsAutoTitleEnabled": False}})
 
     def tearDown(self):
         self.temp.cleanup()

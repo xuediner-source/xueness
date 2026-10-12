@@ -280,12 +280,15 @@ class WebTests(unittest.TestCase):
         self.assertEqual([m["content"] for m in page1["messages"]], ["m5", "m6", "m7", "m8"])
         self.assertEqual(page1["next_cursor"], "5")
         self.assertTrue(page1["truncated"])
-        code, body, _ = self._req(f"/api/sessions/{sid}/journal?limit=4&cursor=5")
+        revision = page1["message_revision"]
+        code, body, _ = self._req(
+            f"/api/sessions/{sid}/journal?limit=4&cursor=5&message_revision={revision}")
         page2 = json.loads(body)
         self.assertEqual([m["content"] for m in page2["messages"]], ["m1", "m2", "m3", "m4"])
         self.assertEqual(page2["next_cursor"], "1")
         self.assertTrue(page2["truncated"])
-        code, body, _ = self._req(f"/api/sessions/{sid}/journal?limit=4&cursor=1")
+        code, body, _ = self._req(
+            f"/api/sessions/{sid}/journal?limit=4&cursor=1&message_revision={revision}")
         page3 = json.loads(body)
         self.assertEqual([m["content"] for m in page3["messages"]], ["m0"])
         self.assertIsNone(page3["next_cursor"])
@@ -306,10 +309,26 @@ class WebTests(unittest.TestCase):
             code, body, _ = self._req(f"/api/sessions/{sid}/journal{query}")
             self.assertEqual(code, 400, query)
             self.assertIn("error", json.loads(body))
-        # An in-range cursor at the newest boundary stays a valid page.
+        # A numeric cursor without the page's revision cannot safely identify
+        # a page after messages have changed.
         code, body, _ = self._req(f"/api/sessions/{sid}/journal?cursor=2")
+        self.assertEqual(code, 400, body)
+
+    def test_journal_cursor_rejects_a_changed_message_revision(self):
+        sid = self._seed_journal(9)
+        code, body, _ = self._req(f"/api/sessions/{sid}/journal?limit=4")
         self.assertEqual(code, 200, body)
-        self.assertFalse(json.loads(body)["truncated"])
+        first_page = json.loads(body)
+        session = self.ctx["store"].load(sid)
+        # Simulate compaction shrinking the transcript while leaving the old
+        # offset in range. The revision binding must reject this stale cursor.
+        session["messages"] = session["messages"][:6]
+        self.ctx["store"].save(session)
+        revision = first_page["message_revision"]
+        code, body, _ = self._req(
+            f"/api/sessions/{sid}/journal?limit=4&cursor=5&message_revision={revision}")
+        self.assertEqual(code, 409, body)
+        self.assertIn("changed", json.loads(body)["error"])
 
     def test_rename_preserves_original_task_and_audits_change(self):
         sid = self._new_session("original instruction")

@@ -243,7 +243,18 @@ await withPage("long", { turns: TURNS, virtualizeFromTail: true }, async (page) 
   const scrolledState = await scrollerState(page);
   assert.ok(scrolledState.visibleItems > 0, "上滚后视口内应可见条目");
 
-  // 历史轨道跳转到第一条用户消息（当前不在窗口内）。
+  // 历史轨道远端停靠点不会常驻 DOM。先断言轨道仍然窗口化，再通过当前
+  // 可见停靠点的 Home 键导航挂载第一项，覆盖生产支持的远端键盘路径。
+  const railState = await page.evaluate(() => ({
+    mountedStops: document.querySelectorAll("[data-history-seq]").length,
+    firstStopMounted: Boolean(document.querySelector("[data-history-seq='1']")),
+  }));
+  assert.equal(railState.firstStopMounted, false, "远端历史停靠点应由轨道虚拟化卸载");
+  assert.ok(railState.mountedStops < TURNS + APPEND_TURNS, "历史轨道应只挂载窗口内停靠点");
+  const tabStop = page.locator("[data-testid='conversation-history-rail'] button[data-history-seq][tabindex='0']");
+  await tabStop.focus();
+  await tabStop.press("Home");
+  await page.waitForSelector("[data-history-seq='1']", { timeout: 5000 });
   await page.click("[data-history-seq='1']");
   await page.waitForFunction(() => {
     const scroller = document.querySelector("[data-testid='session-timeline-scroller']");

@@ -355,7 +355,7 @@ export function CapabilitiesPanel({
           )}
         </div>
       )}
-      {pluginOnly && <p className="xn-plugin-resource-note">{tr("此处显示插件清单资源。清单仅参与 Xueness 内置能力校验，不代表外部插件代码已安装或加载。")}</p>}
+      {pluginOnly && <p className="xn-plugin-resource-note">{tr("此处显示插件资源清单。清单安装、清单启用、功能插件启用是三个独立状态。清单只提供数据，不加载外部代码；可选内置功能会用清单标记可用性。")}</p>}
       {importError && <p className="xn-cap-error xn-plugin-import__error" role="alert" data-testid="xn-plugin-import-error">{importError}</p>}
       {visibleSections.filter((section) => !needle || section.items.length > 0 || section.loading || Boolean(section.error)).map((section) => (
         <CapabilitySection key={section.kind} {...section} hideEmpty={Boolean(needle)} />

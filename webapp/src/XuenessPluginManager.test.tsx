@@ -195,7 +195,8 @@ test("the primary Plugins page shows every bundled plugin rather than an empty r
   const html = renderToStaticMarkup(<XuenessPluginSettingsPanel plugins={catalog} loading={false} error=""
     onRefresh={async () => {}} onToggle={async () => {}}
     resourceContent={<div>empty-resource-list-fixture</div>} />);
-  assert.match(html, /已安装功能插件/);
+  assert.match(html, /功能插件目录/);
+  assert.match(html, /卡片开关控制功能启用/);
   assert.match(html, /资源清单/);
   assert.equal((html.match(/data-testid="xn-installed-plugin-/gu) ?? []).length, catalog.length);
   assert.doesNotMatch(html, /empty-resource-list-fixture/);

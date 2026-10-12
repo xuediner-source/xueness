@@ -133,7 +133,7 @@ import { SidebarResizeHandle, useSessionSidebarWidth } from './plugins/sessions/
 import { SessionContextPane } from './plugins/sessions/SessionContextPane';
 import { TaskTodos } from "./plugins/sessions/XuenessTimeline";
 import { ZCodeConversation } from "./plugins/sessions/ZCodeConversation";
-import { conversationCompactionBoundary } from './plugins/sessions/conversationCompaction';
+import { conversationCompactionBoundary, markArchivedToolRows } from './plugins/sessions/conversationCompaction';
 import { ConversationSelectionActions, type ConversationTextSelection } from './plugins/sessions/ConversationSelectionActions';
 import { buildConversationFindMatches } from './plugins/sessions/ConversationFind';
 import { ConversationShareDialog } from './plugins/sessions/ConversationSharing';
@@ -361,7 +361,7 @@ function rowsFromConversationSnapshot(snapshot: ConversationSnapshot): TimelineR
   const history = Array.isArray(journal.reasoning_history)
     ? journal.reasoning_history as {message_index: number; text: string}[]
     : snapshot.session.reasoning_history ?? [];
-  return withInitialUserMessage(
+  const rows = withInitialUserMessage(
     hydrateTimelineJournalRows(
       hydrateTimelineTools(toTimelineRows(snapshot.timeline.events), journal),
       journal,
@@ -370,6 +370,7 @@ function rowsFromConversationSnapshot(snapshot: ConversationSnapshot): TimelineR
     journal,
     snapshot.session.task,
   );
+  return markArchivedToolRows(rows, journal);
 }
 
 export function XuenessWorkbenchContainer() {

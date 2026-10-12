@@ -1,6 +1,7 @@
 """On-demand owned Node worker with cancellation and plugin lifecycle cleanup."""
 from __future__ import annotations
 import json
+import math
 import os
 from pathlib import Path
 import queue
@@ -29,6 +30,16 @@ class SubscriptionRequestError(ValueError):
         self.category = info.get('category') if info.get('category') in categories else 'request_failed'
         status = info.get('status')
         self.status = status if type(status) is int and 100 <= status <= 599 else None
+
+
+def _request_deadline(value):
+    if value is None:
+        return None
+    if type(value) not in (int, float) or not math.isfinite(value):
+        raise ValueError('invalid subscription request deadline')
+    if time.monotonic() >= value:
+        raise SubscriptionRequestError('subscription request timed out', {'category': 'timeout'})
+    return float(value)
 
 
 class Worker:
@@ -96,9 +107,13 @@ class Worker:
             self.process.stdin.write(raw)
             self.process.stdin.flush()
 
-    def call(self, action, provider, data=None, on_chunk=None):
+    def call(self, action, provider, data=None, on_chunk=None, *, request_deadline=None):
         from ..providers import cancel_watch
         state.require_available(self.state_dir)
+        requested_deadline = _request_deadline(request_deadline)
+        deadline = time.monotonic() + (610 if action == 'generate' else 125)
+        if requested_deadline is not None:
+            deadline = min(deadline, requested_deadline)
         request_id = uuid.uuid4().hex
         waiter = queue.Queue(maxsize=256)
         with self.lock:
@@ -108,7 +123,6 @@ class Worker:
         completed = False
         try:
             self._send({'id': request_id, 'action': action, 'provider': provider, 'data': data or {}})
-            deadline = time.monotonic() + (610 if action == 'generate' else 125)
             while True:
                 state.require_available(self.state_dir)
                 cancel_watch.raise_if_active()
@@ -117,7 +131,7 @@ class Worker:
                 if time.monotonic() >= deadline:
                     raise SubscriptionRequestError('subscription request timed out', {'category': 'timeout'})
                 try:
-                    value = waiter.get(timeout=0.2)
+                    value = waiter.get(timeout=min(0.2, max(0.0, deadline - time.monotonic())))
                 except queue.Empty:
                     continue
                 if 'chunk' in value:
@@ -158,7 +172,8 @@ class Worker:
                 pass
 
 
-def call(state_dir, action, provider, data=None, on_chunk=None, *, start=True):
+def call(state_dir, action, provider, data=None, on_chunk=None, *, start=True, request_deadline=None):
+    requested_deadline = _request_deadline(request_deadline)
     state.require_available(state_dir)
     key = str(Path(state_dir).absolute())
     with _LOCK:
@@ -170,7 +185,7 @@ def call(state_dir, action, provider, data=None, on_chunk=None, *, start=True):
             if not start:
                 return {}
             worker = _WORKERS[key] = Worker(state_dir)
-    return worker.call(action, provider, data, on_chunk)
+    return worker.call(action, provider, data, on_chunk, **({'request_deadline': requested_deadline} if requested_deadline is not None else {}))
 
 
 def shutdown(state_dir):

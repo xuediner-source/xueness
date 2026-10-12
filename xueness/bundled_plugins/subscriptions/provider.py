@@ -32,12 +32,14 @@ class NativeProvider:
             if callback:
                 from ..providers.provider import _notify_stream_callback
                 _notify_stream_callback(callback, chunk['text'])
-        from ..providers.provider import ProviderRequestError
+        from ..providers.provider import ProviderRequestError, _explicit_request_deadline
         try:
+            deadline = _explicit_request_deadline(self)
             result = broker.call(self.state_dir, 'generate', self.account_id,
                                   {'model': self.model, 'messages': messages, 'tools': tools or [],
                                    'sessionId': self.session_id, 'reasoningEffort': self.reasoning_effort,
-                                   'maxTokens': self.max_output_tokens}, emit)
+                                   'maxTokens': self.max_output_tokens}, emit,
+                                 **({'request_deadline': deadline} if deadline is not None else {}))
         except broker.SubscriptionRequestError as error:
             raise ProviderRequestError(error.status, category=error.category,
                                        context_overflow=error.category == 'context_overflow',

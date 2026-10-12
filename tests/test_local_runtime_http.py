@@ -346,6 +346,21 @@ class LocalRuntimeHttpTests(unittest.TestCase):
         self.assertNotIn("contextWindow", raw)
         self.assertNotIn("maxOutputTokens", raw)
 
+    def test_host_disabled_real_model_cannot_run_or_trigger_naming(self):
+        status, profile = self._save_profile(
+            "host-disabled", "https://models.example.test/v1", apiKey=FAKE_KEY)
+        self.assertEqual(200, status, profile)
+        sid = self._new_session("host-disabled")
+
+        # This is the same host hard switch used by XUENESS_ALLOW_REAL=0.
+        self.ctx["allow_real"] = False
+        with patch("xueness.web.provider_config.resolve") as resolve:
+            status, result = self._run(sid)
+            resolve.assert_not_called()
+        self.assertEqual(403, status, result)
+        self.assertIn("real provider disabled by the host", result["error"])
+        self.assertIsNone(self.ctx["store"].load(sid).get("title_source"))
+
 
 if __name__ == "__main__":
     unittest.main()

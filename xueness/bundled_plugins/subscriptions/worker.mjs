@@ -10,7 +10,7 @@ import * as hub from './vendor/hub.mjs';
 import { readPrivateJson, writePrivateJson } from './vendor/auth/safety.mjs';
 import { commandCodeChat, COMMANDCODE_CREDITS_URL, COMMANDCODE_MODELS } from './vendor/commandcode.mjs';
 import { qoderChat, qoderDirectModel, resolveQoderCredential, unwrapQoderEvent } from './vendor/qoder.mjs';
-import { parseFrames, Reply, toNativeMessages, toCommandCodeMessages, openAIChunks, commandCodeChunks, finite } from './protocols.mjs';
+import { parseFrames, Reply, toNativeMessages, toCommandCodeMessages, toGeminiTools, openAIChunks, commandCodeChunks, finite } from './protocols.mjs';
 
 const root = process.env.XUENESS_SUBSCRIPTIONS_STORE;
 if (!root) throw new Error('Subscription store missing');
@@ -212,8 +212,9 @@ async function generate(item, data, signal, emit) {
   const value = await credentials(item), reply = new Reply(emit);
   const model = data.model; if (typeof model !== 'string' || !model || !Array.isArray(data.messages)) throw new Error('Invalid generation request');
   if (adapters[item.id]) {
+    const tools = item.id === 'antigravity' ? toGeminiTools(data.tools ?? []) : (data.tools ?? []).map(tool => tool.function ?? tool);
     for await (const chunk of adapters[item.id].stream({ model, messages: toNativeMessages(data.messages),
-      tools: (data.tools ?? []).map(tool => tool.function ?? tool), reasoningEffort: data.reasoningEffort,
+      tools, reasoningEffort: data.reasoningEffort,
       maxTokens: data.maxTokens, signal, sessionId: data.sessionId })) { signal.throwIfAborted(); reply.push(chunk); }
   } else {
     let response, mapper = openAIChunks;

@@ -154,6 +154,23 @@ class JournalDurabilityTests(unittest.TestCase):
         self.assertNotIn(b"\r", path.read_bytes())
         self.assertEqual(self.store.load(session["id"])["task"], "again")
 
+    def test_atomic_update_runs_the_normal_session_save_hooks(self):
+        session = self.store.new("before", self.root)
+
+        def change_task(current):
+            current["task"] = "after"
+            return True
+
+        with mock.patch("xueness.plugin_runtime.prepare_session_save",
+                        return_value=[("sessions", "prepared")]) as prepare, \
+                mock.patch("xueness.plugin_runtime.commit_session_save") as commit:
+            updated = self.store.update(session["id"], change_task)
+
+        self.assertEqual(updated["task"], "after")
+        self.assertEqual(self.store.load(session["id"])["task"], "after")
+        prepare.assert_called_once_with(self.store.directory, self.store, updated)
+        commit.assert_called_once_with([("sessions", "prepared")])
+
     @unittest.skipUnless(os.name == "posix", "mocked platform must keep the posix lock opener")
     def test_mocked_darwin_and_win32_still_write_lf(self):
         for platform_name in ("darwin", "win32"):

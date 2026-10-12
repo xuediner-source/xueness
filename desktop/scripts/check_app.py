@@ -87,6 +87,8 @@ with tempfile.TemporaryDirectory(prefix='xueness-app-check-') as temporary:
                 assert row['historyLeft'] >= 10 and row['actionsRight'] >= 148, row
         native_menus = set(state.get('nativeMenuLabels', []))
         assert {'编辑', '视图', '窗口'} <= native_menus or {'Edit', 'View', 'Window'} <= native_menus, state
+        if sys.platform == 'darwin':
+            assert '文件' in native_menus or 'File' in native_menus, state
     print(f'PASS: packaged Electron workbench renders, {expected_plugins} plugins/{expected_features} features, isolated renderer and clean exit')
     if sys.platform in ('darwin', 'win32'):
         print('PASS: native window caption safe areas, workbench background theme and localized application menu')

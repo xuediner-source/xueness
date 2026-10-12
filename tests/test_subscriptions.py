@@ -171,6 +171,40 @@ class SubscriptionTests(unittest.TestCase):
             provider.stream([], [], on_delta=callback)
         self.assertNotIn('private', str(caught.exception))
 
+    def test_native_deadline_is_forwarded_to_the_owned_worker(self):
+        import time
+        from xueness.bundled_plugins.subscriptions.provider import NativeProvider
+        self.enable()
+        provider = NativeProvider(self.state, {'subscriptionId': 'antigravity', 'model': 'fixture', 'baseUrl': 'https://example.test'})
+        provider.request_deadline = time.monotonic() + 10
+        with patch.object(broker, 'call', return_value={'content': 'fixture', 'tool_calls': []}) as request:
+            provider.complete([], [])
+        self.assertEqual(request.call_args.kwargs['request_deadline'], provider.request_deadline)
+
+    def test_expired_deadline_does_not_start_a_worker(self):
+        import time
+        self.enable()
+        with patch.object(broker, 'Worker') as worker:
+            with self.assertRaises(broker.SubscriptionRequestError) as caught:
+                broker.call(self.state, 'generate', 'antigravity', {}, request_deadline=time.monotonic() - 1)
+            worker.assert_not_called()
+        self.assertEqual(caught.exception.category, 'timeout')
+
+    def test_owned_worker_deadline_aborts_the_specific_request(self):
+        import threading, time
+        self.enable()
+        worker = broker.Worker.__new__(broker.Worker)
+        worker.state_dir, worker.lock = str(self.state), threading.RLock()
+        worker.pending, worker.closed = {}, threading.Event()
+        sent = []
+        worker._send = sent.append
+        with self.assertRaises(broker.SubscriptionRequestError) as caught:
+            worker.call('generate', 'antigravity', {}, request_deadline=time.monotonic() + 0.02)
+        self.assertEqual(caught.exception.category, 'timeout')
+        self.assertEqual(len(sent), 2)
+        self.assertEqual(sent[1], {'action': 'abort', 'target': sent[0]['id']})
+        self.assertEqual(worker.pending, {})
+
     def test_supplier_metadata_groups_profiles_without_exposing_url_secrets(self):
         first = providers_api.model_supplier_metadata({'baseUrl': 'https://api.example.test/v1?token=PRIVATE'})
         second = providers_api.model_supplier_metadata({'baseUrl': 'https://user:PRIVATE@api.example.test/v2'})

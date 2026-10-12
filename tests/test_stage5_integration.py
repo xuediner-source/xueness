@@ -15,6 +15,7 @@ so a passing run is evidence the handshake works.
 import json
 import sys
 import tempfile
+import threading
 import unittest
 from pathlib import Path
 
@@ -334,6 +335,69 @@ class SubagentLoopTests(unittest.TestCase):
         # ...but the child's system prompt and transcript are NOT persisted.
         self.assertNotIn("You review things carefully.", blob)
         self.assertNotIn("sub-", blob)  # no child session id leaked in
+
+    def test_parent_run_waits_for_child_final_save_before_teardown(self):
+        """Closing a parent cannot return while its child still saves under a lease."""
+        from unittest.mock import patch
+        from xueness.bundled_plugins.subagents.child_sessions import ChildStore
+        from xueness.subagents import load as load_subagents
+
+        final_save_started = threading.Event()
+        release_final_save = threading.Event()
+        parent_finished = threading.Event()
+        outcomes = []
+        errors = []
+        original_save = ChildStore.save
+
+        def controlled_save(child_store, child):
+            if child.get("status") == "completed" and not final_save_started.is_set():
+                final_save_started.set()
+                if not release_final_save.wait(5):
+                    raise TimeoutError("test did not release the controlled final save")
+            return original_save(child_store, child)
+
+        class RoutedProvider:
+            def __init__(self):
+                self.parent_calls = 0
+
+            def complete(self, messages, tools):
+                if any("You review things carefully." in (row.get("content") or "")
+                       for row in messages if row.get("role") == "system"):
+                    return {"content": json.dumps({"summary": "child done", "evidence": []})}
+                self.parent_calls += 1
+                if self.parent_calls == 1:
+                    return {"content": "", "tool_calls": [{
+                        "id": "s1", "type": "function",
+                        "function": {"name": "task", "arguments": json.dumps({
+                            "prompt": "check the file", "agent": "reviewer"})}}]}
+                return {"content": json.dumps({"summary": "parent done", "evidence": []})}
+
+        parent = self.store.new("delegate this", self.workspace)
+
+        def run_parent():
+            try:
+                outcomes.append(run(parent, self.store, RoutedProvider(),
+                                    Gate(self.workspace, allow_write=True), max_steps=3,
+                                    subagents=load_subagents(self.state), max_depth=1))
+            except BaseException as exc:  # surface worker-thread failures in the test thread
+                errors.append(exc)
+            finally:
+                parent_finished.set()
+
+        thread = threading.Thread(target=run_parent, name="stage5-parent-run")
+        with patch.object(ChildStore, "save", controlled_save):
+            thread.start()
+            try:
+                self.assertTrue(final_save_started.wait(5), "child never entered its final save")
+                self.assertFalse(parent_finished.wait(.05),
+                                 "parent run returned while a child still held its save/lease")
+            finally:
+                release_final_save.set()
+                thread.join(5)
+
+        self.assertFalse(thread.is_alive(), "parent run did not settle after the child save was released")
+        self.assertEqual(errors, [])
+        self.assertTrue(outcomes)
 
     def test_subagent_cannot_write(self):
         """The delegated run gets a read-only gate: writes must be denied."""

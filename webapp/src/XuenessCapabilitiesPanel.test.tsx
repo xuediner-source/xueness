@@ -220,7 +220,7 @@ test("CapabilityPanel rows show safe name and description and keep unknown field
   assert.ok(!html.includes("secret"));
 });
 
-test("plugin resources show manifest status and safety copy without claiming runtime-loaded plugins", () => {
+test("plugin resources distinguish manifest activation from feature plugin activation", () => {
   const html = renderToStaticMarkup(
     <CapabilitiesPanel sections={[
       {
@@ -238,8 +238,8 @@ test("plugin resources show manifest status and safety copy without claiming run
   );
   assert.match(html, /data-testid="xn-cap-item-plugins-mcp-tools"/);
   assert.match(html, /清单已启用/);
-  assert.match(html, /Xueness 内置能力校验/);
-  assert.match(html, /不代表外部插件代码已安装或加载/);
+  assert.match(html, /清单安装、清单启用、功能插件启用是三个独立状态/);
+  assert.match(html, /可选内置功能会用清单标记可用性/);
   assert.match(html, /aria-label="禁用插件清单 MCP tools"/);
   assert.doesNotMatch(html, /核心模块/);
 });

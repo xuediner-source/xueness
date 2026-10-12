@@ -46,8 +46,10 @@ function buildApplicationMenu(locale, platform) {
       { type: 'separator' },
       { label: labels.quit, role: 'quit' },
     ] }] : []),
-    // Windows 惯例：「文件」菜单放在最前面（Alt+F），与 macOS 的应用菜单位置对应。
-    ...(!mac ? [{ label: labels.file, submenu: [{ label: labels.quit, role: 'quit' }] }] : []),
+    // macOS keeps Close Window in File (Cmd+W); Quit remains in the app menu.
+    // Windows keeps Quit in File (Alt+F), where its role also supplies the native shortcut.
+    ...(mac ? [{ label: labels.file, submenu: [{ label: labels.closeWindow, role: 'close' }] }]
+      : [{ label: labels.file, submenu: [{ label: labels.quit, role: 'quit' }] }]),
     { label: labels.edit, submenu: [
       { label: labels.undo, role: 'undo' }, { label: labels.redo, role: 'redo' }, { type: 'separator' },
       { label: labels.cut, role: 'cut' }, { label: labels.copy, role: 'copy' },

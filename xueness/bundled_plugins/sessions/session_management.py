@@ -194,15 +194,20 @@ def archive_stale(store: Store, older_than_days: int, *, running_ids=(), has_pen
 
 def rename(store: Store, sid: str, title: str) -> dict:
     _live_path(store, sid)
-    session = store.load(sid)
-    old_title = session.get("title") or session["task"]
-    if old_title != title:
-        _audit(session, "renamed", previous_title=old_title, title=title)
-        session["title"] = title
-        # An operator-provided title wins over sessions.auto_title forever.
-        session["title_source"] = "manual"
-        store.save(session)
-    return session
+
+    def apply_manual_title(session):
+        old_title = session.get("title") or session["task"]
+        if old_title != title:
+            _audit(session, "renamed", previous_title=old_title, title=title)
+        changed = session.get("title") != title or session.get("title_source") != "manual"
+        if changed:
+            session["title"] = title
+            # An operator-provided title wins over sessions.auto_title forever,
+            # including when the operator confirms the existing task text.
+            session["title_source"] = "manual"
+        return changed
+
+    return store.update(sid, apply_manual_title)
 
 
 def list_summaries(store: Store) -> list[dict]:

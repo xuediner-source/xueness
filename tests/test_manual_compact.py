@@ -21,6 +21,7 @@ from xueness.cli import main
 from xueness.core import Store, SYSTEM
 from xueness.plugin_runtime import dispatch_http, route_owner, set_enabled
 from xueness.session_lease import lease
+from xueness.bundled_plugins.settings.settings_store import save_settings
 from xueness.bundled_plugins.sessions import manual_compact
 from xueness.bundled_plugins.sessions.manual_compact import CompactError
 
@@ -54,6 +55,7 @@ class ManualCompactTests(unittest.TestCase):
         self.root = self.base / 'workspace'
         self.root.mkdir()
         self.store = Store(self.state)
+        save_settings(self.state, {'general': {'sessionsAutoTitleEnabled': False}})
         self.session = self.store.new('demo task', self.root)
         self.sid = self.session['id']
         self.put(transcript())

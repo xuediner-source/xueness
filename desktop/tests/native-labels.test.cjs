@@ -13,15 +13,20 @@ function item(menu, label) {
 
 test('native menus use Chinese labels and retain Electron role shortcuts', () => {
   const menu = buildApplicationMenu('zh', 'darwin');
-  assert.deepEqual(menu.map(entry => entry.label), ['Xueness', '编辑', '视图', '窗口']);
+  assert.deepEqual(menu.map(entry => entry.label), ['Xueness', '文件', '编辑', '视图', '窗口']);
   assert.equal(item(menu, '撤销').role, 'undo');
   assert.equal(item(menu, '重新载入').role, 'reload');
   assert.equal(item(menu, '最小化').role, 'minimize');
+  assert.equal(item(menu, '关闭窗口').role, 'close', 'the native role supplies Cmd+W');
   assert.equal(item(menu, '全部置于最前面').role, 'front');
   assert.equal(item(menu, '缩放').role, 'zoom');
   assert.equal(item(menu, '关于 Xueness').role, 'about');
   assert.equal(item(menu, '退出 Xueness').role, 'quit');
   assert.equal(getNativeLabels('zh').projectFolderTitle, '选择项目文件夹');
+
+  const english = buildApplicationMenu('en', 'darwin');
+  assert.deepEqual(english.map(entry => entry.label), ['Xueness', 'File', 'Edit', 'View', 'Window']);
+  assert.equal(item(english, 'Close Window').role, 'close');
 });
 
 test('native menus use English labels on Windows and expose a localized File menu', () => {

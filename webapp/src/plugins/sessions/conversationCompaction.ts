@@ -30,6 +30,36 @@ export type ConversationCompactionMarker = {
   masked: number;
 };
 
+/** Attach archive provenance to tool rows: unlike text rows, tools have no
+ * messageIndex, so the journal window's explicit null index is needed to tell
+ * an archived result from an active one. */
+export function markArchivedToolRows(rows: TimelineRow[], journal: unknown): TimelineRow[] {
+  if (!journal || typeof journal !== 'object' || Array.isArray(journal)) return rows;
+  const source = journal as Record<string, unknown>;
+  const messages = source.messages;
+  const window = source.message_window;
+  if (!Array.isArray(messages) || !window || typeof window !== 'object' || Array.isArray(window)) return rows;
+  const indices = (window as Record<string, unknown>).messageIndices;
+  if (!Array.isArray(indices) || indices.length !== messages.length) return rows;
+  const archivedCalls = new Set<string>();
+  messages.forEach((value, index) => {
+    if (indices[index] !== null || !value || typeof value !== 'object' || Array.isArray(value)) return;
+    const message = value as Record<string, unknown>;
+    if (message.role === 'tool' && typeof message.tool_call_id === 'string') archivedCalls.add(message.tool_call_id);
+    if (message.role === 'assistant' && Array.isArray(message.tool_calls)) {
+      for (const call of message.tool_calls) {
+        if (call && typeof call === 'object' && !Array.isArray(call)
+          && typeof (call as Record<string, unknown>).id === 'string') {
+          archivedCalls.add((call as Record<string, unknown>).id as string);
+        }
+      }
+    }
+  });
+  if (!archivedCalls.size) return rows;
+  return rows.map(row => row.kind === 'tool' && archivedCalls.has(row.toolCallId)
+    ? { ...row, archivedForCompaction: true } : row);
+}
+
 const NUMERIC_FIELDS: readonly string[] = ['removed', 'masked', 'previous_chars', 'estimatedTokens', 'kept_user_turns', 'targetChars', 'instructionsChars'];
 const BOOLEAN_FIELDS: readonly string[] = ['advisory', 'manual'];
 
@@ -83,6 +113,10 @@ export function conversationCompactionBoundary(
   if (!Array.isArray(rows) || rows.length === 0) return null;
   let seenArchived = false;
   for (const row of rows) {
+    if (row.kind === 'tool' && row.archivedForCompaction === true) {
+      seenArchived = true;
+      continue;
+    }
     if (row.kind !== 'user' && row.kind !== 'assistant') continue;
     if (row.kind === 'assistant' && row.streaming === true) continue;
     if (row.messageIndex === undefined) {

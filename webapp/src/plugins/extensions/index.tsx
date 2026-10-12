@@ -171,7 +171,7 @@ export function MarketplaceCard({
   const copy = marketplaceDisplayCopy(item);
   const installed = isInstalled(item);
   const updateAvailable = isUpdateAvailable(item);
-  const actionLabel = !installed ? tr("安装") : updateAvailable ? tr("更新") : isCurrentVersion(item) ? tr("已是最新版本") : tr("已安装");
+  const actionLabel = !installed ? tr("安装清单") : updateAvailable ? tr("更新清单") : isCurrentVersion(item) ? tr("清单已是最新版本") : tr("清单已安装");
   const actionClass = installed && !updateAvailable ? " is-current" : " is-primary";
   return <article className="xn-marketplace__card" data-testid="marketplace-card" data-plugin-id={item.id}>
     <button
@@ -187,7 +187,7 @@ export function MarketplaceCard({
         <span className="xn-marketplace__card-title-row">
           <span className="xn-marketplace__card-title">{copy.name}</span>
           <span className="xn-marketplace__badge is-version">v{item.version}</span>
-          {installed && <span className="xn-marketplace__badge is-installed"><Check size={11} aria-hidden="true" />{tr("已安装")}</span>}
+          {installed && <span className="xn-marketplace__badge is-installed"><Check size={11} aria-hidden="true" />{tr("清单已安装")}</span>}
           {updateAvailable && <span className="xn-marketplace__badge is-update"><RefreshCw size={11} aria-hidden="true" />{tr("更新")}</span>}
         </span>
         <span className="xn-marketplace__description">{copy.description || item.id}</span>
@@ -228,7 +228,7 @@ export function MarketplaceDetail({
   const adapter = manifestString(item.manifest, "builtin");
   const apiVersion = manifestNumber(item.manifest, "apiVersion");
   const capabilities = manifestCapabilities(item.manifest);
-  const actionLabel = !installed ? tr("安装") : updateAvailable ? tr("更新") : isCurrentVersion(item) ? tr("已是最新版本") : tr("已安装");
+  const actionLabel = !installed ? tr("安装清单") : updateAvailable ? tr("更新清单") : isCurrentVersion(item) ? tr("清单已是最新版本") : tr("清单已安装");
   const actionClass = installed && !updateAvailable ? " is-current" : " is-primary";
   return <div className="xn-marketplace__detail" data-testid="marketplace-detail" data-plugin-id={item.id}>
     <button type="button" className="xn-marketplace__back" data-testid="marketplace-back" onClick={onBack}>
@@ -240,7 +240,7 @@ export function MarketplaceDetail({
         <div className="xn-marketplace__detail-title-row"><h2>{copy.name}</h2></div>
         <div className="xn-marketplace__detail-title-row">
           <span className="xn-marketplace__badge is-version">v{item.version}</span>
-          {installed && <span className="xn-marketplace__badge is-installed"><Check size={11} aria-hidden="true" />{tr("已安装")}</span>}
+          {installed && <span className="xn-marketplace__badge is-installed"><Check size={11} aria-hidden="true" />{tr("清单已安装")}</span>}
           {updateAvailable && <span className="xn-marketplace__badge is-update"><RefreshCw size={11} aria-hidden="true" />{tr("更新")}</span>}
         </div>
         <p>{copy.description || item.id}</p>
@@ -265,7 +265,7 @@ export function MarketplaceDetail({
       <dl className="xn-marketplace__facts">
         <div><dt>ID</dt><dd><code>{item.id}</code></dd></div>
         <div><dt>{tr("清单版本")}</dt><dd>{item.version}</dd></div>
-        {item.installedVersion && <div><dt>{tr("已安装版本")}</dt><dd>{item.installedVersion}</dd></div>}
+        {item.installedVersion && <div><dt>{tr("已安装清单版本")}</dt><dd>{item.installedVersion}</dd></div>}
         {adapter && <div><dt>{tr("适配器")}</dt><dd>{adapter}</dd></div>}
         {apiVersion !== null && <div><dt>{tr("API 版本")}</dt><dd>{apiVersion}</dd></div>}
         <div className="xn-marketplace__fact-wide"><dt>{tr("所需能力")}</dt><dd>{capabilities.length ? capabilities.map(capability => <span className="xn-marketplace__capability" key={capability}>{capability}</span>) : <span className="xn-marketplace__muted">{tr("无额外能力")}</span>}</dd></div>
@@ -395,6 +395,7 @@ export function XuenessMarketplace({ onInstalled, onOpenOptional }: { onInstalle
       <div className="xn-marketplace__title">
         <h3>{tr("扩展市场")}</h3>
         <p>{tr("浏览可安装的扩展，在详情中查看能力和使用说明。")}</p>
+        <p className="xn-marketplace__status-note">{tr("市场安装和更新的是数据清单；安装后清单默认停用。市场安装状态、资源清单开关和功能插件开关彼此独立。")}</p>
       </div>
       <div className="xn-marketplace__header-actions">
         <button type="button" className="xn-marketplace__refresh" disabled={loading} onClick={() => void refresh()}>
@@ -427,7 +428,7 @@ export function XuenessMarketplace({ onInstalled, onOpenOptional }: { onInstalle
             {tr("全部")}<span>{items.length}</span>
           </button>
           <button type="button" data-testid="marketplace-filter-installed" aria-pressed={filter === "installed"} className={filter === "installed" ? "is-selected" : ""} onClick={() => setFilter("installed")}>
-            {tr("已安装")}<span>{installedCount}</span>
+            {tr("已安装清单")}<span>{installedCount}</span>
           </button>
         </div>
         <span className="xn-marketplace__count" aria-live="polite">{visibleCountLabel}</span>
@@ -460,7 +461,7 @@ export function XuenessMarketplace({ onInstalled, onOpenOptional }: { onInstalle
       >
         <div className="xn-marketplace__dialog-icon"><ShieldCheck size={19} aria-hidden="true" /></div>
         <div className="xn-marketplace__dialog-copy">
-          <h3 id={dialogTitleId}>{confirm.installedVersion ? tr("确认更新") : tr("确认安装")}</h3>
+          <h3 id={dialogTitleId}>{confirm.installedVersion ? tr("确认更新清单") : tr("确认安装清单")}</h3>
           <p id={dialogDescriptionId}>{marketplaceDisplayCopy(confirm).name} · {tr("将核对目录摘要并安装安全清单。不会载入或执行外部代码。")}</p>
           {error && <p className="xn-marketplace__error" role="alert">{tr("市场操作失败：")}{error}</p>}
           <code className="xn-marketplace__dialog-digest">{confirm.id} · {confirm.version} · SHA-256 {confirm.sha256}</code>

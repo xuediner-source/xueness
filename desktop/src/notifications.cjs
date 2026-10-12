@@ -55,6 +55,7 @@ function normalizeNotifyRequest(value) {
 
 function createDesktopNotifications({ app, Notification, ipcMain, getWindow, getOrigin, showMain, platform = process.platform }) {
   let disposed = false, lastSeq = 0;
+  let readyWebContents = null, desktopEnabled, sessionsEnabled, pendingSessionId = null;
   // Windows notifications need an App User Model ID registered with the
   // packaged app; a missing setter (test fixtures) only skips this step.
   if (platform === 'win32' && typeof app?.setAppUserModelId === 'function') {
@@ -69,17 +70,56 @@ function createDesktopNotifications({ app, Notification, ipcMain, getWindow, get
       } catch { return; }
       notification.on('click', () => {
         try { notification.close(); } catch { /* already closed */ }
-        const target = item.sessionId;
-        if (target) {
-          const window = getWindow();
-          // Reuse the tray command bridge: the workbench selects the session
-          // when sessions are effective and the window is not busy elsewhere.
-          if (window && !window.isDestroyed()) window.webContents.send('xueness:desktop-command', { kind: 'session', id: target });
+        if (item.sessionId) {
+          pendingSessionId = desktopEnabled === false || sessionsEnabled === false ? null : item.sessionId;
+          flushPending();
         }
-        if (typeof showMain === 'function') showMain();
+        // Always restore/focus the app, even if sending to a crashed renderer
+        // failed above. On macOS this may create a new window after last-close.
+        try { if (typeof showMain === 'function') showMain(); } catch { /* keep the notification handler alive */ }
+        flushPending();
       });
       notification.show();
     }
+  };
+  const flushPending = () => {
+    if (!pendingSessionId || desktopEnabled === false || sessionsEnabled === false) return;
+    const window = getWindow();
+    if (!window || window.isDestroyed()) { readyWebContents = null; return; }
+    const contents = window.webContents;
+    if (!contents || contents !== readyWebContents || !isOwnedUrl(contents.mainFrame?.url, getOrigin())) return;
+    if (typeof contents.isLoading === 'function' && contents.isLoading()) return;
+    if (desktopEnabled !== true || sessionsEnabled !== true) return;
+    const id = pendingSessionId;
+    try {
+      // The authenticated tray-state message marks DesktopTrayBridge mounted;
+      // its listener is installed before that state reaches the main process.
+      contents.send('xueness:desktop-command', { kind: 'session', id });
+      pendingSessionId = null;
+    } catch {
+      readyWebContents = null;
+    }
+  };
+  const trayState = (event, value) => {
+    if (disposed) return;
+    const window = getWindow();
+    if (!window || window.isDestroyed() || event.sender !== window.webContents
+        || event.senderFrame !== window.webContents.mainFrame
+        || !isOwnedUrl(event.senderFrame?.url, getOrigin())) return;
+    readyWebContents = event.sender;
+    sessionsEnabled = value && typeof value === 'object' && value.sessionsEnabled === true;
+    if (!sessionsEnabled) pendingSessionId = null;
+    else flushPending();
+  };
+  const desktopPolicy = (event, enabled) => {
+    if (disposed) return;
+    const window = getWindow();
+    if (!window || window.isDestroyed() || event.sender !== window.webContents
+        || event.senderFrame !== window.webContents.mainFrame
+        || !isOwnedUrl(event.senderFrame?.url, getOrigin()) || typeof enabled !== 'boolean') return;
+    desktopEnabled = enabled;
+    if (!enabled) pendingSessionId = null;
+    else flushPending();
   };
   const request = (event, value) => {
     if (disposed) return;
@@ -91,15 +131,23 @@ function createDesktopNotifications({ app, Notification, ipcMain, getWindow, get
     // `seq` is the renderer's strictly increasing request stamp (ms, bumped by
     // one on collisions). Anything not newer is a stale replay.
     if (!normalized || normalized.seq <= lastSeq) return;
-    if (!Notification) return;
     lastSeq = normalized.seq;
+    // The preload enforces this at the renderer boundary; repeat it here so a
+    // queued IPC message cannot outlive disabling the desktop plugin.
+    if (desktopEnabled !== true || !Notification) return;
     show(normalized);
   };
   ipcMain.on('xueness:desktop-notify', request);
+  ipcMain.on('xueness:desktop-tray-state', trayState);
+  ipcMain.on('xueness:desktop-background', desktopPolicy);
   return {
     dispose() {
       disposed = true;
       ipcMain.removeListener('xueness:desktop-notify', request);
+      ipcMain.removeListener('xueness:desktop-tray-state', trayState);
+      ipcMain.removeListener('xueness:desktop-background', desktopPolicy);
+      readyWebContents = null;
+      pendingSessionId = null;
     },
   };
 }

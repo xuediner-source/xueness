@@ -100,16 +100,33 @@ def _probe_directory(directory) -> dict:
         result["freeBytes"] = shutil.disk_usage(path).free
     except OSError:
         pass
+    fd = temporary = None
     try:
         fd, temporary = tempfile.mkstemp(prefix=".xueness-doctor-", dir=path)
-        try:
-            os.write(fd, b"ok")
-        finally:
-            os.close(fd)
+        remaining = memoryview(b"ok")
+        while remaining:
+            written = os.write(fd, remaining)
+            if written <= 0:
+                raise OSError("writability probe made no progress")
+            remaining = remaining[written:]
+        os.close(fd)
+        fd = None
         os.unlink(temporary)
+        temporary = None
         result["writable"] = True
     except OSError:
         result["writable"] = False
+    finally:
+        if fd is not None:
+            try:
+                os.close(fd)
+            except OSError:
+                pass
+        if temporary is not None:
+            try:
+                os.unlink(temporary)
+            except OSError:
+                pass
     return result
 
 
@@ -217,7 +234,9 @@ def report(state_dir, root=None, ping=False) -> dict:
     workspace = _probe_directory(root if root is not None else Path.cwd())
     plugins = plugins_check(state_dir)
     model = model_check(state_dir, ping=ping)
-    ok = bool(state["writable"] and model["resolvable"] and not plugins["configurationError"])
+    ping_ok = model["ping"] is None or model["ping"].get("ok") is True
+    ok = bool(state["writable"] and workspace["writable"] and model["resolvable"]
+              and ping_ok and not plugins["configurationError"])
     return {"schema": SCHEMA, "createdAt": time.time(),
             "version": {"xueness": __version__, "python": platform.python_version(),
                         "system": platform.system(), "machine": platform.machine()},
