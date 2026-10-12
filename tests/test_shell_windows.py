@@ -45,13 +45,27 @@ class ShellDesktopTests(unittest.TestCase):
         cp = f'cp{ctypes.windll.kernel32.GetOEMCP()}'
         # Captured pipes are UTF-8 on every host. An OEM code page is not a
         # second decoder; a console that is already UTF-8 still round-trips.
-        raw = "本机输出".encode(cp)
-        decoded = tooling._decode_output(raw)
         if cp.lower() in ("utf-8", "utf8", "cp65001"):
+            raw = "本机输出".encode("utf-8")
+            decoded = tooling._decode_output(raw)
             self.assertEqual(decoded, "本机输出")
         else:
-            self.assertNotEqual(decoded, "本机输出")
-            self.assertIn("\ufffd", decoded)
+            # OEM code pages such as CP437 cannot encode Chinese. Select a
+            # non-ASCII sample this code page can encode, then compare against
+            # the contract (UTF-8 decoding) rather than encoding failure.
+            for sample in ("本机输出", "é", "ñ", "ç", "ø", "中", "日", "€"):
+                try:
+                    raw = sample.encode(cp)
+                except UnicodeEncodeError:
+                    continue
+                expected = raw.decode("utf-8-sig", errors="replace")
+                if expected != sample:
+                    break
+            else:
+                self.fail(f"no distinguishing UTF-8 sample for {cp}")
+            decoded = tooling._decode_output(raw)
+            self.assertEqual(decoded, expected)
+            self.assertNotEqual(decoded, sample)
         with patch.object(process_runtime, "run_external", wraps=process_runtime.run_external) as run:
             result = self.execute(["powershell.exe", "-NoProfile", "-NonInteractive", "-Command",
                                    "[Console]::OutputEncoding=[System.Text.UTF8Encoding]::new(); Write-Output '本机输出'"])

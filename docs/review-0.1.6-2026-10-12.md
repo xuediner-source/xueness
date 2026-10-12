@@ -26,6 +26,8 @@
 
 本地完整集合按原始 unittest discovery 收集并在独立进程执行，保留标准类/模块 fixture 和平台 skip；测试辅助脚本位于审查目录，不属于产品。GitHub full 模式仍使用标准 unittest discover 命令，对 Windows x64、Mac Intel x64、Mac Apple Silicon arm64 原生运行器执行完整检查、冻结后端、打包及真实应用启动检查。
 
+首次原生全量暴露并修正额外平台夹具差异：调度任务明确使用生成时间戳的上海时区；Linux 路径锁断言显式模拟 Linux；Windows 最近会话时间戳改为秒级间隔，避免 NTFS 纳秒舍入平局；可选 symlink/FIFO 检查独立于通用文件安全断言，FIFO 仅在平台具备该能力时运行；OEM 测试选择当前编码能表示的非 ASCII 样本，保留真实 PowerShell UTF-8 输出检查；`/init` 预期路径与实际工作区 resolve 契约一致。Web 模块启动夹具明确直连 loopback、将输出写入隔离日志并报告失败诊断，仍保留 10 秒预算；Windows 正常及故意无效代理环境均通过，Mac 结果以原生 CI 为准。这些改动没有调整产品权限、默认时区、路径锁或 shell 解码行为。
+
 后端完整 discovery 收集 2867 项，四个隔离进程均正常退出；标准 unittest 结果为 2851 项、0 失败、0 错误、90 项 skip。16 项收集数与运行报告数的差额来自缺少可选外部 MCP 环境时的类级 setUpClass skip，不是遗漏执行。前端验证为 997 项、typecheck、设计与 bundle 门禁；桌面 Node 为 108 项（本机 6 项平台 skip），桌面 Python 9 项；订阅协议 24 项、Python 15 项。浏览器交互四个验证器全部通过；1440px 和 390px 的八张插件状态截图没有横向溢出、浏览器错误或非 loopback 请求。原生构建结果另存于本地证据目录及对应 GitHub Actions 运行记录。
 
 本地证据目录：E:/models/apps/xueness-review-20261012。用户会话、工作区、账号凭据与插件开关不参与验收状态，关机脚本没有恢复或执行。

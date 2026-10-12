@@ -434,7 +434,8 @@ class ComposerTests(InitFixture):
         status, prepared = self.prepare("/init focus on the packaging")
         self.assertEqual(status, 200, prepared)
         self.assertIn("AGENTS.md", prepared["text"])
-        self.assertIn(str(self.ws / "AGENTS.md"), prepared["text"])
+        expected_target = str((self.ws / "AGENTS.md").resolve())
+        self.assertIn(expected_target, prepared["text"])
         self.assertIn("focus on the packaging", prepared["text"])
         self.assertEqual(prepared["metadata"]["commandInvocations"],
                          [{"command": "init", "args": "focus on the packaging"}])

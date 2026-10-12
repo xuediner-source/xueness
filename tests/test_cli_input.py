@@ -115,13 +115,30 @@ class InputTests(unittest.TestCase):
 
     def test_path_escape_binary_and_special_files_are_rejected(self):
         (self.base / "outside").write_text("private")
-        make_symlink(self.root / "escape", self.base / "outside")
         (self.root / "binary").write_bytes(b"\x00\xff")
         (self.root / "nul").write_bytes(b"abc\0")
-        os.mkfifo(self.root / "pipe")
-        for name in ("../outside", "escape", "binary", "nul", "pipe", "."):
+        for name in ("../outside", "binary", "nul", "."):
             with self.subTest(name=name), self.assertRaises((ValueError, OSError)):
                 snapshot(self.root, name)
+
+    def test_symlink_escape_is_rejected(self):
+        outside = self.base / "outside"
+        outside.write_text("private")
+        try:
+            make_symlink(self.root / "escape", outside)
+        except unittest.SkipTest as exc:
+            self.skipTest(str(exc))
+        with self.assertRaises((ValueError, OSError)):
+            snapshot(self.root, "escape")
+
+    def test_fifo_is_rejected_where_supported(self):
+        make_fifo = getattr(os, "mkfifo", None)
+        if not callable(make_fifo):
+            self.skipTest("named pipes are unavailable on this platform")
+        pipe = self.root / "pipe"
+        make_fifo(pipe)
+        with self.assertRaises((ValueError, OSError)):
+            snapshot(self.root, "pipe")
 
     def test_size_limits_and_queue_replacement_are_atomic(self):
         queue = []

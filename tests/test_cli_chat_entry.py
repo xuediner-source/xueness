@@ -79,17 +79,28 @@ class ChatEntryTests(unittest.TestCase):
         newest["mode"] = "plan"
         self.store.save(newest)
         other = self.store.new("other", self.root / "elsewhere")
-        os.utime(self.store._path(older["id"]), ns=(10, 10))
-        os.utime(self.store._path(newest["id"]), ns=(20, 20))
-        os.utime(self.store._path(other["id"]), ns=(30, 30))
-        # Broken/symlinked state must not hijack the continuation selector.
+        # Leave enough separation for filesystems whose timestamp precision is
+        # coarser than one nanosecond (notably Windows/NTFS).
+        os.utime(self.store._path(older["id"]), (10, 10))
+        os.utime(self.store._path(newest["id"]), (20, 20))
+        os.utime(self.store._path(other["id"]), (30, 30))
+        # Corrupt state must not hijack the continuation selector.
         (self.state / ("a" * 32 + ".json")).write_text("[]")
-        make_symlink(self.state / ("b" * 32 + ".json"), self.store._path(other["id"]))
         code, out, err = self.chat("--continue", text="/retry\n/exit\n")
         self.assertEqual(code, 0, err)
         self.assertEqual(json.loads(out)["id"], newest["id"])
         self.assertEqual(json.loads(out)["mode"], "plan")
         self.assertFalse((self.root / "hello.txt").exists())
+
+    def test_continue_ignores_symlinked_session_files(self):
+        latest = self.store.new("latest", self.root)
+        try:
+            make_symlink(self.state / ("b" * 32 + ".json"), self.store._path(latest["id"]))
+        except unittest.SkipTest as exc:
+            self.skipTest(str(exc))
+        code, out, err = self.chat("--continue", text="/exit\n")
+        self.assertEqual(code, 0, err)
+        self.assertEqual(json.loads(out)["id"], latest["id"])
 
     def test_continue_without_match_and_invalid_flags_leave_no_journal(self):
         for flags in (("--continue",), ("--steps", "0"), ("--disallow-tools", "invalid")):
