@@ -22,6 +22,7 @@ import mimetypes
 import os
 import secrets
 import socket
+import socketserver
 import threading
 import traceback
 import urllib.parse
@@ -1076,6 +1077,13 @@ def create_server(port: int, ctx: dict, host: str | None = None) -> ThreadingHTT
     bind_host = resolve_bind_host(host)
     handler = type("XuenessHandler", (Handler,), {"_ctx": ctx})
     class ManagedServer(ThreadingHTTPServer):
+        def server_bind(self):
+            # HTTPServer.server_bind calls socket.getfqdn(host), which can do
+            # reverse DNS for a numeric local address and stall startup.
+            socketserver.TCPServer.server_bind(self)
+            self.server_name = self.server_address[0]
+            self.server_port = self.server_address[1]
+
         def server_close(self):
             # Plugin scopes release exactly what their activate() acquired.
             registry = ctx.get('plugin_scopes')

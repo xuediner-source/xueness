@@ -63,6 +63,30 @@ class WebTests(unittest.TestCase):
         self.server.server_close()
         self.temp.cleanup()
 
+    def test_ephemeral_bind_skips_reverse_dns_and_serves_health(self):
+        context = {}
+        with patch("socket.getfqdn", side_effect=AssertionError("reverse DNS during bind")) as getfqdn, \
+                patch.object(web.plugin_runtime, "sync_services"):
+            server = web.create_server(0, context, "127.0.0.1")
+            self.assertEqual(server.server_name, server.server_address[0])
+            self.assertEqual(server.server_port, server.server_address[1])
+            self.assertGreater(server.server_port, 0)
+            getfqdn.assert_not_called()
+            thread = threading.Thread(target=server.serve_forever, daemon=True)
+            thread.start()
+            try:
+                with urllib.request.urlopen(
+                        f"http://127.0.0.1:{server.server_port}/api/health", timeout=5) as response:
+                    self.assertEqual(response.status, 200)
+                    self.assertEqual(json.loads(response.read()),
+                                     {"ok": True, "service": "xueness-web"})
+            finally:
+                server.shutdown()
+                server.server_close()
+                thread.join(timeout=5)
+            self.assertFalse(thread.is_alive())
+            getfqdn.assert_not_called()
+
     # -- http helpers ----------------------------------------------------
     def _req(self, path, data=None, csrf=True, host=None, origin=None, raw=None):
         url = self.base + path
