@@ -17,7 +17,7 @@ from unittest.mock import Mock, patch
 from xueness import plugin_runtime
 from xueness.bundled_plugins.diagnostics import doctor
 
-SECRET = "sk-super-secret-doctor-value-123"
+SECRET = "sk-test-only-doctor-secret-value-123"
 
 
 class DoctorTestCase(unittest.TestCase):

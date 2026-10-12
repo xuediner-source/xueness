@@ -13,7 +13,7 @@ from xueness.core import Gate
 from xueness.tool_contract import bind_execution
 from xueness.tool_registry import REGISTRY_BY_NAME, dispatch
 
-SECRET = "sk-introspection-secret-value-1"
+SECRET = "sk-test-only-introspection-secret-value-1"
 
 
 class IntrospectionToolsTestCase(unittest.TestCase):
