@@ -63,6 +63,9 @@ jobs:
           python -m unittest tests.test_plugin_architecture tests.test_host_platform tests.test_host_path_identity -q
           npm --prefix webapp run typecheck
           npm --prefix webapp run build
+      - name: Check module entrypoint before the full suite
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.fast_build == false }}
+        run: python -m unittest tests.test_web_module_startup -q
       - name: Run extended release test suite
         if: ${{ github.event_name == 'workflow_dispatch' && inputs.fast_build == false }}
         run: |
