@@ -42,6 +42,19 @@ class WebModuleStartupTests(unittest.TestCase):
         self.workspace.mkdir()
         (self.workspace / "fixture.txt").write_text("fixture file contents", encoding="utf-8")
 
+        # Keep a Python-level snapshot ready before the server reaches its
+        # banner. If plugin lifecycle activation stalls before bind, the health
+        # timeout can otherwise report only that the child is still alive.
+        startup_trace_dir = base / "startup-trace"
+        startup_trace_dir.mkdir()
+        (startup_trace_dir / "sitecustomize.py").write_text(
+            "import faulthandler, sys\n"
+            "sys.stderr.write('xueness startup trace armed\\n')\n"
+            "sys.stderr.flush()\n"
+            "faulthandler.dump_traceback_later(7, repeat=False, file=sys.stderr)\n",
+            encoding="utf-8",
+        )
+
         self.sid = uuid.uuid4().hex
         self.stream_id = uuid.uuid4().hex
         session = {
@@ -79,6 +92,10 @@ class WebModuleStartupTests(unittest.TestCase):
         environment = os.environ.copy()
         environment["XUENESS_ALLOW_REAL"] = "0"
         environment["PYTHONUNBUFFERED"] = "1"
+        python_path = environment.get("PYTHONPATH", "")
+        environment["PYTHONPATH"] = os.pathsep.join(
+            part for part in (str(startup_trace_dir), python_path) if part
+        )
         command = [
             sys.executable, "-m", "xueness.web",
             "--host", "127.0.0.1",
