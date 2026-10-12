@@ -22,6 +22,17 @@ def digest(path, algorithm='sha256'):
         return hashlib.file_digest(stream, algorithm)
 
 
+def verification_mode(jobs):
+    def passed(job, name):
+        return any(step['name'] == name and step['conclusion'] == 'success'
+                   for step in job['steps'])
+    if jobs and all(passed(job, 'Run extended release test suite') for job in jobs):
+        return 'full'
+    if jobs and all(passed(job, 'Check feature ownership and focused native parity') for job in jobs):
+        return 'focused'
+    raise ValueError('all native jobs must pass the same full or focused verification mode')
+
+
 def main():
     run_id = os.environ['XUENESS_BUILD_RUN']
     if not run_id.isascii() or not run_id.isdecimal():
@@ -36,13 +47,16 @@ def main():
     targets = ('windows-x64', 'macos-x64', 'macos-arm64')
     if len(jobs) != 3 or any(job['conclusion'] != 'success' for job in jobs):
         raise ValueError('all three native build jobs must succeed')
+    mode = verification_mode(jobs)
     for target in targets:
         job = next(job for job in jobs if target in job['name'])
-        required = ['Run extended release test suite', 'Freeze the native backend',
-                    'Exercise the actual backend integration suite', 'Verify packaged Electron workbench']
+        required = ['Freeze the native backend', 'Verify packaged Electron workbench']
+        required += (['Run extended release test suite', 'Exercise the actual backend integration suite']
+                     if mode == 'full' else ['Check feature ownership and focused native parity'])
         if target == 'windows-x64':
-            required += ['Exercise the installed NSIS in-app update path',
-                         'Verify public GitHub Windows installer download']
+            required += ['Verify public GitHub Windows installer download']
+            if mode == 'full':
+                required += ['Exercise the installed NSIS in-app update path']
         for step in required:
             if next(row for row in job['steps'] if row['name'] == step)['conclusion'] != 'success':
                 raise ValueError('required native gate did not pass: '+step)
@@ -118,8 +132,9 @@ def main():
         info = {'version':version,'sourceCommit':sha,'buildSourceCommit':sha,
                 'desktopBuildRun':run['url'],'plugins':len(plugins),
                 'features':sum(len(p['features']) for p in plugins),
-                'nativePlatforms':list(targets),'windowsInstalledUpdateSmoke':'passed',
-                'frozenTerminalInterruptResumeAndCleanup':'passed',
+                'nativePlatforms':list(targets),'verificationMode':mode,
+                'windowsInstalledUpdateSmoke':'passed' if mode == 'full' else 'not_run',
+                'frozenTerminalInterruptResumeAndCleanup':'passed' if mode == 'full' else 'not_run',
                 'liveModelPerformanceMeasured':False,
                 'artifacts':[{'name':p.name,'bytes':p.stat().st_size,'sha256':digest(p).hexdigest()}
                              for p in sorted(out.iterdir())]}

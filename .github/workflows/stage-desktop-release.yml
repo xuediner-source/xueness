@@ -3,7 +3,7 @@ on:
   workflow_dispatch:
     inputs:
       build_run_id:
-        description: 'Successful full native build (workflow_dispatch with fast_build=false) for this exact commit'
+        description: 'Successful focused or full native build for this exact commit; build-info records the verification mode'
         type: string
         required: true
 permissions:

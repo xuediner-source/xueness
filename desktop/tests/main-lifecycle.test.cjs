@@ -199,8 +199,20 @@ test('macOS keeps the backend alive after last-window close and recreates a secu
   const f = bootMain(t);
   await waitFor(() => f.windows[0]?.url);
   assert.equal(f.windows.length, 1);
+  const initialBackgroundListeners = f.ipcMain.listeners('xueness:desktop-background');
+  const initialTrayStateListeners = f.ipcMain.listeners('xueness:desktop-tray-state');
+  const notificationListeners = f.ipcMain.listeners('xueness:desktop-notify');
+  assert.equal(initialBackgroundListeners.length, 2, 'notifications and the window host share this channel');
+  assert.equal(initialTrayStateListeners.length, 2, 'notifications and the window host share this channel');
+  assert.equal(notificationListeners.length, 1, 'the notification host is app-scoped');
   f.windows[0].destroy();
-  assert.equal(f.ipcMain.listenerCount('xueness:desktop-background'), 0);
+  const backgroundAfterClose = f.ipcMain.listeners('xueness:desktop-background');
+  const trayStateAfterClose = f.ipcMain.listeners('xueness:desktop-tray-state');
+  assert.equal(backgroundAfterClose.length, 1, 'closing a window disposes its Dock host but keeps notifications');
+  assert.equal(trayStateAfterClose.length, 1, 'closing a window disposes its Dock host but keeps notifications');
+  assert.ok(initialBackgroundListeners.includes(backgroundAfterClose[0]));
+  assert.ok(initialTrayStateListeners.includes(trayStateAfterClose[0]));
+  assert.deepEqual(f.ipcMain.listeners('xueness:desktop-notify'), notificationListeners);
   f.app.emit('window-all-closed');
   assert.equal(f.quitCount(), 0);
   f.app.emit('activate');
@@ -210,10 +222,20 @@ test('macOS keeps the backend alive after last-window close and recreates a secu
   assert.equal(typeof f.windows[1].windowOpenHandler, 'function');
   assert.equal(f.policyInstallations.length, 2);
   assert.equal(f.session.webRequest.beforeSend.length, 2);
-  assert.equal(f.ipcMain.listenerCount('xueness:desktop-background'), 1);
+  const backgroundAfterReopen = f.ipcMain.listeners('xueness:desktop-background');
+  const trayStateAfterReopen = f.ipcMain.listeners('xueness:desktop-tray-state');
+  assert.equal(backgroundAfterReopen.length, 2, 'one app-scoped notification and one current-window host');
+  assert.equal(trayStateAfterReopen.length, 2, 'one app-scoped notification and one current-window host');
+  assert.equal(backgroundAfterReopen.filter(listener => listener === backgroundAfterClose[0]).length, 1);
+  assert.equal(backgroundAfterReopen.filter(listener => listener !== backgroundAfterClose[0]).length, 1);
+  assert.equal(trayStateAfterReopen.filter(listener => listener === trayStateAfterClose[0]).length, 1);
+  assert.equal(trayStateAfterReopen.filter(listener => listener !== trayStateAfterClose[0]).length, 1);
+  assert.deepEqual(f.ipcMain.listeners('xueness:desktop-notify'), notificationListeners,
+    'reopening a window must not install a second notification host');
   f.windows[1].destroy();
-  assert.equal(f.ipcMain.listenerCount('xueness:desktop-background'), 0);
-  assert.equal(f.ipcMain.listenerCount('xueness:desktop-tray-state'), 0);
+  assert.deepEqual(f.ipcMain.listeners('xueness:desktop-background'), backgroundAfterClose);
+  assert.deepEqual(f.ipcMain.listeners('xueness:desktop-tray-state'), trayStateAfterClose);
+  assert.deepEqual(f.ipcMain.listeners('xueness:desktop-notify'), notificationListeners);
 });
 
 test('second-instance restores the secured macOS window after the last window closed', {
@@ -221,7 +243,19 @@ test('second-instance restores the secured macOS window after the last window cl
 }, async t => {
   const f = bootMain(t);
   await waitFor(() => f.windows[0]?.url);
+  const initialBackgroundListeners = f.ipcMain.listeners('xueness:desktop-background');
+  const initialTrayStateListeners = f.ipcMain.listeners('xueness:desktop-tray-state');
+  const notificationListeners = f.ipcMain.listeners('xueness:desktop-notify');
+  assert.equal(initialBackgroundListeners.length, 2);
+  assert.equal(initialTrayStateListeners.length, 2);
+  assert.equal(notificationListeners.length, 1);
   f.windows[0].destroy();
+  const backgroundAfterClose = f.ipcMain.listeners('xueness:desktop-background');
+  const trayStateAfterClose = f.ipcMain.listeners('xueness:desktop-tray-state');
+  assert.equal(backgroundAfterClose.length, 1);
+  assert.equal(trayStateAfterClose.length, 1);
+  assert.ok(initialBackgroundListeners.includes(backgroundAfterClose[0]));
+  assert.ok(initialTrayStateListeners.includes(trayStateAfterClose[0]));
   f.app.emit('window-all-closed');
   assert.equal(f.quitCount(), 0);
   f.app.emit('second-instance', {}, ['Xueness']);
@@ -230,8 +264,19 @@ test('second-instance restores the secured macOS window after the last window cl
   assert.equal(f.windows[1].url, 'http://127.0.0.1:45678/?xuenessDesktop=1');
   assert.equal(f.windows[1].webContents.listenerCount('will-navigate'), 1);
   assert.equal(typeof f.windows[1].windowOpenHandler, 'function');
-  assert.equal(f.ipcMain.listenerCount('xueness:desktop-background'), 1);
+  const backgroundAfterReopen = f.ipcMain.listeners('xueness:desktop-background');
+  const trayStateAfterReopen = f.ipcMain.listeners('xueness:desktop-tray-state');
+  assert.equal(backgroundAfterReopen.length, 2);
+  assert.equal(trayStateAfterReopen.length, 2);
+  assert.equal(backgroundAfterReopen.filter(listener => listener === backgroundAfterClose[0]).length, 1);
+  assert.equal(backgroundAfterReopen.filter(listener => listener !== backgroundAfterClose[0]).length, 1);
+  assert.equal(trayStateAfterReopen.filter(listener => listener === trayStateAfterClose[0]).length, 1);
+  assert.equal(trayStateAfterReopen.filter(listener => listener !== trayStateAfterClose[0]).length, 1);
+  assert.deepEqual(f.ipcMain.listeners('xueness:desktop-notify'), notificationListeners);
   f.windows[1].destroy();
+  assert.deepEqual(f.ipcMain.listeners('xueness:desktop-background'), backgroundAfterClose);
+  assert.deepEqual(f.ipcMain.listeners('xueness:desktop-tray-state'), trayStateAfterClose);
+  assert.deepEqual(f.ipcMain.listeners('xueness:desktop-notify'), notificationListeners);
 });
 
 test('activation and second-instance do not show or recreate windows during quit', {
