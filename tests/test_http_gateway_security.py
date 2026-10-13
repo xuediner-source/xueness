@@ -349,6 +349,49 @@ class GatewaySecurityTests(unittest.TestCase):
         self.assertEqual(payload["code"], "csrf_required")
         self.assertEqual(self._ids(), before)
 
+    def test_forbidden_split_upload_returns_complete_json_and_clean_close(self):
+        before = self._ids()
+        upload = json.dumps({'task': 'must not run', 'padding': 'x' * 32000}).encode()
+        head = self._request_head('POST', '/api/sessions', csrf=False,
+                                  extra=[f'Content-Length: {len(upload)}'])
+        # HTTP clients send the head and body separately. Keep bytes in the
+        # socket beyond the header reader's buffer to exercise refusal while
+        # an upload is still arriving, rather than a single coalesced packet.
+        for _ in range(12):
+            with self._open() as sock:
+                sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
+                sock.sendall(head)
+                time.sleep(0.003)
+                sock.sendall(upload)
+                sock.shutdown(socket.SHUT_WR)
+                status, headers, body, rest = _read_response(sock)
+                self.assertEqual(self._json(status, body)['code'], 'csrf_required')
+                self.assertEqual(status, 403)
+                self.assertEqual(headers['connection'], ['close'])
+                self.assertEqual(rest, b'')
+                self.assertEqual(sock.recv(1), b'')
+        self.assertEqual(self._ids(), before)
+
+    def test_forbidden_upload_never_waits_for_continue_or_an_unbounded_body(self):
+        before = self._ids()
+        cases = (["Content-Length: 64"],
+                 ["Content-Length: 64", "Expect: 100-continue"],
+                 ["Content-Length: 1000001"],
+                 ["Content-Length: 64", "Content-Length: 64"],
+                 ["Transfer-Encoding: chunked"])
+        for extra in cases:
+            with self._open() as sock:
+                sock.sendall(self._request_head('POST', '/api/sessions', extra=extra, csrf=False))
+                started = time.monotonic()
+                status, _, body, rest = _read_response(sock)
+                self.assertEqual(status, 403)
+                self.assertEqual(self._json(status, body)['code'], 'csrf_required')
+                self.assertEqual(rest, b'')
+                self.assertLess(time.monotonic() - started, 0.5)
+                self.assertEqual(sock.recv(1), b'')
+                self.assertLess(time.monotonic() - started, 0.6)
+        self.assertEqual(self._ids(), before)
+
     def test_slow_header_and_body_return_408_and_a_silent_idle_accept_does_not(self):
         self._tighten()
         before = self._ids()

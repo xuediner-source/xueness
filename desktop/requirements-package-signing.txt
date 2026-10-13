@@ -1,0 +1,5 @@
+# Ed25519 publisher verification for source ZIP packages.
+# Since 49.0.0 upstream publishes no Intel macOS wheel. Native Intel CI builds
+# this exact release with Rust + statically linked Homebrew OpenSSL, then runs
+# the frozen and packaged verification gates. See docs/runtime-native-release-2026-10-13.md.
+cryptography==50.0.2

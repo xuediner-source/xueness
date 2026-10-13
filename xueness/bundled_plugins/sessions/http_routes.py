@@ -436,6 +436,31 @@ def _requested_model_selection(data):
     return dict(raw)
 
 
+def _runtime_mode(ctx):
+    """Read the trusted default workbench mode without importing user state."""
+    try:
+        if not host.plugin_runtime.is_enabled(ctx['state_dir'], 'runtimes'):
+            return 'zcode-full'
+        from ..runtimes.runtime import load_selection
+        return load_selection(ctx['state_dir'])
+    except (OSError, ValueError):
+        # A damaged optional selector must not make existing sessions
+        # unopenable. The complete workbench is the fail-closed mode.
+        return 'zcode-full'
+
+
+def _runtime_override_for_session(ctx, session, requested_profile):
+    """Resolve the runtime selector only for a new session's first run.
+
+    Explicit run/provider choices and a previously recorded provider profile
+    remain authoritative. This keeps model switching compatible with older
+    journals while making the runtime panel affect newly created sessions.
+    """
+    if requested_profile is not None or session.get('runtime_profile') is not None:
+        return requested_profile
+    return ('lightweight' if session.get('runtime_mode') == 'pi-lite' else None)
+
+
 def _bind_prepared_selection(selection, prepared):
     metadata = prepared.get('metadata') if isinstance(prepared, dict) else None
     cached = metadata.get('modelSelection') if isinstance(metadata, dict) else None
@@ -759,6 +784,7 @@ def public_session_payload(ctx, session):
         'permission_mode_history': session.get('permission_mode_history', []),
         'model_selection': _public_model_selection(session),
         'model_history': session.get('model_history', []),
+        'runtime_mode': session.get('runtime_mode'),
         'runtime_profile': session.get('runtime_profile'),
         'runtime_budget': _public_runtime_budget(session),
         'runtime_activity': _public_runtime_activity(session),
@@ -1033,6 +1059,10 @@ def handle_POST(self, parts, path, data):
         if 'prepared_token' in data and not isinstance(data['prepared_token'], str):
             self._send(400, {'error': 'prepared input invalid or expired'})
             return True
+        requested_runtime_mode = data.get('runtime_mode')
+        if requested_runtime_mode is not None and requested_runtime_mode not in ('zcode-full', 'pi-lite'):
+            self._send(400, {'error': 'runtime_mode must be zcode-full or pi-lite'})
+            return True
         try:
             requested_selection = _requested_model_selection(data)
         except ValueError as exc:
@@ -1093,6 +1123,9 @@ def handle_POST(self, parts, path, data):
                 ctx['store'].save(session)
             else:
                 session = ctx['store'].new(task.strip(), root)
+            # Keep the workbench choice on the journal so changing the global
+            # selector cannot silently alter an existing conversation.
+            session['runtime_mode'] = requested_runtime_mode or _runtime_mode(ctx)
             if requested_selection:
                 session['model_selection'] = requested_selection
             if prepared is not None:
@@ -1231,8 +1264,8 @@ def handle_POST(self, parts, path, data):
         steps = data.get('steps') if steps_present else None
         max_chars_present = 'max_chars' in data or 'maxChars' in data
         max_chars = data.get('max_chars', data.get('maxChars')) if max_chars_present else None
-        if steps_present and (type(steps) is not int or not 1 <= steps <= 20):
-            self._send(400, {'error': 'steps must be 1..20'})
+        if steps_present and (type(steps) is not int or not 1 <= steps <= 64):
+            self._send(400, {'error': 'steps must be 1..64'})
             return True
         if max_chars_present and (type(max_chars) is not int or not 1000 <= max_chars <= 100000):
             self._send(400, {'error': 'max_chars must be 1000..100000'})
@@ -1439,11 +1472,15 @@ def handle_POST(self, parts, path, data):
             ctx['running'].add(parts[2])
         runstage = 'provider.resolve'
         try:
+            provider_runtime_profile = _runtime_override_for_session(
+                ctx, session, requested_profile)
             provider = host.provider_config.resolve(ctx['state_dir'], pid, model,
                                                    reasoning_effort=reasoning_effort,
                                                    session_id=parts[2],
-                                                   **({'runtime_profile': requested_profile} if requested_profile is not None else {}))
+                                                   **({'runtime_profile': provider_runtime_profile}
+                                                       if provider_runtime_profile is not None else {}))
             from ..providers.lightweight import profile_for
+            requested_profile = provider_runtime_profile
             if requested_profile is None and (pid != selection.get('provider_id') or model != selection.get('model')):
                 requested_profile = getattr(provider, 'runtime_profile', 'standard')
             requested_profile = profile_for(session, provider, requested_profile)
@@ -1515,6 +1552,11 @@ def handle_POST(self, parts, path, data):
                 # only from its next model request: see sessions/model_switch.py.
                 from . import model_switch
                 provider = model_switch.register(ctx, parts[2], provider, gate)
+                from ..runtimes.provider_transport import for_session
+                provider = for_session(
+                    provider, ctx['state_dir'], session,
+                    should_stop=lambda sid=parts[2]: sid in ctx['stop_requested'],
+                    supervisor=ctx.get('pi_lite_sidecar'), runtime_profile=requested_profile)
                 if session.get('remote_connection'):
                     from ...tool_registry import REMOTE_LOCAL_TOOL_NAMES
                     gate.disallow_tool_names = REMOTE_LOCAL_TOOL_NAMES

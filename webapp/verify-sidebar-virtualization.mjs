@@ -434,8 +434,20 @@ await withPage("rail", railHarnessSource(), async (page) => {
   const focusSeq = await page.evaluate(() => document.activeElement?.getAttribute("data-history-seq"));
   assert.equal(focusSeq, "2", "ArrowDown 应把焦点移到下一个停靠点");
   await page.keyboard.press("End");
+  // End reveals a remote virtual window and settles its keyboard target over
+  // two animation frames. Start the next, independent mouse-scroll action
+  // after those commits, as a user would see the focused stop in the viewport.
+  await page.evaluate(() => new Promise((resolveFrame) => requestAnimationFrame(() => requestAnimationFrame(resolveFrame))));
   const endSeq = await page.evaluate(() => document.activeElement?.getAttribute("data-history-seq"));
   assert.equal(endSeq, String(STOPS), "End 应聚焦最后一个停靠点（含自动挂载）");
+  const endVisible = await page.evaluate(() => {
+    const track = document.querySelector(".xn-conversation-history-rail__track");
+    const active = document.activeElement;
+    if (!track?.contains(active)) return false;
+    const rect = active.getBoundingClientRect(), viewport = track.getBoundingClientRect();
+    return rect.bottom > viewport.top && rect.top < viewport.bottom;
+  });
+  assert.equal(endVisible, true, "End 完成渲染后末端焦点应在轨道视口内");
 
   // 用户滚动轨道离开远端焦点后，焦点交给视口内停靠点，方向键仍可继续。
   await page.evaluate(() => {

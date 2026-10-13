@@ -34,6 +34,7 @@ A tool called ``read`` on server ``srv`` is exposed as ``mcp__srv__read``;
 from __future__ import annotations
 
 import collections
+import copy
 import json
 import math
 import os
@@ -73,6 +74,9 @@ RESERVED_NAMES = frozenset({".", ".."})
 CLOSE_GRACE = 1.0
 # Bounded stderr drain buffer (never surfaced, purely to avoid a full pipe).
 STDERR_LINES = 64
+STDERR_CHUNK = 4096
+STDOUT_FRAME_LIMIT = 1_000_000
+STDOUT_QUEUE_LIMIT = 32
 
 
 class _McpError(Exception):
@@ -160,7 +164,7 @@ def _safe_read_json(path: Path):
     return data
 
 
-def load(state_dir) -> list:
+def _load_resources(state_dir) -> list:
     """Every usable MCP server under ``<state_dir>/resources/mcp``, id ascending.
 
     Skips (in this order): a symlinked directory, a missing directory,
@@ -198,6 +202,19 @@ def load(state_dir) -> list:
         servers.append(server)
     servers.sort(key=lambda server: server["id"])
     return servers
+
+
+def load(state_dir) -> list:
+    servers = _load_resources(state_dir)
+    from .package_binding import managed_servers
+    try:
+        managed = managed_servers(state_dir)
+    except (OSError, ValueError):
+        managed = []
+    reserved = {server['id'] for server in managed}
+    # Reserved identities always resolve through the managed package launcher.
+    return sorted([server for server in servers if server['id'] not in reserved] + managed,
+                  key=lambda server: server['id'])
 
 
 # --- naming ----------------------------------------------------------------
@@ -316,7 +333,7 @@ class McpClient:
 
     def __init__(self, server, *, cwd, timeout: int = DEFAULT_TIMEOUT,
                  timeout_cap: int = TIMEOUT_CAP, output_cap: int = DEFAULT_OUTPUT_CAP):
-        self.server = dict(server) if isinstance(server, dict) else {}
+        self.server = copy.deepcopy(server) if isinstance(server, dict) else {}
         self.cwd = cwd
         self.timeout_cap = _as_positive_int(timeout_cap, TIMEOUT_CAP)
         self.timeout = self._resolve_timeout(timeout)
@@ -336,10 +353,12 @@ class McpClient:
         self.server_capabilities = {}
         self._started = False
         self._next_id = 3
-        self._queue = queue.Queue()
+        self._queue = queue.Queue(maxsize=STDOUT_QUEUE_LIMIT)
+        self._reader_error = None
         self._stderr = collections.deque(maxlen=STDERR_LINES)
         self._threads = []
         self._lock = threading.RLock()
+        self._request_lock = threading.RLock()
 
     # --- configuration ------------------------------------------------------
 
@@ -372,19 +391,29 @@ class McpClient:
 
         def read_lines():
             try:
-                for line in stream:
+                while True:
+                    line = stream.readline(STDOUT_FRAME_LIMIT + 1)
+                    if not line:
+                        break
+                    if len(line) > STDOUT_FRAME_LIMIT:
+                        raise _McpTransportError('MCP frame limit exceeded')
                     line = line.strip()
                     if not line:
                         continue
+                    message = json.loads(line)
+                    if not isinstance(message, dict) or message.get('jsonrpc') != '2.0':
+                        raise _McpTransportError('invalid MCP protocol frame')
                     try:
-                        message = json.loads(line)
-                    except ValueError:
-                        continue
-                    self._queue.put(message)
-            except Exception:  # noqa: BLE001 - a broken pipe is not fatal here
-                pass
+                        self._queue.put_nowait(message)
+                    except queue.Full:
+                        raise _McpTransportError('MCP frame queue limit exceeded') from None
+            except Exception as exc:  # content is never included in diagnostics
+                self._reader_error = str(exc) if isinstance(exc, _McpTransportError) else 'invalid MCP protocol frame'
             finally:
-                self._queue.put(None)
+                try:
+                    self._queue.put_nowait(None)
+                except queue.Full:
+                    pass
 
         thread = threading.Thread(target=read_lines, daemon=True)
         thread.start()
@@ -395,8 +424,11 @@ class McpClient:
 
         def drain():
             try:
-                for line in stream:
-                    self._stderr.append(line.rstrip("\n"))
+                while True:
+                    chunk = stream.read(STDERR_CHUNK)
+                    if not chunk:
+                        break
+                    self._stderr.append(chunk)
             except Exception:  # noqa: BLE001
                 pass
 
@@ -405,6 +437,7 @@ class McpClient:
         self._threads.append(thread)
 
     def _write(self, message: dict) -> None:
+        self._require_available()
         proc = self.proc
         if proc is None or proc.poll() is not None:
             raise _McpTransportError("server process is not running")
@@ -449,6 +482,10 @@ class McpClient:
         """
         from .elicitation import is_server_request
         while True:
+            self._require_available()
+            if self._reader_error is not None:
+                self._kill_proc()
+                raise _McpTransportError(self._reader_error)
             remaining = deadline - time.monotonic()
             if remaining <= 0:
                 self._kill_proc()
@@ -461,6 +498,7 @@ class McpClient:
             if message is None:
                 self._kill_proc()
                 raise _McpTransportError("server closed stdout before replying")
+            self._require_available()
             if not isinstance(message, dict):
                 continue
             if is_server_request(message):
@@ -468,11 +506,20 @@ class McpClient:
                 self._answer_server_request(message)
                 deadline += time.monotonic() - started
                 continue
-            if message.get("id") == request_id:
+            if type(message.get('id')) is type(request_id) and message.get("id") == request_id:
+                if ('result' in message) == ('error' in message):
+                    self._kill_proc()
+                    raise _McpTransportError('invalid MCP response envelope')
                 return message
             # Notifications and unrelated ids are ignored.
 
     def _request(self, method: str, params, request_id: int) -> dict:
+        # A single reader queue needs one consumer for the entire exchange;
+        # concurrent catalog/tool calls otherwise steal each other's replies.
+        with self._request_lock:
+            return self._request_serial(method, params, request_id)
+
+    def _request_serial(self, method: str, params, request_id: int) -> dict:
         message = {"jsonrpc": "2.0", "id": request_id, "method": method}
         if params is not None:
             message["params"] = params
@@ -482,7 +529,17 @@ class McpClient:
         if response.get("error") is not None:
             raise _McpError("server error: %s" % _error_summary(response.get("error")))
         result = response.get("result")
-        return result if isinstance(result, dict) else {}
+        if not isinstance(result, dict):
+            raise _McpTransportError('invalid MCP result')
+        return result
+
+    def _require_available(self):
+        from .process_boundary import require_available
+        try:
+            require_available(self.server)
+        except ValueError:
+            self._kill_proc()
+            raise _McpTransportError('MCP plugin or server disabled') from None
 
     # --- lifecycle ----------------------------------------------------------
 
@@ -521,6 +578,9 @@ class McpClient:
         if os.name == 'nt':
             env.update({key: value for key, value in os.environ.items()
                         if key.upper() in ('SYSTEMROOT', 'WINDIR', 'TEMP', 'TMP', 'COMSPEC', 'PATHEXT', 'USERPROFILE')})
+        if 'package' in self.server:
+            from .package_binding import launch_environment
+            env.update(launch_environment(self.server))
         try:
             from ...process_runtime import spawn_external
             process_factory = subprocess.Popen
@@ -565,7 +625,8 @@ class McpClient:
             self.error = _fail_text(exc)
             self._kill_proc()
             return False
-        self._queue = queue.Queue()
+        self._queue = queue.Queue(maxsize=STDOUT_QUEUE_LIMIT)
+        self._reader_error = None
         self._threads = []
         if self.proc.stdout is not None:
             self._spawn_reader(self.proc.stdout)
@@ -610,6 +671,11 @@ class McpClient:
         retried: a different version cannot fix a broken transport.
         """
         with self._lock:
+            try:
+                self._require_available()
+            except _McpTransportError as exc:
+                self.error = str(exc)
+                return
             if self.active:
                 return
             # A launcher can exit while its server child remains alive. Keep
@@ -637,6 +703,13 @@ class McpClient:
             extra = self.server.get("args")
             if isinstance(extra, list):
                 argv.extend(str(part) for part in extra)
+            if 'package' in self.server:
+                from .package_binding import launch_command
+                try:
+                    argv = launch_command(self.server)
+                except (OSError, ValueError):
+                    self.error = 'managed package launch refused'
+                    return
 
             from .elicitation import initialize_capabilities
             capabilities = initialize_capabilities(self.server)

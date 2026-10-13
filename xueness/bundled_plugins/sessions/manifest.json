@@ -381,6 +381,7 @@
     "plugins/sessions/steeringApi.ts",
     "plugins/sessions/ConversationFind.tsx",
     "plugins/sessions/ConversationSelectionActions.tsx",
-    "plugins/sessions/ConversationSharing.tsx"
+    "plugins/sessions/ConversationSharing.tsx",
+    "plugins/sessions/runtimeConversationProjection.ts"
   ]
 }

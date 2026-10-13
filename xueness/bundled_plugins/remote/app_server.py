@@ -1,4 +1,10 @@
-"""``xueness app-server`` — stdio JSON-RPC 2.0 so an IDE can drive Xueness.
+"""``xueness app-server`` — Xueness's own stdio JSON-RPC-shaped protocol.
+
+This is deliberately *not* the ZCode app-server protocol.  ZCode uses
+newline-delimited JSON with no ``jsonrpc`` member and a different session
+schema (``workspace``/``mode``, ``session/subscribe`` and ``session/event``).
+The Xueness entry point keeps its explicit ``jsonrpc: \"2.0\"`` envelope and
+must not be advertised as a drop-in ZCode server until a real adapter exists.
 
 Framing: one UTF-8 JSON-RPC message per line, LF terminated, capped at
 ``MAX_FRAME_BYTES``. stdout carries protocol frames only: the whole request
@@ -344,6 +350,7 @@ class AppServer:
                 "runtimeModelSwitch": True,
                 "networkListener": False,
                 "hostOriginCsrf": False,
+                "zcodeAppServerCompatible": False,
                 "trustModel": ("only the parent process that started this server is trusted; "
                                "over stdio there is no Host/Origin/CSRF layer"),
             },
@@ -367,7 +374,7 @@ class AppServer:
         return self._ask("GET", "/api/sessions/" + _sid(params))
 
     def _session_create(self, params):
-        _reject_unknown(params, {"task", "root", "modelSelection"})
+        _reject_unknown(params, {"task", "root", "modelSelection", "runtimeMode"})
         task = params.get("task")
         if not isinstance(task, str) or not task.strip():
             raise _Refused("task must be a non-empty string", INVALID_PARAMS)
@@ -379,6 +386,10 @@ class AppServer:
         selection = _selection_param(params)
         if selection:
             body["model_selection"] = selection
+        if params.get("runtimeMode") is not None:
+            if params["runtimeMode"] not in ("zcode-full", "pi-lite"):
+                raise _Refused("runtimeMode must be zcode-full or pi-lite", INVALID_PARAMS)
+            body["runtime_mode"] = params["runtimeMode"]
         return self._ask("POST", "/api/sessions", body)
 
     def _session_set_model(self, params):

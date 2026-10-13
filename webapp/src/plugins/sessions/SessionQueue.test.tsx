@@ -71,5 +71,5 @@ test('a reserved send-now item cannot be edited, withdrawn, cancelled, or reorde
   assert.match(first, /aria-label="撤回到输入框"[^>]*disabled=""/);
   assert.match(first, /aria-label="编辑排队消息"[^>]*disabled=""/);
   assert.match(first, /aria-label="取消排队"[^>]*disabled=""/);
-  assert.match(html, /aria-label="调整队列顺序"[^>]*draggable="false"/);
+  assert.match(html, /class="xn-session-queue__kind"[^>]*aria-label="已排队"[^>]*draggable="false"/);
 });

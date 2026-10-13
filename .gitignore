@@ -59,6 +59,8 @@ desktop/release/
 desktop/.build/
 desktop/.venv/
 desktop/update-smoke-evidence/
+desktop/native-evidence/
+/artifacts/
 
 # Local runtime state written relative to the CLI working directory.
 .xueness/

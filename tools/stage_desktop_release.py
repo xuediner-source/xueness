@@ -33,6 +33,57 @@ def verification_mode(jobs):
     raise ValueError('all native jobs must pass the same full or focused verification mode')
 
 
+def validate_native_jobs(jobs):
+    targets = ('windows-x64', 'macos-x64', 'macos-arm64')
+    if len(jobs) != len(targets) or any(job['conclusion'] != 'success' for job in jobs):
+        raise ValueError('all three native build jobs must succeed')
+    mode = verification_mode(jobs)
+    for target in targets:
+        matches = [job for job in jobs if target in job['name']]
+        if len(matches) != 1:
+            raise ValueError('expected exactly one native build job for '+target)
+        job = matches[0]
+        required = ['Verify package-signing dependency and record native versions',
+                    'Freeze the native backend', 'Verify frozen runtime transport',
+                    'Verify packaged Electron workbench', 'Upload native runtime transport evidence']
+        required += (['Run extended release test suite', 'Exercise the actual backend integration suite']
+                     if mode == 'full' else ['Check feature ownership and focused native parity'])
+        if target == 'windows-x64':
+            required += ['Verify public GitHub Windows installer download']
+            if mode == 'full':
+                required += ['Exercise the installed NSIS in-app update path']
+        for step in required:
+            matches = [row for row in job['steps'] if row['name'] == step]
+            if len(matches) != 1 or matches[0]['conclusion'] != 'success':
+                raise ValueError('required native gate did not pass: '+step)
+    return mode
+
+
+def validate_native_evidence(directory, target):
+    expected_platform = 'win32' if target == 'windows-x64' else 'darwin'
+    expected_architecture = 'arm64' if target == 'macos-arm64' else 'x64'
+    requirement = (ROOT/'desktop/requirements-package-signing.txt').read_text(encoding='utf-8')
+    signing_pin = re.findall(r'^cryptography==([^\s;]+)\s*$', requirement, re.MULTILINE)
+    if len(signing_pin) != 1:
+        raise ValueError('package-signing dependency must have exactly one version pin')
+    names = ('package-signing.json', 'frozen-runtime-transport.json',
+             'packaged-runtime-transport.json')
+    for name in names:
+        report = json.loads((directory/name).read_text(encoding='utf-8'))
+        if (report.get('platform') != expected_platform
+                or report.get('architecture') != expected_architecture):
+            raise ValueError('runtime evidence platform differs from native artifact: '+target+'/'+name)
+        if name == 'package-signing.json':
+            valid = (report.get('cryptography') == signing_pin[0]
+                     and report.get('ed25519ValidSignature') is True
+                     and report.get('ed25519AlteredSignatureRejected') is True)
+        else:
+            valid = report.get('status') == 'passed' and isinstance(report.get('checks'), dict) and bool(report['checks'])
+        if not valid:
+            raise ValueError('native runtime evidence did not pass: '+target+'/'+name)
+    return names
+
+
 def main():
     run_id = os.environ['XUENESS_BUILD_RUN']
     if not run_id.isascii() or not run_id.isdecimal():
@@ -45,21 +96,7 @@ def main():
         raise ValueError('only the successful native build of this exact commit may be staged')
     jobs = run['jobs']
     targets = ('windows-x64', 'macos-x64', 'macos-arm64')
-    if len(jobs) != 3 or any(job['conclusion'] != 'success' for job in jobs):
-        raise ValueError('all three native build jobs must succeed')
-    mode = verification_mode(jobs)
-    for target in targets:
-        job = next(job for job in jobs if target in job['name'])
-        required = ['Freeze the native backend', 'Verify packaged Electron workbench']
-        required += (['Run extended release test suite', 'Exercise the actual backend integration suite']
-                     if mode == 'full' else ['Check feature ownership and focused native parity'])
-        if target == 'windows-x64':
-            required += ['Verify public GitHub Windows installer download']
-            if mode == 'full':
-                required += ['Exercise the installed NSIS in-app update path']
-        for step in required:
-            if next(row for row in job['steps'] if row['name'] == step)['conclusion'] != 'success':
-                raise ValueError('required native gate did not pass: '+step)
+    mode = validate_native_jobs(jobs)
     if command('git', 'status', '--porcelain').strip():
         raise ValueError('source tree is not clean')
     from xueness import __version__ as version
@@ -99,6 +136,11 @@ def main():
                     if (out/path.name).exists():
                         raise ValueError('duplicate native asset: '+path.name)
                     shutil.copy2(path, out/path.name)
+            evidence = staging/(target+'-runtime-evidence')
+            subprocess.run(['gh','run','download',run_id,'--name','Xueness-'+target+'-runtime-evidence',
+                            '--dir',str(evidence)],cwd=ROOT,check=True)
+            for name in validate_native_evidence(evidence, target):
+                shutil.copy2(evidence/name, out/('Xueness-'+target+'-'+name))
         actual = {p.name for p in out.iterdir() if p.suffix in ('.exe','.zip','.dmg')}
         if actual != expected:
             raise ValueError('native installer set is incomplete: '+str(actual))
@@ -133,6 +175,7 @@ def main():
                 'desktopBuildRun':run['url'],'plugins':len(plugins),
                 'features':sum(len(p['features']) for p in plugins),
                 'nativePlatforms':list(targets),'verificationMode':mode,
+                'nativeFrozenAndPackagedRuntimeTransport':'passed',
                 'windowsInstalledUpdateSmoke':'passed' if mode == 'full' else 'not_run',
                 'frozenTerminalInterruptResumeAndCleanup':'passed' if mode == 'full' else 'not_run',
                 'liveModelPerformanceMeasured':False,

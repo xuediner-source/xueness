@@ -1,10 +1,13 @@
-import React from 'react';
+import React, { useId } from 'react';
+import { ChevronDown, CornerUpRight, ListPlus } from 'lucide-react';
 import { messages, t as tr } from '../../i18n';
 import { isModKeyPressed } from '../../xuenessShortcutDisplay';
 
 messages['后续输入方式'] = 'Follow-up input behavior';
 messages['当前轮引导'] = 'Guide the current turn';
 messages['引导当前轮'] = 'Guide current turn';
+messages['引导'] = 'Guide';
+messages['排队'] = 'Queue';
 messages['立即发送'] = 'Send now';
 messages['在下一步模型请求前处理，不中断正在执行的工具。'] = 'Apply before the next model request, without interrupting an executing tool.';
 messages['当前轮结束后执行。'] = 'Run after the current turn finishes.';
@@ -38,15 +41,29 @@ export function CurrentTurnInput({ mode, onChange, disabled = false, canGuide = 
   disabled?: boolean;
   canGuide?: boolean;
 }): React.JSX.Element {
-  return <label className="xn-current-turn-input" title={tr(mode === 'guide'
-    ? '在下一步模型请求前处理，不中断正在执行的工具。' : '当前轮结束后执行。')}>
-    <span className="xn-sr-only">{tr('后续输入方式')}</span>
-    <select aria-label={tr('后续输入方式')} value={mode} disabled={disabled}
-      onChange={event => onChange(event.currentTarget.value as FollowupMode)}>
-      <option value="guide" disabled={!canGuide}>{tr('当前轮引导')}</option>
-      <option value="queue">{tr('加入队列')}</option>
-    </select>
-  </label>;
+  const menuId = `xn-followup-mode-${useId().replace(/[^a-zA-Z0-9_-]/g, '')}`;
+  const description = mode === 'guide'
+    ? '在下一步模型请求前处理，不中断正在执行的工具。' : '当前轮结束后执行。';
+  return <details className="xn-current-turn-input" title={tr(description)}>
+    <summary aria-label={`${tr('后续输入方式')}：${tr(mode === 'guide' ? '当前轮引导' : '加入队列')}`}
+      aria-disabled={disabled} aria-controls={menuId} title={tr(description)}
+      onClick={event => { if (disabled) event.preventDefault(); }}>
+      {mode === 'guide' ? <CornerUpRight size={13} aria-hidden="true" /> : <ListPlus size={13} aria-hidden="true" />}
+      <span>{tr(mode === 'guide' ? '引导' : '排队')}</span><ChevronDown size={12} aria-hidden="true" />
+    </summary>
+    <div id={menuId} className="xn-current-turn-input__options" role="group" aria-label={tr('后续输入方式')}>
+      <button type="button" aria-label={tr('当前轮引导')} aria-pressed={mode === 'guide'} disabled={disabled || !canGuide}
+        title={tr('在下一步模型请求前处理，不中断正在执行的工具。')}
+        onClick={event => { onChange('guide'); event.currentTarget.closest('details')?.removeAttribute('open'); }}>
+        <CornerUpRight size={14} aria-hidden="true" /><span>{tr('当前轮引导')}</span>
+      </button>
+      <button type="button" aria-label={tr('加入队列')} aria-pressed={mode === 'queue'} disabled={disabled}
+        title={tr('当前轮结束后执行。')}
+        onClick={event => { onChange('queue'); event.currentTarget.closest('details')?.removeAttribute('open'); }}>
+        <ListPlus size={14} aria-hidden="true" /><span>{tr('加入队列')}</span>
+      </button>
+    </div>
+  </details>;
 }
 
 export type PendingGuidance = {

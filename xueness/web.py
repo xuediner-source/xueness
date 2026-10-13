@@ -24,6 +24,7 @@ import secrets
 import socket
 import socketserver
 import threading
+import time
 import traceback
 import urllib.parse
 from datetime import datetime, timezone
@@ -68,6 +69,11 @@ _HEADER_DEADLINE_SECONDS = 20
 _BODY_IDLE_SECONDS = 15
 _BODY_DEADLINE_SECONDS = 30
 _RESPONSE_IDLE_SECONDS = 60
+# Rejected small uploads may already be in flight after the response. Closing
+# with unread TCP bytes can reset the connection before the client sees 403.
+# This bounded discard is transport cleanup; it never parses or applies data.
+_REJECTED_BODY_MAX_BYTES = 65536
+_REJECTED_BODY_DRAIN_SECONDS = 0.2
 _WRITE_METHODS = frozenset({"POST", "PUT", "PATCH", "DELETE"})
 _ALLOWED_FETCH_SITES = frozenset({"none", "same-origin"})
 # Fixed phrases only. Protocol errors must not echo the request line.
@@ -847,6 +853,38 @@ class Handler(BaseHTTPRequestHandler):
             return {}
         return self._parse_object(self._read_exact(length))
 
+    def _discard_rejected_body(self) -> None:
+        """Finish a small, unambiguous upload after sending its rejection.
+
+        A caller waiting for 100 Continue receives only the final refusal.
+        Ambiguous and large bodies are closed immediately, and a missing or
+        trickling small body can delay close by at most the discard deadline.
+        """
+        self.close_connection = True
+        if self._body_consumed or self.headers.get_all('Expect'):
+            return
+        try:
+            length, explicit = self._declared_length()
+        except _RequestRejected:
+            return
+        if not explicit or not 0 < length <= _REJECTED_BODY_MAX_BYTES:
+            return
+        deadline = time.monotonic() + _REJECTED_BODY_DRAIN_SECONDS
+        remaining = length
+        try:
+            while remaining:
+                timeout = deadline - time.monotonic()
+                if timeout <= 0:
+                    return
+                self.connection.settimeout(timeout)
+                block = self.rfile.read1(min(remaining, 16384))
+                if not block:
+                    return
+                remaining -= len(block)
+            self._body_consumed = True
+        except (OSError, TimeoutError):
+            pass  # The rejection has already been flushed; never send again.
+
     # -- stage 2 modules --------------------------------------------------
     def _dispatch_stage2(self, method: str, data: dict) -> bool:
         """Let each stage-2 module try to handle the request.
@@ -944,10 +982,11 @@ class Handler(BaseHTTPRequestHandler):
 
     def _handle_write(self, method: str):
         # Framing is checked after the host and CSRF gates so a forbidden
-        # caller is refused before we describe the body limit. The body is
-        # still not read on that path, and the connection is closed.
+        # caller is refused before we describe the body limit. Only a bounded
+        # transport discard follows refusal; the body is never applied.
         self._body_consumed = False
         if not self._guard(need_csrf=True):
+            self._discard_rejected_body()
             return
         try:
             data = self._read_json_body()

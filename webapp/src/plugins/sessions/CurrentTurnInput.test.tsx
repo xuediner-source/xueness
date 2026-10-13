@@ -9,9 +9,9 @@ import { CurrentTurnInput, PendingGuidancePanel, followupDelivery,
 test('running composer defaults to current-turn guidance and ordinary send follows the selected mode', () => {
   const html = renderToStaticMarkup(<Composer running queueWhenRunning guideWhenRunning
     defaultValue="Add a detail" onSend={() => undefined} />);
-  assert.match(html, /aria-label="后续输入方式"/);
-  assert.match(html, /<option value="guide" selected="">当前轮引导<\/option>/);
-  assert.match(html, /<option value="queue">加入队列<\/option>/);
+  assert.match(html, /aria-label="后续输入方式：当前轮引导"/);
+  assert.match(html, /aria-pressed="true"[^>]*>.*当前轮引导/);
+  assert.match(html, /aria-pressed="false"[^>]*>.*加入队列/);
   assert.equal(followupDelivery('guide'), 'guide');
   assert.equal(followupDelivery('queue'), 'queue');
 });
@@ -35,6 +35,6 @@ test('guidance panel keeps a missed-turn input visible and offers withdrawal', (
 
 test('guide mode is unavailable when the sessions capability is disabled', () => {
   const html = renderToStaticMarkup(<CurrentTurnInput mode="queue" onChange={() => {}} canGuide={false} />);
-  assert.match(html, /<option value="guide" disabled="">当前轮引导<\/option>/);
-  assert.match(html, /<option value="queue" selected="">加入队列<\/option>/);
+  assert.match(html, /aria-label="当前轮引导"[^>]*disabled=""/);
+  assert.match(html, /aria-label="加入队列"[^>]*aria-pressed="true"/);
 });

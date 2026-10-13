@@ -385,10 +385,12 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--executable', type=Path)
     parser.add_argument('--force-exit', action='store_true', help='verify owned task cleanup after abrupt host loss')
+    parser.add_argument('--skip-contract-tests', action='store_true', help='use when the full source suite is already running in this verification lane')
     args = parser.parse_args()
     # Run the protocol contracts on every native installer job as well as the
     # frozen API checks below. These fixtures never call a real model/network.
-    subprocess.run([sys.executable, '-m', 'unittest',
+    if not args.skip_contract_tests:
+        subprocess.run([sys.executable, '-m', 'unittest',
                     'tests.test_tool_protocol_recovery', 'tests.test_native_evidence',
                     'tests.test_app_server', 'tests.test_git_clone',
                     'tests.test_office_tools', 'tests.test_lightweight_transport_budget',

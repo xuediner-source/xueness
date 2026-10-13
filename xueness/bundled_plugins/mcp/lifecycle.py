@@ -2,14 +2,32 @@
 from __future__ import annotations
 import threading
 from .mcp import client_for, _McpTransportError
+from .process_boundary import configuration_digest, register_pool, require_available, same_state
 
 class Pool:
-    def __init__(self,cwd): self.cwd=cwd;self.clients={};self.lock=threading.RLock()
+    def __init__(self,cwd):
+        self.cwd=cwd;self.clients={};self.lock=threading.RLock()
+        self.digests={};self.states={}
+        register_pool(self)
     def get(self,server):
         with self.lock:
+            try:
+                require_available(server)
+            except ValueError:
+                self.discard(server['id'])
+                raise
+            digest=configuration_digest(server)
             client=self.clients.get(server['id'])
-            if client is not None and getattr(client, "active", not getattr(client, "closed", False)): return client
-            if client is not None: client.close()
+            if (client is not None and self.digests.get(server['id']) == digest
+                    and same_state(self.states.get(server['id']), server.get('_state_dir'))
+                    and getattr(client, "active", not getattr(client, "closed", False))): return client
+            if client is not None:
+                client.close()
+                self.clients.pop(server['id'],None)
+                self.digests.pop(server['id'],None)
+                self.states.pop(server['id'],None)
+                if getattr(client,'_process_cleanup_failed',False):
+                    raise ValueError('MCP previous process tree cleanup failed')
             client=client_for(server,cwd=self.cwd)
             try:
                 client.start()
@@ -18,16 +36,27 @@ class Pool:
                 client.close()
                 raise
             self.clients[server['id']]=client
+            self.digests[server['id']]=digest
+            self.states[server['id']]=server.get('_state_dir')
             return client
     def discard(self, sid):
         with self.lock:
             client = self.clients.pop(sid, None)
+            self.digests.pop(sid, None)
+            self.states.pop(sid, None)
             if client is not None:
                 client.close()
+    def close_state(self, state_dir):
+        with self.lock:
+            for sid, bound in list(self.states.items()):
+                if same_state(bound, state_dir):
+                    self.discard(sid)
     def close(self):
         with self.lock:
             for client in self.clients.values(): client.close()
             self.clients.clear()
+            self.digests.clear()
+            self.states.clear()
 
 def catalog(client,kind):
     if kind not in ('resources','prompts'): raise ValueError('invalid MCP catalog kind')

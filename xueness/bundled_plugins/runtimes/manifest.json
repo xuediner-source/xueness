@@ -1,0 +1,49 @@
+{
+  "id": "runtimes",
+  "name": "运行时档位",
+  "description": "提供完整工作台与本地轻量运行时选择及严格 JSONL 协议边界。",
+  "version": "0.1.0",
+  "apiVersion": 1,
+  "defaultEnabled": true,
+  "dependencies": ["sessions"],
+  "tools": [],
+  "commands": ["pi-lite-worker"],
+  "panels": ["runtimes"],
+  "resources": [],
+  "capabilities": [],
+  "httpFamilies": ["runtimes"],
+  "modules": ["runtime", "zcode_v4", "bridge", "projection", "pi_sidecar", "pi_sidecar_process", "provider_transport"],
+  "features": [
+    {
+      "id": "runtimes.protocol",
+      "name": "版本化换行 JSON 运行时协议",
+      "nameEn": "Versioned line-delimited JSON runtime protocol"
+    },
+    {
+      "id": "runtimes.profiles",
+      "name": "完整工作台与本地轻量档位",
+      "nameEn": "Full workbench and local lightweight profiles"
+    },
+    {
+      "id": "runtimes.selection",
+      "name": "持久运行时档位选择",
+      "nameEn": "Persistent runtime profile selection"
+    },
+    {
+      "id": "runtimes.zcode_v4_adapter",
+      "name": "ZCode v4 会话适配器",
+      "nameEn": "ZCode v4 session adapter"
+    },
+    {
+      "id": "runtimes.pi_lite_sidecar",
+      "name": "Pi-lite 本地进程边界",
+      "nameEn": "Pi-lite local process boundary"
+    },
+    {
+      "id": "runtimes.live_projection",
+      "name": "Web 与桌面统一实时会话投影",
+      "nameEn": "Shared Web and desktop live conversation projection"
+    }
+  ],
+  "frontendModules": ["plugins/runtimes/index.tsx", "plugins/runtimes/RuntimeConversation.ts"]
+}

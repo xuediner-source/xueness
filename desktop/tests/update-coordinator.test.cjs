@@ -10,6 +10,7 @@ const path = require('node:path');
 const {
   UpdateCoordinator,
   RELEASES_API,
+  normalizeNativeArch,
   normalizeVersion,
   compareVersions,
 } = require('../src/update-coordinator.cjs');
@@ -109,6 +110,22 @@ test('stable versions are normalized and compared without accepting prereleases 
   assert.equal(compareVersions('1.2.3', '1.2.2'), 1);
   assert.equal(compareVersions('1.2.3', '1.2.3'), 0);
   assert.equal(compareVersions('1.2.3', '2.0.0'), -1);
+});
+
+test('macOS update assets use canonical x64/arm64 names and reject unsupported architectures', () => {
+  assert.equal(normalizeNativeArch('x86_64'), 'x64');
+  assert.equal(normalizeNativeArch('aarch64'), 'arm64');
+
+  const { coordinator: intel } = makeCoordinator({ platform: 'darwin', arch: 'x86_64' });
+  assert.equal(intel.arch, 'x64');
+  assert.equal(intel.macDmgName('1.2.0'), 'Xueness-1.2.0-macos-x64.dmg');
+  assert.notEqual(intel.status().phase, 'unsupported');
+
+  const { coordinator: unknown } = makeCoordinator({ platform: 'darwin', arch: 'ia32' });
+  assert.equal(unknown.packageSupported, false);
+  assert.equal(unknown.installMode, 'unsupported');
+  assert.equal(unknown.status().phase, 'unsupported');
+  assert.match(unknown.status().reason, /macOS.*架构/);
 });
 
 test('status error text does not expose update URLs or local filesystem paths', async () => {

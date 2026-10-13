@@ -371,8 +371,8 @@ class HttpGoalTests(unittest.TestCase):
         self.ctx['workspace_roots'] = ()
         self.server = web.create_server(0, self.ctx)
         threading.Thread(target=self.server.serve_forever, daemon=True).start()
-        self.addCleanup(self.server.shutdown)
         self.addCleanup(self.server.server_close)
+        self.addCleanup(self.server.shutdown)
         self.base_url = 'http://127.0.0.1:' + str(self.server.server_address[1])
         self.store = self.ctx['store']
         self.session = self.store.new('把首屏降到 1 秒内', self.ctx['web_runs'])

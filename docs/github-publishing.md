@@ -4,7 +4,7 @@
 
 ## 上传范围
 
-上传当前 Python 后端、全部 28 个可信功能插件和 142 项子功能、React 前端源码与预构建资产、桌面宿主及三平台构建脚本、测试及 MCP 测试服务器、开发工具、项目文档与文字审查记录、安装脚本、容器配置、许可证和第三方声明。`webapp/dist` 随仓库保存，克隆后可直接使用 Python 运行界面。
+上传当前 Python 后端、全部 31 个可信功能插件和 223 项子功能、React 前端源码与预构建资产、桌面宿主及三平台构建脚本、测试及 MCP 测试服务器、开发工具、项目文档与文字审查记录、安装脚本、容器配置、许可证和第三方声明。`webapp/dist` 随仓库保存，克隆后可直接使用 Python 运行界面。
 
 不上传本机 `.state`、`.xueness-data`、`.web-runs`、模型配置与密钥、环境文件、依赖安装、缓存、日志、备份、集成实验独立仓库及历史验收截图。首页的 `docs/images/` 仅包含品牌图及新建隔离状态目录所截取的真实界面，不包含用户会话或配置。阶段文档中的其它截图链接指向本机 QA 记录，不是运行或构建依赖。
 
@@ -55,3 +55,13 @@ Windows x64、Mac Intel x64 和 Apple Silicon arm64 构建全部通过，包括�
 公开为 latest 后，使用实际 Electron 44.5.1 与生产 Mac 下载协调器完整取得 0.1.4 arm64 DMG，150974671 字节，SHA-256 为 `b185bf361d1b0052c6c373fcb311d05ac0c6ad981b7f91264628b91a78f2c2b3`，再次校验通过。Mac 上的真实 NSISUpdater / ElectronHttpExecutor 也从公共更新源下载了 0.1.4 Windows 安装器，127131710 字节，内置 SHA-512 校验通过；这个公开源测试使用隔离 Windows adapter，没有执行安装器，不能当作用户 Windows 电脑的速度或安装测量。原生 Windows 安装更新证据来自前述 CI 演练。
 
 这台 Mac 的 `/Applications/Xueness.app` 已替换为最终界面的 0.1.4 并打开，替换期间既有配置内容保持一致，旧应用备份保留。受旧下载器错误影响的其它 Mac 客户端仍需替换一次应用；未签名 Mac 之后仍需在 Finder 完成 DMG 中的应用替换。Windows 便携版不支持原地更新，用户 Windows 0.1.1 慢速的网络原因尚未确定，本次没有宣称普遍提速。中英文首页已切换到 0.1.4 下载链接；随后文档提交与二进制实际构建提交分别记录。
+
+## 2026-10-13 Windows 测试版交付
+
+项目所有者明确将 macOS Intel 与 Apple Silicon 实际验收留待之后自行测试，本轮先覆盖本机 Windows 桌面端，并授权推送源码及上传 Windows 安装包、便携包到测试版 Release。此次 Windows 测试版范围以该新指令为准；正式三平台发行仍使用原有原生 CI 门禁。
+
+已使用最终本机 NSIS 覆盖 `E:/models/apps/Xueness`，旧程序备份留在私有构建目录。现有 308 份状态与启动偏好文件的前后摘要一致；安装后的真实程序在隔离状态中通过界面、renderer 隔离与浏览器 worker 检查。没有迁移或替换原有数据目录。
+
+本轮源码上传沿用 `fix/workspace-path-permissions-20261011` 分支。Windows 0.1.6 测试版入口为 [v0.1.6-windows-preview.1](https://github.com/xuediner-source/xueness/releases/tag/v0.1.6-windows-preview.1)，提供 NSIS、便携 ZIP、安装器 blockmap、Windows 元数据、原生验收说明和 SHA-256 清单。该 Release 使用 prerelease 标记，供手动安装测试；不替换既有稳定版，也不将待测 Mac 平台记为成功。安装包与对应源码提交的关系记录在其 `windows-native-verification.json` 中。
+
+全量测试发现的连接收尾和浏览器验收时序问题已修复并定向复测；完整记录见 [本轮原生运行时与发行验收](runtime-native-release-2026-10-13.md)。私有 `artifacts/`、旧程序备份、测试状态、原始日志及本机数据没有纳入 Git；公开验收资产移除本机绝对路径及用户状态摘要。

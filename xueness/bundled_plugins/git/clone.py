@@ -127,7 +127,14 @@ def _is_broad_directory(path: Path) -> bool:
                 return True
         elif len(path.parts) <= 2:
             return True
-        return path.is_mount()
+        # Python 3.10's WindowsPath does not implement is_mount(); that is
+        # not evidence that every writable project directory is a filesystem
+        # anchor. Treat the unsupported probe as "not a mount" and keep the
+        # explicit drive-root/system-directory checks above.
+        try:
+            return path.is_mount()
+        except NotImplementedError:
+            return False
     except (OSError, RuntimeError, ValueError):
         return True
 

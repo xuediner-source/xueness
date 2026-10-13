@@ -1,7 +1,7 @@
 {
   "id": "extensions",
   "name": "Extension marketplace",
-  "description": "Browse, install and upgrade data-only capability packages.",
+  "description": "Manage data manifests and explicitly approved external MCP/ACP source packages.",
   "apiVersion": 1,
   "version": "1.0.0",
   "defaultEnabled": true,
@@ -9,7 +9,7 @@
   "tools": [
     "plugin_manifest_validate"
   ],
-  "commands": [],
+  "commands": ["extension-package"],
   "panels": [
     "marketplace"
   ],
@@ -18,6 +18,7 @@
   "httpFamilies": [
     "plugins/marketplace",
     "plugins/profiles",
+    "plugins/packages",
     "resources/plugins"
   ],
   "pluginsActions": [
@@ -33,9 +34,20 @@
     "profiles",
     "validate_update",
     "composer_capabilities",
-    "creator_tooling"
+    "creator_tooling",
+    "package_store", "package_cli", "package_download", "package_trust"
   ],
   "features": [
+    {
+      "id": "extensions.source_packages",
+      "name": "外部源码包审查、安装与历史回滚",
+      "nameEn": "External source package review, installation and history rollback"
+    },
+    {
+      "id": "extensions.publisher_trust",
+      "name": "发布者公钥与来源签名校验",
+      "nameEn": "Publisher keys and source signature verification"
+    },
     {
       "id": "extensions.marketplace",
       "name": "可信资源清单市场浏览",

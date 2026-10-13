@@ -14,7 +14,7 @@
     <a href="https://github.com/xuediner-source/xueness/actions/workflows/desktop-build.yml"><img src="https://github.com/xuediner-source/xueness/actions/workflows/desktop-build.yml/badge.svg?branch=main" alt="Desktop build"></a>
     <a href="https://github.com/xuediner-source/xueness/blob/main/LICENSE"><img src="https://img.shields.io/github/license/xuediner-source/xueness?label=license" alt="Apache 2.0 license"></a>
     <a href="https://github.com/xuediner-source/xueness/releases/latest"><img src="https://img.shields.io/github/v/release/xuediner-source/xueness?label=release" alt="Latest release"></a>
-    <img src="https://img.shields.io/badge/plugins-30%20%7C%20212-4263eb" alt="30 plugins and 205 features">
+    <img src="https://img.shields.io/badge/plugins-31%20%7C%20216-4263eb" alt="31 plugins and 216 features">
   </p>
 </div>
 
@@ -35,7 +35,7 @@ Xueness 面向个人本地开发，提供可从终端、浏览器或 Windows/mac
 
 0.1.5 将会话、添加能力和桌面运行链路统一到 Windows 与两种 Mac 架构：完整目录包含 **28 个插件、163 项登记功能**，并补齐上下文用量、推理强度选择、上下文恢复及标准／轻量工作规则。规则归属与使用见[Agent 工作规则](docs/agent-work-policy-2026-10-07.md)；平台差异见[桌面统一记录](docs/desktop-parity-2026-10-07.md)。
 
-当前 0.1.6 源码包含 **30 个插件、212 项登记功能**，新增当前轮引导、稳定历史与增量推送、语义压缩、目标自动续作和持久子会话恢复，并保留可选安装的「订阅中心」和「返回模型监测」。详见[会话运行升级](docs/session-runtime-upgrade-2026-10-12.md)、[目标与历史整理](docs/session-goals-and-context-compaction.md)及[订阅账号范围修正](docs/subscription-account-scope-2026-10-12.md)。Windows、Mac Intel 和 Mac Apple Silicon 的当前构建可从 [Desktop installers 工作流](https://github.com/xuediner-source/xueness/actions/workflows/desktop-build.yml)下载；下表仍是已发布的 0.1.5 安装包。
+当前 0.1.6 源码包含 **31 个插件、216 项登记功能**，新增当前轮引导、稳定历史与增量推送、语义压缩、目标自动续作、持久子会话恢复，以及完整工作台与本地轻量运行时切换。详见[会话运行升级](docs/session-runtime-upgrade-2026-10-12.md)、[目标与历史整理](docs/session-goals-and-context-compaction.md)、[运行时重构基线](docs/xueness-runtime-refoundation-2026-10-12.md)及[订阅账号范围修正](docs/subscription-account-scope-2026-10-12.md)。Windows、Mac Intel 和 Mac Apple Silicon 的当前构建可从 [Desktop installers 工作流](https://github.com/xuediner-source/xueness/actions/workflows/desktop-build.yml)下载；下表仍是已发布的 0.1.5 安装包。
 
 | 系统 | 安装程序 / 磁盘映像 | 便携版 / 应用 ZIP |
 | --- | --- | --- |
@@ -47,8 +47,8 @@ Xueness 面向个人本地开发，提供可从终端、浏览器或 Windows/mac
 
 ## 功能概览
 
-- **本地小模型配置。** 选择「本地轻量」运行档，细调提示、工具集合、上下文与输出预算、采样和协议选项。资源面板报告运行 Xueness 的机器 CPU、内存及进程状态；模型输出面板展示请求阶段、工具调用和服务实际返回的用量。缺少的 Token 或显存数据会标为不可用，不会估算成真实测量值。
-- **30 个可信插件，212 项登记功能。** 会话、工作区文件、模型、Shell、Git、终端、工作流、记忆、Hooks、MCP、浏览器、远程连接、渠道、自动化、诊断、Office 文档创建/重建与预览、搜图、工具执行策略等能力都有明确归属。插件管理页显示完整目录与依赖状态，CLI 也可查看和更改插件开关。会话支持运行中引导与后续排队，桌面端支持确认导入 Chrome 资料到独立浏览器目录；订阅中心与返回模型监测可在插件市场选择安装。
+- **本地小模型配置。** 选择「本地轻量」运行档，细调提示、工具集合、上下文与输出预算、采样和协议选项；也可以在「设置 → 运行时」将新会话默认切到本地轻量循环。资源面板报告运行 Xueness 的机器 CPU、内存及进程状态；模型输出面板展示请求阶段、工具调用和服务实际返回的用量。缺少的 Token 或显存数据会标为不可用，不会估算成真实测量值。
+- **31 个可信插件，216 项登记功能。** 会话、工作区文件、模型、Shell、Git、终端、工作流、记忆、Hooks、MCP、浏览器、远程连接、渠道、自动化、诊断、Office 文档创建/重建与预览、搜图、工具执行策略、运行时档位等能力都有明确归属。插件管理页显示完整目录与依赖状态，CLI 也可查看和更改插件开关。会话支持运行中引导与后续排队，桌面端支持确认导入 Chrome 资料到独立浏览器目录；订阅中心与返回模型监测可在插件市场选择安装。
 - **一键切换插件组合档位。** 「设置 → 供应商」顶部选择 minimal / lightweight / standard 档位，或在 CLI 运行 `xueness plugins profile list|show|apply`；档位只是一张插件 ID 到开关的数据清单，你自己的显式开关始终优先，切换不会改动工作区、审批或权限模式。市场清单可用 `xueness plugins validate <路径>` 只读校验，`xueness plugins update <id>|--all` 仅从既有可信目录原子升级已通过校验的清单。
 - **给会话设一条持续目标。** 开始新任务时在 Composer 的「+」菜单选择「添加为目标」，或用 CLI `--target` 设定。目标跨轮生效，在累计轮次、时间和可选 Token 预算内自动续作；暂停、等待回答或批准、停止和预算到达会结束自动继续。每轮结束由当前配置模型的独立纯文本核验和主机交付检查判断完成，核验会产生该模型服务的用量。该能力归属规划插件，关闭后停止入口、提示和自动续作。
 - **三种入口，共用运行时。** 使用 Agent CLI 运行会话，通过 loopback Web 工作台查看和管理任务，或安装 Windows/macOS 桌面应用。桌面包自带运行时，跨平台差异留在对应插件适配中。

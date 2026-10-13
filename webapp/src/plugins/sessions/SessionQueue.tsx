@@ -1,5 +1,5 @@
 import React, { useEffect, useId, useRef, useState } from "react";
-import { ArrowUp, ArrowDown, ArrowUpFromLine, ChevronDown, CornerUpLeft, GripVertical, Pencil } from "lucide-react";
+import { ArrowDown, ArrowUp, ArrowUpFromLine, ChevronDown, CornerUpLeft, CornerUpRight, ListPlus, MoreHorizontal, Pencil, Trash2 } from "lucide-react";
 import './CurrentTurnInput';
 import { t as tr, tf } from "../../i18n";
 import type { QueuedMessage } from "../../xuenessWorkbench";
@@ -16,7 +16,7 @@ function statusLabel(status: QueuedMessage["status"]): string {
   }
 }
 
-export function SessionQueue({ items, cancellingId, currentId, onCancel, canContinue = false, continuing = false, onContinue, onEdit, onWithdraw, onSendNow, onReorder, disabled = false }: {
+export function SessionQueue({ items, cancellingId, currentId, onCancel, canContinue = false, continuing = false, onContinue, onEdit, onWithdraw, onSendNow, onGuide, onReorder, disabled = false }: {
   items: QueuedMessage[];
   cancellingId?: string | null;
   currentId?: string | null;
@@ -27,6 +27,7 @@ export function SessionQueue({ items, cancellingId, currentId, onCancel, canCont
   onEdit?: (id: string, text: string, expectedText: string) => Promise<void>;
   onWithdraw?: (id: string) => Promise<void>;
   onSendNow?: (id: string) => Promise<void>;
+  onGuide?: (id: string) => Promise<void>;
   onReorder?: (ids: string[], expectedIds: string[]) => Promise<void>;
   disabled?: boolean;
 }): React.JSX.Element | null {
@@ -96,38 +97,51 @@ export function SessionQueue({ items, cancellingId, currentId, onCancel, canCont
       {items.map(item => <li key={item.id} className="xn-session-queue__item" data-status={item.status}
         onDragOver={event => { if (dragRef.current && !mutationDisabled && pendingIds.includes(item.id)) event.preventDefault(); }}
         onDrop={event => { event.preventDefault(); void dropItem(item.id); }}>
-        {onReorder && pendingIds.length > 1 && pendingIds.includes(item.id) && <span className="xn-session-queue__drag"
-          aria-label={tr('调整队列顺序')} title={tr('调整队列顺序')} draggable={!mutationDisabled}
-          onDragStart={event => { if (mutationDisabled) { event.preventDefault(); return; }
+        <span className="xn-session-queue__kind" role="img" aria-label={statusLabel(item.status)} title={statusLabel(item.status)}
+          draggable={Boolean(onReorder && pendingIds.length > 1 && pendingIds.includes(item.id) && !mutationDisabled)}
+          aria-describedby={pendingIds.includes(item.id) ? `${listId}-status-${item.id}` : undefined}
+          onDragStart={event => { if (!onReorder || mutationDisabled || !pendingIds.includes(item.id)) { event.preventDefault(); return; }
             dragRef.current = { id: item.id, expected: [...pendingIds] }; event.dataTransfer.effectAllowed = 'move';
-            event.dataTransfer.setData('text/plain', item.id); }} onDragEnd={() => { dragRef.current = null; }}><GripVertical size={13} aria-hidden="true" /></span>}
+            event.dataTransfer.setData('text/plain', item.id); }} onDragEnd={() => { dragRef.current = null; }}>
+          <ListPlus size={15} aria-hidden="true" />
+        </span>
         <div className="xn-session-queue__copy">
-          {typeof item.position === "number" && <span className="xn-session-queue__position">{tf("队列位置 {0}", [item.position])}</span>}
-          {item.text.length > 120 || item.text.includes('\n') ? <details className="xn-session-queue__preview">
-            <summary aria-label={tr('查看完整排队消息')}><p>{item.text}</p><span>{tr('查看完整消息')}</span></summary>
+          {typeof item.position === "number" && <span className="xn-session-queue__position xn-sr-only">{tf("队列位置 {0}", [item.position])}</span>}
+          {item.text.length > 100 || item.text.includes('\n') ? <details className="xn-session-queue__preview">
+            <summary aria-label={tr('查看完整排队消息')} title={tr('查看完整排队消息')}><span className="xn-session-queue__preview-line">{item.text}</span></summary>
             <pre tabIndex={0}>{item.text}</pre>
-          </details> : <p>{item.text}</p>}
+          </details> : <p className="xn-session-queue__preview-line">{item.text}</p>}
+          <span id={`${listId}-status-${item.id}`} className="xn-sr-only">{statusLabel(item.status)}</span>
           {item.status === "paused" && item.pause_reason && <small className="xn-session-queue__pause-reason">{tf("暂停原因：{0}", [item.pause_reason])}</small>}
         </div>
         <span className="xn-session-queue__status" data-status={item.status}>{statusLabel(item.status)}</span>
-        {onReorder && pendingIds.length > 1 && pendingIds.includes(item.id) && <span className="xn-session-queue__reorder" aria-label={tr('调整队列顺序')}>
-          <button type="button" aria-label={tr('上移排队消息')} title={tr('上移排队消息')} disabled={mutationDisabled || pendingIds[0] === item.id}
-            onClick={() => void move(item.id, -1)}><ArrowUp size={13} aria-hidden="true" /></button>
-          <button type="button" aria-label={tr('下移排队消息')} title={tr('下移排队消息')} disabled={mutationDisabled || pendingIds.at(-1) === item.id}
-            onClick={() => void move(item.id, 1)}><ArrowDown size={13} aria-hidden="true" /></button>
-        </span>}
-        {onSendNow && pendingIds.includes(item.id) && <button type="button" className="xn-session-queue__send-now"
-          aria-label={tr('立即发送')} title={tr('立即发送')} disabled={mutationDisabled}
-          onClick={() => void dispatchItem(item.id, onSendNow)}><ArrowUpFromLine size={13} aria-hidden="true" /></button>}
-        {onEdit && item.id !== currentId && item.editable !== false && pendingIds.includes(item.id) && <button type="button" className="xn-session-queue__edit"
-          aria-label={tr("编辑排队消息")} title={tr("编辑排队消息")} disabled={mutationDisabled}
-          onClick={() => { setEditing({ id: item.id, draft: item.text, original: item.text }); setError(""); }}><Pencil size={13} aria-hidden="true" /></button>}
-        {onWithdraw && pendingIds.includes(item.id) && <button type="button" className="xn-session-queue__edit"
-          aria-label={tr('撤回到输入框')} title={tr('撤回到输入框')} disabled={mutationDisabled}
-          onClick={() => void dispatchItem(item.id, onWithdraw)}><CornerUpLeft size={13} aria-hidden="true" /></button>}
+        {onGuide && pendingIds.includes(item.id) && <button type="button" className="xn-session-queue__guide"
+          aria-label={tr('引导排队消息')} title={tr(dispatchingId === item.id ? '引导中…' : '引导排队消息')}
+          disabled={mutationDisabled || Boolean(cancellingId)}
+          onClick={() => void dispatchItem(item.id, onGuide)}><CornerUpRight size={14} aria-hidden="true" /><span>{tr(dispatchingId === item.id ? '引导中…' : '引导')}</span></button>}
         {item.id !== currentId && (item.status === "queued" || item.status === "paused") && <button type="button" className="xn-session-queue__cancel"
-          aria-label={tr("取消排队")} title={tr("取消排队")} disabled={mutationDisabled}
-          onClick={() => onCancel(item.id)}>{tr(cancellingId === item.id ? "正在取消…" : "取消排队")}</button>}
+          aria-label={tr("取消排队")} title={tr(cancellingId === item.id ? "正在取消…" : "取消排队")} disabled={mutationDisabled}
+          onClick={() => onCancel(item.id)}><Trash2 size={14} aria-hidden="true" /><span className="xn-sr-only">{tr("取消排队")}</span></button>}
+        {(pendingIds.includes(item.id) && ((onReorder && pendingIds.length > 1) || onSendNow || onEdit || onWithdraw)) && <details className="xn-session-queue__actions">
+          <summary aria-label={tr('更多队列操作')} title={tr('更多队列操作')}><MoreHorizontal size={16} aria-hidden="true" /></summary>
+          <div className="xn-session-queue__action-menu" role="group" aria-label={tr('更多队列操作')}>
+            {onReorder && pendingIds.length > 1 && <>
+              <button type="button" aria-label={tr('上移排队消息')} title={tr('上移排队消息')} disabled={mutationDisabled || pendingIds[0] === item.id}
+                onClick={event => { event.currentTarget.closest('details')?.removeAttribute('open'); void move(item.id, -1); }}><ArrowUp size={14} aria-hidden="true" /><span>{tr('上移排队消息')}</span></button>
+              <button type="button" aria-label={tr('下移排队消息')} title={tr('下移排队消息')} disabled={mutationDisabled || pendingIds.at(-1) === item.id}
+                onClick={event => { event.currentTarget.closest('details')?.removeAttribute('open'); void move(item.id, 1); }}><ArrowDown size={14} aria-hidden="true" /><span>{tr('下移排队消息')}</span></button>
+            </>}
+            {onSendNow && <button type="button" className="xn-session-queue__send-now" aria-label={tr('立即发送')}
+              disabled={mutationDisabled} onClick={event => { event.currentTarget.closest('details')?.removeAttribute('open'); void dispatchItem(item.id, onSendNow); }}>
+              <ArrowUpFromLine size={14} aria-hidden="true" /><span>{tr('立即发送')}</span></button>}
+            {onEdit && item.id !== currentId && item.editable !== false && <button type="button" aria-label={tr('编辑排队消息')}
+              disabled={mutationDisabled} onClick={event => { event.currentTarget.closest('details')?.removeAttribute('open'); setEditing({ id: item.id, draft: item.text, original: item.text }); setError(''); }}>
+              <Pencil size={14} aria-hidden="true" /><span>{tr('编辑排队消息')}</span></button>}
+            {onWithdraw && <button type="button" aria-label={tr('撤回到输入框')} disabled={mutationDisabled}
+              onClick={event => { event.currentTarget.closest('details')?.removeAttribute('open'); void dispatchItem(item.id, onWithdraw); }}>
+              <CornerUpLeft size={14} aria-hidden="true" /><span>{tr('撤回到输入框')}</span></button>}
+          </div>
+        </details>}
         {editing?.id === item.id && <div className="xn-session-queue__editor">
           <label htmlFor={`${listId}-edit`}>{tr("编辑排队消息")}</label>
           <textarea id={`${listId}-edit`} autoFocus rows={3} value={editing.draft} disabled={disabled || saving} maxLength={10000}

@@ -20,6 +20,8 @@ expected_features = sum(len(json.loads((ROOT/'xueness/bundled_plugins'/ident/'ma
 parser = argparse.ArgumentParser()
 parser.add_argument('--executable', type=Path, help='check this packaged application executable')
 parser.add_argument('--screenshots', type=Path, help='save native appearance screenshots in this directory')
+parser.add_argument('--runtime-transport-check', action='store_true', help='verify frozen workers and approved packages in this installer')
+parser.add_argument('--runtime-transport-report', type=Path, help='save worker transport results as JSON')
 args = parser.parse_args()
 if args.executable:
     executable = args.executable.expanduser().resolve()
@@ -92,14 +94,21 @@ with tempfile.TemporaryDirectory(prefix='xueness-app-check-') as temporary:
     print(f'PASS: packaged Electron workbench renders, {expected_plugins} plugins/{expected_features} features, isolated renderer and clean exit')
     if sys.platform in ('darwin', 'win32'):
         print('PASS: native window caption safe areas, workbench background theme and localized application menu')
-        print('PASS: Claudex and Xueness light/dark native caption colors and renderer safe areas')
-        print('PASS: distinct classic/Claudex sidebars, home composers and resize handles in both native themes')
+        print('PASS: soft workbench and Xueness light/dark native caption colors and renderer safe areas')
+        print('PASS: distinct classic/soft workbench sidebars, home composers and resize handles in both native themes')
     if sys.platform == 'darwin':
         print('PASS: macOS Dock opens the shared production task popup')
     resources = executable.parent/'resources' if os.name == 'nt' else executable.parents[1]/'Resources'
     worker = resources/'backend/_internal/xueness/bundled_plugins/browser/bridge.mjs'
     driver = resources/'browser-runtime/node_modules/playwright/index.mjs'
     assert worker.is_file() and driver.is_file(), 'browser runtime missing from installer'
+    if args.runtime_transport_check:
+        frozen = resources/'backend'/('xueness-backend.exe' if os.name == 'nt' else 'xueness-backend')
+        check = [sys.executable, str(ROOT/'desktop/scripts/check_runtime_transport.py'),
+                 '--executable', str(frozen), '--node-executable', str(executable), '--python-executable', sys.executable]
+        if args.runtime_transport_report:
+            check.extend(['--report', str(args.runtime_transport_report.resolve())])
+        subprocess.run(check, cwd=ROOT, check=True, timeout=120)
     browser = subprocess.Popen([str(executable), str(worker), str(Path(temporary)/'browser-profile')],
                                stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                                text=True, encoding='utf-8', env={**env, 'ELECTRON_RUN_AS_NODE': '1',

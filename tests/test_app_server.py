@@ -268,6 +268,7 @@ class AppServerTests(unittest.TestCase):
         self.assertEqual(result["protocolVersion"], 1)
         self.assertFalse(result["capabilities"]["networkListener"])
         self.assertFalse(result["capabilities"]["hostOriginCsrf"])
+        self.assertFalse(result["capabilities"]["zcodeAppServerCompatible"])
         self.assertIn("parent process", result["capabilities"]["trustModel"])
         self.assertEqual(result["limits"]["maxFrameBytes"], app_server.MAX_FRAME_BYTES)
         self.assertEqual(set(result["methods"]), METHODS)
@@ -318,6 +319,20 @@ class AppServerTests(unittest.TestCase):
         peer.send({"jsonrpc": "2.0", "method": "initialize", "params": {}})
         peer.request("initialize", request_id=10)
         self.assertEqual(peer.recv()["id"], 10)
+
+    def test_native_zcode_ndjson_frame_is_rejected_explicitly(self):
+        """The Xueness JSON-RPC-shaped protocol is not a ZCode adapter.
+
+        ZCode's app-server omits ``jsonrpc`` and uses a different session
+        schema.  Keep that distinction observable instead of silently
+        accepting a frame that would be interpreted under the wrong contract.
+        """
+        peer = self.start()
+        peer.send({"id": 11, "method": "session/list", "params": {}})
+        frame = peer.recv()
+        self.assertEqual(frame["id"], 11)
+        self.assertEqual(frame["error"]["code"], app_server.INVALID_REQUEST)
+        self.assertIn("jsonrpc", frame["error"]["data"]["reason"])
 
     # -- session methods ----------------------------------------------------
     def test_session_create_list_get_round_trip(self):

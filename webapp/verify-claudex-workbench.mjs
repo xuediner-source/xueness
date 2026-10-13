@@ -286,7 +286,7 @@ try {
   await snapshot('xueness-appearance-settings');
   const savedClaudex = page.waitForResponse(response => response.url().endsWith('/api/settings/appearance') && response.request().method()==='POST');
   void savedClaudex.catch(() => {});
-  await appearance.locator('.xn-appearance-choice').filter({ hasText: 'Claudex' }).click();
+  await appearance.locator('.xn-appearance-choice').filter({ hasText: '柔和工作台' }).click();
   assert.ok((await savedClaudex).ok());
   await page.waitForFunction(() => document.documentElement.dataset.xnPalette==='claudex');
   await page.waitForFunction(() => !document.querySelector('.xn-appearance-choice input[value="claudex"]')?.disabled);
@@ -473,7 +473,7 @@ try {
   report.interactions.push('desktop captions and shared reading scale: 720px settings, 20px headings, 44px wide / 40px narrow captions');
   assert.deepEqual(report.pageErrors, []);
   assert.deepEqual(report.externalRequests, []);
-  console.log(`PASS: Claudex and Xueness built UI, ${report.views.length} views, ${report.interactions.length} interaction groups; no model runs.`);
+  console.log(`PASS: Soft workbench and Xueness built UI, ${report.views.length} views, ${report.interactions.length} interaction groups; no model runs.`);
 } catch (error) {
   report.failure=String(error);
   if (browser) {

@@ -6,6 +6,11 @@ from ... import plugin_runtime
 from . import marketplace, profiles, validate_update
 
 
+def register_cli(commands):
+    from .package_cli import add_parser
+    add_parser(commands)
+
+
 def dispatch(method, parts, query, data, ctx):
     """Ask each owned HTTP family in turn; the most specific route answers first.
 
@@ -13,7 +18,8 @@ def dispatch(method, parts, query, data, ctx):
     under the shared ``plugins/marketplace`` prefix, which ``validate_update``
     claims one segment deeper.
     """
-    for module in (validate_update, profiles, marketplace):
+    from . import package_cli
+    for module in (package_cli, validate_update, profiles, marketplace):
         result = module.dispatch(method, parts, query, data, ctx)
         if result is not None:
             return result
@@ -37,6 +43,9 @@ def execute_cli(args):
 
 
 def _run(args):
+    if getattr(args, 'cmd', None) == 'extension-package':
+        from .package_cli import execute
+        return execute(args)
     action = args.plugins_action
     if action == 'validate':
         return validate_update.validate(args.path)
@@ -57,3 +66,13 @@ def composer_capabilities():
 def tools():
     from .creator_tooling import REGISTRY
     return REGISTRY
+
+
+def activate(scope, ctx):
+    from ..mcp.package_binding import close_managed
+    scope.ensure('extensions.external_packages', lambda: ctx['state_dir'], close_managed)
+
+
+def on_disabled(state_dir):
+    from ..mcp.package_binding import close_managed
+    close_managed(state_dir)

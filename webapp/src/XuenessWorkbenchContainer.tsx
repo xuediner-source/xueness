@@ -123,6 +123,8 @@ import { CommandPalette } from "./plugins/sessions/CommandPalette";
 import { ConversationTimelineViewport, isAwayFromTimelineTail } from "./plugins/sessions/ConversationTimelineViewport";
 import { buildSessionScrollMemoryKey, saveSessionScrollMemoryState } from "./plugins/sessions/sessionScrollMemory";
 import { useConversationUpdates } from './plugins/sessions/LiveConversation';
+import { useRuntimeConversation } from './plugins/runtimes/RuntimeConversation';
+import { loadOlderRuntimeConversationPage, runtimeConversationHistory, runtimeConversationSession, runtimeConversationWindow } from './plugins/sessions/runtimeConversationProjection';
 import { createSingleFlightRefresh, useSessionPolling } from "./plugins/sessions/SessionPolling";
 import { XuenessWorkspacePickerDialog } from "./plugins/settings/XuenessWorkspacePickerDialog";
 import { CodeDisplayProvider } from "./ui/CodeContent";
@@ -204,6 +206,7 @@ const PluginProfilePicker = lazy(() => import("./plugins/extensions/PluginProfil
   .then(module => ({ default: module.PluginProfilePicker })));
 const TerminalPanel = lazy(() => import("./plugins/terminal").then(module => ({ default: module.TerminalPanel })));
 const RemoteConnections = lazy(() => import("./plugins/remote").then(module => ({ default: module.RemoteConnections })));
+const RuntimeSettingsPanel = lazy(() => import("./plugins/runtimes").then(module => ({ default: module.RuntimeSettingsPanel })));
 const XuenessGitView = lazy(() => import("./plugins/git/XuenessGitView").then(module => ({ default: module.XuenessGitView })));
 const XuenessMarketplace = lazy(() => import("./plugins/extensions").then(module => ({ default: module.XuenessMarketplace })));
 const XuenessAutomationsPanel = lazy(() => import("./plugins/automation").then(module => ({ default: module.XuenessAutomationsPanel })));
@@ -294,7 +297,8 @@ type Panel =
   | "marketplace"
   | "diagnostics"
   | "subagents"
-  | "plugins";
+  | "plugins"
+  | "runtimes";
 
 const PANEL_LABELS = (): Record<Panel, string> => ({
   ...Object.fromEntries(Object.entries(PLUGIN_PANEL_LABELS).map(([id, label]) => [id, tr(label)])) as Record<PluginPanel, string>,
@@ -768,12 +772,30 @@ export function XuenessWorkbenchContainer() {
     setActiveId(child.id);
   }, [forkSource, refreshList, appendTextToComposer]);
 
+  const runtimeConversation = useRuntimeConversation(activeId, isPluginEffective('sessions') && isPluginEffective('runtimes'));
+  const usesRuntimeProjection = isPluginEffective('sessions') && isPluginEffective('runtimes')
+    && runtimeConversation.state?.status !== 'unavailable';
+  const runtimeConversationRef = useRef({enabled: usesRuntimeProjection, refresh: runtimeConversation.refresh});
+  runtimeConversationRef.current = {enabled: usesRuntimeProjection, refresh: runtimeConversation.refresh};
+  const acceptedRuntimeEpoch = useRef<{id: string; epoch: string; prefixRevision: string} | null>(null);
   const acceptedSnapshotRevision = useRef<{id: string; revision: number} | null>(null);
   const loadActiveSnapshot = useCallback(async (id: string, includeFiles = true, pushedSnapshot?: unknown) => {
     if (!pluginEffectiveRef.current("sessions") || id !== activeIdRef.current) return;
     activeAbortRef.current?.abort();
     const controller = new AbortController();
     activeAbortRef.current = controller;
+    if (runtimeConversationRef.current.enabled) {
+      await runtimeConversationRef.current.refresh();
+      if (includeFiles && pluginEffectiveRef.current('files')) {
+        const listing = await loadFiles(id, controller.signal);
+        if (!shouldIgnoreSessionResponse(id, activeIdRef.current, mountedRef.current, controller.signal)
+            && pluginEffectiveRef.current('files') && listing.ok) {
+          setFiles(listing.value.files);
+          setFilesTruncated(listing.value.truncated);
+        }
+      }
+      return;
+    }
     // Detail carries pending/approved/changed_files; the timeline carries the
     // real tool_call/tool_result sequence. Both come from the server; neither is
     // reconstructed client-side.
@@ -843,7 +865,14 @@ export function XuenessWorkbenchContainer() {
     const controller = new AbortController();
     olderAbortRef.current = controller;
     setOlderTranscript(previous => ({sessionId: id, hasOlder: true, loading: true, error: ''}));
-    const result = await loadOlderConversationPage(id, before, latest.revision, controller.signal);
+    const legacyPage = async () => {
+      const result = await loadOlderConversationPage(id, before, latest.revision, controller.signal);
+      return result.ok && result.value.window ? {ok: true as const,
+        value: {window: result.value.window, rows: rowsFromConversationSnapshot(result.value)}}
+        : {ok: false as const, error: result.ok ? tr('无法读取更早的会话记录，请刷新后重试。') : result.error};
+    };
+    const result = runtimeConversationRef.current.enabled
+      ? await loadOlderRuntimeConversationPage(id, before, latest.revision, controller.signal) : await legacyPage();
     if (controller.signal.aborted || activeIdRef.current !== id || !mountedRef.current) return;
     if (!result.ok || !result.value.window) {
       setOlderTranscript(previous => ({sessionId: id, hasOlder: true, loading: false,
@@ -856,7 +885,7 @@ export function XuenessWorkbenchContainer() {
         error: tr('会话内容已变化，请重试加载。')}));
       return;
     }
-    const pageRows = rowsFromConversationSnapshot(result.value);
+    const pageRows = result.value.rows;
     const nextPrefix = mergeTimelineRowsByIdentity(pageRows, prefix?.rows ?? []);
     olderRowsRef.current = {sessionId: id, rows: nextPrefix, before: result.value.window.start};
     setRows(previous => stabilizeTimelineRows(previous,
@@ -892,8 +921,33 @@ export function XuenessWorkbenchContainer() {
       });
     }
   }, []);
-  const liveConversationConnected = useConversationUpdates(activeId, isPluginEffective("sessions"), acceptPushedSnapshot);
-  useSessionPolling(isPluginEffective("sessions") && Boolean(activeId) && !liveConversationConnected, pollActiveSession,
+  useEffect(() => {
+    const snapshot = runtimeConversation.state?.snapshot;
+    if (!usesRuntimeProjection || !snapshot || snapshot.sessionId !== activeIdRef.current || !mountedRef.current) return;
+    try {
+      const detail = runtimeConversationSession(snapshot);
+      const window = runtimeConversationWindow(snapshot);
+      if (acceptedRuntimeEpoch.current?.id !== snapshot.sessionId || acceptedRuntimeEpoch.current.epoch !== snapshot.logEpoch
+        || acceptedRuntimeEpoch.current.prefixRevision !== window.prefixRevision) {
+        olderAbortRef.current?.abort();
+        olderRowsRef.current = {sessionId: snapshot.sessionId, rows: [], before: window.start};
+      }
+      acceptedRuntimeEpoch.current = {id: snapshot.sessionId, epoch: snapshot.logEpoch, prefixRevision: window.prefixRevision};
+      transcriptWindowRef.current = {sessionId: snapshot.sessionId, start: window.start, total: window.total, revision: window.messageRevision};
+      setSession(previous => stabilizeSession(previous, detail));
+      const prefix = olderRowsRef.current?.sessionId === snapshot.sessionId ? olderRowsRef.current : null;
+      setRows(previous => stabilizeTimelineRows(previous, runtimeConversationHistory(snapshot, prefix?.rows ?? [])));
+      setOlderTranscript(previous => ({sessionId: snapshot.sessionId, hasOlder: prefix ? prefix.before > 0 : window.hasOlder,
+        loading: previous.sessionId === snapshot.sessionId && previous.loading,
+        error: previous.sessionId === snapshot.sessionId ? previous.error : ''}));
+      setDataErrors(previous => ({...previous, active: runtimeConversation.state?.status === 'recovering'
+        ? tr('会话更新失败，请刷新后重试。') : ''}));
+    } catch (error) {
+      setDataErrors(previous => ({...previous, active: error instanceof Error ? error.message : String(error)}));
+    }
+  }, [runtimeConversation.state, usesRuntimeProjection]);
+  const liveConversationConnected = useConversationUpdates(activeId, isPluginEffective("sessions") && !usesRuntimeProjection, acceptPushedSnapshot);
+  useSessionPolling(isPluginEffective("sessions") && Boolean(activeId) && !usesRuntimeProjection && !liveConversationConnected, pollActiveSession,
     activeSessionNeedsPolling || !session || Boolean(dataErrors.active) ? 1000 : 15000);
   useEffect(() => {
     if (session?.id === activeId && session?.status !== "running" && session?.streaming?.status !== "streaming") {
@@ -1073,7 +1127,8 @@ export function XuenessWorkbenchContainer() {
         model: session.model_selection.model || undefined,
         reasoning_effort: session.model_selection.reasoning_effort || undefined,
       } : {}),
-      runtime_profile: runtimeProfileFromSession(session.runtime_profile),
+      runtime_profile: runtimeProfileFromSession(session.runtime_profile)
+        ?? (session.runtime_mode === "pi-lite" ? "lightweight" : undefined),
       ...(session.permission_mode ? { permission_mode: session.permission_mode } : {}),
       mode: session.mode === "plan" ? "plan" : "build",
     });
@@ -1192,7 +1247,7 @@ export function XuenessWorkbenchContainer() {
   }, [activeId]);
   useEffect(() => {
     if (activeId) void loadActive(activeId);
-  }, [activeId, loadActive]);
+  }, [activeId, loadActive, usesRuntimeProjection]);
 
   const handleApprove = useCallback(
     async (pending: PendingApproval) => {
@@ -2000,6 +2055,7 @@ export function XuenessWorkbenchContainer() {
   const composerModelReady = selectedComposerModel?.configured === true && composerCatalog.allowReal && isPluginEffective("providers");
   const activeMonitorSource = session?.id === activeId ? session : null;
   const activeRuntimeProfile = runtimeProfileFromSession(activeMonitorSource?.runtime_profile)
+    ?? (activeMonitorSource?.runtime_mode === "pi-lite" ? "lightweight" : undefined)
     ?? effectiveRuntimeProfile(selectedComposerModel, choices.runtime_profile);
   const runtimeMonitorSession: LocalRuntimeSession | null = activeMonitorSource ? {
     status: activeMonitorSource.status,
@@ -2393,7 +2449,7 @@ export function XuenessWorkbenchContainer() {
         if (!activeIdRef.current) updateChoices({ browser: enabled });
         await handleUpdateSetting("browserControlEnabled", enabled);
       }} />;
-    const pluginId = ({providers:"providers",subscriptions:'subscriptions','model-monitor':'model_monitor',browser:"browser",memory:"memory",subagents:"subagents",mcp:"mcp",skills:"skills",commands:"commands",hooks:"hooks",usage:"usage"} as Record<string,string>)[settingsSection];
+    const pluginId = ({providers:"providers",subscriptions:'subscriptions','model-monitor':'model_monitor',browser:"browser",memory:"memory",subagents:"subagents",mcp:"mcp",skills:"skills",commands:"commands",hooks:"hooks",usage:"usage",runtimes:"runtimes"} as Record<string,string>)[settingsSection];
     if (pluginId && !isPluginEffective(pluginId)) return <FeatureUnavailable feature={settingsSections.find(section => section.id === settingsSection)?.label ?? settingsSection} onManage={() => setSettingsSection("modules")} />;
     if (inlineSettings) return <SettingsSections embedded sections={[]} activeSection={settingsSection}
       values={{...settingsValues, language: settingsValues.language ?? locale}} capabilities={capabilities}
@@ -2433,6 +2489,7 @@ export function XuenessWorkbenchContainer() {
     if (settingsSection === "automations") return <XuenessAutomationsPanel offPeakEnabled={isPluginEffective("automation")} />;
     if (settingsSection === "diagnostics") return <XuenessDiagnosticsPanel />;
     if (settingsSection === "remote") return <RemoteConnections onUse={id => { chooseWorkspace(composerCatalog.isolatedRoot, true); updateChoices({remote:id}); }} />;
+    if (settingsSection === "runtimes") return <RuntimeSettingsPanel />;
     return null;
   };
 
@@ -2490,6 +2547,7 @@ export function XuenessWorkbenchContainer() {
     subscriptions: <SubscriptionsPanel onChanged={() => void refreshComposerCatalog()} onSelectModel={id => { updateChoices({ provider: 'real', provider_id: id, model: undefined, reasoning_effort: undefined }); void refreshComposerCatalog(); setPanel('chat'); }} />,
     'model-monitor': <ModelMonitorPanel />,
     diagnostics: <XuenessDiagnosticsPanel />,
+    runtimes: <RuntimeSettingsPanel />,
     files: (
       <FileBrowser
         files={files}
@@ -2562,7 +2620,7 @@ export function XuenessWorkbenchContainer() {
     });
   }, [sessions, stoppingSessions, runRequestSessions, activeId, session?.id, session?.status, session?.streaming?.status]);
 
-  const displayTimelineRows = useMemo(() => withAssistantStream(rows, session?.streaming), [rows, session?.streaming]);
+  const displayTimelineRows = useMemo(() => usesRuntimeProjection ? rows : withAssistantStream(rows, session?.streaming), [rows, session?.streaming, usesRuntimeProjection]);
   // 上下文压缩边界：由 sessions 插件从合并后的行与 compactions 记录推导；
   // 行集合随轮询、更早分页与推送快照更新时自动重算。
   const compactionMarker = useMemo(() => session && session.id === activeId

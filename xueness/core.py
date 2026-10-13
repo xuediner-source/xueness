@@ -1641,12 +1641,11 @@ def _drive_run(session: dict, store: Store, provider, gate: Gate, max_steps=None
         light_options = {}
         session.pop('lightweight_options', None)
         session.pop('runtime_budget', None)
-        max_steps = 8 if max_steps is None else max_steps
-        effective_wall = 120 if max_wall_seconds is None else max_wall_seconds
+        effective_wall = max_wall_seconds
         if max_chars is None:
             max_chars = 24000
-    if type(max_steps) is not int or not 1 <= max_steps <= 64:
-        raise ValueError("max_steps must be an integer from 1 to 64")
+    if max_steps is not None and (type(max_steps) is not int or not 1 <= max_steps <= 64):
+        raise ValueError("max_steps must be an integer from 1 to 64 or None")
     deadline = time.monotonic() + effective_wall if effective_wall is not None else None
     session.pop('pause_reason', None)
     session.pop('pause_code', None)
@@ -2013,7 +2012,10 @@ def _drive_run(session: dict, store: Store, provider, gate: Gate, max_steps=None
                 _hook_record(session, event, entry)
         save_session()
 
-    for _ in range(max_steps):
+    from itertools import count
+    for _ in count():
+        if max_steps is not None and _ >= max_steps:
+            break
         # Cooperative stop: settle at a journal boundary, not mid-tool-call.
         # This preserves call/result pairing, not transactional filesystem writes.
         if user_stop_requested():
@@ -2512,7 +2514,7 @@ def _drive_run(session: dict, store: Store, provider, gate: Gate, max_steps=None
             completion = final_assessment or assess(message["content"], session["results"], aliases,
                                                     native_references=plugin_enabled('sessions') and getattr(provider, 'tool_calling', 'native') == 'native')
             if (completion.get('error_code') == 'invalid_evidence_reference'
-                    and aliases and evidence_repairs == 0 and _ + 1 < max_steps):
+                    and aliases and evidence_repairs == 0 and (max_steps is None or _ + 1 < max_steps)):
                 evidence_repairs += 1
                 evidence_repair_active = True
                 repair = reference_repair_prompt()

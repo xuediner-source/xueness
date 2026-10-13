@@ -60,6 +60,7 @@ class HttpMcpClient(McpClient):
 
         The body is drained and discarded. It is not logged: it can echo the answer.
         """
+        self._require_available()
         request = urllib.request.Request(self._checked_url(), data=json.dumps(response).encode(), headers=self._headers())
         with urllib.request.build_opener(_NoRedirect).open(request, timeout=self.timeout) as reply:
             status = getattr(reply, 'status', None)
@@ -100,6 +101,7 @@ class HttpMcpClient(McpClient):
         return self._result(json.loads(data), request_id)
 
     def _exchange(self, payload):
+        self._require_available()
         try:
             request = urllib.request.Request(self._checked_url(), data=json.dumps(payload).encode(), headers=self._headers())
             with urllib.request.build_opener(_NoRedirect).open(request, timeout=self._transport_timeout()) as response:
@@ -110,7 +112,9 @@ class HttpMcpClient(McpClient):
                     self.session_id = session_id
                 if 'id' not in payload:
                     return {}
-                return self._read_response(response, payload['id'])
+                result = self._read_response(response, payload['id'])
+                self._require_available()
+                return result
         except _McpTransportError:
             raise
         except Exception:

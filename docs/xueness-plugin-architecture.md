@@ -1,5 +1,17 @@
 # Xueness 插件架构与功能归属
 
+当前构建目录为 **31 个可信插件、223 项登记功能**；下方历史记录保留各阶段的目录快照。
+
+2026-10-13 原生发行接线：desktop 冻结入口分派已有插件 worker/CLI，收集签名库与许可证；mcp 的源码 Python launcher 支持明确外部解释器；共享进程清理增加未回收 POSIX leader 锚点。打包与报告门禁仍属于已有能力的基础设施，没有新增产品功能或共享例外。Windows 真实冻结包、Electron、终端/工作流退出及隔离 NSIS 更新已通过；Mac 实测仍待对应 runner。见 [原生验收记录](runtime-native-release-2026-10-13.md)。
+
+2026-10-13 统一实时投影：`runtimes.live_projection` 提供 journal 派生的 snapshot/连续水位 long poll、窗口分页与结构变化后的 epoch 重建；Web/Electron 共用 `RuntimeConversation` reducer/订阅客户端，sessions 的 `runtimeConversationProjection` 适配既有视图与消息动作。容器只协调，主显示不再重复拼接旧事件与活动流；运行时关闭时保留 sessions 兼容路径。相关检查及真实构建截图见 [第 5 阶段记录](runtime-live-projection-2026-10-13.md)。
+
+2026-10-13 源码包与 ACP：extensions 增加 `source_packages`、`publisher_trust`，提供精确摘要/签名导入、不可变版本、回滚及默认禁用；mcp 增加 `managed_packages`、`acp_agents`，通过进程边界执行已批准源码并提供 ACP v1 单次操作。新 CLI/API 和实际模块均已登记，没有允许状态数据动态 import 宿主模块，也没有新增共享内核例外。实现、权限与本机验收边界见 [源码包说明](runtime-source-packages-2026-10-13.md)。
+
+2026-10-13 运行时接线：`runtimes.pi_lite_sidecar` 由 `provider_transport` 将 HTTP/CLI 的 Pi-lite 推理移至 bundled 子进程，文本/思考增量与完整结果返回现有宿主循环；工具、Gate、审批和 journal 沿用宿主。MCP 的 `mcp.process_boundary` 绑定配置摘要/状态目录、复查实际开关、回收变更连接并限制外部协议资源。两个能力均登记在所属插件，没有新增共享内核例外。见 [Pi-lite 会话接线](runtime-pi-session-transport-2026-10-13.md) 与 [MCP 外部边界](runtime-external-process-boundary-2026-10-13.md)。
+
+2026-10-12 运行时重构：新增 `runtimes` 插件，提供完整工作台与本地轻量档位的严格 JSONL 边界。新会话将所选档位写入会话日志，`pi-lite` 映射到现有轻量模型循环；sessions 新增 `/api/sessions/{id}/events.zcode` 兼容投影，保留原有 `events.v1`。实现与迁移边界见[运行时重构基线](xueness-runtime-refoundation-2026-10-12.md)。当前目录为 **31 个插件、216 项登记功能**。
+
 2026-10-12 会话自动命名：sessions 新增 `sessions.auto_title`（默认开启，设置键 `sessionsAutoTitleEnabled`）。首个助手回答完成结算后（共享执行器既有 `settle_turn` 插件挂点），对仍是默认任务文本且未被手动改名的会话，发起一次有界、无工具的短标题请求；实现位于 `sessions/auto_title.py`，请求构造沿用 providers 语义压缩的结构化纯文本模式，只送首条用户消息与首条回答的截断文本，失败、超时或无有效模型绑定时静默保留原标题。手动重命名（含分享导入标题）写入 `title_source='manual'`，永不被覆盖；生成的标题写 `title` 与 `title_source='generated'`，前端侧栏继续读取既有 `title` 字段，无需改动。目录为 **30 个插件、212 项登记功能**。
 
 2026-10-12 桌面系统通知：desktop 新增 `desktop.notifications`（默认开启，可在设置中关闭）。会话转入等待审批、等待回答、失败或完成时，复用既有会话列表刷新作为触发源，经 `DesktopNotificationsBridge.tsx` 发布有界请求，由 desktop 的 `window-theme-preload.cjs` 在插件生效时转发，`desktop/src/notifications.cjs` 在主进程再次校验并弹出 Electron 系统通知；点击通知聚焦主窗口并复用托盘命令选中会话。禁用 desktop 或关闭通知开关后，bridge、preload 与主进程三处触发路径均停止。前端实现登记于 desktop 插件 `frontendModules`，设置开关沿用既有 settings 面板分组（默认开）。目录为 **30 个插件、212 项登记功能**。
@@ -109,7 +121,7 @@ flowchart LR
 | updates | `DesktopUpdates.tsx`、`updateLifecycle.ts` |
 | workflows | `ExpertPanel.tsx`、`index.tsx` |
 
-## 28 个插件
+## 当前插件清单（31 个插件）
 
 | ID | 主要能力 | 依赖 | 初始状态 |
 |---|---|---|---|
@@ -141,6 +153,9 @@ flowchart LR
 | updates | 源仓库快进更新与桌面客户端更新 | — | 开 |
 | desktop | 原生窗口、目录选择、状态、标题栏、系统通知与系统权限入口 | — | 开 |
 | tools | 工具干跑及每轮工具调用预算（实验开关默认关闭） | — | 开 |
+| subscriptions | 订阅账号授权、CLI 登录导入与真实额度 | — | **关** |
+| model_monitor | 按会话记录并比较上游返回型号 | providers | **关** |
+| runtimes | 完整工作台与本地轻量运行时、严格 JSONL 协议、统一实时投影 | — | 开 |
 
 “开”指模块可用。Hooks/MCP/子代理等运行 opt-in 仍默认关闭；Web 写操作继续逐调用批准。禁用依赖不会改写其他开关，但会让依赖者 `effective=false`。重新启用依赖后，原来启用的依赖者恢复；显式关闭的插件保持关闭。文件禁用不影响独立 PTY，但 shell 或 sessions 禁用会关闭终端。
 
@@ -169,7 +184,7 @@ python3 -m xueness skills list [--root DIR] [--json]
 python3 -m xueness skills inspect NAME [--root DIR] [--json]
 ```
 
-`--state DIR` 放在子命令之前；CLI 与该状态目录的 Web 服务共用开关。Web「设置 → 插件」默认展示全部 28 个实际功能插件及其启用/依赖状态；「资源清单」另列扩展 manifest，不能将其等同于功能插件。功能插件管理始终可访问；settings 关闭时通过账户菜单中的「插件管理」直达恢复入口，extensions/sessions 关闭也不影响目录。损坏的开关文件会关闭全部功能，并在目录中显示配置错误；修复 `plugin-state.json` 后恢复。它只允许 `apiVersion:1` 与已知 ID 的布尔 `enabled` 字典，不能提供 import 路径或命令。
+`--state DIR` 放在子命令之前；CLI 与该状态目录的 Web 服务共用开关。Web「设置 → 插件」默认展示全部 31 个实际功能插件及其启用/依赖状态；「资源清单」另列扩展 manifest，不能将其等同于功能插件。功能插件管理始终可访问；settings 关闭时通过账户菜单中的「插件管理」直达恢复入口，extensions/sessions 关闭也不影响目录。损坏的开关文件会关闭全部功能，并在目录中显示配置错误；修复 `plugin-state.json` 后恢复。它只允许 `apiVersion:1` 与已知 ID 的布尔 `enabled` 字典，不能提供 import 路径或命令。
 
 `GET /api/plugins` 返回 `enabled/effective/blockedBy`；`POST /api/plugins/<id>` 仅接受 `{enabled:boolean}`，需要 CSRF。所有功能 API 都检查实际生效状态。禁用终端/浏览器会清理本进程持有的服务；运行中的工作流在节点边界停止调度新节点。停用不是撤销已经发生的文件或外部副作用。
 
@@ -253,7 +268,7 @@ providers 的 CLI parser/handler 已迁入 `xueness/bundled_plugins/providers/op
 | commands | 自定义斜杠提示模板；内建 /init（生成或更新 AGENTS.md）；命令资源创建、编辑与开关；目录型 Markdown 命令发现与位置参数展开；commands list/inspect 命令与聊天 /commands |
 | skills | 技能资源与按需目录摘要；有界技能正文读取；目录型技能发现与来源覆盖；skills list/inspect 命令与聊天 /skills |
 | hooks | 明确启用的生命周期事件钩子；钩子命令审批与运行记录；工具执行前后事件管线接入（PostToolUse 可选）；工作区钩子发现与按摘要信任（hooks trust 命令） |
-| mcp | stdio、HTTP 与旧 SSE 连接；OAuth PKCE、凭据刷新与隔离；外部工具、资源与提示词（支持工具名特殊字符清洗与结构化内容解析）；连接诊断、失效恢复与设置；结构化询问（默认关闭） |
+| mcp | stdio、HTTP 与旧 SSE 连接；OAuth PKCE、凭据刷新与隔离；外部工具、资源与提示词（支持工具名特殊字符清洗与结构化内容解析）；连接诊断、失效恢复与设置；结构化询问（默认关闭）；外部进程配置摘要、资源上限及插件 scope 回收 |
 | subagents | 只读子任务与嵌套代理（内置 general-purpose 与 explore 探索代理支持、支持 disallowedTools 工具黑名单过滤）；后台并发派发、主代理持续工作、结果收集与完成检查；子任务进度、结果与协作取消；子代理资源与能力配置；Web 端子代理运行态侧栏与卡片详情展开 |
 | network | 受限公网 HTTPS 页面读取；显式配置的网页搜索服务；独立 OpenAI-compatible 搜索模型；搜索地址、模型 ID 与密钥管理；按需 DNS/服务诊断；FakeIP 环境下可选的公开 DoH |
 | automation | 五字段 cron、时区与下次执行；计划审批与无人值守触发；持久认领、运行历史与暂停；闲时队列：本地低峰窗口排队执行、仅在空闲时与完成通知 |

@@ -312,7 +312,7 @@ test("heroGreeting follows the original six local-time intervals", () => {
   assert.equal(greetingAt(23), "夜深啦，别忘了照顾好自己哦");
 });
 
-test("WorkbenchHeader: 标题带项目文件夹名供 Codex 风格显示项目标记，无项目时不输出", () => {
+test("WorkbenchHeader: 标题带项目文件夹名供紧凑工作台显示项目标记，无项目时不输出", () => {
   const base: WorkbenchSession = { id: "s", task: "检查构建", status: "completed", steps: 1, mode: "build", changed_files: [], pending: [], approved: { write: [], edit: [], exec: [], mcp: [] } };
   for (const root of ["/Users/me/code/xueness", "/Users/me/code/xueness/", "E:\\models\\apps\\xueness"]) {
     const html = renderToStaticMarkup(<WorkbenchHeader session={{ ...base, root }} />);

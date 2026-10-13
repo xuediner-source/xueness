@@ -11,7 +11,7 @@
   ],
   "commands": [
     "mcp",
-    "mcp-check"
+    "mcp-check", "mcp-acp-worker"
   ],
   "panels": [
     "capabilities"
@@ -37,10 +37,27 @@
     "mcp_http",
     "oauth",
     "operator_cli",
+    "process_boundary",
+    "package_binding", "acp_adapter", "acp_worker",
     "sse",
     "windows_process"
   ],
   "features": [
+    {
+      "id": "mcp.managed_packages",
+      "name": "已批准源码包的隔离进程启动",
+      "nameEn": "Owned process launch for approved source packages"
+    },
+    {
+      "id": "mcp.acp_agents",
+      "name": "ACP v1 单次外部代理调用",
+      "nameEn": "ACP v1 single external agent invocation"
+    },
+    {
+      "id": "mcp.process_boundary",
+      "name": "外部进程配置摘要与生命周期边界",
+      "nameEn": "External process configuration digest and lifecycle boundary"
+    },
     {
       "id": "mcp.transports",
       "name": "stdio、HTTP 与旧 SSE 连接",

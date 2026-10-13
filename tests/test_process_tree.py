@@ -9,6 +9,7 @@ import signal
 import subprocess
 import sys
 import tempfile
+import threading
 import time
 import unittest
 from pathlib import Path
@@ -75,6 +76,13 @@ class ProcessTreeSignalTests(unittest.TestCase):
                 patcher = mock.patch.object(target, name, value, create=True)
                 patcher.start()
                 self.addCleanup(patcher.stop)
+        # These cases simulate a session we launched. Separate cases below
+        # exercise rejection of a group hint with a different real SID/PGID.
+        for name in ('getpgid', 'getsid'):
+            patcher = mock.patch.object(process_runtime.os, name,
+                                        side_effect=lambda pid: pid, create=True)
+            patcher.start()
+            self.addCleanup(patcher.stop)
 
     def test_windows_fallback_does_not_require_posix_signals(self):
         from types import SimpleNamespace
@@ -136,6 +144,56 @@ class ProcessTreeSignalTests(unittest.TestCase):
             process_runtime.terminate_process_tree(proc, group=False, grace=0)
         killpg.assert_not_called()
         proc.terminate.assert_called_once_with()
+
+    def test_group_hint_does_not_override_the_actual_session(self):
+        proc = mock.Mock(pid=4242, returncode=None)
+        proc.wait.return_value = 0
+        with mock.patch.object(process_runtime.os, 'name', 'posix'), \
+             mock.patch.object(process_runtime.os, 'getsid', return_value=3131), \
+             mock.patch.object(process_runtime.os, 'killpg') as killpg:
+            self.assertTrue(process_runtime.terminate_process_tree(proc, group=True, grace=0))
+        killpg.assert_not_called()
+        proc.terminate.assert_called_once_with()
+
+    def test_group_force_signal_happens_before_wait_reaps_the_leader(self):
+        proc = mock.Mock(pid=4242, returncode=None)
+        calls = []
+
+        def reap(**kwargs):
+            calls.append(('wait',))
+            proc.returncode = -signal.SIGTERM
+            return proc.returncode
+
+        proc.wait.side_effect = reap
+        with mock.patch.object(process_runtime.os, 'name', 'posix'), \
+             mock.patch.object(process_runtime.os, 'killpg',
+                               side_effect=lambda pid, sig: calls.append(('signal', sig))):
+            self.assertTrue(process_runtime.terminate_process_tree(proc, group=True, grace=0))
+        self.assertEqual(calls, [('signal', signal.SIGTERM), ('signal', signal.SIGKILL), ('wait',)])
+
+    def test_concurrent_wait_cannot_make_group_cleanup_hang_or_reuse_a_pid(self):
+        proc = mock.Mock(spec=process_runtime._SUBPROCESS_POPEN)
+        proc.pid, proc.returncode = 4242, None
+        proc._waitpid_lock = threading.Lock()
+        proc._waitpid_lock.acquire()
+        try:
+            start = time.monotonic()
+            with mock.patch.object(process_runtime.os, 'name', 'posix'), \
+                 mock.patch.object(process_runtime.os, 'killpg') as killpg:
+                self.assertFalse(process_runtime.terminate_process_tree(proc, group=True, grace=0))
+            self.assertLess(time.monotonic() - start, 1.0)
+            killpg.assert_not_called()
+            proc.wait.assert_not_called()
+        finally:
+            proc._waitpid_lock.release()
+
+    def test_failed_group_signal_does_not_claim_tree_cleanup_succeeded(self):
+        proc = mock.Mock(pid=4242, returncode=None)
+        proc.wait.return_value = 0
+        with mock.patch.object(process_runtime.os, 'name', 'posix'), \
+             mock.patch.object(process_runtime.os, 'killpg', side_effect=PermissionError):
+            self.assertFalse(process_runtime.terminate_process_tree(proc, group=True, grace=0))
+        proc.wait.assert_called_once_with(timeout=0)
 
     def test_non_integer_pid_never_becomes_a_taskkill_argument(self):
         proc = mock.Mock()
@@ -217,6 +275,60 @@ class ProcessTreeSignalTests(unittest.TestCase):
 
 
 class OwnedProcessCleanupTests(unittest.TestCase):
+    @unittest.skipIf(os.name == 'nt', 'real POSIX fork/ignore-TERM cleanup needs a POSIX host')
+    def test_term_exit_leader_does_not_strand_ignore_term_grandchild(self):
+        # The parent accepts TERM immediately. Its child has confirmed its
+        # ignore-TERM handler before publication, so this catches premature
+        # leader reaping rather than depending on scheduling luck.
+        with tempfile.TemporaryDirectory() as temporary:
+            path = Path(temporary) / 'pids'
+            script = (
+                'import os, signal, sys, time\n'
+                'ready_read, ready_write = os.pipe()\n'
+                'child = os.fork()\n'
+                'if child == 0:\n'
+                '    os.close(ready_read)\n'
+                '    signal.signal(signal.SIGTERM, signal.SIG_IGN)\n'
+                '    os.write(ready_write, b"ready")\n'
+                '    os.close(ready_write)\n'
+                '    time.sleep(120)\n'
+                '    os._exit(0)\n'
+                'os.close(ready_write)\n'
+                'os.read(ready_read, 5)\n'
+                'os.close(ready_read)\n'
+                'open(sys.argv[1], "w", encoding="ascii").write("%s\\n%s\\n" % (os.getpid(), child))\n'
+                'time.sleep(120)\n'
+            )
+            proc = subprocess.Popen([sys.executable, '-c', script, str(path)],
+                                    stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
+                                    stderr=subprocess.DEVNULL, start_new_session=True)
+            process_runtime.note_owned_process(proc, group=True)
+            grandchild = None
+            try:
+                deadline = time.monotonic() + 5
+                while not path.exists() and time.monotonic() < deadline:
+                    time.sleep(0.02)
+                self.assertTrue(path.exists(), 'child did not publish its ignore-TERM readiness')
+                leader, grandchild = [int(value) for value in path.read_text(encoding='ascii').split()]
+                self.assertEqual(leader, proc.pid)
+                self.assertTrue(process_runtime.terminate_process_tree(proc, grace=0.15))
+                self.assertIsNotNone(proc.returncode, 'leader was not reaped after the final group signal')
+                self.assertTrue(_not_running(grandchild), 'ignore-TERM grandchild was stranded')
+            finally:
+                if proc.returncode is None:
+                    _kill_leader(proc.pid)
+                    proc.wait(timeout=2)
+                if grandchild is not None and not _not_running(grandchild, seconds=0.1):
+                    # Test emergency cleanup only: this pid was recorded by
+                    # the fixture above and still has the expected parent
+                    # session. Production never scans for arbitrary children.
+                    try:
+                        if os.getsid(grandchild) == proc.pid:
+                            os.kill(grandchild, signal.SIGKILL)
+                    except ProcessLookupError:
+                        pass
+                process_runtime.forget_owned_process(proc)
+
     def test_release_stops_a_tracked_session_leader(self):
         proc = subprocess.Popen(
             [sys.executable, '-c', 'import time; time.sleep(60)'],

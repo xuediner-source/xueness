@@ -130,6 +130,7 @@ export type WorkbenchSession = {
   streaming?: { id: string; text: string; reasoning?: string; status: "streaming" | "interrupted"; text_format?: "markdown" } | null;
   provider_usage?: Record<string, number>;
   model_selection?: { provider_id?: string | null; model?: string | null; reasoning_effort?: string | null; tool_calling?: "native" | "json" };
+  runtime_mode?: "zcode-full" | "pi-lite";
   runtime_profile?: "standard" | "lightweight";
   runtime_budget?: {
     profile?: "standard" | "lightweight";

@@ -401,6 +401,11 @@ def _safe_model_config(source: dict) -> dict:
         if profile not in ("standard", "lightweight"):
             raise ForkError("session runtime profile is invalid")
         config["runtime_profile"] = profile
+    mode = source.get("runtime_mode")
+    if mode is not None:
+        if mode not in ("zcode-full", "pi-lite"):
+            raise ForkError("session runtime mode is invalid")
+        config["runtime_mode"] = mode
     return config
 
 

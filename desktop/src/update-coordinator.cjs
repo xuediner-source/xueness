@@ -23,6 +23,14 @@ const MAX_CHECKSUMS_BYTES = 64 * 1024;
 const MAX_RELEASE_METADATA_BYTES = 1024 * 1024;
 const REQUEST_ID = /^[a-f0-9]{32}$/;
 const STABLE_VERSION = /^v?(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/;
+const MAC_ARCHES = new Set(['x64', 'arm64']);
+
+function normalizeNativeArch(value) {
+  if (typeof value !== 'string') return '';
+  if (value === 'x64' || value === 'x86_64' || value === 'amd64') return 'x64';
+  if (value === 'arm64' || value === 'aarch64') return 'arm64';
+  return value;
+}
 
 function parseStableVersion(value) {
   if (typeof value !== 'string') return null;
@@ -107,7 +115,7 @@ class UpdateCoordinator {
     this.currentVersionSource = currentVersion;
     this.signedMac = signedMac === true;
     this.platform = platform;
-    this.arch = arch;
+    this.arch = normalizeNativeArch(arch);
     this.portable = portable === true
       || Boolean(process.env.PORTABLE_EXECUTABLE_DIR || process.env.PORTABLE_EXECUTABLE_FILE);
     this.packaged = packaged === true;
@@ -166,6 +174,7 @@ class UpdateCoordinator {
 
   get installMode() {
     if (!this.packaged) return 'unsupported';
+    if (this.platform === 'darwin' && !MAC_ARCHES.has(this.arch)) return 'unsupported';
     if (this.platform === 'darwin' && !this.signedMac) return 'open-dmg';
     if (this.platform === 'win32' && this.portable) return 'unsupported';
     if ((this.platform === 'win32' || this.platform === 'darwin') && this.signedMac === true) return 'restart';
@@ -175,6 +184,7 @@ class UpdateCoordinator {
 
   get packageSupported() {
     if (!this.packaged) return false;
+    if (this.platform === 'darwin' && !MAC_ARCHES.has(this.arch)) return false;
     if (this.platform === 'win32') return !this.portable && Boolean(this.autoUpdater);
     if (this.platform === 'darwin') {
       return this.signedMac ? Boolean(this.autoUpdater) : Boolean(this.fetchImpl && this.shell?.openPath);
@@ -237,6 +247,7 @@ class UpdateCoordinator {
 
   unsupportedReason() {
     if (!this.packaged) return '开发或源码运行不检查更新。';
+    if (this.platform === 'darwin' && !MAC_ARCHES.has(this.arch)) return '当前 macOS 架构不支持应用内更新。';
     if (this.platform === 'win32' && this.portable) return '便携版不支持应用内更新，请使用 NSIS 安装版。';
     if (this.platform === 'darwin' && !this.signedMac) {
       return '此 macOS 应用尚未签名，不能自动覆盖安装；可下载 DMG 并在 Finder 中手动替换应用。';
@@ -1056,6 +1067,7 @@ module.exports = {
   OWNER,
   REPO,
   RELEASES_API,
+  normalizeNativeArch,
   normalizeVersion,
   compareVersions,
 };

@@ -216,6 +216,27 @@ export type PluginProfileApplyResult = {
   warnings: { code: string; id?: string; message: string }[];
 };
 
+/** Runtime composition seam. Profiles select an execution loop; they do not
+ * inject executable code from the network or from a state file. */
+export type RuntimeProfile = {
+  id: "zcode-full" | "pi-lite" | string;
+  name: string;
+  description: string;
+  loop: string;
+  capabilities: string[];
+  active: boolean;
+};
+export type RuntimeCatalog = { active: string; profiles: RuntimeProfile[] };
+
+export async function listRuntimeProfiles(signal?: AbortSignal): Promise<RuntimeCatalog> {
+  const payload = await get<RuntimeCatalog>("/api/runtimes", signal);
+  return { active: payload.active, profiles: Array.isArray(payload.profiles) ? payload.profiles : [] };
+}
+
+export async function selectRuntimeProfile(profile: string, signal?: AbortSignal): Promise<RuntimeCatalog> {
+  return post<RuntimeCatalog>("/api/runtimes/select", { profile }, signal);
+}
+
 export type AutomationRecord = {
   id: string; name: string; schedule: string; timezone: string; enabled: boolean;
   workflow: { root: string; name: string; nodes: unknown[]; concurrency?: number };

@@ -26,7 +26,7 @@ from .plugin_scope import ScopeRegistry, activation_plan
 from .resources import _atomic_write_json, _is_link
 
 API_VERSION = 1
-PLUGIN_IDS = ('sessions', 'files', 'shell', 'planning', 'providers', 'memory',
+PLUGIN_IDS = ('sessions', 'files', 'shell', 'planning', 'providers', 'runtimes', 'memory',
               'settings', 'usage', 'git', 'workflows', 'terminal', 'office',
               'commands', 'skills', 'hooks', 'mcp', 'subagents', 'network', 'automation', 'extensions', 'diagnostics', 'browser', 'remote', 'bots', 'onboarding', 'updates', 'desktop', 'tools', 'subscriptions', 'model_monitor')
 PACKAGE_ROOT = Path(__file__).with_name('bundled_plugins')

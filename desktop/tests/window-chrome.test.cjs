@@ -222,7 +222,7 @@ test('macOS preload sends localized host policy and tray state for Dock integrat
   ]);
 });
 
-test('Codex 风格 44px title bar resizes Windows caption buttons and recentres macOS traffic lights', () => {
+test('柔和工作台 44px title bar resizes Windows caption buttons and recentres macOS traffic lights', () => {
   const host = themeHost();
   host.send({ color: '#242424', symbolColor: '#dddddd', height: 44 });
   host.send({ color: '#242424', symbolColor: '#dddddd', height: 41 });

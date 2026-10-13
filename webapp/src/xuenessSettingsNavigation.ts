@@ -42,6 +42,7 @@ const definitions: readonly SectionDefinition[] = [
   ['subscriptions', '订阅中心', '通过账号授权或订阅凭证接入，查看实际额度。', 'extensions', 'subscriptions'],
   ['model-monitor', '返回模型监测', '对比请求型号与上游返回型号。', 'extensions', 'model_monitor'],
   ['remote', 'SSH 工作区', '管理远程工作区连接。', 'extensions', 'remote'],
+  ['runtimes', '运行时', '选择完整工作台协议或本地轻量模型模式。', 'extensions', 'runtimes'],
   ['automations', '自动化', '管理定时任务与审批。', 'extensions', 'automation'],
   ['about', '关于 Xueness', '查看应用版本和本机数据位置。', 'extensions', 'desktop'],
   ['updates', '应用更新', '检查、下载和安装客户端稳定版。', 'extensions', 'updates'],

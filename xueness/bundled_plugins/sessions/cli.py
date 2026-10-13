@@ -107,7 +107,7 @@ def _add_agent_flags(parser):
                              "--mode plan is a hard ceiling over every permission mode")
     parser.add_argument("--disallow-tools", default="",
                         help="comma-separated tool deny list, e.g. 'exec,edit'; denied even with --allow-write/--allow-exec")
-    parser.add_argument("--steps", type=int, default=8)
+    parser.add_argument("--steps", type=int, default=None, help="optional per-run step limit; standard mode runs until finished")
     parser.add_argument("--max-chars", type=int, default=24000)
     parser.add_argument("--max-tokens", type=int, default=None,
                         help="standard: advisory chars/4 estimate; lightweight: input estimate budget; neither calls a model")
@@ -158,14 +158,25 @@ def _model_selection_record(provider_id, model, reasoning_effort):
         selection["reasoning_effort"] = reasoning_effort
     return selection
 
+
+def _runtime_mode(state_dir):
+    """Read the process-safe runtime selector used by newly created chats."""
+    try:
+        if not plugin_runtime.is_enabled(state_dir, "runtimes"):
+            return "zcode-full"
+        from ..runtimes.runtime import load_selection
+        return load_selection(state_dir)
+    except (OSError, ValueError):
+        return "zcode-full"
+
 def _prepare_agent(args, parser, store, session):
     """Provider + memory + plugin plan + Gate, wired once for run and chat.
 
     The capability wiring is the same seam the web layer uses; hand-wiring it
     twice is how a fix lands in one caller and misses the other.
     """
-    if args.steps < 1 or args.max_chars < 1000:
-        parser.error("--steps must be positive and --max-chars >= 1000")
+    if (args.steps is not None and not 1 <= args.steps <= 64) or args.max_chars < 1000:
+        parser.error("--steps must be 1..64 when provided and --max-chars >= 1000")
     if args.max_tokens is not None and args.max_tokens < 1:
         parser.error("--max-tokens must be a positive integer")
     try:
@@ -178,7 +189,11 @@ def _prepare_agent(args, parser, store, session):
         pid = args.provider_id or selection.get("provider_id")
         model = args.model or selection.get("model")
         reasoning_effort = args.reasoning_effort or selection.get("reasoning_effort")
+        if session.get("runtime_mode") not in ("zcode-full", "pi-lite"):
+            session["runtime_mode"] = _runtime_mode(args.state)
         runtime_override = getattr(args, 'runtime_profile', None)
+        if runtime_override is None and session.get("runtime_profile") is None and session.get("runtime_mode") == "pi-lite":
+            runtime_override = "lightweight"
         provider = provider_config.resolve(args.state, pid, model,
                                            reasoning_effort=reasoning_effort,
                                            session_id=session.get('id'),
@@ -695,6 +710,7 @@ def _chat_loop_owned(args, parser, store, session, owned):
             elif not s:
                 content, invocation = commands_module.expand(command_items, text)
                 s = store.new(content, root, attachments=attachments)
+                s["runtime_mode"] = _runtime_mode(args.state)
                 owned.enter_context(lease(store, s["id"]))
                 _apply_cli_target(args, parser, store, s)
                 if args.provider_id or args.model or args.reasoning_effort:
@@ -718,7 +734,10 @@ def _chat_loop_owned(args, parser, store, session, owned):
         s["skill_catalog"] = args.skill_catalog
         store.save(s)
         with RunInterrupt(gate) as interrupt, activate(names, args.state, root, s) as ext:
-            s = run(store.load(s["id"]), store, provider, gate,
+            from ..runtimes.provider_transport import for_session
+            run_provider = for_session(provider, args.state, s, should_stop=interrupt.should_stop,
+                                       runtime_profile=getattr(args, 'runtime_profile', None))
+            s = run(store.load(s["id"]), store, run_provider, gate,
                     args.steps, args.max_chars, memory_text, args.max_tokens,
                     skills=ext.kwargs.get("skills"), skill_reader=ext.kwargs.get("skill_reader"),
                     hooks=ext.kwargs.get("hooks"),
@@ -819,7 +838,10 @@ def _execute_cli_impl(args, parser, store):
     if args.cmd == "new":
         root = args.root.resolve()
         root.mkdir(parents=True, exist_ok=True)
-        print(store.new(args.task, root)["id"])
+        session = store.new(args.task, root)
+        session['runtime_mode'] = _runtime_mode(args.state)
+        store.save(session)
+        print(session['id'])
         return 0
     if args.cmd == "list":
         print(json.dumps(store.list(), ensure_ascii=False, indent=2))
@@ -860,8 +882,8 @@ def _execute_cli_impl(args, parser, store):
     if args.cmd == "run":
         # Validate before creating anything: a rejected flag combination must
         # not leave an orphan session in the journal.
-        if args.steps < 1 or args.max_chars < 1000:
-            parser.error("--steps must be positive and --max-chars >= 1000")
+        if (args.steps is not None and not 1 <= args.steps <= 64) or args.max_chars < 1000:
+            parser.error("--steps must be 1..64 when provided and --max-chars >= 1000")
         if args.max_tokens is not None and args.max_tokens < 1:
             parser.error("--max-tokens must be a positive integer")
         try:
@@ -898,8 +920,8 @@ def _execute_cli_impl(args, parser, store):
         if (prepared_agent is None and getattr(args, "mode", None) is None
                 and s.get("mode") == "plan"):
             args.mode = "plan"
-        if args.steps < 1 or args.max_chars < 1000:
-            parser.error("--steps must be positive and --max-chars >= 1000")
+        if (args.steps is not None and not 1 <= args.steps <= 64) or args.max_chars < 1000:
+            parser.error("--steps must be 1..64 when provided and --max-chars >= 1000")
         if args.max_tokens is not None and args.max_tokens < 1:
             parser.error("--max-tokens must be a positive integer")
         try:
@@ -910,6 +932,9 @@ def _execute_cli_impl(args, parser, store):
                     provider, gate, names, memory_text = _prepare_agent(args, parser, store, s)
                 else:
                     provider, gate, names, memory_text = prepared_agent
+                    for field in ('runtime_mode', 'runtime_profile'):
+                        if field in prepared_session:
+                            s[field] = prepared_session[field]
                     if prepared_session.get("model_selection"):
                         s["model_selection"] = prepared_session["model_selection"]
                 _bind_cli_plan_draft(args, gate, s)
@@ -918,7 +943,10 @@ def _execute_cli_impl(args, parser, store):
                 s["skill_catalog"] = args.skill_catalog
                 store.save(s)
                 with RunInterrupt(gate) as interrupt, activate(names, args.state, Path(s["root"]), s) as ext:
-                    s = run(s, store, provider, gate,
+                    from ..runtimes.provider_transport import for_session
+                    run_provider = for_session(provider, args.state, s, should_stop=interrupt.should_stop,
+                                               runtime_profile=getattr(args, 'runtime_profile', None))
+                    s = run(s, store, run_provider, gate,
                             args.steps, args.max_chars, memory_text, args.max_tokens,
                             skills=ext.kwargs.get("skills"), skill_reader=ext.kwargs.get("skill_reader"),
                             hooks=ext.kwargs.get("hooks"),
@@ -956,8 +984,8 @@ def _execute_cli_impl(args, parser, store):
         if args.id and (args.continue_chat or args.root is not None):
             parser.error("chat ID cannot be combined with --continue or --root")
         # Validate even when the user exits without sending a prompt.
-        if args.steps < 1 or args.max_chars < 1000 or (args.max_tokens is not None and args.max_tokens < 1):
-            parser.error("--steps/--max-tokens must be positive and --max-chars >= 1000")
+        if (args.steps is not None and not 1 <= args.steps <= 64) or args.max_chars < 1000 or (args.max_tokens is not None and args.max_tokens < 1):
+            parser.error("--steps/--max-tokens must be 1..64 when provided and --max-chars >= 1000")
         try:
             parse_disallow_list(args.disallow_tools)
             s = store.load(args.id) if args.id else None

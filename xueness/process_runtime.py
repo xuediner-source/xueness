@@ -13,7 +13,10 @@ with ``start_new_session`` via ``killpg``. Windows uses ``taskkill /T /F``.
 Kill-on-close Job Objects stay in the desktop host and the MCP plugin; they
 cover processes that outlive a single ``Popen`` handle. Tree signals are sent
 only to a process this helper still holds or to a pid the caller recorded
-from that launch. A reaped pid is not signaled again.
+from that launch. A reaped pid is not signaled again. During POSIX group
+cleanup the leader remains unreaped through the grace period and SIGKILL;
+otherwise a leader that accepts SIGTERM would strand descendants that ignore
+it and its numeric group ID could eventually be reused.
 
 The shape follows ZCode ``packages/services/src/process/processTreeTerminator.ts``
 and ``packages/services/src/process/windowsTaskkillRunner.ts`` (Apache-2.0):
@@ -58,6 +61,7 @@ _lock = threading.RLock()
 # module attribute; comparing against that live attribute would treat the mock
 # as the real runner and spawn a process anyway.
 _SUBPROCESS_RUN = subprocess.run
+_SUBPROCESS_POPEN = subprocess.Popen
 _owned_lock = threading.Lock()
 _owned = weakref.WeakSet()
 _group_leaders = set()
@@ -197,11 +201,14 @@ def _signal_group(pid, sig):
     # A non-integer, or a pid that was already reaped, must not be interpolated
     # into a signal or a taskkill argv.
     if os.name == 'nt' or not isinstance(pid, int) or pid <= 1 or pid == os.getpid():
-        return
+        return False
     try:
         os.killpg(pid, sig)
-    except (ProcessLookupError, PermissionError, OSError):
-        pass
+        return True
+    except ProcessLookupError:
+        return True  # An already absent group needs no further signal.
+    except (PermissionError, OSError):
+        return False
 
 
 def _signal_direct(proc, sig, *, force=False):
@@ -243,6 +250,47 @@ def _wait_proc(proc, grace):
     except Exception:
         return _returncode(proc) is not None
     return True
+
+
+def _posix_group_matches(pid):
+    """Check the actual session, rather than trusting a caller's group hint."""
+    try:
+        return os.getpgid(pid) == pid and os.getsid(pid) == pid
+    except (AttributeError, ProcessLookupError, PermissionError, OSError):
+        return False
+
+
+def _terminate_posix_group(proc, pid, grace, first):
+    """Signal an owned, unreaped session without freeing its leader's PID.
+
+    Popen.wait()/poll() use the same lock. Holding it prevents a concurrent
+    reader from reaping the leader between the group signals. Acquisition is
+    bounded: a caller already doing wait(None) must not make cleanup hang.
+    False reports that ownership could not be protected; None means this is
+    not a session leader and the direct-process path should be used instead.
+    """
+    wait_lock = getattr(proc, '_waitpid_lock', None) if isinstance(proc, _SUBPROCESS_POPEN) else None
+    if wait_lock is not None and not wait_lock.acquire(timeout=max(0.1, grace)):
+        return False
+    try:
+        if _returncode(proc) is not None:
+            return True
+        if not _posix_group_matches(pid):
+            return None
+        forced = _signal_group(pid, first)
+        if first != signal.SIGKILL:
+            # Do not proc.wait() here, even if the leader has already exited.
+            # Its waitable PID pins our group identity until the final signal.
+            deadline = time.monotonic() + max(0, grace)
+            while time.monotonic() < deadline:
+                time.sleep(min(0.05, max(0, deadline - time.monotonic())))
+            forced = _signal_group(pid, signal.SIGKILL)
+    finally:
+        if wait_lock is not None:
+            wait_lock.release()
+    # All group signals are finished before the leader can be reaped.
+    reaped = _wait_proc(proc, grace)
+    return reaped and forced
 
 
 def _taskkill(pid):
@@ -297,8 +345,10 @@ def signal_process_tree(pid):
 def terminate_process_tree(proc, *, group=None, grace=2.0, sig=None):
     """Stop proc and descendants when it leads a session we created.
 
-    Returns True when the direct process is no longer running. An already
-    reaped process is left alone so a recycled pid cannot be killed.
+    Returns True when the direct process is no longer running and, for a
+    verified POSIX session, its group has received the final force signal.
+    Grandchildren are reaped by their parent/init, not by this helper. An
+    already reaped process is left alone so a recycled pid cannot be killed.
     """
     if proc is None:
         return True
@@ -314,8 +364,10 @@ def terminate_process_tree(proc, *, group=None, grace=2.0, sig=None):
     else:
         first = signal.SIGTERM if sig is None else sig
         if leader and isinstance(pid, int):
-            _signal_group(pid, first)
-        elif first not in (signal.SIGTERM, signal.SIGKILL) and isinstance(pid, int):
+            result = _terminate_posix_group(proc, pid, max(0, grace), first)
+            if result is not None:
+                return result
+        if first not in (signal.SIGTERM, signal.SIGKILL) and isinstance(pid, int):
             try:
                 os.kill(pid, first)
             except (ProcessLookupError, PermissionError, OSError):
@@ -328,8 +380,6 @@ def terminate_process_tree(proc, *, group=None, grace=2.0, sig=None):
         # Windows has no signal.SIGKILL. Popen.kill is the native fallback
         # when taskkill failed or the process did not stop within grace.
         _signal_direct(proc, signal.SIGTERM, force=True)
-    elif leader and isinstance(pid, int) and _returncode(proc) is None:
-        _signal_group(pid, signal.SIGKILL)
     else:
         _signal_direct(proc, signal.SIGKILL)
     return _wait_proc(proc, grace)

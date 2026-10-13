@@ -22,7 +22,8 @@ export type PluginPanel =
   | "marketplace"
   | "diagnostics"
   | "remote"
-  | "subagents";
+  | "subagents"
+  | "runtimes";
 
 export const XUENESS_PLUGIN_REGISTRY = {
   sessions: { name: "会话", description: "会话列表、归档恢复与永久删除、侧栏宽度调整、Agent 对话与历史分叉", panels: ["chat"] },
@@ -52,6 +53,7 @@ export const XUENESS_PLUGIN_REGISTRY = {
   hooks: { name: "Hooks", description: "工具调用前后钩子", panels: ["capabilities"] },
   mcp: { name: "MCP", description: "外部 MCP 服务配置", panels: ["capabilities"] },
   subagents: { name: "子代理", description: "子代理资源与运行态", panels: ["capabilities", "subagents"] },
+  runtimes: { name: "运行时", description: "运行时档位、实时会话投影与断线续传", panels: ["runtimes"] },
   shell: { name: "Shell 工具", description: "执行命令工具", panels: [] },
   planning: { name: "规划工具", description: "待办、提问和交付完整性检查", panels: [] },
   tools: { name: "工具执行策略", description: "对其他插件工具调用的实验性执行策略（干跑预览、每轮工具调用预算）", panels: [] },
@@ -80,6 +82,7 @@ export const PLUGIN_PANEL_LABELS: Record<PluginPanel, string> = {
   diagnostics: "诊断与维护",
   remote: "SSH 工作区",
   subagents: "子代理",
+  runtimes: "运行时",
 };
 
 export const CAPABILITY_PLUGIN_BY_KIND: Partial<Record<CapabilityKind, XuenessPluginId>> = {

@@ -10,9 +10,9 @@
     "start": "electron .",
     "test": "node --test tests/*.test.cjs",
     "prepare:backend": "python scripts/build_backend.py",
-    "dist:mac": "node scripts/check-native-build.cjs darwin && electron-builder --mac --publish never",
-    "dist:win": "node scripts/check-native-build.cjs win32 && electron-builder --win --publish never",
-    "dist:dir": "electron-builder --dir --publish never"
+    "dist:mac": "node scripts/check-native-build.cjs darwin --mac --publish never",
+    "dist:win": "node scripts/check-native-build.cjs win32 --win --publish never",
+    "dist:dir": "node scripts/check-native-build.cjs current --dir --publish never"
   },
   "devDependencies": {
     "electron": "44.5.1",

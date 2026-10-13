@@ -19,10 +19,12 @@ class McpPlugin(Plugin):
         from .lifecycle import Pool
         self._session = session if isinstance(session, dict) else None
         self._state_dir = state_dir
+        from .process_boundary import configuration_digest
         self.pool = Pool(Path(root))
         collected = []
         self.servers = {}
         self.special_tools = {}
+        self.server_digests = {}
         self.tool_name_map.clear()
         for server in load(state_dir):
             client = None
@@ -55,6 +57,7 @@ class McpPlugin(Plugin):
                     continue
                 self._clients[server["id"]] = client
                 self.servers[server["id"]] = server
+                self.server_digests[server['id']] = configuration_digest(server)
                 collected.extend(schemas)
             except Exception:
                 if client is not None:
@@ -74,6 +77,16 @@ class McpPlugin(Plugin):
             if client is None:
                 return {"ok": False, "error": "mcp server not connected"}
             try:
+                # A tool approval belongs to the discovered transport. A
+                # changed/removed resource cannot redirect it to other code.
+                from .process_boundary import require_available
+                require_available(self.servers[parsed[0]])
+                current = next((entry for entry in load(self._state_dir)
+                                if entry['id'] == parsed[0]), None)
+                if current is None or configuration_digest(current) != self.server_digests[parsed[0]]:
+                    self.pool.discard(parsed[0])
+                    _clients.pop(parsed[0], None)
+                    return {'ok': False, 'error': 'MCP configuration changed; start a new run'}
                 if not getattr(client, "active", True):
                     client = self.pool.get(self.servers[parsed[0]])
                     self._bind(client)
@@ -92,6 +105,8 @@ class McpPlugin(Plugin):
                 actual_name = self.tool_name_map.get(parsed, parsed[1])
                 return client.call_tool(actual_name, arguments)
             except Exception:
+                self.pool.discard(parsed[0])
+                _clients.pop(parsed[0], None)
                 return {"ok": False, "error": "mcp call failed"}
 
         return {"mcp_tools": collected, "mcp_call": mcp_call}
@@ -116,12 +131,25 @@ class McpPlugin(Plugin):
         self.tool_name_map.clear()
 
 
+def activate(scope, ctx):
+    """Dispose every run-owned transport when the plugin scope is disabled."""
+    from .process_boundary import close_for_state
+    scope.ensure('mcp.process_boundary', lambda: ctx['state_dir'], close_for_state)
+
+
 def register_cli(commands):
     from .operator_cli import add_parsers
     add_parsers(commands)
+    import argparse
+    worker = commands.add_parser('mcp-acp-worker', help=argparse.SUPPRESS)
+    worker.add_argument('package_id')
+    worker.add_argument('sha256')
 
 
 def execute_cli(args, deps=None):
+    if getattr(args, 'cmd', None) == 'mcp-acp-worker':
+        from .acp_worker import main
+        return main(args.state, args.package_id, args.sha256)
     if getattr(args, "cmd", None) == "mcp":
         from .command_cli import execute
         return execute(args)

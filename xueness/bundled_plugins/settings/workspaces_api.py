@@ -176,7 +176,11 @@ def _is_too_broad_native_root(path: Path) -> bool:
                 return True
         elif len(path.parts) <= 2:
             return True
-        if path.is_mount():
+        try:
+            mounted = path.is_mount()
+        except NotImplementedError:
+            mounted = False
+        if mounted:
             return True
     except (OSError, RuntimeError, ValueError):
         return True

@@ -21,14 +21,17 @@ jobs:
             platform: win32
             arch: x64
             target: windows-x64
+            backend: xueness-backend.exe
           - runner: macos-15-intel
             platform: darwin
             arch: x64
             target: macos-x64
+            backend: xueness-backend
           - runner: macos-15
             platform: darwin
             arch: arm64
             target: macos-arm64
+            backend: xueness-backend
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 60
     defaults:
@@ -46,15 +49,31 @@ jobs:
         with:
           node-version: '24.20.0'
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        id: python
         with:
           python-version: '3.12'
           architecture: ${{ matrix.arch }}
+      - name: Build pinned package-signing dependency on native Intel Mac
+        if: ${{ matrix.platform == 'darwin' && matrix.arch == 'x64' }}
+        run: |
+          brew install openssl@3 rust
+          rustc --version
+          task_openssl_prefix="$(brew --prefix openssl@3)"
+          task_openssl_license="$task_openssl_prefix/LICENSE.txt"
+          test -s "$task_openssl_license" || { echo 'Installed OpenSSL LICENSE.txt is required for the statically linked Intel runtime.' >&2; exit 1; }
+          printf 'XUENESS_PACKAGE_OPENSSL_LICENSE_PATH=%s\n' "$task_openssl_license" >> "$GITHUB_ENV"
+          OPENSSL_DIR="$task_openssl_prefix" OPENSSL_STATIC=1 python -m pip install --no-cache-dir --no-binary cryptography -r desktop/requirements-package-signing.txt
+      - name: Install pinned package-signing wheel on supported wheel platforms
+        if: ${{ matrix.platform != 'darwin' || matrix.arch != 'x64' }}
+        run: python -m pip install --only-binary cryptography -r desktop/requirements-package-signing.txt
       - name: Install build dependencies
         run: |
           python -m pip install -r desktop/requirements-build.txt
           npm ci --prefix webapp --no-audit --no-fund
           npm ci --prefix desktop --no-audit --no-fund
           node desktop/node_modules/electron/install.js
+      - name: Verify package-signing dependency and record native versions
+        run: python desktop/scripts/check_package_signing.py --report desktop/native-evidence/package-signing.json
       - name: Check feature ownership and focused native parity
         if: ${{ github.event_name == 'push' || inputs.fast_build != false }}
         run: |
@@ -84,11 +103,13 @@ jobs:
       - name: Freeze the native backend
         run: |
           python desktop/scripts/build_backend.py
+      - name: Verify frozen runtime transport
+        run: python desktop/scripts/check_runtime_transport.py --executable "desktop/runtime/backend/${{ matrix.backend }}" --python-executable "${{ steps.python.outputs.python-path }}" --report desktop/native-evidence/frozen-runtime-transport.json
       - name: Exercise the actual backend integration suite
         if: ${{ github.event_name == 'workflow_dispatch' && inputs.fast_build == false }}
         run: |
-          python desktop/scripts/check_backend.py
-          python desktop/scripts/check_backend.py --force-exit
+          python desktop/scripts/check_backend.py --skip-contract-tests
+          python desktop/scripts/check_backend.py --force-exit --skip-contract-tests
       - name: Build Windows installer and portable ZIP
         if: runner.os == 'Windows'
         run: npm --prefix desktop run dist:win -- --x64
@@ -96,7 +117,15 @@ jobs:
         if: runner.os == 'macOS'
         run: npm --prefix desktop run dist:mac -- --${{ matrix.arch }}
       - name: Verify packaged Electron workbench
-        run: python desktop/scripts/check_app.py
+        run: python desktop/scripts/check_app.py --runtime-transport-check --runtime-transport-report desktop/native-evidence/packaged-runtime-transport.json
+      - name: Upload native runtime transport evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: Xueness-${{ matrix.target }}-runtime-evidence
+          path: desktop/native-evidence/*.json
+          retention-days: 14
+          if-no-files-found: error
       - name: Exercise the installed NSIS in-app update path
         if: ${{ runner.os == 'Windows' && github.event_name == 'workflow_dispatch' && inputs.fast_build == false }}
         run: python desktop/scripts/check_windows_update.py

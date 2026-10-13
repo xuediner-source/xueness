@@ -707,10 +707,49 @@
 .xn-session-queue__notice { margin: 0; padding: 6px 11px; color: var(--fg-muted); font-size: 11px; }
 .xn-session-queue__notice[role="alert"] { color: var(--error-fg); }
 .xn-session-queue__item:has(.xn-session-queue__editor) { flex-wrap: wrap; }
-.xn-current-turn-input { display: inline-flex; align-items: center; margin: 2px 0; }
-.xn-current-turn-input select { max-width: 190px; padding: 4px 24px 4px 8px; border: 1px solid var(--border); border-radius: 7px; background: var(--bg-subtle); color: var(--fg-muted); font: inherit; font-size: 11px; cursor: pointer; }
-.xn-current-turn-input select:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
-.xn-current-turn-input select:disabled { opacity: .55; cursor: default; }
+.xn-sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
+
+/* Keep each queued follow-up to one quiet line; secondary actions stay reachable in the menu. */
+.xn-session-queue:not(.xn-pending-guidance) .xn-session-queue__item { position: relative; flex-wrap: nowrap; gap: 6px; padding: 5px 8px; }
+.xn-session-queue:not(.xn-pending-guidance) .xn-session-queue__copy { flex: 1 1 auto; overflow: hidden; }
+.xn-session-queue:not(.xn-pending-guidance) .xn-session-queue__copy p,
+.xn-session-queue:not(.xn-pending-guidance) .xn-session-queue__preview-line { display: block; min-width: 0; max-height: none; margin: 0; overflow: hidden; color: var(--fg); font-size: 12px; line-height: 18px; text-overflow: ellipsis; white-space: nowrap; }
+.xn-session-queue:not(.xn-pending-guidance) .xn-session-queue__preview summary { display: block; overflow: hidden; list-style: none; cursor: pointer; }
+.xn-session-queue:not(.xn-pending-guidance) .xn-session-queue__preview summary::-webkit-details-marker { display: none; }
+.xn-session-queue:not(.xn-pending-guidance) .xn-session-queue__preview[open] summary .xn-session-queue__preview-line { display: none; }
+.xn-session-queue__kind { display: grid; width: 18px; height: 24px; flex: 0 0 18px; place-items: center; color: var(--fg-muted); }
+.xn-session-queue__kind[draggable="true"] { cursor: grab; }
+.xn-session-queue__kind[draggable="true"]:active { cursor: grabbing; }
+.xn-session-queue__guide { display: inline-flex; height: 28px; flex: 0 0 auto; align-items: center; justify-content: center; gap: 4px; padding: 0 8px; border: 0; border-radius: 7px; background: var(--bg-active); color: var(--fg); font: inherit; font-size: 11px; cursor: pointer; }
+.xn-session-queue__guide:hover:not(:disabled) { background: var(--bg-hover); }
+.xn-session-queue__guide:disabled { color: var(--fg-muted); cursor: progress; }
+.xn-session-queue:not(.xn-pending-guidance) .xn-session-queue__cancel { display: grid; width: 28px; height: 28px; flex: 0 0 28px; place-items: center; padding: 0; border: 0; border-radius: 7px; color: var(--fg-muted); }
+.xn-session-queue:not(.xn-pending-guidance) .xn-session-queue__cancel:hover:not(:disabled) { color: var(--error-fg); }
+.xn-session-queue__actions { position: relative; flex: 0 0 auto; }
+.xn-session-queue__actions > summary { display: grid; width: 28px; height: 28px; place-items: center; border-radius: 7px; color: var(--fg-muted); cursor: pointer; list-style: none; }
+.xn-session-queue__actions > summary::-webkit-details-marker { display: none; }
+.xn-session-queue__actions > summary:hover { background: var(--bg-hover); color: var(--fg); }
+.xn-session-queue__action-menu { position: absolute; z-index: 12; top: calc(100% + 4px); inset-inline-end: 0; display: grid; min-width: 174px; padding: 4px; border: 1px solid var(--border-strong); border-radius: 9px; background: var(--bg-card); box-shadow: 0 8px 24px rgb(0 0 0 / .2); }
+.xn-session-queue__action-menu button { display: flex; min-height: 32px; align-items: center; gap: 8px; padding: 5px 8px; border: 0; border-radius: 6px; background: transparent; color: var(--fg); font: inherit; font-size: 11px; text-align: start; cursor: pointer; }
+.xn-session-queue__action-menu button:hover:not(:disabled) { background: var(--bg-hover); }
+.xn-session-queue__action-menu button:disabled { color: var(--fg-muted); cursor: progress; }
+.xn-session-queue:not(.xn-pending-guidance) .xn-session-queue__status { display: none; }
+.xn-session-queue:not(.xn-pending-guidance) .xn-session-queue__guide:focus-visible,
+.xn-session-queue:not(.xn-pending-guidance) .xn-session-queue__cancel:focus-visible,
+.xn-session-queue__actions > summary:focus-visible,
+.xn-session-queue__action-menu button:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
+.xn-current-turn-input { position: relative; display: inline-flex; align-items: center; margin: 2px 0; }
+.xn-current-turn-input > summary { display: inline-flex; min-height: 28px; align-items: center; gap: 5px; padding: 0 8px; border: 1px solid var(--border); border-radius: 8px; background: var(--bg-subtle); color: var(--fg-muted); font: inherit; font-size: 11px; cursor: pointer; list-style: none; }
+.xn-current-turn-input > summary::-webkit-details-marker { display: none; }
+.xn-current-turn-input > summary:hover { background: var(--bg-hover); color: var(--fg); }
+.xn-current-turn-input > summary[aria-disabled="true"] { opacity: .55; cursor: default; }
+.xn-current-turn-input__options { position: absolute; z-index: 15; right: 0; bottom: calc(100% + 5px); display: grid; min-width: 210px; gap: 2px; padding: 4px; border: 1px solid var(--border-strong); border-radius: 9px; background: var(--bg-card); box-shadow: 0 8px 24px rgb(0 0 0 / .2); }
+.xn-current-turn-input__options button { display: flex; min-height: 34px; align-items: center; gap: 8px; padding: 6px 8px; border: 0; border-radius: 6px; background: transparent; color: var(--fg); font: inherit; font-size: 11px; text-align: start; cursor: pointer; }
+.xn-current-turn-input__options button[aria-pressed="true"] { background: var(--bg-active); }
+.xn-current-turn-input__options button:hover:not(:disabled) { background: var(--bg-hover); }
+.xn-current-turn-input__options button:disabled { color: var(--fg-muted); cursor: not-allowed; }
+.xn-current-turn-input > summary:focus-visible,
+.xn-current-turn-input__options button:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
 
 .xn-selection-actions {
   position: fixed;
