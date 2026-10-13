@@ -10,8 +10,9 @@ import "./styles/conversation-refresh.css";
 import "./styles/composer-workspace.css";
 import "./styles/composer-toolbar.css";
 import "./styles/parity-final.css";
-// Warm, calm visual polish layer; must stay last.
+// Color palette polish precedes the shared workbench structure.
 import "./styles/claudex-scheme.css";
+import "./plugins/sessions/workbench-frame.css";
 
 function mount(): void {
   const rootElement = document.getElementById("root");

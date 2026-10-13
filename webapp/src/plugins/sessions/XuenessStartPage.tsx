@@ -1,11 +1,12 @@
 /**
  * 空会话起始页（sessions 插件功能）。
  *
- * 轻量起始布局：紧凑快捷动作置于上方，最近项目与会话以列表分组展示。动作与项目数据都由容器
+ * 工作台起始布局：项目入口置于上方，最近项目与会话以列表分组展示。动作与项目数据都由容器
  * 按插件生效状态提供——克隆属于 git 插件、SSH 属于 remote 插件，插件未生效时容器
  * 根本不会把该动作传进来，因此本组件不发起任何请求，只做展示与回调。
  */
 import React from "react";
+import { ArrowUpRight, Folder, MessageSquare } from "lucide-react";
 import { t as tr } from "../../i18n";
 import {
   commandPaletteStatusLabel,
@@ -105,6 +106,7 @@ export type XuenessStartPageProps = {
   locale?: "zh" | "en";
   onSelectSession(id: string): void;
   onSelectProject?(path: string): void;
+  currentRoot?: string | null;
 };
 
 export function XuenessStartPage({
@@ -114,60 +116,71 @@ export function XuenessStartPage({
   locale = "zh",
   onSelectSession,
   onSelectProject,
+  currentRoot,
 }: XuenessStartPageProps): React.JSX.Element | null {
   const recent = recentSessionSummaries(sessions, 5);
   const recentProjects = projects === undefined || projects === null ? null : recentStartPageProjects(projects, 5);
-  const hasRecentProjects = (recentProjects?.length ?? 0) > 0;
+  const showProjects = recentProjects !== null;
   const hasRecentSessions = recent.length > 0;
-  const recentGroupCount = Number(hasRecentProjects) + Number(hasRecentSessions);
+  const recentGroupCount = Number(showProjects) + Number(hasRecentSessions);
   if (actions.length === 0 && recentGroupCount === 0) return null;
   return (
-    <div className="xn-start-page" data-testid="xn-start-page">
+    <div className="xn-workbench-start" data-testid="xn-start-page">
+      {(actions.length > 0 || showProjects) && <header className="xn-workbench-start__heading"><h2>{tr("项目")}</h2></header>}
       {actions.length > 0 && (
-        <div className="xn-start-page__actions" role="group" aria-label={tr("快捷开始")}>
+        <div className="xn-workbench-start__actions" role="group" aria-label={tr("快捷开始")}>
           {actions.map((action) => (
             <button
               type="button"
               key={action.id}
-              className="xn-start-page__action"
+              className="xn-workbench-start__action"
               data-testid={`start-action-${action.id}`}
               aria-label={action.description ? `${action.label}. ${action.description}` : action.label}
               title={action.description}
               onClick={(event) => action.onSelect(event.currentTarget)}
             >
-              <span className="xn-start-page__action-icon" aria-hidden="true">
+              <span className="xn-workbench-start__action-icon" aria-hidden="true">
                 <action.Icon size={18} />
               </span>
-              <span className="xn-start-page__action-copy">
+              <span className="xn-workbench-start__action-copy">
                 <strong>{action.label}</strong>
+                {action.description && <small>{action.description}</small>}
               </span>
+              <ArrowUpRight size={14} aria-hidden="true" />
             </button>
           ))}
         </div>
       )}
       {recentGroupCount > 0 && (
-        <div className="xn-start-page__side" data-group-count={recentGroupCount}>
-          {hasRecentProjects && recentProjects !== null && (
+        <div className="xn-workbench-start__side" data-group-count={recentGroupCount}>
+          {recentProjects !== null && (
             <section
-              className="xn-start-page__recent"
+              className="xn-workbench-start__recent"
               aria-labelledby="xn-start-page-projects-title"
               data-testid="xn-start-page-projects"
             >
               <h2 id="xn-start-page-projects-title">{tr("最近项目")}</h2>
-              <ul className="xn-start-page__recent-list">
+              {recentProjects.length === 0 && <p className="xn-workbench-start__empty">{tr("暂无最近项目")}<span>{tr("选择项目目录后显示在这里")}</span></p>}
+              <ul className="xn-workbench-start__recent-list">
                 {recentProjects.map((project) => (
                   <li key={project.path}>
                     <button
                       type="button"
-                      className="xn-start-page__recent-item"
+                      className="xn-workbench-start__recent-item"
                       data-testid={`start-project-${project.path}`}
                       title={project.path}
+                      aria-current={project.path===currentRoot?"location":undefined}
+                      disabled={!onSelectProject}
                       onClick={() => onSelectProject?.(project.path)}
                     >
-                      <span className="xn-start-page__recent-title">{startPageProjectName(project)}</span>
-                      <span className="xn-start-page__recent-meta">
-                        <span className="xn-start-page__project-path">{abbreviatedWorkspacePath(project.path)}</span>
+                      <Folder size={17} aria-hidden="true" />
+                      <span className="xn-workbench-start__recent-copy">
+                        <span className="xn-workbench-start__recent-title">{startPageProjectName(project)}</span>
+                        <span className="xn-workbench-start__recent-meta">
+                          <span className="xn-workbench-start__project-path">{abbreviatedWorkspacePath(project.path)}</span>
+                        </span>
                       </span>
+                      <ArrowUpRight size={13} aria-hidden="true" />
                     </button>
                   </li>
                 ))}
@@ -175,9 +188,9 @@ export function XuenessStartPage({
             </section>
           )}
           {hasRecentSessions && (
-            <section className="xn-start-page__recent" aria-labelledby="xn-start-page-recent-title" data-testid="xn-start-page-recent">
+            <section className="xn-workbench-start__recent" aria-labelledby="xn-start-page-recent-title" data-testid="xn-start-page-recent">
               <h2 id="xn-start-page-recent-title">{tr("最近会话")}</h2>
-              <ul className="xn-start-page__recent-list">
+              <ul className="xn-workbench-start__recent-list">
                 {recent.map((session) => {
                   const label = session.title || session.task || tr("未命名任务");
                   const updatedAt = formatPaletteUpdatedAt(session.updatedAt, locale);
@@ -185,16 +198,20 @@ export function XuenessStartPage({
                     <li key={session.id}>
                       <button
                         type="button"
-                        className="xn-start-page__recent-item"
+                        className="xn-workbench-start__recent-item"
                         data-testid={`start-recent-${session.id}`}
                         title={label}
                         onClick={() => onSelectSession(session.id)}
                       >
-                        <span className="xn-start-page__recent-title">{label}</span>
-                        <span className="xn-start-page__recent-meta">
-                          <span>{commandPaletteStatusLabel(session.status)}</span>
-                          {updatedAt && <time dateTime={session.updatedAt}>{updatedAt}</time>}
+                        <MessageSquare size={16} aria-hidden="true" />
+                        <span className="xn-workbench-start__recent-copy">
+                          <span className="xn-workbench-start__recent-title">{label}</span>
+                          <span className="xn-workbench-start__recent-meta">
+                            <span>{commandPaletteStatusLabel(session.status)}</span>
+                            {updatedAt && <time dateTime={session.updatedAt}>{updatedAt}</time>}
+                          </span>
                         </span>
+                        <ArrowUpRight size={13} aria-hidden="true" />
                       </button>
                     </li>
                   );

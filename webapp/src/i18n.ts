@@ -4,6 +4,16 @@ const listeners = new Set<() => void>();
 let locale: Locale = 'zh';
 try { if (typeof localStorage !== 'undefined' && localStorage.getItem('xueness.language') === 'en') locale = 'en'; } catch { /* Private browsing. */ }
 export const messages: Record<string, string> = {
+  "会话标签页": "Conversation tabs",
+  "关闭标签页：{0}": "Close tab: {0}",
+  "工作台工具": "Workbench tools",
+  "选择一个会话以查看工作区工具。": "Select a conversation to view workspace tools.",
+  "在这个工作区，开始下一件事。": "Start your next task in this workspace.",
+  "工作台面板": "Workbench panels",
+  "调整面板宽度": "Resize panel width",
+  "调整终端高度": "Resize terminal height",
+  "拖动调整面板大小，双击恢复默认": "Drag to resize the panel. Double-click to reset.",
+
   "请恢复已保留的子任务 {0}，沿用它的历史与只读权限，继续处理并收集结果。": "Resume retained subtask {0} with its existing history and read-only permissions, continue the work and collect its result.",
   "上一个匹配项": "Previous match",
   "下一个匹配项": "Next match",

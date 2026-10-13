@@ -316,6 +316,16 @@
       "id": "sessions.read_state",
       "name": "会话运行状态内省工具（read_state）",
       "nameEn": "Session run-state introspection tool (read_state)"
+    },
+    {
+      "id": "sessions.workbench_tabs",
+      "name": "工作台会话标签",
+      "nameEn": "Workbench conversation tabs"
+    },
+    {
+      "id": "sessions.workbench_docks",
+      "name": "工作台工具停靠",
+      "nameEn": "Workbench tool docks"
     }
   ],
   "frontendModules": [
@@ -382,6 +392,9 @@
     "plugins/sessions/ConversationFind.tsx",
     "plugins/sessions/ConversationSelectionActions.tsx",
     "plugins/sessions/ConversationSharing.tsx",
-    "plugins/sessions/runtimeConversationProjection.ts"
+    "plugins/sessions/runtimeConversationProjection.ts",
+    "plugins/sessions/WorkbenchFrame.tsx",
+    "plugins/sessions/WorkbenchTabs.tsx",
+    "plugins/sessions/WorkbenchDock.tsx"
   ]
 }

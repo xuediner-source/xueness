@@ -12,11 +12,9 @@ import { isImeComposingEvent, resolveHostPlatform } from './xuenessShortcutDispl
  * handler, and a failed call renders the server's error instead of silently
  * doing nothing.
  *
- * Information architecture mirrors the inherited ZCode shell: a dark sidebar
- * (new-task / search actions, task list, footer) plus a chat-first main area —
- * a centered hero composer when no task is selected, the conversation when one
- * is. Secondary views (files/diff/directory/providers/usage/memory/settings)
- * hang off the conversation header switcher and the sidebar footer, not tabs.
+ * The sessions plugin owns project navigation, conversation tabs and dock layout.
+ * Tool panels reuse their owning plugins beside the active conversation; settings
+ * and management pages retain full-page routes.
  */
 import React, { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import "./styles/batch10.css";
@@ -108,13 +106,13 @@ import { DeliveryUnconfirmedError } from './plugins/sessions/submissionTransport
 import { guideCurrentTurn, reserveQueuedMessageNow, withdrawGuidance } from './plugins/sessions/steeringApi';
 import { PendingGuidancePanel, type InputDelivery } from './plugins/sessions/CurrentTurnInput';
 import { composerDraftContent, hasComposerDraftContent, notifyComposerDrafts } from './plugins/sessions/composerRecovery';
-import { Approvals, Composer, WorkbenchHeader, heroGreeting, persistDraft, type ComposerDraftState } from "./plugins/sessions/XuenessWorkbenchView";
+import { Approvals, Composer, WorkbenchHeader, persistDraft, type ComposerDraftState } from "./plugins/sessions/XuenessWorkbenchView";
 import { XuenessStartPage, type StartPageAction } from "./plugins/sessions/XuenessStartPage";
 import { XuenessCloneDialog } from "./plugins/git/XuenessCloneDialog";
 import { loadWorkspaceCatalog, type RecentWorkspaceDirectory } from "./xuenessWorkspaces";
 import { XuenessUsageQuickCard } from "./plugins/usage/XuenessUsageQuickCard";
 import { IconBack, IconGear, IconNewTask, IconSearch, IconWorkflow, IconModel, IconXuenessMark } from "./ui/icons";
-import { CalendarClock, Archive, ArrowDownWideNarrow, ChevronsDownUp, Folder, FolderOpen, Hash, MessageCirclePlus, UserRound, CircleHelp, ChevronDown, Blocks, GitBranch, Bot, Server, House, MessagesSquare, Library, Brain, Monitor, SquarePen, PanelRight, Share2 } from "lucide-react";
+import { CalendarClock, Archive, ArrowDownWideNarrow, ChevronsDownUp, Folder, FolderOpen, Hash, MessageCirclePlus, UserRound, CircleHelp, ChevronDown, Blocks, GitBranch, Bot, Server, House, MessagesSquare, Library, Brain, Monitor, SquarePen, PanelRight, Share2, Files, FileDiff } from "lucide-react";
 import { Select } from "./ui/Select";
 import { RegionBoundary } from "./ui/primitives";
 import { XuenessWorkspaceSettings } from "./plugins/settings/XuenessWorkspaceSettings";
@@ -132,6 +130,9 @@ import { SHORTCUT_COMMANDS, resolveShortcutBinding, matchesShortcut, hasGlobalSh
 import { Shell, SidebarActions, type SidebarAction } from "./XuenessShell";
 import { ClaudexSidebarHeader, ClaudexSidebarRail } from "./plugins/sessions/ClaudexSidebar";
 import { SidebarResizeHandle, useSessionSidebarWidth } from './plugins/sessions/SidebarResizeHandle';
+import { WorkbenchFrame, useWorkbenchLayout, isWorkbenchDockPanel, WORKBENCH_DOCK_PANELS } from './plugins/sessions/WorkbenchFrame';
+import { WorkbenchTabs, useWorkbenchTabs } from './plugins/sessions/WorkbenchTabs';
+import { WorkbenchDock } from './plugins/sessions/WorkbenchDock';
 import { SessionContextPane } from './plugins/sessions/SessionContextPane';
 import { TaskTodos } from "./plugins/sessions/XuenessTimeline";
 import { ZCodeConversation } from "./plugins/sessions/ZCodeConversation";
@@ -160,7 +161,7 @@ import { CapabilitiesPanel, type CapabilitySectionProps } from "./XuenessCapabil
 import { XuenessCapabilityDialog } from "./XuenessCapabilityDialog";
 import { shouldDismissModalOnEscape, useModalFocusScope } from "./plugins/shared";
 import { applyDocumentTheme, applyDocumentColorPalette, normalizeColorPalette } from "./plugins/settings/themeBoot";
-import { FeatureUnavailable, PluginHomeEntry, XuenessPluginManager, XuenessPluginSettingsPanel } from "./XuenessPluginManager";
+import { FeatureUnavailable, XuenessPluginManager, XuenessPluginSettingsPanel } from "./XuenessPluginManager";
 import {
   CAPABILITY_PLUGIN_BY_KIND,
   PLUGIN_PANEL_LABELS,
@@ -484,7 +485,7 @@ export function XuenessWorkbenchContainer() {
   const queueContinuingSessionsRef = useRef(new Set<string>());
   const [queueCancelling, setQueueCancelling] = useState<{ sessionId: string; queueId: string } | null>(null);
   const [queueError, setQueueError] = useState<{ sessionId: string; message: string } | null>(null);
-  const [panel, setPanel] = useState<Panel>("chat");
+  const { panel, setPanel, showConversation, terminalOpen, setTerminalOpen } = useWorkbenchLayout<Panel>("chat");
   const history = useRef<{ panel: Panel; activeId: string | null }[]>([{ panel: "chat", activeId: null }]);
   const historyCursor = useRef(0);
   const historyTarget = useRef<string | null>(null);
@@ -743,9 +744,9 @@ export function XuenessWorkbenchContainer() {
       });
     }
     setRunError("");
-    setPanel("chat");
+    showConversation();
     setActiveId(id);
-  }, []);
+  }, [showConversation]);
 
   const selectTraySession = useCallback((id: string) => {
     if (id === activeId) setPanel('chat');
@@ -1139,7 +1140,7 @@ export function XuenessWorkbenchContainer() {
     setRunError("");
     setActiveId(null);
     setSession(null);
-    setDraftRoot(undefined);
+    setDraftRoot(session?.root ?? draftRoot ?? composerCatalog.root ?? undefined);
     setIsolatedWorkspace(false);
     composerRequests.cancel();
     setComposerRefreshTick(tick => tick + 1);
@@ -1151,7 +1152,7 @@ export function XuenessWorkbenchContainer() {
     setDataErrors(previous => ({ ...previous, active: "" }));
     setPanel("chat");
     setHeroFocusTick((tick) => tick + 1);
-  }, [settingsValues.browserControlEnabled, isPluginEffective, updateChoices, composerRequests]);
+  }, [settingsValues.browserControlEnabled, isPluginEffective, updateChoices, composerRequests, session?.root, draftRoot, composerCatalog.root]);
 
   useEffect(() => {
     if (!commandPaletteEnabled) return;
@@ -2167,7 +2168,7 @@ export function XuenessWorkbenchContainer() {
   </>;
   // 起始页右侧「最近项目」来自 settings 已登记的工作区（带 lastUsed）。插件未生效
   // 或起始页不可见时既不请求也不保留数据，禁用后不会再发起轮询。
-  const startPageVisible = panel === "chat" && !lightweightLayout && !activeId && !session;
+  const startPageVisible = (panel === "chat" || isWorkbenchDockPanel(panel)) && !lightweightLayout && !activeId && !session;
   const refreshRecentProjects = useCallback(async () => {
     if (!pluginEffectiveRef.current("settings") || !pluginEffectiveRef.current("sessions")) {
       setRecentProjects(null);
@@ -2620,6 +2621,9 @@ export function XuenessWorkbenchContainer() {
     });
   }, [sessions, stoppingSessions, runRequestSessions, activeId, session?.id, session?.status, session?.streaming?.status]);
 
+  const workbenchTabs = useWorkbenchTabs({ enabled: isPluginEffective('sessions'), loaded: !dataErrors.list && pluginCatalogReady,
+    sessions: liveSessions, activeId, onSelect: selectSession, onNew: startNewTask });
+
   const displayTimelineRows = useMemo(() => usesRuntimeProjection ? rows : withAssistantStream(rows, session?.streaming), [rows, session?.streaming, usesRuntimeProjection]);
   // 上下文压缩边界：由 sessions 插件从合并后的行与 compactions 记录推导；
   // 行集合随轮询、更早分页与推送快照更新时自动重算。
@@ -2660,6 +2664,19 @@ export function XuenessWorkbenchContainer() {
     { id: 'plugins', icon: <Blocks size={16} />, label: tr('插件管理'), onClick: () => setPanel('plugins') },
   ];
 
+  const dockPanel = isWorkbenchDockPanel(panel) && canShowPanel(panel) ? panel : null;
+  const contextPane = isPluginEffective('sessions') && session && contextSidepaneOpen && !dockPanel ? (
+    <SessionContextPane key={session.id} session={session} rows={displayTimelineRows}
+            filesEnabled={isPluginEffective('files')} onOpenFile={path => { void handleSelectFile(path); setPanel('files'); }}
+            onBrowseFiles={isPluginEffective('files') ? () => setPanel('files') : undefined} onClose={() => setContextSidepaneOpen(false)}
+            subagents={isPluginEffective('subagents') && !lightweightLayout ? <Suspense fallback={null}><SubagentSidePane
+              sessionId={session.id} mode="summary" activeRuntimeProfile={activeRuntimeProfile} subagentsEnabled={isPluginEffective('subagents')}
+              onOpenTasks={() => setPanel('subagents')} /></Suspense> : undefined} />
+  ) : null;
+  const dockTabs = WORKBENCH_DOCK_PANELS.filter(id => canShowPanel(id) && (!lightweightLayout || id !== 'subagents'))
+    .map(id => ({ id, label: PANEL_LABELS()[id], content: activeId
+      ? <RegionBoundary resetKey={`${id}:${activeId}`}><Suspense fallback={<p role="status">{tr("正在加载…")}</p>}>{secondaryPanels[id]}</Suspense></RegionBoundary> : <p className="xn-workbench__empty">{tr('选择一个会话以查看工作区工具。')}</p> }));
+
   return (
     <CodeDisplayProvider settings={settingsValues.codePreviewSettings} dark={String(settingsValues.theme) === "dark" || (settingsValues.theme === "system" && systemDark)}>
     {isPluginEffective('onboarding') && isPluginEffective('desktop') && <Suspense fallback={null}>
@@ -2691,21 +2708,21 @@ export function XuenessWorkbenchContainer() {
       canGoBack={!busy && historyPosition.cursor > 0}
       canGoForward={!busy && historyPosition.cursor < historyPosition.length - 1}
       onGoBack={() => navigateHistory(-1)} onGoForward={() => navigateHistory(1)}
-      sidebarRail={claudexAppearance && panel !== 'settings' ? <ClaudexSidebarRail
+      sidebarRail={panel !== 'settings' ? <ClaudexSidebarRail
         actions={railActions}
         secondaryActions={railSecondaryActions} moreActions={railMoreActions}
         activeId={panel === 'chat' && !activeId ? 'home' : panel}
         platform={resolveHostPlatform()} /> : undefined}
-      sidebarHeader={claudexAppearance && panel !== "settings" ? <ClaudexSidebarHeader
+      sidebarHeader={panel !== "settings" ? <ClaudexSidebarHeader
         search={sidebarActions.find(action => action.id === 'search')} platform={resolveHostPlatform()}
         menuActions={sidebarMenuActions} activity={liveSessions.filter(item => ['running','stopping','awaiting_user','needs_review','failed','provider_error'].includes(item.status)).slice(0,12)} onSelectSession={selectSession} /> : undefined}
       sidebar={panel === "settings" ? null : (
         <>
           <SidebarActions
-            actions={claudexAppearance ? sidebarActions.filter(action => action.id === 'new-task') : sidebarActions}
+            actions={sidebarActions.filter(action => action.id === 'new-task')}
           />
           {isPluginEffective("sessions") && <>
-          <XuenessTaskList sessions={liveSessions} activeId={activeId} busy={busy} compact={claudexAppearance}
+          <XuenessTaskList sessions={liveSessions} activeId={activeId} busy={busy} compact={true}
             projectRoots={composerCatalog.roots.filter(root => root.path !== composerCatalog.isolatedRoot)}
             onAddProject={isPluginEffective("files") && isPluginEffective("settings") ? trigger => {
               if (busy) return;
@@ -2713,6 +2730,8 @@ export function XuenessWorkbenchContainer() {
               setWorkspacePickerMode("project");
               setWorkspacePicking(true);
             } : undefined}
+            currentRoot={session?.root ?? draftRoot ?? composerCatalog.root}
+            onSelectProject={root => chooseWorkspace(root)}
             onStartProject={root => { chooseWorkspace(root, false, true); }}
             preferences={settingsValues.sidebarPreferences as SidebarPreferences | undefined}
             onPreferences={value => { void handleUpdateSetting("sidebarPreferences", value); }}
@@ -2763,7 +2782,7 @@ export function XuenessWorkbenchContainer() {
       )}
 
       <RegionBoundary resetKey={`${panel}:${activeId ?? "hero"}`} onReload={() => window.location.reload()} onRecover={() => setPanel("plugins")}><Suspense fallback={<p role="status" className="xn-view-loading">{tr("正在加载界面…")}</p>}>
-      {panel === "settings" ? secondaryPanels.settings : panel !== "chat" ? (
+      {panel === "settings" ? secondaryPanels.settings : panel !== "chat" && !isWorkbenchDockPanel(panel) ? (
         <div className="xn-secondary-view">
           <div className="xn-secondary-view__bar">
             <button type="button" className="xn-secondary-view__back" onClick={() => setPanel("chat")}>
@@ -2777,7 +2796,23 @@ export function XuenessWorkbenchContainer() {
               : <FeatureUnavailable feature={PANEL_LABELS()[panel]} onManage={() => setPanel("plugins")} />}
           </div>
         </div>
-      ) : !isPluginEffective("sessions") ? (
+      ) : <WorkbenchFrame
+        workspace={session?.root ?? draftRoot ?? composerCatalog.root ?? ''}
+        tabs={isPluginEffective('sessions') ? <WorkbenchTabs {...workbenchTabs} panelId="xn-workbench-conversation" /> : null}
+        tools={[
+          ...(isPluginEffective('files') ? [{ id: 'files', label: tr('文件'), icon: <Files size={16} />, active: panel === 'files', onClick: () => setPanel(panel === 'files' ? 'chat' : 'files') },
+            { id: 'changes', label: tr('改动'), icon: <FileDiff size={16} />, active: panel === 'changes', onClick: () => setPanel(panel === 'changes' ? 'chat' : 'changes') }] : []),
+          ...(isPluginEffective('git') ? [{ id: 'git', label: tr('Git'), icon: <GitBranch size={16} />, active: panel === 'git', onClick: () => setPanel(panel === 'git' ? 'chat' : 'git') }] : []),
+        ]}
+        menu={<details className="xn-workbench-menu"><summary aria-label={tr('工作台')}><CircleHelp size={16} /></summary><div>{viewSwitcher}</div></details>}
+        terminalOpen={terminalOpen && isPluginEffective('terminal')}
+        onToggleTerminal={isPluginEffective('terminal') ? () => setTerminalOpen(value => !value) : undefined}
+        onToggleContext={session && isPluginEffective('sessions') ? () => { setPanel('chat'); setContextSidepaneOpen(value => !value); } : undefined}
+        contextOpen={Boolean(contextPane)}
+        dock={dockPanel ? <WorkbenchDock placement="right" tabs={dockTabs} activeId={dockPanel} onSelect={id => setPanel(id as Panel)} onClose={() => setPanel('chat')} />
+          : contextPane ? <WorkbenchDock placement="right" tabs={[{id: 'context', label: tr('会话信息'), content: contextPane}]} activeId="context" onSelect={() => {}} onClose={() => setContextSidepaneOpen(false)} /> : null}
+        terminal={terminalOpen && isPluginEffective('terminal') ? <WorkbenchDock placement="bottom" tabs={[{id: 'terminal', label: tr('终端'), content: secondaryPanels.terminal}]} activeId="terminal" onSelect={() => {}} onClose={() => setTerminalOpen(false)} /> : null}
+      >{!isPluginEffective("sessions") ? (
         <FeatureUnavailable feature={tr("会话")} onManage={() => setPanel("plugins")} />
       ) : activeId && session?.id !== activeId ? (
         <div role="status" className="xn-hero"><p>{tr("正在加载任务…")}</p></div>
@@ -2787,9 +2822,9 @@ export function XuenessWorkbenchContainer() {
             <WorkbenchHeader
               session={session}
               actions={<>
-                {!lightweightLayout && <>{viewSwitcher}<button type="button" className="xn-conv-header__action xn-conv-header__fork" aria-label={tr("分叉会话")} title={tr("分叉会话")} disabled={busy || session.status === "running" || session.streaming?.status === "streaming"} onClick={() => beginFork()}><GitBranch size={14} aria-hidden="true" /><span>{tr("分叉会话")}</span></button></>}
+                {!lightweightLayout && <><button type="button" className="xn-conv-header__action xn-conv-header__fork" aria-label={tr("分叉会话")} title={tr("分叉会话")} disabled={busy || session.status === "running" || session.streaming?.status === "streaming"} onClick={() => beginFork()}><GitBranch size={14} aria-hidden="true" /><span>{tr("分叉会话")}</span></button></>}
                 <button type="button" className="xn-conv-header__action" aria-label={tr("会话信息")} title={tr("会话信息")}
-                  aria-pressed={contextSidepaneOpen} onClick={() => { setContextSidepaneOpen(value => !value); }}><PanelRight size={16} aria-hidden="true" /></button>
+                  aria-pressed={Boolean(contextPane)} onClick={() => { setPanel("chat"); setContextSidepaneOpen(value => !value); }}><PanelRight size={16} aria-hidden="true" /></button>
               </>}
             pinned={session.pinned === true}
             onTogglePin={() => activeId && void togglePin(activeId, session.pinned !== true)}
@@ -2812,8 +2847,7 @@ export function XuenessWorkbenchContainer() {
           {isPluginEffective('model_monitor') && <Suspense fallback={null}><ModelMonitorHome key={session.id} sessionId={session.id}
             providerId={choices.provider_id} requestedModel={choices.model ?? selectedComposerModel?.model} providerName={selectedComposerModel?.supplierName ?? selectedComposerModel?.name}
             running={activeSessionRunning} onOpenHistory={() => setPanel('model-monitor')} /></Suspense>}
-          {!isPluginEffective('model_monitor') && <PluginHomeEntry plugin={pluginCatalog.find(plugin => plugin.id === 'model_monitor')}
-            onManage={() => setPanel(pluginCatalog.find(plugin => plugin.id === 'model_monitor')?.installed === false && isPluginEffective('extensions') ? 'marketplace' : 'plugins')} />}
+
           {goalEditorOpen && activeId && session?.id === activeId && isPluginEffective('planning') &&
             <GoalEditorDialog key={`goal-editor:${activeId}`} sessionId={activeId} goal={session.goal}
               onClose={() => setGoalEditorOpen(false)} onSaved={() => void loadActive(activeId)} />}
@@ -2930,30 +2964,22 @@ export function XuenessWorkbenchContainer() {
               stopping={stoppingSessions.has(session.id)} interrupted={session.streaming?.status === "interrupted"}
               queueCount={(session.queued_messages ?? []).length} />}
           </div>
-          {contextSidepaneOpen && <SessionContextPane key={session.id} session={session} rows={displayTimelineRows}
-            filesEnabled={isPluginEffective('files')} onOpenFile={path => { void handleSelectFile(path); setPanel('files'); }}
-            onBrowseFiles={isPluginEffective('files') ? () => setPanel('files') : undefined} onClose={() => setContextSidepaneOpen(false)}
-            subagents={isPluginEffective('subagents') && !lightweightLayout ? <Suspense fallback={null}><SubagentSidePane
-              sessionId={session.id} mode="summary" activeRuntimeProfile={activeRuntimeProfile} subagentsEnabled={isPluginEffective('subagents')}
-              onOpenTasks={() => setPanel('subagents')} /></Suspense> : undefined} />}
         </div>
       ) : (
         <div className="xn-hero" data-testid="xn-hero">
-          {!lightweightLayout && <div className="xn-hero__bar"><details className="xn-workbench-menu"><summary aria-label={tr("工作台")}><CircleHelp size={16} /></summary><div>{viewSwitcher}</div></details></div>}
           <div className="xn-hero__intro">
             <div className="xn-hero__brand" aria-hidden="true">
               <IconXuenessMark size={34} className="xn-hero__brand-mark" />
             </div>
-            <h1 className="xn-hero__greeting">{claudexAppearance ? tf("我们应该在 {0} 中做些什么？", [composerCatalog.roots.find(item => item.path === (draftRoot ?? composerCatalog.root))?.name ?? (draftRoot ?? composerCatalog.root)?.split(/[/\\]/u).filter(Boolean).pop() ?? "Xueness"]) : heroGreeting(new Date())}</h1>
+            <h1 className="xn-hero__greeting">{tr('在这个工作区，开始下一件事。')}</h1>
             <p className="xn-hero__hint">{tr("描述你想完成的事，Xueness 会在你的工作区里执行。")}</p>
           </div>
 
           <div className="xn-hero__composer">
             {isPluginEffective('model_monitor') ? <Suspense fallback={null}><ModelMonitorHome key="new-chat"
               providerId={choices.provider_id} requestedModel={choices.model ?? selectedComposerModel?.model} providerName={selectedComposerModel?.supplierName ?? selectedComposerModel?.name}
-              onOpenHistory={() => setPanel('model-monitor')} /></Suspense> : <PluginHomeEntry plugin={pluginCatalog.find(plugin => plugin.id === 'model_monitor')}
-              onManage={() => setPanel(pluginCatalog.find(plugin => plugin.id === 'model_monitor')?.installed === false && isPluginEffective('extensions') ? 'marketplace' : 'plugins')} />}
-            {claudexAppearance && <div className="xn-hero__workspace">{workspaceContext}<span className="xn-composer-workspace__host"><Monitor size={15} aria-hidden="true" />{choices.remote ? tr("SSH 工作区") : tr("此计算机")}</span></div>}
+              onOpenHistory={() => setPanel('model-monitor')} /></Suspense> : null}
+            {<div className="xn-hero__workspace">{workspaceContext}<span className="xn-composer-workspace__host"><Monitor size={15} aria-hidden="true" />{choices.remote ? tr("SSH 工作区") : tr("此计算机")}</span></div>}
             {runError && (
               <p role="alert" className="xn-run-error">{runError}</p>
             )}
@@ -2964,7 +2990,6 @@ export function XuenessWorkbenchContainer() {
                 platform={resolveHostPlatform()}
                 sendShortcut={settingsValues.sendShortcut === "mod-enter" ? "mod-enter" : "enter"}
                 variant="hero"
-                topContent={claudexAppearance ? undefined : workspaceContext}
                 inputRef={heroInputRef}
                 onSend={handleCreate}
                 disabled={busy || !commandRoot || !isPluginEffective("sessions")}
@@ -2989,13 +3014,14 @@ export function XuenessWorkbenchContainer() {
           {!lightweightLayout && <XuenessStartPage
             actions={startPageActions}
             projects={recentProjects}
+            currentRoot={draftRoot ?? composerCatalog.root}
             sessions={liveSessions}
             locale={locale}
             onSelectSession={selectSession}
             onSelectProject={root => chooseWorkspace(root)}
           />}
         </div>
-      )}
+      )}</WorkbenchFrame>}
 
       </Suspense></RegionBoundary>
 

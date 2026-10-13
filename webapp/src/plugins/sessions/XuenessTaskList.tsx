@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Archive, ArrowDownWideNarrow, Check, ChevronsDownUp, ChevronDown, Folder, Hash, MoreHorizontal, Plus, Pencil, Pin, Trash2 } from 'lucide-react';
+import { Archive, ArrowDownWideNarrow, Check, ChevronsDownUp, ChevronDown, Folder, FolderOpen, Hash, MoreHorizontal, Plus, Pencil, Pin, Trash2 } from 'lucide-react';
 import { SidebarNav } from './SidebarNav';
 import { Select } from '../../ui/Select';
 import { isImeComposingEvent } from '../../xuenessShortcutDisplay';
@@ -52,7 +52,9 @@ export interface XuenessTaskListProps {
   onPin: (id: string, pinned: boolean) => void;
   onOpenArchived: () => void;
   projectRoots?: SidebarProjectRoot[];
+  currentRoot?: string | null;
   onAddProject?: (trigger: HTMLElement) => void;
+  onSelectProject?: (root: string) => void;
   onStartProject?: (root: string) => void;
 }
 
@@ -143,7 +145,9 @@ export function XuenessTaskList({
   onPin,
   onOpenArchived,
   projectRoots = [],
+  currentRoot,
   onAddProject,
+  onSelectProject,
   onStartProject,
 }: XuenessTaskListProps) {
   const [menu,setMenu]=useState<{id:string;x:number;y:number}|null>(null);
@@ -159,6 +163,7 @@ export function XuenessTaskList({
   const groups = Array.isArray(preferences.groups) ? preferences.groups.filter(g=>g&&typeof g.id==='string'&&typeof g.label==='string'&&Array.isArray(g.taskIds)) : [];
   const collapsed = Array.isArray(preferences.collapsed) ? preferences.collapsed : [];
   const view=preferences.view??'projects';
+  const selectedRoot=currentRoot??sessions.find(session=>session.id===activeId)?.root;
   const sorted=[...sessions].sort((a,b)=> preferences.sort==='name' ? (a.title||a.task).localeCompare(b.title||b.task) : ((Date.parse(b.updatedAt??'')||0)-(Date.parse(a.updatedAt??'')||0))*(preferences.sort==='oldest'?-1:1));
   const save=(patch:Partial<SidebarPreferences>)=>onPreferences({...preferences,...patch});
   const rowItems=(items:SessionSummary[])=>items.map(s=>({id:s.id,label:s.title||s.task||tr('未命名任务'),active:s.id===activeId,status:s.status,pinned:s.pinned,timeLabel:compact ? undefined : taskRelativeTime(s.updatedAt)}));
@@ -364,16 +369,30 @@ export function XuenessTaskList({
     {buckets.map(group=>{
       const isCollapsed=collapsed.includes(group.id);
       const canStartProject=group.project&&group.id!==''&&onStartProject!==undefined;
+      const selectedProject=group.project&&group.id!==''&&group.id===selectedRoot;
       return <section key={group.id} className="xn-task-list__group" data-project-root={group.project?group.id:undefined} onDragOver={e=>{if(!group.project)e.preventDefault();}} onDrop={e=>{persistTaskGroupDrop({event:e,targetGroupId:group.id,targetIsProject:group.project,taskIds:sessions.map(s=>s.id),groups,onPersist:nextGroups=>save({groups:nextGroups})});}}>
-        <header>
-          <button className="xn-task-list__group-name" aria-expanded={!isCollapsed} title={group.id} onClick={()=>toggle(group.id)}>{group.project?<Folder size={14}/>:<ChevronDown size={14} className={isCollapsed?'is-collapsed':''}/>}<span>{group.label}</span></button>
-          {canStartProject&&<button type="button" className="xn-task-list__project-new-task" data-testid="xn-task-project-new-task" title={tr('新建任务')} aria-label={`${tr('新建任务')}: ${group.label}`} disabled={busy} onClick={()=>onStartProject(group.id)}><Plus size={14}/></button>}
-          {!group.project&&group.id!=='__ungrouped__'&&<button title={tr('重命名')} aria-label={tr('重命名')} onClick={e=>beginGroupEditor({id:group.id,label:group.label},e.currentTarget)}><Pencil size={12}/></button>}
-        </header>
+        {group.project ? <div className="xn-workspace-row" data-selected={selectedProject || undefined}>
+          <button type="button" className="xn-workspace-row__expand" data-testid="xn-task-project-expand"
+            aria-expanded={!isCollapsed} aria-label={`${tr(isCollapsed?'展开':'折叠')}: ${group.label}`}
+            onClick={()=>toggle(group.id)}><ChevronDown size={13} className={isCollapsed?'is-collapsed':''}/></button>
+          <button type="button" className="xn-workspace-row__select" data-testid="xn-task-project-select"
+            aria-current={selectedProject?'location':undefined} title={group.id || group.label}
+            aria-expanded={onSelectProject&&group.id?undefined:!isCollapsed}
+            disabled={busy && Boolean(onSelectProject && group.id)}
+            onClick={()=>onSelectProject&&group.id?onSelectProject(group.id):toggle(group.id)}>
+            {selectedProject?<FolderOpen size={17}/>:<Folder size={17}/>}
+            <span className="xn-workspace-row__copy"><strong>{group.label}</strong>{group.id&&<small>{group.id}</small>}</span>
+          </button>
+          {canStartProject&&<button type="button" className="xn-workspace-row__new-task" data-testid="xn-task-project-new-task" title={tr('新建任务')} aria-label={`${tr('新建任务')}: ${group.label}`} disabled={busy} onClick={()=>onStartProject(group.id)}><Plus size={15}/></button>}
+        </div> : <header>
+          <button className="xn-task-list__group-name" aria-expanded={!isCollapsed} title={group.id} onClick={()=>toggle(group.id)}><ChevronDown size={14} className={isCollapsed?'is-collapsed':''}/><span>{group.label}</span></button>
+          {group.id!=='__ungrouped__'&&<button title={tr('重命名')} aria-label={tr('重命名')} onClick={e=>beginGroupEditor({id:group.id,label:group.label},e.currentTarget)}><Pencil size={12}/></button>}
+        </header>}
         {!isCollapsed&&group.project&&group.items.length===0&&canStartProject&&<button type="button" className="xn-task-list__empty-project-new-task" data-testid="xn-task-empty-project-new-task" disabled={busy} onClick={()=>onStartProject(group.id)}><Plus size={14}/>{tr('新建任务')}</button>}
         {!isCollapsed&&group.items.length>0&&renderRows(group.items)}
       </section>;
     })}
+    {view==='projects'&&buckets.length===0&&onAddProject&&<button type="button" className="xn-workspace-empty" disabled={busy} onClick={event=>onAddProject(event.currentTarget)}><Folder size={22}/><span>{tr('添加项目')}</span><small>{tr('选择项目目录后显示在这里')}</small></button>}
     {compact && unpinned.length > 0 && <section className="xn-task-list__recent" aria-label={tr('最近会话')}>
       <h2 className="xn-task-list__section-label">{tr('最近')}</h2>
       {renderRows([...unpinned].sort((a,b)=>(Date.parse(b.updatedAt??'')||0)-(Date.parse(a.updatedAt??'')||0)).slice(0,8),true)}

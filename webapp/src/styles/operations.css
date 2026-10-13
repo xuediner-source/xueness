@@ -170,6 +170,23 @@
 .xn-terminal-host { padding:0; overflow:hidden; }
 .xn-terminal-host > .xterm { padding:16px; }
 
+/* Terminal keeps its permission explanation and controls in the workbench dock. */
+.xn-workbench-dock--bottom .xn-terminal-page { display:flex; flex-direction:column; height:100%; box-sizing:border-box; gap:6px; }
+.xn-workbench-dock--bottom .xn-operation-heading { flex:none; margin:0; }
+.xn-workbench-dock--bottom .xn-operation-heading__icon,
+.xn-workbench-dock--bottom .xn-operation-heading h2 { display:none; }
+.xn-workbench-dock--bottom .xn-operation-heading p { margin:0; font-size:11px; }
+.xn-workbench-dock--bottom .xn-terminal-frame { display:flex; flex-direction:column; flex:1; min-height:0; border-radius:6px; }
+.xn-workbench-dock--bottom .xn-terminal-toolbar { padding:5px 8px; gap:6px; flex:none; }
+.xn-workbench-dock--bottom .xn-terminal-canvas { flex:1; min-height:60px; }
+.xn-workbench-dock--bottom .xn-terminal-host { position:absolute; inset:0; height:100%; }
+.xn-workbench-dock--bottom .xn-terminal-host > .xterm { height:100%; box-sizing:border-box; padding:4px 8px; }
+.xn-workbench-dock--bottom .xn-terminal-empty { padding:6px; gap:4px; }
+.xn-workbench-dock--bottom .xn-terminal-empty > svg { display:none; }
+.xn-workbench-dock--bottom .xn-terminal-empty h3 { font-size:12px; margin:0; }
+.xn-workbench-dock--bottom .xn-terminal-empty p { font-size:11px; margin:0; }
+.xn-workbench-dock--bottom .xn-terminal-footer { padding:3px 8px; flex:none; }
+
 @media (max-width:900px) {
   /* Keep the close control outside the drawer, above its stacking layer. */
   .xn-shell-layout--sidebar-open .xn-shell-sidebar-toggle { left:calc(min(300px,84vw) + 10px); z-index:45; }
