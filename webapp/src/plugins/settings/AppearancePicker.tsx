@@ -1,12 +1,12 @@
 import React from "react";
-import { PanelLeft, Sparkles } from "lucide-react";
+import { PanelLeft, PanelsTopLeft } from "lucide-react";
 import { t as tr } from "../../i18n";
 import { normalizeColorPalette, type ColorPalettePreference } from "./themeBoot";
 import "./appearance.css";
 
 const APPEARANCES = [
-  { id: "xueness", name: "Xueness", description: "中性配色，经典工作台", Icon: PanelLeft },
-  { id: "claudex", name: "柔和工作台", description: "温润纸色，简洁工作台", Icon: Sparkles },
+  { id: "xueness", name: "ZCode 工作台", description: "默认 · 项目侧栏、会话标签与工具停靠", Icon: PanelsTopLeft },
+  { id: "claudex", name: "Codex 工作台", description: "图标导航、紧凑会话列表与居中首页", Icon: PanelLeft },
 ] as const;
 
 export function AppearancePicker({ value, disabled, onChange }: {

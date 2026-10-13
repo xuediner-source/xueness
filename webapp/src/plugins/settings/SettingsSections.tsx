@@ -265,7 +265,7 @@ export function SettingsSections({
         />
         <SettingsRow
           label={tr("外观")}
-          description={tr("选择经典 Xueness 或柔和工作台样式。两种外观共用功能、模型配置和运行设置。")}
+          description={tr("默认使用 ZCode 工作台，也可切换到 Codex 工作台。布局不同，会话、模型配置和运行设置共用。")}
           control={<AppearancePicker value={values.colorPalette} disabled={!onUpdateSetting || saving} onChange={(next) => { void update("colorPalette", next); }} />}
         />
         <SettingsRow

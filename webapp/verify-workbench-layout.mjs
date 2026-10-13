@@ -8,7 +8,7 @@ import {chromium} from 'playwright';
 
 const root=resolve(import.meta.dirname,'..');
 const temporary=await mkdtemp(join(tmpdir(),'xueness-workbench-'));
-const output=resolve(process.env.XUENESS_WORKBENCH_OUTPUT || join(root,'artifacts/workbench-preview2'));
+const output=resolve(process.env.XUENESS_WORKBENCH_OUTPUT || join(root,'artifacts/workbench-preview3'));
 await mkdir(output,{recursive:true});
 const source=String.raw`
 import json,sys,threading
@@ -119,7 +119,7 @@ try {
   await page.getByTestId('xn-hero').waitFor();
   assert.equal(await page.locator('.xn-workbench__workspace').getAttribute('title'),ready.roots[1]);
   await page.locator('.xn-composer__input').fill('新任务草稿');
-  await tab(ready.ids[0]).click();await page.getByTestId('workbench-tab-new').click();
+  await pick(ready.ids[1]);await page.getByTestId('workbench-tab-new').click();
   await page.waitForFunction(()=>document.querySelector('.xn-composer__input')?.value==='新任务草稿');
   await page.reload();await tab(ready.ids[0]).waitFor();await tab(ready.ids[1]).waitFor();
   report.checks.push('New task inherits workspace; drafts and open tabs survive navigation/reload');
@@ -132,6 +132,54 @@ try {
   assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1));
   await page.screenshot({path:join(output,'narrow.png')});
   report.checks.push('Narrow view stacks tools beneath chat without horizontal overflow');
+  await dock.getByRole('button',{name:'关闭面板',exact:true}).click();
+  await page.setViewportSize({width:1440,height:960});
+  const appearance=async value=>{
+    await page.getByRole('button',{name:'打开设置',exact:true}).click();
+    await page.getByTestId('xn-settings-nav-appearance').click();
+    await page.locator(`.xn-appearance-choice:has(input[value="${value}"])`).click();
+    await page.waitForFunction(expected=>{
+      const input=document.querySelector(`.xn-appearance-choice input[value="${expected}"]`);
+      return input?.checked && !input.disabled;
+    },value);
+    await page.getByTestId('xn-settings-back').click();
+    await page.locator(`[data-workbench="${value==='claudex'?'codex':'zcode'}"]`).waitFor();
+    await settle();
+  };
+  await appearance('claudex');
+  assert.equal(await page.getByTestId('xn-sidebar-rail').count(),1);
+  assert.equal(await page.locator('.xn-task-list__toolbar--compact').count(),1);
+  assert.equal(await page.getByTestId('xn-workbench-tabs').count(),0);
+  await page.waitForFunction(()=>document.querySelector('.xn-composer__input')?.value==='Alpha 独立草稿');
+  await page.getByTestId('xn-workbench-tool-files').click();
+  await dock.getByText('alpha.txt',{exact:true}).waitFor();
+  await assertVisibleChat();
+  await page.screenshot({path:join(output,'codex-conversation.png')});
+  await dock.getByRole('button',{name:'关闭面板',exact:true}).click();
+  await page.getByRole('button',{name:'新聊天',exact:true}).click();
+  await page.getByTestId('xn-hero').waitFor();
+  assert.equal(await page.locator('.xn-workbench__workspace').getAttribute('title'),ready.roots[0]);
+  await page.locator('.xn-composer__input:not(:disabled)').fill('Codex 首页草稿');
+  assert.equal(await page.locator('.xn-hero__workspace').count(),1);
+  assert.equal(await page.locator('.xn-hero .xn-composer__top-content').count(),0);
+  await page.screenshot({path:join(output,'codex-home.png')});
+  await page.setViewportSize({width:550,height:850});await settle();
+  assert.ok(await page.locator('.xn-composer__input').isVisible());
+  assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1));
+  await page.screenshot({path:join(output,'codex-narrow.png')});
+  await page.setViewportSize({width:1440,height:960});
+  await page.reload();await page.locator('[data-workbench="codex"]').waitFor();
+  await appearance('xueness');
+  assert.equal(await page.getByTestId('xn-sidebar-rail').count(),0);
+  assert.equal(await page.locator('.xn-task-list__segments').count(),1);
+  assert.equal(await page.getByTestId('xn-workbench-tabs').count(),1);
+  assert.equal(await page.locator('.xn-hero__workspace').count(),0);
+  assert.equal(await page.locator('.xn-hero .xn-composer__top-content').count(),1);
+  await page.waitForFunction(()=>document.querySelector('.xn-composer__input')?.value==='Codex 首页草稿');
+  await tab(ready.ids[0]).click();
+  await page.waitForFunction(()=>document.querySelector('.xn-composer__input')?.value==='Alpha 独立草稿');
+  assert.equal(await tab(ready.ids[1]).count(),1);
+  report.checks.push('Appearance settings switch between distinct ZCode and Codex layouts, retain drafts/tabs and survive reload');
   await page.evaluate(async()=>{
     const {csrfToken}=await (await fetch('/api/csrf')).json();
     for(const id of ['files','git','terminal']) {

@@ -2708,21 +2708,21 @@ export function XuenessWorkbenchContainer() {
       canGoBack={!busy && historyPosition.cursor > 0}
       canGoForward={!busy && historyPosition.cursor < historyPosition.length - 1}
       onGoBack={() => navigateHistory(-1)} onGoForward={() => navigateHistory(1)}
-      sidebarRail={panel !== 'settings' ? <ClaudexSidebarRail
+      sidebarRail={claudexAppearance && panel !== 'settings' ? <ClaudexSidebarRail
         actions={railActions}
         secondaryActions={railSecondaryActions} moreActions={railMoreActions}
         activeId={panel === 'chat' && !activeId ? 'home' : panel}
         platform={resolveHostPlatform()} /> : undefined}
-      sidebarHeader={panel !== "settings" ? <ClaudexSidebarHeader
+      sidebarHeader={claudexAppearance && panel !== "settings" ? <ClaudexSidebarHeader
         search={sidebarActions.find(action => action.id === 'search')} platform={resolveHostPlatform()}
         menuActions={sidebarMenuActions} activity={liveSessions.filter(item => ['running','stopping','awaiting_user','needs_review','failed','provider_error'].includes(item.status)).slice(0,12)} onSelectSession={selectSession} /> : undefined}
       sidebar={panel === "settings" ? null : (
         <>
           <SidebarActions
-            actions={sidebarActions.filter(action => action.id === 'new-task')}
+            actions={claudexAppearance ? sidebarActions.filter(action => action.id === 'new-task') : sidebarActions}
           />
           {isPluginEffective("sessions") && <>
-          <XuenessTaskList sessions={liveSessions} activeId={activeId} busy={busy} compact={true}
+          <XuenessTaskList sessions={liveSessions} activeId={activeId} busy={busy} compact={claudexAppearance}
             projectRoots={composerCatalog.roots.filter(root => root.path !== composerCatalog.isolatedRoot)}
             onAddProject={isPluginEffective("files") && isPluginEffective("settings") ? trigger => {
               if (busy) return;
@@ -2797,6 +2797,7 @@ export function XuenessWorkbenchContainer() {
           </div>
         </div>
       ) : <WorkbenchFrame
+        appearance={claudexAppearance ? 'codex' : 'zcode'}
         workspace={session?.root ?? draftRoot ?? composerCatalog.root ?? ''}
         tabs={isPluginEffective('sessions') ? <WorkbenchTabs {...workbenchTabs} panelId="xn-workbench-conversation" /> : null}
         tools={[
@@ -2979,7 +2980,7 @@ export function XuenessWorkbenchContainer() {
             {isPluginEffective('model_monitor') ? <Suspense fallback={null}><ModelMonitorHome key="new-chat"
               providerId={choices.provider_id} requestedModel={choices.model ?? selectedComposerModel?.model} providerName={selectedComposerModel?.supplierName ?? selectedComposerModel?.name}
               onOpenHistory={() => setPanel('model-monitor')} /></Suspense> : null}
-            {<div className="xn-hero__workspace">{workspaceContext}<span className="xn-composer-workspace__host"><Monitor size={15} aria-hidden="true" />{choices.remote ? tr("SSH 工作区") : tr("此计算机")}</span></div>}
+            {claudexAppearance && <div className="xn-hero__workspace">{workspaceContext}<span className="xn-composer-workspace__host"><Monitor size={15} aria-hidden="true" />{choices.remote ? tr("SSH 工作区") : tr("此计算机")}</span></div>}
             {runError && (
               <p role="alert" className="xn-run-error">{runError}</p>
             )}
@@ -2990,6 +2991,7 @@ export function XuenessWorkbenchContainer() {
                 platform={resolveHostPlatform()}
                 sendShortcut={settingsValues.sendShortcut === "mod-enter" ? "mod-enter" : "enter"}
                 variant="hero"
+                topContent={claudexAppearance ? undefined : workspaceContext}
                 inputRef={heroInputRef}
                 onSend={handleCreate}
                 disabled={busy || !commandRoot || !isPluginEffective("sessions")}

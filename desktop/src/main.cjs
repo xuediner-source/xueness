@@ -328,6 +328,7 @@ async function start() {
           actionsRight: actions ? innerWidth - actions.getBoundingClientRect().right : null,
           sidebarWidth: document.querySelector('#xn-shell-sidebar')?.getBoundingClientRect().width,
           sidebarRail: !!document.querySelector('.xn-shell-sidebar--with-rail'),
+          workbenchAppearance: document.querySelector('[data-workbench]')?.dataset.workbench,
           workbenchTabs: !!document.querySelector('[data-testid=xn-workbench-tabs]'),
           workbenchTools: !!document.querySelector('[data-testid=xn-workbench-tool-files]'),
           compactTasks: !!document.querySelector('.xn-task-list__toolbar--compact'),

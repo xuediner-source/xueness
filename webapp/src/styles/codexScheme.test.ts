@@ -8,16 +8,16 @@ const main = readFileSync(resolve(process.cwd(), "src/main.tsx"), "utf8");
 const taskList = readFileSync(resolve(process.cwd(), "src/plugins/sessions/XuenessTaskList.tsx"), "utf8");
 const strip = (source: string) => source.replace(/\/\*[\s\S]*?\*\//g, "");
 
-test("外观层之后加载工作台结构，确保各配色共用标签和停靠布局", () => {
+test("工作台适配层最后加载，各外观保留独立布局", () => {
   const imports = [...main.matchAll(/^import\s+"(\.\/[^"]+\.css)";/gm)].map(match => match[1]);
   assert.equal(imports.at(-2), "./styles/claudex-scheme.css");
   assert.equal(imports.at(-1), "./plugins/sessions/workbench-frame.css");
 });
 
-test("Claudex 色彩样式仅作用于所选外观，侧栏结构使用共同主题令牌", () => {
+test("Codex 色彩及侧栏布局只作用于所选外观", () => {
   const sidebar = readFileSync(resolve(process.cwd(), 'src/plugins/sessions/ClaudexSidebar.css'), 'utf8');
   assert.doesNotMatch(sidebar, /var\(--claudex-(frame|rail-fg|sidebar-fg)\)/);
-  for (const source of [css]) {
+  for (const source of [css, sidebar]) {
     const selectors = strip(source).split(/[{}]/).filter(part => part.includes('html'));
     assert.ok(selectors.length > 0);
     for (const selector of selectors) assert.doesNotMatch(selector, /html(?!\[data-xn-palette="claudex"\])/);

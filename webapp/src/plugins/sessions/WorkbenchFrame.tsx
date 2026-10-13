@@ -26,7 +26,8 @@ export function useWorkbenchLayout<Panel extends string>(initialPanel: Panel) {
 export type WorkbenchToolAction = { id: string; label: string; icon: React.ReactNode; active?: boolean; onClick(): void };
 
 /** Layout only; feature gates and all API-backed content are supplied by the host. */
-export function WorkbenchFrame({ workspace, tabs, tools, menu, terminalOpen, onToggleTerminal, onToggleContext, contextOpen, dock, terminal, children }: {
+export function WorkbenchFrame({ appearance, workspace, tabs, tools, menu, terminalOpen, onToggleTerminal, onToggleContext, contextOpen, dock, terminal, children }: {
+  appearance: 'zcode' | 'codex';
   workspace: string;
   tabs: React.ReactNode;
   tools: WorkbenchToolAction[];
@@ -39,8 +40,8 @@ export function WorkbenchFrame({ workspace, tabs, tools, menu, terminalOpen, onT
   terminal?: React.ReactNode;
   children: React.ReactNode;
 }) {
-  return <div className="xn-workbench" data-testid="xn-workbench">
-    <header className="xn-workbench__header">
+  return <div className={`xn-workbench xn-workbench--${appearance}`} data-testid="xn-workbench" data-workbench={appearance}>
+    <header className={`xn-workbench__header xn-${appearance}-workbench-header`}>
       <div className="xn-workbench__workspace" title={workspace}><FolderOpen size={16} aria-hidden="true" /><span>{workspace.split(/[/\\]/u).filter(Boolean).pop() || tr('工作区')}</span></div>
       <div className="xn-workbench__tools" role="group" aria-label={tr('工作台工具')}>
         {tools.map(tool => <button key={tool.id} type="button" title={tool.label} aria-label={tool.label} aria-pressed={Boolean(tool.active)} onClick={tool.onClick} data-testid={`xn-workbench-tool-${tool.id}`}>{tool.icon}<span>{tool.label}</span></button>)}
@@ -49,10 +50,10 @@ export function WorkbenchFrame({ workspace, tabs, tools, menu, terminalOpen, onT
         {menu}
       </div>
     </header>
-    {tabs}
+    {appearance === 'zcode' && tabs}
     <div className="xn-workbench__body">
       <div className="xn-workbench__column">
-        <div className="xn-workbench__chat" id="xn-workbench-conversation" role="tabpanel">{children}</div>
+        <div className="xn-workbench__chat" id="xn-workbench-conversation" role={appearance === 'zcode' && tabs ? 'tabpanel' : 'region'} aria-label={tr('会话')}>{children}</div>
         {terminal}
       </div>
       {dock}

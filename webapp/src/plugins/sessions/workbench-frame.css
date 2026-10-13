@@ -27,21 +27,21 @@
 .xn-workbench-tabs__status { width: 6px; height: 6px; border-radius: 50%; background: var(--fg-muted); flex: none; }
 .xn-workbench-tabs__status[data-status="running"], .xn-workbench-tabs__status[data-status="stopping"] { background: var(--accent); }
 
-/* Palette-independent geometry. Appearance preferences continue to supply colors. */
-html .xn-shell-layout .xn-workbench .xn-hero { align-items: stretch; justify-content: flex-start; width: 100%; max-width: 860px; margin: 0 auto; padding: clamp(32px, 7vh, 76px) clamp(20px, 4vw, 56px) 36px; gap: 22px; box-sizing: border-box; overflow: auto; text-align: left; }
-html .xn-shell-layout .xn-workbench .xn-hero__intro { display: flex; flex-direction: column; align-items: flex-start; width: 100%; max-width: none; gap: 10px; margin: 0; text-align: left; }
-html .xn-shell-layout .xn-workbench .xn-hero__brand { display: flex; margin: 0 0 10px; }
-html .xn-shell-layout .xn-workbench .xn-hero__greeting { font-size: clamp(23px, 2.4vw, 30px); font-weight: 550; letter-spacing: -.025em; line-height: 1.45; margin: 0; }
-html .xn-shell-layout .xn-workbench .xn-hero__hint { display: block; color: var(--fg-muted); font-size: 13px; margin: 0; }
-html .xn-shell-layout .xn-workbench .xn-hero__composer { width: 100%; max-width: none; margin: 0; }
-html .xn-shell-layout .xn-workbench .xn-hero__workspace { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 6px; margin-bottom: 9px; }
-html .xn-shell-layout .xn-workbench .xn-composer { width: 100%; max-width: 880px; border: 1px solid var(--border); border-radius: 12px; box-shadow: none; background: var(--bg-input, var(--bg)); }
-html .xn-shell-layout .xn-workbench .xn-composer__input { padding: 16px 17px 8px; min-height: 90px; font-size: 14px; line-height: 1.65; }
-html .xn-shell-layout .xn-workbench .xn-composer__row { padding: 8px 10px; border-top: 1px solid var(--border); gap: 6px; align-items: flex-end; }
-html .xn-shell-layout .xn-workbench .xn-composer__tools { min-width: 0; flex-wrap: wrap; gap: 5px; }
+/* ZCode uses the workspace header, session tabs and integrated project composer. */
+html .xn-shell-layout .xn-workbench--zcode .xn-hero { align-items: stretch; justify-content: flex-start; width: 100%; max-width: 860px; margin: 0 auto; padding: clamp(32px, 7vh, 76px) clamp(20px, 4vw, 56px) 36px; gap: 22px; box-sizing: border-box; overflow: auto; text-align: left; }
+html .xn-shell-layout .xn-workbench--zcode .xn-hero__intro { display: flex; flex-direction: column; align-items: flex-start; width: 100%; max-width: none; gap: 10px; margin: 0; text-align: left; }
+html .xn-shell-layout .xn-workbench--zcode .xn-hero__brand { display: flex; margin: 0 0 10px; }
+html .xn-shell-layout .xn-workbench--zcode .xn-hero__greeting { font-size: clamp(23px, 2.4vw, 30px); font-weight: 550; letter-spacing: -.025em; line-height: 1.45; margin: 0; }
+html .xn-shell-layout .xn-workbench--zcode .xn-hero__hint { display: block; color: var(--fg-muted); font-size: 13px; margin: 0; }
+html .xn-shell-layout .xn-workbench--zcode .xn-hero__composer { width: 100%; max-width: none; margin: 0; }
+html .xn-shell-layout .xn-workbench--zcode .xn-hero__workspace { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 6px; margin-bottom: 9px; }
+html .xn-shell-layout .xn-workbench--zcode .xn-composer { width: 100%; max-width: 880px; border: 1px solid var(--border); border-radius: 12px; box-shadow: none; background: var(--bg-input, var(--bg)); }
+html .xn-shell-layout .xn-workbench--zcode .xn-composer__input { padding: 16px 17px 8px; min-height: 90px; font-size: 14px; line-height: 1.65; }
+html .xn-shell-layout .xn-workbench--zcode .xn-composer__row { padding: 8px 10px; border-top: 1px solid var(--border); gap: 6px; align-items: flex-end; }
+html .xn-shell-layout .xn-workbench--zcode .xn-composer__tools { min-width: 0; flex-wrap: wrap; gap: 5px; }
 html .xn-shell-layout .xn-workbench .xn-conversation-container { flex: 1; min-width: 0; min-height: 0; height: 100%; }
 html .xn-shell-layout .xn-workbench .xn-conversation { width: 100%; flex: 1; min-width: 0; min-height: 0; }
-html .xn-shell-layout .xn-workbench .xn-conv-header { min-height: 54px; padding: 9px 18px; }
+html .xn-shell-layout .xn-workbench--zcode .xn-conv-header { min-height: 54px; padding: 9px 18px; }
 html .xn-shell-layout .xn-workbench .xn-conversation > .xn-composer { flex: none; width: calc(100% - 32px); margin: 8px auto 14px; }
 html .xn-shell-layout .xn-workbench__body:has(.xn-workbench-dock) .xn-composer__input { min-height: 52px; }
 html .xn-shell-layout .xn-workbench .xn-session-context { position: static; width: 100%; height: 100%; max-width: none; border: 0; box-shadow: none; box-sizing: border-box; }
@@ -55,6 +55,27 @@ html .xn-shell-layout .xn-workbench .xn-workbench-dock .xn-git-view { min-width:
   .xn-workbench-dock .xn-file-main { min-height: 120px; padding: 14px; }
 }
 .xn-shell-layout:not(.xn-shell-layout--desktop-titlebar).xn-shell-layout--sidebar-collapsed .xn-workbench__header { padding-left: 55px; }
+/* Codex keeps a continuous chat surface and navigates conversations in its sidebar. */
+html .xn-shell-layout .xn-workbench--codex > .xn-workbench__header { height: 40px; border-bottom: 0; padding-inline: 20px; }
+html .xn-shell-layout .xn-workbench--codex .xn-workbench__tools > button > span { display: none; }
+html .xn-shell-layout .xn-workbench--codex .xn-hero { width: 100%; max-width: none; box-sizing: border-box; }
+html .xn-shell-layout .xn-workbench--codex .xn-workbench-start { order: 1; width: min(var(--claudex-column), 100%); margin: 0 0 28px; }
+html .xn-shell-layout .xn-workbench--codex .xn-workbench-start__heading { display: none; }
+html .xn-shell-layout .xn-workbench--codex .xn-workbench-start__actions { gap: 6px; }
+html .xn-shell-layout .xn-workbench--codex .xn-workbench-start__action { flex: 0 1 auto; padding: 8px 10px; border: 0; border-radius: 8px; background: transparent; }
+html .xn-shell-layout .xn-workbench--codex .xn-workbench-start__action:hover { background: var(--bg-hover); }
+html .xn-shell-layout .xn-workbench--codex .xn-workbench-start__action-icon { width: 20px; height: 20px; }
+html .xn-shell-layout .xn-workbench--codex .xn-workbench-start__action-copy small,
+html .xn-shell-layout .xn-workbench--codex .xn-workbench-start__action > svg { display: none; }
+html .xn-shell-layout .xn-workbench--codex .xn-workbench-start__side { gap: 16px; }
+html .xn-shell-layout .xn-workbench--codex .xn-workbench-start__recent-item { min-height: 36px; padding-block: 5px; }
+html .xn-shell-layout .xn-workbench--codex .xn-workbench-start__recent-meta { display: none; }
+html .xn-shell-layout .xn-workbench--codex .xn-conversation > .xn-composer-region { width: min(var(--claudex-column), calc(100% - 32px)); margin: 8px auto 16px; }
+html .xn-shell-layout .xn-workbench--zcode .xn-composer__top-content { padding: 12px 16px 0; }
+html .xn-shell-layout .xn-workbench--zcode .xn-composer__top-content .xn-composer-workspace { margin: 0; }
+html .xn-shell-layout .xn-workbench--zcode .xn-composer--with-top-content::before { content: none; }
+html .xn-shell-layout .xn-workbench--zcode .xn-composer--with-top-content .xn-composer__input { margin-top: 0; }
+html .xn-shell-layout .xn-workbench--zcode .xn-composer--with-top-content .xn-composer__row { margin-bottom: 0; }
 @media (max-width: 1000px) { .xn-workbench__body { flex-direction: column; } }
 @media (max-width: 900px) {
   .xn-shell-layout:not(.xn-shell-layout--desktop-titlebar) .xn-workbench__header { padding-left: 55px; }
@@ -63,7 +84,7 @@ html .xn-shell-layout .xn-workbench .xn-workbench-dock .xn-git-view { min-width:
   .xn-workbench__header { gap: 4px; padding-right: 6px; }
   .xn-workbench__tools { gap: 0; }
   .xn-workbench__tools > button > span { display: none; }
-  html .xn-shell-layout .xn-workbench .xn-hero { padding: 26px 16px; gap: 18px; }
-  html .xn-shell-layout .xn-workbench .xn-hero__greeting { font-size: 23px; }
-  html .xn-shell-layout .xn-workbench .xn-composer__keyboard-help { display: none; }
+  html .xn-shell-layout .xn-workbench--zcode .xn-hero { padding: 26px 16px; gap: 18px; }
+  html .xn-shell-layout .xn-workbench--zcode .xn-hero__greeting { font-size: 23px; }
+  html .xn-shell-layout .xn-workbench--zcode .xn-composer__keyboard-help { display: none; }
 }

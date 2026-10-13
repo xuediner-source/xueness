@@ -319,8 +319,8 @@
     },
     {
       "id": "sessions.workbench_tabs",
-      "name": "工作台会话标签",
-      "nameEn": "Workbench conversation tabs"
+      "name": "ZCode 工作台会话标签",
+      "nameEn": "ZCode workbench conversation tabs"
     },
     {
       "id": "sessions.workbench_docks",

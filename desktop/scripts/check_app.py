@@ -77,10 +77,11 @@ with tempfile.TemporaryDirectory(prefix='xueness-app-check-') as temporary:
         for row in appearances:
             claudex = row['palette'] == 'claudex'
             assert row['sidebarWidth'] == (340 if claudex else 270), row
-            assert row['sidebarRail'] is True and row['compactTasks'] is True, row
-            assert row['classicTasks'] is False, row
-            assert row['workspaceStrip'] is True and row['composerWorkspace'] is False, row
-            assert row['workbenchTabs'] is True and row['workbenchTools'] is True, row
+            assert row['workbenchAppearance'] == ('codex' if claudex else 'zcode'), row
+            assert row['sidebarRail'] is claudex and row['compactTasks'] is claudex, row
+            assert row['classicTasks'] is (not claudex), row
+            assert row['workspaceStrip'] is claudex and row['composerWorkspace'] is (not claudex), row
+            assert row['workbenchTabs'] is (not claudex) and row['workbenchTools'] is True, row
             assert row['resizeHandle'] is True and row['titlebarHeight'] == 44, row
             assert row['nativeBackground'].lower() == row['chromeToken'].lower(), row
             assert row['meta'].lower() == row['windowBgToken'].lower() and row['nodeAccess'] is False, row
@@ -95,8 +96,8 @@ with tempfile.TemporaryDirectory(prefix='xueness-app-check-') as temporary:
     print(f'PASS: packaged Electron workbench renders, {expected_plugins} plugins/{expected_features} features, isolated renderer and clean exit')
     if sys.platform in ('darwin', 'win32'):
         print('PASS: native window caption safe areas, workbench background theme and localized application menu')
-        print('PASS: soft workbench and Xueness light/dark native caption colors and renderer safe areas')
-        print('PASS: workspace navigation, conversation tabs and dock tools in both palettes and native themes')
+        print('PASS: Codex and ZCode light/dark native caption colors and renderer safe areas')
+        print('PASS: distinct ZCode tabbed workspace and Codex rail/chat layouts in both native themes')
     if sys.platform == 'darwin':
         print('PASS: macOS Dock opens the shared production task popup')
     resources = executable.parent/'resources' if os.name == 'nt' else executable.parents[1]/'Resources'
