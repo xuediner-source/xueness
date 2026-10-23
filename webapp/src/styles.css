@@ -1095,6 +1095,18 @@ code, kbd, samp, pre {
   overflow-y: auto;
 }
 
+/* Same box as the collapsed request telemetry bar (28px summary + 6px gap),
+   kept in the main bundle so the lazy panel's fallback reserves it too. */
+.xn-request-telemetry-placeholder {
+  box-sizing: border-box;
+  width: calc(100% - 40px);
+  max-width: 896px;
+  height: 28px;
+  margin: 0 auto 6px;
+  flex: 0 0 auto;
+  pointer-events: none;
+}
+
 .xn-run-error {
   margin: 0;
   padding: 6px 16px;

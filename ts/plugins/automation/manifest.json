@@ -1,0 +1,35 @@
+{
+  "apiVersion": 2,
+  "id": "automation",
+  "name": "自动化",
+  "description": "带不可变计划审批的时区 cron、闲时队列与本地运行历史。",
+  "version": "0.2.0",
+  "defaultEnabled": true,
+  "dependencies": ["workflows"],
+  "provides": ["automation.scheduler"],
+  "inject": { "required": ["workflows.store"] },
+  "capabilities": {
+    "fs": {
+      "read": ["state", "workspace"],
+      "write": ["state"]
+    }
+  },
+  "httpFamilies": ["automations", "automation/offpeak"],
+  "tools": [
+    { "name": "offpeak_create", "gate": "exec", "mutating": true, "concurrencySafe": false }
+  ],
+  "commands": ["automation"],
+  "panels": ["automations"],
+  "features": [
+    { "id": "automation.schedules", "name": "五字段 cron、时区与下次执行", "nameEn": "Five-field cron, time zones and next run" },
+    { "id": "automation.approval", "name": "计划审批与无人值守触发", "nameEn": "Schedule approval and unattended triggers" },
+    { "id": "automation.history", "name": "持久认领、运行历史与暂停", "nameEn": "Persistent claims, run history and pause" },
+    { "id": "automation.off_peak", "name": "闲时队列：本地低峰窗口排队执行、仅在空闲时与完成通知", "nameEn": "Off-peak queue: local idle-window runs, idle-only tasks and completion notices" }
+  ],
+  "frontendModules": [
+    "plugins/automation/automationModel.ts",
+    "plugins/automation/offPeakModel.ts",
+    "plugins/automation/OffPeakTasks.tsx",
+    "plugins/automation/index.tsx"
+  ]
+}

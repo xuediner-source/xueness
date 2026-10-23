@@ -22,19 +22,30 @@ import {
 import "./sessions.css";
 
 export type ConversationTimelineViewportProps = {
-  children: React.ReactNode;
+  children?: React.ReactNode;
   autoScroll: boolean;
   rowsVersion: unknown;
   streamingText?: string;
   queuedMessages?: unknown;
   /** 滚动记忆的 session 作用域；未提供时不做记忆读写。 */
   sessionId?: string | null;
+  /** Empty-state content and its composer can share this scroll root. */
+  emptyState?: React.ReactNode;
+  bottomDock?: React.ReactNode;
+  centerEmptyStateWithDock?: boolean;
 };
 
 const FOLLOW_TAIL_DISTANCE = 80;
 
 /** A restored reading position must initialize the virtual window away from its tail. */
 export const TimelineInitialTailOverrideContext = React.createContext<boolean | null>(null);
+
+/**
+ * The conversation surface captures wheel/touch/keyboard intent before the
+ * browser's scroll event arrives. Virtualized children read that intent during
+ * layout measurement so a same-frame stream update cannot reclaim the tail.
+ */
+export const TimelineUserScrollIntentContext = React.createContext<() => TimelineUserScrollIntent>(() => "none");
 
 /** 用户滚动意图的存活窗口：超过该时长未再出现输入即视为过期。 */
 const USER_SCROLL_INTENT_TTL_MS = 1200;
@@ -76,7 +87,7 @@ export function restoreSessionScroll(sessionId: string | null | undefined): "pin
 }
 
 /** Sessions-owned scroll container keeps new output in view until the reader moves away. */
-export function ConversationTimelineViewport({ children, autoScroll, rowsVersion, streamingText, queuedMessages, sessionId }: ConversationTimelineViewportProps): React.JSX.Element {
+export function ConversationTimelineViewport({ children, autoScroll, rowsVersion, streamingText, queuedMessages, sessionId, emptyState, bottomDock, centerEmptyStateWithDock = false }: ConversationTimelineViewportProps): React.JSX.Element {
   const scrollerRef = useRef<HTMLDivElement>(null);
   const followingRef = useRef(initialFollowing());
   const smoothScrollRef = useRef(false);
@@ -419,9 +430,21 @@ export function ConversationTimelineViewport({ children, autoScroll, rowsVersion
         onPointerDown={cancelSmoothScroll}
         data-testid="session-timeline-scroller"
       >
-        <TimelineInitialTailOverrideContext.Provider value={initialTailOverride}>
-          {children}
-        </TimelineInitialTailOverrideContext.Provider>
+        <TimelineUserScrollIntentContext.Provider value={getActiveUserScrollIntent}>
+          <TimelineInitialTailOverrideContext.Provider value={initialTailOverride}>
+            {centerEmptyStateWithDock && emptyState !== undefined ? (
+              <div className="xn-session-empty-composite">
+                <div className="xn-session-timeline-empty xn-session-timeline-empty--centered" data-testid="session-timeline-empty">{emptyState}</div>
+                {bottomDock !== undefined && <div className="xn-session-composer-dock xn-session-composer-dock--centered" data-testid="session-composer-dock">{bottomDock}</div>}
+              </div>
+            ) : (
+              <>
+                {emptyState !== undefined ? <div className="xn-session-timeline-empty" data-testid="session-timeline-empty">{emptyState}</div> : children}
+                {bottomDock !== undefined && <div className="xn-session-composer-dock" data-testid="session-composer-dock">{bottomDock}</div>}
+              </>
+            )}
+          </TimelineInitialTailOverrideContext.Provider>
+        </TimelineUserScrollIntentContext.Provider>
       </div>
       {awayFromTail && <button
         type="button"

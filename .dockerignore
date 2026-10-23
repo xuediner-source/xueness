@@ -2,9 +2,10 @@
 .demo/
 .web-runs/
 .host-workspace/
-__pycache__/
-*.pyc
-tests/
+ts/node_modules/
+ts/dist/
+ts/LOG
+desktop/
 integration-lab/
 reviews/
 .git/

@@ -8,6 +8,8 @@
 import React from "react";
 import test from "node:test";
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { renderToStaticMarkup } from "react-dom/server";
 import { Folder, GitBranch, MessageCirclePlus, Server, Sparkles } from "lucide-react";
 
@@ -20,6 +22,11 @@ import {
   type StartPageAction,
   type StartPageProject,
 } from "./XuenessStartPage";
+import { StartPageWorkspaceMenu, filterStartPageWorkspaces } from "./StartPageWorkspaceMenu";
+import {
+  StartPageRemoteDialog,
+  filterRemoteConnections,
+} from "./StartPageRemoteDialog";
 import type { SessionSummary } from "../../xuenessWorkbench";
 
 const session = (id: string, updatedAt?: string): SessionSummary => ({
@@ -204,6 +211,29 @@ test("起始页：没有任何历史时不渲染项目或会话分组，也不�
   assert.doesNotMatch(noSessions, /xn-start-page__side|xn-start-page-projects|xn-start-page-recent|暂无最近/);
 });
 
+test("G10 工作区菜单：搜索按标签/路径过滤并限制 5 项，远程入口可由容器开关控制", () => {
+  const workspaces = [
+    { path: "/home/one", label: "One" },
+    { path: "/home/two", label: "Two" },
+    { path: "/home/three", label: "Three" },
+    { path: "/home/four", label: "Four" },
+    { path: "/home/five", label: "Five" },
+    { path: "/home/six", label: "Six" },
+    { path: "remote:office", label: "Office", kind: "remote" as const, remoteId: "office" },
+  ];
+  assert.deepEqual(filterStartPageWorkspaces(workspaces).map(item => item.label), ["One", "Two", "Three", "Four", "Five"]);
+  assert.deepEqual(filterStartPageWorkspaces(workspaces, "office").map(item => item.remoteId), ["office"]);
+  const html = renderToStaticMarkup(
+    <StartPageWorkspaceMenu workspaces={workspaces} currentPath="/home/one"
+      allowOpenFolder allowRemote onSelectWorkspace={() => undefined} onOpenFolder={() => undefined}
+      onConnectRemote={() => undefined} onDetachProject={() => undefined} />,
+  );
+  assert.match(html, /data-testid="xn-start-page-workspace-menu"/);
+  assert.match(html, /data-testid="xn-start-page-workspace-search"/);
+  assert.match(html, /连接或重连 SSH/);
+  assert.match(html, /打开文件夹/);
+});
+
 test("起始页：三个动作块由容器按插件生效状态给出；git/remote 未生效时对应块不出现", () => {
   const qoderActions: StartPageAction[] = [
     { id: "open-project", label: "打开项目", Icon: Folder, onSelect: () => undefined },
@@ -228,4 +258,104 @@ test("起始页：三个动作块由容器按插件生效状态给出；git/remo
   assert.doesNotMatch(disabled, /start-action-clone-repository/);
   assert.doesNotMatch(disabled, /start-action-connect-ssh/);
   assert.doesNotMatch(disabled, /clone-dialog/);
+});
+
+test("G10 远程连接弹窗：搜索过滤、断连状态与重连操作", () => {
+  const connections = [
+    { id: "office", host: "office.example.com", user: "dev", port: 22, directory: "/home/dev/app", connectionState: "connected", connected: true },
+    { id: "prod", host: "prod.example.com", user: "admin", port: 2200, directory: "/srv/prod", connectionState: "disconnected", connected: false },
+    { id: "staging", host: "staging.example.com", user: "deploy", port: 22, directory: "/var/app", connectionState: "reconnecting" },
+  ];
+  assert.equal(filterRemoteConnections(connections, "office").length, 1);
+  assert.equal(filterRemoteConnections(connections, "office")[0].id, "office");
+  assert.equal(filterRemoteConnections(connections, "prod")[0].id, "prod");
+  assert.equal(filterRemoteConnections(connections, "non-existent").length, 0);
+
+  const html = renderToStaticMarkup(
+    <StartPageRemoteDialog
+      open={true}
+      allowRemote={true}
+      connections={connections}
+      currentRemoteId="office"
+      onClose={() => undefined}
+      onSelectRemote={() => undefined}
+      onManageRemote={() => undefined}
+    />,
+  );
+  assert.match(html, /data-testid="start-page-remote-dialog"/);
+  assert.match(html, /data-testid="remote-connection-search"/);
+  assert.match(html, /data-testid="remote-connection-item-office"/);
+  assert.match(html, /data-testid="remote-connection-item-prod"/);
+  assert.match(html, /data-testid="remote-reconnect-btn-prod"/);
+  assert.match(html, /data-testid="remote-connect-btn-staging"/);
+  assert.match(html, /重连/);
+  assert.match(html, /已断开/);
+  assert.match(html, /已连接/);
+  assert.match(html, /data-testid="remote-manage-btn"/);
+});
+
+test("G10 远程连接弹窗：remote 插件禁用或弹窗关闭时不渲染", () => {
+  const closed = renderToStaticMarkup(
+    <StartPageRemoteDialog
+      open={false}
+      allowRemote={true}
+      connections={[{ id: "office" }]}
+      onClose={() => undefined}
+      onSelectRemote={() => undefined}
+    />,
+  );
+  assert.equal(closed, "");
+
+  const disabled = renderToStaticMarkup(
+    <StartPageRemoteDialog
+      open={true}
+      allowRemote={false}
+      connections={[{ id: "office" }]}
+      onClose={() => undefined}
+      onSelectRemote={() => undefined}
+    />,
+  );
+  assert.equal(disabled, "");
+});
+
+test("G10 启动图：空态弹窗、工作区菜单和目录选择按需加载，远程弹窗样式不进首屏 CSS", () => {
+  const container = readFileSync(resolve(process.cwd(), "src/XuenessWorkbenchContainer.tsx"), "utf8");
+  const app = readFileSync(resolve(process.cwd(), "src/App.tsx"), "utf8");
+  const dialog = readFileSync(resolve(process.cwd(), "src/plugins/sessions/StartPageRemoteDialog.tsx"), "utf8");
+  const sessionsCss = readFileSync(resolve(process.cwd(), "src/plugins/sessions/sessions.css"), "utf8");
+  const startPage = readFileSync(resolve(process.cwd(), "src/plugins/sessions/XuenessStartPage.tsx"), "utf8");
+  const dynamicSpecifiers = [
+    "./plugins/sessions/StartPageRemoteDialog",
+    "./plugins/sessions/StartPageWorkspaceMenu",
+    "./plugins/settings/XuenessWorkspacePickerDialog",
+    "./plugins/settings/XuenessWorkspaceSettings",
+    "./plugins/git/XuenessCloneDialog",
+    "./plugins/sessions/ForkSessionDialog",
+    "./plugins/sessions/XuenessRenameDialog",
+    "./plugins/sessions/ConversationSharing",
+    "./plugins/sessions/ArchivedSessions",
+    "./plugins/planning/GoalEditorDialog",
+    "./XuenessCapabilityDialog",
+  ];
+  for (const specifier of dynamicSpecifiers) {
+    const escaped = specifier.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    assert.match(container, new RegExp(String.raw`import\(\s*['"]${escaped}['"]\s*\)`));
+    assert.doesNotMatch(container, new RegExp(String.raw`import\s+(?!type\b).*from\s+['"]${escaped}['"]`));
+  }
+  assert.match(app, /import\(\s*['"]\.\/plugins\/sessions\/ConversationSharing['"]\s*\)/u);
+  assert.doesNotMatch(app, /from\s+['"]\.\/plugins\/sessions\/ConversationSharing['"]/u);
+  assert.match(dialog, /StartPageRemoteDialog\.css/u);
+  assert.doesNotMatch(sessionsCss, /\.xn-remote-dialog/u);
+  assert.doesNotMatch(startPage, /StartPageWorkspaceMenu|filterStartPageWorkspaces/u);
+});
+
+test("G10 工作区列表：排除已断连的远程工作区以防直接切入不可用环境，同时保留已连接工作区", () => {
+  const workspaces = [
+    { path: "/home/one", label: "One" },
+    { path: "remote:connected", label: "Connected Remote", kind: "remote" as const, remoteId: "connected", connected: true },
+    { path: "remote:disconnected", label: "Disconnected Remote", kind: "remote" as const, remoteId: "disconnected", connected: false },
+  ];
+  const filtered = filterStartPageWorkspaces(workspaces);
+  assert.deepEqual(filtered.map(w => w.label), ["One", "Connected Remote"]);
+  assert.equal(filtered.some(w => w.remoteId === "disconnected"), false);
 });

@@ -1,7 +1,10 @@
 import React from "react";
 import test from "node:test";
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { renderToStaticMarkup } from "react-dom/server";
+import { RemoteConnectionStateLabel } from "./sessionsRemoteConnectionState";
 
 import { SidebarNav, nextSidebarCursorIndex, sidebarNavItemPropsEqual } from "./SidebarNav";
 
@@ -100,6 +103,47 @@ test("SidebarNav: 无 pinned 项时不渲染「已置顶」标题与 pin 图标"
   assert.ok(first >= 0 && first < second);
 });
 
+test("SidebarNav: sessions-index attention sidecars render only when present", () => {
+  const html = renderToStaticMarkup(
+    <SidebarNav
+      items={[
+        {
+          id: "pending",
+          label: "等待确认",
+          active: false,
+          pendingInteraction: "需要用户输入",
+          changeSummary: { added: 2, removed: 1 },
+        },
+        {
+          id: "unread",
+          label: "后台完成",
+          active: false,
+          unread: true,
+          changeSummary: { files: 3 },
+        },
+        { id: "quiet", label: "普通会话", active: false },
+      ]}
+      onSelect={() => {}}
+    />,
+  );
+
+  const pending = html.match(/<button[^>]*data-testid="xn-sidebar-item-pending"[^>]*>[\s\S]*?<\/button>/)?.[0] ?? "";
+  const unread = html.match(/<button[^>]*data-testid="xn-sidebar-item-unread"[^>]*>[\s\S]*?<\/button>/)?.[0] ?? "";
+  const quiet = html.match(/<button[^>]*data-testid="xn-sidebar-item-quiet"[^>]*>[\s\S]*?<\/button>/)?.[0] ?? "";
+
+  assert.match(pending, /data-pending-interaction="true"/);
+  assert.match(pending, /data-pending-interaction-label="true"/);
+  assert.match(pending, /需要用户输入/);
+  assert.match(pending, /data-change-summary="true"[^>]*>\+2 -1<\/span>/);
+  assert.doesNotMatch(pending, /data-unread-indicator="true"/);
+
+  assert.match(unread, /data-unread-indicator="true"/);
+  assert.match(unread, /data-change-summary="true"[^>]*>3 个文件<\/span>/);
+  assert.doesNotMatch(unread, /data-pending-interaction="true"/);
+
+  assert.doesNotMatch(quiet, /data-pending-interaction|data-unread-indicator|data-change-summary/);
+});
+
 test("SidebarNav: 键盘光标移动夹取边界，Home/End 跳到首尾", () => {
   assert.equal(nextSidebarCursorIndex("ArrowDown", 0, 3), 1);
   assert.equal(nextSidebarCursorIndex("ArrowDown", 2, 3), 2, "到底后停留");
@@ -183,6 +227,48 @@ test("SidebarNav: 空输入不抛", () => {
   assert.doesNotThrow(() => {
     renderToStaticMarkup(<SidebarNav items={[]} />);
   });
+});
+
+test('SidebarNav remote configuration changes invalidate memo and render an unknown connection state without reconnect guesses', () => {
+  const remote = { connectionId: 'lab', configuration: 'configured' as const, connectionState: 'unknown' as const };
+  const base = { item: { id: 'remote', label: 'Remote task', active: false, remote },
+    optionId: 'remote-option', optionPosition: 1, optionSetSize: 1, listbox: true, cursor: false };
+  assert.equal(sidebarNavItemPropsEqual(base, { ...base, item: { ...base.item, remote: { ...remote } } }), true);
+  assert.equal(sidebarNavItemPropsEqual(base, { ...base, item: { ...base.item, remote: { ...remote, configuration: 'missing' } } }), false);
+  assert.equal(sidebarNavItemPropsEqual(base, { ...base, item: { ...base.item, remote: undefined } }), false);
+  for (const onSelect of [undefined, () => {}]) {
+    const html = renderToStaticMarkup(<SidebarNav items={[base.item]} onSelect={onSelect} />);
+    assert.match(html, /data-remote-summary="configured"/);
+    assert.match(html, /lab · 远程配置已保存 · 连接状态未知/);
+    assert.match(html, /data-connection-state="unknown"/);
+    assert.doesNotMatch(html, /已连接|正在重连|reconnecting/);
+  }
+});
+
+test('SidebarNav marks a recorded remote phase without putting its label in the static shell', () => {
+  const source = readFileSync(resolve(process.cwd(), 'src/plugins/sessions/SidebarNav.tsx'), 'utf8');
+  assert.match(source, /import\(\s*['"]\.\/sessionsRemoteConnectionState['"]\s*\)/);
+  assert.doesNotMatch(source, /from\s+['"]\.\/sessionsRemoteConnectionState['"]/);
+  const remote = { connectionId: 'lab', configuration: 'configured' as const, connectionState: 'reconnecting' as const };
+  const unknown = { ...remote, connectionState: 'unknown' as const };
+  const base = { item: { id: 'remote', label: 'Remote task', active: false, remote },
+    optionId: 'remote-option', optionPosition: 1, optionSetSize: 1, listbox: true, cursor: false };
+  assert.equal(sidebarNavItemPropsEqual(base, { ...base, item: { ...base.item, remote: unknown } }), false);
+  const html = renderToStaticMarkup(<SidebarNav items={[base.item]} onSelect={() => {}} />);
+  const badge = html.match(/<span class="xn-sidebar-remote-summary"[^>]*>[\s\S]*?<\/span>/)?.[0] ?? '';
+  assert.match(badge, /data-remote-summary="configured"/);
+  assert.match(badge, /data-connection-state="reconnecting"/);
+  assert.match(badge, /title="lab · 远程配置已保存"/);
+  assert.match(badge, />远程</);
+  assert.doesNotMatch(badge, /连接状态未知|正在重连|<button/);
+  for (const [state, label] of [
+    ['pending', '正在连接'], ['reconnecting', '正在重连'], ['connected', '已连接'], ['disconnected', '已断开'],
+  ] as const) {
+    const phase = renderToStaticMarkup(<RemoteConnectionStateLabel state={state} />);
+    assert.match(phase, new RegExp(`data-connection-state="${state}"`));
+    assert.match(phase, new RegExp(label));
+    assert.doesNotMatch(phase, /<button|ssh|重试/);
+  }
 });
 
 test("SidebarNav: 上千条会话只挂载部分行，垫片补齐剩余高度；短列表完整渲染", () => {

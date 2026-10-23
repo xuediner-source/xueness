@@ -1,0 +1,19 @@
+{
+  "apiVersion": 2,
+  "id": "diagnostics",
+  "name": "Local diagnostics",
+  "description": "脱敏诊断、状态存储维护与实时本机资源采样。",
+  "version": "1.0.0",
+  "defaultEnabled": true,
+  "capabilities": { "fs": { "read": ["state", "workspace"], "write": ["state", "workspace"] } },
+  "httpFamilies": ["diagnostics"],
+  "commands": ["doctor"],
+  "panels": ["diagnostics"],
+  "features": [
+    { "id": "diagnostics.export", "name": "脱敏支持诊断导出", "nameEn": "Redacted support diagnostic export" },
+    { "id": "diagnostics.storage", "name": "状态存储统计与限定日志清理", "nameEn": "State storage statistics and scoped log cleanup" },
+    { "id": "diagnostics.runtime", "name": "实时本机 CPU、内存与磁盘采样", "nameEn": "Live host CPU, memory and disk sampling" },
+    { "id": "diagnostics.doctor", "name": "只读健康体检（doctor）", "nameEn": "Read-only health report (doctor)" }
+  ],
+  "frontendModules": ["plugins/diagnostics/index.tsx"]
+}

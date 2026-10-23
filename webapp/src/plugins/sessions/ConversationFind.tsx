@@ -18,6 +18,7 @@ function stringifySearchValue(value: unknown): string {
 }
 
 export function conversationFindRowKey(row: TimelineRow): string {
+  if (row.kind === "subagent") return `subagent:${row.toolCallId}:${row.taskId}`;
   if (row.kind === "tool") return `tool:${row.toolCallId}`;
   if ((row.kind === "user" || row.kind === "assistant") && row.messageId) return `${row.kind}:${row.messageId}`;
   return `${row.kind}:${row.seq}`;
@@ -25,12 +26,16 @@ export function conversationFindRowKey(row: TimelineRow): string {
 
 export function conversationFindText(row: TimelineRow): string {
   switch (row.kind) {
-    case "user": return row.text.slice(0, 48_000);
-    case "assistant": return [row.reasoning, row.text].filter(Boolean).join("\n").slice(0, 48_000);
+    case "subagent": return [row.label, row.agent, row.summary].filter(Boolean).join("\n");
+    case "user": return (row.displayText ?? row.text).slice(0, 48_000);
+    case "assistant": return [row.reasoning, row.displayText ?? row.text].filter(Boolean).join("\n").slice(0, 48_000);
     case "tool": return [row.subject, row.name, row.error, stringifySearchValue(row.input), stringifySearchValue(row.output)]
       .filter(Boolean).join("\n").slice(0, 48_000);
     case "completion": return row.summary.slice(0, 24_000);
     case "pending_question": return row.question.slice(0, 24_000);
+    case "citation":
+    case "preview":
+    case "artifact": return [row.label, row.path].filter(Boolean).join("\n").slice(0, 2_000);
   }
 }
 
@@ -141,7 +146,7 @@ export function ConversationFindBar({
   onNext: () => void;
   onClose: () => void;
 }): React.JSX.Element {
-  if (!open) return <button type="button" className="xn-zc-find__toggle" aria-label={tr("搜索会话")} title={tr("搜索会话")} onClick={onOpen}>
+  if (!open) return <button type="button" data-shortcut-action="find-in-task" className="xn-zc-find__toggle" aria-label={tr("搜索会话")} title={tr("搜索会话")} onClick={onOpen}>
     <Search size={14} aria-hidden="true" />
   </button>;
   const status = resultCount ? `${activeIndex + 1} / ${resultCount}` : query.trim() ? "0 / 0" : "";

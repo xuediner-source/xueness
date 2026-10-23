@@ -13,6 +13,8 @@ export type ForkSessionDialogProps = {
   initialTurn?: number;
   onCancel: () => void;
   onFork: (result: ForkSessionResponse) => void;
+  loadBoundaries?: typeof loadForkBoundaries;
+  createFork?: typeof forkSession;
 };
 
 function historyNote(reason: string | null): string {
@@ -90,7 +92,7 @@ export function ForkBoundaryChoices({ boundaries, selectedToken, busy = false, o
 }
 
 /** Fork choices are opaque server-issued selectors. The dialog never derives an index from rendered timeline rows. */
-export function ForkSessionDialog({ open, sourceId, sourceTitle, initialTurn, onCancel, onFork }: ForkSessionDialogProps): React.JSX.Element | null {
+export function ForkSessionDialog({ open, sourceId, sourceTitle, initialTurn, onCancel, onFork, loadBoundaries = loadForkBoundaries, createFork = forkSession }: ForkSessionDialogProps): React.JSX.Element | null {
   const [boundaries, setBoundaries] = React.useState<ForkBoundary[]>([]);
   const [revision, setRevision] = React.useState("");
   const [historyTruncated, setHistoryTruncated] = React.useState(false);
@@ -116,7 +118,7 @@ export function ForkSessionDialog({ open, sourceId, sourceTitle, initialTurn, on
     setError("");
     setRequestMessage("");
     setSelectedToken("");
-    const result = await loadForkBoundaries(sourceId);
+    const result = await loadBoundaries(sourceId);
     if (requestNumber.current !== current) return;
     if (result.ok) {
       setBoundaries(result.value.boundaries);
@@ -134,7 +136,7 @@ export function ForkSessionDialog({ open, sourceId, sourceTitle, initialTurn, on
       setError(result.error);
     }
     setLoading(false);
-  }, [sourceId, initialTurn]);
+  }, [sourceId, initialTurn, loadBoundaries]);
 
   React.useEffect(() => {
     if (!open) return;
@@ -188,7 +190,7 @@ export function ForkSessionDialog({ open, sourceId, sourceTitle, initialTurn, on
     setBusy(true);
     setError("");
     setRequestMessage("");
-    const result = await forkSession(sourceAtSubmit, selected.token, revision, titleValue || undefined);
+    const result = await createFork(sourceAtSubmit, selected.token, revision, titleValue || undefined);
     setBusy(false);
     if (!result.ok) {
       setError(result.error);

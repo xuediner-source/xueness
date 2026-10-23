@@ -1,0 +1,41 @@
+{
+  "passed": true,
+  "installerExitCode": 0,
+  "installedVersion": "0.1.8",
+  "installedPath": "E:\\models\\apps\\Xueness",
+  "backup": "E:\\models\\apps\\backups\\xueness-before-install-20261017-bb0bdcb5",
+  "payloadFilesVerified": 1927,
+  "payloadMismatches": [],
+  "extraInstalledFiles": [
+    "Uninstall Xueness.exe"
+  ],
+  "userDataFilesUnchangedBeforeLaunch": 1485,
+  "modelProfilesBeforeLaunch": 1,
+  "installerSha256": "7bbdc3267eb312c9244e70d99547900cf8ceb5bbb3c939d6f7b5a2e0f9da6200",
+  "launchedVersion": "0.1.8",
+  "cleanExit": true,
+  "protectedDataFilesCheckedAfterLaunch": 69,
+  "rendererErrors": [],
+  "launchVerified": true,
+  "protectedContentChangesAfterLaunch": [],
+  "lifecycleMetadataChangesAfterLaunch": [
+    {
+      "category": "session-read",
+      "fields": [
+        "viewedAt"
+      ]
+    },
+    {
+      "category": "session-read",
+      "fields": [
+        "viewedAt"
+      ]
+    },
+    {
+      "category": "queue-clock",
+      "fields": [
+        "withdrawalClock"
+      ]
+    }
+  ]
+}

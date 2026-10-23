@@ -1,0 +1,102 @@
+{
+  "id": "skills",
+  "name": "技能",
+  "description": "技能资源、目录型技能发现、目录摘要与按需正文读取。",
+  "version": "1.0.0",
+  "apiVersion": 1,
+  "defaultEnabled": true,
+  "dependencies": [],
+  "tools": [
+    "skill_read",
+    "skill_validate"
+  ],
+  "commands": [
+    "skills"
+  ],
+  "panels": [
+    "capabilities"
+  ],
+  "resources": [
+    "skills"
+  ],
+  "capabilities": [],
+  "toolEvents": {
+    "events": ["after_tool_execution"]
+  },
+  "httpFamilies": [
+    "resources/skills",
+    "resources/skills/files"
+  ],
+  "modules": [
+    "skills",
+    "file_skills",
+    "files_api",
+    "skills_cli",
+    "composer_capabilities",
+    "creator_tooling",
+    "continuity"
+  ],
+  "features": [
+    {
+      "id": "skills.catalog",
+      "name": "技能资源与按需目录摘要",
+      "nameEn": "Skill resources and on-demand catalog"
+    },
+    {
+      "id": "skills.read",
+      "name": "有界技能正文读取",
+      "nameEn": "Bounded skill body reading"
+    },
+    {
+      "id": "skills.context_restore",
+      "name": "压缩后的当前技能索引与按需重读",
+      "nameEn": "Current skill pointers and on-demand reload after compaction"
+    },
+    {
+      "id": "skills.file_skills",
+      "name": "目录型技能发现与来源覆盖",
+      "nameEn": "Directory-shaped skill discovery and source shadowing"
+    },
+    {
+      "id": "skills.cli",
+      "name": "skills list/inspect 命令与聊天 /skills",
+      "nameEn": "skills list/inspect commands and in-chat /skills"
+    },
+    {
+      "id": "skills.skill_creator",
+      "name": "技能创建与 SKILL.md 校验",
+      "nameEn": "Skill creation and SKILL.md validation"
+    },
+    {
+      "id": "skills.seagull_game_security",
+      "name": "游戏安全研究",
+      "nameEn": "Game security research"
+    },
+    {
+      "id": "skills.seagull_lab",
+      "name": "研究工作区与证据整理",
+      "nameEn": "Research workspaces and evidence"
+    },
+    {
+      "id": "skills.seagull_license_security",
+      "name": "授权与激活安全分析",
+      "nameEn": "License and activation security"
+    },
+    {
+      "id": "skills.seagull_memory",
+      "name": "内存与转储分析",
+      "nameEn": "Memory and dump analysis"
+    },
+    {
+      "id": "skills.seagull_pentest",
+      "name": "应用与网络安全验证",
+      "nameEn": "Application and network security validation"
+    },
+    {
+      "id": "skills.seagull_reverse",
+      "name": "二进制与协议逆向",
+      "nameEn": "Binary and protocol reverse engineering"
+    }
+  ],
+  "frontendModules": []
+}

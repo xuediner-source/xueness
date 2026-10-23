@@ -1,3 +1,13 @@
+.xn-delivery-files { display: grid; gap: 7px; width: min(100% - 32px, 760px); margin: 0 auto 8px; }
+.xn-delivery-files:empty { display: none; }
+.xn-delivery-file { display: flex; align-items: center; gap: 12px; padding: 12px 14px; border: 1px solid var(--border); border-radius: 12px; background: var(--bg-card); color: var(--fg); }
+.xn-delivery-file__icon { font-size: 20px; color: var(--fg-muted); }
+.xn-delivery-file__copy { display: grid; flex: 1; min-width: 0; gap: 3px; font-size: 13px; }
+.xn-delivery-file__copy > span { color: var(--fg-muted); font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.xn-delivery-file__status { color: var(--fg-muted); font-size: 11px; flex-shrink: 0; }
+.xn-delivery-file__status[data-status="passed"] { color: var(--ok-fg); }
+.xn-delivery-file__status[data-status="failed"] { color: var(--error-fg); }
+@media(max-width: 600px) { .xn-delivery-file { flex-wrap: wrap; gap: 8px; } .xn-delivery-file__copy { flex-basis: 60%; } }
 .xn-delivery-checks {
   box-sizing: border-box;
   width: min(100% - 32px, 760px);

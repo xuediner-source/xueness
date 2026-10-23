@@ -1,3 +1,5 @@
+> Historical reference from 2026-10-12, before the TypeScript/Z8 migration; current behavior is defined by [README.md](../README.md) and [ts/docs/z8-guarded-goal-memory.md](../ts/docs/z8-guarded-goal-memory.md).
+
 # 桌面浏览器资料
 
 浏览器工具与资料管理归 `browser` 插件，资料导入还要求 `desktop` 插件生效。设置页的开关放在标题旁；启用后检测实际打包驱动和浏览器可执行文件，显示 Chrome、Edge 或 Chromium。检测不会打开页面，不表示已经验证网站访问或登录。

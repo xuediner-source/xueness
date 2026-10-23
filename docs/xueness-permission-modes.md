@@ -1,3 +1,5 @@
+> Historical reference from 2026-10-12, before the TypeScript/Z8 migration; current behavior is defined by [README.md](../README.md) and [ts/docs/z8-guarded-goal-memory.md](../ts/docs/z8-guarded-goal-memory.md).
+
 # 权限模式对照（build / edit / yolo / plan）
 
 本文对照 Xueness 与 ZCode `--mode build|edit|plan|yolo`。取值的单一来源是

@@ -1,3 +1,5 @@
+> Historical reference from 2026-10-12, before the TypeScript/Z8 migration; current behavior is defined by [README.md](../README.md) and [ts/docs/z8-guarded-goal-memory.md](../ts/docs/z8-guarded-goal-memory.md).
+
 # Xueness Agent CLI：功能补齐与后续插件拆分（进行中）
 
 > 2026-09-29 用户确认：主产品是自用 Agent CLI，参考开源 ZCode 的设计与功能；先完成并验收功能，再拆成类似 DeepSeek Harness 的插件形式。已有内核/协议/插件接口保留。以下早期分层计划是历史过程，不再代表插件优先的实施顺序。最新上游审查与下一批顺序见 `zcode-upstream-2026-09-29.md`。
@@ -297,13 +299,13 @@ web 回答从此不可能分叉：
 
 ## 第十八批：四项主线及扩展 Web（2026-09-30）
 
-四项实现和实际使用方式统一记录在 [四项功能说明](xueness-four-workstreams.md)。新增 CLI session/provider 管理、按需 skill_read、HTTP MCP/诊断、后台命令、持久化 DAG/恢复/复用/并发，以及模型/工作流/子任务/PTY/Office/i18n 界面。保留 stdio、原有逐调用审批与插件接缝；本轮不提前进行插件拆分。
+四项实现和实际使用方式统一记录在 [四项功能说明](https://github.com/xuediner-source/xueness/blob/25ba9dbae4838ba6a84ae64ff9d089a1bdd50833/docs/xueness-four-workstreams.md)。新增 CLI session/provider 管理、按需 skill_read、HTTP MCP/诊断、后台命令、持久化 DAG/恢复/复用/并发，以及模型/工作流/子任务/PTY/Office/i18n 界面。保留 stdio、原有逐调用审批与插件接缝；本轮不提前进行插件拆分。
 
 已实测浏览器语言切换不丢草稿、Office、PTY 和 DAG 执行日志；真实模型协议使用本机假服务验证配置选择，不使用付费密钥。完整 Office 排版、MCP OAuth/旧 SSE、Windows PTY 与 ZCode 全量对等不在本次声明内。
 
 ### 第十九批：当前上游复查与工作台美化（2026-09-30）
 
-重新拉取只读 ZCode HEAD，仍为 `29628c9a`（9 月 24 日）。[本轮审查](zcode-feature-audit-2026-09-30.md) 重新过账旧 33 类清单，并列出 CLI TUI、多模态输入、模型流式响应/重试、模型工作流工具、可写 actor、自适应并发、MCP OAuth、Git checkpoint、Office 排版、cron 和完整插件生命周期等未完成子项；四项基础可用不代表这些子项全部完成。
+重新拉取只读 ZCode HEAD，仍为 `29628c9a`（9 月 24 日）。[本轮审查](https://github.com/xuediner-source/xueness/blob/25ba9dbae4838ba6a84ae64ff9d089a1bdd50833/docs/zcode-feature-audit-2026-09-30.md) 重新过账旧 33 类清单，并列出 CLI TUI、多模态输入、模型流式响应/重试、模型工作流工具、可写 actor、自适应并发、MCP OAuth、Git checkpoint、Office 排版、cron 和完整插件生命周期等未完成子项；四项基础可用不代表这些子项全部完成。
 
 美化原生工作流、模型配置与交互终端：统一标题/卡片/状态徽标，节点指标和进度、收起长计划、紧凑并发、按需日志、配置卡片加编辑表单、终端工具栏与空状态；二级页直接切换视图，侧栏图标与可访问名称，增加中英新文案和窄屏布局。保留实际操作与审批边界，不新增假数据或不可用产品动作。
 

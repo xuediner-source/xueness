@@ -1,0 +1,106 @@
+{
+  "id": "mcp",
+  "name": "MCP 连接",
+  "description": "stdio/HTTP MCP 工具、服务器配置与连接诊断。",
+  "version": "1.0.0",
+  "apiVersion": 1,
+  "defaultEnabled": true,
+  "dependencies": [],
+  "tools": [
+    "mcp__*"
+  ],
+  "commands": [
+    "mcp",
+    "mcp-check"
+  ],
+  "panels": [
+    "capabilities"
+  ],
+  "resources": [
+    "mcp"
+  ],
+  "capabilities": [
+    "command",
+    "network"
+  ],
+  "httpFamilies": [
+    "mcp",
+    "resources/mcp",
+    "sessions/*/elicitation",
+    "sessions/*/mcp-runtime"
+  ],
+  "modules": [
+    "command_cli",
+    "diagnostics",
+    "elicitation",
+    "lifecycle",
+    "mcp",
+    "mcp_http",
+    "oauth",
+    "operator_cli",
+    "sse",
+    "windows_process",
+    "config",
+    "runtime_api",
+    "runtime",
+    "runtime_extension"
+  ],
+  "features": [
+    {
+      "id": "mcp.transports",
+      "name": "stdio、HTTP 与旧 SSE 连接",
+      "nameEn": "stdio, HTTP and legacy SSE connections"
+    },
+    {
+      "id": "mcp.oauth",
+      "name": "OAuth PKCE、凭据刷新与隔离",
+      "nameEn": "OAuth PKCE, refresh and credential isolation"
+    },
+    {
+      "id": "mcp.tools",
+      "name": "外部工具、资源与提示词",
+      "nameEn": "External tools, resources and prompts"
+    },
+    {
+      "id": "mcp.recovery",
+      "name": "连接诊断、失效恢复与设置",
+      "nameEn": "Connection diagnostics, recovery and settings"
+    },
+    {
+      "id": "mcp.command",
+      "name": "「/mcp」连接管理命令",
+      "nameEn": "In-chat /mcp connection command"
+    },
+    {
+      "id": "mcp.elicitation",
+      "name": "结构化询问",
+      "nameEn": "Structured elicitation"
+    },
+    {
+      "id": "mcp.runtime_connections",
+      "name": "运行连接端口与租约生命周期",
+      "nameEn": "Runtime connection port and lease lifecycle"
+    },
+    {
+      "id": "mcp.cancellation",
+      "name": "MCP 请求取消与取消通知",
+      "nameEn": "MCP request cancellation and cancellation notices"
+    },
+    {
+      "id": "mcp.catalog_updates",
+      "name": "服务通知驱动的工具目录刷新",
+      "nameEn": "Notification-driven tool catalog refresh"
+    },
+    {
+      "id": "mcp.resource_subscriptions",
+      "name": "资源订阅与变更活动",
+      "nameEn": "Resource subscriptions and change activity"
+    }
+  ],
+  "frontendModules": [
+    "plugins/mcp/index.tsx",
+    "plugins/mcp/McpDiagnostics.tsx",
+    "plugins/mcp/ElicitationForm.tsx",
+    "plugins/mcp/elicitationSubscription.ts"
+  ]
+}

@@ -51,6 +51,18 @@ test("command palette searches descriptions, sessions and workspaces, with trans
   assert.doesNotMatch(html, /palette-command-open-settings/);
 });
 
+test('search descriptions use review, failure and pending interaction states consistently', () => {
+  const rows: SessionSummary[] = [
+    { id: 'review', task: 'check result', status: 'needs_review' },
+    { id: 'failed', task: 'failed task', status: 'failed' },
+    { id: 'approval', task: 'approval task', status: 'paused', pendingInteraction: { kind: 'permission' } },
+    { id: 'question', task: 'question task', status: 'awaiting_user', pendingInteraction: { kind: 'userInput' } },
+  ];
+  const results = buildCommandPaletteResults('', [], rows, false);
+  assert.deepEqual(results.map(item => item.kind === 'session' ? item.description : ''),
+    ['需要复核', '失败', '等待批准', '等待答复']);
+});
+
 test("command palette arrow keys, Home and End move among available options without wrapping", () => {
   const enabled = [0, 2, 4];
   assert.equal(nextPaletteIndex("ArrowDown", 0, enabled), 2);
@@ -93,7 +105,7 @@ test("composition keystrokes never activate or dismiss a palette result, and sta
   setLocale("en");
   try {
     assert.equal(commandPaletteStatusLabel("completed"), "Completed");
-    assert.equal(commandPaletteStatusLabel("needs_review"), "Needs review");
+    assert.equal(commandPaletteStatusLabel("needs_review"), "Review needed");
   } finally {
     setLocale("zh");
   }

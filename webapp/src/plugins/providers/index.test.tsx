@@ -13,9 +13,12 @@ import {
   adjustedLightweightOutput,
   canAdoptProviderCompatibility,
   canTestProviderCompatibility,
+  createProviderDraft,
   emptyProviderDraft,
+  isLoopbackHttpEndpoint,
   lightweightBudgetPreview,
   providerDraftFromSummary,
+  providerDraftWithEndpoint,
   providerDraftWithLocalEndpoint,
   providerSavePayload,
   validateProviderDraft,
@@ -35,6 +38,70 @@ const provider = (overrides: Partial<ProviderSummary> = {}): ProviderSummary => 
   ...overrides,
 });
 
+function renderProviderEditor(draft: ReturnType<typeof providerDraftFromSummary>, original: ProviderSummary | null = null, busy = false) {
+  return renderToStaticMarkup(<ProviderEditor
+    draft={draft}
+    original={original}
+    hasKey={original?.hasKey ?? false}
+    busy={busy}
+    testing={false}
+    testResult={null}
+    testError=""
+    deleting={false}
+    onDraftChange={() => undefined}
+    onSave={() => undefined}
+    onUse={() => undefined}
+    onTest={() => undefined}
+    onDelete={() => undefined}
+    onCancelDelete={() => undefined}
+    onCancelEdit={() => undefined}
+  />);
+}
+
+test('unsaved provider edits cannot test or select the older saved configuration', () => {
+  const saved = provider();
+  const dirty = { ...providerDraftFromSummary(saved), model: 'another-model' };
+  const html = renderProviderEditor(dirty, saved);
+  const actions = [...html.matchAll(/<button\b[^>]*>(?:(?!<\/button>)[\s\S])*<\/button>/g)].map(match => match[0]);
+  const useActions = actions.filter(button => button.includes('用于当前运行'));
+  assert.equal(useActions.length, 2, 'use is reachable at both ends of the long form');
+  for (const button of [...useActions, ...actions.filter(button => button.includes('测试对话'))]) {
+    assert.match(button, /disabled=""/);
+    assert.match(button, /请先保存更改/);
+  }
+  const clean = renderProviderEditor(providerDraftFromSummary(saved), saved);
+  const cleanActions = [...clean.matchAll(/<button\b[^>]*>(?:(?!<\/button>)[\s\S])*<\/button>/g)].map(match => match[0]);
+  for (const button of cleanActions.filter(button => button.includes('用于当前运行') || button.includes('测试对话'))) {
+    assert.doesNotMatch(button, /disabled=""/);
+  }
+});
+
+test('disabled provider actions expose a visible save reason to assistive technology', () => {
+  const saved = provider();
+  const dirty = { ...providerDraftFromSummary(saved), model: 'another-model' };
+  const html = renderProviderEditor(dirty, saved);
+  const help = [...html.matchAll(/<p\b[^>]*id="provider-unsaved-actions-help"[^>]*>([\s\S]*?)<\/p>/g)];
+  assert.equal(help.length, 1, 'the shared explanation has one stable target');
+  assert.match(help[0][1], /请先保存更改，再测试或使用此配置。/);
+
+  const actions = [...html.matchAll(/<button\b[^>]*>(?:(?!<\/button>)[\s\S])*<\/button>/g)]
+    .map(match => match[0])
+    .filter(button => button.includes('用于当前运行') || button.includes('测试对话'));
+  assert.equal(actions.length, 3, 'both Use actions and Test reference the explanation');
+  for (const button of actions) {
+    assert.match(button, /disabled=""/);
+    assert.match(button, /aria-describedby="provider-unsaved-actions-help"/);
+  }
+
+  const clean = renderProviderEditor(providerDraftFromSummary(saved), saved);
+  assert.doesNotMatch(clean, /id="provider-unsaved-actions-help"/);
+  for (const match of clean.matchAll(/<button\b[^>]*>(?:(?!<\/button>)[\s\S])*<\/button>/g)) {
+    if (match[0].includes('用于当前运行') || match[0].includes('测试对话')) {
+      assert.doesNotMatch(match[0], /aria-describedby="provider-unsaved-actions-help"/);
+    }
+  }
+});
+
 test('public-summary draft never includes a previously saved API key', () => {
   const summary = { ...provider(), apiKey: 'private-test-secret' } as ProviderSummary & { apiKey: string };
   const draft = providerDraftFromSummary(summary);
@@ -49,6 +116,106 @@ test('draft validation matches server ID and HTTP(S) endpoint constraints', () =
   assert.match(validateProviderDraft({ ...draft, id: 'unsafe/name' }) ?? '', /配置 ID/);
   assert.match(validateProviderDraft({ ...draft, baseUrl: 'file:///tmp/key' }) ?? '', /HTTP 或 HTTPS/);
   assert.match(validateProviderDraft({ ...draft, baseUrl: 'not-a-url' }) ?? '', /有效的 API 地址/);
+});
+
+test('loopback HTTP opt-in is offered only for literal HTTP loopback IPs accepted by the backend', () => {
+  for (const endpoint of [
+    'http://127.0.0.1:7863/v1',
+    'http://127.255.255.255/v1',
+    'http://[::1]:1234/v1',
+    'http://[0:0:0:0:0:0:0:1]:1234/v1',
+    'http://[::ffff:127.0.0.1]:1234/v1',
+    'http://[::ffff:7f00:1]:1234/v1',
+  ]) assert.equal(isLoopbackHttpEndpoint(endpoint), true, endpoint);
+  for (const endpoint of [
+    'https://127.0.0.1/v1',
+    'http://localhost:7863/v1',
+    'http://local-proxy.test/v1',
+    'http://192.168.1.8/v1',
+    'http://127.1:7863/v1',
+    'http://127.000.0.1/v1',
+    'http://127.0.0.999/v1',
+    'http://[::ffff:8000:1]/v1',
+  ]) assert.equal(isLoopbackHttpEndpoint(endpoint), false, endpoint);
+
+  const optedIn = { ...emptyProviderDraft(), baseUrl: 'http://127.0.0.1/v1', allowLoopbackHttp: true };
+  assert.equal(providerDraftWithEndpoint(optedIn, 'http://127.0.0.1:7863/v1').allowLoopbackHttp, true);
+  assert.equal(providerDraftWithEndpoint(optedIn, 'https://127.0.0.1/v1').allowLoopbackHttp, false);
+  assert.equal(providerDraftWithEndpoint(optedIn, 'http://localhost:7863/v1').allowLoopbackHttp, false);
+});
+
+test('provider loopback HTTP opt-in round-trips in a standard profile without exposing its saved API key', () => {
+  const summary = provider({ baseUrl: 'http://127.0.0.1:7863/v1', allowLoopbackHttp: true, runtimeProfile: 'standard' });
+  const draft = providerDraftFromSummary(summary);
+  assert.equal(draft.allowLoopbackHttp, true);
+  assert.equal(validateProviderDraft({ ...draft, id: 'provider-one', name: 'Local proxy' }), null);
+  assert.equal(providerSavePayload({ ...draft, id: 'provider-one', name: 'Local proxy' }).allowLoopbackHttp, true);
+  assert.equal(providerDraftFromSummary(provider({ baseUrl: 'http://127.0.0.1/v1' })).allowLoopbackHttp, false);
+  assert.equal(providerSavePayload({ ...draft, allowLoopbackHttp: false }).allowLoopbackHttp, false);
+  assert.match(validateProviderDraft({ ...draft, allowLoopbackHttp: true, baseUrl: 'https://127.0.0.1/v1' }) ?? '', /回环 IP/);
+  assert.match(validateProviderDraft({ ...draft, allowLoopbackHttp: true, baseUrl: 'http://localhost/v1' }) ?? '', /回环 IP/);
+  assert.equal('apiKey' in providerSavePayload({ ...draft, id: 'provider-one', name: 'Local proxy' }), false);
+});
+
+test('provider editor exposes an explicit, scoped loopback HTTP permission and hides it for other hosts', () => {
+  const summary = provider({ baseUrl: 'http://127.0.0.1:7863/v1', allowLoopbackHttp: true, runtimeProfile: 'standard' });
+  const savedHtml = renderProviderEditor(providerDraftFromSummary(summary), summary);
+  const savedGroup = savedHtml.match(/<fieldset(?=[^>]*data-testid="provider-loopback-http-opt-in")[^>]*>.*?<\/fieldset>/s)?.[0] ?? '';
+  assert.ok(savedGroup);
+  assert.match(savedGroup, /type="checkbox"[^>]*checked=""/);
+  assert.match(savedGroup, /aria-describedby="provider-loopback-http-help"/);
+  assert.match(savedHtml, /标准档仍需要 API 密钥/);
+  assert.match(savedHtml, /localhost、域名或远程 HTTP/);
+
+  const uncheckedDraft = { ...providerDraftFromSummary({ ...summary, allowLoopbackHttp: undefined }), allowLoopbackHttp: false };
+  const uncheckedHtml = renderProviderEditor(uncheckedDraft, { ...summary, allowLoopbackHttp: undefined });
+  const uncheckedGroup = uncheckedHtml.match(/<fieldset(?=[^>]*data-testid="provider-loopback-http-opt-in")[^>]*>.*?<\/fieldset>/s)?.[0] ?? '';
+  assert.ok(uncheckedGroup);
+  assert.match(uncheckedGroup, /aria-describedby="provider-loopback-http-help"/);
+  assert.doesNotMatch(uncheckedGroup, /type="checkbox"[^>]*checked=""/);
+
+  assert.doesNotMatch(renderProviderEditor({ ...uncheckedDraft, baseUrl: 'http://localhost:7863/v1' }), /provider-loopback-http-opt-in/);
+  assert.doesNotMatch(renderProviderEditor({ ...uncheckedDraft, baseUrl: 'https://127.0.0.1:7863/v1' }), /provider-loopback-http-opt-in/);
+  assert.match(renderProviderEditor(uncheckedDraft, null, true), /<fieldset(?=[^>]*data-testid="provider-loopback-http-opt-in")(?=[^>]*disabled="")[^>]*>/);
+});
+
+test('new provider drafts receive distinct valid IDs while Chinese names and manual IDs remain supported', () => {
+  const first = createProviderDraft([], 'same-token');
+  const second = createProviderDraft([first.id], 'same-token');
+  assert.match(first.id, /^[A-Za-z0-9._-]{1,64}$/);
+  assert.notEqual(second.id, first.id);
+  assert.equal(second.id, `${first.id}-2`);
+
+  const chineseName = { ...first, name: '方舟模型', baseUrl: 'https://ark.example.test/v1', model: 'ark-test' };
+  assert.equal(validateProviderDraft(chineseName), null);
+
+  const manuallyNamed = { ...chineseName, id: 'ark_custom-1' };
+  assert.equal(validateProviderDraft(manuallyNamed), null);
+  const payload = providerSavePayload(manuallyNamed);
+  assert.equal(payload.id, 'ark_custom-1');
+  assert.equal('autoGeneratedId' in payload, false);
+  assert.match(validateProviderDraft({ ...manuallyNamed, id: '方舟' }) ?? '', /配置 ID/);
+});
+
+test('an auto-generated ID is a clean initial new-provider draft baseline', () => {
+  const html = renderToStaticMarkup(<ProviderEditor
+    draft={createProviderDraft([], 'baseline-token')}
+    original={null}
+    hasKey={false}
+    busy={false}
+    testing={false}
+    testResult={null}
+    testError=""
+    deleting={false}
+    onDraftChange={() => undefined}
+    onSave={() => undefined}
+    onUse={() => undefined}
+    onTest={() => undefined}
+    onDelete={() => undefined}
+    onCancelDelete={() => undefined}
+    onCancelEdit={() => undefined}
+  />);
+  assert.doesNotMatch(html, /当前更改尚未保存|>取消<\/button>/);
 });
 
 test('save payload omits blank keys and Anthropic reasoning, but sends a deliberately entered key', () => {
@@ -192,6 +359,7 @@ test('provider editor uses a blank password field and exposes only supported pro
     onCancelEdit={() => undefined}
   />);
   assert.match(html, /data-testid="model-provider-editor"/);
+  assert.match(html, /<input[^>]*disabled=""[^>]*aria-label="配置 ID"[^>]*value="local-openai"/);
   assert.match(html, /type="password"[^>]*value=""/);
   assert.match(html, /已配置密钥/);
   assert.match(html, /OpenAI-compatible/);
@@ -577,7 +745,8 @@ test('an empty custom model list shows the illustration, both Add actions, and t
   assert.match(html, /data-testid="provider-custom-empty-action"/);
   assert.match(html, />添加</);
   assert.match(html, /data-testid="provider-custom-empty-docs"/);
-  assert.match(html, /查看模型文档/);
+  assert.match(html, /本地模型文档/);
+  assert.match(html, /data-testid="provider-setup-guide"/);
   assert.match(html, /href="https:\/\/github.com\/xuediner-source\/xueness\/blob\/main\/docs\/xueness-local-lightweight-mode\.md"/);
   assert.match(html, /rel="noopener noreferrer"/);
   // 工作台源站没有 docs/，不能使用打不开的相对路径。
@@ -601,6 +770,11 @@ test('custom model empty-state strings exist in English', () => {
     assert.equal(t('+ 添加'), '+ Add');
     assert.equal(t('添加'), 'Add');
     assert.equal(t('查看模型文档'), 'View Docs');
+    assert.equal(t('本地模型文档'), 'Local model guide');
+    assert.equal(t('第一次配置模型？从这里开始'), 'Setting up your first model? Start here');
+    assert.equal(t('本机 HTTP 安全授权'), 'Local HTTP security permission');
+    assert.equal(t('允许此配置通过未加密 HTTP 连接到本机回环地址'), 'Allow this profile to connect to a local loopback address over unencrypted HTTP');
+    assert.equal(t('本机 HTTP 授权只适用于 HTTP 回环 IP 字面地址。'), 'The local HTTP permission applies only to HTTP loopback IP literals.');
   } finally {
     setLocale('zh');
   }

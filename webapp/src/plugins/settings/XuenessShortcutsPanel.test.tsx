@@ -36,16 +36,21 @@ function event(key: string, patch: Partial<{ ctrlKey: boolean; metaKey: boolean;
 
 test("shortcut registry includes only wired workbench actions with stable defaults", () => {
   assert.deepEqual(SHORTCUT_COMMANDS.map((command) => command.id), [
-    "new-session", "command-palette", "open-settings", "toggle-sidebar", "refresh-session",
+    "new-session", "command-palette", "open-settings", "toggle-sidebar", "refresh-session", "send-message", "stop-generation", "insert-newline", "switch-theme", "toggle-terminal", "toggle-browser", "zoom-in", "zoom-out", "reset-zoom",
   ]);
   assert.deepEqual(DEFAULT_SHORTCUT_BINDINGS, {
     "new-session": "Mod+N",
-    "command-palette": "Mod+K",
+    "command-palette": "Mod+K | Mod+Shift+P",
     "open-settings": "Mod+,",
     "toggle-sidebar": "Mod+B",
     "refresh-session": "Alt+Shift+R",
+    "send-message": "Mod+Shift+Enter",
+    "stop-generation": "Alt+Shift+S",
+    "insert-newline": "Shift+Enter", "switch-theme": "Mod+Shift+L", "toggle-terminal": "Alt+Shift+J",
+    "toggle-browser": "Mod+Alt+B", "zoom-in": "Alt+Shift+=", "zoom-out": "Alt+Shift+9", "reset-zoom": "Alt+Shift+0",
   });
   assert.equal(new Set(Object.values(DEFAULT_SHORTCUT_BINDINGS)).size, SHORTCUT_COMMANDS.length);
+  assert.deepEqual(SHORTCUT_COMMANDS.filter(command => command.scope === "composer").map(command => command.id), ["send-message", "stop-generation", "insert-newline"]);
 });
 
 test("shortcut recorder canonicalizes modifiers, uses physical keys for Alt-produced glyphs, and requires a modifier", () => {

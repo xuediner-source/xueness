@@ -1,0 +1,30 @@
+{
+  "id": "batch_calls",
+  "name": "批量调用",
+  "description": "提示 Agent 在同一步发出互不依赖的侦查调用，并在上下文压缩后恢复这条规则。",
+  "version": "1.0.0",
+  "apiVersion": 1,
+  "defaultEnabled": true,
+  "dependencies": [],
+  "tools": [],
+  "commands": [],
+  "panels": [],
+  "resources": [],
+  "capabilities": [],
+  "modules": [
+    "policy",
+    "extension"
+  ],
+  "features": [
+    {
+      "id": "batch_calls.policy",
+      "name": "独立侦查调用同一步发齐，依赖调用按序执行",
+      "nameEn": "Batch independent inspection calls and sequence dependent calls"
+    },
+    {
+      "id": "batch_calls.compaction",
+      "name": "上下文压缩后在模型请求前恢复批量调用提醒",
+      "nameEn": "Reassert batching guidance before a model request after compaction"
+    }
+  ]
+}

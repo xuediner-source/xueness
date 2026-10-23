@@ -1,0 +1,25 @@
+{
+  "apiVersion": 2,
+  "id": "skills",
+  "name": "技能",
+  "description": "工作区、用户与已存技能的发现，ZCode 技能清单与 Skill 工具，SKILL.md 校验。",
+  "version": "0.2.0",
+  "defaultEnabled": true,
+  "capabilities": { "fs": { "read": ["state", "workspace"] } },
+  "tools": [
+    { "name": "skill_read", "gate": "read", "mutating": false, "concurrencySafe": true },
+    { "name": "skill_validate", "gate": "read", "mutating": false, "concurrencySafe": true }
+  ],
+  "features": [
+    { "id": "skills.listing", "name": "可用技能清单", "nameEn": "Available skills listing" },
+    { "id": "skills.read", "name": "按名称加载技能", "nameEn": "Load a skill by name" },
+    { "id": "skills.validate", "name": "校验 SKILL.md", "nameEn": "Validate a SKILL.md" },
+    { "id": "skills.seagull_game_security", "name": "游戏安全研究", "nameEn": "Game security research" },
+    { "id": "skills.seagull_lab", "name": "研究工作区与证据整理", "nameEn": "Research workspaces and evidence" },
+    { "id": "skills.seagull_license_security", "name": "授权与激活安全分析", "nameEn": "License and activation security" },
+    { "id": "skills.seagull_memory", "name": "内存与转储分析", "nameEn": "Memory and dump analysis" },
+    { "id": "skills.seagull_pentest", "name": "应用与网络安全验证", "nameEn": "Application and network security validation" },
+    { "id": "skills.seagull_reverse", "name": "二进制与协议逆向", "nameEn": "Binary and protocol reverse engineering" }
+  ],
+  "panels": ["capabilities"]
+}

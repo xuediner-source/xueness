@@ -4,10 +4,11 @@
  * This is the Xueness-owned workbench, built on our own event protocol and data
  * layer. The web entry renders this application for every URL.
  */
-import React from "react";
+import React, { lazy, Suspense } from "react";
 import { XuenessWorkbenchContainer } from "./XuenessWorkbenchContainer";
 import { RegionBoundary } from "./ui/primitives";
-import { ConversationSharePage } from "./plugins/sessions/ConversationSharing";
+
+const ConversationSharePage = lazy(() => import("./plugins/sessions/ConversationSharing").then(module => ({ default: module.ConversationSharePage })));
 
 /** Base styling for the standalone workbench. */
 const BASE_STYLE = `
@@ -28,9 +29,9 @@ export function XuenessApp() {
       <div className="xn-app" data-testid="xn-app">
         {/* The workbench owns the whole shell: sidebar + chat-first main area. */}
         <RegionBoundary onReload={() => window.location.reload()}>
-          {shareId ? <ConversationSharePage shareId={shareId} onImported={id => {
+          {shareId ? <Suspense fallback={null}><ConversationSharePage shareId={shareId} onImported={id => {
             window.location.assign(`/?session=${encodeURIComponent(id)}`);
-          }} /> : <XuenessWorkbenchContainer />}
+          }} /></Suspense> : <XuenessWorkbenchContainer />}
         </RegionBoundary>
       </div>
     </>

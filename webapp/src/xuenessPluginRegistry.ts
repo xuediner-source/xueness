@@ -11,6 +11,7 @@ export type PluginPanel =
   | "directory"
   | "providers"
   | "subscriptions"
+  | "workbuddy"
   | "model-monitor"
   | "usage"
   | "memory"
@@ -18,6 +19,7 @@ export type PluginPanel =
   | "settings"
   | "workflows"
   | "terminal"
+  | "browser"
   | "automations"
   | "marketplace"
   | "diagnostics"
@@ -25,23 +27,26 @@ export type PluginPanel =
   | "subagents";
 
 export const XUENESS_PLUGIN_REGISTRY = {
-  sessions: { name: "会话", description: "会话列表、归档恢复与永久删除、侧栏宽度调整、Agent 对话与历史分叉", panels: ["chat"] },
+  sessions: { name: "会话", description: "会话列表、工作区、用途与时间线视图、活性摘要、归档恢复与永久删除、侧栏、四会话分屏与持久会话组、独立输入、Agent 对话、有界子代理摘要、投影订阅与续传、命令回执与历史分叉、事实工作分段与活跃时长", panels: ["chat"] },
   files: { name: "文件", description: "工作区文件、改动和目录浏览", panels: ["files", "changes", "directory"] },
   git: { name: "Git", description: "工作区状态、差异和提交记录", panels: ["git"] },
   providers: { name: "供应商", description: "模型配置、模型发现、本地轻量模式与接口兼容诊断", panels: ["providers"] },
   subscriptions: { name: "订阅中心", description: "选择安装后通过账号授权、CLI 登录或订阅凭证接入，在会话中使用模型并查询上游真实额度。", panels: ["subscriptions"] },
+  workbuddy: { name: "WorkBuddy 号池", description: "查看本机 WorkBuddy 账号状态并管理认证文件。", panels: ["workbuddy"] },
+  native_ops: { name: "原生操作工具", description: "批量读取、文件修订与文档文本工具，按需发现并通过现有权限审批执行。", panels: [] },
+  batch_calls: { name: "批量调用", description: "鼓励同一步发起独立工具调用，并在上下文压缩后恢复批量调用约定。", panels: [] },
   model_monitor: { name: "返回模型监测", description: "随会话记录请求型号与上游返回型号，标记一致、不同及未报告。不会自动发起额外模型请求。", panels: ["model-monitor"] },
   usage: { name: "用量", description: "会话和步骤用量统计", panels: ["usage"] },
   memory: { name: "记忆", description: "记忆文件轨道状态", panels: ["memory"] },
   settings: { name: "设置", description: "工作台和运行设置", panels: ["settings"] },
   workflows: { name: "工作流", description: "工作流和后台任务", panels: ["workflows"] },
-  terminal: { name: "终端", description: "工作区交互式终端", panels: ["terminal"] },
+  terminal: { name: "终端", description: "工作区本地与连接作用域远程交互式终端", panels: ["terminal"] },
   automation: { name: "自动化", description: "本地计划与审批队列", panels: ["automations"] },
   extensions: { name: "扩展市场", description: "查看并安装可信资源清单，切换插件组合档位", panels: ["marketplace"] },
   network: { name: "网络工具", description: "受限公网读取、搜索服务配置与按需诊断", panels: [] },
   diagnostics: { name: "诊断与维护", description: "导出脱敏状态并清理旧日志", panels: ["diagnostics"] },
-  browser: { name: "浏览器自动化", description: "受审批约束的 Playwright 浏览器操作工具", panels: [] },
-  remote: { name: "远程连接", description: "连接已配置的 SSH 主机", panels: ["remote"] },
+  browser: { name: "浏览器自动化", description: "受审批约束的本地与远程截图式浏览器标签", panels: ["browser"] },
+  remote: { name: "远程连接", description: "连接已配置的 SSH 主机，作用域问题回答、撤回恢复、当前轮输入与历史媒体预览", panels: ["remote"] },
   bots: { name: "Bot 工具", description: "由插件目录声明的 Bot 能力", panels: [] },
   onboarding: { name: "引导", description: "工作区初始化与首次启动系统权限引导", panels: [] },
   desktop: { name: "桌面端", description: "Windows/macOS 桌面宿主、原生目录选择、系统通知与系统权限状态", panels: [] },
@@ -68,6 +73,7 @@ export const PLUGIN_PANEL_LABELS: Record<PluginPanel, string> = {
   directory: "目录",
   providers: "供应商",
   subscriptions: "订阅中心",
+  workbuddy: "WorkBuddy 号池",
   "model-monitor": "返回模型监测",
   usage: "用量",
   memory: "记忆",
@@ -75,6 +81,7 @@ export const PLUGIN_PANEL_LABELS: Record<PluginPanel, string> = {
   settings: "设置",
   workflows: "工作流与后台任务",
   terminal: "终端",
+  browser: "浏览器",
   automations: "自动化",
   marketplace: "扩展市场",
   diagnostics: "诊断与维护",

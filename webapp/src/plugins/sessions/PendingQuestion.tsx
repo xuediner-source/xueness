@@ -5,10 +5,10 @@ import { evaluatePendingQuestionKey } from "../shared";
 import { deferCompositionEnd } from "../../xuenessShortcutDisplay";
 import "./PendingQuestion.css";
 
-type QuestionTransport = {
+export type QuestionTransport = {
   load: (sessionId: string, signal?: AbortSignal) => Promise<QuestionResponse>;
-  answer: (sessionId: string, questionId: string, answer: string) => Promise<AnswerResponse>;
-  answerCards?: (sessionId: string, questionId: string, answers: QuestionCardAnswers) => Promise<AnswerResponse>;
+  answer: (sessionId: string, questionId: string, answer: string, enabled?: () => boolean) => Promise<AnswerResponse>;
+  answerCards?: (sessionId: string, questionId: string, answers: QuestionCardAnswers, enabled?: () => boolean) => Promise<AnswerResponse>;
 };
 type QuestionState = { sessionId: string; question: PendingQuestionRecord | null; draft: string; answers: QuestionCardAnswers; available: boolean; loading: boolean; saving: boolean; error: string };
 const emptyState = (): QuestionState => ({ sessionId: "", question: null, draft: "", answers: {}, available: false, loading: false, saving: false, error: "" });
@@ -71,8 +71,9 @@ export class PendingQuestionModel {
     const generation = this.generation;
     this.update({ saving: true, error: "" });
     try {
-      if (cards) await this.transport.answerCards!(sessionId, question.id, answers);
-      else await this.transport.answer(sessionId, question.id, answer);
+      const current = () => this.enabled && generation === this.generation;
+      if (cards) await this.transport.answerCards!(sessionId, question.id, answers, current);
+      else await this.transport.answer(sessionId, question.id, answer, current);
       if (generation !== this.generation || !this.enabled) return false;
       this.drafts.delete(this.draftKey(question));
       this.cardDrafts.delete(this.draftKey(question));
@@ -87,11 +88,13 @@ export class PendingQuestionModel {
   }
 }
 
-export function PendingQuestion({ sessionId, pendingQuestion, enabled, disabled = false, onSubmitted }: {
+export function PendingQuestion({ sessionId, pendingQuestion, enabled, disabled = false, onSubmitted, transport }: {
   sessionId: string; pendingQuestion?: string | null; enabled: boolean; disabled?: boolean;
+  transport?: QuestionTransport;
   onSubmitted: (sessionId: string, continueRun: boolean, isCurrent: () => boolean) => Promise<unknown>;
 }): React.ReactElement | null {
-  const [model] = useState(() => new PendingQuestionModel());
+  const domScope = React.useId().replace(/[^a-zA-Z0-9_-]/g, '');
+  const [model] = useState(() => new PendingQuestionModel(transport));
   const state = useSyncExternalStore(model.subscribe, model.snapshot, model.snapshot);
   const [continuingError, setContinuingError] = useState("");
   const [customChoices, setCustomChoices] = useState<Record<string, boolean>>({});
@@ -132,8 +135,8 @@ export function PendingQuestion({ sessionId, pendingQuestion, enabled, disabled 
       }}>{tr("刷新会话")}</button>
     {continuingError && <p role="alert">{tf("答复操作失败：{0}", [continuingError])}</p>}
   </section>;
-  return <section className="xn-pending-question" aria-labelledby={`question-heading-${sessionId}`} data-testid="pending-question">
-    <header><h3 id={`question-heading-${sessionId}`}>{tr("需要你的答复")}</h3><span>{tr("等待答复")}</span></header>
+  return <section className="xn-pending-question" aria-labelledby={`question-heading-${domScope}`} data-testid="pending-question">
+    <header><h3 id={`question-heading-${domScope}`}>{tr("需要你的答复")}</h3><span>{tr("等待答复")}</span></header>
     <p className="xn-pending-question__text">{current && state.question ? state.question.text : pendingQuestion}</p>
     {cards ? <div className="xn-question-cards">{cards.map(card => {
       const answer = state.answers[card.id] ?? { selected: [], text: "" };
@@ -145,18 +148,18 @@ export function PendingQuestion({ sessionId, pendingQuestion, enabled, disabled 
       return <fieldset key={card.id} disabled={busy} className="xn-question-card">
         <legend><span>{card.header}</span>{card.question}</legend>
         {card.options.length > 0 && <div className="xn-question-card__options">{card.options.map(option => <label key={option.label} className="xn-question-card__choice" data-selected={answer.selected.includes(option.label)}>
-          <input type={card.multiSelect ? "checkbox" : "radio"} name={`question-${sessionId}-${card.id}`} checked={answer.selected.includes(option.label)} onChange={event => updateChoice(option.label, event.currentTarget.checked)} />
+          <input type={card.multiSelect ? "checkbox" : "radio"} name={`question-${domScope}-${card.id}`} checked={answer.selected.includes(option.label)} onChange={event => updateChoice(option.label, event.currentTarget.checked)} />
           <span><strong>{option.label}</strong>{option.description && <span>{option.description}</span>}</span>
         </label>)}{!card.multiSelect && <label className="xn-question-card__choice" data-selected={customChoices[card.id] || (answer.selected.length === 0 && Boolean(answer.text.trim()))}>
-          <input type="radio" name={`question-${sessionId}-${card.id}`} checked={Boolean(customChoices[card.id] || (answer.selected.length === 0 && answer.text.trim()))}
+          <input type="radio" name={`question-${domScope}-${card.id}`} checked={Boolean(customChoices[card.id] || (answer.selected.length === 0 && answer.text.trim()))}
             onChange={() => {
               setCustomChoices(current => ({ ...current, [card.id]: true }));
               model.setCardAnswer(card.id, { selected: [], text: answer.text });
-              document.getElementById(`question-custom-${sessionId}-${card.id}`)?.focus();
+              document.getElementById(`question-custom-${domScope}-${card.id}`)?.focus();
             }} /><span><strong>{tr("自行填写")}</strong></span>
         </label>}</div>}
-        <label htmlFor={`question-custom-${sessionId}-${card.id}`}>{tr(card.options.length ? "补充或自定义答复" : "你的答复")}</label>
-        <textarea id={`question-custom-${sessionId}-${card.id}`} value={answer.text} rows={2} maxLength={2000}
+        <label htmlFor={`question-custom-${domScope}-${card.id}`}>{tr(card.options.length ? "补充或自定义答复" : "你的答复")}</label>
+        <textarea id={`question-custom-${domScope}-${card.id}`} value={answer.text} rows={2} maxLength={2000}
           placeholder={tr("填写答复，或补充任务所需的信息…")} onChange={event => model.setCardAnswer(card.id, { ...answer, text: event.currentTarget.value })} />
         {Array.from(answer.text.trim()).length > 1000 && <small role="alert">{tr("每项答复不能超过 1000 个字符。")}</small>}
       </fieldset>;

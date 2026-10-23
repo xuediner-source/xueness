@@ -1,4 +1,5 @@
 import { t as tr, tf, getLocale } from '../../i18n';
+import { modelToolName } from "../../xuenessToolNames";
 import React from "react";
 import { Brain, Check, ChevronDown, Copy, Files, Plug, Search, SquareTerminal } from "lucide-react";
 import type { TimelineRow, ToolDisplayStatus } from "../../xuenessWorkbench";
@@ -711,7 +712,8 @@ const ToolTimelineCard = React.memo(function ToolTimelineCard({
   const errorText = row.error
     ? `${row.errorCode ? `[${row.errorCode}] ` : ""}${row.error}`
     : row.status === "error" ? tr("工具执行失败") : "";
-  const kindLabel = toolKind === "mcp" ? "MCP" : toolKind === 'exec' ? tr('终端') : row.name;
+  // The model-facing (ZCode) name, e.g. Edit / TodoWrite; journal rows carry the Xueness name.
+  const kindLabel = toolKind === "mcp" ? "MCP" : toolKind === 'exec' ? tr('终端') : modelToolName(row.name);
 
   const statusNode = status === "error" && errorText
     ? <FailureCopyTooltip text={errorText} label={statusLabel} />

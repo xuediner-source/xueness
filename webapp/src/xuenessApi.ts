@@ -52,6 +52,8 @@ export type ProviderSummary = {
   capabilities?: string[];
   reasoningLevels?: string[];
   runtimeProfile?: "standard" | "lightweight";
+  /** Explicitly permits this saved profile to use plaintext HTTP on loopback IP literals only. */
+  allowLoopbackHttp?: boolean;
   contextWindow?: number;
   maxOutputTokens?: number;
   toolCalling?: "native" | "json";

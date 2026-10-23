@@ -1,0 +1,53 @@
+{
+  "apiVersion": 2,
+  "id": "native_ops",
+  "name": "原生操作工具",
+  "description": "由固定 Rust worker 提供的有界工作区文件与文档工具；命令执行仍由 Xueness 宿主管理。",
+  "version": "1.0.0",
+  "defaultEnabled": true,
+  "dependencies": ["files"],
+  "capabilities": {
+    "fs": {
+      "read": ["workspace"],
+      "write": ["workspace"]
+    },
+    "exec": ["dsh-ops-worker"]
+  },
+  "tools": [
+    { "name": "xops_inspect_local_file", "gate": "read", "mutating": false, "concurrencySafe": true },
+    { "name": "xops_grep", "gate": "read", "mutating": false, "concurrencySafe": true },
+    { "name": "xops_glob", "gate": "read", "mutating": false, "concurrencySafe": true },
+    { "name": "xops_replace", "gate": "edit", "mutating": true, "concurrencySafe": false },
+    { "name": "xops_write_file", "gate": "write", "mutating": true, "concurrencySafe": false },
+    { "name": "xops_edit_file", "gate": "edit", "mutating": true, "concurrencySafe": false },
+    { "name": "xops_diff", "gate": "read", "mutating": false, "concurrencySafe": true },
+    { "name": "xops_stat", "gate": "read", "mutating": false, "concurrencySafe": true },
+    { "name": "xops_copy", "gate": "write", "mutating": true, "concurrencySafe": false },
+    { "name": "xops_move", "gate": "write", "mutating": true, "concurrencySafe": false },
+    { "name": "xops_remove", "gate": "write", "mutating": true, "concurrencySafe": false },
+    { "name": "xops_read_files", "gate": "read", "mutating": false, "concurrencySafe": true },
+    { "name": "xops_read_table", "gate": "read", "mutating": false, "concurrencySafe": true },
+    { "name": "xops_read_docx", "gate": "read", "mutating": false, "concurrencySafe": true },
+    { "name": "xops_read_pdf", "gate": "read", "mutating": false, "concurrencySafe": true },
+    { "name": "xops_discover_tools", "gate": "read", "mutating": false, "concurrencySafe": false }
+  ],
+  "modules": ["native_file_worker", "tool_discovery", "document_readers"],
+  "backendAssets": [
+    "assets/schemas.json",
+    "assets/PROVENANCE.md",
+    "assets/LICENSE",
+    "assets/NOTICE",
+    "assets/licenses/deepseek-harness/LICENSE",
+    "assets/licenses/documents/THIRD-PARTY-NOTICES.txt",
+    "assets/licenses/fastctx/LICENSE-APACHE",
+    "assets/licenses/fastctx/NOTICE",
+    "assets/runtime/win32-x64/dsh-ops-worker.exe",
+    "assets/runtime/linux-x64/dsh-ops-worker",
+    "assets/runtime/darwin-arm64/dsh-ops-worker"
+  ],
+  "features": [
+    { "id": "native_ops.files", "name": "固定原生工作区文件工具", "nameEn": "Fixed native workspace file tools" },
+    { "id": "native_ops.discovery", "name": "按会话发现高级文件工具", "nameEn": "Per-session discovery of advanced file tools" },
+    { "id": "native_ops.documents", "name": "有界 CSV、DOCX 与 PDF 读取", "nameEn": "Bounded CSV, DOCX and PDF reading" }
+  ]
+}

@@ -2,6 +2,7 @@ const { app, BrowserWindow, Menu, dialog, shell, net, ipcMain, Tray, screen, sys
 const { join, resolve } = require('node:path');
 const { existsSync, mkdirSync, writeFileSync } = require('node:fs');
 const { Backend } = require('./backend.cjs');
+const { frontDoorCommand } = require('./front-door.cjs');
 const { isOwnedUrl, isExternalUrl, installPermissionPolicy } = require('./security.cjs');
 const { getWindowChromeOptions, installWindowThemeSync } = require('./window-chrome.cjs');
 const { createDesktopBackground, handleSecondInstance } = require('./desktop-background.cjs');
@@ -10,6 +11,8 @@ const { createElectronAssetRequest } = require('./electron-net-asset.cjs');
 const { createPermissionsHandler } = require('./permissions.cjs');
 const { createDesktopNotifications } = require('./notifications.cjs');
 const { buildApplicationMenu, getNativeLabels } = require('./native-labels.cjs');
+const { createDesktopStateStore } = require('./desktop-state-store.cjs');
+const { installProjectExplorer } = require('./project-explorer.cjs');
 const { autoUpdater } = require('electron-updater');
 const { configuredDataDirectory } = require('./data-directory.cjs');
 
@@ -102,6 +105,26 @@ function installApplicationMenu() {
   applicationMenuReady = true;
 }
 
+function installDesktopStateStorage(store) {
+  const trustedMainFrame = event => window && !window.isDestroyed()
+    && event.sender === window.webContents
+    && event.senderFrame === window.webContents.mainFrame
+    && isOwnedUrl(event.senderFrame?.url, backend?.origin);
+  ipcMain.on('xueness:desktop-storage:get', (event, key) => {
+    event.returnValue = trustedMainFrame(event) ? store.getItem(key) : null;
+  });
+  ipcMain.on('xueness:desktop-storage:set', (event, key, value) => {
+    if (!trustedMainFrame(event)) { event.returnValue = false; return; }
+    try { store.setItem(key, value); event.returnValue = true; }
+    catch { event.returnValue = false; }
+  });
+  ipcMain.on('xueness:desktop-storage:remove', (event, key) => {
+    if (!trustedMainFrame(event)) { event.returnValue = false; return; }
+    try { store.removeItem(key); event.returnValue = true; }
+    catch { event.returnValue = false; }
+  });
+}
+
 // Per-window security wiring: desktop token injection and navigation guards.
 // Re-applied whenever the main window is recreated (macOS dock reopen).
 function attachWindowSecurity(target, origin) {
@@ -125,14 +148,15 @@ function attachWindowSecurity(target, origin) {
 async function start() {
   const root = resolve(__dirname, '../..');
   const data = app.getPath('userData'); mkdirSync(data, { recursive: true, mode: 0o700 });
-  const executable = app.isPackaged
-    ? join(process.resourcesPath, 'backend', process.platform === 'win32' ? 'xueness-backend.exe' : 'xueness-backend')
-    : process.env.XUENESS_PYTHON || (process.platform === 'win32' ? 'python' : 'python3');
-  if (app.isPackaged && !existsSync(executable)) throw new Error('Missing bundled backend');
-  backend = new Backend({ executable, args: app.isPackaged ? [] : [join(root, 'desktop/entrypoint.py')],
+  installDesktopStateStorage(createDesktopStateStore(join(data, 'desktop-state-v1.json')));
+  installProjectExplorer({ ipcMain, getWindow: () => window, getBackend: () => backend, shell });
+  const assets = app.isPackaged ? join(process.resourcesPath, 'webapp') : join(root, 'webapp/dist');
+  const command = frontDoorCommand({ env: process.env, packaged: app.isPackaged, root, resourcesPath: process.resourcesPath, assets });
+  if (app.isPackaged && !existsSync(command.args[0])) throw new Error('Missing bundled backend');
+  backend = new Backend({ executable: command.executable, args: command.args,
     cwd: app.isPackaged ? data : root, data, node: process.execPath,
     playwright: app.isPackaged ? join(process.resourcesPath, 'browser-runtime/node_modules/playwright/index.mjs') : join(root, 'webapp/node_modules/playwright/index.mjs'),
-    assets: app.isPackaged ? join(process.resourcesPath, 'webapp') : join(root, 'webapp/dist') });
+    assets });
   const handlePermissionRequest = createPermissionsHandler({
     platform: process.platform,
     systemPreferences,
@@ -302,25 +326,40 @@ async function start() {
       })()`);
       await window.loadURL(`${origin}/?xuenessDesktop=1`);
       const appearance = await window.webContents.executeJavaScript(`(async () => {
+        const visible = element => {
+          if (!element) return false;
+          const rect = element.getBoundingClientRect();
+          const style = getComputedStyle(element);
+          return rect.width > 0 && rect.height > 0 && rect.left >= 0 && rect.top >= 0
+            && rect.right <= innerWidth && rect.bottom <= innerHeight
+            && style.visibility === 'visible' && style.display !== 'none';
+        };
         let settled = false;
         for (let n=0;n<100;n++) {
           const sidebar = document.querySelector('#xn-shell-sidebar');
+          const homeWorkspace = document.querySelector('[data-testid=xn-hero] [data-testid=xn-start-page-workspace-menu] > summary');
           if (document.querySelector('[data-testid=xn-shell] [data-testid=xn-sidebar-action-new-task]')
               && (document.documentElement.dataset.xnPalette || 'xueness') === ${JSON.stringify(palette)}
               && document.documentElement.dataset.xnTheme === ${JSON.stringify(theme)}
               // Cached document colors precede React settings and sidebar sizing.
-              && sidebar && Math.abs(sidebar.getBoundingClientRect().width - ${palette === 'claudex' ? 340 : 270}) < 0.1) {
+              && sidebar && Math.abs(sidebar.getBoundingClientRect().width - ${palette === 'claudex' ? 340 : 270}) < 0.1
+              // The production home workspace menu is lazy-loaded after the shell.
+              && visible(homeWorkspace)) {
             settled = true;
             break;
           }
           await new Promise(resolve => setTimeout(resolve,100));
         }
-        if (!settled) throw new Error('Appearance fixture sidebar did not settle');
+        if (!settled) throw new Error('Appearance fixture sidebar and home workspace menu did not settle');
         const root = document.documentElement;
         const css = getComputedStyle(root);
         const history = document.querySelector('.xn-desktop-titlebar__history button');
         const actions = document.querySelector('.xn-desktop-titlebar__actions');
         const token = css.getPropertyValue('--bg-window').trim();
+        const home = document.querySelector('[data-testid=xn-hero]');
+        const workspaceMenu = home?.querySelector('[data-testid=xn-start-page-workspace-menu] > summary');
+        const workspaceBand = workspaceMenu?.closest('.xn-hero__workspace, .xn-composer__top-content');
+        const workspaceRect = workspaceMenu?.getBoundingClientRect();
         return { palette: root.dataset.xnPalette || 'xueness', theme: root.dataset.xnTheme,
           windowBgToken: token, chromeToken: css.getPropertyValue('--xn-native-titlebar-color').trim() || token,
           meta: document.querySelector('meta[name="theme-color"]')?.content,
@@ -332,8 +371,12 @@ async function start() {
           classicTasks: !!document.querySelector('.xn-task-list__segments'),
           resizeHandle: !!document.querySelector('[data-testid=xn-sidebar-resizer]'),
           titlebarHeight: document.querySelector('.xn-desktop-titlebar')?.getBoundingClientRect().height,
-          workspaceStrip: !!document.querySelector('.xn-hero__workspace'),
-          composerWorkspace: !!document.querySelector('.xn-hero .xn-composer__top-content'),
+          workspaceStrip: !!home?.querySelector('.xn-hero__workspace'),
+          composerWorkspace: !!home?.querySelector('.xn-composer__top-content'),
+          workspaceMenuVisible: visible(workspaceMenu),
+          workspacePlacement: workspaceBand?.className || null,
+          workspaceMenuBounds: workspaceRect ? { x: workspaceRect.x, y: workspaceRect.y,
+            width: workspaceRect.width, height: workspaceRect.height } : null,
           nodeAccess: typeof window.require !== 'undefined' };
       })()`);
       if (typeof window.getBackgroundColor === 'function') {

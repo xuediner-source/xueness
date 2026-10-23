@@ -1,3 +1,5 @@
+> Historical reference from 2026-10-12, before the TypeScript/Z8 migration; current behavior is defined by [README.md](../README.md) and [ts/docs/z8-guarded-goal-memory.md](../ts/docs/z8-guarded-goal-memory.md).
+
 # 0.1.6 Windows 与 macOS 统一
 
 会话界面和插件运行机制使用同一份源码与预构建工作台。查找会话在 macOS 使用 Cmd+F，在 Windows 使用 Ctrl+F；当前轮引导、排队反向发送和快捷键标签沿用各平台的 Mod 键。macOS 原有原生菜单、Dock 窗口恢复、标题栏安全区和用户数据目录继续生效。

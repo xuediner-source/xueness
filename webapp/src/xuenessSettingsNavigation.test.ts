@@ -10,10 +10,11 @@ test('all installed settings destinations have English labels, descriptions and 
     const sections = settingsNavigation(new Set([
       'settings', 'files', 'providers', 'browser', 'network', 'memory', 'subagents',
       'mcp', 'skills', 'commands', 'hooks', 'usage', 'extensions', 'remote',
-      'automation', 'desktop', 'updates', 'diagnostics',
+      'automation', 'desktop', 'updates', 'diagnostics', 'workbuddy',
     ]));
     assert.ok(sections.some(section => section.id === 'network'));
     assert.ok(sections.some(section => section.id === 'updates'));
+    assert.ok(sections.some(section => section.id === 'workbuddy'));
     for (const section of sections) {
       assert.doesNotMatch(`${section.label} ${section.description} ${section.group}`, /[\u3400-\u9fff]/, section.id);
     }
@@ -29,6 +30,7 @@ test('settings navigation hides ineffective plugin routes and keeps plugin manag
   assert.ok(sections.some(section => section.id === 'providers'));
   assert.ok(sections.some(section => section.id === 'mcp'));
   assert.equal(sections.some(section => section.id === 'browser'), false);
+  assert.equal(sections.some(section => section.id === 'workbuddy'), false);
   assert.deepEqual(
     sections.filter(section => section.group === '基础设置' || section.group === 'Agent 能力' || section.group === '数据与统计')
       .map(section => section.id),

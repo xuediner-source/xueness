@@ -1,0 +1,55 @@
+{
+  "apiVersion": 2,
+  "id": "hooks",
+  "name": "生命周期钩子",
+  "description": "按调用授权执行生命周期钩子；工作区钩子经摘要审查与显式信任后并入同一执行器。",
+  "version": "0.2.0",
+  "defaultEnabled": true,
+  "capabilities": {
+    "exec": [
+      "*"
+    ],
+    "fs": {
+      "read": [
+        "state",
+        "workspace"
+      ]
+    }
+  },
+  "tools": [],
+  "features": [
+    {
+      "id": "hooks.events",
+      "name": "七个生命周期事件",
+      "nameEn": "Seven lifecycle events"
+    },
+    {
+      "id": "hooks.pre_tool_block",
+      "name": "PreToolUse 拦截工具调用",
+      "nameEn": "PreToolUse can block a tool call"
+    },
+    {
+      "id": "hooks.workspace_trust",
+      "name": "工作区 hooks 按摘要授权",
+      "nameEn": "Workspace hooks run only after digest trust"
+    },
+    {
+      "id": "hooks.runtime_admission",
+      "name": "每次执行前重新核验工作区信任",
+      "nameEn": "Workspace trust revalidation before each dispatch"
+    },
+    {
+      "id": "hooks.output_control",
+      "name": "Hook 上下文、输入更新与有限续跑",
+      "nameEn": "Hook context, input updates and bounded continuation"
+    }
+  ],
+  "panels": [
+    "capabilities"
+  ],
+  "modules": [
+    "runner",
+    "output",
+    "trust"
+  ]
+}

@@ -1,6 +1,8 @@
+> Historical reference from 2026-10-12, before the TypeScript/Z8 migration; current behavior is defined by [README.md](../README.md) and [ts/docs/z8-guarded-goal-memory.md](../ts/docs/z8-guarded-goal-memory.md).
+
 # 订阅中心与返回模型监测
 
-2026-10-11：功能目录现为 **30 个可信插件、192 项登记功能**。新增两个可选插件，默认未安装、未启用；更新客户端不会自动接入账号或启用监测。后续已加入会话主页入口与按会话隔离的监测卡，详见[会话主页与模型导航](conversation-home-and-model-navigation-2026-10-11.md)。
+2026-10-11：功能目录现为 **30 个可信插件、192 项登记功能**。新增两个可选插件，默认未安装、未启用；更新客户端不会自动接入账号或启用监测。后续已加入会话主页入口与按会话隔离的监测卡，详见[会话主页与模型导航](https://github.com/xuediner-source/xueness/blob/25ba9dbae4838ba6a84ae64ff9d089a1bdd50833/docs/conversation-home-and-model-navigation-2026-10-11.md)。
 
 ## 安装与使用
 

@@ -56,3 +56,9 @@ test("切换 Claudex 外观不做全局缩放：不改根字号、界面字号�
 test("Claudex 外观不引入专有字体或品牌字体", () => {
   assert.doesNotMatch(tokens + polish, /Anthropic (Sans|Serif|Mono)|Tiempos|Copernicus|Styrene|OpenAI Sans|Söhne|Soehne/i);
 });
+
+test("纸感外观的单个会话面板不画强调色边框，分屏时用中性细线标出焦点", () => {
+  const css = strip(polish);
+  assert.match(css, /html\[data-xn-palette="claudex"\] \.xn-workbench-leaf\[data-pane-focused="true"\] \{ box-shadow: none; \}/);
+  assert.match(css, /html\[data-xn-palette="claudex"\] \.xn-pane-workbench__canvas:has\(> \.xn-workbench-leaf ~ \.xn-workbench-leaf\) \.xn-workbench-leaf\[data-pane-focused="true"\] \{ box-shadow: inset 0 0 0 1px color-mix\(in oklab, var\(--fg\) 24%, transparent\);/);
+});

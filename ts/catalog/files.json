@@ -1,0 +1,110 @@
+{
+  "id": "files",
+  "name": "工作区文件",
+  "description": "文件工具、目录浏览、文件预览与改动视图。",
+  "version": "1.0.0",
+  "apiVersion": 1,
+  "defaultEnabled": true,
+  "dependencies": [],
+  "tools": [
+    "read",
+    "list",
+    "glob",
+    "grep",
+    "write",
+    "edit"
+  ],
+  "commands": [],
+  "panels": [
+    "files",
+    "changes",
+    "directory"
+  ],
+  "resources": [],
+  "capabilities": [
+    "filesystem-write"
+  ],
+  "httpFamilies": [
+    "directory",
+    "home",
+    "system",
+    "sessions/*/file",
+    "sessions/*/files",
+    "sessions/*/file-bytes"
+  ],
+  "modules": [
+    "builtin_tools",
+    "directory_api",
+    "http_routes",
+    "instructions",
+    "preview",
+    "windows_paths",
+    "read_state",
+    "file_history",
+    "file_rewind",
+    "file_rewind_api",
+    "file_bytes_api"
+  ],
+  "features": [
+    {
+      "id": "files.read",
+      "name": "文件列表、搜索与分页读取",
+      "nameEn": "File listing, search and paged reading"
+    },
+    {
+      "id": "files.mutations",
+      "name": "批准后的文件写入与编辑",
+      "nameEn": "Approved file writes and edits"
+    },
+    {
+      "id": "files.directory",
+      "name": "目录浏览、新建与本机目录选择",
+      "nameEn": "Directory browsing, creation and host folder selection"
+    },
+    {
+      "id": "files.preview",
+      "name": "文本、图像、PDF 与媒体预览",
+      "nameEn": "Text, image, PDF and media previews"
+    },
+    {
+      "id": "files.changes",
+      "name": "会话文件改动、逐行差异与上下文折叠",
+      "nameEn": "Session file changes, line diffs and folded context"
+    },
+    {
+      "id": "files.instructions",
+      "name": "工作区 AGENTS 指导文件加载",
+      "nameEn": "Workspace AGENTS instruction loading"
+    },
+    {
+      "id": "files.read_state_restore",
+      "name": "恢复会话的文件读写快照",
+      "nameEn": "Restored session file read and write snapshots"
+    },
+    {
+      "id": "files.rewind_snapshots",
+      "name": "授权文件修改前后快照",
+      "nameEn": "Authorized file change snapshots"
+    },
+    {
+      "id": "files.file_rewind",
+      "name": "核验文件哈希后回退",
+      "nameEn": "File rewind with after-hash verification"
+    },
+    {
+      "id": "files.filesystem_adapter",
+      "name": "工作区文件系统适配与版本写入",
+      "nameEn": "Workspace filesystem adapter and revision writes"
+    },
+    {
+      "id": "files.byte_ranges",
+      "name": "有界文件字节范围读取",
+      "nameEn": "Bounded file byte range reading"
+    }
+  ],
+  "frontendModules": [
+    "plugins/files/DirectoryBrowser.tsx",
+    "plugins/files/FileBrowser.tsx",
+    "plugins/files/DiffView.tsx"
+  ]
+}

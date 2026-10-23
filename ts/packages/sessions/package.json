@@ -1,0 +1,13 @@
+{
+  "name": "@xueness/sessions",
+  "version": "0.2.1",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@xueness/contracts": "0.2.1",
+    "koffi": "3.3.3"
+  }
+}

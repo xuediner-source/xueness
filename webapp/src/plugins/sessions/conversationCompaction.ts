@@ -19,6 +19,15 @@ export type SessionCompactionRecord = {
   estimatedTokens?: number;
   kept_user_turns?: number;
   advisory?: boolean;
+  /** ZCode compaction (ts/plugins/providers/src/zcode-compact.ts): model summary, flat scalar record. */
+  kind?: string;
+  trigger?: string;
+  kept?: number;
+  summarizedMessageCount?: number;
+  preCompactTokens?: number;
+  postCompactTokens?: number;
+  truePostCompactTokens?: number;
+  willRetriggerNextTurn?: boolean;
 };
 
 export type ConversationCompactionMarker = {
@@ -28,6 +37,8 @@ export type ConversationCompactionMarker = {
   removed: number;
   /** 后端记录累计掩码的旧工具输出条数。 */
   masked: number;
+  /** 最近一条压缩记录（可选）；ZCode 记录（kind "zcode"）用 ZCode 的文案。 */
+  latest?: SessionCompactionRecord;
 };
 
 /** Attach archive provenance to tool rows: unlike text rows, tools have no
@@ -60,8 +71,9 @@ export function markArchivedToolRows(rows: TimelineRow[], journal: unknown): Tim
     ? { ...row, archivedForCompaction: true } : row);
 }
 
-const NUMERIC_FIELDS: readonly string[] = ['removed', 'masked', 'previous_chars', 'estimatedTokens', 'kept_user_turns', 'targetChars', 'instructionsChars'];
-const BOOLEAN_FIELDS: readonly string[] = ['advisory', 'manual'];
+const NUMERIC_FIELDS: readonly string[] = ['removed', 'masked', 'previous_chars', 'estimatedTokens', 'kept_user_turns', 'targetChars', 'instructionsChars',
+  'kept', 'summarizedMessageCount', 'preCompactTokens', 'postCompactTokens', 'truePostCompactTokens'];
+const BOOLEAN_FIELDS: readonly string[] = ['advisory', 'manual', 'willRetriggerNextTurn'];
 
 /** 防御性解析 session payload 的 compactions；形状意外时按空记录处理。 */
 export function parseSessionCompactions(value: unknown): SessionCompactionRecord[] {
@@ -79,7 +91,11 @@ export function parseSessionCompactions(value: unknown): SessionCompactionRecord
 }
 
 /** 压缩边界的单行说明；计数来自后端 compactions 记录，缺失时只陈述事实。 */
-export function conversationCompactionLabel(marker: Pick<ConversationCompactionMarker, 'removed' | 'masked'>): string {
+export function conversationCompactionLabel(marker: Pick<ConversationCompactionMarker, 'removed' | 'masked' | 'latest'>): string {
+  // ZCode `transcript.compact.completed`「上下文已压缩」；条数是已移出上下文、由摘要接替的消息。
+  if (marker.latest?.kind === 'zcode') {
+    return marker.removed > 0 ? tf('上下文已压缩（{0} 条较早消息已摘要）', [marker.removed]) : tr('上下文已压缩');
+  }
   if (marker.removed > 0 && marker.masked > 0) {
     return tf('已压缩 {0} 条较早消息，另有 {1} 条旧输出已掩码', [marker.removed, marker.masked]);
   }
@@ -125,10 +141,12 @@ export function conversationCompactionBoundary(
     }
     if (seenArchived) {
       const records = parseSessionCompactions(compactions);
+      const latest = records.at(-1);
       return {
         boundarySeq: row.seq,
         removed: recordCount(records, 'removed'),
         masked: recordCount(records, 'masked'),
+        ...(latest?.kind === 'zcode' ? { latest } : {}),
       };
     }
   }

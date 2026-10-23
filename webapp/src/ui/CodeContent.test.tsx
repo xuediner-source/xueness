@@ -34,3 +34,33 @@ test('highlight timing gate: immediate 同步高亮，after-stream 推迟为纯�
   assert.match(onVisible,/data-highlight-timing="on-visible"/);
   assert.match(onVisible,/<span style="color:/);
 });
+
+test('highlighting runs once per render and never for plain, oversized or still-streaming text; failures fall back to plain lines',async()=>{
+  const h=await loadHighlighter(['github-light'],'json');
+  const original=h.codeToHtml;
+  const calls:string[]=[];
+  let fail=false;
+  h.codeToHtml=((code:string,options:Parameters<typeof original>[1])=>{
+    calls.push(code);
+    if(fail) throw new Error('grammar exploded');
+    return original.call(h,code,options);
+  }) as typeof original;
+  try{
+    const highlighted=renderToStaticMarkup(<CodeContent text={'{"once": true}'} language="json"/>);
+    assert.match(highlighted,/<span style="color:/);
+    assert.deepEqual(calls,['{"once": true}']);
+    calls.length=0;
+    renderToStaticMarkup(<CodeContent text={'{"streaming": true}'} language="json" highlightTiming="after-stream"/>);
+    renderToStaticMarkup(<CodeContent text="plain words" language="text"/>);
+    const oversized=renderToStaticMarkup(<CodeContent text={'['+'1,'.repeat(100001)+'1]'} language="json"/>);
+    assert.match(oversized,/<span class="line">/);
+    assert.deepEqual(calls,[]);
+    fail=true;
+    const broken=renderToStaticMarkup(<CodeContent text={'{"broken": <b>}'} language="json"/>);
+    assert.equal(calls.length,1);
+    assert.match(broken,/<span class="line">\{&quot;broken&quot;: &lt;b&gt;\}<\/span>/);
+    assert.doesNotMatch(broken,/<b>/);
+  }finally{
+    h.codeToHtml=original;
+  }
+});

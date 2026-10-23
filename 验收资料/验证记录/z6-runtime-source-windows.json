@@ -1,0 +1,61 @@
+{
+  "ok": true,
+  "mode": "source",
+  "network": "loopback-only",
+  "scenarios": [
+    {
+      "name": "compile_draft_digest_and_session_ownership",
+      "ok": true,
+      "diagnosticLocation": true,
+      "draftDigest": true,
+      "staleStartStatus": 409,
+      "foreignReadStatus": 403,
+      "foreignStartStatus": 403,
+      "modelRequests": 0
+    },
+    {
+      "name": "typed_actors_reads_report_hole_and_resume_replay",
+      "ok": true,
+      "typedRepairRequests": 2,
+      "plannerAsks": 2,
+      "samePlannerSession": true,
+      "fanoutActors": 2,
+      "readOriginal": true,
+      "reportsAfterResume": 1,
+      "holeResolved": true,
+      "replayModelRequests": 0,
+      "totalModelRequests": 5,
+      "phaseAndLogEvents": true
+    },
+    {
+      "name": "amend_reuses_readonly_cache_without_replaying_models",
+      "ok": true,
+      "newRunId": true,
+      "matchingWorkspaceFingerprint": true,
+      "readOnlyAskAndReadCacheReused": true,
+      "amendedResult": "amended",
+      "originalRunUnchanged": true,
+      "totalModelRequests": 5
+    },
+    {
+      "name": "cancel_hung_actor_once_and_workflows_plugin_gate",
+      "ok": true,
+      "status": "cancelled",
+      "activeActorStopped": true,
+      "cancelModelRequests": 1,
+      "replayed": false,
+      "workflowsPluginGate403": true,
+      "pluginRestored": true,
+      "hostCloseStatus": "cancelled",
+      "hostCloseModelRequests": 1
+    }
+  ],
+  "failures": [],
+  "modelRequests": {
+    "typedWorkflow": 5,
+    "cancellationCase": 1,
+    "hostCloseCase": 1,
+    "cancelledAndClosedWorkflowProfile": 2,
+    "total": 7
+  }
+}

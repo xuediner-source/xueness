@@ -1,0 +1,14 @@
+{
+  "name": "@xueness/engine-tools",
+  "version": "0.2.1",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@lydell/node-pty": "^1.2.0-beta.15",
+    "@xueness/contracts": "0.2.1",
+    "koffi": "3.3.3"
+  }
+}

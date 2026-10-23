@@ -6,15 +6,35 @@ export type ShortcutCommandId =
   | "command-palette"
   | "open-settings"
   | "toggle-sidebar"
-  | "refresh-session";
+  | "refresh-session"
+  | "send-message"
+  | "stop-generation"
+  | "insert-newline"
+  | "switch-theme" | "toggle-terminal" | "toggle-browser"
+  | "zoom-in" | "zoom-out" | "reset-zoom";
 
-export type ShortcutCommand = {
-  id: ShortcutCommandId;
+type ComposerShortcutCommandId = "send-message" | "stop-generation" | "insert-newline";
+
+/** Scopes used by the settings keymap. Session and pane commands are registered
+ * by the sessions plugin and are not part of the always-on global table. */
+export type ShortcutScope = "global" | "composer" | "session" | "pane";
+
+export type ShortcutCommandDefinition = {
+  id: string;
   label: string;
   description: string;
-  scope: "global";
+  scope: ShortcutScope;
   defaultBinding: string;
 };
+
+export type ShortcutCommand = {
+  label: string;
+  description: string;
+  defaultBinding: string;
+} & (
+  | { scope: "global"; id: Exclude<ShortcutCommandId, ComposerShortcutCommandId> }
+  | { scope: "composer"; id: ComposerShortcutCommandId }
+);
 
 /**
  * Keep this registry aligned with the real handlers in
@@ -23,10 +43,19 @@ export type ShortcutCommand = {
  */
 export const SHORTCUT_COMMANDS: readonly ShortcutCommand[] = [
   { id: "new-session", label: "新建任务", description: "开始一个新的任务。", scope: "global", defaultBinding: "Mod+N" },
-  { id: "command-palette", label: "打开命令面板", description: "搜索任务和可用命令。", scope: "global", defaultBinding: "Mod+K" },
+  { id: "command-palette", label: "打开命令面板", description: "搜索任务和可用命令。", scope: "global", defaultBinding: "Mod+K | Mod+Shift+P" },
   { id: "open-settings", label: "打开设置", description: "打开工作台设置。", scope: "global", defaultBinding: "Mod+," },
   { id: "toggle-sidebar", label: "切换侧栏", description: "显示或收起任务侧栏。", scope: "global", defaultBinding: "Mod+B" },
   { id: "refresh-session", label: "刷新任务", description: "重新加载任务列表和当前任务。", scope: "global", defaultBinding: "Alt+Shift+R" },
+  { id: "send-message", label: "发送消息", description: "在 composer 中发送当前草稿。", scope: "composer", defaultBinding: "Mod+Shift+Enter" },
+  { id: "stop-generation", label: "停止生成", description: "在 composer 中停止当前回合。", scope: "composer", defaultBinding: "Alt+Shift+S" },
+  { id: "insert-newline", label: "插入换行", description: "仅在当前输入区插入换行。", scope: "composer", defaultBinding: "Shift+Enter" },
+  { id: "switch-theme", label: "切换主题", description: "切换深色和浅色主题。", scope: "global", defaultBinding: "Mod+Shift+L" },
+  { id: "toggle-terminal", label: "切换终端面板", description: "打开或关闭终端面板。", scope: "global", defaultBinding: "Alt+Shift+J" },
+  { id: "toggle-browser", label: "切换浏览器面板", description: "打开或关闭浏览器面板。", scope: "global", defaultBinding: "Mod+Alt+B" },
+  { id: "zoom-in", label: "放大应用", description: "放大工作台界面，不改变系统显示缩放。", scope: "global", defaultBinding: "Alt+Shift+=" },
+  { id: "zoom-out", label: "缩小应用", description: "缩小工作台界面，不改变系统显示缩放。", scope: "global", defaultBinding: "Alt+Shift+9" },
+  { id: "reset-zoom", label: "恢复应用缩放", description: "恢复工作台原始大小。", scope: "global", defaultBinding: "Alt+Shift+0" },
 ] as const;
 
 export const DEFAULT_SHORTCUT_BINDINGS: Readonly<Record<ShortcutCommandId, string>> =
@@ -42,6 +71,7 @@ export type ShortcutEventLike = {
   keyCode?: number;
   isComposing?: boolean;
   repeat?: boolean;
+  defaultPrevented?: boolean;
   nativeEvent?: { isComposing?: boolean; keyCode?: number };
   compositionActive?: boolean;
 };
@@ -105,7 +135,7 @@ function canonicalKey(key: string): string | null {
   if (/^[a-z]$/i.test(alias)) return alias.toUpperCase();
   if (/^[0-9]$/.test(alias)) return alias;
   if (/^F(?:[1-9]|1[0-2])$/i.test(alias)) return alias.toUpperCase();
-  if (["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", "Delete"].includes(alias)) return alias;
+  if (["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", "Delete", "Enter"].includes(alias)) return alias;
   if ([".", ",", "/", "\\", "-", "=", ";", "[", "]", "`"].includes(alias)) return alias;
   return null;
 }
@@ -116,13 +146,23 @@ function canonicalPhysicalKey(code: string): string | null {
   const digit = /^Digit([0-9])$/.exec(code);
   if (digit) return digit[1];
   const named: Record<string, string> = {
-    Comma: ",", Period: ".", Slash: "/", Backslash: "\\", Minus: "-", Equal: "=",
+    Comma: ",", Period: ".", Slash: "/", Backslash: "\\", IntlBackslash: "\\", Minus: "-", Equal: "=",
     Semicolon: ";", BracketLeft: "[", BracketRight: "]", Backquote: "`",
+    ArrowLeft: "ArrowLeft", ArrowRight: "ArrowRight", ArrowUp: "ArrowUp", ArrowDown: "ArrowDown",
   };
   return named[code] ?? null;
 }
 
+/** Alternative chords use a bounded pipe-separated string; legacy single strings remain valid. */
+export function shortcutAlternatives(value: string): string[] { return value.split('|').map(part => part.trim()).filter(Boolean); }
 export function normalizeShortcutBinding(value: string): string | null {
+  if (value.includes('|')) {
+    const parts = value.split('|');
+    if (parts.length > 4) return null;
+    const normalized = parts.map(part => normalizeShortcutBinding(part));
+    if (normalized.some(part => !part) || new Set(normalized).size !== normalized.length) return null;
+    return normalized.join(' | ');
+  }
   if (!value.trim()) return "";
   const parts = value.split("+").map((part) => part.trim());
   if (parts.some((part) => !part)) return null;
@@ -139,16 +179,17 @@ export function normalizeShortcutBinding(value: string): string | null {
     return "";
   });
   if (modifiers.some((modifier) => !modifier) || new Set(modifiers).size !== modifiers.length) return null;
-  if (modifiers.length === 0) return null;
+  if (modifiers.length === 0 && key !== "Enter") return null;
   return [...MODIFIER_ORDER.filter((modifier) => modifiers.includes(modifier)), key].join("+");
 }
 
 export function isReservedShortcut(binding: string): boolean {
+  if (binding.includes('|')) return shortcutAlternatives(binding).some(isReservedShortcut);
   const normalized = normalizeShortcutBinding(binding);
-  return Boolean(normalized && RESERVED_SHORTCUTS.has(normalized.toLowerCase()));
+  return Boolean(normalized && [normalized, normalized.replace(/^Ctrl\+/, "Mod+"), normalized.replace(/^Meta\+/, "Mod+")].some(value => RESERVED_SHORTCUTS.has(value.toLowerCase())));
 }
 
-export function recordShortcutEvent(event: ShortcutEventLike, platform?: string): ShortcutRecordingResult {
+export function recordShortcutEvent(event: ShortcutEventLike, platform?: string, scope: ShortcutScope = "global"): ShortcutRecordingResult {
   if (isImeComposingEvent(event)) {
     return { kind: "invalid", reason: "unsupported-key" };
   }
@@ -177,17 +218,41 @@ export function recordShortcutEvent(event: ShortcutEventLike, platform?: string)
   if (event.shiftKey) modifiers.push("Shift");
   if (!modifiers.length && (key === "F5" || key === "F12")) return { kind: "invalid", reason: "reserved" };
   const normalized = normalizeShortcutBinding([...modifiers, key].join("+"));
-  if (!normalized) return { kind: "invalid", reason: "modifier-required" };
+  if (!normalized || (normalized === "Enter" && scope !== "composer")) return { kind: "invalid", reason: "modifier-required" };
   if (isReservedShortcut(normalized)) return { kind: "invalid", reason: "reserved" };
   return { kind: "binding", binding: normalized };
 }
 
 export function resolveShortcutBinding(
-  commandId: ShortcutCommandId,
+  commandId: string,
   overrides: Readonly<Record<string, string>>,
+  defaultBinding?: string,
 ): string {
   if (Object.hasOwn(overrides, commandId)) return overrides[commandId] ?? "";
-  return DEFAULT_SHORTCUT_BINDINGS[commandId];
+  if (Object.hasOwn(DEFAULT_SHORTCUT_BINDINGS, commandId)) return DEFAULT_SHORTCUT_BINDINGS[commandId as ShortcutCommandId];
+  return defaultBinding ?? "";
+}
+
+/** Shifted punctuation and arrows keep a stable identity in event.code. */
+const PHYSICAL_SHORTCUT_KEYS: Record<string, string> = {
+  BracketLeft: "[",
+  BracketRight: "]",
+  Backslash: "\\",
+  IntlBackslash: "\\",
+  Minus: "-",
+  Equal: "=",
+  ArrowLeft: "arrowleft",
+  ArrowRight: "arrowright",
+  ArrowUp: "arrowup",
+  ArrowDown: "arrowdown",
+};
+
+function eventMatchesShortcutKey(event: ShortcutEventLike, expected: string): boolean {
+  const direct = event.key === " " ? "space" : event.key.toLowerCase();
+  if (direct === expected) return true;
+  if (event.altKey && event.code && /^Key[A-Z]$/.test(event.code) && event.code.slice(3).toLowerCase() === expected) return true;
+  const physical = event.code ? PHYSICAL_SHORTCUT_KEYS[event.code] : undefined;
+  return physical === expected;
 }
 
 export function matchesShortcut(
@@ -195,15 +260,10 @@ export function matchesShortcut(
   chord: string,
   platform?: string,
 ): boolean {
+  if (chord.includes('|')) return shortcutAlternatives(chord).some(binding => matchesShortcut(event, binding, platform));
   const parts = chord.toLowerCase().split("+").map((part) => part.trim());
   const key = parts.at(-1);
-  if (!key) return false;
-  const eventKey = event.key === " "
-    ? "space"
-    : event.altKey && event.code && /^Key[A-Z]$/.test(event.code)
-      ? event.code.slice(3).toLowerCase()
-      : event.key.toLowerCase();
-  if (eventKey !== key) return false;
+  if (!key || !eventMatchesShortcutKey(event, key)) return false;
   const isMac = isMacPlatform(platform);
   const expectsCtrl = parts.includes("ctrl") || (parts.includes("mod") && !isMac);
   const expectsMeta = parts.includes("meta") || (parts.includes("mod") && isMac);
@@ -242,14 +302,27 @@ export function findShortcutConflict(
   overrides: Readonly<Record<string, string>>,
   platform?: string,
 ): ShortcutCommandId | null {
-  const canonical = canonicalPhysicalBinding(binding, platform);
-  if (!canonical) return null;
-  for (const command of SHORTCUT_COMMANDS) {
-    if (command.id === commandId) continue;
-    const candidate = resolveShortcutBinding(command.id, overrides);
+  const conflict = findShortcutConflictIn(binding, commandId, overrides, SHORTCUT_COMMANDS, platform);
+  return conflict as ShortcutCommandId | null;
+}
+
+/** Same-scope conflicts only. A chord may be reused by another scope. */
+export function findShortcutConflictIn(
+  binding: string,
+  commandId: string,
+  overrides: Readonly<Record<string, string>>,
+  commands: readonly ShortcutCommandDefinition[],
+  platform?: string,
+): string | null {
+  const canonical = shortcutAlternatives(binding).map(item => canonicalPhysicalBinding(item, platform)).filter(Boolean);
+  if (!canonical.length) return null;
+  const scope = commands.find((item) => item.id === commandId)?.scope;
+  if (!scope) return null;
+  for (const command of commands) {
+    if (command.id === commandId || command.scope !== scope) continue;
+    const candidate = resolveShortcutBinding(command.id, overrides, command.defaultBinding);
     if (!candidate) continue;
-    const candidateCanonical = canonicalPhysicalBinding(candidate, platform);
-    if (candidateCanonical && candidateCanonical === canonical) return command.id;
+    if (shortcutAlternatives(candidate).some(item => canonical.includes(canonicalPhysicalBinding(item, platform)))) return command.id;
   }
   return null;
 }
@@ -334,21 +407,28 @@ export function hasGlobalShortcutConflict(
 }
 
 export function filterShortcutCommands(
-  commands: readonly ShortcutCommand[],
+  commands: readonly ShortcutCommandDefinition[],
   overrides: Readonly<Record<string, string>>,
   query: string,
-): ShortcutCommand[] {
+): ShortcutCommandDefinition[] {
   const needle = query.trim().toLocaleLowerCase();
   if (!needle) return [...commands];
-  return commands.filter((command) => [command.id, tr(command.label), tr(command.description), resolveShortcutBinding(command.id, overrides)]
+  return commands.filter((command) => [command.id, tr(command.label), tr(command.description), resolveShortcutBinding(command.id, overrides, command.defaultBinding)]
     .join(" ").toLocaleLowerCase().includes(needle));
 }
 
 export function restoreShortcutDefault(
   overrides: Readonly<Record<string, string>>,
-  commandId: ShortcutCommandId,
+  commandId: string,
 ): Record<string, string> {
   const next = { ...overrides };
   delete next[commandId];
   return next;
+}
+
+/** Composer-owned bindings outrank window capture listeners only inside its editor. */
+export function composerOwnsShortcutEvent(event: ShortcutEventLike, target: unknown, bindings: Record<string, string>, platform?: string): boolean {
+  const element = target as HTMLElement | null;
+  if (!element || typeof element.closest !== 'function' || !element.closest('.xn-composer') || !isEditableTarget(target)) return false;
+  return SHORTCUT_COMMANDS.some(command => command.scope === 'composer' && matchesShortcut(event, resolveShortcutBinding(command.id, bindings), platform));
 }

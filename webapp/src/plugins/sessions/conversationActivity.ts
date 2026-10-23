@@ -2,6 +2,8 @@
 export function conversationActivityLabel(phase?: string): string {
   switch (phase) {
     case 'waiting_model': return '等待模型响应…';
+    case 'queued_model': return '等待模型并发名额…';
+    case 'retrying': return '模型请求失败，正在自动重试…';
     case 'thinking': return '思考中…';
     case 'generating': return '正在生成回复…';
     case 'tools': return '正在执行工具…';

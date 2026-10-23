@@ -6,7 +6,7 @@
 
 子代理的启用、并发派发、主代理继续工作及合理暂停条件见[子代理协作说明](xueness-subagent-coordination.md)。该能力属于 `subagents` 插件；安装包需要包含对应版本的后端与 Web 构建，源码变更不会自动改写已安装客户端。
 
-桌面端使用独立实现的 Electron 外壳，复用 Xueness 工作台与插件运行时。安装包内置平台原生的 Python 后端和预构建 Web 资产，用户不需要安装 Python、Node.js 或开发依赖。
+桌面端使用独立实现的 Electron 外壳，复用 Xueness 工作台与插件运行时。后端是 TypeScript 桌面宿主（`ts/apps/server/src/desktop-host.ts`），安装包内置编译后的 JS、生产依赖及 Node，并包含预构建 Web 资产；Python 后端已在第 10 轮删除，不再有回退开关。用户不需要安装 Node.js 或开发依赖。详细范围见 [TS 迁移交接](../ts/HANDOVER.md)。
 
 ## 平台与产物
 
@@ -28,7 +28,7 @@ Windows 可在 `%APPDATA%\Xueness\desktop-data-directory.json` 保存 `{"apiVers
 
 默认使用 Electron 的 Xueness 用户数据目录：Mac 在 `~/Library/Application Support/Xueness`，Windows 在 `%APPDATA%/Xueness`。会话与模型配置在其中的 `state/`，运行工作区在 `runs/`，默认项目在 `workspace/`。更新应用文件不会删除这些数据，Windows 卸载也保留应用数据。
 
-可在启动前用 `XUENESS_DESKTOP_DATA` 指向独立数据目录。CLI 如需与桌面共享数据，使用 `python -m xueness --state /absolute/path/to/Xueness/state ...`。本项目原有 `.state` 不会被自动复制或更改，也不会打进安装包。
+可在启动前用 `XUENESS_DESKTOP_DATA` 指向独立数据目录。CLI 如需与桌面共享数据，使用 `bin/xueness --state /absolute/path/to/Xueness/state ...`。本项目原有 `.state` 不会被自动复制或更改，也不会打进安装包。
 
 ## 插件归属与进程生命周期
 
@@ -62,17 +62,15 @@ Windows 工作区输入目录仅读取 Git 分支元数据，不在切换时扫�
 
 ## 从源码构建
 
-需要目标系统、Node.js 24 和 Python 3.12+。PyInstaller 不能从 Mac 交叉生成 Windows Python 后端，因此 Windows 安装包必须在 Windows 构建；Intel Mac 与 Apple Silicon 也使用各自架构运行时。
+需要目标系统和 Node.js 24.11+；`check_app.py`、`checksums.py` 等检查脚本只用 Python 3 标准库。随包 Node 运行时取自构建机，因此 Windows 安装包必须在 Windows 构建；Intel Mac 与 Apple Silicon 也使用各自架构运行时。
 
 ```sh
 npm --prefix webapp ci
 npm --prefix desktop ci
+npm --prefix ts ci
 node desktop/node_modules/electron/install.js
-python -m pip install -r desktop/requirements-build.txt
+npm --prefix ts run check
 npm --prefix webapp run build
-python desktop/scripts/build_backend.py
-python desktop/scripts/check_backend.py
-python desktop/scripts/check_backend.py --force-exit
 npm --prefix desktop test
 # Mac：选择当前机器架构
 npm --prefix desktop run dist:mac -- --arm64
@@ -80,12 +78,14 @@ npm --prefix desktop run dist:mac -- --arm64
 # Windows：
 npm --prefix desktop run dist:win -- --x64
 python desktop/scripts/check_app.py
+# Windows：检查安装目录中的随包 Node、TS 依赖和原生会话/附件请求
+npm --prefix ts run test:packaged
 python desktop/scripts/checksums.py
 ```
 
-本机开发建议使用独立 Python 虚拟环境。构建产物在 `desktop/release/`，原生后端载荷在 `desktop/runtime/backend/`，均不提交到源码。后端分发包含 Python 许可证、PyInstaller bootloader 分发例外及适用依赖声明。安装包内置 IANA 时区数据，自动化计划不依赖 Windows 系统提供时区数据库；打包检查在关闭系统时区搜索路径后验证上海时区的定时计划。
+`dist:win` / `dist:mac` 会先构建 `ts/dist/`，把随包 Node、JS 和生产依赖一并复制到 `resources/backend-ts/`。构建产物在 `desktop/release/`，不提交到源码。后端分发包含 Node 许可证及适用依赖声明。安装包内置 IANA 时区数据，自动化计划不依赖 Windows 系统提供时区数据库；打包检查在关闭系统时区搜索路径后验证上海时区的定时计划。
 
-`.github/workflows/desktop-build.yml` 提供手动触发的 Windows x64、Intel Mac x64 与 Apple Silicon arm64 构建、冻结后端真实检查、打包应用检查和校验和产物。源码上传和 CI 构建不自动创建 GitHub Release 或部署服务。
+`.github/workflows/desktop-build.yml` 提供手动触发的 Windows x64、Intel Mac x64 与 Apple Silicon arm64 构建、TS 检查、打包应用检查和校验和产物。源码上传和 CI 构建不自动创建 GitHub Release 或部署服务。
 
 `npm --prefix webapp run test:browser:conversation` 使用生产资产与隔离后端验证会话、权限确认、编辑/反馈、长历史和停止队列；通过 `XUENESS_CONVERSATION_PLATFORM=windows|macos` 检查两种平台响应。`node webapp/verify-desktop-parity.mjs` 检查原生按钮避让、⌘/Ctrl 快捷键、主题及更新帮助。浏览器中的平台响应验证与既有三平台原生构建验证分别记录；fixture 不代表真实模型性能。验收不读取用户状态。
 

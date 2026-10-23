@@ -86,33 +86,34 @@
 
   /* Color tokens - Light */
   --bg: #fafafa;
-  --bg-subtle: #f1f1f1;
+  --bg-subtle: #f4f4f5;
   --bg-card: #ffffff;
   --bg-hover: rgba(13, 13, 13, 0.05);
   --bg-active: rgba(13, 13, 13, 0.05);
 
-  --fg: #262626;
-  --fg-subtle: #535353;
-  --fg-muted: #626262;
+  --fg: #1c1c1e;
+  --fg-subtle: #48484d;
+  --fg-muted: #616166;
   --fg-inverted: #ffffff;
-  --conversation-fg: #404040;
+  --conversation-fg: #2c2c2f;
   --conversation-muted: color-mix(in oklab, var(--conversation-fg) 60%, transparent);
   --conversation-subtlest: color-mix(in oklab, var(--conversation-fg) 40%, transparent);
   --conversation-user-surface: color-mix(in oklab, #0a0a0a 3%, transparent);
 
-  --border: color-mix(in oklab, #0a0a0a 10%, transparent);
-  --border-strong: color-mix(in oklab, #0a0a0a 20%, transparent);
-  --border-focus: rgba(13, 13, 13, 0.15);
+  --border: color-mix(in oklab, #0a0a0a 9%, transparent);
+  --border-strong: color-mix(in oklab, #0a0a0a 17%, transparent);
+  --border-focus: rgba(13, 13, 13, 0.22);
 
-  /* Default accent follows the original info blue; Claude 风格 overrides to clay. */
-  --accent-brand: #0369a1;
-  --accent-brand-hover: #025a8a;
+  /* Default accent is ink: the neutral palette carries no hue of its own (status
+   * colours stay semantic); Claudex 外观 overrides it to clay. */
+  --accent-brand: #1c1c1e;
+  --accent-brand-hover: #000000;
   --accent-brand-fg: #ffffff;
-  --accent-soft: color-mix(in oklab, var(--accent-brand) 12%, transparent);
-  --focus-ring: color-mix(in oklab, var(--accent-brand) 62%, transparent);
+  --accent-soft: color-mix(in oklab, var(--accent-brand) 7%, transparent);
+  --focus-ring: color-mix(in oklab, var(--accent-brand) 48%, transparent);
 
-  --primary: #262626;
-  --primary-hover: #333333;
+  --primary: #1c1c1e;
+  --primary-hover: #333336;
   --primary-active: #000000;
   --primary-fg: #ffffff;
   --primary-light: rgba(13, 13, 13, 0.05);
@@ -139,8 +140,8 @@
 
   /* Shadows */
   --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
-  --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
-  --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
+  --shadow-md: 0 1px 2px 0 rgb(0 0 0 / 0.04), 0 6px 16px -6px rgb(0 0 0 / 0.14);
+  --shadow-lg: 0 0 0 1px rgb(0 0 0 / 0.03), 0 18px 40px -16px rgb(0 0 0 / 0.22);
 
   /* Radius */
   --radius-sm: 6px;
@@ -156,7 +157,7 @@
   --fill-secondary: var(--bg-subtle);
   --fill-hover: var(--bg-hover);
   --muted: var(--fg-muted);
-  --accent: var(--info-fg);
+  --accent: var(--accent-brand);
   --danger: var(--error-fg);
   --danger-fg: var(--error-fg);
   --danger-bg: var(--error-bg);
@@ -191,43 +192,43 @@
 
 .dark {
   color-scheme: dark;
-  --bg-window: #2b2b2b;
-  --bg-sidebar: #252525;
+  --bg-window: #0f0f10;
+  --bg-sidebar: #0f0f10;
   --bg-surface: color-mix(in srgb, var(--fg) 5%, transparent);
-  --bg-panel: #202020;
-  --bg-input: #2b2b2b;
-  --bg-popover: #2b2b2b;
+  --bg-panel: #171718;
+  --bg-input: #1c1c1e;
+  --bg-popover: #202022;
   --primary-fg: #000000;
   /* Quiet neutral surfaces for the native workbench. Semantic status colors
    * are independent of the monochrome navigation and primary actions. */
   /* Color tokens - Dark */
   --bg: #161616;
-  --bg-subtle: #161616;
-  --bg-card: #2b2b2b;
-  --bg-hover: color-mix(in oklab, white 10%, transparent);
-  --bg-active: #404040;
+  --bg-subtle: #1c1c1e;
+  --bg-card: #202022;
+  --bg-hover: color-mix(in oklab, white 7%, transparent);
+  --bg-active: #2a2a2c;
 
-  --fg: #d4d4d4;
-  --fg-subtle: #c0c0c0;
-  --fg-muted: #b3b3b3;
+  --fg: #ececed;
+  --fg-subtle: #c7c7cc;
+  --fg-muted: #a1a1a6;
   --fg-inverted: #0a0a0a;
-  --conversation-fg: #e5e5e5;
+  --conversation-fg: #e3e3e6;
   --conversation-muted: color-mix(in oklab, var(--conversation-fg) 60%, transparent);
   --conversation-subtlest: color-mix(in oklab, var(--conversation-fg) 30%, transparent);
   --conversation-user-surface: color-mix(in oklab, white 5%, transparent);
 
-  --border: color-mix(in oklab, #fafafa 10%, transparent);
-  --border-strong: color-mix(in oklab, #fafafa 30%, transparent);
-  --border-focus: rgba(255, 255, 255, 0.15);
+  --border: color-mix(in oklab, #fafafa 9%, transparent);
+  --border-strong: color-mix(in oklab, #fafafa 18%, transparent);
+  --border-focus: rgba(255, 255, 255, 0.22);
 
-  --accent-brand: #7dd3fc;
-  --accent-brand-hover: #9ae0fd;
-  --accent-brand-fg: #082f49;
-  --accent-soft: color-mix(in oklab, var(--accent-brand) 18%, transparent);
-  --focus-ring: color-mix(in oklab, var(--accent-brand) 62%, transparent);
+  --accent-brand: #ececed;
+  --accent-brand-hover: #ffffff;
+  --accent-brand-fg: #111112;
+  --accent-soft: color-mix(in oklab, var(--accent-brand) 9%, transparent);
+  --focus-ring: color-mix(in oklab, var(--accent-brand) 52%, transparent);
 
-  --primary: #d4d4d4;
-  --primary-hover: #eeeeee;
+  --primary: #ececed;
+  --primary-hover: #ffffff;
   --primary-active: #ffffff;
   --primary-light: rgba(255, 255, 255, 0.1);
 

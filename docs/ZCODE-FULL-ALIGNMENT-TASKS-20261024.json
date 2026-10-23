@@ -1,0 +1,881 @@
+{
+  "schema": "xueness.zcode-full-alignment-plan.v1",
+  "date": "2026-10-24",
+  "projectVersion": "0.2.1",
+  "upstream": {
+    "repository": "https://github.com/zai-org/ZCode",
+    "commit": "3c5b227649371507ddc4eb46ac5133afe6db1cab",
+    "packageVersion": "3.16.2",
+    "referenceKind": "main source snapshot; not a verified release tag"
+  },
+  "intent": "Full public capability, production behavior and protocol alignment; current delivery is the plan and current complete source, not completed implementation.",
+  "executionPolicy": {
+    "decisionOwner": "root",
+    "subagents": "GPT-6-Luna / max; execution only",
+    "reporting": "major phase",
+    "tests": "affected meaningful probes; stage gates; no repeated whole suite per small round",
+    "preserveUserData": true
+  },
+  "phases": [
+    {
+      "id": "F00",
+      "title": "基线、契约与可执行差异账本",
+      "dependencies": "无；先执行本阶段，再启动实现",
+      "ownership": "共享架构、providers、remote、验收工具",
+      "rounds": [
+        {
+          "id": "F00.01",
+          "title": "固定最新基线并完成源码差异盘点",
+          "deliverable": "固定 ZCode commit、Xueness 摘要、旧新版本增量与四领域证据",
+          "acceptance": "每项结论有真实生产入口和文件行号；区分新增、旧缺口、架构差异及未证实项",
+          "existingFoundation": "本次已完成静态审计；不是运行时全面验收",
+          "status": "completed_static_audit",
+          "evidence": "docs/audits/20261024/AUDIT.md"
+        },
+        {
+          "id": "F00.02",
+          "title": "核验通用 tool_search 的真实接线",
+          "deliverable": "隔离状态下追踪工具注册、搜索执行器、discovered_tools 写入和再次请求",
+          "acceptance": "执行真实注册链；能搜索并调用，或记录可复现缺口并转入 F02；删除误导性完成标记",
+          "existingFoundation": "存在目录与 lightweight selector；执行器及生产者尚待确认",
+          "status": "planned",
+          "evidence": null
+        },
+        {
+          "id": "F00.03",
+          "title": "建立公共能力与行为契约表",
+          "deliverable": "模型、工具、会话、工作流、远程协议的接口与不变量映射",
+          "acceptance": "每个上游公共契约均有 Xueness 归属、接线位置、差异和验收 ID；不按文件数量打分",
+          "existingFoundation": "已有 Z1–Z8 分阶段文档；尚无完整契约覆盖表",
+          "status": "planned",
+          "evidence": null
+        },
+        {
+          "id": "F00.04",
+          "title": "建立精简的对照验收入口",
+          "deliverable": "可复用的模型流、工具事件、故障和恢复样本及结果记录格式",
+          "acceptance": "离线样本能复现关键边界；真实模型验证单列并记录费用授权；不把 fixture 当性能结果",
+          "existingFoundation": "已有单元与集成验证；需要统一对照口径",
+          "status": "planned",
+          "evidence": null
+        }
+      ]
+    },
+    {
+      "id": "F01",
+      "title": "模型适配与调度治理",
+      "dependencies": "F00；与 F02 的契约先协同确定",
+      "ownership": "providers、共享模型端口",
+      "rounds": [
+        {
+          "id": "F01.01",
+          "title": "补齐供应商请求与响应契约",
+          "deliverable": "按协议列出 tool call、reasoning、usage、cache、finish reason、流式事件转换",
+          "acceptance": "生产 provider 入口逐字段可追溯；不支持字段显式报告；兼容现有模型配置",
+          "existingFoundation": "已有多供应商请求与流式适配，需逐协议核对",
+          "status": "planned",
+          "evidence": null
+        },
+        {
+          "id": "F01.02",
+          "title": "统一失败分类和重试语义",
+          "deliverable": "限流、Retry-After、连接断开、无输出失败及已输出失败的分类表",
+          "acceptance": "同一失败从 adapter 到 runtime 只计算一次预算；取消不重试；已输出片段不重播",
+          "existingFoundation": "已有 model-request/model-retry，需深化边界",
+          "status": "planned",
+          "evidence": null
+        },
+        {
+          "id": "F01.03",
+          "title": "实现执行级模型选择与回退",
+          "deliverable": "临时 selection、单次尝试、原会话模型恢复和已接收工具调用结算",
+          "acceptance": "选择失败与请求失败走相应路径；已接受工具只执行一次，切换不改会话默认模型",
+          "existingFoundation": "通用重试已有；缺上游 execution-selection 专门通路",
+          "status": "planned",
+          "evidence": null
+        },
+        {
+          "id": "F01.04",
+          "title": "建立自适应模型并发治理",
+          "deliverable": "AIMD、按 run 公平轮转、429 冷却和主任务优先级调度",
+          "acceptance": "受限后降低并发并按窗口恢复；队列取消可移除；不会饿死其他 run",
+          "existingFoundation": "现有固定 FIFO admission，默认并发 4",
+          "status": "planned",
+          "evidence": null
+        },
+        {
+          "id": "F01.05",
+          "title": "将辅助模型调用纳入统一调度",
+          "deliverable": "标题、语义检索、记忆、工作流及子代理使用同一 admission/usage 端口",
+          "acceptance": "生产调用清单无未声明旁路；父子排队和计费可关联且无重复持有槽位",
+          "existingFoundation": "部分辅助调用直接进入 adapter",
+          "status": "planned",
+          "evidence": null
+        },
+        {
+          "id": "F01.06",
+          "title": "补齐模型轨迹与诊断投影",
+          "deliverable": "request/attempt/provider/selection ID 与用量、等待、重试、耗时事件",
+          "acceptance": "跨重试与回退可还原一次执行；日志不暴露密钥；缺失用量保留未知",
+          "existingFoundation": "已有运行事件与模型监测插件；需统一语义",
+          "status": "planned",
+          "evidence": null
+        }
+      ]
+    },
+    {
+      "id": "F02",
+      "title": "工具发现、延迟暴露与执行契约",
+      "dependencies": "F00；deadline 依赖 F01 admission 事件",
+      "ownership": "providers、工具桥、工具注册表、相关工具插件",
+      "rounds": [
+        {
+          "id": "F02.01",
+          "title": "补齐工具暴露与安全元数据",
+          "deliverable": "alwaysLoad、shouldDefer、只读/破坏性/并发安全等元数据及配置模式",
+          "acceptance": "标准和轻量模式都有确定规则；插件禁用后工具从目录和执行器同时移除",
+          "existingFoundation": "已有 registry 与 lightweight schema 选择",
+          "status": "planned",
+          "evidence": null
+        },
+        {
+          "id": "F02.02",
+          "title": "实现通用 ToolSearch 的 local/native 路径",
+          "deliverable": "可执行搜索工具、完整本地目录、供应商原生能力协商",
+          "acceptance": "普通 tool-calling 模型可用 local；native 只在协议支持时启用；真实结果可被调用",
+          "existingFoundation": "R01 待核验；不能以 catalog 声明当成已经实现",
+          "status": "planned",
+          "evidence": null
+        },
+        {
+          "id": "F02.03",
+          "title": "实现 DeferredToolCall 调用通路",
+          "deliverable": "延迟工具封装、目标解析、权限检查、参数验证和调用结果关联",
+          "acceptance": "同轮发现后的调用能执行；取消、未知工具及插件关闭保持一致结果契约",
+          "existingFoundation": "暂无同等通用 deferred wrapper",
+          "status": "planned",
+          "evidence": null
+        },
+        {
+          "id": "F02.04",
+          "title": "持久化发现与压缩后的工具公告",
+          "deliverable": "结构化工具引用、历史 hydrate、压缩后的发现提醒与去重",
+          "acceptance": "冷恢复和压缩后仍能调用已发现工具；公告不重复污染可见对话",
+          "existingFoundation": "已有 discovered_tools 消费；缺已证实的完整生产写入链",
+          "status": "planned",
+          "evidence": null
+        },
+        {
+          "id": "F02.05",
+          "title": "建立排队感知的 ToolDeadline",
+          "deliverable": "工具通用时限、嵌套模型 queued/admitted 暂停恢复及 queuedMs",
+          "acceptance": "只扣实际工具执行时间；嵌套排队不误超时；取消始终立即生效",
+          "existingFoundation": "有模型请求与进程时限，没有同一通用工具 deadline",
+          "status": "planned",
+          "evidence": null
+        },
+        {
+          "id": "F02.06",
+          "title": "对齐安全并发与执行顺序",
+          "deliverable": "可配置并发上限、屏障、元数据映射及依赖接口",
+          "acceptance": "有副作用调用串行屏障；安全调用有界并发；保持结果顺序；仅使用实际提供的依赖",
+          "existingFoundation": "双方已有默认 10 路安全并发；上游 turn mapper 当前 dependsOn 为空",
+          "status": "planned",
+          "evidence": null
+        }
+      ]
+    },
+    {
+      "id": "F03",
+      "title": "Turn 生命周期、自主运行与恢复",
+      "dependencies": "F01、F02；持久化边界与 F04 联调",
+      "ownership": "agent、goals、automation、共享运行注册表",
+      "rounds": [
+        {
+          "id": "F03.01",
+          "title": "梳理统一 Turn 状态机与命令优先级",
+          "deliverable": "输入、steering、暂停、取消、完成、恢复的状态表和生产路由",
+          "acceptance": "同一 prompt 只归属一个执行；优先级变化不丢用户消息；事件反映真实状态",
+          "existingFoundation": "已有 agent runner、消息队列及运行状态",
+          "status": "planned",
+          "evidence": null
+        },
+        {
+          "id": "F03.02",
+          "title": "结算流式已接收工具调用",
+          "deliverable": "模型中断、切换、取消时的 accepted-call 结算账本与恢复边界",
+          "acceptance": "已接受调用不会无故丢弃或重复写盘；未接收的片段不误执行",
+          "existingFoundation": "已有流处理与工具桥，需和回退路线统一",
+          "status": "planned",
+          "evidence": null
+        },
+        {
+          "id": "F03.03",
+          "title": "完善 Steering 与输入接管",
+          "deliverable": "运行中输入的 admission、边界注入、持久化和优先级调度",
+          "acceptance": "用户输入可在规定边界接管；压缩/等待工具期间输入保留且可追踪",
+          "existingFoundation": "已有消息队列与 turn 控制",
+          "status": "planned",
+          "evidence": null
+        },
+        {
+          "id": "F03.04",
+          "title": "深化 Goal 继续与停止判据",
+          "deliverable": "预算、验证、暂停、完成、主动继续和终止原因的统一契约",
+          "acceptance": "已有自动继续生产链完整保留；达到预算或用户暂停后不再启动后续轮",
+          "existingFoundation": "Goal extension 已接入生产 runner，不能重新记为未实现",
+          "status": "planned",
+          "evidence": null
+        },
+        {
+          "id": "F03.05",
+          "title": "统一后台任务通知与空闲行为",
+          "deliverable": "任务完成/失败通知、隐藏提醒、重复消除和持久恢复",
+          "acceptance": "父任务恢复后只收到一次有效提醒；隐藏信息不变成用户输入；空闲不忙等",
+          "existingFoundation": "已有后台任务、collect/resume/send_message",
+          "status": "planned",
+          "evidence": null
+        },
+        {
+          "id": "F03.06",
+          "title": "完善执行驻留与收尾租约",
+          "deliverable": "prompt 所有权、detached runner、cancel/drain 和 cold resume 生命周期图",
+          "acceptance": "正常/异常收尾均释放租约；进程重启不产生并行写者；依据可复现问题修复",
+          "existingFoundation": "已有 lease 与 cancel/drain；未证明上游新抽取模块代表现有竞态",
+          "status": "planned",
+          "evidence": null
+        }
+      ]
+    },
+    {
+      "id": "F04",
+      "title": "会话数据、事件与历史一致性",
+      "dependencies": "F03 的状态契约；先迁移隔离副本",
+      "ownership": "sessions、共享 journal/store、history",
+      "rounds": [
+        {
+          "id": "F04.01",
+          "title": "对齐消息与内容块的规范模型",
+          "deliverable": "消息/part/tool-call ID、来源、可见性与修订版本的数据模型",
+          "acceptance": "工具结果、媒体、隐藏提醒和压缩标记可无损保存和还原",
+          "existingFoundation": "已有 journal、事件 epoch 与投影",
+          "status": "planned",
+          "evidence": null
+        },
+        {
+          "id": "F04.02",
+          "title": "建设主事务存储及迁移路径",
+          "deliverable": "默认 SQLite 主存储、事务边界、索引、JSON 导入与可回退迁移",
+          "acceptance": "中断迁移可重启；迁移前后消息/文件关联数与摘要一致；原数据不覆盖",
+          "existingFoundation": "已有可选 SQLite 镜像，当前主存储是 JSON journal",
+          "status": "planned",
+          "evidence": null
+        },
+        {
+          "id": "F04.03",
+          "title": "深化事件保留与历史分页",
+          "deliverable": "瞬态 turn-window 保留、持久事件索引、游标分页和快照",
+          "acceptance": "热内存与持久历史策略分开；大历史分页不反复全量读取；游标跨恢复有效",
+          "existingFoundation": "已有 JSONL 账本及 append 缓存；readPage 仍读账本",
+          "status": "planned",
+          "evidence": null
+        },
+        {
+          "id": "F04.04",
+          "title": "统一 Fork/Edit/Retry 的规范意图",
+          "deliverable": "分叉、编辑重试、回退的 parent/lineage/command receipt 关系",
+          "acceptance": "重放同一命令不重复操作；新分支保留文件和工具上下文的正确边界",
+          "existingFoundation": "已有分叉、对话回退与 durable command 收据",
+          "status": "planned",
+          "evidence": null
+        },
+        {
+          "id": "F04.05",
+          "title": "深化文件撤销与压缩恢复事务",
+          "deliverable": "文件 before/after、CAS 回退、compaction operation 与恢复关联",
+          "acceptance": "冲突外部修改不覆盖；压缩崩溃恢复不丢已提交工具结果；撤销有可追踪结果",
+          "existingFoundation": "已有文件历史、CAS 与压缩操作持久化",
+          "status": "planned",
+          "evidence": null
+        },
+        {
+          "id": "F04.06",
+          "title": "完善工作区与历史迁移修复",
+          "deliverable": "路径迁移、缺失工作区、旧 schema 与历史游标的修复入口",
+          "acceptance": "移动目录与升级后会话可定位；无法修复项报告准确原因；迁移不改本机凭据",
+          "existingFoundation": "已有多工作区与会话恢复，需覆盖迁移矩阵",
+          "status": "planned",
+          "evidence": null
+        }
+      ]
+    },
+    {
+      "id": "F05",
+      "title": "本地执行、文件与进程能力",
+      "dependencies": "F02、F03；跨平台收尾在 F14 复验",
+      "ownership": "files、terminal、native_ops、共享执行适配器",
+      "rounds": [
+        {
+          "id": "F05.01",
+          "title": "逐项对齐文件读取语义",
+          "deliverable": "行/字节范围、编码边界、大文件、图片及文档结果契约",
+          "acceptance": "UTF-8 边界与旧编码不截坏；部分读取不误当完整读证明；返回形状可比对",
+          "existingFoundation": "已有范围读取和编码回退；上游新采样边界不是全面编码缺口",
+          "status": "planned",
+          "evidence": null
+        },
+        {
+          "id": "F05.02",
+          "title": "深化 Write/Edit 与读证明",
+          "deliverable": "多处替换、原子写、读状态 hydrate、文件修订与冲突处理",
+          "acceptance": "保留 Xueness rename 前 CAS 复核；范围读和完整读的权限证明语义清晰",
+          "existingFoundation": "已有 Read/Write/Edit 与原子写前二次 CAS",
+          "status": "planned",
+          "evidence": null
+        },
+        {
+          "id": "F05.03",
+          "title": "实现前台超时自动转后台",
+          "deliverable": "Bash auto_on_timeout、显式后台、进程所有权转移和取消规则",
+          "acceptance": "符合条件的长命令转后台继续运行；任务 ID、日志及完成通知可用；取消不误杀新任务",
+          "existingFoundation": "已有显式 background；前台超时当前终止",
+          "status": "planned",
+          "evidence": null
+        },
+        {
+          "id": "F05.04",
+          "title": "完善后台执行输出与回收",
+          "deliverable": "增量日志、退出码、产物引用、终端环境初始化及回收",
+          "acceptance": "父会话恢复后可接续读取；大输出有界；退出和超时原因不混淆",
+          "existingFoundation": "已有任务注册与输出读取，需与新生命周期联动",
+          "status": "planned",
+          "evidence": null
+        },
+        {
+          "id": "F05.05",
+          "title": "补齐平台执行适配差异",
+          "deliverable": "Windows/POSIX shell、环境、PTY/非交互进程与进程树清理矩阵",
+          "acceptance": "保留 Windows Job Object 崩溃清理；三平台能力差异明确并有针对性探针",
+          "existingFoundation": "Windows 有宿主 Job Object 额外保障；其他平台需实机验收",
+          "status": "planned",
+          "evidence": null
+        }
+      ]
+    },
+    {
+      "id": "F06",
+      "title": "MCP 完整协议与 Apps 宿主",
+      "dependencies": "F02、F03；Apps 需要前端归属和 F11 投影",
+      "ownership": "mcp、MCP 设置/工具/Apps 前端",
+      "rounds": [
+        {
+          "id": "F06.01",
+          "title": "深化连接池与租约生命周期",
+          "deliverable": "连接代次、重连、run 关闭、通知、超时与 pool lease",
+          "acceptance": "关闭旧 lease 不关闭新连接；并行 run 不相互断开；禁用插件立即停止新连接",
+          "existingFoundation": "已有 MCP 连接及 run 级许可/关闭",
+          "status": "planned",
+          "evidence": null
+        },
+        {
+          "id": "F06.02",
+          "title": "逐项对齐 MCP 基本能力",
+          "deliverable": "tools/resources/prompts、分页、变更通知、进度与取消的协议矩阵",
+          "acceptance": "真实 MCP server 测试各能力协商；工具目录变更能进入下一轮请求",
+          "existingFoundation": "已有工具、资源、提示词，需逐契约深化",
+          "status": "planned",
+          "evidence": null
+        },
+        {
+          "id": "F06.03",
+          "title": "补齐富内容与资源引用",
+          "deliverable": "图片、音频、embedded resource、resource_link 与附件投影",
+          "acceptance": "内容进入模型和 UI 时保持 MIME/来源/权限；大资源可按引用加载",
+          "existingFoundation": "已有工具输出转换，需核对全部内容块",
+          "status": "planned",
+          "evidence": null
+        },
+        {
+          "id": "F06.04",
+          "title": "深化 MCP OAuth 与认证发现",
+          "deliverable": "标准发现、授权、token 更新/撤销及兼容端口",
+          "acceptance": "支持的认证流程能连接真实隔离 server；取消授权不残留可用 session；秘密不进入项目包",
+          "existingFoundation": "已有 OAuth 能力，需覆盖最新标准交互",
+          "status": "planned",
+          "evidence": null
+        },
+        {
+          "id": "F06.05",
+          "title": "完善 Elicitation 交互",
+          "deliverable": "表单与 URL elicitation、并发请求、取消和会话恢复",
+          "acceptance": "请求准确归属工具调用；拒绝/取消形成标准结果；UI 可恢复未决交互",
+          "existingFoundation": "已有 elicitation 表单 UI",
+          "status": "planned",
+          "evidence": null
+        },
+        {
+          "id": "F06.06",
+          "title": "实现 MCP Apps UI 宿主",
+          "deliverable": "协议桥、资源打开、Apps iframe/视图、连接等待和 lease generation 复核",
+          "acceptance": "真实 Apps 能初始化并交换工具上下文；重连后旧 app 不能串用新会话",
+          "existingFoundation": "当前未发现 MCP Apps 宿主；不等同于已有 elicitation",
+          "status": "planned",
+          "evidence": null
+        }
+      ]
+    },
+    {
+      "id": "F07",
+      "title": "配置、Hooks、Skills 与插件开发面",
+      "dependencies": "F00；工具与连接契约分别沿用 F02/F06",
+      "ownership": "settings、hooks、skills、commands、插件管理",
+      "rounds": [
+        {
+          "id": "F07.01",
+          "title": "对齐配置层级与多根工作区",
+          "deliverable": "系统/用户/项目/env/CLI 合并、来源显示与覆盖矩阵",
+          "acceptance": "每个有效值可追溯来源；切换工作区只重新应用相应层；旧配置兼容",
+          "existingFoundation": "已有配置和工作区，信任/合并边界与上游不同",
+          "status": "planned",
+          "evidence": null
+        },
+        {
+          "id": "F07.02",
+          "title": "补齐 Hook 输入与输出协议",
+          "deliverable": "事件名、matcher、stdin、退出码、stdout 控制语义及超时",
+          "acceptance": "支持的 hook 对照样本输出一致；错误只影响契约指定范围；不吞正常工具结果",
+          "existingFoundation": "已有 hooks 与 request gate",
+          "status": "planned",
+          "evidence": null
+        },
+        {
+          "id": "F07.03",
+          "title": "统一 Hook 生命周期和信任边界",
+          "deliverable": "配置摘要、可信插件 hook、工作区 hook 授权与 UI 状态",
+          "acceptance": "配置变更后旧授权准确失效；可信 bundled 与工作区脚本边界明确且可配置",
+          "existingFoundation": "双方都有工作区 hook digest；当前准入策略不同",
+          "status": "planned",
+          "evidence": null
+        },
+        {
+          "id": "F07.04",
+          "title": "支持多目录 Skills 与 Commands",
+          "deliverable": "多根发现、目录命名空间、参数、资源路径及 slash command 合并",
+          "acceptance": "同名不静默覆盖；迁移后现有 11 skills 可用；新增目录被生产入口加载",
+          "existingFoundation": "已有单工作区根发现；上游最新增加多目录",
+          "status": "planned",
+          "evidence": null
+        },
+        {
+          "id": "F07.05",
+          "title": "深化插件组件包与生命周期",
+          "deliverable": "skill/command/hook/MCP 等组件的包格式、alwaysLoad 与安装升级卸载",
+          "acceptance": "组件归属在插件面板可查；禁用后无新任务；可选插件不会自动安装",
+          "existingFoundation": "已有构建 allowlist 和数据型市场；保留 native_ops/batch_calls 默认启用",
+          "status": "planned",
+          "evidence": null
+        },
+        {
+          "id": "F07.06",
+          "title": "完善插件 SDK 与贡献契约",
+          "deliverable": "公开类型、示例插件、依赖、设置、工具、前端挂载、事件与兼容规则",
+          "acceptance": "按文档可完成一个隔离示例插件的构建/安装/启停；无需复制主应用实现",
+          "existingFoundation": "已有插件 SDK 文档与双语 feature registry，需增加深度",
+          "status": "planned",
+          "evidence": null
+        }
+      ]
+    },
+    {
+      "id": "F08",
+      "title": "子代理协作与协调器",
+      "dependencies": "F01–F04；默认执行策略遵循用户选择",
+      "ownership": "subagents、共享 TaskCoordinator",
+      "rounds": [
+        {
+          "id": "F08.01",
+          "title": "深化代理配置与上下文继承",
+          "deliverable": "profile、模型、工具权限、历史分支与继承规则",
+          "acceptance": "不同角色继承符合声明；子任务不能越过父级许可；原代理历史不被覆盖",
+          "existingFoundation": "已有子代理启动、配置和历史能力",
+          "status": "planned",
+          "evidence": null
+        },
+        {
+          "id": "F08.02",
+          "title": "统一后台 Dispatch/Collect/Resume",
+          "deliverable": "启动回执、后台执行、等待、增量收集和恢复状态机",
+          "acceptance": "重启后可重连任务；重复 collect 不重复结果；任务结束后能继续合法 follow-up",
+          "existingFoundation": "现有 TaskCoordinator 已接线，非空壳",
+          "status": "planned",
+          "evidence": null
+        },
+        {
+          "id": "F08.03",
+          "title": "补齐协调器与消息契约",
+          "deliverable": "SendMessage、RespondToCoordinator、任务身份与升级请求协议",
+          "acceptance": "消息准确投递；子代理结果能结束父任务等待；消息与授权边界分别处理",
+          "existingFoundation": "已有 send_message；接口语义需与上游逐项映射",
+          "status": "planned",
+          "evidence": null
+        },
+        {
+          "id": "F08.04",
+          "title": "完善完成聚合与隐藏提醒",
+          "deliverable": "多子任务完成/失败、父会话提醒、持久化与去重",
+          "acceptance": "父级空闲或恢复时收到应收结果一次；运行中状态可查询且不误判完成",
+          "existingFoundation": "已有后台工具与请求时重建的列表提示",
+          "status": "planned",
+          "evidence": null
+        },
+        {
+          "id": "F08.05",
+          "title": "完善父子生命周期和清理",
+          "deliverable": "父取消、子异常、租约、预算归属与故障恢复",
+          "acceptance": "取消及时到达对应子任务；失败不遗留独占写锁；保留可诊断终止原因",
+          "existingFoundation": "已有取消与进程树清理，需覆盖跨任务恢复",
+          "status": "planned",
+          "evidence": null
+        }
+      ]
+    },
+    {
+      "id": "F09",
+      "title": "项目记忆、提取与 Dream",
+      "dependencies": "F01、F03、F04；不把自动 Dream 当成上游已启用能力",
+      "ownership": "memory、模型辅助调用",
+      "rounds": [
+        {
+          "id": "F09.01",
+          "title": "建立记忆 Manifest/Index",
+          "deliverable": "分层索引、候选选择、来源与版本信息",
+          "acceptance": "不必把所有记忆正文放进每次请求；选中文档有可追溯来源和上限",
+          "existingFoundation": "当前三类 curated memory 已进入生产请求",
+          "status": "planned",
+          "evidence": null
+        },
+        {
+          "id": "F09.02",
+          "title": "实现有选择的预取与检索",
+          "deliverable": "turn 前 recall、语义/索引选择及增量刷新",
+          "acceptance": "相关记忆可命中；无关记忆不常驻；索引失败回退明确且不中断用户任务",
+          "existingFoundation": "上游旧版已有选择式 recall；Xueness 需深化",
+          "status": "planned",
+          "evidence": null
+        },
+        {
+          "id": "F09.03",
+          "title": "增加后台记忆提取调度",
+          "deliverable": "成功 turn 后按条件提取、去重、串并行与取消策略",
+          "acceptance": "生产 turn 完成可触发；失败/取消 turn 不错误提取；辅助调用进入 admission",
+          "existingFoundation": "暂无对等后台 extraction 生产调度",
+          "status": "planned",
+          "evidence": null
+        },
+        {
+          "id": "F09.04",
+          "title": "实现完整记忆工具代理循环",
+          "deliverable": "受限工具循环、证据读取、候选变更和审查",
+          "acceptance": "候选可验证、可拒绝；应用后索引同步；过程取消不留下半写状态",
+          "existingFoundation": "已有显式 Dream JSON 候选和审核",
+          "status": "planned",
+          "evidence": null
+        },
+        {
+          "id": "F09.05",
+          "title": "深化 Dream 手动入口与回写",
+          "deliverable": "手动调用、工具循环、审查 diff、应用和撤销的端到端入口",
+          "acceptance": "入口、执行器、审核和持久化真实接通；不默认增加无上游依据的自动 Dream",
+          "existingFoundation": "ZCode 最新与旧版都未自动触发 Dream；保持准确边界",
+          "status": "planned",
+          "evidence": null
+        }
+      ]
+    },
+    {
+      "id": "F10",
+      "title": "完整动态工作流 SDK 与运行时",
+      "dependencies": "F01–F04、F08；从兼容样例逐层扩展",
+      "ownership": "workflows、受控动态执行端口",
+      "rounds": [
+        {
+          "id": "F10.01",
+          "title": "扩展动态工作流语言与类型契约",
+          "deliverable": "上游实际支持的 TS API/语法清单、类型声明与诊断",
+          "acceptance": "公开兼容样例不再因当前受限 AST 拒绝；不将任意 TS/Node 权限当默认能力",
+          "existingFoundation": "已有 DAG 和受限 TS AST 编译/解释",
+          "status": "planned",
+          "evidence": null
+        },
+        {
+          "id": "F10.02",
+          "title": "建设工作流 VM/Harness",
+          "deliverable": "受控运行环境、世界端口、时钟、取消、预算和错误传递",
+          "acceptance": "真实宿主生产启动；超时/取消可终止；对外能力经显式端口提供",
+          "existingFoundation": "暂无完整上游等价 VM/harness",
+          "status": "planned",
+          "evidence": null
+        },
+        {
+          "id": "F10.03",
+          "title": "深化 Typed Actors 与修复",
+          "deliverable": "schema、actor 输入输出、transcript、失败分类与修复循环",
+          "acceptance": "无效结果可定位到 actor；修复有预算；恢复后不重复提交已完成副作用",
+          "existingFoundation": "已有 actor、hole、resume 基础",
+          "status": "planned",
+          "evidence": null
+        },
+        {
+          "id": "F10.04",
+          "title": "实现 world.run 与世界读取",
+          "deliverable": "world.run/read、嵌套运行、数据依赖、缓存和跨 actor 上下文",
+          "acceptance": "公开 SDK 样例可运行；子 run 归属和用量可追溯；缓存遵循输入版本",
+          "existingFoundation": "当前没有完整 world.run SDK",
+          "status": "planned",
+          "evidence": null
+        },
+        {
+          "id": "F10.05",
+          "title": "补齐 Artifact/Stream/Dashboard SDK",
+          "deliverable": "artifact 引用、stream/future、仪表盘状态与前端展示",
+          "acceptance": "大产物按引用保存；流可订阅并恢复；面板真实显示运行产物与状态",
+          "existingFoundation": "已有工作流状态面板，缺全量 SDK 面",
+          "status": "planned",
+          "evidence": null
+        },
+        {
+          "id": "F10.06",
+          "title": "完善 Resume/Amend 与运行谱系",
+          "deliverable": "hole 填补、修改后继续、恢复点和 lineage 的规范操作",
+          "acceptance": "重启后从正确节点继续；amend 不篡改已完成分支；命令可幂等重放",
+          "existingFoundation": "已有部分 resolve/resume，需覆盖 SDK 语义",
+          "status": "planned",
+          "evidence": null
+        },
+        {
+          "id": "F10.07",
+          "title": "实现 Workflow Blocked Reminders",
+          "deliverable": "父会话空闲检测、阻塞进度摘要、隐藏持久提醒及 reset",
+          "acceptance": "阻塞工作流在规定边界提醒；用户 steering 或进展后重置；压缩/恢复不重复",
+          "existingFoundation": "上游最新新增；当前 Xueness 以显式查询/恢复为主",
+          "status": "planned",
+          "evidence": null
+        }
+      ]
+    },
+    {
+      "id": "F11",
+      "title": "远程连接与 ZCode 公共协议兼容",
+      "dependencies": "F03、F04；保留 Xueness 原生协议并增加兼容入口",
+      "ownership": "remote、共享协议/投影、terminal/browser 端口",
+      "rounds": [
+        {
+          "id": "F11.01",
+          "title": "建立 V4 契约与兼容 Facade",
+          "deliverable": "锁定 upstream V4 schema、路由、错误码、能力协商与原生协议映射",
+          "acceptance": "真实标准客户端或独立契约客户端能协商；不能仅将 v2 字段重命名为 V4",
+          "existingFoundation": "已有 xueness v1/v2；上游 V4 wire 常量实际为 3",
+          "status": "planned",
+          "evidence": null
+        },
+        {
+          "id": "F11.02",
+          "title": "实现完整 Wire 编解码",
+          "deliverable": "complete/fragment、字节长度、顺序、topic/subscription 与 checksum",
+          "acceptance": "乱序/重复/缺片给出规定结果；大帧还原与源逻辑帧完全一致",
+          "existingFoundation": "已有自有 remote-fragment.v1，schema 不互通",
+          "status": "planned",
+          "evidence": null
+        },
+        {
+          "id": "F11.03",
+          "title": "对齐订阅建立与重同步",
+          "deliverable": "topic reservation、READY、序号、游标、断线恢复与 resync",
+          "acceptance": "首次快照与增量无空洞；断线后从有效游标续接；manager 实际使用新路径",
+          "existingFoundation": "服务端已有 v2；当前 remote manager acceptHello 仅 v1",
+          "status": "planned",
+          "evidence": null
+        },
+        {
+          "id": "F11.04",
+          "title": "对齐命令收据与规范重放",
+          "deliverable": "prompt/stop/goal/workflow 等命令的 receipt、幂等和执行关联",
+          "acceptance": "超时重发返回同一已提交结果；失败与未接收明确区分",
+          "existingFoundation": "已有 durable receipt，需映射完整上游契约",
+          "status": "planned",
+          "evidence": null
+        },
+        {
+          "id": "F11.05",
+          "title": "对齐会话 Hydration 与投影",
+          "deliverable": "conversation/controller/workflow、媒体与后台任务的 schema 映射",
+          "acceptance": "冷启动客户端恢复一致状态；缺省字段/增量删除语义与基线相符",
+          "existingFoundation": "已有恢复投影和会话订阅",
+          "status": "planned",
+          "evidence": null
+        },
+        {
+          "id": "F11.06",
+          "title": "深化 SSH/WSL 与远程交互端口",
+          "deliverable": "远程启动、认证、端口转发、terminal/browser 接口与关闭",
+          "acceptance": "隔离远端可连接/重连/关闭；路径和平台差异可诊断；凭据不进源码",
+          "existingFoundation": "已有 remote/SSH/WSL 基础，需逐端口核验",
+          "status": "planned",
+          "evidence": null
+        }
+      ]
+    },
+    {
+      "id": "F12",
+      "title": "持久交互环境、浏览器与 Computer Use",
+      "dependencies": "F02、F03、F06；所有产品能力登记插件",
+      "ownership": "node_repl（拟新增）、browser、computer_use（拟新增）、network、channel",
+      "rounds": [
+        {
+          "id": "F12.01",
+          "title": "提供持久 Node REPL 代理 SDK",
+          "deliverable": "会话作用域、变量持久化、模块导入、reset、输出与宿主能力端口",
+          "acceptance": "多次调用共享已定义状态；reset 真正隔离；长调用可取消；实例随会话回收",
+          "existingFoundation": "当前固定工具集合没有同等持久 agent SDK",
+          "status": "planned",
+          "evidence": null
+        },
+        {
+          "id": "F12.02",
+          "title": "提供统一 Browsers Facade",
+          "deliverable": "浏览器/标签身份、DOM 与视觉操作、下载产物和持久引用",
+          "acceptance": "真实页面完成导航、读取和交互；失效引用有确定语义；与原 browser 工具兼容",
+          "existingFoundation": "已有六个固定 browser 工具，能力面较窄",
+          "status": "planned",
+          "evidence": null
+        },
+        {
+          "id": "F12.03",
+          "title": "增加 OS Computer Use 插件",
+          "deliverable": "屏幕/窗口/坐标输入、截图、会话权限与平台适配端口",
+          "acceptance": "真实桌面能执行隔离交互并回传证据；在不支持平台明确显示不可用",
+          "existingFoundation": "desktop 宿主不等于模型可用 CUA；当前未发现 agent-facing OS CUA",
+          "status": "planned",
+          "evidence": null
+        },
+        {
+          "id": "F12.04",
+          "title": "补齐搜索与 Fetch 的模型能力面",
+          "deliverable": "provider-native search 协商、独立搜索、网页/媒体读取及来源引用",
+          "acceptance": "支持供应商可走原生工具；其他供应商继续端点搜索；输出来源可追溯",
+          "existingFoundation": "已有配置型 search/fetch；不是完全没有联网工具",
+          "status": "planned",
+          "evidence": null
+        },
+        {
+          "id": "F12.05",
+          "title": "补齐外部频道回复端口",
+          "deliverable": "ReplyToChannel、频道身份、附件、会话关联及发送回执",
+          "acceptance": "隔离频道可收发并关联正确 run；外发遵循用户授权；不混同子代理 SendMessage",
+          "existingFoundation": "现有子代理消息不是 bot channel 回复",
+          "status": "planned",
+          "evidence": null
+        }
+      ]
+    },
+    {
+      "id": "F13",
+      "title": "执行模式、票据与供应商服务接口",
+      "dependencies": "F01、F03、F08；私有服务缺失需显式列出",
+      "ownership": "providers、automation、可选账户/权益适配插件",
+      "rounds": [
+        {
+          "id": "F13.01",
+          "title": "抽取执行选择与请求认证端口",
+          "deliverable": "selection/request dependency、凭据刷新和同供应商回退接口",
+          "acceptance": "不写死官方私有账号；本地模拟端口可运行生产路径；与 F01 回退统一",
+          "existingFoundation": "已有普通 provider 配置，缺同等执行绑定",
+          "status": "planned",
+          "evidence": null
+        },
+        {
+          "id": "F13.02",
+          "title": "实现 Off-Peak 票据和用户接管",
+          "deliverable": "票据续期、输出前重试、子执行所有权释放与普通模型恢复",
+          "acceptance": "无输出过期可续签；已输出不重播；用户接管在请求边界生效",
+          "existingFoundation": "已有 durable idle-window queue，缺 live ticket 生命周期",
+          "status": "planned",
+          "evidence": null
+        },
+        {
+          "id": "F13.03",
+          "title": "提供可选供应商权益适配",
+          "deliverable": "真实可接入的账户、订阅、配额与 ticket 服务 adapter 及配置文档",
+          "acceptance": "可用公共/用户授权接口有真实连通证据；私有不可用项列为待外部条件，不能宣称已对齐",
+          "existingFoundation": "WorkBuddy/订阅中心可选；不复制私有密钥或官方账号体系",
+          "status": "planned",
+          "evidence": null
+        },
+        {
+          "id": "F13.04",
+          "title": "统一能力发现与降级体验",
+          "deliverable": "执行模式能力公告、不可用原因、用户选择与回退显示",
+          "acceptance": "不支持服务的模型仍可正常运行；UI 清晰解释所缺接口；支持时真实走票据路径",
+          "existingFoundation": "当前空闲任务与模型选项已有，需新增统一契约",
+          "status": "planned",
+          "evidence": null
+        }
+      ]
+    },
+    {
+      "id": "F14",
+      "title": "全量对齐验收、迁移与交付",
+      "dependencies": "所有实现阶段；允许先准备探针，最终逐项收口",
+      "ownership": "验收、桌面宿主、updater、各能力插件",
+      "rounds": [
+        {
+          "id": "F14.01",
+          "title": "执行三平台生产入口验收",
+          "deliverable": "Windows/Linux/macOS CLI、server、desktop、remote 的实际结果矩阵",
+          "acceptance": "每个支持平台有真实构建和关键链路证据；未运行项明确未验收",
+          "existingFoundation": "当前已安装版证据主要是 Windows，不能外推三平台",
+          "status": "planned",
+          "evidence": null
+        },
+        {
+          "id": "F14.02",
+          "title": "执行少量代表性真实模型任务",
+          "deliverable": "同模型/配置的编辑、长任务、并发子代理、工作流与 MCP 场景",
+          "acceptance": "有明确授权后运行收费模型；记录实际完成/失败与轨迹，不用样本数冒充成功率",
+          "existingFoundation": "旧 fixture 回归不代表真实模型效果",
+          "status": "planned",
+          "evidence": null
+        },
+        {
+          "id": "F14.03",
+          "title": "度量性能、上下文与资源开销",
+          "deliverable": "冷启动、长历史分页、并发公平、工具 schema token 和驻留内存基线",
+          "acceptance": "同机器同输入重复必要次数；报告原始值和条件；针对退化做修复",
+          "existingFoundation": "本次只有源码审计，尚无新的对照性能数字",
+          "status": "planned",
+          "evidence": null
+        },
+        {
+          "id": "F14.04",
+          "title": "完成升级与用户数据保留验收",
+          "deliverable": "安装器、portable、updater、插件/skill 迁移及可回退升级",
+          "acceptance": "隔离旧数据升级后会话与配置摘要一致；凭据仍在用户状态；默认可选插件规则正确",
+          "existingFoundation": "当前0.2.1已安装并有独立证据，新引擎完成后需重验",
+          "status": "planned",
+          "evidence": null
+        },
+        {
+          "id": "F14.05",
+          "title": "关闭差异账本并形成完整交付",
+          "deliverable": "每个契约证据、剩余外部依赖、完整源码包、校验值、SDK和交接说明",
+          "acceptance": "所有必需项有生产接线和验收；外部待决不可计作完成；GitHub树与交付manifest一致",
+          "existingFoundation": "本次交付当前完整项目与计划，不代表82轮实现完成",
+          "status": "planned",
+          "evidence": null
+        }
+      ]
+    }
+  ],
+  "phaseCount": 15,
+  "roundCount": 82
+}

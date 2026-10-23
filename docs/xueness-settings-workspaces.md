@@ -58,3 +58,14 @@ python3 -m xueness.web --port 8138 --workspace-root /absolute/path/to/project
 - [settings-workspace-default](screenshots/batch24-20260930T130126Z-settings-workspace-default.png)
 - [mobile-settings-320](screenshots/batch24-20260930T130126Z-mobile-settings-320.png)
 - [mobile-start-390](screenshots/batch24-20260930T130126Z-mobile-start-390.png)
+
+
+### 多绑定与应用缩放（2026-10-14）
+
+快捷键设置每项可保留最多四个备用组合键，使用“+”添加，重新录制替换整组，清除取消绑定。旧版单字符串设置无损兼容；新组合以 ` | ` 分隔保存。命令面板默认支持 Mod+K 和 Mod+Shift+P。Mod 在 macOS 为 Command，在 Windows/Linux 为 Ctrl。相同作用域的物理按键冲突会被拒绝，浏览器、系统编辑和缩放键也被保留，因此任务查找、终端与应用缩放使用安全的 Alt+Shift 组合而非接管 Mod+F/J/+/−/0。
+
+输入换行默认 Shift+Enter，可仅在输入区作用域录制裸 Enter；不在终端、普通编辑器或页面全局分发。IME、按键重复、模态对话框和已消费事件不会产生第二个动作。输入区自定义绑定优先于窗口作用域，窗口动作使用当前聚焦且可见的分屏身份，不回退到第一个窗格。模型、模式、权限和思考强度快捷键仅打开该窗格已有且可用的控件，仍需用户明确选择并经过原权限确认。
+
+工作区快捷键仅在当前窗格已有工作区选择器时可用。次级窗格没有独立工作区选择器时不会替用户更改主窗格工作区。远程模型目录缺失时也不会套用本地模型列表。参考产品的界面模式切换、重新打开引导，以及权限/思考档位直接循环未提供等价快捷键，不登记空处理器。
+
+设置插件的“应用缩放”可在外观页设置 75%–150%，Alt+Shift+= 放大、Alt+Shift+9 缩小、Alt+Shift+0 复原。当前桌面桥未提供缩放接口，使用明确的 CSS 应用缩放后备，仅改变工作台，不改变操作系统显示缩放；关闭设置插件会清理缩放样式。终端、浏览器面板快捷键仅在所属插件生效时执行。

@@ -1,0 +1,4 @@
+#!/bin/sh
+# Run the Xueness web UI server from the source checkout (Node 24 strips the TypeScript types).
+ROOT=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
+exec "${XUENESS_NODE:-node}" "$ROOT/ts/apps/server/src/main.ts" --project-root "$ROOT" "$@"

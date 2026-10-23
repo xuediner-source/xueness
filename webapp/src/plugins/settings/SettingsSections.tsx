@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { Monitor, Moon, Sun } from "lucide-react";
 import { t as tr, tf } from "../../i18n";
 import { XuenessTerminalShellSelect } from "../terminal/XuenessTerminalPreferences";
@@ -7,6 +7,7 @@ import type { AgentCapabilities } from "../../xuenessSettings";
 import { Badge, Button, EmptyState, Field, Panel, Spinner, Stat } from "../../ui/primitives";
 import { Select } from "../../ui/Select";
 import { XuenessShortcutsPanel } from "./XuenessShortcutsPanel";
+import { registeredShortcutCommands, scopedShortcutSettingsPatch } from "../sessions/scopedCommands";
 import { SettingsGroup, SettingsRow } from "./SettingsPrimitives";
 import { CODE_PREVIEW_THEME_OPTIONS, CodePreview, isCodePreviewTheme, type CodePreviewTheme } from "../../ui/CodePreview";
 import { displayBinding, isImeComposingEvent } from "../../xuenessShortcutDisplay";
@@ -30,6 +31,11 @@ export type SettingsSectionsProps = {
   embedded?: boolean;
   saving?: boolean;
   pluginSettings?: React.ReactNode;
+  /** True only when both sessions and settings are effective. Hides composer,
+   * session navigation and pane rows otherwise. */
+  sessionScopedCommands?: boolean;
+  terminalEffective?: boolean;
+  browserEffective?: boolean;
 };
 
 function SettingsToggle({
@@ -147,7 +153,15 @@ export function SettingsSections({
   saving = false,
   embedded = false,
   pluginSettings,
+  sessionScopedCommands, terminalEffective, browserEffective,
 }: SettingsSectionsProps): React.ReactElement {
+  const shortcutCommands = useMemo(() => {
+    if (sessionScopedCommands === undefined) return undefined;
+    return registeredShortcutCommands({
+      sessionsEffective: sessionScopedCommands,
+      settingsEffective: true, terminalEffective, browserEffective,
+    });
+  }, [sessionScopedCommands, terminalEffective, browserEffective]);
   const update = (key: string, value: unknown) => onUpdateSetting?.(key, value);
   const select = (label: string, value: string, options: React.ReactNode, onChange: (next: string) => void, forceDisabled = false) => (
     <SettingsSelect label={tr(label)} value={value} disabled={!onUpdateSetting || saving || forceDisabled} onChange={onChange}>
@@ -265,9 +279,11 @@ export function SettingsSections({
         />
         <SettingsRow
           label={tr("外观")}
-          description={tr("选择经典 Xueness 或 Claudex 工作台样式。两种外观共用功能、模型配置和运行设置。")}
+          description={tr("选择经典或纸感工作台样式。两种外观共用功能、模型配置和运行设置。")}
           control={<AppearancePicker value={values.colorPalette} disabled={!onUpdateSetting || saving} onChange={(next) => { void update("colorPalette", next); }} />}
         />
+        <SettingsRow label={tr("应用缩放")} description={tr("只缩放工作台，不改变系统显示设置。")}
+          control={<SettingsFontSizeInput label={tr("应用缩放百分比")} value={Math.round(Number(values.appZoom ?? 1) * 100)} disabled={!onUpdateSetting || saving} min={75} max={150} onCommit={next => update("appZoom", next / 100)} />} />
         <SettingsRow
           label={tr("界面字号")}
           description={tr("调整应用界面的文字大小，图标和布局尺寸不受影响。")}
@@ -350,8 +366,12 @@ export function SettingsSections({
     const bindings = values.bindings && typeof values.bindings === "object" && !Array.isArray(values.bindings)
       ? Object.fromEntries(Object.entries(values.bindings).filter((entry): entry is [string, string] => typeof entry[1] === "string"))
       : {};
+    const shortcutCatalog = shortcutCommands;
     controls = <>
-      <XuenessShortcutsPanel bindings={bindings} disabled={!onUpdateSetting || saving} onChange={(next) => update("bindings", next)} />
+      <XuenessShortcutsPanel bindings={bindings} commands={shortcutCatalog} disabled={!onUpdateSetting || saving} onChange={(next) => {
+        const patch = scopedShortcutSettingsPatch(next, shortcutCatalog ?? [], sessionScopedCommands === true);
+        for (const [key, value] of Object.entries(patch)) update(key, value);
+      }} />
       <SettingsGroup title={tr("发送行为")} description={tr("选择发送消息时使用的 Enter 组合。") }>
         <SettingsRow
           label={tr("发送消息快捷键")}

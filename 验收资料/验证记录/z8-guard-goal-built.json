@@ -1,0 +1,63 @@
+{
+  "schema": "xueness.z8.guard-goal.v1",
+  "ok": true,
+  "mode": "built",
+  "network": "127.0.0.1-only",
+  "scenarios": [
+    {
+      "name": "guarded_ordinary_exec_and_once_only_dangerous_delete",
+      "ok": true,
+      "approvalCount": 2,
+      "approvalCodes": [
+        "guarded",
+        "guarded"
+      ],
+      "rememberWasUnavailable": true,
+      "rememberGrantRejected": "guarded_once_only",
+      "ordinaryExecRanBeforeApproval": true,
+      "deleteRanOnlyAfterOnce": true,
+      "providerRequests": 4
+    },
+    {
+      "name": "guarded_live_session_scope_is_one_shot_and_repeat_is_reasked",
+      "ok": true,
+      "firstPublicOneShot": true,
+      "secondPublicOneShot": true,
+      "firstScopeSessionDidNotPersist": true,
+      "exactCommandWasAskedAgain": true,
+      "repeatRejectedWithoutDeletingTarget": true,
+      "providerRequests": 3
+    },
+    {
+      "name": "guarded_mode_requires_planning_before_model_admission",
+      "ok": true,
+      "refusedStatus": 409,
+      "code": "unsupported_run",
+      "providerRequestsAdded": 0
+    },
+    {
+      "name": "pause_during_goal_verification_drains_and_resume_preserves_budget",
+      "ok": true,
+      "goalRunHttpStatus": 200,
+      "pausedAfterDrain": true,
+      "accumulatedReportedTokens": 32,
+      "stalePositiveVerdictPrepared": true,
+      "stalePositiveVerdictDelivered": false,
+      "goalStayedPausedAfterVerifierDelay": true,
+      "resumePreservedBudgetAndUsage": true,
+      "goalProviderRequests": 2
+    }
+  ],
+  "failures": [],
+  "modelRequests": {
+    "guarded": 4,
+    "liveApproval": 3,
+    "goal": 2
+  },
+  "goalVerifier": {
+    "started": true,
+    "positiveVerdictPrepared": true,
+    "positiveVerdictDelivered": false,
+    "evidenceId": "answer:2c88cc0c8fff46a0aeb2ccd4b06bf40b"
+  }
+}

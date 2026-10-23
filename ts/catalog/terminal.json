@@ -1,0 +1,70 @@
+{
+  "id": "terminal",
+  "name": "交互式终端",
+  "description": "显式打开的真实 PTY，输入、调整、重连与关闭。",
+  "version": "1.0.0",
+  "apiVersion": 1,
+  "defaultEnabled": true,
+  "dependencies": [
+    "sessions",
+    "shell"
+  ],
+  "tools": [],
+  "commands": [],
+  "panels": [
+    "terminal"
+  ],
+  "resources": [],
+  "capabilities": [
+    "command"
+  ],
+  "httpFamilies": [
+    "terminals"
+  ],
+  "provides": [
+    "terminal.broker"
+  ],
+  "modules": [
+    "shells",
+    "terminal_worker",
+    "terminals",
+    "windows",
+    "windows_interrupt",
+    "windows_shell",
+    "remote_protocol"
+  ],
+  "features": [
+    {
+      "id": "terminal.pty",
+      "name": "工作区 POSIX PTY / Windows ConPTY 交互式终端",
+      "nameEn": "Interactive workspace POSIX PTY / Windows ConPTY"
+    },
+    {
+      "id": "terminal.lifecycle",
+      "name": "终端尺寸、日志、关闭与服务清理",
+      "nameEn": "Terminal sizing, logs, closing and cleanup"
+    },
+    {
+      "id": "terminal.preferences",
+      "name": "默认 Shell 与终端偏好",
+      "nameEn": "Default shell and terminal preferences"
+    },
+    {
+      "id": "terminal.tabs",
+      "name": "工作区终端标签与独立进程生命周期",
+      "nameEn": "Workspace terminal tabs and independent process lifecycle"
+    },
+    {
+      "id": "terminal.remote",
+      "name": "连接作用域远程交互式终端",
+      "nameEn": "Connection-scoped remote interactive terminals"
+    }
+  ],
+  "frontendModules": [
+    "plugins/terminal/XuenessTerminalPreferences.tsx",
+    "plugins/terminal/index.tsx",
+    "plugins/terminal/terminalLifecycle.ts",
+    "plugins/terminal/terminalSessionRegistry.ts",
+    "plugins/terminal/remoteTerminalTransport.ts"
+  ]
+}

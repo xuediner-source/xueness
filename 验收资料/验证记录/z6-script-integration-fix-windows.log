@@ -1,0 +1,28 @@
+✔ synthesizes ask schemas and stable source-ordered sites (10.4217ms)
+✔ accepts the documented control flow and pure callback subset (3.838ms)
+✔ reports forbidden globals, prototype paths, and duplicate actor names with locations (0.6335ms)
+✔ returns located TypeScript parse and unsupported type diagnostics (1.3229ms)
+✔ rejects out-of-range source lengths (0.1723ms)
+▶ dynamic workflow engine
+  ✔ restores completed ask/report nodes without dispatching or duplicating reports (98.6329ms)
+  ✔ serializes each actor, runs another actor concurrently, and retunes live capacity (98.4621ms)
+  ✔ holds at a hole, resumes after resolution, and keeps earlier reports unique (64.6622ms)
+  ✔ recomputes imported mismatches but rejects a mismatch in the same run (162.7386ms)
+  ✔ cancels queued work and drains the in-flight driver before settling (81.36ms)
+  ✔ validates ask schemas and distinguishes actor questions from retryable pauses (209.0677ms)
+✔ dynamic workflow engine (716.3501ms)
+▶ dynamic workflow AST evaluation
+  ✔ runs typed asks through loops, branches, and return (14.5113ms)
+  ✔ starts async map asks together before Promise.all waits (34.633ms)
+  ✔ passes read, phase, report, log, and hole calls to the host (1.807ms)
+  ✔ refuses ambient and forged actor calls, then enforces budget and cancellation (5.6552ms)
+  ✔ keeps an unawaited ask pending while later statements continue (21.7725ms)
+✔ dynamic workflow AST evaluation (79.7953ms)
+ℹ tests 16
+ℹ suites 2
+ℹ pass 16
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 1497.3672

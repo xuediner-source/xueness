@@ -1,0 +1,174 @@
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import { BrowserSessionRegistry, screenshotBlob, type BrowserApi, type BrowserTab, type BrowserResult } from './browserSessionRegistry';
+function fixture() {
+  const calls: unknown[] = [], closed: string[] = [], revoked: string[] = [];
+  let next = 0;
+  let result: BrowserResult = { approvalRequired: true, approvalId: 'approval', subject: 'exact action' };
+  const api: BrowserApi = { list: async () => ({ tabs: [] }), open: async sessionId => ({ pageId: String(++next), sessionId, workspaceId: '/work', url: '', title: 'Browser' }), action: async (id, action) => { calls.push([id, action]); return result; }, cancel: async () => ({ cancelled: true }), close: async id => { closed.push(id); } };
+  const registry = new BrowserSessionRegistry(api, { create: () => 'blob:preview', revoke: url => revoked.push(url) });
+  registry.setEnabled(true);
+  return { registry, api, calls, closed, revoked, result: (value: BrowserResult) => { result = value; } };
+}
+test('independent workspace-owned pages preserve state across view detach and conversation changes', async () => {
+  const f = fixture();
+  const first = (await f.registry.create('/work', 's1'))!, second = (await f.registry.create('/work', 's2'))!;
+  f.registry.select(first);
+  assert.equal(f.registry.selected('/work'), first);
+  assert.equal(f.registry.tabs('/other').length, 0);
+  await f.registry.act(second, { action: 'inspect' });
+  assert.equal(second.sessionId, 's2');
+  assert.deepEqual(f.calls, [['2', { action: 'inspect' }]]);
+  assert.equal(f.closed.length, 0);
+  f.registry.close(first); f.registry.close(first);
+  assert.deepEqual(f.closed, ['1']);
+});
+test('confirmation binds exact action, disable removes pending state and disposes once', async () => {
+  const f = fixture(), tab = (await f.registry.create('/work', 's1'))!;
+  await f.registry.act(tab, { action: 'inspect' });
+  await f.registry.act(tab, { action: 'screenshot' }, true);
+  assert.equal(f.calls.length, 1);
+  f.result({ ok: true });
+  await f.registry.act(tab, { action: 'inspect' }, true);
+  assert.deepEqual(f.calls[1], [tab.pageId, { action: 'inspect', approvalId: 'approval' }]);
+  f.registry.setEnabled(false); f.registry.setEnabled(false);
+  await f.registry.act(tab, { action: 'inspect' });
+  assert.equal(f.calls.length, 2);
+  assert.deepEqual(f.closed, [tab.pageId]);
+});
+test('remote never opens local resources; late creation is closed on disable or removal', async () => {
+  const f = fixture();
+  assert.equal(await f.registry.create('/work', 's1', true), undefined);
+  let resolve!: (tab: BrowserTab) => void;
+  f.api.open = () => new Promise(done => { resolve = done; });
+  const creation = f.registry.create('/work', 's1');
+  f.registry.removeWorkspace('/work');
+  resolve({ pageId: 'late', workspaceId: '/work', sessionId: 's1', url: '', title: 'Browser' });
+  await creation;
+  assert.deepEqual(f.closed, ['late']);
+});
+test('restore never opens or acts; stale restore after disable is ignored', async () => {
+  const f = fixture();
+  let resolve!: (value: { tabs: BrowserTab[] }) => void;
+  f.api.list = () => new Promise(done => { resolve = done; });
+  const restoring = f.registry.restore();
+  f.registry.setEnabled(false);
+  resolve({ tabs: [{ pageId: 'old', workspaceId: '/work', sessionId: 's1', title: 'Browser', url: 'https://example.com' }] });
+  await restoring;
+  assert.deepEqual(f.registry.tabs('/work'), []);
+  assert.deepEqual(f.calls, []);
+});
+test('only bounded PNG bytes become local blob URLs, replaced and closed URLs are revoked', async () => {
+  const f = fixture(), tab = (await f.registry.create('/work', 's1'))!;
+  assert.throws(() => screenshotBlob('https://example.com/image.png'));
+  assert.throws(() => screenshotBlob('data:image/svg+xml;base64,AAAA'));
+  assert.throws(() => screenshotBlob('data:image/png;base64,' + 'A'.repeat(700000)));
+  f.result({ ok: true, imageDataUrl: 'data:image/png;base64,' + btoa('\x89PNG\r\n\x1a\n') });
+  await f.registry.act(tab, { action: 'screenshot' });
+  assert.equal(tab.preview, 'blob:preview');
+  await f.registry.act(tab, { action: 'screenshot' });
+  f.registry.close(tab); f.registry.close(tab);
+  assert.deepEqual(f.revoked, ['blob:preview', 'blob:preview']);
+});
+
+test('cancel revokes exact server nonce and blocks stale approval while cancellation is pending', async () => {
+  const f = fixture(), tab = (await f.registry.create('/work', 's1'))!;
+  await f.registry.act(tab, { action: 'inspect' });
+  let resolve!: (value: { cancelled: boolean }) => void;
+  const cancellations: unknown[] = [];
+  f.api.cancel = (id, approval) => { cancellations.push([id, approval]); return new Promise(done => { resolve = done; }); };
+  const cancelling = f.registry.cancel(tab);
+  assert.equal(tab.pending, undefined);
+  assert.equal(tab.busy, true);
+  await f.registry.act(tab, { action: 'inspect' }, true);
+  assert.equal(f.calls.length, 1);
+  assert.deepEqual(cancellations, [[tab.pageId, { approvalId: 'approval', subject: 'exact action' }]]);
+  resolve({ cancelled: true }); await cancelling;
+  assert.equal(tab.error, '');
+  await f.registry.act(tab, { action: 'inspect' }, true);
+  assert.equal(f.calls.length, 1);
+});
+test('cancel timeout and already-submitted status never claim prevention or retry execution', async () => {
+  const f = fixture(), tab = (await f.registry.create('/work', 's1'))!;
+  await f.registry.act(tab, { action: 'inspect' });
+  f.api.cancel = async () => { throw new Error('timeout'); };
+  await f.registry.cancel(tab);
+  assert.match(tab.error!, /Cancellation not confirmed/);
+  assert.equal(f.calls.length, 1);
+  await f.registry.act(tab, { action: 'inspect' });
+  f.api.cancel = async () => ({ cancelled: false, error: 'Action was already submitted; cancellation cannot undo its effects.' });
+  await f.registry.cancel(tab);
+  assert.match(tab.error!, /cannot undo/);
+  assert.equal(f.calls.length, 2);
+});
+test('disabled cancellation never sends requests', async () => {
+  const f = fixture(), tab = (await f.registry.create('/work', 's1'))!;
+  await f.registry.act(tab, { action: 'inspect' });
+  let cancellations = 0;
+  f.api.cancel = async () => { cancellations++; return { cancelled: true }; };
+  f.registry.setEnabled(false);
+  await f.registry.cancel(tab);
+  assert.equal(cancellations, 0);
+});
+test('refresh complete tab inventory discards reset-profile stale pages and screenshot URLs', async () => {
+  const f = fixture(), tab = (await f.registry.create('/work', 's1'))!;
+  f.result({ ok: true, imageDataUrl: 'data:image/png;base64,' + btoa('\x89PNG\r\n\x1a\n') });
+  await f.registry.act(tab, { action: 'screenshot' });
+  await f.registry.refresh();
+  assert.equal(tab.disposed, true);
+  assert.deepEqual(f.registry.tabs('/work'), []);
+  assert.deepEqual(f.revoked, ['blob:preview']);
+  assert.equal(f.calls.length, 1);
+});
+test('removed workspace closes late discovered pages and explicit re-add can create new tabs', async () => {
+  const f = fixture();
+  let resolve!: (value: { tabs: BrowserTab[] }) => void;
+  f.api.list = () => new Promise(done => { resolve = done; });
+  const restoring = f.registry.restore();
+  f.registry.removeWorkspace('/work');
+  const fresh = (await f.registry.create('/work', 's2'))!;
+  resolve({ tabs: [{ pageId: 'undiscovered', workspaceId: '/work', sessionId: 's1', title: 'Old', url: '' }] });
+  await restoring;
+  assert.deepEqual(f.closed, ['undiscovered']);
+  assert.deepEqual(f.registry.tabs('/work'), [fresh]);
+});
+test('remove and re-add cannot resurrect an old in-flight page creation', async () => {
+  const f = fixture();
+  let resolve!: (tab: BrowserTab) => void;
+  const original = f.api.open;
+  f.api.open = () => new Promise(done => { resolve = done; });
+  const oldCreation = f.registry.create('/work', 's1');
+  f.registry.removeWorkspace('/work');
+  f.api.open = original;
+  const fresh = (await f.registry.create('/work', 's2'))!;
+  resolve({ pageId: 'old-opening', workspaceId: '/work', sessionId: 's1', title: 'Old', url: '' });
+  await oldCreation;
+  assert.deepEqual(f.closed, ['old-opening']);
+  assert.deepEqual(f.registry.tabs('/work'), [fresh]);
+});
+test('a stale inventory cannot resurrect an explicitly closed page', async () => {
+  const f = fixture(), tab = (await f.registry.create('/work', 's1'))!;
+  f.registry.close(tab);
+  f.api.list = async () => ({tabs: [{...tab, disposed: false}]});
+  await f.registry.refresh();
+  assert.equal(f.registry.tabs('/work').length, 0);
+});
+test('lost close keeps exact cleanup proof and exposes explicit retry', async () => {
+  const f = fixture(), tab = (await f.registry.create('/work','s1'))!;
+  let calls = 0;
+  let finish!: () => void;
+  f.api.close = async id => {assert.equal(id,tab.pageId); if (++calls === 1) throw new Error('lost'); await new Promise<void>(resolve => { finish = resolve; });};
+  f.registry.close(tab);
+  await new Promise(resolve => setTimeout(resolve, 0));
+  assert.equal(f.registry.cleanupPending, true);
+  const notifications: boolean[] = [];
+  f.registry.subscribe(() => { notifications.push(f.registry.cleanupPending); });
+  f.registry.retryCleanup();
+  f.registry.retryCleanup();
+  assert.equal(calls, 2, 'do not duplicate an in-flight explicit cleanup');
+  assert.equal(f.registry.cleanupPending, true, 'pending retry is not confirmed cleanup');
+  finish();
+  await new Promise(resolve => setTimeout(resolve, 0));
+  assert.equal(f.registry.cleanupPending, false); assert.equal(calls, 2);
+  assert.deepEqual(notifications, [false], 'refresh the warning only once cleanup is confirmed');
+});

@@ -3,17 +3,21 @@ import { Keyboard, Pencil, RotateCcw, Search, Trash2, X } from "lucide-react";
 import { t as tr } from "../../i18n";
 import {
   filterShortcutCommands,
-  findShortcutConflict,
+  findShortcutConflictIn,
   recordShortcutEvent,
   resolveShortcutBinding,
   restoreShortcutDefault,
   SHORTCUT_COMMANDS,
-  type ShortcutCommandId,
+  type ShortcutCommandDefinition,
 } from "../../xuenessShortcutCommands";
+import { shortcutScopeLabel } from "../sessions/scopedCommands";
 import { displayBindingParts } from "../../xuenessShortcutDisplay";
 
 export type XuenessShortcutsPanelProps = {
   bindings?: Record<string, string>;
+  /** Defaults to the always-on global and composer table. Sessions passes the
+   * registered catalog when both sessions and settings are effective. */
+  commands?: readonly ShortcutCommandDefinition[];
   disabled?: boolean;
   onChange: (bindings: Record<string, string>) => void | Promise<unknown>;
 };
@@ -27,21 +31,23 @@ function recordingError(reason: "modifier-required" | "unsupported-key" | "reser
 
 export function XuenessShortcutsPanel({
   bindings = {},
+  commands = SHORTCUT_COMMANDS,
   disabled = false,
   onChange,
 }: XuenessShortcutsPanelProps): React.JSX.Element {
   const [query, setQuery] = useState("");
-  const [recordingId, setRecordingId] = useState<ShortcutCommandId | null>(null);
+  const [recordingId, setRecordingId] = useState<string | null>(null);
+  const [appendBinding, setAppendBinding] = useState(false);
   const [preview, setPreview] = useState("");
   const [error, setError] = useState("");
   const recorderRef = useRef<HTMLButtonElement>(null);
   const searchRef = useRef<HTMLInputElement>(null);
-  const commandButtonRefs = useRef<Partial<Record<ShortcutCommandId, HTMLButtonElement | null>>>({});
+  const commandButtonRefs = useRef<Partial<Record<string, HTMLButtonElement | null>>>({});
   const bindingsRef = useRef(bindings);
   const onChangeRef = useRef(onChange);
   bindingsRef.current = bindings;
   onChangeRef.current = onChange;
-  const restoreCommandFocus = (commandId: ShortcutCommandId) => {
+  const restoreCommandFocus = (commandId: string) => {
     window.requestAnimationFrame(() => {
       const target = commandButtonRefs.current[commandId];
       if (target && !target.disabled) target.focus();
@@ -49,7 +55,7 @@ export function XuenessShortcutsPanel({
     });
   };
 
-  const visibleCommands = useMemo(() => filterShortcutCommands(SHORTCUT_COMMANDS, bindings, query), [bindings, query]);
+  const visibleCommands = useMemo(() => filterShortcutCommands(commands, bindings, query), [bindings, commands, query]);
 
   useEffect(() => {
     if (!recordingId) return;
@@ -72,7 +78,7 @@ export function XuenessShortcutsPanel({
         restoreCommandFocus(recordingId);
         return;
       }
-      const recorded = recordShortcutEvent(event);
+      const recorded = recordShortcutEvent(event, undefined, commands.find(command => command.id === recordingId)?.scope);
       if (recorded.kind === "pending") {
         setPreview(recorded.preview);
         setError("");
@@ -83,13 +89,16 @@ export function XuenessShortcutsPanel({
         setError(recordingError(recorded.reason));
         return;
       }
-      const conflictId = findShortcutConflict(recorded.binding, recordingId, bindingsRef.current);
+      const conflictId = findShortcutConflictIn(recorded.binding, recordingId, bindingsRef.current, commands);
       if (conflictId) {
         setPreview(recorded.binding);
-        setError(recordingError("reserved", tr(SHORTCUT_COMMANDS.find((command) => command.id === conflictId)!.label)));
+        setError(recordingError("reserved", tr(commands.find((command) => command.id === conflictId)?.label ?? conflictId)));
         return;
       }
-      void onChangeRef.current({ ...bindingsRef.current, [recordingId]: recorded.binding });
+      const previous = resolveShortcutBinding(recordingId, bindingsRef.current, commands.find(command => command.id === recordingId)?.defaultBinding);
+      const choices = previous.split('|').map(value => value.trim()).filter(Boolean);
+      if (appendBinding && (choices.includes(recorded.binding) || choices.length >= 4)) { setError(tr("最多四个不同的快捷键。")); return; }
+      void onChangeRef.current({ ...bindingsRef.current, [recordingId]: appendBinding && previous ? `${previous} | ${recorded.binding}` : recorded.binding });
       setRecordingId(null);
       setPreview("");
       setError("");
@@ -101,9 +110,10 @@ export function XuenessShortcutsPanel({
       window.removeEventListener("keydown", handleRecording, true);
       window.cancelAnimationFrame(frame);
     };
-  }, [recordingId]);
+  }, [commands, recordingId, appendBinding]);
 
-  const startRecording = (commandId: ShortcutCommandId) => {
+  const startRecording = (commandId: string, append = false) => {
+    setAppendBinding(append);
     setError("");
     setPreview("");
     setRecordingId(commandId);
@@ -151,7 +161,7 @@ export function XuenessShortcutsPanel({
           <span role="columnheader">{tr("操作")}</span>
         </div>
         {visibleCommands.map((command) => {
-          const binding = resolveShortcutBinding(command.id, bindings);
+          const binding = resolveShortcutBinding(command.id, bindings, command.defaultBinding);
           const active = recordingId === command.id;
           const overridden = Object.hasOwn(bindings, command.id);
           return (
@@ -167,7 +177,7 @@ export function XuenessShortcutsPanel({
                       <Keyboard size={15} aria-hidden="true" />{preview || tr("按下组合键…")}
                     </button>
                     {error && <small role="alert">{error}</small>}
-                    {!error && <small>{tr("按 Escape 取消；按 Backspace 恢复默认。")}</small>}
+                    {!error && <small>{tr("按 Escape 取消；按 Backspace 清除绑定。")}</small>}
                   </span>
                 ) : (
                   <button
@@ -182,8 +192,9 @@ export function XuenessShortcutsPanel({
                   </button>
                 )}
               </span>
-              <span className="xn-shortcuts__scope" role="cell">{tr("全局")}</span>
+              <span className="xn-shortcuts__scope" role="cell">{shortcutScopeLabel(command.scope)}</span>
               <span className="xn-shortcuts__actions" role="cell">
+                <button type="button" disabled={disabled || active} aria-label={`${tr("添加备用快捷键")}：${tr(command.label)}`} onClick={() => startRecording(command.id, true)}>+</button>
                 <button ref={(node) => { commandButtonRefs.current[command.id] = node; }} type="button" title={tr("重新录制")} aria-label={`${tr("重新录制")}：${tr(command.label)}`} disabled={disabled || active} onClick={() => startRecording(command.id)} data-testid={`xn-shortcut-edit-${command.id}`}><Pencil size={14} aria-hidden="true" /></button>
                 <button type="button" title={tr("清除绑定")} aria-label={`${tr("清除绑定")}：${tr(command.label)}`} disabled={disabled || !binding || active} onClick={() => { setRecordingId(null); void onChange({ ...bindings, [command.id]: "" }); }} data-testid={`xn-shortcut-clear-${command.id}`}><Trash2 size={14} aria-hidden="true" /></button>
                 <button type="button" title={tr("恢复默认")} aria-label={`${tr("恢复默认")}：${tr(command.label)}`} disabled={disabled || !overridden || active} onClick={() => { setRecordingId(null); void onChange(restoreShortcutDefault(bindings, command.id)); }} data-testid={`xn-shortcut-default-${command.id}`}><RotateCcw size={14} aria-hidden="true" /></button>

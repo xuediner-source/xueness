@@ -1,0 +1,42 @@
+.xn-workbuddy { display: grid; align-content: start; gap: 16px; width: 100%; max-width: 1160px; margin-inline: auto; padding: 30px 36px 48px; box-sizing: border-box; min-width: 0; color: var(--fg); }
+.xn-workbuddy h2, .xn-workbuddy h3, .xn-workbuddy p { margin: 0; }
+.xn-workbuddy__header { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: 14px; }
+.xn-workbuddy__header > div:first-child { flex: 1 1 18rem; min-width: 0; }
+.xn-workbuddy__header h2 { font-size: 22px; font-weight: 650; letter-spacing: -.02em; line-height: 1.4; }
+.xn-workbuddy__header p { margin-top: 8px; color: var(--fg-muted); line-height: 1.65; }
+.xn-workbuddy__toolbar, .xn-workbuddy__account-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.xn-workbuddy button { display: inline-flex; align-items: center; justify-content: center; gap: 7px; min-height: 34px; padding: 7px 11px; border: 1px solid var(--border); border-radius: 8px; background: var(--bg-card); color: var(--fg); font: inherit; cursor: pointer; }
+.xn-workbuddy button:hover:not(:disabled) { background: var(--bg-hover); }
+.xn-workbuddy button:disabled { opacity: .55; cursor: default; }
+.xn-workbuddy :is(button, input):focus-visible { outline: 2px solid var(--border-focus); outline-offset: 2px; }
+.xn-workbuddy__local-note { padding: 10px 12px; border: 1px solid var(--border); border-radius: 8px; background: var(--bg-subtle); color: var(--fg-muted); line-height: 1.6; }
+.xn-workbuddy__gateway { color: var(--ok-fg); font-size: 12px; }
+.xn-workbuddy__gateway.is-offline { color: var(--error-fg); }
+.xn-workbuddy__busy, .xn-workbuddy__loading { color: var(--fg-muted); }
+.xn-workbuddy__error, .xn-workbuddy__account-error { padding: 9px 11px; border-radius: 8px; color: var(--error-fg); background: var(--error-bg); overflow-wrap: anywhere; }
+.xn-workbuddy__notice { color: var(--ok-fg); }
+.xn-workbuddy__accounts { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 330px), 1fr)); gap: 14px; }
+.xn-workbuddy__account { display: grid; align-content: start; gap: 15px; min-width: 0; padding: 17px; border: 1px solid var(--border); border-radius: 12px; background: var(--bg-card); }
+.xn-workbuddy__account-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; min-width: 0; }
+.xn-workbuddy__account-heading > div { min-width: 0; }
+.xn-workbuddy__account-heading h3 { overflow-wrap: anywhere; font-size: 16px; font-weight: 620; }
+.xn-workbuddy__account-heading p { margin-top: 5px; color: var(--fg-muted); font-size: 12px; overflow-wrap: anywhere; }
+.xn-workbuddy code { font-family: var(--font-mono, monospace); font-size: .95em; overflow-wrap: anywhere; }
+.xn-workbuddy__badge { flex: 0 0 auto; padding: 5px 9px; border-radius: 20px; background: var(--bg-subtle); color: var(--fg-muted); font-size: 11px; }
+.xn-workbuddy__badge.is-available { background: var(--ok-bg); color: var(--ok-fg); }
+.xn-workbuddy__badge.is-cooling, .xn-workbuddy__badge.is-unknown { background: var(--warn-bg); color: var(--warn-fg); }
+.xn-workbuddy__badge.is-disabled, .xn-workbuddy__badge.is-offline { background: var(--error-bg); color: var(--error-fg); }
+.xn-workbuddy__details { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 13px; margin: 0; }
+.xn-workbuddy__details > div { min-width: 0; }
+.xn-workbuddy__details dt { color: var(--fg-muted); font-size: 11px; }
+.xn-workbuddy__details dd { margin: 4px 0 0; overflow-wrap: anywhere; font-size: 13px; }
+.xn-workbuddy__account-error { margin: 0; font-size: 12px; line-height: 1.55; }
+.xn-workbuddy__account-actions { justify-content: flex-start; }
+.xn-workbuddy__account-actions > span { color: var(--fg-muted); font-size: 12px; }
+.xn-workbuddy__empty { padding: 28px 18px; border: 1px dashed var(--border); border-radius: 12px; text-align: center; }
+.xn-workbuddy__empty h3 { font-size: 15px; }
+.xn-workbuddy__empty p { margin-top: 8px; color: var(--fg-muted); line-height: 1.6; }
+@media (max-width: 620px) {
+  .xn-workbuddy { padding: 22px 16px 36px; }
+  .xn-workbuddy__toolbar { width: 100%; }
+}

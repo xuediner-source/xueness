@@ -1,0 +1,108 @@
+{
+  "apiVersion": 2,
+  "id": "planning",
+  "name": "计划与问答",
+  "description": "Session goals, independent bounded verification, task lists, questions and immutable delivery content checks.",
+  "version": "0.2.0",
+  "defaultEnabled": true,
+  "capabilities": {
+    "fs": {
+      "read": [
+        "workspace"
+      ],
+      "write": [
+        "state"
+      ]
+    }
+  },
+  "httpFamilies": [
+    "sessions/*/goal",
+    "delivery/*"
+  ],
+  "tools": [
+    {
+      "name": "delivery_plan",
+      "gate": "todo_write",
+      "mutating": false,
+      "concurrencySafe": false
+    },
+    {
+      "name": "todo_read",
+      "gate": "todo_read",
+      "mutating": false,
+      "concurrencySafe": true
+    },
+    {
+      "name": "todo_write",
+      "gate": "todo_write",
+      "mutating": false,
+      "concurrencySafe": false
+    },
+    {
+      "name": "ask_user",
+      "gate": "ask_user",
+      "mutating": false,
+      "concurrencySafe": false
+    },
+    {
+      "name": "exit_plan_mode",
+      "gate": "plan_exit",
+      "mutating": false,
+      "concurrencySafe": false
+    },
+    {
+      "name": "enter_plan_mode",
+      "gate": "plan_enter",
+      "mutating": false,
+      "concurrencySafe": false
+    },
+    {
+      "name": "goal_read",
+      "gate": "goal_read",
+      "mutating": false,
+      "concurrencySafe": true
+    }
+  ],
+  "features": [
+    {
+      "id": "planning.goal_editor",
+      "name": "目标创建与显式替换",
+      "nameEn": "Goal creation and explicit replacement"
+    },
+    {
+      "id": "planning.goal_driver",
+      "name": "目标独立核验与有界继续执行",
+      "nameEn": "Independent goal verification and bounded continuation"
+    },
+    {
+      "id": "planning.task_tools",
+      "name": "会话任务清单与操作员问答",
+      "nameEn": "Session tasks and operator questions"
+    },
+    {
+      "id": "planning.delivery",
+      "name": "不可弱化的交付清单与实际内容核验",
+      "nameEn": "Immutable delivery plans and actual content checks"
+    },
+    {
+      "id": "planning.work_policy",
+      "name": "任务执行与验证指导",
+      "nameEn": "Work execution and verification guidance"
+    },
+    {
+      "id": "planning.guarded",
+      "name": "守护执行与危险命令逐次确认",
+      "nameEn": "Guarded execution with one-time dangerous-command approval"
+    },
+    {
+      "id": "planning.goal_lifecycle",
+      "name": "稳定目标标识、状态召回与累计预算",
+      "nameEn": "Stable goal identities, request state recall and cumulative budgets"
+    }
+  ],
+  "frontendModules": [
+    "plugins/planning/CompletionChecks.tsx",
+    "plugins/planning/SessionGoal.tsx#SessionGoal",
+    "plugins/planning/GoalEditorDialog.tsx"
+  ]
+}

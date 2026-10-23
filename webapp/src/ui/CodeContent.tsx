@@ -43,43 +43,27 @@ export const CodeContent = React.memo(function CodeContent({text,path,language,t
     observer.observe(node);
     return()=>observer.disconnect();
   },[highlightTiming,visibleOnce]);
-  const highlightAllowed=shouldAttemptCodeHighlight(highlightTiming,visibleOnce);
-  const syncH=getLoadedHighlighter(theme,lang);
-  const initialHtml = useMemo(()=>{
-    if(!highlightAllowed) return '';
-    if(syncH&&lang!=='text'&&text.length<=200000){
-      try{return syncH.codeToHtml(text,{lang,theme});}catch{return '';}
-    }
-    return '';
-  },[syncH,text,lang,theme,highlightAllowed]);
-  const [html,setHtml]=useState(initialHtml);
+  // Highlight at most once per text/language/theme change, during render; the
+  // effect only loads a missing theme or grammar and then re-renders.
+  const eligible=lang!=='text'&&text.length<=200000&&shouldAttemptCodeHighlight(highlightTiming,visibleOnce);
+  const h=eligible?getLoadedHighlighter(theme,lang):null;
+  const [,setLoads]=useState(0);
   useEffect(()=>{
+    if(!eligible||h) return;
     let live=true;
-    if(!highlightAllowed||lang==='text'||text.length>200000){
-      setHtml('');
-      return()=>{live=false;};
-    }
-    const currentH=getLoadedHighlighter(theme,lang);
-    if(currentH){
-      try{
-        const val=currentH.codeToHtml(text,{lang,theme});
-        if(live)setHtml(val);
-      }catch{
-        if(live)setHtml('');
-      }
-      return()=>{live=false;};
-    }
-    void loadHighlighter([theme],lang).then(h=>{
-      if(!live)return;
-      try{
-        const value=h.codeToHtml(text,{lang,theme});
-        if(live)setHtml(value);
-      }catch{
-        if(live)setHtml('');
-      }
-    }).catch(()=>{});
+    loadHighlighter([theme],lang as CodeLanguage).then(()=>{if(live)setLoads(n=>n+1);},()=>{});
     return()=>{live=false;};
-  },[text,theme,lang,highlightAllowed]);
+  },[eligible,h,theme,lang]);
+  // While that load runs, keep the last highlight of the same text (e.g. across
+  // a theme switch) rather than flashing plain text.
+  const last=useRef(['','']);
+  const html=useMemo(()=>{
+    let value='';
+    if(h){try{value=h.codeToHtml(text,{lang,theme});}catch{}}
+    else if(eligible&&last.current[0]===text) value=last.current[1];
+    last.current=[text,value];
+    return value;
+  },[h,text,lang,theme,eligible]);
   const props={className:`xn-code-content${settings.showLineNumbers?' has-line-numbers':''}${settings.wrapLongLines?' wraps-lines':''}`,style:{fontSize:`${settings.fontSizePx}px`},'data-testid':'primitive-code','data-tone':tone,'data-language':lang,'data-highlight-timing':highlightTiming};
   const lines=text.split('\n');
   return html?<div ref={rootRef} {...props} dangerouslySetInnerHTML={{__html:html}}/>:<div ref={rootRef} {...props}><pre><code>{lines.map((line,i)=><React.Fragment key={i}><span className="line">{line||'\u200b'}</span>{i<lines.length-1?'\n':''}</React.Fragment>)}</code></pre></div>;

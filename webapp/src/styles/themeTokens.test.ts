@@ -15,8 +15,13 @@ test("默认配色：中性 Xueness 浅色/深色，不是暖色象牙白", () =
   assert.equal(value(block(":root"), "bg"), "#fafafa");
   assert.equal(value(block(":root"), "bg-window"), "#ececee");
   assert.equal(value(block(".dark"), "bg"), "#161616");
-  assert.equal(value(block(":root"), "accent"), "var(--info-fg)");
-  assert.equal(value(block(":root"), "accent-brand"), "#0369a1");
+  assert.equal(value(block(":root"), "accent"), "var(--accent-brand)");
+  assert.equal(value(block(":root"), "accent-brand"), "#1c1c1e");
+  // The default appearance is ink on paper: its accent carries no hue (no blue/violet).
+  for (const source of [block(":root"), block(".dark")]) {
+    const [r, g, b] = rgb(value(source, "accent-brand"));
+    assert.ok(Math.max(r, g, b) - Math.min(r, g, b) <= 4, `default accent-brand should be a neutral grey`);
+  }
 });
 
 test("Claudex uses warm surfaces and keeps the same native chrome token source", () => {

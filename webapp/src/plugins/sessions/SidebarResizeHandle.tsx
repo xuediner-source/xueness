@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { t as tr } from '../../i18n';
 import { isImeComposingEvent } from '../../xuenessShortcutDisplay';
 import './sidebar-resize.css';
+import { getWorkbenchStorage } from '../desktop/desktopStorage';
 
 export type SidebarAppearance = 'xueness' | 'claudex';
 export const SIDEBAR_WIDTH_STORAGE = 'xueness.sidebar-widths.v1';
@@ -32,7 +33,7 @@ export function decodeSidebarWidths(raw: string | null): Widths {
 }
 
 function readWidths(): Widths {
-  try { return decodeSidebarWidths(localStorage.getItem(SIDEBAR_WIDTH_STORAGE)); }
+  try { return decodeSidebarWidths(getWorkbenchStorage()?.getItem(SIDEBAR_WIDTH_STORAGE) ?? null); }
   catch { return {}; }
 }
 
@@ -60,7 +61,7 @@ export function useSessionSidebarWidth(appearance: SidebarAppearance, enabled: b
     const next = { ...widthsRef.current, [appearance]: clampSidebarWidth(value, appearance, 1920) };
     widthsRef.current = next;
     setWidths(next);
-    if (commit) try { localStorage.setItem(SIDEBAR_WIDTH_STORAGE, JSON.stringify(next)); } catch { /* Keep the in-memory preference. */ }
+    if (commit) try { getWorkbenchStorage()?.setItem(SIDEBAR_WIDTH_STORAGE, JSON.stringify(next)); } catch { /* Keep the in-memory preference. */ }
   }, [appearance, enabled]);
   return { width: enabled ? clampSidebarWidth(widths[appearance] ?? DEFAULT_SIDEBAR_WIDTHS[appearance], appearance, viewport) : undefined,
     limits: sidebarWidthLimits(appearance, viewport), onChange };
@@ -85,6 +86,16 @@ export function SidebarResizeHandle({ appearance, width, min, max, onChange }: {
     setResizing(false);
   }, [onChange]);
   useEffect(() => () => finish(false), [finish]);
+  // Mark the shell itself while dragging. A `:has()` selector on the shell (with a
+  // descendant `*` branch) forced every keystroke/stream tick to restyle the whole
+  // document; a plain attribute keeps the drag cursor without that cost.
+  useEffect(() => {
+    if (!resizing) return;
+    const shell = handle.current?.closest<HTMLElement>('.xn-shell-layout');
+    if (!shell) return;
+    shell.setAttribute('data-sidebar-resizing', 'true');
+    return () => shell.removeAttribute('data-sidebar-resizing');
+  }, [resizing]);
   useEffect(() => {
     const cancel = () => finish(false);
     window.addEventListener('blur', cancel);

@@ -28,6 +28,10 @@ function fixtureStyle() {
       border: 0; background: transparent; font: 13px/1.4 sans-serif; text-align: left; }
     .xn-shell-nav__label { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .xn-task-list { font: 13px sans-serif; }
+    .xn-task-list__context { position: fixed; z-index: 50; width: 210px; max-height: calc(100vh - 8px); overflow: auto; padding: 4px; border: 1px solid #888; background: white; color: #111; }
+    .xn-task-list__context button { display: flex; align-items: center; min-height: 32px; width: 100%; }
+    .xn-task-list__menu-backdrop { position: fixed; z-index: 49; inset: 0; width: 100%; height: 100%; border: 0; background: transparent; }
+    .xn-task-list__options-menu-label { padding: 4px 8px; font-size: 12px; }
     .xn-conversation-history-rail { position: fixed; right: 8px; top: 8px; width: 34px; }
     .xn-conversation-history-rail__track { max-height: 220px; overflow-y: auto; scrollbar-width: none; }
     .xn-conversation-history-rail__stops { display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 5px 0; }
@@ -40,7 +44,7 @@ function sidebarHarnessSource() {
   return `
     import React, { useState } from "react";
     import { createRoot } from "react-dom/client";
-    import { XuenessTaskList } from ${JSON.stringify(resolve(webappRoot, "src/plugins/sessions/XuenessTaskList.tsx"))};
+    import { XuenessTaskList, normalizeHiddenProjectRoots, sameSidebarProjectPath } from ${JSON.stringify(resolve(webappRoot, "src/plugins/sessions/XuenessTaskList.tsx"))};
     const sessions = Array.from({ length: ${SESSIONS} }, (_, index) => ({
       id: "task-" + (index + 1),
       task: "task-" + (index + 1),
@@ -52,11 +56,19 @@ function sidebarHarnessSource() {
     function Fixture() {
       const [activeId, setActiveId] = useState("task-1");
       const [selected, setSelected] = useState([]);
+      const [preferences, setPreferences] = useState({});
+      window.__sidebarProjectProbe = { sessionCount: sessions.length, preferences };
       const select = (id) => { setActiveId(id); setSelected((current) => [...current, id]); };
       return React.createElement("div", { className: "xn-shell-sidebar__body", "data-testid": "sidebar-body" },
         React.createElement(XuenessTaskList, {
-          sessions, activeId, busy: false,
-          onPreferences: () => {}, onSelect: select,
+          sessions, activeId, busy: false, projectRoots: [{ path: "/work/demo", name: "Demo project" }], preferences,
+          onPreferences: setPreferences,
+          onAddProject: () => setPreferences((previous) => ({
+            ...previous,
+            hiddenProjectRoots: normalizeHiddenProjectRoots(previous.hiddenProjectRoots)
+              .filter((path) => !sameSidebarProjectPath(path, "/work/demo")),
+          })),
+          onSelect: select,
           onRename: () => {}, onArchive: () => {}, onPin: () => {}, onOpenArchived: () => {},
         }),
         React.createElement("button", { type: "button", "data-testid": "external-select-last", style: { display: "none" }, onClick: () => setActiveId("task-${SESSIONS}") }, "external select"),
@@ -278,6 +290,39 @@ const pickList = "[...document.querySelectorAll('.xn-shell-nav__list')].at(-1)";
 
 await withPage("sidebar", sidebarHarnessSource(), async (page) => {
   await page.waitForSelector('.xn-shell-nav__list li');
+
+  // Project rows expose the same mouse and keyboard context-menu entry points
+  // as task rows. Removing one hides only the project grouping; an explicit
+  // add of that same root restores it without changing the session fixture.
+  const projectHeader = page.locator('[data-project-root="/work/demo"] header');
+  await projectHeader.waitFor({ state: "visible" });
+  await projectHeader.evaluate((node) => node.dispatchEvent(new MouseEvent("contextmenu", {
+    bubbles: true, cancelable: true, clientX: window.innerWidth - 1, clientY: window.innerHeight - 1,
+  })));
+  const projectMenu = page.getByRole("menu", { name: "项目操作" });
+  await projectMenu.waitFor({ state: "visible" });
+  await page.getByText("只会从侧栏隐藏。文件和会话会保留。", { exact: true }).waitFor({ state: "visible" });
+  const menuBounds = await projectMenu.boundingBox();
+  assert.ok(menuBounds && menuBounds.x >= 0 && menuBounds.y >= 0
+    && menuBounds.x + menuBounds.width <= 900 && menuBounds.y + menuBounds.height <= 640,
+  "项目菜单应夹持在视口内");
+  await page.keyboard.press("Escape");
+  await projectMenu.waitFor({ state: "detached" });
+
+  await projectHeader.locator(".xn-task-list__group-name").focus();
+  await page.keyboard.press("Shift+F10");
+  await projectMenu.waitFor({ state: "visible" });
+  await projectMenu.getByRole("menuitem", { name: "从项目列表移除" }).click();
+  await page.waitForFunction(() => !document.querySelector('[data-project-root="/work/demo"]'));
+  const removedState = await page.evaluate(() => window.__sidebarProjectProbe);
+  assert.deepEqual(removedState.preferences.hiddenProjectRoots, ["/work/demo"]);
+  assert.equal(removedState.sessionCount, SESSIONS, "项目移除只修改侧栏偏好，不删除会话");
+
+  await page.getByTestId("xn-task-add-project").click();
+  await page.waitForSelector('[data-project-root="/work/demo"]');
+  const restoredState = await page.evaluate(() => window.__sidebarProjectProbe);
+  assert.deepEqual(restoredState.preferences.hiddenProjectRoots, [], "重新添加同一路径会恢复项目行");
+
   const initial = await rowCount(page);
   assert.ok(initial < SESSIONS, `长列表应只挂载部分行，实际 ${initial}`);
   assert.ok(initial > 10, "窗口内应有可见行");

@@ -1,0 +1,17 @@
+Xueness Web UI on http://127.0.0.1:9 (loopback only, real provider on)
+----------------------------------------------------------------------
+Ran 246 tests in 82.120s
+
+OK (skipped=21)
+{"frozen": true, "isolated_state": true, "successful_tool_calls": ["read", "list", "glob", "grep", "write", "edit", "read"], "absolute_and_relative_previews": 3, "rejected_invalid_paths": 6, "completion_status": "verified", "session_status": "completed"}
+PASS: frozen search API: Tavily/Brave/SearXNG, private keys and independent provider settings
+[isolated HTTP 400 /api/sessions/archived/a759e2e789734405b165feabaea1dd2c] tail (103 chars):
+{"error": "explicit confirmation and archived revision required", "code": "bad_request", "status": 400}
+PASS: frozen archived deletion, explicit confirmation and workspace/active-session preservation
+PASS: frozen terminal interrupt/resume/close round 1/3
+PASS: frozen terminal interrupt/resume/close round 2/3
+PASS: frozen terminal interrupt/resume/close round 3/3
+PASS: packaged timezone data (Asia/Shanghai, nextRunAt=1792371600.0)
+[isolated HTTP 403 /api/desktop/status] tail (126 chars):
+{"error": "plugin disabled or dependency unavailable: desktop", "code": "plugin_disabled", "status": 403, "plugin": "desktop"}
+PASS: frozen runtime, authenticated HTTP, UI, 30 plugins, real PTY/ConPTY, workflow worker, gating and shutdown

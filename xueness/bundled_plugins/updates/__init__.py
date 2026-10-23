@@ -1,1 +1,0 @@
-"""CLI source updates plugin."""

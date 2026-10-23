@@ -20,6 +20,8 @@ function bootMain(t, { smoke = false, deferBackend = false, failReopenLoad = fal
 
   const app = new EventEmitter();
   const ipcMain = new EventEmitter();
+  const invokeHandlers = new Map();
+  ipcMain.handle = (name, callback) => { assert.equal(invokeHandlers.has(name), false); invokeHandlers.set(name, callback); };
   const session = { webRequest: {
     beforeSend: [], beforeRequest: [],
     onBeforeSendHeaders(handler) { this.beforeSend.push(handler); },
@@ -191,6 +193,33 @@ test('native menus and host messages follow only the owned main-frame locale', a
   f.backends[0].emit('failure');
   assert.equal(f.dialogs.at(-1).title, 'Xueness backend stopped');
   assert.match(f.dialogs.at(-1).message, /Saved data has not been deleted/);
+});
+
+test('desktop storage IPC is synchronous, allowlisted, and scoped to the current trusted main frame', async t => {
+  const f = bootMain(t);
+  await waitFor(() => f.windows[0]?.url);
+  const owner = f.windows[0];
+  const emit = (channel, event, ...args) => {
+    event.returnValue = undefined;
+    f.ipcMain.emit(channel, event, ...args);
+    return event.returnValue;
+  };
+  const event = { sender: owner.webContents, senderFrame: owner.webContents.mainFrame };
+  const key = 'xueness.sessions.pane-layout.v2';
+  const raw = JSON.stringify({ v: 2, groups: [], activeGroupId: null });
+  assert.equal(emit('xueness:desktop-storage:get', event, key), null);
+  assert.equal(emit('xueness:desktop-storage:set', event, key, raw), true);
+  assert.equal(emit('xueness:desktop-storage:get', event, key), raw,
+    'sendSync callers receive the saved value before the renderer continues');
+  assert.equal(emit('xueness:desktop-storage:set', event, 'unapproved:key', 'x'), false);
+  assert.equal(emit('xueness:desktop-storage:set', { ...event, sender: {} }, key, raw), false);
+  assert.equal(emit('xueness:desktop-storage:get', { ...event, senderFrame: { url: owner.url } }, key), null,
+    'a same-origin child frame is not the main frame');
+  owner.webContents.mainFrame.url = 'https://example.com/';
+  assert.equal(emit('xueness:desktop-storage:set', event, key, raw), false);
+
+  const file = join(f.directory, 'data', 'desktop-state-v1.json');
+  assert.equal(JSON.parse(readFileSync(file, 'utf8')).entries[key], raw);
 });
 
 test('macOS keeps the backend alive after last-window close and recreates a secured window on activate', {

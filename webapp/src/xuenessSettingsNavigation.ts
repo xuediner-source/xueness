@@ -40,6 +40,7 @@ const definitions: readonly SectionDefinition[] = [
   ['agent', 'Agent 访问', '控制 MCP、子代理和 Hooks 的运行权限。', 'extensions', 'settings'],
   ['marketplace', '扩展市场', '查看并安装可信扩展资源。', 'extensions', 'extensions'],
   ['subscriptions', '订阅中心', '通过账号授权或订阅凭证接入，查看实际额度。', 'extensions', 'subscriptions'],
+  ['workbuddy', 'WorkBuddy 号池', '查看本机 WorkBuddy 账号状态并管理认证文件。', 'extensions', 'workbuddy'],
   ['model-monitor', '返回模型监测', '对比请求型号与上游返回型号。', 'extensions', 'model_monitor'],
   ['remote', 'SSH 工作区', '管理远程工作区连接。', 'extensions', 'remote'],
   ['automations', '自动化', '管理定时任务与审批。', 'extensions', 'automation'],

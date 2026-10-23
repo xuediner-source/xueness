@@ -40,6 +40,47 @@ test('success is quiet, approvals and terminal failures are explicit without spi
   const pending=renderToStaticMarkup(<ZCodeConversation rows={failedRows} pendingToolIds={new Set(['read-a'])} />);
   assert.match(pending,/等待批准/);
 });
+
+test('tool renderer dependencies fail closed while effective plugins get specialized cards', () => {
+  const toolRows: TimelineRow[] = [
+    { kind: 'tool', seq: 1, turnId: 'turn-renderers', toolCallId: 'read-1', name: 'read', subject: 'a.ts', status: 'ok', error: '', errorCode: '', input: { path: 'a.ts' }, output: 'secret read output' },
+    { kind: 'tool', seq: 2, turnId: 'turn-renderers', toolCallId: 'edit-1', name: 'edit', subject: 'a.ts', status: 'ok', error: '', errorCode: '', input: { old_str: 'one', new_str: 'two' }, output: 'secret edit output' },
+    { kind: 'tool', seq: 3, turnId: 'turn-renderers', toolCallId: 'exec-1', name: 'exec', subject: 'printf ok', status: 'ok', error: '', errorCode: '', input: { command: 'printf ok' }, output: 'secret terminal output' },
+  ];
+  const safe = renderToStaticMarkup(<ZCodeConversation rows={toolRows} collapseTools={false} effectivePluginIds={new Set(['sessions'])} />);
+  assert.equal((safe.match(/data-tool-renderer="fallback"/gu) || []).length, 3);
+  assert.doesNotMatch(safe, /secret (?:read|edit|terminal) output/);
+
+  const specialized = renderToStaticMarkup(<ZCodeConversation rows={toolRows} collapseTools={false} effectivePluginIds={new Set(['sessions', 'files', 'shell'])} />);
+  assert.match(specialized, /data-tool-renderer="read"/);
+  assert.match(specialized, /data-tool-renderer="edit"/);
+  assert.match(specialized, /data-tool-renderer="exec"/);
+  assert.match(specialized, /secret terminal output/);
+});
+
+test('specialized tool payloads stay bounded in the rendered document', () => {
+  const tail = 'TAIL_SENTINEL_SHOULD_NOT_RENDER';
+  const rows: TimelineRow[] = [{
+    kind: 'tool', seq: 1, turnId: 'turn-bound', toolCallId: 'exec-bound', name: 'exec', subject: 'cat large.log',
+    status: 'ok', error: '', errorCode: '', input: { command: 'cat large.log' }, output: { stdout: `${'x'.repeat(50_000)}${tail}` },
+  }];
+  const html = renderToStaticMarkup(<ZCodeConversation rows={rows} collapseTools={false} effectivePluginIds={new Set(['sessions', 'shell'])} />);
+  assert.match(html, /\[输出已截断\]/);
+  assert.doesNotMatch(html, new RegExp(tail));
+});
+
+test('edit previews cap large file diffs while retaining the truncation marker', () => {
+  const rows: TimelineRow[] = [{
+    kind: 'tool', seq: 1, turnId: 'turn-diff-bound', toolCallId: 'edit-bound', name: 'edit', subject: 'large.txt',
+    status: 'ok', error: '', errorCode: '', input: {
+      old_str: Array.from({ length: 400 }, (_, index) => `old-${index}`).join('\n'),
+      new_str: Array.from({ length: 400 }, (_, index) => `new-${index}`).join('\n'),
+    }, output: '',
+  }];
+  const html = renderToStaticMarkup(<ZCodeConversation rows={rows} collapseTools={false} effectivePluginIds={new Set(['sessions', 'files'])} />);
+  assert.match(html, /class="xn-zc-tool-truncated"/);
+  assert.ok((html.match(/class="xn-diff-line /gu) || []).length <= 240);
+});
 test('live work stays open and only the active turn has a loading state', () => {
   const active=[...rows,{kind:'user' as const,seq:5,turnId:'turn-2',text:'second turn'}];
   const html=renderToStaticMarkup(<ZCodeConversation rows={active} streamingPending activityPhase="connecting" />);
@@ -54,19 +95,34 @@ test('normal chat hides protocol envelopes and duplicate completion cards', () =
   assert.doesNotMatch(html,/summary|evidence|timeline-item-completion/);
 });
 test('feedback, editing and fork controls only appear when backed by capabilities', () => {
-  const html=renderToStaticMarkup(<ZCodeConversation rows={rows} onFork={()=>{}} onEdit={async()=>true} onFeedback={async()=>{}} />);
+  const html=renderToStaticMarkup(<ZCodeConversation rows={rows} effectivePluginIds={new Set(['sessions'])} onFork={()=>{}} onEdit={async()=>true} onFeedback={async()=>{}} />);
   assert.match(html,/aria-label="编辑消息"/);
   assert.match(html,/aria-label="有帮助"[^>]*aria-pressed="true"/);
   assert.match(html,/aria-label="分叉会话"/);
   assert.doesNotMatch(html,/重试运行/);
   const readonly=renderToStaticMarkup(<ZCodeConversation rows={rows} />);
   assert.doesNotMatch(readonly,/aria-label="编辑消息"|aria-label="有帮助"|aria-label="分叉会话"/);
+  const disabled=renderToStaticMarkup(<ZCodeConversation rows={rows} effectivePluginIds={new Set()} onEdit={async()=>true} />);
+  assert.doesNotMatch(disabled,/aria-label="编辑消息"|message-edit-composer/);
 });
 test('reasoning preferences and unsafe Markdown remain respected', () => {
   const html=renderToStaticMarkup(<ZCodeConversation rows={rows} showReasoning={false} />);
   assert.doesNotMatch(html,/检查范围/);
   const unsafe=renderToStaticMarkup(<ZCodeConversation rows={[{kind:'assistant',seq:1,turnId:'t',text:'[click](javascript:alert(1)) <script>bad</script>'}]} />);
   assert.doesNotMatch(unsafe,/href="javascript:|<script>/);
+});
+
+test('reasoning is a separate collapsible row with latest summary and completed duration', () => {
+  const html = renderToStaticMarkup(<ZCodeConversation rows={[{
+    kind: 'user', seq: 1, turnId: 'turn-reasoning', text: 'question',
+  }, {
+    kind: 'assistant', seq: 2, turnId: 'turn-reasoning', text: 'answer', reasoning: 'first thought\nlatest thought',
+    startedAt: 1_000, endedAt: 3_200,
+  }]} />);
+  assert.match(html, /data-testid="timeline-item-reasoning-2"/);
+  assert.match(html, /思考了 2 秒/);
+  assert.match(html, /latest thought/);
+  assert.match(html, /class="xn-zc-reasoning"/);
 });
 
 test('evaluateUserMessageEditKey: handles Escape and Mod+Enter with IME and platform awareness', () => {
@@ -231,4 +287,168 @@ test('compaction boundary renders once at the top of the first live turn', () =>
   assert.doesNotMatch(renderToStaticMarkup(<ZCodeConversation rows={merged} />), /timeline-compaction-boundary/);
   assert.doesNotMatch(renderToStaticMarkup(<ZCodeConversation rows={rows}
     compactionMarker={{ boundarySeq: 999, removed: 2, masked: 0 }} />), /timeline-compaction-boundary/);
+});
+
+test('interrupted reasoning displays data-state="interrupted", duration or stopped label, and preserves summary', () => {
+  // With duration
+  const withDurationRows: TimelineRow[] = [
+    { kind: 'user', seq: 1, turnId: 'turn-int-1', text: 'question' },
+    {
+      kind: 'assistant', seq: 2, turnId: 'turn-int-1', text: 'interrupted partial text',
+      reasoning: 'thought line 1\nstopped thinking here',
+      interrupted: true, startedAt: 1_000, endedAt: 4_200,
+    },
+  ];
+  const withDurHtml = renderToStaticMarkup(<ZCodeConversation rows={withDurationRows} />);
+  assert.match(withDurHtml, /data-state="interrupted"/);
+  assert.match(withDurHtml, /思考了 3 秒/);
+  assert.match(withDurHtml, /stopped thinking here/);
+
+  // Without duration (e.g., immediate stop before timing measured)
+  const withoutDurationRows: TimelineRow[] = [
+    { kind: 'user', seq: 1, turnId: 'turn-int-2', text: 'question' },
+    {
+      kind: 'assistant', seq: 2, turnId: 'turn-int-2', text: 'aborted',
+      reasoning: 'immediate stop',
+      interrupted: true,
+    },
+  ];
+  const withoutDurHtml = renderToStaticMarkup(<ZCodeConversation rows={withoutDurationRows} />);
+  assert.match(withoutDurHtml, /data-state="interrupted"/);
+  assert.match(withoutDurHtml, /思考已停止/);
+  assert.match(withoutDurHtml, /immediate stop/);
+});
+
+test('a restored interrupted answer stays in its stopped work segment after a later turn', () => {
+  const restored: TimelineRow[] = [
+    { kind: 'user', seq: 1, turnId: 'turn-1', text: 'first question' },
+    { kind: 'assistant', seq: 2, turnId: 'turn-1', streamId: 'd'.repeat(32),
+      text: 'partial answer from the stopped run', interrupted: true },
+    { kind: 'user', seq: 3, turnId: 'turn-2', text: 'follow-up question' },
+    { kind: 'assistant', seq: 4, turnId: 'turn-2', text: 'completed follow-up answer' },
+  ];
+  const html = renderToStaticMarkup(<ZCodeConversation rows={restored} />);
+  assert.match(html, /已停止/);
+  assert.match(html, /partial answer from the stopped run/);
+  const finalAt = html.indexOf('class="xn-zc-final"');
+  assert.ok(finalAt >= 0);
+  assert.doesNotMatch(html.slice(finalAt), /partial answer from the stopped run/);
+  assert.match(html.slice(finalAt), /completed follow-up answer/);
+});
+
+test('reasoning rows are gated by effectivePluginIds when provided', () => {
+  const rowsWithReasoning: TimelineRow[] = [
+    { kind: 'user', seq: 1, turnId: 'turn-gate', text: 'prompt' },
+    {
+      kind: 'assistant', seq: 2, turnId: 'turn-gate', text: 'final answer',
+      reasoning: 'internal thought to be hidden',
+    },
+  ];
+
+  // Sessions enabled: reasoning renders
+  const enabledHtml = renderToStaticMarkup(
+    <ZCodeConversation rows={rowsWithReasoning} effectivePluginIds={new Set(['sessions'])} />,
+  );
+  assert.match(enabledHtml, /class="xn-zc-reasoning"/);
+  assert.match(enabledHtml, /internal thought to be hidden/);
+
+  // Sessions disabled: reasoning hidden
+  const disabledHtml = renderToStaticMarkup(
+    <ZCodeConversation rows={rowsWithReasoning} effectivePluginIds={new Set(['files'])} />,
+  );
+  assert.doesNotMatch(disabledHtml, /class="xn-zc-reasoning"/);
+  assert.doesNotMatch(disabledHtml, /internal thought to be hidden/);
+  assert.match(disabledHtml, /final answer/);
+});
+
+test('multi-segment reasoning across work rows retains distinct collapsible cards and summaries', () => {
+  const multiSegmentRows: TimelineRow[] = [
+    { kind: 'user', seq: 1, turnId: 'turn-multi', text: 'multi-step task' },
+    {
+      kind: 'assistant', seq: 2, turnId: 'turn-multi', text: '',
+      reasoning: 'Step 1: finding candidates', startedAt: 1000, endedAt: 2500,
+    },
+    {
+      kind: 'tool', seq: 3, turnId: 'turn-multi', toolCallId: 'find-1', name: 'read',
+      subject: 'src/config.ts', status: 'ok', error: '', errorCode: '',
+    },
+    {
+      kind: 'assistant', seq: 4, turnId: 'turn-multi', text: '',
+      reasoning: 'Step 2: evaluating options', startedAt: 3000, endedAt: 5100,
+    },
+    {
+      kind: 'tool', seq: 5, turnId: 'turn-multi', toolCallId: 'edit-1', name: 'edit',
+      subject: 'src/config.ts', status: 'ok', error: '', errorCode: '',
+    },
+    {
+      kind: 'assistant', seq: 6, turnId: 'turn-multi', text: 'All changes done.',
+      reasoning: 'Step 3: preparing final summary', startedAt: 6000, endedAt: 7500,
+    },
+    {
+      kind: 'completion', seq: 7, turnId: 'turn-multi', verified: true,
+      status: 'verified', summary: 'All changes done.',
+    },
+  ];
+
+  const html = renderToStaticMarkup(<ZCodeConversation rows={multiSegmentRows} streamingPending collapseTools={false} />);
+  // All three reasoning segments must be rendered with their separate testids and summaries
+  assert.match(html, /data-testid="timeline-item-reasoning-2"/);
+  assert.match(html, /data-testid="timeline-item-reasoning-4"/);
+  assert.match(html, /data-testid="timeline-item-reasoning-6"/);
+  assert.match(html, /Step 1: finding candidates/);
+  assert.match(html, /Step 2: evaluating options/);
+  assert.match(html, /Step 3: preparing final summary/);
+});
+
+test('interrupted reasoning after tool is preserved and earlier narration is not treated as final', () => {
+  const rows: TimelineRow[] = [
+    { kind: 'user', seq: 1, turnId: 'turn-int-work', text: 'run task' },
+    {
+      kind: 'assistant', seq: 2, turnId: 'turn-int-work', text: 'Starting step 1',
+      reasoning: 'Plan for step 1', startedAt: 1000, endedAt: 2000,
+    },
+    {
+      kind: 'tool', seq: 3, turnId: 'turn-int-work', toolCallId: 'call-1', name: 'read',
+      subject: 'file.txt', status: 'ok', error: '', errorCode: '',
+    },
+    {
+      kind: 'assistant', seq: 4, turnId: 'turn-int-work', text: '',
+      reasoning: 'Interrupted while analyzing file.txt',
+      interrupted: true, startedAt: 3000, endedAt: 4500,
+    },
+  ];
+
+  const html = renderToStaticMarkup(<ZCodeConversation rows={rows} collapseTools={false} />);
+  // The interrupted reasoning must be rendered with data-state="interrupted" and its text
+  assert.match(html, /data-testid="timeline-item-reasoning-4"/);
+  assert.match(html, /data-state="interrupted"/);
+  assert.match(html, /Interrupted while analyzing file\.txt/);
+  // Earlier step 1 narration must NOT be rendered in xn-zc-final
+  assert.doesNotMatch(html, /class="xn-zc-final"/);
+});
+
+
+test('work footer reports wall elapsed time and rejects reversed or missing boundary timestamps', () => {
+  const assistant = (seq: number, startedAt?: number, endedAt?: number): TimelineRow => ({kind:'assistant',seq,turnId:'elapsed-turn',text:`part ${seq}`,startedAt,endedAt});
+  const render = (rows: TimelineRow[]) => renderToStaticMarkup(<ZCodeConversation rows={rows} />);
+  assert.match(render([assistant(1,1000,2000),assistant(2,3000,5000)]), /经过 4 秒/);
+  assert.doesNotMatch(render([assistant(1,6000,7000),assistant(2,3000,5000)]), /经过|Worked for/);
+  assert.doesNotMatch(render([assistant(1,1000,2000),assistant(2,3000)]), /经过|Worked for/);
+  assert.doesNotMatch(render([assistant(1,undefined,2000),assistant(2,3000,5000)]), /经过|Worked for/);
+});
+
+test('authoritative work facts render active time, distinct segments and gated fallback without tool changes', () => {
+  const rows: TimelineRow[] = [{kind:'user', seq:0, turnId:'turn-1', text:'task'},
+    {kind:'tool', seq:1, turnId:'turn-1', toolCallId:'c', name:'list', subject:'.', status:'ok', error:'', errorCode:''}];
+  const workActivity = [{id:'a',turn_id:'turn-1',state:'continued',active_ms:2000},
+    {id:'b',turn_id:'turn-1',state:'stopped',active_ms:3000}];
+  const html = renderToStaticMarkup(<ZCodeConversation rows={rows} workActivity={workActivity} effectivePluginIds={new Set(['sessions'])} />);
+  assert.match(html, /已停止/);
+  assert.match(html, /活跃 5 秒/);
+  assert.match(html, /2.*段工作/);
+  const disabled = renderToStaticMarkup(<ZCodeConversation rows={rows} workActivity={workActivity} effectivePluginIds={new Set()} />);
+  assert.doesNotMatch(disabled, /活跃|段工作/);
+  const unknown = renderToStaticMarkup(<ZCodeConversation rows={rows} workActivity={[{...workActivity[0],state:'unknown',active_ms:null}]} effectivePluginIds={new Set(['sessions'])} />);
+  assert.match(unknown, /工作状态未知/);
+  assert.doesNotMatch(unknown, /活跃|经过/);
 });

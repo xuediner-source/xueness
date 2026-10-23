@@ -1,3 +1,5 @@
+> Historical reference from 2026-10-12, before the TypeScript/Z8 migration; current behavior is defined by [README.md](../README.md) and [ts/docs/z8-guarded-goal-memory.md](../ts/docs/z8-guarded-goal-memory.md).
+
 # 会话执行与恢复升级
 
 实施顺序：当前轮引导 → 稳定历史与增量推送 → 语义压缩 → 目标驱动 → 子会话恢复。
@@ -40,4 +42,4 @@ subagents 插件保留独立子会话、父/根身份、消息和工具记录；
 
 版本更新到 0.1.6。Windows 与两种 Mac 架构采用同一界面和原生打包路径，构建模式及平台细节见[桌面统一记录](desktop-parity-2026-10-12.md)。
 
-后续已按所有者的新要求审查七个本地提交并重跑全量测试，包含自动命名绑定、子会话最终保存、journal 修订游标和订阅协议修复；见[本轮审查记录](review-0.1.6-2026-10-12.md)。journal 的 cursor 回翻请求必须同时携带第一页返回的 message_revision，失配返回 409 并要求重新从尾部取页。
+后续已按所有者的新要求审查七个本地提交并重跑全量测试，包含自动命名绑定、子会话最终保存、journal 修订游标和订阅协议修复；见[本轮审查记录](https://github.com/xuediner-source/xueness/blob/25ba9dbae4838ba6a84ae64ff9d089a1bdd50833/docs/review-0.1.6-2026-10-12.md)。journal 的 cursor 回翻请求必须同时携带第一页返回的 message_revision，失配返回 409 并要求重新从尾部取页。

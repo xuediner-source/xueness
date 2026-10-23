@@ -1,9 +1,15 @@
 import React, { useCallback, useEffect, useId, useRef, useState } from "react";
 import { IconLoader, IconPencil, IconPin, IconTrash, IconX } from "../../ui/icons";
 import { MoreHorizontal } from 'lucide-react';
-import { t as tr } from "../../i18n";
+import { t as tr, tf } from "../../i18n";
+import { normalizeChangeSummary, normalizePendingInteraction, normalizeRemoteSummary, remoteSummaryLabel } from './sessionsIndex';
+import type { SessionRemoteSummary } from './sessionsIndex';
 import { isImeComposingEvent } from "../../xuenessShortcutDisplay";
 import { useUniformListWindow } from "./ListVirtualWindow";
+
+// Phase words stay in a separate chunk. Unknown rows do not load it.
+const RemoteConnectionStateLabel = React.lazy(() =>
+  import('./sessionsRemoteConnectionState').then(module => ({ default: module.RemoteConnectionStateLabel })));
 
 /** 状态圆点：ZCode 用小彩色圆点而非字形。 */
 function StatusDot({ status }: { status?: string }): React.JSX.Element | null {
@@ -34,6 +40,11 @@ export type SidebarNavItemData = {
   status?: string;
   pinned?: boolean;
   timeLabel?: string;
+  /** sessions-index row attention sidecar. Optional fields keep legacy rows unchanged. */
+  pendingInteraction?: boolean | string;
+  unread?: boolean;
+  changeSummary?: { added?: number; removed?: number; files?: number } | string;
+  remote?: SessionRemoteSummary;
 };
 
 export type SidebarNavProps = {
@@ -80,12 +91,20 @@ type SidebarNavItemProps = {
 /** 行属性按值比较：外层重渲染时 items 数组与行对象总是新身份，
  * 字段未变的行必须命中 memo 才能保证「切换选中会话不重渲染整列表」。 */
 export function sidebarNavItemPropsEqual(a: SidebarNavItemProps, b: SidebarNavItemProps): boolean {
+  const leftChange = typeof a.item.changeSummary === 'string' ? a.item.changeSummary : JSON.stringify(a.item.changeSummary ?? null);
+  const rightChange = typeof b.item.changeSummary === 'string' ? b.item.changeSummary : JSON.stringify(b.item.changeSummary ?? null);
   return a.item.id === b.item.id
     && a.item.label === b.item.label
     && a.item.active === b.item.active
     && a.item.status === b.item.status
     && a.item.pinned === b.item.pinned
     && a.item.timeLabel === b.item.timeLabel
+    && a.item.pendingInteraction === b.item.pendingInteraction
+    && a.item.unread === b.item.unread
+    && a.item.remote?.connectionId === b.item.remote?.connectionId
+    && a.item.remote?.configuration === b.item.remote?.configuration
+    && a.item.remote?.connectionState === b.item.remote?.connectionState
+    && leftChange === rightChange
     && a.optionId === b.optionId
     && a.optionPosition === b.optionPosition
     && a.optionSetSize === b.optionSetSize
@@ -131,6 +150,39 @@ function SidebarNavItemBase({
   onActivated,
 }: SidebarNavItemProps): React.JSX.Element {
   const isCurrent = item.active;
+  const normalizedPending = normalizePendingInteraction(item.pendingInteraction);
+  const pendingInteraction = Boolean(normalizedPending);
+  const unread = item.unread === true;
+  const remote = normalizeRemoteSummary(item.remote);
+  const remoteConfigTitle = remote
+    ? `${remote.connectionId} · ${remote.configuration === 'configured' ? tr('远程配置已保存') : remoteSummaryLabel(remote)}`
+    : '';
+  const remoteBadge = remote && <span className="xn-sidebar-remote-summary" data-remote-summary={remote.configuration}
+    data-connection-state={remote.connectionState}
+    title={remote.connectionState === 'unknown' ? `${remoteConfigTitle} · ${tr('连接状态未知')}` : remoteConfigTitle}>
+    {remoteSummaryLabel(remote)}
+    {remote.connectionState !== 'unknown' ? <React.Suspense fallback={null}><RemoteConnectionStateLabel state={remote.connectionState} /></React.Suspense> : null}
+  </span>;
+  const changes = normalizeChangeSummary(item.changeSummary);
+  const changeSummary = typeof changes === 'string'
+    ? changes
+    : changes
+      ? (() => {
+        const added = changes.added ?? 0;
+        const removed = changes.removed ?? 0;
+        const files = changes.files ?? 0;
+        return added > 0 || removed > 0 || files > 0
+          ? [
+            added > 0 ? `+${added}` : '',
+            removed > 0 ? `-${removed}` : '',
+            files > 0 && added === 0 && removed === 0 ? tf('{0} 个文件', [files]) : '',
+          ].filter(Boolean).join(' ')
+          : '';
+      })()
+      : '';
+  const pendingLabel = typeof normalizedPending === 'string'
+    ? normalizedPending
+    : tr('待处理');
   return (
     <li draggable role={listbox ? "none" : undefined} className={`xn-shell-nav__item ${isCurrent ? "xn-shell-nav__item--active" : ""}`}>
       {onSelect ? (
@@ -156,9 +208,13 @@ function SidebarNavItemBase({
           data-sidebar-navigate="true"
         >
           <span className="xn-shell-nav__leading" aria-hidden="true">
-            {item.pinned ? <IconPin size={12} /> : <StatusDot status={item.status} />}
+            {pendingInteraction ? <span data-pending-interaction="true" className="xn-sidebar-attention xn-sidebar-attention--pending">!</span> : unread ? <span data-unread-indicator="true" className="xn-sidebar-attention xn-sidebar-attention--unread" /> : item.pinned ? <IconPin size={12} /> : <StatusDot status={item.status} />}
           </span>
           <span className="xn-shell-nav__label">{item.label}</span>
+          {unread && <span className="xn-sidebar-unread-label">{tr('未读')}</span>}
+          {pendingInteraction && <span className="xn-sidebar-attention-label" data-pending-interaction-label="true" title={pendingLabel}>{pendingLabel}</span>}
+          {changeSummary && <span className="xn-sidebar-change-summary" data-change-summary="true" title={changeSummary}>{changeSummary}</span>}
+          {remoteBadge}
           {item.timeLabel && <time className="xn-shell-nav__time">{item.timeLabel}</time>}
         </button>
       ) : (
@@ -173,9 +229,13 @@ function SidebarNavItemBase({
           title={item.label}
         >
           <span className="xn-shell-nav__leading" aria-hidden="true">
-            {item.pinned ? <IconPin size={12} /> : <StatusDot status={item.status} />}
+            {pendingInteraction ? <span data-pending-interaction="true" className="xn-sidebar-attention xn-sidebar-attention--pending">!</span> : unread ? <span data-unread-indicator="true" className="xn-sidebar-attention xn-sidebar-attention--unread" /> : item.pinned ? <IconPin size={12} /> : <StatusDot status={item.status} />}
           </span>
           <span className="xn-shell-nav__label">{item.label}</span>
+          {unread && <span className="xn-sidebar-unread-label">{tr('未读')}</span>}
+          {pendingInteraction && <span className="xn-sidebar-attention-label" data-pending-interaction-label="true" title={pendingLabel}>{pendingLabel}</span>}
+          {changeSummary && <span className="xn-sidebar-change-summary" data-change-summary="true" title={changeSummary}>{changeSummary}</span>}
+          {remoteBadge}
           {item.timeLabel && <time className="xn-shell-nav__time">{item.timeLabel}</time>}
         </div>
       )}

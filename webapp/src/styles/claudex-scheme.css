@@ -176,6 +176,10 @@ html[data-xn-palette="claudex"] .xn-shell-layout .xn-composer textarea:focus-vis
 html[data-xn-palette="claudex"] .xn-shell-layout .xn-composer__input:focus-visible { outline: none; }
 html[data-xn-palette="claudex"] ::selection { background: var(--accent-soft); }
 
+/* Panes: no frame around a single session; a neutral ring marks the focused split pane. */
+html[data-xn-palette="claudex"] .xn-workbench-leaf[data-pane-focused="true"] { box-shadow: none; }
+html[data-xn-palette="claudex"] .xn-pane-workbench__canvas:has(> .xn-workbench-leaf ~ .xn-workbench-leaf) .xn-workbench-leaf[data-pane-focused="true"] { box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--fg) 24%, transparent); border-radius: 6px; }
+
 /* ── 2. Thread header: 46px, semibold title, bordered action buttons ────── */
 html[data-xn-palette="claudex"] .xn-shell-layout .xn-conversation > .xn-conv-header,
 html[data-xn-palette="claudex"] .xn-shell-layout .xn-conv-header {
@@ -330,6 +334,9 @@ html[data-xn-palette="claudex"] .xn-shell-layout .xn-composer-region--docked {
   max-width: var(--claudex-column);
   margin-bottom: 16px;
 }
+/* The tray above the composer (queue / withdrawal recovery) follows the composer column. */
+html[data-xn-palette="claudex"] .xn-shell-layout .xn-queue-dock { width: min(var(--claudex-column), calc(100% - 48px)); }
+html[data-xn-palette="claudex"] .xn-shell-layout .xn-conversation > .xn-command-recovery { width: min(var(--claudex-column), calc(100% - 48px)); }
 html[data-xn-palette="claudex"] .xn-shell-layout .xn-composer__input {
   min-height: 44px;
   padding: 0;

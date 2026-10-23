@@ -1,0 +1,1 @@
+{"round":14,"built":false,"platform":"linux","modelCalls":3,"heldFirstRequest":true,"acceptedSidecars":{"queue":"queued","steer":"queued"},"modelReceived":{"steer":true,"queuedFollowup":true},"consumedSessionMessages":{"steer":true,"queuedFollowup":true},"finalSidecars":{"queue":"completed","steer":"completed"},"ptyExitCode":0,"cliExitCode":0,"screenRestored":true}

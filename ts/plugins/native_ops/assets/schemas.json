@@ -1,0 +1,3139 @@
+{
+  "source": {
+    "package": "dsh-ops",
+    "version": "0.4.0",
+    "files": [
+      "lib/capabilities/file.js",
+      "lib/capabilities/documents.js",
+      "lib/capabilities/result.js"
+    ]
+  },
+  "rawNames": [
+    "inspect_local_file",
+    "grep",
+    "glob",
+    "replace",
+    "write_file",
+    "edit_file",
+    "diff",
+    "stat",
+    "copy",
+    "move",
+    "remove",
+    "read_files",
+    "read_table",
+    "read_docx",
+    "read_pdf"
+  ],
+  "referenceSchema": {
+    "type": "object",
+    "properties": {
+      "refId": {
+        "type": "string",
+        "description": "Opaque ref://session/tool/uuid; a locator, never authority."
+      },
+      "createdAt": {
+        "type": "integer",
+        "description": "Unix milliseconds."
+      },
+      "ttlMs": {
+        "type": "integer",
+        "description": "0 means session lifetime; otherwise at most 604800000 milliseconds."
+      },
+      "schemaVersion": {
+        "type": "string"
+      },
+      "producerTool": {
+        "type": "string"
+      },
+      "totalItems": {
+        "type": "integer"
+      },
+      "totalBytes": {
+        "type": "integer"
+      },
+      "preview": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "refId",
+      "createdAt",
+      "ttlMs",
+      "schemaVersion",
+      "producerTool",
+      "totalItems",
+      "totalBytes",
+      "preview"
+    ]
+  },
+  "tools": {
+    "inspect_local_file": {
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string"
+          },
+          "offset": {
+            "type": "integer",
+            "description": "1-based line or 16-byte hex row; default 1. Legacy 0 also reads the first unit."
+          },
+          "limit": {
+            "type": "integer",
+            "description": "1-10000 inclusive. Default 200."
+          },
+          "encoding": {
+            "type": "string",
+            "enum": [
+              "utf-8"
+            ]
+          },
+          "view": {
+            "type": "string",
+            "enum": [
+              "text",
+              "hex"
+            ]
+          }
+        },
+        "required": [],
+        "additionalProperties": false
+      },
+      "description": "Read bounded UTF-8 text lines or a hex view from path relative to the DSH session cwd. Directories are rejected; use ops_glob or ops_grep. Failures resolve as {status:\"error\"|\"rejected\", error.code}; they are not thrown.",
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "reference": {
+            "type": "object",
+            "properties": {
+              "refId": {
+                "type": "string",
+                "description": "Opaque ref://session/tool/uuid; a locator, never authority."
+              },
+              "createdAt": {
+                "type": "integer",
+                "description": "Unix milliseconds."
+              },
+              "ttlMs": {
+                "type": "integer",
+                "description": "0 means session lifetime; otherwise at most 604800000 milliseconds."
+              },
+              "schemaVersion": {
+                "type": "string"
+              },
+              "producerTool": {
+                "type": "string"
+              },
+              "totalItems": {
+                "type": "integer"
+              },
+              "totalBytes": {
+                "type": "integer"
+              },
+              "preview": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "refId",
+              "createdAt",
+              "ttlMs",
+              "schemaVersion",
+              "producerTool",
+              "totalItems",
+              "totalBytes",
+              "preview"
+            ]
+          },
+          "referenceRoot": {
+            "type": "string"
+          },
+          "root": {
+            "type": "string"
+          },
+          "source": {
+            "type": "object"
+          },
+          "storageError": {
+            "type": "object"
+          },
+          "nextAction": {
+            "type": "string"
+          },
+          "revision": {
+            "type": "string"
+          },
+          "bytes": {
+            "type": "integer"
+          },
+          "lineCount": {
+            "oneOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "status": {
+            "type": "string"
+          },
+          "phase": {
+            "type": "string"
+          },
+          "changed": {
+            "type": "integer"
+          },
+          "matched": {
+            "type": "integer"
+          },
+          "skipped": {
+            "type": "integer"
+          },
+          "failed": {
+            "type": "integer"
+          },
+          "complete": {
+            "type": "boolean"
+          },
+          "omitted": {
+            "type": "integer"
+          },
+          "total": {
+            "type": "integer"
+          },
+          "nextOffset": {
+            "type": "integer"
+          },
+          "truncated": {
+            "type": "boolean"
+          },
+          "items": {
+            "type": "array",
+            "items": {}
+          },
+          "dryRun": {
+            "type": "boolean"
+          },
+          "files": {
+            "type": "integer"
+          },
+          "matches": {
+            "type": "integer"
+          },
+          "skippedFiles": {
+            "type": "integer"
+          },
+          "error": {
+            "type": "object"
+          }
+        }
+      }
+    },
+    "grep": {
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string"
+          },
+          "pattern": {
+            "type": "string"
+          },
+          "glob": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "outputMode": {
+            "type": "string",
+            "enum": [
+              "files_with_matches",
+              "content",
+              "count",
+              "summary"
+            ]
+          },
+          "caseInsensitive": {
+            "type": "boolean"
+          },
+          "lineNumbers": {
+            "type": "boolean"
+          },
+          "beforeContext": {
+            "type": "integer",
+            "description": "0-32 inclusive."
+          },
+          "afterContext": {
+            "type": "integer",
+            "description": "0-32 inclusive."
+          },
+          "multiline": {
+            "type": "boolean"
+          },
+          "offset": {
+            "type": "integer",
+            "description": "Nonnegative integer (0-based)."
+          },
+          "limit": {
+            "type": "integer",
+            "description": "1-10000 inclusive. Default 100."
+          },
+          "continuation": {
+            "type": "string",
+            "description": "Opaque cursor from a complete scan. Keep query options unchanged; omit offset or use nextOffset. SEARCH_STALE requires a fresh query."
+          }
+        },
+        "required": [
+          "pattern"
+        ],
+        "additionalProperties": false
+      },
+      "description": "Search UTF-8 files below path relative to the current session cwd. pattern is ONE Rust regex string; filter files with glob, an ARRAY of relative globs (\"!\" excludes). There is no include field. Use summary for aggregate file/match totals, count for per-file counts, files_with_matches for paths, content for text (default); limit defaults to 100 items. Optional line context. Paging uses 0-based offset/nextOffset; prefer continuation with unchanged options. Each page rescans; SEARCH_STALE means restart. Check scanComplete and pageComplete; matchedTotal exists only after a complete scan, matchedObserved is a lower bound otherwise. skipReasons explains gaps. Narrow incomplete scans instead of blindly paging. Failures resolve as {status:\"error\"|\"rejected\", error.code}; they are not thrown.",
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "reference": {
+            "type": "object",
+            "properties": {
+              "refId": {
+                "type": "string",
+                "description": "Opaque ref://session/tool/uuid; a locator, never authority."
+              },
+              "createdAt": {
+                "type": "integer",
+                "description": "Unix milliseconds."
+              },
+              "ttlMs": {
+                "type": "integer",
+                "description": "0 means session lifetime; otherwise at most 604800000 milliseconds."
+              },
+              "schemaVersion": {
+                "type": "string"
+              },
+              "producerTool": {
+                "type": "string"
+              },
+              "totalItems": {
+                "type": "integer"
+              },
+              "totalBytes": {
+                "type": "integer"
+              },
+              "preview": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "refId",
+              "createdAt",
+              "ttlMs",
+              "schemaVersion",
+              "producerTool",
+              "totalItems",
+              "totalBytes",
+              "preview"
+            ]
+          },
+          "referenceRoot": {
+            "type": "string"
+          },
+          "root": {
+            "type": "string"
+          },
+          "source": {
+            "type": "object"
+          },
+          "storageError": {
+            "type": "object"
+          },
+          "nextAction": {
+            "type": "string"
+          },
+          "revision": {
+            "type": "string"
+          },
+          "bytes": {
+            "type": "integer"
+          },
+          "lineCount": {
+            "oneOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "status": {
+            "type": "string"
+          },
+          "phase": {
+            "type": "string"
+          },
+          "changed": {
+            "type": "integer"
+          },
+          "matched": {
+            "type": "integer"
+          },
+          "skipped": {
+            "type": "integer"
+          },
+          "failed": {
+            "type": "integer"
+          },
+          "complete": {
+            "type": "boolean"
+          },
+          "omitted": {
+            "type": "integer"
+          },
+          "total": {
+            "type": "integer"
+          },
+          "nextOffset": {
+            "type": "integer"
+          },
+          "truncated": {
+            "type": "boolean"
+          },
+          "items": {
+            "type": "array",
+            "items": {}
+          },
+          "dryRun": {
+            "type": "boolean"
+          },
+          "files": {
+            "type": "integer"
+          },
+          "matches": {
+            "type": "integer"
+          },
+          "skippedFiles": {
+            "type": "integer"
+          },
+          "error": {
+            "type": "object"
+          },
+          "scanComplete": {
+            "type": "boolean"
+          },
+          "pageComplete": {
+            "type": "boolean"
+          },
+          "scannedFiles": {
+            "type": "integer"
+          },
+          "skipReasons": {
+            "type": "object"
+          },
+          "matchedObserved": {
+            "type": "integer"
+          },
+          "matchedTotal": {
+            "type": "integer",
+            "description": "Present only after a complete scan."
+          },
+          "truncatedBy": {
+            "type": "string",
+            "enum": [
+              "scan-budget",
+              "output-budget",
+              "time",
+              "row-limit",
+              "none"
+            ]
+          },
+          "continuation": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "glob": {
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string"
+          },
+          "pattern": {
+            "type": "array",
+            "description": "At least one positive glob is required.",
+            "items": {
+              "type": "string"
+            }
+          },
+          "outputMode": {
+            "type": "string",
+            "enum": [
+              "paths",
+              "details"
+            ]
+          },
+          "sort": {
+            "type": "string",
+            "enum": [
+              "path",
+              "modified"
+            ]
+          },
+          "offset": {
+            "type": "integer",
+            "description": "Nonnegative integer (0-based)."
+          },
+          "limit": {
+            "type": "integer",
+            "description": "1-10000 inclusive. Default 100."
+          },
+          "continuation": {
+            "type": "string",
+            "description": "Opaque cursor from a complete scan. Keep query options unchanged; omit offset or use nextOffset. SEARCH_STALE requires a fresh query."
+          }
+        },
+        "required": [
+          "pattern"
+        ],
+        "additionalProperties": false
+      },
+      "description": "Find regular files below path relative to the current session cwd. pattern is an ARRAY of globs matched against paths relative to path: [\"**/*.md\",\"!vendor/**\"]; \"*.md\" matches the top level only, \"!\" excludes, at least one positive entry. Symlinks, reparse points, hidden files and dependency/build directories are excluded. limit defaults to 100; paging uses 0-based offset/nextOffset. Check scanComplete and pageComplete; matchedTotal exists only after a complete scan. Prefer continuation with unchanged options; SEARCH_STALE means restart. Incomplete scans require a narrower query. Failures resolve as {status:\"error\"|\"rejected\", error.code}; they are not thrown.",
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "reference": {
+            "type": "object",
+            "properties": {
+              "refId": {
+                "type": "string",
+                "description": "Opaque ref://session/tool/uuid; a locator, never authority."
+              },
+              "createdAt": {
+                "type": "integer",
+                "description": "Unix milliseconds."
+              },
+              "ttlMs": {
+                "type": "integer",
+                "description": "0 means session lifetime; otherwise at most 604800000 milliseconds."
+              },
+              "schemaVersion": {
+                "type": "string"
+              },
+              "producerTool": {
+                "type": "string"
+              },
+              "totalItems": {
+                "type": "integer"
+              },
+              "totalBytes": {
+                "type": "integer"
+              },
+              "preview": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "refId",
+              "createdAt",
+              "ttlMs",
+              "schemaVersion",
+              "producerTool",
+              "totalItems",
+              "totalBytes",
+              "preview"
+            ]
+          },
+          "referenceRoot": {
+            "type": "string"
+          },
+          "root": {
+            "type": "string"
+          },
+          "source": {
+            "type": "object"
+          },
+          "storageError": {
+            "type": "object"
+          },
+          "nextAction": {
+            "type": "string"
+          },
+          "revision": {
+            "type": "string"
+          },
+          "bytes": {
+            "type": "integer"
+          },
+          "lineCount": {
+            "oneOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "status": {
+            "type": "string"
+          },
+          "phase": {
+            "type": "string"
+          },
+          "changed": {
+            "type": "integer"
+          },
+          "matched": {
+            "type": "integer"
+          },
+          "skipped": {
+            "type": "integer"
+          },
+          "failed": {
+            "type": "integer"
+          },
+          "complete": {
+            "type": "boolean"
+          },
+          "omitted": {
+            "type": "integer"
+          },
+          "total": {
+            "type": "integer"
+          },
+          "nextOffset": {
+            "type": "integer"
+          },
+          "truncated": {
+            "type": "boolean"
+          },
+          "items": {
+            "type": "array",
+            "items": {}
+          },
+          "dryRun": {
+            "type": "boolean"
+          },
+          "files": {
+            "type": "integer"
+          },
+          "matches": {
+            "type": "integer"
+          },
+          "skippedFiles": {
+            "type": "integer"
+          },
+          "error": {
+            "type": "object"
+          },
+          "scanComplete": {
+            "type": "boolean"
+          },
+          "pageComplete": {
+            "type": "boolean"
+          },
+          "scannedFiles": {
+            "type": "integer"
+          },
+          "skipReasons": {
+            "type": "object"
+          },
+          "matchedObserved": {
+            "type": "integer"
+          },
+          "matchedTotal": {
+            "type": "integer",
+            "description": "Present only after a complete scan."
+          },
+          "truncatedBy": {
+            "type": "string",
+            "enum": [
+              "scan-budget",
+              "output-budget",
+              "time",
+              "row-limit",
+              "none"
+            ]
+          },
+          "continuation": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "replace": {
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string"
+          },
+          "pattern": {
+            "type": "string"
+          },
+          "replacement": {
+            "type": "string"
+          },
+          "glob": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "maxReplacements": {
+            "type": "integer",
+            "description": "1-100000 inclusive. Default 100."
+          },
+          "dryRun": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "pattern",
+          "replacement"
+        ],
+        "additionalProperties": false
+      },
+      "description": "Replace LITERAL text (pattern is not a regex) in UTF-8 files under path; glob filters files as in ops_grep. dryRun observes only; writes use revision checks and atomic replacement. Read-only sessions are rejected. Darwin nonempty extended ACLs fail closed with METADATA_UNSUPPORTED. Windows preserves owner/group/ordered DACL and supported basic attributes/timestamps; readonly overwrite is refused and unsupported streams/EA/special storage fail with METADATA_UNSUPPORTED. SACL/audit labels are not preserved. Failures resolve as {status:\"error\"|\"rejected\", error.code}; they are not thrown.",
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "reference": {
+            "type": "object",
+            "properties": {
+              "refId": {
+                "type": "string",
+                "description": "Opaque ref://session/tool/uuid; a locator, never authority."
+              },
+              "createdAt": {
+                "type": "integer",
+                "description": "Unix milliseconds."
+              },
+              "ttlMs": {
+                "type": "integer",
+                "description": "0 means session lifetime; otherwise at most 604800000 milliseconds."
+              },
+              "schemaVersion": {
+                "type": "string"
+              },
+              "producerTool": {
+                "type": "string"
+              },
+              "totalItems": {
+                "type": "integer"
+              },
+              "totalBytes": {
+                "type": "integer"
+              },
+              "preview": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "refId",
+              "createdAt",
+              "ttlMs",
+              "schemaVersion",
+              "producerTool",
+              "totalItems",
+              "totalBytes",
+              "preview"
+            ]
+          },
+          "referenceRoot": {
+            "type": "string"
+          },
+          "root": {
+            "type": "string"
+          },
+          "source": {
+            "type": "object"
+          },
+          "storageError": {
+            "type": "object"
+          },
+          "nextAction": {
+            "type": "string"
+          },
+          "revision": {
+            "type": "string"
+          },
+          "bytes": {
+            "type": "integer"
+          },
+          "lineCount": {
+            "oneOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "status": {
+            "type": "string"
+          },
+          "phase": {
+            "type": "string"
+          },
+          "changed": {
+            "type": "integer"
+          },
+          "matched": {
+            "type": "integer"
+          },
+          "skipped": {
+            "type": "integer"
+          },
+          "failed": {
+            "type": "integer"
+          },
+          "complete": {
+            "type": "boolean"
+          },
+          "omitted": {
+            "type": "integer"
+          },
+          "total": {
+            "type": "integer"
+          },
+          "nextOffset": {
+            "type": "integer"
+          },
+          "truncated": {
+            "type": "boolean"
+          },
+          "items": {
+            "type": "array",
+            "items": {}
+          },
+          "dryRun": {
+            "type": "boolean"
+          },
+          "files": {
+            "type": "integer"
+          },
+          "matches": {
+            "type": "integer"
+          },
+          "skippedFiles": {
+            "type": "integer"
+          },
+          "error": {
+            "type": "object"
+          }
+        }
+      }
+    },
+    "write_file": {
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string"
+          },
+          "content": {
+            "type": "string"
+          },
+          "expectedRevision": {
+            "type": "string",
+            "description": "64 lowercase hex SHA-256 revision returned by inspect/stat; absent is create-only, never an overwrite wildcard."
+          },
+          "dryRun": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "path",
+          "content",
+          "expectedRevision"
+        ],
+        "additionalProperties": false
+      },
+      "description": "Create or fully overwrite one UTF-8 file; parents must exist. Required expectedRevision is the observed SHA-256, or absent for create-only. Atomic CAS, short receipt with new revision/bytes/lineCount; dryRun only previews. Darwin nonempty extended ACLs fail closed with METADATA_UNSUPPORTED. Read-only denies even dryRun. Windows preserves owner/group/ordered DACL and supported basic attributes/timestamps; readonly overwrite is refused and unsupported streams/EA/special storage fail with METADATA_UNSUPPORTED. SACL/audit labels are not preserved. Failures resolve as {status:\"error\"|\"rejected\", error.code}; they are not thrown.",
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "reference": {
+            "type": "object",
+            "properties": {
+              "refId": {
+                "type": "string",
+                "description": "Opaque ref://session/tool/uuid; a locator, never authority."
+              },
+              "createdAt": {
+                "type": "integer",
+                "description": "Unix milliseconds."
+              },
+              "ttlMs": {
+                "type": "integer",
+                "description": "0 means session lifetime; otherwise at most 604800000 milliseconds."
+              },
+              "schemaVersion": {
+                "type": "string"
+              },
+              "producerTool": {
+                "type": "string"
+              },
+              "totalItems": {
+                "type": "integer"
+              },
+              "totalBytes": {
+                "type": "integer"
+              },
+              "preview": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "refId",
+              "createdAt",
+              "ttlMs",
+              "schemaVersion",
+              "producerTool",
+              "totalItems",
+              "totalBytes",
+              "preview"
+            ]
+          },
+          "referenceRoot": {
+            "type": "string"
+          },
+          "root": {
+            "type": "string"
+          },
+          "source": {
+            "type": "object"
+          },
+          "storageError": {
+            "type": "object"
+          },
+          "nextAction": {
+            "type": "string"
+          },
+          "revision": {
+            "type": "string"
+          },
+          "bytes": {
+            "type": "integer"
+          },
+          "lineCount": {
+            "oneOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "status": {
+            "type": "string"
+          },
+          "phase": {
+            "type": "string"
+          },
+          "changed": {
+            "type": "integer"
+          },
+          "matched": {
+            "type": "integer"
+          },
+          "skipped": {
+            "type": "integer"
+          },
+          "failed": {
+            "type": "integer"
+          },
+          "complete": {
+            "type": "boolean"
+          },
+          "omitted": {
+            "type": "integer"
+          },
+          "total": {
+            "type": "integer"
+          },
+          "nextOffset": {
+            "type": "integer"
+          },
+          "truncated": {
+            "type": "boolean"
+          },
+          "items": {
+            "type": "array",
+            "items": {}
+          },
+          "dryRun": {
+            "type": "boolean"
+          },
+          "files": {
+            "type": "integer"
+          },
+          "matches": {
+            "type": "integer"
+          },
+          "skippedFiles": {
+            "type": "integer"
+          },
+          "error": {
+            "type": "object"
+          }
+        }
+      }
+    },
+    "edit_file": {
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string"
+          },
+          "expectedRevision": {
+            "type": "string",
+            "description": "64 lowercase hex SHA-256 revision returned by inspect/stat; absent is not accepted."
+          },
+          "edits": {
+            "type": "array",
+            "description": "1-100 nonoverlapping edits against the same original bytes.",
+            "items": {
+              "type": "object",
+              "properties": {
+                "oldText": {
+                  "type": "string",
+                  "description": "Nonempty text that occurs exactly once in the original."
+                },
+                "newText": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "oldText",
+                "newText"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "dryRun": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "path",
+          "expectedRevision",
+          "edits"
+        ],
+        "additionalProperties": false
+      },
+      "description": "Precisely patch one UTF-8 file using 1-100 oldText/newText edits against the SAME original bytes. Every nonempty oldText must occur exactly once; overlapping edits reject all. Required expectedRevision from inspect/stat. Atomic CAS; dryRun previews. Darwin nonempty extended ACLs fail closed with METADATA_UNSUPPORTED. Preserve CRLF/BOM explicitly in text. Windows preserves owner/group/ordered DACL and supported basic attributes/timestamps; readonly overwrite is refused and unsupported streams/EA/special storage fail with METADATA_UNSUPPORTED. SACL/audit labels are not preserved. Failures resolve as {status:\"error\"|\"rejected\", error.code}; they are not thrown.",
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "reference": {
+            "type": "object",
+            "properties": {
+              "refId": {
+                "type": "string",
+                "description": "Opaque ref://session/tool/uuid; a locator, never authority."
+              },
+              "createdAt": {
+                "type": "integer",
+                "description": "Unix milliseconds."
+              },
+              "ttlMs": {
+                "type": "integer",
+                "description": "0 means session lifetime; otherwise at most 604800000 milliseconds."
+              },
+              "schemaVersion": {
+                "type": "string"
+              },
+              "producerTool": {
+                "type": "string"
+              },
+              "totalItems": {
+                "type": "integer"
+              },
+              "totalBytes": {
+                "type": "integer"
+              },
+              "preview": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "refId",
+              "createdAt",
+              "ttlMs",
+              "schemaVersion",
+              "producerTool",
+              "totalItems",
+              "totalBytes",
+              "preview"
+            ]
+          },
+          "referenceRoot": {
+            "type": "string"
+          },
+          "root": {
+            "type": "string"
+          },
+          "source": {
+            "type": "object"
+          },
+          "storageError": {
+            "type": "object"
+          },
+          "nextAction": {
+            "type": "string"
+          },
+          "revision": {
+            "type": "string"
+          },
+          "bytes": {
+            "type": "integer"
+          },
+          "lineCount": {
+            "oneOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "status": {
+            "type": "string"
+          },
+          "phase": {
+            "type": "string"
+          },
+          "changed": {
+            "type": "integer"
+          },
+          "matched": {
+            "type": "integer"
+          },
+          "skipped": {
+            "type": "integer"
+          },
+          "failed": {
+            "type": "integer"
+          },
+          "complete": {
+            "type": "boolean"
+          },
+          "omitted": {
+            "type": "integer"
+          },
+          "total": {
+            "type": "integer"
+          },
+          "nextOffset": {
+            "type": "integer"
+          },
+          "truncated": {
+            "type": "boolean"
+          },
+          "items": {
+            "type": "array",
+            "items": {}
+          },
+          "dryRun": {
+            "type": "boolean"
+          },
+          "files": {
+            "type": "integer"
+          },
+          "matches": {
+            "type": "integer"
+          },
+          "skippedFiles": {
+            "type": "integer"
+          },
+          "error": {
+            "type": "object"
+          }
+        }
+      }
+    },
+    "diff": {
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string"
+          },
+          "content": {
+            "type": "string"
+          },
+          "offset": {
+            "type": "integer",
+            "description": "Nonnegative integer (0-based)."
+          },
+          "limit": {
+            "type": "integer",
+            "description": "1-1000 inclusive. Default 100."
+          }
+        },
+        "required": [
+          "path",
+          "content"
+        ],
+        "additionalProperties": false
+      },
+      "description": "Read-only comparison of one UTF-8 file with content. Returns one prefix/suffix-trimmed replacement hunk (not a minimal diff), paged 0-based offset/limit (default 100). Includes old/new hashes and line counts; no publication. Failures resolve as {status:\"error\"|\"rejected\", error.code}; they are not thrown.",
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "reference": {
+            "type": "object",
+            "properties": {
+              "refId": {
+                "type": "string",
+                "description": "Opaque ref://session/tool/uuid; a locator, never authority."
+              },
+              "createdAt": {
+                "type": "integer",
+                "description": "Unix milliseconds."
+              },
+              "ttlMs": {
+                "type": "integer",
+                "description": "0 means session lifetime; otherwise at most 604800000 milliseconds."
+              },
+              "schemaVersion": {
+                "type": "string"
+              },
+              "producerTool": {
+                "type": "string"
+              },
+              "totalItems": {
+                "type": "integer"
+              },
+              "totalBytes": {
+                "type": "integer"
+              },
+              "preview": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "refId",
+              "createdAt",
+              "ttlMs",
+              "schemaVersion",
+              "producerTool",
+              "totalItems",
+              "totalBytes",
+              "preview"
+            ]
+          },
+          "referenceRoot": {
+            "type": "string"
+          },
+          "root": {
+            "type": "string"
+          },
+          "source": {
+            "type": "object"
+          },
+          "storageError": {
+            "type": "object"
+          },
+          "nextAction": {
+            "type": "string"
+          },
+          "revision": {
+            "type": "string"
+          },
+          "bytes": {
+            "type": "integer"
+          },
+          "lineCount": {
+            "oneOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "status": {
+            "type": "string"
+          },
+          "phase": {
+            "type": "string"
+          },
+          "changed": {
+            "type": "integer"
+          },
+          "matched": {
+            "type": "integer"
+          },
+          "skipped": {
+            "type": "integer"
+          },
+          "failed": {
+            "type": "integer"
+          },
+          "complete": {
+            "type": "boolean"
+          },
+          "omitted": {
+            "type": "integer"
+          },
+          "total": {
+            "type": "integer"
+          },
+          "nextOffset": {
+            "type": "integer"
+          },
+          "truncated": {
+            "type": "boolean"
+          },
+          "items": {
+            "type": "array",
+            "items": {}
+          },
+          "dryRun": {
+            "type": "boolean"
+          },
+          "files": {
+            "type": "integer"
+          },
+          "matches": {
+            "type": "integer"
+          },
+          "skippedFiles": {
+            "type": "integer"
+          },
+          "error": {
+            "type": "object"
+          }
+        }
+      }
+    },
+    "stat": {
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "path"
+        ],
+        "additionalProperties": false
+      },
+      "description": "Inspect one regular file: SHA-256 revision, bytes, UTF-8 lineCount (null for binary), timestamps and permissions; no content. Missing paths return exists:false, revision:absent. Failures resolve as {status:\"error\"|\"rejected\", error.code}; they are not thrown.",
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "reference": {
+            "type": "object",
+            "properties": {
+              "refId": {
+                "type": "string",
+                "description": "Opaque ref://session/tool/uuid; a locator, never authority."
+              },
+              "createdAt": {
+                "type": "integer",
+                "description": "Unix milliseconds."
+              },
+              "ttlMs": {
+                "type": "integer",
+                "description": "0 means session lifetime; otherwise at most 604800000 milliseconds."
+              },
+              "schemaVersion": {
+                "type": "string"
+              },
+              "producerTool": {
+                "type": "string"
+              },
+              "totalItems": {
+                "type": "integer"
+              },
+              "totalBytes": {
+                "type": "integer"
+              },
+              "preview": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "refId",
+              "createdAt",
+              "ttlMs",
+              "schemaVersion",
+              "producerTool",
+              "totalItems",
+              "totalBytes",
+              "preview"
+            ]
+          },
+          "referenceRoot": {
+            "type": "string"
+          },
+          "root": {
+            "type": "string"
+          },
+          "source": {
+            "type": "object"
+          },
+          "storageError": {
+            "type": "object"
+          },
+          "nextAction": {
+            "type": "string"
+          },
+          "revision": {
+            "type": "string"
+          },
+          "bytes": {
+            "type": "integer"
+          },
+          "lineCount": {
+            "oneOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "status": {
+            "type": "string"
+          },
+          "phase": {
+            "type": "string"
+          },
+          "changed": {
+            "type": "integer"
+          },
+          "matched": {
+            "type": "integer"
+          },
+          "skipped": {
+            "type": "integer"
+          },
+          "failed": {
+            "type": "integer"
+          },
+          "complete": {
+            "type": "boolean"
+          },
+          "omitted": {
+            "type": "integer"
+          },
+          "total": {
+            "type": "integer"
+          },
+          "nextOffset": {
+            "type": "integer"
+          },
+          "truncated": {
+            "type": "boolean"
+          },
+          "items": {
+            "type": "array",
+            "items": {}
+          },
+          "dryRun": {
+            "type": "boolean"
+          },
+          "files": {
+            "type": "integer"
+          },
+          "matches": {
+            "type": "integer"
+          },
+          "skippedFiles": {
+            "type": "integer"
+          },
+          "error": {
+            "type": "object"
+          }
+        }
+      }
+    },
+    "copy": {
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string"
+          },
+          "to": {
+            "type": "string"
+          },
+          "expectedRevision": {
+            "type": "string",
+            "description": "64 lowercase hex SHA-256 revision returned by inspect/stat; absent is not accepted."
+          }
+        },
+        "required": [
+          "path",
+          "to",
+          "expectedRevision"
+        ],
+        "additionalProperties": false
+      },
+      "description": "Copy ONE regular file to absent to (relative to session cwd); parents must exist. Required expectedRevision checks source. Atomic no-clobber destination; preserves metadata or fails closed. Windows preserves owner/group/ordered DACL and supported basic attributes/timestamps; readonly overwrite is refused and unsupported streams/EA/special storage fail with METADATA_UNSUPPORTED. SACL/audit labels are not preserved. Darwin requires APFS cloning and currently refuses nonempty extended ACLs with METADATA_UNSUPPORTED before staging; use a dedicated metadata-aware tool for ACL-bearing files. No directories/links; recursive work uses ops_batch when available. Failures resolve as {status:\"error\"|\"rejected\", error.code}; they are not thrown.",
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "reference": {
+            "type": "object",
+            "properties": {
+              "refId": {
+                "type": "string",
+                "description": "Opaque ref://session/tool/uuid; a locator, never authority."
+              },
+              "createdAt": {
+                "type": "integer",
+                "description": "Unix milliseconds."
+              },
+              "ttlMs": {
+                "type": "integer",
+                "description": "0 means session lifetime; otherwise at most 604800000 milliseconds."
+              },
+              "schemaVersion": {
+                "type": "string"
+              },
+              "producerTool": {
+                "type": "string"
+              },
+              "totalItems": {
+                "type": "integer"
+              },
+              "totalBytes": {
+                "type": "integer"
+              },
+              "preview": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "refId",
+              "createdAt",
+              "ttlMs",
+              "schemaVersion",
+              "producerTool",
+              "totalItems",
+              "totalBytes",
+              "preview"
+            ]
+          },
+          "referenceRoot": {
+            "type": "string"
+          },
+          "root": {
+            "type": "string"
+          },
+          "source": {
+            "type": "object"
+          },
+          "storageError": {
+            "type": "object"
+          },
+          "nextAction": {
+            "type": "string"
+          },
+          "revision": {
+            "type": "string"
+          },
+          "bytes": {
+            "type": "integer"
+          },
+          "lineCount": {
+            "oneOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "status": {
+            "type": "string"
+          },
+          "phase": {
+            "type": "string"
+          },
+          "changed": {
+            "type": "integer"
+          },
+          "matched": {
+            "type": "integer"
+          },
+          "skipped": {
+            "type": "integer"
+          },
+          "failed": {
+            "type": "integer"
+          },
+          "complete": {
+            "type": "boolean"
+          },
+          "omitted": {
+            "type": "integer"
+          },
+          "total": {
+            "type": "integer"
+          },
+          "nextOffset": {
+            "type": "integer"
+          },
+          "truncated": {
+            "type": "boolean"
+          },
+          "items": {
+            "type": "array",
+            "items": {}
+          },
+          "dryRun": {
+            "type": "boolean"
+          },
+          "files": {
+            "type": "integer"
+          },
+          "matches": {
+            "type": "integer"
+          },
+          "skippedFiles": {
+            "type": "integer"
+          },
+          "error": {
+            "type": "object"
+          }
+        }
+      }
+    },
+    "move": {
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string"
+          },
+          "to": {
+            "type": "string"
+          },
+          "expectedRevision": {
+            "type": "string",
+            "description": "64 lowercase hex SHA-256 revision returned by inspect/stat; absent is not accepted."
+          }
+        },
+        "required": [
+          "path",
+          "to",
+          "expectedRevision"
+        ],
+        "additionalProperties": false
+      },
+      "description": "Move ONE regular file to absent to, same filesystem only. Required source expectedRevision. Atomic no-clobber destination then source unlink; failures after publication carry effectState:applied. No copy-delete fallback, directories or links. Failures resolve as {status:\"error\"|\"rejected\", error.code}; they are not thrown.",
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "reference": {
+            "type": "object",
+            "properties": {
+              "refId": {
+                "type": "string",
+                "description": "Opaque ref://session/tool/uuid; a locator, never authority."
+              },
+              "createdAt": {
+                "type": "integer",
+                "description": "Unix milliseconds."
+              },
+              "ttlMs": {
+                "type": "integer",
+                "description": "0 means session lifetime; otherwise at most 604800000 milliseconds."
+              },
+              "schemaVersion": {
+                "type": "string"
+              },
+              "producerTool": {
+                "type": "string"
+              },
+              "totalItems": {
+                "type": "integer"
+              },
+              "totalBytes": {
+                "type": "integer"
+              },
+              "preview": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "refId",
+              "createdAt",
+              "ttlMs",
+              "schemaVersion",
+              "producerTool",
+              "totalItems",
+              "totalBytes",
+              "preview"
+            ]
+          },
+          "referenceRoot": {
+            "type": "string"
+          },
+          "root": {
+            "type": "string"
+          },
+          "source": {
+            "type": "object"
+          },
+          "storageError": {
+            "type": "object"
+          },
+          "nextAction": {
+            "type": "string"
+          },
+          "revision": {
+            "type": "string"
+          },
+          "bytes": {
+            "type": "integer"
+          },
+          "lineCount": {
+            "oneOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "status": {
+            "type": "string"
+          },
+          "phase": {
+            "type": "string"
+          },
+          "changed": {
+            "type": "integer"
+          },
+          "matched": {
+            "type": "integer"
+          },
+          "skipped": {
+            "type": "integer"
+          },
+          "failed": {
+            "type": "integer"
+          },
+          "complete": {
+            "type": "boolean"
+          },
+          "omitted": {
+            "type": "integer"
+          },
+          "total": {
+            "type": "integer"
+          },
+          "nextOffset": {
+            "type": "integer"
+          },
+          "truncated": {
+            "type": "boolean"
+          },
+          "items": {
+            "type": "array",
+            "items": {}
+          },
+          "dryRun": {
+            "type": "boolean"
+          },
+          "files": {
+            "type": "integer"
+          },
+          "matches": {
+            "type": "integer"
+          },
+          "skippedFiles": {
+            "type": "integer"
+          },
+          "error": {
+            "type": "object"
+          }
+        }
+      }
+    },
+    "remove": {
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string"
+          },
+          "expectedRevision": {
+            "type": "string",
+            "description": "64 lowercase hex SHA-256 revision returned by inspect/stat; absent is not accepted."
+          }
+        },
+        "required": [
+          "path",
+          "expectedRevision"
+        ],
+        "additionalProperties": false
+      },
+      "description": "Unlink ONE regular file with required expectedRevision from inspect/stat. No recursion/directories/links. Atomic unlink; no trash. Read-only denies all mutations. Failures resolve as {status:\"error\"|\"rejected\", error.code}; they are not thrown.",
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "reference": {
+            "type": "object",
+            "properties": {
+              "refId": {
+                "type": "string",
+                "description": "Opaque ref://session/tool/uuid; a locator, never authority."
+              },
+              "createdAt": {
+                "type": "integer",
+                "description": "Unix milliseconds."
+              },
+              "ttlMs": {
+                "type": "integer",
+                "description": "0 means session lifetime; otherwise at most 604800000 milliseconds."
+              },
+              "schemaVersion": {
+                "type": "string"
+              },
+              "producerTool": {
+                "type": "string"
+              },
+              "totalItems": {
+                "type": "integer"
+              },
+              "totalBytes": {
+                "type": "integer"
+              },
+              "preview": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "refId",
+              "createdAt",
+              "ttlMs",
+              "schemaVersion",
+              "producerTool",
+              "totalItems",
+              "totalBytes",
+              "preview"
+            ]
+          },
+          "referenceRoot": {
+            "type": "string"
+          },
+          "root": {
+            "type": "string"
+          },
+          "source": {
+            "type": "object"
+          },
+          "storageError": {
+            "type": "object"
+          },
+          "nextAction": {
+            "type": "string"
+          },
+          "revision": {
+            "type": "string"
+          },
+          "bytes": {
+            "type": "integer"
+          },
+          "lineCount": {
+            "oneOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "status": {
+            "type": "string"
+          },
+          "phase": {
+            "type": "string"
+          },
+          "changed": {
+            "type": "integer"
+          },
+          "matched": {
+            "type": "integer"
+          },
+          "skipped": {
+            "type": "integer"
+          },
+          "failed": {
+            "type": "integer"
+          },
+          "complete": {
+            "type": "boolean"
+          },
+          "omitted": {
+            "type": "integer"
+          },
+          "total": {
+            "type": "integer"
+          },
+          "nextOffset": {
+            "type": "integer"
+          },
+          "truncated": {
+            "type": "boolean"
+          },
+          "items": {
+            "type": "array",
+            "items": {}
+          },
+          "dryRun": {
+            "type": "boolean"
+          },
+          "files": {
+            "type": "integer"
+          },
+          "matches": {
+            "type": "integer"
+          },
+          "skippedFiles": {
+            "type": "integer"
+          },
+          "error": {
+            "type": "object"
+          }
+        }
+      }
+    },
+    "read_files": {
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "files": {
+            "type": "array",
+            "description": "1-32 file ranges.",
+            "items": {
+              "type": "object",
+              "properties": {
+                "path": {
+                  "type": "string"
+                },
+                "offset": {
+                  "type": "integer",
+                  "description": "Line >=1; default 1."
+                },
+                "limit": {
+                  "type": "integer",
+                  "description": "1-10000 inclusive. Default 200."
+                }
+              },
+              "required": [
+                "path"
+              ],
+              "additionalProperties": false
+            }
+          }
+        },
+        "required": [
+          "files"
+        ],
+        "additionalProperties": false
+      },
+      "description": "Read UTF-8 ranges relative to session cwd. Check each file complete/error; nextOffset continues lines, nextIndex resumes pending files. Binary needs a binary reader. Failures return status:error|rejected and error.code; never throw.",
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "reference": {
+            "type": "object",
+            "properties": {
+              "refId": {
+                "type": "string",
+                "description": "Opaque ref://session/tool/uuid; a locator, never authority."
+              },
+              "createdAt": {
+                "type": "integer",
+                "description": "Unix milliseconds."
+              },
+              "ttlMs": {
+                "type": "integer",
+                "description": "0 means session lifetime; otherwise at most 604800000 milliseconds."
+              },
+              "schemaVersion": {
+                "type": "string"
+              },
+              "producerTool": {
+                "type": "string"
+              },
+              "totalItems": {
+                "type": "integer"
+              },
+              "totalBytes": {
+                "type": "integer"
+              },
+              "preview": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "refId",
+              "createdAt",
+              "ttlMs",
+              "schemaVersion",
+              "producerTool",
+              "totalItems",
+              "totalBytes",
+              "preview"
+            ]
+          },
+          "referenceRoot": {
+            "type": "string"
+          },
+          "root": {
+            "type": "string"
+          },
+          "source": {
+            "type": "object"
+          },
+          "storageError": {
+            "type": "object"
+          },
+          "nextAction": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "complete": {
+            "type": "boolean"
+          },
+          "nextIndex": {
+            "type": "integer"
+          },
+          "pending": {
+            "type": "integer"
+          },
+          "total": {
+            "type": "integer"
+          },
+          "failed": {
+            "type": "integer"
+          },
+          "truncated": {
+            "type": "boolean"
+          },
+          "effectState": {
+            "type": "string"
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "reference": {
+                  "type": "object",
+                  "properties": {
+                    "refId": {
+                      "type": "string",
+                      "description": "Opaque ref://session/tool/uuid; a locator, never authority."
+                    },
+                    "createdAt": {
+                      "type": "integer",
+                      "description": "Unix milliseconds."
+                    },
+                    "ttlMs": {
+                      "type": "integer",
+                      "description": "0 means session lifetime; otherwise at most 604800000 milliseconds."
+                    },
+                    "schemaVersion": {
+                      "type": "string"
+                    },
+                    "producerTool": {
+                      "type": "string"
+                    },
+                    "totalItems": {
+                      "type": "integer"
+                    },
+                    "totalBytes": {
+                      "type": "integer"
+                    },
+                    "preview": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "refId",
+                    "createdAt",
+                    "ttlMs",
+                    "schemaVersion",
+                    "producerTool",
+                    "totalItems",
+                    "totalBytes",
+                    "preview"
+                  ]
+                },
+                "referenceRoot": {
+                  "type": "string"
+                },
+                "root": {
+                  "type": "string"
+                },
+                "source": {
+                  "type": "object"
+                },
+                "storageError": {
+                  "type": "object"
+                },
+                "nextAction": {
+                  "type": "string"
+                },
+                "revision": {
+                  "type": "string"
+                },
+                "bytes": {
+                  "type": "integer"
+                },
+                "lineCount": {
+                  "oneOf": [
+                    {
+                      "type": "integer"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "status": {
+                  "type": "string"
+                },
+                "phase": {
+                  "type": "string"
+                },
+                "changed": {
+                  "type": "integer"
+                },
+                "matched": {
+                  "type": "integer"
+                },
+                "skipped": {
+                  "type": "integer"
+                },
+                "failed": {
+                  "type": "integer"
+                },
+                "complete": {
+                  "type": "boolean"
+                },
+                "omitted": {
+                  "type": "integer"
+                },
+                "total": {
+                  "type": "integer"
+                },
+                "nextOffset": {
+                  "type": "integer"
+                },
+                "truncated": {
+                  "type": "boolean"
+                },
+                "items": {
+                  "type": "array",
+                  "items": {}
+                },
+                "dryRun": {
+                  "type": "boolean"
+                },
+                "files": {
+                  "type": "integer"
+                },
+                "matches": {
+                  "type": "integer"
+                },
+                "skippedFiles": {
+                  "type": "integer"
+                },
+                "error": {
+                  "type": "object"
+                },
+                "path": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "error": {
+            "type": "object"
+          }
+        }
+      }
+    },
+    "read_table": {
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string",
+            "description": "Regular file path relative to the current session cwd."
+          },
+          "format": {
+            "type": "string",
+            "enum": [
+              "csv",
+              "tsv"
+            ],
+            "description": "Default tsv for .tsv paths, otherwise csv."
+          },
+          "encoding": {
+            "type": "string",
+            "enum": [
+              "utf-8",
+              "utf-16le",
+              "utf-16be"
+            ],
+            "default": "utf-8",
+            "description": "Strict decoding; conflicting BOMs fail. No replacement characters."
+          },
+          "header": {
+            "type": "boolean",
+            "default": true,
+            "description": "First record is columns when true; empty/duplicate column names stay positional."
+          },
+          "offset": {
+            "type": "integer",
+            "default": 1,
+            "description": "1-100000 data rows, 1-based; header is excluded."
+          },
+          "limit": {
+            "type": "integer",
+            "default": 200,
+            "description": "1-1000 data rows."
+          }
+        },
+        "required": [
+          "path"
+        ],
+        "additionalProperties": false
+      },
+      "description": "Read bounded CSV/TSV lexical string cells relative to session cwd. Preserves quoted multiline records and physical LF lineStart/lineEnd. Check scanComplete versus pageComplete; total/revision exist only after a stable full scan. Up to 32 MiB, 100000 data records, 1 MiB/record, 1024 columns and 30s; row paging cannot bypass scan gaps. Errors retain safe preceding rows with nextAction. Compare revisions before combining rescanned pages. No spreadsheet formulas or type coercion. Failures return status:error|rejected and error.code; never throw.",
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "scope": {
+            "type": "string"
+          },
+          "excludedContent": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "blocksObserved": {
+            "type": "integer"
+          },
+          "pagesObserved": {
+            "type": "integer"
+          },
+          "decodedBytes": {
+            "type": "integer"
+          },
+          "processedBytes": {
+            "type": "integer"
+          },
+          "format": {
+            "type": "string"
+          },
+          "encoding": {
+            "type": "string"
+          },
+          "header": {
+            "type": "boolean"
+          },
+          "columns": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "columnCount": {
+            "type": "integer"
+          },
+          "bytes": {
+            "type": "integer"
+          },
+          "bytesRead": {
+            "type": "integer"
+          },
+          "rowsObserved": {
+            "type": "integer"
+          },
+          "skipped": {
+            "type": "integer"
+          },
+          "scanComplete": {
+            "type": "boolean"
+          },
+          "pageComplete": {
+            "type": "boolean"
+          },
+          "complete": {
+            "type": "boolean"
+          },
+          "truncated": {
+            "type": "boolean"
+          },
+          "truncatedBy": {
+            "type": "string"
+          },
+          "nextOffset": {
+            "type": "integer"
+          },
+          "total": {
+            "type": "integer"
+          },
+          "rowCount": {
+            "type": "integer"
+          },
+          "omitted": {
+            "type": "integer"
+          },
+          "revision": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "phase": {
+            "type": "string"
+          },
+          "changed": {
+            "type": "integer"
+          },
+          "effectState": {
+            "type": "string"
+          },
+          "path": {
+            "type": "string"
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "row": {
+                  "type": "integer"
+                },
+                "cells": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "lineStart": {
+                  "type": "integer"
+                },
+                "lineEnd": {
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "row",
+                "cells",
+                "lineStart",
+                "lineEnd"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "error": {
+            "type": "object"
+          },
+          "nextAction": {
+            "type": "string"
+          },
+          "reference": {
+            "type": "object",
+            "properties": {
+              "refId": {
+                "type": "string",
+                "description": "Opaque ref://session/tool/uuid; a locator, never authority."
+              },
+              "createdAt": {
+                "type": "integer",
+                "description": "Unix milliseconds."
+              },
+              "ttlMs": {
+                "type": "integer",
+                "description": "0 means session lifetime; otherwise at most 604800000 milliseconds."
+              },
+              "schemaVersion": {
+                "type": "string"
+              },
+              "producerTool": {
+                "type": "string"
+              },
+              "totalItems": {
+                "type": "integer"
+              },
+              "totalBytes": {
+                "type": "integer"
+              },
+              "preview": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "refId",
+              "createdAt",
+              "ttlMs",
+              "schemaVersion",
+              "producerTool",
+              "totalItems",
+              "totalBytes",
+              "preview"
+            ]
+          },
+          "referenceRoot": {
+            "type": "string"
+          },
+          "source": {
+            "type": "object",
+            "properties": {
+              "scope": {
+                "type": "string"
+              },
+              "excludedContent": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "blocksObserved": {
+                "type": "integer"
+              },
+              "pagesObserved": {
+                "type": "integer"
+              },
+              "decodedBytes": {
+                "type": "integer"
+              },
+              "processedBytes": {
+                "type": "integer"
+              },
+              "format": {
+                "type": "string"
+              },
+              "encoding": {
+                "type": "string"
+              },
+              "header": {
+                "type": "boolean"
+              },
+              "columns": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "columnCount": {
+                "type": "integer"
+              },
+              "bytes": {
+                "type": "integer"
+              },
+              "bytesRead": {
+                "type": "integer"
+              },
+              "rowsObserved": {
+                "type": "integer"
+              },
+              "skipped": {
+                "type": "integer"
+              },
+              "scanComplete": {
+                "type": "boolean"
+              },
+              "pageComplete": {
+                "type": "boolean"
+              },
+              "complete": {
+                "type": "boolean"
+              },
+              "truncated": {
+                "type": "boolean"
+              },
+              "truncatedBy": {
+                "type": "string"
+              },
+              "nextOffset": {
+                "type": "integer"
+              },
+              "total": {
+                "type": "integer"
+              },
+              "rowCount": {
+                "type": "integer"
+              },
+              "omitted": {
+                "type": "integer"
+              },
+              "revision": {
+                "type": "string"
+              },
+              "root": {
+                "type": "string"
+              },
+              "itemEncoding": {
+                "type": "string"
+              },
+              "capturedItems": {
+                "type": "integer"
+              },
+              "captureComplete": {
+                "type": "boolean"
+              }
+            }
+          },
+          "storageError": {
+            "type": "object"
+          }
+        }
+      }
+    },
+    "read_docx": {
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string",
+            "description": "Regular DOCX file path relative to the current session cwd. Binary DOC is unsupported."
+          },
+          "offset": {
+            "type": "integer",
+            "default": 1,
+            "description": "1-100000 main-body paragraphs, 1-based."
+          },
+          "limit": {
+            "type": "integer",
+            "default": 200,
+            "description": "1-1000 paragraphs."
+          }
+        },
+        "required": [
+          "path"
+        ],
+        "additionalProperties": false
+      },
+      "description": "Read bounded DOCX main-body paragraphs relative to session cwd, preserving Unicode text and table/row/cell coordinates. Scope excludes layout, headers/footers, notes, comments and metadata; complete applies only to that scope. Standard stored/deflated ZIP, strict UTF-8/BOM UTF-16; unsupported content and parse errors retain safe preceding paragraphs with nextAction. Check scanComplete versus pageComplete; total/revision require a stable full scan. 32 MiB archive, 8 MiB main XML, 1 MiB/paragraph, 100000 paragraphs, 30s. Paging cannot bypass physical gaps; compare revisions across calls. No binary DOC, macros, external fetch or extraction to disk. Failures return status:error|rejected and error.code; never throw.",
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "scope": {
+            "type": "string"
+          },
+          "excludedContent": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "blocksObserved": {
+            "type": "integer"
+          },
+          "pagesObserved": {
+            "type": "integer"
+          },
+          "decodedBytes": {
+            "type": "integer"
+          },
+          "processedBytes": {
+            "type": "integer"
+          },
+          "format": {
+            "type": "string"
+          },
+          "encoding": {
+            "type": "string"
+          },
+          "header": {
+            "type": "boolean"
+          },
+          "columns": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "columnCount": {
+            "type": "integer"
+          },
+          "bytes": {
+            "type": "integer"
+          },
+          "bytesRead": {
+            "type": "integer"
+          },
+          "rowsObserved": {
+            "type": "integer"
+          },
+          "skipped": {
+            "type": "integer"
+          },
+          "scanComplete": {
+            "type": "boolean"
+          },
+          "pageComplete": {
+            "type": "boolean"
+          },
+          "complete": {
+            "type": "boolean"
+          },
+          "truncated": {
+            "type": "boolean"
+          },
+          "truncatedBy": {
+            "type": "string"
+          },
+          "nextOffset": {
+            "type": "integer"
+          },
+          "total": {
+            "type": "integer"
+          },
+          "rowCount": {
+            "type": "integer"
+          },
+          "omitted": {
+            "type": "integer"
+          },
+          "revision": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "phase": {
+            "type": "string"
+          },
+          "changed": {
+            "type": "integer"
+          },
+          "effectState": {
+            "type": "string"
+          },
+          "path": {
+            "type": "string"
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "block": {
+                  "type": "integer"
+                },
+                "type": {
+                  "type": "string",
+                  "enum": [
+                    "paragraph"
+                  ]
+                },
+                "text": {
+                  "type": "string"
+                },
+                "table": {
+                  "type": "integer"
+                },
+                "row": {
+                  "type": "integer"
+                },
+                "cell": {
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "block",
+                "type",
+                "text"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "error": {
+            "type": "object"
+          },
+          "nextAction": {
+            "type": "string"
+          },
+          "reference": {
+            "type": "object",
+            "properties": {
+              "refId": {
+                "type": "string",
+                "description": "Opaque ref://session/tool/uuid; a locator, never authority."
+              },
+              "createdAt": {
+                "type": "integer",
+                "description": "Unix milliseconds."
+              },
+              "ttlMs": {
+                "type": "integer",
+                "description": "0 means session lifetime; otherwise at most 604800000 milliseconds."
+              },
+              "schemaVersion": {
+                "type": "string"
+              },
+              "producerTool": {
+                "type": "string"
+              },
+              "totalItems": {
+                "type": "integer"
+              },
+              "totalBytes": {
+                "type": "integer"
+              },
+              "preview": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "refId",
+              "createdAt",
+              "ttlMs",
+              "schemaVersion",
+              "producerTool",
+              "totalItems",
+              "totalBytes",
+              "preview"
+            ]
+          },
+          "referenceRoot": {
+            "type": "string"
+          },
+          "source": {
+            "type": "object",
+            "properties": {
+              "scope": {
+                "type": "string"
+              },
+              "excludedContent": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "blocksObserved": {
+                "type": "integer"
+              },
+              "pagesObserved": {
+                "type": "integer"
+              },
+              "decodedBytes": {
+                "type": "integer"
+              },
+              "processedBytes": {
+                "type": "integer"
+              },
+              "format": {
+                "type": "string"
+              },
+              "encoding": {
+                "type": "string"
+              },
+              "header": {
+                "type": "boolean"
+              },
+              "columns": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "columnCount": {
+                "type": "integer"
+              },
+              "bytes": {
+                "type": "integer"
+              },
+              "bytesRead": {
+                "type": "integer"
+              },
+              "rowsObserved": {
+                "type": "integer"
+              },
+              "skipped": {
+                "type": "integer"
+              },
+              "scanComplete": {
+                "type": "boolean"
+              },
+              "pageComplete": {
+                "type": "boolean"
+              },
+              "complete": {
+                "type": "boolean"
+              },
+              "truncated": {
+                "type": "boolean"
+              },
+              "truncatedBy": {
+                "type": "string"
+              },
+              "nextOffset": {
+                "type": "integer"
+              },
+              "total": {
+                "type": "integer"
+              },
+              "rowCount": {
+                "type": "integer"
+              },
+              "omitted": {
+                "type": "integer"
+              },
+              "revision": {
+                "type": "string"
+              },
+              "root": {
+                "type": "string"
+              },
+              "itemEncoding": {
+                "type": "string"
+              },
+              "capturedItems": {
+                "type": "integer"
+              },
+              "captureComplete": {
+                "type": "boolean"
+              }
+            }
+          },
+          "storageError": {
+            "type": "object"
+          }
+        }
+      }
+    },
+    "read_pdf": {
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string",
+            "description": "Regular PDF file path relative to the current session cwd."
+          },
+          "offset": {
+            "type": "integer",
+            "default": 1,
+            "description": "1-32 pages, 1-based."
+          },
+          "limit": {
+            "type": "integer",
+            "default": 10,
+            "description": "1-32 pages."
+          }
+        },
+        "required": [
+          "path"
+        ],
+        "additionalProperties": false
+      },
+      "description": "Read bounded PDF 1.3-1.7 page text and individual runs relative to session cwd. Restricted classic-xref PDFs with standard Helvetica/Courier/Times Type1 fonts and Standard/WinAnsi encoding only. Scope is text-layer content order; excludes rendered reading order, images/OCR, annotations/forms and metadata. Unsupported or malformed later pages retain preceding complete pages with error/nextAction. Check scanComplete versus pageComplete; total/revision require a stable full scan. 16 MiB input and aggregate decoded/processed streams, 1 MiB/page, 32 pages, 30s. Page offsets cannot bypass physical gaps; compare revisions across calls. Failures return status:error|rejected and error.code; never throw.",
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "scope": {
+            "type": "string"
+          },
+          "excludedContent": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "blocksObserved": {
+            "type": "integer"
+          },
+          "pagesObserved": {
+            "type": "integer"
+          },
+          "decodedBytes": {
+            "type": "integer"
+          },
+          "processedBytes": {
+            "type": "integer"
+          },
+          "format": {
+            "type": "string"
+          },
+          "encoding": {
+            "type": "string"
+          },
+          "header": {
+            "type": "boolean"
+          },
+          "columns": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "columnCount": {
+            "type": "integer"
+          },
+          "bytes": {
+            "type": "integer"
+          },
+          "bytesRead": {
+            "type": "integer"
+          },
+          "rowsObserved": {
+            "type": "integer"
+          },
+          "skipped": {
+            "type": "integer"
+          },
+          "scanComplete": {
+            "type": "boolean"
+          },
+          "pageComplete": {
+            "type": "boolean"
+          },
+          "complete": {
+            "type": "boolean"
+          },
+          "truncated": {
+            "type": "boolean"
+          },
+          "truncatedBy": {
+            "type": "string"
+          },
+          "nextOffset": {
+            "type": "integer"
+          },
+          "total": {
+            "type": "integer"
+          },
+          "rowCount": {
+            "type": "integer"
+          },
+          "omitted": {
+            "type": "integer"
+          },
+          "revision": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "phase": {
+            "type": "string"
+          },
+          "changed": {
+            "type": "integer"
+          },
+          "effectState": {
+            "type": "string"
+          },
+          "path": {
+            "type": "string"
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "page": {
+                  "type": "integer"
+                },
+                "text": {
+                  "type": "string"
+                },
+                "runs": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              },
+              "required": [
+                "page",
+                "text",
+                "runs"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "error": {
+            "type": "object"
+          },
+          "nextAction": {
+            "type": "string"
+          },
+          "reference": {
+            "type": "object",
+            "properties": {
+              "refId": {
+                "type": "string",
+                "description": "Opaque ref://session/tool/uuid; a locator, never authority."
+              },
+              "createdAt": {
+                "type": "integer",
+                "description": "Unix milliseconds."
+              },
+              "ttlMs": {
+                "type": "integer",
+                "description": "0 means session lifetime; otherwise at most 604800000 milliseconds."
+              },
+              "schemaVersion": {
+                "type": "string"
+              },
+              "producerTool": {
+                "type": "string"
+              },
+              "totalItems": {
+                "type": "integer"
+              },
+              "totalBytes": {
+                "type": "integer"
+              },
+              "preview": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "refId",
+              "createdAt",
+              "ttlMs",
+              "schemaVersion",
+              "producerTool",
+              "totalItems",
+              "totalBytes",
+              "preview"
+            ]
+          },
+          "referenceRoot": {
+            "type": "string"
+          },
+          "source": {
+            "type": "object",
+            "properties": {
+              "scope": {
+                "type": "string"
+              },
+              "excludedContent": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "blocksObserved": {
+                "type": "integer"
+              },
+              "pagesObserved": {
+                "type": "integer"
+              },
+              "decodedBytes": {
+                "type": "integer"
+              },
+              "processedBytes": {
+                "type": "integer"
+              },
+              "format": {
+                "type": "string"
+              },
+              "encoding": {
+                "type": "string"
+              },
+              "header": {
+                "type": "boolean"
+              },
+              "columns": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "columnCount": {
+                "type": "integer"
+              },
+              "bytes": {
+                "type": "integer"
+              },
+              "bytesRead": {
+                "type": "integer"
+              },
+              "rowsObserved": {
+                "type": "integer"
+              },
+              "skipped": {
+                "type": "integer"
+              },
+              "scanComplete": {
+                "type": "boolean"
+              },
+              "pageComplete": {
+                "type": "boolean"
+              },
+              "complete": {
+                "type": "boolean"
+              },
+              "truncated": {
+                "type": "boolean"
+              },
+              "truncatedBy": {
+                "type": "string"
+              },
+              "nextOffset": {
+                "type": "integer"
+              },
+              "total": {
+                "type": "integer"
+              },
+              "rowCount": {
+                "type": "integer"
+              },
+              "omitted": {
+                "type": "integer"
+              },
+              "revision": {
+                "type": "string"
+              },
+              "root": {
+                "type": "string"
+              },
+              "itemEncoding": {
+                "type": "string"
+              },
+              "capturedItems": {
+                "type": "integer"
+              },
+              "captureComplete": {
+                "type": "boolean"
+              }
+            }
+          },
+          "storageError": {
+            "type": "object"
+          }
+        }
+      }
+    }
+  }
+}

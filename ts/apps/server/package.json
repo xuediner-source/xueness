@@ -1,0 +1,41 @@
+{
+  "name": "@xueness/server",
+  "version": "0.2.1",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "xueness-server": "./src/main.ts"
+  },
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@xueness/contracts": "0.2.1",
+    "@xueness/kernel": "0.2.1",
+    "@xueness/plugin-files": "0.2.1",
+    "@xueness/plugin-shell": "0.2.1",
+    "@xueness/plugin-providers": "0.2.1",
+    "@xueness/plugin-sessions": "0.2.1",
+    "@xueness/plugin-settings": "0.2.1",
+    "@xueness/sessions": "0.2.1",
+    "@xueness/providers": "0.2.1",
+    "@xueness/agent": "0.2.1",
+    "@xueness/tool-bridge": "0.2.1",
+    "@xueness/engine-tools": "0.2.1",
+    "@xueness/permissions": "0.2.1",
+    "@xueness/plugin-planning": "0.2.1",
+    "@xueness/plugin-git": "0.2.1",
+    "@xueness/plugin-mcp": "0.2.1",
+    "@xueness/plugin-skills": "0.2.1",
+    "@xueness/plugin-hooks": "0.2.1",
+    "@xueness/plugin-subagents": "0.2.1",
+    "@xueness/plugin-memory": "0.2.1",
+    "@xueness/plugin-office": "0.2.1",
+    "@xueness/plugin-browser": "0.2.1",
+    "@xueness/plugin-network": "0.2.1",
+    "@xueness/plugin-commands": "0.2.1",
+    "@xueness/plugin-workbuddy": "0.2.1",
+    "@xueness/plugin-native_ops": "0.2.1",
+    "@xueness/plugin-batch_calls": "0.2.1"
+  }
+}

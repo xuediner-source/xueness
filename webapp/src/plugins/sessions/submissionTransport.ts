@@ -11,7 +11,8 @@ export function couldHaveBeenAccepted(error: unknown): boolean {
   if (error instanceof Error && 'requestNotSent' in error && error.requestNotSent === true) return false;
   const status = error instanceof Error && 'status' in error ? Number(error.status) : undefined;
   return error instanceof TypeError || error instanceof DeliveryUnconfirmedError
-    || (error instanceof Error && (error.name === 'TimeoutError' || error.message === 'invalid JSON response'))
+    || (error instanceof Error && (error.name === 'TimeoutError' || error.message === 'invalid JSON response'
+      || ('responseUnreadable' in error && error.responseUnreadable === true)))
     || (status !== undefined && (status >= 500 || status === 408));
 }
 

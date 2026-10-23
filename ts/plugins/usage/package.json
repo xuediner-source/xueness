@@ -1,0 +1,14 @@
+{
+  "name": "@xueness/plugin-usage",
+  "version": "0.2.1",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./manifest.json": "./manifest.json"
+  },
+  "dependencies": {
+    "@xueness/contracts": "0.2.1",
+    "@xueness/kernel": "0.2.1"
+  }
+}

@@ -66,6 +66,21 @@ test('rejected optimistic submissions restore full drafts without touching new e
   assert.equal(restoreSubmittedComposerDraft(edited, 'a', 5, original), edited);
 });
 
+test('a completed send followed by a run failure keeps newer composer text instead of restoring the sent prompt', () => {
+  const original: ComposerDraftState = { text: 'sent prompt', attachments: [], goal: false,
+    selectedCapabilities: [], selectedContext: { files: [], sessions: [], skills: [], plugins: [] },
+    submissionError: '', attachmentError: '', revision: 8 };
+  const cleared = clearSubmittedComposerDraft(new Map([['session-a', original]]), 'session-a', original.revision);
+  const clearedRevision = cleared.get('session-a')!.revision;
+  const acknowledged = new Map(cleared).set('session-a', { ...cleared.get('session-a')!, pendingSubmission: undefined });
+  const followup = new Map(acknowledged).set('session-a', { ...acknowledged.get('session-a')!, text: 'next question', revision: clearedRevision + 1 });
+
+  const afterRunFailure = restoreSubmittedComposerDraft(followup, 'session-a', clearedRevision, original, 'provider rate limited');
+  assert.equal(afterRunFailure, followup, 'the accepted prompt must not be restored over a later draft');
+  assert.equal(afterRunFailure.get('session-a')?.text, 'next question');
+  assert.equal(afterRunFailure.get('session-a')?.submissionError, '');
+});
+
 test("TaskList: renders title and highlights activeId", () => {
   const sessions: SessionSummary[] = [
     { id: "sess-1", task: "修复登录接口", status: "running" },
@@ -185,6 +200,49 @@ test('approval resume preserves granted state and disables repeat clicks while r
   assert.match(busy, /正在继续…/);
 });
 
+// ZCode packages/ui/src/PermissionDialog.tsx + i18n zh-CN "chat.permission.*": a call waiting in the
+// running turn is answered in place with 允许 / 拒绝 and stays clickable while the run is busy.
+test("Approvals: a waiting call offers 允许 / 拒绝 during the run; replay rows keep the retry path", () => {
+  const waiting: PendingApproval[] = [
+    { tool_call_id: "live-1", kind: "write", name: "write", subject: "a.txt", preview: "", waiting: true },
+    { tool_call_id: "live-2", kind: "exec", name: "exec", subject: "npm test", preview: "", waiting: true },
+  ];
+  const html = renderToStaticMarkup(<Approvals pending={waiting} busy onApprove={() => {}} onReject={() => {}} />);
+  assert.match(html, /data-testid="approval-waiting-live-1"[^>]*>等待确认</);
+  assert.equal(html.match(/<button[^>]*>允许<\/button>/g)?.length, 2);
+  assert.equal(html.match(/<button[^>]*>拒绝<\/button>/g)?.length, 2);
+  assert.doesNotMatch(html, /<button[^>]*disabled=""[^>]*>(允许|拒绝)<\/button>/, "a busy run does not block answering a waiting call");
+  assert.doesNotMatch(html, /批准并重试/);
+  assert.match(html, /全部允许 \(2\)/);
+  const noReject = renderToStaticMarkup(<Approvals pending={waiting.slice(0, 1)} onApprove={() => {}} />);
+  assert.doesNotMatch(noReject, /拒绝/);
+  const replay = renderToStaticMarkup(<Approvals pending={[{ tool_call_id: "old", name: "write", subject: "b.txt", preview: "" }]} busy onApprove={() => {}} onReject={() => {}} />);
+  assert.match(replay, /<button[^>]*disabled=""[^>]*>正在继续…<\/button>/);
+  assert.doesNotMatch(replay, /等待确认|>拒绝</);
+});
+
+// ZCode zh-CN "chat.permission.allowForSession" (允许本会话) and permission-response.ts (reject reason).
+test("Approvals: waiting calls offer 允许本会话 and an optional rejection reason", () => {
+  const waiting: PendingApproval[] = [{ tool_call_id: "live-1", kind: "exec", name: "exec", subject: "npm test", preview: "", waiting: true }];
+  const html = renderToStaticMarkup(<Approvals pending={waiting} busy onApprove={() => {}} onReject={() => {}} onAllowSession={() => {}} />);
+  assert.match(html, /<button[^>]*>允许本会话<\/button>/);
+  assert.match(html, /<input[^>]*data-testid="approval-feedback-live-1"[^>]*placeholder="拒绝理由（可选，会转告模型）"/);
+  assert.doesNotMatch(html, /<input[^>]*disabled=""[^>]*data-testid="approval-feedback/);
+  const plain = renderToStaticMarkup(<Approvals pending={waiting} onApprove={() => {}} />);
+  assert.doesNotMatch(plain, /允许本会话|approval-feedback/);
+  const replay = renderToStaticMarkup(<Approvals pending={[{ tool_call_id: "old", name: "write", subject: "b.txt", preview: "" }]} onApprove={() => {}} onReject={() => {}} onAllowSession={() => {}} />);
+  assert.doesNotMatch(replay, /允许本会话|approval-feedback/, "replay rows stay one-shot");
+});
+
+// alwaysAsk (and ask rules / remote exec) ask every time: no "allow for this session" for them.
+test("Approvals: one-shot waiting calls hide 允许本会话 but keep 允许 and 拒绝", () => {
+  const once: PendingApproval[] = [{ tool_call_id: "live-2", kind: "exec", name: "exec", subject: "git push", preview: "", waiting: true, oneShot: true }];
+  const html = renderToStaticMarkup(<Approvals pending={once} onApprove={() => {}} onReject={() => {}} onAllowSession={() => {}} />);
+  assert.doesNotMatch(html, /允许本会话/);
+  assert.match(html, /<button[^>]*>允许<\/button>/);
+  assert.match(html, /<button[^>]*>拒绝<\/button>/);
+});
+
 test("Approvals: renders items and action button; empty or no items has NO buttons", () => {
   const pendingItems: PendingApproval[] = [
     {
@@ -272,6 +330,41 @@ test("Composer: renders textarea and circle send button; disabled attributes cor
   );
   assert.match(htmlHero, /class="xn-composer xn-composer--hero"/);
   assert.match(htmlHero, /aria-label="运行模式"/);
+});
+
+test("Composer: model catalog recovery distinguishes loading, retry, configuration, and blocked states", () => {
+  let sendCalls = 0;
+  const render = (modelRecovery: React.ComponentProps<typeof Composer>["modelRecovery"], reason: string) =>
+    renderToStaticMarkup(<Composer defaultValue="help" sendDisabled sendDisabledReason={reason} modelRecovery={modelRecovery}
+      onSend={() => { sendCalls += 1; }} />);
+  const recoveryButton = (html: string, testId: string) =>
+    html.match(new RegExp(`<button[^>]*data-testid="${testId}"[^>]*>`))?.[0] ?? "";
+  const sendButton = (html: string) => html.match(/<button[^>]*aria-label="发送"[^>]*>/)?.[0] ?? "";
+
+  const loading = render({ kind: "loading" }, "正在加载模型…");
+  assert.match(loading, /data-testid="composer-send-unavailable"[^>]*role="status"|role="status"[^>]*data-testid="composer-send-unavailable"/);
+  assert.match(loading, /aria-live="polite"/);
+  assert.match(recoveryButton(loading, "composer-model-recovery-loading"), /disabled/);
+  assert.match(recoveryButton(loading, "composer-model-recovery-loading"), /aria-busy="true"/);
+  assert.match(sendButton(loading), /disabled/);
+
+  const failed = render({ kind: "error", onRetry: () => {} }, "模型列表加载失败，请重试。");
+  assert.match(failed, /<button[^>]*data-testid="composer-model-recovery-retry">重试<\/button>/);
+  assert.doesNotMatch(failed, /data-testid="composer-model-recovery-configure"/);
+  assert.match(sendButton(failed), /disabled/);
+
+  const missing = render({ kind: "missing", onConfigure: () => {} }, "选择或配置模型后即可发送。");
+  assert.match(missing, /<button[^>]*data-testid="composer-model-recovery-configure">配置模型<\/button>/);
+  assert.doesNotMatch(missing, /data-testid="composer-model-recovery-retry"/);
+
+  const emptyDraft = renderToStaticMarkup(<Composer sendDisabled sendDisabledReason="选择或配置模型后即可发送。"
+    modelRecovery={{ kind: "missing", onConfigure: () => {} }} onSend={() => { sendCalls += 1; }} />);
+  assert.match(emptyDraft, /data-testid="composer-send-unavailable"/);
+  assert.match(emptyDraft, /data-testid="composer-model-recovery-configure"/);
+
+  const blocked = render({ kind: "blocked" }, "服务端已关闭模型请求。");
+  assert.doesNotMatch(blocked, /data-testid="composer-model-recovery-(?:retry|configure|loading)"/);
+  assert.equal(sendCalls, 0, "rendering recovery never submits or retries the conversation");
 });
 
 test("Composer: hero workspace header stays in the input surface and keeps keyboard guidance linked", () => {
@@ -973,6 +1066,24 @@ test("Approvals: renders batch approve button and shortcut badges when multiple 
   );
   assert.doesNotMatch(singleHtml, /class="xn-approvals__batch-actions"/);
   assert.doesNotMatch(singleHtml, /全部批准/);
+});
+
+test("Approvals: explains structured operation impact and shows only the ungranted batch scope", () => {
+  const pendingItems: PendingApproval[] = [
+    { tool_call_id: "already-granted", kind: "read", name: "read", subject: "private.txt", preview: "read file", granted: true },
+    { tool_call_id: "exec-next", kind: "exec", name: "exec", subject: '["git","status"]', preview: "git status" },
+    { tool_call_id: "write-next", kind: "write", name: "write", subject: "out.txt", preview: "write file" },
+  ];
+  const html = renderToStaticMarkup(<Approvals pending={pendingItems} onApprove={() => {}} onApproveAll={() => {}} />);
+  const scope = html.match(/<div[^>]*data-testid="approvals-batch-scope"[^>]*>([\s\S]*?)<\/div>\s*<div style=/)?.[1] ?? "";
+  assert.ok(scope, "visible batch scope should render");
+  assert.match(scope, /全部批准将批准以下 2 项/);
+  assert.match(scope, /执行命令 · git status/);
+  assert.match(scope, /写入 · out\.txt/);
+  assert.doesNotMatch(scope, /private\.txt/);
+  assert.match(html, /读取所列目标，不会修改文件/);
+  assert.match(html, /运行所列命令；命令可能改变文件或系统状态/);
+  assert.match(html, /向所列目标写入内容，可能创建或覆盖文件/);
 });
 
 test("parseDiffPreview: correctly parses unified diff format, lines and statistics", () => {

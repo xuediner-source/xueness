@@ -1,0 +1,16 @@
+▶ shell background runtime
+  ✔ projects at most 32 same-session task facts without command or output text (1.5013ms)
+  ✔ sends one terminal reminder and deduplicates current and archived messages (1.1129ms)
+  ✔ filters ownership, updates the snapshot, and never reads incremental output (0.4016ms)
+  ✔ marks missing running snapshots lost once without reading output, rerunning commands, or inventing an exit code (0.6602ms)
+  ✔ rolls back a failed save so the terminal reminder can be resent (0.6558ms)
+  ✔ binds a manager on activation and disposes it without clearing a replacement binding (6.0971ms)
+✔ shell background runtime (11.5681ms)
+ℹ tests 6
+ℹ suites 1
+ℹ pass 6
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 578.8338

@@ -1,6 +1,7 @@
 import React from "react";
 import { flushSync } from "react-dom";
-import { TimelineInitialTailOverrideContext } from "./ConversationTimelineViewport";
+import { TimelineInitialTailOverrideContext, TimelineUserScrollIntentContext } from "./ConversationTimelineViewport";
+import type { TimelineUserScrollIntent } from "./timelineScrollAnchor";
 
 /**
  * 时间线窗口化（虚拟列表）规划器。
@@ -24,6 +25,8 @@ export type TimelineWindowHost = {
   setScrollTop(top: number): void;
   /** 实测某个条目的渲染高度；未渲染或无法测量时返回 null。 */
   measureEntry(index: number): number | null;
+  /** 条目在滚动内容坐标中的顶部；用于直接补偿真实 DOM 锚点。 */
+  readEntryTop?(index: number): number | null;
   readRowGap(): number;
 };
 
@@ -42,6 +45,8 @@ export type TimelineWindowOptions = {
   enabled?: boolean;
   /** 打开会话时窗口是否定位在末尾（自动滚动开启的会话从底部呈现）。 */
   initialTail?: boolean;
+  /** 运行期间是否允许自动跟随尾部；与初始开窗位置分开控制。 */
+  followTail?: boolean;
   /** 窗口最少渲染的条数。 */
   pageSize?: number;
   /** 视口上下额外渲染的像素。 */
@@ -96,6 +101,7 @@ export class TimelineWindowModel {
   private overscanPx: number;
   private defaultEstimate: number;
   private tailThresholdPx: number;
+  private followTailAllowed: boolean;
 
   private enabled: boolean;
   private count = 0;
@@ -107,6 +113,8 @@ export class TimelineWindowModel {
   private gap = 0;
   private prefix: number[] = [0];
   private prefixDirty = true;
+  /** 上次提交时，条目坐标系相对滚动内容的固定起点。 */
+  private layoutBase: number | null = null;
   private revealPending = false;
   /** 跟随尾部的意图：只由滚动事件更新，条目增长（估计→实测）不改写它。 */
   private tailSticky: boolean;
@@ -117,7 +125,8 @@ export class TimelineWindowModel {
     this.host = host;
     this.enabled = options.enabled !== false;
     this.initialTail = options.initialTail === true;
-    this.tailSticky = this.initialTail;
+    this.followTailAllowed = options.followTail !== false;
+    this.tailSticky = this.initialTail && this.followTailAllowed;
     this.pageSize = Math.max(1, Math.floor(options.pageSize ?? DEFAULT_PAGE_SIZE));
     this.overscanPx = Math.max(0, options.overscanPx ?? DEFAULT_OVERSCAN_PX);
     this.defaultEstimate = Math.max(1, options.estimatePx ?? DEFAULT_ESTIMATE_PX);
@@ -166,6 +175,8 @@ export class TimelineWindowModel {
       this.measuredSum = 0;
       this.measuredCount = 0;
       this.estimate = this.defaultEstimate;
+      this.layoutBase = null;
+      this.revealPending = false;
     }
     this.count = nextCount;
     this.prefixDirty = true;
@@ -173,12 +184,49 @@ export class TimelineWindowModel {
     this.notify();
   }
 
+  /**
+   * Reuse a mounted conversation view for another session without carrying
+   * measured row heights, a previous reading anchor, or tail intent across.
+   */
+  resetForSession(initialTail: boolean, followTail = this.followTailAllowed): void {
+    this.initialTail = initialTail;
+    this.followTailAllowed = followTail;
+    this.tailSticky = initialTail && followTail;
+    this.heights.clear();
+    this.measuredSum = 0;
+    this.measuredCount = 0;
+    this.estimate = this.defaultEstimate;
+    this.gap = 0;
+    this.prefix = [0];
+    this.prefixDirty = true;
+    this.layoutBase = null;
+    this.revealPending = false;
+    this.range = this.planRangeAfterCountChange(0, 0);
+    this.notify();
+  }
+
+  /** Keep a live preference change from leaving an old tail-follow intent active. */
+  setFollowTailAllowed(allowed: boolean): void {
+    if (allowed === this.followTailAllowed) return;
+    this.followTailAllowed = allowed;
+    if (!allowed) {
+      this.tailSticky = false;
+      return;
+    }
+    const viewport = this.host.readViewport();
+    this.tailSticky = Boolean(viewport && !isAwayFromTail(
+      viewport.scrollHeight, viewport.scrollTop, viewport.clientHeight, this.tailThresholdPx,
+    ));
+  }
+
   /** 滚动事件：按最新滚动位置平移窗口，并更新跟随尾部的意图。 */
   onScrolled(): void {
-    if (!this.windowed || this.count === 0) return;
+    if (this.count === 0) return;
     const viewport = this.host.readViewport();
     if (!viewport) return;
-    this.tailSticky = !isAwayFromTail(viewport.scrollHeight, viewport.scrollTop, viewport.clientHeight, this.tailThresholdPx);
+    this.tailSticky = this.followTailAllowed
+      && !isAwayFromTail(viewport.scrollHeight, viewport.scrollTop, viewport.clientHeight, this.tailThresholdPx);
+    if (!this.windowed) return;
     const next = this.computeWindow(viewport.scrollTop, viewport.clientHeight, this.ensurePrefix());
     if (next.start !== this.range.start || next.end !== this.range.end) {
       this.range = next;
@@ -187,50 +235,54 @@ export class TimelineWindowModel {
   }
 
   /** 提交后（布局阶段）执行：测量窗口条目、补偿锚点或贴合尾部。 */
-  syncAfterCommit(): void {
+  syncAfterCommit(userScrollIntent: TimelineUserScrollIntent = "none"): void {
     if (!this.enabled || this.count === 0) return;
     const gap = this.host.readRowGap();
     if (Number.isFinite(gap) && gap >= 0 && gap !== this.gap) {
       this.gap = gap;
       this.prefixDirty = true;
     }
-    if (!this.windowed) return;
     const viewport = this.host.readViewport();
     if (!viewport) return;
 
+    // Captured input is earlier than the native scroll event. Honor an upscroll
+    // before measuring a stream update that could otherwise snap back to tail.
+    if (userScrollIntent === "awayFromBottom") this.tailSticky = false;
+
     this.measureWindow();
-    // 距底部是否足够近只用于“重新粘住”；离开尾部必须由滚动事件判定，
-    // 否则追加条目导致的高度增长会被误读为用户离开。
-    if (!isAwayFromTail(viewport.scrollHeight, viewport.scrollTop, viewport.clientHeight, this.tailThresholdPx)) {
-      this.tailSticky = true;
-    }
-    const atTail = this.tailSticky;
+    // Only scroll events (plus the captured upscroll above) change follow intent.
+    // A fold/shrink can move an old reading position inside the tail threshold.
+    const atTail = this.followTailAllowed && this.tailSticky;
+    const previousPrefix = this.prefix;
+    const previousBase = this.layoutBase ?? 0;
+    const observedBase = this.readLayoutBase(previousPrefix);
     // reveal 跳转后的首次提交只做测量：旧 scrollTop 可能超出新布局高度，
     // 此时锚点补偿与贴底跟随都会把窗口拉回原处，撤销跳转意图。
     if (this.revealPending) {
       this.revealPending = false;
+      if (observedBase !== null) this.layoutBase = observedBase;
       this.refreshSnapshotIfChanged();
       return;
     }
     let followedTail = false;
     if (this.prefixDirty) {
-      const previousPrefix = this.prefix;
       this.ensurePrefix();
       if (atTail) {
         this.host.setScrollTop(viewport.scrollHeight);
         followedTail = true;
-      } else if (previousPrefix.length >= 2) {
-        this.compensateAnchor(previousPrefix, viewport);
+      } else if (previousPrefix.length >= 2 && (!this.host.readEntryTop || this.layoutBase !== null)) {
+        this.compensateAnchor(previousPrefix, viewport, previousBase);
       }
     } else if (atTail && viewport.scrollHeight - viewport.scrollTop - viewport.clientHeight > 1) {
       this.host.setScrollTop(viewport.scrollHeight);
       followedTail = true;
     }
     // 贴底写入后窗口必须同步覆盖尾部，不能等下一次 scroll 事件。
-    if (followedTail) {
+    if (followedTail && this.windowed) {
       const next = this.computeWindow(viewport.scrollHeight, viewport.clientHeight, this.ensurePrefix());
       if (next.start !== this.range.start || next.end !== this.range.end) this.range = next;
     }
+    if (observedBase !== null) this.layoutBase = observedBase;
     // 测量会更新估计与垫片高度；窗口未变时也要把新快照同步给订阅者。
     this.refreshSnapshotIfChanged();
   }
@@ -282,13 +334,28 @@ export class TimelineWindowModel {
     return { start: Math.min(start, Math.max(0, this.count - 1)), end: Math.max(end, Math.min(this.count, start + 1)) };
   }
 
-  private compensateAnchor(previousPrefix: readonly number[], viewport: TimelineViewportMeasure): void {
-    const anchor = indexAtOffset(previousPrefix, viewport.scrollTop);
+  private compensateAnchor(previousPrefix: readonly number[], viewport: TimelineViewportMeasure, previousBase: number): void {
+    // Preserve the established virtual-window coordinate model; full-render
+    // sessions have no top spacer and can use the measured content base.
+    const anchorBase = this.windowed ? 0 : previousBase;
+    const anchor = indexAtOffset(previousPrefix, viewport.scrollTop - anchorBase);
     if (anchor >= this.count) return;
     const slot = Math.max(0, this.prefix[anchor + 1]! - this.prefix[anchor]!);
-    const offset = Math.min(Math.max(0, viewport.scrollTop - previousPrefix[anchor]!), slot);
-    const nextTop = this.prefix[anchor]! + offset;
+    const offset = Math.min(Math.max(0, viewport.scrollTop - anchorBase - previousPrefix[anchor]!), slot);
+    // The row is usually still rendered (especially for full-render short
+    // conversations). Its actual post-commit position already includes folds,
+    // streaming shrinkage, and content above it, so prefer that over an estimate.
+    const actualAnchorTop = this.windowed ? null : this.host.readEntryTop?.(anchor);
+    const nextTop = actualAnchorTop != null && Number.isFinite(actualAnchorTop)
+      ? actualAnchorTop + offset
+      : this.prefix[anchor]! + anchorBase + offset;
     if (Math.abs(nextTop - viewport.scrollTop) >= 1) this.host.setScrollTop(nextTop);
+  }
+
+  private readLayoutBase(prefix: readonly number[]): number | null {
+    const top = this.host.readEntryTop?.(this.range.start);
+    if (top == null || !Number.isFinite(top)) return null;
+    return top - (prefix[this.range.start] ?? 0);
   }
 
   private measureWindow(): void {
@@ -368,6 +435,9 @@ type UseTimelineVirtualWindowProps = {
   count: number;
   enabled: boolean;
   initialTail: boolean;
+  followTail?: boolean;
+  /** Reset height and reading-anchor state when this view changes sessions. */
+  scopeKey?: string | null;
 };
 
 export type TimelineVirtualWindowController = {
@@ -378,9 +448,11 @@ export type TimelineVirtualWindowController = {
 };
 
 /** 把窗口规划器接到时间线流容器上：滚动监听、提交后测量与尺寸变化重测。 */
-export function useTimelineVirtualWindow({ count, enabled, initialTail }: UseTimelineVirtualWindowProps): TimelineVirtualWindowController {
+export function useTimelineVirtualWindow({ count, enabled, initialTail, followTail = true, scopeKey }: UseTimelineVirtualWindowProps): TimelineVirtualWindowController {
   const restoredTailOverride = React.useContext(TimelineInitialTailOverrideContext);
   const effectiveInitialTail = initialTail && restoredTailOverride !== false;
+  const getUserScrollIntent = React.useContext(TimelineUserScrollIntentContext);
+  const sessionScope = React.useRef(scopeKey ?? null);
   const streamRef = React.useRef<HTMLDivElement | null>(null);
   const [model] = React.useState(() => new TimelineWindowModel({
     readViewport: () => {
@@ -399,25 +471,40 @@ export function useTimelineVirtualWindow({ count, enabled, initialTail }: UseTim
       const node = stream.querySelector<HTMLElement>(`[data-window-index="${index}"]`);
       return node ? node.getBoundingClientRect().height : null;
     },
+    readEntryTop: (index) => {
+      const stream = streamRef.current;
+      const scroller = findTimelineScroller(stream);
+      if (!stream || !scroller) return null;
+      const node = stream.querySelector<HTMLElement>(`[data-window-index="${index}"]`);
+      if (!node) return null;
+      return node.getBoundingClientRect().top - scroller.getBoundingClientRect().top + scroller.scrollTop;
+    },
     readRowGap: () => {
       const stream = streamRef.current;
       if (!stream || typeof window === "undefined" || typeof window.getComputedStyle !== "function") return 0;
       const gapValue = Number.parseFloat(window.getComputedStyle(stream).rowGap);
       return Number.isFinite(gapValue) ? gapValue : 0;
     },
-  }, { enabled, initialTail: effectiveInitialTail, initialCount: count }));
+  }, { enabled, initialTail: effectiveInitialTail, followTail, initialCount: count }));
 
   const subscribe = React.useCallback((listener: () => void) => model.subscribe(listener), [model]);
   const getSnapshot = React.useCallback(() => model.getSnapshot(), [model]);
   const snapshot = React.useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
 
   React.useLayoutEffect(() => {
+    const nextScope = scopeKey ?? null;
+    if (sessionScope.current !== nextScope) {
+      sessionScope.current = nextScope;
+      model.resetForSession(effectiveInitialTail, followTail);
+    } else {
+      model.setFollowTailAllowed(followTail);
+    }
     model.setEnabled(enabled);
     model.setCount(count);
   });
 
   React.useLayoutEffect(() => {
-    model.syncAfterCommit();
+    model.syncAfterCommit(getUserScrollIntent());
   });
 
   React.useEffect(() => {
@@ -431,10 +518,10 @@ export function useTimelineVirtualWindow({ count, enabled, initialTail }: UseTim
   React.useEffect(() => {
     const stream = streamRef.current;
     if (!stream || typeof ResizeObserver === "undefined") return;
-    const observer = new ResizeObserver(() => model.syncAfterCommit());
+    const observer = new ResizeObserver(() => model.syncAfterCommit(getUserScrollIntent()));
     observer.observe(stream);
     return () => observer.disconnect();
-  }, [model]);
+  }, [model, getUserScrollIntent]);
 
   const reveal = React.useCallback((index: number) => {
     flushSync(() => model.reveal(index));

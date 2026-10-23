@@ -1,0 +1,5 @@
+
+> xueness-ts@0.2.0-dev.0 test:built
+> node scripts/smoke-built.ts
+
+Relocated JS/runtime: static UI, native session/history, plugin catalog, health and unowned-route 404 passed.

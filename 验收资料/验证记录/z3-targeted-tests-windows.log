@@ -1,0 +1,104 @@
+▶ ZCode compaction in the agent service
+  ✔ compacts reactively after a context overflow and retries the request once (1059.1288ms)
+  ✔ surfaces the overflow when compaction cannot help, without a second reactive attempt (601.1382ms)
+  ✔ re-attaches recent file reads and todos after an auto compaction (1621.4611ms)
+  ✔ answers a repeated unchanged Read with the ZCode file_unchanged stub in the request view (1133.9706ms)
+  ✔ compacts manually with instructions, keeps no round, and reports nothing to compact for short history (411.6089ms)
+  ✔ still opens and continues sessions compacted by the earlier semantic and deterministic paths (579.6515ms)
+  ✔ trips the rapid-refill breaker after three quick refills (ZCode turn-loop-state) (0.5498ms)
+✔ ZCode compaction in the agent service (5410.385ms)
+▶ subagents on the TS agent service
+  ✔ dispatches a read-only Explore child in the background and returns its report through task_collect (2801.6036ms)
+  ✔ uses a stored definition's prompt and tool allowlist (1521.1325ms)
+  ✔ offers no Agent tool unless the request allows delegation, and reports an unknown type (1744.9734ms)
+  ✔ stops the child when the parent run stops, recording a cancelled task (897.8319ms)
+  ✔ runs a session with background tasks left by the removed Python backend on TS (29.881ms)
+✔ subagents on the TS agent service (6997.6106ms)
+✔ runs the integrated local provider lifecycle with workspace grants, exact approvals and receipts (2713.9277ms)
+✔ runs an actor node, pauses it on a question, answers it and completes on resume (2035.0048ms)
+▶ agent lifecycle and durable boundaries
+  ✔ stops a stream, preserves partial display text, releases its lease and resumes without replay (686.3063ms)
+  ✔ distinguishes provider failures, callback failures, local failures and timeout stops (462.5551ms)
+  ✔ fails closed on plugin policy errors and rechecks tool ownership after the provider (410.8561ms)
+  ✔ keeps product hooks within their effective plugin and always settles/closes a run (359.261ms)
+  ✔ honors bounded plugin continuations through persisted human turns (343.8605ms)
+  ✔ does not execute intent when its durable publication fails (64.3738ms)
+  ✔ pauses on approval and does not start a later side effect from the same response (210.73ms)
+  ✔ ends the turn like ZCode when evidence references are invalid: no repair round, no blocked tools (222.6236ms)
+  ✔ offloads oversized text for writable runs and keeps read-only runs free of artifact writes (18.229ms)
+  ✔ releases invocation media bindings on both successful and failed requests (255.914ms)
+  ✔ appends turns and answers only at valid conversation boundaries (56.5487ms)
+✔ agent lifecycle and durable boundaries (3094.4278ms)
+▶ logical model request handling
+  ✔ retries a zero-usage empty completion once, publishes ordered attempt events, and releases each media binding (355.3485ms)
+  ✔ bounds repeated empties, respects budgets, and skips adapter retries for normal stop, usage, tools, or reasoning (1229.0721ms)
+  ✔ retries failed tool preludes without leaking snapshots and runs only the accepted tool call (547.4148ms)
+  ✔ does not retry after visible body or hidden reasoning and leaves visible partials while releasing the lease (278.5673ms)
+  ✔ persists localized terminal failures, clears them on the next request, and skips disabled provider hooks (535.7881ms)
+  ✔ keeps user cancellation during an idle-timeout retry from persisting a provider failure and releases media (284.5561ms)
+✔ logical model request handling (3233.3467ms)
+▶ session turn runtime integration
+  ✔ publishes one trace across a model-tool-model turn with final counts (921.8307ms)
+  ✔ records cancellation, local error and step limit without success and releases each lease (821.3726ms)
+  ✔ closes a missing cold-resume tool result as interrupted without replaying the old call (300.228ms)
+  ✔ admits a guide during a text response after the assistant save and completes its same-turn receipt (444.3211ms)
+  ✔ delivers only one queued guide per model boundary and leaves the next for the next request (598.2413ms)
+  ✔ emits tool_result only after a successful journal save, and never on save failure (603.4703ms)
+✔ session turn runtime integration (3693.3489ms)
+﹣ session history corruption scan (0.8807ms) # no Python backend at E:\models\apps\_stage-z3\Xueness-0.1.8-complete-project
+﹣ session history pages (0.8498ms) # no Python backend at E:\models\apps\_stage-z3\Xueness-0.1.8-complete-project
+﹣ session journal storage (1.6394ms) # no Python backend at E:\models\apps\_stage-z3\Xueness-0.1.8-complete-project
+✔ cold file rewind restores original bytes, removes newly created files and merges repeated edits (866.5414ms)
+✔ external file changes block the entire rewind before another file is touched (337.6121ms)
+✔ failed session publication compensates files and retains active operation records (222.1251ms)
+✔ file rewind API requires enabled owner, exact revision, confirmation and an idle session (53.1667ms)
+▶ files read-state restoration
+  ✔ restores a real Read snapshot after clearing and allows Edit (459.521ms)
+  ✔ rejects an external file change after restoring the persisted snapshot (314.4697ms)
+  ✔ clears older authorization for a range Read and skips failures, missing metadata, and non-file calls (105.4683ms)
+  ✔ uses the newest successful file-tool snapshot for a path (122.5489ms)
+  ✔ does not run the restore hook when the files plugin is disabled (284.0356ms)
+✔ files read-state restoration (1291.5871ms)
+✔ compact recovery requires a matching durable operation boundary, not a recent unrelated summary (2.4089ms)
+✔ drops tool media and visualizations only when an archived session is deleted for good (698.5636ms)
+▶ safe session forks
+  ﹣ matches Python boundaries and refusals for malformed, stale and compacted turns (1.381ms) # no Python backend at E:\models\apps\_stage-z3\Xueness-0.1.8-complete-project
+  ✔ copies only the closed prefix with child-local identities and no execution state (201.0689ms)
+  ✔ refuses a source lease another process owns and a disabled feature without side effects (68.9882ms)
+  ✔ links checkpoint forks to the earlier closed turn without rewriting the shared workspace (154.0966ms)
+  ✔ pins forked media under the child's exact message owner before publication (305.561ms)
+  ✔ keeps guide and background notices inside their existing turn boundaries (0.8048ms)
+  ✔ persists only complete stable anchors and rejects prefixes that no longer match (162.8514ms)
+✔ safe session forks (897.2939ms)
+▶ session tool history hydration
+  ✔ restores a missing tool message from a structured result and ignores archived history (12.4046ms)
+  ✔ marks only missing results in a partial batch interrupted and is idempotent (2.9773ms)
+  ✔ recovers boolean-ok JSON tool history and leaves legacy text as non-success history (1.1271ms)
+  ✔ preserves an approval_required placeholder rather than replacing it with interruption (0.5678ms)
+  ✔ projects tool results after their assistant in call order, takes the last duplicate, and omits orphans (0.5974ms)
+  ✔ rejects duplicate assistant call IDs without changing the journal or inventing IDs (1.2218ms)
+✔ session tool history hydration (22.0456ms)
+✔ rewinds under a lease, survives coldload, invalidates stale reads and preserves no removed execution effects (361.4915ms)
+✔ recovers a bounded projection across cold instances and pages (123.0716ms)
+✔ skips duplicate and backward events while marking sequence gaps (0.495ms)
+✔ serializes appends from independent worker instances without reusing sequence numbers (703.4026ms)
+✔ repairs only a torn final line and rejects a complete corrupt record (55.4953ms)
+✔ enforces workspace, epoch, and forward-cursor checks on the runtime endpoint (146.1455ms)
+✔ keeps runtime hook events free of tool inputs, results, and private session fields (77.7759ms)
+✔ keeps the complete ledger while bounding each page to 500 events (3574.1045ms)
+▶ SQLite session library
+  ✔ round-trips lossless values and rolls back a failed multi-session import (206.651ms)
+  ✔ rejects a database carrying a newer migration id (128.3311ms)
+  ✔ does not create or write a database while the feature switch is off (90.5083ms)
+  ✔ mirrors a save before returning and supports a cold SQLite query (217.6774ms)
+  ✔ reindexes without changing journals and exports snapshots plus revision sidecars (229.793ms)
+  ✔ filters API counts and lists by authorized root and gates the sessions plugin (318.3048ms)
+✔ SQLite session library (1193.6761ms)
+ℹ tests 75
+ℹ suites 12
+ℹ pass 74
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 1
+ℹ todo 0
+ℹ duration_ms 11189.2606

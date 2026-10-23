@@ -1,0 +1,11 @@
+✔ defers initial frames until the reply is sent, pauses persistence delivery, falls back after epoch loss, and fences resync/unsubscribe (1322.2248ms)
+✔ relays workflow event gaps and status changes without starting workflow or model execution (240.3288ms)
+✔ retries a controller change when flow pauses during its in-flight projection read (443.9899ms)
+ℹ tests 3
+ℹ suites 0
+ℹ pass 3
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 2201.8572

@@ -1,4 +1,5 @@
 import { t as tr, tf } from './i18n';
+import { useSidebarPreference } from './plugins/sessions/sidebarPreference';
 import React, { useEffect, useRef, useState } from "react";
 import ReactMarkdown, { defaultUrlTransform, type Components } from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -8,6 +9,7 @@ import { IconBack, IconCheck, IconLoader, IconX, IconMenu, IconXuenessMark } fro
 import { CodeContent } from "./ui/CodeContent";
 import type { CodeLanguage } from "./ui/CodePreview";
 import { displayBinding, isImeComposingEvent } from "./xuenessShortcutDisplay";
+import { proseWithoutVisualizations, splitVisualizations, VisualizationFrame } from "./plugins/sessions/Visualizations";
 
 export function shouldCloseNarrowSidebarOnEscape(event: {
   key: string;
@@ -47,6 +49,7 @@ export type ShellProps = {
    * profile's minimal layout); toggling still works and switching the request
    * back to false restores the previously collapsed/expanded choice. */
   initialSidebarCollapsed?: boolean;
+  sidebarPersistenceEnabled?: boolean;
   /** Task-history navigation, wired by the workbench container. */
   canGoBack?: boolean;
   canGoForward?: boolean;
@@ -66,6 +69,7 @@ export function Shell({
   navigationKey,
   sidebarToggleToken = 0,
   initialSidebarCollapsed = false,
+  sidebarPersistenceEnabled = false,
   canGoBack = false,
   canGoForward = false,
   onGoBack,
@@ -73,8 +77,7 @@ export function Shell({
   children,
 }: ShellProps): React.JSX.Element {
   const [sidebarOpen, setSidebarOpen] = React.useState(false);
-  const [sidebarCollapsed, setSidebarCollapsed] = React.useState(initialSidebarCollapsed);
-  const requestedCollapsed = React.useRef(initialSidebarCollapsed);
+  const [sidebarCollapsed, setSidebarCollapsed] = useSidebarPreference(initialSidebarCollapsed, sidebarPersistenceEnabled);
   const [narrow, setNarrow] = React.useState(() => typeof window === "undefined" || window.matchMedia("(max-width: 900px)").matches);
   const asideRef = React.useRef<HTMLElement>(null);
   const mainRef = React.useRef<HTMLElement>(null);
@@ -89,15 +92,6 @@ export function Shell({
     }
     previousToggleToken.current = sidebarToggleToken;
   }, [sidebarToggleToken, narrow]);
-  React.useEffect(() => {
-    // A profile switch re-requests the starting sidebar state without wiping a
-    // collapse the user chose manually in the meantime.
-    const requested = Boolean(initialSidebarCollapsed);
-    if (requestedCollapsed.current === requested) return;
-    requestedCollapsed.current = requested;
-    if (narrow) setSidebarOpen(false);
-    else setSidebarCollapsed(requested);
-  }, [initialSidebarCollapsed, narrow]);
   const previousCollapsed = React.useRef(false);
   const previousDrawer = React.useRef(false);
   const drawerFocus = React.useRef<"main" | "toggle" | null>(null);
@@ -308,7 +302,7 @@ export function SidebarActions({ actions, platform }: { actions: SidebarAction[]
           </span>
           <span className="xn-sidebar-action__label">{action.label}</span>
           {action.shortcut && (
-            <kbd className="xn-sidebar-action__shortcut">{displayBinding(action.shortcut, platform)}</kbd>
+            <kbd className="xn-sidebar-action__shortcut">{displayBinding(action.shortcut.split('|')[0].trim(), platform)}</kbd>
           )}
         </button>
       ))}
@@ -710,14 +704,135 @@ export const MarkdownRenderOptionsContext = React.createContext<MarkdownRenderOp
   cacheParseResults: true,
 });
 
-function renderMarkdownElements(text: string): React.JSX.Element {
-  return ReactMarkdown({
-    children: text,
+/**
+ * Keep a growing Markdown response structurally stable while it streams.
+ * `remark-gfm` promotes a header/separator pair to a table as soon as the
+ * separator arrives, and a link can change from text to an anchor when its
+ * closing delimiter is received.  Rendering such constructs from their raw
+ * text first and reparsing them later makes a live answer jump, so:
+ *
+ * - a table renders once its header and separator lines are complete, and then
+ *   grows one complete row at a time; a row (or header) still being received
+ *   is withheld instead of flashing as pipes;
+ * - an unfinished final line made only of block markers (a bullet, a setext
+ *   underline, a heading, quote or fence marker) is withheld, so the paragraph
+ *   above cannot flash as a heading;
+ * - links and bare URLs stay literal until the stream settles; the settled
+ *   render receives the original source and restores them.
+ *
+ * An unmatched fenced block gets a synthetic closing marker for parsing only.
+ * This keeps the block a code block while it grows (and lets CodeContent keep
+ * highlighting disabled via `after-stream`) without ever exposing the marker
+ * to the user.
+ */
+export function prepareStreamingMarkdown(text: string): string {
+  const normalized = text.replace(/\r\n?/gu, "\n");
+  const lines = normalized.split("\n");
+  // The last element is "" when the text ends with a newline; otherwise it is
+  // the line still being received.
+  const partial = normalized.endsWith("\n") ? -1 : lines.length - 1;
+  const lastLine = normalized.endsWith("\n") ? lines.length - 2 : lines.length - 1;
+  let withheldFrom = lines.length;
+  const withhold = (index: number) => { withheldFrom = Math.min(withheldFrom, index); };
+  if (partial >= 0 && /^\s*(?:[-=*+#>|`~:]+|\d{1,9}[.)])\s*$/u.test(lines[partial] ?? "")) withhold(partial);
+
+  let fence: { marker: string; length: number; start: number } | null = null;
+  const fencedLines = new Set<number>();
+  const tableDelimiter = /^\s*\|?\s*:?-{1,}:?\s*(?:\|\s*:?-{1,}:?\s*)*\|?\s*$/u;
+  const delimiterPrefix = /^\s*\|?[\s|:-]*$/u;
+  const tableRow = /^\s*(?:\|.*\||[^|\n]+(?:\|[^|\n]+)+)\s*$/u;
+  const tableContinuation = /^\s*.*\|.*$/u;
+  const pipeLed = /^\s*\|/u;
+
+  for (let index = 0; index < withheldFrom; index += 1) {
+    const line = lines[index] ?? "";
+    const fenceMatch = line.match(/^\s*(`{3,}|~{3,})/u);
+    if (fenceMatch) {
+      fencedLines.add(index);
+      const marker = fenceMatch[1] ?? "";
+      if (!fence) fence = { marker: marker[0] ?? "`", length: marker.length, start: index };
+      else if (fence.marker === marker[0] && marker.length >= fence.length) fence = null;
+      continue;
+    }
+    if (fence) {
+      fencedLines.add(index);
+      continue;
+    }
+    // A header that is still arriving may become a table: hold pipe-led ones.
+    if (index === partial) {
+      if (pipeLed.test(line)) withhold(index);
+      continue;
+    }
+    if (!tableRow.test(line)) continue;
+    const next = index + 1;
+    if (next > lastLine) {
+      // Complete header, separator not received yet.
+      if (pipeLed.test(line)) withhold(index);
+      continue;
+    }
+    const separator = lines[next] ?? "";
+    if (next === partial) {
+      if (delimiterPrefix.test(separator) && /[-|:]/u.test(separator)) withhold(index);
+      continue;
+    }
+    if (!tableDelimiter.test(separator)) continue;
+    // A confirmed table renders now; only its row still being received waits.
+    let end = next + 1;
+    while (end < withheldFrom && end <= lastLine && tableContinuation.test(lines[end] ?? "")) end += 1;
+    if (end - 1 === partial && end - 1 > next) withhold(end - 1);
+    index = end - 1;
+  }
+
+  // A fence opened on the line still being received has no body yet.
+  if (fence && fence.start >= withheldFrom) fence = null;
+  if (fence && fence.start === partial) {
+    withhold(partial);
+    fence = null;
+  }
+  const output = lines.slice(0, withheldFrom).map((line, index) => {
+    let value = line;
+    // Links and bare URLs are deferred together. Escape markdown link
+    // delimiters and insert a zero-width space into http(s)/www markers so
+    // GFM cannot promote or autolink them mid-stream; settled renders keep
+    // the original source without these parser-only tweaks.
+    if (!fencedLines.has(index)) {
+      value = value.replace(/(?<!\\)\[[^\]\n]*\](?:\([^)\n]*\)?|\([^\n]*$)|\[[^\]\n]*$/gu, match =>
+        match.replace(/(?<!\\)([[\]()])/gu, "\\$1"));
+      value = value.replace(/(https?:)\/\//gu, "$1\u200b//")
+        .replace(/(^|[\s(])www\./gu, "$1www\u200b.");
+    }
+    return value;
+  });
+
+  if (fence) output.push(fence.marker.repeat(fence.length));
+  return output.join("\n");
+}
+
+/** Streaming text is revealed a few characters per frame; while the reveal
+ * is inside a withheld row or marker the prepared source is unchanged, so a
+ * few recent trees are reused instead of parsing the same source again. */
+const streamingElementCache = new Map<string, React.JSX.Element>();
+const STREAMING_ELEMENT_CACHE_LIMIT = 8;
+
+function renderMarkdownElements(text: string, streaming = false): React.JSX.Element {
+  const source = streaming ? prepareStreamingMarkdown(text) : text;
+  const reused = streaming ? streamingElementCache.get(source) : undefined;
+  if (reused) return reused;
+  const elements = ReactMarkdown({
+    children: source,
     remarkPlugins: REMARK_PLUGINS,
     components: markdownComponents,
     skipHtml: true,
     urlTransform: safeMarkdownUrl,
   });
+  if (streaming) {
+    streamingElementCache.set(source, elements);
+    if (streamingElementCache.size > STREAMING_ELEMENT_CACHE_LIMIT) {
+      const oldest = streamingElementCache.keys().next().value;
+      if (oldest !== undefined) streamingElementCache.delete(oldest);
+    }
+  }
+  return elements;
 }
 
 /**
@@ -729,17 +844,20 @@ function renderMarkdownElements(text: string): React.JSX.Element {
  * With `cacheResults=false` the tree is rendered fresh and the cache is left
  * untouched (used for still-growing streaming text).
  */
-export function cachedMarkdownElements(text: string, cacheResults = true): React.JSX.Element {
-  if (!cacheResults) return renderMarkdownElements(text);
-  const cached = markdownElementCache.get(text);
+export function cachedMarkdownElements(text: string, cacheResults = true, streaming = false): React.JSX.Element {
+  if (!cacheResults) return renderMarkdownElements(text, streaming);
+  // Streaming and settled parses of identical source have intentionally
+  // different syntax trees (tables/links are deferred while streaming).
+  const cacheKey = streaming ? `\u0000streaming:${text}` : text;
+  const cached = markdownElementCache.get(cacheKey);
   if (cached) {
     // Re-insert so Map insertion order keeps this entry as most-recently used.
-    markdownElementCache.delete(text);
-    markdownElementCache.set(text, cached);
+    markdownElementCache.delete(cacheKey);
+    markdownElementCache.set(cacheKey, cached);
     return cached;
   }
-  const elements = renderMarkdownElements(text);
-  markdownElementCache.set(text, elements);
+  const elements = renderMarkdownElements(text, streaming);
+  markdownElementCache.set(cacheKey, elements);
   if (markdownElementCache.size > MARKDOWN_ELEMENT_CACHE_LIMIT) {
     const oldest = markdownElementCache.keys().next().value;
     if (oldest !== undefined) markdownElementCache.delete(oldest);
@@ -747,12 +865,28 @@ export function cachedMarkdownElements(text: string, cacheResults = true): React
   return elements;
 }
 
-/** Markdown renderer for transcript prose. Raw HTML stays disabled; unsafe URL schemes are omitted. */
+/**
+ * Markdown renderer for transcript prose. Raw HTML stays disabled; unsafe URL schemes are omitted.
+ * `::visualize{...}` reference lines become sandboxed visualization frames once the text settles.
+ */
 export const SimpleMarkdown = React.memo(function SimpleMarkdown({ text }: { text: string }): React.JSX.Element {
   const options = React.useContext(MarkdownRenderOptionsContext);
+  const streaming = options.codeHighlightTiming === "after-stream";
+  const segments = splitVisualizations(text);
+  if (segments.length === 1 && segments[0]!.kind === "markdown") {
+    return (
+      <div className="xn-md" data-testid="xn-simple-markdown">
+        {cachedMarkdownElements(text, options.cacheParseResults, streaming)}
+      </div>
+    );
+  }
   return (
     <div className="xn-md" data-testid="xn-simple-markdown">
-      {cachedMarkdownElements(text, options.cacheParseResults)}
+      {streaming
+        ? cachedMarkdownElements(proseWithoutVisualizations(segments), options.cacheParseResults, true)
+        : segments.map((segment, index) => segment.kind === "markdown"
+          ? <React.Fragment key={index}>{cachedMarkdownElements(segment.text, options.cacheParseResults, false)}</React.Fragment>
+          : <VisualizationFrame key={index} reference={segment.reference} label={tr("可视化")} />)}
     </div>
   );
 });

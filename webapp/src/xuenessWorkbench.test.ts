@@ -7,6 +7,7 @@ import {
   deleteSession,
   forkSession,
   listSessions,
+  listSessionsIndex,
   loadFiles,
   loadFilePreview,
   loadForkBoundaries,
@@ -29,6 +30,7 @@ import {
   type PendingApproval,
 } from "./xuenessWorkbench";
 import type { XuenessEventV1 } from "./xuenessEvents";
+import { projectJournalAssistantWork } from "./plugins/sessions/conversationJournalProjection";
 
 test('journal text and reasoning hydrate exact event positions including a partial event page', () => {
   const fullUser='u'.repeat(700), fullAssistant='a'.repeat(800);
@@ -46,6 +48,9 @@ test('journal text and reasoning hydrate exact event positions including a parti
   assert.equal(JSON.stringify(rows),before);
   const streamed=withAssistantStream([], {id:'thinking',text:'',reasoning:'only reasoning',status:'streaming'});
   assert.equal(streamed[0].kind==='assistant'&&streamed[0].reasoning,'only reasoning');
+  const withAnswer = withAssistantStream(streamed, {id:'thinking',text:'answer',reasoning:'only reasoning',status:'streaming'});
+  assert.equal(withAnswer.length, 1, 'reasoning-only stream must become one assistant row when text arrives');
+  assert.equal(withAnswer[0].kind === 'assistant' && withAnswer[0].text, 'answer');
 });
 
 test('journal projects tool-response reasoning and narration before their real call IDs without fabricated timing', () => {
@@ -65,6 +70,43 @@ test('journal projects tool-response reasoning and narration before their real c
     { messages: [journal.messages[0], { ...journal.messages[1], content: 'I will inspect it.' }] }, history);
   assert.equal(narrated[0].kind === 'assistant' && narrated[0].text, 'I will inspect it.');
   assert.equal(narrated[1], tool);
+});
+
+test('journal restores pure reasoning with no tool call when the user turn is visible', () => {
+  const rows: import('./xuenessWorkbench').TimelineRow[] = [
+    { kind: 'user', seq: 1, turnId: 'turn-1', text: 'think first' },
+  ];
+  const journal = { messages: [
+    { role: 'user', content: 'think first' },
+    { role: 'assistant', content: '', tool_calls: [] },
+  ], reasoning_timing: [{ message_index: 1, started_at: '2026-10-13T00:00:00.000Z', ended_at: '2026-10-13T00:00:02.100Z' }] };
+  const out = hydrateTimelineJournalRows(rows, journal, [{ message_index: 1, text: 'I will reason carefully.' }]);
+  assert.equal(out.length, 2);
+  assert.equal(out[1]?.kind, 'assistant');
+  if (out[1]?.kind === 'assistant') {
+    assert.equal(out[1].reasoning, 'I will reason carefully.');
+    assert.equal(out[1].startedAt, Date.parse('2026-10-13T00:00:00.000Z'));
+    assert.equal(out[1].endedAt, Date.parse('2026-10-13T00:00:02.100Z'));
+  }
+  assert.equal(hydrateTimelineJournalRows(out, journal, [{ message_index: 1, text: 'I will reason carefully.' }]).length, 2);
+});
+
+test('journal restores first-turn pure reasoning after the omitted task row is added', () => {
+  const journal = { messages: [
+    { role: 'user', content: 'first task', _turn_id: 'turn-1', _message_id: 'a'.repeat(32) },
+    { role: 'assistant', content: '', tool_calls: [], _turn_id: 'turn-1', _message_id: 'b'.repeat(32) },
+  ], reasoning_history: [{ message_index: 1, text: 'first-turn thought' }],
+    reasoning_timing: [{ message_index: 1, started_at: '2026-10-13T00:00:00.000Z', ended_at: '2026-10-13T00:00:02.000Z' }] };
+  const withTask = withInitialUserMessage([], journal, 'fallback');
+  const out = hydrateTimelineJournalRows(withTask, journal, journal.reasoning_history, journal.reasoning_timing);
+  assert.equal(out.length, 2);
+  assert.equal(out[0]?.kind, 'user');
+  assert.equal(out[1]?.kind, 'assistant');
+  if (out[1]?.kind === 'assistant') {
+    assert.equal(out[1].reasoning, 'first-turn thought');
+    assert.equal(out[1].messageId, 'b'.repeat(32));
+    assert.equal(out[1].startedAt, Date.parse('2026-10-13T00:00:00.000Z'));
+  }
 });
 
 test('journal hydration accounts for prior turn completions and structured user content before relocating tool narration', () => {
@@ -154,6 +196,104 @@ describe("durable assistant text", () => {
     assert.equal(withAssistantStream(resumedRefresh, stream), resumedRefresh, "unchanged resumed stream preserves row and array identity");
     assert.equal(withAssistantStream([...completed, { kind: "user", seq: 4, turnId: "next", text: "repeat" }], stream).length, 3);
     assert.deepEqual(withAssistantStream([], null), []);
+  });
+
+  it("preserves interrupted stream reasoning summary and timing on assistant row", () => {
+    const startedAt = "2026-10-14T01:00:00.000Z";
+    const interruptedAt = "2026-10-14T01:00:04.500Z";
+    const stream = {
+      id: "reasoning-stream-1",
+      text: "",
+      reasoning: "step 1: analyze\nstep 2: compute",
+      status: "streaming" as const,
+      reasoning_started_at: startedAt,
+    };
+    const live = withAssistantStream([], stream);
+    assert.equal(live.length, 1);
+    assert.equal(live[0]?.kind, "assistant");
+    if (live[0]?.kind === "assistant") {
+      assert.equal(live[0].streaming, true);
+      assert.equal(live[0].interrupted, undefined);
+      assert.equal(live[0].reasoning, "step 1: analyze\nstep 2: compute");
+      assert.equal(live[0].startedAt, Date.parse(startedAt));
+    }
+
+    // Now stream is interrupted with interrupted_at timestamp
+    const interrupted = withAssistantStream(live, {
+      ...stream,
+      status: "interrupted",
+      interrupted_at: interruptedAt,
+    });
+    assert.equal(interrupted.length, 1);
+    assert.equal(interrupted[0]?.kind, "assistant");
+    if (interrupted[0]?.kind === "assistant") {
+      assert.equal(interrupted[0].streaming, false);
+      assert.equal(interrupted[0].interrupted, true);
+      assert.equal(interrupted[0].reasoning, "step 1: analyze\nstep 2: compute");
+      assert.equal(interrupted[0].startedAt, Date.parse(startedAt));
+      assert.equal(interrupted[0].endedAt, Date.parse(interruptedAt));
+    }
+  });
+
+  it("restores stopped transcript text as an interrupted read-only row and merges the live stream by identity", () => {
+    const streamId = "d".repeat(32);
+    const startedAt = "2026-10-14T01:00:00.000Z";
+    const interruptedAt = "2026-10-14T01:00:04.500Z";
+    const journal = {
+      message_revision: `sha256:${"a".repeat(64)}`,
+      message_window: { start: 0, messageIndices: [1, null] },
+      messages: [
+        { role: "user", content: "please explain", _turn_id: "turn-1", _message_id: "a".repeat(32) },
+        { role: "assistant", content: "partial answer", _turn_id: "turn-1", _message_id: "b".repeat(32),
+          _transcript_partial: true, _stream_interrupted: true, _stream_id: streamId,
+          _stream_reasoning: "checked the first point", _stream_reasoning_started_at: startedAt,
+          _stream_interrupted_at: interruptedAt },
+      ],
+    };
+    const events: import("./xuenessWorkbench").TimelineRow[] = [
+      { kind: "assistant", seq: 2, turnId: "turn-1", text: "partial answer" },
+    ];
+    const hydrated = hydrateTimelineJournalRows(events, journal);
+    assert.equal(hydrated.length, 1);
+    const partial = hydrated[0];
+    assert.equal(partial?.kind, "assistant");
+    if (partial?.kind !== "assistant") return;
+    assert.equal(partial.text, "partial answer");
+    assert.equal(partial.turnId, "turn-1");
+    assert.equal(partial.streamId, streamId);
+    assert.equal(partial.interrupted, true);
+    assert.equal(partial.streaming, false);
+    assert.equal(partial.reasoning, "checked the first point");
+    assert.equal(partial.startedAt, Date.parse(startedAt));
+    assert.equal(partial.endedAt, Date.parse(interruptedAt));
+    assert.equal(partial.messageIndex, undefined, "synthetic transcript rows cannot edit the provider prompt");
+    assert.equal(partial.messageRevision, undefined);
+
+    const merged = withAssistantStream(hydrated, {
+      id: streamId, text: "partial answer", reasoning: "checked the first point", status: "interrupted",
+      reasoning_started_at: startedAt, interrupted_at: interruptedAt,
+    });
+    assert.equal(merged.length, 1, "the current stream must update its transcript row, not append a duplicate");
+    assert.equal(merged[0]?.kind === "assistant" && merged[0].turnId, "turn-1");
+  });
+
+  it("projects a reasoning-only stopped partial after its own turn anchor", () => {
+    const user: import("./xuenessWorkbench").TimelineRow = {
+      kind: "user", seq: 1, turnId: "turn-2", text: "second turn",
+    };
+    const rows = projectJournalAssistantWork([user], [
+      { role: "user", content: "second turn", _turn_id: "turn-2" },
+      { role: "assistant", content: "", _turn_id: "turn-2", _message_id: "c".repeat(32),
+        _transcript_partial: true, _stream_id: "e".repeat(32),
+        _stream_reasoning: "reasoning before the stop", _stream_interrupted_at: "2026-10-14T01:00:04.500Z" },
+    ], []);
+    const partial = rows.find(row => row.kind === "assistant");
+    assert.ok(partial && partial.kind === "assistant");
+    assert.equal(partial.turnId, "turn-2");
+    assert.equal(partial.text, "");
+    assert.equal(partial.reasoning, "reasoning before the stop");
+    assert.equal(partial.interrupted, true);
+    assert.equal(partial.streamId, "e".repeat(32));
   });
 });
 
@@ -353,6 +493,46 @@ describe("xuenessWorkbench reads", () => {
     assert.equal(recorded.length, 1);
     assert.equal(recorded[0].url, "/api/sessions");
     assert.equal(recorded[0].init.credentials, "same-origin");
+    assert.equal(recorded[0].init.cache, "no-store");
+  });
+
+  it("listSessionsIndex accepts bounded sidecars and drops malformed rows", async () => {
+    stubStandardFetch({
+      "/api/sessions/index": {
+        protocolVersion: 1,
+        sessions: [
+          {
+            id: "s1",
+            title: "Indexed task",
+            status: "awaiting_user",
+            workspacePath: "/work/project",
+            purpose: "conversation",
+            pendingInteraction: { kind: "userInput" },
+            unread: true,
+            changeSummary: { added: 2, removed: 1 },
+          },
+          { id: "", title: "missing id" },
+          null,
+          { sessionId: "s2", title: "session-id-only" },
+        ],
+      },
+    });
+
+    const result = await listSessionsIndex();
+    if (!result.ok) assert.fail(result.error);
+    assert.deepEqual(result.value, [{
+      id: "s1",
+      task: "Indexed task",
+      title: "Indexed task",
+      status: "awaiting_user",
+      workspacePath: "/work/project",
+      purpose: "conversation",
+      pendingInteraction: { kind: "userInput" },
+      unread: true,
+      changeSummary: { added: 2, removed: 1 },
+    }]);
+    assert.equal(recorded.length, 1);
+    assert.equal(recorded[0].url, "/api/sessions/index");
     assert.equal(recorded[0].init.cache, "no-store");
   });
 
@@ -568,19 +748,24 @@ describe("xuenessWorkbench failure paths", () => {
     assert.deepEqual(result, { ok: false, error: "boom" });
   });
 
-  it("HTTP 500 without a JSON body reports HTTP status", async () => {
+  it("HTTP 500 without a readable error reports an actionable server failure", async () => {
     stubFetch(() => new Response("server exploded", { status: 500 }));
 
     const result = await loadSession(SESSION);
-    assert.deepEqual(result, { ok: false, error: "HTTP 500" });
+    assert.equal(result.ok, false);
+    if (!result.ok) {
+      assert.match(result.error, /服务暂时无法完成|service could not complete/iu);
+      assert.doesNotMatch(result.error, /HTTP 500/u);
+      assert.match(result.error, /检查会话|check the conversation/iu);
+    }
   });
 
-  it("a non-JSON 200 response is reported as invalid JSON", async () => {
+  it("a non-JSON 200 response explains that the server result could not be read", async () => {
     stubFetch(() => new Response("<html>oops</html>", { status: 200 }));
 
     const result = await listSessions();
     assert.equal(result.ok, false);
-    if (!result.ok) assert.match(result.error, /json/i);
+    if (!result.ok) assert.match(result.error, /服务器返回的数据无法读取|server returned data that could not be read/iu);
   });
 
   it("a network failure is caught into {ok:false}", async () => {
@@ -588,7 +773,11 @@ describe("xuenessWorkbench failure paths", () => {
 
     const result = await loadTimeline(SESSION);
     assert.equal(result.ok, false);
-    if (!result.ok) assert.equal(result.error, "network down");
+    if (!result.ok) {
+      assert.match(result.error, /网络连接中断|connection was interrupted/iu);
+      assert.doesNotMatch(result.error, /network down/u);
+      assert.match(result.error, /无法确认|result is unknown/iu);
+    }
   });
 
   it("loadFiles and loadFilePreview also fail soft", async () => {
@@ -633,6 +822,44 @@ describe("xuenessWorkbench approvePending", () => {
     assert.equal(headerOf(post, "X-CSRF-Token"), "test-csrf-token");
     assert.equal(headerOf(post, "Content-Type"), "application/json");
     assert.deepEqual(bodyOf(post), { kind: "write", subject: "src/a.ts", tool_call_id: "call-1" });
+  });
+
+  it("reports resumed when a call waiting in the running turn was answered (no rerun)", async () => {
+    stubStandardFetch({ "/api/sessions/s1/approvals": { approved: { kind: "write", tool_call_id: "call-1" }, resumed: true } });
+    const result = await approvePending(SESSION, { ...writePending, kind: "write", waiting: true });
+    if (!result.ok) assert.fail(result.error);
+    assert.equal(result.resumed, true);
+    assert.deepEqual(bodyOf(recorded[1]), { kind: "write", tool_call_id: "call-1" });
+  });
+
+  it("rejects a waiting call with decision reject; a replay grant is not resumed", async () => {
+    stubStandardFetch({ "/api/sessions/s1/approvals": { rejected: { kind: "write", tool_call_id: "call-1" }, resumed: true } });
+    const rejected = await approvePending(SESSION, { ...writePending, kind: "write", waiting: true }, undefined, "reject");
+    if (!rejected.ok) assert.fail(rejected.error);
+    assert.equal(rejected.resumed, true);
+    assert.deepEqual(bodyOf(recorded[1]), { kind: "write", tool_call_id: "call-1", decision: "reject" });
+    stubStandardFetch({ "/api/sessions/s1/approvals": { approved: { kind: "write", tool_call_id: "call-1" } } });
+    const replay = await approvePending(SESSION, { ...writePending, kind: "write" });
+    if (!replay.ok) assert.fail(replay.error);
+    assert.equal(replay.resumed, undefined);
+  });
+
+  // ZCode permission-response.ts (deny carries the reason) and "允许本会话" (session permission updates).
+  it("sends reject feedback and the session scope for waiting calls only", async () => {
+    stubStandardFetch({ "/api/sessions/s1/approvals": { rejected: { kind: "write", tool_call_id: "call-1" }, resumed: true } });
+    const rejected = await approvePending(SESSION, { ...writePending, kind: "write", waiting: true }, undefined, "reject", { message: "  换个文件名  " });
+    if (!rejected.ok) assert.fail(rejected.error);
+    assert.deepEqual(bodyOf(recorded[1]), { kind: "write", tool_call_id: "call-1", decision: "reject", message: "换个文件名" });
+    stubStandardFetch({ "/api/sessions/s1/approvals": { approved: { kind: "write", tool_call_id: "call-1" }, resumed: true } });
+    const session = await approvePending(SESSION, { ...writePending, kind: "write", waiting: true }, undefined, "approve", { scope: "session" });
+    if (!session.ok) assert.fail(session.error);
+    assert.deepEqual(bodyOf(recorded[1]), { kind: "write", tool_call_id: "call-1", scope: "session" });
+    stubStandardFetch({ "/api/sessions/s1/approvals": { approved: { kind: "write", tool_call_id: "call-1" } } });
+    await approvePending(SESSION, { ...writePending, kind: "write" }, undefined, "approve", { scope: "session" });
+    assert.deepEqual(bodyOf(recorded[1]), { kind: "write", tool_call_id: "call-1" }, "a replay grant stays one-shot");
+    stubStandardFetch({ "/api/sessions/s1/approvals": { approved: { kind: "write", tool_call_id: "call-1" }, resumed: true } });
+    await approvePending(SESSION, { ...writePending, kind: "write", waiting: true, oneShot: true }, undefined, "approve", { scope: "session" });
+    assert.deepEqual(bodyOf(recorded[1]), { kind: "write", tool_call_id: "call-1" }, "an alwaysAsk call is approved once");
   });
 
   it("canonical capability approvals send only kind and journal call id", async () => {
@@ -836,11 +1063,11 @@ describe("xuenessWorkbench run orchestration", () => {
     assert.equal(callsTo("/api/sessions/new-1/run").length, 0);
   });
 
-  it("goal runs keep their explicit budget while ordinary runs preserve explicit caller budgets", async () => {
+  it("goal runs add no step budget while explicit caller budgets are preserved", async () => {
     stubStandardFetch({ "/api/sessions": { id: "goal-1" }, "/api/sessions/goal-1/run": {} });
     const goalResult = await createSession("goal run", { provider: "real", mode: "build", goal: true });
     if (!goalResult.ok) assert.fail(goalResult.error);
-    assert.equal((bodyOf(lastCall()) as Record<string, unknown>).steps, 20);
+    assert.equal("steps" in (bodyOf(lastCall()) as Record<string, unknown>), false, "goal runs follow the unbounded ZCode turn loop");
 
     stubStandardFetch({ "/api/sessions/s-explicit/run": {} });
     const explicitChoices = { provider: "real", mode: "build", steps: 5 } as Parameters<typeof runSession>[1] & { steps: number };
@@ -1436,6 +1663,37 @@ describe("structural sharing stabilization", () => {
     assert.notEqual(result, prev);
     assert.equal(result[1], prev[1]); // s2 reused!
     assert.equal(result[0], next[0]); // s1 updated!
+  });
+
+  it('sidebar polling updates attention without requiring a session status change', () => {
+    const quiet = { id:'quiet', task:'Quiet', status:'completed' };
+    const waiting = { id:'waiting', task:'Waiting', status:'awaiting_user',
+      pendingInteraction:{kind:'userInput'}, unread:true, changeSummary:{files:2} };
+    const previous = [waiting, quiet];
+    const resolved = { ...waiting, pendingInteraction:undefined, unread:false, changeSummary:undefined };
+    const result = stabilizeSessionList(previous, [resolved, {...quiet}]);
+    assert.equal(result[0], resolved);
+    assert.equal(result[1], quiet);
+    assert.equal(stabilizeSessionList(result, [{...resolved}, {...quiet}]), result);
+  });
+
+  it('sidebar polling refreshes remote configuration summaries without changing session status', () => {
+    const original = { id: 'remote', task: 'Remote', status: 'completed',
+      remote: { connectionId: 'lab', configuration: 'configured' as const, connectionState: 'unknown' as const } };
+    const changed = { ...original, remote: { ...original.remote, configuration: 'changed' as const } };
+    const result = stabilizeSessionList([original], [changed]);
+    assert.equal(result[0], changed);
+    assert.equal(stabilizeSessionList(result, [{ ...changed, remote: { ...changed.remote } }]), result);
+    assert.equal(stabilizeSessionList(result, [{ ...changed, remote: undefined }])[0].remote, undefined);
+  });
+
+  it('sidebar polling refreshes a recorded remote connection phase without changing session status', () => {
+    const original = { id: 'remote', task: 'Remote', status: 'completed',
+      remote: { connectionId: 'lab', configuration: 'configured' as const, connectionState: 'pending' as const } };
+    const next = { ...original, remote: { ...original.remote, connectionState: 'reconnecting' as const } };
+    const result = stabilizeSessionList([original], [next]);
+    assert.equal(result[0], next);
+    assert.equal(stabilizeSessionList(result, [{ ...next, remote: { ...next.remote } }]), result);
   });
 });
 

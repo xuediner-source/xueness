@@ -1,5 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { clampSidebarWidth, decodeSidebarWidths, sidebarWidthLimits } from './SidebarResizeHandle';
 
 test('sidebar sizing keeps a usable main pane, finite limits and different appearance defaults', () => {
@@ -17,4 +19,11 @@ test('stored sidebar widths are validated per appearance without trusting unknow
   assert.deepEqual(decodeSidebarWidths('{"xueness":"320","claudex":true}'),{});
   assert.deepEqual(decodeSidebarWidths('{"xueness":-500,"claudex":10000}'),{xueness:220,claudex:560});
   for (const raw of [null,'broken','null','[]','"a"']) assert.deepEqual(decodeSidebarWidths(raw),{});
+});
+
+test('drag cursor is keyed by a shell attribute instead of a document-wide :has() restyle', () => {
+  const css = readFileSync(resolve(process.cwd(), 'src/plugins/sessions/sidebar-resize.css'), 'utf8');
+  assert.match(css, /\.xn-shell-layout\[data-sidebar-resizing="true"\] \*/);
+  // A shell-level :has() with a descendant branch restyled every element on each keystroke and stream tick.
+  assert.doesNotMatch(css, /\.xn-shell-layout:has\(/);
 });

@@ -13,6 +13,7 @@ export type RuntimeActivity = {
   firstOutputSeconds?: number;
   firstReasoningSeconds?: number;
   requestSeconds?: number;
+  queuedMs?: number;
   charactersPerSecond?: number;
   reportedOutputTokens?: number;
   tokensPerSecond?: number;
@@ -47,6 +48,11 @@ export type LocalRuntimeSession = {
   tool_timings?: { step: number; name: string; tool_call_id: string; seconds: number; ok: boolean }[];
 };
 
+/** Inert footprint of the collapsed request telemetry bar (no text, not focusable). */
+export function RequestTimingPlaceholder() {
+  return <div className="xn-request-telemetry-placeholder" aria-hidden="true" />;
+}
+
 export function RequestTiming({ session }: { session: LocalRuntimeSession | null }) {
   const rows = (session?.runtime_activity_history ?? []).slice(-24);
   const activity = session?.runtime_activity ?? null;
@@ -60,8 +66,10 @@ export function RequestTiming({ session }: { session: LocalRuntimeSession | null
   const showDetailsLabel = status.phase !== 'completed';
   // The lightweight footer already reports a normal completed turn. Keep the
   // request timing panel for errors/stalls, where its details are actionable.
-  if (session?.runtime_profile === 'lightweight' && status.phase === 'completed') return null;
-  if (status.phase === 'completed' && !activity && !rows.length && !session?.tool_timings?.length) return null;
+  // A hidden panel still keeps its collapsed footprint, so starting or
+  // finishing a run does not push the conversation by one bar height.
+  if (session?.runtime_profile === 'lightweight' && status.phase === 'completed') return <RequestTimingPlaceholder />;
+  if (status.phase === 'completed' && !activity && !rows.length && !session?.tool_timings?.length) return <RequestTimingPlaceholder />;
   return <details className="xn-request-telemetry" data-testid="request-telemetry" open={status.phase === 'provider_error' || status.phase === 'stalled'}>
     <summary className="xn-request-telemetry__summary" title={t('步骤耗时与实际用量')}>
       <Activity size={13} aria-hidden="true" />
@@ -79,6 +87,7 @@ export function RequestTiming({ session }: { session: LocalRuntimeSession | null
           {Number.isInteger(activity?.requestStep) && (activity?.requestStep as number) >= 0 &&
             <span>{t('请求轮次')} #{activity?.requestStep}</span>}
           {elapsedSeconds !== null && <span><span>{t('已运行')}</span> {formatRate(elapsedSeconds, '秒')}</span>}
+          {finite(activity?.queuedMs) && <span>{t('排队耗时')} {formatRate(activity.queuedMs / 1000, '秒')}</span>}
         </div>
       </header>
       <dl className="xn-runtime-monitor__request-usage" aria-label={t('已报告 Token 用量')}>
@@ -94,9 +103,11 @@ export function RequestTiming({ session }: { session: LocalRuntimeSession | null
     <details className="xn-runtime-monitor__timings">
       <summary>{t('步骤耗时与实际用量')}</summary>
       <p>{t('等待、思考和生成按收到流数据的时段计时，包含传输等待；非流式请求无法拆分思考与生成。缺失 Token 和重试信息显示 —。')}</p>
-      {rows.length ? <div className="xn-runtime-monitor__timings-table"><table><thead><tr>{['步骤', '模型请求', '等待', '思考流', '生成流', '工具', '输入 Token', '缓存 Token', '输出 Token', '失败重试'].map(label => <th key={label}>{t(label)}</th>)}</tr></thead>
+      {rows.length ? <div className="xn-runtime-monitor__timings-table"><table><thead><tr>{['步骤', '模型请求', '排队耗时', '等待', '思考流', '生成流', '工具', '输入 Token', '缓存 Token', '输出 Token', '失败重试'].map(label => <th key={label}>{t(label)}</th>)}</tr></thead>
         <tbody>{rows.map((row, index) => <tr key={row.startedAt ?? index}><td>#{row.requestStep ?? index + 1}</td>
-          {[row.requestSeconds, row.waitingSeconds, row.thinkingSeconds, row.generatingSeconds, row.toolSeconds].map((seconds, i) => <td key={i}>{finite(seconds) ? `${seconds.toFixed(2)} s` : '—'}</td>)}
+          <td>{finite(row.requestSeconds) ? `${row.requestSeconds.toFixed(2)} s` : '—'}</td>
+          <td>{finite(row.queuedMs) ? formatRate(row.queuedMs / 1000, '秒') : '—'}</td>
+          {[row.waitingSeconds, row.thinkingSeconds, row.generatingSeconds, row.toolSeconds].map((seconds, i) => <td key={i}>{finite(seconds) ? `${seconds.toFixed(2)} s` : '—'}</td>)}
           {[row.reportedInputTokens, row.reportedCachedTokens, row.reportedOutputTokens, row.retryCount].map((count, i) => <td key={i}>{formatCount(count)}</td>)}
         </tr>)}</tbody></table></div> : <p className="xn-runtime-monitor__timings-empty">{t('尚无已完成请求耗时记录')}</p>}
       {session?.tool_timings?.length ? <ul>{session.tool_timings.slice(-30).map((tool, i) => <li key={`${tool.tool_call_id}-${i}`}>#{tool.step} · {tool.name} · {tool.seconds.toFixed(3)} s · {t(tool.ok ? '执行成功' : '执行未成功')}</li>)}</ul> : null}
@@ -124,14 +135,14 @@ export type RuntimeMetrics = {
 };
 
 const PHASE_LABELS: Record<string, string> = {
-  waiting_model: '等待模型', thinking: '思考', generating: '生成', tools: '工具调用',
+  waiting_model: '等待模型', queued_model: '等待并发名额', retrying: '自动重试', thinking: '思考', generating: '生成', tools: '工具调用',
   repairing: '修复', completed: '已完成', needs_review: '需要审核', paused: '已暂停',
   stopped: '已停止', stalled: '运行停滞', awaiting_user: '等待用户', provider_error: '供应商错误',
   interrupted: '已中断', running: '运行中', pending: '等待启动', failed: '失败',
   cancelled: '已取消', closed: '已关闭', unknown: '未知',
 };
 
-const LIVE_REQUEST_PHASES = new Set(['waiting_model', 'thinking', 'generating', 'tools', 'repairing', 'stalled']);
+const LIVE_REQUEST_PHASES = new Set(['waiting_model', 'queued_model', 'retrying', 'thinking', 'generating', 'tools', 'repairing', 'stalled']);
 
 function currentRequestStatus(session: LocalRuntimeSession | null): { phase: string; label: string; running: boolean } {
   const sessionStatus = typeof session?.status === 'string' ? session.status.trim() : '';

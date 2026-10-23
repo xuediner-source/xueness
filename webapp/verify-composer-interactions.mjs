@@ -44,10 +44,11 @@ try {
       sends: string[];
       resolveDeferred?: (accepted: boolean) => void;
       submissions: ElicitationSubmission[];
+      choicePatches: Record<string, unknown>[];
       invalid: string;
       updateStream?: (text: string, streaming: boolean) => void;
     };
-    const testState: TestState = { mode: "accept", sends: [], submissions: [], invalid: "" };
+    const testState: TestState = { mode: "accept", sends: [], submissions: [], choicePatches: [], invalid: "" };
     (window as Window & { __composerTest?: TestState }).__composerTest = testState;
 
     const models = [
@@ -66,7 +67,7 @@ try {
       const [sendShortcut, setSendShortcut] = useState<"enter" | "mod-enter">("enter");
       const [stream, setStream] = useState({ text: "", streaming: false });
       testState.updateStream = (text, streaming) => setStream({ text, streaming });
-      const controls = <LightweightComposerControls enabled choices={choices} onChange={() => {}} models={models} loading={false} error="" onReload={() => {}} onManageModels={() => {}} inputRef={inputRef} />;
+      const controls = <LightweightComposerControls enabled choices={choices} onChange={(patch) => { testState.choicePatches.push(patch); }} models={models} loading={false} error="" onReload={() => {}} onManageModels={() => {}} inputRef={inputRef} />;
       return <main>
         <LightweightComposer
           inputRef={inputRef}
@@ -197,10 +198,19 @@ try {
   await composer.press("Control+Enter");
   await page.waitForFunction(() => window.__composerTest.sends.length === 6 && document.querySelector("[data-testid='lightweight-composer-input']")?.value === "");
 
+  const modelSwitchDraft = "Switching models preserves this unsent draft";
+  await composer.fill(modelSwitchDraft);
   await page.getByRole("button", { name: "选择模型" }).click();
+  // These saved fixture profiles have no supplier metadata, so the production
+  // menu groups them under "saved" before exposing their model rows.
+  await page.locator('[data-supplier-row="saved"]').click();
   await page.locator('[data-model-row="local-b:model-b"]').click();
   await page.waitForFunction(() => document.activeElement?.getAttribute("data-testid") === "lightweight-composer-input");
+  assert.deepEqual(await page.evaluate(() => window.__composerTest.choicePatches.map(({ provider_id, model }) => ({ provider_id, model }))),
+    [{ provider_id: "local-b", model: "model-b" }], "selecting the provider's model emits the exact model choice once");
   assert.equal(await composer.evaluate((node) => node === document.activeElement), true, "model selection returns focus to the actual lightweight textarea");
+  assert.equal(await composer.inputValue(), modelSwitchDraft, "model selection preserves the unsent draft");
+  assert.equal(await sendCount.textContent(), "6", "model selection does not submit the draft");
 
   const answer = page.locator("#xn-mcp-elicitation-answer");
   assert.equal(await answer.getAttribute("maxlength"), "2", "one-code-point limit allows a supplementary character's two UTF-16 units");

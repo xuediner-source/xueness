@@ -1,1 +1,0 @@
-"""Public web tools plugin."""

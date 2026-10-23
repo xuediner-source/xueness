@@ -247,10 +247,12 @@ test('轻量设置页按「常用 → 高级」分组，高级项默认折叠且
   assert.match(html, /最大输出（tokens）/);
 });
 
-test('标准档设置页不出现常用/高级分组，原有展示保持不变', () => {
+test('标准档同样折叠高级设置，兼容参数仍保留在表单中', () => {
   const html = editorHtml({});
   assert.doesNotMatch(html, /xn-provider-common__label/);
-  assert.doesNotMatch(html, /data-testid="provider-advanced-settings"/);
+  const advanced = html.match(/<details[^>]*data-testid="provider-advanced-settings"[^>]*>/)?.[0] ?? '';
+  assert.notEqual(advanced, '');
+  assert.doesNotMatch(advanced, / open=/);
   assert.match(html, /data-testid="provider-compatibility-diagnostics"/);
 });
 
@@ -559,7 +561,7 @@ test('LightweightStatusBar: 不重复模型选择器，展示路径、真实 Tok
     isNarrow
   />);
   assert.match(narrowHtml, /xn-lightweight-statusbar--narrow/);
-  assert.match(narrowHtml, /出错了/);
+  assert.match(narrowHtml, /失败/);
   assert.match(narrowHtml, /xn-lightweight-status__dot--error/);
 
   // 待运行/等待中状态
@@ -796,11 +798,12 @@ test('lightweightStatusPresentation: 状态词表覆盖标准档用到的全部�
   assert.deepEqual(lightweightStatusPresentation('pending'), { label: '等待中', tone: 'paused' });
   assert.deepEqual(lightweightStatusPresentation('queued'), { label: '等待中', tone: 'paused' });
   assert.deepEqual(lightweightStatusPresentation('paused'), { label: '已暂停', tone: 'paused' });
-  assert.deepEqual(lightweightStatusPresentation('needs_review'), { label: '需要审核', tone: 'paused' });
-  assert.deepEqual(lightweightStatusPresentation('awaiting_user'), { label: '等待用户', tone: 'paused' });
+  assert.deepEqual(lightweightStatusPresentation('needs_review'), { label: '需要复核', tone: 'paused' });
+  assert.deepEqual(lightweightStatusPresentation('failed'), { label: '失败', tone: 'error' });
+  assert.deepEqual(lightweightStatusPresentation('awaiting_approval'), { label: '等待批准', tone: 'paused' });
+  assert.deepEqual(lightweightStatusPresentation('awaiting_user'), { label: '等待答复', tone: 'paused' });
   assert.deepEqual(lightweightStatusPresentation('stalled'), { label: '运行停滞', tone: 'paused' });
-  assert.deepEqual(lightweightStatusPresentation('failed'), { label: '出错了', tone: 'error' });
-  assert.deepEqual(lightweightStatusPresentation('provider_error'), { label: '出错了', tone: 'error' });
+  assert.deepEqual(lightweightStatusPresentation('provider_error'), { label: '模型连接失败', tone: 'error' });
   assert.deepEqual(lightweightStatusPresentation('cancelled'), { label: '已取消', tone: 'idle' });
   assert.deepEqual(lightweightStatusPresentation('completed'), { label: '已完成', tone: 'done' });
   assert.deepEqual(lightweightStatusPresentation(undefined), { label: '空闲', tone: 'idle' });
@@ -852,7 +855,7 @@ test('LightweightStatusBar: 状态读数补齐停止中、中断与队列，且�
   assert.match(interruptedHtml, /xn-lightweight-status__dot--paused/);
 
   const failedHtml = renderToStaticMarkup(<LightweightStatusBar modelName="m" status="failed" />);
-  assert.match(failedHtml, /出错了/);
+  assert.match(failedHtml, /失败/);
   assert.match(failedHtml, /xn-lightweight-status__dot--error/);
 });
 
@@ -1261,9 +1264,10 @@ test('LightweightStatusBar: Token 读数给屏幕阅读器展开，箭头字形�
 test('LightweightStatusBar: 状态色不只靠 6px 圆点表达，读数文字按 tone 着色且只用令牌', async () => {
   const errorHtml = renderToStaticMarkup(<LightweightStatusBar status="provider_error" />);
   assert.match(errorHtml, /data-tone="error"/);
-  assert.match(errorHtml, /出错了/);
+  assert.match(errorHtml, /模型连接失败/);
   const pausedHtml = renderToStaticMarkup(<LightweightStatusBar status="needs_review" />);
   assert.match(pausedHtml, /data-tone="paused"/);
+  assert.match(pausedHtml, /需要复核/);
 
   const css = await readFile(resolve(process.cwd(), 'src/plugins/providers/LightweightWorkbench.css'), 'utf8');
   for (const tone of ['error', 'paused', 'done']) {

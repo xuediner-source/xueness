@@ -1,0 +1,45 @@
+{
+  "stage": "Z7",
+  "date": "2026-10-23",
+  "platform": "Windows",
+  "node": "v24.19.0",
+  "ok": true,
+  "reference": {
+    "name": "ZCode",
+    "version": "v3.15.1",
+    "commit": "aac4755666d09fdcd70272fcf063c077a639015f",
+    "scope": "Xueness native adaptation; no claim of upstream V4 wire compatibility"
+  },
+  "regression": {
+    "uniqueTests": 39,
+    "pass": 29,
+    "historicalPythonOracleSkip": 10,
+    "unresolvedFailures": 0,
+    "cancelled": 0,
+    "logs": ["z7-targeted-windows.log", "z7-controller-flow-fix-windows.log"],
+    "counting": "38 initial identities plus 1 new controller flow race identity; repeated tests are not counted twice"
+  },
+  "gates": {
+    "typecheck": "passed",
+    "typescriptFiles": 1001,
+    "maximumLines": 400,
+    "plugins": 30,
+    "pluginSourceFiles": 422,
+    "buildJavaScriptModules": 706,
+    "relocatedEmptyPath": "passed"
+  },
+  "runtimeAcceptance": {
+    "source": { "scenarios": 7, "loopbackProviderRequests": 5, "failures": 0 },
+    "built": { "scenarios": 7, "loopbackProviderRequests": 5, "failures": 0 }
+  },
+  "shutdownAcceptance": {
+    "source": { "scenarios": 2, "loopbackProviderRequests": 2, "failures": 0 },
+    "built": { "scenarios": 2, "loopbackProviderRequests": 2, "failures": 0 },
+    "checks": ["stdin EOF drains active durable run", "remote plugin disable exits without another stdin message", "normal code 0 exit", "retained command query after restart", "no automatic model replay", "no successful-path forced kill"]
+  },
+  "web": { "baseline": "Z6", "distFiles": 166, "hashesUnchanged": true, "sourceUnchanged": true },
+  "publicOrPaidModelRequests": 0,
+  "newPackagesOrDependencies": 0,
+  "notValidated": ["native Linux/macOS", "installers", "Docker", "CI"],
+  "remainingEngineStage": "Z8"
+}

@@ -1,9 +1,4 @@
-#!/usr/bin/env python3
-"""Run the source checkout from any working directory, without installation."""
-import sys
-from pathlib import Path
-
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-from xueness.cli import main
-
-raise SystemExit(main())
+#!/bin/sh
+# Run the Xueness CLI from the source checkout (Node 24 strips the TypeScript types).
+ROOT=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
+exec "${XUENESS_NODE:-node}" "$ROOT/ts/apps/server/src/cli/main.ts" "$@"

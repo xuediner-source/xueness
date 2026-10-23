@@ -4,19 +4,21 @@ import { t } from '../../i18n';
 import './SessionGoal.css';
 
 export type SessionGoalHistoryEntry = {
-  action: 'set' | 'replace' | 'clear' | 'achieved' | 'complete' | 'pause' | 'resume' | 'blocked' | 'budget_limited';
+  action: 'set' | 'replace' | 'clear' | 'achieved' | 'complete' | 'pause' | 'resume' | 'blocked' | 'budget_limited' | 'budget';
   at: string;
   text?: string;
   source?: string;
 };
 
 export type SessionGoalRecord = {
+  id?: string;
+  summaryTitle?: string;
   text: string;
   status: 'active' | 'paused' | 'blocked' | 'budget_limited' | 'complete' | 'achieved' | 'cleared';
   setAt: string;
   updatedAt: string;
   history: SessionGoalHistoryEntry[];
-  budget?: { maxRounds: number; maxWallSeconds: number; maxTokens?: number };
+  budget?: { maxRounds?: number; maxWallSeconds?: number; maxTokens?: number };
   runtime?: { reason?: string };
 };
 
@@ -40,13 +42,15 @@ const ACTION_LABEL: Record<SessionGoalHistoryEntry['action'], string> = {
   resume: '继续目标',
   blocked: '目标受阻',
   budget_limited: '达到目标预算',
+  budget: '调整目标预算',
 };
 
 /** 会话目标的一行徽标：摘要只显示状态与文本，展开后查看完整目标、变更历史和清除。 */
-export function SessionGoal({ sessionId, goal, disabled, onChanged }: {
+export function SessionGoal({ sessionId, goal, disabled, running, onChanged }: {
   sessionId: string;
   goal?: SessionGoalRecord | null;
   disabled?: boolean;
+  running?: boolean;
   onChanged: () => void;
 }) {
   const [busy, setBusy] = useState(false);
@@ -83,7 +87,7 @@ export function SessionGoal({ sessionId, goal, disabled, onChanged }: {
     <details className="xn-session-goal" data-status={goal.status} data-testid="session-goal">
       <summary className="xn-session-goal__bar">
         <span className="xn-session-goal__label">{t('会话目标')}</span>
-        <span className="xn-session-goal__text" title={goal.text}>{goal.text}</span>
+        <span className="xn-session-goal__text" title={goal.text}>{goal.summaryTitle || goal.text}</span>
         <span className="xn-session-goal__status">{t(STATUS_LABEL[goal.status])}</span>
       </summary>
       <div className="xn-session-goal__body">
@@ -107,10 +111,10 @@ export function SessionGoal({ sessionId, goal, disabled, onChanged }: {
           {t(busy ? '更新中…' : '暂停目标')}
         </button>}
         {canResume && <button className="xn-session-goal__button" type="button"
-          disabled={disabled || busy} onClick={() => void transition('resume')}>
+          disabled={disabled || running || busy} onClick={() => void transition('resume')}>
           {t(busy ? '更新中…' : '继续目标')}
         </button>}
-        <button className="xn-session-goal__button" type="button" disabled={disabled || busy} onClick={() => void clear()}>
+        <button className="xn-session-goal__button" type="button" disabled={disabled || running || busy} onClick={() => void clear()}>
           {t(busy ? '清除中…' : '清除目标')}
         </button>
         {error && <p className="xn-session-goal__error" role="alert">{error}</p>}

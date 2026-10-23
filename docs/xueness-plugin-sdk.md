@@ -1,3 +1,5 @@
+> Historical reference from 2026-10-12, before the TypeScript/Z8 migration; current behavior is defined by [README.md](../README.md) and [ts/docs/z8-guarded-goal-memory.md](../ts/docs/z8-guarded-goal-memory.md).
+
 # Xueness 插件 SDK 与隔离（第四批冻结契约）
 
 日期：2026-09-28。本文件冻结**第四批**：可控插件 SDK 与隔离。

@@ -1,1 +1,0 @@
-"""SSH remote connections plugin."""

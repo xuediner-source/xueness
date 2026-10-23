@@ -1,0 +1,18 @@
+{
+  "apiVersion": 2,
+  "id": "onboarding",
+  "name": "Configuration wizard",
+  "description": "Configuration wizard",
+  "version": "1.0.0",
+  "defaultEnabled": true,
+  "dependencies": ["providers"],
+  "capabilities": { "fs": { "read": ["state"], "write": ["state"] } },
+  "httpFamilies": ["onboarding"],
+  "commands": ["onboarding"],
+  "features": [
+    { "id": "onboarding.wizard", "name": "模型与工作区初次配置向导", "nameEn": "Initial model and workspace setup wizard" },
+    { "id": "onboarding.credentials", "name": "隐藏密钥输入与配置保存", "nameEn": "Hidden key input and configuration saving" },
+    { "id": "onboarding.desktop_permissions", "name": "首次启动三步系统权限引导与可跳过的进度保存", "nameEn": "First-launch three-step system permission guide with optional progress saving" }
+  ],
+  "frontendModules": ["plugins/onboarding/DesktopPermissionOnboarding.tsx"]
+}

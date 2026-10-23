@@ -12,9 +12,10 @@ const goal = (patch: Partial<SessionGoalRecord> = {}): SessionGoalRecord => ({
 });
 
 test('an active goal is one quiet line above the composer with its own status', () => {
-  const html = renderToStaticMarkup(<SessionGoal sessionId="abc" goal={goal()} onChanged={() => {}} />);
+  const html = renderToStaticMarkup(<SessionGoal sessionId="abc" goal={goal({ summaryTitle: '首屏目标摘要' })} onChanged={() => {}} />);
   assert.match(html, /会话目标/);
-  assert.match(html, /把首屏渲染降到 1 秒内/);
+  assert.match(html, /首屏目标摘要/);
+  assert.match(html, /title="把首屏渲染降到 1 秒内"/);
   assert.match(html, /进行中/);
   assert.match(html, /data-status="active"/);
 });
@@ -47,6 +48,13 @@ test('clearing is offered but never while the session is busy', () => {
   assert.doesNotMatch(open, /disabled/);
   assert.match(renderToStaticMarkup(<SessionGoal sessionId="abc" goal={goal()} disabled
     onChanged={() => {}} />), /disabled/);
+});
+
+test('budget history has a readable label and missing optional budget limits are valid', () => {
+  const html = renderToStaticMarkup(<SessionGoal sessionId="abc" goal={goal({
+    budget: { maxTokens: 4096 }, history: [{ action: 'budget', at: '2026-10-05T10:00:00+00:00' }],
+  })} onChanged={() => {}} />);
+  assert.match(html, /调整目标预算/);
 });
 
 test('the long goal text stays on one line and the full text is available when expanded', () => {

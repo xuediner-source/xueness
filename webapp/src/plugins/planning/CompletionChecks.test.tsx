@@ -4,6 +4,17 @@ import assert from 'node:assert/strict';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { CompletionChecks } from './CompletionChecks';
 
+test('deliverables show actual check results and file actions outside the disclosure', () => {
+  const requirement = { id: 'report', label: '清理后的表格', path: 'output/clean.csv', contains: [], min_links: 0 };
+  const html = renderToStaticMarkup(<CompletionChecks compact sessionId="files" items={[requirement]} onSaved={() => {}}
+    onOpenFile={() => {}} completion={{ delivery_status: 'failed', delivery_checks: { planning: { status: 'failed', items: [{ ...requirement, passed: false, missing: ['缺少数据'] }] } } }} />);
+  assert.ok(html.indexOf('打开文件') < html.indexOf('<details'));
+  assert.match(html, /output\/clean.csv/); assert.match(html, /检查未通过/);
+  assert.doesNotMatch(html, />已检查</);
+  const disabledFiles = renderToStaticMarkup(<CompletionChecks sessionId="files" items={[requirement]} onSaved={() => {}} />);
+  assert.match(disabledFiles, /待检查/); assert.doesNotMatch(disabledFiles, /打开文件/);
+});
+
 test('tool success remains separate from delivery failure and missing items are visible', () => {
   const html = renderToStaticMarkup(<CompletionChecks sessionId="abc" items={[]} disabled onSaved={() => {}} completion={{ tool_execution_success: true, delivery_status: 'failed', delivery_checks: { planning: { status: 'failed', items: [{ id: 'r', label: '人物报告', contains: ['乙'], min_links: 1, passed: false, missing: ['缺少内容：乙'] }] } } }} />);
   assert.match(html, /工具执行成功/); assert.match(html, /交付检查未通过/); assert.match(html, /缺少内容：乙/); assert.match(html, /disabled/);

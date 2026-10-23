@@ -1,0 +1,215 @@
+{
+  "schema": "xueness.engine-gap-register.v1",
+  "date": "2026-10-24",
+  "baselineCommit": "3c5b227649371507ddc4eb46ac5133afe6db1cab",
+  "scope": "Static audit findings, not a complete runtime score",
+  "items": [
+    {
+      "id": "G01",
+      "capability": "工具暴露与 deferred 调用",
+      "classification": "新增缺口",
+      "rounds": "F02",
+      "evidence": "models-runtime-evidence.md",
+      "conclusion": "已有 lightweight selector；缺完整 generic ToolSearch/DeferredToolCall、结构化引用和历史 hydration。",
+      "status": "open_for_alignment"
+    },
+    {
+      "id": "R01",
+      "capability": "tool_search 生产执行器和 discovered_tools 写入",
+      "classification": "待运行核验",
+      "rounds": "F00.02 / F02",
+      "evidence": "models-runtime-evidence.md",
+      "conclusion": "全 TS 检索未定位生产执行器。result-tool.ts 仅注册 tool_result_read，agent-service 注入该工厂；catalog 声明不能代替可执行接线。",
+      "status": "needs_runtime_confirmation"
+    },
+    {
+      "id": "G02",
+      "capability": "模型自适应 admission 与辅助请求归一",
+      "classification": "旧缺口",
+      "rounds": "F01",
+      "evidence": "models-runtime-evidence.md",
+      "conclusion": "Xueness 固定 FIFO；上游 AIMD、公平轮转和冷却。标题/语义等需统一生产 admission。",
+      "status": "open_for_alignment"
+    },
+    {
+      "id": "G03",
+      "capability": "执行级临时模型与失败回退",
+      "classification": "新增缺口",
+      "rounds": "F01 / F13",
+      "evidence": "models-runtime-evidence.md",
+      "conclusion": "上游先结算已接收工具，再回到原模型；普通 retry 不等价。",
+      "status": "open_for_alignment"
+    },
+    {
+      "id": "G04",
+      "capability": "排队感知工具 deadline",
+      "classification": "旧缺口",
+      "rounds": "F02",
+      "evidence": "models-runtime-evidence.md",
+      "conclusion": "已有请求和进程时限，缺通用工具计时器及嵌套模型排队暂停。",
+      "status": "open_for_alignment"
+    },
+    {
+      "id": "D01",
+      "capability": "安全工具并发元数据和配置",
+      "classification": "局部行为差异",
+      "rounds": "F02",
+      "evidence": "models-runtime-evidence.md",
+      "conclusion": "双方已有默认10并发；上游 mapper dependsOn 当前为空，不能虚构活跃调用DAG优势。",
+      "status": "open_for_alignment"
+    },
+    {
+      "id": "G05",
+      "capability": "前台超时转后台",
+      "classification": "旧能力的行为缺口",
+      "rounds": "F05",
+      "evidence": "models-runtime-evidence.md",
+      "conclusion": "Xueness 已有显式后台；上游 eligible Bash 到前台期限后转后台。新版还解除 off-peak 限制。",
+      "status": "open_for_alignment"
+    },
+    {
+      "id": "D02",
+      "capability": "文件读取策略与原子写复核",
+      "classification": "实现差异/保留优势",
+      "rounds": "F05",
+      "evidence": "models-runtime-evidence.md",
+      "conclusion": "Xueness 已有编码与范围读取、冷恢复读状态；应保留 rename 前 CAS 和 Windows Job Object。",
+      "status": "open_for_alignment"
+    },
+    {
+      "id": "G06",
+      "capability": "隐藏 runtime reminder 持久化",
+      "classification": "新增缺口",
+      "rounds": "F03 / F08 / F10",
+      "evidence": "autonomy-workflows-evidence.md",
+      "conclusion": "上游将隐藏提醒进入历史与 compaction；Xueness 部分列表提示是请求时重建。",
+      "status": "open_for_alignment"
+    },
+    {
+      "id": "G07",
+      "capability": "工作流阻塞自动提醒",
+      "classification": "新增缺口",
+      "rounds": "F10",
+      "evidence": "autonomy-workflows-evidence.md",
+      "conclusion": "已有显式 query/resolve/resume，缺上游空闲父会话 blocked-reminder/reset 语义。",
+      "status": "open_for_alignment"
+    },
+    {
+      "id": "G08",
+      "capability": "完整动态工作流 SDK/VM",
+      "classification": "旧缺口",
+      "rounds": "F10",
+      "evidence": "autonomy-workflows-evidence.md",
+      "conclusion": "当前 DAG+TS AST 子集；需 world.run、artifact/stream/future/dashboard 与完整宿主端口。dynamic-workflow/src 在两版基线间未变。",
+      "status": "open_for_alignment"
+    },
+    {
+      "id": "G09",
+      "capability": "选择式记忆与后台提取",
+      "classification": "旧缺口",
+      "rounds": "F09",
+      "evidence": "autonomy-workflows-evidence.md",
+      "conclusion": "已有 curated 三轨注入和显式 Dream；上游 recall/extraction 两版都有生产触发。两版均未自动触发 Dream。",
+      "status": "open_for_alignment"
+    },
+    {
+      "id": "D03",
+      "capability": "子代理与 Goal 的深度契约",
+      "classification": "已实现基础需深化",
+      "rounds": "F03 / F08",
+      "evidence": "autonomy-workflows-evidence.md",
+      "conclusion": "Goal 自动继续、TaskCoordinator、后台收集和 send_message 都已接线；不能按旧清单宣称缺失。",
+      "status": "open_for_alignment"
+    },
+    {
+      "id": "G10",
+      "capability": "多根 Skills/Commands",
+      "classification": "新增缺口",
+      "rounds": "F07",
+      "evidence": "extensions-config-evidence.md",
+      "conclusion": "上游支持目录根与命名空间；Xueness 当前单工作区根发现。",
+      "status": "open_for_alignment"
+    },
+    {
+      "id": "D04",
+      "capability": "配置层级与 Hook/MCP 信任",
+      "classification": "契约差异",
+      "rounds": "F06 / F07",
+      "evidence": "extensions-config-evidence.md",
+      "conclusion": "双方有配置、hooks、MCP。准入、摘要授权、会话 lease 和默认信任策略不同，需确定兼容配置。",
+      "status": "open_for_alignment"
+    },
+    {
+      "id": "G11",
+      "capability": "MCP Apps UI 宿主",
+      "classification": "已确认能力缺口",
+      "rounds": "F06",
+      "evidence": "extensions-config-evidence.md",
+      "conclusion": "已有 MCP tools/resources/prompts/OAuth/elicitation，不等于 Apps；上游有 waitForAppConnection 和 lease 代次复核。",
+      "status": "open_for_alignment"
+    },
+    {
+      "id": "G12",
+      "capability": "持久 Node REPL/Browsers/OS CUA",
+      "classification": "已确认能力面缺口",
+      "rounds": "F12",
+      "evidence": "extensions-config-evidence.md",
+      "conclusion": "固定浏览器工具与桌面宿主不等于 agent.computerUse、持久 agent.browsers SDK。",
+      "status": "open_for_alignment"
+    },
+    {
+      "id": "D05",
+      "capability": "插件包与原生 WebSearch",
+      "classification": "能力面/适配差异",
+      "rounds": "F07 / F12",
+      "evidence": "extensions-config-evidence.md",
+      "conclusion": "保留可信 allowlist 与现有搜索；补组件包SDK、alwaysLoad、供应商原生搜索能力。",
+      "status": "open_for_alignment"
+    },
+    {
+      "id": "D06",
+      "capability": "SQLite 主存储及事件保留",
+      "classification": "架构/算法差异",
+      "rounds": "F04",
+      "evidence": "sessions-protocol-evidence.md",
+      "conclusion": "Xueness 已有可选 SQLite 镜像和持久JSONL；上游默认SQLite主存储及内存turn-window。未证明数据丢失或内存泄漏。",
+      "status": "open_for_alignment"
+    },
+    {
+      "id": "G13",
+      "capability": "ZCode V4 公共协议兼容",
+      "classification": "协议不互换",
+      "rounds": "F11",
+      "evidence": "sessions-protocol-evidence.md",
+      "conclusion": "原生v1/v2已有fragment/回执/订阅；不等于V4 wire。自有remote manager尚只接受v1。",
+      "status": "open_for_alignment"
+    },
+    {
+      "id": "D07",
+      "capability": "驻留租约与模块抽取",
+      "classification": "审查目标/未证实缺陷",
+      "rounds": "F03",
+      "evidence": "sessions-protocol-evidence.md",
+      "conclusion": "上游新增模块不直接算缺失；Xueness已有lease/cancel/drain，需要行为探针后决定修复。",
+      "status": "open_for_alignment"
+    },
+    {
+      "id": "P01",
+      "capability": "Off-Peak live ticket/接管",
+      "classification": "服务绑定机制缺口",
+      "rounds": "F13",
+      "evidence": "models-runtime-evidence.md",
+      "conclusion": "Xueness已有持久空闲队列；缺执行级ticket续期、凭据和用户接管。私有服务可用性另列。",
+      "status": "open_for_alignment"
+    },
+    {
+      "id": "P02",
+      "capability": "外部频道回复与供应商权益",
+      "classification": "适配接口待补齐",
+      "rounds": "F12 / F13",
+      "evidence": "autonomy-workflows-evidence.md",
+      "conclusion": "ReplyToChannel不是子代理发消息。机制与公共契约要实现；无法接入私有后端不能宣称线上等价。",
+      "status": "open_for_alignment"
+    }
+  ]
+}

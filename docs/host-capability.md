@@ -1,3 +1,5 @@
+> Historical reference from 2026-10-12, before the TypeScript/Z8 migration; current behavior is defined by [README.md](../README.md) and [ts/docs/z8-guarded-goal-memory.md](../ts/docs/z8-guarded-goal-memory.md).
+
 # 宿主平台探测与一次性能力票据
 
 实验功能，默认关闭。只接受设置里的布尔值 `true`。desktop 插件停用后，这些路由与其它桌面路由一样返回 403。不修改 `GET /api/desktop/status` 的字段，也不替换长期桌面令牌、Host/Origin 或 CSRF。

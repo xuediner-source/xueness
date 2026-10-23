@@ -133,7 +133,9 @@ test("TimelineStream: renders all 3 roles (user, assistant, tool) and visually d
   // Tool item presence and role identification
   assert.match(html, /data-testid="timeline-item-tool-3"/);
   assert.match(html, /data-role="tool"/);
-  assert.match(html, /<span class="xn-msg__tool-name[^\"]*">write<\/span>/);
+  // Step 3: the timeline label is the model-facing (ZCode) name; data-tool-name keeps the journal name.
+  assert.match(html, /<span class="xn-msg__tool-name[^\"]*">Write<\/span>/);
+  assert.match(html, /data-tool-name="write"/);
   assert.match(html, /webapp\/src\/plugins\/sessions\/XuenessTimeline\.tsx/);
 
   // Visual distinction between user and assistant
@@ -450,6 +452,7 @@ test('an active run with no first delta still announces a pending request and gr
 test('TimelineStream pending status follows each reported runtime phase and keeps unknown phases generic', () => {
   const phases = [
     ['waiting_model', '等待模型响应…'],
+    ['queued_model', '等待模型并发名额…'],
     ['thinking', '思考中…'],
     ['generating', '正在生成回复…'],
     ['tools', '正在执行工具…'],

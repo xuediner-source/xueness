@@ -1,3 +1,5 @@
+> Historical reference from 2026-10-12, before the TypeScript/Z8 migration; current behavior is defined by [README.md](../README.md) and [ts/docs/z8-guarded-goal-memory.md](../ts/docs/z8-guarded-goal-memory.md).
+
 # Xueness Event Protocol v1（冻结契约）
 
 日期：2026-09-27。本文件是**第二批**的冻结合同：Xueness 自有的会话/工具事件协议。

@@ -1,5 +1,53 @@
 # Xueness 插件架构与功能归属
 
+2026-10-16 Windows 新手会话优化：`providers.setup_guidance` 在模型空状态和新建表单内提供离线可读的在线 / 本地配置步骤，登记在现有 providers 插件；标准和轻量档均折叠高级参数。指引不发起请求、不自动运行模型、不改变权限，providers 关闭时随面板卸载。既有 sessions 的模型目录恢复区分“重试加载”和“配置模型”，保持草稿与原发送权限。使用与验收说明见 [Windows 新手会话验收](windows-novice-acceptance-2026-10-16.md)。
+
+2026-10-15 macOS 新手会话验收：扩展既有 `sessions.command_ack`、`sessions.refresh_recovery`、`sessions.timeline_follow`、`sessions.zcode_conversation`、`providers.profiles` 与 `mcp.elicitation`，处理已确认失败回执、配置后目录刷新、自动 ID、阅读锚点、长轮询与迟到表单；额度识别继续归 providers/subscriptions，Git 本地化兼容继续归 git。新增前端模块在所属 manifest 登记，工作台只协调挂载与目录刷新，不扩展共享白名单。使用和证据口径见[macOS 会话验收](mac-conversation-acceptance-2026-10-15.md)。
+
+2026-10-15 providers 登记 `providers.loopback_http`：模型 profile 可保存显式 `allowLoopbackHttp` 确认，仅对 `http://` 与字面环回 IP 生效；默认关闭，不信任 `localhost`/DNS 别名，不放宽远端 HTTP。该选项只授权传输，标准档仍要求 API key；提供者 catalog 通过同一解析器判断 `configured`，避免已保存的本机兼容代理被误标为未配置。表单与 profile 保存归 providers，使用限制见[本地小模型轻量模式](xueness-local-lightweight-mode.md)。不扩展共享内核边界。
+
+2026-10-14 r37 G3 分割条：扩展既有 `sessions.pane_layout`，在按需加载的 `plugins/sessions/SessionPaneSplit.tsx` 提供左右／上下拖拽和键盘调整，`paneResize.ts` 维护预览、提交和取消生命周期。主 pane 比例有界为 25%–75%，缺失或非法数值默认 50%，旧 v1 布局兼容；沿用本机 `xueness.sessions.pane-layout.v1`。指针捕获与 animation frame 只更新 CSS，松开后一次提交；取消、失去捕获、关闭、失效或窄屏时清理未提交拖动。sessions 未生效不挂分割条、不读写布局，窄屏保留已提交比例。`SessionPaneLayout.tsx` 仅在打开分屏时动态加载双格组件及样式，不增加启动图分割条代码；调整不改变 G1 订阅身份、pane key 或 secondary composer。不改事件协议、审批 ACK 或共享内核边界。终端／浏览器 pane 与嵌套网格仍未做。使用见[会话分屏](sessions-pane-layout.md)。功能数以 manifest 为准。
+
+2026-10-14 r29 G4 子代理实时投影：扩展 `sessions.subagent_rows`。父会话快照在 subagents 生效时只读本进程 `task_registry.list(parent)`，覆盖已绑定行的状态和 1–64 步数（`subagent_rows.py`）。不读子 journal、不新增行、不改 `xueness.events.v1` 或 G1 帧。步数文案在 `plugins/sessions/subagentRowProgress.tsx`，仅有步数时加载，不进入启动包。subagents 未生效不读 registry。工作项列表和多作用域代理视图仍未做。使用见[会话体验](xueness-conversation-experience.md)。
+
+2026-10-14 r26 G3 第二输入框：同一 `sessions.pane_layout` 在已绑定的第二个对话 pane 挂载独立 composer（`secondaryConversationPane.tsx`、`secondaryPaneComposer.tsx`）。草稿与主会话分开；发送、排队和停止复用 rich composer 与 command ack，并检查 sessions effective。容器只保留动态 import 与生效状态，分屏会话块不进入启动包。不改 `xueness.events.v1`，也不新增共享内核例外。终端 pane、嵌套网格和分割条拖拽在这一层尚未做。使用见[会话分屏](sessions-pane-layout.md)。功能数以 manifest 为准。
+
+2026-10-14 r25 G8 连接阶段：remote 登记 `remote.connection_state`（`connection_state.py`）。它只保存调用方已经持有的 pending/reconnecting/connected/disconnected，按连接 id 与配置 digest 限制在内存中，不打开 SSH、不重试、不落盘。`sessions.sessions_index` 在配置仍匹配时把阶段放进既有 remote sidecar，否则保持 unknown；remote 未生效时丢掉该目录的记录且不读 SSH 配置。阶段文案在 `plugins/sessions/sessionsRemoteConnectionState.tsx`，仅当行上已有非 unknown 阶段时加载。没有 connectRemoteWorkspaceTarget，生产路径不写入阶段。不改 `xueness.events.v1`，也不扩展 G1/G2/G3/G7。使用及剩余范围见[会话体验](xueness-conversation-experience.md)与 [G8 差距](zcode-parity-gaps.md)。
+
+2026-10-14 r18 G8 远程行摘要：扩展 `sessions.sessions_index`，由 remote 新登记的 `remote.session_summary`（`session_summary.py`）贡献有界远程配置摘要。只比较会话已有 `remote_connection` 的 id/digest 与当前保存配置，区分 configured/changed/missing/unavailable/unsupported；输出只含 connectionId、configuration、connectionState=unknown，不含凭据、目标地址或执行参数。每次索引最多读一次 100 KB／100 条配置，无合法绑定不读，remote 失效不导入或读取贡献；前端在 remote 失效时立即隐藏缓存。索引无法获取时继续用原完整列表，不启动连接、探测或重试。一次性 SSH 不证明持续连接状态，因此没有 connected/reconnecting 投影。本层没有扩展共享例外，使用及剩余范围见[会话体验](xueness-conversation-experience.md)与 [G8 差距](zcode-parity-gaps.md)。
+
+2026-10-14 r31 旧消息附件恢复：同属 `sessions.rich_composer`，`UserMessageEditor.tsx` 与 `messageEditAttachments.ts` 只在打开用户消息编辑时加载。编辑草稿从 `/api/composer/attachments/restore` 恢复服务端会话记录中最多四个附件引用与纯文本；不接受客户端引用或路径作为授权。记录与消息内容摘要绑定，旧记录还需按轮次与快照大小/摘要核对。上传恢复使用会话已有快照，工作区恢复再检查 root、files 生效、路径 jail 与当前内容摘要；引用失效安全降级。取消、卸载与保存释放本次临时引用，迟到结果不回填；关闭 sessions 后不启动请求，临时恢复记录十五分钟失效。文本编辑由服务端重新校验并保留有效附件，沿用原编辑命令协议，不改 `xueness.events.v1`。本层不提供旧附件增删、完整 Lexical 或分块上传。
+
+2026-10-14 已授权附件预览：sessions 登记 `sessions.attachment_preview`（`composer_attachments.py` 的 preview、`plugins/sessions/composerAttachmentPreview.tsx`）。只对已提交的附件引用返回图片、视频、PDF 或有界文本摘录；对话框把字节留在内存，草稿仍只保存引用。工作区读取复用附件 jail，并要求 files 生效。sessions 未生效时不挂预览、不发请求。工作台同步路径只保留文件名和移除按钮；芯片入口在有附件且 sessions 生效时才加载，预览对话框、解析与渲染在 `composerAttachmentPreviewDialog.tsx`，打开时才加载。两者都不进入启动包。不改 `xueness.events.v1`。分块上传仍未做。旧消息附件恢复见本页 r31 记录。功能数以 manifest 为准。
+
+2026-10-14 G9 作用域命令：sessions 登记 `sessions.scoped_commands`。命令表与分发在 `plugins/sessions/scopedCommands.ts`；settings 用既有快捷键 API 保存 keymap，并校验 `shortcutScopes` 与命令作用域一致。composer 行、会话前进/后退和双对话 pane 的焦点、拆分、关闭只在 sessions 与 settings 都生效时注册。容器只挂载监听和生效状态。不新增后端事件，不改 `xueness.events.v1`。使用见[作用域命令](sessions-scoped-commands.md)。功能数以 manifest 为准。
+
+2026-10-14 r13 G4 子代理行：sessions 新增 `sessions.subagent_rows`（`subagent_rows.py`、`plugins/sessions/subagentRows.ts`、`SubagentRowView.tsx`）。从当前父 journal 的 task 记录、coordination 和真实调用回执构建最多 32 行的 `message_subagents` sidecar，按调用身份绑定当前页；仅显示有界状态与纯文本摘要，不读取子 journal 或运行 registry（r29 才在 subagents 生效时只读本进程 registry），不改变事件协议。详情复用 subagents 的只读 `SubagentTranscript`，仅在两插件生效且用户展开并点击后挂载，折叠和禁用中止请求；subagents 未生效仍保留安全摘要，sessions 未生效不投影、不挂载。无新依赖或共享内核例外。使用见[会话体验](xueness-conversation-experience.md)。
+
+2026-10-14 G3 双对话分屏第一层：sessions 登记 `sessions.pane_layout`。布局、焦点、关闭与侧栏拖入绑定在 `plugins/sessions/paneLayout.ts` 与 `SessionPaneLayout.tsx`；第二个 pane 用独立订阅身份复用 `conversationTransport.ts`，投影沿用 `paneConversation.ts`。容器只挂载主会话槽和插件生效状态。有界布局只写本机 `xueness.sessions.pane-layout.v1`，sessions 未生效时不读取、不监听、不出现第二 pane。不改 `xueness.events.v1`，也不把分屏业务放进共享 Shell。使用与限制见[会话分屏](sessions-pane-layout.md)。功能数以 manifest 为准。
+
+2026-10-14 G1 会话投影订阅第一层：sessions 登记 `sessions.conversation_transport`，后端 `conversation_transport.py` 提供版本化 HTTP conversation topic、snapshot 与有界 epoch/seq 续传；前端 `conversationProjectionStore.ts` 与 `conversationTransport.ts` 负责原子投影、缺口重同步和取消。工作台仅接线，正文与状态收敛到订阅，思考、工具和队列桥接既有快照；不可用时恢复旧 LiveConversation / SessionPolling，sessions 失效时停止请求。保留 `xueness.events.v1`，没有扩大共享内核例外。使用与限制见[会话投影订阅](sessions-conversation-transport.md)，功能数以 manifest 为准。
+
+2026-10-14 r22-g1b 扩展同一 `sessions.conversation_transport`：`conversationTransport.ts` 在已确认投影的瞬态断线中保留 epoch/seq 与单一权威归属，有界重试补齐，连续失败耗尽或 HTTP 403/404 降级。无需新 HTTP 边界、前端模块或共享内核例外，沿用 manifest 与静态注册表的既有 sessions 归属及 effective 检查；不增加界面或启动图依赖。协议异常继续原子校验与 snapshot 重同步，sessions 关闭、切换或卸载中止请求。
+
+2026-10-14 G4 引用行：sessions 新增 `sessions.reference_rows`（`reference_rows.py`、`plugins/sessions/referenceRows.ts`、`referenceRowView.tsx`）。流式 Markdown 仍由 `sessions.rich_message_rendering` 负责。会话快照旁路投影有界 citation、预览与 artifact 引用，只含已验证的相对路径、行号、名称和大小；不把文件正文写入投影或 `xueness.events.v1`。files 未生效时不访问工作区文件，前端把指令降为纯文本且不发起预览请求。越界路径和符号链接不会成为行。容器只把 files 的 effective 状态传入既有快照装配。功能数以 manifest 为准。使用见[会话体验](xueness-conversation-experience.md)。
+
+2026-10-14 G8 侧栏索引：sessions 登记 `sessions.sessions_index`。后端 `sessions_index.py` 提供有界、只读的 `/api/sessions/index` 快照；前端 `plugins/sessions/sessionsIndex.ts` 负责清洗 sidecar、与完整列表合并及失败降级，容器仅协调请求和状态。侧栏可切换项目、分组、工作区、用途，保留置顶和归档；用途分组不编辑自定义分组。r16 增加 `plugins/sessions/sessionsSidebarTimeline.ts` 专用时间线模式：按已有更新时间及本地日历分段，未知日期保留、置顶不重复，日期折叠与原分组独立，沿用原有索引降级及 effective 挂载，没有新轮询或远程执行。待交互来自已记录的问题/批准等待，未读沿用会话阅读水位，文件摘要仅在 files 生效且存在成功改动记录时显示，不推测增删行数。sessions 失效时中止刷新，files 关闭后立即隐藏缓存摘要。功能数以 manifest 为准；未扩展共享内核例外。使用及限制见[会话体验](xueness-conversation-experience.md)。
+
+2026-10-14 结构化 Composer 编辑状态：`sessions.rich_composer` 在附件引用之上增加有界 editor state（`plugins/sessions/composerEditorState.ts`、`ComposerStructuredEditor.tsx`）。纯文本仍用 textarea；mention/slash 节点才挂结构化编辑器。草稿继续按会话写在浏览器存储，发送仍走 composer prepare 与既有 REST。状态损坏、超限或 sessions 未生效时不挂该编辑器。不改 `xueness.events.v1`，也不把编辑器放进共享 Shell。附件预览与旧消息附件恢复见本页后续记录；分块上传仍未做。功能数以 manifest 为准。
+
+2026-10-14 结构化 Composer 草稿：sessions 新增 `sessions.rich_composer`。每会话 textarea 草稿同时保存有界附件引用；拖放、粘贴和文件选择提交为同一 `AttachmentRef`，chip 可移除，切换会话后恢复。发送与排队经 composer prepare 携带引用 id。`composer_attachments.py` 在状态目录中 begin/commit/release，工作区路径越界、符号链接和插件未生效时安全失败，并保留原 textarea 降级路径。目录功能数以 manifest 为准。
+
+2026-10-14 命令回执：sessions 新增 `sessions.command_ack`，后端 `command_ack.py` 与前端 `plugins/sessions/commandClient.ts` 为发送、排队和停止提供有界持久去重、明确回执及结果查询；r15-g2b 扩展同一功能至创建及运行，创建使用 collection 回执，运行使用独立会话命令身份并在执行期间释放回执锁，保证查询与停止可用。r17-g2c 将消息编辑纳入同一功能，复用 `message_actions.py` 的修订 CAS、lease、队列及待审批检查；确认编辑结果后才继续运行。响应未知时只查询同一身份，复用原写接口的安全检查；有效期内不逐出身份，崩溃窗口保守保留未知。容器仅接线及传递插件生效状态，未新增共享例外。边界和用法见[会话命令回执](sessions-command-ack.md)。目录功能数以 manifest 为准。
+
+r33-g2e 延续审批 command_ack WIP：`approve`／`reject`／`approval` 复用原审批 HTTP、lease 与 Gate 边界，私有回执只读查询及有界幂等不重复授权或清除审计。审批载荷、决定校验与结果恢复位于按需加载的 `plugins/sessions/approvalCommands.ts`，登记在 sessions frontendModules；工作台只接线。回执须匹配决定与 capability，文件路径只以 journal 为准，关闭插件不因懒加载而转入 REST。r36 将 `commandClient.ts` 移出工作台启动静态图，回执校验留在 `commandReceipt.ts`；命令模块在创建句柄时加载，审批模块仍只在审批时加载。
+
+2026-10-14 空态与快捷键：sessions 空会话路径将 greeting/start page 与 composer dock 放入同一滚动根；起始页可搜索工作区菜单（最多 5 项）复用 catalog/remote 并按插件生效门控；登记 composer 作用域 `send-message` / `stop-generation` 快捷键与按作用域冲突检查。目录功能数以 manifest 为准。
+
+2026-10-13 工具身份渲染：sessions 新增 `sessions.tool_renderers`，由 `plugins/sessions/toolRenderers.tsx` 提供稳定的 read/edit/exec registry、统一进行中／失败／审批等待状态壳和依赖失效时的安全摘要。工作台把后端 catalog 的 `effective` 插件集合传入会话渲染；files 或 shell 未生效时不展示对应原始输出，工具输出和文件差异继续有界，`toolCallId` 更新沿用原位行与持久折叠状态。目录为 **30 个插件、215 项登记功能**。
+
+2026-10-13 r2 会话渲染补齐：sessions 新增 `sessions.reasoning_rows` 与 `sessions.rich_message_rendering`。思考流在 sessions 内记录有界起止时间，前端以默认折叠、最新摘要、可滚动正文及时长行展示；无工具的纯思考通过会话 journal 恢复。流式 Markdown 在 sessions 的消息渲染入口延迟表格、链接语义并为未闭合 fence 提供解析期闭合，收流后沿用原始文本恢复 GFM 与代码高亮；`xueness.events.v1` 不变。功能关闭或依赖未生效时不挂载新交互。目录为 **30 个插件、214 项登记功能**。
+
 2026-10-12 会话自动命名：sessions 新增 `sessions.auto_title`（默认开启，设置键 `sessionsAutoTitleEnabled`）。首个助手回答完成结算后（共享执行器既有 `settle_turn` 插件挂点），对仍是默认任务文本且未被手动改名的会话，发起一次有界、无工具的短标题请求；实现位于 `sessions/auto_title.py`，请求构造沿用 providers 语义压缩的结构化纯文本模式，只送首条用户消息与首条回答的截断文本，失败、超时或无有效模型绑定时静默保留原标题。手动重命名（含分享导入标题）写入 `title_source='manual'`，永不被覆盖；生成的标题写 `title` 与 `title_source='generated'`，前端侧栏继续读取既有 `title` 字段，无需改动。目录为 **30 个插件、212 项登记功能**。
 
 2026-10-12 桌面系统通知：desktop 新增 `desktop.notifications`（默认开启，可在设置中关闭）。会话转入等待审批、等待回答、失败或完成时，复用既有会话列表刷新作为触发源，经 `DesktopNotificationsBridge.tsx` 发布有界请求，由 desktop 的 `window-theme-preload.cjs` 在插件生效时转发，`desktop/src/notifications.cjs` 在主进程再次校验并弹出 Electron 系统通知；点击通知聚焦主窗口并复用托盘命令选中会话。禁用 desktop 或关闭通知开关后，bridge、preload 与主进程三处触发路径均停止。前端实现登记于 desktop 插件 `frontendModules`，设置开关沿用既有 settings 面板分组（默认开）。目录为 **30 个插件、212 项登记功能**。
@@ -234,15 +282,15 @@ providers 的 CLI parser/handler 已迁入 `xueness/bundled_plugins/providers/op
 
 ## 功能逐项归属清单
 
-下表概述当前 28 份 manifest 中的 142 项用户能力。命令/工具/依赖和实际实现文件以同一份 manifest 为准；前端卡片直接展示该功能清单，不维护第二份隐藏列表。纯安全内核与通用布局的边界如前文所述。
+下表概述各份 manifest 中的主要用户能力；完整数量、命令/工具/依赖和实际实现文件以同一份 manifest 为准。前端卡片直接展示该功能清单，不维护第二份隐藏列表。纯安全内核与通用布局的边界如前文所述。
 
 | 插件 | 已实现的用户能力 |
 |---|---|
-| sessions | 会话创建与 Agent 对话；选择、搜索、重命名、固定与归档；历史导航与跨会话上下文检索；闭合历史轮次分叉与来源链接；从轮次检查点分叉并记录来源快照；脱敏导出、导入与恢复；文本、思考与工具调用增量流；附件、上下文引用与会话输入；计划权限模式与会话计划草稿；多行 CLI、全屏 TUI 与中断恢复；运行中切换模型与推理档位（/model、/effort）；运行期间排队发送后续消息；命令面板搜索与键盘导航；时间线跟随与回到底部；空会话起始页快捷动作与最近会话；手动压缩上下文（/compact 与说明）；依赖感知的工具并发调度；统一模型选择与详情卡；会话事件的增量游标读取（实验，默认关闭） |
+| sessions | 会话创建与 Agent 对话；选择、搜索、重命名、固定与归档；历史导航与跨会话上下文检索；闭合历史轮次分叉与来源链接；从轮次检查点分叉并记录来源快照；脱敏导出、导入与恢复；文本、思考与工具调用增量流；独立思考行（摘要折叠、思考时长、滚动内容与纯思考历史恢复）；流式 Markdown 容错与收流后富文本渲染；附件、上下文引用与会话输入；计划权限模式与会话计划草稿；多行 CLI、全屏 TUI 与中断恢复；运行中切换模型与推理档位（/model、/effort）；运行期间排队发送后续消息；命令面板搜索与键盘导航；时间线跟随与回到底部；空会话起始页快捷动作与最近会话；空态工作区搜索、项目脱离与远程连接入口；composer 发送与停止快捷键；手动压缩上下文（/compact 与说明）；依赖感知的工具并发调度；统一模型选择与详情卡；会话事件的增量游标读取（实验，默认关闭） |
 | files | 文件列表、搜索与分页读取；批准后的文件写入与编辑；目录浏览、新建与本机目录选择；文本、图像、PDF 与媒体预览；会话文件改动视图；工作区 AGENTS 指导文件加载 |
 | shell | 批准后的 argv 命令执行 |
 | planning | 待办计划读取与更新；提问、用户回答与继续；持久交付清单与内容完成检查；会话目标设置、每轮注入与完成核验 |
-| providers | 模型配置保存、选择与切换；OpenAI 兼容与 Anthropic 协议；显式模型发现；本地小模型轻量档位；轻量档极简工作台布局；轻量紧凑时间线与极简输入状态；上下文、输出与安全预算；精简工具、按需发现与结果分页；JSON 工具协议与有限修复；兼容参数、超时与有限重试；本地接口对话、原生/JSON 工具、SSE 与工具续轮诊断；输出阶段、延迟、计数与速率趋势；默认模型与推理档位保存；生成结束原因与截断安全暂停；实际用量校准与缓存容量计入；用户要求保留与可追溯历史摘要；自定义模型空状态 |
+| providers | 模型配置保存、选择与切换；本机环回地址的显式 HTTP 授权；OpenAI 兼容与 Anthropic 协议；显式模型发现；本地小模型轻量档位；轻量档极简工作台布局；轻量紧凑时间线与极简输入状态；上下文、输出与安全预算；精简工具、按需发现与结果分页；JSON 工具协议与有限修复；兼容参数、超时与有限重试；本地接口对话、原生/JSON 工具、SSE 与工具续轮诊断；输出阶段、延迟、计数与速率趋势；默认模型与推理档位保存；生成结束原因与截断安全暂停；实际用量校准与缓存容量计入；用户要求保留与可追溯历史摘要；自定义模型空状态 |
 | memory | 只读记忆轨道与上下文注入（支持 YAML frontmatter 与 HTML 注释自动清洗）；手动编辑与版本冲突检测；记忆能力与工作区配置 |
 | settings | 工作区登记、项目选择与默认目录；主题、语言、字体与代码显示；快捷键配置、验证与冲突检测；Agent 运行与能力偏好；设置项搜索 |
 | usage | 会话、步骤与日期统计；供应商实际报告的 Token 统计；实际报告成本与模型维度统计；工作台用量速览卡片 |
@@ -307,7 +355,7 @@ SearchModel 使用独立的 OpenAI-compatible Chat Completions endpoint、model 
 
 当前完整目录为 27 个可信插件、98 项登记功能。`network` 登记搜索接口与凭据管理、独立搜索模型、DNS/服务诊断和显式真实 DNS 路径；`planning.delivery` 提供持久交付清单；`providers.compatibility_checks` 提供实际协议诊断与显式采用验证参数，现有请求活动能力补充实际用量和工具计时；`desktop.window_chrome` 提供集成标题栏，`desktop.background` 提供 Windows 托盘与关闭后后台运行，`desktop.tray_navigation` 提供会话分组、快速打开、新建与反馈入口；`updates.desktop` 提供客户端检查、下载、取消和安装控制。具体功能 ID、依赖与实现模块以 manifest 为准，前端插件面板读取同一完整 catalog。
 
-证据别名、一轮引用修复及插件完成检查回调属于现有通用完成验证与 journal 协议；具体交付业务留在 planning。安装前的 HTTP 操作登记与关闭接入属于宿主安全和生命周期边界，版本判断、下载和安装决策属于 updates。没有扩大结构检查的共享白名单。使用与验证范围见[可靠性、搜索模型与客户端更新](xueness-reliability-and-updates.md)。
+证据别名（可选提示；2026-10-18 起对齐 ZCode，不再有引用修复轮）及插件完成检查回调属于现有通用完成验证与 journal 协议；具体交付业务留在 planning。安装前的 HTTP 操作登记与关闭接入属于宿主安全和生命周期边界，版本判断、下载和安装决策属于 updates。没有扩大结构检查的共享白名单。使用与验证范围见[可靠性、搜索模型与客户端更新](xueness-reliability-and-updates.md)。
 
 `updates.desktop` 的紧凑入口放在侧栏左下角，详细状态保留在插件设置页；容器只负责挂载和导航。`desktop.window_chrome` 的隔离 preload 读取现有主题 token，主进程经主窗口、主 frame、后端 origin 与颜色校验后更新 Windows 原生控件颜色。窗口配色沿用宿主恢复基础设施边界，不增加业务入口或扩大共享白名单。
 
@@ -662,7 +710,9 @@ stdio、Streamable HTTP 的 SSE 响应体、以及旧 SSE 的消息队列，都�
 
 `requestedSchema` 只接受 2025-06-18 的扁平对象：string（format 仅 email/uri/date/date-time，可带 minLength/maxLength）、number/integer（minimum/maximum）、boolean，以及 string 上的 enum/enumNames。属性最多 16 个，说明最长 2000，enum 最多 32 项，字符串最长 4000。嵌套对象、数组、组合 schema、未知关键字和超限都 decline，并记一条只有代码和服务器 id 的诊断。format、属性名或标题像 password/secret/token/credential/api-key 时直接 decline，表单不会渲染。
 
-通过校验的请求挂在本会话上，来源显示服务器名。`GET/POST /api/sessions/<id>/elicitation` 归 mcp（httpFamilies `sessions/*/elicitation`），沿用宿主的 Host、Origin 与 CSRF。POST 成功体只有 `{ok, action}`。内容不合格时返回 400 并保留这次等待，操作者可以改完再提交。10 分钟没有回答则自动 `cancel`。同一会话同时只挂一条；第二条直接 decline。
+通过校验的请求挂在本会话上，来源显示服务器名。`GET/POST /api/sessions/<id>/elicitation` 归 mcp（httpFamilies `sessions/*/elicitation`），沿用宿主的 Host、Origin 与 CSRF。GET 可带 `wait=<ms>`：缺省或 `wait=0` 立即返回；1–20000 ms 在没有待回答请求时等待创建、回答或取消通知，等待期间每秒重新确认 mcp 与 sessions 均有效；任一关闭后返回对应插件的 403。等待中的请求按状态目录和会话隔离，最多 32 个、同一会话最多 2 个；达到上限时回退为立即读取。POST 成功体只有 `{ok, action}`。内容不合格时返回 400 并保留这次等待，操作者可以改完再提交。10 分钟没有回答则自动 `cancel`。同一状态目录和会话同时只挂一条；第二条直接 decline。
+
+Web 表单可以使用 `GET /api/sessions/<id>/elicitation?wait=20000` 降低空闲读取频率。该请求仍由 mcp 插件拥有；事件发布复用 sessions 的进程内信号基础设施，但保持独立于窗口级 `conversation-transport/watch`，不会把 MCP 表单数据写进会话投影。
 
 ### 无人值守与命令行
 
@@ -675,7 +725,7 @@ stdio、Streamable HTTP 的 SSE 响应体、以及旧 SSE 的消息队列，都�
 - 回答只出现在回给该 MCP 服务器的 JSON-RPC result 里。若服务器把回答放进工具结果，模型才会看见；会话、待回答文件、诊断、日志和 HTTP 响应都不保存回答。
 - 待回答文件只含服务器名、说明、schema 和过期时间，放在状态目录 `mcp-elicitations/` 下，回答后删除。符号链接路径不写。
 - 界面固定提示「不要在这里填写密码或密钥。」前端按同一 schema 再校验一遍，控件是文本、数字、开关和下拉，没有密码框。
-- 工作台容器只挂载 `McpElicitation`。表单、样式和轮询在 `webapp/src/plugins/mcp/ElicitationForm.tsx`。页面隐藏时暂停轮询。
+- 工作台容器只挂载 `McpElicitation`。表单、样式和轮询在 `webapp/src/plugins/mcp/ElicitationForm.tsx`。页面隐藏时暂停轮询；可见时使用最长 20 秒的可选长轮询，待回答状态变化会立即返回。
 - 不新增 eval、动态导入、监听套接字或 shell。测试用临时目录里的假 stdio 服务器（`sys.executable` 固定 argv）和内存中的假 SSE 响应，不访问网络、不调用真实模型。
 ## 轻量模式紧凑时间线与状态行（providers.lightweight_compact_timeline，2026-10-05）
 
@@ -879,3 +929,73 @@ workflows 插件登记 `workflows.saved_library`（新模块 `bundled_plugins/wo
 三个模型工具按 `tool_registry` 既有模式登记（`tools.py`，manifest `tools` 同步）：`save_workflow`（planning；来源四选一——字面 plan、DSL script、本工作区既有运行 id、`latest` 最近一次运行，运行来源校验 root 归属）、`list_saved_workflows`（planning、只读、`concurrency_safe=True`；只投影名字/描述/节点数/并发/保存时间）、`run_saved_workflow`（exec、需操作者批准；批准 subject 绑定模板名+计划摘要+allow_real，实例化复用既有 `WorkflowStore.create/launch`——创建时按目标工作区重新 validate_plan，launch 自身维持命令计划审批与真实模型开关，运行前保留 web 宿主 real-provider 硬天花检查；有 owner 会话时照常写入 `owner_session`，引擎运行时继续执行既有的权限天花重读）。没有新增 Gate kind、没有第二套运行时、没有权限绕过。
 
 CLI 为新顶层命令 `xueness workflows save|list|run`（manifest `commands` 登记 `workflows`，parser/执行在 `saved_library.py`，插件 `register_cli`/`execute_cli` 既有分发接线）：`save <name> [file] --root DIR [--description] [--overwrite] [--from-run ID] [--latest]`，`list`，`run <name> --root DIR [--approve] [--allow-real]`，语义与 `workflow create/start` 一致（命令节点仍需 `--approve`）。插件禁用后三个工具由 dispatch 既有边界拒绝、CLI 在 `_require_cli_plugins` 拒绝。回归见 `tests/test_workflows_saved.py`（24 项：存/列/按名运行端到端、覆盖需显式、非法名、坏 DAG 拒绝且零写入、跨工作区拒绝、exec subject 精确性、宿主天花、禁用停用工具与 CLI、CLI 往返），`tests/test_workflows.py` 全模块维持原有通过。
+
+2026-10-14 持久媒体提供商边界：`providers.durable_media_input` 归属 `providers/media_input.py`。仅接受本次已接受 journal 消息的身份绑定，去除私有字段后的请求对象使用调用级 ContextVar 授权，不解析文本中的 artifact ID。图像在请求构造期间校验精确 root/session/message owner、引用元数据、大小和哈希，并以 provider pin 防止回收；完成或异常释放。每条消息最多 8 个、单个 20 MiB、合计 64 MiB；整个请求历史最多 64 MiB/32 个媒体项，超限明确报错。旧内联路径保留 4 个/单个 2 MiB 等原限制，PDF 与视频能力不扩大。sessions 或 providers 失效拒绝读取。共享调用边界的必要性及限制见 CONTRIBUTING.md；业务逻辑不进内核。
+
+### Sessions factual work lifecycle (2026-10-14)
+
+`sessions.work_activity` owns `work_activity.py` and `conversationWorkSegments.ts`. Generic `run_started` runs only after the driver assigns its stable turn identity; `settle_run` receives the host's `run_returned` fact so an exception cannot become successful work. Approved-tool replay has paired `run_started` / `execution_finished` notifications around the actual tool execution only. This isolated finish intentionally does not invoke model-turn settlement, queue/media ownership or title generation. These narrowly scoped shared lifecycle notifications are needed because loading/saving a journal is not proof of execution. All timing, state mapping, bounded metadata and UI remain sessions-owned and effective-plugin gated; `events.v1` is unchanged. Existing save and guidance hooks publish terminal and split facts without introducing requests, polling, background jobs or provider calls.
+
+## 桌面会话体验（2026-10-17）
+
+sessions 新增 starter_ideas（StarterIdeas）、material_manifest（ComposerMaterialManifest/composerMaterialSummary）与 approval_impact（approvalImpact）；sidebarPreference、statusPresentation、SessionRecoveryNotice 扩展既有侧栏、状态和恢复能力。planning.deliverable_files 在 CompletionChecks 连接检查结果与 files 已有预览。model_monitor.home 改为紧凑摘要；extensions 的启用入口统一回到插件管理。
+
+desktop.lifecycle 的 desktop-state-store.cjs 与 desktopStorage.ts 是宿主存储适配：只接受可信主窗口的固定键访问，由现有 sessions 消费者持有内容和开关。它在 React 挂载前可同步读取，避免随机端口切换导致启动读到空状态。不是新的业务入口，不提供模型、网络或通用文件权限。没有扩大共享白名单。详见 windows-conversation-0.1.7.md。
+
+sessions.project_list 扩展 XuenessTaskList 的项目行菜单。移除项目只写入 sidebarPreferences.hiddenProjectRoots，按既有工作区路径规则匹配；文件、会话和工作区授权保留。显式重新添加同一路径时由容器协调清除对应隐藏记录。排序菜单定位在侧栏工具区之内，避免文字被窗口左边界裁掉。
+
+## Windows 0.1.8 项目与输入操作
+
+sessions.project_list 扩展置顶项目、显示名称和项目分区，使用既有 sidebarPreferences 保存；ProjectContextMenu 与 projectSidebar 实现布局和偏好，projectArchive 复用软归档 API。容器只接线，批量归档确认与范围选择属于 sessions，运行中的会话不被归档。输入方式与队列操作沿用 sessions.current_turn_guidance / sessions.message_queue 的传输和权限语义，仅调整展示与菜单。自动模型媒体能力标记不再作为用户上下文标签展示。
+
+desktop.project_explorer 的 project-explorer.cjs 和 projectExplorer.ts 仅打开已授权的项目目录，宿主校验主窗口来源与插件有效状态，并复用 workspaces API 的目录边界。此能力不提供任意 shell 或文件执行接口。model_monitor 记录页的尺寸和排版留在其插件 CSS。详见 windows-conversation-0.1.8.md。
+
+## 会话终端聊天（sessions.tui）
+
+全屏终端聊天由 sessions 插件拥有；实现文件位于 `ts/plugins/sessions/src/tui*.ts`。CLI 仅负责适配参数与调用插件入口。未扩展共享白名单，也未修改 `webapp/`。
+
+第 14 轮把编辑器、菜单、键盘、鼠标、卡片、侧栏、主题、审批与问题弹窗拆成独立模块，由 `tui-fullscreen.ts` 协调；`tui.ts` 保留入口。`TuiPort` 是展示层与既有能力的连接：`tui-session-port.ts` 复用 session store、queue、steering、附件与已有 HTTP API，主 CLI 的 `chat-tui.ts` 仅注入 providers、workflows 和 host 适配。会话结果与 reasoning stream 通过内部端口提供，没有扩大公开工具事件中的结果字段。
+
+状态更新由最终状态文件的通知驱动，排除锁与临时文件，关闭终端时解除订阅；动画只在运行时计时。子代理详情保持只读。剪贴板命令在 sessions manifest 中声明，只在用户按复制或粘贴快捷键时执行。项目记忆仅保存审批面板提供、用户明确选择的精确规则，存于状态目录的 `project-permissions/`，后续仍经过既有工作区和权限上限检查。菜单、问题、侧栏、卡片、附件、队列及会话选择均已登记为 sessions 子功能。
+
+## Z2 回合运行时与工具执行器（2026-10-22）
+
+sessions 的 turn_runtime/history_hydration/steering_boundaries 持有持久回合事实、冷历史配对和指导收口；files.read_state_restore 持有成功工具快照的恢复策略；shell.background_notifications 持有本运行环境的任务事实、终态/失联通知；providers.tool_result_budget 持有模型结果字节预算和当前会话分页工具。模块、工具及中英文 feature 同步登记于 TS catalog/manifest。没有新增插件包或扩大共享 allowlist。
+
+共享 agent 的 TurnMachine、执行/审批/结果钩子、最终文字边界是执行机械端口；bridge 只在权限通过后、handler 前调用生命周期，tool_result 在结果成功保存后发布。恢复和展示策略不放进主宿主。主、子、workflow 分别使用自己的 ToolEnv/tracker/currentSession；每个 shell 宿主持有自己的 manager binding，禁用后由插件生命周期停止任务。后台通知在模型历史中保留系统标记，公开/TUI/旧事件投影不把它当成人类输入。详见 [Z2 说明](engine-z2.md)；逐帧事件 reducer/存储留在 Z3，外部协议留在 Z7。
+
+## Z3 会话事件与存储（2026-10-23）
+
+sessions.runtime_events/sqlite_storage/conversation_rewind/stable_boundaries/compact_persistence 拥有 ledger、可选库、回退、锚点和压缩恢复策略；files.rewind_snapshots/file_rewind 拥有授权文件修改的 before artifact、after hash、预览与应用。catalog/manifest 同步登记模块和中英文功能。
+
+共享 contracts 只提供新的纯事件 schema/reducer，agent 的 recordEvent 端口先于观察回调，sessions 共享包只提供无副作用的 compact-operation 状态 helper；宿主接线主/子/workflow及管理脚本。JSON journal/history 继续作为执行权威，SQLite 为可重建辅助库，没有新增插件或共享 allowlist 例外。详情见 [Z3 说明](engine-z3.md)。
+
+## Z4 执行适配（2026-10-23）
+
+shell 的 provider/snapshot/startup/config_api、files 的 file_bytes_api 与共享文件系统机械适配、network 的 fetch_runtime 均登记在现有插件中。主/子/workflow 宿主只连接 ToolEnv 与扩展，真实业务策略仍归插件；providers 补齐 tool_result_read 的工具声明。共享执行调用端口传递平台 spawn 参数，文件原子写端口新增取消、create-only 和替换前校验；这些是现有执行/文件基础设施的机械选项。manifest 的 HTTP route segment 允许连字符，使已经存在的 file-bytes 等实际路由可以精确登记，不新增插件或扩大构建 allowlist。NetworkRequest 是 sessions 本地持久事件的新增公开活动种类，URL 只保留 origin。详细范围和 Windows/Linux 验证区别见 [Z4 说明](engine-z4.md)。
+
+## Z5 MCP、配置与 hooks（2026-10-23）
+
+settings 的 runtime_config/runtime_config_api 拥有数据层、provenance、项目摘要信任及脱敏视图；mcp 的 config/runtime/runtime_extension/runtime_api 拥有服务器适配、激活内连接lease、通知/取消/订阅、只读端口；hooks 的 runner/output/trust 拥有逐派发信任和输出消费。server/runtime-configuration 只组合所属插件验证，main和actor按其现有范围连接实际配置，ApplicationApi装配路由。contracts新增纯McpActivity schema/reducer，sessions登记并持久活动，既有agent生命周期端口无需新产品分支。原hooks信任与配置trust独立，连接不跨run/session常驻；具体能力和保留边界见 [Z5 说明](engine-z5.md)。
+
+## Z6 动态工作流（2026-10-23）
+
+动态工作流的持久运行、缓存、调度、HTTP、工具和 CLI 归 `workflows` 插件：`dynamic-store`、`dynamic-engine*`、`dynamic-service`、`dynamic-http`、`dynamic-tools`。TUI 已将 script run 接入现有 workflow 卡片/侧栏，watcher 消费 dynamic-workflows 状态，composer data 登记八个 script 工具；宿主负责装配，不另开权限路径。
+
+共享纯 compiler/schema/interpreter 位于 `ts/packages/agent/src/script/`，属于 `@xueness/agent` 公共解释器实现。Microsoft TypeScript 5.9.3 运行依赖因此登记在 agent 包；`workflows` 插件没有外部依赖，allowlist 不变。compiler 只接受文档列明的原生 AST 子集；它不是 `ts.Program` 全量类型检查器，也不执行任意 JS。运行行为、授权、恢复和上游保留边界见 [Z6 说明](engine-z6.md)。
+
+## Z7 app-server 与 headless（2026-10-23）
+
+`remote` 插件拥有 stdio JSON-RPC 的 `app-server` 入口、v1/v2 method dispatcher、协议身份验证、投影 subscriptions 和有界 response fragments。它将命令、会话读取/投影、历史与文件回退、问题/withdrawal/guidance、media 及 workflow script 操作转交给既有 sessions/files/composer/workflows HTTP owners；receipt、CAS、数据持久化与功能权限仍由原 owner 决定。default protocol name 为 `xueness.app-server.v1`，协商版本 2 时为 `xueness.app-server.v2`；projection schema 独立标为 1。宿主只负责 stdio 帧、请求容量、stdout 背压、ACK-before-initial-frame 和在关停时停止/排空当前进程工作，不新增业务存储、任意路由、原始工具执行或网络 listener。协议不向远端暴露 provider 密钥，session 和 workspace 必须匹配固定的首个 root identity。
+
+`sessions.headless` 由 sessions catalog/manifest 登记并拥有单任务 CLI 使用能力。CLI 入口复用 AgentRunner、provider 选择、权限模式和会话 store，分别提供 text、JSON result 和 stream-json 事件输出；它不是 detached worker，也没有单独的审批或权限旁路。remote 负责与已有会话 owner 的协议桥接，sessions 负责 headless 会话/运行入口，业务授权不会转移给 app-server 宿主。适配范围、v1/v2 方法、协议限制和当前验收见 [Z7 说明](engine-z7.md) 与 [HANDOVER §48](../ts/HANDOVER.md)。
+
+## Z8 guarded、goal 与 project-memory dream（2026-10-23）
+
+`planning.guarded` 负责有限危险命令匹配，通用 shell parser 的无 I/O 合同位于 `@xueness/contracts`，`@xueness/permissions` 保留兼容重导与既有 policy 接线。支持范围为 POSIX/Git Bash 与 PowerShell 的有限命令形状；命中规则的 exec 每次请求批准，未命中沿用 guarded 的 yolo 放行路径。CMD 和 opaque/unsupported 语法不因此变安全；本功能是提示策略，不是 OS sandbox，也不作自动安全保证。主工作台、轻量工作台和 pane 菜单复用既有模式选项；readonly 子代理与 workflow `edit` file-only ceiling 不放宽。没有扩展 Gate 通用只读白名单。
+
+`planning.session_goal` 持有每会话目标、确定性 summary、稳定 id、生命周期状态及累计 budget；goal 文本首行经空白归一化后最多 80 个 Unicode 码点，不调用模型生成标题。`goal_read` 只读当前目标。暂停 running goal 时先修改 live 状态，再 abort/drain 执行；resume 保留累计 usage，budget 通过完整对象替换。HTTP 与 CLI 仍归 planning owner，session header 展示摘要并提供运行中暂停及显式恢复；没有后台自动恢复 runner。remote 新增 `goal/read`、`set`、`pause`、`resume`、`clear`、`budget` 六个固定 scope 方法。
+
+`memory.dream` 由 memory 插件拥有草稿/候选状态、来源快照、digest 校验、workspace lease 与显式应用；host `memory-dream-driver` 只接现有 sessions store、memory HTTP KEY reader/writer 和 provider 的单次 `handoffModelJson` 端口。草稿不调用模型，start 是一次无 tools 的 JSON handoff，ready 不落 KEY；apply 复核 candidate digest、来源摘要和 KEY CAS 后仅写项目 `KEY.md`，不写全局 `MEMORY.md` 或 `USER.md`。原有 `memory.context` 仍从三条轨道只读注入每次模型请求，API track editor 仍要求 confirmed+digest。HTTP 子路由归 `sessions/*/memory-dreams`，CLI 为 `memory-dream`，remote 固定登记 `memory/dream/{list,propose,get,start,cancel,apply}` 六方法。该路径手动启动、审阅和确认，没有自动 scheduler 或完整上游 dream tool loop。产品使用、生命周期和差异见 [Z8 说明](../ts/docs/z8-guarded-goal-memory.md)；源码验收记录为四个场景、五次 loopback provider 请求，见 [z8-memory-source.json](../验收资料/验证记录/z8-memory-source.json)。
+
+构建验收曾发现 server driver 通过 dist 源文件路径导入 memory dream service，而 HTTP owner 通过 `@xueness/plugin-memory` 导入，造成相同代码的 Error 类被加载为两个模块身份，HTTP 的 `instanceof` 分类因而失配。driver 已统一从 memory 公共包导入 service/error/types，使宿主与 HTTP owner 使用同一模块身份；这是已修复的构建接线问题，不是保留的产品行为边界。

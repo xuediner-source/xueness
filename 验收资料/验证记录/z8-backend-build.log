@@ -1,0 +1,11 @@
+
+> xueness-ts@0.2.0-dev.0 build
+> npm run typecheck && node scripts/build.ts
+
+
+> xueness-ts@0.2.0-dev.0 typecheck
+> tsc -p tsconfig.json
+
+
+added 44 packages in 2s
+Built 717 JavaScript modules in E:\models\apps\_stage-z8\Xueness-0.1.8-complete-project\ts\dist

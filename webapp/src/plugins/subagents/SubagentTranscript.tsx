@@ -5,6 +5,7 @@ import { toTimelineRows } from "../../xuenessWorkbench";
 import { parseEventsEnvelope } from "../../xuenessEvents";
 import { t as tr } from "../../i18n";
 import { ZCodeConversation } from "../sessions/ZCodeConversation";
+import "../../styles/subagent-sidepane.css";
 
 type ChildTranscript = {
   childSessionId: string;

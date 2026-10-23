@@ -159,6 +159,26 @@
   margin-bottom: 0;
 }
 
+.xn-shell-layout .xn-viz {
+  margin: 12px 0;
+  height: 520px;
+  min-height: 240px;
+  max-width: 100%;
+  overflow: hidden;
+  resize: vertical;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+
+.xn-shell-layout .xn-viz--wide { height: 640px; }
+
+.xn-shell-layout .xn-viz__frame {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border: 0;
+}
+
 .xn-shell-layout .xn-md__list {
   margin: 0 0 0.9em;
   padding-left: 1.4em;

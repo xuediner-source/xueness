@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { retainRejectedComposerDraft, recoverComposerDraft, subscribeComposerDrafts, notifyComposerDrafts } from './composerRecovery';
+import { retainRejectedComposerDraft, recoverComposerDraft, subscribeComposerDrafts, notifyComposerDrafts, relocateEmptyComposerDraft } from './composerRecovery';
 import { clearSubmittedComposerDraft, persistDraft, readPersistedDraft, restoredDraft, type ComposerDraftState } from './XuenessWorkbenchView';
 
 const draft = (text: string): ComposerDraftState => ({ text, goal: false, attachments: [], selectedCapabilities: [],
@@ -65,3 +65,88 @@ test('remounted composer receives late settlement from the same store; unsubscri
   assert.deepEqual([old, next, other], [1, 1, 0]);
   disposeNext(); disposeOther();
 });
+
+test('empty-state draft follows a workspace change and does not clobber text already stored there', () => {
+  const store = new Map<string, { text: string; revision: number }>([
+    ['default:new-task', { text: 'keep me', revision: 3 }],
+  ]);
+  assert.equal(relocateEmptyComposerDraft(store, 'default:new-task', '/work:new-task'), true);
+  assert.deepEqual(store.get('/work:new-task'), { text: 'keep me', revision: 4 });
+  store.set('/work:new-task', { text: 'already there', revision: 1 });
+  store.set('default:new-task', { text: 'incoming', revision: 2 });
+  assert.equal(relocateEmptyComposerDraft(store, 'default:new-task', '/work:new-task'), false);
+  assert.equal(store.get('/work:new-task')?.text, 'already there');
+  assert.equal(relocateEmptyComposerDraft(store, 'default:new-task', 'default:new-task'), false);
+  assert.equal(store.get('default:new-task')?.revision, 2);
+  assert.equal(relocateEmptyComposerDraft(new Map([['a', { text: '', revision: 1 }]]), 'a', 'b'), false);
+});
+
+const nontextDrafts: [string, Partial<ComposerDraftState>][] = [
+  ['attachment', { attachments: [{ name: 'a.txt', data: 'YQ==', mimeType: 'text/plain' }] }],
+  ['lost attachment marker', { hadAttachments: true }],
+  ['goal', { goal: true }],
+  ['capability', { selectedCapabilities: ['write'] }],
+  ['context', { selectedContext: { files: ['a.txt'], sessions: [], skills: [], plugins: [] } }],
+  ['structured mention', { editorState: { version: 1, nodes: [{ type: 'mention', kind: 'file', id: 'a.txt', label: 'a.txt' }] } }],
+  ['recovery', { recoverableDrafts: [draft('recover me')] }],
+  ['pending submission', { pendingSubmission: { id: 'pending', draft: draft('sending') } }],
+  ['unconfirmed delivery', { deliveryUnconfirmed: true }],
+  ['submission error', { submissionError: 'failed' }],
+  ['attachment error', { attachmentError: 'reattach' }],
+];
+
+for (const [label, content] of nontextDrafts) {
+  test(`workspace migration preserves a ${label}-only target and its conflicting source`, () => {
+    const source = draft('incoming');
+    const target = { ...draft(''), ...content };
+    const store = new Map([['from', source], ['to', target]]);
+    assert.equal(relocateEmptyComposerDraft(store, 'from', 'to'), false);
+    assert.equal(store.get('from'), source);
+    assert.equal(store.get('to'), target);
+  });
+
+  if (content.pendingSubmission) continue;
+  test(`workspace migration copies a ${label}-only source into an empty target without losing its state`, () => {
+    const source = { ...draft(''), ...content };
+    const store = new Map([['from', source], ['to', draft('')]]);
+    assert.equal(relocateEmptyComposerDraft(store, 'from', 'to'), true);
+    assert.deepEqual(store.get('to'), { ...source, revision: source.revision + 1 });
+    assert.equal(store.get('from'), source);
+    assert.equal(relocateEmptyComposerDraft(store, 'from', 'from'), false);
+    assert.equal(relocateEmptyComposerDraft(store, 'from', 'to'), false);
+  });
+}
+
+
+for (const text of ['', 'new input while sending']) {
+  test(`workspace migration leaves a live send in its original scope (${text || 'empty editor'})`, () => {
+    const source = { ...draft(text), pendingSubmission: { id: 'live-send', draft: draft('sending') } };
+    const target = draft('');
+    const store = new Map<string, ComposerDraftState>([['from', source], ['to', target]]);
+    assert.equal(relocateEmptyComposerDraft(store, 'from', 'to'), false);
+    assert.equal(store.get('from'), source);
+    assert.equal(store.get('to'), target);
+    assert.equal(relocateEmptyComposerDraft(store, 'from', 'unused'), false);
+    assert.equal(store.has('unused'), false);
+    // A late ACK releases only the original key, just as handleSend does.
+    store.set('from', { ...source, pendingSubmission: undefined });
+    assert.equal(store.get('to')?.pendingSubmission, undefined);
+    assert.equal(store.get('from')?.text, text);
+  });
+}
+
+for (const inRecovery of [false, true]) {
+  test(`workspace-bound attachment refs stay in their original ${inRecovery ? 'recovery' : 'active'} draft`, () => {
+    const attachment = { name: 'a.txt', data: '', mimeType: 'text/plain', ref: {
+      id: 'a'.repeat(32), token: 'a'.repeat(32), name: 'a.txt', mimeType: 'text/plain', size: 1,
+      origin: 'file' as const, source: 'upload' as const,
+    } };
+    const withRef = { ...draft('with attachment'), attachments: [attachment] };
+    const source = inRecovery ? { ...draft('new input'), recoverableDrafts: [withRef] } : withRef;
+    const target = draft('');
+    const store = new Map<string, ComposerDraftState>([['from', source], ['to', target]]);
+    assert.equal(relocateEmptyComposerDraft(store, 'from', 'to'), false);
+    assert.equal(store.get('from'), source);
+    assert.equal(store.get('to'), target);
+  });
+}

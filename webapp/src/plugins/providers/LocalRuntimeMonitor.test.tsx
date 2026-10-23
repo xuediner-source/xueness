@@ -14,6 +14,8 @@ import {
 } from './LocalRuntimeMonitor';
 import type { LocalRuntimeSession } from './LocalRuntimeMonitor';
 
+const PLACEHOLDER = '<div class="xn-request-telemetry-placeholder" aria-hidden="true"></div>';
+
 test('monitor stays absent outside lightweight mode', () => {
   assert.equal(renderToStaticMarkup(<LocalRuntimeMonitor lightweight={false} session={null} />), '');
 });
@@ -108,23 +110,24 @@ test('request details expand for provider errors while normal completed details 
   assert.match(failed, /data-testid="request-telemetry" open=""/);
   const completed = renderToStaticMarkup(<RequestTiming session={{ status: 'completed' }} />);
   assert.doesNotMatch(completed, /data-testid="request-telemetry" open/);
-  assert.equal(completed, '', 'A completed turn with no recorded telemetry has no empty diagnostics panel');
+  assert.equal(completed, PLACEHOLDER, 'A completed turn with no recorded telemetry keeps only an inert spacer, not an empty diagnostics panel');
   const recorded = renderToStaticMarkup(<RequestTiming session={{status:'completed', runtime_activity:{phase:'completed',requestSeconds:2}}} />);
   assert.match(recorded, /已报告 Token 用量/);
 });
 
 test('lightweight completed request summary is omitted while error diagnostics remain visible', () => {
   const completed = renderToStaticMarkup(<RequestTiming session={{ status: 'completed', runtime_profile: 'lightweight' }} />);
-  assert.equal(completed, '');
+  assert.equal(completed, PLACEHOLDER);
   const failed = renderToStaticMarkup(<RequestTiming session={{ status: 'provider_error', runtime_profile: 'lightweight' }} />);
   assert.match(failed, /data-testid="request-telemetry" open=""/);
   assert.match(failed, /供应商错误/);
 });
 
 test('the live request phase and provider-reported usage stay visible without history', () => {
-  for (const [phase, label] of [['thinking', '思考'], ['generating', '生成'], ['tools', '工具调用']] as const) {
+  for (const [phase, label] of [['thinking', '思考'], ['generating', '生成'], ['tools', '工具调用'], ['queued_model', '等待并发名额']] as const) {
     const html = renderToStaticMarkup(<RequestTiming session={{ status: 'running', runtime_activity: {
       phase, startedAt: '2026-10-07T00:00:00Z', requestStep: 2,
+      queuedMs: phase === 'queued_model' ? 1500 : undefined,
       reportedInputTokens: 1200, reportedCachedTokens: 480, reportedOutputTokens: 37,
     } }} />);
     assert.match(html, new RegExp(label));
@@ -132,7 +135,12 @@ test('the live request phase and provider-reported usage stay visible without hi
     assert.match(html, />1,200</);
     assert.match(html, />480</);
     assert.match(html, />37</);
+    if (phase === 'queued_model') assert.match(html, /排队耗时[^<]*1\.5 秒/);
   }
+  const zeroQueue = renderToStaticMarkup(<RequestTiming session={{ status: 'running', runtime_activity: {
+    phase: 'queued_model', queuedMs: 0,
+  } }} />);
+  assert.match(zeroQueue, /排队耗时[^<]*0 秒/);
 });
 
 test('terminal session status overrides stale generating activity and disables elapsed timing', () => {

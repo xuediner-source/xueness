@@ -1,0 +1,50 @@
+{
+  "apiVersion": 2,
+  "id": "memory",
+  "name": "记忆",
+  "description": "Curated memory tracks with explicit, reviewable project-memory consolidation.",
+  "version": "0.2.0",
+  "defaultEnabled": true,
+  "capabilities": {
+    "fs": {
+      "read": [
+        "any"
+      ],
+      "write": [
+        "any"
+      ]
+    }
+  },
+  "tools": [],
+  "features": [
+    {
+      "id": "memory.injection",
+      "name": "只读记忆轨道与上下文注入",
+      "nameEn": "Read-only memory tracks and context injection"
+    },
+    {
+      "id": "memory.recall_reset",
+      "name": "压缩后重新召回记忆",
+      "nameEn": "Memory recall reset after compaction"
+    },
+    {
+      "id": "memory.dream",
+      "name": "显式项目记忆整理、候选审阅与确认应用",
+      "nameEn": "Explicit project memory curation, candidate review and confirmed application"
+    }
+  ],
+  "panels": [
+    "memory"
+  ],
+  "frontendModules": [
+    "plugins/memory/MemoryPanel.tsx",
+    "plugins/memory/MemorySettings.tsx",
+    "plugins/memory/index.tsx"
+  ],
+  "httpFamilies": [
+    "sessions/*/memory-dreams"
+  ],
+  "commands": [
+    "memory-dream"
+  ]
+}

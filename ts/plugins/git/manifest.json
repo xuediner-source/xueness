@@ -1,0 +1,17 @@
+{
+  "apiVersion": 2,
+  "id": "git",
+  "name": "Git 审查",
+  "description": "Scoped recoverable workspace checkpoints and per-turn rewind.",
+  "version": "0.2.0",
+  "defaultEnabled": true,
+  "capabilities": { "exec": ["git"], "fs": { "read": ["state", "workspace", "temp"], "write": ["state", "workspace", "temp"] } },
+  "toolEvents": { "events": ["after_tool_authorization"] },
+  "features": [
+    { "id": "git.checkpoints", "name": "可恢复工作区检查点", "nameEn": "Recoverable workspace checkpoints" },
+    { "id": "git.turn_checkpoints", "name": "轮次首个写入前自动检查点", "nameEn": "Automatic checkpoints before a turn's first change" },
+    { "id": "git.rewind", "name": "回退工作区到轮次检查点", "nameEn": "Rewind the workspace to a turn checkpoint" }
+  ],
+  "panels": ["git"],
+  "frontendModules": ["plugins/git/XuenessGitView.tsx", "plugins/git/XuenessCloneDialog.tsx", "xuenessGit.ts"]
+}

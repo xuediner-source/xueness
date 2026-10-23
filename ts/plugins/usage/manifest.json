@@ -1,0 +1,23 @@
+{
+  "apiVersion": 2,
+  "id": "usage",
+  "name": "用量统计",
+  "description": "从本地会话记录统计步骤和运行。",
+  "version": "1.0.0",
+  "defaultEnabled": true,
+  "capabilities": { "fs": { "read": ["state"] } },
+  "httpFamilies": ["usage"],
+  "commands": ["usage"],
+  "panels": ["usage"],
+  "features": [
+    { "id": "usage.usage", "name": "会话、步骤与日期统计", "nameEn": "Session, step and daily statistics" },
+    { "id": "usage.tokens", "name": "供应商实际报告的 Token 统计", "nameEn": "Provider-reported token statistics" },
+    { "id": "usage.costs", "name": "实际成本与模型维度统计、稳定配色的每日堆叠图", "nameEn": "Reported costs, per-model statistics and daily stacked charts with stable colors" },
+    { "id": "usage.quick_card", "name": "工作台用量速览卡片", "nameEn": "Workbench usage quick card" }
+  ],
+  "frontendModules": [
+    "plugins/usage/UsagePanel.tsx",
+    "plugins/usage/XuenessUsageSettings.tsx",
+    "plugins/usage/XuenessUsageQuickCard.tsx"
+  ]
+}

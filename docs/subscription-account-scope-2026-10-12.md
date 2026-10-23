@@ -1,3 +1,5 @@
+> Historical reference from 2026-10-12, before the TypeScript/Z8 migration; current behavior is defined by [README.md](../README.md) and [ts/docs/z8-guarded-goal-memory.md](../ts/docs/z8-guarded-goal-memory.md).
+
 # 订阅中心的账号范围修正
 
 订阅中心使用用户的账号授权、CLI 登录或订阅登录凭证，不要求用户开通 API 或填写 API Key。插件仍由用户在插件市场选择安装，默认未安装、未启用。

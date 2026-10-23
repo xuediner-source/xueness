@@ -1,3 +1,5 @@
+> Historical reference from 2026-10-12, before the TypeScript/Z8 migration; current behavior is defined by [README.md](../README.md) and [ts/docs/z8-guarded-goal-memory.md](../ts/docs/z8-guarded-goal-memory.md).
+
 # Deploying Xueness
 
 运行入口见 [README](../README.md#one-command-local-deploy)。后端需要 Python 3.10+，只使用标准库；仓库已包含 `webapp/dist`，运行预构建界面不需要 Node.js。

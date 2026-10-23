@@ -1,0 +1,26 @@
+{
+  "apiVersion": 2,
+  "id": "subscriptions",
+  "name": "订阅中心",
+  "description": "选择安装后通过账号授权、CLI 登录或订阅凭证接入，在会话中使用模型并查询上游真实额度。",
+  "version": "1.0.0",
+  "defaultEnabled": false,
+  "installPackage": "xueness-subscriptions",
+  "dependencies": ["providers"],
+  "capabilities": { "fs": { "read": ["state"], "write": ["state"] }, "exec": ["node"] },
+  "httpFamilies": ["subscriptions"],
+  "panels": ["subscriptions"],
+  "provides": ["subscriptions.worker"],
+  "modules": ["state", "accounts", "broker", "provider"],
+  "frontendModules": ["plugins/subscriptions/api.ts", "plugins/subscriptions/index.tsx"],
+  "backendAssets": ["assets/worker.mjs", "assets/protocols.mjs", "assets/compat.mjs", "assets/vendor/hub.mjs", "assets/vendor/commandcode.mjs", "assets/vendor/qoder.mjs", "assets/vendor/auth/oauth-flow.mjs", "assets/vendor/auth/qwen-device-flow.mjs", "assets/vendor/auth/safety.mjs"],
+  "dataFiles": ["assets/catalog.json", "assets/vendor/LICENSE-MIT.txt"],
+  "features": [
+    { "id": "subscriptions.accounts", "name": "浏览器授权与本机登录导入", "nameEn": "Browser authorization and local credential import" },
+    { "id": "subscriptions.providers", "name": "订阅账号与登录凭证供应商目录", "nameEn": "Subscription account and login credential catalog" },
+    { "id": "subscriptions.quota", "name": "上游实际额度与重置时间", "nameEn": "Upstream reported quota and reset times" },
+    { "id": "subscriptions.models", "name": "实际型号发现与会话模型选择", "nameEn": "Model discovery and conversation selection" },
+    { "id": "subscriptions.streams", "name": "多协议流式文本、思考与工具调用", "nameEn": "Streaming text, reasoning and tool calls across protocols" },
+    { "id": "subscriptions.lifecycle", "name": "可选安装、凭据保护与禁用即停", "nameEn": "Optional installation, private credentials and disable cleanup" }
+  ]
+}

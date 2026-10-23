@@ -8,6 +8,8 @@ import {
   SidebarActions,
   TimelineCard,
   SimpleMarkdown,
+  MarkdownRenderOptionsContext,
+  prepareStreamingMarkdown,
   copyTextToClipboard,
   shouldCloseNarrowSidebarOnEscape,
   cachedMarkdownElements,
@@ -371,4 +373,64 @@ test("SimpleMarkdown: 默认上下文代码块立即高亮（immediate），cach
   assert.notEqual(bypassedAgain, bypassedFirst);
   const hot = cachedMarkdownElements("绕过缓存的段落");
   assert.equal(cachedMarkdownElements("绕过缓存的段落"), hot);
+});
+
+test("SimpleMarkdown: 流式表格按完整行渲染，链接收流后恢复 GFM", () => {
+  const text = [
+    "| 名称 | 状态 |",
+    "| --- | --- |",
+    "| alpha | ready |",
+    "",
+    "[安全链接](https://example.com)",
+  ].join("\n");
+  const streamingOptions = { codeHighlightTiming: "after-stream", cacheParseResults: false } as const;
+  const render = (value: string) => renderToStaticMarkup(
+    <MarkdownRenderOptionsContext.Provider value={streamingOptions}>
+      <SimpleMarkdown text={value} />
+    </MarkdownRenderOptionsContext.Provider>,
+  );
+  // A table renders while it streams, so settling does not reflow it.
+  const streaming = render(text);
+  assert.match(streaming, /class="xn-md__table"/);
+  assert.match(streaming, /alpha/);
+  assert.doesNotMatch(streaming, /href="https:\/\/example\.com"/);
+  assert.match(streaming, /\[安全链接\]\(https:\u200b?\/\/example\.com\)/);
+
+  const settled = renderToStaticMarkup(<SimpleMarkdown text={text} />);
+  assert.match(settled, /class="xn-md__table"/);
+  assert.match(settled, /href="https:\/\/example\.com"/);
+});
+
+test("prepareStreamingMarkdown: 未收完的表格行、表头与块标记不以字面量闪现", () => {
+  const table = "| 名称 | 状态 |\n| --- | --- |\n| alpha | ready |\n";
+  // The row still being received waits; complete rows stay.
+  assert.equal(prepareStreamingMarkdown(table + "| be"), table.slice(0, -1));
+  assert.equal(prepareStreamingMarkdown(table + "| beta | done |\n"), table + "| beta | done |\n");
+  // A header whose separator has not arrived (or is partial) is held back.
+  assert.equal(prepareStreamingMarkdown("前文\n\n| 名称 | 状"), "前文\n");
+  assert.equal(prepareStreamingMarkdown("前文\n\n| 名称 | 状态 |\n"), "前文\n");
+  assert.equal(prepareStreamingMarkdown("前文\n\n| 名称 | 状态 |\n| --- | -"), "前文\n");
+  // A header with its separator is a table already (rows follow).
+  assert.equal(prepareStreamingMarkdown("| 名称 | 状态 |\n| --- | --- |\n"), "| 名称 | 状态 |\n| --- | --- |\n");
+  // Prose with pipes is not held.
+  assert.equal(prepareStreamingMarkdown("a | b 之间"), "a | b 之间");
+  // A bare block marker cannot turn the paragraph above into a heading.
+  assert.equal(prepareStreamingMarkdown("段落\n-"), "段落");
+  assert.equal(prepareStreamingMarkdown("段落\n- 列表项"), "段落\n- 列表项");
+  // A fence opened on the line still being received has no body yet.
+  assert.equal(prepareStreamingMarkdown("说明\n```py"), "说明");
+});
+
+test("SimpleMarkdown: 流式未闭合 fence 维持代码块结构且不泄漏合成闭合标记", () => {
+  const text = "```ts\nconst answer = 42;";
+  const prepared = prepareStreamingMarkdown(text);
+  assert.match(prepared, /```ts\nconst answer = 42;\n```$/);
+  const html = renderToStaticMarkup(
+    <MarkdownRenderOptionsContext.Provider value={{ codeHighlightTiming: "after-stream", cacheParseResults: false }}>
+      <SimpleMarkdown text={text} />
+    </MarkdownRenderOptionsContext.Provider>,
+  );
+  assert.match(html, /class="xn-md__code-fence" data-language="typescript" data-highlight="after-stream"/);
+  assert.match(html, /const answer = 42;/);
+  assert.doesNotMatch(html, />```<\/code>/);
 });

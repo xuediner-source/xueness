@@ -11,15 +11,15 @@ import sys
 
 ROOT = Path(__file__).resolve().parents[2]
 RELEASE = ROOT/'desktop/release'
-from sys import path as module_path
-module_path.insert(0, str(ROOT))
-from xueness import __version__ as expected_version
-from xueness.plugin_runtime import PLUGIN_IDS
-expected_plugins = len(PLUGIN_IDS)
-expected_features = sum(len(json.loads((ROOT/'xueness/bundled_plugins'/ident/'manifest.json').read_text(encoding='utf-8'))['features']) for ident in PLUGIN_IDS)
+# The plugin catalog ships with the TypeScript backend (ts/catalog); the version is the desktop package's.
+expected_version = json.loads((ROOT/'desktop/package.json').read_text(encoding='utf-8'))['version']
+CATALOG = sorted((ROOT/'ts/catalog').glob('*.json'))
+expected_plugins = len(CATALOG)
+expected_features = sum(len(json.loads(path.read_text(encoding='utf-8'))['features']) for path in CATALOG)
 parser = argparse.ArgumentParser()
 parser.add_argument('--executable', type=Path, help='check this packaged application executable')
 parser.add_argument('--screenshots', type=Path, help='save native appearance screenshots in this directory')
+parser.add_argument('--report', type=Path, help='retain the isolated native UI report for review')
 args = parser.parse_args()
 if args.executable:
     executable = args.executable.expanduser().resolve()
@@ -50,6 +50,9 @@ with tempfile.TemporaryDirectory(prefix='xueness-app-check-') as temporary:
         detail = json.loads(report.read_text(encoding='utf-8')).get('reason', '') if report.exists() else ''
         raise SystemExit('Packaged desktop did not complete its UI startup check. '+detail)
     state = json.loads(report.read_text(encoding='utf-8'))
+    if args.report:
+        args.report.parent.mkdir(parents=True, exist_ok=True)
+        args.report.write_text(json.dumps(state, ensure_ascii=False, indent=2), encoding='utf-8')
     assert state.get('plugins') == expected_plugins and state.get('features') == expected_features, state
     assert state.get('installedCards') == expected_plugins and state.get('aboutReady') is True, state
     assert state.get('aboutVersion') == expected_version, state
@@ -78,6 +81,8 @@ with tempfile.TemporaryDirectory(prefix='xueness-app-check-') as temporary:
             assert row['sidebarRail'] is claudex and row['compactTasks'] is claudex, row
             assert row['classicTasks'] is (not claudex), row
             assert row['workspaceStrip'] is claudex and row['composerWorkspace'] is (not claudex), row
+            assert row['workspaceMenuVisible'] is True, row
+            assert row['workspacePlacement'] == ('xn-hero__workspace' if claudex else 'xn-composer__top-content'), row
             assert row['resizeHandle'] is True and row['titlebarHeight'] == 44, row
             assert row['nativeBackground'].lower() == row['chromeToken'].lower(), row
             assert row['meta'].lower() == row['windowBgToken'].lower() and row['nodeAccess'] is False, row
@@ -97,7 +102,7 @@ with tempfile.TemporaryDirectory(prefix='xueness-app-check-') as temporary:
     if sys.platform == 'darwin':
         print('PASS: macOS Dock opens the shared production task popup')
     resources = executable.parent/'resources' if os.name == 'nt' else executable.parents[1]/'Resources'
-    worker = resources/'backend/_internal/xueness/bundled_plugins/browser/bridge.mjs'
+    worker = resources/'backend-ts/plugins/browser/bridge.mjs'
     driver = resources/'browser-runtime/node_modules/playwright/index.mjs'
     assert worker.is_file() and driver.is_file(), 'browser runtime missing from installer'
     browser = subprocess.Popen([str(executable), str(worker), str(Path(temporary)/'browser-profile')],

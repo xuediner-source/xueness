@@ -1,0 +1,67 @@
+Xueness 0.2.1 Windows 版使用说明
+====================================
+
+本目录提供 Windows x64 安装版、便携版和完整项目包。安装包仅包含应用程序及运行所需组件，不包含个人模型配置、API 密钥、用户会话、工作区或模型权重。
+
+0.2.1 更新内容
+---------------
+1. 项目行提供完整右键菜单，也可按 Shift+F10 打开。可置顶、修改显示名称、切换分区、在资源管理器中打开、归档项目内会话，或“从项目列表移除”。修改显示名称只改显示偏好；移除项目不会删除磁盘目录或会话记录。
+2. 输入区加入“引导 / 排队”选择。排队消息会显示在输入区上方，可查看、编辑、取消、调整顺序或立即发送；排队期间可继续编辑当前草稿。
+3. 模型监测记录增加留白和记录间距。桌面宽屏并列显示请求型号与返回型号，窄屏改为纵向排列；查看记录不额外发起模型请求。
+4. 新会话不再自动显示 image、PDF、video 能力标签。实际添加的附件以及主动选择的技能等上下文仍会显示，模型能力配置不变。
+
+交付文件与完整项目 ZIP
+----------------------
+Xueness-0.2.1-complete-project.zip 是主要交付文件。解压后会得到 Xueness-0.2.1-complete-project 文件夹：
+
+- 文件夹根目录是可重建的 allowlist 项目源码，源码已展开，包含 xueness、webapp、desktop、tests、tools、docs、依赖锁文件、构建脚本和许可证文件。
+- Windows/ 目录包含 Xueness-0.2.1-windows-x64-setup.exe 安装版和 Xueness-0.2.1-windows-x64-portable.zip 便携版。
+- 使用说明.txt 是本说明的副本。
+- 验收资料/ 包含本次验收报告和截图。请以验收报告列出的范围和结论为准。
+- source-manifest.json 和 complete-project-manifest.json 列出源码与完整项目包的文件及 SHA-256。
+
+交付目录还提供独立的源码 ZIP/TAR、安装版、便携版、artifact-manifest.json 和 SHA256SUMS.txt。可在 PowerShell 中用以下命令核验文件：
+
+  Get-FileHash .\Xueness-0.2.1-windows-x64-setup.exe -Algorithm SHA256
+
+将结果与 SHA256SUMS.txt 中同名文件的摘要逐字符比较。完整项目包内的安装版和便携版摘要也记录在 complete-project-manifest.json。
+
+安装与首次启动
+--------------
+1. 先将完整项目 ZIP 解压到一个普通文件夹，不要直接在 ZIP 预览窗口中运行程序。
+2. 若要安装，打开解压目录中的 Windows 文件夹，运行 Xueness-0.2.1-windows-x64-setup.exe，按安装向导完成安装。安装程序按当前 Windows 用户安装，可选择程序目录并创建开始菜单/桌面快捷方式。
+3. 从开始菜单或桌面快捷方式启动 Xueness。首次使用时，打开设置并配置自己的模型服务地址、模型名称和凭据，然后再发送任务。软件不会替用户创建或提供模型账号。
+4. 若选择便携版，解压 Windows 文件夹中的 portable ZIP 的全部内容，再运行解压目录里的 Xueness.exe。不要只从 ZIP 预览中运行单个 EXE。便携包仍默认使用当前 Windows 用户的数据目录；它不会自动建立独立数据副本。
+5. Windows 可能提示发布者尚未验证。启动前可先按上面的命令核对 SHA256SUMS.txt。若摘要不一致，请不要运行该文件。
+
+数据保留与升级
+--------------
+Windows 默认用户数据目录是 %APPDATA%\Xueness，通常对应当前用户的 AppData\Roaming\Xueness。会话和模型配置保存在其中的 state\；运行工作区在 runs\；默认项目目录在 workspace\。你选择的其它项目目录保留在原位置。
+
+覆盖安装只更新程序文件，不删除会话、模型配置或插件开关。Windows 卸载程序也配置为保留应用数据。不要手工删除 %APPDATA%\Xueness，也不要在升级时清理你选择的数据目录或项目目录。
+
+如果以前配置过自定义数据位置，请继续使用同一位置。应用通过 %APPDATA%\Xueness\desktop-data-directory.json 保存该选择；显式环境变量 XUENESS_DESKTOP_DATA 优先。安装版和便携版使用相同的数据位置规则。更换电脑或迁移数据前，请先关闭 Xueness，再自行备份整个实际数据目录及项目目录。
+
+从源码重建 Windows 安装包
+--------------------------
+构建 Windows x64 桌面包需要 Windows x64 和 Node.js 24.11+；后端是 TypeScript（Python 后端已删除）。最后两条检查脚本只用 Python 3 标准库，可选。下面命令在 PowerShell 中执行；先进入完整项目 ZIP 解压后的项目根目录：
+
+  npm --prefix webapp ci
+  npm --prefix desktop ci
+  npm --prefix ts ci
+  node desktop/node_modules/electron/install.js
+  npm --prefix ts run check
+  npm --prefix webapp run build
+  npm --prefix desktop test
+  npm --prefix desktop run dist:win -- --x64
+  npm --prefix ts run test:packaged
+  python desktop/scripts/check_app.py
+  python desktop/scripts/checksums.py
+
+成功产物写入 desktop\release\。Windows 安装包须在 Windows 上构建（随包 Node 运行时取自构建机）。node_modules、编译缓存和 ts/dist 属于本机生成内容，不包含在源码 ZIP 中；依赖锁文件已随源码提供。
+
+许可证与内容范围
+----------------
+重新分发或修改时请保留项目根目录的 LICENSE、NOTICE.md，以及各依赖随附的许可证文件（包括订阅组件的 vendor\LICENSE-MIT.txt）。安装版和便携版还包含打包运行时所需的许可证文本。
+
+交付包不含个人 API 密钥、模型登录凭据、用户数据或模型权重。请只在你信任的本机配置模型凭据，并勿将个人配置文件复制进源码或重新打包。

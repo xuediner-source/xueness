@@ -1,0 +1,62 @@
+{
+  "ok": true,
+  "mode": "source",
+  "network": "loopback-only",
+  "scenarios": [
+    {
+      "name": "openai_empty_finish_zero_usage",
+      "requests": 2,
+      "status": "completed",
+      "modelRetries": 1,
+      "finish": "stop"
+    },
+    {
+      "name": "openai_tool_prelude_error_retry",
+      "requests": 3,
+      "status": "completed",
+      "observedToolIds": [
+        "accepted-tool"
+      ],
+      "executedTools": 1
+    },
+    {
+      "name": "openai_visible_partial_503_no_replay",
+      "requests": 1,
+      "status": "provider_error",
+      "modelRetries": 0,
+      "retainedPartial": "visible partial answer"
+    },
+    {
+      "name": "openai_401_localized_persisted",
+      "requests": 1,
+      "status": "provider_error",
+      "errorCode": "provider_not_configured",
+      "localized": true,
+      "persisted": true
+    },
+    {
+      "name": "openai_idle_timeout_retry",
+      "requests": 2,
+      "status": "completed",
+      "idleFailure": "stream_idle_timeout",
+      "modelRetries": 1
+    },
+    {
+      "name": "openai_abort_idle_read",
+      "requests": 1,
+      "status": "stopped",
+      "abortElapsedMs": 116,
+      "modelRetries": 0
+    },
+    {
+      "name": "anthropic_data_refreshes_idle",
+      "requests": 1,
+      "status": "completed",
+      "payloads": 6,
+      "timeoutMs": 100
+    }
+  ],
+  "totalRequests": 11,
+  "elapsedMs": 1207,
+  "temporaryDataCleaned": true
+}

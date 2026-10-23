@@ -1,0 +1,14 @@
+  • electron-builder  version=26.15.3 os=10.0.26200
+  • loaded configuration  file=package.json ("build" field)
+  • loaded parent configuration  file=E:\models\apps\_stage-z8\Xueness-0.1.8-complete-project\desktop\electron-builder.cjs
+  • executing @electron/rebuild  electronVersion=44.5.1 arch=x64 buildFromSource=false workspaceRoot=E:\models\apps\_stage-z8\Xueness-0.1.8-complete-project\desktop projectDir=./ appDir=./
+  • installing native dependencies  arch=x64
+  • completed installing native dependencies
+  • packaging       platform=win32 arch=x64 electron=44.5.1 appOutDir=release\win-unpacked
+  • downloaded      label=electron progress=100%
+  • downloaded electron zip extracted successfully  output=E:\models\apps\_stage-z8\Xueness-0.1.8-complete-project\desktop\release\win-unpacked
+  • searching for node modules  pm=npm searchDir=E:\models\apps\_stage-z8\Xueness-0.1.8-complete-project\desktop
+  • updating asar integrity executable resource  executablePath=release\win-unpacked\Xueness.exe
+  • signing with signtool.exe  path=release\win-unpacked\resources\backend-ts\runtime\node.exe
+  • signing with signtool.exe  path=release\win-unpacked\resources\backend-ts\node_modules\@lydell\node-pty-win32-x64\prebuilds\win32-x64\conpty\OpenConsole.exe
+  • signing with signtool.exe  path=release\win-unpacked\Xueness.exe

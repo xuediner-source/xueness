@@ -14,6 +14,7 @@ import type { ComposerDraftState } from '../sessions/XuenessWorkbenchView';
 import type { ComposerInput, ComposerModel } from '../../xuenessComposer';
 import type { RunChoices } from '../../xuenessBridge';
 import { isPermissionMode, type PermissionMode } from '../sessions/permissionModes';
+import { sessionStatusPresentation, type SessionStatusPresentation } from '../sessions/statusPresentation';
 import { FullAccessConfirmationDialog, requiresYoloConfirmation } from '../sessions/FullAccessConfirmationDialog';
 import './LightweightWorkbench.css';
 import { formatCommandArgv } from '../../xuenessWorkbench';
@@ -69,6 +70,7 @@ const LIGHTWEIGHT_PERMISSION_CHOICES: readonly { value: PermissionMode; label: s
   { value: 'plan', label: '计划' },
   { value: 'build', label: '变更前确认' },
   { value: 'edit', label: '自动编辑' },
+  { value: 'guarded', label: '守护执行' },
   { value: 'yolo', label: '完全访问' },
 ];
 
@@ -254,33 +256,19 @@ export type LightweightStatusBarProps = {
   isNarrow?: boolean;
 };
 
-export type LightweightStatusTone = 'idle' | 'running' | 'paused' | 'error' | 'done';
+export type LightweightStatusTone = SessionStatusPresentation['tone'];
 
 export type LightweightStatusPresentation = { label: string; tone: LightweightStatusTone };
 
 /**
- * 把会话状态映射成极简状态行的读数，词表与标准档保持一致（侧栏 StatusDot、
- * SessionQueue、命令面板使用同一批状态字符串）。未知状态回落为空闲文案，
- * 不虚构状态。
+ * 极简栏复用会话插件的状态词表，needs_review 保持“需要复核”这一中性状态；
+ * 只有明确失败状态才显示失败色。未知状态不猜测。
  */
 export function lightweightStatusPresentation(
   status?: string | null,
   context: { stopping?: boolean; interrupted?: boolean; queueCount?: number } = {},
 ): LightweightStatusPresentation {
-  const value = typeof status === 'string' ? status.trim() : '';
-  if (context.stopping) return { label: tr('正在停止'), tone: 'running' };
-  if (value === 'running' || value === 'streaming' || value === 'stopping') return { label: tr('运行中'), tone: 'running' };
-  if (value === 'pending' || value === 'queued') return { label: tr('等待中'), tone: 'paused' };
-  if (value === 'paused') return { label: tr('已暂停'), tone: 'paused' };
-  if (value === 'needs_review') return { label: tr('需要审核'), tone: 'paused' };
-  if (value === 'awaiting_user') return { label: tr('等待用户'), tone: 'paused' };
-  if (value === 'stalled') return { label: tr('运行停滞'), tone: 'paused' };
-  if (value === 'interrupted' || context.interrupted) return { label: tr('已中断'), tone: 'paused' };
-  if (value === 'error' || value === 'failed' || value === 'provider_error') return { label: tr('出错了'), tone: 'error' };
-  if (value === 'cancelled') return { label: tr('已取消'), tone: 'idle' };
-  if (value === 'completed') return { label: tr('已完成'), tone: 'done' };
-  if ((context.queueCount ?? 0) > 0) return { label: tr('队列中'), tone: 'paused' };
-  return { label: tr('空闲'), tone: 'idle' };
+  return sessionStatusPresentation(status, context) ?? { label: tr('空闲'), tone: 'idle' };
 }
 
 const STATUS_DOT_CLASS: Record<LightweightStatusTone, string> = {

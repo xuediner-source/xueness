@@ -450,7 +450,7 @@ export function ReasoningEffortControl(props: ReasoningEffortPanelProps) {
     event.preventDefault(); event.stopPropagation(); setOpen(false); triggerRef.current?.focus();
   }}>
     <button type="button" className="xn-effort-control__trigger" ref={triggerRef}
-      data-testid="reasoning-effort-trigger" aria-label={tr("思考强度")}
+      data-shortcut-action="open-reasoning-menu" data-testid="reasoning-effort-trigger" aria-label={tr("思考强度")}
       aria-haspopup="dialog" aria-expanded={open} aria-controls={open ? id : undefined}
       title={tr("思考强度")} disabled={props.disabled}
       onClick={() => setOpen(current => !current)}>

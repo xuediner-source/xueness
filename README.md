@@ -1,140 +1,58 @@
-# Xueness
+# Xueness 0.2.1 source archive
 
-<div align="center">
-  <img src="docs/images/xueness-banner.svg" alt="Xueness — 本地 Agent 工作台" width="100%">
-  <p>Agent CLI、本地 Web 工作台与自包含桌面应用，共用一套可开关的功能插件。</p>
-  <p>
-    <a href="README.en.md">English</a> ·
-    <a href="https://github.com/xuediner-source/xueness/releases/latest">下载桌面版</a> ·
-    <a href="docs/xueness-desktop.md">桌面文档</a> ·
-    <a href="docs/xueness-local-lightweight-mode.md">本地轻量模式</a> ·
-    <a href="docs/xueness-plugin-architecture.md">插件目录</a>
-  </p>
-  <p>
-    <a href="https://github.com/xuediner-source/xueness/actions/workflows/desktop-build.yml"><img src="https://github.com/xuediner-source/xueness/actions/workflows/desktop-build.yml/badge.svg?branch=main" alt="Desktop build"></a>
-    <a href="https://github.com/xuediner-source/xueness/blob/main/LICENSE"><img src="https://img.shields.io/github/license/xuediner-source/xueness?label=license" alt="Apache 2.0 license"></a>
-    <a href="https://github.com/xuediner-source/xueness/releases/latest"><img src="https://img.shields.io/github/v/release/xuediner-source/xueness?label=release" alt="Latest release"></a>
-    <img src="https://img.shields.io/badge/plugins-30%20%7C%20212-4263eb" alt="30 plugins and 205 features">
-  </p>
-</div>
+2026-10-24 当前交接入口：[完整项目交接](HANDOVER-20261024.md)、[最新 ZCode 差异审计](docs/audits/20261024/AUDIT.md)、[完整对齐任务清单（15 阶段 / 82 小轮次）](docs/ZCODE-FULL-ALIGNMENT-TASKS-20261024.md)。本机桌面端已安装 0.2.1，包含 33 个插件和 11 项内置技能；后续全面引擎对齐尚未实施。以下 Z1–Z8 资料保留为历史交付记录，当前基线与待办以新交接为准。
 
-<p align="center">
-  <img src="docs/images/workbench.png" alt="Xueness 对话与本地工作台" width="100%">
-</p>
-<p align="center">
-  <img src="docs/images/lightweight-settings.png" alt="本地轻量高级配置：预算、工具与恢复" width="49%">
-  <img src="docs/images/plugins.png" alt="完整功能插件目录" width="49%">
-</p>
-<p align="center"><sub>实际构建界面，使用隔离工作区与示例配置；不含用户会话或模型性能结果。</sub></p>
+后端已完整迁移到 TypeScript（`ts/`），Python 后端在第 10 轮删除。使用入口、完整验收与迁移记录见
+[ts/README.md](ts/README.md) 和 [ts/HANDOVER.md](ts/HANDOVER.md)。
+最新阶段范围与状态见 [Z7 工作摘要](WORK-SUMMARY-20261023-Z7.md)、[Z7 app-server 与 headless 说明](docs/engine-z7.md)、[Z8 guarded、goal 与 memory dream 说明](ts/docs/z8-guarded-goal-memory.md)、[引擎路线图](ts/docs/engine-roadmap.md) 和 [PATCH-Z7.md](PATCH-Z7.md)。Z7 已交付范围为 Xueness 原生 JSON-RPC v1/v2 与单任务 headless，不宣称 ZCode V4 wire 兼容；source/built runtime、额外 shutdown drain、706 JS build 与搬迁 smoke 均有验收记录。Z8 完成 guarded 权限、会话目标与显式项目记忆整理；memory 的源码验收记录覆盖四个场景和五次 loopback provider 请求，详见 [z8-memory-source.json](验收资料/验证记录/z8-memory-source.json)。此前 [Z6](WORK-SUMMARY-20261023-Z6.md) 动态工作流、[Z5](docs/engine-z5.md) MCP/配置/hooks、[Z4](docs/engine-z4.md) 执行适配及 [Z3](docs/engine-z3.md) 事件、会话库与回退继续作为已交付能力记录。完整迁移与当前边界见 [HANDOVER §48](ts/HANDOVER.md)。
+这是源码归档；`desktop/` 包含 Electron 宿主源码，不包含 Windows 安装包。运行后端需要 Node.js 24.11+，并在首次使用前执行 `npm --prefix ts ci`。
 
-Xueness 面向个人本地开发，提供可从终端、浏览器或 Windows/macOS 桌面使用的 Agent 工作区。重点放在本地模型的细粒度运行配置、可见的主机与请求状态，以及能按领域启用或停用的产品功能。
+终端聊天入口见[终端聊天使用说明](docs/xueness-terminal-chat.md)。
 
-## 下载
+Nothing in this archive publishes files, creates tags, or signs artifacts.
+Release downloads and the complete repository are available at:
 
-[打开 GitHub Releases](https://github.com/xuediner-source/xueness/releases/latest)，选择与系统和处理器架构匹配的安装包。版本页面会列出桌面产物及 `SHA256SUMS.txt` 校验文件。
+- https://github.com/xuediner-source/xueness
+- https://github.com/xuediner-source/xueness/releases
 
-0.1.5 将会话、添加能力和桌面运行链路统一到 Windows 与两种 Mac 架构：完整目录包含 **28 个插件、163 项登记功能**，并补齐上下文用量、推理强度选择、上下文恢复及标准／轻量工作规则。规则归属与使用见[Agent 工作规则](docs/agent-work-policy-2026-10-07.md)；平台差异见[桌面统一记录](docs/desktop-parity-2026-10-07.md)。
+The backend is the TypeScript workspace in `ts/` and needs Node.js 24.11 or
+newer; Node strips the types at run time, so no build step is required. Install
+its dependencies once with `npm --prefix ts ci`. The prebuilt browser interface
+is included under `webapp/dist/`. Docker Compose is optional.
 
-当前 0.1.6 源码包含 **30 个插件、212 项登记功能**，新增当前轮引导、稳定历史与增量推送、语义压缩、目标自动续作和持久子会话恢复，并保留可选安装的「订阅中心」和「返回模型监测」。详见[会话运行升级](docs/session-runtime-upgrade-2026-10-12.md)、[目标与历史整理](docs/session-goals-and-context-compaction.md)及[订阅账号范围修正](docs/subscription-account-scope-2026-10-12.md)。Windows、Mac Intel 和 Mac Apple Silicon 的当前构建可从 [Desktop installers 工作流](https://github.com/xuediner-source/xueness/actions/workflows/desktop-build.yml)下载；下表仍是已发布的 0.1.5 安装包。
+Start from this directory with `bin/xueness-web --port 8138` (or
+`node ts/apps/server/src/main.ts --port 8138`), then open
+`http://127.0.0.1:8138`. The default port without this option is
+`http://127.0.0.1:8137`; `./install.sh` does the same with a private data
+directory. Configure a real model endpoint in Settings before sending a task.
+Local small models can use the lightweight profile described in
+`docs/xueness-local-lightweight-mode.md`. Use `bin/xueness` for the Agent CLI.
 
-| 系统 | 安装程序 / 磁盘映像 | 便携版 / 应用 ZIP |
-| --- | --- | --- |
-| Windows 10/11 · x64 | [安装程序 `.exe`](https://github.com/xuediner-source/xueness/releases/download/v0.1.5/Xueness-0.1.5-windows-x64-setup.exe) | [便携版 `.zip`](https://github.com/xuediner-source/xueness/releases/download/v0.1.5/Xueness-0.1.5-windows-x64-portable.zip) |
-| macOS · Apple Silicon | [arm64 `.dmg`](https://github.com/xuediner-source/xueness/releases/download/v0.1.5/Xueness-0.1.5-macos-arm64.dmg) | [arm64 应用 `.zip`](https://github.com/xuediner-source/xueness/releases/download/v0.1.5/Xueness-0.1.5-macos-arm64.zip) |
-| macOS · Intel | [x64 `.dmg`](https://github.com/xuediner-source/xueness/releases/download/v0.1.5/Xueness-0.1.5-macos-x64.dmg) | [x64 应用 `.zip`](https://github.com/xuediner-source/xueness/releases/download/v0.1.5/Xueness-0.1.5-macos-x64.zip) |
+Backend checks: `npm --prefix ts run check` (line limit, plugin gate,
+typecheck and tests). To rebuild the web interface: `npm --prefix webapp ci`,
+then `npm --prefix webapp run build`.
 
-此版本所有平台的 SHA-256 校验值见 [`SHA256SUMS.txt`](https://github.com/xuediner-source/xueness/releases/download/v0.1.5/SHA256SUMS.txt)。桌面包内含 Electron 外壳、冻结 Python 后端、预构建工作台和浏览器驱动；不要求另外安装 Python 或 Node.js。Git、SSH、ffmpeg 等外部程序仍由使用到它们的插件按需调用；浏览器自动化需要本机 Chrome 或 Edge。当前产物未进行代码签名或 macOS 公证，首次启动可能出现系统信任提示，详情见[桌面端说明](docs/xueness-desktop.md)。
+The Electron host source is in `desktop/`. Build an installer on its target
+operating system and architecture; see `docs/xueness-desktop.md` for commands.
 
-## 功能概览
+Locally built installers are not automatically signed or published.
 
-- **本地小模型配置。** 选择「本地轻量」运行档，细调提示、工具集合、上下文与输出预算、采样和协议选项。资源面板报告运行 Xueness 的机器 CPU、内存及进程状态；模型输出面板展示请求阶段、工具调用和服务实际返回的用量。缺少的 Token 或显存数据会标为不可用，不会估算成真实测量值。
-- **30 个可信插件，212 项登记功能。** 会话、工作区文件、模型、Shell、Git、终端、工作流、记忆、Hooks、MCP、浏览器、远程连接、渠道、自动化、诊断、Office 文档创建/重建与预览、搜图、工具执行策略等能力都有明确归属。插件管理页显示完整目录与依赖状态，CLI 也可查看和更改插件开关。会话支持运行中引导与后续排队，桌面端支持确认导入 Chrome 资料到独立浏览器目录；订阅中心与返回模型监测可在插件市场选择安装。
-- **一键切换插件组合档位。** 「设置 → 供应商」顶部选择 minimal / lightweight / standard 档位，或在 CLI 运行 `xueness plugins profile list|show|apply`；档位只是一张插件 ID 到开关的数据清单，你自己的显式开关始终优先，切换不会改动工作区、审批或权限模式。市场清单可用 `xueness plugins validate <路径>` 只读校验，`xueness plugins update <id>|--all` 仅从既有可信目录原子升级已通过校验的清单。
-- **给会话设一条持续目标。** 开始新任务时在 Composer 的「+」菜单选择「添加为目标」，或用 CLI `--target` 设定。目标跨轮生效，在累计轮次、时间和可选 Token 预算内自动续作；暂停、等待回答或批准、停止和预算到达会结束自动继续。每轮结束由当前配置模型的独立纯文本核验和主机交付检查判断完成，核验会产生该模型服务的用量。该能力归属规划插件，关闭后停止入口、提示和自动续作。
-- **三种入口，共用运行时。** 使用 Agent CLI 运行会话，通过 loopback Web 工作台查看和管理任务，或安装 Windows/macOS 桌面应用。桌面包自带运行时，跨平台差异留在对应插件适配中。
+Every product feature must be implemented by a trusted bundled plugin and
+listed in Settings > Plugins, including each new feature. See `AGENTS.md`,
+`CONTRIBUTING.md` and `docs/xueness-plugin-architecture.md`. Run
+`npm --prefix ts run check:plugins` before handing off a change.
 
-轻量设置用于控制运行行为，不会下载模型、调整模型权重或自动改变推理服务的显存分配。Office 预览支持部分文档页面、图像、图表和缓存单元格数据；它不是 Microsoft Office 的完整排版或兼容实现。
-
-## 快速开始
-
-### Web 工作台与 CLI
-
-源码运行需要 Python 3.10+；后端仅依赖 Python 标准库，仓库附有预构建的 Web 界面，日常运行不需要 Node.js。
+## Get the complete checkout
 
 ```sh
 git clone https://github.com/xuediner-source/xueness.git
 cd xueness
-
-# 启动仅监听本机的 Web 工作台
-python3 -m xueness.web --port 8138
-# 浏览器打开 http://127.0.0.1:8138
-
-# 通过 Agent CLI 开始会话
-./bin/xueness chat --root /absolute/path/to/project
-# 继续该工作区最近一次会话
-./bin/xueness chat --continue --root /absolute/path/to/project
-# 指定独立私有状态目录（全局参数放在子命令之前）
-./bin/xueness --state /absolute/path/to/private-state chat --root /absolute/path/to/project
-# 为会话设置跨轮持续生效的目标（已有目标时需加 --target-replace 才会覆盖）
-./bin/xueness run --root /absolute/path/to/project --prompt "补齐导出命令的测试" --target "让导出命令具备完整测试与使用说明"
-# 查看、替换或清除某个会话的目标
-./bin/xueness goal --session <会话ID> show
-./bin/xueness goal --session <会话ID> replace "新的目标文本"
-./bin/xueness goal --session <会话ID> clear
-./bin/xueness --help
 ```
 
-首次使用时，在「设置 → 模型配置」填写自己已运行的模型服务地址、模型 ID 和密钥。也可以将 `XUENESS_API_BASE`、`XUENESS_MODEL`、`XUENESS_API_KEY` 配置在本机环境中。Xueness 不提供伪造的离线对话入口。
+Use the desktop installer for your operating system and architecture if you
+prefer an application with its Node.js runtime already bundled.
 
-Web 设置可以选择和授权工作区。CLI 默认在项目的 `.state/` 保存会话与配置；使用 `--state /absolute/path/to/private-state` 指定独立状态目录。状态中可能包含任务文本、工具输出和模型凭据，应留在私有目录，不要提交到公共仓库。桌面数据路径和桌面与 CLI 的共享方式见[桌面文档](docs/xueness-desktop.md)。
-
-### 本机一键运行
-
-在已克隆的仓库根目录执行：
-
-```sh
-./install.sh
-# 默认地址：http://127.0.0.1:8137
-
-# 可指定端口和独立的数据目录
-PORT=9000 DATA_DIR=/absolute/path/to/private-data ./install.sh
-```
-
-此入口不做系统级安装，Web 默认只绑定 loopback。Docker Compose 也是可选的本地运行方式，详见[部署说明](docs/deploy.md)。
-
-## 插件与安全边界
-
-每项产品功能由可信内置插件提供。Web「设置 → 插件」列出完整的后端 catalog、依赖和子功能；禁用项也保留在目录中。所有者要求今后的功能继续遵守这条插件归属规则，实施步骤见 [AGENTS.md](AGENTS.md) 与 [CONTRIBUTING.md](CONTRIBUTING.md)。插件注册表由构建时 allowlist 决定；扩展市场的清单是数据，不会在运行时加载任意代码。
-
-启用插件不等于批准执行。文件修改和命令仍受 Gate、逐项审批、工作区范围与宿主请求边界控制。Web 面向单人本地使用，默认仅监听 loopback；它没有多用户认证、TLS 或操作系统级沙箱，不要直接暴露到局域网或公网。模型密钥由本机后端持有，不应写入工作区或提交到 Git。
-
-默认关闭的会话与工具实验功能可在「设置 → 通用」独立开启：版本校验的事件游标、结构化问题答复、干跑预览和每轮工具调用预算。标准/轻量模式共用答复表单和预算状态。范围、接口与验收见[交接后续说明](docs/handoff-followup-2026-10-06.md)。
-
-## 开发
-
-后端开发使用 Python 3.10+；编辑和构建前端需要 Node.js 20.19+ 或 22.12+。功能实现和开关行为必须遵守插件归属、权限及生命周期约束。最短结构验证入口：
-
-```sh
-python3 tools/check_plugin_architecture.py
-python3 -m unittest tests.test_plugin_architecture -q
-```
-
-更完整的测试命令、依赖和贡献流程见 [CONTRIBUTING.md](CONTRIBUTING.md)。桌面构建需要目标平台原生环境、Node.js 24 和 Python 3.12+；PyInstaller 后端需在目标 OS 和架构上构建，细节见[桌面构建说明](docs/xueness-desktop.md)。
-
-## 文档
-
-- [桌面版、数据位置与平台支持](docs/xueness-desktop.md)
-- [网络搜索配置与 FakeIP DNS 诊断](docs/xueness-network-tools.md)
-- [本地小模型轻量模式](docs/xueness-local-lightweight-mode.md)
-- [会话发送、草稿恢复与队列操作](docs/session-experience-2026-10-11.md)
-- [归档会话恢复、永久删除与侧栏对齐](docs/archived-session-delete-2026-10-11.md)
-- [插件架构与逐项归属清单](docs/xueness-plugin-architecture.md)
-- [CLI、工作流和工作台使用说明](docs/xueness-four-workstreams.md)
-- [部署与网络边界](docs/deploy.md)
-- [贡献指南](CONTRIBUTING.md)
-
-## 许可与来源
-
-本仓库使用 [Apache License 2.0](LICENSE)。Web 界面包含经适配的 [ZCode](https://github.com/zai-org/ZCode) 界面素材，相关版权和改动说明见 [NOTICE.md](NOTICE.md)；Xueness 使用自己的 Agent 运行时、插件接口和 Electron 桌面外壳，并非 Z.AI、ZCode 或 DeepSeek 的官方产品。插件接口是 Xueness 自有实现；本项目不宣称与上游插件 ABI 兼容，也不声称完整复刻上游功能。[DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) 仅作为架构与桌面设计参考，没有随本项目分发其桌面代码、商标或图标。Web 及桌面依赖的许可说明随源代码和产物提供，另见 [第三方声明](webapp/public/third-party-notices.txt)。
-
-添加菜单能力、上下文用量圆环与完全访问确认见[使用说明](docs/xueness-composer-capabilities.md)；当前功能归属见[插件架构清单](docs/xueness-plugin-architecture.md)，添加能力阶段的验证见[核查记录](docs/composer-plugin-audit-2026-10-07.md)。
+Model credentials and other online-service configuration must be supplied by
+the operator at runtime. This archive contains no runtime state or credentials.
+See `LICENSE` and `NOTICE.md` before use or
+redistribution.

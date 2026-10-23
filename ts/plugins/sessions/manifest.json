@@ -1,0 +1,469 @@
+{
+  "apiVersion": 2,
+  "id": "sessions",
+  "name": "会话管理",
+  "description": "Durable session lifecycle, revision-bound conversations, queues and scoped private media.",
+  "version": "0.2.0",
+  "defaultEnabled": true,
+  "capabilities": {
+    "exec": [
+      "ffmpeg",
+      "powershell.exe",
+      "pbcopy",
+      "osascript",
+      "wl-copy",
+      "wl-paste",
+      "xclip"
+    ],
+    "fs": {
+      "read": [
+        "state",
+        "workspace"
+      ],
+      "write": [
+        "state"
+      ]
+    }
+  },
+  "features": [
+    {
+      "id": "sessions.tui",
+      "name": "全屏聊天、草稿与终端中断",
+      "nameEn": "Fullscreen chat, drafts and terminal interruption"
+    },
+    {
+      "id": "sessions.auto_title",
+      "name": "自动命名会话",
+      "nameEn": "Automatic conversation titles"
+    },
+    {
+      "id": "sessions.runtime_model_switch",
+      "name": "运行中切换模型与推理档位",
+      "nameEn": "Switch model and reasoning effort between requests"
+    },
+    {
+      "id": "sessions.manual_compact",
+      "name": "手动压缩上下文",
+      "nameEn": "Manual deterministic context compaction"
+    },
+    {
+      "id": "sessions.lifecycle",
+      "name": "会话创建、续行与停止",
+      "nameEn": "Session creation continuation and stopping"
+    },
+    {
+      "id": "sessions.management",
+      "name": "会话标题、置顶与归档",
+      "nameEn": "Session titles pins and archives"
+    },
+    {
+      "id": "sessions.archived_delete",
+      "name": "确认后永久删除归档",
+      "nameEn": "Confirmed permanent archive deletion"
+    },
+    {
+      "id": "sessions.portable",
+      "name": "脱敏会话导入与导出",
+      "nameEn": "Redacted session import and export"
+    },
+    {
+      "id": "sessions.fork",
+      "name": "安全历史边界分叉",
+      "nameEn": "Forking at safe history boundaries"
+    },
+    {
+      "id": "sessions.fork_from_checkpoint",
+      "name": "从检查点前一轮分叉",
+      "nameEn": "Forking before a checkpoint turn"
+    },
+    {
+      "id": "sessions.scoped_commands",
+      "name": "持久会话命令回执",
+      "nameEn": "Durable session command acknowledgements"
+    },
+    {
+      "id": "sessions.message_queue",
+      "name": "持久消息队列与顺序执行",
+      "nameEn": "Durable message queues and ordered execution"
+    },
+    {
+      "id": "sessions.queue_withdrawal_recovery",
+      "name": "队列撤回与文本恢复",
+      "nameEn": "Queue withdrawals and text recovery"
+    },
+    {
+      "id": "sessions.current_turn_guidance",
+      "name": "当前轮次补充指导",
+      "nameEn": "Guidance for the current turn"
+    },
+    {
+      "id": "sessions.start_now",
+      "name": "已排队消息立即发送",
+      "nameEn": "Sending a queued message now"
+    },
+    {
+      "id": "sessions.approvals",
+      "name": "精确工具调用批准",
+      "nameEn": "Approval for exact tool calls"
+    },
+    {
+      "id": "sessions.message_edit",
+      "name": "版本绑定的消息编辑",
+      "nameEn": "Revision bound message editing"
+    },
+    {
+      "id": "sessions.message_feedback",
+      "name": "本地助手回答反馈",
+      "nameEn": "Local assistant answer feedback"
+    },
+    {
+      "id": "sessions.consistent_snapshot",
+      "name": "一致会话快照与分页",
+      "nameEn": "Consistent conversation snapshots and paging"
+    },
+    {
+      "id": "sessions.events_cursor",
+      "name": "事件前缀游标分页",
+      "nameEn": "Event prefix cursor paging"
+    },
+    {
+      "id": "sessions.event_resume",
+      "name": "事件纪元恢复",
+      "nameEn": "Event epoch resume"
+    },
+    {
+      "id": "sessions.streaming",
+      "name": "模型文本增量流",
+      "nameEn": "Model text delta streams"
+    },
+    {
+      "id": "sessions.live_updates",
+      "name": "会话快照实时补丁",
+      "nameEn": "Live conversation snapshot patches"
+    },
+    {
+      "id": "sessions.reference_rows",
+      "name": "受限文件引用展示",
+      "nameEn": "Bounded file reference display"
+    },
+    {
+      "id": "sessions.subagent_rows",
+      "name": "父会话子代理摘要",
+      "nameEn": "Parent session subagent summaries"
+    },
+    {
+      "id": "sessions.read_state",
+      "name": "版本绑定的已读水位",
+      "nameEn": "Revision bound read watermarks"
+    },
+    {
+      "id": "sessions.live_tool_activity",
+      "name": "受限工具输入流展示",
+      "nameEn": "Bounded tool input stream display"
+    },
+    {
+      "id": "sessions.timeline_markers",
+      "name": "持久变更时间线标记",
+      "nameEn": "Timeline markers for persisted changes"
+    },
+    {
+      "id": "sessions.completion_policy",
+      "name": "完成结论证据检查",
+      "nameEn": "Completion evidence checks"
+    },
+    {
+      "id": "sessions.full_text_search",
+      "name": "有界会话全文搜索",
+      "nameEn": "Bounded conversation text search"
+    },
+    {
+      "id": "sessions.sessions_index",
+      "name": "只读会话侧栏索引",
+      "nameEn": "Read only session sidebar index"
+    },
+    {
+      "id": "sessions.conversation_share",
+      "name": "选中轮次的只读分享",
+      "nameEn": "Read only sharing of selected turns"
+    },
+    {
+      "id": "sessions.structured_questions",
+      "name": "显式选择的结构化问题",
+      "nameEn": "Structured questions with explicit choices"
+    },
+    {
+      "id": "sessions.answer_question_experimental",
+      "name": "幂等操作员问题回答",
+      "nameEn": "Idempotent operator question answers"
+    },
+    {
+      "id": "sessions.composer_attachments",
+      "name": "附件上传与恢复",
+      "nameEn": "Attachment upload and recovery"
+    },
+    {
+      "id": "sessions.history",
+      "name": "会话历史",
+      "nameEn": "Session history"
+    },
+    {
+      "id": "sessions.media_artifacts",
+      "name": "私有媒体存储",
+      "nameEn": "Private media artifacts"
+    },
+    {
+      "id": "sessions.media_binding",
+      "name": "模型媒体绑定",
+      "nameEn": "Provider media binding"
+    },
+    {
+      "id": "sessions.tui_completion",
+      "name": "终端命令、模型、文件与会话补全",
+      "nameEn": "Terminal command, model, file and session completion"
+    },
+    {
+      "id": "sessions.tui_dialogs",
+      "name": "终端工具审批与多题澄清对话",
+      "nameEn": "Terminal tool approvals and multi-question dialogs"
+    },
+    {
+      "id": "sessions.tui_sidebar",
+      "name": "终端状态侧栏",
+      "nameEn": "Terminal status sidebar"
+    },
+    {
+      "id": "sessions.tui_cards",
+      "name": "可折叠推理、工具、压缩与工作流卡片",
+      "nameEn": "Foldable reasoning, tool, compaction and workflow cards"
+    },
+    {
+      "id": "sessions.tui_clipboard",
+      "name": "剪贴板文本复制与 PNG 图片附件",
+      "nameEn": "Clipboard text copying and PNG image attachments"
+    },
+    {
+      "id": "sessions.tui_queue",
+      "name": "后续输入队列与当前轮次指导",
+      "nameEn": "Follow-up queue and current-turn steering"
+    },
+    {
+      "id": "sessions.tui_sessions",
+      "name": "会话选择与只读子代理时间线",
+      "nameEn": "Session selection and read-only subagent timelines"
+    },
+    {
+      "id": "sessions.turn_runtime",
+      "name": "回合状态与工具结算",
+      "nameEn": "Turn lifecycle and tool settlement"
+    },
+    {
+      "id": "sessions.history_hydration",
+      "name": "中断会话与工具结果恢复",
+      "nameEn": "Interrupted session and tool result hydration"
+    },
+    {
+      "id": "sessions.steering_boundaries",
+      "name": "模型结束边界的当前回合指导",
+      "nameEn": "Current-turn guidance at model completion boundaries"
+    },
+    {
+      "id": "sessions.runtime_events",
+      "name": "持久运行事件与断点恢复",
+      "nameEn": "Durable runtime events and cursor recovery"
+    },
+    {
+      "id": "sessions.sqlite_storage",
+      "name": "可选 SQLite 会话库与迁移",
+      "nameEn": "Optional SQLite session library and migration"
+    },
+    {
+      "id": "sessions.conversation_rewind",
+      "name": "按消息回退会话分支",
+      "nameEn": "Conversation branch rewind"
+    },
+    {
+      "id": "sessions.stable_boundaries",
+      "name": "稳定分叉边界与独立身份",
+      "nameEn": "Stable fork boundaries and child identities"
+    },
+    {
+      "id": "sessions.compact_persistence",
+      "name": "压缩操作持久化与中断恢复",
+      "nameEn": "Durable compaction operations and recovery"
+    },
+    {
+      "id": "sessions.headless",
+      "name": "无头运行、恢复与机器输出",
+      "nameEn": "Headless execution, resume and machine output"
+    }
+  ],
+  "panels": [
+    "chat"
+  ],
+  "frontendModules": [
+    "plugins/sessions/ArchivedSessions.tsx",
+    "plugins/sessions/archiveApi.ts",
+    "plugins/sessions/composerRecovery.ts",
+    "plugins/sessions/composerAttachmentRef.ts",
+    "plugins/sessions/messageEditAttachments.ts",
+    "plugins/sessions/UserMessageEditor.tsx",
+    "plugins/sessions/composerAttachmentPreview.tsx",
+    "plugins/sessions/composerAttachmentPreviewModel.ts",
+    "plugins/sessions/composerAttachmentPreviewDialog.tsx",
+    "plugins/sessions/composerEditorState.ts",
+    "plugins/sessions/ComposerStructuredEditor.tsx",
+    "plugins/sessions/submissionTransport.ts",
+    "plugins/sessions/sessionRequestErrors.ts",
+    "plugins/sessions/commandClient.ts",
+    "plugins/sessions/commandReceipt.ts",
+    "plugins/sessions/approvalCommands.ts",
+    "plugins/sessions/ComposerRecoveryPanel.tsx",
+    "plugins/sessions/SidebarResizeHandle.tsx",
+    "plugins/sessions/SessionContextPane.tsx",
+    "plugins/sessions/ClaudexSidebar.tsx",
+    "plugins/sessions/XuenessComposerToolbar.tsx",
+    "plugins/sessions/ReasoningEffortSlider.tsx",
+    "plugins/sessions/XuenessConversationHistoryRail.tsx",
+    "plugins/sessions/XuenessRenameDialog.tsx",
+    "plugins/sessions/XuenessTaskList.tsx",
+    "plugins/sessions/ProjectContextMenu.tsx",
+    "plugins/sessions/projectSidebar.ts",
+    "plugins/sessions/projectArchive.ts",
+    "plugins/sessions/XuenessTimeline.tsx",
+    "plugins/sessions/XuenessWorkbenchView.tsx",
+    "xuenessComposer.ts",
+    "xuenessWorkbench.ts",
+    "plugins/sessions/ForkSessionDialog.tsx",
+    "plugins/sessions/index.ts",
+    "plugins/sessions/composerCatalogLifecycle.ts",
+    "plugins/sessions/ComposerWorkspaceSelect.tsx",
+    "plugins/sessions/completionPresentation.ts",
+    "plugins/sessions/conversationWorkDuration.ts",
+    "plugins/sessions/toolDisplayStatus.ts",
+    "plugins/sessions/SessionQueue.tsx",
+    "plugins/sessions/CommandPalette.tsx",
+    "plugins/sessions/ConversationTimelineViewport.tsx",
+    "plugins/sessions/SessionPolling.ts",
+    "plugins/sessions/sessionsIndex.ts",
+    "plugins/sessions/sessionsRemoteConnectionState.tsx#RemoteConnectionStateLabel",
+    "plugins/sessions/sessionsSidebarTimeline.ts",
+    "plugins/sessions/XuenessStartPage.tsx",
+    "plugins/sessions/StartPageWorkspaceMenu.tsx",
+    "plugins/sessions/StartPageRemoteDialog.tsx",
+    "plugins/sessions/permissionModes.ts",
+    "plugins/sessions/TimelineVirtualWindow.ts#TimelineWindowModel",
+    "plugins/sessions/TimelineVirtualWindow.ts#useTimelineVirtualWindow",
+    "plugins/sessions/ListVirtualWindow.ts",
+    "plugins/sessions/messageTimeLabel.ts#formatMessageTimeLabel",
+    "plugins/sessions/sessionScrollMemory.ts",
+    "plugins/sessions/timelineScrollAnchor.ts",
+    "plugins/sessions/SidebarNav.tsx",
+    "plugins/sessions/debounce.ts",
+    "plugins/sessions/PendingQuestion.tsx#PendingQuestion",
+    "plugins/sessions/PendingQuestion.tsx#PendingQuestionModel",
+    "plugins/sessions/questionApi.ts",
+    "plugins/sessions/SessionExperimentSettings.tsx#SessionExperimentSettings",
+    "ui/StreamingCommitGate.ts#STREAM_COMMIT_INTERVAL_MS",
+    "ui/StreamingCommitGate.ts#StreamingCommitGate",
+    "ui/StreamingCommitGate.ts#useQuantizedStreamingText",
+    "ui/StreamingCommitGate.ts#STREAM_REVEAL_FRAME_MS",
+    "ui/StreamingCommitGate.ts#streamingRevealBoundary",
+    "ui/StreamingCommitGate.ts#StreamingRevealPacer",
+    "ui/StreamingCommitGate.ts#useStreamingReveal",
+    "plugins/sessions/PendingQuestion.tsx#QuestionResume",
+    "plugins/sessions/ComposerCapabilityMenu.tsx",
+    "plugins/sessions/ContextUsageRing.tsx",
+    "plugins/sessions/sessionContextUsage.ts",
+    "plugins/sessions/FullAccessConfirmationDialog.tsx",
+    "plugins/sessions/conversationActivity.ts",
+    "plugins/sessions/conversationJournalProjection.ts",
+    "plugins/sessions/conversationCompaction.ts",
+    "plugins/sessions/referenceRows.ts",
+    "plugins/sessions/referenceRowView.tsx",
+    "plugins/sessions/subagentRows.ts",
+    "plugins/sessions/SubagentRowView.tsx",
+    "plugins/sessions/subagentRowProgress.tsx#SubagentStepProgress",
+    "plugins/sessions/ZCodeConversation.tsx",
+    "plugins/sessions/useRunPermissionConfirmation.tsx",
+    "plugins/sessions/sessionSearch.ts",
+    "plugins/sessions/queueApi.ts",
+    "plugins/sessions/LiveConversation.ts",
+    "plugins/sessions/conversationProjectionStore.ts",
+    "plugins/sessions/conversationTransport.ts",
+    "plugins/sessions/conversationWatch.ts",
+    "plugins/sessions/paneLayout.ts",
+    "plugins/sessions/scopedCommands.ts",
+    "plugins/sessions/paneConversation.ts",
+    "plugins/sessions/SessionPaneLayout.tsx",
+    "plugins/sessions/SessionPaneSplit.tsx",
+    "plugins/sessions/paneResize.ts",
+    "plugins/sessions/secondaryConversationPane.tsx",
+    "plugins/sessions/secondaryPaneComposer.tsx",
+    "plugins/sessions/CurrentTurnInput.tsx",
+    "plugins/sessions/steeringApi.ts",
+    "plugins/sessions/ConversationFind.tsx",
+    "plugins/sessions/ConversationSelectionActions.tsx",
+    "plugins/sessions/ConversationSharing.tsx",
+    "plugins/sessions/toolRenderers.tsx",
+    "plugins/sessions/useQueueWithdrawals.ts",
+    "plugins/sessions/paneTree.ts",
+    "plugins/sessions/paneGroups.ts",
+    "plugins/sessions/panePersistence.ts",
+    "plugins/sessions/paneIdentity.ts",
+    "plugins/sessions/paneRunOptions.ts",
+    "plugins/sessions/usePaneWorkbench.ts",
+    "plugins/sessions/paneGeometry.ts",
+    "plugins/sessions/paneRestore.ts",
+    "plugins/sessions/SessionPaneWorkbench.tsx",
+    "plugins/sessions/paneDrop.ts",
+    "plugins/sessions/composerAttachmentUpload.ts",
+    "plugins/sessions/composerAttachmentUploadStore.ts",
+    "plugins/sessions/composerAttachmentDraft.ts",
+    "plugins/sessions/composerAttachmentLifecycle.ts",
+    "plugins/sessions/NativeToolCallCard.tsx",
+    "plugins/sessions/nativeToolPayload.ts",
+    "plugins/sessions/composerAttachmentCleanup.ts",
+    "plugins/sessions/conversationWorkSegments.ts",
+    "plugins/sessions/toolActivity.ts",
+    "plugins/sessions/conversationMarkers.tsx",
+    "plugins/sessions/PaneSessionControls.tsx",
+    "plugins/sessions/paneShortcutActions.ts",
+    "plugins/sessions/PaneOptionToolbar.tsx",
+    "plugins/sessions/paneWorkflowActions.ts",
+    "plugins/sessions/paneHistoryActions.tsx",
+    "plugins/sessions/composerImagePreviewTransfer.ts",
+    "plugins/sessions/paneForkActions.tsx",
+    "plugins/sessions/primaryForkCommand.ts",
+    "plugins/sessions/paneCommandCoordinator.ts",
+    "plugins/sessions/paneSidePanelBinding.ts",
+    "plugins/sessions/commandLedger.ts",
+    "plugins/sessions/CommandReceiptRecovery.tsx",
+    "plugins/sessions/messageEditRestore.ts",
+    "plugins/sessions/DisconnectedRemoteStop.tsx",
+    "plugins/sessions/StarterIdeas.tsx",
+    "plugins/sessions/sidebarPreference.ts",
+    "plugins/sessions/statusPresentation.ts",
+    "plugins/sessions/SessionRecoveryNotice.tsx",
+    "plugins/sessions/ComposerMaterialManifest.tsx",
+    "plugins/sessions/composerMaterialSummary.ts",
+    "plugins/sessions/approvalImpact.ts",
+    "plugins/sessions/manualCompact.ts",
+    "xuenessToolNames.ts",
+    "plugins/sessions/Visualizations.tsx"
+  ],
+  "modules": [
+    "runtime_event_log",
+    "runtime_event_extension",
+    "runtime_event_api",
+    "sqlite_library",
+    "session_storage",
+    "storage_api",
+    "rewind",
+    "rewind_api",
+    "stable_boundaries",
+    "compact_runtime"
+  ],
+  "commands": [
+    "headless"
+  ]
+}

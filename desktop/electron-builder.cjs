@@ -4,7 +4,9 @@ module.exports = {
   publish: [{ provider: 'github', owner: 'xuediner-source', repo: 'xueness', releaseType: 'release' }],
   files: ['src/**/*', 'package.json'],
   extraResources: [
-    { from: 'runtime/backend', to: 'backend' },
+    { from: '../ts/dist', to: 'backend-ts', filter: ['**/*', '!**/*.map'] },
+    // electron-builder excludes a source root's node_modules during extraResources copying.
+    { from: '../ts/dist/node_modules', to: 'backend-ts/node_modules', filter: ['**/*', '!**/*.map'] },
     { from: '../webapp/dist', to: 'webapp' },
     { from: '../webapp/node_modules/playwright', to: 'browser-runtime/node_modules/playwright' },
     { from: '../webapp/node_modules/playwright-core', to: 'browser-runtime/node_modules/playwright-core' },
@@ -15,7 +17,7 @@ module.exports = {
     icon: '../webapp/public/icon_512@2x.png', identity: null,
     extendInfo: { NSMicrophoneUsageDescription: 'Xueness requests microphone access only when you choose Allow in its permission guide. No recording starts during setup.' },
     artifactName: 'Xueness-${version}-macos-${arch}.${ext}' },
-  win: { target: ['nsis', 'zip'], icon: '../webapp/public/icon_512@2x.png',
+  win: { target: ['nsis', 'zip'], icon: '../webapp/public/favicon.ico',
     artifactName: 'Xueness-${version}-windows-${arch}-portable.${ext}' },
   nsis: { oneClick: false, allowToChangeInstallationDirectory: true,
     perMachine: false, createDesktopShortcut: true, createStartMenuShortcut: true,

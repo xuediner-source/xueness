@@ -1,0 +1,5 @@
+
+> xueness-ts@0.2.0-dev.0 check:lines
+> node scripts/check-max-lines.ts
+
+check:lines ok: 1001 files, largest plugins\sessions\src\tui-transcript.ts (400 lines, max 400)

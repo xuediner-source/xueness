@@ -1,0 +1,101 @@
+{
+  "schema": "xueness.cleanup-plan.v1",
+  "preparedAtLocal": "2026-10-23",
+  "executionState": "prepared-not-run",
+  "appsRoot": "E:\\models\\apps",
+  "sourceInventories": [
+    "E:\\models\\apps\\_stage-z8\\deploy-inventory.json",
+    "E:\\models\\apps\\_stage-z8\\cleanup-extra-inventory.json"
+  ],
+  "preconditions": {
+    "reportsMustExist": true,
+    "reports": [
+      { "path": "E:\\models\\apps\\_stage-z8\\deployment-verification.json", "requiredField": "ok", "requiredValue": true },
+      { "path": "E:\\models\\apps\\_stage-z8\\package-verification-z8.json", "requiredField": "ok", "requiredValue": true }
+    ],
+    "preparationObservation": "Both report files were absent at plan preparation time; cleanup must stop unless each report exists and has a top-level boolean ok=true."
+  },
+  "protectedPaths": [
+    "E:\\models\\apps\\Xueness",
+    "E:\\models\\apps\\xueness-data",
+    "E:\\models\\apps\\session-comparison",
+    "E:\\models\\apps\\_stage-z8",
+    "E:\\models\\apps\\xueness-src",
+    "E:\\models\\apps\\re-20261010",
+    "E:\\models\\apps\\xueness-audit-20261010",
+    "E:\\models\\apps\\xueness-review-20261009",
+    "E:\\models\\apps\\xueness-review-20261012",
+    "E:\\models\\apps\\xueness-optimization-20261012",
+    "E:\\models\\apps\\xueness-frontend-redesign-20261015",
+    "E:\\models\\apps\\xueness-review-20261009.bundle",
+    "E:\\models\\apps\\downloads (directory retained; only exact listed child items are targets)",
+    "E:\\models\\apps\\backups (directory retained; only exact listed backup children are targets)"
+  ],
+  "directoryTargets": [
+    { "path": "E:\\models\\apps\\_round10", "type": "round snapshot directory" },
+    { "path": "E:\\models\\apps\\_round11", "type": "round snapshot directory" },
+    { "path": "E:\\models\\apps\\_round13", "type": "round snapshot directory" },
+    { "path": "E:\\models\\apps\\_round14", "type": "round snapshot directory" },
+    { "path": "E:\\models\\apps\\_round17", "type": "round snapshot directory" },
+    { "path": "E:\\models\\apps\\_round18", "type": "round snapshot directory" },
+    { "path": "E:\\models\\apps\\_round19", "type": "round snapshot directory" },
+    { "path": "E:\\models\\apps\\_stage-z2", "type": "stage snapshot directory" },
+    { "path": "E:\\models\\apps\\_stage-z3", "type": "stage snapshot directory" },
+    { "path": "E:\\models\\apps\\_stage-z4", "type": "stage snapshot directory" },
+    { "path": "E:\\models\\apps\\_stage-z5", "type": "stage snapshot directory" },
+    { "path": "E:\\models\\apps\\_stage-z6", "type": "stage snapshot directory" },
+    { "path": "E:\\models\\apps\\_stage-z7", "type": "stage snapshot directory" },
+    { "path": "E:\\models\\apps\\xueness-0.1.5-src", "type": "old source archive directory" },
+    { "path": "E:\\models\\apps\\xueness-build-env", "type": "old build environment directory" },
+    { "path": "E:\\models\\apps\\xueness-win-20261014", "type": "old Windows build directory" },
+    { "path": "E:\\models\\apps\\xueness-windows-build-20261007", "type": "old Windows build directory" },
+    { "path": "E:\\models\\apps\\xueness-windows-repair-20261008", "type": "old Windows repair build directory" },
+    { "path": "E:\\models\\apps\\downloads\\Xueness-windows-preview-20261007", "type": "old Windows preview directory" },
+    { "path": "E:\\models\\apps\\downloads\\Xueness-windows-repair-20261008", "type": "old Windows repair directory" },
+    { "path": "E:\\models\\apps\\backups\\xueness-before-install-20261016-3a0f6570", "type": "mixed application/user-data backup; preserve user-data and before-manifest.json first" },
+    { "path": "E:\\models\\apps\\backups\\xueness-before-install-20261017-aa4be41f", "type": "mixed application/user-data backup; preserve user-data and before-manifest.json first" },
+    { "path": "E:\\models\\apps\\backups\\xueness-before-install-20261017-bb0bdcb5", "type": "mixed application/user-data backup; preserve user-data and before-manifest.json first" },
+    { "path": "E:\\models\\apps\\xueness-backup-20261002", "type": "state-only backup; preserve state first" }
+  ],
+  "fileTargets": [
+    { "path": "E:\\models\\apps\\downloads\\xueness-source-b4992aed6e80226b5559727de7de23015d7f329d.zip", "type": "zip/source-snapshot", "sizeBytes": 4828594 },
+    { "path": "E:\\models\\apps\\downloads\\Xueness-0.1.1-windows-x64-setup.exe", "type": "installer/exe", "sizeBytes": 126878840 },
+    { "path": "E:\\models\\apps\\downloads\\Xueness-0.1.4-windows-x64-setup.exe", "type": "installer/exe", "sizeBytes": 127131710 },
+    { "path": "E:\\models\\apps\\downloads\\Xueness-0.1.5-windows-x64-setup.exe", "type": "installer/exe", "sizeBytes": 716800 }
+  ],
+  "coverageNote": "Installer/source/archive files inside directoryTargets are covered by deleting their parent target and are intentionally not listed as duplicate fileTargets. The apps root had no direct matching Xueness installer or source archive at preparation time.",
+  "preservationRules": {
+    "mixedBackups": [
+      {
+        "source": "E:\\models\\apps\\backups\\xueness-before-install-20261016-3a0f6570\\user-data",
+        "destination": "E:\\models\\apps\\xueness-data\\preserved-backups\\xueness-before-install-20261016-3a0f6570\\user-data",
+        "copyManifestTo": "E:\\models\\apps\\xueness-data\\preserved-backups\\xueness-before-install-20261016-3a0f6570\\before-manifest.json",
+        "observedFiles": { "sessions": 2, "settings": 3, "providerOrProfile": 1, "other": 1348 }
+      },
+      {
+        "source": "E:\\models\\apps\\backups\\xueness-before-install-20261017-aa4be41f\\user-data",
+        "destination": "E:\\models\\apps\\xueness-data\\preserved-backups\\xueness-before-install-20261017-aa4be41f\\user-data",
+        "copyManifestTo": "E:\\models\\apps\\xueness-data\\preserved-backups\\xueness-before-install-20261017-aa4be41f\\before-manifest.json",
+        "observedFiles": { "sessions": 2, "settings": 3, "providerOrProfile": 1, "other": 1408 }
+      },
+      {
+        "source": "E:\\models\\apps\\backups\\xueness-before-install-20261017-bb0bdcb5\\user-data",
+        "destination": "E:\\models\\apps\\xueness-data\\preserved-backups\\xueness-before-install-20261017-bb0bdcb5\\user-data",
+        "copyManifestTo": "E:\\models\\apps\\xueness-data\\preserved-backups\\xueness-before-install-20261017-bb0bdcb5\\before-manifest.json",
+        "observedFiles": { "sessions": 2, "settings": 3, "providerOrProfile": 1, "other": 1479 }
+      }
+    ],
+    "stateOnlyBackup": {
+      "source": "E:\\models\\apps\\xueness-backup-20261002\\state",
+      "destination": "E:\\models\\apps\\xueness-data\\preserved-backups\\xueness-backup-20261002\\state",
+      "observedFiles": { "sessions": 0, "settings": 1, "providerOrProfile": 1, "other": 0 }
+    },
+    "otherTargets": "At execution time, inspect each fixed directory target root and discovered project source roots for direct child directories named state or .state; move each found tree under xueness-data/preserved-backups/<target-name>/<relative-path> before deleting that target. The scan does not follow links or inspect file contents."
+  },
+  "executionSafeguards": [
+    "This plan and its script are prepared only; no move/delete has been run.",
+    "The script checks exact allowlists, report gates, absolute containment, and rejects any reparse-point path component before mutations.",
+    "The script hashes each preserved data tree before/after move and verifies the moved tree hash; mixed-backup manifests are copied and hash-checked before old backup directories are removed.",
+    "If a target, destination, report, or hash check differs from this plan, the script stops before deleting version targets."
+  ]
+}

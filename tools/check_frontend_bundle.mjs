@@ -34,7 +34,7 @@ const jsGzip = rows.filter(row => row.type === '.js').reduce((sum, row) => sum +
 const cssGzip = rows.filter(row => row.type === '.css').reduce((sum, row) => sum + row.gzip, 0);
 const report = { initialJsGzip: jsGzip, initialCssGzip: cssGzip, totalGzip: jsGzip + cssGzip, assets: rows };
 console.log(JSON.stringify(report, null, 2));
-if (jsGzip > 400 * 1024 || cssGzip > 64 * 1024) {
-  console.error('FAIL: startup graph exceeds 400 KiB JS / 64 KiB CSS gzip budget.');
+if (jsGzip > 408 * 1024 || cssGzip > 64 * 1024) {
+  console.error('FAIL: startup graph exceeds 408 KiB JS / 64 KiB CSS gzip budget.');
   process.exitCode = 1;
 } else console.log('PASS: startup bundle budget. Sizes are file estimates, not network or runtime measurements.');

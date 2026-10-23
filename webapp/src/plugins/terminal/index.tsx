@@ -1,166 +1,140 @@
 import React, { useEffect, useRef, useState } from 'react';
-import type { Terminal } from '@xterm/xterm';
 import { get, post } from '../../xuenessApi';
 import { IconTerminal } from '../../ui/icons';
 import { t as tr } from '../../i18n';
 import { OperationHeader, OperationStatus } from '../shared';
 import '../../styles/operations.css';
 import { terminalFontStack } from './XuenessTerminalPreferences';
-const errorText = (error: unknown) => error instanceof Error ? error.message : String(error);
+import { TerminalSessionRegistry, type TerminalResource, type TerminalApi } from './terminalSessionRegistry';
+import { registerTerminalLifecycle } from './terminalLifecycle';
+import { isImeComposingEvent } from '../../xuenessShortcutDisplay';
+export { nextTerminalBackoff, terminalResizePayload, decodeTerminalData } from './terminalSessionRegistry';
 
-export function nextTerminalBackoff(currentBackoff: number): number {
-  return Math.min(currentBackoff * 2, 1000);
-}
-
-export function terminalResizePayload(cols: number, rows: number): { cols: number; rows: number } | null {
-  if (!Number.isInteger(cols) || !Number.isInteger(rows) || cols <= 0 || rows <= 0) return null;
-  return { cols, rows };
-}
-
-export function decodeTerminalData(data: string): Uint8Array | null {
+import type { RemoteSessionAdapter } from '../remote/remoteSessionAdapter';
+import { createRemoteTerminalTransport } from './remoteTerminalTransport';
+let singleton: TerminalSessionRegistry | undefined;
+const remoteRegistries = new Map<string, TerminalSessionRegistry>();
+let terminalEnabled = false;
+let remoteEnabled = false;
+const lifecycle = {
+  setEnabled(value: boolean) { terminalEnabled = value; singleton?.setEnabled(value); for (const registry of remoteRegistries.values()) registry.setEnabled(value && remoteEnabled); },
+  setRemoteEnabled(value: boolean) { remoteEnabled = value; for (const registry of remoteRegistries.values()) registry.setEnabled(value && terminalEnabled); },
+  removeWorkspace(id: string) { singleton?.removeWorkspace(id); for (const registry of remoteRegistries.values()) registry.removeWorkspace(id); },
+};
+function getRemoteTerminalRegistry(adapter: RemoteSessionAdapter) {
+  const found = remoteRegistries.get(adapter.runtimeKey);
+  if (found) return found;
+  let storage: Pick<Storage, 'getItem' | 'setItem'> | undefined;
+  let cleanupStorage: Pick<Storage, 'getItem' | 'setItem'> | undefined;
   try {
-    // The server emits canonical RFC 4648 base64. `atob` accepts some malformed
-    // or unpadded strings, which can otherwise advance the terminal cursor with
-    // bytes the server never sent.
-    if (!/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(data)) {
-      throw new Error('invalid base64');
-    }
-    const decoded = atob(data);
-    if (btoa(decoded) !== data) throw new Error('non-canonical base64');
-    return Uint8Array.from(decoded, c => c.charCodeAt(0));
-  } catch (decodeErr) {
-    console.error('Failed to decode terminal output:', decodeErr);
-    return null;
-  }
+    const key = 'xueness.terminal.remote.v1:' + adapter.runtimeKey;
+    const local = window.localStorage;
+    storage = { getItem: () => local.getItem(key), setItem: (_key, value) => local.setItem(key, value) };
+    cleanupStorage = { getItem: () => local.getItem(key + ':cleanup'), setItem: (_key, value) => local.setItem(key + ':cleanup', value) };
+  } catch { /* Live ownership works without persisted descriptors. */ }
+  const registry = createTerminalRegistry(createRemoteTerminalTransport(adapter, () => terminalEnabled && remoteEnabled, cleanupStorage), storage);
+  remoteRegistries.set(adapter.runtimeKey, registry);
+  registry.setEnabled(terminalEnabled && remoteEnabled && adapter.isCurrent());
+  const unsubscribe = adapter.subscribe(() => {
+    if (!adapter.isCurrent()) { registry.setEnabled(false); if (!registry.hasPendingCleanup()) { remoteRegistries.delete(adapter.runtimeKey); unsubscribe(); } }
+  });
+  return registry;
+}
+export function getTerminalRegistry() {
+  if (singleton) return singleton;
+  let storage: Storage | undefined;
+  try { storage = window.localStorage; } catch { /* Private browsing. */ }
+  singleton = createTerminalRegistry({
+    list: () => get('/api/terminals'),
+    open: sessionId => post('/api/terminals', { session_id: sessionId, open: true }),
+    poll: (id, cursor, signal) => get(`/api/terminals/${encodeURIComponent(id)}?cursor=${cursor}`, signal),
+    input: (id, text) => post(`/api/terminals/${encodeURIComponent(id)}/input`, { text }),
+    resize: (id, cols, rows) => post(`/api/terminals/${encodeURIComponent(id)}/resize`, { cols, rows }),
+    close: id => post(`/api/terminals/${encodeURIComponent(id)}/close`, {}),
+  }, storage);
+  registerTerminalLifecycle(lifecycle);
+  return singleton;
+}
+function createTerminalRegistry(api: TerminalApi, storage?: Pick<Storage, 'getItem' | 'setItem'>) {
+  return new TerminalSessionRegistry(api, async (_entry, input, resize) => {
+    const [{ Terminal }, { FitAddon }] = await Promise.all([import('@xterm/xterm'), import('@xterm/addon-fit')]);
+    const element = document.createElement('div'); element.className = 'xn-terminal-host';
+    const terminal = new Terminal({ cursorBlink: true, convertEol: false, scrollback: 5000, fontSize: 13, fontFamily: terminalFontStack('system'), theme: { background: '#161616', foreground: '#d4d4d4', cursor: '#d4d4d4', selectionBackground: '#ffffff25' } });
+    const fit = new FitAddon(); terminal.loadAddon(fit);
+    let opened = false;
+    const fitVisible = () => {
+      if (!opened || !element.isConnected || !element.clientWidth || !element.clientHeight) return;
+      fit.fit(); resize(terminal.cols, terminal.rows);
+    };
+    const observer = new ResizeObserver(fitVisible);
+    const subscription = terminal.onData(input);
+    return {
+      write: data => terminal.write(data),
+      attach(host) { observer.disconnect(); host.appendChild(element); if (!opened) { terminal.open(element); opened = true; } observer.observe(host); fitVisible(); terminal.focus(); },
+      detach() { observer.disconnect(); element.remove(); },
+      configure(size, family) { terminal.options.fontSize = Number.isFinite(size) ? Math.max(10, Math.min(24, Math.round(size))) : 13; terminal.options.fontFamily = terminalFontStack(family); fitVisible(); },
+      dispose() { observer.disconnect(); subscription.dispose(); terminal.dispose(); element.remove(); },
+    };
+  }, storage);
 }
 
-export function TerminalPanel({ sessionId, fontSize = 13, fontFamily = "system" }: { sessionId: string | null; fontSize?: number; fontFamily?: string }) {
-  const textSize = Number.isFinite(fontSize) ? Math.max(10, Math.min(24, Math.round(fontSize))) : 13;
-  const terminalRef = useRef<Terminal | null>(null);
-  const resizeRef = useRef<(() => void) | null>(null);
-  useEffect(() => {
-    if (terminalRef.current) { terminalRef.current.options.fontSize = textSize; resizeRef.current?.(); }
-  }, [textSize]);
-  useEffect(() => {
-    if (terminalRef.current) { terminalRef.current.options.fontFamily = terminalFontStack(fontFamily); resizeRef.current?.(); }
-  }, [fontFamily]);
+function TerminalView({ entry, registry, fontSize, fontFamily }: { entry: TerminalResource; registry: TerminalSessionRegistry; fontSize: number; fontFamily: string }) {
   const host = useRef<HTMLDivElement>(null);
-  const [id, setId] = useState('');
-  const [error, setError] = useState('');
-  const [closed, setClosed] = useState(false);
-  const [existing, setExisting] = useState<{id: string; session_id: string; closed: boolean}[]>([]);
-  const mounted = useRef(false);
-  const lifecycleGeneration = useRef(0);
-  const currentSessionId = useRef(sessionId);
-  const currentTerminalId = useRef(id);
-  currentSessionId.current = sessionId;
-  currentTerminalId.current = id;
   useEffect(() => {
-    mounted.current = true;
-    lifecycleGeneration.current += 1;
-    return () => { mounted.current = false; lifecycleGeneration.current += 1; };
-  }, []);
-  useEffect(() => { setId(''); setClosed(false); setError(''); }, [sessionId]);
-  useEffect(() => {
-    const controller = new AbortController();
-    void get<{terminals: typeof existing}>('/api/terminals', controller.signal)
-      .then(r => { if (mounted.current && !controller.signal.aborted) setExisting(r.terminals); })
-      .catch(e => {
-        if (mounted.current && !controller.signal.aborted && !(e instanceof DOMException && e.name === 'AbortError')) {
-          setError(errorText(e));
-        }
-      });
-    return () => { controller.abort(); };
-  }, [sessionId, id]);
-  useEffect(() => {
-    if (!id || !host.current) return;
-    let live = true, timer: ReturnType<typeof setTimeout>;
-    let dispose = () => {};
-    const pollController = new AbortController();
-    void (async () => {
-      const { Terminal } = await import('@xterm/xterm');
-      const { FitAddon } = await import('@xterm/addon-fit');
-      if (!live || !host.current || pollController.signal.aborted) return;
-      const terminal = new Terminal({ cursorBlink: true, convertEol: false, fontSize: textSize, fontFamily: terminalFontStack(fontFamily), theme: { background: '#161616', foreground: '#d4d4d4', cursor: '#d4d4d4', selectionBackground: '#ffffff25' } });
-      terminalRef.current = terminal;
-      const fit = new FitAddon(); terminal.loadAddon(fit); terminal.open(host.current); fit.fit(); terminal.focus();
-      let cursor = 0, sending = Promise.resolve();
-      const input = terminal.onData(text => {
-        sending = sending.then(async () => {
-          if (!live || pollController.signal.aborted) return;
-          await post(`/api/terminals/${id}/input`, { text });
-        }).catch(e => {
-          if (live && !pollController.signal.aborted && !(e instanceof DOMException && e.name === 'AbortError')) {
-            setError(errorText(e));
-          }
-        });
-      });
-      const resize = () => {
-        fit.fit();
-        const size = terminalResizePayload(terminal.cols, terminal.rows);
-        if (!live || !size || pollController.signal.aborted) return;
-        void post(`/api/terminals/${id}/resize`, size).catch(e => {
-          if (live && !pollController.signal.aborted && !(e instanceof DOMException && e.name === 'AbortError')) {
-            setError(errorText(e));
-          }
-        });
-      };
-      resizeRef.current = resize;
-      const observer = new ResizeObserver(resize); observer.observe(host.current); resize();
-      dispose = () => { terminalRef.current = null; resizeRef.current = null; observer.disconnect(); input.dispose(); terminal.dispose(); };
-      let backoff = 150;
-      const poll = async () => {
-        try {
-          const r = await get<{data: string; cursor: number; truncated: boolean; closed: boolean}>(`/api/terminals/${id}?cursor=${cursor}`, pollController.signal);
-          if (!live || pollController.signal.aborted) return;
-          backoff = 150;
-          if (r.truncated) terminal.write('\r\n[older output truncated]\r\n');
-          const bytes = decodeTerminalData(r.data);
-          if (bytes) terminal.write(bytes);
-          cursor = r.cursor;
-          setClosed(r.closed);
-          if (!r.closed || r.data) timer = setTimeout(() => { void poll(); }, 150);
-        } catch (e) {
-          if (live && !pollController.signal.aborted && !(e instanceof DOMException && e.name === 'AbortError')) {
-            setError(errorText(e));
-            timer = setTimeout(() => { void poll(); }, backoff);
-            backoff = nextTerminalBackoff(backoff);
-          }
-        }
-      };
-      void poll();
-    })().catch(e => {
-      if (live && !pollController.signal.aborted && !(e instanceof DOMException && e.name === 'AbortError')) {
-        setError(errorText(e));
-      }
-    });
-    return () => { live = false; clearTimeout(timer); pollController.abort(); dispose(); };
-  }, [id]);
-  return <section className="xn-operations xn-terminal-page">
-    <OperationHeader icon={<IconTerminal size={22} />} title={tr("交互式终端")} description={tr("打开后直接在工作区执行命令，终端输入不会经过 Agent 的逐次审批。")} />
-    {error && <p role="alert">{error}</p>}
-    <div className="xn-terminal-frame"><div className="xn-terminal-toolbar"><span><IconTerminal />{id ? id.slice(0, 8) : tr('工作区 Shell')}</span><OperationStatus status={id ? closed ? 'closed' : 'running' : 'pending'} /><div className="xn-operations-actions">
-    <button className="xn-operation-primary" disabled={!sessionId || Boolean(id && !closed)} onClick={() => {
-      const targetSessionId = sessionId;
-      if (!targetSessionId) return;
-      const generation = lifecycleGeneration.current;
-      void post<{ id: string }>('/api/terminals', { session_id: targetSessionId, open: true }).then(r => {
-        if (!mounted.current || lifecycleGeneration.current !== generation || currentSessionId.current !== targetSessionId) return;
-        setId(r.id); setClosed(false); setError('');
-      }).catch(e => { if (mounted.current && lifecycleGeneration.current === generation && currentSessionId.current === targetSessionId) setError(errorText(e)); });
-    }}>{tr("打开工作区终端")}</button>
-    {existing.filter(t => t.session_id === sessionId && !t.closed && t.id !== id).map(t => <button key={t.id} onClick={() => { setId(t.id); setClosed(false); }}>{tr("连接终端")} · {t.id.slice(0, 8)}</button>)}
-    <button disabled={!id || closed} onClick={() => {
-      const closingId = id;
-      const generation = lifecycleGeneration.current;
-      void post(`/api/terminals/${closingId}/close`, {}).then(() => {
-        if (mounted.current && lifecycleGeneration.current === generation && currentTerminalId.current === closingId) setClosed(true);
-      }).catch(e => {
-        if (mounted.current && lifecycleGeneration.current === generation && currentTerminalId.current === closingId) setError(errorText(e));
-      });
-    }}>{tr("关闭终端")}</button>
-    </div></div><div className="xn-terminal-canvas"><div className="xn-terminal-host" ref={host} />
-    {!id && <div className="xn-terminal-empty"><IconTerminal size={36} /><h3>{sessionId ? tr('终端已就绪') : tr('请先选择一个会话')}</h3><p>{sessionId ? tr('打开终端，开始在当前工作区操作。') : tr('终端会使用所选会话的工作区目录。')}</p></div>}
-    </div><footer className="xn-terminal-footer"><span>{tr('交互输入 · 自适应尺寸 · 会话内重连')}</span><kbd>Ctrl + C</kbd></footer></div>
+    const element = host.current;
+    if (!element) return;
+    registry.attach(entry, element, fontSize, fontFamily);
+    return () => registry.detach(entry, element);
+  }, [entry, registry, fontSize, fontFamily]);
+  return <div className="xn-terminal-host" ref={host} />;
+}
+
+/** sessionId authorizes explicit shell creation; workspaceId owns the independent tabs. */
+export function TerminalPanel({ sessionId, workspaceId, remote = false, remoteAdapter, fontSize = 13, fontFamily = 'system' }: { sessionId: string | null; workspaceId?: string; remote?: boolean; remoteAdapter?: RemoteSessionAdapter; fontSize?: number; fontFamily?: string }) {
+  const localRegistry = getTerminalRegistry();
+  const remoteReady = remote && remoteAdapter?.isCurrent() && remoteAdapter.owner.capabilities.interactiveTerminals === true;
+  const registry = remoteReady && remoteAdapter ? getRemoteTerminalRegistry(remoteAdapter) : localRegistry;
+  const unavailable = remote && !remoteReady;
+  const workspace = workspaceId || '';
+  const [, redraw] = useState(0);
+  const [creating, setCreating] = useState(false);
+  const [cleaning, setCleaning] = useState(false);
+  const cleanupRegistries = [...remoteRegistries.values()].filter(value => value.hasPendingCleanup());
+  const cleanup = async () => { setCleaning(true); try { for (const value of cleanupRegistries) await value.retryCleanup(); } finally { setCleaning(false); } };
+  useEffect(() => registry.subscribe(() => redraw(n => n + 1)), [registry]);
+  useEffect(() => { void registry.restore(); }, [registry]);
+  const tabs = unavailable ? [] : registry.tabs(workspace);
+  const active = unavailable ? undefined : registry.selected(workspace);
+  const select = (tab: TerminalResource) => registry.select(tab);
+  const create = () => {
+    if (!sessionId || !workspace || unavailable || creating) return;
+    setCreating(true);
+    void registry.create(workspace, sessionId).then(tab => {
+      if (tab) registry.select(tab);
+    }).finally(() => setCreating(false));
+  };
+  return <section className="xn-operations xn-terminal-page" data-testid="terminal-pane">
+    <OperationHeader icon={<IconTerminal size={22} />} title={tr('交互式终端')} description={tr('打开后直接在工作区执行命令，终端输入不会经过 Agent 的逐次审批。')} />
+    {unavailable && <p role="status">{tr('远程终端尚不可用；不会启动本机 Shell。')}</p>}
+    {cleanupRegistries.length > 0 && <p role="alert">{tr('远程终端打开结果尚未确认。可重试清理原请求；不会重新打开终端。')} <button type="button" disabled={cleaning} onClick={() => { void cleanup(); }}>{tr('重试终端清理')}</button></p>}
+    {cleanupRegistries.filter(value => value !== registry && value.error).map((value, index) => <p role="alert" key={index}>{value.error}</p>)}
+    {registry.error && <p role="alert">{registry.error}</p>}
+    {active?.error && <p role="alert">{active.error}</p>}
+    <div className="xn-terminal-frame"><div className="xn-terminal-toolbar">
+      <div role="tablist" aria-label={tr('工作区终端')} onKeyDown={event => {
+        if (isImeComposingEvent(event) || event.ctrlKey || event.metaKey || event.altKey || !['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key) || !tabs.length) return;
+        const index = tabs.indexOf(active!);
+        const next = event.key === 'Home' ? 0 : event.key === 'End' ? tabs.length - 1 : (index + (event.key === 'ArrowRight' ? 1 : -1) + tabs.length) % tabs.length;
+        event.preventDefault(); event.stopPropagation(); select(tabs[next]);
+        event.currentTarget.querySelectorAll<HTMLButtonElement>('[role="tab"]')[next]?.focus();
+      }}>{tabs.map(tab => <span key={tab.tabId}>
+        <button type="button" role="tab" className={active === tab ? "xn-operation-primary" : undefined} aria-selected={active === tab} tabIndex={active === tab ? 0 : -1} onClick={() => select(tab)}>{tab.title}{tab.status === 'stopped' ? ` · ${tr('已停止')}` : ''}</button>
+        <button type="button" aria-label={`${tr('关闭终端')} ${tab.title}`} title={tr('关闭标签并终止进程')} onClick={() => registry.close(tab)}>×</button>
+      </span>)}</div>
+      <OperationStatus status={active ? active.status === 'stopped' ? 'closed' : 'running' : 'pending'} />
+      <div className="xn-operations-actions"><button className="xn-operation-primary" disabled={!sessionId || !workspace || unavailable || creating} onClick={create}>{creating ? tr('正在打开…') : tr('新建终端')}</button></div>
+    </div><div className="xn-terminal-canvas">
+      {active && !unavailable ? <TerminalView key={active.tabId} entry={active} registry={registry} fontSize={fontSize} fontFamily={fontFamily} /> : <div className="xn-terminal-empty"><IconTerminal size={36} /><h3>{sessionId ? tr('终端已就绪') : tr('请先选择一个会话')}</h3><p>{tr('新建终端需要明确操作。切换工作区或隐藏面板会保留终端；关闭标签会终止进程。')}</p></div>}
+    </div><footer className="xn-terminal-footer"><span>{tr('工作区独立标签 · 隐藏时保留进程 · 关闭标签终止')}</span><kbd>Ctrl + C</kbd></footer></div>
   </section>;
 }

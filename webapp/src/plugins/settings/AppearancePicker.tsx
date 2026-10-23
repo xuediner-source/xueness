@@ -6,7 +6,7 @@ import "./appearance.css";
 
 const APPEARANCES = [
   { id: "xueness", name: "Xueness", description: "中性配色，经典工作台", Icon: PanelLeft },
-  { id: "claudex", name: "Claudex", description: "温润纸色，简洁工作台", Icon: Sparkles },
+  { id: "claudex", name: "纸感", description: "温润纸色，简洁工作台", Icon: Sparkles },
 ] as const;
 
 export function AppearancePicker({ value, disabled, onChange }: {
@@ -19,7 +19,7 @@ export function AppearancePicker({ value, disabled, onChange }: {
     {APPEARANCES.map(({ id, name, description, Icon }) => <label key={id} className="xn-appearance-choice" data-selected={selected === id}>
       <input type="radio" name="xueness-appearance" value={id} checked={selected === id} disabled={disabled} onChange={() => onChange(id)} />
       <span className="xn-appearance-choice__icon"><Icon size={20} aria-hidden="true" /></span>
-      <span className="xn-appearance-choice__copy"><strong>{name}</strong><span>{tr(description)}</span></span>
+      <span className="xn-appearance-choice__copy"><strong>{tr(name)}</strong><span>{tr(description)}</span></span>
       <span className="xn-appearance-choice__check" aria-hidden="true" />
     </label>)}
   </div>;

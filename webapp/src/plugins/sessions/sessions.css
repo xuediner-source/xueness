@@ -152,6 +152,12 @@
 .xn-session-timeline-viewport { position: relative; flex: 1 1 auto; min-height: 0; }
 /* overflow-anchor 关闭浏览器原生滚动锚定，滚动位置由时间线窗口补偿逻辑维护。 */
 .xn-session-timeline-viewport__scroll { width: 100%; height: 100%; overflow-anchor: none; }
+.xn-session-empty-composite { display: flex; min-height: 100%; flex-direction: column; align-items: center; justify-content: center; }
+.xn-session-timeline-empty { width: 100%; min-height: 0; }
+.xn-session-timeline-empty--centered { display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 24px 16px; box-sizing: border-box; }
+.xn-session-composer-dock { position: sticky; z-index: 4; bottom: 0; width: 100%; padding: 0 16px 16px; box-sizing: border-box; background: linear-gradient(to bottom, transparent, var(--bg) 24%); pointer-events: auto; }
+.xn-session-composer-dock--centered { position: relative; padding-top: 12px; background: transparent; }
+.xn-session-composer-dock > * { width: min(720px, 100%); margin-inline: auto; }
 /* The conversation shell must fill the chat surface even when the optional
    subagent sidepane is closed (its stylesheet is loaded lazily). */
 .xn-conversation-container {
@@ -357,6 +363,36 @@
   width: 100%;
   margin: 8px 0 -1px;
 }
+/* 撤回恢复副本：原先完全没有样式（裸 <p> 与系统按钮），改为与队列卡片同一语言的一行提示条；
+   说明文字在左，错误收成小标签，“刷新恢复副本”是带图标的轻按钮。 */
+.xn-session-queue__recovery { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; box-sizing: border-box; width: min(100% - 48px, 848px); margin: 0 auto 10px; padding: 6px 6px 6px 12px; border: 1px solid var(--border); border-radius: 10px; background: var(--bg-card); color: var(--fg-muted); font-size: 12px; line-height: 18px; }
+.xn-queue-dock .xn-session-queue__recovery { width: 100%; margin: 0 0 -1px; border-bottom-right-radius: 0; border-bottom-left-radius: 0; background: color-mix(in srgb, var(--bg-card) 82%, transparent); backdrop-filter: blur(14px) saturate(1.25); -webkit-backdrop-filter: blur(14px) saturate(1.25); }
+.xn-session-queue__recovery p { margin: 0; overflow-wrap: anywhere; }
+.xn-session-queue__recovery > p { flex: 1 1 240px; min-width: 0; }
+.xn-session-queue__recovery > p[role="status"] { flex: 0 1 auto; color: var(--fg-subtle); }
+.xn-session-queue__recovery > p[role="alert"] { flex: 0 1 auto; padding: 1px 8px; border-radius: 999px; background: var(--error-bg); color: var(--error-fg); font-size: 11px; }
+.xn-session-queue__recovery button { display: inline-flex; flex: 0 0 auto; align-items: center; gap: 6px; min-height: 26px; padding: 0 9px; border: 0; border-radius: 7px; background: transparent; color: var(--fg-subtle); font: inherit; font-size: 12px; cursor: pointer; }
+.xn-session-queue__recovery > button::before { content: ""; width: 13px; height: 13px; background: currentColor; -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8'/%3E%3Cpath d='M21 3v5h-5'/%3E%3Cpath d='M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16'/%3E%3Cpath d='M8 16H3v5'/%3E%3C/svg%3E") center / contain no-repeat; mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8'/%3E%3Cpath d='M21 3v5h-5'/%3E%3Cpath d='M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16'/%3E%3Cpath d='M8 16H3v5'/%3E%3C/svg%3E") center / contain no-repeat; }
+.xn-session-queue__recovery button:hover:not(:disabled) { background: var(--bg-hover); color: var(--fg); }
+.xn-session-queue__recovery button:focus-visible { outline: 2px solid var(--border-focus); outline-offset: 1px; }
+.xn-session-queue__recovery button:disabled { opacity: .5; cursor: default; }
+.xn-session-queue__recovery > div { display: flex; flex: 1 1 100%; flex-wrap: wrap; align-items: center; gap: 2px 12px; padding: 7px 0 1px; border-top: 1px solid var(--border); }
+.xn-session-queue__recovery > div > p { flex: 0 1 auto; }
+.xn-session-queue__recovery > div > p:first-child { color: var(--fg); }
+.xn-session-queue__recovery > div > span { flex: 1 1 100%; color: var(--warn-fg); }
+/* 未确认命令：原先是裸 <section>（无样式文本 + 系统按钮）。只在确实丢失回执时出现
+   （页面仍在等待的请求不算），与撤回恢复副本同一语言：点线状态点 + 说明 + 轻按钮。 */
+.xn-command-recovery { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; box-sizing: border-box; width: min(100% - 48px, 848px); margin: 0 auto 10px; padding: 6px 6px 6px 12px; border: 1px solid var(--border); border-radius: 10px; background: var(--bg-card); color: var(--fg-muted); font-size: 12px; line-height: 18px; }
+.xn-hero__composer > .xn-command-recovery { width: 100%; margin: 0 0 10px; }
+.xn-command-recovery p { flex: 1 1 240px; min-width: 0; margin: 0; overflow-wrap: anywhere; }
+.xn-command-recovery > p.xn-command-recovery__pending { display: flex; align-items: center; gap: 8px; color: var(--fg); }
+.xn-command-recovery__pending::before { content: ""; flex: none; box-sizing: border-box; width: 9px; height: 9px; border: 1.5px dotted var(--warn-fg); border-radius: 50%; }
+.xn-command-recovery > p[role="alert"] { flex: 0 1 auto; padding: 1px 8px; border-radius: 999px; background: var(--error-bg); color: var(--error-fg); font-size: 11px; }
+.xn-command-recovery button { display: inline-flex; flex: 0 0 auto; align-items: center; gap: 6px; min-height: 26px; padding: 0 9px; border: 0; border-radius: 7px; background: transparent; color: var(--fg-subtle); font: inherit; font-size: 12px; cursor: pointer; }
+.xn-command-recovery > button:not(.xn-command-recovery__open)::before { content: ""; width: 13px; height: 13px; background: currentColor; -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='11' cy='11' r='7'/%3E%3Cpath d='m20 20-3.5-3.5'/%3E%3C/svg%3E") center / contain no-repeat; mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='11' cy='11' r='7'/%3E%3Cpath d='m20 20-3.5-3.5'/%3E%3C/svg%3E") center / contain no-repeat; }
+.xn-command-recovery button:hover:not(:disabled) { background: var(--bg-hover); color: var(--fg); }
+.xn-command-recovery button:focus-visible { outline: 2px solid var(--border-focus); outline-offset: 1px; }
+.xn-command-recovery button:disabled { opacity: .5; cursor: default; }
 .xn-composer__submit-actions { display: inline-flex; flex: 0 0 auto; align-items: center; gap: 5px; }
 .xn-composer__queue { background: var(--bg-active); color: var(--fg); }
 .xn-composer__queue:hover:not(:disabled) { background: var(--bg-hover); }
@@ -824,3 +860,40 @@
 }
 .xn-session-history-older { display: grid; justify-items: center; gap: 6px; padding: 6px 0 12px; }
 .xn-session-history-older p { margin: 0; color: var(--error-fg); font-size: 12px; }
+
+/* sessions.rich_composer structured surface. Plain text stays on the textarea. */
+.xn-composer__editor {
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+  min-height: 40px;
+  max-height: 160px;
+  overflow-y: auto;
+  padding: 12px 14px 4px;
+  border: 0;
+  background: transparent;
+  color: var(--fg);
+  font: inherit;
+  font-size: 13px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  outline: none;
+}
+.xn-shell-layout .xn-composer__editor { padding: 0; font: 14px/20px var(--font-sans); }
+.xn-shell-layout .xn-composer--with-top-content .xn-composer__editor { width: calc(100% - 24px); margin: 12px 12px 0; }
+.xn-composer__editor[contenteditable="false"] { cursor: not-allowed; opacity: 0.6; }
+.xn-composer__editor-token {
+  display: inline-block;
+  margin: 0 1px;
+  padding: 0 6px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--bg-subtle);
+  color: var(--fg);
+  font-size: 12px;
+  line-height: 18px;
+  user-select: none;
+  vertical-align: baseline;
+}
+.xn-composer__editor-token--slash { font-family: var(--font-mono, ui-monospace, monospace); }

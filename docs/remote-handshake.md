@@ -1,3 +1,5 @@
+> Historical reference from 2026-10-12, before the TypeScript/Z8 migration; current behavior is defined by [README.md](../README.md) and [ts/docs/z8-guarded-goal-memory.md](../ts/docs/z8-guarded-goal-memory.md).
+
 # 远程 SSH 握手与能力协商
 
 实验功能，默认关闭。只接受设置里的布尔值 `true`。remote 插件本身默认关闭；插件停用后 `remote_exec` 与其它远程入口一样不可用。声明为 `system=windows` 的主机仍然在批准之前、SSH 之前拒绝，探测脚本不会发到那台机器上。

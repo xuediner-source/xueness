@@ -1,0 +1,20 @@
+{
+  "apiVersion": 2,
+  "id": "bots",
+  "name": "Channel inbox",
+  "description": "Opt-in Telegram allowlisted inbox and explicitly reviewed replies.",
+  "version": "0.2.0",
+  "defaultEnabled": false,
+  "dependencies": ["sessions"],
+  "capabilities": {
+    "fs": { "read": ["state"], "write": ["state"] },
+    "net": { "connect": ["api.telegram.org:443"] }
+  },
+  "tools": [],
+  "httpFamilies": ["bots"],
+  "commands": ["bots"],
+  "features": [
+    { "id": "bots.inbox", "name": "Telegram 白名单收件箱", "nameEn": "Allowlisted Telegram inbox" },
+    { "id": "bots.reply", "name": "明确批准的消息回复", "nameEn": "Explicitly approved message replies" }
+  ]
+}

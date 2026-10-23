@@ -1,0 +1,49 @@
+﹣ hooks on the TS agent service (0.5721ms) # POSIX hook commands
+▶ production agent service
+  ✔ uses actual file tools and flags workspace answers without evidence as unverified (1463.402ms)
+  ✔ replays exactly the approved original denied call once before asking the model again (845.9113ms)
+  ✔ does not spend a stale approval for a different subject or disabled owner (756.9451ms)
+  ✔ supports every configured capability on TS without model calls (492.1689ms)
+  ✔ connects configured MCP servers for the run, asks before each call and closes them afterwards (1579.0488ms)
+  ✔ lists workspace skills to the model and loads one through the ZCode Skill tool (664.8371ms)
+  ✖ allows only the session plan draft to be written in permission plan mode (614.6471ms)
+  ✔ compacts past the ZCode threshold through the real plugin hook before the main request (589.6033ms)
+  ✔ drains an active request on host shutdown even with experimental cancel propagation disabled (362.0311ms)
+✖ production agent service (7370.8711ms)
+﹣ plugin plan matches Python (0.5449ms) # no Python backend at E:\models\apps\_stage-z5\Xueness-0.1.8-complete-project
+▶ MCP server loading
+  ﹣ matches Python load() entry for entry (0.8151ms) # no Python backend at E:\models\apps\_stage-z5\Xueness-0.1.8-complete-project
+  ✔ keeps the Python executor for what the TS plugin does not serve (105.3994ms)
+  ﹣ refuses a linked mcp directory (0.2489ms) # SKIP
+✔ MCP server loading (108.1382ms)
+✔ runs an actor node, pauses it on a question, answers it and completes on resume (1646.8556ms)
+✔ recovers a bounded projection across cold instances and pages (55.5563ms)
+✔ skips duplicate and backward events while marking sequence gaps (0.3518ms)
+✔ serializes appends from independent worker instances without reusing sequence numbers (449.605ms)
+✔ repairs only a torn final line and rejects a complete corrupt record (29.4819ms)
+✔ enforces workspace, epoch, and forward-cursor checks on the runtime endpoint (72.8496ms)
+✔ keeps runtime hook events free of tool inputs, results, and private session fields (43.5597ms)
+✔ keeps the complete ledger while bounding each page to 500 events (2413.2937ms)
+ℹ tests 20
+ℹ suites 4
+ℹ pass 17
+ℹ fail 1
+ℹ cancelled 0
+ℹ skipped 2
+ℹ todo 0
+ℹ duration_ms 9476.7871
+
+✖ failing tests:
+
+test at apps\server\test\agent-service.test.ts:152:3
+✖ allows only the session plan draft to be written in permission plan mode (614.6471ms)
+  Error: ENOENT: no such file or directory, open 'C:\Users\19404\AppData\Local\Temp\xueness-service-state-bPiu8I\plan-drafts\507227e025994013a428d6e38713d2a9.md'
+      at readFileSync (node:fs:484:20)
+      at TestContext.<anonymous> (file:///E:/models/apps/_stage-z5/Xueness-0.1.8-complete-project/ts/apps/server/test/agent-service.test.ts:160:20)
+      at async Test.run (node:internal/test_runner/test:1389:7)
+      at async Suite.processPendingSubtests (node:internal/test_runner/test:960:7) {
+    errno: -4058,
+    code: 'ENOENT',
+    syscall: 'open',
+    path: 'C:\\Users\\19404\\AppData\\Local\\Temp\\xueness-service-state-bPiu8I\\plan-drafts\\507227e025994013a428d6e38713d2a9.md'
+  }

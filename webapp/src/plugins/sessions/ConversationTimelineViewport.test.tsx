@@ -16,3 +16,16 @@ test("the return-to-bottom control is offered only after scrolling away from the
   assert.match(html, /Conversation/);
   assert.doesNotMatch(html, /session-back-to-bottom/, "the button does not appear at the tail");
 });
+
+test("empty state and composer dock share the same scroll viewport", () => {
+  const html = renderToStaticMarkup(
+    <ConversationTimelineViewport autoScroll={false} rowsVersion={[]} centerEmptyStateWithDock
+      emptyState={<div data-testid="empty-copy">Start here</div>}
+      bottomDock={<div data-testid="empty-composer">Composer</div>}/>,
+  );
+  assert.equal((html.match(/data-testid="session-timeline-scroller"/g) ?? []).length, 1);
+  assert.match(html, /data-testid="empty-copy"/);
+  assert.match(html, /data-testid="empty-composer"/);
+  assert.match(html, /xn-session-timeline-empty--centered/);
+  assert.match(html, /data-testid="session-composer-dock"/);
+});

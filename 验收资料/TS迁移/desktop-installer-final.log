@@ -1,0 +1,42 @@
+
+> xueness-desktop@0.1.8 dist:win
+> node scripts/check-native-build.cjs win32 && npm run prepare:ts && electron-builder --win --publish never --x64
+
+Native package target verified: win32/x64
+
+> xueness-desktop@0.1.8 prepare:ts
+> npm --prefix ../ts run build
+
+
+> xueness-ts@0.2.0-dev.0 build
+> npm run typecheck && node scripts/build.ts
+
+
+> xueness-ts@0.2.0-dev.0 typecheck
+> tsc -p tsconfig.json
+
+
+added 17 packages in 1s
+Built 256 JavaScript modules in E:\models\Xueness-ts-m4-20261018\Xueness-0.1.8-complete-project\ts\dist
+  • electron-builder  version=26.15.3 os=10.0.26200
+  • loaded configuration  file=package.json ("build" field)
+  • loaded parent configuration  file=E:\models\Xueness-ts-m4-20261018\Xueness-0.1.8-complete-project\desktop\electron-builder.cjs
+  • executing @electron/rebuild  electronVersion=44.5.1 arch=x64 buildFromSource=false workspaceRoot=E:\models\Xueness-ts-m4-20261018\Xueness-0.1.8-complete-project\desktop projectDir=./ appDir=./
+  • installing native dependencies  arch=x64
+  • completed installing native dependencies
+  • packaging       platform=win32 arch=x64 electron=44.5.1 appOutDir=release\win-unpacked
+  • downloaded      label=electron progress=100%
+  • downloaded electron zip extracted successfully  output=E:\models\Xueness-ts-m4-20261018\Xueness-0.1.8-complete-project\desktop\release\win-unpacked
+  • searching for node modules  pm=npm searchDir=E:\models\Xueness-ts-m4-20261018\Xueness-0.1.8-complete-project\desktop
+  • updating asar integrity executable resource  executablePath=release\win-unpacked\Xueness.exe
+  • signing with signtool.exe  path=release\win-unpacked\resources\backend\xueness-backend.exe
+  • signing with signtool.exe  path=release\win-unpacked\resources\backend-ts\runtime\node.exe
+  • signing with signtool.exe  path=release\win-unpacked\resources\backend\_internal\winpty\OpenConsole.exe
+  • signing with signtool.exe  path=release\win-unpacked\resources\backend\_internal\winpty\winpty-agent.exe
+  • signing with signtool.exe  path=release\win-unpacked\Xueness.exe
+  • building        target=zip arch=x64 file=release\Xueness-0.1.8-windows-x64-portable.zip
+  • building        target=nsis file=release\Xueness-0.1.8-windows-x64-setup.exe archs=x64 oneClick=false perMachine=false
+  • signing with signtool.exe  path=release\win-unpacked\resources\elevate.exe
+  • signing with signtool.exe  path=release\Xueness-0.1.8-windows-x64-setup.__uninstaller.exe
+  • signing with signtool.exe  path=release\Xueness-0.1.8-windows-x64-setup.exe
+  • building block map  blockMapFile=release\Xueness-0.1.8-windows-x64-setup.exe.blockmap

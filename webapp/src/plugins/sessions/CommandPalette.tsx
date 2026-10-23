@@ -6,6 +6,7 @@ import type { SessionSummary } from "../../xuenessWorkbench";
 import { createDebouncer } from "./debounce";
 import { deferCompositionEnd, isImeComposingEvent } from "../../xuenessShortcutDisplay";
 import { searchTranscripts, type TranscriptHit, type TranscriptSearchState } from "./sessionSearch";
+import { sessionStatusPresentation } from './statusPresentation';
 import "./sessions.css";
 
 type PaletteCommand = { id: string; label: string; description: string };
@@ -14,16 +15,10 @@ type SessionEntry = { kind: "session"; id: string; session: SessionSummary; labe
 export type CommandPaletteEntry = CommandEntry | SessionEntry;
 type ElementRef<T extends HTMLElement> = { current: T | null };
 
-const SESSION_STATUS_LABELS: Record<string, string> = {
-  created: "待执行", pending: "等待中", queued: "已排队", running: "运行中", awaiting_user: "等待答复",
-  pausing: "正在暂停", paused: "已暂停", stopping: "正在取消", cancelled: "已取消",
-  completed: "已完成", failed: "失败", interrupted: "已中断", blocked: "受阻",
-  closed: "已关闭", needs_review: "需要审核", provider_error: "供应商错误",
-};
 const EMPTY_TRANSCRIPT_HITS: TranscriptHit[] = [];
 
-export function commandPaletteStatusLabel(status: string): string {
-  return tr(SESSION_STATUS_LABELS[status] ?? status);
+export function commandPaletteStatusLabel(status: string, pendingInteraction?: unknown): string {
+  return sessionStatusPresentation(status, { pendingInteraction })?.label ?? tr(status);
 }
 
 export function paletteWorkspaceLabel(root?: string): string {
@@ -58,7 +53,7 @@ export function buildCommandPaletteResults(
       id: item.id,
       session: item,
       label: item.title || item.task || tr("未命名任务"),
-      description: commandPaletteStatusLabel(item.status),
+      description: commandPaletteStatusLabel(item.status, item.pendingInteraction),
       disabled: busy,
       snippet: contentHits.get(item.id)?.snippet,
     }));

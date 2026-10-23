@@ -141,6 +141,126 @@
   color: var(--fg);
 }
 
+.xn-composer__context-chip > .xn-composer__preview-open {
+  display: inline-flex;
+  width: auto;
+  height: auto;
+  min-width: 0;
+  max-width: 220px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+.xn-composer__context-chip > .xn-composer__preview-open:hover {
+  background: transparent;
+  color: var(--fg);
+}
+
+.xn-composer__preview-open > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.xn-composer-preview {
+  position: fixed;
+  z-index: var(--z-dialog);
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 16px;
+  background: rgb(0 0 0 / 40%);
+}
+
+.xn-composer-preview__panel {
+  display: flex;
+  width: min(640px, 100%);
+  max-height: min(80vh, 720px);
+  box-sizing: border-box;
+  flex-direction: column;
+  gap: 12px;
+  overflow: auto;
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--bg-panel);
+  color: var(--fg);
+}
+
+.xn-composer-preview__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.xn-composer-preview__header h2 {
+  min-width: 0;
+  margin: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--text-md);
+  font-weight: 600;
+}
+
+.xn-composer-preview__header button {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg-input);
+  color: var(--fg);
+  cursor: pointer;
+}
+
+.xn-composer-preview__media,
+.xn-composer-preview__frame {
+  display: block;
+  width: 100%;
+  max-height: min(60vh, 480px);
+  object-fit: contain;
+  border: 0;
+  background: var(--bg-subtle);
+}
+
+.xn-composer-preview__frame {
+  min-height: 240px;
+}
+
+.xn-composer-preview__text {
+  max-height: min(50vh, 420px);
+  margin: 0;
+  overflow: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  color: var(--fg);
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+}
+
+.xn-composer-preview__file,
+.xn-composer-preview__status {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0;
+  color: var(--fg);
+  font-size: var(--text-sm);
+  overflow-wrap: anywhere;
+}
+
 .xn-composer__status,
 .xn-composer__error {
   padding: 4px 12px;

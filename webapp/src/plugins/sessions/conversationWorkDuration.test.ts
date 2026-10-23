@@ -32,3 +32,12 @@ test("formatConversationWorkDuration: matches zcode zh-CN/en-US unit copy", () =
   assert.equal(formatConversationWorkDuration(86_400_000), "1 天");
   assert.equal(formatConversationWorkDuration(86_400_000, "en"), "1d");
 });
+
+import { conversationElapsedInterval } from './conversationWorkDuration';
+test('wall-clock interval rejects incomplete, reversed and non-finite evidence', () => {
+  for (const pair of [[undefined, 1], [1, undefined], [20, 10], [NaN, 1], [1, Infinity]]) {
+    assert.equal(conversationElapsedInterval(...pair), undefined);
+  }
+  assert.equal(conversationElapsedInterval(1, 1), 0);
+  assert.equal(conversationElapsedInterval(1, 2001), 2000);
+});

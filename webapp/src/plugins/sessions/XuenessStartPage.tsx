@@ -105,6 +105,8 @@ export type XuenessStartPageProps = {
   locale?: "zh" | "en";
   onSelectSession(id: string): void;
   onSelectProject?(path: string): void;
+  workspaceMenu?: React.ReactNode;
+  remoteDialog?: React.ReactNode;
 };
 
 export function XuenessStartPage({
@@ -114,15 +116,19 @@ export function XuenessStartPage({
   locale = "zh",
   onSelectSession,
   onSelectProject,
+  workspaceMenu,
+  remoteDialog,
 }: XuenessStartPageProps): React.JSX.Element | null {
   const recent = recentSessionSummaries(sessions, 5);
   const recentProjects = projects === undefined || projects === null ? null : recentStartPageProjects(projects, 5);
   const hasRecentProjects = (recentProjects?.length ?? 0) > 0;
   const hasRecentSessions = recent.length > 0;
   const recentGroupCount = Number(hasRecentProjects) + Number(hasRecentSessions);
-  if (actions.length === 0 && recentGroupCount === 0) return null;
+  if (actions.length === 0 && recentGroupCount === 0 && !workspaceMenu && !remoteDialog) return null;
   return (
     <div className="xn-start-page" data-testid="xn-start-page">
+      {workspaceMenu}
+      {remoteDialog}
       {actions.length > 0 && (
         <div className="xn-start-page__actions" role="group" aria-label={tr("快捷开始")}>
           {actions.map((action) => (

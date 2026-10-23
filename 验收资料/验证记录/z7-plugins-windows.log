@@ -1,0 +1,5 @@
+
+> xueness-ts@0.2.0-dev.0 check:plugins
+> node scripts/check-plugins.ts
+
+check:plugins ok: 30 plugins, 422 source files

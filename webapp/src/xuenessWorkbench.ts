@@ -1,6 +1,13 @@
 import { projectJournalAssistantWork } from './plugins/sessions/conversationJournalProjection';
+import { internalToolName } from "./xuenessToolNames";
+import { parseSessionsIndex } from './plugins/sessions/sessionsIndex';
 import { submitQueuedTurn, couldHaveBeenAccepted, DeliveryUnconfirmedError } from './plugins/sessions/submissionTransport';
-import { t as tr } from './i18n';
+import { createSessionHttpError, createSessionNetworkError, createUnreadableSessionResponseError } from './plugins/sessions/sessionRequestErrors';
+import { CommandDeliveryUnconfirmedError, createSessionCommandId, validateCreateCommandResult, validateEditCommandResult, validateSendCommandResult } from './plugins/sessions/commandReceipt';
+import type { SessionCommandClient } from './plugins/sessions/commandClient';
+import type { FollowupAdmission } from './plugins/sessions/commandLedger';
+import { t as tr, tf as trf } from './i18n';
+import { CommandReceiptLedger, type PendingCommandReference } from './plugins/sessions/commandLedger';
 
 /**
  * Xueness workbench data layer.
@@ -29,6 +36,13 @@ export type PendingApproval = {
   preview: string;
   /** Live one-shot approval, bound to this exact call and subject on the host. */
   granted?: boolean;
+  /**
+   * The call waits in the running turn (ZCode in-process approval): answering
+   * continues that turn, so the client must not start another run.
+   */
+  waiting?: boolean;
+  /** Asked by an alwaysAsk / ask rule or remote exec: approve once only, no "allow for this session". */
+  oneShot?: boolean;
 };
 
 export type QueuedMessage = {
@@ -107,6 +121,8 @@ export type WorkbenchSession = {
   root?: string;
   status: string;
   active_turn_id?: string | null;
+  /** Transient server identity of the command owning this active worker. */
+  active_run_command_id?: string | null;
   history_revision?: number;
   /** Full journal message digest used to reject shares created from stale history. */
   message_revision?: string;
@@ -117,6 +133,7 @@ export type WorkbenchSession = {
   delivery_requirements?: import('./plugins/planning/CompletionChecks').DeliveryRequirement[];
   goal?: import('./plugins/planning/SessionGoal').SessionGoalRecord | null;
   queued_messages?: QueuedMessage[];
+  queue_revision?: number;
   pending_guidance?: PendingGuidance[];
   guidance_history?: PendingGuidance[];
   current_queue_item_id?: string | null;
@@ -124,10 +141,15 @@ export type WorkbenchSession = {
   pending_question?: string | null;
   /** Bounded provider reasoning, keyed by the assistant message's journal index. */
   reasoning_history?: ReasoningHistoryEntry[];
+  /** Optional sessions-owned wall-clock intervals for displayed reasoning rows. */
+  reasoning_timing?: ReasoningTimingEntry[];
+  tool_activity?: unknown;
+  work_segments?: import('./plugins/sessions/conversationWorkSegments').ConversationWorkSegment[];
+  timeline_markers?: import('./plugins/sessions/conversationMarkers').ConversationFactMarker[];
   pending: PendingApproval[];
   approved: { write: string[]; edit: string[]; exec: string[]; mcp: string[] };
   changed_files: string[];
-  streaming?: { id: string; text: string; reasoning?: string; status: "streaming" | "interrupted"; text_format?: "markdown" } | null;
+  streaming?: { id: string; text: string; reasoning?: string; status: "streaming" | "interrupted"; text_format?: "markdown"; reasoning_started_at?: string; reasoning_ended_at?: string; interrupted_at?: string } | null;
   provider_usage?: Record<string, number>;
   model_selection?: { provider_id?: string | null; model?: string | null; reasoning_effort?: string | null; tool_calling?: "native" | "json" };
   runtime_profile?: "standard" | "lightweight";
@@ -158,7 +180,16 @@ export type WorkbenchSession = {
   compactions?: import('./plugins/sessions/conversationCompaction').SessionCompactionRecord[];
 };
 
-export type SessionSummary = { id: string; task: string; title?: string; status: string; pinned?: boolean; root?: string; updatedAt?: string };
+export type SessionSummary = {
+  id: string;
+  task: string;
+  title?: string;
+  status: string;
+  pinned?: boolean;
+  root?: string;
+  updatedAt?: string;
+  sidecar?: import('./plugins/sessions/sessionsIndex').SessionSidebarSidecar;
+} & import('./plugins/sessions/sessionsIndex').SessionSidebarSidecar;
 
 export type ArchivedSummary = { id: string; task: string; title?: string; archivedAt?: string; revision?: string };
 
@@ -197,8 +228,11 @@ export type TimelinePage = {
 
 export type Result<T> = { ok: true; value: T } | { ok: false; error: string };
 export type ReasoningHistoryEntry = { message_index: number; text: string };
+export type ReasoningTimingEntry = { message_index: number; started_at: string; ended_at: string };
 /** A saved turn survives a later run failure and must not be submitted twice. */
-export type SubmissionResult<T> = Result<T> & { accepted?: boolean; id?: string; outcomeUnknown?: boolean };
+export type SubmissionResult<T> = Result<T> & { accepted?: boolean; id?: string; outcomeUnknown?: boolean; commandId?: string;
+  /** An approval answered a call waiting in the running turn; no rerun is needed. */
+  resumed?: boolean };
 
 export type WorkspaceListing = {
   files: { path: string; size: number }[];
@@ -243,14 +277,20 @@ export type FilePreview = {
  * 展示层只做显式映射，不再用 errorCode 推导；"cancelled" 等状态由行构造时确定。 */
 export type ToolDisplayStatus = "queued" | "running" | "ok" | "error" | "cancelled" | "stopped";
 
+/** Display text after citation directives are replaced. Edit and events keep `text`. */
+export type ReferenceAnchorRole = "user" | "assistant";
+
 export type TimelineRow =
-  | { kind: "user"; seq: number; turnId: string; text: string; messageId?: string; messageIndex?: number; messageRevision?: string }
-  | { kind: "assistant"; seq: number; turnId: string; text: string; reasoning?: string; messageId?: string; messageIndex?: number; messageRevision?: string; feedback?: 'like' | 'dislike'; streaming?: boolean; startedAt?: number; endedAt?: number; interrupted?: boolean }
+  | { kind: "subagent"; seq: number; turnId: string; toolCallId: string; taskId: string; agent: string; label: string; status: "running" | "completed" | "failed" | "cancelled" | "unknown"; summary: string; childSessionId?: string; steps?: number }
+  | { kind: "user"; seq: number; turnId: string; text: string; displayText?: string; messageId?: string; messageIndex?: number; messageRevision?: string }
+  | { kind: "assistant"; seq: number; turnId: string; text: string; displayText?: string; reasoning?: string; messageId?: string; streamId?: string; messageIndex?: number; messageRevision?: string; feedback?: 'like' | 'dislike'; streaming?: boolean; startedAt?: number; endedAt?: number; interrupted?: boolean }
   | {
       kind: "tool";
       seq: number;
       turnId: string;
       toolCallId: string;
+      toolActivityId?: string;
+      inputActivity?: { phase: "input_streaming"; inputChars: number; partialInput: string; truncated: boolean };
       name: string;
       subject: string;
       status: ToolDisplayStatus;
@@ -262,22 +302,70 @@ export type TimelineRow =
       output?: unknown;
     }
   | { kind: "completion"; seq: number; verified: boolean; summary: string; status?: "verified" | "unverified" | "not_applicable" | "incomplete"; toolExecutionStatus?: "succeeded" | "failed" | "incomplete" | "not_applicable"; deliveryStatus?: "passed" | "failed" | "not_assessed"; turnId?: string }
-  | { kind: "pending_question"; seq: number; question: string };
+  | { kind: "pending_question"; seq: number; question: string }
+  | {
+      kind: "citation" | "preview" | "artifact";
+      seq: number;
+      turnId: string;
+      path: string;
+      label: string;
+      anchorRole: ReferenceAnchorRole;
+      startLine?: number;
+      endLine?: number;
+      sizeBytes?: number;
+      messageId?: string;
+    };
 
 /** Show durable text during generation and after an interrupted request. */
+function reasoningTimeMs(value: unknown): number | undefined {
+  if (typeof value !== "string" || !value) return undefined;
+  const parsed = Date.parse(value);
+  return Number.isFinite(parsed) ? parsed : undefined;
+}
+
 export function withAssistantStream(rows: TimelineRow[], stream: WorkbenchSession["streaming"]): TimelineRow[] {
   if (!stream || (!stream.text && !stream.reasoning) || !["streaming", "interrupted"].includes(stream.status)) return rows;
+  const streamingIndex = rows.findLastIndex(row => row.kind === "assistant"
+    && (row.streamId === stream.id || row.turnId === stream.id)
+    && (row.streaming === true || row.interrupted === true));
+  const streaming = stream.status === "streaming";
+  const interrupted = stream.status === "interrupted";
+  const startedAt = reasoningTimeMs(stream.reasoning_started_at);
+  const endedAt = reasoningTimeMs(stream.reasoning_ended_at)
+    ?? (interrupted ? reasoningTimeMs(stream.interrupted_at) : undefined);
+  const update = (row: Extract<TimelineRow, { kind: "assistant" }>): TimelineRow => ({ ...row,
+    text: stream.text,
+    streamId: stream.id,
+    ...(stream.reasoning ? { reasoning: stream.reasoning } : (row.reasoning ? { reasoning: row.reasoning } : {})),
+    ...(startedAt !== undefined ? { startedAt } : (row.startedAt !== undefined ? { startedAt: row.startedAt } : {})),
+    ...(endedAt !== undefined ? { endedAt } : (row.endedAt !== undefined ? { endedAt: row.endedAt } : {})),
+    streaming,
+    interrupted,
+  });
+  // A reasoning-only stream starts with an empty answer and may later receive
+  // public text. Match the synthetic row by stream id so the answer updates in
+  // place instead of leaving a duplicate reasoning card behind.
+  if (streamingIndex >= 0) {
+    const current = rows[streamingIndex];
+    if (current?.kind !== "assistant") return rows;
+    const next = update(current);
+    return isEqualTimelineRow(current, next) ? rows : [...rows.slice(0, streamingIndex), next, ...rows.slice(streamingIndex + 1)];
+  }
   const latest = rows[rows.length - 1];
-  if (latest?.kind === "assistant" && latest.text === stream.text) {
-    const streaming = stream.status === "streaming";
-    const interrupted = stream.status === "interrupted";
-    if (latest.streaming === streaming && (latest.interrupted === true) === interrupted && (!stream.reasoning || latest.reasoning === stream.reasoning)) return rows;
-    return [...rows.slice(0, -1), { ...latest, ...(stream.reasoning ? { reasoning: stream.reasoning } : {}), streaming, interrupted }];
+  if (latest?.kind === "assistant" && (!latest.turnId || latest.turnId === stream.id || latest.streamId === stream.id)
+      && (latest.turnId === stream.id || latest.streamId === stream.id || latest.text === stream.text)) {
+    if (latest.streaming === streaming && (latest.interrupted === true) === interrupted
+      && (!stream.reasoning || latest.reasoning === stream.reasoning)
+      && (startedAt === undefined || latest.startedAt === startedAt)
+      && (endedAt === undefined || latest.endedAt === endedAt)) return rows;
+    return [...rows.slice(0, -1), update(latest)];
   }
   return [...rows, { kind: "assistant", seq: rows.reduce((max, row) => Math.max(max, row.seq), 0) + 1,
     turnId: stream.id, text: stream.text,
+    streamId: stream.id,
     ...(stream.reasoning ? { reasoning: stream.reasoning } : {}),
-    streaming: stream.status === "streaming", ...(stream.status === "interrupted" ? { interrupted: true } : {}) }];
+    ...(startedAt !== undefined ? { startedAt } : {}), ...(endedAt !== undefined ? { endedAt } : {}),
+    streaming, ...(interrupted ? { interrupted: true } : {}) }];
 }
 
 function parsePendingGuidance(value: unknown): PendingGuidance[] | undefined {
@@ -308,6 +396,13 @@ function parsePendingGuidance(value: unknown): PendingGuidance[] | undefined {
 }
 
 function parseSessionInboxFields(value: Record<string, unknown>): Partial<WorkbenchSession> {
+  if (value.active_run_command_id !== undefined && value.active_run_command_id !== null
+    && (typeof value.active_run_command_id !== 'string' || !value.active_run_command_id
+      || value.active_run_command_id.length > 128)) throw new Error('invalid active run command identity');
+  if (Object.prototype.hasOwnProperty.call(value, "queue_revision")
+    && (!Number.isSafeInteger(value.queue_revision) || (value.queue_revision as number) < 0)) {
+    throw new Error("invalid queue revision");
+  }
   const historyRevision = value.history_revision;
   if (historyRevision !== undefined && (!Number.isInteger(historyRevision) || (historyRevision as number) < 0)) {
     throw new Error('invalid session history revision');
@@ -320,6 +415,8 @@ function parseSessionInboxFields(value: Record<string, unknown>): Partial<Workbe
   const guidanceHistory = parsePendingGuidance(value.guidance_history);
   return { ...(typeof value.active_turn_id === 'string' || value.active_turn_id === null
       ? { active_turn_id: value.active_turn_id } : {}),
+    ...(typeof value.active_run_command_id === 'string' || value.active_run_command_id === null
+      ? {active_run_command_id:value.active_run_command_id} : {}),
     ...(typeof historyRevision === 'number' ? { history_revision: historyRevision } : {}),
     ...(pendingGuidance ? { pending_guidance: pendingGuidance } : {}),
     ...(guidanceHistory ? { guidance_history: guidanceHistory } : {}) };
@@ -340,12 +437,17 @@ function shallowEqualRecords(a: Record<string, unknown> | undefined | null, b: R
 function isEqualTimelineRow(a: TimelineRow, b: TimelineRow): boolean {
   if (a === b) return true;
   if (a.kind !== b.kind || a.seq !== b.seq) return false;
+  if (a.kind === "subagent" && b.kind === "subagent") {
+    return a.turnId === b.turnId && a.toolCallId === b.toolCallId && a.taskId === b.taskId && a.agent === b.agent
+      && a.label === b.label && a.status === b.status && a.summary === b.summary && a.childSessionId === b.childSessionId
+      && a.steps === b.steps;
+  }
   if (a.kind === "user" && b.kind === "user") {
-    return a.turnId === b.turnId && a.text === b.text && a.messageId === b.messageId && a.messageIndex === b.messageIndex && a.messageRevision === b.messageRevision;
+    return a.turnId === b.turnId && a.text === b.text && a.displayText === b.displayText && a.messageId === b.messageId && a.messageIndex === b.messageIndex && a.messageRevision === b.messageRevision;
   }
   if (a.kind === "assistant" && b.kind === "assistant") {
-    return a.turnId === b.turnId && a.text === b.text && a.reasoning === b.reasoning && a.messageId === b.messageId && a.messageIndex === b.messageIndex && a.messageRevision === b.messageRevision && a.feedback === b.feedback && a.streaming === b.streaming
-      && a.startedAt === b.startedAt && a.endedAt === b.endedAt && a.interrupted === b.interrupted;
+    return a.turnId === b.turnId && a.text === b.text && a.displayText === b.displayText && a.reasoning === b.reasoning && a.messageId === b.messageId && a.messageIndex === b.messageIndex && a.messageRevision === b.messageRevision && a.feedback === b.feedback && a.streaming === b.streaming
+      && a.streamId === b.streamId && a.startedAt === b.startedAt && a.endedAt === b.endedAt && a.interrupted === b.interrupted;
   }
   if (a.kind === "tool" && b.kind === "tool") {
     if (a.turnId !== b.turnId || a.toolCallId !== b.toolCallId || a.name !== b.name || a.subject !== b.subject || a.status !== b.status || a.error !== b.error || a.errorCode !== b.errorCode || a.archivedForCompaction !== b.archivedForCompaction) return false;
@@ -364,6 +466,10 @@ function isEqualTimelineRow(a: TimelineRow, b: TimelineRow): boolean {
   }
   if (a.kind === "pending_question" && b.kind === "pending_question") {
     return a.question === b.question;
+  }
+  if ((a.kind === "citation" || a.kind === "preview" || a.kind === "artifact") && a.kind === b.kind) {
+    return a.turnId === b.turnId && a.path === b.path && a.label === b.label && a.anchorRole === b.anchorRole
+      && a.startLine === b.startLine && a.endLine === b.endLine && a.sizeBytes === b.sizeBytes && a.messageId === b.messageId;
   }
   return false;
 }
@@ -394,16 +500,26 @@ export function mergeTimelineRowsByIdentity(...pages: TimelineRow[][]): Timeline
   const rows = new Map<string, TimelineRow>();
   for (const page of pages) for (const row of page) {
     const identity = row.kind === 'tool' ? `tool:${row.toolCallId}`
+      : row.kind === 'subagent' ? `subagent:${row.toolCallId}:${row.taskId}`
       : (row.kind === 'user' || row.kind === 'assistant') && row.messageId ? `${row.kind}:${row.messageId}`
       : row.kind === 'completion' ? `completion:${row.turnId ?? ''}:${row.summary}`
-      : row.kind === 'pending_question' ? `question:${row.question}` : `${row.kind}:${row.seq}`;
+      : row.kind === 'pending_question' ? `question:${row.question}`
+      : (row.kind === 'citation' || row.kind === 'preview' || row.kind === 'artifact')
+        ? `${row.kind}:${row.messageId ?? row.turnId}:${row.path}:${row.startLine ?? ''}:${row.endLine ?? ''}:${row.seq}`
+        : `${row.kind}:${row.seq}`;
     rows.set(identity, row);
   }
   return [...rows.values()].sort((left, right) => left.seq - right.seq);
 }
 
 function areSessionSummariesEqual(a: SessionSummary, b: SessionSummary): boolean {
-  return a.id === b.id && a.task === b.task && a.title === b.title && a.status === b.status && a.pinned === b.pinned && a.root === b.root && a.updatedAt === b.updatedAt;
+  return a.id === b.id && a.task === b.task && a.title === b.title && a.status === b.status && a.pinned === b.pinned && a.root === b.root && a.updatedAt === b.updatedAt
+    && a.workspace === b.workspace && a.workspaceId === b.workspaceId && a.workspacePath === b.workspacePath
+    && a.workspaceName === b.workspaceName && a.purpose === b.purpose && a.unread === b.unread
+    && a.unreadAt === b.unreadAt && JSON.stringify(a.pendingInteraction ?? null) === JSON.stringify(b.pendingInteraction ?? null)
+    && JSON.stringify(a.changeSummary ?? null) === JSON.stringify(b.changeSummary ?? null)
+    && JSON.stringify(a.remote ?? null) === JSON.stringify(b.remote ?? null)
+    && JSON.stringify(a.sidecar ?? null) === JSON.stringify(b.sidecar ?? null);
 }
 
 /** Structural sharing for session lists so polling skips re-rendering when sessions are unchanged. */
@@ -505,28 +621,42 @@ function toErrorMessage(error: unknown): string {
  * escapes as an exception to the UI.
  */
 async function requestJson<T>(path: string, init: RequestInit): Promise<T> {
-  const response = await fetch(path, init);
+  let response: Response;
+  try {
+    response = await fetch(path, init);
+  } catch (error) {
+    if (init.signal?.aborted) throw init.signal.reason ?? error;
+    if (error instanceof TypeError) throw createSessionNetworkError(error);
+    throw error;
+  }
   let payload: unknown;
   let jsonParsed = true;
+  let jsonError: unknown;
   try {
     payload = await response.json();
   } catch (error) {
     if (init.signal?.aborted) throw init.signal.reason ?? error;
     jsonParsed = false;
+    jsonError = error;
   }
   if (!response.ok) {
     const detail = (payload as { error?: unknown } | null | undefined)?.error;
     const code = (payload as { error_code?: unknown } | null | undefined)?.error_code;
-    if (code === 'yolo_confirmation_required') throw new Error(tr('发送前需要确认完全访问，请重新发送并完成确认。'));
+    const errorCode = typeof code === 'string' && code.trim() ? code : undefined;
+    const backendDetail = typeof detail === 'string' && detail.trim() ? detail : undefined;
+    const appendDetail = (message: string) => backendDetail ? trf('{0}\n服务器说明：{1}', [message, backendDetail]) : message;
+    if (code === 'yolo_confirmation_required') {
+      throw createSessionHttpError(response.status, errorCode, backendDetail, appendDetail(tr('发送前需要确认完全访问，请重新发送并完成确认。')));
+    }
     if (code === 'message_action_conflict') {
       const message = String(detail);
-      if (message.includes('conversation changed')) throw new Error(tr('会话已发生变化。请刷新后重新编辑；当前输入已保留。'));
-      if (message.includes('queued messages')) throw new Error(tr('请先处理或取消排队消息，再编辑历史。'));
-      if (message.includes('run already in progress')) throw new Error(tr('会话正在运行，结束后可修改历史。'));
+      if (message.includes('conversation changed')) throw createSessionHttpError(response.status, errorCode, backendDetail, appendDetail(tr('会话已发生变化。请刷新后重新编辑；当前输入已保留。')));
+      if (message.includes('queued messages')) throw createSessionHttpError(response.status, errorCode, backendDetail, appendDetail(tr('请先处理或取消排队消息，再编辑历史。')));
+      if (message.includes('run already in progress')) throw createSessionHttpError(response.status, errorCode, backendDetail, appendDetail(tr('会话正在运行，结束后可修改历史。')));
     }
-    throw Object.assign(new Error(typeof detail === "string" && detail ? detail : `HTTP ${response.status}`), { status: response.status });
+    throw createSessionHttpError(response.status, errorCode, backendDetail);
   }
-  if (!jsonParsed) throw new Error("invalid JSON response");
+  if (!jsonParsed) throw createUnreadableSessionResponseError(response.status, jsonError);
   return payload as T;
 }
 
@@ -545,12 +675,14 @@ async function requestGet<T>(path: string, signal?: AbortSignal): Promise<T> {
 }
 
 /** Every mutation fetches a fresh CSRF token first and sends it as a header. */
-export async function requestMutation<T>(method: "POST" | "PATCH" | "DELETE", path: string, body: unknown, signal?: AbortSignal): Promise<T> {
+export async function requestMutation<T>(method: "POST" | "PATCH" | "DELETE", path: string, body: unknown, signal?: AbortSignal, beforeSend?: () => boolean): Promise<T> {
   let token: { csrfToken?: string };
   try { token = await requestGet<{ csrfToken?: string }>("/api/csrf", signal); }
   catch (error) { if (error instanceof Error) Object.assign(error, { requestNotSent: true }); throw error; }
   const csrfToken = typeof token?.csrfToken === "string" ? token.csrfToken : "";
   if (!csrfToken) throw new Error("missing csrf token");
+  if (signal?.aborted) throw Object.assign(signal.reason instanceof Error ? signal.reason : new Error('Request cancelled'), { requestNotSent: true });
+  if (beforeSend && !beforeSend()) throw Object.assign(new Error('Request is no longer enabled'), { requestNotSent: true });
   return requestJson<T>(path, {
     method,
     credentials: "same-origin",
@@ -560,12 +692,152 @@ export async function requestMutation<T>(method: "POST" | "PATCH" | "DELETE", pa
   });
 }
 
-function requestPost<T>(path: string, body: unknown, signal?: AbortSignal): Promise<T> {
-  return requestMutation<T>("POST", path, body, signal);
+function requestPost<T>(path: string, body: unknown, signal?: AbortSignal, beforeSend?: () => boolean): Promise<T> {
+  return requestMutation<T>("POST", path, body, signal, beforeSend);
 }
 
 function sessionPath(id: string, suffix = ""): string {
   return `/api/sessions/${encodeURIComponent(id)}${suffix}`;
+}
+
+type CommandModule = typeof import('./plugins/sessions/commandClient');
+let commandModuleLoading: Promise<CommandModule> | undefined;
+
+/** Command admission loads on use. The receipt helpers stay in the startup graph. */
+function loadCommandModule(): Promise<CommandModule> {
+  return commandModuleLoading ??= import('./plugins/sessions/commandClient').catch(error => {
+    commandModuleLoading = undefined;
+    throw error;
+  });
+}
+
+/**
+ * Startup stand-in for SessionCommandClient. The real client is fetched when the
+ * workbench creates this handle, so the command module stays out of the static
+ * startup graph. Calls made before it arrives keep the effectiveness captured
+ * at the call, and cancel or dispose during that gap never falls through to REST.
+ */
+class StartupCommandHandle {
+  private instance: SessionCommandClient | undefined;
+  private opening: Promise<SessionCommandClient> | undefined;
+  private disposed = false;
+  private epoch = 0;
+
+  constructor(private readonly effective: () => boolean, private readonly receiptScope?: string) {
+    void this.open().catch(() => undefined);
+  }
+
+  private disposedError(): Error {
+    return Object.assign(new Error('Command client disposed'), { requestNotSent: true });
+  }
+
+  private cancelledError(): Error {
+    return Object.assign(new Error('Command cancelled before admission'), { requestNotSent: true });
+  }
+
+  private open(): Promise<SessionCommandClient> {
+    if (this.instance) return Promise.resolve(this.instance);
+    return this.opening ??= loadCommandModule().then(({ SessionCommandClient: CommandClient }) => {
+      if (!this.instance) {
+        this.instance = new CommandClient({
+          isEffective: () => this.effective(), receiptScope: this.receiptScope,
+          post: (path, body, signal, beforeSend) => requestPost(path, body, signal, () => this.effective() && (!beforeSend || beforeSend())),
+          get: (path, signal) => requestGet(path, signal),
+        });
+        if (this.disposed) this.instance.dispose();
+      }
+      return this.instance;
+    }).catch(error => {
+      this.opening = undefined;
+      throw error;
+    });
+  }
+
+  isEffective(): boolean {
+    return this.instance ? this.instance.isEffective() : !this.disposed && this.effective();
+  }
+
+  /** Nothing can be in flight before the real client exists. */
+  isInFlight(sessionId: string | null, commandId: string): boolean {
+    return this.instance?.isInFlight(sessionId, commandId) ?? false;
+  }
+
+  pendingCommands(): PendingCommandReference[] {
+    if (this.instance) return this.instance.pendingCommands();
+    try { return this.receiptScope ? new CommandReceiptLedger(this.receiptScope).pending() : []; } catch { return []; }
+  }
+  recoveryStorageWarning(): string | null { return this.instance?.recoveryStorageWarning() ?? null; }
+
+  recoveryStorageError(): string | null {
+    if (this.instance) return this.instance.recoveryStorageError();
+    try { if (this.receiptScope) new CommandReceiptLedger(this.receiptScope).pending(); return null; }
+    catch (error) { return error instanceof Error ? error.message : String(error); }
+  }
+
+  cancelPending(): void {
+    this.epoch += 1;
+    this.instance?.cancelPending();
+  }
+
+  dispose(): void {
+    this.disposed = true;
+    this.epoch += 1;
+    this.instance?.dispose();
+  }
+
+  private forward<T>(run: (client: SessionCommandClient) => Promise<T>): Promise<T> {
+    if (this.disposed) return Promise.reject(this.disposedError());
+    const wasEffective = this.isEffective();
+    if (this.instance) return run(this.instance);
+    const epoch = this.epoch;
+    return this.open().then(client => {
+      if (this.disposed) return Promise.reject(this.disposedError());
+      if (epoch !== this.epoch || (wasEffective && !client.isEffective())) return Promise.reject(this.cancelledError());
+      return run(client);
+    });
+  }
+
+  query(...args: Parameters<SessionCommandClient['query']>) {
+    return this.forward(client => client.query(...args));
+  }
+
+  queryCreate(...args: Parameters<SessionCommandClient['queryCreate']>) {
+    return this.forward(client => client.queryCreate(...args));
+  }
+
+  submitCreate(...args: Parameters<SessionCommandClient['submitCreate']>) {
+    return this.forward(client => client.submitCreate(...args));
+  }
+
+  submit(...args: Parameters<SessionCommandClient['submit']>) {
+    return this.forward(client => client.submit(...args));
+  }
+
+  submitEdit(...args: Parameters<SessionCommandClient['submitEdit']>) {
+    return this.forward(client => client.submitEdit(...args));
+  }
+
+  confirmQueueWithdrawalAsync(...args: Parameters<SessionCommandClient['confirmQueueWithdrawalAsync']>): Promise<boolean> {
+    return this.forward(client => client.confirmQueueWithdrawalAsync(...args));
+  }
+
+  confirmQueueWithdrawal(...args: Parameters<SessionCommandClient['confirmQueueWithdrawal']>): boolean {
+    return this.instance?.confirmQueueWithdrawal(...args) ?? false;
+  }
+
+  submitQueue(...args: Parameters<SessionCommandClient['submitQueue']>) {
+    return this.forward(client => client.submitQueue(...args));
+  }
+
+  submitApproval(...args: Parameters<SessionCommandClient['submitApproval']>) {
+    return this.forward(client => client.submitApproval(...args));
+  }
+}
+
+/** The sessions plugin owns command policy; this adapter reuses the API boundary. */
+export function createSessionCommandClient(isEffective: () => boolean, receiptScope: string | undefined = typeof window === 'undefined' ? undefined : JSON.stringify(['local', window.location?.origin ?? 'same-origin'])): SessionCommandClient {
+  // Private client fields stay in the lazy module. Callers use the public command API.
+  return new StartupCommandHandle(isEffective, receiptScope) as unknown as SessionCommandClient;
 }
 
 // -- reads -------------------------------------------------------------------
@@ -574,6 +846,16 @@ export async function listSessions(signal?: AbortSignal): Promise<Result<Session
   try {
     const payload = await requestGet<{ sessions?: SessionSummary[] }>("/api/sessions", signal);
     return { ok: true, value: payload.sessions ?? [] };
+  } catch (error) {
+    return { ok: false, error: toErrorMessage(error) };
+  }
+}
+
+/** Same-origin transport; sessions owns snapshot parsing and list fallback. */
+export async function listSessionsIndex(signal?: AbortSignal): Promise<Result<SessionSummary[]>> {
+  try {
+    const payload = await requestGet<unknown>("/api/sessions/index", signal);
+    return { ok: true, value: parseSessionsIndex(payload) };
   } catch (error) {
     return { ok: false, error: toErrorMessage(error) };
   }
@@ -667,9 +949,9 @@ export function parseConversationSnapshot(id: string, payload: unknown): Convers
 }
 
 /** Read opaque, revision-bound safe fork selectors from the server. */
-export async function loadForkBoundaries(sourceId: string, signal?: AbortSignal): Promise<Result<ForkBoundaryList>> {
+export async function loadForkBoundaries(sourceId: string, signal?: AbortSignal, request = requestGet<unknown>): Promise<Result<ForkBoundaryList>> {
   try {
-    const payload = await requestGet<unknown>(sessionPath(sourceId, "/fork-boundaries"), signal);
+    const payload = await request(sessionPath(sourceId, "/fork-boundaries"), signal);
     if (!payload || typeof payload !== "object" || Array.isArray(payload)) throw new Error("invalid fork boundaries response");
     const record = payload as Record<string, unknown>;
     if (record.sourceId !== sourceId || typeof record.revision !== "string" || !record.revision
@@ -706,10 +988,11 @@ export async function forkSession(
   boundary: string,
   revision: string,
   title?: string,
+  request: (path: string, body: unknown) => Promise<unknown> = requestPost<unknown>,
 ): Promise<Result<ForkSessionResponse>> {
   try {
     const cleanTitle = title?.trim();
-    const payload = await requestPost<unknown>(sessionPath(sourceId, "/fork"), {
+    const payload = await request(sessionPath(sourceId, "/fork"), {
       boundary,
       revision,
       ...(cleanTitle ? { title: cleanTitle } : {}),
@@ -1025,68 +1308,41 @@ export async function restoreSession(id: string, signal?: AbortSignal): Promise<
 export async function approvePending(
   id: string,
   pending: PendingApproval,
-): Promise<Result<string>> {
-  // Contract §4: validate and build the body locally first — rejected shapes
-  // must fail without any network request.
-  const toolCallId = typeof pending?.tool_call_id === "string" ? pending.tool_call_id : "";
-  const subject = typeof pending?.subject === "string" ? pending.subject : "";
-  const name = typeof pending?.name === "string" ? pending.name : "";
-
-  if (!toolCallId) {
-    return { ok: false, error: "approval is missing tool_call_id" };
-  }
-
-  let body: Record<string, unknown>;
-  if (typeof pending.kind === "string" && pending.kind) {
-    // New approval rows are resolved from their canonical journal entry on the
-    // server. Only send the capability and call id; never replay client args.
-    body = { kind: pending.kind, tool_call_id: toolCallId };
-  } else
-  if (name === "write" || name === "edit") {
-    if (!subject) return { ok: false, error: "approval is missing subject" };
-    body = { kind: name, subject, tool_call_id: toolCallId };
-  } else if (name === "exec") {
-    let argv: unknown;
-    try {
-      argv = JSON.parse(subject);
-    } catch {
-      return { ok: false, error: "exec approval subject must be a JSON array" };
-    }
-    if (!Array.isArray(argv)) {
-      return { ok: false, error: "exec approval subject must be a JSON array" };
-    }
-    body = { kind: "exec", argv, tool_call_id: toolCallId };
-  } else if (name.startsWith("mcp__")) {
-    if (!subject) return { ok: false, error: "approval is missing subject" };
-    // The subject is resolved server-side from the journal; never send it.
-    body = { kind: "mcp", tool_call_id: toolCallId };
-  } else {
-    return { ok: false, error: "unsupported approval kind" };
-  }
-
-  try {
-    await requestPost(sessionPath(id, "/approvals"), body);
-    return { ok: true, value: toolCallId };
-  } catch (error) {
-    return { ok: false, error: toErrorMessage(error) };
-  }
+  commands?: SessionCommandClient,
+  decision: 'approve' | 'reject' = 'approve',
+  answer: { message?: string; scope?: 'session' } = {},
+): Promise<SubmissionResult<string>> {
+  const commandWasEffective = commands?.isEffective() === true;
+  return import('./plugins/sessions/approvalCommands').then(module => module.approvePending(id, pending, commands,
+    (body, signal) => requestPost(sessionPath(id, "/approvals"), body, signal), toErrorMessage, commandWasEffective, decision, answer))
+    .catch(error => ({ ok: false, error: toErrorMessage(error) }));
 }
 
 /**
- * Shared run body: user choices + opt-ins. Ordinary turns leave the step budget
- * to the selected server runtime profile; goal runs keep their explicit budget.
+ * Shared run body: user choices + opt-ins. Runs never add a step budget: the
+ * server loop follows ZCode and runs until the model stops calling tools
+ * (an explicit caller `steps` choice is still forwarded unchanged).
  * readRunOptIns fails closed to {} and must never enable a capability.
  */
-async function runSessionWith(id: string, choices?: RunChoices, options?: { continueQueue?: boolean; promotionRequestId?: string }): Promise<void> {
+async function runSessionWith(id: string, choices?: RunChoices, options?: { continueQueue?: boolean; promotionRequestId?: string; mayStart?: () => boolean }, commands?: SessionCommandClient): Promise<void> {
+  const useCommands = commands?.isEffective() === true;
+  const mayStart = options?.mayStart ?? (useCommands ? () => commands!.isEffective() : undefined);
+  if (mayStart && !mayStart()) throw new Error('Session commands are no longer enabled');
   const effectiveChoices = choices ?? getRunChoices();
   const optIns = await readRunOptIns();
-  await requestPost(sessionPath(id, "/run"), {
+  if (mayStart && !mayStart()) throw new Error('Session commands are no longer enabled');
+  const body = {
     ...effectiveChoices,
-    ...(effectiveChoices.goal ? { steps: 20 } : {}),
     ...optIns,
     ...(options?.continueQueue ? { continue_queue: true } : {}),
     ...(options?.promotionRequestId ? { promotion_request_id: options.promotionRequestId } : {}),
-  });
+  };
+  if (commands) {
+    const commandId = createSessionCommandId();
+    validateSendCommandResult(id, await commands.submit(id, 'run', body,
+      signal => requestPost(sessionPath(id, '/run'), body, signal, mayStart), commandId), commandId);
+  }
+  else await requestPost(sessionPath(id, '/run'), body, undefined, mayStart);
 }
 
 export async function createSession(
@@ -1094,21 +1350,29 @@ export async function createSession(
   choices?: RunChoices,
   context?: { root?: string; prepared_token?: string },
   onCreated?: (id: string) => void,
+  commands?: SessionCommandClient,
 ): Promise<SubmissionResult<string>> {
   let createdId = "";
   try {
     // No root: sessions default to the host workspace root.
-    const created = await requestPost<{ id?: string }>("/api/sessions", { task, ...context }, AbortSignal.timeout(20000));
-    const id = typeof created?.id === "string" ? created.id : "";
+    const useCommands = commands?.isEffective() === true;
+    const commandId = commands ? createSessionCommandId() : undefined;
+    const body = { task, ...context };
+    const created = commands
+      ? await commands.submitCreate(body, signal => requestPost('/api/sessions', body, signal), commandId)
+      : await requestPost<{ id?: string }>('/api/sessions', body, AbortSignal.timeout(20000));
+    const id = useCommands ? validateCreateCommandResult(created, commandId)
+      : created && typeof created === 'object' && 'id' in created && typeof created.id === 'string' ? created.id : '';
     if (!id) throw new DeliveryUnconfirmedError();
     createdId = id;
     onCreated?.(id);
-    await runSessionWith(id, choices);
+    await runSessionWith(id, choices, useCommands ? { mayStart: () => commands!.isEffective() } : undefined, commands);
     return { ok: true, value: id };
   } catch (error) {
-    const outcomeUnknown = !createdId && couldHaveBeenAccepted(error);
+    const outcomeUnknown = (!createdId && couldHaveBeenAccepted(error)) || error instanceof CommandDeliveryUnconfirmedError;
     return { ok: false, error: toErrorMessage(outcomeUnknown ? new DeliveryUnconfirmedError() : error),
-      ...(createdId ? { accepted: true, id: createdId } : outcomeUnknown ? { outcomeUnknown: true } : {}) };
+      ...(createdId ? { accepted: true, id: createdId } : {}), ...(outcomeUnknown ? { outcomeUnknown: true } : {}),
+      ...(error instanceof CommandDeliveryUnconfirmedError ? { commandId: error.commandId } : {}) };
   }
 }
 
@@ -1118,25 +1382,35 @@ export async function sendTurn(
   choices?: RunChoices,
   preparedToken?: string,
   onAccepted?: () => void,
+  commands?: SessionCommandClient,
 ): Promise<SubmissionResult<void>> {
   let accepted = false;
   try {
-    await requestPost(sessionPath(id, "/messages"), { text, ...(preparedToken ? { prepared_token: preparedToken } : {}) }, AbortSignal.timeout(20000));
+    const useCommands = commands?.isEffective() === true;
+    const body = { text, ...(preparedToken ? { prepared_token: preparedToken } : {}) };
+    if (commands) validateSendCommandResult(id, await commands.submit(id, 'send', body, signal => requestPost(sessionPath(id, '/messages'), body, signal)));
+    else await requestPost(sessionPath(id, '/messages'), body, AbortSignal.timeout(20000));
     accepted = true;
     onAccepted?.();
-    await runSessionWith(id, choices);
+    await runSessionWith(id, choices, useCommands ? { mayStart: () => commands!.isEffective() } : undefined, commands);
     return { ok: true, value: undefined };
   } catch (error) {
-    const outcomeUnknown = !accepted && couldHaveBeenAccepted(error);
+    const outcomeUnknown = (!accepted && couldHaveBeenAccepted(error)) || error instanceof CommandDeliveryUnconfirmedError;
     return { ok: false, error: toErrorMessage(outcomeUnknown ? new DeliveryUnconfirmedError() : error),
-      ...(accepted ? { accepted: true } : outcomeUnknown ? { outcomeUnknown: true } : {}) };
+      ...(accepted ? { accepted: true } : {}), ...(outcomeUnknown ? { outcomeUnknown: true } : {}),
+      ...(error instanceof CommandDeliveryUnconfirmedError ? { commandId: error.commandId } : {}) };
   }
 }
 
 /** Add a user turn to the active run's FIFO queue. The prepared token is one-use. */
-export async function queueTurn(id: string, text: string, preparedToken?: string): Promise<SubmissionResult<QueuedMessage>> {
+export async function queueTurn(id: string, text: string, preparedToken?: string, commands?: SessionCommandClient, followup?: FollowupAdmission): Promise<SubmissionResult<QueuedMessage>> {
   try {
-    const payload = await submitQueuedTurn((path, body, signal) => requestPost(path, body, signal), id, text, preparedToken);
+    if (followup && (!commands || !followup.current())) throw Object.assign(new Error('The observed follow-up turn is no longer current'), {requestNotSent:true});
+    const body = { text, request_id: crypto.randomUUID().replaceAll('-', ''), ...(preparedToken ? { prepared_token: preparedToken } : {}),
+      ...(followup ? {expected_turn_id: followup.proof.expectedTurnId} : {}) };
+    const payload = commands
+      ? await commands.submit(id, 'queue', body, signal => requestPost(sessionPath(id, '/queue'), body, signal, followup?.current), undefined, followup)
+      : await submitQueuedTurn((path, legacyBody, signal) => requestPost(path, legacyBody, signal), id, text, preparedToken);
     if (!payload || typeof payload !== "object" || Array.isArray(payload)) throw new DeliveryUnconfirmedError();
     const record = payload as Record<string, unknown>;
     const item = record.item && typeof record.item === "object" && !Array.isArray(record.item)
@@ -1156,18 +1430,37 @@ export async function queueTurn(id: string, text: string, preparedToken?: string
       ...(typeof item.pause_reason === "string" ? { pause_reason: item.pause_reason } : {}),
     } };
   } catch (error) {
-    return { ok: false, error: toErrorMessage(error), ...(error instanceof DeliveryUnconfirmedError ? { outcomeUnknown: true } : {}) };
+    return { ok: false, error: toErrorMessage(error), ...(error instanceof DeliveryUnconfirmedError ? { outcomeUnknown: true } : {}),
+      ...(error instanceof CommandDeliveryUnconfirmedError ? { commandId: error.commandId } : {}) };
   }
 }
 
-/** Cancel a queued turn; the server rejects removal after the worker claims it. */
-export async function cancelQueuedTurn(id: string, queueId: string): Promise<Result<void>> {
+/** A stop ACK admits cancellation; existing polling observes the worker settling. */
+export async function stopSession(id: string, expectedTurnId: string | null, commands?: SessionCommandClient): Promise<Result<{ stopping: boolean }>> {
   try {
-    const payload = await requestMutation<{ removed?: unknown }>("DELETE", `${sessionPath(id, "/queue")}/${encodeURIComponent(queueId)}`, undefined);
-    if (payload?.removed !== true) throw new Error("invalid queue cancellation response");
+    const body = { expected_turn_id: expectedTurnId };
+    const payload = commands
+      ? await commands.submit(id, 'stop', body, signal => requestPost(sessionPath(id, '/stop'), {}, signal))
+      : await requestPost(sessionPath(id, '/stop'), {});
+    if (!payload || typeof payload !== 'object' || typeof (payload as { stopping?: unknown }).stopping !== 'boolean') {
+      throw new DeliveryUnconfirmedError();
+    }
+    return { ok: true, value: { stopping: (payload as { stopping: boolean }).stopping } };
+  } catch (error) { return { ok: false, error: toErrorMessage(error) }; }
+}
+
+/** Cancel a queued turn; the server rejects removal after the worker claims it. */
+export async function cancelQueuedTurn(id: string, queueId: string, expectedText?: string,
+  commands?: SessionCommandClient, expectedRevision?: number): Promise<SubmissionResult<void>> {
+  const wasEffective = commands?.isEffective();
+  try {
+    const { cancelQueuedMessage } = await import('./plugins/sessions/queueApi');
+    if (wasEffective && !commands?.isEffective()) throw Object.assign(new Error('Session commands are no longer enabled'), { requestNotSent: true });
+    await cancelQueuedMessage(id, queueId, expectedText, commands, expectedRevision);
     return { ok: true, value: undefined };
   } catch (error) {
-    return { ok: false, error: toErrorMessage(error) };
+    return { ok: false, error: toErrorMessage(error),
+      ...(error instanceof CommandDeliveryUnconfirmedError ? { outcomeUnknown: true, ...('queueIntentMismatch' in error ? {} : { commandId: error.commandId }) } : {}) };
   }
 }
 
@@ -1180,27 +1473,43 @@ export async function answerQuestion(id: string, answer: string): Promise<Result
   }
 }
 
-export async function runSession(id: string, choices?: RunChoices, options?: { continueQueue?: boolean; promotionRequestId?: string }): Promise<Result<void>> {
+export async function runSession(id: string, choices?: RunChoices, options?: { continueQueue?: boolean; promotionRequestId?: string }, commands?: SessionCommandClient): Promise<SubmissionResult<void>> {
   try {
-    await runSessionWith(id, choices, options);
+    await runSessionWith(id, choices, options, commands);
     return { ok: true, value: undefined };
   } catch (error) {
-    return { ok: false, error: toErrorMessage(error) };
+    return { ok: false, error: toErrorMessage(error),
+      ...(couldHaveBeenAccepted(error) ? { outcomeUnknown: true } : {}),
+      ...(error instanceof CommandDeliveryUnconfirmedError ? { commandId: error.commandId } : {}) };
   }
 }
 
 /** The journal-issued revision and message index identify one persisted row. */
 export async function updateConversationMessage(id: string,
   row: Extract<TimelineRow, {kind: 'user' | 'assistant'}>,
-  action: {action: 'edit'; text: string} | {action: 'feedback'; feedback: 'like' | 'dislike' | null},
-): Promise<Result<void>> {
+  action: {action: 'edit'; text: string; prepared_token?: string} | {action: 'feedback'; feedback: 'like' | 'dislike' | null},
+  commands?: SessionCommandClient,
+): Promise<SubmissionResult<void>> {
   if (row.messageIndex === undefined || !row.messageRevision) return {ok: false, error: 'Refresh this conversation before editing its history'};
   try {
-    await requestMutation('PATCH', sessionPath(id, '/message-actions'), {
-      revision: row.messageRevision, messageIndex: row.messageIndex, ...action,
-    });
+    const body = { revision: row.messageRevision, messageIndex: row.messageIndex, ...action };
+    if (action.action === 'edit') {
+      const editBody = { revision: row.messageRevision, messageIndex: row.messageIndex, ...action };
+      if (commands) {
+        const receipt = await commands.submitEdit(id, editBody,
+          signal => requestMutation('PATCH', sessionPath(id, '/message-actions'), editBody, signal));
+        return {ok: true, value: undefined, commandId: receipt.commandId};
+      }
+      validateEditCommandResult(id, row.messageIndex, await requestMutation('PATCH',
+        sessionPath(id, '/message-actions'), editBody, AbortSignal.timeout(20000)));
+    } else await requestMutation('PATCH', sessionPath(id, '/message-actions'), body);
     return {ok: true, value: undefined};
-  } catch (error) { return {ok: false, error: toErrorMessage(error)}; }
+  } catch (error) {
+    const outcomeUnknown = action.action === 'edit' && couldHaveBeenAccepted(error);
+    return {ok: false, error: toErrorMessage(outcomeUnknown ? new DeliveryUnconfirmedError() : error),
+      ...(outcomeUnknown ? {outcomeUnknown: true} : {}),
+      ...(error instanceof CommandDeliveryUnconfirmedError ? {commandId: error.commandId} : {})};
+  }
 }
 
 // -- pure view model ---------------------------------------------------------
@@ -1256,14 +1565,22 @@ export function hydrateTimelineTools(rows: TimelineRow[], journal: unknown): Tim
  * position. The event protocol stays bounded and unchanged; row ordering and
  * message identity come from the same journal used by the server projection.
  */
-export function hydrateTimelineJournalRows(rows: TimelineRow[], journal: unknown, history: ReasoningHistoryEntry[] = []): TimelineRow[] {
+export function hydrateTimelineJournalRows(rows: TimelineRow[], journal: unknown, history: ReasoningHistoryEntry[] = [], timing: ReasoningTimingEntry[] = []): TimelineRow[] {
   if (!journal || typeof journal !== "object" || Array.isArray(journal)) return rows;
   const source = journal as Record<string, unknown>;
   const messages = source.messages;
   if (!Array.isArray(messages)) return rows;
   const reasoning = new Map(history.filter(item => Number.isInteger(item?.message_index) && typeof item?.text === "string")
     .map(item => [item.message_index, item.text.slice(0, 32_000)]));
-  const texts = new Map<number, { kind: "user" | "assistant"; text: string; messageIndex: number; messageId?: string }>();
+  const sourceTiming = timing.length > 0 ? timing
+    : Array.isArray(source.reasoning_timing) ? source.reasoning_timing as ReasoningTimingEntry[] : [];
+  const reasoningTiming = new Map(sourceTiming.filter(item => Number.isInteger(item?.message_index)
+    && typeof item?.started_at === "string" && typeof item?.ended_at === "string")
+    .map(item => [item.message_index, item]));
+  const texts = new Map<number, {
+    kind: "user" | "assistant"; text: string; messageIndex: number; messageId?: string;
+    streamId?: string; interrupted?: boolean; reasoning?: string; startedAt?: number; endedAt?: number;
+  }>();
   // events.v1 inserts historical completion records before the next user
   // message. Ignoring them shifts every later message and its reasoning.
   const completionCounts = new Map<string, number>();
@@ -1290,7 +1607,19 @@ export function hydrateTimelineJournalRows(rows: TimelineRow[], journal: unknown
     const identity = typeof message._message_id === 'string' ? {messageId: message._message_id} : {};
     if (message.role === "assistant") {
       for (const call of Array.isArray(message.tool_calls) ? message.tool_calls : []) if (call && typeof call === "object") seq++;
-      if (message.content) texts.set(++seq, { kind:"assistant", text:String(message.content), messageIndex, ...identity });
+      if (message.content) texts.set(++seq, {
+        kind:"assistant", text:String(message.content), messageIndex, ...identity,
+        ...(message._transcript_partial === true ? {
+          streamId: typeof message._stream_id === 'string' ? message._stream_id : undefined,
+          interrupted: true,
+          ...(typeof message._stream_reasoning === 'string' && message._stream_reasoning
+            ? {reasoning: message._stream_reasoning} : {}),
+          ...(reasoningTimeMs(message._stream_reasoning_started_at) !== undefined
+            ? {startedAt: reasoningTimeMs(message._stream_reasoning_started_at)} : {}),
+          ...(reasoningTimeMs(message._stream_reasoning_ended_at ?? message._stream_interrupted_at) !== undefined
+            ? {endedAt: reasoningTimeMs(message._stream_reasoning_ended_at ?? message._stream_interrupted_at)} : {}),
+        } : {}),
+      });
     } else if (message.role === "tool") seq++;
     else if (message.role === "user") {
       if (firstUser) {
@@ -1319,10 +1648,18 @@ export function hydrateTimelineJournalRows(rows: TimelineRow[], journal: unknown
       ? (source.message_annotations as Record<string, unknown>)[String(full.messageIndex)] : undefined;
     const feedback = annotations && typeof annotations === 'object' ? (annotations as Record<string, unknown>).feedback : undefined;
     return {...row, text:full.text, messageIndex:full.messageIndex, messageId:full.messageId,
-      ...(revision ? {messageRevision:revision, feedback:feedback === 'like' || feedback === 'dislike' ? feedback : undefined} : {}),
-      ...(reasoning.has(full.messageIndex) ? { reasoning:reasoning.get(full.messageIndex) } : {})};
+      ...(full.streamId ? {streamId:full.streamId} : {}),
+      ...(full.interrupted ? {interrupted:true, streaming:false} : {}),
+      ...(full.reasoning ? {reasoning:full.reasoning} : reasoning.has(full.messageIndex) ? { reasoning:reasoning.get(full.messageIndex) } : {}),
+      ...(!full.interrupted && revision ? {messageRevision:revision, feedback:feedback === 'like' || feedback === 'dislike' ? feedback : undefined} : {}),
+      ...(!full.interrupted && reasoningTiming.has(full.messageIndex) ? {
+        startedAt: reasoningTimeMs(reasoningTiming.get(full.messageIndex)?.started_at),
+        endedAt: reasoningTimeMs(reasoningTiming.get(full.messageIndex)?.ended_at),
+      } : {}),
+      ...(full.startedAt !== undefined ? {startedAt:full.startedAt} : {}),
+      ...(full.endedAt !== undefined ? {endedAt:full.endedAt} : {})};
   });
-  let projected = projectJournalAssistantWork(hydrated, messages, history);
+  let projected = projectJournalAssistantWork(hydrated, messages, history, sourceTiming);
   if (messageIndices) {
     projected = projected.map(row => {
       if ((row.kind !== 'user' && row.kind !== 'assistant') || row.messageIndex === undefined) return row;
@@ -1418,7 +1755,7 @@ export function toTimelineRows(events: XuenessEventV1[]): TimelineRow[] {
           seq: event.seq,
           turnId: event.turnId,
           toolCallId: event.toolCallId,
-          name: event.name,
+          name: internalToolName(event.name),
           subject: event.subject,
           status: "running",
           error: "",
@@ -1446,7 +1783,7 @@ export function toTimelineRows(events: XuenessEventV1[]): TimelineRow[] {
             seq: event.seq,
             turnId: event.turnId,
             toolCallId: event.toolCallId,
-            name: event.name,
+            name: internalToolName(event.name),
             subject: event.subject,
             status: event.ok ? "ok" : event.errorCode === "xueness.error.cancelled" ? "cancelled" : "error",
             error: event.error,

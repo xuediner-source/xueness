@@ -4,9 +4,12 @@ import assert from "node:assert/strict";
 import { renderToStaticMarkup } from "react-dom/server";
 import {
   ElicitationForm,
+  ElicitationPendingTracker,
   McpElicitation,
+  RESOLVED_ELICITATION_LIMIT,
   handleElicitationAction,
   parsePending,
+  parsePendingSnapshot,
   validateElicitationContent,
   shouldDismissElicitationOnEscape,
   type ElicitationPending,
@@ -66,6 +69,32 @@ test("a password-like schema is not rendered and an idle panel is empty", () => 
   assert.equal(parsePending({ pending: null }), null);
   assert.equal(parsePending({ pending: { ...pending, requestedSchema: { type: "object", properties: { child: { type: "object" } }, required: [] } } }), null);
   assert.equal(renderToStaticMarkup(<McpElicitation sessionId="0123456789abcdef0123456789abcdef" />), "");
+});
+
+test("elicitation tracker ignores malformed and resolved snapshots, scopes errors by pending id, and bounds resolved IDs", () => {
+  const tracker = new ElicitationPendingTracker();
+  const first = { ...pending, id: "request-a" };
+  const second = { ...pending, id: "request-b" };
+
+  assert.deepEqual(parsePendingSnapshot({ pending: null }), { kind: "clear" });
+  assert.equal(parsePendingSnapshot({}), null);
+  assert.equal(parsePendingSnapshot({ pending: { ...first, requestedSchema: { type: "object" } } }), null);
+  assert.deepEqual(tracker.receive({ pending: first }), { accepted: true, pending: first });
+  assert.equal(tracker.receive({ pending: { ...first, requestedSchema: { type: "object" } } }).accepted, false);
+  assert.equal(tracker.pending?.id, first.id, "an unreadable snapshot must not discard the active draft");
+
+  assert.equal(tracker.completeSubmission(first.id), null);
+  assert.equal(tracker.receive({ pending: first }).accepted, false, "a delayed poll must not resurrect the submitted request");
+  assert.equal(tracker.receive({ pending: second }).accepted, true, "a new request remains usable after the old one resolves");
+  assert.equal(tracker.shouldShowSubmissionError(first.id), false, "an old write failure must not annotate the new form");
+  assert.equal(tracker.shouldShowSubmissionError(second.id), true);
+
+  const bounded = new ElicitationPendingTracker();
+  for (let index = 0; index < RESOLVED_ELICITATION_LIMIT + 1; index += 1) {
+    bounded.completeSubmission(`resolved-${index}`);
+  }
+  assert.equal(bounded.receive({ pending: { ...pending, id: "resolved-0" } }).accepted, true,
+    "the session-local replay fence evicts oldest IDs instead of growing without limit");
 });
 
 test("validation rejects bad values and the submit callback receives only a clean answer", () => {

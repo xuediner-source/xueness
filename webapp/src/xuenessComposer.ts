@@ -3,6 +3,8 @@ import { getLocale } from "./i18n";
 
 export type ComposerInput = {
   attachments: { name: string; mimeType: string; data: string }[];
+  /** Committed attachment ids. Bytes stay in the sessions attachment store. */
+  attachmentRefs?: { id: string; remoteOwner?: import("./plugins/sessions/composerAttachmentRef").RemoteAttachmentOwner }[];
   files: string[];
   sessions: string[];
   skills: string[];
@@ -90,9 +92,10 @@ export type ComposerCatalog = {
   capabilities?: ComposerCapability[];
   models: ComposerModel[];
   allowReal: boolean;
+  planningEnabled?: boolean;
   backgroundCount?: number;
   git?: { branch: string; branches: string[] };
-  remoteConnections?: { id: string; label: string; digest: string }[];
+  remoteConnections?: { id: string; label: string; digest: string; connectionState?: string; connected?: boolean }[];
 };
 export const emptyComposerCatalog: ComposerCatalog = {
   root: null, isolatedRoot: "", roots: [], files: [], sessions: [], skills: [], plugins: [], models: [], allowReal: false,
@@ -110,6 +113,7 @@ export async function prepareComposer(text: string, input: ComposerInput | undef
   root?: string; session_id?: string; provider_id?: string; model?: string; reasoning_effort?: string;
   language?: string;
 }): Promise<{ text: string; token: string; root: string; metadata: Record<string, unknown>; goal: boolean }> {
+  if (input?.attachmentRefs?.some(ref => ref.remoteOwner)) throw new Error("Remote attachments require their remote connection");
   // 界面语言只是展示数据：服务端用它渲染内建提示命令，不改变任何权限判断。
   return post("/api/composer/prepare", { text, language: getLocale(), ...selection, ...(input ? { input } : {}) });
 }

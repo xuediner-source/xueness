@@ -1,3 +1,5 @@
+> Historical reference from 2026-10-12, before the TypeScript/Z8 migration; current behavior is defined by [README.md](../README.md) and [ts/docs/z8-guarded-goal-memory.md](../ts/docs/z8-guarded-goal-memory.md).
+
 # 会话发送、恢复、队列与阅读体验
 
 本轮按本机 ZCode、Codex 和 Claude 解包中的会话交互核对并适配。实现归属于既有 `sessions` 插件，标准和轻量工作台共用同一个 Composer。没有增加共享内核例外，也没有更改用户的模型、权限或实验开关。

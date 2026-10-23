@@ -1,5 +1,5 @@
 /** 与 sessions/plan_mode.PERMISSION_MODES 对齐的唯一前端取值。 */
-export const PERMISSION_MODES = ["build", "edit", "yolo", "plan"] as const;
+export const PERMISSION_MODES = ["build", "edit", "yolo", "plan", "guarded"] as const;
 
 export type PermissionMode = (typeof PERMISSION_MODES)[number];
 

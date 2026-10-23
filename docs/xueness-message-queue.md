@@ -1,3 +1,5 @@
+> Historical reference from 2026-10-12, before the TypeScript/Z8 migration; current behavior is defined by [README.md](../README.md) and [ts/docs/z8-guarded-goal-memory.md](../ts/docs/z8-guarded-goal-memory.md).
+
 # 会话消息队列 / Session message queue
 
 当会话正在运行时，可以把后续消息加入该会话的 FIFO 队列。当前轮次结束后，运行器按提交顺序把每条消息作为独立用户轮次执行。队列只保存用户输入与安全的已准备上下文元数据；它不会授予工具权限，也不会把排队文本当作工具结果或完成证据。

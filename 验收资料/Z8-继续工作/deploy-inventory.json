@@ -1,0 +1,134 @@
+{
+  "generatedAtLocal": "2026-10-23T15:03:02.4797531+08:00",
+  "mode": "read-only inventory; no install files, source checkout, archives, or candidate directories were changed",
+  "inspectionScope": {
+    "candidateDirectoryDepth": 2,
+    "excludedFromCandidateSizeWalk": ["node_modules"],
+    "candidateDirectorySizesAreShallow": true,
+    "excludedFromCandidates": [
+      { "path": "E:\\models\\apps\\xueness-data", "reason": "user data" },
+      { "path": "E:\\models\\apps\\session-comparison-20261012", "reason": "reference checkout/source" },
+      { "path": "E:\\models\\apps\\xueness-src", "reason": "user source Git checkout; inspected read-only only" }
+    ]
+  },
+  "installedApplication": {
+    "directory": "E:\\models\\apps\\Xueness",
+    "executable": { "path": "E:\\models\\apps\\Xueness\\Xueness.exe", "sizeBytes": 245726208, "lastWrite": "2026-10-18T20:57:24" },
+    "asar": { "path": "E:\\models\\apps\\Xueness\\resources\\app.asar", "sizeBytes": 2328462, "embeddedPackage": { "name": "xueness-desktop", "version": "0.1.8", "main": "src/main.cjs" } },
+    "shortcuts": [
+      { "path": "C:\\Users\\19404\\Desktop\\Xueness.lnk", "target": "E:\\models\\apps\\Xueness\\Xueness.exe", "workingDirectory": "E:\\models\\apps\\Xueness" },
+      { "path": "C:\\Users\\19404\\AppData\\Roaming\\Microsoft\\Windows\\Start Menu\\Programs\\Xueness.lnk", "target": "E:\\models\\apps\\Xueness\\Xueness.exe", "workingDirectory": "E:\\models\\apps\\Xueness" }
+    ],
+    "resources": {
+      "backend": "E:\\models\\apps\\Xueness\\resources\\backend (frozen xueness-backend.exe, runtime-manifest.json, _internal and licenses)",
+      "backendTs": "E:\\models\\apps\\Xueness\\resources\\backend-ts (apps/catalog/packages/plugins plus bundled node_modules; runtime/node.exe is 92825416 bytes)",
+      "webapp": "E:\\models\\apps\\Xueness\\resources\\webapp (index/tray pages and assets)",
+      "browserRuntime": "E:\\models\\apps\\Xueness\\resources\\browser-runtime\\node_modules"
+    },
+    "updaterConfig": { "path": "E:\\models\\apps\\Xueness\\resources\\app-update.yml", "owner": "xuediner-source", "repo": "xueness", "provider": "github" }
+  },
+  "reusablePackaging": {
+    "currentStageDesktop": {
+      "packageJson": "E:\\models\\apps\\_stage-z8\\Xueness-0.1.8-complete-project\\desktop\\package.json",
+      "version": "0.1.8",
+      "windowsScript": "dist:win checks native platform, runs prepare:ts, then electron-builder --win --publish never",
+      "builderConfig": "E:\\models\\apps\\_stage-z8\\Xueness-0.1.8-complete-project\\desktop\\electron-builder.cjs",
+      "targets": ["NSIS setup", "portable ZIP"],
+      "outputDirectory": "E:\\models\\apps\\_stage-z8\\Xueness-0.1.8-complete-project\\desktop\\release",
+      "publishBehavior": "explicitly disabled by --publish never",
+      "electronBuilderInstalled": false,
+      "electronInstalled": false,
+      "releaseDirectoryExists": false,
+      "webDistExists": true,
+      "tsDistExists": true
+    },
+    "sourceCheckoutDesktop": {
+      "packageJson": "E:\\models\\apps\\xueness-src\\desktop\\package.json",
+      "version": "0.1.2",
+      "windowsScript": "dist:win runs electron-builder --win --publish never",
+      "backendPreparation": "prepare:backend runs scripts/build_backend.py",
+      "electronBuilderInstalled": true,
+      "electronInstalled": true,
+      "releaseDirectoryExists": true,
+      "webDistExists": true,
+      "backendBuildDirectoryExists": true,
+      "assessment": "the 0.1.8 stage package has the reusable script/config and prebuilt web/TS dist, but lacks local Electron/electron-builder dependencies; xueness-src has those dependencies and a release directory, but its desktop metadata is version 0.1.2"
+    }
+  },
+  "sourceCheckout": {
+    "path": "E:\\models\\apps\\xueness-src",
+    "branch": "main",
+    "localHead": "1c30fbad1e284e00a5d86816725bf29a84bced00",
+    "cachedTrackingDivergence": "0 ahead / 0 behind origin/main (local cached tracking ref); live ls-remote main hash differs from local HEAD",
+    "originRepository": "xuediner-source/xueness (sanitized; no credentials emitted)",
+    "readOnlyLsRemote": { "succeeded": true, "remoteHead": "25ba9dbae4838ba6a84ae64ff9d089a1bdd50833", "remoteMain": "25ba9dbae4838ba6a84ae64ff9d089a1bdd50833", "matchesLocalHead": false },
+    "readmeRepository": "README.md and README.en.md point to github.com/xuediner-source/xueness; README release artifact links currently name v0.1.2",
+    "workingTree": {
+      "modifiedPaths": ["webapp/src/i18n.ts"],
+      "uncommittedI18nDiff": "44 added lines only; adds English translations for image navigation, landing text, and local endpoint compatibility diagnostics",
+      "checkoutWasNotModified": true
+    }
+  },
+  "candidateDirectories": [
+    { "path": "E:\\models\\apps\\_round10", "type": "directory", "shallowFiles": 271, "shallowBytesDepth2ExcludingNodeModules": 18359243, "description": "Older acceptance workspace with copied project, smoke/diagnostic outputs and build logs; no ZIP observed at inspected depth." },
+    { "path": "E:\\models\\apps\\_round11", "type": "directory", "shallowFiles": 245, "shallowBytesDepth2ExcludingNodeModules": 18704107, "description": "Round 12 workspace snapshot, pack script, handover and full ZIP." },
+    { "path": "E:\\models\\apps\\_round13", "type": "directory", "shallowFiles": 87, "shallowBytesDepth2ExcludingNodeModules": 11751828, "description": "Round 13 project snapshot, TUI acceptance artifacts, handover and full ZIP." },
+    { "path": "E:\\models\\apps\\_round14", "type": "directory", "shallowFiles": 91, "shallowBytesDepth2ExcludingNodeModules": 11807000, "description": "Round 14 project snapshot, verification artifacts, handover and full ZIP." },
+    { "path": "E:\\models\\apps\\_round17", "type": "directory", "shallowFiles": 97, "shallowBytesDepth2ExcludingNodeModules": 12588753, "description": "Round 17 project snapshot, verification artifacts, handover, full ZIP and patch ZIP." },
+    { "path": "E:\\models\\apps\\_round18", "type": "directory", "shallowFiles": 99, "shallowBytesDepth2ExcludingNodeModules": 12741271, "description": "Round 18 project snapshot, verification artifacts, handover, full ZIP and patch ZIP." },
+    { "path": "E:\\models\\apps\\_round19", "type": "directory", "shallowFiles": 103, "shallowBytesDepth2ExcludingNodeModules": 14691329, "description": "Round 19 project snapshot, verification artifacts, handover, full ZIP and patch ZIP." },
+    { "path": "E:\\models\\apps\\_stage-z2", "type": "directory", "shallowFiles": 108, "shallowBytesDepth2ExcludingNodeModules": 13068487, "description": "Z2 staged project snapshot, verification/handover and full/patch ZIPs." },
+    { "path": "E:\\models\\apps\\_stage-z3", "type": "directory", "shallowFiles": 112, "shallowBytesDepth2ExcludingNodeModules": 13150579, "description": "Z3 staged project snapshot, verification/handover and full/patch ZIPs." },
+    { "path": "E:\\models\\apps\\_stage-z4", "type": "directory", "shallowFiles": 115, "shallowBytesDepth2ExcludingNodeModules": 13235493, "description": "Z4 staged project snapshot, verification/handover, checksums and full/patch ZIPs." },
+    { "path": "E:\\models\\apps\\_stage-z5", "type": "directory", "shallowFiles": 120, "shallowBytesDepth2ExcludingNodeModules": 13329549, "description": "Z5 staged project snapshot, audit/verification/handover and full/patch ZIPs." },
+    { "path": "E:\\models\\apps\\_stage-z6", "type": "directory", "shallowFiles": 126, "shallowBytesDepth2ExcludingNodeModules": 13485705, "description": "Z6 staged project snapshot, audit/verification/handover and full/patch ZIPs." },
+    { "path": "E:\\models\\apps\\_stage-z7", "type": "directory", "shallowFiles": 132, "shallowBytesDepth2ExcludingNodeModules": 13641646, "description": "Z7 staged project snapshot, verification/handover and full/patch ZIPs." },
+    { "path": "E:\\models\\apps\\_stage-z8", "type": "directory", "shallowFiles": 121, "shallowBytesDepth2ExcludingNodeModules": 2776048, "description": "Current active Z8 workspace; no ZIP observed. Preserve as active source workspace." },
+    { "path": "E:\\models\\apps\\backups", "type": "directory", "shallowFiles": 80, "shallowBytesDepth2ExcludingNodeModules": 1005095318, "description": "Three xueness-before-install snapshots; shallow walk sees three 245726208-byte Xueness.exe copies and related app files." },
+    { "path": "E:\\models\\apps\\xueness-backup-20261002", "type": "directory", "shallowFiles": 2, "shallowBytesDepth2ExcludingNodeModules": 1050, "description": "Contains a state directory; treat as possible user/session data, not an old binary candidate." },
+    { "path": "E:\\models\\apps\\xueness-build-env", "type": "directory", "shallowFiles": 23, "shallowBytesDepth2ExcludingNodeModules": 2130599, "description": "Python virtual environment with build and PyInstaller tooling." },
+    { "path": "E:\\models\\apps\\xueness-win-20261014", "type": "directory", "shallowFiles": 4753, "shallowBytesDepth2ExcludingNodeModules": 388577730, "description": "Windows validation workspace with artifacts, installation backups/temp, Python env, test state and source tar.gz." },
+    { "path": "E:\\models\\apps\\xueness-windows-build-20261007", "type": "directory", "shallowFiles": 339, "shallowBytesDepth2ExcludingNodeModules": 5786818, "description": "Windows build evidence plus a source-hash-named project directory." },
+    { "path": "E:\\models\\apps\\xueness-windows-repair-20261008", "type": "directory", "shallowFiles": 831, "shallowBytesDepth2ExcludingNodeModules": 347160592, "description": "Repair/source checkout copy containing .git and a desktop/release v0.1.5 ZIP and installer; preserve as a separate Git copy until reviewed." },
+    { "path": "E:\\models\\apps\\downloads\\Xueness-windows-preview-20261007", "type": "directory", "shallowFiles": 5, "shallowBytesDepth2ExcludingNodeModules": 300098924, "description": "Preview v0.1.4 portable ZIP/setup plus usage, build info, checksums and validation files." },
+    { "path": "E:\\models\\apps\\downloads\\Xueness-windows-repair-20261008", "type": "directory", "shallowFiles": 1, "shallowBytesDepth2ExcludingNodeModules": 142555783, "description": "Standalone v0.1.5 repair installer directory." }
+  ],
+  "candidateArchivesAndInstallers": [
+    { "path": "E:\\models\\apps\\_round11\\Xueness-0.1.8-round12-20261022.zip", "type": "zip/full-project", "sizeBytes": 9761278 },
+    { "path": "E:\\models\\apps\\_round13\\Xueness-0.1.8-round13-20261022.zip", "type": "zip/full-project", "sizeBytes": 9779373 },
+    { "path": "E:\\models\\apps\\_round14\\Xueness-0.1.8-round14-20261022.zip", "type": "zip/full-project", "sizeBytes": 9852005 },
+    { "path": "E:\\models\\apps\\_round17\\Xueness-0.1.8-round17-20261022.zip", "type": "zip/full-project", "sizeBytes": 9916401 },
+    { "path": "E:\\models\\apps\\_round17\\Xueness-0.1.8-round17-20261022-patch.zip", "type": "zip/patch", "sizeBytes": 292737 },
+    { "path": "E:\\models\\apps\\_round18\\Xueness-0.1.8-round18-20261022.zip", "type": "zip/full-project", "sizeBytes": 9954736 },
+    { "path": "E:\\models\\apps\\_round18\\Xueness-0.1.8-round18-20261022-patch.zip", "type": "zip/patch", "sizeBytes": 323871 },
+    { "path": "E:\\models\\apps\\_round19\\Xueness-0.1.8-round19-20261022.zip", "type": "zip/full-project", "sizeBytes": 9996682 },
+    { "path": "E:\\models\\apps\\_round19\\Xueness-0.1.8-round19-20261022-patch.zip", "type": "zip/patch", "sizeBytes": 2228160 },
+    { "path": "E:\\models\\apps\\_stage-z2\\Xueness-0.1.8-Z2-20261022.zip", "type": "zip/full-project", "sizeBytes": 10058231 },
+    { "path": "E:\\models\\apps\\_stage-z2\\Xueness-0.1.8-Z2-20261022-patch.zip", "type": "zip/patch", "sizeBytes": 475548 },
+    { "path": "E:\\models\\apps\\_stage-z3\\Xueness-0.1.8-Z3-20261023.zip", "type": "zip/full-project", "sizeBytes": 10129581 },
+    { "path": "E:\\models\\apps\\_stage-z3\\Xueness-0.1.8-Z3-20261023-patch.zip", "type": "zip/patch", "sizeBytes": 459236 },
+    { "path": "E:\\models\\apps\\_stage-z4\\Xueness-0.1.8-Z4-20261023.zip", "type": "zip/full-project", "sizeBytes": 10184915 },
+    { "path": "E:\\models\\apps\\_stage-z4\\Xueness-0.1.8-Z4-20261023-patch.zip", "type": "zip/patch", "sizeBytes": 458779 },
+    { "path": "E:\\models\\apps\\_stage-z5\\Xueness-0.1.8-Z5-20261023.zip", "type": "zip/full-project", "sizeBytes": 10244684 },
+    { "path": "E:\\models\\apps\\_stage-z5\\Xueness-0.1.8-Z5-20261023-patch.zip", "type": "zip/patch", "sizeBytes": 448706 },
+    { "path": "E:\\models\\apps\\_stage-z6\\Xueness-0.1.8-Z6-20261023.zip", "type": "zip/full-project", "sizeBytes": 10327494 },
+    { "path": "E:\\models\\apps\\_stage-z6\\Xueness-0.1.8-Z6-20261023-patch.zip", "type": "zip/patch", "sizeBytes": 468497 },
+    { "path": "E:\\models\\apps\\_stage-z7\\Xueness-0.1.8-Z7-20261023.zip", "type": "zip/full-project", "sizeBytes": 10409773 },
+    { "path": "E:\\models\\apps\\_stage-z7\\Xueness-0.1.8-Z7-20261023-patch.zip", "type": "zip/patch", "sizeBytes": 447942 },
+    { "path": "E:\\models\\apps\\xueness-windows-repair-20261008\\desktop\\release\\Xueness-0.1.5-windows-x64-portable.zip", "type": "zip/portable-installer", "sizeBytes": 191357002 },
+    { "path": "E:\\models\\apps\\downloads\\Xueness-windows-preview-20261007\\Xueness-0.1.4-windows-x64-preview-20261007-portable.zip", "type": "zip/portable-installer", "sizeBytes": 172651159 },
+    { "path": "E:\\models\\apps\\downloads\\xueness-source-b4992aed6e80226b5559727de7de23015d7f329d.zip", "type": "zip/source-snapshot; review before removal", "sizeBytes": 4828594 },
+    { "path": "E:\\models\\apps\\xueness-win-20261014\\Xueness-Windows-verified-20261014-source.tar.gz", "type": "tar.gz/source-snapshot", "sizeBytes": 10293240 },
+    { "path": "E:\\models\\apps\\xueness-windows-repair-20261008\\desktop\\release\\Xueness-0.1.5-windows-x64-setup.exe", "type": "installer/exe", "sizeBytes": 142592872 },
+    { "path": "E:\\models\\apps\\downloads\\Xueness-windows-preview-20261007\\Xueness-0.1.4-windows-x64-preview-20261007-setup.exe", "type": "installer/exe", "sizeBytes": 127444726 },
+    { "path": "E:\\models\\apps\\downloads\\Xueness-windows-repair-20261008\\Xueness-0.1.5-windows-repair-20261008-setup.exe", "type": "installer/exe", "sizeBytes": 142555783 },
+    { "path": "E:\\models\\apps\\downloads\\Xueness-0.1.1-windows-x64-setup.exe", "type": "installer/exe", "sizeBytes": 126878840 },
+    { "path": "E:\\models\\apps\\downloads\\Xueness-0.1.4-windows-x64-setup.exe", "type": "installer/exe", "sizeBytes": 127131710 },
+    { "path": "E:\\models\\apps\\Xueness-0.1.5-windows-x64-setup.exe", "type": "installer/exe", "sizeBytes": 716800 }
+  ],
+  "protectedNearbyItems": [
+    { "path": "E:\\models\\apps\\downloads\\xueness-data-before-20261006.json", "reason": "user-data snapshot; excluded from cleanup candidates" },
+    { "path": "E:\\models\\apps\\downloads\\xueness-install-receipt-20261006.json", "reason": "installation metadata" },
+    { "path": "E:\\models\\apps\\downloads\\xueness-shortcuts-before-20261006.json", "reason": "shortcut metadata" }
+  ]
+}

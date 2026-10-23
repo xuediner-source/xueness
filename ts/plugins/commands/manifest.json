@@ -1,0 +1,16 @@
+{
+  "apiVersion": 2,
+  "id": "commands",
+  "name": "自定义命令",
+  "description": "自定义斜杠提示模板、目录型 Markdown 命令、内建 /init 与命令资源管理。",
+  "version": "0.2.0",
+  "defaultEnabled": true,
+  "capabilities": { "fs": { "read": ["state", "workspace"], "write": ["state"] } },
+  "features": [
+    { "id": "commands.templates", "name": "自定义斜杠提示模板", "nameEn": "Custom slash prompt templates" },
+    { "id": "commands.init", "name": "内建 /init：调研工作区并生成或更新 AGENTS.md", "nameEn": "Built-in /init: study the workspace and create or update AGENTS.md" },
+    { "id": "commands.resources", "name": "命令资源创建、编辑与开关", "nameEn": "Command resource creation, editing and switches" },
+    { "id": "commands.file_commands", "name": "目录型 Markdown 命令发现与位置参数展开", "nameEn": "File-shaped Markdown commands with positional argument expansion" }
+  ],
+  "panels": ["capabilities"]
+}

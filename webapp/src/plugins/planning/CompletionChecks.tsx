@@ -12,9 +12,10 @@ export type CompletionAssessment = {
   delivery_checks?: Record<string, { status: string; reason?: string; scope?: string; items?: (DeliveryRequirement & { passed: boolean; missing: string[] })[] }>;
 };
 
-export function CompletionChecks({ sessionId, completion, items, disabled, onSaved, compact = false, openEditorRequest = 0 }: {
+export function CompletionChecks({ sessionId, completion, items, disabled, onSaved, onOpenFile, compact = false, openEditorRequest = 0 }: {
   sessionId: string; completion?: CompletionAssessment | null; items: DeliveryRequirement[];
   disabled?: boolean; onSaved: () => void;
+  onOpenFile?: (path: string) => void;
   compact?: boolean; openEditorRequest?: number;
 }) {
   const [editing, setEditing] = useState(false);
@@ -31,6 +32,9 @@ export function CompletionChecks({ sessionId, completion, items, disabled, onSav
     setError('');
   }, [sessionId, itemsSignature]);
   const check = completion?.delivery_checks?.planning;
+  const fileItems = items.map(item => ({ ...item, ...check?.items?.find(result => result.id === item.id) }))
+    .concat((check?.items ?? []).filter(item => !items.some(requirement => requirement.id === item.id)))
+    .filter(item => Boolean(item.path));
   const verificationStatus = completion?.status ?? completion?.verification_status;
   const toolFailed = completion?.tool_execution_status === 'failed' || completion?.tool_execution_status === 'incomplete';
   const toolNotApplicable = !toolFailed && (verificationStatus === 'not_applicable'
@@ -64,7 +68,16 @@ export function CompletionChecks({ sessionId, completion, items, disabled, onSav
     onClick={() => { setDraft(items); setEditing(true); }}>
     {t('编辑交付清单')}
   </button>;
-  return <details className="xn-delivery-checks" data-delivery-status={deliveryStatus}
+  return <><div className="xn-delivery-files" data-testid="delivery-files">
+    {fileItems.map(item => <div className="xn-delivery-file" key={item.id}>
+      <span className="xn-delivery-file__icon" aria-hidden="true">↗</span>
+      <span className="xn-delivery-file__copy"><strong>{item.label}</strong><span title={item.path ?? ''}>{item.path}</span></span>
+      <span className="xn-delivery-file__status" data-status={item.passed === true ? 'passed' : item.passed === false ? 'failed' : 'unchecked'}>
+        {t(item.passed === true ? '已检查' : item.passed === false ? '检查未通过' : '待检查')}
+      </span>
+      {onOpenFile && <button type="button" className="xn-delivery-checks__button" onClick={() => onOpenFile(item.path!)}>{t('打开文件')}</button>}
+    </div>)}
+  </div><details className="xn-delivery-checks" data-delivery-status={deliveryStatus}
     open={editing || deliveryStatus === 'failed'}>
     <summary className="xn-delivery-checks__summary">
       <span className="xn-delivery-checks__title">{t('交付检查')}</span>
@@ -115,5 +128,5 @@ export function CompletionChecks({ sessionId, completion, items, disabled, onSav
       </div>}
       {error && <p className="xn-delivery-checks__error" role="alert">{error}</p>}
     </div>
-  </details>;
+  </details></>;
 }

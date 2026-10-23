@@ -1,0 +1,28 @@
+{
+  "apiVersion": 2, "id": "browser", "name": "Browser",
+  "description": "Explicitly approved browser operations: one persistent Playwright worker per state directory, no model-provided JavaScript.",
+  "version": "0.2.0", "defaultEnabled": false, "dependencies": ["files"],
+  "capabilities": { "exec": ["*"], "fs": { "read": ["state"], "write": ["state"] } },
+  "tools": [
+    { "name": "browser_navigate", "gate": "exec", "mutating": false, "concurrencySafe": false },
+    { "name": "browser_inspect", "gate": "exec", "mutating": false, "concurrencySafe": false },
+    { "name": "browser_snapshot", "gate": "exec", "mutating": false, "concurrencySafe": false },
+    { "name": "browser_click", "gate": "exec", "mutating": true, "concurrencySafe": false },
+    { "name": "browser_fill", "gate": "exec", "mutating": true, "concurrencySafe": false },
+    { "name": "browser_screenshot", "gate": "exec", "mutating": false, "concurrencySafe": false }
+  ],
+  "features": [
+    { "id": "browser.pages", "name": "受审批约束的页面导航与检查", "nameEn": "Approved page navigation and inspection" },
+    { "id": "browser.actions", "name": "精确点击、输入与内存截图", "nameEn": "Exact click, fill and in-memory screenshots" },
+    { "id": "browser.snapshot", "name": "页面无障碍树快照", "nameEn": "Page accessibility tree snapshot" }
+  ],
+  "panels": ["browser"],
+  "frontendModules": [
+    "plugins/browser/BrowserSettings.tsx",
+    "plugins/browser/DesktopBrowserImport.tsx",
+    "plugins/browser/BrowserPanel.tsx",
+    "plugins/browser/browserSessionRegistry.ts",
+    "plugins/browser/browserLifecycle.ts",
+    "plugins/browser/remoteBrowserTransport.ts"
+  ]
+}

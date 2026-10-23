@@ -1,0 +1,52 @@
+{
+  "apiVersion": 2,
+  "id": "desktop",
+  "name": "桌面端",
+  "description": "Windows 与 macOS 原生宿主、窗口所属目录选择和桌面状态。",
+  "version": "1.0.0",
+  "defaultEnabled": true,
+  "httpFamilies": ["desktop"],
+  "capabilities": { "fs": { "read": ["state"] } },
+  "features": [
+    { "id": "desktop.application", "name": "Windows / macOS 独立桌面应用与内置运行时", "nameEn": "Windows / macOS application with bundled runtime" },
+    { "id": "desktop.folder_picker", "name": "窗口所属的原生项目文件夹选择", "nameEn": "Window-owned native project folder selection" },
+    { "id": "desktop.lifecycle", "name": "单实例、固定数据目录、启动恢复与后台进程清理", "nameEn": "Single instance, persistent data location, startup recovery and backend cleanup" },
+    { "id": "desktop.status", "name": "关于页面的应用版本与数据位置", "nameEn": "Application version and data location in About" },
+    { "id": "desktop.window_chrome", "name": "原生窗口控件、工作台标题栏、双语菜单与主题同步", "nameEn": "Native window controls, integrated title bar, bilingual menus and theme sync" },
+    { "id": "desktop.background", "name": "Windows 托盘与 macOS Dock 后台运行和窗口恢复", "nameEn": "Windows tray and macOS Dock background operation and window restoration" },
+    { "id": "desktop.tray_navigation", "name": "托盘与 Dock 会话分组、快速打开、新建与反馈入口", "nameEn": "Tray and Dock chat groups, quick navigation, new chat and feedback" },
+    { "id": "desktop.permissions", "name": "系统权限真实状态与受限原生授权入口", "nameEn": "Actual system permission status and fixed native authorization actions" },
+    { "id": "desktop.host_capability", "name": "宿主平台与一次性能力票据（实验，默认关闭）", "nameEn": "Host platform probe and one-time capability ticket (experimental, off by default)" },
+    { "id": "desktop.notifications", "name": "等待审批、提问与运行结果的系统通知", "nameEn": "System notifications for approvals, questions and run results" },
+    { "id": "desktop.project_explorer", "name": "在系统资源管理器中打开已授权项目目录", "nameEn": "Open an authorized project directory in the system file manager" }
+  ],
+  "frontendModules": [
+    "plugins/desktop/DesktopAbout.tsx",
+    "plugins/desktop/DesktopTitlebar.tsx",
+    "plugins/desktop/DesktopTrayBridge.tsx",
+    "plugins/desktop/DesktopTrayMenu.tsx",
+    "plugins/desktop/tray-main.tsx",
+    "plugins/desktop/DesktopNotificationsBridge.tsx",
+    "plugins/desktop/DesktopNotificationSettings.tsx",
+    "plugins/desktop/desktopStorage.ts",
+    "plugins/desktop/projectExplorer.ts"
+  ],
+  "desktopModules": [
+    "src/main.cjs",
+    "src/desktop-state-store.cjs",
+    "src/data-directory.cjs",
+    "src/backend.cjs",
+    "src/front-door.cjs",
+    "src/security.cjs",
+    "src/window-chrome.cjs",
+    "src/window-theme-preload.cjs",
+    "src/desktop-background.cjs",
+    "src/tray-menu.cjs",
+    "src/tray-menu-preload.cjs",
+    "src/loading.html",
+    "src/permissions.cjs",
+    "src/native-labels.cjs",
+    "src/notifications.cjs",
+    "src/project-explorer.cjs"
+  ]
+}

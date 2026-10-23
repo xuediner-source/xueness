@@ -1,7 +1,27 @@
-// Read the same CSS tokens as the title bar. No Electron API is exposed to the page.
-const { ipcRenderer } = require('electron');
+// Read the title bar CSS tokens; expose only fixed desktop storage and project actions.
+const { contextBridge, ipcRenderer } = require('electron');
 
 if ((process.platform === 'win32' || process.platform === 'darwin') && window.top === window) {
+  contextBridge.exposeInMainWorld('xuenessDesktopProjects', Object.freeze({
+    openDirectory(root) { return ipcRenderer.invoke('xueness:open-project', root); },
+  }));
+  contextBridge.exposeInMainWorld('xuenessDesktopStorage', Object.freeze({
+    getItem(key) {
+      const value = ipcRenderer.sendSync('xueness:desktop-storage:get', key);
+      return typeof value === 'string' ? value : null;
+    },
+    setItem(key, value) {
+      if (ipcRenderer.sendSync('xueness:desktop-storage:set', key, value) !== true) {
+        throw new Error('Desktop storage is unavailable');
+      }
+    },
+    removeItem(key) {
+      if (ipcRenderer.sendSync('xueness:desktop-storage:remove', key) !== true) {
+        throw new Error('Desktop storage is unavailable');
+      }
+    },
+  }));
+
   const observeTheme = () => {
     const root = document.documentElement;
     // Scheme title bar height depends on the window width (wide layout only).

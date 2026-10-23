@@ -4,7 +4,9 @@ Xueness 的固定开发规则是：**每项产品功能归属于插件，并在�
 
 ## 实现和登记
 
-后端业务实现放在 `xueness/bundled_plugins/<id>/`，入口 `plugin.py` 贡献 `register_cli`、`execute_cli`、`dispatch`、`tools` 或运行能力；主入口只负责统一分发。工具采用 `BuiltinTool`，批准 subject 与实际 Gate 检查共用同一规范化值。新的前端实现放在 `webapp/src/plugins/<id>/`，通过静态注册表和 `effective` 状态挂载。
+> 第 10 轮起 Python 后端已删除，后端全部在 `ts/`。下文沿用的 Python 名称（`plugin_runtime`、`resources.py` 等）指其 TypeScript 对应实现，对照见 [ts/HANDOVER.md](ts/HANDOVER.md)。
+
+后端业务实现放在 `ts/plugins/<id>/`，插件导出的 bundled plugin 贡献工具、CLI、HTTP 路由或运行能力；主入口只负责统一分发。批准 subject 与实际 Gate 检查共用同一规范化值。新的前端实现放在 `webapp/src/plugins/<id>/`，通过静态注册表和 `effective` 状态挂载。
 
 每次新增用户能力，必须在所属 `manifest.json` 追加功能条目。例如，下面是功能登记示例，并非额外的运行入口：
 
@@ -18,9 +20,9 @@ Xueness 的固定开发规则是：**每项产品功能归属于插件，并在�
 }
 ```
 
-`modules` 列出包内全部实际 Python 业务模块，排除入口 `plugin.py` 和 `__init__.py`；嵌套模块使用点分隔名称。`frontendModules` 路径相对于 `webapp/src/`。新业务组件应直接放在所属插件目录；确需共享纯展示文件时才按导出符号声明归属，并记录共享理由。
+插件目录数据（功能、依赖、路由族、默认开关）在 `ts/catalog/<id>.json`，由 `npm --prefix ts run check:plugins` 校验。`frontendModules` 路径相对于 `webapp/src/`。新业务组件应直接放在所属插件目录；确需共享纯展示文件时才按导出符号声明归属，并记录共享理由。
 
-创建新插件时，还需登记后端 `PLUGIN_IDS`、前端 `XUENESS_PLUGIN_REGISTRY`、依赖、真实工具/命令/面板/资源，并更新 [架构功能清单](docs/xueness-plugin-architecture.md)。共享 `capabilities` 面板可由多个资源插件贡献，实际工具、CLI 命令和子功能 ID 不能重复归属。没有单独 Web 面板的 CLI/工具插件，也必须出现在完整 catalog 中。通常从「设置 → 插件」进入；settings 关闭时从账户菜单中的「插件管理」进入，全部插件关闭后仍能查看及恢复。
+创建新插件时，还需登记 TS 插件目录与注册、前端 `XUENESS_PLUGIN_REGISTRY`、依赖、真实工具/命令/面板/资源，并更新 [架构功能清单](docs/xueness-plugin-architecture.md)。共享 `capabilities` 面板可由多个资源插件贡献，实际工具、CLI 命令和子功能 ID 不能重复归属。没有单独 Web 面板的 CLI/工具插件，也必须出现在完整 catalog 中。通常从「设置 → 插件」进入；settings 关闭时从账户菜单中的「插件管理」进入，全部插件关闭后仍能查看及恢复。
 
 ## 禁用与资源释放
 
@@ -34,13 +36,13 @@ Xueness 的固定开发规则是：**每项产品功能归属于插件，并在�
 
 ## 验收与交付
 
-1. 运行 `python3 tools/check_plugin_architecture.py`。它检查包/allowlist/前端 ID、模块与前端归属、双语功能清单、依赖、唯一贡献和面板一致性。
-2. 运行 `python3 -m unittest tests.test_plugin_architecture -q`，其中还检查实际 CLI parser、工具归属及持久禁用的调用边界。
-3. 对功能行为运行适当回归；后端行为改动跑 `python3 -m unittest discover -s tests -q`。前端改动跑 `npm --prefix webapp test`、`npm --prefix webapp run typecheck`、`npm --prefix webapp run build`。
+1. 运行 `npm --prefix ts run check:plugins`。它检查插件目录、前端 ID 与归属、双语功能清单、依赖、唯一贡献和面板一致性。
+2. 运行 `npm --prefix ts run check`（行数上限、插件门禁、类型检查和全部 TS 测试），其中包含 CLI、工具归属及持久禁用的调用边界。
+3. 对功能行为运行适当回归。前端改动跑 `npm --prefix webapp test`、`npm --prefix webapp run typecheck`、`npm --prefix webapp run build`。
 4. 用隔离状态和最新构建，核验插件卡片及子功能可搜索、禁用/阻塞项仍可见、功能关闭后停止请求/服务；前端至少核验桌面与窄屏。构建会自动运行 `check:design`（未定义变量、主题单源及基础文本对比度）和 `check:bundle`（启动静态依赖图 gzip 文件预算）；后者不等于真实网络时延或运行性能测量。
 
 插件目录的原生折叠交互回归使用 `npm --prefix webapp run test:browser`。它在临时目录和随机 loopback 端口中渲染真实组件，禁止 API/外部请求，不读取用户状态。默认使用本机 Chrome；可通过 `PLAYWRIGHT_CHANNEL` 选择已安装的 Playwright 浏览器通道。
-5. 更新使用说明和功能清单，再准备本地发布包。`tools/prepare_release.py` 再次执行结构门禁并把开发约束一并打包。
+5. 更新使用说明和功能清单，再准备本地发布包；发布构建（`.github/workflows/desktop-build.yml`）再次执行 TS 检查与插件门禁。
 
 结构检查能发现漏登记或注册表漂移，不能替代对语义、权限、动态执行与生命周期的审查。不得只改检查白名单、填空壳功能名或添加卡片来宣称完成插件拆分。
 
@@ -54,7 +56,7 @@ Xueness 的固定开发规则是：**每项产品功能归属于插件，并在�
 
 ## 桌面宿主与平台适配
 
-桌面产品集成属于 `desktop` 插件。Electron 业务模块在 `desktop/src/`，由 desktop manifest 的 `desktopModules` 精确登记；Python 对应实现位于 `xueness/bundled_plugins/desktop/`，界面位于 `webapp/src/plugins/desktop/`。结构门禁同样检查 Electron 模块归属。
+桌面产品集成属于 `desktop` 插件。Electron 业务模块在 `desktop/src/`，由 desktop manifest 的 `desktopModules` 精确登记；后端对应实现位于 `ts/plugins/desktop/` 与 `ts/apps/server/src/desktop-host.ts`，界面位于 `webapp/src/plugins/desktop/`。结构门禁同样检查 Electron 模块归属。
 
 窗口、私有后端连接和插件管理是桌面入口的恢复基础设施，类似 Web HTTP 宿主；禁用 desktop 时它们仍提供其它插件和插件恢复入口，原生目录选择和桌面状态 API 则关闭。不能将其它桌面业务借此放入宿主。跨平台文件锁是已有 lease/写锁基础设施的实现。会话租约在打开后校验：POSIX 用 `O_DIRECTORY|O_NOFOLLOW` 打开锁目录再相对打开锁文件，Windows 在未跟随的目录句柄上相对创建并拒绝 reparse point。会话 journal 的读写使用同一套打开后校验的文件锁，但是锁文件是 `<sid>.journal.lock`，和运行租约 `<sid>.lock` 分开：租约是非阻塞的整轮单写者，journal 锁只包住一次落盘或崩溃修复，避免在持有租约时再次锁定同一文件。journal 与运行事件 JSONL 都按 UTF-8 和 LF 落盘；读入时接受 CRLF。半行和断电留下的截断尾不会覆盖已经写完的记录。路径是否为同一文件，以及命令、技能、钩子是否仍在 jail 内，只走 `write_lock` 的主机路径比较：Windows 与 macOS 忽略大小写，Linux 保持区分。Shell、终端、工作流和机器指标的系统差异必须留在各自插件。
 
@@ -65,3 +67,5 @@ Xueness 的固定开发规则是：**每项产品功能归属于插件，并在�
 `plugins/shared.tsx` 的 `useModalFocusScope` 和 `shouldDismissModalOnEscape` 属于基础 UI：只处理可见模态窗口的焦点、Tab、输入法保护与清理，不读取产品数据、发起请求、执行动作或授予权限。各插件仍持有确认状态、业务回调与开关边界。它统一已有跨插件对话框的键盘行为，避免各插件重复不完整的焦点陷阱；未扩大结构门禁共享白名单。独立产品组件必须物理放在所属插件目录，不能仅登记顶层文件绕过此要求。
 
 `xuenessShortcutDisplay.ts` 是共享基础 UI 的显示例外：它只把已经解析好的快捷键文本转换为当前平台的 ⌘/Ctrl、⌥/Alt 与 ⇧/Shift 标签，供侧栏和 settings 快捷键面板复用。它不监听键盘、不读取或保存快捷键配置、不执行操作，也不判断插件或权限；绑定配置和实际动作仍归各自插件。结构门禁单独登记此文件，不能借此放入新的快捷键业务。
+
+持久媒体的提供商接缝：`providers.media_input.bind_prompt` 在每次模型调用（包括上下文溢出重试）前接收已接受 journal 和选中消息，产出过滤私有字段的协议对象，并仅在该调用生命周期用 ContextVar 绑定其精确对象身份。现有 `before_model_request` 位于选择、轻量转换和私有字段过滤之前，无法将授权绑定到最终对象或保证请求异常/取消的清理，因此共享执行器仅以 context manager 包裹既有调用。媒体引用校验、插件开关、owner/pin、完整性、限额及协议物化全部留在 providers/sessions 插件；不在内核解释附件或加载原始字节。轻量视图保留接受的媒体用户消息身份且不合并；存储/准备/预算仍只有紧凑引用。没有持久媒体时不加载 sessions 媒体存储模块。

@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import { TimelineWindowModel, type TimelineWindowHost, type TimelineWindowSnapshot } from "./TimelineVirtualWindow";
+import type { TimelineRow } from "../../xuenessWorkbench";
 
 /** 确定性伪随机数，保证断言可复现。 */
 function mulberry32(seed: number): () => number {
@@ -81,6 +82,10 @@ class FakeTimelineScroller implements TimelineWindowHost {
     return index >= this.view.start && index < this.view.end ? this.heights[index]! : null;
   }
 
+  readEntryTop(index: number): number | null {
+    return this.itemDomTop(index);
+  }
+
   readRowGap(): number {
     return this.gap;
   }
@@ -107,9 +112,9 @@ class FakeTimelineScroller implements TimelineWindowHost {
 }
 
 /** 模拟一次渲染提交：快照 → DOM → 布局阶段测量/补偿。 */
-function commit(model: TimelineWindowModel, fake: FakeTimelineScroller): void {
+function commit(model: TimelineWindowModel, fake: FakeTimelineScroller, userScrollIntent: "none" | "awayFromBottom" | "towardBottom" | "unknown" = "none"): void {
   fake.render(model.getSnapshot());
-  model.syncAfterCommit();
+  model.syncAfterCommit(userScrollIntent);
   fake.render(model.getSnapshot());
 }
 
@@ -135,6 +140,106 @@ test("短会话完整渲染，不产生窗口垫片", () => {
   const snapshot = model.getSnapshot();
   assert.equal(snapshot.windowed, false);
   assert.deepEqual([snapshot.start, snapshot.end, snapshot.topPad, snapshot.bottomPad], [0, 40, 0, 0]);
+});
+
+test("short conversation regrouping stays linear for a long single turn", async () => {
+  const { buildConversationTurns } = await import("./ZCodeConversation");
+  const count = 2_048;
+  let turnIdReads = 0;
+  const rows = Array.from({ length: count }, (_, seq) => {
+    const row = { kind: "assistant", seq, text: "" } as unknown as TimelineRow;
+    Object.defineProperty(row, "turnId", { get: () => { turnIdReads += 1; return "one-long-turn"; } });
+    return row;
+  });
+
+  const turns = buildConversationTurns(rows);
+
+  assert.equal(turns.length, 1);
+  assert.equal(turns[0]?.rows.length, count);
+  assert.ok(turnIdReads <= count * 2, `turnId should be read O(N), got ${turnIdReads} reads for ${count} rows`);
+});
+
+test("full-render short sessions preserve the non-tail reading anchor when content folds", () => {
+  const heights = Array.from({ length: 40 }, () => 100);
+  const fake = new FakeTimelineScroller(heights, { clientHeight: 320, gap: 12 });
+  const model = new TimelineWindowModel(fake, { initialTail: true, pageSize: 32 });
+  attachAtTail(model, fake, heights.length);
+  scrollBy(model, fake, -850);
+  const before = fake.viewportTopAnchor();
+  assert.ok(before, "reading position should be anchored to a rendered turn");
+
+  // Folding old work shortens a turn above the reader after React has committed.
+  heights[4] = 28;
+  commit(model, fake);
+
+  const after = fake.viewportTopAnchor();
+  assert.ok(after);
+  assert.equal(after.index, before.index, "the same turn should remain at the viewport top");
+  assert.ok(Math.abs(after.offset - before.offset) <= 0.5, `anchor offset drifted ${before.offset} → ${after.offset}`);
+  assert.ok(fake.scrollHeight - fake.scrollTop - fake.clientHeight > 80, "an away-from-tail reader should stay away from the tail");
+});
+
+test("short sessions follow height changes at tail but honor a pending upscroll", () => {
+  const heights = Array.from({ length: 40 }, () => 100);
+  const fake = new FakeTimelineScroller(heights, { clientHeight: 320, gap: 12 });
+  const model = new TimelineWindowModel(fake, { initialTail: true, pageSize: 32 });
+  attachAtTail(model, fake, heights.length);
+
+  heights[12] = 180;
+  commit(model, fake);
+  assert.equal(fake.scrollTop + fake.clientHeight, fake.scrollHeight, "a pinned short conversation should follow a fold/expand");
+
+  // Input capture runs before the browser's scroll event. If a stream update
+  // lands in that frame, do not infer renewed tail intent from stale geometry.
+  const previousTop = fake.scrollTop;
+  const anchor = fake.viewportTopAnchor();
+  assert.ok(anchor);
+  heights[anchor.index] = heights[anchor.index]! + 220;
+  commit(model, fake, "awayFromBottom");
+  assert.equal(fake.scrollTop, previousTop, "the content commit must not consume the not-yet-dispatched upscroll");
+  assert.ok(fake.scrollHeight - fake.scrollTop - fake.clientHeight > 80);
+});
+
+test("turning automatic follow off clears the virtualizer tail intent without moving the reader", () => {
+  const heights = Array.from({ length: 40 }, () => 100);
+  const fake = new FakeTimelineScroller(heights, { clientHeight: 320, gap: 12 });
+  const model = new TimelineWindowModel(fake, { initialTail: true, followTail: true, pageSize: 32 });
+  attachAtTail(model, fake, heights.length);
+  const readingTop = fake.scrollTop;
+
+  model.setFollowTailAllowed(false);
+  heights.push(100);
+  model.setCount(heights.length);
+  commit(model, fake);
+
+  assert.equal(fake.scrollTop, readingTop, "a setting change must revoke the old tail-follow intent");
+  assert.ok(fake.scrollHeight - fake.scrollTop - fake.clientHeight > 80, "new output should remain below the reader");
+
+  // Re-enabling the preference while already away from the tail preserves this reading position.
+  model.setFollowTailAllowed(true);
+  heights.push(100);
+  model.setCount(heights.length);
+  commit(model, fake);
+  assert.equal(fake.scrollTop, readingTop);
+});
+
+test("session reset clears measured heights, anchor baseline, and prior tail intent", () => {
+  const heights = Array.from({ length: 40 }, () => 72);
+  const fake = new FakeTimelineScroller(heights, { clientHeight: 320, gap: 12 });
+  const model = new TimelineWindowModel(fake, { initialTail: true, pageSize: 32 });
+  attachAtTail(model, fake, heights.length);
+  assert.equal(model.getSnapshot().estimate, 72);
+  const oldSessionTail = fake.scrollTop;
+
+  heights.fill(180);
+  model.resetForSession(false);
+  commit(model, fake);
+
+  assert.equal(model.getSnapshot().estimate, 180, "new-session measurements should replace the old session's heights");
+  assert.equal(fake.scrollTop, oldSessionTail, "session reset must not auto-follow using the previous session's tail state");
+  heights[0] = 240;
+  commit(model, fake);
+  assert.ok(fake.scrollHeight - fake.scrollTop - fake.clientHeight > 80, "later layout changes must retain the new session's non-tail state");
 });
 
 test("长会话初始按尾部开窗，垫片用估计高度补齐", () => {

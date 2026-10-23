@@ -1,0 +1,74 @@
+{
+  "id": "native_ops",
+  "name": "原生操作工具",
+  "description": "由固定 Rust worker 提供的有界工作区文件与文档工具；命令执行仍由 Xueness 宿主管理。",
+  "version": "1.0.0",
+  "apiVersion": 1,
+  "defaultEnabled": true,
+  "dependencies": [
+    "files"
+  ],
+  "tools": [
+    "xops_inspect_local_file",
+    "xops_grep",
+    "xops_glob",
+    "xops_replace",
+    "xops_write_file",
+    "xops_edit_file",
+    "xops_diff",
+    "xops_stat",
+    "xops_copy",
+    "xops_move",
+    "xops_remove",
+    "xops_read_files",
+    "xops_read_table",
+    "xops_read_docx",
+    "xops_read_pdf",
+    "xops_discover_tools"
+  ],
+  "commands": [],
+  "panels": [],
+  "resources": [],
+  "capabilities": [
+    "native_ops.files",
+    "native_ops.discovery",
+    "native_ops.documents"
+  ],
+  "httpFamilies": [],
+  "modules": [
+    "native_file_worker",
+    "tool_discovery",
+    "document_readers"
+  ],
+  "features": [
+    {
+      "id": "native_ops.files",
+      "name": "固定原生工作区文件工具",
+      "nameEn": "Fixed native workspace file tools"
+    },
+    {
+      "id": "native_ops.discovery",
+      "name": "按会话发现高级文件工具",
+      "nameEn": "Per-session discovery of advanced file tools"
+    },
+    {
+      "id": "native_ops.documents",
+      "name": "有界 CSV、DOCX 与 PDF 读取",
+      "nameEn": "Bounded CSV, DOCX and PDF reading"
+    }
+  ],
+  "backendAssets": [
+    "assets/schemas.json",
+    "assets/PROVENANCE.md",
+    "assets/LICENSE",
+    "assets/NOTICE",
+    "assets/licenses/deepseek-harness/LICENSE",
+    "assets/licenses/documents/THIRD-PARTY-NOTICES.txt",
+    "assets/licenses/fastctx/LICENSE-APACHE",
+    "assets/licenses/fastctx/NOTICE",
+    "assets/runtime/win32-x64/dsh-ops-worker.exe",
+    "assets/runtime/linux-x64/dsh-ops-worker",
+    "assets/runtime/darwin-arm64/dsh-ops-worker"
+  ],
+  "frontendModules": []
+}

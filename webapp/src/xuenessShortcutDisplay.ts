@@ -20,6 +20,7 @@ export function resolveHostPlatform(platform?: string): HostPlatform {
 /** Display each modifier/key separately for settings chips. */
 export function displayBindingParts(shortcut: string, platform?: string): string[] {
   const isMac = isMacPlatform(platform);
+  if (shortcut.includes('|')) return shortcut.split('|').flatMap((binding, index) => [...(index ? [' / '] : []), ...displayBindingParts(binding.trim(), platform)]);
   return shortcut.split('+').map((part) => {
     if (part === 'Mod') return isMac ? '⌘' : 'Ctrl';
     if (part === 'Ctrl') return 'Ctrl';
@@ -33,6 +34,8 @@ export function displayBindingParts(shortcut: string, platform?: string): string
 /** 'Mod+Enter' -> '⌘Enter' on macOS, 'Ctrl+Enter' elsewhere. */
 export function displayBinding(shortcut: string, platform?: string): string {
   const isMac = isMacPlatform(platform);
+  // Alternatives ('Mod+K | Mod+Shift+P') are joined per binding, never with '+'.
+  if (shortcut.includes('|')) return shortcut.split('|').map(binding => displayBinding(binding.trim(), platform)).join(' / ');
   return displayBindingParts(shortcut, platform).join(isMac ? '' : '+');
 }
 

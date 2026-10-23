@@ -99,18 +99,28 @@ test('Linux does not install an unsupported window theme listener', () => {
 });
 
 test('isolated preload follows theme mutations, deduplicates unrelated changes and cleans up', () => {
-  const callbacks = new Map(), sent = [];
+  const callbacks = new Map(), sent = [], exposed = {};
+  const stored = new Map();
   let policy = null, trayState = null, notifyRequest = null;
   const root = { getAttribute: name => name === 'data-xn-desktop-enabled' ? policy
     : name === 'data-xn-desktop-tray-state' ? trayState
     : name === 'data-xn-desktop-notify-request' ? notifyRequest : null };
   let color = '#ececee', symbolColor = '#262626', observed, disconnected = false, sync;
   const ipcRenderer = new EventEmitter(); ipcRenderer.send = (...args) => sent.push(args);
+  const invoked = [];
+  ipcRenderer.invoke = (...args) => { invoked.push(args); return Promise.resolve({ ok: true }); };
+  ipcRenderer.sendSync = (channel, key, value) => {
+    if (channel === 'xueness:desktop-storage:get') return stored.get(key) ?? null;
+    if (channel === 'xueness:desktop-storage:set') { stored.set(key, value); return true; }
+    if (channel === 'xueness:desktop-storage:remove') { stored.delete(key); return true; }
+    return null;
+  };
   const dispatched = [];
   const page = { addEventListener: (name, callback) => callbacks.set(name, callback), dispatchEvent: event => dispatched.push(event) };
   page.top = page;
   runInNewContext(readFileSync(join(__dirname, '../src/window-theme-preload.cjs'), 'utf8'), {
-    require: name => { assert.equal(name, 'electron'); return { ipcRenderer }; },
+    require: name => { assert.equal(name, 'electron'); return { ipcRenderer,
+      contextBridge: { exposeInMainWorld: (key, value) => { exposed[key] = value; } } }; },
     CustomEvent: class { constructor(type, options) { this.type = type; this.detail = options.detail; } },
     process: { platform: 'win32' }, // Sandboxed preloads expose a reduced process object.
     document: { readyState: 'loading', documentElement: root },
@@ -125,6 +135,14 @@ test('isolated preload follows theme mutations, deduplicates unrelated changes a
       disconnect() { disconnected = true; }
     },
   });
+  assert.deepEqual(Object.keys(exposed), ['xuenessDesktopProjects', 'xuenessDesktopStorage']);
+  assert.deepEqual(Object.keys(exposed.xuenessDesktopProjects), ['openDirectory']);
+  exposed.xuenessDesktopProjects.openDirectory('C:\\workspace');
+  assert.deepEqual(invoked, [['xueness:open-project', 'C:\\workspace']]);
+  exposed.xuenessDesktopStorage.setItem('xueness.sessions.pane-layout.v2', '{"v":2}');
+  assert.equal(exposed.xuenessDesktopStorage.getItem('xueness.sessions.pane-layout.v2'), '{"v":2}');
+  exposed.xuenessDesktopStorage.removeItem('xueness.sessions.pane-layout.v2');
+  assert.equal(exposed.xuenessDesktopStorage.getItem('xueness.sessions.pane-layout.v2'), null);
   assert.equal(sent.length, 0);
   callbacks.get('DOMContentLoaded')();
   assert.deepEqual(observed.element, root);
@@ -192,7 +210,7 @@ test('macOS preload sends localized host policy and tray state for Dock integrat
   const page = { addEventListener: (name, callback) => callbacks.set(name, callback) };
   page.top = page;
   runInNewContext(readFileSync(join(__dirname, '../src/window-theme-preload.cjs'), 'utf8'), {
-    require: name => { assert.equal(name, 'electron'); return { ipcRenderer }; },
+    require: name => { assert.equal(name, 'electron'); return { ipcRenderer, contextBridge: { exposeInMainWorld() {} } }; },
     process: { platform: 'darwin' },
     document: { readyState: 'loading', documentElement: root },
     window: page,
@@ -259,7 +277,7 @@ test('preload prefers the scheme title bar colour and reports the 44px height on
   };
   page.top = page;
   runInNewContext(readFileSync(join(__dirname, '../src/window-theme-preload.cjs'), 'utf8'), {
-    require: () => ({ ipcRenderer }), process: { platform: 'win32' },
+    require: () => ({ ipcRenderer, contextBridge: { exposeInMainWorld() {} } }), process: { platform: 'win32' },
     document: { readyState: 'loading', documentElement: root }, window: page,
     getComputedStyle: () => ({ getPropertyValue: name => ({ '--bg-window': '#f3f3f3', '--fg': '#0d0d0d',
       '--xn-native-titlebar-color': chrome, '--xn-native-titlebar-height': height })[name] || '' }),

@@ -35,10 +35,10 @@ services:
       # XUENESS_API_BASE: "https://your-gateway.example/v1"
       # XUENESS_MODEL: "your-model"
       # XUENESS_API_KEY: ""  # never commit a real key; use env_file instead
-    command: ["python3", "-m", "xueness.web", "--host", "0.0.0.0", "--port", "8137", "--state", "/data/state", "--web-runs", "/data/web-runs"]
+    command: ["node", "ts/apps/server/src/main.ts", "--project-root", "/app", "--host", "0.0.0.0", "--port", "8137", "--state", "/data/state", "--web-runs", "/data/web-runs"]
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "python3", "-c", "import urllib.request,sys; sys.exit(0 if b'\"ok\": true' in urllib.request.urlopen('http://127.0.0.1:8137/api/health', timeout=4).read() else 1)"]
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:8137/api/health',{signal:AbortSignal.timeout(4000)}).then(r=>r.json()).then(b=>process.exit(b.ok===true?0:1),()=>process.exit(1))"]
       interval: 30s
       timeout: 5s
       start_period: 10s

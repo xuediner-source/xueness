@@ -1,0 +1,115 @@
+{
+  "schema": "xueness.public-delivery-verification-summary.v1",
+  "date": "2026-10-24",
+  "version": "0.2.1",
+  "evidenceType": "Summary of existing Windows verification records; no new application or model execution in this documentation delivery",
+  "installedSkills": {
+    "ok": true,
+    "verifiedAt": "2026-10-23T17:34:44.127Z",
+    "skills": [
+      "docx",
+      "pdf",
+      "pptx",
+      "seagull-game-security",
+      "seagull-lab",
+      "seagull-license-security",
+      "seagull-memory",
+      "seagull-pentest",
+      "seagull-reverse",
+      "visualize",
+      "xlsx"
+    ],
+    "pluginCount": 33,
+    "standardCatalogHasSelected": true,
+    "lightweightCatalogHasSelected": true,
+    "loaded": {
+      "seagull-game-security": {
+        "ok": true,
+        "source": "bundled",
+        "truncated": false,
+        "chars": 1384
+      },
+      "seagull-lab": {
+        "ok": true,
+        "source": "bundled",
+        "truncated": false,
+        "chars": 1361
+      },
+      "seagull-license-security": {
+        "ok": true,
+        "source": "bundled",
+        "truncated": false,
+        "chars": 1401
+      },
+      "seagull-memory": {
+        "ok": true,
+        "source": "bundled",
+        "truncated": false,
+        "chars": 1303
+      },
+      "seagull-pentest": {
+        "ok": true,
+        "source": "bundled",
+        "truncated": false,
+        "chars": 1241
+      },
+      "seagull-reverse": {
+        "ok": true,
+        "source": "bundled",
+        "truncated": false,
+        "chars": 1468
+      }
+    },
+    "composerSkills": [
+      "docx",
+      "pdf",
+      "pptx",
+      "seagull-game-security",
+      "seagull-lab",
+      "seagull-license-security",
+      "seagull-memory",
+      "seagull-pentest",
+      "seagull-reverse",
+      "visualize",
+      "xlsx"
+    ],
+    "composerHasSelected": [
+      "seagull-game-security",
+      "seagull-lab",
+      "seagull-license-security",
+      "seagull-memory",
+      "seagull-pentest",
+      "seagull-reverse"
+    ]
+  },
+  "localDesktopUpdate": {
+    "ok": true,
+    "updatedAt": "2026-10-24T00:30:28.0714681+08:00",
+    "replacedResourceFiles": 2428,
+    "verifiedPayloadHashes": true,
+    "desktopHostUnchanged": true,
+    "userStateFiles": 388,
+    "userStateUnchanged": true
+  },
+  "windowsIntegrityFix": {
+    "ok": true,
+    "fixedAt": "2026-10-24T01:34:21.7021916+08:00",
+    "stillLowCount": 0,
+    "runtimeWriteProbeOk": true,
+    "scope": "Windows mandatory integrity label; not a source-code functional change"
+  },
+  "publicBinaryVerification": {
+    "ok": true,
+    "verifiedArchiveEntries": 2680,
+    "files": 2680,
+    "bytes": 615253964,
+    "archiveSha256": "aa5d12ec7b94b0aaf057a9b7d6dbf9e9e24865478269e5a2e7857b218d8b9097",
+    "installerSha256": "6bdce08e7e0660c9b7175696104f4c988b40eff56232d68b093dc05302846122"
+  },
+  "limitations": [
+    "Not every plugin feature was manually exercised",
+    "Not a three-platform verification",
+    "No new real-model success-rate or performance comparison",
+    "Binary Release remains draft; source push separately authorized"
+  ]
+}

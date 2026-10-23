@@ -150,3 +150,27 @@ test("evaluatePendingQuestionKey: Enter+Mod submission obeys platform and reject
   assert.equal(evaluatePendingQuestionKey({ key: "Process", ctrlKey: true }, { platform: "win32" }), null);
   assert.equal(evaluatePendingQuestionKey({ key: "Dead", metaKey: true }, { platform: "darwin" }), null);
 });
+
+test('local question answer cannot post after pane disable during CSRF', async () => {
+  const { answerQuestion } = await import('./questionApi');
+  const original = globalThis.fetch; let enabled = true; let writes = 0;
+  globalThis.fetch = async (_input, init) => {
+    if (!init?.method || init.method === 'GET') { enabled = false; return new Response(JSON.stringify({csrfToken:'token'}), {status:200}); }
+    writes++; throw new Error('must not send');
+  };
+  try { await assert.rejects(() => answerQuestion('guarded-question-session', 'question', 'original', () => enabled)); assert.equal(writes,0); }
+  finally { globalThis.fetch = original; }
+});
+test('an unknown local answer cannot be replaced by edited content and mistaken for acceptance', async () => {
+  const { answerQuestion } = await import('./questionApi');
+  const original = globalThis.fetch; let writes = 0;
+  globalThis.fetch = async (_input, init) => {
+    if (!init?.method || init.method === 'GET') return new Response(JSON.stringify({csrfToken:'token'}), {status:200});
+    writes++; throw new TypeError('lost answer');
+  };
+  try {
+    await assert.rejects(() => answerQuestion('unknown-question-session', 'question', 'original'));
+    await assert.rejects(() => answerQuestion('unknown-question-session', 'question', 'edited'), /earlier answer is unconfirmed/);
+    assert.equal(writes,1);
+  } finally { globalThis.fetch = original; }
+});

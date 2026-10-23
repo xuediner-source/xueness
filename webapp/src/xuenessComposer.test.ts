@@ -63,7 +63,7 @@ test("validated composer context travels as a one-use token, and creation become
     assert.deepEqual(calls.find(call => call.path === "/api/sessions")?.body, {
       task: "inspect", root: "/qa", prepared_token: "one-use",
     });
-    assert.equal(calls.find(call => call.path.endsWith("/run"))?.body?.steps, 20);
+    assert.equal(calls.find(call => call.path.endsWith("/run"))?.body?.steps, undefined);
     assert.equal(calls.find(call => call.path === "/api/composer/prepare")?.body?.reasoning_effort, "max");
     calls.length = 0;
     const sent = await sendTurn("new-task", "next", { provider: "real", mode: "build" }, "second-use");

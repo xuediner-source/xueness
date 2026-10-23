@@ -112,3 +112,25 @@ test('labels describe removal, masking or the bare fact in the current locale', 
   assert.equal(conversationCompactionLabel({ removed: 0, masked: 2 }), '已掩码 2 条较早的工具输出');
   assert.equal(conversationCompactionLabel({ removed: 0, masked: 0 }), '较早历史已压缩出上下文');
 });
+
+// ZCode 压缩记录（ts/plugins/providers/src/zcode-compact.ts）：扁平标量，旧记录照常解析。
+const zcodeRecord = {
+  kind: 'zcode', trigger: 'auto', phase: 'preflight', reason: 'context_limit', checkpointId: 'c1', removed: 6, kept: 2,
+  summarizedMessageCount: 6, preCompactTokens: 180000, postCompactTokens: 190000, truePostCompactTokens: 4200,
+  willRetriggerNextTurn: false, at: '2026-10-19T00:00:00+00:00',
+};
+
+test('ZCode compaction records parse and carry the latest record onto the marker', () => {
+  assert.equal(parseSessionCompactions([zcodeRecord]).length, 1);
+  assert.equal(parseSessionCompactions([{ ...zcodeRecord, willRetriggerNextTurn: 'no' }]).length, 0);
+  assert.equal(parseSessionCompactions([{ ...zcodeRecord, kept: '2' }]).length, 0);
+  const marker = conversationCompactionBoundary([...archivedRows, ...liveRows], [{ removed: 2, masked: 1 }, zcodeRecord]);
+  assert.deepEqual(marker, { boundarySeq: 4, removed: 8, masked: 1, latest: zcodeRecord });
+});
+
+test('ZCode compaction uses the ZCode divider text; earlier records keep theirs', () => {
+  assert.equal(conversationCompactionLabel({ removed: 6, masked: 0, latest: zcodeRecord }), '上下文已压缩（6 条较早消息已摘要）');
+  assert.equal(conversationCompactionLabel({ removed: 0, masked: 0, latest: { ...zcodeRecord, trigger: 'manual' } }), '上下文已压缩');
+  assert.equal(conversationCompactionLabel({ removed: 6, masked: 0, latest: { removed: 6 } }), '已压缩 6 条较早消息');
+  assert.equal(conversationCompactionLabel({ removed: 6, masked: 0 }), '已压缩 6 条较早消息');
+});

@@ -9,15 +9,42 @@ import type {
 import { Button, Badge, EmptyState } from "../../ui/primitives";
 import { IconArrowUp, IconLoader, IconPaperclip, IconPencil, IconPin, IconRefresh, IconTrash, IconX } from "../../ui/icons";
 import type { ComposerCapability, ComposerInput } from "../../xuenessComposer";
+import {
+  attachmentsFromRefs,
+  editorAttachmentRefs, parseStoredAttachmentRefs, persistedAttachmentFields,
+  type AttachmentOrigin, type AttachmentRef, type ComposerAttachment,
+} from "./composerAttachmentRef";
+import type { UploadTransport } from './composerAttachmentUpload';
+import type { RemoteAttachmentEndpoint } from './composerAttachmentRef';
+import { deferComposerAttachmentRelease } from './composerAttachmentCleanup';
+import { getComposerAttachmentUploadStore } from './composerAttachmentUploadStore';
+import { attachmentOwnerMatches, composerDraftIdentityIsOwned, composerReferenceIsOwned, hasUnscopedComposerAttachments, parseComposerAttachmentOwner, reconcileComposerUploads, type ComposerAttachmentOwner } from './composerAttachmentDraft';
 import { ComposerCapabilityMenu, MAX_SELECTED_COMPOSER_CAPABILITIES, capabilityLabel, matchesComposerSearch } from './ComposerCapabilityMenu';
 import { retainRejectedComposerDraft, recoverComposerDraft, composerDraftContent, subscribeComposerDrafts, notifyComposerDrafts } from './composerRecovery';
+import {
+  applyEditorSuggestion, contextAfterEditorEdit, deleteEditorAtom, editorHasAtomicNodes, editorStateForPlainText,
+  editorStateHasContent, editorStateMatching, editorStateSignature, insertEditorText, navigationLength, navigationText,
+  parseComposerEditorState, renderEditorHtml, sendableText, type ComposerEditorState,
+} from './composerEditorState';
+import { ComposerStructuredEditor, readEditorCursor } from './ComposerStructuredEditor';
 import { DeliveryUnconfirmedError } from './submissionTransport';
 import { ComposerRecoveryPanel } from './ComposerRecoveryPanel';
+import { getWorkbenchStorage } from '../desktop/desktopStorage';
+import { ComposerMaterialManifest } from './ComposerMaterialManifest';
+import { composerInputForDraft, composerMaterialsForDraft } from './composerMaterialSummary';
+import { approvalImpactKind, pendingBatchApprovals } from './approvalImpact';
+import { SessionRecoveryNotice } from './SessionRecoveryNotice';
 import { CurrentTurnInput, followupDelivery, followupPointerDelivery, type FollowupMode, type InputDelivery } from './CurrentTurnInput';
 import { Search, Target, Workflow, Blocks, Folder } from 'lucide-react';
 import { completionPresentation } from './completionPresentation';
 import { deferCompositionEnd, displayBinding, isModKeyPressed, isImeComposingEvent } from '../../xuenessShortcutDisplay';
 import { formatCommandArgv } from "../../xuenessWorkbench";
+import { matchesShortcut, resolveShortcutBinding } from "../../xuenessShortcutCommands";
+
+// Chip shell stays in this module. Preview kind, button and dialog load on demand.
+const attachmentPublishers = new WeakMap<object, () => void>();
+const missingAttachmentDrafts = new Set<string>();
+const ComposerAttachmentChips = React.lazy(() => import('./composerAttachmentPreview'));
 
 export type TaskListProps = {
   sessions: SessionSummary[];
@@ -583,10 +610,37 @@ function ApprovalItemPreview({
 
 export type ApprovalsProps = {
   pending: PendingApproval[];
+  /** Resolves false when the answer did not go through (the card then offers a retry). */
   onApprove?: (pending: PendingApproval) => void | Promise<unknown>;
   onApproveAll?: (items: PendingApproval[]) => void | Promise<unknown>;
+  /** Deny a call that waits in the running turn; the model gets the denial and goes on. */
+  /** Rejects a waiting call; `feedback` (optional) is handed to the model with the denial (ZCode permission-response). */
+  onReject?: (pending: PendingApproval, feedback?: string) => void | Promise<unknown>;
+  /** Allows a waiting call and identical calls for the rest of this session (ZCode "允许本会话"). */
+  onAllowSession?: (pending: PendingApproval) => void | Promise<unknown>;
+  /** Holds the replay path (older sessions); waiting calls stay answerable while a run is busy. */
   busy?: boolean;
 };
+
+function approvalOperationLabel(kind: ReturnType<typeof approvalImpactKind>): string {
+  return tr(kind === 'read' ? '读取' : kind === 'write' ? '写入' : kind === 'edit' ? '修改'
+    : kind === 'execute' ? '执行命令' : kind === 'network' ? '访问网络'
+      : kind === 'external' ? '调用外部工具' : kind === 'plan' ? '批准计划' : '执行操作');
+}
+
+function approvalImpactDescription(kind: ReturnType<typeof approvalImpactKind>): string {
+  return tr(kind === 'read' ? '读取所列目标，不会修改文件。'
+    : kind === 'write' ? '向所列目标写入内容，可能创建或覆盖文件。'
+      : kind === 'edit' ? '修改所列目标；请检查下面的变更预览。'
+        : kind === 'execute' ? '运行所列命令；命令可能改变文件或系统状态。'
+          : kind === 'network' ? '访问联网服务，并向所列目标发送查询或读取内容。'
+            : kind === 'external' ? '调用所列外部工具；请核对工具名称与目标。'
+              : '按所列操作类型处理目标；请检查目标和详细预览。');
+}
+
+function approvalTarget(pending: PendingApproval): string {
+  return pending.subject ? formatSubject(pending.kind ?? pending.name, pending.subject) : tr('未提供目标');
+}
 
 export type ApprovalsKeyAction =
   | { type: "approve-item"; index: number; item: PendingApproval }
@@ -656,9 +710,30 @@ export function evaluateApprovalsKeyDown(
   return null;
 }
 
-export function Approvals({ pending, onApprove, onApproveAll, busy = false }: ApprovalsProps) {
+export function Approvals({ pending, onApprove, onApproveAll, onReject, onAllowSession, busy = false }: ApprovalsProps) {
   const [focusedIndex, setFocusedIndex] = useState(0);
   const containerRef = useRef<HTMLDivElement>(null);
+  // ZCode PermissionDialog: an answer in flight disables that card; a failed one says so.
+  const [responding, setResponding] = useState<ReadonlySet<string>>(() => new Set());
+  const [failed, setFailed] = useState<ReadonlySet<string>>(() => new Set());
+  const [feedback, setFeedback] = useState<ReadonlyMap<string, string>>(() => new Map());
+  const blocked = (p: PendingApproval) => p.waiting ? responding.has(p.tool_call_id) : busy;
+  const respond = async (items: PendingApproval[], action: () => void | Promise<unknown>) => {
+    const ids = items.map(p => p.tool_call_id);
+    setResponding(previous => new Set([...previous, ...ids]));
+    setFailed(previous => new Set([...previous].filter(id => !ids.includes(id))));
+    let outcome: unknown;
+    try { outcome = await action(); } catch { outcome = false; }
+    finally { setResponding(previous => new Set([...previous].filter(id => !ids.includes(id)))); }
+    if (outcome === false && items.some(p => p.waiting)) setFailed(previous => new Set([...previous, ...ids]));
+  };
+  const approveOne = (p: PendingApproval) => { if (onApprove && !blocked(p)) void respond([p], () => onApprove(p)); };
+  const rejectOne = (p: PendingApproval) => {
+    if (!onReject || !p.waiting || blocked(p)) return;
+    const note = (feedback.get(p.tool_call_id) ?? '').trim();
+    void respond([p], () => note ? onReject(p, note) : onReject(p));
+  };
+  const allowSessionOne = (p: PendingApproval) => { if (onAllowSession && p.waiting && !p.oneShot && !blocked(p)) void respond([p], () => onAllowSession(p)); };
 
   if (!pending || pending.length === 0) {
     return (
@@ -668,16 +743,20 @@ export function Approvals({ pending, onApprove, onApproveAll, busy = false }: Ap
 
   const activeIndex = Math.min(Math.max(0, focusedIndex), pending.length - 1);
   const allGranted = pending.every(p => p.granted);
+  const ungranted = pendingBatchApprovals(pending);
 
+  const liveBatch = ungranted.length > 0 && ungranted.every(p => p.waiting);
+  const batchBlocked = allGranted || (liveBatch ? ungranted.some(p => responding.has(p.tool_call_id)) : busy);
   const handleBatchApprove = async () => {
-    if (busy || allGranted) return;
-    if (onApproveAll) {
-      await onApproveAll(pending);
-    } else if (onApprove) {
-      for (const p of pending.filter(item => !item.granted)) {
-        await onApprove(p);
-      }
-    }
+    if (batchBlocked) return;
+    // Keep the callback's actual scope identical to the visible ungranted list.
+    const remaining = pendingBatchApprovals(pending);
+    await respond(remaining, async () => {
+      if (onApproveAll) return onApproveAll(remaining);
+      let outcome: unknown = true;
+      if (onApprove) for (const p of remaining) if (await onApprove(p) === false) outcome = false;
+      return outcome;
+    });
   };
 
   useEffect(() => {
@@ -697,16 +776,14 @@ export function Approvals({ pending, onApprove, onApproveAll, busy = false }: Ap
     if (action.type === "approve-item") {
       event.preventDefault();
       setFocusedIndex(action.index);
-      if (onApprove && !busy) {
-        void onApprove(action.item);
-      }
+      approveOne(action.item);
     } else if (action.type === "approve-all") {
       event.preventDefault();
       void handleBatchApprove();
     } else if (action.type === "approve-active") {
-      if (onApprove && !busy) {
+      if (onApprove && !blocked(action.item)) {
         event.preventDefault();
-        void onApprove(action.item);
+        approveOne(action.item);
       }
     } else if (action.type === "next") {
       event.preventDefault();
@@ -746,19 +823,37 @@ export function Approvals({ pending, onApprove, onApproveAll, busy = false }: Ap
             <Button
               variant="secondary"
               size="sm"
-              disabled={busy || allGranted}
+              disabled={batchBlocked}
               onClick={() => void handleBatchApprove()}
               data-testid="approvals-batch-button"
             >
-              {allGranted ? tr("全部已批准") : busy ? tr("正在继续…") : tf("全部批准 ({0})", [pending.length])}
+              {allGranted ? tr("全部已批准") : liveBatch ? tf("全部允许 ({0})", [ungranted.length]) : busy ? tr("正在继续…") : tf("全部批准 ({0})", [ungranted.length])}
             </Button>
           </div>
         )}
       </div>
 
+      {pending.length > 1 && !allGranted && (
+        <div className="xn-approvals__scope" role="note" aria-label={tr('本次批量批准范围')} data-testid="approvals-batch-scope"
+          style={{ padding: '8px 10px', border: '1px solid var(--warn-border)', borderRadius: 'var(--radius-md)', background: 'var(--bg-card)' }}>
+          <p style={{ margin: '0 0 6px', fontWeight: 600 }}>{tf('全部批准将批准以下 {0} 项：', [ungranted.length])}</p>
+          <ul style={{ margin: 0, paddingInlineStart: 20, display: 'grid', gap: 5 }}>
+            {ungranted.map(item => {
+              const kind = approvalImpactKind(item.kind, item.name);
+              return <li key={item.tool_call_id}>
+                <span>{approvalOperationLabel(kind)} · {approvalTarget(item)}</span>
+                {kind === 'external' && item.name !== (item.kind ?? item.name) && <small> · {tf('工具：{0}', [item.name])}</small>}
+                <small style={{ display: 'block', color: 'var(--fg-muted)' }}>{approvalImpactDescription(kind)}</small>
+              </li>;
+            })}
+          </ul>
+        </div>
+      )}
+
       <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
         {pending.map((p, index) => {
-          const readableSubject = formatSubject(p.kind ?? p.name, p.subject);
+          const impactKind = approvalImpactKind(p.kind, p.name);
+          const readableSubject = approvalTarget(p);
           const isFocused = index === activeIndex;
           return (
             <div
@@ -789,9 +884,9 @@ export function Approvals({ pending, onApprove, onApproveAll, busy = false }: Ap
                     border: "1px solid var(--border)",
                   }}
                 >
-                  {p.kind ?? p.name}
+                  {approvalOperationLabel(impactKind)}
                 </span>
-                <span
+                {impactKind !== 'plan' && <span
                   style={{
                     fontFamily: "var(--font-mono)",
                     overflowWrap: "anywhere",
@@ -799,25 +894,52 @@ export function Approvals({ pending, onApprove, onApproveAll, busy = false }: Ap
                   }}
                 >
                   {readableSubject}
-                </span>
+                </span>}
               </div>
+              {impactKind === 'plan' && p.subject && (
+                <div data-testid={`approval-plan-${p.tool_call_id}`} className="xn-approval-plan"
+                  style={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere", maxHeight: 320, overflowY: "auto", color: "var(--fg)", lineHeight: 1.5 }}>
+                  {p.subject}
+                </div>
+              )}
+              <p className="xn-approval-impact" style={{ margin: 0, color: 'var(--fg-muted)' }}>
+                {approvalImpactDescription(impactKind)}{impactKind === 'external' && p.name !== (p.kind ?? p.name) ? ` ${tf('工具：{0}', [p.name])}` : ''}
+              </p>
               {p.preview && (
                 <ApprovalItemPreview preview={p.preview} toolCallId={p.tool_call_id} />
               )}
+              {failed.has(p.tool_call_id) && <p role="alert" className="xn-approval-error" style={{ margin: 0, color: "var(--danger-fg, var(--warn-fg))" }}>{tr("审批未完成，请重试。")}</p>}
               {onApprove && (
                 <div style={{ marginTop: 4, display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 8 }}>
                   <span className="xn-approval-shortcut" aria-hidden="true" title={tf("按数字键 {0} 快速批准", [index + 1])}>
                     {index + 1}
                   </span>
-                  {p.granted && <span className="xn-approval-granted" role="status">{tr("已批准，等待执行")}</span>}
-                  <Button
-                    variant="primary"
-                    size="sm"
-                    disabled={busy}
-                    onClick={() => void onApprove(p)}
-                  >
-                    {tr(busy ? "正在继续…" : p.granted ? "继续执行" : "批准并重试")}
-                  </Button>
+                  {p.waiting ? <>
+                    {/* ZCode PermissionDialog: the call waits in this turn; 允许 / 拒绝 answer it in place. */}
+                    <span className="xn-approval-waiting" role="status" data-testid={`approval-waiting-${p.tool_call_id}`}>{tr("等待确认")}</span>
+                    {onReject && <input
+                      type="text" className="xn-approval-feedback" maxLength={2000} disabled={blocked(p)}
+                      data-testid={`approval-feedback-${p.tool_call_id}`}
+                      aria-label={tr("拒绝理由（可选，会转告模型）")} placeholder={tr("拒绝理由（可选，会转告模型）")}
+                      value={feedback.get(p.tool_call_id) ?? ''}
+                      onKeyDown={event => { event.stopPropagation(); if (event.key === 'Enter') { event.preventDefault(); rejectOne(p); } }}
+                      onChange={event => { const value = event.target.value; setFeedback(previous => new Map(previous).set(p.tool_call_id, value)); }}
+                      style={{ flex: 1, minWidth: 0, fontSize: 12 }}
+                    />}
+                    {onReject && <Button variant="secondary" size="sm" disabled={blocked(p)} onClick={() => rejectOne(p)}>{tr("拒绝")}</Button>}
+                    {onAllowSession && !p.oneShot && <Button variant="secondary" size="sm" disabled={blocked(p)} title={tr("本会话内同样的调用不再询问；停止或关闭会话后失效")} onClick={() => allowSessionOne(p)}>{tr("允许本会话")}</Button>}
+                    <Button variant="primary" size="sm" disabled={blocked(p)} onClick={() => approveOne(p)}>{tr("允许")}</Button>
+                  </> : <>
+                    {p.granted && <span className="xn-approval-granted" role="status">{tr("已批准，等待执行")}</span>}
+                    <Button
+                      variant="primary"
+                      size="sm"
+                      disabled={busy}
+                      onClick={() => approveOne(p)}
+                    >
+                      {tr(busy ? "正在继续…" : p.granted ? "继续执行" : "批准并重试")}
+                    </Button>
+                  </>}
                 </div>
               )}
             </div>
@@ -895,6 +1017,13 @@ export type ComposerStartActions = {
   onModels?: () => void;
 };
 
+/** Recovery shown when an active composer cannot send because its model catalog is unavailable. */
+export type ComposerModelRecovery =
+  | { kind: "loading" }
+  | { kind: "error"; onRetry: () => void }
+  | { kind: "missing"; onConfigure: () => void }
+  | { kind: "blocked" };
+
 /** Shared autocomplete for the hero and conversation composer. */
 export function contextComposerSuggestions(
   text: string,
@@ -919,7 +1048,7 @@ export function contextComposerSuggestions(
     // /compact is a host command, not a user-defined one: it only appears while
     // the sessions plugin that implements it is effective.
     if (actions?.canCompact && "compact".startsWith(prefix) && !items.some((item) => item.token === "compact")) {
-      items.push({ kind: "command", token: "compact", description: tr("按预算压缩当前上下文") });
+      items.push({ kind: "command", token: "compact", description: tr("压缩当前对话（可附说明）") });
     }
     return items.slice(0, 8);
   }
@@ -1090,12 +1219,7 @@ export interface StorageLike {
 }
 
 export function getBrowserStorage(): StorageLike | null {
-  if (typeof window === "undefined") return null;
-  try {
-    return window.localStorage;
-  } catch {
-    return null;
-  }
+  return getWorkbenchStorage();
 }
 
 export const PROMPT_HISTORY_STORAGE_KEY_PREFIX = "xueness:chat-prompt-history:";
@@ -1139,6 +1263,8 @@ export function persistPromptHistoryEntries(
 export const COMPOSER_DRAFT_STORAGE_KEY_PREFIX = "xueness:composer-drafts:v1:";
 
 export type PersistedComposerDraft = {
+  draftId?: string;
+  attachmentOwner?: ComposerAttachmentOwner;
   text: string;
   goal?: boolean;
   selectedCapabilities?: string[];
@@ -1151,17 +1277,27 @@ export type PersistedComposerDraft = {
   updatedAt?: number;
   recoverableDrafts?: PersistedComposerDraft[];
   hadAttachments?: boolean;
+  attachmentRefs?: ReturnType<typeof parseStoredAttachmentRefs>;
+  editorState?: ComposerEditorState;
   deliveryUnconfirmed?: boolean;
   pendingSubmission?: PersistedComposerDraft;
 };
+
+function persistedEditorState(text: string, stored: unknown): ComposerEditorState | undefined {
+  return editorStateMatching(text, stored) ?? undefined;
+}
 
 export function restoredDraft(value: PersistedComposerDraft): ComposerDraftState {
   const recovered = value.recoverableDrafts?.map(item => restoredDraft({ ...item, recoverableDrafts: undefined, pendingSubmission: undefined })) ?? [];
   if (value.pendingSubmission) recovered.push(restoredDraft({ ...value.pendingSubmission, deliveryUnconfirmed: true,
     recoverableDrafts: undefined, pendingSubmission: undefined }));
-  return { ...emptyComposerDraft(value.text), goal: value.goal === true,
+  const attachmentRefs = parseStoredAttachmentRefs(value.attachmentRefs);
+  return { ...emptyComposerDraft(value.text), draftId: value.draftId || crypto.randomUUID(),
+    attachmentOwner: parseComposerAttachmentOwner(value.attachmentOwner), goal: value.goal === true,
     selectedCapabilities: value.selectedCapabilities ?? [],
     selectedContext: value.selectedContext ?? { files: [], sessions: [], skills: [], plugins: [] },
+    attachments: attachmentsFromRefs(attachmentRefs),
+    editorState: persistedEditorState(value.text, value.editorState),
     attachmentError: value.hadAttachments ? tr('重新打开后请重新添加附件。') : '',
     hadAttachments: value.hadAttachments === true, deliveryUnconfirmed: value.deliveryUnconfirmed === true,
     recoverableDrafts: recovered };
@@ -1171,10 +1307,14 @@ function readStoredDraft(value: unknown, includeRecovery = true): PersistedCompo
   if (!value || typeof value !== 'object' || Array.isArray(value) || !('text' in value) || typeof value.text !== 'string') return null;
   const input = value as PersistedComposerDraft;
   const strings = (items: unknown): string[] => Array.isArray(items) ? items.filter((item): item is string => typeof item === 'string') : [];
-  return { text: input.text, goal: input.goal === true, selectedCapabilities: strings(input.selectedCapabilities),
+  return { draftId: typeof input.draftId === 'string' ? input.draftId : undefined,
+    attachmentOwner: parseComposerAttachmentOwner(input.attachmentOwner), text: input.text, goal: input.goal === true, selectedCapabilities: strings(input.selectedCapabilities),
     selectedContext: { files: strings(input.selectedContext?.files), sessions: strings(input.selectedContext?.sessions),
       skills: strings(input.selectedContext?.skills), plugins: strings(input.selectedContext?.plugins) },
     ...(input.hadAttachments === true ? { hadAttachments: true } : {}),
+    ...(parseStoredAttachmentRefs(input.attachmentRefs).length
+      ? { attachmentRefs: parseStoredAttachmentRefs(input.attachmentRefs) } : {}),
+    ...(persistedEditorState(input.text, input.editorState) ? { editorState: persistedEditorState(input.text, input.editorState) } : {}),
     ...(input.deliveryUnconfirmed === true ? { deliveryUnconfirmed: true } : {}),
     ...(includeRecovery && input.pendingSubmission ? { pendingSubmission: readStoredDraft(input.pendingSubmission, false) ?? undefined } : {}),
     ...(includeRecovery && Array.isArray(input.recoverableDrafts) ? { recoverableDrafts: input.recoverableDrafts
@@ -1202,7 +1342,7 @@ export function readPersistedDraft(
 export function persistDraft(
   workspaceKey: string,
   scope: string,
-  draft: Pick<ComposerDraftState, "text" | "goal" | "selectedCapabilities" | "selectedContext" | "recoverableDrafts"> & Partial<Pick<ComposerDraftState, 'attachments' | 'pendingSubmission' | 'deliveryUnconfirmed' | 'hadAttachments'>>,
+  draft: Pick<ComposerDraftState, "text" | "goal" | "selectedCapabilities" | "selectedContext" | "recoverableDrafts"> & Partial<Pick<ComposerDraftState, 'attachments' | 'pendingSubmission' | 'deliveryUnconfirmed' | 'hadAttachments' | 'editorState' | 'draftId' | 'attachmentOwner'>>,
   storage: StorageLike | null = getBrowserStorage(),
 ): void {
   if (!storage) return;
@@ -1217,7 +1357,7 @@ export function persistDraft(
       } catch {}
     }
     const hasContent = Boolean(
-      draft.text.trim() ||
+      draft.text.trim() || editorStateHasContent(draft.editorState) ||
       draft.recoverableDrafts?.length || draft.attachments?.length || draft.pendingSubmission || draft.hadAttachments ||
       draft.goal ||
       draft.selectedCapabilities?.length ||
@@ -1229,15 +1369,25 @@ export function persistDraft(
     if (!hasContent) {
       delete file.scopes[scope];
     } else {
-      const snapshot = (item: typeof draft): PersistedComposerDraft => ({ text: item.text, goal: item.goal,
-        selectedCapabilities: item.selectedCapabilities, selectedContext: item.selectedContext,
-        hadAttachments: Boolean(item.attachments?.length || item.hadAttachments), deliveryUnconfirmed: item.deliveryUnconfirmed === true });
+      const snapshot = (item: typeof draft): PersistedComposerDraft => {
+        const editorState = persistedEditorState(item.text, item.editorState);
+        return { draftId: item.draftId, attachmentOwner: item.attachmentOwner, text: item.text, goal: item.goal,
+          selectedCapabilities: item.selectedCapabilities, selectedContext: item.selectedContext,
+          ...persistedAttachmentFields(item.attachments, item.hadAttachments),
+          ...(item.hadAttachments ? { hadAttachments: true } : {}),
+          ...(editorState ? { editorState } : {}),
+          deliveryUnconfirmed: item.deliveryUnconfirmed === true };
+      };
+      const editorState = persistedEditorState(draft.text, draft.editorState);
       file.scopes[scope] = {
+        draftId: draft.draftId, attachmentOwner: draft.attachmentOwner,
         text: draft.text,
         goal: draft.goal,
         selectedCapabilities: draft.selectedCapabilities,
         selectedContext: draft.selectedContext,
-        hadAttachments: Boolean(draft.attachments?.length || draft.hadAttachments),
+        ...persistedAttachmentFields(draft.attachments, draft.hadAttachments),
+        ...(draft.hadAttachments ? { hadAttachments: true } : {}),
+        ...(editorState ? { editorState } : {}),
         deliveryUnconfirmed: draft.deliveryUnconfirmed === true,
         recoverableDrafts: draft.recoverableDrafts?.map(snapshot),
         pendingSubmission: draft.pendingSubmission ? snapshot(draft.pendingSubmission.draft) : undefined,
@@ -1282,6 +1432,7 @@ export type ComposerProps = {
   /** Disable sending while keeping the prompt editable (for model/permission gates). */
   sendDisabled?: boolean;
   sendDisabledReason?: string;
+  modelRecovery?: ComposerModelRecovery;
   running?: boolean;
   queueWhenRunning?: boolean;
   guideWhenRunning?: boolean;
@@ -1301,7 +1452,7 @@ export type ComposerProps = {
   /** "hero" renders the centered new-task card; "docked" the bottom composer. */
   variant?: "hero" | "docked";
   autoFocus?: boolean;
-  inputRef?: React.Ref<HTMLTextAreaElement>;
+  inputRef?: React.Ref<HTMLElement>;
   /** Left side of the bottom row: mode/provider selects and other real controls. */
   footer?: React.ReactNode;
   /** Optional workspace/context controls shown inside the input surface. */
@@ -1322,15 +1473,31 @@ export type ComposerProps = {
    */
   minimal?: boolean;
   platform?: string;
+  /** Settings-owned overrides for sessions-scoped send/stop commands. */
+  shortcutBindings?: Record<string, string>;
+  /** sessions.rich_composer. When false, keep the textarea and inline attachments. */
+  richComposer?: boolean;
+  /** Active session id for attachment begin/commit. Omitted for a new task. */
+  attachmentSessionId?: string;
+  /** Workspace root the attachment store binds to. Required for committed refs. */
+  attachmentRoot?: string;
+  attachmentsEnabled?: boolean;
+  attachmentGeneration?: string | number;
+  attachmentTransport?: UploadTransport;
+  attachmentRemoteOwner?: RemoteAttachmentEndpoint;
 };
 
 export type ComposerDraftState = {
+  draftId?: string;
+  attachmentOwner?: ComposerAttachmentOwner;
   recoverableDrafts?: import('./composerRecovery').RecoverableComposerDraft[];
   pendingSubmission?: { id: string; draft: import('./composerRecovery').RecoverableComposerDraft };
   deliveryUnconfirmed?: boolean;
   hadAttachments?: boolean;
+  /** sessions.rich_composer structured document. Absent when degraded to plain text. */
+  editorState?: ComposerEditorState;
   text: string;
-  attachments: ComposerInput["attachments"];
+  attachments: ComposerAttachment[];
   goal: boolean;
   selectedCapabilities?: string[];
   selectedContext: Pick<ComposerInput, "files" | "sessions" | "skills" | "plugins">;
@@ -1341,6 +1508,7 @@ export type ComposerDraftState = {
 
 function emptyComposerDraft(text = ""): ComposerDraftState {
   return {
+    draftId: crypto.randomUUID(),
     text,
     attachments: [],
     goal: false,
@@ -1453,6 +1621,7 @@ export function Composer({
   disabled = false,
   sendDisabled = false,
   sendDisabledReason,
+  modelRecovery,
   running = false,
   queueWhenRunning = false,
   guideWhenRunning = false,
@@ -1479,6 +1648,14 @@ export function Composer({
   files = [],
   minimal = false,
   platform,
+  shortcutBindings = {},
+  richComposer = false,
+  attachmentSessionId,
+  attachmentRoot,
+  attachmentsEnabled = true,
+  attachmentGeneration = "default",
+  attachmentTransport,
+  attachmentRemoteOwner,
 }: ComposerProps) {
   const localDraftsRef = useRef<Map<string, ComposerDraftState>>(new Map());
   const [localFollowupMode, setLocalFollowupMode] = useState<FollowupMode>('guide');
@@ -1512,6 +1689,7 @@ export function Composer({
     }
   }
   const draft = draftsRef.current.get(scopedDraftKey)!;
+  if (!draft.draftId) draft.draftId = crypto.randomUUID();
   // State lives in a per-scope map so late handlers keep writing to the draft
   // they submitted, even after this component has switched to another session.
   void draftRenderVersion;
@@ -1527,7 +1705,8 @@ export function Composer({
     const nextDrafts = new Map(draftsRef.current);
     nextDrafts.set(scope, nextDraft);
     draftsRef.current = nextDrafts;
-    persistDraft(resolvedWorkspaceKey, draftKey, nextDraft);
+    const scopePrefix = `${resolvedWorkspaceKey}:`;
+    persistDraft(resolvedWorkspaceKey, scope.startsWith(scopePrefix) ? scope.slice(scopePrefix.length) : draftKey, nextDraft);
     notifyComposerDrafts(draftsRef);
     return nextDraft;
   };
@@ -1548,15 +1727,21 @@ export function Composer({
   };
   const setText = (value: string | ((previous: string) => string)) => updateCurrentDraft(current => {
     const nextText = typeof value === "function" ? value(current.text) : value;
-    if (nextText === current.text && !current.submissionError) return current;
-    return { ...current, text: nextText, submissionError: "" };
+    if (!richComposer) {
+      if (nextText === current.text && !current.submissionError && !current.editorState) return current;
+      return { ...current, text: nextText, editorState: undefined, submissionError: "" };
+    }
+    if (nextText === current.text && !current.submissionError && editorStateMatching(nextText, current.editorState)) return current;
+    const editorState = editorStateForPlainText(nextText) ?? undefined;
+    if (nextText === current.text && !current.submissionError && !editorState && !current.editorState) return current;
+    return { ...current, text: nextText, editorState, submissionError: "" };
   });
   const setGoal = (value: boolean | ((previous: boolean) => boolean)) => updateCurrentDraft(current => {
     const nextGoal = typeof value === "function" ? value(current.goal) : value;
     return nextGoal === current.goal ? current : { ...current, goal: nextGoal };
   });
-  const attachmentBusyRef = useRef(false);
-  const [attachmentBusy, setAttachmentBusy] = useState(false);
+  const [legacyAttachmentBusy, setLegacyAttachmentBusy] = useState(false);
+  const legacyAttachmentBusyRef = useRef(false);
   const [plusOpen, setPlusOpen] = useState(false);
   const [addSearch, setAddSearch] = useState('');
   const plusRef = useRef<HTMLDivElement | null>(null);
@@ -1565,6 +1750,11 @@ export function Composer({
   const attachInputRef = useRef<HTMLInputElement | null>(null);
   // Local handle for the helper buttons; external inputRef stays in sync.
   const localInputRef = useRef<HTMLTextAreaElement | null>(null);
+  const editorDomRef = useRef<HTMLDivElement | null>(null);
+  const localEditSignature = useRef("");
+  const pendingCaret = useRef<number | null>(null);
+  const surfaceRef = useRef({ scope: "", key: 0, signature: "", html: "", caret: 0 });
+  const wasTokenMode = useRef(false);
   const attachRef = (el: HTMLTextAreaElement | null) => {
     localInputRef.current = el;
     if (typeof inputRef === "function") inputRef(el);
@@ -1572,47 +1762,98 @@ export function Composer({
       (inputRef as React.MutableRefObject<HTMLTextAreaElement | null>).current = el;
     }
   };
-  const updateAttachments = (next: ComposerInput["attachments"]) => updateCurrentDraft(current =>
+  const updateAttachments = (next: ComposerAttachment[]) => updateCurrentDraft(current =>
     current.attachments === next ? current : { ...current, attachments: next, hadAttachments: false });
   const setAttachmentError = (message: string) => updateCurrentDraft(current =>
     current.attachmentError === message ? current : { ...current, attachmentError: message }, false);
   const setSubmissionError = (message: string) => updateCurrentDraft(current =>
     current.submissionError === message ? current : { ...current, submissionError: message }, false);
-  const addAttachmentFiles = async (filesToAdd: FileList | File[]) => {
+  const uploadOwner = draft.attachmentOwner ?? { remote: attachmentRemoteOwner, root: attachmentRoot ?? '', sessionId: attachmentSessionId,
+    draftId: draft.draftId ?? scopedDraftKey };
+  const uploadStore = useMemo(() => getComposerAttachmentUploadStore({ root: uploadOwner.root,
+    sessionId: uploadOwner.sessionId, draftKey: uploadOwner.draftId, remote: uploadOwner.remote }, attachmentTransport),
+    [uploadOwner.root, uploadOwner.sessionId, uploadOwner.draftId, JSON.stringify(uploadOwner.remote), attachmentTransport]);
+  const uploadEnabled = (!attachmentRemoteOwner || Boolean(attachmentTransport)) && richComposer && attachmentsEnabled && !disabled && Boolean(attachmentRoot);
+  const uploadItems = uploadStore.getSnapshot();
+  const ownerMismatch = Boolean((draft.attachments.length || draft.hadAttachments || uploadItems.length) && !attachmentOwnerMatches(draft.attachmentOwner, attachmentRoot, attachmentSessionId, attachmentRemoteOwner));
+  const unavailableAttachments = attachments.length > 0 && (!attachmentsEnabled || (!richComposer && attachments.some(item => item.ref)));
+  const attachmentBusy = legacyAttachmentBusy || uploadStore.hasUnready();
+  useEffect(() => {
+    if (!richComposer) return;
+    uploadStore.setDisposalGuard(id => composerReferenceIsOwned(draftsRef.current.values(), id));
+    // Initialize once. A retained manager may already contain completions from
+    // an unmounted editor; never replace those with an older persisted snapshot.
+    if (draft.hadAttachments && !uploadStore.hasUnready()) missingAttachmentDrafts.add(uploadOwner.draftId);
+    const retainedUploads = uploadStore.getSnapshot().length > 0;
+    if (!retainedUploads) uploadStore.syncReadyRefs(editorAttachmentRefs(draft.attachments));
+    const publish = () => {
+      for (const [key, value] of draftsRef.current) {
+        const next = reconcileComposerUploads(value, uploadOwner.draftId,
+          uploadStore.readyAttachments(), uploadStore.hasUnready() || missingAttachmentDrafts.has(uploadOwner.draftId));
+        if (next === value) continue;
+        draftsRef.current.set(key, next);
+        const prefix = `${resolvedWorkspaceKey}:`;
+        if (key.startsWith(prefix)) persistDraft(resolvedWorkspaceKey, key.slice(prefix.length), next);
+      }
+      notifyComposerDrafts(draftsRef);
+    };
+    // Keep persistence subscribed through remounts, until this manager is reused.
+    const key = uploadStore as object;
+    attachmentPublishers.get(key)?.();
+    attachmentPublishers.set(key, uploadStore.subscribe(publish));
+  }, [uploadStore, draftsRef, richComposer]);
+  useEffect(() => {
+    uploadStore.setContext({ enabled: uploadEnabled && !ownerMismatch, generation: attachmentGeneration });
+  }, [uploadStore, uploadEnabled, ownerMismatch, attachmentGeneration]);
+  const disposeRef = (ref: AttachmentRef | undefined, owner = uploadOwner) => {
+    if (!ref) return;
+    const refId = ref.id;
+    // An id collision must never turn a restored remote reference into local cleanup.
+    if (JSON.stringify(ref.remoteOwner ? { connectionId: ref.remoteOwner.connectionId, digest: ref.remoteOwner.digest, workspaceIdentity: ref.remoteOwner.workspaceIdentity } : null) !== JSON.stringify(owner.remote ?? null)) return;
+    deferComposerAttachmentRelease(owner, refId, () => composerReferenceIsOwned(draftsRef.current.values(), refId), owner.remote && JSON.stringify(owner.remote) !== JSON.stringify(attachmentRemoteOwner) ? undefined : attachmentTransport);
+  };
+  const removeAttachment = (index: number) => {
+    const removed = attachments[index];
+    const item = uploadStore.getSnapshot().find(item => item.ref?.id === removed?.ref?.id);
+    if (item) uploadStore.remove(item.id);
+    updateAttachments(attachments.filter((_, itemIndex) => itemIndex !== index));
+    disposeRef(removed?.ref);
+  };
+  const removeUpload = (id: string) => {
+    const removed = uploadStore.getSnapshot().find(item => item.id === id);
+    uploadStore.remove(id);
+    disposeRef(removed?.ref);
+  };
+  const addAttachmentFiles = async (filesToAdd: FileList | File[], origin: AttachmentOrigin = "file") => {
     const incoming = Array.from(filesToAdd);
-    if (incoming.length === 0 || disabled || running || attachmentBusyRef.current) return;
-    attachmentBusyRef.current = true;
-    setAttachmentBusy(true);
-    setAttachmentError("");
-    const currentAttachments = (draftsRef.current.get(scopedDraftKey) ?? emptyComposerDraft()).attachments;
-    let next = [...currentAttachments];
-    const initialCount = next.length;
-    let totalBytes = next.reduce((sum, item) => sum + composerAttachmentBytes(item.data), 0);
-    let rejected = false;
-    let failed = false;
-    for (const file of incoming) {
-      if (
-        next.length >= COMPOSER_ATTACHMENT_LIMITS.count ||
-        file.size > COMPOSER_ATTACHMENT_LIMITS.eachBytes ||
-        totalBytes + file.size > COMPOSER_ATTACHMENT_LIMITS.totalBytes
-      ) {
-        rejected = true;
-        continue;
-      }
-      try {
-        const data = await encodeComposerFile(file);
-        next = [...next, { name: file.name, mimeType: file.type || "application/octet-stream", data }];
-        totalBytes += file.size;
-      } catch {
-        failed = true;
-      }
+    if (!incoming.length || disabled || !attachmentsEnabled || running || ownerMismatch) return;
+    const uploadOrigin = origin === 'workspace' ? 'file' : origin;
+    if (richComposer) {
+      if (!attachmentRoot) { setAttachmentError(tr('附件未能写入会话，草稿已保留。')); return; }
+      updateCurrentDraft(current => ({ ...current, attachmentOwner: uploadOwner, attachmentError: '' }));
+      uploadStore.setContext({ enabled: uploadEnabled, generation: attachmentGeneration });
+      const result = uploadStore.enqueue(incoming, uploadOrigin);
+      if (result.rejected.length) setAttachmentError(tr('最多 8 个附件；图片单个 20 MiB，总量 64 MiB；其他文件最多 4 个，PDF/视频单个 2 MiB、合计 4 MiB，文本 64 KiB。'));
+      return;
     }
-    const added = next.slice(initialCount);
-    if (added.length > 0) updateCurrentDraft(current => ({ ...current, attachments: [...current.attachments, ...added] }));
-    if (rejected) setAttachmentError(tr("附件最多 4 个，单个不超过 2 MiB，总量不超过 4 MiB。"));
-    else if (failed) setAttachmentError(tr("读取附件失败，请重新选择。"));
-    attachmentBusyRef.current = false;
-    setAttachmentBusy(false);
+    // Plain composer compatibility. Transaction failures never enter this path.
+    if (legacyAttachmentBusyRef.current) return;
+    legacyAttachmentBusyRef.current = true; setLegacyAttachmentBusy(true);
+    const scope = scopedDraftKey;
+    try {
+      const existing = (draftsRef.current.get(scope) ?? emptyComposerDraft()).attachments;
+      const added: ComposerAttachment[] = [];
+      let total = existing.reduce((sum, item) => sum + composerAttachmentBytes(item.data), 0);
+      for (const file of incoming) {
+        if (existing.length + added.length >= COMPOSER_ATTACHMENT_LIMITS.count || file.size > COMPOSER_ATTACHMENT_LIMITS.eachBytes || total + file.size > COMPOSER_ATTACHMENT_LIMITS.totalBytes) {
+          setAttachmentError(tr('附件最多 4 个，单个不超过 2 MiB，总量不超过 4 MiB。')); continue;
+        }
+        const data = await encodeComposerFile(file);
+        added.push({ name: file.name, mimeType: file.type || 'application/octet-stream', data }); total += file.size;
+      }
+      updateDraftFor(scope, current => ({ ...current, attachments: [...current.attachments, ...added], hadAttachments: false }));
+    } catch { setAttachmentError(tr('读取附件失败，请重新选择。')); }
+    finally { legacyAttachmentBusyRef.current = false; setLegacyAttachmentBusy(false); }
   };
   const toggleContext = (mention: ComposerMention) => {
     const field = mention.kind === "file" ? "files" : mention.kind === "session" ? "sessions" : mention.kind === "skill" ? "skills" : "plugins";
@@ -1689,6 +1930,40 @@ export function Composer({
   const suggestionListId = useId();
   const plusMenuId = useId();
 
+  const matchedEditor = richComposer ? editorStateMatching(text, draft.editorState) : null;
+  const plainEditor = richComposer ? editorStateForPlainText(text) : null;
+  const tokenEditor = matchedEditor && editorHasAtomicNodes(matchedEditor) ? matchedEditor : null;
+  const structuredDraft = Boolean(richComposer && (tokenEditor || plainEditor));
+  let editorSurface = surfaceRef.current;
+  if (!tokenEditor) {
+    if (editorSurface.scope) {
+      editorSurface = { scope: "", key: 0, signature: "", html: "", caret: 0 };
+      surfaceRef.current = editorSurface;
+    }
+  } else {
+    const signature = editorStateSignature(tokenEditor);
+    const local = localEditSignature.current === signature;
+    if (local) {
+      localEditSignature.current = "";
+      if (editorSurface.signature !== signature) {
+        editorSurface = { ...editorSurface, signature };
+        surfaceRef.current = editorSurface;
+      }
+    } else if (editorSurface.scope !== scopedDraftKey || editorSurface.signature !== signature) {
+      const caret = pendingCaret.current ?? navigationLength(tokenEditor);
+      pendingCaret.current = null;
+      editorSurface = {
+        scope: scopedDraftKey,
+        key: editorSurface.scope === scopedDraftKey ? editorSurface.key + 1 : 0,
+        signature,
+        html: renderEditorHtml(tokenEditor),
+        caret,
+      };
+      surfaceRef.current = editorSurface;
+    }
+  }
+  const suggestionSource = tokenEditor ? navigationText(tokenEditor).replaceAll("\uFFFC", "\n") : text;
+  const suggestionCursor = tokenEditor ? (cursorOffset ?? navigationLength(tokenEditor)) : (cursorOffset ?? text.length);
   const trimmed = text.trim();
   const selectedContextCount = Object.values(selectedContext).reduce((sum, values) => sum + values.length, selectedCapabilities.length);
   const visibleCapabilities = capabilities.filter(item => matchesComposerSearch(addSearch,
@@ -1697,7 +1972,14 @@ export function Composer({
   const canOfferGoal = Boolean(startActions?.canGoal);
   const canOfferWorkflow = Boolean(startActions?.canWorkflow);
   const hasSendableContent = trimmed.length > 0 || attachments.length > 0 || selectedContextCount > 0;
-  const isSendDisabled = disabled || sendDisabled || queueBusy || Boolean(draft.pendingSubmission) || (running && !queueWhenRunning) || attachmentBusy || !hasSendableContent;
+  const materialRows = composerMaterialsForDraft(draft, richComposer, {
+    mentions: availableMentions,
+    capabilities,
+    uploads: uploadItems,
+    attachmentsEnabled,
+    ownerMismatch,
+  });
+  const isSendDisabled = disabled || sendDisabled || queueBusy || Boolean(draft.pendingSubmission) || (running && !queueWhenRunning) || attachmentBusy || unavailableAttachments || ownerMismatch || Boolean(draft.hadAttachments) || !hasSendableContent;
   // 停止/发送互斥（对标 ZCode showStopControl = canStop && !hasDraftToSubmit）：
   // 运行中且草稿为空时，停止按钮独占发送槽位；有草稿时显示排队发送键。
   // queueWhenRunning=false 时发送键在运行中没有排队语义，停止键始终保留。
@@ -1705,32 +1987,42 @@ export function Composer({
   const showStopControl = canStop && (!queueWhenRunning || !hasSendableContent);
   const showQueueControl = running && queueWhenRunning && hasSendableContent;
   const suggestions = !disabled && !suggestDismissed && historyIndexRef.current === null
-    ? contextComposerSuggestions(text, commands, availableMentions, {
+    ? contextComposerSuggestions(suggestionSource, commands, availableMentions, {
       canGoal: canOfferGoal,
       canWorkflow: canOfferWorkflow,
       canCompact: Boolean(startActions?.canCompact),
-    }, cursorOffset ?? text.length)
+    }, suggestionCursor)
     : [];
   const [activeSuggestion, setActiveSuggestion] = useState(0);
   const currentSuggestion = suggestions.length > 0 ? Math.min(activeSuggestion, suggestions.length - 1) : -1;
+  const tokenSignature = tokenEditor ? editorStateSignature(tokenEditor) : "";
+  useEffect(() => {
+    const tokens = tokenSignature.length > 0;
+    if (wasTokenMode.current && !tokens) localInputRef.current?.focus();
+    wasTokenMode.current = tokens;
+  }, [tokenSignature]);
 
   useEffect(() => {
     if (!running || !onStop || stopping) return;
     const onWindowKeyDown = (event: KeyboardEvent) => {
+      // Custom stop bindings are composer-only. Escape outside the editor belongs
+      // to the focused leaf, never the first running composer's document listener.
       if (event.key !== "Escape" || event.defaultPrevented || event.repeat || isImeCompositionKey(event)) return;
+      const pane = (editorDomRef.current ?? localInputRef.current)?.closest<HTMLElement>('[data-pane-focused]');
+      if (pane && (pane.hidden || pane.dataset.paneFocused !== 'true')) return;
       const target = event.target as HTMLElement | null;
       if (target?.closest?.("textarea, input, select, [contenteditable='true']")) return;
       if (
         plusOpen ||
         suggestions.length > 0 ||
-        document.querySelector('[role="dialog"], [aria-modal="true"], .xn-composer-toolbar__mode[open], .xn-composer-toolbar__model[open]')
+        document.querySelector('[role="dialog"], [role="menu"], [aria-modal="true"], .xn-composer-toolbar__mode[open], .xn-composer-toolbar__model[open]')
       ) return;
       event.preventDefault();
       onStop();
     };
     document.addEventListener("keydown", onWindowKeyDown);
     return () => document.removeEventListener("keydown", onWindowKeyDown);
-  }, [onStop, plusOpen, running, stopping, suggestions.length]);
+  }, [onStop, platform, plusOpen, running, shortcutBindings, stopping, suggestions.length]);
 
   // Keep the input compact for short prompts and let it grow for longer ones.
   useEffect(() => {
@@ -1754,8 +2046,46 @@ export function Composer({
     return () => observer.disconnect();
   }, [text, variant]);
 
+  const readSelectionOffset = () => {
+    if (tokenEditor && editorDomRef.current) return readEditorCursor(editorDomRef.current);
+    return localInputRef.current?.selectionStart ?? cursorOffset ?? text.length;
+  };
+  const commitStructured = (state: ComposerEditorState, cursor: number, local: boolean) => {
+    const previous = parseComposerEditorState(draftsRef.current.get(scopedDraftKey)?.editorState);
+    if (local) localEditSignature.current = editorStateSignature(state);
+    else pendingCaret.current = cursor;
+    updateCurrentDraft(current => ({
+      ...current,
+      text: sendableText(state),
+      editorState: state,
+      selectedContext: contextAfterEditorEdit(current.selectedContext, previous, state),
+      submissionError: "",
+    }));
+    setCursorOffset(cursor);
+  };
   const acceptSuggestion = (suggestion: ContextComposerSuggestion) => {
-    const cursor = localInputRef.current?.selectionStart ?? cursorOffset ?? text.length;
+    const cursor = readSelectionOffset();
+    if (richComposer) {
+      const base = editorStateMatching(text, draftsRef.current.get(scopedDraftKey)?.editorState) ?? editorStateForPlainText(text);
+      const applied = base ? applyEditorSuggestion(base, cursor, suggestion) : null;
+      if (applied) {
+        if (suggestion.kind === "goal") {
+          if (startActions?.onGoal) startActions.onGoal();
+          else setGoal(current => !current);
+        } else if (suggestion.kind === "workflow") startActions?.onWorkflow();
+        else if (suggestion.kind !== "command") addContext(selectedMention(suggestion.kind, suggestion.token));
+        commitStructured(applied.state, applied.cursor, false);
+        setSuggestDismissed(false);
+        setActiveSuggestion(0);
+        if (!editorHasAtomicNodes(applied.state)) {
+          setTimeout(() => {
+            localInputRef.current?.focus();
+            try { localInputRef.current?.setSelectionRange(applied.cursor, applied.cursor); } catch { /* The structured surface has no selection range. */ }
+          }, 0);
+        }
+        return;
+      }
+    }
     let nextText = text;
     let nextCursor = cursor;
 
@@ -1806,16 +2136,10 @@ export function Composer({
     if (isSendDisabled || draftsRef.current.get(scopedDraftKey)?.pendingSubmission || !onSend) return;
     setSubmissionError("");
     const submittedDraft = draftsRef.current.get(scopedDraftKey) ?? emptyComposerDraft(defaultValue);
+    if (uploadStore.hasUnready() || legacyAttachmentBusyRef.current || submittedDraft.hadAttachments || unavailableAttachments ||
+      (submittedDraft.attachments.length > 0 && !attachmentOwnerMatches(submittedDraft.attachmentOwner, attachmentRoot, attachmentSessionId, attachmentRemoteOwner))) return;
     const submittedRevision = submittedDraft.revision;
-    const draft: ComposerInput = {
-      attachments: submittedDraft.attachments,
-      files: submittedDraft.selectedContext.files,
-      sessions: submittedDraft.selectedContext.sessions,
-      skills: submittedDraft.selectedContext.skills,
-      plugins: submittedDraft.selectedContext.plugins,
-      capabilities: submittedDraft.selectedCapabilities ?? [],
-      goal: submittedDraft.goal,
-    };
+    const draft = composerInputForDraft(submittedDraft, richComposer);
     const ticket = crypto.randomUUID();
     const submittedText = submittedDraft.text.trim();
     if (submittedText) {
@@ -1858,14 +2182,62 @@ export function Composer({
       const delivery = running && queueWhenRunning ? requestedDelivery ?? followupDelivery(effectiveFollowupMode) : undefined;
       const sent = await onSend(submittedDraft.text.trim(), draft, acknowledge, delivery);
       if (sent === false) restore();
-      else acknowledge();
+      else {
+        acknowledge();
+
+      }
     } catch (error) {
       restore(error instanceof Error ? error.message : tr("发送失败，草稿已保留。"), error instanceof DeliveryUnconfirmedError);
-    } finally { release(); }
+    } finally {
+      release();
+      if (accepted) {
+        for (const ref of editorAttachmentRefs(submittedDraft.attachments)) disposeRef(ref, submittedDraft.attachmentOwner ?? uploadOwner);
+        if (submittedDraft.draftId && !composerDraftIdentityIsOwned(draftsRef.current.values(), submittedDraft.draftId)) {
+          uploadStore.syncReadyRefs([]);
+          attachmentPublishers.get(uploadStore)?.(); attachmentPublishers.delete(uploadStore);
+          uploadStore.invalidate();
+        }
+      }
+    }
   };
 
-  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLElement>) => {
     const isComposing = compositionActiveRef.current || isImeCompositionKey(e);
+    if (tokenEditor && !isComposing && (e.key === "Backspace" || e.key === "Delete")) {
+      const edited = deleteEditorAtom(tokenEditor, readSelectionOffset(), e.key === "Backspace" ? "backspace" : "delete");
+      if (edited) {
+        e.preventDefault();
+        commitStructured(edited.state, edited.cursor, false);
+        return;
+      }
+    }
+    if (e.defaultPrevented || e.repeat) return;
+    const newlineBinding = resolveShortcutBinding("insert-newline", shortcutBindings);
+    if (!isComposing && matchesShortcut(e, newlineBinding, platform) && suggestions.length === 0) {
+      e.preventDefault();
+      const cursor = readSelectionOffset();
+      if (tokenEditor) {
+        const inserted = insertEditorText(tokenEditor, cursor, "\n");
+        if (inserted) commitStructured(inserted.state, inserted.cursor, false);
+      } else {
+        const end = localInputRef.current?.selectionEnd ?? cursor;
+        setText(text.slice(0, cursor) + "\n" + text.slice(end));
+        requestAnimationFrame(() => localInputRef.current?.setSelectionRange(cursor + 1, cursor + 1));
+      }
+      return;
+    }
+    const sendBinding = resolveShortcutBinding("send-message", shortcutBindings);
+    const stopBinding = resolveShortcutBinding("stop-generation", shortcutBindings);
+    if (!isComposing && matchesShortcut(e, sendBinding, platform) && suggestions.length === 0) {
+      e.preventDefault();
+      void handleSend();
+      return;
+    }
+    if (!isComposing && running && onStop && !stopping && matchesShortcut(e, stopBinding, platform)) {
+      e.preventDefault();
+      onStop();
+      return;
+    }
     if (e.key === "Escape") {
       if (isComposing) return;
       e.preventDefault();
@@ -1911,7 +2283,7 @@ export function Composer({
         setActiveSuggestion((currentSuggestion - 1 + suggestions.length) % suggestions.length);
       } else if (!e.shiftKey && !e.ctrlKey && !e.metaKey && !e.altKey) {
         const entries = readPromptHistoryEntries(resolvedWorkspaceKey);
-        if (historyIndexRef.current === null && text.length === 0) {
+        if (historyIndexRef.current === null && text.length === 0 && !tokenEditor) {
           savedDraftTextRef.current = text;
           const result = navigatePromptHistory(entries, null, "up");
           if (result.shouldHandle) {
@@ -1947,8 +2319,19 @@ export function Composer({
       } else if (intent === "send") {
         e.preventDefault();
         void handleSend();
+      } else if (tokenEditor && e.key === "Enter" && !isComposing) {
+        e.preventDefault();
+        const cursor = readSelectionOffset();
+        const inserted = insertEditorText(tokenEditor, cursor, "\n");
+        if (inserted) commitStructured(inserted.state, inserted.cursor, false);
+        else degradeToTextarea((editorDomRef.current?.textContent ?? text).replace(/\u200B/g, ""));
       }
     }
+  };
+  const degradeToTextarea = (fallback: string) => {
+    localEditSignature.current = "";
+    pendingCaret.current = null;
+    updateCurrentDraft(current => ({ ...current, text: fallback, editorState: undefined, submissionError: "" }));
   };
 
   const handlePasteEvent = (event: React.ClipboardEvent) => {
@@ -1956,7 +2339,7 @@ export function Composer({
     if (pastedFiles.length > 0) {
       event.preventDefault();
       event.stopPropagation();
-      void addAttachmentFiles(pastedFiles);
+      void addAttachmentFiles(pastedFiles, "paste");
     }
   };
 
@@ -1966,15 +2349,28 @@ export function Composer({
     if (files.length > 0) {
       event.preventDefault();
       event.stopPropagation();
-      void addAttachmentFiles(files);
+      void addAttachmentFiles(files, "drop");
     }
   };
+
+  const attachmentChipShell = attachments.map((attachment, index) => (
+    <span className="xn-composer__context-chip" key={(attachment.ref?.id ?? attachment.name) + ":" + index}
+      data-testid="composer-attachment-chip" data-attachment-origin={attachment.ref?.origin}>
+      <span>{attachment.name}</span>
+      <button type="button" aria-label={tf("移除附件：{0}", [attachment.name])} onClick={() => removeAttachment(index)}>
+        <IconX size={12} />
+      </button>
+    </span>
+  ));
+  const previewChips = Boolean(richComposer && attachmentRoot && attachments.length > 0);
 
   return (
     <div className={`xn-composer-region xn-composer-region--${variant}`}>
       <form
       aria-label={tr("消息编写器")}
       className={`xn-composer xn-composer--${variant}${topContent ? " xn-composer--with-top-content" : ""}`}
+      data-rich-composer={richComposer ? "true" : "false"}
+      data-editor={tokenEditor ? "tokens" : structuredDraft ? "text" : "textarea"}
       data-drag-over={isDraggingOver ? "true" : undefined}
       onSubmit={(e) => {
         e.preventDefault();
@@ -2006,7 +2402,7 @@ export function Composer({
         type="file"
         multiple
         hidden
-        disabled={disabled || attachmentBusy}
+        disabled={disabled || !attachmentsEnabled || legacyAttachmentBusy}
         aria-label={tr("添加附件")}
         data-testid="composer-attachment-input"
         onChange={(event) => {
@@ -2038,7 +2434,7 @@ export function Composer({
           ))}
         </ul>
       )}
-      {(goal || attachments.length > 0 || selectedContextCount > 0) && (
+      {(goal || attachments.length > 0 || uploadItems.length > 0 || selectedContextCount > 0) && (
         <div className="xn-composer__chips" aria-label={tr("已添加的上下文")} data-testid="composer-selected-context" aria-live="polite" aria-relevant="additions removals">
           {selectedCapabilities.map(id => {
             const capability = capabilities.find(item => item.id === id);
@@ -2066,38 +2462,110 @@ export function Composer({
               );
             });
           })}
-          {attachments.map((attachment, index) => (
-            <span className="xn-composer__context-chip" key={attachment.name + ":" + index} data-testid="composer-attachment-chip">
-              <span>{attachment.name}</span>
-              <button
-                type="button"
-                aria-label={tf("移除附件：{0}", [attachment.name])}
-                onClick={() => updateAttachments(attachments.filter((_, itemIndex) => itemIndex !== index))}
-              ><IconX size={12} /></button>
+          {richComposer && uploadItems.length > 0 ? uploadItems.map(item => (
+            <span className="xn-composer__context-chip" key={item.id} data-testid="composer-upload-chip" data-upload-state={item.state} title={item.error}>
+              {item.state === 'ready' && item.ref ? <React.Suspense fallback={<span>{item.name}</span>}>
+                <ComposerAttachmentChips attachments={attachmentsFromRefs([item.ref])} enabled={uploadEnabled}
+                  root={uploadOwner.root} sessionId={uploadOwner.sessionId} onRemove={() => removeUpload(item.id)} />
+              </React.Suspense> : <span>{item.name}</span>}
+              <span role="status">{item.state === 'queued' ? tr('附件排队中') : item.state === 'uploading' ? `${tr('附件上传中')} ${Math.round(item.progress)}%` : item.state === 'failed' ? tr('附件上传失败') : tr('附件已就绪')}</span>
+              {item.state === 'uploading' && <progress max={item.size || 1} value={item.uploadedBytes} aria-label={item.name} />}
+              {item.state === 'failed' && <button type="button" disabled={!uploadEnabled || ownerMismatch} onClick={() => uploadStore.retry(item.id)}>{tr('重试附件')}</button>}
+              {item.state !== 'ready' && <button type="button" aria-label={tf('移除附件：{0}', [item.name])} onClick={() => removeUpload(item.id)}>{item.state === 'uploading' || item.state === 'queued' ? tr('取消') : <IconX size={12} />}</button>}
             </span>
-          ))}
+          )) : previewChips ? (
+            <React.Suspense fallback={attachmentChipShell}>
+              <ComposerAttachmentChips
+                attachments={attachments}
+                enabled={richComposer}
+                root={attachmentRoot}
+                sessionId={attachmentSessionId}
+                onRemove={removeAttachment}
+              />
+            </React.Suspense>
+          ) : attachmentChipShell}
         </div>
       )}
-      {attachmentBusy && <div className="xn-composer__status" role="status">{tr("正在读取附件...")}</div>}
+      <ComposerMaterialManifest materials={materialRows} />
+      {ownerMismatch && <div className="xn-composer__error" role="alert">{tr("附件属于原草稿，请移除后重新添加。")}</div>}
+      {legacyAttachmentBusy && <div className="xn-composer__status" role="status">{tr("正在读取附件...")}</div>}
       {attachmentError && <div className="xn-composer__error" role="alert">{attachmentError}</div>}
+      {draft.hadAttachments && !uploadStore.hasUnready() && <button type="button" onClick={() => { missingAttachmentDrafts.delete(uploadOwner.draftId); updateCurrentDraft(current => ({ ...current, hadAttachments: false, attachmentError: '' })); }}>{tr('移除未恢复附件')}</button>}
       {selectedCapabilities.length > 0 && <div className="xn-composer__status" role="status" data-testid="composer-capability-hint">{tr('已添加能力。描述具体需求后发送，即可使用。')}</div>}
-      {sendDisabled && (hasSendableContent || goal) && <div className="xn-composer__status xn-composer__setup" role="status" data-testid="composer-send-unavailable">
+      {sendDisabled && (hasSendableContent || goal || modelRecovery) && <div className="xn-composer__status xn-composer__setup" role="status" aria-live="polite" data-testid="composer-send-unavailable">
         <span>{sendDisabledReason || tr('选择或配置模型后即可发送。')}</span>
-        {startActions?.onModels && <button type="button" onClick={startActions.onModels}>{tr('配置模型')}</button>}
+        {modelRecovery?.kind === "loading" && <button type="button" data-testid="composer-model-recovery-loading" disabled aria-busy="true">{tr('正在加载…')}</button>}
+        {modelRecovery?.kind === "error" && <button type="button" data-testid="composer-model-recovery-retry" onClick={modelRecovery.onRetry}>{tr('重试')}</button>}
+        {modelRecovery?.kind === "missing" && <button type="button" data-testid="composer-model-recovery-configure" onClick={modelRecovery.onConfigure}>{tr('配置模型')}</button>}
+        {!modelRecovery && startActions?.onModels && <button type="button" onClick={startActions.onModels}>{tr('配置模型')}</button>}
       </div>}
       {submissionError && <div className="xn-composer__error" role="alert">{submissionError}</div>}
       {draft.deliveryUnconfirmed && <div className="xn-composer__error" role="status">{tr('消息接收状态暂时无法确认，请先查看会话与队列再重试。')}</div>}
-      {draft.pendingSubmission && <div className="xn-composer-recovery" data-testid="composer-sending" role="status">
+      {draft.pendingSubmission && <div className="xn-composer-recovery xn-composer-recovery--sending" data-testid="composer-sending" role="status">
         <span>{tr('正在发送…')}</span>
         <p className="xn-composer-recovery__preview">{draft.pendingSubmission.draft.text || tr('附件与上下文')}</p>
       </div>}
       <ComposerRecoveryPanel drafts={draft.recoverableDrafts ?? []}
+        references={availableMentions}
+        capabilities={capabilities}
+        attachmentState={recovered => !recovered.attachmentOwner ? 'unknown-scope'
+          : attachmentOwnerMatches(recovered.attachmentOwner, attachmentRoot, attachmentSessionId, attachmentRemoteOwner) ? 'available' : 'different-scope'}
         onRestore={index => { updateCurrentDraft(current => recoverComposerDraft(current, index)); localInputRef.current?.focus(); }}
-        onDiscard={index => updateCurrentDraft(current => ({ ...current,
-          recoverableDrafts: current.recoverableDrafts?.filter((_, position) => position !== index) }))} />
-      <textarea
+        onDiscard={index => {
+          const discarded = draftsRef.current.get(scopedDraftKey)?.recoverableDrafts?.[index];
+          if (discarded && hasUnscopedComposerAttachments(discarded)) {
+            setAttachmentError(tr('无法确认原附件的归属范围，已保留恢复草稿。'));
+            return;
+          }
+          updateCurrentDraft(current => ({ ...current,
+            recoverableDrafts: current.recoverableDrafts?.filter((_, position) => position !== index) }));
+          if (!discarded) return;
+          const owner = discarded.attachmentOwner;
+          if (owner && !composerDraftIdentityIsOwned(draftsRef.current.values(), owner.draftId)) {
+            const manager = getComposerAttachmentUploadStore({ root: owner.root, sessionId: owner.sessionId, draftKey: owner.draftId, remote: owner.remote });
+            manager.setDisposalGuard(id => composerReferenceIsOwned(draftsRef.current.values(), id));
+            for (const item of manager.getSnapshot()) manager.remove(item.id);
+            attachmentPublishers.get(manager)?.();
+            attachmentPublishers.delete(manager);
+            manager.invalidate();
+            for (const ref of editorAttachmentRefs(discarded.attachments)) disposeRef(ref, owner);
+          }
+        }} />
+      {tokenEditor ? <ComposerStructuredEditor
+        html={editorSurface.html}
+        resetKey={editorSurface.key}
+        caret={editorSurface.caret}
+        disabled={disabled}
+        label={tr("输入消息或指令...")}
+        describedBy={minimal ? undefined : `${suggestionListId}-keyboard-help`}
+        controls={suggestions.length ? suggestionListId : undefined}
+        expanded={suggestions.length > 0}
+        activeDescendant={currentSuggestion >= 0 ? `${suggestionListId}-option-${currentSuggestion}` : undefined}
+        editorRef={element => {
+          editorDomRef.current = element;
+          if (typeof inputRef === "function") inputRef(element);
+          else if (inputRef && typeof inputRef === "object") {
+            (inputRef as React.MutableRefObject<HTMLElement | null>).current = element;
+          }
+        }}
+        onLocalChange={(state, cursor) => commitStructured(state, cursor, true)}
+        onDegrade={degradeToTextarea}
+        onKeyDown={handleKeyDown}
+        onPaste={handlePasteEvent}
+        onDrop={handleDropEvent}
+        onDragOver={event => {
+          if (isFileDragEvent(event.dataTransfer)) {
+            event.preventDefault();
+            event.dataTransfer.dropEffect = "copy";
+          }
+        }}
+        onCompositionStart={() => { compositionActiveRef.current = true; }}
+        onCompositionEnd={() => { deferCompositionEnd(() => { compositionActiveRef.current = false; }); }}
+        onCursor={setCursorOffset}
+      /> : <textarea
         ref={attachRef}
         className="xn-composer__input"
+        data-editor={structuredDraft ? "text" : "textarea"}
         value={text}
         onChange={(e) => {
           setText(e.target.value);
@@ -2140,7 +2608,7 @@ export function Composer({
         aria-expanded={suggestions.length > 0}
         aria-activedescendant={currentSuggestion >= 0 ? `${suggestionListId}-option-${currentSuggestion}` : undefined}
         aria-describedby={minimal ? undefined : `${suggestionListId}-keyboard-help`}
-      />
+      />}
       <div className="xn-composer__row">
         <div className="xn-composer__tools">
           {<div className="xn-composer__actions" role="group" aria-label={tr("输入辅助")}>
@@ -2153,7 +2621,7 @@ export function Composer({
                 aria-label={tr("添加附件")}
                 title={tr("添加附件")}
                 data-testid="composer-attachment"
-                disabled={disabled || attachmentBusy}
+                disabled={disabled || !attachmentsEnabled || legacyAttachmentBusy}
                 onClick={openAttachmentPicker}
               >
                 <IconPaperclip size={16} />
@@ -2200,7 +2668,7 @@ export function Composer({
                     aria-label={tr('搜索能力或上下文')} placeholder={tr('搜索能力或上下文')}
                     onChange={event => setAddSearch(event.target.value)} /></div>
                   <div className="xn-composer__plus-heading">{tr("添加")}</div>
-                  <button type="button" role="menuitem" disabled={attachmentBusy} onClick={openAttachmentPicker}>
+                  <button type="button" role="menuitem" disabled={!attachmentsEnabled || legacyAttachmentBusy} onClick={openAttachmentPicker}>
                     <IconPaperclip size={16} />{tr("附件")}
                   </button>
                   {canOfferGoal && (
@@ -2478,6 +2946,7 @@ export function XuenessWorkbench({
   onRefresh,
   composerDisabled = false,
 }: XuenessWorkbenchProps) {
+  const composerInputRef = useRef<HTMLElement | null>(null);
   const liveText = activeSession?.streaming?.text ?? "";
   const duplicateLiveText = Boolean(liveText && timelineRows.some(row => row.kind === "assistant" && row.text === liveText));
   const visibleRows: TimelineRow[] = liveText && !duplicateLiveText
@@ -2538,10 +3007,13 @@ export function XuenessWorkbench({
 
           <div style={{ flex: 1, overflowY: "auto", display: "flex", flexDirection: "column" }}>
             <Timeline rows={visibleRows} />
-            {activeSession?.streaming?.status === "interrupted" && liveText && <p role="status">{tr("输出已中断，已保留收到的内容。")}</p>}
+            {activeSession?.streaming?.status === "interrupted" && <SessionRecoveryNotice kind="interrupted"
+              reason={tr(liveText ? '本轮已停止，已保留收到的内容。' : '本轮已停止，可以继续补充。')}
+              actionLabel={tr('接着做')} onAction={() => composerInputRef.current?.focus()} />}
           </div>
 
           <Composer
+            inputRef={composerInputRef}
             onSend={onSend}
             disabled={composerDisabled || !activeSession}
           />

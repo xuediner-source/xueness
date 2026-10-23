@@ -7,3 +7,11 @@
 .xn-composer-recovery__error { color: var(--fg-muted); overflow-wrap: anywhere; }
 .xn-composer-recovery button { background: transparent; color: inherit; border: 1px solid var(--border); border-radius: 5px; padding: 4px 8px; margin: 6px 8px 0 0; cursor: pointer; }
 .xn-composer-recovery button:focus-visible, .xn-composer-recovery summary:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
+/* 正在发送：本机确认通常不到 0.5 s。先不占位，0.6 s 后仍未确认才展开成一行，
+   避免每次发送时输入框先向上鼓起约 86px、再缩回（两次布局跳动）。等待期间 display: none，
+   连输入框的 12px 行间距也不占。 */
+.xn-composer-recovery--sending { display: flex; align-items: baseline; gap: 8px; overflow: hidden; color: var(--fg-muted); animation: xn-composer-sending-reveal .16s ease-out .6s both; }
+.xn-composer-recovery--sending > span { flex: none; }
+.xn-composer-recovery--sending .xn-composer-recovery__preview { flex: 1 1 auto; min-width: 0; max-height: none; margin: 0; overflow: hidden; color: var(--fg); white-space: nowrap; text-overflow: ellipsis; }
+@keyframes xn-composer-sending-reveal { from { display: none; max-height: 0; margin-bottom: 0; padding-block: 0; border-width: 0; opacity: 0; } to { max-height: 40px; opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .xn-composer-recovery--sending { animation-duration: 0s; } }

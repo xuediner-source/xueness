@@ -51,3 +51,9 @@ export function formatConversationWorkDuration(
 
   return parts.slice(0, 2).join(" ");
 }
+
+/** Wall-clock interval only; missing/reversed/non-finite evidence is unknown. */
+export function conversationElapsedInterval(start?: number, end?: number): number | undefined {
+  return start !== undefined && end !== undefined && Number.isFinite(start) && Number.isFinite(end) && end >= start
+    ? end - start : undefined;
+}

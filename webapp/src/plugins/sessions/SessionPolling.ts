@@ -1,6 +1,6 @@
 import { useEffect } from "react";
 
-type SessionPollSchedule = {
+export type SessionPollSchedule = {
   setTimeout(callback: () => void, delay: number): unknown;
   clearTimeout(handle: unknown): void;
 };
@@ -15,7 +15,7 @@ export type SessionPollingOptions = {
   hiddenDelayMs?: number;
 };
 
-function browserVisibility(): boolean {
+export function browserVisibility(): boolean {
   return typeof document === "undefined" || document.visibilityState === "visible";
 }
 
@@ -24,7 +24,7 @@ export function sessionPollingNetworkAvailable(online: boolean, hostname: string
   return online || ['localhost', '127.0.0.1', '[::1]', '::1'].includes(hostname);
 }
 
-function subscribeBrowserVisibility(listener: () => void): () => void {
+export function subscribeBrowserVisibility(listener: () => void): () => void {
   if (typeof document === "undefined") return () => undefined;
   document.addEventListener("visibilitychange", listener);
   window.addEventListener("focus", listener);
@@ -38,13 +38,17 @@ function subscribeBrowserVisibility(listener: () => void): () => void {
   };
 }
 
+export function browserNetworkAvailable(): boolean {
+  return sessionPollingNetworkAvailable(typeof navigator === 'undefined' || navigator.onLine !== false,
+    typeof window === 'undefined' ? '' : window.location.hostname);
+}
+
 /** Polls sequentially, slows background tabs, and runs promptly when they return. */
 export function startSessionPolling({
   refresh,
   isVisible = browserVisibility,
   subscribeVisibility = subscribeBrowserVisibility,
-  isOnline = () => sessionPollingNetworkAvailable(typeof navigator === 'undefined' || navigator.onLine !== false,
-    typeof window === 'undefined' ? '' : window.location.hostname),
+  isOnline = browserNetworkAvailable,
   schedule = { setTimeout: (callback, delay) => window.setTimeout(callback, delay), clearTimeout: handle => window.clearTimeout(handle as number) },
   visibleDelayMs = 1000,
   hiddenDelayMs = 5000,

@@ -1,0 +1,61 @@
+{
+  "kind": "packaged-project-menu-six-actions",
+  "sourceRoot": "E:\\models\\xueness-win-20261016\\xueness",
+  "buildRoot": "E:\\models\\xueness-win-20261016\\xueness",
+  "data": "E:\\models\\Xueness-ux-20261017-v018\\isolated-project-menu-12xGfk",
+  "workspace": "E:\\models\\Xueness-ux-20261017-v018\\isolated-project-menu-12xGfk\\demo-project",
+  "screenshots": [
+    "project-menu-all-actions.png",
+    "project-section-flyout-narrow.png",
+    "project-archive-confirmation.png",
+    "project-removed.png",
+    "project-restored-after-restart.png"
+  ],
+  "errors": [],
+  "httpErrors": [],
+  "modelRuns": 0,
+  "checks": {
+    "fixtureSessionPinned": true,
+    "sixMenuActionsVisible": true,
+    "pinPersisted": true,
+    "editPersisted": true,
+    "sectionFlyoutOpensOnHoverAndFitsNarrowViewport": true,
+    "sectionPersisted": true,
+    "explorerBridgeUsedWithoutOpeningExplorer": true,
+    "sessionArchivedAndJournalRetained": true,
+    "removeHidesProjectAndKeepsFileAndSession": true,
+    "metadataRestoredAfterUnhide": true
+  },
+  "firstLaunch": {
+    "pid": 39644,
+    "url": "http://127.0.0.1:64219/?xuenessDesktop=1"
+  },
+  "sessionId": "e0ecb3c8c9e8444dbb8596feeb40ba83",
+  "sectionFlyoutGeometry": {
+    "left": 4,
+    "right": 476,
+    "top": 479.6000061035156,
+    "bottom": 572.2000045776367,
+    "width": 472,
+    "height": 92.5999984741211,
+    "viewportWidth": 480,
+    "viewportHeight": 760,
+    "pageWidth": 480,
+    "position": "fixed"
+  },
+  "sectionId": "10b2f025-0d95-4b8b-8078-bb9f39b86e83",
+  "explorerCallPaths": [
+    "E:\\models\\Xueness-ux-20261017-v018\\isolated-project-menu-12xGfk\\demo-project"
+  ],
+  "restartLaunch": {
+    "pid": 5592,
+    "url": "http://127.0.0.1:61179/?xuenessDesktop=1"
+  },
+  "persistedAfterRestart": {
+    "hidden": true,
+    "pinned": true,
+    "label": "Acceptance Project",
+    "section": "Acceptance Section"
+  },
+  "passed": true
+}

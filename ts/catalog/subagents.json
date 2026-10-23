@@ -1,0 +1,105 @@
+{
+  "id": "subagents",
+  "name": "子代理",
+  "description": "只读子任务、进度与协作取消。",
+  "version": "1.0.0",
+  "apiVersion": 1,
+  "defaultEnabled": true,
+  "dependencies": [
+    "sessions",
+    "files"
+  ],
+  "tools": [
+    "task",
+    "task_collect",
+    "task_resume",
+    "task_send_message"
+  ],
+  "commands": [],
+  "panels": [
+    "capabilities",
+    "subagents"
+  ],
+  "resources": [
+    "subagents"
+  ],
+  "capabilities": [
+    "network"
+  ],
+  "httpFamilies": [
+    "sessions/*/tasks",
+    "resources/subagents"
+  ],
+  "modules": [
+    "coordinator",
+    "tools",
+    "runner",
+    "subagents",
+    "task_registry",
+    "cancel_one",
+    "child_sessions",
+    "child_api"
+  ],
+  "features": [
+    {
+      "id": "subagents.tasks",
+      "name": "只读子任务与嵌套代理",
+      "nameEn": "Read-only subtasks and nested agents"
+    },
+    {
+      "id": "subagents.progress",
+      "name": "子任务进度、结果与取消",
+      "nameEn": "Subtask progress, results and cancellation"
+    },
+    {
+      "id": "subagents.cancel_one",
+      "name": "单个子任务协作取消",
+      "nameEn": "Cooperative cancellation for one subtask"
+    },
+    {
+      "id": "subagents.coordination",
+      "name": "后台派发、结果收集、恢复与引导",
+      "nameEn": "Background dispatch, collection, resume and steering"
+    },
+    {
+      "id": "subagents.parallel_coordination",
+      "name": "后台并发派发、主代理持续工作与结果收集",
+      "nameEn": "Background delegation, parent progress and result collection"
+    },
+    {
+      "id": "subagents.context_restore",
+      "name": "压缩后未收集子任务的状态恢复",
+      "nameEn": "Uncollected subtask state restoration after compaction"
+    },
+    {
+      "id": "subagents.durable_children",
+      "name": "持久化子会话与显式恢复",
+      "nameEn": "Durable child sessions and explicit recovery"
+    },
+    {
+      "id": "subagents.child_inbox",
+      "name": "安全边界子任务消息",
+      "nameEn": "Safe-boundary child messages"
+    },
+    {
+      "id": "subagents.child_transcript",
+      "name": "只读子会话记录",
+      "nameEn": "Read-only child conversation transcript"
+    },
+    {
+      "id": "subagents.settings",
+      "name": "子代理资源与能力配置",
+      "nameEn": "Subagent resources and capability settings"
+    },
+    {
+      "id": "subagents.sidepane",
+      "name": "Web 端子代理运行态侧栏",
+      "nameEn": "Web subagent runtime sidepane"
+    }
+  ],
+  "frontendModules": [
+    "plugins/subagents/SubagentSettings.tsx",
+    "plugins/subagents/SubagentSidePane.tsx",
+    "plugins/subagents/SubagentTranscript.tsx"
+  ]
+}

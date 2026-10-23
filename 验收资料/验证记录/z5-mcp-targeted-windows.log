@@ -1,0 +1,47 @@
+﹣ elicitation schema matches Python (0.4993ms) # no Python backend at E:\models\apps\_stage-z5\Xueness-0.1.8-complete-project
+▶ elicitation HTTP
+  ✔ owns only the session elicitation path (1.5492ms)
+✔ elicitation HTTP (1.9446ms)
+▶ MCP Streamable HTTP
+  ✔ speaks JSON-RPC over POST with json replies and keeps the session id (76.6462ms)
+  ✔ speaks JSON-RPC over POST with sse replies and keeps the session id (28.017ms)
+  ✔ a rejected request is a suppressed transport failure (31.2101ms)
+  ✔ refuses plain http without the loopback opt-in, URLs with credentials or queries, and bad auth config (1.5556ms)
+  ✔ does not follow a redirect (5.5576ms)
+✔ MCP Streamable HTTP (144.2509ms)
+▶ MCP legacy SSE
+  ✔ POSTs to the same-origin endpoint and reads replies from the stream (37.9288ms)
+  ✔ refuses a cross-origin endpoint (7.3293ms)
+✔ MCP legacy SSE (45.5688ms)
+﹣ mcp resources http matches Python (0.4773ms) # no Python backend at E:\models\apps\_stage-z5\Xueness-0.1.8-complete-project
+▶ MCP stdio plugin
+  ✔ registers every page of tools under Python names and calls them (1001.7156ms)
+  ✔ answers a server request with method-not-found and still gets the result (1035.8006ms)
+  ✔ adds resource and prompt readers when the server declares them (677.1344ms)
+  ✔ reconnects once when the server went away between calls (410.2517ms)
+  ✔ skips a server that cannot start and keeps the others (588.4579ms)
+  ✔ times out a silent call, kills the process and reports metadata only (627.735ms)
+  ﹣ gives the child only PATH and HOME on POSIX (0.1643ms) # SKIP
+✔ MCP stdio plugin (4342.6164ms)
+▶ MCP version negotiation (Python test_mcp_version_negotiation.py)
+  ✔ uses the preferred version when accepted and records server info (109.345ms)
+  ✔ retries newest first until the server accepts (344.1535ms)
+  ✔ gives up after the whole ladder (461.0959ms)
+  ✔ refuses an unsupported answer version (123.6896ms)
+  ✔ a per-server pin is asked first (232.8962ms)
+✔ MCP version negotiation (Python test_mcp_version_negotiation.py) (1271.8264ms)
+▶ MCP runtime lifecycle
+  ✔ dedupes initialize and shares only identical owner, cwd and config leases (468.7051ms)
+  ✔ refreshes registered tools after tools/list_changed, keeps the first sanitized collision, and unloads them (1441.8954ms)
+  ✔ adds subscribe tools only for declared capability and keeps resource notifications metadata-only (1169.8014ms)
+  ✔ does not block replies on notification handlers and clears cancelled RPC waiters (0.9698ms)
+  ✔ aborts the active HTTP request, sends cancellation, and never replays the cancelled call (150.7136ms)
+✔ MCP runtime lifecycle (3233.559ms)
+ℹ tests 25
+ℹ suites 8
+ℹ pass 24
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 1
+ℹ todo 0
+ℹ duration_ms 7530.8201

@@ -1,0 +1,50 @@
+✔ holds frames behind initialize while 16 runs are active and still admits reserved stop/query controls (50.8957ms)
+✔ rejects duplicate in-flight ids and oversized frames without corrupting the next legal frame (88.0122ms)
+✔ headless parser accepts new, resumed-input, and continue forms (3.3546ms)
+✔ headless parser rejects conflicting or underspecified selection modes (1.1485ms)
+✔ headless result keeps the stable envelope and returns only final assistant content (0.7817ms)
+✔ maps composer requests to the bound HTTP owner and rejects local routing data (4.3892ms)
+✔ maps question, guidance, and withdrawal methods to their owning routes with session authorization (2.4039ms)
+✔ maps media status to one read-only status request (0.8765ms)
+✔ projects only sessions rooted at the selected workspace and maps resume cursors to native query values (6.9812ms)
+✔ preserves the command envelope while binding create_session to the sole workspace root (2.0232ms)
+✔ checks transfer ownership, supports chunk rereads, and expires data after one minute (17.3191ms)
+✔ defers initial frames until the reply is sent, pauses persistence delivery, falls back after epoch loss, and fences resync/unsubscribe (1309.6948ms)
+✔ relays workflow event gaps and status changes without starting workflow or model execution (236.2713ms)
+﹣ answers every saved-connection and lifecycle step with the status and body Python's dispatch returns (0.8211ms) # no Python backend at E:\models\apps\_stage-z7\Xueness-0.1.8-complete-project
+✔ refuses every route while the plugin is off, as the web route gate does (3.8221ms)
+▶ attachment crash recovery and filesystem boundaries
+  ✔ adopts an unacknowledged chunk only on an exact retry after metadata failure (174.4935ms)
+  ✔ recovers one imported artifact after commit publication fails without duplicating media (159.7275ms)
+  ✔ retains complete restore allocation after adoption failure and aborts only its draft owners (266.3609ms)
+  ✔ replays an already-committed restore after the acknowledgement write reports failure (223.5043ms)
+  ✔ does not adopt media when restore allocation directory durability cannot be confirmed (197.2208ms)
+  ✔ rejects a corrupt restore receipt without reallocating or overwriting the durable identity (167.2871ms)
+  ✔ waits for another process's transaction lease before applying attachment directory ACLs (65.3137ms)
+  ✔ reads bounded matching session snapshots without repairing a corrupt journal from backup (61.4783ms)
+  ✔ rejects redirected workspace/staging directories and hardlinked metadata without touching their targets (42.4849ms)
+  ﹣ matches Python nullable declaration and Unicode protected-directory refusals (0.1752ms) # no Python backend at E:\models\apps\_stage-z7\Xueness-0.1.8-complete-project
+✔ attachment crash recovery and filesystem boundaries (1360.2171ms)
+﹣ matches Python HTTP free text question answers, replay and conflicts (1.1306ms) # no Python backend at E:\models\apps\_stage-z7\Xueness-0.1.8-complete-project
+﹣ matches Python HTTP structured question answers, replay and conflicts (0.2592ms) # no Python backend at E:\models\apps\_stage-z7\Xueness-0.1.8-complete-project
+✔ queries saved question answers by exact text and structured fingerprints within one session (116.7482ms)
+▶ queue and command admission
+  ﹣ matches real Python queue mutation/CAS/history semantics (0.705ms) # no Python backend at E:\models\apps\_stage-z7\Xueness-0.1.8-complete-project
+  ﹣ matches Python HTTP receipt validation, noop/duplicate/query and expiry (0.1144ms) # no Python backend at E:\models\apps\_stage-z7\Xueness-0.1.8-complete-project
+  ✔ keeps an unknown durable claim non-replayable across API instances (80.4044ms)
+  ✔ rejects unsupported commands before any durable claim or user mutation (34.9621ms)
+  ✔ refuses mutations while another process owns the run, without pausing queues or claiming commands (54.8255ms)
+  ﹣ matches Python HTTP queue CAS, fenced refusal, idempotent enqueue and withdrawal escrow (0.1329ms) # no Python backend at E:\models\apps\_stage-z7\Xueness-0.1.8-complete-project
+  ✔ splices guidance once in the same turn and pauses undelivered old guidance (131.3014ms)
+  ﹣ matches real Python HTTP guide, retained queries and send-now reservation fences (0.1333ms) # no Python backend at E:\models\apps\_stage-z7\Xueness-0.1.8-complete-project
+✔ queue and command admission (303.9956ms)
+﹣ matches real Python HTTP snapshot/resume frames and multiplexed watch behavior (1.3497ms) # no Python backend at E:\models\apps\_stage-z7\Xueness-0.1.8-complete-project
+﹣ streams exact completed model offsets and stops live snapshot generation on cancellation (0.2083ms) # no Python backend at E:\models\apps\_stage-z7\Xueness-0.1.8-complete-project
+ℹ tests 38
+ℹ suites 2
+ℹ pass 28
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 10
+ℹ todo 0
+ℹ duration_ms 2604.3544

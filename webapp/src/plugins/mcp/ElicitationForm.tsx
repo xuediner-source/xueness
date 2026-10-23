@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
-import { get, post } from "../../xuenessApi";
+import { post } from "../../xuenessApi";
+import { subscribeElicitation } from './elicitationSubscription';
 import { isImeComposingEvent } from "../../xuenessShortcutDisplay";
 import { t as tr, tf } from "../../i18n";
 import "./ElicitationForm.css";
@@ -234,6 +235,64 @@ export function parsePending(body: unknown): ElicitationPending | null {
   return { id, serverId: row.serverId, serverName: row.serverName, message: row.message, requestedSchema, expiresAt: row.expiresAt };
 }
 
+type PendingSnapshot = { kind: "clear" } | { kind: "pending"; pending: ElicitationPending };
+
+/** Only an explicit `{ pending: null }` is a confirmed clear; malformed reads must preserve a draft. */
+export function parsePendingSnapshot(body: unknown): PendingSnapshot | null {
+  if (!body || typeof body !== "object" || Array.isArray(body)
+    || !Object.prototype.hasOwnProperty.call(body, "pending")) return null;
+  if ((body as { pending?: unknown }).pending === null) return { kind: "clear" };
+  const pending = parsePending(body);
+  return pending ? { kind: "pending", pending } : null;
+}
+
+export const RESOLVED_ELICITATION_LIMIT = 64;
+
+export function elicitationIdentity(id: ElicitationPending["id"]): string {
+  return `${typeof id}:${String(id)}`;
+}
+
+/** Session-local state fence for delayed polls and overlapping submit responses. */
+export class ElicitationPendingTracker {
+  private current: ElicitationPending | null = null;
+  private resolved = new Set<string>();
+
+  get pending(): ElicitationPending | null {
+    return this.current;
+  }
+
+  receive(body: unknown): { accepted: boolean; pending: ElicitationPending | null } {
+    const snapshot = parsePendingSnapshot(body);
+    if (!snapshot) return { accepted: false, pending: this.current };
+    if (snapshot.kind === "clear") {
+      this.current = null;
+      return { accepted: true, pending: null };
+    }
+    if (this.resolved.has(elicitationIdentity(snapshot.pending.id))) {
+      return { accepted: false, pending: this.current };
+    }
+    this.current = snapshot.pending;
+    return { accepted: true, pending: this.current };
+  }
+
+  completeSubmission(id: ElicitationPending["id"]): ElicitationPending | null {
+    const identity = elicitationIdentity(id);
+    this.resolved.delete(identity);
+    this.resolved.add(identity);
+    while (this.resolved.size > RESOLVED_ELICITATION_LIMIT) {
+      const oldest = this.resolved.values().next().value as string | undefined;
+      if (oldest === undefined) break;
+      this.resolved.delete(oldest);
+    }
+    if (this.current?.id === id) this.current = null;
+    return this.current;
+  }
+
+  shouldShowSubmissionError(id: ElicitationPending["id"]): boolean {
+    return this.current?.id === id;
+  }
+}
+
 function formatOk(format: string, value: string): boolean {
   if (!value) return false;
   if (format === "email") {
@@ -357,6 +416,7 @@ export function ElicitationForm({
   onChange,
   onResolve,
   onInvalid,
+  submitting = false,
 }: {
   pending: ElicitationPending;
   values: ElicitationFormState;
@@ -365,11 +425,13 @@ export function ElicitationForm({
   onChange: (name: string, value: string | boolean) => void;
   onResolve: (body: ElicitationSubmission) => void;
   onInvalid?: (field: string | null, code: string) => void;
+  submitting?: boolean;
 }): React.JSX.Element | null {
   const schema = normalizeRequestedSchema(pending.requestedSchema);
   if (!schema) return null;
   const titleId = "xn-mcp-elicitation-title";
   const submit = (action: ElicitationAction) => {
+    if (submitting) return;
     handleElicitationAction(action, { ...pending, requestedSchema: schema }, values, onResolve, (field, code) => onInvalid?.(field, code));
   };
   const onKeyDown = (event: React.KeyboardEvent<HTMLFormElement>) => {
@@ -440,66 +502,45 @@ export function ElicitationForm({
       </div>
       {error && <p id="xn-mcp-elicitation-error" className="xn-mcp-elicitation__error" role="alert">{error}</p>}
       <div className="xn-mcp-elicitation__actions">
-        <button type="submit" className="xn-mcp-elicitation__submit">{tr("提交")}</button>
-        <button type="button" onClick={() => submit("decline")}>{tr("拒绝")}</button>
-        <button type="button" onClick={() => submit("cancel")}>{tr("取消")}</button>
+        <button type="submit" disabled={submitting} className="xn-mcp-elicitation__submit">{tr(submitting ? "提交中…" : "提交")}</button>
+        <button type="button" disabled={submitting} onClick={() => submit("decline")}>{tr("拒绝")}</button>
+        <button type="button" disabled={submitting} onClick={() => submit("cancel")}>{tr("取消")}</button>
       </div>
     </form>
   );
 }
 
-/** Polls the session elicitation route and mounts the form. Renders nothing while idle. */
+/** A session key fences both read and submit completions after switching tasks. */
 export function McpElicitation({ sessionId }: { sessionId: string }): React.JSX.Element | null {
+  return <SessionElicitation key={sessionId} sessionId={sessionId} />;
+}
+
+function SessionElicitation({ sessionId }: { sessionId: string }): React.JSX.Element | null {
   const [pending, setPending] = useState<ElicitationPending | null>(null);
   const [values, setValues] = useState<ElicitationFormState>({});
   const [error, setError] = useState("");
   const [errorField, setErrorField] = useState<string | null>(null);
+  const [submittingIds, setSubmittingIds] = useState<ReadonlySet<string>>(() => new Set());
+  const submittingIdsRef = useRef(new Set<string>());
+  const pendingTracker = useRef(new ElicitationPendingTracker());
+  const refreshSubscription = useRef<(() => void) | null>(null);
   const mounted = useRef(true);
   useEffect(() => {
+    mounted.current = true;
     return () => {
       mounted.current = false;
     };
   }, []);
   useEffect(() => {
     if (!sessionId) return undefined;
-    let stopped = false;
-    let timer = 0;
-    let inFlight = false;
-    const controller = new AbortController();
-    const tick = async () => {
-      if (stopped || inFlight || controller.signal.aborted) return;
-      if (typeof document !== "undefined" && document.visibilityState === "hidden") {
-        window.clearTimeout(timer);
-        timer = window.setTimeout(() => void tick(), 1500);
-        return;
-      }
-      inFlight = true;
-      try {
-        const body = await get<unknown>(`/api/sessions/${encodeURIComponent(sessionId)}/elicitation`, controller.signal);
-        if (!stopped && !controller.signal.aborted && mounted.current) setPending(parsePending(body));
-      } catch {
-        if (!stopped && !controller.signal.aborted && mounted.current) setPending(null);
-      } finally {
-        inFlight = false;
-        if (!stopped && !controller.signal.aborted) {
-          window.clearTimeout(timer);
-          timer = window.setTimeout(() => void tick(), 1200);
-        }
-      }
-    };
-    void tick();
-    const onVisible = () => {
-      if (document.visibilityState === "visible") {
-        window.clearTimeout(timer);
-        void tick();
-      }
-    };
-    document.addEventListener("visibilitychange", onVisible);
+    const subscription = subscribeElicitation({ sessionId, accept: body => {
+      const update = pendingTracker.current.receive(body);
+      if (update.accepted) setPending(update.pending);
+    } });
+    refreshSubscription.current = subscription.refresh;
     return () => {
-      stopped = true;
-      window.clearTimeout(timer);
-      controller.abort();
-      document.removeEventListener("visibilitychange", onVisible);
+      if (refreshSubscription.current === subscription.refresh) refreshSubscription.current = null;
+      subscription();
     };
   }, [sessionId]);
   useEffect(() => {
@@ -514,15 +555,30 @@ export function McpElicitation({ sessionId }: { sessionId: string }): React.JSX.
       values={values}
       error={error}
       errorField={errorField}
+      submitting={submittingIds.has(elicitationIdentity(pending.id))}
       onChange={(name, value) => setValues(current => ({ ...current, [name]: value }))}
       onInvalid={(field, code) => { setErrorField(field); setError(fieldError(code, field)); }}
       onResolve={body => {
+        const identity = elicitationIdentity(body.id);
+        if (submittingIdsRef.current.has(identity) || pendingTracker.current.pending?.id !== body.id) return;
+        submittingIdsRef.current.add(identity);
+        setSubmittingIds(new Set(submittingIdsRef.current));
         setError("");
         setErrorField(null);
         void post(`/api/sessions/${encodeURIComponent(sessionId)}/elicitation`, body).then(() => {
-          if (mounted.current) setPending(null);
+          if (mounted.current) setPending(pendingTracker.current.completeSubmission(body.id));
         }).catch(() => {
-          if (mounted.current) setError(tr("没能提交这次回答，请重试。"));
+          if (mounted.current && pendingTracker.current.shouldShowSubmissionError(body.id)) {
+            setError(tr("没能提交这次回答，请重试。"));
+          }
+        }).finally(() => {
+          submittingIdsRef.current.delete(identity);
+          if (mounted.current) {
+            setSubmittingIds(new Set(submittingIdsRef.current));
+            // A read may have captured an older pending snapshot before this write settled.
+            // Replace it immediately so that stale data cannot resurrect a resolved form.
+            refreshSubscription.current?.();
+          }
         });
       }}
     />

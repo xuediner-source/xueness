@@ -1,0 +1,51 @@
+{
+  "id": "model_monitor",
+  "name": "返回模型监测",
+  "description": "随会话记录请求型号与上游返回型号，标记一致、不同及未报告。不会自动发起额外模型请求。",
+  "version": "1.0.0",
+  "apiVersion": 1,
+  "defaultEnabled": false,
+  "installPackage": "xueness-model-monitor",
+  "dependencies": [
+    "providers"
+  ],
+  "tools": [],
+  "commands": [],
+  "panels": [
+    "model-monitor"
+  ],
+  "resources": [],
+  "capabilities": [],
+  "httpFamilies": [
+    "model_monitor"
+  ],
+  "modules": [
+    "observer"
+  ],
+  "frontendModules": [
+    "plugins/model_monitor/index.tsx",
+    "plugins/model_monitor/ModelMonitorHome.tsx"
+  ],
+  "features": [
+    {
+      "id": "model_monitor.observation",
+      "name": "随会话被动记录上游返回型号",
+      "nameEn": "Passively record upstream-reported models during conversations"
+    },
+    {
+      "id": "model_monitor.comparison",
+      "name": "请求与返回型号对比及证据说明",
+      "nameEn": "Compare requested and reported models with source context"
+    },
+    {
+      "id": "model_monitor.history",
+      "name": "本机监测记录、筛选与清理",
+      "nameEn": "Local observations, filtering and clearing"
+    },
+    {
+      "id": "model_monitor.home",
+      "name": "紧凑模型状态与按需展开的监测详情",
+      "nameEn": "Compact model status with expandable monitoring details"
+    }
+  ]
+}

@@ -1,3 +1,6 @@
+import type { AttachmentPreviewTransport } from './composerAttachmentPreviewModel';
+import type { MessageEditAttachmentTransport } from './messageEditAttachments';
+import { ConversationMarkers } from './conversationMarkers';
 /**
  * Adapted from Z.AI ZCode v3.14.3, commit 29628c9 (Apache-2.0):
  * ConversationTurnGroup, ConversationRowView, ToolSummaryRow and Reasoning.
@@ -10,15 +13,16 @@ import { Brain, Check, ChevronRight, Copy, FileText, TrendingUpDown, Pencil, Sea
 import { t as tr, tf, getLocale } from '../../i18n';
 import type { TimelineRow } from '../../xuenessWorkbench';
 import { SimpleMarkdown, MarkdownRenderOptionsContext, type MarkdownRenderOptions } from '../../XuenessShell';
-import { useQuantizedStreamingText } from '../../ui/StreamingCommitGate';
+import { useStreamingReveal } from '../../ui/StreamingCommitGate';
 import { assistantTextForDisplay, terminalResultForDisplay } from './XuenessTimeline';
 import { conversationCompactionLabel, type ConversationCompactionMarker } from './conversationCompaction';
 import { completionPresentation, isDuplicateCompletionAnswer, shouldHideCompletionCard } from './completionPresentation';
 import { conversationActivityLabel, reasoningIsActive } from './conversationActivity';
-import { formatConversationWorkDuration } from './conversationWorkDuration';
+import { conversationWorkSegments, conversationActiveDuration, conversationWorkLabel } from './conversationWorkSegments';
+import { formatConversationWorkDuration, conversationElapsedInterval } from './conversationWorkDuration';
 import { useTimelineVirtualWindow } from './TimelineVirtualWindow';
 import { XuenessConversationHistoryRail } from './XuenessConversationHistoryRail';
-import { deferCompositionEnd, isImeComposingEvent, isModKeyPressed } from '../../xuenessShortcutDisplay';
+import { isImeComposingEvent, isModKeyPressed } from '../../xuenessShortcutDisplay';
 import './zcode-conversation.css';
 import './sessions.css';
 import { formatCommandArgv } from '../../xuenessWorkbench';
@@ -29,6 +33,14 @@ import {
   ConversationFindBar,
   conversationFindRowKey,
 } from './ConversationFind';
+import { ReferenceRowView } from './referenceRowView';
+import { isReferenceTimelineRow } from './referenceRows';
+import { SubagentRowView } from './SubagentRowView';
+import { resolveToolRenderer, ToolStatusShell, type ToolRendererId } from './toolRenderers';
+import { NativeToolCallCard } from './NativeToolCallCard';
+import { nativeToolPayload } from './nativeToolPayload';
+import { toolActivityRows } from './toolActivity';
+import { TOOL_DISPLAY_STATUS_LABELS } from './toolDisplayStatus';
 
 export function evaluateUserMessageEditKey(
   event: {
@@ -59,14 +71,50 @@ const settledMarkdown: MarkdownRenderOptions = { codeHighlightTiming: 'on-visibl
 export const zcodeConversationDisclosures = new Map<string, boolean>();
 const DisclosureContext = React.createContext<Map<string, boolean> | null>(null);
 const SessionIdContext = React.createContext<string | undefined>(undefined);
+const DISCLOSURE_STORAGE_KEY = 'xueness.sessions.tool-disclosures.v1';
+const DISCLOSURE_STORAGE_LIMIT = 500;
+
+function readStoredDisclosure(key: string): boolean | undefined {
+  try {
+    const raw = window.localStorage.getItem(DISCLOSURE_STORAGE_KEY);
+    if (!raw) return undefined;
+    const parsed: unknown = JSON.parse(raw);
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return undefined;
+    const value = (parsed as Record<string, unknown>)[key];
+    return typeof value === 'boolean' ? value : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function persistDisclosure(key: string, value: boolean): void {
+  try {
+    const raw = window.localStorage.getItem(DISCLOSURE_STORAGE_KEY);
+    const parsed: unknown = raw ? JSON.parse(raw) : {};
+    const state: Record<string, boolean> = parsed && typeof parsed === 'object' && !Array.isArray(parsed)
+      ? Object.fromEntries(Object.entries(parsed).filter(([, candidate]) => typeof candidate === 'boolean')) as Record<string, boolean>
+      : {};
+    delete state[key];
+    state[key] = value;
+    const keys = Object.keys(state);
+    while (keys.length > DISCLOSURE_STORAGE_LIMIT) {
+      const oldest = keys.shift();
+      if (oldest !== undefined) delete state[oldest];
+    }
+    window.localStorage.setItem(DISCLOSURE_STORAGE_KEY, JSON.stringify(state));
+  } catch {
+    // Private browsing and storage quota failures leave the in-memory state
+    // authoritative; disclosure persistence is an enhancement only.
+  }
+}
 
 function useDisclosure(key: string, defaultOpen = false) {
   const sessionId = React.useContext(SessionIdContext);
   const fullKey = sessionId ? `${sessionId}:${key}` : key;
   const saved = React.useContext(DisclosureContext) ?? zcodeConversationDisclosures;
-  const [override, setOpen] = React.useState<boolean | undefined>(() => saved.get(fullKey) ?? saved.get(key));
+  const [override, setOpen] = React.useState<boolean | undefined>(() => saved.get(fullKey) ?? saved.get(key) ?? readStoredDisclosure(fullKey));
   React.useEffect(() => {
-    setOpen(saved.get(fullKey) ?? saved.get(key));
+    setOpen(saved.get(fullKey) ?? saved.get(key) ?? readStoredDisclosure(fullKey));
   }, [fullKey, key, saved]);
   const open = override ?? defaultOpen;
   return { open, onToggle: (event: React.SyntheticEvent<HTMLDetailsElement>) => {
@@ -74,6 +122,7 @@ function useDisclosure(key: string, defaultOpen = false) {
     if (next !== open) {
       setPersistedDisclosure(saved, fullKey, next);
       setPersistedDisclosure(zcodeConversationDisclosures, fullKey, next);
+      persistDisclosure(fullKey, next);
       setOpen(next);
     }
   } };
@@ -81,20 +130,25 @@ function useDisclosure(key: string, defaultOpen = false) {
 export type ConversationTurn = { key: string; rows: TimelineRow[]; userSeq?: number };
 
 function timelineRowTurnId(row: TimelineRow): string | undefined {
-  return 'turnId' in row && typeof row.turnId === 'string' ? row.turnId : undefined;
+  if (!('turnId' in row)) return undefined;
+  const turnId = row.turnId;
+  return typeof turnId === 'string' ? turnId : undefined;
 }
 
 /** Preserve source order, including tool results updated in place by call ID. */
 export function buildConversationTurns(rows: TimelineRow[]): ConversationTurn[] {
   const turns: ConversationTurn[] = [];
+  let currentTurnId: string | undefined;
   for (const row of rows) {
-    const currentTurnId = turns.at(-1)?.rows.map(timelineRowTurnId).find(Boolean);
-    if (!turns.length || row.kind === 'user' && row.turnId !== currentTurnId) {
+    const rowTurnId = timelineRowTurnId(row);
+    if (!turns.length || row.kind === 'user' && rowTurnId !== currentTurnId) {
       const stableId = (row.kind === 'user' || row.kind === 'assistant') && row.messageId ? row.messageId : row.seq;
       turns.push({ key: row.kind === 'user' ? `user:${stableId}` : `leading:${stableId}`, rows: [],
         ...(row.kind === 'user' ? { userSeq: row.seq } : {}) });
+      currentTurnId = undefined;
     }
     turns[turns.length - 1].rows.push(row);
+    if (!currentTurnId && rowTurnId) currentTurnId = rowTurnId;
   }
   return turns;
 }
@@ -147,9 +201,18 @@ function Reasoning({ row, activityPhase, findActive = false }: { row: Assistant;
   const open = disclosure.open || findActive;
   const active = reasoningIsActive(row.streaming, activityPhase, row.text);
   const summary = row.reasoning?.trim().split(/\r?\n/u).filter(Boolean).at(-1);
-  return <details className="xn-zc-reasoning" open={open} onToggle={disclosure.onToggle} {...rowData(row)} data-active={active || undefined}>
-    <summary><Brain size={16} /><span className="xn-zc-kind">{tr(active ? '思考中…' : '思考')}</span>
-      {active && summary && <span className="xn-zc-reasoning-preview">{summary.slice(-180)}</span>}
+  // Keep the reasoning block independent from the assistant prose while
+  // retaining the legacy assistant row identity for old event consumers.
+  // Empty streaming reasoning is intentionally absent until the first token.
+  if (row.streaming && !row.reasoning?.trim()) return null;
+  const durationMs = conversationElapsedInterval(row.startedAt, row.endedAt);
+  const duration = durationMs !== undefined ? formatConversationWorkDuration(durationMs, getLocale()) : undefined;
+  const state = active ? 'streaming' : row.interrupted ? 'interrupted' : 'complete';
+  const label = active ? tr('思考中…') : duration ? tf('思考了 {0}', [duration]) : row.interrupted ? tr('思考已停止') : tr('思考');
+  return <details className="xn-zc-reasoning" open={open} onToggle={disclosure.onToggle} {...rowData(row)} data-active={active || undefined}
+    data-testid={`timeline-item-reasoning-${row.seq}`} data-state={state}>
+    <summary><Brain size={16} /><span className="xn-zc-kind">{label}</span>
+      {!open && summary && <span className="xn-zc-reasoning-preview" title={summary}>{summary.slice(-180)}</span>}
       <ChevronRight size={16} className="xn-zc-chevron" /></summary>
     {open && <div className="xn-zc-reasoning-content"><MarkdownRenderOptionsContext.Provider value={row.streaming ? streamingMarkdown : settledMarkdown}><SimpleMarkdown text={row.reasoning ?? ''} /></MarkdownRenderOptionsContext.Provider></div>}
   </details>;
@@ -167,36 +230,62 @@ function toolSummary(row: Tool): string {
 }
 
 const toolKinds: Record<string, string> = { read: '读取', list: '列出', glob: '查找', grep: '搜索',
-  exec: '执行', exec_start: '执行', write: '写入', edit: '修改', search_web: '搜索网页', web_search: '搜索网页', web_fetch: '读取网页' };
-function ToolRow({ row, pending, defaultOpen, findActive = false, onRetry }: { row: Tool; pending: boolean; defaultOpen: boolean; findActive?: boolean; onRetry?: (row: Tool) => void | Promise<unknown> }) {
-  const disclosure = useDisclosure(`tool:${row.toolCallId}`, defaultOpen);
+  exec: '执行', exec_start: '执行', write: '写入', edit: '修改', search_web: '搜索网页', web_search: '搜索网页', web_fetch: '读取网页',
+  todo_read: '读取待办', todo_write: '更新待办', ask_user: '提问', exec_output: '查看后台任务', exec_kill: '停止后台任务', exit_plan_mode: '退出计划模式', enter_plan_mode: '进入计划模式' };
+const TOOL_PAYLOAD_LIMIT = 48_000;
+const TOOL_DIFF_PREVIEW_LINES = 240;
+const TOOL_SUMMARY_LIMIT = 2_000;
+function ToolRow({ row, pending, defaultOpen, findActive = false, effectivePluginIds, onRetry }: { row: Tool; pending: boolean; defaultOpen: boolean; findActive?: boolean; effectivePluginIds?: ReadonlySet<string>; onRetry?: (row: Tool) => void | Promise<unknown> }) {
+  const disclosure = useDisclosure(`tool:${row.toolActivityId ?? row.toolCallId}`, defaultOpen);
   const open = disclosure.open || findActive;
-  const Icon = /exec|bash|shell/u.test(row.name) ? SquareTerminal : /write|edit/u.test(row.name) ? Pencil : /search|grep|glob/u.test(row.name) ? Search : FileText;
+  const renderer = resolveToolRenderer(row.name, effectivePluginIds);
+  const rendererId: ToolRendererId = renderer.id;
+  const Icon = rendererId === 'exec' ? SquareTerminal : rendererId === 'edit' ? Pencil : rendererId === 'read' ? Search : FileText;
+  const native = ['files', 'browser', 'workflow', 'task'].includes(rendererId);
+  const nativeSummary = native ? nativeToolPayload(rendererId, row) : undefined;
+  const primaryText = row.inputActivity ? '' : rendererId === 'fallback' ? '' : nativeSummary
+    ? nativeSummary.url ?? nativeSummary.fields[0]?.value ?? '' : toolSummary(row);
+  const boundedPrimaryText = primaryText.length > TOOL_SUMMARY_LIMIT ? `${primaryText.slice(0, TOOL_SUMMARY_LIMIT)}…` : primaryText;
   const running = row.status === 'running' || row.status === 'queued';
   const failed = row.status === 'error';
-  const status = pending ? tr('等待批准') : failed ? tr('失败') : row.status === 'cancelled' || row.status === 'stopped' ? tr('已停止') : running ? tr('运行中') : undefined;
+  const status = row.inputActivity ? (getLocale() === 'en' ? 'Receiving tool input' : '正在接收工具输入') : pending ? tr('等待批准') : row.status === 'ok' ? undefined : tr(TOOL_DISPLAY_STATUS_LABELS[row.status]);
   const summarize = (value: unknown) => {
-    try { return typeof value === 'string' ? value : JSON.stringify(value, null, 2) ?? ''; }
+    let text: string;
+    try { text = typeof value === 'string' ? value : JSON.stringify(value, null, 2) ?? ''; }
     catch { return tr('无法显示工具数据'); }
+    return text.length > TOOL_PAYLOAD_LIMIT ? `${text.slice(0, TOOL_PAYLOAD_LIMIT)}\n${tr('[输出已截断]')}` : text;
   };
-  const output = open ? summarize(row.output) : '';
-  const terminal = /^(exec|exec_start|exec_poll)$/u.test(row.name) ? terminalResultForDisplay(row.output) : null;
-  const textResult = !terminal && row.output && typeof row.output === 'object'
+  const detailsAvailable = rendererId !== 'fallback' && !native;
+  const output = open && detailsAvailable ? summarize(row.output) : '';
+  const terminal = rendererId === 'exec' ? terminalResultForDisplay(row.output) : null;
+  const textResult = detailsAvailable && !terminal && row.output && typeof row.output === 'object'
     ? ['text', 'output', 'content'].map(key => (row.output as Record<string, unknown>)[key]).find(value => typeof value === 'string') : undefined;
 
-  const diff = React.useMemo(() => extractToolDiff(row), [row]);
+  const diff = React.useMemo(() => rendererId === 'edit' ? extractToolDiff(row) : null, [rendererId, row]);
+  const diffLines = diff?.lines.slice(0, TOOL_DIFF_PREVIEW_LINES) ?? [];
+  const diffTruncated = Boolean(diff && diff.lines.length > TOOL_DIFF_PREVIEW_LINES);
 
-  return <details className="xn-zc-tool" open={open} onToggle={disclosure.onToggle} {...rowData(row)} data-tool-call-id={row.toolCallId}
+  if (row.inputActivity) return <details className="xn-zc-tool" open={open} onToggle={disclosure.onToggle} {...rowData(row)}
+    data-tool-call-id={row.toolCallId} data-tool-renderer={rendererId} data-tool-phase="input_streaming" data-status="running">
+    <summary><Icon size={16} /><span className="xn-zc-kind">{tr(toolKinds[row.name] ?? row.name)}</span>
+      <ToolStatusShell status="running">{status} · {row.inputActivity.inputChars} {getLocale() === 'en' ? 'characters' : '字符'}</ToolStatusShell>
+      <ChevronRight size={16} className="xn-zc-chevron" /></summary>
+    {open && <div className="xn-zc-tool-body">{rendererId !== 'fallback' && row.inputActivity.partialInput
+      ? <pre>{row.inputActivity.partialInput}{row.inputActivity.truncated ? `\n${tr('[输出已截断]')}` : ''}</pre>
+      : <p className="xn-zc-tool-safe-summary">{tr('工具详情不可用')}</p>}</div>}
+  </details>;
+
+  return <details className="xn-zc-tool" open={open} onToggle={disclosure.onToggle} {...rowData(row)} data-tool-call-id={row.toolCallId} data-tool-renderer={rendererId}
     data-status={pending ? 'pendingApproval' : row.status} data-testid={`timeline-item-tool-${row.seq}`}>
     <summary><Icon size={16} /><span className="xn-zc-kind" data-running={running && !pending || undefined}>{tr(toolKinds[row.name] ?? row.name)}</span>
-      <span className="xn-zc-tool-primary" title={toolSummary(row)}>{toolSummary(row)}</span>
+      <span className="xn-zc-tool-primary" title={boundedPrimaryText}>{boundedPrimaryText}</span>
       {diff && (diff.added > 0 || diff.removed > 0) && (
         <span className="xn-zc-diff-count" aria-label={tf("改动：+{0} -{1}", [diff.added, diff.removed])}>
           <span className="xn-diff-added">+{diff.added}</span>{" "}
           <span className="xn-diff-removed">-{diff.removed}</span>
         </span>
       )}
-      {status && <span className="xn-zc-tool-state" data-failed={failed || undefined}>{status}</span>}
+      {status && <ToolStatusShell status={row.status} pendingApproval={pending}>{status}</ToolStatusShell>}
       {failed && onRetry && (
         <button
           type="button"
@@ -220,7 +309,7 @@ function ToolRow({ row, pending, defaultOpen, findActive = false, onRetry }: { r
       )}
       <ChevronRight size={16} className="xn-zc-chevron" /></summary>
     {open && <div className="xn-zc-tool-body">
-      {diff && diff.lines.length > 0 && (
+      {diff && diffLines.length > 0 && (
         <section className="xn-zc-tool-diff" aria-label={tr("文件改动差异")}>
           <div
             className="xn-unified-diff"
@@ -235,7 +324,7 @@ function ToolRow({ row, pending, defaultOpen, findActive = false, onRetry }: { r
           >
             <table>
               <tbody>
-                {diff.lines.map((dl, i) => (
+                {diffLines.map((dl, i) => (
                   <tr key={i} className={`xn-diff-line xn-diff-line--${dl.kind}`}>
                     <td className="xn-diff-line__marker" aria-hidden="true">
                       {dl.kind === "add" ? "+" : dl.kind === "remove" ? "−" : dl.kind === "hunk" ? "@@" : " "}
@@ -245,12 +334,15 @@ function ToolRow({ row, pending, defaultOpen, findActive = false, onRetry }: { r
                 ))}
               </tbody>
             </table>
+            {diffTruncated && <p className="xn-zc-tool-truncated" role="status">{tr('[输出已截断]')}</p>}
           </div>
         </section>
       )}
-      {row.input && <details><summary>{tr('输入参数')}</summary><pre>{summarize(row.input)}</pre></details>}
-      {row.error && <p role="alert">{row.errorCode ? `[${row.errorCode}] ` : ''}{row.error}</p>}
-      {terminal ? <section aria-label={tr('终端输出')}><pre className="xn-zc-command">$ {toolSummary(row)}</pre>
+      {rendererId === 'fallback' && <p className="xn-zc-tool-safe-summary" role="note">{tr(renderer.safeLabel)}</p>}
+      {(native || rendererId === 'read') && <NativeToolCallCard kind={rendererId} row={row} />}
+      {detailsAvailable && row.input && <details><summary>{tr('输入参数')}</summary><pre>{summarize(row.input)}</pre></details>}
+      {detailsAvailable && row.error && <p role="alert">{row.errorCode ? `[${row.errorCode.slice(0, 100)}] ` : ''}{row.error.slice(0, TOOL_PAYLOAD_LIMIT)}</p>}
+      {terminal ? <section aria-label={tr('终端输出')}><pre className="xn-zc-command">$ {boundedPrimaryText}</pre>
         {terminal.output && <Payload text={terminal.output} />}
         {terminal.stderr && <><span>{tr('标准错误')}</span><Payload text={terminal.stderr} /></>}
         {terminal.exitCode !== undefined && <span>{tf('退出码 {0}', [terminal.exitCode])}</span>}
@@ -263,15 +355,25 @@ function ToolRow({ row, pending, defaultOpen, findActive = false, onRetry }: { r
 
 function Payload({ text }: { text: string }) {
   const [limit, setLimit] = React.useState(6000);
-  return <><pre>{text.slice(0, limit)}</pre>{text.length > limit && <button type="button" className="xn-zc-text-button"
-    onClick={() => setLimit(value => value + 12000)}>{tr('显示更多')}</button>}</>;
+  const boundedLimit = Math.min(limit, 48_000);
+  const visible = text.slice(0, boundedLimit);
+  const capped = text.length > boundedLimit;
+  return <><pre>{visible}{capped ? `\n${tr('[输出已截断]')}` : ''}</pre>{capped && boundedLimit < 48_000 && <button type="button" className="xn-zc-text-button"
+    onClick={() => setLimit(value => Math.min(48_000, value + 12_000))}>{tr('显示更多')}</button>}</>;
+}
+
+function visibleAssistantText(row: Assistant): string {
+  return row.streaming ? row.text : (row.displayText ?? row.text);
 }
 
 function AssistantText({ row, summary, protocol }: { row: Assistant; summary?: string; protocol: boolean }) {
-  const text = useQuantizedStreamingText(row.text, row.streaming === true);
-  const displayed = assistantTextForDisplay(text, row.streaming, summary, protocol);
+  // Reveal decoded answer text at an even pace. The streaming presentation is
+  // kept until the reveal catches up, so the end of a stream does not pop.
+  const target = assistantTextForDisplay(visibleAssistantText(row), row.streaming, summary, protocol);
+  const { text: displayed, revealing } = useStreamingReveal(target, row.streaming === true);
+  const live = row.streaming === true || revealing;
   return displayed.trim() ? <div className="xn-zc-answer" data-role="assistant" data-testid={`timeline-item-assistant-${row.seq}`} {...rowData(row)}>
-    <MarkdownRenderOptionsContext.Provider value={row.streaming ? streamingMarkdown : settledMarkdown}><SimpleMarkdown text={displayed} /></MarkdownRenderOptionsContext.Provider>
+    <MarkdownRenderOptionsContext.Provider value={live ? streamingMarkdown : settledMarkdown}><SimpleMarkdown text={displayed} /></MarkdownRenderOptionsContext.Provider>
   </div> : null;
 }
 
@@ -289,10 +391,15 @@ function CompletionCheck({ row, answer, protocol, findActive = false }: { row: C
 }
 
 export type ZCodeConversationProps = {
+  toolActivity?: unknown;
+  currentStreamId?: string;
+  currentTurnId?: string;
+  workActivity?: unknown;
   sessionId?: string;
   rows: TimelineRow[];
   /** 上下文压缩边界（由快照的 compactions 与归档行推导）；缺省不渲染分隔行。 */
   compactionMarker?: ConversationCompactionMarker | null;
+  timelineMarkers?: unknown;
   findQuery?: string;
   onFindQueryChange?(query: string): void;
   findRequest?: { id: string; query: string; rowKey?: string; occurrence?: number };
@@ -304,53 +411,30 @@ export type ZCodeConversationProps = {
   collapseTools?: boolean;
   autoScroll?: boolean;
   pendingToolIds?: ReadonlySet<string>;
+  /** Effective plugin IDs from the backend catalog. Renderer dependencies
+   * fail closed when files/shell is disabled or blocked. */
+  effectivePluginIds?: ReadonlySet<string>;
+  isSessionsEffective?: () => boolean;
   onFork?(row: Assistant): void;
   onFeedback?(row: Assistant, feedback: 'like' | 'dislike' | null): Promise<void>;
-  onEdit?(row: User, text: string, onAccepted: () => void): Promise<boolean>;
+  messageEditSessionId?: string;
+  messageEditPreviewTransport?: AttachmentPreviewTransport;
+  messageEditTransport?: MessageEditAttachmentTransport;
+  onEdit?(row: User, text: string, onAccepted: () => void, attachments?: { preparedToken: string }): Promise<boolean>;
   onRetry?(row?: Tool): void | Promise<unknown>;
 };
 
-function UserMessage({ row, onEdit }: { row: User; onEdit?: ZCodeConversationProps['onEdit'] }) {
+const UserMessageEditor = React.lazy(() => import('./UserMessageEditor'));
+
+function UserMessage({ row, onEdit, enabled, isSessionsEffective, attachmentTransport, editSessionId, previewTransport }: { row: User; editSessionId?: string; previewTransport?: AttachmentPreviewTransport; attachmentTransport?: MessageEditAttachmentTransport; onEdit?: ZCodeConversationProps['onEdit']; enabled: boolean; isSessionsEffective?: () => boolean }) {
   const [editing, setEditing] = React.useState(false);
-  const [text, setText] = React.useState(row.text);
-  const [saving, setSaving] = React.useState(false);
-  const [error, setError] = React.useState('');
-  const compositionActiveRef = React.useRef(false);
-  const save = async () => {
-    if (!onEdit || saving || !text.trim()) return;
-    setSaving(true); setError('');
-    try {
-      const accepted = await onEdit(row, text, () => setEditing(false));
-      if (accepted) setEditing(false);
-    } catch (reason) { setError(reason instanceof Error ? reason.message : tr('修改失败，输入已保留。')); }
-    finally { setSaving(false); }
-  };
+  const sessionId = React.useContext(SessionIdContext);
   return <div className="xn-zc-user" data-history-user-seq={row.seq} data-role="user" data-testid={`timeline-item-user-${row.seq}`}>
-    {editing ? <form className="xn-zc-editor" onSubmit={event => { event.preventDefault(); void save(); }}>
-      <textarea aria-label={tr('编辑消息')} value={text} autoFocus disabled={saving} onChange={event => setText(event.target.value)}
-        onCompositionStart={(event) => {
-          compositionActiveRef.current = true;
-          event.currentTarget.setAttribute("data-composing", "true");
-        }}
-        onCompositionEnd={(event) => {
-          const el = event.currentTarget;
-          deferCompositionEnd(() => {
-            compositionActiveRef.current = false;
-            el?.removeAttribute("data-composing");
-          });
-        }}
-        onKeyDown={event => {
-          const action = evaluateUserMessageEditKey({ ...event, compositionActive: compositionActiveRef.current }, { saving });
-          if (action === 'cancel') { event.preventDefault(); setEditing(false); }
-          else if (action === 'save') { event.preventDefault(); void save(); }
-        }} />
-      <p className="xn-zc-editor-note">{tr('重新发送会替换这条消息及其后续对话。工作区文件保持当前状态。')}</p>
-      {error && <p role="alert">{error}</p>}
-      <div><button type="button" disabled={saving} onClick={() => setEditing(false)}>{tr('取消')}</button>
-        <button type="submit" disabled={saving || !text.trim()}>{tr(saving ? '正在发送…' : '发送')}</button></div>
-    </form> : <><div className="xn-zc-user-bubble">{row.text}</div><div className="xn-zc-actions"><CopyAction text={row.text} />
-      {onEdit && row.messageRevision && row.messageIndex !== undefined && <button type="button" className="xn-zc-action"
-        aria-label={tr('编辑消息')} title={tr('编辑消息')} onClick={() => { setText(row.text); setError(''); setEditing(true); }}><Pencil size={14} /></button>}
+    {editing && enabled ? <React.Suspense fallback={null}><UserMessageEditor previewTransport={previewTransport} attachmentTransport={attachmentTransport} row={row} sessionId={editSessionId ?? sessionId} enabled={enabled} isSessionsEffective={isSessionsEffective}
+      onEdit={onEdit} onClose={() => setEditing(false)} evaluateKey={evaluateUserMessageEditKey} /></React.Suspense>
+      : <>{(row.displayText ?? row.text).trim() ? <div className="xn-zc-user-bubble">{row.displayText ?? row.text}</div> : null}<div className="xn-zc-actions"><CopyAction text={(row.displayText ?? row.text).trim() ? (row.displayText ?? row.text) : row.text} />
+      {enabled && onEdit && row.messageRevision && row.messageIndex !== undefined && <button type="button" className="xn-zc-action"
+        aria-label={tr('编辑消息')} title={tr('编辑消息')} onClick={() => { if (isSessionsEffective?.() !== false) setEditing(true); }}><Pencil size={14} /></button>}
     </div></>}
   </div>;
 }
@@ -396,61 +480,109 @@ function CompactionBoundary({ marker }: { marker: ConversationCompactionMarker }
 }
 
 function Turn({ turn, latest, props, activeFindRowKey, compactionMarker }: { turn: ConversationTurn; latest: boolean; props: ZCodeConversationProps; activeFindRowKey: string | null; compactionMarker?: ConversationCompactionMarker | null }) {
-  const { showReasoning = true, jsonToolProtocol = false, pendingToolIds, onFork, onFeedback, onEdit, onRetry } = props;
+  const { showReasoning = true, jsonToolProtocol = false, pendingToolIds, effectivePluginIds, onFork, onFeedback, onEdit, onRetry } = props;
+  const canShowReasoning = showReasoning && (!effectivePluginIds || effectivePluginIds.has('sessions'));
   const assistantRows = turn.rows.filter((row): row is Assistant => row.kind === 'assistant');
   const completion = turn.rows.findLast((row): row is Completion => row.kind === 'completion');
-  const final = assistantRows.findLast(row => Boolean(assistantTextForDisplay(row.text, row.streaming, completion?.summary, jsonToolProtocol).trim()));
-  const finalIndex = final ? turn.rows.indexOf(final) : turn.rows.length;
-  const work = turn.rows.filter((row, i) => (row.kind === 'assistant' && i < finalIndex) || row.kind === 'tool');
+  const lastToolIndex = turn.rows.findLastIndex(row => row.kind === 'tool');
+  const finalCandidates = assistantRows.filter(row => turn.rows.indexOf(row) > lastToolIndex);
+  // A stopped partial is durable transcript content, not the turn's final
+  // answer. Keep it in the work segment so its explicit stopped status remains
+  // visible after the active stream and stop banner have gone away.
+  const final = finalCandidates.findLast(row => !row.interrupted
+    && Boolean(assistantTextForDisplay(visibleAssistantText(row), row.streaming, completion?.summary, jsonToolProtocol).trim()));
+  const work = turn.rows.filter(row => {
+    if (row.kind === 'tool') return true;
+    if (row.kind === 'subagent' && effectivePluginIds?.has('sessions')) return true;
+    if (row.kind === 'assistant' && row !== final) {
+      const hasText = Boolean(assistantTextForDisplay(visibleAssistantText(row), row.streaming, completion?.summary, jsonToolProtocol).trim());
+      const hasReasoning = Boolean(canShowReasoning && row.reasoning);
+      return hasText || hasReasoning;
+    }
+    return false;
+  });
   const workPending = work.some(row => row.kind === 'tool' && pendingToolIds?.has(row.toolCallId));
-  const workFailed = work.some(row => row.kind === 'tool' && row.status === 'error' && !pendingToolIds?.has(row.toolCallId));
-  const workDisclosure = useDisclosure(`work:${turn.key}`, workFailed || workPending);
+  const workFailed = work.some(row => row.kind === 'tool' && row.status === 'error' && !pendingToolIds?.has(row.toolCallId)
+    || row.kind === 'subagent' && row.status === 'failed');
+  const subagentRunning = work.some(row => row.kind === 'subagent' && row.status === 'running');
+  const workDisclosure = useDisclosure(`work:${turn.key}`, workFailed || workPending || subagentRunning);
   const workFindActive = work.some(row => conversationFindRowKey(row) === activeFindRowKey);
   const workOpen = workDisclosure.open || workFindActive;
   const running = latest && props.streamingPending === true;
   const interrupted = assistantRows.some(row => row.interrupted === true);
-  const firstTime = assistantRows.find(row => row.startedAt !== undefined)?.startedAt;
-  const lastTime = assistantRows.findLast(row => row.endedAt !== undefined)?.endedAt;
-  const duration = firstTime !== undefined && lastTime !== undefined ? formatConversationWorkDuration(Math.max(0, lastTime - firstTime), getLocale()) : undefined;
-  const workLabel = workPending ? tr('等待批准') : interrupted ? tr('已停止') : running ? tr('工作中') : workFailed ? tr('运行失败') : duration ? tf('用时 {0}', [duration]) : tr('已完成');
-  const answer = final ? assistantTextForDisplay(final.text, final.streaming, completion?.summary, jsonToolProtocol) : '';
-  const copyText = assistantRows.map(row => assistantTextForDisplay(row.text, row.streaming, completion?.summary, jsonToolProtocol)).filter(text => text.trim()).join('\n\n');
+  const firstTime = assistantRows[0]?.startedAt;
+  const lastTime = assistantRows.at(-1)?.endedAt;
+  const elapsedMs = conversationElapsedInterval(firstTime, lastTime);
+  const duration = elapsedMs !== undefined && elapsedMs > 0 ? formatConversationWorkDuration(elapsedMs, getLocale()) : null;
+  const facts = effectivePluginIds?.has('sessions') ? conversationWorkSegments(props.workActivity, turn.rows.map(timelineRowTurnId).find(Boolean)) : [];
+  const activeMs = conversationActiveDuration(facts);
+  const factualLabel = conversationWorkLabel(facts, getLocale(), activeMs === undefined ? null : formatConversationWorkDuration(activeMs, getLocale()));
+  const workLabel = factualLabel ?? (workPending ? tr('等待批准') : interrupted ? tr('已停止') : running || subagentRunning ? tr('工作中') : workFailed ? tr('运行失败') : duration ? (getLocale() === 'en' ? `Elapsed ${duration}` : `经过 ${duration}`) : tr('已完成'));
+  const answer = final ? assistantTextForDisplay(visibleAssistantText(final), final.streaming, completion?.summary, jsonToolProtocol) : '';
+  const streamingRow = assistantRows.some(row => row.streaming);
+  const liveLabel = tr(conversationActivityLabel(props.activityPhase));
+  const copyText = assistantRows.map(row => assistantTextForDisplay(visibleAssistantText(row), row.streaming, completion?.summary, jsonToolProtocol)).filter(text => text.trim()).join('\n\n');
+  const referenceRows = turn.rows.filter(isReferenceTimelineRow);
+  const userReferences = referenceRows.filter(row => row.anchorRole === 'user');
+  const assistantReferences = referenceRows.filter(row => row.anchorRole !== 'user');
   const workRows = work.map(row => row.kind === 'tool'
-    ? <ToolRow key={`tool:${row.toolCallId}`} row={row} pending={pendingToolIds?.has(row.toolCallId) ?? false} defaultOpen={props.collapseTools === false || row.status === 'error' && !pendingToolIds?.has(row.toolCallId)} findActive={activeFindRowKey === conversationFindRowKey(row)} onRetry={onRetry} />
-    : row.kind === 'assistant' ? <div key={`response:${row.messageId ?? row.messageIndex ?? row.seq}`} className="xn-zc-work-response">
-      {showReasoning && row.reasoning && <Reasoning row={row} activityPhase={props.activityPhase} findActive={activeFindRowKey === conversationFindRowKey(row)} />}
-      <AssistantText row={row} summary={completion?.summary} protocol={jsonToolProtocol} />
-    </div> : null);
+    ? <ToolRow key={`tool:${row.toolActivityId ?? row.toolCallId}`} row={row} pending={pendingToolIds?.has(row.toolCallId) ?? false} effectivePluginIds={effectivePluginIds} defaultOpen={props.collapseTools === false || row.status === 'error' && !pendingToolIds?.has(row.toolCallId)} findActive={activeFindRowKey === conversationFindRowKey(row)} onRetry={onRetry} />
+    : row.kind === 'subagent' ? <SubagentRowView key={`subagent:${row.toolCallId}:${row.taskId}`} row={row}
+      sessionId={props.sessionId} effectivePluginIds={effectivePluginIds} findActive={activeFindRowKey === conversationFindRowKey(row)} />
+    : row.kind === 'assistant' ? <React.Fragment key={`response:${row.messageId ?? row.messageIndex ?? row.seq}`}>
+      {canShowReasoning && row.reasoning && <Reasoning row={row} activityPhase={props.activityPhase} findActive={activeFindRowKey === conversationFindRowKey(row)} />}
+      {Boolean(assistantTextForDisplay(visibleAssistantText(row), row.streaming, completion?.summary, jsonToolProtocol).trim()) && (
+        <div className="xn-zc-work-response"><AssistantText row={row} summary={completion?.summary} protocol={jsonToolProtocol} /></div>
+      )}
+    </React.Fragment> : null);
   const stableTurnId = turn.rows.map(timelineRowTurnId).find(Boolean) ?? turn.key;
   return <section className="xn-zc-turn" data-turn-key={turn.key} data-zcode-turn-id={stableTurnId}>
     {compactionMarker && <CompactionBoundary marker={compactionMarker} />}
-    {turn.rows.filter((row): row is User => row.kind === 'user').map(row => <div key={`user:${row.messageId ?? row.messageIndex ?? row.seq}`} {...rowData(row)}><UserMessage row={row} onEdit={onEdit} /></div>)}
-    {work.length > 0 && (running || !final ? <div className="xn-zc-work"><div className="xn-zc-work-status" role="status">{workLabel}</div><div className="xn-zc-work-content">{workRows}</div></div>
-      : <details className="xn-zc-work" open={workOpen} onToggle={workDisclosure.onToggle}><summary className="xn-zc-work-status"><span>{workLabel}</span><ChevronRight size={16} className="xn-zc-chevron" /></summary>
+    <ConversationMarkers facts={props.timelineMarkers} rows={turn.rows} placement="before_user" enabled={effectivePluginIds?.has('sessions') === true} />
+    {turn.rows.filter((row): row is User => row.kind === 'user').map(row => <div key={`user:${row.messageId ?? row.messageIndex ?? row.seq}`} {...rowData(row)}><UserMessage editSessionId={props.messageEditSessionId} previewTransport={props.messageEditPreviewTransport} attachmentTransport={props.messageEditTransport} row={row} onEdit={onEdit} enabled={effectivePluginIds?.has('sessions') === true} isSessionsEffective={props.isSessionsEffective} /></div>)}
+    {userReferences.map(row => <ReferenceRowView key={`${row.kind}:${row.seq}`} row={row} sessionId={props.sessionId} effectivePluginIds={effectivePluginIds} />)}
+    {(work.length > 0 || facts.length > 0) && (running || !final ? <div className="xn-zc-work"><div className="xn-zc-work-status" role="status">{workLabel}{facts.length > 1 && <span> · {facts.length} {getLocale() === 'en' ? 'segments' : '段工作'}</span>}</div><div className="xn-zc-work-content">{workRows}</div></div>
+      : <details className="xn-zc-work" open={workOpen} onToggle={workDisclosure.onToggle}><summary className="xn-zc-work-status"><span>{workLabel}{facts.length > 1 && ` · ${facts.length} ${getLocale() === 'en' ? 'segments' : '段工作'}`}</span><ChevronRight size={16} className="xn-zc-chevron" /></summary>
         {workOpen && <div className="xn-zc-work-content">{workRows}</div>}</details>)}
+    <ConversationMarkers facts={props.timelineMarkers} rows={turn.rows} placement="work_tail" enabled={effectivePluginIds?.has('sessions') === true} />
     {final && <div className="xn-zc-final">
-      {showReasoning && final.reasoning && <Reasoning row={final} activityPhase={props.activityPhase} findActive={activeFindRowKey === conversationFindRowKey(final)} />}
+      {canShowReasoning && final.reasoning && <Reasoning row={final} activityPhase={props.activityPhase} findActive={activeFindRowKey === conversationFindRowKey(final)} />}
       <AssistantText row={final} summary={completion?.summary} protocol={jsonToolProtocol} />
-      {!running && <div className="xn-zc-actions"><CopyAction text={copyText} />
+      {/* While the turn runs, the action row is reserved (it is invisible until
+          hover anyway); a settling turn shows its status there, so finishing
+          does not add or remove a line below the answer. Distinct keys keep the
+          reserved row's opacity from fading through the new buttons. */}
+      {running ? <div key="reserved" className="xn-zc-actions xn-zc-actions--reserved" aria-hidden={streamingRow ? true : undefined}>
+        {!streamingRow && <span className="xn-zc-live" role="status" data-testid="timeline-stream-loading">{liveLabel}</span>}
+      </div>
+      : <div key="actions" className="xn-zc-actions"><CopyAction text={copyText} />
         {onFeedback && final.messageRevision && final.messageIndex !== undefined && <FeedbackActions row={final} onFeedback={onFeedback} />}
         {onFork && <button type="button" className="xn-zc-action" aria-label={tr('分叉会话')} title={tr('分叉会话')} onClick={() => onFork(final)}><TrendingUpDown size={14} /></button>}
       </div>}
     </div>}
+    {assistantReferences.map(row => <ReferenceRowView key={`${row.kind}:${row.seq}`} row={row} sessionId={props.sessionId} effectivePluginIds={effectivePluginIds} />)}
     {completion && <CompletionCheck row={completion} answer={answer} protocol={jsonToolProtocol} findActive={activeFindRowKey === conversationFindRowKey(completion)} />}
     {turn.rows.filter(row => row.kind === 'pending_question').map(row => row.kind === 'pending_question' ? <p key={`question:${row.seq}`} {...rowData(row)} role="status" className="xn-zc-question">{tr('等待回答')} · {row.question}</p> : null)}
-    {running && !assistantRows.some(row => row.streaming) && <p className="xn-zc-live" role="status" data-testid="timeline-stream-loading">{tr(conversationActivityLabel(props.activityPhase))}</p>}
+    {running && !streamingRow && !final && <p className="xn-zc-live" role="status" data-testid="timeline-stream-loading">{liveLabel}</p>}
   </section>;
 }
 
 /** Standard and lightweight runtimes use exactly the same conversation view. */
 export function ZCodeConversation(props: ZCodeConversationProps) {
   const [disclosures] = React.useState(() => zcodeConversationDisclosures);
-  const turns = React.useMemo(() => buildConversationTurns(props.rows), [props.rows]);
+  const identityScope = `${props.sessionId ?? ''}:${props.currentTurnId ?? ''}`;
+  const identities = React.useRef({ scope: identityScope, calls: new Map<string, string>() });
+  if (identities.current.scope !== identityScope) identities.current = { scope: identityScope, calls: new Map() };
+  const projectedRows = toolActivityRows(props.rows, props.toolActivity, { running: props.streamingPending,
+    currentTurnId: props.currentTurnId, currentStreamId: props.currentStreamId,
+    effectivePluginIds: props.effectivePluginIds, identities: identities.current.calls });
+  const turns = React.useMemo(() => buildConversationTurns(projectedRows), [projectedRows]);
   // 压缩边界挂在「第一条仍在模型上下文内的行」所属轮次的顶部；归档轮次在前。
   const markerTurnIndex = React.useMemo(() => props.compactionMarker
     ? turns.findIndex(turn => turn.rows.some(row => row.seq >= props.compactionMarker!.boundarySeq))
     : -1, [turns, props.compactionMarker]);
-  const { snapshot, streamRef, reveal } = useTimelineVirtualWindow({ count: turns.length, enabled: true, initialTail: props.autoScroll !== false });
+  const { snapshot, streamRef, reveal } = useTimelineVirtualWindow({ count: turns.length, enabled: true,
+    initialTail: props.autoScroll !== false, followTail: props.autoScroll !== false, scopeKey: props.sessionId });
   const rootRef = React.useRef<HTMLDivElement>(null);
   const [internalFindQuery, setInternalFindQuery] = React.useState("");
   const findQuery = props.findQuery ?? internalFindQuery;

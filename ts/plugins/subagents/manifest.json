@@ -1,0 +1,27 @@
+{
+  "apiVersion": 2,
+  "id": "subagents",
+  "name": "子代理",
+  "description": "只读子任务：ZCode Agent 工具、后台派发与结果收集、显式恢复与引导、内置与已存子代理类型清单、持久化子会话与 task_runs 记录。",
+  "version": "0.3.0",
+  "defaultEnabled": true,
+  "capabilities": { "fs": { "read": ["state"], "write": ["state"] } },
+  "tools": [
+    { "name": "task", "gate": "planning", "mutating": false, "concurrencySafe": false },
+    { "name": "task_collect", "gate": "planning", "mutating": false, "concurrencySafe": false },
+    { "name": "task_resume", "gate": "planning", "mutating": false, "concurrencySafe": false },
+    { "name": "task_send_message", "gate": "planning", "mutating": false, "concurrencySafe": false }
+  ],
+  "features": [
+    { "id": "subagents.tasks", "name": "只读子任务", "nameEn": "Read-only subtasks" },
+    { "id": "subagents.coordination", "name": "后台派发、结果收集、恢复与引导", "nameEn": "Background dispatch, collection, resume and steering" },
+    { "id": "subagents.listing", "name": "可用子代理类型清单", "nameEn": "Available agent types listing" },
+    { "id": "subagents.durable_children", "name": "持久化子会话", "nameEn": "Durable child sessions" }
+  ],
+  "panels": ["capabilities", "subagents"],
+  "frontendModules": [
+    "plugins/subagents/SubagentSettings.tsx",
+    "plugins/subagents/SubagentSidePane.tsx",
+    "plugins/subagents/SubagentTranscript.tsx"
+  ]
+}

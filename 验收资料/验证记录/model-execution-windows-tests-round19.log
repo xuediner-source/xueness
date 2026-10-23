@@ -1,0 +1,84 @@
+▶ subagents on the TS agent service
+  ✔ dispatches a read-only Explore child in the background and returns its report through task_collect (1009.0189ms)
+  ✔ uses a stored definition's prompt and tool allowlist (647.8522ms)
+  ✔ offers no Agent tool unless the request allows delegation, and reports an unknown type (768.1143ms)
+  ✔ stops the child when the parent run stops, recording a cancelled task (440.5461ms)
+  ✔ runs a session with background tasks left by the removed Python backend on TS (19.6051ms)
+✔ subagents on the TS agent service (2886.5247ms)
+▶ terminal model failure display
+  ✔ shows queue status in CLI and updates one TUI queue card across attempts (3.4371ms)
+  ✔ renders fixed localized CLI messages and stays quiet for intermediate or cancelled failures (0.4026ms)
+  ✔ adds one terminal TUI error card per request and skips intermediate and cancelled errors (0.7338ms)
+✔ terminal model failure display (6.1764ms)
+✔ runs an actor node, pauses it on a question, answers it and completes on resume (1028.5588ms)
+▶ agent lifecycle and durable boundaries
+  ✔ stops a stream, preserves partial display text, releases its lease and resumes without replay (364.0336ms)
+  ✔ distinguishes provider failures, callback failures, local failures and timeout stops (298.4384ms)
+  ✔ fails closed on plugin policy errors and rechecks tool ownership after the provider (267.1882ms)
+  ✔ keeps product hooks within their effective plugin and always settles/closes a run (244.3233ms)
+  ✔ honors bounded plugin continuations through persisted human turns (267.1141ms)
+  ✔ does not execute intent when its durable publication fails (39.8952ms)
+  ✔ pauses on approval and does not start a later side effect from the same response (162.2033ms)
+  ✔ ends the turn like ZCode when evidence references are invalid: no repair round, no blocked tools (173.8615ms)
+  ✔ offloads oversized text for writable runs and keeps read-only runs free of artifact writes (10.4627ms)
+  ✔ releases invocation media bindings on both successful and failed requests (166.0952ms)
+  ✔ appends turns and answers only at valid conversation boundaries (40.4759ms)
+✔ agent lifecycle and durable boundaries (2035.9829ms)
+▶ agent model request admission
+  ✔ runs FIFO at one slot for the same state/model and publishes queued, admitted and started (411.2527ms)
+  ✔ cancels a queued run without calling the provider and releases its session lease (225.9223ms)
+  ✔ releases a failed request before backoff so a queued request runs before its retry (308.8875ms)
+  ✔ rebinds media per retry, releases each binding, and leaves the journal message intact (135.2799ms)
+  ✔ records numeric-only completion/failure diagnostics and counts hidden reasoning (358.7968ms)
+  ✔ clears queued runs on provider disable, wall deadline, and host abort (857.0926ms)
+✔ agent model request admission (2299.069ms)
+▶ logical model request handling
+  ✔ retries a zero-usage empty completion once, publishes ordered attempt events, and releases each media binding (164.7684ms)
+  ✔ bounds repeated empties, respects budgets, and skips adapter retries for normal stop, usage, tools, or reasoning (800.6449ms)
+  ✔ retries failed tool preludes without leaking snapshots and runs only the accepted tool call (393.2291ms)
+  ✔ does not retry after visible body or hidden reasoning and leaves visible partials while releasing the lease (212.8755ms)
+  ✔ persists localized terminal failures, clears them on the next request, and skips disabled provider hooks (378.245ms)
+  ✔ keeps user cancellation during an idle-timeout retry from persisting a provider failure and releases media (187.9236ms)
+✔ logical model request handling (2139.8174ms)
+▶ ZCode model retry in the agent driver
+  ✔ re-sends the same request after transient failures and publishes ZCode status events (153.0934ms)
+  ✔ stops at the budget, on non-retryable failures and after committed output (234.1182ms)
+  ✔ keeps a single attempt for the lightweight profile and honours single-attempt budgets (129.1433ms)
+  ✔ settles as stopped when the user stops during the retry wait (111.051ms)
+  ✔ never retries past the wall-time bound (65.2762ms)
+✔ ZCode model retry in the agent driver (694.2148ms)
+▶ provider request admission
+  ✔ keeps no-admission and fast-path admission free of queue observer events (2.0833ms)
+  ✔ orders queued slow-path observers and skips them without a fast-path API (1.4291ms)
+  ✔ rejects pre-abort and releases a grant that crosses the abort boundary (1.3113ms)
+  ✔ does not acquire after onQueued fails and releases after onAdmitted fails (1.7346ms)
+✔ provider request admission (8.6388ms)
+✔ keeps queue time across admission/start and clears it for the next unqueued attempt (101.4444ms)
+﹣ matches real Python measured activity without inventing missing provider counters (0.2392ms) # no Python backend at E:\models\apps\_round19\Xueness-0.1.8-complete-project
+✔ records a ZCode model retry on the request activity and keeps only safe public facts (2.7489ms)
+▶ provider admission policy
+  ✔ grants FIFO within a model bucket while independent keys progress separately (3.2046ms)
+  ✔ removes cancelled waiters and makes release-versus-abort races settle once (0.8682ms)
+  ✔ releases tickets idempotently and removes idle buckets (0.2912ms)
+  ✔ shares the first per-state limit, isolates other states, honors zero, and restores the environment (1.2817ms)
+✔ provider admission policy (7.5042ms)
+▶ content-free model diagnostics
+  ✔ counts canonical text and reasoning while excluding media and tool payloads (2.1514ms)
+  ✔ projects a fixed safe schema and drops nested content, credentials, and unknown fields (1.7334ms)
+  ✔ is disabled without opt-in and creates no state directory (3.0996ms)
+  ✔ writes private atomic JSON files and retains only the newest managed records (63.0298ms)
+  ✔ counts link or directory conflicts without throwing or exposing errors (7.4649ms)
+✔ content-free model diagnostics (79.0958ms)
+▶ model failure status
+  ✔ uses fixed localized text and persists only terminal classified facts (2.8289ms)
+  ✔ tracks start, completion and terminal failure on one activity record (2.0113ms)
+  ✔ projects safe model failure and request activity fields in session payloads (3.0899ms)
+✔ model failure status (9.4201ms)
+ℹ tests 56
+ℹ suites 10
+ℹ pass 55
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 1
+ℹ todo 0
+ℹ duration_ms 4713.4463

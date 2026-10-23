@@ -1,0 +1,5 @@
+
+> xueness-ts@0.2.0-dev.0 test:packaged
+> node scripts/smoke-packaged.ts E:\models\Xueness-ts-m4-20261018\Xueness-0.1.8-complete-project\desktop\release\win-unpacked\resources E:\models\Xueness-ts-m4-20261018\packaged-native-report.json
+
+Packaged bundled Node + frozen Python: native session/history/media, desktop guards, private locks and isolated startup passed.

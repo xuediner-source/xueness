@@ -1,0 +1,19 @@
+{
+  "name": "@xueness/tool-bridge",
+  "version": "0.2.1",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@xueness/contracts": "0.2.1",
+    "@xueness/engine-tools": "0.2.1",
+    "@xueness/kernel": "0.2.1",
+    "@xueness/permissions": "0.2.1"
+  },
+  "devDependencies": {
+    "@xueness/plugin-files": "0.2.1",
+    "@xueness/plugin-shell": "0.2.1"
+  }
+}

@@ -1,0 +1,18 @@
+{
+  "apiVersion": 2,
+  "id": "updates",
+  "name": "应用更新",
+  "description": "源仓库更新与桌面客户端检查、下载和安装",
+  "version": "1.0.0",
+  "defaultEnabled": true,
+  "commands": ["update"],
+  "httpFamilies": ["updates"],
+  "capabilities": { "exec": ["*"], "fs": { "read": ["state"], "write": ["state"] } },
+  "features": [
+    { "id": "updates.check", "name": "源仓库版本与更新检查", "nameEn": "Source repository version and update checks" },
+    { "id": "updates.apply", "name": "明确批准的干净仓库快进更新", "nameEn": "Approved clean-repository fast-forward update" },
+    { "id": "updates.desktop", "name": "客户端更新检查、下载与重启安装", "nameEn": "Desktop update checks, downloads and restart installation" }
+  ],
+  "frontendModules": ["plugins/updates/DesktopUpdates.tsx", "plugins/updates/updateLifecycle.ts"],
+  "desktopModules": ["src/update-coordinator.cjs", "src/electron-net-asset.cjs"]
+}

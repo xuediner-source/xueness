@@ -31,7 +31,7 @@ const serverScript = join(temporary, 'server.py');
 await writeFile(serverScript, source);
 const child = spawn(process.env.PYTHON || 'python3', [serverScript, temporary, join(root, 'webapp/dist')], {
   cwd: root, env: { ...process.env, PYTHONPATH: root, XUENESS_API_KEY: '', XUENESS_MODEL: '', XUENESS_MARKETPLACE_URL: '', XUENESS_WORKSPACE_ROOTS: '' },
-  stdio: ['pipe', 'pipe', 'pipe'],
+  windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'],
 });
 let browser;
 const errors = [], external = [], results = [];
@@ -59,7 +59,10 @@ try {
     await page.route('**/*', async route => {
       const url = new URL(route.request().url());
       if (url.origin !== origin) { external.push(url.href); await route.abort(); return; }
-      if (/\/run$/.test(url.pathname)) throw new Error('Verification must never start a model request');
+      const runCommand = route.request().method() === 'POST'
+        && /^\/api\/sessions\/[^/]+\/commands$/.test(url.pathname)
+        && route.request().postDataJSON()?.type === 'run';
+      if (/\/run$/.test(url.pathname) || runCommand) throw new Error('Verification must never start a model request');
       if (url.pathname === '/api/updates/status') {
         await route.fulfill({ json: { phase: 'current', currentVersion: '0.1.4', canDownload: false, canInstall: false, installMode, reason: '当前已是最新稳定版。' } });
         return;
@@ -82,7 +85,7 @@ try {
         background: style.backgroundColor, foreground: style.color, overflow: document.body.scrollWidth > innerWidth };
     });
     assert.equal(geometry.width, width);
-    assert.equal(geometry.height, 40);
+    assert.equal(geometry.height, width <= 900 ? 40 : 44);
     assert.equal(geometry.overflow, false);
     if (platform === 'macos') { assert.ok(geometry.left >= 78); assert.ok(geometry.right >= 10 && geometry.right < 30); }
     else { assert.ok(geometry.left >= 10 && geometry.left < 30); assert.ok(geometry.right >= 148); }

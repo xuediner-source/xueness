@@ -1,0 +1,23 @@
+▶ dynamic workflow engine
+  ✔ restores completed ask/report nodes without dispatching or duplicating reports (102.7643ms)
+  ✔ serializes each actor, runs another actor concurrently, and retunes live capacity (102.3609ms)
+  ✔ holds at a hole, resumes after resolution, and keeps earlier reports unique (69.428ms)
+  ✔ recomputes imported mismatches but rejects a mismatch in the same run (162.8609ms)
+  ✔ cancels queued work and drains the in-flight driver before settling (76.1669ms)
+  ✔ validates ask schemas and distinguishes actor questions from retryable pauses (208.2844ms)
+✔ dynamic workflow engine (723.2609ms)
+▶ dynamic workflow AST evaluation
+  ✔ runs typed asks through loops, branches, and return (13.8797ms)
+  ✔ starts async map asks together before Promise.all waits (25.8912ms)
+  ✔ passes read, phase, report, log, and hole calls to the host (2.0928ms)
+  ✔ refuses ambient and forged actor calls, then enforces budget and cancellation (5.7384ms)
+  ✔ keeps an unawaited ask pending and drains it when the script completes (19.2663ms)
+✔ dynamic workflow AST evaluation (68.3ms)
+ℹ tests 11
+ℹ suites 2
+ℹ pass 11
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 1449.7761

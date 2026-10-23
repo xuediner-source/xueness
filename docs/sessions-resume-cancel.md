@@ -1,3 +1,5 @@
+> Historical reference from 2026-10-12, before the TypeScript/Z8 migration; current behavior is defined by [README.md](../README.md) and [ts/docs/z8-guarded-goal-memory.md](../ts/docs/z8-guarded-goal-memory.md).
+
 # 取消、重连与事件续传
 
 实验功能，默认全部关闭。只接受设置里的布尔值 `true`。sessions 插件停用后，这些 HTTP 路由与其它会话路由一样返回 403。不修改已发布的 `xueness.events.v1` 字段，也不改 `POST /api/sessions/<sid>/stop` 在开关关闭时的响应。

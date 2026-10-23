@@ -35,7 +35,7 @@ test('mixed sessions, incomplete pages, sequence gaps and status races fail clos
 });
 test('history mutation sends persisted message identity and a fresh CSRF token', async () => {
   const previous=globalThis.fetch; const calls:{url:string;init?:RequestInit}[]=[];
-  globalThis.fetch=async(url,init)=>{calls.push({url:String(url),init});return new Response(JSON.stringify(String(url)==='/api/csrf'?{csrfToken:'fresh-token'}:{}),{status:200});};
+  globalThis.fetch=async(url,init)=>{calls.push({url:String(url),init});return new Response(JSON.stringify(String(url)==='/api/csrf'?{csrfToken:'fresh-token'}:{id,messageIndex:3,action:'edit',revision}),{status:200});};
   try {
     const result=await updateConversationMessage(id,{kind:'user',seq:999,turnId:'turn-2',text:'old',messageIndex:3,messageRevision:revision},{action:'edit',text:'new'});
     assert.equal(result.ok,true);

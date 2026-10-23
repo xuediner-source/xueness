@@ -1,0 +1,1546 @@
+{
+  "scope": [
+    "apps/zcode-cli/packages/contracts/src",
+    "apps/zcode-cli/packages/core/src",
+    "apps/zcode-cli/packages/adapters/src",
+    "apps/zcode-cli/packages/bootstrap/src",
+    "apps/zcode-cli/packages/dynamic-workflow/src"
+  ],
+  "excludes": [
+    "tests/fixtures/generated/assets/bundled",
+    "*.test.ts",
+    "*.spec.ts"
+  ],
+  "priorCommit": "aac4755666d09fdcd70272fcf063c077a639015f",
+  "latestCommit": "3c5b227649371507ddc4eb46ac5133afe6db1cab",
+  "priorIndexedFiles": 1269,
+  "latestIndexedFiles": 1307,
+  "summary": [
+    {
+      "group": "contracts",
+      "added": 2,
+      "modified": 15,
+      "removed": 0
+    },
+    {
+      "group": "core",
+      "added": 25,
+      "modified": 110,
+      "removed": 0
+    },
+    {
+      "group": "adapters",
+      "added": 1,
+      "modified": 34,
+      "removed": 0
+    },
+    {
+      "group": "bootstrap",
+      "added": 11,
+      "modified": 50,
+      "removed": 1
+    },
+    {
+      "group": "dynamic-workflow",
+      "added": 0,
+      "modified": 0,
+      "removed": 0
+    }
+  ],
+  "changes": [
+    {
+      "path": "apps/zcode-cli/packages/adapters/src/commands/index.ts",
+      "kind": "modified",
+      "oldSha256": "fed9f429a40e7a54b2d30788e3da3c1a01dc3e0268fdaa19da2201a020f78ceb",
+      "latestSha256": "e3af8c31908d89673fe8422964b4869021d3418e8854007f3f1367080a272479"
+    },
+    {
+      "path": "apps/zcode-cli/packages/adapters/src/commands/roots.ts",
+      "kind": "modified",
+      "oldSha256": "0c939c0f615ce8a020e9c2decd3da7c8ee32b15c03bd465a3b2bf47283b151ad",
+      "latestSha256": "fe877cf25f9f60ef863e90c2f44e5c06e7936beffd6539efdb899a780c913925"
+    },
+    {
+      "path": "apps/zcode-cli/packages/adapters/src/config/schema.ts",
+      "kind": "modified",
+      "oldSha256": "ca09ef9de3e43c453765086117335a9833551774e5573627a16985f2d77ccfd8",
+      "latestSha256": "7d46f130df2f8c9a508664c985aab359badc85dfd305aae166e7f32ec304528d"
+    },
+    {
+      "path": "apps/zcode-cli/packages/adapters/src/exec/execution-adapter-types.ts",
+      "kind": "modified",
+      "oldSha256": "19afaa216564d969eadd0ba2b719d70bbc8d5ac00af32f3b2a9edba10f29318c",
+      "latestSha256": "cce934adcc6d9ee2072281c6c5bfb808168b431ff147586cd2ba23f8f18e959f"
+    },
+    {
+      "path": "apps/zcode-cli/packages/adapters/src/exec/node-execution-adapter-lifecycle.ts",
+      "kind": "modified",
+      "oldSha256": "28521fa08500727863acdc0ad8d231aa0c389d57c498875802f096f0ee050ebc",
+      "latestSha256": "b697db8f769caf98951b586f4b3cb0136ed77a3849bf14ddcfb1967a57164558"
+    },
+    {
+      "path": "apps/zcode-cli/packages/adapters/src/exec/node-execution-adapter-run.ts",
+      "kind": "modified",
+      "oldSha256": "0e2f8a8db95702fd2f51338a58f4369e78c0ff31bf08a0d03917c848ecd67ce4",
+      "latestSha256": "b623cd87dcc1264870261e423c93b34e7424183845760d488c3fd73ad266b9cc"
+    },
+    {
+      "path": "apps/zcode-cli/packages/adapters/src/fs/text-metadata.ts",
+      "kind": "modified",
+      "oldSha256": "e9a06dd2c8fb234fd0b5f6be4c9e72fe88d21902bc217ad8bc08e90b38f373fd",
+      "latestSha256": "b4021966550111375c73a82b12def10247f44e1c7594090fa6e380dd356a406e"
+    },
+    {
+      "path": "apps/zcode-cli/packages/adapters/src/fs/text-range-reader.ts",
+      "kind": "modified",
+      "oldSha256": "b7de018fed8a256115d2d8a35428196ec05a4a316847b91d97b64c087738b168",
+      "latestSha256": "b2cd41319d3f43df2e764a4ad5dd38d382c28ce1f13e7b30e13379c0986f50e5"
+    },
+    {
+      "path": "apps/zcode-cli/packages/adapters/src/mcp/descriptor.ts",
+      "kind": "modified",
+      "oldSha256": "1964135169aaafb7e66cbe74ab6ee8e2d68f8679178f91e6e54c91cfc9c64f7f",
+      "latestSha256": "eddbd77c02421ed20e74934287fe2aa9ad493ed36141cef48366b994c3bc0c22"
+    },
+    {
+      "path": "apps/zcode-cli/packages/adapters/src/mcp/index.ts",
+      "kind": "modified",
+      "oldSha256": "29f12b42f035a8a426975fc298fdf240461b8f38a6724704a893e11a113bc700",
+      "latestSha256": "f3e4ca32569cc44f6e77184913c71fdb70e034c8d81a7076768bd83f8b455755"
+    },
+    {
+      "path": "apps/zcode-cli/packages/adapters/src/mcp/pool.ts",
+      "kind": "modified",
+      "oldSha256": "00942c5bdca9a5d55bc6f4c67086b3477be97521454863f24c694a27b04e5862",
+      "latestSha256": "4b3208e3c21a93741c4e7992c87bfbb817f3d4774402217cca49990e48be2197"
+    },
+    {
+      "path": "apps/zcode-cli/packages/adapters/src/model/errors.ts",
+      "kind": "modified",
+      "oldSha256": "c559ccb8c2d99199016083b0fcfe625983f4d1894be75d36334caaa0765e73e8",
+      "latestSha256": "4e0b1915d657c99384fc994c945d888b555c1c55d1d8ec47b83ca8e1c4fbaf32"
+    },
+    {
+      "path": "apps/zcode-cli/packages/adapters/src/model/model.ts",
+      "kind": "modified",
+      "oldSha256": "20a1821905d649fa5200ff7b17eabb1fe8e626dd6a0139e57a9a32c320a87c6f",
+      "latestSha256": "91f7043fbfaadbe3bcbbfc4cb225cdf8a9284f2ca2a6b2d83c9b184ec18d99ce"
+    },
+    {
+      "path": "apps/zcode-cli/packages/adapters/src/model/provider-endpoint-routing-fetch.ts",
+      "kind": "modified",
+      "oldSha256": "f591f3ef9c3312715887f0a8332ca3b7a92925e4651c656412f02db0aa31db17",
+      "latestSha256": "14cca70a5cc2b599f2b124132b343f89b7485d4dd90bd59c4713078bc04064ab"
+    },
+    {
+      "path": "apps/zcode-cli/packages/adapters/src/model/provider-endpoint-routing-options.ts",
+      "kind": "modified",
+      "oldSha256": "53cf1607d0c82f2824cc73510b1a706546f6140a98a860f062d84614250fc48a",
+      "latestSha256": "df3211a577f70f73d19adf69a0f39a4f4197552ad18c3fc11ccfbf9ee5de08b7"
+    },
+    {
+      "path": "apps/zcode-cli/packages/adapters/src/model/runner-diagnostics.ts",
+      "kind": "modified",
+      "oldSha256": "07b76e8c274faac02f85e99085e93d82a0259384e2aca2b00e43072646801873",
+      "latestSha256": "bf5f687b4e94a932c3a9a79c005c6da15ad08e88cd9f6ef889970f11dbbe293d"
+    },
+    {
+      "path": "apps/zcode-cli/packages/adapters/src/model/runner-generate.ts",
+      "kind": "modified",
+      "oldSha256": "2442e3d1a66f933c0a3e9815c1cbdfc281d15e95d1513601e51e4139184d4ea9",
+      "latestSha256": "e04a99b3a361ea13940069ffde3d60331645b321d3b48615d25d017455bc969a"
+    },
+    {
+      "path": "apps/zcode-cli/packages/adapters/src/model/runner-options.ts",
+      "kind": "modified",
+      "oldSha256": "a5c732994ea57f4e0394f67a2f928a31a72bc8a7f0cd0fc1059a9321efcb2a5c",
+      "latestSha256": "9ea51025617d3aa1f1d10d5332d4382dac966ccbc2b8352ddcdab8ba889d6340"
+    },
+    {
+      "path": "apps/zcode-cli/packages/adapters/src/model/runner-stream.ts",
+      "kind": "modified",
+      "oldSha256": "2da5de37b963e5b509a8a83a1b6da3e32bbd0fdb860a6fa98e8a48cbc1853149",
+      "latestSha256": "2df5a764e7b302bec678d8b2868e1890d61d7c0766018aa079daaa3ced1e8f49"
+    },
+    {
+      "path": "apps/zcode-cli/packages/adapters/src/model/runner.ts",
+      "kind": "modified",
+      "oldSha256": "c02c3b59116fd11c67158a7ad67c87844c0e14f4d78f03bc048ed3a829af6945",
+      "latestSha256": "febff8dcd4d0d8be0813be231942bf1c6287497fd1031a0a61148e6e6dd2ab3d"
+    },
+    {
+      "path": "apps/zcode-cli/packages/adapters/src/model/tool-result-media-projection.ts",
+      "kind": "modified",
+      "oldSha256": "4170e9abc02288faf2801d4e026869bb2cdc3ba5be79b4c343847155029c626e",
+      "latestSha256": "980bfb2ed66be2abdb479d69439244964a347c92b28af8b9a75240fdbb230d08"
+    },
+    {
+      "path": "apps/zcode-cli/packages/adapters/src/model/tool-search.ts",
+      "kind": "added",
+      "oldSha256": null,
+      "latestSha256": "a77a7ffcda23feb03d92d40e132522fe3c5c0b14161671b0f11b5da3d9a2cec5"
+    },
+    {
+      "path": "apps/zcode-cli/packages/adapters/src/model/tool-transform.ts",
+      "kind": "modified",
+      "oldSha256": "50c2b3cdd9c4ba13185192fb885bfb80f107e1ecc6b48e5e26804d5fe9d40940",
+      "latestSha256": "18a723a77e193ed5bd255af630f13b5b70421570f8497b04946483c5ad1a8c77"
+    },
+    {
+      "path": "apps/zcode-cli/packages/adapters/src/model/transform.ts",
+      "kind": "modified",
+      "oldSha256": "89b8c634c723e7ec979c8d1f84665717ea98ba961902fd95045a72c3111d6ecd",
+      "latestSha256": "b51d51127d59dc006fd1155eaf5d583421c4318699c2118a53aa44bbfc3f4a27"
+    },
+    {
+      "path": "apps/zcode-cli/packages/adapters/src/plugins/marketplace.ts",
+      "kind": "modified",
+      "oldSha256": "1594e539bc8458f7ecce5138b3554d748629c11ccedf34042356caa53dcac43c",
+      "latestSha256": "4b777f615747059772f181fe7f38aa13ec662a43277b3eb304038178102ae465"
+    },
+    {
+      "path": "apps/zcode-cli/packages/adapters/src/plugins/mcp.ts",
+      "kind": "modified",
+      "oldSha256": "a0c4af5a2e0c1c404c166b4184bafd5114ab8c82d80d368345985aeb46b469ef",
+      "latestSha256": "c88a6ecb8906f061de194bc5c0364087afa0d4d7866e9bf1c8e96f3d320e1078"
+    },
+    {
+      "path": "apps/zcode-cli/packages/adapters/src/skills/index.ts",
+      "kind": "modified",
+      "oldSha256": "7ec39e804bafa91b138d1549b4170b80ccd58a05b2d251a9d571616cfcc4bb2d",
+      "latestSha256": "82ead0c36194ca1c19da8aec10a64418bbcd54c51d053be4159b519c3087eab0"
+    },
+    {
+      "path": "apps/zcode-cli/packages/adapters/src/skills/roots.ts",
+      "kind": "modified",
+      "oldSha256": "fddf17bc8c14707e202f64a1d2520b848b9cf8b6a2d9681843c51f86613ed09d",
+      "latestSha256": "76c93fa02dc2cf4a4122be9b237592a992d3823ba91eaf4c68a2a38ce28c0b58"
+    },
+    {
+      "path": "apps/zcode-cli/packages/adapters/src/storage/session-store/codecs.ts",
+      "kind": "modified",
+      "oldSha256": "70e88ac555cb71f778b936fb29c0ac427210334ec8cc791382fd4c3087b0ea3c",
+      "latestSha256": "78dd692b269cf7cdd0227af416bed16a3f9c2878dd98426e80cf44473ba70356"
+    },
+    {
+      "path": "apps/zcode-cli/packages/adapters/src/storage/session-store/migration-runner.ts",
+      "kind": "modified",
+      "oldSha256": "098839b53ebf03cfea0c90db83fe2b49ab5f333f7e8efb7df78da2d63ada30b5",
+      "latestSha256": "69559eff1d2dd7d81cb0074e7551cef271b787b05c56665dedc362af68bb61c5"
+    },
+    {
+      "path": "apps/zcode-cli/packages/adapters/src/storage/session-store/migrations.ts",
+      "kind": "modified",
+      "oldSha256": "a4aa8f83c731464700f9c16b151fd06a5dc88c71cdb9f0519eec633a6c16ba81",
+      "latestSha256": "783240ae2d679ed1289c2587620b98233dc66fc2b5c797bb759071e71e7200b1"
+    },
+    {
+      "path": "apps/zcode-cli/packages/adapters/src/storage/session-store/paths.ts",
+      "kind": "modified",
+      "oldSha256": "c720a006029e75a9149dd4307d32159a29f8c398ddcd8221a5c6c9e6c58856fe",
+      "latestSha256": "d786680ce0b4709978c92ad3dbdbfdf9d120ea7c53bdef948a6c11d506474e1f"
+    },
+    {
+      "path": "apps/zcode-cli/packages/adapters/src/storage/session-store/repositories/sessions.ts",
+      "kind": "modified",
+      "oldSha256": "5d5e87067d9ae30ce22da2a6e80797766094b26d9af2b4fd5aa7e19fb89faa59",
+      "latestSha256": "87ede86d56a1618bb5c0ac59e8f2d8d78dd4f69292953ee85bd108d58acd7ba8"
+    },
+    {
+      "path": "apps/zcode-cli/packages/adapters/src/storage/session-store/rows.ts",
+      "kind": "modified",
+      "oldSha256": "e6c7f057836cd3db05442f9addc1ceb53eebb506cae666fe79904ca7fa687d31",
+      "latestSha256": "62e21505bdcba3e89cbc45a86f06e766ffcba1d59f883236416a6697b0cc4ad5"
+    },
+    {
+      "path": "apps/zcode-cli/packages/adapters/src/storage/session-store/sqlite-session-store.ts",
+      "kind": "modified",
+      "oldSha256": "bd86ae12e48f88153744437b12784c342664017d3d2bef01af0081afdf96feb9",
+      "latestSha256": "e1a52911a63233efb0706ea1a40ff8884029cc03f00565c2c1733b260cc7674b"
+    },
+    {
+      "path": "apps/zcode-cli/packages/bootstrap/src/app/bundled-plugins.ts",
+      "kind": "modified",
+      "oldSha256": "b5fd0f957f8cad5cdd70fcce45f784a9d870c573431b4065786a851d32ead558",
+      "latestSha256": "62d882d035b64cd84f477c37197b0ba981b022562cfcb9b68791e1cb1b5f6068"
+    },
+    {
+      "path": "apps/zcode-cli/packages/bootstrap/src/app/cli-default-selection.ts",
+      "kind": "added",
+      "oldSha256": null,
+      "latestSha256": "84917b2b4e13d1c4dcaee39ee03827b01e9eb806122c17b779217878eddf4428"
+    },
+    {
+      "path": "apps/zcode-cli/packages/bootstrap/src/app/create-app.ts",
+      "kind": "modified",
+      "oldSha256": "532b716cdcee3d55444c6c0ca4210b2a36531f6389be8c931ed4d7ebde36acb2",
+      "latestSha256": "cc0065f37ad45004a346abfb46bb2a01c9390eaa406c227058f47a1980eee426"
+    },
+    {
+      "path": "apps/zcode-cli/packages/bootstrap/src/app/input-facade.ts",
+      "kind": "modified",
+      "oldSha256": "4e823a2f2aa2504268a5d10da4f231ad61f56119aa153acc02d949a2ec9d1bf2",
+      "latestSha256": "2d3ddb8ceef217e5c19a6c965f7e1f356ddfa44dc31c365e760cafda858f082f"
+    },
+    {
+      "path": "apps/zcode-cli/packages/bootstrap/src/app/legacy-cli-personal-provider-config-importer.ts",
+      "kind": "modified",
+      "oldSha256": "4e3eefad8974f13ca958d9d7b8c4c9e81087d7b76a161ad74ebe9faf85ec7e8d",
+      "latestSha256": "631cccfc429aa9b19e771f0f623e88a6bd5abfb6f0f5b837c342cbb4ea8ff089"
+    },
+    {
+      "path": "apps/zcode-cli/packages/bootstrap/src/app/official-plugin-definitions.ts",
+      "kind": "modified",
+      "oldSha256": "6b0b0813980f861de46de1112a16d5f9a0a749c3cc2e6387f8d2765af4f73a39",
+      "latestSha256": "16abe7276f59b58d69b9e2915fe81e2778b98d0c933038fa0e128e8490b1762b"
+    },
+    {
+      "path": "apps/zcode-cli/packages/bootstrap/src/app/official-plugin-runtime.ts",
+      "kind": "modified",
+      "oldSha256": "b997a42a4c0753e3fd16a1c1469462e28d41887fba059400da8872cbc4aecb99",
+      "latestSha256": "bbfd00180630c881f95eafb4276086ded6b52ea339da722d5660e88f1796a64a"
+    },
+    {
+      "path": "apps/zcode-cli/packages/bootstrap/src/app/runtime-config.ts",
+      "kind": "modified",
+      "oldSha256": "3625b3b220cd7799e1f4369ad3e44db990410d888ef9f29bd11b70ec32f78af2",
+      "latestSha256": "0cff683d757e4794e94b0da7261f7192e0d28cb0822c3e7ce79614698880ccfd"
+    },
+    {
+      "path": "apps/zcode-cli/packages/bootstrap/src/app/script-workflow-child-runtime.ts",
+      "kind": "modified",
+      "oldSha256": "71455c5b2df00c13ded2857a0e31a82b3561dc7ecb904f5571a0d47adc859626",
+      "latestSha256": "59ac7d8cf57266ac5f92ac920f4e1abffbf80e7881d9d6cf67beb3fc58f5335d"
+    },
+    {
+      "path": "apps/zcode-cli/packages/bootstrap/src/app/session-facade.ts",
+      "kind": "modified",
+      "oldSha256": "f95231ccf677ae6a54d82d3d3ddd03f942a96e996d2cf21064461ed862b555b7",
+      "latestSha256": "68a1f10bee722f22e2c96fbe3e24810ec7724602618edfb9a3ee09d26361aa47"
+    },
+    {
+      "path": "apps/zcode-cli/packages/bootstrap/src/app/session-store.ts",
+      "kind": "modified",
+      "oldSha256": "bba5d19e042ccac6ee3056de355e1d2f0c3323d520ad2c230a5adfb1252d54ca",
+      "latestSha256": "e4ed79f5876ec33522d074915f2cf18187a1d99615903a3753049934dda939a1"
+    },
+    {
+      "path": "apps/zcode-cli/packages/bootstrap/src/app/types.ts",
+      "kind": "modified",
+      "oldSha256": "04189dd1188f8a1cb461795da236fcfb3b59a0102a6564f2f3711f61ac2841f0",
+      "latestSha256": "7b7f6f689b9deb20ac8628d9dc475ba8b896dd8ed01625bce9509c4118c8c218"
+    },
+    {
+      "path": "apps/zcode-cli/packages/bootstrap/src/app/workflow-concurrency-governor.ts",
+      "kind": "modified",
+      "oldSha256": "5a88afc935660a95035658374666940c92b079ae6e82d7cdee5561fb76d79554",
+      "latestSha256": "58104d0dab55b09e382f6cc66fd861dc607d1a52e4677d2e57e88f94d1757ddd"
+    },
+    {
+      "path": "apps/zcode-cli/packages/bootstrap/src/app/workflow-facade.ts",
+      "kind": "modified",
+      "oldSha256": "bebe3653297106fd5ef03417dfdb318ce51afcd6b8dbc3de2ffa24ce456dae34",
+      "latestSha256": "7e91ba9001d0ad9760d0fe65c3734aafd257436443bc9362bf4c91ad6c0e64de"
+    },
+    {
+      "path": "apps/zcode-cli/packages/bootstrap/src/custom-commands.ts",
+      "kind": "modified",
+      "oldSha256": "d7ba4fe01489cf51dbd7f90abc09d8ee3139dcace846f7c119a107cbb4838fe6",
+      "latestSha256": "f5a1a61754749ec63e6f80370ace157628fcfaac71a32d45cba6463d0c30e499"
+    },
+    {
+      "path": "apps/zcode-cli/packages/bootstrap/src/plugins.ts",
+      "kind": "modified",
+      "oldSha256": "23eb56c2d9c58ea838ab83d42375c01eff804ec1fc0a7387c0c0a583f29ce1e1",
+      "latestSha256": "11af96642e8f097140c02528171b1acafbee835447f6aecb27d732b6e5148b76"
+    },
+    {
+      "path": "apps/zcode-cli/packages/bootstrap/src/provider-endpoint-routing.ts",
+      "kind": "modified",
+      "oldSha256": "1a44ac8d9b77474a7f95e420623db5286c5c7d2f09d5c9a364f6770df30b035f",
+      "latestSha256": "80fb9d09bc18050b27647d979ab76ed79dfee86d552720c777d5fa692a5bb30e"
+    },
+    {
+      "path": "apps/zcode-cli/packages/bootstrap/src/runtime-subagents/contract.example.ts",
+      "kind": "added",
+      "oldSha256": null,
+      "latestSha256": "31637cc2a23f434b9c172d481a5c0f569394f59c255cff7d480004a1c039135f"
+    },
+    {
+      "path": "apps/zcode-cli/packages/bootstrap/src/runtime-subagents/contract.ts",
+      "kind": "added",
+      "oldSha256": null,
+      "latestSha256": "0ca42d4f9a5e7563f4acca4183317071c58b74e8f0b72f0545419ef43182f282"
+    },
+    {
+      "path": "apps/zcode-cli/packages/bootstrap/src/runtime-subagents/index.ts",
+      "kind": "added",
+      "oldSha256": null,
+      "latestSha256": "87b002c2dbab9e58020652cac3b3a1dfbf77b407d78400f939a184a5020892a6"
+    },
+    {
+      "path": "apps/zcode-cli/packages/bootstrap/src/runtime-subagents/module.ts",
+      "kind": "added",
+      "oldSha256": null,
+      "latestSha256": "c272d783a19d6986ea4e5c0c9b4be7e648220c0688f13f77a7965cbe3b7018ea"
+    },
+    {
+      "path": "apps/zcode-cli/packages/bootstrap/src/session-execution/contract.example.ts",
+      "kind": "added",
+      "oldSha256": null,
+      "latestSha256": "41e8a59985617f51d6aa26dfd54c24856c890c16af35b6fa9177116e07417762"
+    },
+    {
+      "path": "apps/zcode-cli/packages/bootstrap/src/session-execution/contract.ts",
+      "kind": "added",
+      "oldSha256": null,
+      "latestSha256": "4b03f9cec76e5ba5967d67a2f739858b7ea870e449cf5b45733084d052b2e550"
+    },
+    {
+      "path": "apps/zcode-cli/packages/bootstrap/src/session-execution/index.ts",
+      "kind": "added",
+      "oldSha256": null,
+      "latestSha256": "85115ca6f57cfe3ca9d3c923f3073b93c386a039cba740ea08b445c364d49fcb"
+    },
+    {
+      "path": "apps/zcode-cli/packages/bootstrap/src/session-execution/model-context.ts",
+      "kind": "added",
+      "oldSha256": null,
+      "latestSha256": "bc7f011d866fa4dcb23797d456a35c110b9a5f5f72ca50ce73d1bb0155c474e9"
+    },
+    {
+      "path": "apps/zcode-cli/packages/bootstrap/src/session-execution/module.ts",
+      "kind": "added",
+      "oldSha256": null,
+      "latestSha256": "a6a8975df8f6c6c1bac8805fc739a68a869b6bdd2d87ca2d5e14dadccddfb05d"
+    },
+    {
+      "path": "apps/zcode-cli/packages/bootstrap/src/session-execution/residency-lease.ts",
+      "kind": "added",
+      "oldSha256": null,
+      "latestSha256": "a29269150b823ee0103f7e1be6d2c5a87e5d1d0d7b7fb824d2c3aafcf32d1980"
+    },
+    {
+      "path": "apps/zcode-cli/packages/bootstrap/src/sessions.ts",
+      "kind": "modified",
+      "oldSha256": "d562211df234fe8d72bcc1aabf2242992b36623c9cfea65e31c6e82964c6f201",
+      "latestSha256": "294e39f64416ce3210c2eefec31491cb0fdb0de2cc4b72fedfc670289a4de946"
+    },
+    {
+      "path": "apps/zcode-cli/packages/bootstrap/src/slash-command-surface.ts",
+      "kind": "modified",
+      "oldSha256": "74cbb121dc7dd1b4350f5537617caf2cf4730fc2dd06c30bfb430c4233e1527c",
+      "latestSha256": "6bfaf0351af7fad1d6ebaf648e8ea9d8ecd18bd908b7f577e0ada4a88601274b"
+    },
+    {
+      "path": "apps/zcode-cli/packages/bootstrap/src/subagent-runtime-config.ts",
+      "kind": "removed",
+      "oldSha256": "53fb152e1540a76449a503e28a8367b70b8cb2a690347fc7deeafe7107025ef9",
+      "latestSha256": null
+    },
+    {
+      "path": "apps/zcode-cli/packages/bootstrap/src/subagents.ts",
+      "kind": "modified",
+      "oldSha256": "10c49008a749884cdcf8ee56c49c5ff4e56a48264772cde116be613473ab19d7",
+      "latestSha256": "4b8fbe46a0857e8b178d82288274b3f52b7c8be9a024aa65cf12354c034b8974"
+    },
+    {
+      "path": "apps/zcode-cli/packages/bootstrap/src/zcode-protocol-v4/cold-session-resume.ts",
+      "kind": "modified",
+      "oldSha256": "1ef3815fecb94bf1f92977643887b7f5830f5715184ff7c3e608d5a4756a0d9d",
+      "latestSha256": "e097646688cca668c431c61ab2a297f21f24539ea8c2c5edfe243007269acece"
+    },
+    {
+      "path": "apps/zcode-cli/packages/bootstrap/src/zcode-protocol-v4/command-inbox.ts",
+      "kind": "modified",
+      "oldSha256": "cabd269423928a9d9b75418450cb9c51f06c3e106ebcab43fe9b87ccd3ee70e5",
+      "latestSha256": "06754d30e1a5d11c16a6a7d12b0079eb76fa18f7d0ebb295ca9e7368f34d9a44"
+    },
+    {
+      "path": "apps/zcode-cli/packages/bootstrap/src/zcode-protocol-v4/commands/handlers/canonical-intent-replay.ts",
+      "kind": "modified",
+      "oldSha256": "69afd176ad4f795cd8278fc3cc7cc6d36245d15d804b97c6a88281c3da2cf2f9",
+      "latestSha256": "1b996e15ab580176e057fa15d64a933d0f589c3bb1dd9b7713fee862721279b1"
+    },
+    {
+      "path": "apps/zcode-cli/packages/bootstrap/src/zcode-protocol-v4/commands/handlers/fork-edit-retry.ts",
+      "kind": "modified",
+      "oldSha256": "015f6a326dd0ab414544a5b11d5430db5c7fd0404363d19659281b1b627f0636",
+      "latestSha256": "e8ee471b32518f8620a0c20d33623e259bfda5333e26ad23a30eda0ec4d638cf"
+    },
+    {
+      "path": "apps/zcode-cli/packages/bootstrap/src/zcode-protocol-v4/commands/handlers/goal-compact.ts",
+      "kind": "modified",
+      "oldSha256": "8e42bf3d9bd387b54df4a4fad40eaa05080df7d29e5b4f054d04ee997a9a731d",
+      "latestSha256": "8a2f4b9a367eb65d3e24d7659fa158eb49de67876308c96d92894ec7d813afb8"
+    },
+    {
+      "path": "apps/zcode-cli/packages/bootstrap/src/zcode-protocol-v4/commands/handlers/queue.ts",
+      "kind": "modified",
+      "oldSha256": "851b2d63b79343447e8721c2f6b08aaed88ac3f04e522910b1ae67aeb71b1349",
+      "latestSha256": "504f34780361d5d180f4c0853b986a0fb0cc9d139c88e36271987ffa643c2c5d"
+    },
+    {
+      "path": "apps/zcode-cli/packages/bootstrap/src/zcode-protocol-v4/commands/handlers/session-flow.ts",
+      "kind": "modified",
+      "oldSha256": "a2297f1344397ac5a9d6102fe7bbfacadb335d9fec8adea400d0f018c3bb774e",
+      "latestSha256": "b437c76412749b67561b3cdb5e4c7c6fea8286c7128368b26b628a22ad59c7dc"
+    },
+    {
+      "path": "apps/zcode-cli/packages/bootstrap/src/zcode-protocol-v4/commands/handlers/session-mgmt.ts",
+      "kind": "modified",
+      "oldSha256": "cdaf7770bb7ba2fee37b7d6d5e58b2e45c578a3eef7e2666aff4f74b7d22158d",
+      "latestSha256": "c9bff256ccc2bb94dd2ecd8362aee83d613aec488ddbc205e04ca1d45dc767d2"
+    },
+    {
+      "path": "apps/zcode-cli/packages/bootstrap/src/zcode-protocol-v4/commands/input-admission.ts",
+      "kind": "modified",
+      "oldSha256": "5fd06e0a82f9252398dd12953d1d7a6bcc47858c20c5c8e6bae6e88014011ba3",
+      "latestSha256": "dde9a6c3dd1ea3f75b7cfecf375e9f1dd8a08dddde4b60aae9a21367b36e940e"
+    },
+    {
+      "path": "apps/zcode-cli/packages/bootstrap/src/zcode-protocol-v4/commands/prompt-turn.ts",
+      "kind": "modified",
+      "oldSha256": "12113765ca4f171d622697ce31f74059f40fae585e789c8ecbf27b3cb4e08b99",
+      "latestSha256": "0d6c5d9bba0a49a228815978cf907be06c61b852daa01f43d55668b0121325a8"
+    },
+    {
+      "path": "apps/zcode-cli/packages/bootstrap/src/zcode-protocol-v4/commands/types.ts",
+      "kind": "modified",
+      "oldSha256": "da991521fb0920b89bedc94e96bf1ef65bdc5cd056c0d32cfafc7704b3adb638",
+      "latestSha256": "0f391541bea62bb38ec370eb6fcfdeb3ac952ff1110a3358d6b60966583cedae"
+    },
+    {
+      "path": "apps/zcode-cli/packages/bootstrap/src/zcode-protocol-v4/conversation-telemetry-facts.ts",
+      "kind": "modified",
+      "oldSha256": "2e85234846e1ce598b88d179c6445f391f7cb3987975be402de194af14428aa7",
+      "latestSha256": "e5ff5fd367bed20496f57a61550d49ab1a8760d37868e247269aff3938fd6993"
+    },
+    {
+      "path": "apps/zcode-cli/packages/bootstrap/src/zcode-protocol-v4/conversation-topic-publisher.ts",
+      "kind": "modified",
+      "oldSha256": "074b504841ba844fe7ebfdba8c0a80895404c7a8cbc8377ebfbd77bbc0bad1ad",
+      "latestSha256": "f1e55576d2c7e312a3483c1dffb653c7686248d2446a2c639d2e08a91962307b"
+    },
+    {
+      "path": "apps/zcode-cli/packages/bootstrap/src/zcode-protocol-v4/product-projection.ts",
+      "kind": "modified",
+      "oldSha256": "d225b03c375100f51067d5aaeb1e8197105f458ce84e8d11ecddb7c741e7951f",
+      "latestSha256": "3a14a6c647ebbf3e6a772e2d4dfdefe09141801b2067ba297dcd9a7df70c459d"
+    },
+    {
+      "path": "apps/zcode-cli/packages/bootstrap/src/zcode-protocol-v4/sessions-index-projection.ts",
+      "kind": "modified",
+      "oldSha256": "67194dd29e1c590c12d23cee7be02cba906497f1926e8ef848c423f7cdf1cad7",
+      "latestSha256": "e8fccb651cc77fd4187c423fcea67e5a0e445fd090a3cf506bc01013eb53953a"
+    },
+    {
+      "path": "apps/zcode-cli/packages/bootstrap/src/zcode-protocol-v4/transcript-hydration.ts",
+      "kind": "modified",
+      "oldSha256": "ce3d5ba6385005798c27631d2a35d018f6301554e81b14b84892f5300b9f6cee",
+      "latestSha256": "e3f256501bfcb3d08ab4babfe6a0efba445cdee3cae9accefd5ae8718315ed9f"
+    },
+    {
+      "path": "apps/zcode-cli/packages/bootstrap/src/zcode-protocol-v4/v4-gateway.ts",
+      "kind": "modified",
+      "oldSha256": "abe28cd1de6c633612f40d9f595d0ab390fdd1459f9a79855c5345743cd1cbe0",
+      "latestSha256": "1b42b93910b145a949bb4e7d4e5d8d0e1dea4f16b78f5593bcf17685a31a16ee"
+    },
+    {
+      "path": "apps/zcode-cli/packages/bootstrap/src/zcode-protocol/account-provider-config.ts",
+      "kind": "modified",
+      "oldSha256": "4c821504dcf0abadff8b2ed0e5166cddac4f186ff3194dac37574522bfbd7a03",
+      "latestSha256": "827df3f0a0c94343ad73ecdda6ce2a2a2037ca60a824e22d56c364b799eece8c"
+    },
+    {
+      "path": "apps/zcode-cli/packages/bootstrap/src/zcode-protocol/mcp-ui/protocol.ts",
+      "kind": "modified",
+      "oldSha256": "4b5a5e618fed4a19a726c1f7cfa08b0806af502e982efd2e565343dcabb4a8d9",
+      "latestSha256": "acf94e8661823b87f6bc0ee16a0d3c76398bcfd99316b46c81971312b669f724"
+    },
+    {
+      "path": "apps/zcode-cli/packages/bootstrap/src/zcode-protocol/model-execution.ts",
+      "kind": "modified",
+      "oldSha256": "a3fd6fad7d90cd43da71e23b4e6bd2393888a8427070f6111e0f08afc7141c86",
+      "latestSha256": "a9a5ca778d3a0f7689ed3b52cb815f96e59ddec28351826233c3abb959cc90c0"
+    },
+    {
+      "path": "apps/zcode-cli/packages/bootstrap/src/zcode-protocol/plugins.ts",
+      "kind": "modified",
+      "oldSha256": "da2d4926fa9f49cbbed072f2dad39fb2552e36cde1c4c335410bac573a4474aa",
+      "latestSha256": "e265a417044cc5926da8c79aa8e56c928b47d23a97a10690ccdf3129ba1d9027"
+    },
+    {
+      "path": "apps/zcode-cli/packages/bootstrap/src/zcode-protocol/protocol-mcp-config.ts",
+      "kind": "modified",
+      "oldSha256": "49b2c81b7d75ff086b096a97ca2d62202bf36113efeab12fa851534e1d6294e1",
+      "latestSha256": "37bcb8d9c4177874d6f97ac00a28e6678ba7a70107ebb0f660820efdba1bbbc5"
+    },
+    {
+      "path": "apps/zcode-cli/packages/bootstrap/src/zcode-protocol/server-operations.ts",
+      "kind": "modified",
+      "oldSha256": "6cd704dd512ac41113fa63e76cb93a891779ff3c1b8bc1676acefede3e29b759",
+      "latestSha256": "902555e36ee864b5a01fc61f2685897b8d6527e0652c529e7dc0f8ad1c0ef3dd"
+    },
+    {
+      "path": "apps/zcode-cli/packages/bootstrap/src/zcode-protocol/server-types.ts",
+      "kind": "modified",
+      "oldSha256": "2b82598180e7cfd112f893137b077ef72ab7d1e02636e27a99f456afec804461",
+      "latestSha256": "d945ad999edbe37d4b37fd0cfc9e1792f258b1fbb29fc89a8c01a85eefee7729"
+    },
+    {
+      "path": "apps/zcode-cli/packages/bootstrap/src/zcode-protocol/server.ts",
+      "kind": "modified",
+      "oldSha256": "32ab1a1440fff13e05882361003cfadc98d0e7960e10b2b6e7f5512190a1b4a0",
+      "latestSha256": "1411c5d8ab7b7c5b395a18082bc84292ce1943e3e40d7ab773df805e04622591"
+    },
+    {
+      "path": "apps/zcode-cli/packages/bootstrap/src/zcode-protocol/session-mapper.ts",
+      "kind": "modified",
+      "oldSha256": "00d3f1700c902a104ad84f00cc50a2cfecf330899c450e40a63ca4857a557d75",
+      "latestSha256": "4ec9f925d6adcccab07224a7e8ac2f6a2d41118e1d6d6c4455a824c1d1ed9754"
+    },
+    {
+      "path": "apps/zcode-cli/packages/bootstrap/src/zcode-protocol/session-residency.ts",
+      "kind": "modified",
+      "oldSha256": "9ae1335d41a0fbcc78a008d76eeeb2fac6e63660e35baea18d8f5a89943e6f43",
+      "latestSha256": "3591d13b563e98901cd571a61505f5b120d3725095cebda6143d64cfe92dde24"
+    },
+    {
+      "path": "apps/zcode-cli/packages/bootstrap/src/zcode-protocol/slash-commands.ts",
+      "kind": "modified",
+      "oldSha256": "0a9e55c68860854471178becf3b4d5339b2ef88e39d4ee80408bb88a6523c2a4",
+      "latestSha256": "841fb69f309d576c6b8f268786472f2b281dfd617cd560a7485e04836457f5cf"
+    },
+    {
+      "path": "apps/zcode-cli/packages/bootstrap/src/zcode-protocol/transport.ts",
+      "kind": "modified",
+      "oldSha256": "0b7733967c5c88c0a394efe25143b84f99503b9964c8fa52d7976d65efa1e976",
+      "latestSha256": "24900266b434b9c636dd1b5c109ac662983e1d3d238658f1a3d8fb9de906d197"
+    },
+    {
+      "path": "apps/zcode-cli/packages/bootstrap/src/zcode-protocol/v4-bridge.ts",
+      "kind": "modified",
+      "oldSha256": "67d3f1fdb44056df93a5312add5e2f026d77bd934ff4d12f54c25ad4bfa8d4ab",
+      "latestSha256": "4fedbf148f3ba19bbf596d96606153c243bc601356f19c817d576c789be4a8fc"
+    },
+    {
+      "path": "apps/zcode-cli/packages/bootstrap/src/zcode-protocol/workspace-model-runtime.ts",
+      "kind": "modified",
+      "oldSha256": "1e0ee584b7211346851a3c9ad3e1f700321789ab3d3a4c97b3114f6c4b8e4bd5",
+      "latestSha256": "a91642b29178f8f2dfcd68ede5447a0f000bf1e225f8d97535286052d1f591bc"
+    },
+    {
+      "path": "apps/zcode-cli/packages/contracts/src/commands/index.ts",
+      "kind": "modified",
+      "oldSha256": "e35f7f806db7bf9c43226e7db967a666d1933d3980f4fc4f62156a155dab404c",
+      "latestSha256": "e808b4c0401bf182d0dbd925debdb194b41d36e3bc397b3abc8f24ccfe830980"
+    },
+    {
+      "path": "apps/zcode-cli/packages/contracts/src/events/session.events.ts",
+      "kind": "modified",
+      "oldSha256": "20a944cbca77bc23e8397547c2f9904e3224dda213e6fe9ed98b1defd34186bf",
+      "latestSha256": "8f886fdf52207530e45bbcaed9d7b89b720950fd083bf02967b17740e106ea23"
+    },
+    {
+      "path": "apps/zcode-cli/packages/contracts/src/interfaces/mcp.port.ts",
+      "kind": "modified",
+      "oldSha256": "0f98b366bd575d6e009bbc482e3939fe697dfb5dfbd3e955922e872048c4e24e",
+      "latestSha256": "93f02eac9b52568b1474b1f4880da8405057d56fc6d42daf1c512ebdc1ec82fd"
+    },
+    {
+      "path": "apps/zcode-cli/packages/contracts/src/interfaces/provider-endpoint-routing.port.ts",
+      "kind": "modified",
+      "oldSha256": "b2d71ecd30b17a8914a8c755bd43a510cb3d9d01b4b324e89ea116b4597a1aec",
+      "latestSha256": "701b9bb3c88f912496a4f253dace0cb03ce5c312c0a75f10efa5b8499182139c"
+    },
+    {
+      "path": "apps/zcode-cli/packages/contracts/src/interfaces/session-store.port.ts",
+      "kind": "modified",
+      "oldSha256": "6151ae577d8a9e2571ff9321184f01b36c989b9e5764d26d7db4b9ad19c8c547",
+      "latestSha256": "322ef55bb7e48e341a716a0d3895f0bf068262c8dcd5e01ccf5880b8210624b1"
+    },
+    {
+      "path": "apps/zcode-cli/packages/contracts/src/interfaces/session.port.ts",
+      "kind": "modified",
+      "oldSha256": "662f8ade1ff9093f200fa0eeff7f555809cca4f3624bfb8435c91be3c375c033",
+      "latestSha256": "0efa30b3e6efe28243d3af0f4f7f386d1488bdc09195397e83b79fcd514faf54"
+    },
+    {
+      "path": "apps/zcode-cli/packages/contracts/src/interfaces/subagent.port.ts",
+      "kind": "modified",
+      "oldSha256": "9595d9df0915adf3d898658d0f488edfda6b93bbd48159d98fff2a40b21a6d2d",
+      "latestSha256": "c555800637b3bcde5537691511632b2823e0b610610120c7843f15f0afd12af5"
+    },
+    {
+      "path": "apps/zcode-cli/packages/contracts/src/model/index.ts",
+      "kind": "modified",
+      "oldSha256": "07b94e6f3a2bf2173b0c8bfea83138f2cf1d36e526562d3c304a886e65f457e9",
+      "latestSha256": "8614ae4ad95bf699416a3c373bffa5c2eb8933a82fbbdb413ac08363adac3f7b"
+    },
+    {
+      "path": "apps/zcode-cli/packages/contracts/src/model/model.ts",
+      "kind": "modified",
+      "oldSha256": "42b6faeca243b79e6ad44532a753804fefab2a345f16a5b60315c2e32397e687",
+      "latestSha256": "5d4d0f8b981c268318e2996fdfd4016b99a047d27d34ddb8066d3b58f975c212"
+    },
+    {
+      "path": "apps/zcode-cli/packages/contracts/src/plugins/index.ts",
+      "kind": "modified",
+      "oldSha256": "05693a2e8bbc12add1a65fe19db8e10eb1da59ec77e30f1a8be3159828e5412c",
+      "latestSha256": "1096e92bbeaae43dfad3e5bb9894e7fc8d2c0e112878ea9f7b4ddba777fa62e4"
+    },
+    {
+      "path": "apps/zcode-cli/packages/contracts/src/skills/index.ts",
+      "kind": "modified",
+      "oldSha256": "eed20fca2db82197e7dc432496277ae8a90e51f4718617160a874fa64b7c7eb4",
+      "latestSha256": "9c2c436c636ed05c868707cc704699506c436c1230a451cb92cc33cc2a38feb3"
+    },
+    {
+      "path": "apps/zcode-cli/packages/contracts/src/tools/amend-workflow.ts",
+      "kind": "modified",
+      "oldSha256": "d1b28c34a09ad8881ff3114cfa41c1c40ebab6486327cf4f55370915e587afc5",
+      "latestSha256": "b057f982d89ffd8b9da408ffb10e26391d850e19ee4a5f37aed50f6bdf0607f9"
+    },
+    {
+      "path": "apps/zcode-cli/packages/contracts/src/tools/create-workflow.ts",
+      "kind": "modified",
+      "oldSha256": "d8c2305f30b25a161926b51523ba9c0e498b0888cda19c41ff5f1f56c289e5e0",
+      "latestSha256": "2e0bc3d976c29fd3108838fc324f247e08acd2e12e4966fe6f16bb98bac40396"
+    },
+    {
+      "path": "apps/zcode-cli/packages/contracts/src/tools/deferred-tool-call.ts",
+      "kind": "added",
+      "oldSha256": null,
+      "latestSha256": "7899831a5e187623654fb006ebce09a37af693a7197b7fc7a31039be09b84587"
+    },
+    {
+      "path": "apps/zcode-cli/packages/contracts/src/tools/index.ts",
+      "kind": "modified",
+      "oldSha256": "a73731f9fc9c1f32d5ed90014ec18f91c5e99820e1fc245af863a9696fb7bae3",
+      "latestSha256": "5a87eee8ac86b1bc59d8ea2057bd31418a9a0167f5b5c5fc886b217bc7cadc49"
+    },
+    {
+      "path": "apps/zcode-cli/packages/contracts/src/tools/tool-result-metadata.ts",
+      "kind": "modified",
+      "oldSha256": "975e0dcada32a76dcf64908d7754331d03d92eb6c123dfc07d78c53f68d47a50",
+      "latestSha256": "1ae48f97d47af2eaac45b9ac310f708c94f2d1596b538f5f2e09cd6545f7222b"
+    },
+    {
+      "path": "apps/zcode-cli/packages/contracts/src/tools/tool-search.ts",
+      "kind": "added",
+      "oldSha256": null,
+      "latestSha256": "bc809d9dab266f588317bbdf67185085dafdbddbd65d29717d7aa22f9d9033a2"
+    },
+    {
+      "path": "apps/zcode-cli/packages/core/src/agent/file-part-hydration.ts",
+      "kind": "modified",
+      "oldSha256": "e639aa52b569c3d3f0aa0748b11280fc3449b19a7316b3d478cdf27cf2a5af59",
+      "latestSha256": "4550e52e5f378c46df45ec031d16d6928ff74fddddbb064f89800ce44237f4cd"
+    },
+    {
+      "path": "apps/zcode-cli/packages/core/src/agent/message-history.ts",
+      "kind": "modified",
+      "oldSha256": "136664941c93bfe9993ccff8a25da9477080d87a774d40c2efe8bc71fd0151cb",
+      "latestSha256": "94d25018617df775a0aa725092ed308d30b1d237768913918c8eff4006c26db8"
+    },
+    {
+      "path": "apps/zcode-cli/packages/core/src/agent/session-history-hydrator.ts",
+      "kind": "modified",
+      "oldSha256": "dcac91205fed271292cf0bb98798fbfc4cb6bcddd37e607a5b75f05d561fe2a5",
+      "latestSha256": "3722e10f3c6e835614347bdc6c5959be441c0515857d7c0a5815ca0f621eefd5"
+    },
+    {
+      "path": "apps/zcode-cli/packages/core/src/agent/tool-search-hydration.ts",
+      "kind": "added",
+      "oldSha256": null,
+      "latestSha256": "efbb6914da108a10d02fbd2480285ed94e84594f0ce30ee0aa33134176aad381"
+    },
+    {
+      "path": "apps/zcode-cli/packages/core/src/agent/turn-state.ts",
+      "kind": "modified",
+      "oldSha256": "797b3708e28ccfab992390d68ba8d2a47dee5735a215b479c9b2f23d627fea8d",
+      "latestSha256": "f957a861ce6abcbc595cce61c7b01ecde6e62a515bfe6051b9c8f72514e99c3a"
+    },
+    {
+      "path": "apps/zcode-cli/packages/core/src/compact/manual.ts",
+      "kind": "modified",
+      "oldSha256": "49e96f7f450ee324e6baa05997856601a0f998cda835321c57c31f9eda3a0c34",
+      "latestSha256": "bd5494eef888865510c37d176d65123c52926e6e2f380366b7807fceedf7bcd0"
+    },
+    {
+      "path": "apps/zcode-cli/packages/core/src/compact/microcompact.ts",
+      "kind": "modified",
+      "oldSha256": "f340b57e162f154be2d87bd46512d10654da04c72b31e488c182e4c425e1cc5e",
+      "latestSha256": "6276bd1c9a64d525592d6bfee7927759be611d9a2dfd2f5d37a2a67646c78c8b"
+    },
+    {
+      "path": "apps/zcode-cli/packages/core/src/context/builder.ts",
+      "kind": "modified",
+      "oldSha256": "4b3bfde05188d8566f1f4c341b8b77d532c05b63ed9dd7cec615a7e7a696f38d",
+      "latestSha256": "4b42c20a79389cd1e1b90ef2d74df6572c104126ac6c3588d5d62099bd1c0e34"
+    },
+    {
+      "path": "apps/zcode-cli/packages/core/src/context/sections/env-info.ts",
+      "kind": "modified",
+      "oldSha256": "1fba61f85de1fb811ff3d608d252df2f9d3ea904e460cd33f3d7ca12f9e9e1d8",
+      "latestSha256": "8ce0866ab3ffb847cd475ce5b317f279b16117dffc66c128d9984a091fa3606c"
+    },
+    {
+      "path": "apps/zcode-cli/packages/core/src/context/types.ts",
+      "kind": "modified",
+      "oldSha256": "3d70f559f6f6d59e3d60a78f7eac04c87da6550dfdcde0e9ebdd58c64ac6429d",
+      "latestSha256": "a60fe5cb7d1fa0d7d729c538c07207428efa2d4f81d52d722198d97f8be524a8"
+    },
+    {
+      "path": "apps/zcode-cli/packages/core/src/mcp/index.ts",
+      "kind": "modified",
+      "oldSha256": "2d2c7af42613e9e8e1a875793e03307232124ef8c53510d7abff5020ed0958b9",
+      "latestSha256": "0c4c277d4dce767b990c446181b37f5c6901a7d9887f965fe455464925d66789"
+    },
+    {
+      "path": "apps/zcode-cli/packages/core/src/memory/memory-agent-loop.ts",
+      "kind": "modified",
+      "oldSha256": "187f5d18080b436aaf75ced4e489e13d739b3f0291924ce0407581039c947883",
+      "latestSha256": "c1c3a76394a7c2e2c189c0eb23773bf73f1054606e144846563380a68424a173"
+    },
+    {
+      "path": "apps/zcode-cli/packages/core/src/permission/service.ts",
+      "kind": "modified",
+      "oldSha256": "8a15fa65e87e185250e01a6a39481ba4c8a2371d04395fed657c47e0bceeb49b",
+      "latestSha256": "ca63501c39e9effd90730f5dee661a01f02b4ad4378a4adc9a713db4d81d1003"
+    },
+    {
+      "path": "apps/zcode-cli/packages/core/src/runtime-task/registry.ts",
+      "kind": "modified",
+      "oldSha256": "f45279c0a4c49ce4e48f6114ee8766c5dca8512d87774e1916f8f2d559439f2f",
+      "latestSha256": "e3361f5e957602eee59ded60cb7e0d4a79d72d66ee033a3d3392e34b8e847482"
+    },
+    {
+      "path": "apps/zcode-cli/packages/core/src/runtime-task/workflow-blocked-reminder.ts",
+      "kind": "added",
+      "oldSha256": null,
+      "latestSha256": "5b4c72173a11d3790c894d27346b93a75cf7dd62c6e9c991694c16ec2a8d156f"
+    },
+    {
+      "path": "apps/zcode-cli/packages/core/src/runtime-task/workflow-notification-copy.ts",
+      "kind": "modified",
+      "oldSha256": "6f474624f60a09d782d6b1cf79370cea4aa730db16ea3aef25cb4e88d87fd0f3",
+      "latestSha256": "0319cd9f4804160994e0c095059eeaa5be2dbe9fadfa82e905a78a1cc58d746f"
+    },
+    {
+      "path": "apps/zcode-cli/packages/core/src/runtime/agent-runtime.ts",
+      "kind": "modified",
+      "oldSha256": "d96342dcae9da440edf6dca16da7c58ebd6decf4a884ef5a4d86aea6e3e7ce52",
+      "latestSha256": "05e434d0f2a39a88219bdab9b14d5e1c45961f2daf4238e95c65bab5832c0a85"
+    },
+    {
+      "path": "apps/zcode-cli/packages/core/src/runtime/command-queue.ts",
+      "kind": "modified",
+      "oldSha256": "9689359eb9e8bdbad9cb67f766eb458f31e2696cb56b063b03f8e94798545643",
+      "latestSha256": "f45cb9801b203c2bfc7460290c866589ad9e90028aa46fe4695e5794cf265b12"
+    },
+    {
+      "path": "apps/zcode-cli/packages/core/src/runtime/helpers/attachment-path-reference.ts",
+      "kind": "modified",
+      "oldSha256": "e1346a9c19de9d02805d6ee879ac213b7d33548efa7dc445cf02471ccb2c7c1b",
+      "latestSha256": "b23ffda6ba75b747eb5105483e42929078c2f30c36a73bba077ea3c2c88bf505"
+    },
+    {
+      "path": "apps/zcode-cli/packages/core/src/runtime/helpers/compact.ts",
+      "kind": "modified",
+      "oldSha256": "37d9e458214970f5a292f9c87068af8d933ef2717316a181c9127d91d1760835",
+      "latestSha256": "35fc5926d9e0a6d27d2542c3eeb2cc9dadbb6844df88735ef7a80b138e4d5e7c"
+    },
+    {
+      "path": "apps/zcode-cli/packages/core/src/runtime/helpers/conversation.ts",
+      "kind": "modified",
+      "oldSha256": "4428a5912b716a2d6b66c1b72c1aad5b5da9cf7d7a57956d221e349f4089586d",
+      "latestSha256": "d72c4db517283bae6623d1500dd63133daf7be8335f756b5e4659b24bc11ad1a"
+    },
+    {
+      "path": "apps/zcode-cli/packages/core/src/runtime/helpers/media-budget.ts",
+      "kind": "modified",
+      "oldSha256": "298f0f17b17fc0c1f437b8802f6d7cf095dc7ae1f93653654e829f23f1c970e5",
+      "latestSha256": "465062aada38be56bc366dedfd55049c5e8bb9ffe1f59647e7d0964825aad3d3"
+    },
+    {
+      "path": "apps/zcode-cli/packages/core/src/runtime/helpers/media-capability.ts",
+      "kind": "modified",
+      "oldSha256": "3199ac9f20d74a68d89e43a9944e5f5012adee871707a6e139e9646508d3787c",
+      "latestSha256": "82d3cbd9993b8ece5fa52df1f9862fead89184c897af4ac75509d17019397501"
+    },
+    {
+      "path": "apps/zcode-cli/packages/core/src/runtime/helpers/project-memory-agent.ts",
+      "kind": "modified",
+      "oldSha256": "10f095e5f388ae608ddf34d908d018e24bf9b75bbedbbae6ea20a39c5278c909",
+      "latestSha256": "e7f51b0a99da441aab472ea336f936760a465573d2aeec5e878f21cdeefe4916"
+    },
+    {
+      "path": "apps/zcode-cli/packages/core/src/runtime/helpers/project-memory-dream.ts",
+      "kind": "modified",
+      "oldSha256": "1f30d5f9d6fac2999d4807b09496ce8b8c4a3b8a0b4ac3ee62bb66e0e6feb340",
+      "latestSha256": "8ed45f029dc84bf11c5226ad83567418ed59734afaa524ae6aa8ead53f004b15"
+    },
+    {
+      "path": "apps/zcode-cli/packages/core/src/runtime/helpers/project-memory-extraction.ts",
+      "kind": "modified",
+      "oldSha256": "12092ec4ce6aafff08065f99a1a4b80a7b38c2982d68ae1d32741e806e32225c",
+      "latestSha256": "2ac06086e88cee24e3fe8c3454a73ffec6aa82d55e7766fdcc8d2491600c1520"
+    },
+    {
+      "path": "apps/zcode-cli/packages/core/src/runtime/helpers/provider-request-messages.ts",
+      "kind": "modified",
+      "oldSha256": "4e87f721a484369aa65f1eb60207be7967e8999fb0a2e02af9babed0976e1357",
+      "latestSha256": "1ea1addb40e0c4bf5d9b008509d12f8abe3910a0ff49ec8ab7990c0ca620503d"
+    },
+    {
+      "path": "apps/zcode-cli/packages/core/src/runtime/helpers/runtime-provider-request-messages.ts",
+      "kind": "modified",
+      "oldSha256": "1837b7d0102baae9c24ba7eb6498b07613bb6e09c88df10f9642937cddb6ecbe",
+      "latestSha256": "945d35abfd32f0dc1786081f2b5bfdca50d51dc577ab6a42c1760eebd76f4a14"
+    },
+    {
+      "path": "apps/zcode-cli/packages/core/src/runtime/helpers/turn-errors.ts",
+      "kind": "modified",
+      "oldSha256": "8df0c571ca835f9bcebe840753fa79ac6e25bfcc8ce29e49bdb0b7ba99acd262",
+      "latestSha256": "2144ecdaeb7ba67c1fde11125158ec4aa5ec63e460bba359c07d23ce3b2fe0ec"
+    },
+    {
+      "path": "apps/zcode-cli/packages/core/src/runtime/internal-turn-methods.ts",
+      "kind": "modified",
+      "oldSha256": "67886bd03774d68b3f21384d2b613cba0cd085733b6113736ebd7d68aaf10be6",
+      "latestSha256": "2c4578fbdb8f3987283a5d04f89721dfa61c46981a163a12a77781453e218ecc"
+    },
+    {
+      "path": "apps/zcode-cli/packages/core/src/runtime/internal.ts",
+      "kind": "modified",
+      "oldSha256": "c2eeccb74d5a8f21e2b784e4525cad0b62b31544c1e19b0d568f315b61c77e50",
+      "latestSha256": "e197c98cb531438077301c6e3330c984ca977eda99bcc4cbda6b6bfaec2bf9b5"
+    },
+    {
+      "path": "apps/zcode-cli/packages/core/src/runtime/methods/compact-active-helpers.ts",
+      "kind": "modified",
+      "oldSha256": "5df487edaadde1b2bea97547f0bb019b3995997b0ba088526e01e473b3b08f9f",
+      "latestSha256": "e42fc5af46f5a389b9bf912ecc33f8eef9714fc037ebb437cc7e1bc690e72508"
+    },
+    {
+      "path": "apps/zcode-cli/packages/core/src/runtime/methods/compact-active.ts",
+      "kind": "modified",
+      "oldSha256": "dee549af064506eee44ee202d0acf9078777074585d2657967ba6ad36ee44d5a",
+      "latestSha256": "21d2ab4a1b63f2e10b179249756570c74b2fe090fab0bc8d74ed8fc590b1ba8c"
+    },
+    {
+      "path": "apps/zcode-cli/packages/core/src/runtime/methods/compact-persistence.ts",
+      "kind": "modified",
+      "oldSha256": "ef01b679ed264c68173fd3544f23c4e1566946ee8dbb68ca9758508f910f7ec8",
+      "latestSha256": "7ace7e0a12b6ae8965ef653ef8d957bae05689a2cc8326da45f04407a4db26e8"
+    },
+    {
+      "path": "apps/zcode-cli/packages/core/src/runtime/methods/compact-summary-model-request.ts",
+      "kind": "modified",
+      "oldSha256": "33219851c53d11fd07efc0482cbec5fb14e8eefe3d588557ca57158edbd06f49",
+      "latestSha256": "10ea4b7a614c7189e6388fec9dedbdc0180fc94f744fec029cdc10c673ffae7e"
+    },
+    {
+      "path": "apps/zcode-cli/packages/core/src/runtime/methods/compact.ts",
+      "kind": "modified",
+      "oldSha256": "ebf0b35949006842e564ed3e3c6ac5008b5381267f8d07519464a5a9ed491e29",
+      "latestSha256": "4f36a2ae526c0d1d7d921eec7a215a33ac36b0f02a7770909784ab4dadeb135e"
+    },
+    {
+      "path": "apps/zcode-cli/packages/core/src/runtime/methods/config.ts",
+      "kind": "modified",
+      "oldSha256": "437e96208c6587d8f96c9c3d875e82a7f3bde44e71046edca2a95cf2521fe5ad",
+      "latestSha256": "9acf76bc1511460284866bbf90b6158c25b8456a19ce535f94f971a138185d7a"
+    },
+    {
+      "path": "apps/zcode-cli/packages/core/src/runtime/methods/context.ts",
+      "kind": "modified",
+      "oldSha256": "db3e29fe7f8acea9d29f3621bd002f86dcf847c2585ebc077451a37b429ebcae",
+      "latestSha256": "087bb9e977a121c41ada7a2d16c6e5eb84807d890a4944f89ebdee35eb35e016"
+    },
+    {
+      "path": "apps/zcode-cli/packages/core/src/runtime/methods/dynamic-workflow-blocked-reminder.ts",
+      "kind": "added",
+      "oldSha256": null,
+      "latestSha256": "f8cfb953dec2626e4b524a5c592ea100ecb6c17016498454cd649ddae0d54eea"
+    },
+    {
+      "path": "apps/zcode-cli/packages/core/src/runtime/methods/dynamic-workflow-run-hole-notification.ts",
+      "kind": "modified",
+      "oldSha256": "0c47cc834c4766d03f270ac16ebf403739bbe688c9f601fab9f066bc0316f1fd",
+      "latestSha256": "9035f6ab4ffbc89be756190c995ac2f8b36eb9970c02d988ac7bd57c5884ee2f"
+    },
+    {
+      "path": "apps/zcode-cli/packages/core/src/runtime/methods/dynamic-workflow-run-progress.ts",
+      "kind": "modified",
+      "oldSha256": "0a2b6c1a16b684742af05ade0d0dad1d79791d0f8d8017b09ba40a0997b0139c",
+      "latestSha256": "540b4e6767cfeabae373d6268c4fc1afc571934d40b93e75a1ddb9b204065ddc"
+    },
+    {
+      "path": "apps/zcode-cli/packages/core/src/runtime/methods/events.ts",
+      "kind": "modified",
+      "oldSha256": "9cd1fc9b92eb5465d4d830c14e43faab5d9468826c46cff3c7617aef35f94f88",
+      "latestSha256": "eea15db4a42df8a7d16d3715dd9f08f68128481e029c517905071510cb90b0bb"
+    },
+    {
+      "path": "apps/zcode-cli/packages/core/src/runtime/methods/model.ts",
+      "kind": "modified",
+      "oldSha256": "8729e06eeb56fbd43837779821cfd7ab29c2bc0e2bb7133e0d31458c54ab8e86",
+      "latestSha256": "e24dc278bb494f4763dfae5a25547dbc1184f43c6090a0e8919f8ca887387c91"
+    },
+    {
+      "path": "apps/zcode-cli/packages/core/src/runtime/methods/prompt-admission.ts",
+      "kind": "modified",
+      "oldSha256": "e384aec9f234f2d571aaa68d28f653f7daaf54e374b27ae963b221f2118f8052",
+      "latestSha256": "400e4eaeec8e7b95bd2bdfc21b440d2ef74d64813e4ab6f012b50753c8c1475a"
+    },
+    {
+      "path": "apps/zcode-cli/packages/core/src/runtime/methods/residency.ts",
+      "kind": "modified",
+      "oldSha256": "daeb9a214dddbbc8200fbd60770225ae148941583c6a20d310b22d9bb93c1d5b",
+      "latestSha256": "de958edf68577af1fa9d276f8fc8a0c654c1c9677c181d87b43c3e80253e7169"
+    },
+    {
+      "path": "apps/zcode-cli/packages/core/src/runtime/methods/resume.ts",
+      "kind": "modified",
+      "oldSha256": "b832c1bcff060aba00171dcc1aa6f4e63cdf55be5a198c5876b6de815f4dd84e",
+      "latestSha256": "c111890936c785e0b32a860924cdfb25b2e8a1d50a267d0be546baa6af4506ff"
+    },
+    {
+      "path": "apps/zcode-cli/packages/core/src/runtime/methods/runtime-command-queue.ts",
+      "kind": "modified",
+      "oldSha256": "cd3650a8b60ad1f22926e964e262cec7d89fdafb039309e84bd9a6d869ffe4a0",
+      "latestSha256": "26a387588692fd8d3a14bf0e36de99fe882d1204bd919d0c60081ac8e0a7cd7c"
+    },
+    {
+      "path": "apps/zcode-cli/packages/core/src/runtime/methods/runtime-command-submit.ts",
+      "kind": "modified",
+      "oldSha256": "b94039a1f950cec7b6472418d81bba411bee7ec7244048092233833956507b4e",
+      "latestSha256": "450cbb3540146658c7c0ecc21e299fc0f4e99e7baa3a7e6b58818e3c256230cb"
+    },
+    {
+      "path": "apps/zcode-cli/packages/core/src/runtime/methods/runtime-model.ts",
+      "kind": "modified",
+      "oldSha256": "0b35d6d677a9d75f700e7ce43a9a0687c2d6dcd807772ccdd9cf29943603b45c",
+      "latestSha256": "faaf25406608ff9c6a8cb32aafb6959a13243c1d0df69cf037310e65f5d832fd"
+    },
+    {
+      "path": "apps/zcode-cli/packages/core/src/runtime/methods/runtime-reminder-persistence.ts",
+      "kind": "added",
+      "oldSha256": null,
+      "latestSha256": "1c8d8ffaea5e9b3703ce989a655fee40155de6da1a3c448914a50562301e1629"
+    },
+    {
+      "path": "apps/zcode-cli/packages/core/src/runtime/methods/session-title.ts",
+      "kind": "modified",
+      "oldSha256": "1593362b9674b2dd6c13e6ab7b12f79688df21a8058960dde57772c6a4638d25",
+      "latestSha256": "0a6f440b8a614ae0f1e1723d69e300e93976fced3df71b4bf4687b134e331071"
+    },
+    {
+      "path": "apps/zcode-cli/packages/core/src/runtime/methods/steering.ts",
+      "kind": "modified",
+      "oldSha256": "e93ecbc7cb006411134ee45c9c8e7619658cd0e8503260e9935faf45da623bef",
+      "latestSha256": "b794281856100e8d19e88058008692ba8c62a886053e3d89ef71d7911b6ac13c"
+    },
+    {
+      "path": "apps/zcode-cli/packages/core/src/runtime/methods/streaming-tool-coordinator.ts",
+      "kind": "modified",
+      "oldSha256": "775c759059e38a2bdff44d3f83517e836f22789adb31b04f91dcc384e1a4117f",
+      "latestSha256": "eb4c32b2b43501a33550d6f23424699ef3293f48a6bda486bd3d21a59c9f22c5"
+    },
+    {
+      "path": "apps/zcode-cli/packages/core/src/runtime/methods/subagent.ts",
+      "kind": "modified",
+      "oldSha256": "5c5117e3c4df5451ccd40c187ceb140aae3afdb7945beca26832fd37721e1911",
+      "latestSha256": "c684ee959b53623d022736d01d2377b2b3e686ddc29e736ccaca0158f828a0dd"
+    },
+    {
+      "path": "apps/zcode-cli/packages/core/src/runtime/methods/target-completion-verification.ts",
+      "kind": "modified",
+      "oldSha256": "3c4dc8c9a573ea5d0a1b745ab31f35f13f5e2eecb454ab9e74a13123e3a21d0a",
+      "latestSha256": "39f4581936eba028af07333ce22c3fe7e9be396f9ba1b6c7d476d7821ca6f654"
+    },
+    {
+      "path": "apps/zcode-cli/packages/core/src/runtime/methods/title-generation-sidecar.ts",
+      "kind": "modified",
+      "oldSha256": "34b8cf8b5862b02e9411e5733063fc883015be01dd8dd4d221ad0d5a361e523f",
+      "latestSha256": "47326e5df336df90fe500ff9421c04b26de83d58ed1da809f865d6245c3fc50f"
+    },
+    {
+      "path": "apps/zcode-cli/packages/core/src/runtime/methods/tool-part-metadata.ts",
+      "kind": "modified",
+      "oldSha256": "607a3c99c61bd6f4354aee405fa6f5e8fce0edf6c7fc64af595a3190b111d1aa",
+      "latestSha256": "ef8da65e5d801a6ff698e82e2d99fc411239413b435676871bf42fb0dd92fa46"
+    },
+    {
+      "path": "apps/zcode-cli/packages/core/src/runtime/methods/tool-part-persistence.ts",
+      "kind": "modified",
+      "oldSha256": "136e062efecc7d65c9e1a012a21ceae2eafd3f094930a044f4cc840968879d80",
+      "latestSha256": "2163588a88ab747a81cf3dfba981c09a1abcdf59186ff3aa5602836bd19252d9"
+    },
+    {
+      "path": "apps/zcode-cli/packages/core/src/runtime/methods/tool-result-settlement.ts",
+      "kind": "modified",
+      "oldSha256": "377243aad2d570fc84d5c42b61977a53c3541c940ae4a3691e9e28e8533238d9",
+      "latestSha256": "4f1f976d075fb8ad55c5325bd66005d4b6666de0bb75f34368b1dc65b6631b62"
+    },
+    {
+      "path": "apps/zcode-cli/packages/core/src/runtime/methods/tools.ts",
+      "kind": "modified",
+      "oldSha256": "281d6eacc1af30d1d7eafad0dd2497e7c6ceb47d42608ca4b400fccda22f42e7",
+      "latestSha256": "754033091df964e4fde83c59bd195ceecd9d4e923fd64aafdf1834fbe3de96f8"
+    },
+    {
+      "path": "apps/zcode-cli/packages/core/src/runtime/methods/turn-execution-fallback.ts",
+      "kind": "modified",
+      "oldSha256": "8738284593585899b122c59543f12eb59c9e88f9c1045fa10c484e55b285b5ae",
+      "latestSha256": "ee23090fe79f89effebaf9eb238a173c1829d5515f24de670baba8fcbcb9f153"
+    },
+    {
+      "path": "apps/zcode-cli/packages/core/src/runtime/methods/turn-loop-state.ts",
+      "kind": "modified",
+      "oldSha256": "bf55956f47f57d57c694835f18c6b57c2ef843deb899515e3b5fcad65e4f4c4f",
+      "latestSha256": "0748ddd695c3f54a34eb75e1bcb302a7d99c71d7a41453065a5b7f44b07c2b14"
+    },
+    {
+      "path": "apps/zcode-cli/packages/core/src/runtime/methods/turn-loop.ts",
+      "kind": "modified",
+      "oldSha256": "9bf8f70e9f21ea7b18420f22d9fdca0719d16682d3fd5e57005c42a4c1621235",
+      "latestSha256": "a60320eff867c3fadfd7586c22f95fd4ee13d005b22bbe540c8a101d939f01f8"
+    },
+    {
+      "path": "apps/zcode-cli/packages/core/src/runtime/methods/turn-model-step-usage.ts",
+      "kind": "modified",
+      "oldSha256": "7e3179bb02656f1acaf22b60a4b5e30f2d34badb3688526946ca778adc262a8e",
+      "latestSha256": "b8870c300a3a2b8cd239ba49d33e068ac1f8883e50e93d311fa7e2336efb43eb"
+    },
+    {
+      "path": "apps/zcode-cli/packages/core/src/runtime/methods/turn-model-step.ts",
+      "kind": "modified",
+      "oldSha256": "3527e5887fe5584d3f66bb643f92488463c3433df69592c25c42dfcfa6b9e782",
+      "latestSha256": "8159fe5dd5ff5a4917801aba4fb112643ed3a1005ca4d5c4bd5f5246f1f5e061"
+    },
+    {
+      "path": "apps/zcode-cli/packages/core/src/runtime/methods/turn-model.ts",
+      "kind": "modified",
+      "oldSha256": "52d01083c4abb8add6e04873f4b74581755d8337c76d57350bc71cd0b67ffe30",
+      "latestSha256": "7e2b5722ffc7dab764040d4dba17ce185b3f4d3a3df2870a8ebcdb3e91689b03"
+    },
+    {
+      "path": "apps/zcode-cli/packages/core/src/runtime/methods/turn-tool-warnings.ts",
+      "kind": "modified",
+      "oldSha256": "572664347e3029e87282e6c0d87de9e847669e1382d2b7b56cc40bcdae572c8a",
+      "latestSha256": "6c35f24080798915ca65ab4f59e29119c1f97354c36120b3feb3a4794378b521"
+    },
+    {
+      "path": "apps/zcode-cli/packages/core/src/runtime/methods/turn-tools.ts",
+      "kind": "modified",
+      "oldSha256": "ac0fb21707bd9b7bd170ed4403e21100654141e3d48d2165abf76f5fe3150907",
+      "latestSha256": "1a875056bc2d0f5d7919ea87d45fed023573df29a79ddb6e2b03b81f1df2e9d1"
+    },
+    {
+      "path": "apps/zcode-cli/packages/core/src/runtime/methods/turn.ts",
+      "kind": "modified",
+      "oldSha256": "8d150a86387f0ffebb7a691b0cd52aac439eb59a55ff8d2351e4e86d0da70aab",
+      "latestSha256": "42097fc840d1ea985b02b4c6fa0949d8b293ed39c3aa8136ef2ce0d945fbe366"
+    },
+    {
+      "path": "apps/zcode-cli/packages/core/src/runtime/methods/usage-observability.ts",
+      "kind": "modified",
+      "oldSha256": "adc86fe348f68f76217d74ce61f9d2146e9ea33c48deca6d52066fc8ade2762f",
+      "latestSha256": "6df55692c807df01381d6a96a7cf758a837fc48627c6f5aa31e0b0f20b94ff32"
+    },
+    {
+      "path": "apps/zcode-cli/packages/core/src/runtime/off-peak/lifecycle.ts",
+      "kind": "added",
+      "oldSha256": null,
+      "latestSha256": "d90e3c8bad43c2e8bf9f82091452ecbb2fef3d5926955d38ba1ff3700ca8da15"
+    },
+    {
+      "path": "apps/zcode-cli/packages/core/src/runtime/off-peak/model-binding.ts",
+      "kind": "added",
+      "oldSha256": null,
+      "latestSha256": "23e5dbf94e091fd34934379793f25bd4784858e2032e762a61a8834ceba3981a"
+    },
+    {
+      "path": "apps/zcode-cli/packages/core/src/runtime/off-peak/runtime.ts",
+      "kind": "added",
+      "oldSha256": null,
+      "latestSha256": "786a5e90d55ae34abd9bcf3cb427110afd7e60d5829cbe59bdef8a315316f6d6"
+    },
+    {
+      "path": "apps/zcode-cli/packages/core/src/runtime/off-peak/turn.ts",
+      "kind": "added",
+      "oldSha256": null,
+      "latestSha256": "77979cd71fa57bd120aad2292cb69423d84b7aa8eec863e61b23c3d86dd14d38"
+    },
+    {
+      "path": "apps/zcode-cli/packages/core/src/runtime/tool-result-settlement/contract.example.ts",
+      "kind": "added",
+      "oldSha256": null,
+      "latestSha256": "fe680131631239140fd713e826d93d73725a845a6e348ac3a5d97b215c8be877"
+    },
+    {
+      "path": "apps/zcode-cli/packages/core/src/runtime/tool-result-settlement/contract.ts",
+      "kind": "added",
+      "oldSha256": null,
+      "latestSha256": "f73d70f322e9cb0dcb7ac06d5746ed4db3e385fb3bedcd7ad1ac8e70b1212174"
+    },
+    {
+      "path": "apps/zcode-cli/packages/core/src/runtime/tool-result-settlement/module.ts",
+      "kind": "added",
+      "oldSha256": null,
+      "latestSha256": "33e61493b2a564610867da097c4027d3520e003e80e7127b4a3123680a16ddc0"
+    },
+    {
+      "path": "apps/zcode-cli/packages/core/src/runtime/types.ts",
+      "kind": "modified",
+      "oldSha256": "43c9f4a530ce68f1ab91e4cc80a4c99996aaff92d89832a222a5714f3d8f21ca",
+      "latestSha256": "65b835284bee93928d17ecbb8d11c052ad6cf8f7c74a402339f13c0ee329ef90"
+    },
+    {
+      "path": "apps/zcode-cli/packages/core/src/subagent/explore-tools.ts",
+      "kind": "modified",
+      "oldSha256": "55c3c142df45b63cae129916a3dcf13fdd877ed502160fd8a1eefd149a95c523",
+      "latestSha256": "036a45568ae995c9f2a5ff548494e6d8579a0acbed00ce3791abbe05421d875c"
+    },
+    {
+      "path": "apps/zcode-cli/packages/core/src/subagent/persistent-memory.ts",
+      "kind": "modified",
+      "oldSha256": "6cc973e60f88d2d476378b222e1a0b7cf6d78884f54652b125076b7978f8e2ed",
+      "latestSha256": "c280b97ff2fefce414226d5098df48700ed8192153bebab2384563926e7f6f3a"
+    },
+    {
+      "path": "apps/zcode-cli/packages/core/src/subagent/runner.ts",
+      "kind": "modified",
+      "oldSha256": "d49fc85006f2584347c67a5465fef8836df88d05a5cb1e1fcd4699a716c883b7",
+      "latestSha256": "aca3b12158bd1d65437f074549ef86c3feb02e7de779fffca9721d1a55ffb6ea"
+    },
+    {
+      "path": "apps/zcode-cli/packages/core/src/system-reminder/source.ts",
+      "kind": "modified",
+      "oldSha256": "c2e037eec7aa395fd6479fd1c33f166d07a3206ed469980da46ba4d5948b56ea",
+      "latestSha256": "1b43e41a40975e6b34874283511a40ad64287ca8ca0ca7fff2d3064c88453136"
+    },
+    {
+      "path": "apps/zcode-cli/packages/core/src/tool/channel-reply/contract.example.ts",
+      "kind": "added",
+      "oldSha256": null,
+      "latestSha256": "4722d956b24482c4dcff3d492d449926de5204ed60cbcf43d89041842425a843"
+    },
+    {
+      "path": "apps/zcode-cli/packages/core/src/tool/channel-reply/contract.ts",
+      "kind": "added",
+      "oldSha256": null,
+      "latestSha256": "ae930685a9a2f3e17678427b2d0d77e90deda46b7d898326fcdb8f2ff0007165"
+    },
+    {
+      "path": "apps/zcode-cli/packages/core/src/tool/channel-reply/module.ts",
+      "kind": "added",
+      "oldSha256": null,
+      "latestSha256": "be3f09fa7334e21f53fcbcc20bb2135ecaf1f2eb2900d2f3e230f4a3bcf0ea39"
+    },
+    {
+      "path": "apps/zcode-cli/packages/core/src/tool/deferred-call.ts",
+      "kind": "added",
+      "oldSha256": null,
+      "latestSha256": "a03fb23c7ce9abcf36d9d7719ef8042d31212ec1e071aca2bfc71aa3d9a3d7f3"
+    },
+    {
+      "path": "apps/zcode-cli/packages/core/src/tool/executor/batch-runner.ts",
+      "kind": "modified",
+      "oldSha256": "df72e6d686e14e8d03ea1636aece562e84dd530fd3882db0321133ea575cc9c3",
+      "latestSha256": "bfff6ac412c4b6490ba11497134f02f9f01c281f4511f168eca16d85e96385bf"
+    },
+    {
+      "path": "apps/zcode-cli/packages/core/src/tool/executor/call-runner.ts",
+      "kind": "modified",
+      "oldSha256": "e272f7f1d8e13aeaeff784c78dab1aadf6bc6417b6bec54ce6389ba087b8decc",
+      "latestSha256": "ca8e3639422881ca75d89517b5638c2ea5e435dcd9c350b38b6efb5b2981b9c3"
+    },
+    {
+      "path": "apps/zcode-cli/packages/core/src/tool/executor/events.ts",
+      "kind": "modified",
+      "oldSha256": "314c99ca2b933e2a5854ba9460425912980c2abe5a37bb6a3c9e22712761464d",
+      "latestSha256": "3adcc4d4a899507d079a344b43e187a3d4abf75ddf9142779e7e398c165c17b6"
+    },
+    {
+      "path": "apps/zcode-cli/packages/core/src/tool/executor/result-content-projection.ts",
+      "kind": "modified",
+      "oldSha256": "eb0fdfc04dba4d45379e8f0b16b016221515ec17e358c7f0be690593d3216833",
+      "latestSha256": "18ba9102118875746995c61a2fd2937277240027eb4ee2f21f40ab03b8ae4917"
+    },
+    {
+      "path": "apps/zcode-cli/packages/core/src/tool/executor/result-serialization.ts",
+      "kind": "modified",
+      "oldSha256": "c7aa38f2e6c5214fb856cdffc9822f74a7f41d2bb40ec3d618edaad63b247ff2",
+      "latestSha256": "a78d88f2e7f1072a0f0b9244e595c2e3c3d6052ee109bfd776448d50bb77e4ba"
+    },
+    {
+      "path": "apps/zcode-cli/packages/core/src/tool/executor/types.ts",
+      "kind": "modified",
+      "oldSha256": "a1be52e8676964203928db527931ea9cb74f4b290996108061f53e29f1e73242",
+      "latestSha256": "0a8f41e29ae6543e0fa8c571507cffbed35aeac02633b3c1417cd25537d5fe4c"
+    },
+    {
+      "path": "apps/zcode-cli/packages/core/src/tool/handlers/agent.ts",
+      "kind": "modified",
+      "oldSha256": "5b4276bffa1ddaebefd7393406ccc47a4f64d312f3330bd5e5461e23a9f6826f",
+      "latestSha256": "e0d1bc490ab72b2204a90351d2bd9bd7666d110b77d235c5ccc80101fef8c072"
+    },
+    {
+      "path": "apps/zcode-cli/packages/core/src/tool/handlers/amend-workflow-resolve.ts",
+      "kind": "modified",
+      "oldSha256": "a63cf5bb9b95b6c19c377661b1bfb6407f17eae3efbca0534e66af6e08a98503",
+      "latestSha256": "16685aa1395c88b8493f169985308c02a110f8b37bc7f9bd2d0cafb0fbb87263"
+    },
+    {
+      "path": "apps/zcode-cli/packages/core/src/tool/handlers/amend-workflow.ts",
+      "kind": "modified",
+      "oldSha256": "f231e3d755f2c30c415f49e13fec2bfd75f81fcdd59b7aa3f08d3c8565862509",
+      "latestSha256": "e43dc82860457ea0b7fd3080e307891ef43a754ce6d6882236dabea183392ee5"
+    },
+    {
+      "path": "apps/zcode-cli/packages/core/src/tool/handlers/bash.ts",
+      "kind": "modified",
+      "oldSha256": "07e942b05b1716907eddc2764f4e68d3d11cd14dd1cc3188642d1e7ba62796e8",
+      "latestSha256": "67d5b0c65254b8c212c7bcd1f42f2fc9b2c247b54275cf82895813b7545660df"
+    },
+    {
+      "path": "apps/zcode-cli/packages/core/src/tool/handlers/create-workflow.ts",
+      "kind": "modified",
+      "oldSha256": "eb9c76871ded513218289250f9b84214db43e4f0d9d4ffe701650c5a6a84de52",
+      "latestSha256": "3c478c6c1dd6ae07b3fc007b543036ba01f15f1d498e789597d9580a28647e60"
+    },
+    {
+      "path": "apps/zcode-cli/packages/core/src/tool/handlers/cron.ts",
+      "kind": "modified",
+      "oldSha256": "eda6c8884a99c2176719136a90edb664a4e7004f6d90cd28ab08475dd04d8a90",
+      "latestSha256": "abda96342c5782aca4a40a7aef82e54be1ebf6eddea9675529da35377b38cc26"
+    },
+    {
+      "path": "apps/zcode-cli/packages/core/src/tool/handlers/deferred-tool-call.ts",
+      "kind": "added",
+      "oldSha256": null,
+      "latestSha256": "921e32b054985ef669135039667ad646ffe009d6cd7fa29c677940626f50764a"
+    },
+    {
+      "path": "apps/zcode-cli/packages/core/src/tool/handlers/escalate.ts",
+      "kind": "modified",
+      "oldSha256": "6319a6dc916fc54449c8cee6ee14aa7d0c71e0a10cf0fdd8ede0f3c1ce7a6668",
+      "latestSha256": "e9ee3da5285d8783c593a8f386ef91f85fd531d5ac480950eb1001955d0d6f44"
+    },
+    {
+      "path": "apps/zcode-cli/packages/core/src/tool/handlers/eval-workflow-snippet.ts",
+      "kind": "modified",
+      "oldSha256": "afcfe27f057a5d700c516bf33ae92f8c34f370eae4bc97b2145a103c1507f0a6",
+      "latestSha256": "8120db0c50e4251cc1fd86205747adca48d9cb4b0e3140813a2a676cd5933ece"
+    },
+    {
+      "path": "apps/zcode-cli/packages/core/src/tool/handlers/fill-workflow-hole.ts",
+      "kind": "modified",
+      "oldSha256": "9fa1182f953a7c94980e2d43afce033af639750606e647671cb561715577b4e7",
+      "latestSha256": "2980ecd38dd06264282f4c3cd595e93e9cb4662bcac538d1719cf801e22df5fc"
+    },
+    {
+      "path": "apps/zcode-cli/packages/core/src/tool/handlers/get-workflow-run.ts",
+      "kind": "modified",
+      "oldSha256": "4b1e2395417c30d94c8b144eff9b99d3339cba8585c5733d14f9d8f8f20400b5",
+      "latestSha256": "09e3b78242bc632b895edb2c223655635b4ca026bf82d6c75fbace96340eeb89"
+    },
+    {
+      "path": "apps/zcode-cli/packages/core/src/tool/handlers/index.ts",
+      "kind": "modified",
+      "oldSha256": "064049e5251e20d6638b88fe619362e8b96040a1645145ad4b4402b28e210218",
+      "latestSha256": "13d21d0eaa0458cdcf3e70458ec7390504b39f00cd4f1780a5ef798def93949c"
+    },
+    {
+      "path": "apps/zcode-cli/packages/core/src/tool/handlers/list-models.ts",
+      "kind": "modified",
+      "oldSha256": "3e3e974f6c3821ce50ef0e622b5015c43b5286887b7d8d01d53b15f0be361d86",
+      "latestSha256": "71b9c7cb40a0a36ebaf69ab51e0a76c755013f4958f9b0f5c748ccc0d0f8d8a5"
+    },
+    {
+      "path": "apps/zcode-cli/packages/core/src/tool/handlers/list-saved-workflows.ts",
+      "kind": "modified",
+      "oldSha256": "42c4a2d07c14f17b7ad140ae5039c3e5b9fb618003b2c73aef61af691cd1aad4",
+      "latestSha256": "0634c42e5f3f7c7c53cf720411192f1eaf6adee2759879345a9bbacbace354f3"
+    },
+    {
+      "path": "apps/zcode-cli/packages/core/src/tool/handlers/list-workflow-runs.ts",
+      "kind": "modified",
+      "oldSha256": "7ffb019c9fb06a3ed6aed90c4a928be14c1ec3aebdfbd4b671831e086b99c519",
+      "latestSha256": "1c7a39a785c3fd6c76d6d7dd9cf8f9704a3e06fd841f612c037f76fef5cf24f9"
+    },
+    {
+      "path": "apps/zcode-cli/packages/core/src/tool/handlers/model-reference.ts",
+      "kind": "modified",
+      "oldSha256": "ca4c1eda600fd0094616a178def0033f73237869910e3a4a6500d34eb5bffdb1",
+      "latestSha256": "d14e03322f57532cfa98d38813e4b8cf70f48d8342941d2c430b0f94aa6b1a3e"
+    },
+    {
+      "path": "apps/zcode-cli/packages/core/src/tool/handlers/node-repl.ts",
+      "kind": "modified",
+      "oldSha256": "6cbc9c21843b1b692ceca287c02c296d0f4f892e7bc524f20cb1fa1b794be320",
+      "latestSha256": "bb1daafa1aa9c2349e068945f4f30c86c82bd3e0f9fdf945079d082782b2af1d"
+    },
+    {
+      "path": "apps/zcode-cli/packages/core/src/tool/handlers/off-peak.ts",
+      "kind": "modified",
+      "oldSha256": "64e9a24db3716eedbc1b5b3ea599301562b66e25a5b358d42fe4b8b107ca300d",
+      "latestSha256": "f2abc51875c62baedb46b7cd201e32a3d7f154961db355a8c222d10ffe103dd9"
+    },
+    {
+      "path": "apps/zcode-cli/packages/core/src/tool/handlers/plan-mode.ts",
+      "kind": "modified",
+      "oldSha256": "cb92bcf2c2c622b37fd5b77c77b24282ad7ebb962cf41e047398ed7fab53fb10",
+      "latestSha256": "34a77e514358e1ffce3ff8e054ef0b247734d78a61c5a6d9eebd0a880da2cfbc"
+    },
+    {
+      "path": "apps/zcode-cli/packages/core/src/tool/handlers/read-session-context.ts",
+      "kind": "modified",
+      "oldSha256": "d95c146d7c13bb8e45e3e2ba19fc7e779a61500f40d78d82dd4e4c5672a23473",
+      "latestSha256": "df07bea5c848d07223d941d111ace5bffdb1716ac7b6f2993cdd4ba89e96c25e"
+    },
+    {
+      "path": "apps/zcode-cli/packages/core/src/tool/handlers/reply-to-channel.ts",
+      "kind": "modified",
+      "oldSha256": "d5f62b33d76038a78d76b5530fe222d34741de8f32da7fc311bf4258c5972667",
+      "latestSha256": "0a5ea0357dc92a5e39fa6fb06271a9594739a9bba4678866b426167ab3cf8e84"
+    },
+    {
+      "path": "apps/zcode-cli/packages/core/src/tool/handlers/resolve-workflow-question.ts",
+      "kind": "modified",
+      "oldSha256": "4de0bcb2aa2d21a7b8063b9e8724eec5d98e5779340bb569d61dddc6a68a5252",
+      "latestSha256": "e83495a9c7bc58a4c3bf01a1c14096a29da858cdd5e16ee7101a86ed8166267c"
+    },
+    {
+      "path": "apps/zcode-cli/packages/core/src/tool/handlers/respond-to-coordinator.ts",
+      "kind": "modified",
+      "oldSha256": "0aa92ae37b13f450f733c8de0fece96c53c079f75cfdb98b79b562bcbdbc2070",
+      "latestSha256": "52c9185139370512d5f1d0c5dc699f42ea79199311aeb6bf7dd2601a080ff6dd"
+    },
+    {
+      "path": "apps/zcode-cli/packages/core/src/tool/handlers/resume-workflow-run.ts",
+      "kind": "modified",
+      "oldSha256": "d821a833a065e40a1b1ff2cd778c5c40ff33250e31245da3b736eab36d44976e",
+      "latestSha256": "53db3f9c213f40eb93044882695ee62d2ac936b6891c61f8207a3af312ba08f5"
+    },
+    {
+      "path": "apps/zcode-cli/packages/core/src/tool/handlers/save-workflow.ts",
+      "kind": "modified",
+      "oldSha256": "447f13fa9159fdb3e6f27611d0e147668e5387d451c856e90ebc2b75e22a2b98",
+      "latestSha256": "393fe8fea6e3b3188905fbd547a5d9e497e7d64e6ec6a8bab7656f488b77eb5e"
+    },
+    {
+      "path": "apps/zcode-cli/packages/core/src/tool/handlers/send-message.ts",
+      "kind": "modified",
+      "oldSha256": "9b80d5717665401bcaaae80a62551db3d6e1bb18c63e561cb977b66996573602",
+      "latestSha256": "01ee55f4be7b8b3ac35b5d5f30219273d91abce030589bc42b6afa8a3f1cadf7"
+    },
+    {
+      "path": "apps/zcode-cli/packages/core/src/tool/handlers/skill.ts",
+      "kind": "modified",
+      "oldSha256": "dbae5ab909c079215c82fc8a5aba3861907933dbbe36b09d6a12738a968420b4",
+      "latestSha256": "f91cc8a81509f46b2ac40c0c8dd2eeb7bc79c12fc6be35fcd2d1638fd83a7173"
+    },
+    {
+      "path": "apps/zcode-cli/packages/core/src/tool/handlers/submit-result.ts",
+      "kind": "modified",
+      "oldSha256": "e54a60402915d7a4c59fe052b565a8c2759c448d2b83ce9be59376609370922a",
+      "latestSha256": "90ecaba7b11a319de5b18834c9eac75828f7797ad205084a3a9b06278d02a5d4"
+    },
+    {
+      "path": "apps/zcode-cli/packages/core/src/tool/handlers/task-output.ts",
+      "kind": "modified",
+      "oldSha256": "0d041c8de26e22df015ffa8307c9a8b5d6f4d94e9577fd79d70619eb522e37dd",
+      "latestSha256": "7a3827189cf17b9a98d6ca6f3e97dab8a4efca9fd559494566d137860e0c5fe5"
+    },
+    {
+      "path": "apps/zcode-cli/packages/core/src/tool/handlers/task-stop.ts",
+      "kind": "modified",
+      "oldSha256": "b185e512178ae34153abd2ef874206d7b1b380d9bc77d515ff0d8595ff0d18cf",
+      "latestSha256": "ba49eac0ed00ab6a39a4ae2fbe935625b49f9e7daa262807b24695a49941f284"
+    },
+    {
+      "path": "apps/zcode-cli/packages/core/src/tool/handlers/todo.ts",
+      "kind": "modified",
+      "oldSha256": "07a40f05be6daa4218815e491d6a3b75b93d7933b468745851514cbcee440b68",
+      "latestSha256": "6bfc35e773a2f9c5c2c51cc042112ad60d92d4e25f4ba827ebc29964defd7115"
+    },
+    {
+      "path": "apps/zcode-cli/packages/core/src/tool/handlers/tool-search.ts",
+      "kind": "added",
+      "oldSha256": null,
+      "latestSha256": "2a7cd61b0f27de17c46d12f0b212c3c580cf1ef8aa42055b4dd94082f16b1dde"
+    },
+    {
+      "path": "apps/zcode-cli/packages/core/src/tool/handlers/webfetch.ts",
+      "kind": "modified",
+      "oldSha256": "af7eb5129de95c3d907d39b430224adcee76114c183d83c1cd0f1508882441bd",
+      "latestSha256": "18d5587c43cc2670ac90e13a51c94333f86fcd24cf45272fcfb3a4f2ed44597d"
+    },
+    {
+      "path": "apps/zcode-cli/packages/core/src/tool/handlers/websearch.ts",
+      "kind": "modified",
+      "oldSha256": "5a82c362e66e2542095d42c95c9748c7b8260399083324a3ef60a351351dd2ce",
+      "latestSha256": "2b8118b9ec8c17db8c3414d47e59cbf05ec962e02fa30f48ce6baa6486575dbb"
+    },
+    {
+      "path": "apps/zcode-cli/packages/core/src/tool/search/description.ts",
+      "kind": "added",
+      "oldSha256": null,
+      "latestSha256": "d7f3eaaa85e9ae445fedf2de9ac466c1bf7bdc223b1749ad21acb5c82c077d80"
+    },
+    {
+      "path": "apps/zcode-cli/packages/core/src/tool/search/exposure.ts",
+      "kind": "added",
+      "oldSha256": null,
+      "latestSha256": "9f801cbb76323505bc7c3cd014cbfb0912f56c97d38a440462b5221859d77c55"
+    },
+    {
+      "path": "apps/zcode-cli/packages/core/src/tool/search/history.ts",
+      "kind": "added",
+      "oldSha256": null,
+      "latestSha256": "1cc0e63d59869121851394688324852f05456bf05b4099e7955579b08c7c5caf"
+    },
+    {
+      "path": "apps/zcode-cli/packages/core/src/tool/search/local-projection.ts",
+      "kind": "added",
+      "oldSha256": null,
+      "latestSha256": "6d74bf505ca71a6795c298ecfa3306742d075249661ce9aca67664512ad7168a"
+    },
+    {
+      "path": "apps/zcode-cli/packages/core/src/tool/search/search.ts",
+      "kind": "added",
+      "oldSha256": null,
+      "latestSha256": "bfbdf20890f2cb8ed5cb59ab398bb38f071ed450acf8e489aa700c96b38bbb25"
+    },
+    {
+      "path": "apps/zcode-cli/packages/core/src/tool/types.ts",
+      "kind": "modified",
+      "oldSha256": "d186b338b436795ef1d5c53af1372c78887179392ba3afdfe5c1bb08e125f0bb",
+      "latestSha256": "2dcab31888e1b709474cbe189cfc33a33f0a8c449aba4b2ce27b18e9660abacd"
+    },
+    {
+      "path": "apps/zcode-cli/packages/core/src/tool/workflow-entrypoints/contract.example.ts",
+      "kind": "added",
+      "oldSha256": null,
+      "latestSha256": "087364283a84312285e89f7c23bcc73021d235ec1786c783f88d5909714c5f95"
+    },
+    {
+      "path": "apps/zcode-cli/packages/core/src/tool/workflow-entrypoints/contract.ts",
+      "kind": "added",
+      "oldSha256": null,
+      "latestSha256": "94e24fa5f47c3658d317fe074f407f355d5780117f7e4babfc69abe0de8d602d"
+    },
+    {
+      "path": "apps/zcode-cli/packages/core/src/tool/workflow-entrypoints/module.ts",
+      "kind": "added",
+      "oldSha256": null,
+      "latestSha256": "3f341fe64266c78c372b0bdc72bf4612937c747b800eaf46e7cc5499f03afce1"
+    }
+  ]
+}

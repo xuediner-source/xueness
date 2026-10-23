@@ -1,0 +1,187 @@
+{
+  "title": "Xueness",
+  "plugins": 30,
+  "features": 254,
+  "onboardingSeen": true,
+  "onboardingClosed": true,
+  "onboardingCompleted": true,
+  "permissionSnapshotValid": true,
+  "permissionStatusHonest": true,
+  "permissionPlatform": "win32",
+  "permissionSnapshot": {
+    "platform": "win32",
+    "permissions": [
+      {
+        "id": "accessibility",
+        "status": "unsupported",
+        "canRequest": false
+      },
+      {
+        "id": "screen",
+        "status": "unsupported",
+        "canRequest": false
+      },
+      {
+        "id": "fullDisk",
+        "status": "unsupported",
+        "canRequest": false
+      },
+      {
+        "id": "microphone",
+        "status": "granted",
+        "canRequest": false
+      }
+    ]
+  },
+  "installedCards": 30,
+  "aboutReady": true,
+  "aboutVersion": "0.1.8",
+  "aboutDataDirectory": "C:\\Users\\19404\\AppData\\Local\\Temp\\xueness-app-check-oxxdz7wp\\data",
+  "oldDesktopNavAbsent": true,
+  "titlebarPlatform": "windows",
+  "titlebarInsets": {
+    "brandLeft": 10,
+    "actionsRight": 148
+  },
+  "windowBgToken": "#ececee",
+  "nodeAccess": false,
+  "workbenchReady": true,
+  "body": 486,
+  "clipWriteGranted": true,
+  "clipReadDenied": true,
+  "dockTaskPopupReady": null,
+  "nativeBackground": "#ECECEE",
+  "appearanceChecks": [
+    {
+      "palette": "claudex",
+      "theme": "light",
+      "windowBgToken": "#eeeae4",
+      "chromeToken": "#eeeae4",
+      "meta": "#eeeae4",
+      "historyLeft": 10,
+      "actionsRight": 148.4000244140625,
+      "sidebarWidth": 340,
+      "sidebarRail": true,
+      "compactTasks": true,
+      "classicTasks": false,
+      "resizeHandle": true,
+      "titlebarHeight": 44,
+      "workspaceStrip": true,
+      "composerWorkspace": false,
+      "workspaceMenuVisible": true,
+      "workspacePlacement": "xn-hero__workspace",
+      "workspaceMenuBounds": {
+        "x": 382,
+        "y": 532.6500244140625,
+        "width": 101.51250457763672,
+        "height": 31.600000381469727
+      },
+      "nodeAccess": false,
+      "nativeBackground": "#EEEAE4"
+    },
+    {
+      "palette": "claudex",
+      "theme": "dark",
+      "windowBgToken": "#262522",
+      "chromeToken": "#262522",
+      "meta": "#262522",
+      "historyLeft": 10,
+      "actionsRight": 148.4000244140625,
+      "sidebarWidth": 340,
+      "sidebarRail": true,
+      "compactTasks": true,
+      "classicTasks": false,
+      "resizeHandle": true,
+      "titlebarHeight": 44,
+      "workspaceStrip": true,
+      "composerWorkspace": false,
+      "workspaceMenuVisible": true,
+      "workspacePlacement": "xn-hero__workspace",
+      "workspaceMenuBounds": {
+        "x": 382,
+        "y": 532.6500244140625,
+        "width": 101.51250457763672,
+        "height": 31.600000381469727
+      },
+      "nodeAccess": false,
+      "nativeBackground": "#262522"
+    },
+    {
+      "palette": "xueness",
+      "theme": "light",
+      "windowBgToken": "#ececee",
+      "chromeToken": "#ececee",
+      "meta": "#ececee",
+      "historyLeft": 94.67500305175781,
+      "actionsRight": 148.4000244140625,
+      "sidebarWidth": 270,
+      "sidebarRail": false,
+      "compactTasks": false,
+      "classicTasks": true,
+      "resizeHandle": true,
+      "titlebarHeight": 44,
+      "workspaceStrip": false,
+      "composerWorkspace": true,
+      "workspaceMenuVisible": true,
+      "workspacePlacement": "xn-composer__top-content",
+      "workspaceMenuBounds": {
+        "x": 470.8999938964844,
+        "y": 396.0249938964844,
+        "width": 103.82500457763672,
+        "height": 32.35000228881836
+      },
+      "nodeAccess": false,
+      "nativeBackground": "#ECECEE"
+    },
+    {
+      "palette": "xueness",
+      "theme": "dark",
+      "windowBgToken": "#0f0f10",
+      "chromeToken": "#0f0f10",
+      "meta": "#0f0f10",
+      "historyLeft": 94.67500305175781,
+      "actionsRight": 148.4000244140625,
+      "sidebarWidth": 270,
+      "sidebarRail": false,
+      "compactTasks": false,
+      "classicTasks": true,
+      "resizeHandle": true,
+      "titlebarHeight": 44,
+      "workspaceStrip": false,
+      "composerWorkspace": true,
+      "workspaceMenuVisible": true,
+      "workspacePlacement": "xn-composer__top-content",
+      "workspaceMenuBounds": {
+        "x": 470.8999938964844,
+        "y": 396.0249938964844,
+        "width": 103.82500457763672,
+        "height": 32.35000228881836
+      },
+      "nodeAccess": false,
+      "nativeBackground": "#0F0F10"
+    }
+  ],
+  "nativeMenuLabels": [
+    "文件",
+    "编辑",
+    "视图",
+    "窗口"
+  ],
+  "dockMenuLabels": [],
+  "permissionPostRequests": 0,
+  "noPermissionRequests": true,
+  "updates": {
+    "phase": "disabled",
+    "version": null,
+    "currentVersion": "0.1.8",
+    "percent": 0,
+    "transferredBytes": null,
+    "totalBytes": null,
+    "bytesPerSecond": null,
+    "etaSeconds": null,
+    "reason": "更新功能已关闭。",
+    "canInstall": false,
+    "canDownload": false,
+    "installMode": "restart"
+  }
+}

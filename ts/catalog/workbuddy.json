@@ -1,0 +1,65 @@
+{
+  "id": "workbuddy",
+  "name": "WorkBuddy 号池",
+  "description": "可选安装的本机 WorkBuddy 号池网关。在设置中添加或删除自备账号认证、查看号池状态，并在会话中使用三个 WorkBuddy 模型。",
+  "version": "1.0.0",
+  "apiVersion": 1,
+  "defaultEnabled": false,
+  "installPackage": "xueness-workbuddy",
+  "dependencies": [
+    "providers"
+  ],
+  "tools": [],
+  "commands": [],
+  "panels": [
+    "workbuddy"
+  ],
+  "resources": [],
+  "capabilities": [],
+  "httpFamilies": [
+    "workbuddy"
+  ],
+  "modules": [
+    "models",
+    "layout",
+    "accounts",
+    "gateway",
+    "provider",
+    "http",
+    "api"
+  ],
+  "backendAssets": [
+    "assets/workbuddy2api-panel.exe"
+  ],
+  "frontendModules": [
+    "plugins/workbuddy/api.ts",
+    "plugins/workbuddy/WorkbuddySettings.tsx"
+  ],
+  "features": [
+    {
+      "id": "workbuddy.pool",
+      "name": "可选安装的本机号池网关与多账号轮换",
+      "nameEn": "Optional local pool gateway with account rotation"
+    },
+    {
+      "id": "workbuddy.models",
+      "name": "三个号池模型进入会话模型选择",
+      "nameEn": "Pool models in conversation model selection"
+    },
+    {
+      "id": "workbuddy.accounts",
+      "name": "设置内添加、更新与删除本机账号认证",
+      "nameEn": "Add, update and remove local account credentials in settings"
+    },
+    {
+      "id": "workbuddy.status",
+      "name": "账号额度、冷却、在途请求与最近状态",
+      "nameEn": "Account credits, cooldown, in-flight requests and recent status"
+    },
+    {
+      "id": "workbuddy.lifecycle",
+      "name": "可选安装、私有凭据与禁用后停止",
+      "nameEn": "Optional installation, private credentials and disable cleanup"
+    }
+  ]
+}

@@ -1,0 +1,138 @@
+{
+  "apiVersion": 2,
+  "id": "providers",
+  "name": "模型供应商",
+  "description": "Saved model profiles, bounded connection tests, model discovery and verified compatibility diagnostics.",
+  "version": "0.2.0",
+  "defaultEnabled": true,
+  "capabilities": {
+    "fs": {
+      "read": [
+        "state"
+      ],
+      "write": [
+        "state"
+      ]
+    },
+    "net": {
+      "connect": [
+        "*"
+      ]
+    }
+  },
+  "features": [
+    {
+      "id": "providers.model_admission",
+      "name": "模型请求排队与并发准入",
+      "nameEn": "Model request queue and admission"
+    },
+    {
+      "id": "providers.model_debug",
+      "name": "本地请求诊断记录",
+      "nameEn": "Local model request diagnostics"
+    },
+    {
+      "id": "providers.profiles",
+      "name": "模型配置",
+      "nameEn": "Model profiles"
+    },
+    {
+      "id": "providers.connection_test",
+      "name": "连接测试",
+      "nameEn": "Connection tests"
+    },
+    {
+      "id": "providers.model_discovery",
+      "name": "模型发现",
+      "nameEn": "Model discovery"
+    },
+    {
+      "id": "providers.compatibility",
+      "name": "兼容性诊断",
+      "nameEn": "Compatibility diagnostics"
+    },
+    {
+      "id": "providers.default_selection",
+      "name": "默认模型",
+      "nameEn": "Default model"
+    },
+    {
+      "id": "providers.lightweight",
+      "name": "轻量模型运行",
+      "nameEn": "Lightweight model runtime"
+    },
+    {
+      "id": "providers.semantic_compaction",
+      "name": "模型整理历史并保留原始检查点",
+      "nameEn": "Model-assisted history handoffs with preserved source checkpoints"
+    },
+    {
+      "id": "providers.activity",
+      "name": "实时请求状态、已报告用量、步骤耗时与速率趋势",
+      "nameEn": "Live request states, reported usage, step timings and rate trends"
+    },
+    {
+      "id": "providers.empty_completion_retry",
+      "name": "空补全一次重试",
+      "nameEn": "One retry for empty model completions"
+    },
+    {
+      "id": "providers.stream_retry_boundary",
+      "name": "流式前奏暂存与输出提交边界",
+      "nameEn": "Buffered stream preludes and committed output boundary"
+    },
+    {
+      "id": "providers.stream_idle_timeout",
+      "name": "模型响应流空闲超时",
+      "nameEn": "Model response stream idle timeout"
+    },
+    {
+      "id": "providers.model_request_status",
+      "name": "模型请求耗时与最终失败提示",
+      "nameEn": "Model request timings and terminal failure messages"
+    },
+    {
+      "id": "providers.request_shaping",
+      "name": "工具参数规范化与请求整形",
+      "nameEn": "Tool input normalization and request shaping"
+    },
+    {
+      "id": "providers.strict_tool_schema",
+      "name": "按工具声明启用严格工具 Schema",
+      "nameEn": "Opt-in strict tool schemas"
+    },
+    {
+      "id": "providers.reasoning_history",
+      "name": "思考签名历史兼容与一次恢复",
+      "nameEn": "Reasoning history compatibility and one signature repair"
+    },
+    {
+      "id": "providers.tool_stream_assembly",
+      "name": "工具流结束提交与兼容过滤",
+      "nameEn": "Closed tool stream assembly and compatibility filtering"
+    },
+    {
+      "id": "providers.tool_result_budget",
+      "name": "工具结果字节预算与分页读取",
+      "nameEn": "Tool result byte budgets and paged reading"
+    }
+  ],
+  "panels": [
+    "providers"
+  ],
+  "frontendModules": [
+    "plugins/providers/ProvidersPanel.tsx",
+    "plugins/providers/LocalRuntimeMonitor.tsx",
+    "plugins/providers/runtimeSampling.ts",
+    "plugins/providers/index.tsx",
+    "plugins/providers/LightweightWorkbench.tsx"
+  ],
+  "tools": [
+    {
+      "name": "tool_result_read",
+      "gate": "tool_result_read",
+      "mutating": false,
+      "concurrencySafe": true
+    }
+  ]
+}
