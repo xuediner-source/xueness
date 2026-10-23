@@ -3,7 +3,7 @@ on:
   workflow_dispatch:
     inputs:
       build_run_id:
-        description: 'Successful focused or full native build for this exact commit; build-info records the verification mode'
+        description: 'Successful focused native parity or full extended release test run for this exact commit'
         type: string
         required: true
 permissions:
@@ -21,10 +21,7 @@ jobs:
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: '24.20.0'
-      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
-        with:
-          python-version: '3.12'
-      - name: Install metadata parser without application install scripts
+      - name: Install the update-feed parser (js-yaml) without application install scripts
         run: npm ci --prefix desktop --ignore-scripts --no-audit --no-fund
       - name: Verify and upload draft release
-        run: python tools/stage_desktop_release.py
+        run: node ts/scripts/stage-desktop-release.ts
