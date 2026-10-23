@@ -1,2 +1,4 @@
+# Preserve source bytes across Git checkouts for the SHA-256 project manifest.
+* -text
 # Ship generated workbench assets without noisy code diffs.
 webapp/dist/** linguist-generated=true -diff
