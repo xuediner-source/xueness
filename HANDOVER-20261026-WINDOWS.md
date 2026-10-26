@@ -11,6 +11,7 @@
 ## 本次修复
 
 - 补齐后端锁文件工作区登记和插件 catalog v1 字段，结构门禁同时校验分发目录。
+- 修正 GitHub TypeScript CI 的依赖安装顺序：前端 prebuild 会调用 TS 插件门禁，必须先安装后端工作区。
 - 修复 Node 持久 REPL 动态导入、Windows 会话迁移边界和 HTTP 半截请求超时回包。
 - 修复待审批答复被在途 run 回执阻塞，恢复取消传播设置入口并校正百分比/停止原因显示。
 - Harness 的测试文件系统使用本机路径；NTFS junction 与 POSIX symlink 均验证链接拒绝，导入器明确拒绝链接文件槽。
