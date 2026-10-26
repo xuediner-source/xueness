@@ -37,8 +37,10 @@ describe("execution platform matrix", () => {
     assert.equal(shell.length >= 2, true);
   });
 
-  it("probes this machine: the shell runs, groups die as groups, crash cleanup matches the platform", { timeout: 30_000 }, async () => {
-    const probes = await probeExecutionPlatform();
+  it("probes this machine: the shell runs, groups die as groups, crash cleanup matches the platform", { timeout: 60_000 }, async () => {
+    // CI Windows can cold-start PowerShell under a busy full-suite runner.
+    // Keep the exact argv, exit status and output assertions; allow startup headroom.
+    const probes = await probeExecutionPlatform({ timeoutMs: 25_000 });
     assert.equal(probes.platform, process.platform);
     assert.deepEqual(probes.shell.argv.slice(0, -1), defaultShell(), "the probe runs the default shell itself");
     assert.equal(probes.shell.ok, true, `default shell probe failed: ${probes.shell.output}`);

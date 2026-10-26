@@ -57,7 +57,7 @@ try {
     windowsHide: true, timeout: 60_000, stdio: "inherit",
   });
 } finally {
-  const target = realpathSync(temporary);
-  assert(relative(realpathSync(tmpdir()), target).startsWith("xueness-built-"), "unexpected cleanup path");
+  const target = realpathSync.native(temporary);
+  assert(relative(realpathSync.native(tmpdir()), target).startsWith("xueness-built-"), "unexpected cleanup path");
   rmSync(target, { recursive: true, force: true });
 }

@@ -93,5 +93,22 @@
       "bytes": 8427296,
       "url": "https://raw.githubusercontent.com/xuediner-source/xueness/main/marketplace/packages/xueness-workbuddy-1.0.0-c2be80e9e145199a.json.gz"
     }
-  ]
+  ],
+  "generalDesktopChecks": [
+    "packaged-desktop-startup",
+    "UI-send-stream-file-tool-journal",
+    "UI-attachment-commit-preview-remove",
+    "UI-write-approval-resume",
+    "UI-complete-plugin-catalog",
+    "UI-plugin-switch-backend-effective",
+    "UI-settings-all-panels",
+    "UI-theme-saved-to-backend",
+    "UI-cancellation-setting-wired",
+    "UI-running-queue-admission",
+    "UI-stop-preserves-partial-output",
+    "UI-narrow-window-no-horizontal-overflow",
+    "full-desktop-restart-session-and-file-preserved"
+  ],
+  "settingsPages": 21,
+  "generalDesktopProvider": "local deterministic fixture"
 }

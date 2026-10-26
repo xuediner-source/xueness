@@ -91,7 +91,7 @@ npm --prefix webapp run build
 | [`desktop`](desktop) | Electron 宿主、原生集成与安装构建 |
 | [`marketplace/packages`](marketplace/packages) | 按内容摘要命名的官方可选插件包 |
 
-验证以可复查的记录为准：[Windows 全链路验收](HANDOVER-20261026-WINDOWS.md) · [SSE 与 WorkBuddy 长任务压测](验收资料/20261026-workbuddy-benchmark) · [插件架构](docs/xueness-plugin-architecture.md) · [贡献指南](CONTRIBUTING.md)。长任务报告保留失败任务、预算限制与测试夹具问题，不把模型请求成功率等同于任务完成率。
+验证以可复查的记录为准：[插件与技能实机验收](验收资料/20261026-plugins-skills/验收报告.md) · [Windows 全链路验收](HANDOVER-20261026-WINDOWS.md) · [SSE 与 WorkBuddy 长任务压测](验收资料/20261026-workbuddy-benchmark) · [插件架构](docs/xueness-plugin-architecture.md) · [贡献指南](CONTRIBUTING.md)。长任务报告保留失败任务、预算限制与测试夹具问题，不把模型请求成功率等同于任务完成率。
 
 <details>
 <summary>历史交接与实现范围</summary>

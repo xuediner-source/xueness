@@ -4,12 +4,15 @@ import assert from "node:assert/strict";
 import { createRequire } from "node:module";
 import { existsSync, mkdirSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join, relative, resolve } from "node:path";
+import { isAbsolute, join, relative, resolve } from "node:path";
 import { BUNDLED_PLUGIN_IDS } from "@xueness/contracts";
 const require = createRequire(import.meta.url);
 const { Backend } = require("../../desktop/src/backend.cjs");
 const { frontDoorCommand } = require("../../desktop/src/front-door.cjs");
-const project = resolve(import.meta.dirname, "../.."), resources = resolve(process.argv[2] ?? join(project, "desktop/release/win-unpacked/resources"));
+const project = resolve(import.meta.dirname, "../..");
+// npm --prefix changes cwd; relative package arguments are repository-relative.
+const requested = process.argv[2];
+const resources = requested ? isAbsolute(requested) ? resolve(requested) : resolve(project, requested) : join(project, "desktop/release/win-unpacked/resources");
 assert(existsSync(join(resources, "backend-ts/node_modules/@xueness/contracts/package.json")), "installer omitted TS production dependencies");
 const data = mkdtempSync(join(tmpdir(), "xueness-installed-ts-"));
 const priorPath = process.env.PATH, priorReal = process.env.XUENESS_ALLOW_REAL;
@@ -45,5 +48,5 @@ finally {
   await backend.stop();
   if (priorPath === undefined) delete process.env.PATH; else process.env.PATH = priorPath;
   if (priorReal === undefined) delete process.env.XUENESS_ALLOW_REAL; else process.env.XUENESS_ALLOW_REAL = priorReal;
-  assert(relative(realpathSync(tmpdir()), realpathSync(data)).startsWith("xueness-installed-ts-")); rmSync(data, { recursive: true, force: true });
+  assert(relative(realpathSync.native(tmpdir()), realpathSync.native(data)).startsWith("xueness-installed-ts-")); rmSync(data, { recursive: true, force: true });
 }
