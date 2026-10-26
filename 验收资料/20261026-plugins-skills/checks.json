@@ -110,5 +110,26 @@
     "full-desktop-restart-session-and-file-preserved"
   ],
   "settingsPages": 21,
-  "generalDesktopProvider": "local deterministic fixture"
+  "generalDesktopProvider": "local deterministic fixture",
+  "functionalCommit": "39d39d54253e85230300f703ef1cec31d931b665",
+  "runtimeCommit": "9f8712924e2a7c42d5591fd6ecf3d2efff1908bf",
+  "originalBackendRegressions": {
+    "tests": 17,
+    "passed": 17,
+    "failed": 0
+  },
+  "buildComparableBackendFiles": 2517,
+  "freshSkillList": {
+    "total": 12,
+    "initialVisible": 7,
+    "initialDefaultOff": true,
+    "modelRequests": 0,
+    "screenshot": "skills-defaults.png"
+  },
+  "remoteCI": {
+    "summary": "ci-summary.json",
+    "allRequiredJobsPassed": true,
+    "runtimeCommit": "9f8712924e2a7c42d5591fd6ecf3d2efff1908bf"
+  },
+  "formalDesktopBrowserReadinessPassed": true
 }
