@@ -27,12 +27,13 @@ jobs:
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: '24.20.0'
+      # The frontend prebuild invokes the TS plugin gate, which imports TypeScript.
+      - name: Install the TypeScript workspace
+        run: npm ci --prefix ts --no-audit --no-fund
       - name: Build the web UI bundle the front door serves
         run: |
           npm ci --prefix webapp --no-audit --no-fund
           npm --prefix webapp run build
-      - name: Install the TypeScript workspace
-        run: npm ci --prefix ts --no-audit --no-fund
       - name: Line limit, plugin gate, typecheck and tests
         working-directory: ts
         env:
