@@ -81,8 +81,8 @@ test("marketplace loading and header use the recovered installed structure", () 
   assert.match(html, /xn-marketplace__header-actions/);
   assert.match(html, /xn-marketplace__empty-icon/);
   assert.match(html, /正在加载市场清单/);
-  assert.match(html, /市场安装和更新的是数据清单/);
-  assert.match(html, /市场安装状态、资源清单开关和功能插件开关彼此独立/);
+  assert.match(html, /按需从 GitHub 下载/);
+  assert.match(html, /内置功能无需重复安装/);
 });
 
 test("marketplace detail shows allowlisted manifest fields and never renders arbitrary manifest values", () => {

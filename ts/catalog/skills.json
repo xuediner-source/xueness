@@ -25,7 +25,9 @@
   },
   "httpFamilies": [
     "resources/skills",
-    "resources/skills/files"
+    "resources/skills/files",
+    "resources/skills/imports",
+    "resources/skills/folders"
   ],
   "modules": [
     "skills",
@@ -37,6 +39,9 @@
     "continuity"
   ],
   "features": [
+    { "id": "skills.switches", "name": "预置技能列表与独立启用开关", "nameEn": "Initial skills listing and individual enable switches" },
+    { "id": "skills.ask_user_question", "name": "结构化提问与用户选择", "nameEn": "Structured questions and user choices" },
+    { "id": "skills.folder_import", "name": "从文件夹添加与移除技能", "nameEn": "Add and remove skills from a folder" },
     {
       "id": "skills.catalog",
       "name": "技能资源与按需目录摘要",
@@ -98,5 +103,5 @@
       "nameEn": "Binary and protocol reverse engineering"
     }
   ],
-  "frontendModules": []
+  "frontendModules": ["plugins/skills/SkillsSection.tsx"]
 }

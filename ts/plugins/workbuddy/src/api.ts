@@ -133,7 +133,7 @@ export function createWorkbuddy(options: WorkbuddyOptions) {
       return await accountSnapshot(false);
     },
   });
-  return { gateway, http, profiles, available, close(): void { void gateway.stop(); } };
+  return { gateway, http, profiles, available, close(): Promise<void> { return gateway.stop(); } };
 }
 
 function numeric(value: unknown): number | null {

@@ -6,10 +6,11 @@
  */
 import { pyJsonDumps } from "@xueness/contracts";
 import { find, merge, discover, readBody, type SkillRow } from "./discover.ts";
-import { bodyAfterFrontmatter, parseFrontmatter, validateFrontmatter, type Diagnostic, type SkillMeta } from "./frontmatter.ts";
+import { bodyAfterFrontmatter, diagnostic, parseFrontmatter, validateFrontmatter, type Diagnostic, type SkillMeta } from "./frontmatter.ts";
 import { MAX_SKILL_FILE_BYTES } from "./discover.ts";
 import { readResource, resourceRows } from "./resources.ts";
 import { clip, pyLen, pySlice, pyStrip } from "./text.ts";
+import { fileSkillEnabled, fileSkillSwitches } from "./switches.ts";
 
 type Row = Record<string, unknown>;
 export const CATALOG_HEADER = "# Available skills (use skill_read with an exact id)";
@@ -20,14 +21,16 @@ export const UNTRUSTED_PREAMBLE = "The following cross-session memory was loaded
 /** Python `list_all`: both families merged, shadowing resolved. */
 export function listAll(stateDir: string, root: string | null, includeCompat = true, bundled: string | null = null): { skills: SkillRow[]; diagnostics: Diagnostic[] } {
   const found = discover(stateDir, root, includeCompat, undefined, bundled);
-  return { skills: merge(resourceRows(stateDir), found.skills), diagnostics: found.diagnostics };
+  const switches = fileSkillSwitches(stateDir);
+  if (switches.broken) found.diagnostics.push(diagnostic("skill_state_invalid", "error", "skill-state.json is invalid; file skills are disabled"));
+  return { skills: merge(resourceRows(stateDir), found.skills).map(row => ({ ...row, enabled: fileSkillEnabled(row, switches) })), diagnostics: found.diagnostics };
 }
 
 /** Python `catalog` (lightweight runtime): JSON lines under a 4000-character budget. */
 export function pythonCatalog(rows: readonly SkillRow[]): string {
   const lines = [CATALOG_HEADER];
   for (const item of rows) {
-    if (item.shadowed) continue;
+    if (item.shadowed || item.enabled === false) continue;
     const payload: Row = { id: item.id, name: pySlice(item.name, 0, 120), description: pySlice(item.description, 0, 240) };
     if (item.source !== "resource") payload.source = item.source;
     const line = pyJsonDumps(payload, { ensureAscii: false });
@@ -42,7 +45,7 @@ const DEFAULT_SKILL_METADATA_BUDGET = 20_000;
 const MAX_DESCRIPTION_CHARS = 250;
 export interface ListedSkill { name: string; description: string; path: string }
 export function listedSkills(rows: readonly SkillRow[]): ListedSkill[] {
-  return rows.filter((item) => !item.shadowed).map((item) => ({ name: item.name, description: item.description, path: item.path }));
+  return rows.filter((item) => !item.shadowed && item.enabled !== false).map((item) => ({ name: item.name, description: item.description, path: item.path }));
 }
 export function zcodeSkillsListing(skills: readonly ListedSkill[], budget = DEFAULT_SKILL_METADATA_BUDGET): string | null {
   if (!skills.length) return null;

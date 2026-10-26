@@ -11,6 +11,7 @@ import { BUNDLED_PLUGIN_IDS, isDict, JsonFloat, pyJsonLoadsBytes, PyKeyError, Py
 import { isLink, isPyOSError, isPyValueError, pyCodeCompare } from "@xueness/sessions";
 import { BoundedReadError, readLimited, atomicWriteJson } from "./io.ts";
 import { loadManifests } from "./sdk.ts";
+import { OPTIONAL_IDS, optionalInstalled } from "@xueness/kernel";
 
 const MAX_STATE_BYTES = 65536;
 const MAX_PROFILE_NAME = 64;
@@ -154,7 +155,8 @@ export function resolveRows(stateDir: string, switches: Record<string, boolean>,
     for (const item of loadManifests(stateDir)) packages.add(`${item.id}\0${item.builtin}`);
   }
   const installed = new Map<string, boolean>();
-  for (const [pid, item] of manifests) installed.set(pid, !item.installPackage || packages.has(`${item.installPackage}\0${pid}`));
+  for (const [pid, item] of manifests) installed.set(pid, !item.installPackage || packages.has(`${item.installPackage}\0${pid}`)
+    && (!OPTIONAL_IDS.includes(pid as typeof OPTIONAL_IDS[number]) || optionalInstalled(stateDir, pid)));
   const effective = new Map<string, boolean>();
   const chosen = (pid: string): boolean => (Object.hasOwn(switches, pid) ? switches[pid]! : Object.hasOwn(overlay, pid) ? overlay[pid]! : manifests.get(pid)!.defaultEnabled);
   const resolve = (pid: string, visiting: readonly string[]): boolean => {

@@ -9,3 +9,4 @@ export * from "./tool-registry.ts";
 export * from "./tool-events.ts";
 export * from "./resources.ts";
 export * from "./plugin-host.ts";
+export * from "./optional-packages.ts";

@@ -1,6 +1,7 @@
+import { mkdtempSync } from "../test-support/canonical-temp.ts";
 /** Exercise the compiled runtime after relocation, with no source workspace links. */
 import assert from "node:assert/strict";
-import { cpSync, existsSync, mkdtempSync, realpathSync, rmSync } from "node:fs";
+import { cpSync, existsSync, realpathSync, rmSync } from "node:fs";
 import { execFileSync } from "node:child_process";
 import { tmpdir } from "node:os";
 import { dirname, join, relative, resolve } from "node:path";

@@ -54,7 +54,7 @@ async function fileOrNotFound(path: string, contentType: string): Promise<Static
   }
 }
 
-export async function serveStatic(path: string, webappDir: string): Promise<StaticResponse | null> {
+export async function serveStatic(path: string, webappDir: string, optionalAsset?: (name: string) => Buffer | null): Promise<StaticResponse | null> {
   if (path === "/" || path === "/index.html") {
     try {
       return { kind: "file", status: 200, body: await readFile(join(webappDir, "index.html")), contentType: "text/html; charset=utf-8" };
@@ -69,7 +69,10 @@ export async function serveStatic(path: string, webappDir: string): Promise<Stat
     const asset = await resolvePath(join(root, name));
     const type = ASSET_TYPES[extname(basename(asset))];
     if (dirname(asset) !== root || !type) return NOT_FOUND;
-    return fileOrNotFound(asset, type);
+    const local = await fileOrNotFound(asset, type);
+    if (local.kind === "file") return local;
+    const downloaded = optionalAsset?.(name);
+    return downloaded ? { kind: "file", status: 200, body: downloaded, contentType: type } : local;
   }
   const entry = ROOT_FILES[path];
   if (entry) {

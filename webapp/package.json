@@ -19,7 +19,7 @@
     "check:design": "node ../tools/check_frontend_design.mjs",
     "check:bundle": "node ../tools/check_frontend_bundle.mjs",
     "prebuild": "npm run check:plugins && npm run check:design",
-    "postbuild": "npm run check:bundle",
+    "postbuild": "npm run check:bundle && node ../ts/scripts/package-optional.ts",
     "test:browser:experiments": "node verify-question-experiments.mjs"
   },
   "dependencies": {

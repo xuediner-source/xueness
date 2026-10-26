@@ -4,9 +4,9 @@ module.exports = {
   publish: [{ provider: 'github', owner: 'xuediner-source', repo: 'xueness', releaseType: 'release' }],
   files: ['src/**/*', 'package.json'],
   extraResources: [
-    { from: '../ts/dist', to: 'backend-ts', filter: ['**/*', '!**/*.map'] },
+    { from: '../ts/dist', to: 'backend-ts', filter: ['**/*', '!**/*.map', '!plugins/{subscriptions,model_monitor,workbuddy}/{src,assets}/**/*'] },
     // electron-builder excludes a source root's node_modules during extraResources copying.
-    { from: '../ts/dist/node_modules', to: 'backend-ts/node_modules', filter: ['**/*', '!**/*.map'] },
+    { from: '../ts/dist/node_modules', to: 'backend-ts/node_modules', filter: ['**/*', '!**/*.map', '!@xueness/plugin-{subscriptions,model_monitor,workbuddy}/{src,assets}/**/*'] },
     { from: '../webapp/dist', to: 'webapp' },
     { from: '../webapp/node_modules/playwright', to: 'browser-runtime/node_modules/playwright' },
     { from: '../webapp/node_modules/playwright-core', to: 'browser-runtime/node_modules/playwright-core' },

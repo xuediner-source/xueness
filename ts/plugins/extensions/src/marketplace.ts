@@ -11,6 +11,7 @@ import { isPyKeyError, isPyOSError, isPyValueError } from "@xueness/sessions";
 import { uninstallPackage } from "./components.ts";
 import { digest, installAll, loadManifests, validateDataManifest, type InstallResult } from "./sdk.ts";
 import type { ExtensionsReply } from "./validate.ts";
+import { optionalArtifactByPackage, optionalInstalled } from "@xueness/kernel";
 
 /** Python `NetworkError`: marketplace does not turn this into a 400. */
 export class NetworkError extends Error {
@@ -30,25 +31,15 @@ export const SUBSCRIPTIONS_MARKET_MANIFEST = { id: SUBSCRIPTIONS_PACKAGE_ID, ver
 export const MONITOR_MARKET_MANIFEST = { id: MONITOR_PACKAGE_ID, version: "1.0.0", apiVersion: 1, builtin: "model_monitor", capabilities: [] as string[], enabled: false };
 export const WORKBUDDY_MARKET_MANIFEST = { id: WORKBUDDY_PACKAGE_ID, version: "1.0.0", apiVersion: 1, builtin: "workbuddy", capabilities: [] as string[], enabled: false };
 
-const KINDS = ["skills", "hooks", "mcp", "subagents"];
+const CORE_PACKAGES = new Set(["xueness-skills", "xueness-hooks", "xueness-mcp", "xueness-subagents"]);
 
 export interface MarketplaceOptions {
   env?: NodeJS.ProcessEnv;
   fetchUrl?: (url: string) => FetchUrlResult;
 }
 
-function builtinRow(kind: string): Record<string, unknown> {
-  const id = `xueness-${kind}`;
-  return {
-    id,
-    name: kind.slice(0, 1).toUpperCase() + kind.slice(1),
-    description: `Trusted ${kind} capability adapter`,
-    manifest: { id, version: "1.0.0", apiVersion: 1, builtin: kind, capabilities: [], enabled: false },
-  };
-}
-
 function packageRow(id: string, name: string, description: string, manifest: Record<string, unknown>): Record<string, unknown> {
-  return { id, name, description, manifest: structuredClone(manifest), source: "bundled" };
+  return { id, name, description, manifest: structuredClone(manifest), source: "GitHub" };
 }
 
 function remoteItems(url: string, fetchUrl: MarketplaceOptions["fetchUrl"]): unknown {
@@ -64,9 +55,9 @@ function remoteItems(url: string, fetchUrl: MarketplaceOptions["fetchUrl"]): unk
 }
 
 function loadRows(url: string, fetchUrl: MarketplaceOptions["fetchUrl"]): unknown[] {
-  const rows = url ? remoteItems(url, fetchUrl) : KINDS.map(builtinRow);
+  const rows = url ? remoteItems(url, fetchUrl) : [];
   if (!Array.isArray(rows) || rows.length > 100) throw new PyValueError("invalid marketplace catalog");
-  const kept = rows.filter((row) => !isDict(row) || row.id !== SUBSCRIPTIONS_PACKAGE_ID);
+  const kept = rows.filter((row) => !isDict(row) || !CORE_PACKAGES.has(String(row.id)) && row.id !== SUBSCRIPTIONS_PACKAGE_ID);
   kept.push(packageRow(SUBSCRIPTIONS_PACKAGE_ID, "订阅中心", "可选安装。通过账号授权或登录凭证接入 Claude、Codex 等订阅账号，查询真实额度并用于会话。", SUBSCRIPTIONS_MARKET_MANIFEST));
   const withoutMonitor = kept.filter((row) => !isDict(row) || row.id !== MONITOR_PACKAGE_ID);
   withoutMonitor.push(packageRow(MONITOR_PACKAGE_ID, "返回模型监测", "可选安装。随会话显示请求型号与上游返回型号，判断一致或不同；不自动发送额外请求。", MONITOR_MARKET_MANIFEST));
@@ -93,15 +84,18 @@ export function marketplaceCatalog(stateDir: string, options: MarketplaceOptions
     if (declared !== itemDigest) throw new PyValueError("marketplace digest mismatch");
     const current = installed.get(manifest.id);
     const reserved = manifest.id === SUBSCRIPTIONS_PACKAGE_ID || manifest.id === MONITOR_PACKAGE_ID || manifest.id === WORKBUDDY_PACKAGE_ID;
+    const artifact = reserved ? optionalArtifactByPackage(manifest.id) : null;
+    const available = !reserved || optionalInstalled(stateDir, manifest.builtin);
     output.push({
       id: manifest.id,
       name: pyStr(row.name ?? manifest.id).slice(0, 120),
       description: pyStr(row.description ?? "").slice(0, 500),
       version: manifest.version,
-      sha256: itemDigest,
-      installedVersion: current ? current.version : null,
+      sha256: artifact?.sha256 ?? itemDigest,
+      installedVersion: current && available ? current.version : null,
       manifest: row.manifest,
       source: reserved ? (row.source ?? null) : (url || "bundled"),
+      ...(reserved ? { delivery: "official", downloadBytes: artifact?.bytes ?? 0 } : {}),
     });
   }
   return output;
@@ -124,6 +118,7 @@ function versionAtMost(left: string, right: string): boolean {
 
 /** `marketplace.install`. The written manifest is forced `enabled: false`. */
 export function installPackage(stateDir: string, id: string, expected: unknown, update: boolean, options: MarketplaceOptions = {}): InstallResult {
+  if ([SUBSCRIPTIONS_PACKAGE_ID, MONITOR_PACKAGE_ID, WORKBUDDY_PACKAGE_ID].includes(id)) throw new PyValueError("official plugins must be downloaded and verified before installation");
   const item = marketplaceCatalog(stateDir, options).find((row) => row.id === id);
   if (!item || expected !== item.sha256) throw new PyValueError("catalog changed; review the package again");
   const installed = item.installedVersion;

@@ -195,10 +195,9 @@ describe("extensions HTTP matches Python", { skip: skip ?? false }, () => {
     const reply = await fetched.dispatch("GET", ["api", "plugins", "marketplace"], {}, {});
     const ids = ((reply?.[1] as { marketplace: { id: string; source: string; version: string }[] }).marketplace).map((row) => [row.id, row.source, row.version]);
     assert.deepEqual(ids, [
-      ["xueness-hooks", env.XUENESS_MARKETPLACE_URL, "1.0.0"],
-      ["xueness-subscriptions", "bundled", "1.0.0"],
-      ["xueness-model-monitor", "bundled", "1.0.0"],
-      ["xueness-workbuddy", "bundled", "1.0.0"],
+      ["xueness-subscriptions", "GitHub", "1.0.0"],
+      ["xueness-model-monitor", "GitHub", "1.0.0"],
+      ["xueness-workbuddy", "GitHub", "1.0.0"],
     ]);
     const broken = createExtensionsHttp({ stateDir: state, enabled: true, env, fetchUrl: () => ({ output: "{", truncated: false }) });
     assert.deepEqual(await broken.dispatch("GET", ["api", "plugins", "marketplace"], {}, {}), [400, { error: "marketplace validation or installation failed" }]);

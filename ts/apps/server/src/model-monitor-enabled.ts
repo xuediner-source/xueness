@@ -4,13 +4,12 @@
  * 403 a route Python can still serve. Match the catalog instead: marketplace
  * marker installed, explicit switch true, providers on. Default stays off.
  */
-import { loadDataManifests } from "@xueness/plugin-extensions";
-import { explicitPluginChoice } from "./plugin-state.ts";
+import { explicitPluginChoice, packageInstalled } from "./plugin-state.ts";
 
 export function modelMonitorEnabled(stateDir: string, providersOn: boolean): boolean {
   if (!providersOn || explicitPluginChoice(stateDir, "model_monitor") !== true) return false;
   try {
-    return loadDataManifests(stateDir).some((item) => item.id === "xueness-model-monitor" && item.builtin === "model_monitor");
+    return packageInstalled(stateDir, "model_monitor", "xueness-model-monitor");
   } catch {
     return false;
   }

@@ -1,7 +1,8 @@
+import { mkdtempSync } from "../test-support/canonical-temp.ts";
 /** Verify the installed layout, not only the pre-installer dist directory. */
 import assert from "node:assert/strict";
 import { createRequire } from "node:module";
-import { existsSync, mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, relative, resolve } from "node:path";
 import { BUNDLED_PLUGIN_IDS } from "@xueness/contracts";

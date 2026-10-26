@@ -16,7 +16,9 @@ export default defineConfig({
   }],
   build: { rollupOptions: {
     input: { workbench: resolve(import.meta.dirname, 'index.html'), tray: resolve(import.meta.dirname, 'tray.html') },
-    output: { manualChunks(id) {
+    output: { onlyExplicitManualChunks: true, manualChunks(id) {
+      const optional = /\/src\/plugins\/(subscriptions|model_monitor|workbuddy)\//.exec(id.replaceAll('\\', '/'));
+      if (optional) return `optional-${optional[1]}`;
       // Give the shared React runtime a stable cache identity across plugin chunks.
       if (/node_modules\/(react|react-dom|scheduler)\//.test(id)) return 'react-vendor';
       if (/node_modules\/(micromark|mdast|unist|unified|vfile|hast|property-information|remark|react-markdown)/.test(id)) return 'markdown-vendor';

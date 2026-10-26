@@ -28,11 +28,11 @@ import { createComposerFeatures } from "./composer-features.ts";
 import { isLoopbackAddress } from "./py-url.ts";
 import { createRound5 } from "./round5-http.ts";
 import { createRound6 } from "./round6-http.ts";
+import { observeOptionalProvider } from "./optional-integrations.ts";
 import { createRound7 } from "./round7-http.ts";
 import { createRound8 } from "./round8-http.ts";
 import { DynamicServiceError, DynamicWorkflowService, createDynamicWorkflowApi } from '@xueness/plugin-workflows';
 import { createDynamicWorkflowDriver } from './dynamic-workflow-driver.ts';
-import { NativeProvider } from "@xueness/plugin-subscriptions";
 
 export interface ApplicationApiOptions {
   projectRoot: string;
@@ -113,8 +113,8 @@ export async function createApplicationApi(options: ApplicationApiOptions): Prom
     resolveProvider(selection, sid) {
       // Opaque conversation identity preserves subscription thread continuity.
       const provider = providers.resolve(selection);
-      if (provider instanceof NativeProvider) provider.sessionId = sid;
-      return provider;
+      round6.bindSession(provider, sid);
+      return observeOptionalProvider({ stateDir: options.stateDir, enabled, env }, provider, sid, selection.providerId);
     } });
   const lifecycle: LifecycleOptions = { store, stateDir: options.stateDir, enabled, allowReal: options.allowReal === true,
     approvals, liveApprovals: agent.liveApprovals, running, activeContext, resolveProvider: agent.resolveProvider, createRunner: agent.createRunner, knownTools: agent.knownTools,
@@ -181,7 +181,7 @@ export async function createApplicationApi(options: ApplicationApiOptions): Prom
   const shellHttp = createShellSettingsApi({ stateDir: options.stateDir, enabled });
   const networkHttp = createNetworkHttp({ stateDir: options.stateDir, enabled, env });
   const catalogNet = nodeNet();
-  const extensionsHttp = createExtensionsHttp({ stateDir: options.stateDir, enabled, env, fetchUrl: async (url) => {
+  const extensionsHttp = createExtensionsHttp({ stateDir: options.stateDir, enabled, env, optionalChanged: () => round6.syncOptional(), fetchUrl: async (url) => {
     const page = await fetchPage(catalogNet, url);
     return { output: typeof page.output === "string" ? page.output : "", truncated: page.truncated === true };
   } });
@@ -190,6 +190,7 @@ export async function createApplicationApi(options: ApplicationApiOptions): Prom
   const migratedOwns = (method: string, parts: readonly string[]): boolean => round8.owns(method, parts) || hooksHttp.owns(method, parts) || skillsHttp.owns(method, parts) || mcpResources.owns(method, parts) || mcpOps.owns(method, parts) || elicitationHttp.owns(method, parts) || appsHttp.owns(method, parts) || subagentResources.owns(method, parts) || subagentTasks.owns(method, parts) || runtimeConfigApi.owns(method, parts) || shellHttp.owns(method, parts) || networkHttp.owns(method, parts) || memoryHttp.owns(method, parts) || filesHttp.owns(method, parts) || extensionsHttp.owns(method, parts) || round5.owns(method, parts) || round6.owns(method, parts) || round7.owns(method, parts);
   return {
     agent, store, enabled, dynamicWorkflows, memoryDreams,
+    asset: extensionsHttp.asset,
     csrfToken: bridge.csrfToken, routes: [...memoryDreamApi.routes, ...settingsApi.routes, ...providers.routes, ...sessions.routes, ...commands.routes, ...composer.routes, ...hooksHttp.routes, ...skillsHttp.routes, ...mcpResources.routes, ...mcpOps.routes, ...elicitationHttp.routes, ...appsHttp.routes, ...subagentResources.routes, ...subagentTasks.routes, ...runtimeConfigApi.routes, ...shellHttp.routes, ...networkHttp.routes, ...memoryHttp.routes, ...filesHttp.routes, ...extensionsHttp.routes, ...round5.routes, ...round6.routes, ...round7.routes, ...round8.routes],
     owns: (method, parts) => memoryDreamApi.owns(method, parts) || settingsApi.owns(method, parts) || providers.owns(method, parts) || sessions.owns(method, parts) || browserHandoff.owns(method, parts) || commands.owns(method, parts) || composer.owns(method, parts) || migratedOwns(method, parts),
     lossless: (method, parts) => settingsApi.lossless(method, parts) || commands.lossless(method, parts) || hooksHttp.lossless(method, parts) || skillsHttp.lossless(method, parts) || mcpResources.lossless(method, parts) || subagentResources.lossless(method, parts) || extensionsHttp.lossless(method, parts) || round7.lossless(method, parts),

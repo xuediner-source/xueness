@@ -10,10 +10,16 @@
  */
 import { definePlugin, type BundledPlugin } from "@xueness/kernel";
 import { resourceDispatch } from "@xueness/sessions";
+import { optionalArtifactByPackage, optionalAsset } from "@xueness/kernel";
 import manifest from "../manifest.json" with { type: "json" };
 import { dispatchMarketplace, NetworkError, type FetchUrlResult } from "./marketplace.ts";
 import { dispatchProfiles } from "./profiles.ts";
 import { dispatchValidate, type ExtensionsReply } from "./validate.ts";
+import { marketplaceCatalog } from "./marketplace.ts";
+import { fetchOfficialArtifact, removeOfficialArtifact, type ArtifactDownload } from "./official-install.ts";
+import { installAll } from "./sdk.ts";
+import { readState, writeState } from "./runtime.ts";
+import { uninstallPackage } from "./components.ts";
 
 export { loadManifests as loadDataManifests } from "./sdk.ts";
 export { profileCommand, updatePackages, validatePath } from "./cli.ts";
@@ -33,6 +39,8 @@ export interface ExtensionsHttpOptions {
   env?: NodeJS.ProcessEnv;
   /** Sync, or a promise. A marketplace URL is fetched once per request, then replayed. */
   fetchUrl?: (url: string) => FetchUrlResult | Promise<FetchUrlResult>;
+  downloadArtifact?: ArtifactDownload;
+  optionalChanged?(id: string): Promise<void>;
 }
 
 export const EXTENSIONS_ROUTES = [
@@ -55,9 +63,11 @@ const owns = (_method: string, parts: readonly string[]): boolean => parts[0] ==
 
 export function createExtensionsHttp(options: ExtensionsHttpOptions) {
   const enabledNow = (): boolean => (typeof options.enabled === "function" ? options.enabled("extensions") === true : options.enabled === true);
+  const installing = new Set<string>();
   return {
     routes: EXTENSIONS_ROUTES,
     owns,
+    asset: (name: string): Buffer | null => optionalAsset(options.stateDir, name),
     /** Resource documents and marketplace bodies keep Python's numbers (`1.0`). */
     lossless: (method: string, parts: readonly string[]): boolean => owns(method, parts) && (parts[1] === "resources" || (parts[1] === "plugins" && parts[2] === "marketplace" && method === "POST")),
     async dispatch(method: string, parts: string[], _query: Record<string, readonly string[] | undefined>, data: unknown): Promise<ExtensionsReply | null> {
@@ -81,7 +91,34 @@ export function createExtensionsHttp(options: ExtensionsHttpOptions) {
           return value;
         };
       }
-      const market = dispatchMarketplace(method, parts, data, options.stateDir, { env, ...(fetchUrl ? { fetchUrl } : {}) });
+      const marketOptions = { env, ...(fetchUrl ? { fetchUrl } : {}) };
+      const artifact = parts[1] === "plugins" && parts[2] === "marketplace" && parts.length === 5 ? optionalArtifactByPackage(parts[3] ?? "") : null;
+      if (artifact && method === "POST" && ["install", "update", "uninstall"].includes(parts[4]!)) {
+        if (installing.has(artifact.id)) return [409, { error: "This plugin already has an operation in progress" }];
+        installing.add(artifact.id);
+        try {
+          if (parts[4] === "uninstall") {
+            const state = readState(options.stateDir); state.enabled[artifact.id] = false; writeState(options.stateDir, state.enabled, state.profile);
+            await options.optionalChanged?.(artifact.id);
+            const removed = uninstallPackage(options.stateDir, artifact.packageId);
+            if (!removed.ok) return [400, { error: removed.error }];
+            removeOfficialArtifact(options.stateDir, artifact.packageId);
+            return [200, { ...removed, marketplace: marketplaceCatalog(options.stateDir, marketOptions) }];
+          }
+          const item = marketplaceCatalog(options.stateDir, marketOptions).find(row => row.id === artifact.packageId);
+          if (!item || !data || typeof data !== "object" || (data as Record<string, unknown>).sha256 !== artifact.sha256) return [400, { error: "Catalog changed; review this plugin again" }];
+          if (Boolean(item.installedVersion) !== (parts[4] === "update")) return [400, { error: "Refresh the catalog before installing" }];
+          if (item.installedVersion === artifact.version) return [400, { error: "No newer plugin version available" }];
+          await fetchOfficialArtifact(options.stateDir, artifact.packageId, options.downloadArtifact);
+          const state = readState(options.stateDir); state.enabled[artifact.id] = false; writeState(options.stateDir, state.enabled, state.profile);
+          const installed = installAll(options.stateDir, [{ ...(item.manifest as Record<string, unknown>), enabled: false }]);
+          if (!installed.ok) throw new Error("Plugin manifest could not be saved");
+          await options.optionalChanged?.(artifact.id);
+          return [200, { ...installed, marketplace: marketplaceCatalog(options.stateDir, marketOptions) }];
+        } catch (error) { return [400, { error: error instanceof Error ? error.message : "Plugin download failed" }]; }
+        finally { installing.delete(artifact.id); }
+      }
+      const market = dispatchMarketplace(method, parts, data, options.stateDir, marketOptions);
       if (market) return market;
       if (parts[1] === "resources" && parts[2] === "plugins") return resourceDispatch(options.stateDir, method, parts, data);
       return null;

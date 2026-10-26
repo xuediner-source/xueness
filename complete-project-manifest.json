@@ -2,8 +2,8 @@
   "schemaVersion": 2,
   "product": "Xueness",
   "baseVersion": "0.1.8",
-  "migration": "TS M4.2/M4.3 + Windows packaging, 2026-10-18; ZCode-aligned completion, 2026-10-18; ZCode-aligned TS agent loop, 2026-10-18; ZCode full-alignment roadmap doc, 2026-10-18; ZCode roadmap step 1 permissions and approval flow, 2026-10-19; ZCode roadmap step 2 prompt, context and steering, 2026-10-19; ZCode roadmap step 3 round 1 core-tool contracts, ExitPlanMode, read/write/edit/bash, 2026-10-19; ZCode roadmap step 3 rounds 2-3 Glob/Grep/Task/Todo results, EnterPlanMode, ApplyPatch, Edit matchers, 2026-10-19; ZCode roadmap step 4 context compaction, 2026-10-19; ZCode roadmap step 5 round 1 MCP runtime, 2026-10-19; ZCode roadmap step 5 round 2 skills, 2026-10-19; ZCode roadmap step 5 round 3 lifecycle hooks, 2026-10-19; ZCode roadmap step 5 round 4 subagents to TS, 2026-10-19; ZCode roadmap step 5 round 5 memory plugin, 2026-10-19; ZCode roadmap step 6 round 1 Office plugin, 2026-10-19; ZCode roadmap step 6 round 2 TS browser plugin, 2026-10-19; ZCode roadmap step 6 round 3 network plugin and bundled ZCode document skills, 2026-10-19; ZCode roadmap step 7 round 1 settings and workspaces, 2026-10-19; ZCode roadmap step 7 round 2 composer and commands, 2026-10-19; ZCode roadmap step 7 rounds 3-9, 2026-10-19 to 2026-10-21; step 7 round 10 Python backend removed, 2026-10-21; round 11 cleanup, 2026-10-21; round 13 sessions fullscreen chat, inline approvals and local ConPTY acceptance, 2026-10-22; Round 14: sessions-owned TUI interaction alignment, structured dialogs, completions, cards, sidebar, clipboard, durable queue/steering and session navigation; targeted tests and local ConPTY verification; round 15 final wrap-up: full Linux verification (check, build, desktop, webapp, Linux PTY TUI acceptance), POSIX build LICENSE fix, paper palette pane frame fix, engine roadmap, 2026-10-22; 2026-10-22 round 16: engine Z1-1 ZCode model failure classification and retry; Round 17: ZCode Z1-2 empty completion retry, stream commit boundary, event idle timeout and persistent localized model failure status; Round 18: ZCode Z1-3 request shaping, opt-in strict schemas, signed reasoning history and closed tool stream assembly; Round 19: per-attempt fixed FIFO model admission, cancellable queue status, content-free local diagnostics and queue timing UI; 2026-10-22 Z2 stage: persisted turn runtime, cold history/file hydration, durable tool lifecycle, late steering, background terminal/lost notices, UTF-8 result budgets and session-scoped paging; 2026-10-23 Z3 stage: durable runtime events and SSE recovery, optional lossless SQLite snapshot library, child identities and stable forks, conversation/file rewind and compact operation recovery; 2026-10-23 Z4 execution adapter stage: Bash snapshots/startup, workspace range IO and revisions, validated redirects/full text cache/activity, provider paging registration; Windows targeted validation and source/built acceptance; 2026-10-23 Z5 stage: activation-scoped MCP leases/cancellation/catalog/subscriptions and metadata events; layered shell/MCP configuration with exact workspace trust; fresh hooks admission/output; plan-draft snapshot fix; Windows targeted and source/built validation; 2026-10-23 Z6: bounded native TypeScript workflow-script AST/compiler/schema/interpreter, dynamic workflows plugin runtime/API/tools/CLI, TUI workflow-card and sidebar integration; Windows targeted regression, source+built four-scenario loopback acceptance, build and relocated empty-PATH verification; 2026-10-23 Z7 native stdio v1/v2 protocol, durable command and projection adapters, bounded subscriptions and transfers, headless CLI; Windows source/built acceptance and shutdown draining verified; 2026-10-23 Z8 guarded permissions, durable goal lifecycle and explicit project memory curation; source and built loopback acceptance passed; desktop GUI startup unresolved and old installation restored; full project handover before deployment/cleanup/GitHub push; 2026-10-23 publish the verified installed Windows 0.2.1 snapshot with matching source and preserve user data while cleaning explicitly named old versions; 2026-10-23 local native_ops and batch_calls initial plugins, optional WorkBuddy/subscriptions/model-monitor, WorkBuddy account settings; publication and desktop deployment deferred pending skill selection; 2026-10-24: selected Seagull skills, current desktop evidence, pinned ZCode3.16.2 audit, 15-phase 82-round full-alignment plan and complete-source delivery; Preserve source bytes across Git checkouts for portable SHA-256 verification; 2026-10-26 Windows 0.2.1 deployment, full backend regression 2328 pass 0 fail 62 existing skips, native process cleanup and installed UI acceptance; 2026-10-26 sync tested prebuilt web assets and source-only acceptance evidence; 2026-10-26 install TS dependencies before frontend prebuild plugin gate in GitHub CI; 2026-10-26 retain browser-authenticated GitHub CI dependency-order correction; 2026-10-26 portable regression fixtures, current hook payloads, explicit foreground timeout and relocation of obsolete Python vendor license; 2026-10-26 preserve test source line endings for portable fixture corrections; Fix streamed transport backpressure and compatible tool identity continuations, honor explicit session URLs, and record real WorkBuddy long-task acceptance; Synchronize the verified prebuilt Web bundle with the installed explicit-session navigation fix; Canonicalize CI temp fixtures across aliases and await background log drain after pipe EOF",
-  "sourceFileCount": 2956,
+  "migration": "TS M4.2/M4.3 + Windows packaging, 2026-10-18; ZCode-aligned completion, 2026-10-18; ZCode-aligned TS agent loop, 2026-10-18; ZCode full-alignment roadmap doc, 2026-10-18; ZCode roadmap step 1 permissions and approval flow, 2026-10-19; ZCode roadmap step 2 prompt, context and steering, 2026-10-19; ZCode roadmap step 3 round 1 core-tool contracts, ExitPlanMode, read/write/edit/bash, 2026-10-19; ZCode roadmap step 3 rounds 2-3 Glob/Grep/Task/Todo results, EnterPlanMode, ApplyPatch, Edit matchers, 2026-10-19; ZCode roadmap step 4 context compaction, 2026-10-19; ZCode roadmap step 5 round 1 MCP runtime, 2026-10-19; ZCode roadmap step 5 round 2 skills, 2026-10-19; ZCode roadmap step 5 round 3 lifecycle hooks, 2026-10-19; ZCode roadmap step 5 round 4 subagents to TS, 2026-10-19; ZCode roadmap step 5 round 5 memory plugin, 2026-10-19; ZCode roadmap step 6 round 1 Office plugin, 2026-10-19; ZCode roadmap step 6 round 2 TS browser plugin, 2026-10-19; ZCode roadmap step 6 round 3 network plugin and bundled ZCode document skills, 2026-10-19; ZCode roadmap step 7 round 1 settings and workspaces, 2026-10-19; ZCode roadmap step 7 round 2 composer and commands, 2026-10-19; ZCode roadmap step 7 rounds 3-9, 2026-10-19 to 2026-10-21; step 7 round 10 Python backend removed, 2026-10-21; round 11 cleanup, 2026-10-21; round 13 sessions fullscreen chat, inline approvals and local ConPTY acceptance, 2026-10-22; Round 14: sessions-owned TUI interaction alignment, structured dialogs, completions, cards, sidebar, clipboard, durable queue/steering and session navigation; targeted tests and local ConPTY verification; round 15 final wrap-up: full Linux verification (check, build, desktop, webapp, Linux PTY TUI acceptance), POSIX build LICENSE fix, paper palette pane frame fix, engine roadmap, 2026-10-22; 2026-10-22 round 16: engine Z1-1 ZCode model failure classification and retry; Round 17: ZCode Z1-2 empty completion retry, stream commit boundary, event idle timeout and persistent localized model failure status; Round 18: ZCode Z1-3 request shaping, opt-in strict schemas, signed reasoning history and closed tool stream assembly; Round 19: per-attempt fixed FIFO model admission, cancellable queue status, content-free local diagnostics and queue timing UI; 2026-10-22 Z2 stage: persisted turn runtime, cold history/file hydration, durable tool lifecycle, late steering, background terminal/lost notices, UTF-8 result budgets and session-scoped paging; 2026-10-23 Z3 stage: durable runtime events and SSE recovery, optional lossless SQLite snapshot library, child identities and stable forks, conversation/file rewind and compact operation recovery; 2026-10-23 Z4 execution adapter stage: Bash snapshots/startup, workspace range IO and revisions, validated redirects/full text cache/activity, provider paging registration; Windows targeted validation and source/built acceptance; 2026-10-23 Z5 stage: activation-scoped MCP leases/cancellation/catalog/subscriptions and metadata events; layered shell/MCP configuration with exact workspace trust; fresh hooks admission/output; plan-draft snapshot fix; Windows targeted and source/built validation; 2026-10-23 Z6: bounded native TypeScript workflow-script AST/compiler/schema/interpreter, dynamic workflows plugin runtime/API/tools/CLI, TUI workflow-card and sidebar integration; Windows targeted regression, source+built four-scenario loopback acceptance, build and relocated empty-PATH verification; 2026-10-23 Z7 native stdio v1/v2 protocol, durable command and projection adapters, bounded subscriptions and transfers, headless CLI; Windows source/built acceptance and shutdown draining verified; 2026-10-23 Z8 guarded permissions, durable goal lifecycle and explicit project memory curation; source and built loopback acceptance passed; desktop GUI startup unresolved and old installation restored; full project handover before deployment/cleanup/GitHub push; 2026-10-23 publish the verified installed Windows 0.2.1 snapshot with matching source and preserve user data while cleaning explicitly named old versions; 2026-10-23 local native_ops and batch_calls initial plugins, optional WorkBuddy/subscriptions/model-monitor, WorkBuddy account settings; publication and desktop deployment deferred pending skill selection; 2026-10-24: selected Seagull skills, current desktop evidence, pinned ZCode3.16.2 audit, 15-phase 82-round full-alignment plan and complete-source delivery; Preserve source bytes across Git checkouts for portable SHA-256 verification; 2026-10-26 Windows 0.2.1 deployment, full backend regression 2328 pass 0 fail 62 existing skips, native process cleanup and installed UI acceptance; 2026-10-26 sync tested prebuilt web assets and source-only acceptance evidence; 2026-10-26 install TS dependencies before frontend prebuild plugin gate in GitHub CI; 2026-10-26 retain browser-authenticated GitHub CI dependency-order correction; 2026-10-26 portable regression fixtures, current hook payloads, explicit foreground timeout and relocation of obsolete Python vendor license; 2026-10-26 preserve test source line endings for portable fixture corrections; Fix streamed transport backpressure and compatible tool identity continuations, honor explicit session URLs, and record real WorkBuddy long-task acceptance; Synchronize the verified prebuilt Web bundle with the installed explicit-session navigation fix; Canonicalize CI temp fixtures across aliases and await background log drain after pipe EOF; GitHub optional plugin artifacts; visible starter skills with individual switches; folder imports and repository homepage",
+  "sourceFileCount": 2994,
   "manifestExcludesItself": true,
   "originalManifests": "验收资料/原始清单/",
   "exclusions": [
@@ -78,8 +78,8 @@
     },
     {
       "path": "desktop/electron-builder.cjs",
-      "sizeBytes": 1719,
-      "sha256": "f4af88fe2ffd13f22c65dc1afa510d0cb82f23953d614f467e24e33e2107b39b"
+      "sizeBytes": 1867,
+      "sha256": "c28e75f3b12709067021f946697fa414841b624c75e15076d29925df8bc69ea9"
     },
     {
       "path": "desktop/package-lock.json",
@@ -458,13 +458,13 @@
     },
     {
       "path": "NOTICE.md",
-      "sizeBytes": 40901,
-      "sha256": "ab64555fedf0957ec5d5cd3acebe2499f5d8c4b27c3a958e707feea06f411a74"
+      "sizeBytes": 41212,
+      "sha256": "cbb17a86ef514f01ce053226fd0ac0d4ed1944e4c1743155a4ef8b804a4c2ed9"
     },
     {
       "path": "README.md",
-      "sizeBytes": 4508,
-      "sha256": "8e66d3ed710059e03d2bbb727ba8f8b28a3bad99fe523b5d83a834ff0e0ecea8"
+      "sizeBytes": 6512,
+      "sha256": "ea4580cf2b6e065889c0b0caf3da24b9906f219f1736ca6d4019a4e60aeded07"
     },
     {
       "path": "source-manifest.json",
@@ -533,18 +533,18 @@
     },
     {
       "path": "ts/apps/server/src/api-body.ts",
-      "sizeBytes": 4153,
-      "sha256": "ba51f5aea23f2082736d863f559562f711edda1827df66a722c19abb69244cea"
+      "sizeBytes": 4271,
+      "sha256": "97a0b0378ab6d0412d52b3f1315a920384b8b97779650dce9d3733298f483739"
     },
     {
       "path": "ts/apps/server/src/application-api.ts",
-      "sizeBytes": 22246,
-      "sha256": "6573dc06c86df36e43643aaf9d5dceec316e0b5524e684e23df22aca6051eabc"
+      "sizeBytes": 22398,
+      "sha256": "3f3557e6d36c56ff62dfba2268f264d2c5865224cbdf85f92d20a8bd640a43e0"
     },
     {
       "path": "ts/apps/server/src/bundled-plugins.ts",
-      "sizeBytes": 2542,
-      "sha256": "fd5a7a97da0badd3816635d7b9aa394644b86b863449ab2f98b06b16fe0b42d8"
+      "sizeBytes": 3227,
+      "sha256": "5e90f691fc547ab78ec36462e6966d185d4d42f2fea11ceb83ed00e9026f9301"
     },
     {
       "path": "ts/apps/server/src/desktop-host.ts",
@@ -553,8 +553,8 @@
     },
     {
       "path": "ts/apps/server/src/front-door.ts",
-      "sizeBytes": 13069,
-      "sha256": "56bddc430594e51b56bde7a3d51e4879d9f4c8a6e53565b8750282a61f170bab"
+      "sizeBytes": 13089,
+      "sha256": "c7a276989950119dba92e66027feec66cc40c75863719c3a514a580a11b2c134"
     },
     {
       "path": "ts/apps/server/src/guards.ts",
@@ -583,8 +583,8 @@
     },
     {
       "path": "ts/apps/server/src/plugin-state.ts",
-      "sizeBytes": 3986,
-      "sha256": "098fcd6f4c69341ecf23bd9c9d5f0acb02927a8e5d5fa5fb0aaad81b6a67beca"
+      "sizeBytes": 4167,
+      "sha256": "3135411600fa64f94e19e50497862e096a90a933b716b9fc825fb6f4900d767c"
     },
     {
       "path": "ts/apps/server/src/py-url.ts",
@@ -603,8 +603,8 @@
     },
     {
       "path": "ts/apps/server/src/static.ts",
-      "sizeBytes": 3603,
-      "sha256": "766afc658bab09e6201acef8962bdaf4937f365f99e6c9239a99d3d72e71bf55"
+      "sizeBytes": 3856,
+      "sha256": "62373c0ea53192a190bb6dd3afee8694b1f9ea58cc3a468bcd6a0ba8cac40b50"
     },
     {
       "path": "ts/apps/server/src/stream-response.ts",
@@ -1123,8 +1123,8 @@
     },
     {
       "path": "ts/packages/kernel/src/index.ts",
-      "sizeBytes": 352,
-      "sha256": "649a27aa5b377ad6da13ca0f61941cdd2cf9b05bb37db9bde76709279be14d69"
+      "sizeBytes": 392,
+      "sha256": "e76e608436b8012394e9dd666d5bbc2ce35a2cad74cf8a2762dcda8e0df262bd"
     },
     {
       "path": "ts/packages/kernel/src/internal.ts",
@@ -1373,8 +1373,8 @@
     },
     {
       "path": "ts/packages/providers/test/http-idle.test.ts",
-      "sizeBytes": 6485,
-      "sha256": "ff148ac209f80a9526376576f89fe370e71e94fa3863aaa3f00e5511ee3cb89e"
+      "sizeBytes": 6975,
+      "sha256": "8c35c00d71c7231dfb445fde3899ed9dd7b9fffac4420eef28992e881f898761"
     },
     {
       "path": "ts/packages/providers/test/http-tunnel.test.ts",
@@ -2468,18 +2468,18 @@
     },
     {
       "path": "ts/scripts/plugin-gate.ts",
-      "sizeBytes": 13009,
-      "sha256": "9806e1fab3d08e78857e8b688f1000a3c5fe575732202b37a8bd0135b5b97342"
+      "sizeBytes": 13694,
+      "sha256": "ed2704983396b870dfb9df352f8d2440b37302b5fb86d6991bd47835533fb8f5"
     },
     {
       "path": "ts/scripts/smoke-built.ts",
-      "sizeBytes": 3789,
-      "sha256": "729ddf5c3dd85b474d32ba1b704c0bfd4d56c302638643b529071542291ae033"
+      "sizeBytes": 3841,
+      "sha256": "bfe667f64f9222bd374014173f691e74b4e8ac92958b60c68860db85b076fec5"
     },
     {
       "path": "ts/scripts/smoke-packaged.ts",
-      "sizeBytes": 4366,
-      "sha256": "239b5dfc8c814207267316a2e9d56bc6ece4170142929ea6eaa9cb448baf21bb"
+      "sizeBytes": 4418,
+      "sha256": "acc7775a70b126bfa032d4c3ecb5c8f2a3c0f4c2131287257241cf84cfba682b"
     },
     {
       "path": "ts/scripts/test/bench-tools.test.ts",
@@ -2572,21 +2572,6 @@
       "sha256": "9697da7f56e0e331eb0566070f7eecaa054fb3550a02d1c3c6b6c53afbe24b52"
     },
     {
-      "path": "webapp/dist/assets/activity-BAYAqdXp.js",
-      "sizeBytes": 414,
-      "sha256": "292b4ffd776d4be322d7b537d0f539627ddebe82d9b716f214e264fbd1c0d315"
-    },
-    {
-      "path": "webapp/dist/assets/addon-fit-D1AmTfSG.js",
-      "sizeBytes": 1810,
-      "sha256": "130a92d88e42e20f33b51da5eef15ecfb6c3fcbf5b2238379cbc187ee89be123"
-    },
-    {
-      "path": "webapp/dist/assets/aiden0z-pptx-renderer.es-V5qm_tdr.js",
-      "sizeBytes": 1005636,
-      "sha256": "4047b666a2f609269d6da923b15fdeacd6f77b447f16d39cf3a08d6ca2751e86"
-    },
-    {
       "path": "webapp/dist/assets/ArchivedSessions-Bhf1IWqc.css",
       "sizeBytes": 2167,
       "sha256": "686b104b731ceb383cef2031e80c0509203cf5896d90ee4c904b68e2878ffa5f"
@@ -2602,11 +2587,6 @@
       "sha256": "497e30d80ba09585f75142f4c93b1302a46503c20cde21e5452338b7c31e1477"
     },
     {
-      "path": "webapp/dist/assets/cable-B8yLsXg-.js",
-      "sizeBytes": 674,
-      "sha256": "76b1c5dc8ba424978cf33ba2c6d7c69944e07e040c37e86db3cc033d8caa512f"
-    },
-    {
       "path": "webapp/dist/assets/catppuccin-latte-C9dUb6Cb.js",
       "sizeBytes": 47256,
       "sha256": "621f81dbc7293ff13fd2b0085dc3a84d5d0dbc3bfca4c1414c9e59b4ac43b3e8"
@@ -2617,24 +2597,9 @@
       "sha256": "b10b92891fde2ac93b551d568f8ca2ce7deb12701a0cdab40d13ad1bc7cd6872"
     },
     {
-      "path": "webapp/dist/assets/chevron-right-C1Q1cx-0.js",
-      "sizeBytes": 4784,
-      "sha256": "95b6032b2190d709a732efdab9d00458c60f08a76ee7d0b00700fa0286de6808"
-    },
-    {
-      "path": "webapp/dist/assets/cloud-B0Gha8Z4.js",
-      "sizeBytes": 340,
-      "sha256": "531109e0704ab50b257f78688b82f76c0c24ff4ecbc2e1e80119e6496158fad7"
-    },
-    {
       "path": "webapp/dist/assets/CompletionChecks-BCG36jLd.css",
       "sizeBytes": 6917,
       "sha256": "59016cbceecf8e4d89d473a961f41e14ef0fd617d126b66990febbbf8244e30b"
-    },
-    {
-      "path": "webapp/dist/assets/core-DnKJpOwW.js",
-      "sizeBytes": 83815,
-      "sha256": "3689c25e21a2291186ec02d5be24bf626ec779e47a78257e34d656149b93ed1f"
     },
     {
       "path": "webapp/dist/assets/cpp-sn89xroM.js",
@@ -2670,11 +2635,6 @@
       "path": "webapp/dist/assets/DiffView-DNhcdzcR.css",
       "sizeBytes": 2473,
       "sha256": "d77468c099761e4d6c88d61c2d7371eca155716328dd1c220a374cdefa477c87"
-    },
-    {
-      "path": "webapp/dist/assets/docx-preview-XfB7h97g.js",
-      "sizeBytes": 77388,
-      "sha256": "12483eb85444e31e20187d56182e0b67bfd9e838bbe84ad67293abee94c4b835"
     },
     {
       "path": "webapp/dist/assets/ElicitationForm-yshFhly2.css",
@@ -2737,11 +2697,6 @@
       "sha256": "a13c26c8ebccc24fd70fa6c52834f5e07261fb4ac43c0d83f9de37bc8ba58b1a"
     },
     {
-      "path": "webapp/dist/assets/index-DoCgZ5WQ.css",
-      "sizeBytes": 8098,
-      "sha256": "59d72fce2033294583a314cdc068e3a4f5ab375611b4872a0817418986189c94"
-    },
-    {
       "path": "webapp/dist/assets/index-DPIz2Hve.css",
       "sizeBytes": 19264,
       "sha256": "47125047e7c2344220bb28635c0587c73d36b26456c0a25f8c33eda2ce51c36a"
@@ -2750,11 +2705,6 @@
       "path": "webapp/dist/assets/index-Fmav5ix_.css",
       "sizeBytes": 998,
       "sha256": "a08918b87a98261a7c8cef6a133c470e8bba310a9afd464bdd9605a2816656a9"
-    },
-    {
-      "path": "webapp/dist/assets/index-SvK_nS_t.css",
-      "sizeBytes": 6127,
-      "sha256": "f94bed65fef449d8a88c9f5a0d72658de37c23057f91b7a97fc4242858cc7efe"
     },
     {
       "path": "webapp/dist/assets/javascript-wDzz0qaB.js",
@@ -2772,31 +2722,6 @@
       "sha256": "abb8a7007d9a1f743c33283c233a509dc702eb618d1447d128b1330b73851bf2"
     },
     {
-      "path": "webapp/dist/assets/jszip.min-C0JlZKx2.js",
-      "sizeBytes": 97303,
-      "sha256": "515fe7fda8f9f5289ac609971bfa95c554d948b4be1334f76f8345c5db137f05"
-    },
-    {
-      "path": "webapp/dist/assets/key-round-DH_Iovt2.js",
-      "sizeBytes": 530,
-      "sha256": "ea427fd4ed63c6a8b1300f908e6fdb749e7e4b2759f20af85d8160eb581980e2"
-    },
-    {
-      "path": "webapp/dist/assets/keyboard-CxRGcNZW.js",
-      "sizeBytes": 633,
-      "sha256": "78b0f6117929d445a6b1a57e54dc39fc09d0d36eeaa94ccd6728a9b0fe5784f9"
-    },
-    {
-      "path": "webapp/dist/assets/layers-D8dTUoxm.js",
-      "sizeBytes": 601,
-      "sha256": "ba50dbfc6976ec8a3dde5c64d1c6941a7597d0773562247e9db6b8d85fc3c806"
-    },
-    {
-      "path": "webapp/dist/assets/loader-circle-BriWPoJL.js",
-      "sizeBytes": 319,
-      "sha256": "753f31407d326b8581a9e8cef36f98689e3dcf00819321b37c4aeb3eceeec6e0"
-    },
-    {
       "path": "webapp/dist/assets/LocalRuntimeMonitor-ByzhBJSU.css",
       "sizeBytes": 10271,
       "sha256": "c2a1cdf98acaae4bbe5568bed9fbf059e0cc2a9a42376d299617710c508a64a0"
@@ -2805,11 +2730,6 @@
       "path": "webapp/dist/assets/markdown-Cvjx9yec.js",
       "sizeBytes": 59335,
       "sha256": "ce6a8b1a6ed9b803b1847231214ba37621c2fa51611ec3037d38b561b360c278"
-    },
-    {
-      "path": "webapp/dist/assets/markdown-vendor-DnjgO2ou.js",
-      "sizeBytes": 171124,
-      "sha256": "87cc25a014b0e8fb642ce4abbf63c57b2aee8df955ff2d6467c2584794225e0a"
     },
     {
       "path": "webapp/dist/assets/MemorySettings-B1-YPD_g.css",
@@ -2842,11 +2762,6 @@
       "sha256": "6c933f73b18a3c3a7b93c955ec82385ac5b4989b785ae353e3129e5fa3c4e9b7"
     },
     {
-      "path": "webapp/dist/assets/package-BmjUf_70.js",
-      "sizeBytes": 552,
-      "sha256": "29dc4f830fce2a9e3f5f4e0116fef25565f4a11acae77a1fe57505d818477536"
-    },
-    {
       "path": "webapp/dist/assets/PendingQuestion-Q2UMXIxB.css",
       "sizeBytes": 2410,
       "sha256": "7b2145195053caee16a6478b6a28dcd57788b6671816748fd4b0e757ba2dd5b1"
@@ -2865,21 +2780,6 @@
       "path": "webapp/dist/assets/python-B6aJPvgy.js",
       "sizeBytes": 69952,
       "sha256": "7652ab863f920a5959c4aa52d6decb8c11d23fd590773977ce8aa0fbb3c555c4"
-    },
-    {
-      "path": "webapp/dist/assets/radio-DF1me86u.js",
-      "sizeBytes": 554,
-      "sha256": "54a409deda7d6b1541af6c2fcaf266568441fa172ba76720b65beef47da8d8f5"
-    },
-    {
-      "path": "webapp/dist/assets/radix-vendor-Cd_jQvru.js",
-      "sizeBytes": 72430,
-      "sha256": "0079a0bfcb8e69100ab25d7b899b8a427e532f6c8aa922a1b3c7203f7148221e"
-    },
-    {
-      "path": "webapp/dist/assets/react-vendor-DPCyJGN7.js",
-      "sizeBytes": 223813,
-      "sha256": "cc84e62b4263e679572adee3ceb577cd9084b2bb6763aec44b75b8ecb42c8172"
     },
     {
       "path": "webapp/dist/assets/rust-B1yitclQ.js",
@@ -2937,11 +2837,6 @@
       "sha256": "41c4a440080f2ba4fbbe9053a113679cf55bdfabde341c9c0cf3c46dccad5089"
     },
     {
-      "path": "webapp/dist/assets/tray-Bb-BvafK.js",
-      "sizeBytes": 4532,
-      "sha256": "4167d33942895d08e451967216da95b17daa154056a6bba46958c5bccf3ecc03"
-    },
-    {
       "path": "webapp/dist/assets/tray-god2nIDX.css",
       "sizeBytes": 14329,
       "sha256": "857e2e1d094f356dc8e04295101be6ac8b71841353150bed6b6865920fb22b9e"
@@ -2967,19 +2862,9 @@
       "sha256": "272401bf8f7fa77313d7d3dbdc609a59bde479c8d69763047b5aa508e16ead9d"
     },
     {
-      "path": "webapp/dist/assets/wand-sparkles-Da7v2RW1.js",
-      "sizeBytes": 693,
-      "sha256": "6b99609f68036c91a6e29e8e1fa9c54235457a3b147ccd41de8bbe395325fe61"
-    },
-    {
       "path": "webapp/dist/assets/wasm-CG6Dc4jp.js",
       "sizeBytes": 622336,
       "sha256": "8deb47b0d7b203f733275b554ccf654df3b76026bd14cab89130ae2a61abd719"
-    },
-    {
-      "path": "webapp/dist/assets/xterm-CGC5XgIc.js",
-      "sizeBytes": 291268,
-      "sha256": "bb1e9d43d95553adec3dfdc9d3536cb719c2228934df47be792b380f8e4f514a"
     },
     {
       "path": "webapp/dist/assets/XuenessCapabilitiesPanel-CU7V5ptc.css",
@@ -3028,8 +2913,8 @@
     },
     {
       "path": "webapp/dist/index.html",
-      "sizeBytes": 2686,
-      "sha256": "5029c80c872eb912cb2be9e85b59a932ae2fa4f9461a634b89dd980d65c7c512"
+      "sizeBytes": 2931,
+      "sha256": "8a9e71a3497f54422ca6b769620968971601f2fe0741b0cb796080d38d437c36"
     },
     {
       "path": "webapp/dist/third-party-notices.txt",
@@ -3038,8 +2923,8 @@
     },
     {
       "path": "webapp/dist/tray.html",
-      "sizeBytes": 515,
-      "sha256": "60462fe5bbf39c33b70e961e6e9f3948ce73c19a1459de83cb2755f3ab09fb0a"
+      "sizeBytes": 600,
+      "sha256": "f2107712e9298498d923288d360f06e5232b33c7f96c1a40c757b28c1ee2758d"
     },
     {
       "path": "webapp/dist/xueness-icon.svg",
@@ -3063,8 +2948,8 @@
     },
     {
       "path": "webapp/package.json",
-      "sizeBytes": 1863,
-      "sha256": "2bb746002003783f43797995749896c4530174a3a4412086a018620eebd8dccf"
+      "sizeBytes": 1905,
+      "sha256": "53edec11accf04feeb4e80eaf977cb8e6014046c7093759d1c66ec261adea58a"
     },
     {
       "path": "webapp/public/apple-touch-icon.png",
@@ -3118,8 +3003,8 @@
     },
     {
       "path": "webapp/src/i18n.ts",
-      "sizeBytes": 192620,
-      "sha256": "1a53589b259ab762bb7a3c30c87c63580fc9486c81d130a617c570d91c901c78"
+      "sizeBytes": 194725,
+      "sha256": "874e30eb3c82b3337d1f18ad9412df4edb4a3861a38808c763d64827eefe30e8"
     },
     {
       "path": "webapp/src/i18nCoverage.test.ts",
@@ -3313,13 +3198,13 @@
     },
     {
       "path": "webapp/src/plugins/extensions/index.test.tsx",
-      "sizeBytes": 7314,
-      "sha256": "ea669cac252a63932718b400b17bb47719e92271f5fad0925cacaa3e00465921"
+      "sizeBytes": 7256,
+      "sha256": "349b500432964ec0c696a747488570f86d30999b8ee31f9fcad7c60760d29a3d"
     },
     {
       "path": "webapp/src/plugins/extensions/index.tsx",
-      "sizeBytes": 22869,
-      "sha256": "0d11b22e534c59bb10daf67046d11f1a50f020dc4428c229b8ed8167d5034d29"
+      "sizeBytes": 23623,
+      "sha256": "ccf888d8a231318a1a4fc7a6f25d4d4caa948af7be9d68be85c1626cf7822d5e"
     },
     {
       "path": "webapp/src/plugins/extensions/PluginProfilePicker.css",
@@ -5443,8 +5328,8 @@
     },
     {
       "path": "webapp/src/xuenessApi.ts",
-      "sizeBytes": 32271,
-      "sha256": "0d4cfddb2fe482e03a5fea017a45da5e7e15b87b7098f03701797e5976c08eac"
+      "sizeBytes": 32327,
+      "sha256": "d58b7b79636ae8b53efa227ab5fe74f62684dcfbbdd59381db3237ac62bcd0a7"
     },
     {
       "path": "webapp/src/xuenessBridge.test.ts",
@@ -5463,8 +5348,8 @@
     },
     {
       "path": "webapp/src/xuenessCapabilities.ts",
-      "sizeBytes": 16009,
-      "sha256": "8651b4789e31a290d5a29c39394a795b6bc52620e880286548e8c7dc0ee39e49"
+      "sizeBytes": 16163,
+      "sha256": "bf1954334b30c560c0ff5282c94dec14938e7a018e9f6251180a283a442993bb"
     },
     {
       "path": "webapp/src/XuenessCapabilitiesPanel.test.tsx",
@@ -5473,8 +5358,8 @@
     },
     {
       "path": "webapp/src/XuenessCapabilitiesPanel.tsx",
-      "sizeBytes": 14984,
-      "sha256": "2d62c31ff7507264fd37da23174affadbbef3a164838a7e4083de6240503e261"
+      "sizeBytes": 15606,
+      "sha256": "4d0e534ebdb2e267c14c4529cf9fbf79ccdf543ff9cd821b8475230986c0917b"
     },
     {
       "path": "webapp/src/XuenessCapabilityDialog.test.tsx",
@@ -5548,8 +5433,8 @@
     },
     {
       "path": "webapp/src/xuenessPluginRegistry.ts",
-      "sizeBytes": 7457,
-      "sha256": "2f479a842dc6635d3419da0988933cdc7ed0113ee05f9f513706187c71ab1319"
+      "sizeBytes": 7468,
+      "sha256": "86fe0b11ac3225a9a2b116c30bf8062227d6893fcbf9c426f3e37b660f49f2e2"
     },
     {
       "path": "webapp/src/xuenessSettings.test.ts",
@@ -5608,8 +5493,8 @@
     },
     {
       "path": "webapp/src/XuenessWorkbenchContainer.tsx",
-      "sizeBytes": 199078,
-      "sha256": "3f94f983de320e8e19666e3953532d384ab54f9620367e87f6c540cdb70c47aa"
+      "sizeBytes": 199438,
+      "sha256": "686989b1dc69287dfb31d370038e7f83197342dbb534a6cf4c770f0d59639b57"
     },
     {
       "path": "webapp/src/XuenessWorkbenchView2.test.tsx",
@@ -5703,8 +5588,8 @@
     },
     {
       "path": "webapp/vite.config.ts",
-      "sizeBytes": 1898,
-      "sha256": "9b38f745c626fcd0b15517b40cb9187efb0710a65885e4ce593361a76ae79824"
+      "sizeBytes": 2099,
+      "sha256": "37742bf099972fb6aed7fcf2af745ba84d3c0d3bd69b1893c5aba32aaacb57bb"
     },
     {
       "path": "使用说明.txt",
@@ -6553,8 +6438,8 @@
     },
     {
       "path": "ts/plugins/skills/manifest.json",
-      "sizeBytes": 1577,
-      "sha256": "3257ecf003a887943968f8f4f3cb16a34db47f58bb430b111f6cd8e0d79ef965"
+      "sizeBytes": 2074,
+      "sha256": "121d2b4e7034233ae3a7db93071ba5676e097def0c2622b87441067b02ebb6b7"
     },
     {
       "path": "ts/plugins/skills/package.json",
@@ -6563,13 +6448,13 @@
     },
     {
       "path": "ts/plugins/skills/src/continuity.ts",
-      "sizeBytes": 3402,
-      "sha256": "4b9e4a67372bb0be90f4ae915460c499064094b0ba8c71cc9b2629b43dcda212"
+      "sizeBytes": 3480,
+      "sha256": "fdafb6453b04d5c1556faca9ace63550fdf96980d3bf92dce3f5d4ad542ca312"
     },
     {
       "path": "ts/plugins/skills/src/discover.ts",
-      "sizeBytes": 10792,
-      "sha256": "0464f61375fae50063fe8f494892a5ecc2ef7ae6331834d95fbe4420bd929d36"
+      "sizeBytes": 10839,
+      "sha256": "faeefa981f2bd2e72f498823362a1679b82114acbb7fe89e6f7d07e3747b9095"
     },
     {
       "path": "ts/plugins/skills/src/frontmatter.ts",
@@ -6578,8 +6463,8 @@
     },
     {
       "path": "ts/plugins/skills/src/index.ts",
-      "sizeBytes": 7092,
-      "sha256": "63b8b45140f088459de0ecf2d74eadb27e9bb2a04fa1ef3cae3766641a936394"
+      "sizeBytes": 7262,
+      "sha256": "bfb574df9520b3c38e98bb6f27e22d8973da100d5ea4959d10a76cc97a89d3b0"
     },
     {
       "path": "ts/plugins/skills/src/paths.ts",
@@ -6588,8 +6473,8 @@
     },
     {
       "path": "ts/plugins/skills/src/render.ts",
-      "sizeBytes": 9457,
-      "sha256": "4aef5cb39c8e07617b962a4f6fe686df60188b88630a62ff51cb2a8788323c3d"
+      "sizeBytes": 9853,
+      "sha256": "49e18ffbc50b7eb27d74cac305977ecf34ec51c21d916f8921a9da449b810a47"
     },
     {
       "path": "ts/plugins/skills/src/resources.ts",
@@ -7648,8 +7533,8 @@
     },
     {
       "path": "ts/plugins/skills/test/skills-bundled.test.ts",
-      "sizeBytes": 4723,
-      "sha256": "6d0cc53e4a8c37039d0bc34dc3b6b80d3f19500bb8e53ff86dcf75bfee350b25"
+      "sizeBytes": 4978,
+      "sha256": "8e1ec86e6aa90be29276e9e3a0836928974f849bf20565d777d4c20a086497ee"
     },
     {
       "path": "ts/packages/contracts/test/py-codecs.test.ts",
@@ -7948,18 +7833,18 @@
     },
     {
       "path": "ts/apps/server/src/model-monitor-enabled.ts",
-      "sizeBytes": 794,
-      "sha256": "8b52e2850ef268f67c5bd2b6e8cc027ee52f4f60a73f28333272fe846bc9abe0"
+      "sizeBytes": 701,
+      "sha256": "fe54b6ab1a847bc36ce56af249fa23f530f99fe383a3348a0df73f7d14224fb8"
     },
     {
       "path": "ts/apps/server/src/round5-http.ts",
-      "sizeBytes": 5378,
-      "sha256": "227bc5838a394e5e9145d4a82746b738afc5060f7da1af31077be00f1ffca451"
+      "sizeBytes": 5391,
+      "sha256": "4b00174c68d5f4e23f55bc166eb9cee1a8b031f2c5e9f84ad9dc54c115c5bd7a"
     },
     {
       "path": "ts/apps/server/src/round6-http.ts",
-      "sizeBytes": 3704,
-      "sha256": "5efd0cc7eac4d085f0d57b247bed0329766b6b007aa6e0121771ab93b9351469"
+      "sizeBytes": 2716,
+      "sha256": "ea06929dadacbe41b86203f4e6db232d977a48888421bff90e3b65618d45be5b"
     },
     {
       "path": "ts/apps/server/src/round7-http.ts",
@@ -8043,8 +7928,8 @@
     },
     {
       "path": "ts/catalog/extensions.json",
-      "sizeBytes": 1684,
-      "sha256": "50eaea7d897f25b3e88a753a1f47946589fe47da3aec6ba23ebef1ecf01de2cd"
+      "sizeBytes": 1879,
+      "sha256": "94e1f18f67b983a318de705c9030a07ad8ad535bc36e2e9bbaab2d6714c3c5d7"
     },
     {
       "path": "ts/catalog/files.json",
@@ -8123,8 +8008,8 @@
     },
     {
       "path": "ts/catalog/skills.json",
-      "sizeBytes": 2595,
-      "sha256": "110dfa91e05f257aac92d7356ba2226ef2c1a1dbd951bcdc5408743341ece112"
+      "sizeBytes": 3111,
+      "sha256": "d566235b36fa4837d2df6aab9f1d029ee64efedf2c7486cb30d1bbaf0ef3a5c8"
     },
     {
       "path": "ts/catalog/subagents.json",
@@ -8508,8 +8393,8 @@
     },
     {
       "path": "ts/plugins/extensions/manifest.json",
-      "sizeBytes": 1453,
-      "sha256": "91b3877879b6679360fa39c05411f5662f89b237bbead0da787db37d49b6f7f1"
+      "sizeBytes": 1701,
+      "sha256": "945333d5af7bc84ac8ef766d0ae9a80cd303b489d26c59cc76ef7c9e648907b8"
     },
     {
       "path": "ts/plugins/extensions/package.json",
@@ -8533,8 +8418,8 @@
     },
     {
       "path": "ts/plugins/extensions/src/index.ts",
-      "sizeBytes": 5165,
-      "sha256": "d5c6aa9b457a32e57982875bb1ccaac61581f7506383f685080b1337c75cbb04"
+      "sizeBytes": 8199,
+      "sha256": "99a0f75a92237f309713433b82ecf342e46284e986bce8c6a206a3c1d85fecc3"
     },
     {
       "path": "ts/plugins/extensions/src/io.ts",
@@ -8543,8 +8428,8 @@
     },
     {
       "path": "ts/plugins/extensions/src/marketplace.ts",
-      "sizeBytes": 9304,
-      "sha256": "ef8359f99ca485e3f6ac634ee00b6ac0b1120617a86f328baa6fd2975d13bcec"
+      "sizeBytes": 9583,
+      "sha256": "0a7bb2f7c5a45460d60946e63608fcece0bd327dc53584de4bc47615ae6b6c78"
     },
     {
       "path": "ts/plugins/extensions/src/profiles.ts",
@@ -8553,8 +8438,8 @@
     },
     {
       "path": "ts/plugins/extensions/src/runtime.ts",
-      "sizeBytes": 10580,
-      "sha256": "2457540b64eee8f327a08177914fd1487f56ad994ff65a1cd64d4b8e976cbf73"
+      "sizeBytes": 10751,
+      "sha256": "5368cbc5b9189055296d96c43db35799a7a30c2e126073ac9afbf2403e37951f"
     },
     {
       "path": "ts/plugins/extensions/src/sdk.ts",
@@ -8568,8 +8453,8 @@
     },
     {
       "path": "ts/plugins/extensions/test/extensions-http-python.test.ts",
-      "sizeBytes": 13417,
-      "sha256": "2cb633f8338772a7f9bd6e49b8f17a59410e223d100350d10b0a195915ca5373"
+      "sizeBytes": 13351,
+      "sha256": "d4fbc7319fda8954f8af691d6534333af384b40cd62e79dcf2d38ccc0f1f7304"
     },
     {
       "path": "ts/plugins/files/src/directory-http.ts",
@@ -8708,8 +8593,8 @@
     },
     {
       "path": "ts/plugins/model_monitor/src/index.ts",
-      "sizeBytes": 578,
-      "sha256": "7424bcf79b24db633c8a0e64936c169b764c1700aae6b9c9eb450cd27d3f9291"
+      "sizeBytes": 627,
+      "sha256": "9157fdb3ef4c1f41d905a8124949c19e95b84bdcb021357f38bbd7bfe2afcd0a"
     },
     {
       "path": "ts/plugins/model_monitor/src/records.ts",
@@ -8988,8 +8873,8 @@
     },
     {
       "path": "ts/plugins/skills/src/http-api.ts",
-      "sizeBytes": 4178,
-      "sha256": "7fd79700c8c73e3c12a78947002d0f8e1f825fde6a24cf99b72144f949c6e4a3"
+      "sizeBytes": 7130,
+      "sha256": "4b922437ac42fc249661edab878740709fde98961bc6f170f19a127fe76e8939"
     },
     {
       "path": "ts/plugins/skills/src/visualize-vendor.ts",
@@ -9413,8 +9298,8 @@
     },
     {
       "path": "ts/plugins/workflows/test/saved-library.test.ts",
-      "sizeBytes": 12264,
-      "sha256": "6d1f91d7fd62d837b90db46cc7a9fd1b68559a75a7b0c1529ed5282d455b5ca3"
+      "sizeBytes": 12534,
+      "sha256": "396372228ce22d6d668a017fef297990323c395452705ed9e8c7f157426448d5"
     },
     {
       "path": "ts/plugins/workflows/test/tools.test.ts",
@@ -11268,8 +11153,8 @@
     },
     {
       "path": "ts/plugins/workbuddy/src/api.ts",
-      "sizeBytes": 7207,
-      "sha256": "ac09cdb3590c9ae1ed294986f811e858d6b7e1d69c39705f4e8975e70a3c6a0e"
+      "sizeBytes": 7218,
+      "sha256": "a63d7fcebf64710e8991aced0c2f32bef58bf373361077146ea130c0e7147c49"
     },
     {
       "path": "ts/plugins/workbuddy/src/gateway.ts",
@@ -11358,8 +11243,8 @@
     },
     {
       "path": "ts/plugins/extensions/test/workbuddy-marketplace.test.ts",
-      "sizeBytes": 2963,
-      "sha256": "e53bfee3abf37949604d2512a712ea0c08625effa76e19132328977fc5357cfb"
+      "sizeBytes": 6055,
+      "sha256": "4a603e0a33932e1a1f5ef50d47c17d6d8c2fbd82b7bb0c48a4f6b2d7ef39a11b"
     },
     {
       "path": "ts/plugins/native_ops/README.md",
@@ -11458,8 +11343,8 @@
     },
     {
       "path": "ts/plugins/native_ops/test/native-ops.test.ts",
-      "sizeBytes": 8969,
-      "sha256": "962023ff022f05c53ee6e20472bbca146874ad1700bbad7fea2c653beb7cdc6b"
+      "sizeBytes": 9144,
+      "sha256": "4a58b90039495b94524114cde1b6c3c93a7a7e743d4524707f50e84ca2a4ca44"
     },
     {
       "path": "ts/plugins/workbuddy/src/accounts.ts",
@@ -11470,11 +11355,6 @@
       "path": "ts/plugins/workbuddy/test/accounts-http.test.ts",
       "sizeBytes": 10561,
       "sha256": "05d8186e96f7c3db93d6956ff55336050c7926d0ffec939e75ece97862483c41"
-    },
-    {
-      "path": "webapp/dist/assets/WorkbuddySettings-DjCxGD63.css",
-      "sizeBytes": 3677,
-      "sha256": "9d43b025cfbff9fcc82be41285a25b1da7b1ad97802369b627f22931d149028a"
     },
     {
       "path": "webapp/src/plugins/workbuddy/WorkbuddySettings.test.tsx",
@@ -13373,8 +13253,8 @@
     },
     {
       "path": "ts/plugins/extensions/test/component-packages.test.ts",
-      "sizeBytes": 8589,
-      "sha256": "fd2f83698b722de384c9da6051fbc01ae74acf55e40c11778ca5e4d0a541f359"
+      "sizeBytes": 8617,
+      "sha256": "31ae14b4daad84df641cf7186b652bb0fa7bacef5c8e5c436944b28b6fb3ae51"
     },
     {
       "path": "ts/plugins/extensions/test/plugin-sdk-contract.test.ts",
@@ -13793,8 +13673,8 @@
     },
     {
       "path": "ts/plugins/skills/test/skills-extra-roots.test.ts",
-      "sizeBytes": 9520,
-      "sha256": "3db2d941ad845e0435cb4fac605d3fd8f3482aea28d2ed4a0a83084837e49a30"
+      "sizeBytes": 9521,
+      "sha256": "081ab3f78b74c141c80511fb4cfe02f698c95eb1730824c1a9acce4eda862e15"
     },
     {
       "path": "ts/plugins/subagents/src/background-receipts.ts",
@@ -14442,356 +14322,6 @@
       "sha256": "f4f89bdc414ba4a15bbc1e073e24f3ea933b90699ea73cafc9df5031aa2ff1ed"
     },
     {
-      "path": "webapp/dist/assets/AppsUiHost-CDdv7LZ4.js",
-      "sizeBytes": 5210,
-      "sha256": "145394afa1942f57098a940d379f73e76b6242b7c22caede0a771c329fc10c6d"
-    },
-    {
-      "path": "webapp/dist/assets/ArchivedSessions-BcwG4HK1.js",
-      "sizeBytes": 7079,
-      "sha256": "6a14ba81b98b5fd13d2cec056fadfd826a61a3da873cfbc05aa23528792455cf"
-    },
-    {
-      "path": "webapp/dist/assets/BrowserPanel-DxHkH1SP.js",
-      "sizeBytes": 12020,
-      "sha256": "74ca60b8075112afeba379bd2cb434eaf146e1a30c88eb6eb61e0280112bde76"
-    },
-    {
-      "path": "webapp/dist/assets/BrowserSettings-Bn9wQTnH.js",
-      "sizeBytes": 12441,
-      "sha256": "8f77202529dff3d6dccb0d6a1d391fe9e00759dbcae93f97a9dae62d900679c0"
-    },
-    {
-      "path": "webapp/dist/assets/CompletionChecks-BTqrT7pS.js",
-      "sizeBytes": 6397,
-      "sha256": "f3dfe4b59139401af3e085197269758b379357e643d4c9e12cfb1a1dc4f86d04"
-    },
-    {
-      "path": "webapp/dist/assets/ConversationSharing-B0IAJRqH.js",
-      "sizeBytes": 10382,
-      "sha256": "5a3a2a16d383a794d4e7132e4d404dc81e6b48e0e6aa45a1ebd3e091187087cb"
-    },
-    {
-      "path": "webapp/dist/assets/DesktopAbout-DFa61EGj.js",
-      "sizeBytes": 2005,
-      "sha256": "f0357ab9cd183547ea4d873bbfa0741f25f917bab576ec18e04a6870654484de"
-    },
-    {
-      "path": "webapp/dist/assets/DesktopNotificationSettings-DUAZXOhW.js",
-      "sizeBytes": 862,
-      "sha256": "4b9e5c463e18606f8a0f4abf193bcbc21563f855a429a3a17e3cf9fcc7c308c8"
-    },
-    {
-      "path": "webapp/dist/assets/DesktopPermissionOnboarding-DN2K23B9.js",
-      "sizeBytes": 18650,
-      "sha256": "70458a98c715df6b1ec5588142062227f4a1d39aacf8863286af596b96592719"
-    },
-    {
-      "path": "webapp/dist/assets/DesktopUpdates-CqUjQdT4.js",
-      "sizeBytes": 7486,
-      "sha256": "afa38601c509e5652fb619e6f0c13f02c6f93f594ee3cb3ac3bf082199c9392b"
-    },
-    {
-      "path": "webapp/dist/assets/DiffView-CPUT7jge.js",
-      "sizeBytes": 5654,
-      "sha256": "8a29c6e24bd1b4b3fd674d0a9f4b9acfbf43d8bb82cd28d939f04ac702f8c0b0"
-    },
-    {
-      "path": "webapp/dist/assets/DirectoryBrowser-Cw1fYALY.js",
-      "sizeBytes": 3731,
-      "sha256": "d43d19bca731cee45de659fb159a495126d7a2a7dd327848376f1549186b1410"
-    },
-    {
-      "path": "webapp/dist/assets/ElicitationForm-C1FxDyBr.js",
-      "sizeBytes": 14450,
-      "sha256": "eb8adf2d106ca670bc0b86309d4eb03cccce244c358ace03cb0c24ef8332592c"
-    },
-    {
-      "path": "webapp/dist/assets/FileBrowser-BJW8VgKw.js",
-      "sizeBytes": 10786,
-      "sha256": "032a2853d1b51b511fe826d00954d56dd0235a84dc8e7e159e5c2605df3a5f45"
-    },
-    {
-      "path": "webapp/dist/assets/ForkSessionDialog-BQBSfQwu.js",
-      "sizeBytes": 7826,
-      "sha256": "431aa9d755d8554d66982b3c2ffd9915afd8b179515cd5f06d93096a542fa45c"
-    },
-    {
-      "path": "webapp/dist/assets/GoalEditorDialog-CI-tQY7l.js",
-      "sizeBytes": 3322,
-      "sha256": "b4bc0aee8f5d7da177157f953fad4abf60bd2218cebb8b6c23c6ca5ba2b8d30c"
-    },
-    {
-      "path": "webapp/dist/assets/LocalRuntimeMonitor-ClRsz7yY.js",
-      "sizeBytes": 18880,
-      "sha256": "891219e406abe5ae5bee1947c35beceb5ffbac06a15f7e5abecf7dfe246896a4"
-    },
-    {
-      "path": "webapp/dist/assets/MemoryPanel-CmIm6IK0.js",
-      "sizeBytes": 2447,
-      "sha256": "792083c96789fb172612cb6d9745e6a43e6ebdf45373e6a247932f6ba2dab012"
-    },
-    {
-      "path": "webapp/dist/assets/MemorySettings-Bcvu-Ppq.js",
-      "sizeBytes": 3862,
-      "sha256": "8abced21f7f82f46ce274f9191d4001edfa8efc0d726f28ef80895caeb166f32"
-    },
-    {
-      "path": "webapp/dist/assets/ModelMonitorHome-BC5s_Bsz.js",
-      "sizeBytes": 5006,
-      "sha256": "21e7d2886e048b41a1cc066b9f4eebf0f8096d6419ae198c62a6a83b47b544f1"
-    },
-    {
-      "path": "webapp/dist/assets/NetworkSettings-066V-8AL.js",
-      "sizeBytes": 14685,
-      "sha256": "6d32d393f6f9eab6a4e02322c95333ad11bd4904e65f7081910725ab11cdd602"
-    },
-    {
-      "path": "webapp/dist/assets/PendingQuestion-OenIXPDe.js",
-      "sizeBytes": 8763,
-      "sha256": "4c9cad7454e78e7a9f8f7215f55e11c375d009da00ea0ba258f45974a9b5ca60"
-    },
-    {
-      "path": "webapp/dist/assets/PluginProfilePicker-BDLDJ1zo.js",
-      "sizeBytes": 4717,
-      "sha256": "e5369a781d5ccc97c49b11faf27c0f5b41be6ab0eb2d293c708a4982d34e2c49"
-    },
-    {
-      "path": "webapp/dist/assets/ProjectContextMenu-B82dWwFp.js",
-      "sizeBytes": 10624,
-      "sha256": "e7dc1a0e840ada106d78fd5cfe888ec45713f54693731b3e050f449c09fca2c6"
-    },
-    {
-      "path": "webapp/dist/assets/SessionContextPane-DQtTt4fL.js",
-      "sizeBytes": 4303,
-      "sha256": "e72bb07a2918480d753a7862a721c472a725860392d3c95057835b642523bc7b"
-    },
-    {
-      "path": "webapp/dist/assets/SessionExperimentSettings-BrdQ6eDQ.js",
-      "sizeBytes": 1732,
-      "sha256": "bcf84ed72c33215421eea9898e3a3abfae711df47a13c71fd3f4cb86de91bc67"
-    },
-    {
-      "path": "webapp/dist/assets/SessionGoal-LMBr6MpS.js",
-      "sizeBytes": 2877,
-      "sha256": "bd415382719c54d80a2c414a73d20ddb5468ca17efe77c47136bfb1e317f1b95"
-    },
-    {
-      "path": "webapp/dist/assets/SessionPaneWorkbench-NfJArQ1b.js",
-      "sizeBytes": 94070,
-      "sha256": "d4ee85c0a205ab1ad64d356d2f2549a9497ef509ea0c4c08ec6d3a881e7e3daa"
-    },
-    {
-      "path": "webapp/dist/assets/SessionQueue-7PsTvie0.js",
-      "sizeBytes": 15038,
-      "sha256": "88a6407c544f25c2d487a7c4b6c7eea01f19383f130fda209ea86adcf8e6de59"
-    },
-    {
-      "path": "webapp/dist/assets/SettingsSections-D1EQHukB.js",
-      "sizeBytes": 21343,
-      "sha256": "c7b815eb5af4f6894113439b4e3e0cf0d335a353b0ed182b739a5ea66ea2d258"
-    },
-    {
-      "path": "webapp/dist/assets/StartPageRemoteDialog-lFYQaR5u.js",
-      "sizeBytes": 6217,
-      "sha256": "17feb1432274adaa2e74a8e8c07082126398f014cd40a909316d22d8232030d6"
-    },
-    {
-      "path": "webapp/dist/assets/StartPageWorkspaceMenu-7myTnj-J.js",
-      "sizeBytes": 2865,
-      "sha256": "7ad9c01c7d0799036bd01de05e8d51c3bdd207658f8ceb2122a75fb9f5d6a999"
-    },
-    {
-      "path": "webapp/dist/assets/StarterIdeas-Bn_ajiqP.js",
-      "sizeBytes": 2311,
-      "sha256": "ee08ca2f6884dc0193a56d97829b7144904315629c5da3cc7edc241af6b47472"
-    },
-    {
-      "path": "webapp/dist/assets/SubagentSettings-BgVj3waN.js",
-      "sizeBytes": 17885,
-      "sha256": "d2f786bb7ff619e35c2594f312e075839d60d0a39110814c8ff69c4b66253ea0"
-    },
-    {
-      "path": "webapp/dist/assets/SubagentSidePane-DrGPIeCK.js",
-      "sizeBytes": 15355,
-      "sha256": "06e99f9ecdca72601d4ba4671193310792eee8d58fc82ab1dd565d65e1668c68"
-    },
-    {
-      "path": "webapp/dist/assets/SubagentTranscript-DQ04xYTl.js",
-      "sizeBytes": 2492,
-      "sha256": "fb4a8dadc42beb1037d8ebc9dac4b31ef4a00aff9d976f5e4db856e2958fb0d7"
-    },
-    {
-      "path": "webapp/dist/assets/UserMessageEditor-D5shwpXl.js",
-      "sizeBytes": 13651,
-      "sha256": "cf9f9acec3fecad6958c83a00df98077ae2e9ee3a257347fe0be94b564033aa1"
-    },
-    {
-      "path": "webapp/dist/assets/WorkbuddySettings-CwHpvUbe.js",
-      "sizeBytes": 7766,
-      "sha256": "5c63a90659c023903e7e507d8cf071403b55e205c70d6323ead4169d5ab55e12"
-    },
-    {
-      "path": "webapp/dist/assets/XuenessCapabilitiesPanel-CROwDp2U.js",
-      "sizeBytes": 9462,
-      "sha256": "0f4006db242bed64f6e4fa4a791e091c1ad2d2da5100134785b6e45c63975b41"
-    },
-    {
-      "path": "webapp/dist/assets/XuenessCapabilityDialog-Obk5udma.js",
-      "sizeBytes": 7920,
-      "sha256": "e5100ae25275a6a1fe052be7bca7a5cfcbf5e17f7ce8158534b8f5f227217615"
-    },
-    {
-      "path": "webapp/dist/assets/XuenessCloneDialog-BfMQa2XL.js",
-      "sizeBytes": 4909,
-      "sha256": "f3cd639d3abc83820ad15eae4dde50948a816618425ac0e783c3907b8c5a0208"
-    },
-    {
-      "path": "webapp/dist/assets/XuenessGitView-BbGQju_P.js",
-      "sizeBytes": 7403,
-      "sha256": "af7a157115f9d9d72c0e671172fe24984500da84ef8633654a7ee8fcfe8154ba"
-    },
-    {
-      "path": "webapp/dist/assets/XuenessRenameDialog-DAz6IvOv.js",
-      "sizeBytes": 3286,
-      "sha256": "39a155a05fc2ccc609afc19d5f22806f5e4d4a18374e209769bdd3d54726b1f2"
-    },
-    {
-      "path": "webapp/dist/assets/XuenessSettingsView-8xiS-3fH.js",
-      "sizeBytes": 10594,
-      "sha256": "fd49a9b4a5938e4d909c02ec41665491f10fb74d45368a2569af3c325609deff"
-    },
-    {
-      "path": "webapp/dist/assets/XuenessTerminalPreferences-D86JDPU2.js",
-      "sizeBytes": 1246,
-      "sha256": "0f5cb8e2ba7f9a1bd8be9eaae1dff25822eb12d7bc01e75eec3b82802fe124c8"
-    },
-    {
-      "path": "webapp/dist/assets/XuenessUsageSettings-C9WeyAxp.js",
-      "sizeBytes": 13756,
-      "sha256": "dd7b90f9186211166b7c3242927de188d5d0d999617f19cd1fb68d50b40dcb08"
-    },
-    {
-      "path": "webapp/dist/assets/XuenessWorkspacePickerDialog-BcwdBVsF.js",
-      "sizeBytes": 5894,
-      "sha256": "f62353c76595d1146d35227115419ea79bff5b644d6c3441e510d81fadb3b9ca"
-    },
-    {
-      "path": "webapp/dist/assets/XuenessWorkspaceSettings-Blg-oR_-.js",
-      "sizeBytes": 11244,
-      "sha256": "f98af75f07878844ac2333b7789cf7803adaca49df803aa5c963019ae6bc1d37"
-    },
-    {
-      "path": "webapp/dist/assets/approvalCommands-BOsaEBxE.js",
-      "sizeBytes": 4049,
-      "sha256": "a006431d311211d3940029529197b1a4bea02488eaeb42e4628fb36898ef43dd"
-    },
-    {
-      "path": "webapp/dist/assets/commandClient-BjaUhikf.js",
-      "sizeBytes": 14120,
-      "sha256": "ded99faa96151d72112c6380e8287e595ff10fdf5275ea32c65f084b939a7ae0"
-    },
-    {
-      "path": "webapp/dist/assets/composerAttachmentPreview-BhKfYvVo.js",
-      "sizeBytes": 3558,
-      "sha256": "e1a1dc4dc6c418aa8e64672c01d2d6f649f3945a0f924c34d6cf97c785fe1de3"
-    },
-    {
-      "path": "webapp/dist/assets/composerAttachmentPreviewDialog-Ygn2ni0x.js",
-      "sizeBytes": 9026,
-      "sha256": "55dac2d8eb38ea825a0298e34bc3c0bb0f99022df063130256e0dc27b4d67516"
-    },
-    {
-      "path": "webapp/dist/assets/conversationWatch-Cnla8QlK.js",
-      "sizeBytes": 5282,
-      "sha256": "34d61faa5ed7a60f256f97dfb6835c235d8a15f2ae76398a4439de69d3dbe6f7"
-    },
-    {
-      "path": "webapp/dist/assets/index-CpbQd2pY.js",
-      "sizeBytes": 4206,
-      "sha256": "10852e96491d35cf94e7d1e17365b91c36b906d5074e829f0fd14fcb1d7ad3e5"
-    },
-    {
-      "path": "webapp/dist/assets/index-Cw9-XZ9t.js",
-      "sizeBytes": 14006,
-      "sha256": "e4c37d8d7c840ca378add7af2969471ce318e76bc13a35a961c34edb1bd7d612"
-    },
-    {
-      "path": "webapp/dist/assets/index-CzDAPIPw.js",
-      "sizeBytes": 5235,
-      "sha256": "4a53ec55cb76ecb04be0f624a694ba5e2eff1c8b0e9469bfecd7ca42b638343f"
-    },
-    {
-      "path": "webapp/dist/assets/index-DFW01T3I.js",
-      "sizeBytes": 4294,
-      "sha256": "257b7e64705260681a51e58b21f8e2135e83d2aa0245bec57d8cce9a439f4cef"
-    },
-    {
-      "path": "webapp/dist/assets/index-DLEPuYeg.js",
-      "sizeBytes": 7737,
-      "sha256": "a9e4ce0d676643bb91002b81f61653b7798b9a891bd929417993b09cd59b55dd"
-    },
-    {
-      "path": "webapp/dist/assets/index-DLJ-PzuJ.js",
-      "sizeBytes": 15965,
-      "sha256": "adc550a1dd9a93d4fed7e7aaa0b8ed3a11f99a5161dc1954157d0ae1697264b1"
-    },
-    {
-      "path": "webapp/dist/assets/index-DlTfOhBo.js",
-      "sizeBytes": 15731,
-      "sha256": "5c9587459dbf1e1f9b3bd40d1876396ceab50ac4ab1ee2da3b797be722773136"
-    },
-    {
-      "path": "webapp/dist/assets/index-DqqkHCJh.js",
-      "sizeBytes": 5884,
-      "sha256": "cbc3261c72ca8c977e71e515a18e4c4cc9aaecd77e67d90dfbf461a4579bb71d"
-    },
-    {
-      "path": "webapp/dist/assets/index-H7vocSOS.js",
-      "sizeBytes": 14814,
-      "sha256": "24336a47304f0a761116b936e58dc111fbfa91005211600a1ca8de95c72854c6"
-    },
-    {
-      "path": "webapp/dist/assets/index-_9UTGlzQ.js",
-      "sizeBytes": 58371,
-      "sha256": "b11be5d4b92d974fa32624b337db36b79d9f9a2e0f717c4a5a8589ff4d923836"
-    },
-    {
-      "path": "webapp/dist/assets/index-dsxnH86a.js",
-      "sizeBytes": 41006,
-      "sha256": "f0f773069885b3d9bdfb7f2c02c3379a7ce2a0033f5b67e3ad0435504373e155"
-    },
-    {
-      "path": "webapp/dist/assets/paneForkActions-Bwgk5oxI.js",
-      "sizeBytes": 6417,
-      "sha256": "84ce358b2eb8dc609d58b174ad26cf15b3619a940c8f392a737d841c407dfb28"
-    },
-    {
-      "path": "webapp/dist/assets/remoteSessionAdapter-QjUEAeVr.js",
-      "sizeBytes": 18760,
-      "sha256": "cf11c4504e3fc4638d8d458d4442e4bbf4cb1d4f3b569f232a5a9159ab18a0e2"
-    },
-    {
-      "path": "webapp/dist/assets/scopedCommands-Crux7X-W.js",
-      "sizeBytes": 12669,
-      "sha256": "911219866fd825f05c77d732722f7856994979d738031d2333b5235559f0d8aa"
-    },
-    {
-      "path": "webapp/dist/assets/sessionsRemoteConnectionState-B8V_uwxl.js",
-      "sizeBytes": 554,
-      "sha256": "e7a16880492036a18ac7225ae95abd7912e26c8c21e4f8f5455ddaf1166667cd"
-    },
-    {
-      "path": "webapp/dist/assets/subagentRowProgress-BXFDThto.js",
-      "sizeBytes": 428,
-      "sha256": "10d68ea80ee174374b0e8421104a6daf37bee7b721bda74a6da2bea46661b7a6"
-    },
-    {
-      "path": "webapp/dist/assets/workbench-91j5R7dU.js",
-      "sizeBytes": 824265,
-      "sha256": "27ae2598227e965f94416221865331eab554d72f3141b7f336da76ae4e5aa26e"
-    },
-    {
       "path": "ts/packages/engine-tools/test/background-log-drain.test.ts",
       "sizeBytes": 2561,
       "sha256": "eed8c392805d9d5ab391450b85b4e4b296a1ed128fe0e92bbaf8600c5e035e2e"
@@ -14805,6 +14335,666 @@
       "path": "ts/test-support/canonical-temp.ts",
       "sizeBytes": 435,
       "sha256": "0d5d74e5be914917b6639723ea91761230e1efb63f3b6c07528814e00bfe78cc"
+    },
+    {
+      "path": "docs/images/marketplace-github.png",
+      "sizeBytes": 115260,
+      "sha256": "d5784a8d1ae421f3bde4881ed87df2e98b3f5b5d71c1b32c008a77dac850ec14"
+    },
+    {
+      "path": "docs/images/skills-folder.png",
+      "sizeBytes": 158646,
+      "sha256": "c2f7db47e2cbe29ec3cf7df74576b0e77e017a561e8dbca9f2e2199e8430e763"
+    },
+    {
+      "path": "docs/images/xueness-hero.svg",
+      "sizeBytes": 4014,
+      "sha256": "f9eb972b3d24ba2efd9f1f3497f483a1a9d873c8aa9e9774324fd7245ffeba35"
+    },
+    {
+      "path": "docs/optional-plugins-and-folder-skills.md",
+      "sizeBytes": 5212,
+      "sha256": "89020296575a7c9d7a14c19df69e747aaa35311baeb2b9c70d7a39b7f62c2499"
+    },
+    {
+      "path": "marketplace/packages/xueness-model-monitor-1.0.0-3a9c6597ee517275.json.gz",
+      "sizeBytes": 15096,
+      "sha256": "3a9c6597ee51727520eae977adb49462fb44a74b024baeb2c6f11eafd12ae38b"
+    },
+    {
+      "path": "marketplace/packages/xueness-model-monitor-1.0.0-e2e4b87d697a761e.json.gz",
+      "sizeBytes": 15094,
+      "sha256": "e2e4b87d697a761e8477bd41a2561ee4d5f7beb43ec6272479b95d8d5865c073"
+    },
+    {
+      "path": "marketplace/packages/xueness-subscriptions-1.0.0-48aa364e28b7ed7e.json.gz",
+      "sizeBytes": 154823,
+      "sha256": "48aa364e28b7ed7e5cb17d15da1db2508eefdd8ba263a7ce8f28db8e60733655"
+    },
+    {
+      "path": "marketplace/packages/xueness-subscriptions-1.0.0-fcd50bd3cab890e0.json.gz",
+      "sizeBytes": 154823,
+      "sha256": "fcd50bd3cab890e07705214197010e1f23570cfe0cd2b6702c4572c499768228"
+    },
+    {
+      "path": "marketplace/packages/xueness-workbuddy-1.0.0-5fca5e14a9846760.json.gz",
+      "sizeBytes": 8427297,
+      "sha256": "5fca5e14a984676032c138369f1c844e06b817f01998024136ecde4286e518ce"
+    },
+    {
+      "path": "marketplace/packages/xueness-workbuddy-1.0.0-c2be80e9e145199a.json.gz",
+      "sizeBytes": 8427296,
+      "sha256": "c2be80e9e145199abf7644bd44261281b5e5c61402aefbf364ff0538e69f9692"
+    },
+    {
+      "path": "ts/apps/server/src/optional-integrations.ts",
+      "sizeBytes": 5121,
+      "sha256": "ebcbdd442e5db965f7e4c08c3eb23984ea4a72c6a9e776a4bd530d6d73905fa8"
+    },
+    {
+      "path": "ts/apps/server/test/optional-download-runtime.test.ts",
+      "sizeBytes": 3295,
+      "sha256": "8fb6c83324133a675a50fffe9f8134e6cac4ec9bb165dc3bb387cbc8d7421291"
+    },
+    {
+      "path": "ts/packages/kernel/src/optional-packages.json",
+      "sizeBytes": 9852,
+      "sha256": "b3fa498a48c506ce1f2c851aecdafed784d648b5cf88f4ae3084a43eb472a324"
+    },
+    {
+      "path": "ts/packages/kernel/src/optional-packages.ts",
+      "sizeBytes": 5009,
+      "sha256": "56a4bbf09abea325fc4c6b84f9c0db6a0fb2db0b3218d4f85b8d864a03ef4cb2"
+    },
+    {
+      "path": "ts/plugins/extensions/src/official-install.ts",
+      "sizeBytes": 5425,
+      "sha256": "2fa5d3d62810ebc80e7db08ebccf45ffc1a43ad5e836f1b383f838753c848dc2"
+    },
+    {
+      "path": "ts/plugins/model_monitor/src/provider.ts",
+      "sizeBytes": 1490,
+      "sha256": "8594efee9361797345132a3ffe2f56ff71f3081363b9b9678bddfc93878dc81c"
+    },
+    {
+      "path": "ts/plugins/model_monitor/test/provider-observation.test.ts",
+      "sizeBytes": 1715,
+      "sha256": "1dbe3b6fefbf77b097bd7e6f5b20fb2f77ca6b9437e413b7b06320527ed3af29"
+    },
+    {
+      "path": "ts/plugins/skills/bundled/ask-user-question/LICENSE",
+      "sizeBytes": 1067,
+      "sha256": "4938460b8c57cb6373d2cedd619aa3f4895a5b67f0f7bf7aca6e2612590c5d89"
+    },
+    {
+      "path": "ts/plugins/skills/bundled/ask-user-question/SKILL.md",
+      "sizeBytes": 3649,
+      "sha256": "77202591de56142d50c48ecd90b57514145135fe8a41426cdba2d30232886e63"
+    },
+    {
+      "path": "ts/plugins/skills/bundled/ask-user-question/examples/deploy-target.json",
+      "sizeBytes": 578,
+      "sha256": "c2a9ba1df097f2812946dc719e36dfe6fea751b27815c440b55bad5cf51307de"
+    },
+    {
+      "path": "ts/plugins/skills/bundled/ask-user-question/examples/overwrite-policy.json",
+      "sizeBytes": 491,
+      "sha256": "ed52b4eac602d742708bd4ab07080504c083e7b18de30fe97db2af83e2021bb1"
+    },
+    {
+      "path": "ts/plugins/skills/bundled/ask-user-question/lib/validate.js",
+      "sizeBytes": 3227,
+      "sha256": "a89ac0b1f8060c37e8f2ab6d138dcb2cfdf1958bb43100384ad9122db442de5c"
+    },
+    {
+      "path": "ts/plugins/skills/bundled/ask-user-question/package.json",
+      "sizeBytes": 861,
+      "sha256": "b75d5c399696f17ca3d659e1aaff3a0ce11d88043057d50361bb62d839b2a153"
+    },
+    {
+      "path": "ts/plugins/skills/bundled/ask-user-question/references/upstream-SKILL.md",
+      "sizeBytes": 8342,
+      "sha256": "e47e478790680e3ebb3378d0a4cf0ea18a39d005004b17da193eccb499596405"
+    },
+    {
+      "path": "ts/plugins/skills/src/bundled.ts",
+      "sizeBytes": 112,
+      "sha256": "44036f8e60ab29c18a50c2a1609633c2d2919bf999213785019fc02305deb174"
+    },
+    {
+      "path": "ts/plugins/skills/src/folder-import.ts",
+      "sizeBytes": 11063,
+      "sha256": "6a916262792bd201d3dc40445a4fe2b5f6e2ba4a0e2b93df8ace4a34423ee313"
+    },
+    {
+      "path": "ts/plugins/skills/src/switches.ts",
+      "sizeBytes": 3265,
+      "sha256": "a7b20797d087c81a569b821001dcbf3f90a2ab15567292a0acfed712c59b8149"
+    },
+    {
+      "path": "ts/plugins/skills/test/folder-import.test.ts",
+      "sizeBytes": 7685,
+      "sha256": "280402cd064bf73a4d257047b1961ae9713b3fe26faef0a0ce24a95226f20a04"
+    },
+    {
+      "path": "ts/plugins/skills/test/skill-switches.test.ts",
+      "sizeBytes": 4066,
+      "sha256": "cbdcb68ebdaf1261168ba0046f97e5bf60a4168b6d669b609a9ec12fb67333db"
+    },
+    {
+      "path": "ts/scripts/package-optional.ts",
+      "sizeBytes": 3942,
+      "sha256": "a354d2f5e5a9ad8cd78a6bbc87af3605d18942d8e9001edf149414c130ac5b48"
+    },
+    {
+      "path": "ts/test-support/optional-artifacts.ts",
+      "sizeBytes": 1108,
+      "sha256": "80859b7e3602b0f94f4d2b6d35cb2e88797775d524b96de4c22927ef2f91b360"
+    },
+    {
+      "path": "webapp/dist/assets/AppsUiHost-CJlsWMdc.js",
+      "sizeBytes": 5313,
+      "sha256": "e50b569ab7346c1d6c398306c311afa8943a47853b4b7e50efbdcba515222b76"
+    },
+    {
+      "path": "webapp/dist/assets/ArchivedSessions-C3nRxudp.js",
+      "sizeBytes": 7174,
+      "sha256": "d8ecf0f47c83588423492bf60332f52be4264dfe01a04479c862bd26127cb713"
+    },
+    {
+      "path": "webapp/dist/assets/BrowserPanel-BOp_DqE9.js",
+      "sizeBytes": 12121,
+      "sha256": "cec0df9690aa68e69113469736b5114937030caaad6881e9004796a8cd1cfae9"
+    },
+    {
+      "path": "webapp/dist/assets/BrowserSettings-ssqprkNq.js",
+      "sizeBytes": 12542,
+      "sha256": "8775949600aedf3069f7796675468d6a945392cc561b7172912ef2ed565422c2"
+    },
+    {
+      "path": "webapp/dist/assets/Combination-CWVN4E0m.js",
+      "sizeBytes": 12805,
+      "sha256": "51b8368bc460907bac1420774ebeadfddc32ede0d293872fcf700d93f3ab6713"
+    },
+    {
+      "path": "webapp/dist/assets/CompletionChecks-Bds_Yxfy.js",
+      "sizeBytes": 6498,
+      "sha256": "d091b199bd4e9991636765401e884122cbff6346e02418ad89e6d7108ea5737c"
+    },
+    {
+      "path": "webapp/dist/assets/ConversationSharing-CCuGJtQZ.js",
+      "sizeBytes": 10478,
+      "sha256": "de9ae2631b296ac3dadba9bda32dfde932a8e0a262c540da0ee1bb444e09f990"
+    },
+    {
+      "path": "webapp/dist/assets/DesktopAbout-CIni2cAb.js",
+      "sizeBytes": 2101,
+      "sha256": "465780ac21a907deafe0e72775f51d38acd068c3c6d0449921f0c5c9f4696712"
+    },
+    {
+      "path": "webapp/dist/assets/DesktopNotificationSettings-DE2z4B-R.js",
+      "sizeBytes": 963,
+      "sha256": "63a8a6db2d7e673826303893b5316fc7fabcd7562900a547ad1ad78ff82234f1"
+    },
+    {
+      "path": "webapp/dist/assets/DesktopPermissionOnboarding-0BHneC-o.js",
+      "sizeBytes": 18751,
+      "sha256": "9748ee7833bae96aa1373e9973f92039e8f27c2d1c7d636ba1a58a51c211d2ad"
+    },
+    {
+      "path": "webapp/dist/assets/DesktopUpdates-BXQtAIDs.js",
+      "sizeBytes": 7587,
+      "sha256": "de7f63c2ecc943423839f7262cc25dee05d9de16f372abd4751c59efe731d253"
+    },
+    {
+      "path": "webapp/dist/assets/DiffView-7HILsj4d.js",
+      "sizeBytes": 5754,
+      "sha256": "d100eee1ba2e31f5d454d379a3aff39049bf22a7e8d419a3dee941734524362a"
+    },
+    {
+      "path": "webapp/dist/assets/DirectoryBrowser-Ch2OoAdw.js",
+      "sizeBytes": 3832,
+      "sha256": "4582607bfd94ae6f8419e14c95df202a22257a1ccbe1bae13de7f79177b26c27"
+    },
+    {
+      "path": "webapp/dist/assets/ElicitationForm-DHdWuZkH.js",
+      "sizeBytes": 14551,
+      "sha256": "c280a15d2ea1e5f31edf0dd33be3f0c40b53fdb08a306d3599b653433687abc8"
+    },
+    {
+      "path": "webapp/dist/assets/FileBrowser-C9a5is8V.js",
+      "sizeBytes": 10891,
+      "sha256": "046a5f42695d34bc173976138d932881328e06e2bf6c66afbe5754caece098c9"
+    },
+    {
+      "path": "webapp/dist/assets/ForkSessionDialog-BaKuq53I.js",
+      "sizeBytes": 7927,
+      "sha256": "1b90b10a1d70af6d8dcb9e4c39d25d5381768e91d40d36b673d063feee11c16f"
+    },
+    {
+      "path": "webapp/dist/assets/GoalEditorDialog-dxRXwRDz.js",
+      "sizeBytes": 3423,
+      "sha256": "f0144c7b7d6a35ba109144c7740bc8f94f80594da8431c860c955cc246b0baa7"
+    },
+    {
+      "path": "webapp/dist/assets/LocalRuntimeMonitor-DlAUjON5.js",
+      "sizeBytes": 18880,
+      "sha256": "3946e6a8178d575224fa711f690022db0bc3a89477151f3507e1c3f2a5b86c3d"
+    },
+    {
+      "path": "webapp/dist/assets/MemoryPanel-CPIqjI4y.js",
+      "sizeBytes": 2548,
+      "sha256": "2ba6d0e8211b075a27f0abd645d6c1d1e90824dc78da7443f94dc16706d1b726"
+    },
+    {
+      "path": "webapp/dist/assets/MemorySettings-yBRqV9nC.js",
+      "sizeBytes": 3963,
+      "sha256": "7529d525b396439f29f509032e23ad79dc05efde035c2bd4d839bd4bd9808414"
+    },
+    {
+      "path": "webapp/dist/assets/NetworkSettings-CIBn6-LF.js",
+      "sizeBytes": 14785,
+      "sha256": "333e60d365f776473435392e899cf647e4dca1b0c6ce880888b4a1729181b3d0"
+    },
+    {
+      "path": "webapp/dist/assets/PendingQuestion-CwcsH3G-.js",
+      "sizeBytes": 8868,
+      "sha256": "5d28c7bf14b5d590c27c131e3b1228f6c35245ac7eceed5c867fd5182a6df652"
+    },
+    {
+      "path": "webapp/dist/assets/PluginProfilePicker-BEmr7ARt.js",
+      "sizeBytes": 4818,
+      "sha256": "2f342e95f4aa5d55f378f8d3181473df86701282cb0d6d97ac77326e70a1e1f2"
+    },
+    {
+      "path": "webapp/dist/assets/ProjectContextMenu-D-HoKKNV.js",
+      "sizeBytes": 10725,
+      "sha256": "2103d5cb495fbfe5177fa527ad72484c5b70edcf757f1ac6c3957b49d515f0e9"
+    },
+    {
+      "path": "webapp/dist/assets/SessionContextPane-Cpi3YHVk.js",
+      "sizeBytes": 4404,
+      "sha256": "f14161fa1dd2535e5f1e4c205ee11e44f99fad98146ccbd6be94f39793ea76b0"
+    },
+    {
+      "path": "webapp/dist/assets/SessionExperimentSettings-Cyi5WPdT.js",
+      "sizeBytes": 1833,
+      "sha256": "53ae15c8896affd8916f4e2b07d5ae7e95e4d4b1a2b78cee0da971c4cb478dbc"
+    },
+    {
+      "path": "webapp/dist/assets/SessionGoal-DTn9EUcI.js",
+      "sizeBytes": 2978,
+      "sha256": "ac184902ac035c18fb460541230d0842282c3d58196a5113aa246fbfb2aee15c"
+    },
+    {
+      "path": "webapp/dist/assets/SessionPaneWorkbench-AXn0vH67.js",
+      "sizeBytes": 94171,
+      "sha256": "7de8ace4ebea9e7cc284ee88bc753fd538a06f6ddd341524d4e095dc63cab39a"
+    },
+    {
+      "path": "webapp/dist/assets/SessionQueue-CMxyHUrS.js",
+      "sizeBytes": 15138,
+      "sha256": "f6a8031fb6725b9950c194446925299c08963c2dfc12d7adcb6c05df10ab8e7c"
+    },
+    {
+      "path": "webapp/dist/assets/SettingsSections-BcxylMSi.js",
+      "sizeBytes": 21443,
+      "sha256": "c7fadc8fe8712ca2cb47168d9d33b56d12b16918229649bfb8ef610e9bf905e5"
+    },
+    {
+      "path": "webapp/dist/assets/SkillsSection-D31swLLi.js",
+      "sizeBytes": 4901,
+      "sha256": "6d4fd4787b6357dfd6332cd111c099459ba0d00d3170ccd3cc7febdfd2c2a648"
+    },
+    {
+      "path": "webapp/dist/assets/StartPageRemoteDialog-uWcEqWFy.js",
+      "sizeBytes": 6318,
+      "sha256": "747eb2a7e475c366c6fa974c6e6fb9ca2cadccf9b5c3f3c2eb78168002bdbc32"
+    },
+    {
+      "path": "webapp/dist/assets/StartPageWorkspaceMenu-HPCbTbT3.js",
+      "sizeBytes": 2966,
+      "sha256": "9e6fa4d718aa12267e9b9dfd9041301529f2e0afafedb08d271ee285e3654ce5"
+    },
+    {
+      "path": "webapp/dist/assets/StarterIdeas-Dez-dlsc.js",
+      "sizeBytes": 2412,
+      "sha256": "74af6203b8fc8f52c2b3bc966e687425d79ba84d27de889f11ca62e9fe2b2635"
+    },
+    {
+      "path": "webapp/dist/assets/SubagentSettings-D8VmTtLv.js",
+      "sizeBytes": 17984,
+      "sha256": "846b17dcc3aebee73e9a2c707d1b2d728d6e7c577711c84340f7b9ff96b2eec1"
+    },
+    {
+      "path": "webapp/dist/assets/SubagentSidePane-DQ3Q_56m.js",
+      "sizeBytes": 15456,
+      "sha256": "2b128953cd588195c1863c97c94dde6be5aae9050351acab2fc25a29364bfc08"
+    },
+    {
+      "path": "webapp/dist/assets/SubagentTranscript-C1NwWeGt.js",
+      "sizeBytes": 2593,
+      "sha256": "464917c7b8286b804a9a73c65a1a508d513565188c497406ab88e5e6b798fed4"
+    },
+    {
+      "path": "webapp/dist/assets/UserMessageEditor-BgT9urhf.js",
+      "sizeBytes": 13752,
+      "sha256": "4542cbcd33073119c7b5b3e43073c0b5e6b59245bba6770d3f724d9aa78234a0"
+    },
+    {
+      "path": "webapp/dist/assets/XuenessCapabilitiesPanel-D1wSDl0o.js",
+      "sizeBytes": 9813,
+      "sha256": "d71c561087f49c68b3686179fbca32317ffe32c6a4ab56c1cd3f91aa0c36be17"
+    },
+    {
+      "path": "webapp/dist/assets/XuenessCapabilityDialog-D3JIaOoH.js",
+      "sizeBytes": 8026,
+      "sha256": "5a5881f35a86fd54b6fb35fb3e90d591de8e6517271812e0bde5c4d191e47491"
+    },
+    {
+      "path": "webapp/dist/assets/XuenessCloneDialog-BQuW1IEe.js",
+      "sizeBytes": 5017,
+      "sha256": "dea8311d4218cf4b39f18d1b215a2d7657928a6a817923a3483e5f465ed00cbe"
+    },
+    {
+      "path": "webapp/dist/assets/XuenessGitView-CtRDbrXF.js",
+      "sizeBytes": 7504,
+      "sha256": "fc408b9c9c1e42281dcbc745e5f8a949cb309dca0f286de819690dabf92b63da"
+    },
+    {
+      "path": "webapp/dist/assets/XuenessRenameDialog-CCzakU8b.js",
+      "sizeBytes": 3387,
+      "sha256": "89415c75a50fe70efa6bace4c4a5acca3d7232f1314be592e17a2760cebb06cd"
+    },
+    {
+      "path": "webapp/dist/assets/XuenessSettingsView-DCYa5TAy.js",
+      "sizeBytes": 10695,
+      "sha256": "ee6b464afa933a987c03ed0654af75634412ca6ed116da6a058bef12d66a32bc"
+    },
+    {
+      "path": "webapp/dist/assets/XuenessTerminalPreferences-HzvtPXgi.js",
+      "sizeBytes": 1246,
+      "sha256": "427e7c8749270453a5daf156d7de22b2f9ced18acf19831c2138c8558f110b81"
+    },
+    {
+      "path": "webapp/dist/assets/XuenessUsageSettings-CCQ8z3Wr.js",
+      "sizeBytes": 13856,
+      "sha256": "2dd7408ce9fb3bb060d3ff475feaf34c2b56cf28139b176cf2999a6260ac229a"
+    },
+    {
+      "path": "webapp/dist/assets/XuenessWorkspacePickerDialog-BKE5yvyQ.js",
+      "sizeBytes": 5995,
+      "sha256": "5c2f4550f0c211cd9c5d8e64a14bd7b2d36f64f5c286f10b76465052a981d8fe"
+    },
+    {
+      "path": "webapp/dist/assets/XuenessWorkspaceSettings-ScSLOm2P.js",
+      "sizeBytes": 11345,
+      "sha256": "a0eae127d7ce2607e17f8196d769984e762b1b49e3c502c87c1c4706bc5a1c4c"
+    },
+    {
+      "path": "webapp/dist/assets/_commonjsHelpers-Cpj98o6Y.js",
+      "sizeBytes": 236,
+      "sha256": "9625379badd4849610dfe6c15453cdf0c0071264c90eef177307fac094d2aa6c"
+    },
+    {
+      "path": "webapp/dist/assets/activity-JoPfoxyi.js",
+      "sizeBytes": 414,
+      "sha256": "c1270a8091c56efc0776674c9c79a486097e08b0f5836404e5c17a8da4e1d400"
+    },
+    {
+      "path": "webapp/dist/assets/addon-fit-B3_hsltv.js",
+      "sizeBytes": 1814,
+      "sha256": "1c750981ff5cca7ff86d897307429914051aeb282f90595d9d83526e8bec8c49"
+    },
+    {
+      "path": "webapp/dist/assets/aiden0z-pptx-renderer.es-jeqSvPXO.js",
+      "sizeBytes": 1005640,
+      "sha256": "65d4767a645b7fd74998fdb6d9e730cdbd471f48cc64de87a51427dac0c0f56d"
+    },
+    {
+      "path": "webapp/dist/assets/approvalCommands-CfP1MgQY.js",
+      "sizeBytes": 4150,
+      "sha256": "a76ad78b6c4d2968e1385a5ef8b5dfc1573d21de20ab3dabfc04b98c62f40fc0"
+    },
+    {
+      "path": "webapp/dist/assets/cable-BeT97T_G.js",
+      "sizeBytes": 674,
+      "sha256": "de83e96b9842955c8ec997df01f650162494d4cd36fdfab522478a93cee3f6c8"
+    },
+    {
+      "path": "webapp/dist/assets/chevron-right-C2UqwyfD.js",
+      "sizeBytes": 4784,
+      "sha256": "ba81749c083a8b6aacf26da3b19183d46c2ee05fb0e4467e4a8ff5dc73d62738"
+    },
+    {
+      "path": "webapp/dist/assets/cloud-CC1iYsI_.js",
+      "sizeBytes": 340,
+      "sha256": "b147449cc546fcb7906ae5811101d705b8943b2004bab5f20bd3f21e45df5ef1"
+    },
+    {
+      "path": "webapp/dist/assets/commandClient-JTZRZm6n.js",
+      "sizeBytes": 14327,
+      "sha256": "c2062fda9993af892d8746cd6d8dd12b34d0358644104e28dbd24035b406b211"
+    },
+    {
+      "path": "webapp/dist/assets/composerAttachmentPreview-zzgzv_qP.js",
+      "sizeBytes": 3662,
+      "sha256": "3b31221376791d9dbb5b72dd545ca8161724f9b9e037331c14e03cb2cadff18b"
+    },
+    {
+      "path": "webapp/dist/assets/composerAttachmentPreviewDialog-DCL82GPg.js",
+      "sizeBytes": 9132,
+      "sha256": "dd80c21c44df9aac4ebc8c54bf5c40bdd1852c7146f57f1354450b53540bc14e"
+    },
+    {
+      "path": "webapp/dist/assets/conversationWatch-Ctxco1e9.js",
+      "sizeBytes": 5383,
+      "sha256": "fec79d9ccbe1d4756bfd0a4d40d33af534a174ab08fdd32562da9d8ee936a36c"
+    },
+    {
+      "path": "webapp/dist/assets/core-CLjaoc-I.js",
+      "sizeBytes": 83882,
+      "sha256": "4317e4e1a80c72b52ee7583b1a9d0e20344d0d0aeec23ed5cc021853dba3cd56"
+    },
+    {
+      "path": "webapp/dist/assets/docx-preview-DA4PtBBM.js",
+      "sizeBytes": 77392,
+      "sha256": "bd37e4dc7d27013514cdc420264fe5c52f4bbfa05103f5c623590a1e94b8ee64"
+    },
+    {
+      "path": "webapp/dist/assets/index-Bwsaj454.js",
+      "sizeBytes": 7838,
+      "sha256": "0a08f875e61fc43727112c6dc1ec2c515ef23fc864beabebf8c6d8f0d910e626"
+    },
+    {
+      "path": "webapp/dist/assets/index-CUW8NF5S.js",
+      "sizeBytes": 41107,
+      "sha256": "5dffac2d38eb0d05cfc08840154c59513cf6cabb8bc08ca139b8f0029cbc8886"
+    },
+    {
+      "path": "webapp/dist/assets/index-CZYledNX.js",
+      "sizeBytes": 14915,
+      "sha256": "26d9539a7d3f8aebec14757d26fd64565b6936a251daf4eb73c597fd57203d22"
+    },
+    {
+      "path": "webapp/dist/assets/index-Cly_p3rU.js",
+      "sizeBytes": 5336,
+      "sha256": "1af2d5c36af954affe21510cfbb626fd0352c31bf98dada646527174b8fc9c8e"
+    },
+    {
+      "path": "webapp/dist/assets/index-DMIU-JKF.js",
+      "sizeBytes": 17611,
+      "sha256": "be7e7f39764b1e02053d9699d3051ee41b0395b71873982fc6b57071ef0c6b21"
+    },
+    {
+      "path": "webapp/dist/assets/index-DgFAGmsh.js",
+      "sizeBytes": 4307,
+      "sha256": "535ca91810743308b24f69a59c2d053b95e9640708af62a286b49ab131004883"
+    },
+    {
+      "path": "webapp/dist/assets/index-DqMePrFY.js",
+      "sizeBytes": 4395,
+      "sha256": "32e3982720495bbb0a9fa5c151023f89ff99935efdc11ac72ced7c32883c4735"
+    },
+    {
+      "path": "webapp/dist/assets/index-QEEdmwJX.js",
+      "sizeBytes": 16401,
+      "sha256": "5b3b68a9c3f240b4a0bed730f5d220043eb797d98b2e53fd98ab80f8504c5605"
+    },
+    {
+      "path": "webapp/dist/assets/index-RM1nUjNy.js",
+      "sizeBytes": 58470,
+      "sha256": "f0932e2cca5165b912f6cc76886423b58367c8ebf857c1f6296745c9b2c5c246"
+    },
+    {
+      "path": "webapp/dist/assets/index-cJdf3DiG.js",
+      "sizeBytes": 16070,
+      "sha256": "ec12d26264f8a2948c18402d27bcf5c46f4bd74664c0e00c77a022e6e8988962"
+    },
+    {
+      "path": "webapp/dist/assets/jszip.min-CfprPJiY.js",
+      "sizeBytes": 97307,
+      "sha256": "c13783f90f6a62f4011a54e584ebcb4ca776b202ab3855dc65e014a89025b3fd"
+    },
+    {
+      "path": "webapp/dist/assets/key-round-BYbS6lAm.js",
+      "sizeBytes": 530,
+      "sha256": "df0c1bf07798b99484051dd0b4076a756fd24ab4a7c685328a408fb47e0e259e"
+    },
+    {
+      "path": "webapp/dist/assets/keyboard-DhBjj1Vd.js",
+      "sizeBytes": 633,
+      "sha256": "7f646e7005d2d41f80f41b00ee5ad4cced2654360064bf9e125a8e7e7fb5de01"
+    },
+    {
+      "path": "webapp/dist/assets/layers-B3tEIAE9.js",
+      "sizeBytes": 601,
+      "sha256": "61ffd27a20aff1787e45f468f1c8264d34b95c005cb731eb01ff2b7af3911b45"
+    },
+    {
+      "path": "webapp/dist/assets/loader-circle-D2qUaB1t.js",
+      "sizeBytes": 319,
+      "sha256": "1b0aebd2fad6eff382d7fb54cb16a1aca0239d3eea00b364eff0ff826994a7b5"
+    },
+    {
+      "path": "webapp/dist/assets/markdown-vendor-hkRgCSAm.js",
+      "sizeBytes": 154167,
+      "sha256": "d5694a75643bb24b8ea11eaa7a29dba75e0c7128c605ce9179b52bd58fd2ebdf"
+    },
+    {
+      "path": "webapp/dist/assets/package-B-6mp0x-.js",
+      "sizeBytes": 552,
+      "sha256": "edfa212e0ad1507f1a5070be1683518ed1564be209b8f221f9a307397961e696"
+    },
+    {
+      "path": "webapp/dist/assets/paneForkActions-CmnX2Mtl.js",
+      "sizeBytes": 6522,
+      "sha256": "c7acbcdc6004df6259fdde049031bf51aeefa91a33645bf3393f430a9cf6510a"
+    },
+    {
+      "path": "webapp/dist/assets/radio-IQT29Xfc.js",
+      "sizeBytes": 554,
+      "sha256": "3094331f795f98391bb3bacee95e2edc179efc7ead947ac27fa2c41637ca61a9"
+    },
+    {
+      "path": "webapp/dist/assets/radix-vendor-Dex_w2rK.js",
+      "sizeBytes": 59642,
+      "sha256": "0222a63fc6d883d5f9bcef62582e50426e4a5841ee9246b6fcb5df179c11fd86"
+    },
+    {
+      "path": "webapp/dist/assets/react-vendor-CkNNwXoc.js",
+      "sizeBytes": 223634,
+      "sha256": "c63e9a35adb1c6192d9c32466cfafb2c2eb2dd664bfa2d3b50606b9807575a19"
+    },
+    {
+      "path": "webapp/dist/assets/remoteSessionAdapter-BBgivmqX.js",
+      "sizeBytes": 18755,
+      "sha256": "1ecde8e1b74b5fbaa029d4c13435ff50c1aab6c2e60660665c84a8648cd301f2"
+    },
+    {
+      "path": "webapp/dist/assets/scopedCommands-BZonQJq7.js",
+      "sizeBytes": 12669,
+      "sha256": "ea0d4cb575dc8c80cd370e7ab3f4abc362e6b07f703f6df73a05ce410a890437"
+    },
+    {
+      "path": "webapp/dist/assets/sessionsRemoteConnectionState-Bp88bDK9.js",
+      "sizeBytes": 655,
+      "sha256": "ac4c84383cc29c88dddd7ce7afece588c3a18e5ca77678a46e98ac680b522bd7"
+    },
+    {
+      "path": "webapp/dist/assets/subagentRowProgress-BHftM_LB.js",
+      "sizeBytes": 529,
+      "sha256": "34963b6161b9708134c659daaea503f2e9c2d856479a10eb7d99e4afda600eee"
+    },
+    {
+      "path": "webapp/dist/assets/tray-BzFXIg3t.js",
+      "sizeBytes": 4571,
+      "sha256": "10fbc5aa2fead6851632f931d89bd1bbb594e17925d233e7e2fcf14c66756760"
+    },
+    {
+      "path": "webapp/dist/assets/unplug-CAzGDHGT.js",
+      "sizeBytes": 974,
+      "sha256": "e0984c072ac67dc54f1ed7d179cae6b1065961d3f40433c53eb2bc2ccd3b78c2"
+    },
+    {
+      "path": "webapp/dist/assets/user-plus-CDNVjAqa.js",
+      "sizeBytes": 490,
+      "sha256": "9ccb5cd54be7de1af0db281d31a2f0345c1328014cd7d1177878d1aed6535f39"
+    },
+    {
+      "path": "webapp/dist/assets/wand-sparkles-CdJ-W8_s.js",
+      "sizeBytes": 693,
+      "sha256": "13073a5a74d27dca7da88a703fb62138a53c5bb07b8f72361be35d5686893744"
+    },
+    {
+      "path": "webapp/dist/assets/workbench-BcXmzP_i.js",
+      "sizeBytes": 827416,
+      "sha256": "61883fd839bbcdd12da05c6a1571a727faa67ba6b88979632b8796afc42a2b62"
+    },
+    {
+      "path": "webapp/dist/assets/xterm-BD6gRW8x.js",
+      "sizeBytes": 291272,
+      "sha256": "4d23ec971d1e4cf3e377123f8861a444b136267230c46094794fc137aa85cbcb"
+    },
+    {
+      "path": "webapp/dist/optional-packages.json",
+      "sizeBytes": 9852,
+      "sha256": "b3fa498a48c506ce1f2c851aecdafed784d648b5cf88f4ae3084a43eb472a324"
+    },
+    {
+      "path": "webapp/src/plugins/skills/SkillsSection.test.tsx",
+      "sizeBytes": 4365,
+      "sha256": "8b1a02353f9c8da09429222080fd8210c568e9dea4e6d2fa535cf6529700da9a"
+    },
+    {
+      "path": "webapp/src/plugins/skills/SkillsSection.tsx",
+      "sizeBytes": 7973,
+      "sha256": "bf6424d4bc00648329b02780a1fce08fce54365e7747c030f79e70c222841508"
+    },
+    {
+      "path": "验收资料/20261026-plugins-skills/checks.json",
+      "sizeBytes": 2528,
+      "sha256": "0e98d33c254f89f3900169f441833957eba6bae133fa4c32c86b68ea0dbf4e1c"
+    },
+    {
+      "path": "验收资料/20261026-plugins-skills/marketplace.png",
+      "sizeBytes": 115260,
+      "sha256": "d5784a8d1ae421f3bde4881ed87df2e98b3f5b5d71c1b32c008a77dac850ec14"
+    },
+    {
+      "path": "验收资料/20261026-plugins-skills/skills-narrow.png",
+      "sizeBytes": 79051,
+      "sha256": "e7f3f2d4823b0c488bb12810742174fa75582476fee654de86aebaf27c38e0d2"
+    },
+    {
+      "path": "验收资料/20261026-plugins-skills/skills.png",
+      "sizeBytes": 158646,
+      "sha256": "c2f7db47e2cbe29ec3cf7df74576b0e77e017a561e8dbca9f2e2199e8430e763"
+    },
+    {
+      "path": "验收资料/20261026-plugins-skills/验收报告.md",
+      "sizeBytes": 4158,
+      "sha256": "738a1b5466608ca78bc6d0ea797bec7559ed2a6a24e15549fe7a8ca43bb0fa4b"
     }
   ]
 }

@@ -3,7 +3,7 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "nod
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, it } from "node:test";
-import { isDict, pyJsonLoads } from "@xueness/contracts";
+import { isDict, isPyFloatValue, numericValue, pyJsonLoads } from "@xueness/contracts";
 import {
   latestRunPlan, MAX_DESCRIPTION, NAME, SavedWorkflowLibrary, sourcePlan, templatePlanDigest, validateName,
 } from "../src/saved-library.ts";
@@ -55,8 +55,11 @@ describe("saved workflow library", () => {
       assert.equal(saved.node_count, 1);
       assert.equal(saved.plan_name, "Nightly");
       assert.equal(saved.concurrency, 1);
-      assert.equal(typeof saved.saved_at, "number");
-      assert.equal(typeof saved.updated_at, "number");
+      // Integral seconds are intentionally a JsonFloat to preserve Python's
+      // float wire format. A wall-clock tick can land exactly on a second.
+      assert.equal(isPyFloatValue(saved.saved_at), true);
+      assert.equal(isPyFloatValue(saved.updated_at), true);
+      assert.equal(Number.isFinite(numericValue(saved.saved_at)), true);
       assert.match(String(saved.plan_digest), /^[a-f0-9]{64}$/);
 
       // One JSON file directly inside `<state>/workflows/saved`, exactly as Python writes it.
@@ -73,7 +76,7 @@ describe("saved workflow library", () => {
       assert.deepEqual(loaded.plan, onDisk.plan);
       assert.equal(loaded.plan_digest, saved.plan_digest);
       assert.deepEqual(loaded.source, { kind: "plan" });
-      assert.equal(loaded.saved_at, saved.saved_at);
+      assert.deepEqual(loaded.saved_at, saved.saved_at);
     } finally { rmSync(join(state, ".."), { recursive: true, force: true }); }
   });
 

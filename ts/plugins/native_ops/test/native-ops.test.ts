@@ -54,8 +54,10 @@ function record(value: unknown): Record<string, unknown> {
   return value as Record<string, unknown>;
 }
 
+const workerSkip = process.platform === "darwin" && process.arch === "x64" ? "dsh-ops@0.4.0 ships no macOS Intel worker" : false;
+
 describe("native_ops fixed worker", () => {
-  it("reads multiple files, records complete read proofs, and applies only the observed revision", async () => {
+  it("reads multiple files, records complete read proofs, and applies only the observed revision", { skip: workerSkip }, async () => {
     const f = await fixture();
     try {
       writeFileSync(join(f.workspace, "a.txt"), "alpha\n");
@@ -123,7 +125,7 @@ describe("native_ops fixed worker", () => {
     } finally { await f.close(); }
   });
 
-  it("removes tools on disable and drains an in-flight worker", async (t) => {
+  it("removes tools on disable and drains an in-flight worker", { skip: workerSkip }, async (t) => {
     const f = await fixture("edit", "session-abort");
     try {
       let notifyStarted!: () => void;

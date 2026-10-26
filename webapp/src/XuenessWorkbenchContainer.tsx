@@ -172,6 +172,7 @@ import {
 } from "./xuenessCapabilities";
 import type { CapabilitySectionProps } from "./XuenessCapabilitiesPanel";
 const CapabilitiesPanel = lazy(() => import('./XuenessCapabilitiesPanel').then(module => ({ default: module.CapabilitiesPanel })));
+const SkillsSection = lazy(() => import('./plugins/skills/SkillsSection').then(module => ({ default: module.SkillsSection })));
 import { shouldDismissModalOnEscape, useModalFocusScope } from "./plugins/shared";
 import { applyDocumentTheme, applyDocumentColorPalette, normalizeColorPalette } from "./plugins/settings/themeBoot";
 import { FeatureUnavailable, XuenessPluginManager, XuenessPluginSettingsPanel } from "./XuenessPluginManager";
@@ -2702,6 +2703,7 @@ export function XuenessWorkbenchContainer() {
     onCreate: openCapCreate,
     onEdit: openCapEdit,
     onDelete: (k, item) => void handleCapDelete(k, item),
+    ...(kind === 'skills' ? { render: (props: CapabilitySectionProps) => <Suspense fallback={null}><SkillsSection {...props} /></Suspense> } : {}),
   }));
 
   const settingsSections = settingsNavigation(pluginAvailability.effectiveIds, new Set(pluginCatalog.map(plugin => plugin.id)));
@@ -2768,7 +2770,7 @@ export function XuenessWorkbenchContainer() {
       settingsSaving={settingsSaving}
       onCancelOneEnabledChange={value => void handleUpdateSetting("subagentCancelOneEnabled", value)}
     />;
-    if (pluginAvailability.capabilityKinds.includes(settingsSection as CapabilityKind)) return <CapabilitiesPanel sections={capSections.filter(section => section.kind === settingsSection)} />;
+    if (pluginAvailability.capabilityKinds.includes(settingsSection as CapabilityKind)) return <CapabilitiesPanel scopeLabel={settingsSection === 'skills' ? tr('内置与用户技能') : undefined} sections={capSections.filter(section => section.kind === settingsSection)} />;
     if (settingsSection === "modules") return <XuenessPluginManager plugins={pluginCatalog} loading={pluginCatalogLoading} error={pluginCatalogError} onRefresh={refreshPluginCatalog} onToggle={togglePlugin} />;
     if (settingsSection === 'subscriptions') return <SubscriptionsPanel embedded onChanged={() => void refreshComposerCatalog()} onSelectModel={id => { updateChoices({ provider: 'real', provider_id: id, model: undefined, reasoning_effort: undefined }); void refreshComposerCatalog(); setPanel('chat'); }} />;
     if (settingsSection === 'workbuddy') return <WorkbuddySettingsPanel />;

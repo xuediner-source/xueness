@@ -219,6 +219,15 @@ export function checkPlugins(root: string): { problems: string[]; plugins: numbe
   for (const issue of frontendIssues(join(root, ".."), manifests)) problems.push(`frontend: ${issue}`);
   const listFile = join(root, "apps", "server", "src", "bundled-plugins.ts");
   const listed = [...readFileSync(listFile, "utf8").matchAll(/from\s+["']@xueness\/plugin-([a-z][a-z0-9_]*)["']/g)].map((match) => match[1] as string).sort();
+  // These three reviewed optional implementations ship separately. Core keeps
+  // their manifest ownership, and the kernel accepts only build-pinned bytes.
+  const optional = ["subscriptions", "model_monitor", "workbuddy"];
+  const metadata = [...readFileSync(listFile, "utf8").matchAll(/from\s+["']\.\.\/\.\.\/\.\.\/plugins\/([a-z_]+)\/manifest\.json["']/g)].map(match => match[1]!);
+  for (const id of metadata) {
+    const manifest = manifests.find(item => item.id === id);
+    if (!optional.includes(id) || !manifest?.installPackage || manifest.defaultEnabled) problems.push(`apps/server/src/bundled-plugins.ts: invalid optional descriptor ${id}`);
+    else listed.push(id);
+  }
   for (const id of ids.filter((id) => !listed.includes(id))) problems.push(`apps/server/src/bundled-plugins.ts: plugin ${id} is not listed`);
   for (const id of listed.filter((id) => !ids.includes(id))) problems.push(`apps/server/src/bundled-plugins.ts: ${id} is not a directory under plugins/`);
   return { problems, plugins: ids.length, files };

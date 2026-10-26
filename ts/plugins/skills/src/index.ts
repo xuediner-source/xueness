@@ -12,7 +12,6 @@ import { isDict } from "@xueness/contracts";
 import { DESKTOP_CONTEXT_SOURCE, type AgentContext, type AgentExtension, type ModelRequest } from "@xueness/agent";
 import type { ToolDefinition, ToolResult } from "@xueness/engine-tools";
 import { definePlugin, type BundledPlugin } from "@xueness/kernel";
-import { join } from "node:path";
 import manifest from "../manifest.json" with { type: "json" };
 import { contextReminder, observeRead } from "./continuity.ts";
 import { listAll, listedSkills, loadSkill, pythonCatalog, UNTRUSTED_PREAMBLE, validateSkill, zcodeSkillsListing } from "./render.ts";
@@ -21,6 +20,8 @@ import { interactiveViewsSection, VISUALIZE_SKILL } from "./visualize.ts";
 export * from "./render.ts";
 export * from "./discover.ts";
 export * from "./extra-roots.ts";
+export * from "./switches.ts";
+export { BUNDLED_SKILLS_DIR } from "./bundled.ts";
 export * from "./http-api.ts";
 export * from "./frontmatter.ts";
 export * from "./visualize.ts";
@@ -41,7 +42,6 @@ export interface SkillsOptions {
 }
 
 /** The bundled documentation, visualization, and Seagull research skills, lowest precedence. */
-export const BUNDLED_SKILLS_DIR = join(import.meta.dirname, "..", "bundled");
 
 export function skillTools(options: SkillsOptions): ToolDefinition[] {
   const read: ToolDefinition<Row> = {
@@ -113,7 +113,8 @@ export function skillsExtension(options: SkillsExtensionOptions): AgentExtension
       return result;
     },
     completionInstructions(context) {
-      const reminder = contextReminder(context.session as Row, !lightweight(context));
+      const allowed = new Set(listAll(options.stateDir, context.root ?? null, true, options.bundled ?? null).skills.filter(row => !row.shadowed && row.enabled !== false).map(row => row.id));
+      const reminder = contextReminder(context.session as Row, !lightweight(context), allowed);
       return reminder ? [reminder] : [];
     },
   };

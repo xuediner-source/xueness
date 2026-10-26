@@ -35,6 +35,7 @@ export interface SkillRow {
   source: Source; scope: string; namespace: string | null; path: string; directory: string; rootPath: string; bytes: number;
   attachments: { name: string; bytes: number }[]; attachmentsTruncated: boolean;
   shadowed: boolean; shadowedBy: string | null;
+  enabled?: boolean;
 }
 
 export function skillRoots(stateDir: string, root: string | null, includeCompat = true): [Source, string, string][] {
@@ -162,7 +163,7 @@ export function merge(resourceRows: readonly SkillRow[], fileRows: readonly Skil
 /** The winning row whose id or name equals `key` exactly; never a path or a glob. */
 export function find(rows: readonly SkillRow[], key: unknown): SkillRow | null {
   if (typeof key !== "string" || !key) return null;
-  return rows.find((item) => !item.shadowed && (key === item.id || key === item.name)) ?? null;
+  return rows.find((item) => !item.shadowed && item.enabled !== false && (key === item.id || key === item.name)) ?? null;
 }
 
 /** Re-check the jail at read time, then the SKILL.md body without its frontmatter. */

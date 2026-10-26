@@ -5,12 +5,15 @@
   "description": "工作区、用户与已存技能的发现，ZCode 技能清单与 Skill 工具，SKILL.md 校验。",
   "version": "0.2.0",
   "defaultEnabled": true,
-  "capabilities": { "fs": { "read": ["state", "workspace"] } },
+  "capabilities": { "fs": { "read": ["state", "workspace"], "write": ["state"] } },
   "tools": [
     { "name": "skill_read", "gate": "read", "mutating": false, "concurrencySafe": true },
     { "name": "skill_validate", "gate": "read", "mutating": false, "concurrencySafe": true }
   ],
   "features": [
+    { "id": "skills.switches", "name": "预置技能列表与独立启用开关", "nameEn": "Initial skills listing and individual enable switches" },
+    { "id": "skills.ask_user_question", "name": "结构化提问与用户选择", "nameEn": "Structured questions and user choices" },
+    { "id": "skills.folder_import", "name": "从文件夹添加与移除技能", "nameEn": "Add and remove skills from a folder" },
     { "id": "skills.listing", "name": "可用技能清单", "nameEn": "Available skills listing" },
     { "id": "skills.read", "name": "按名称加载技能", "nameEn": "Load a skill by name" },
     { "id": "skills.validate", "name": "校验 SKILL.md", "nameEn": "Validate a SKILL.md" },
@@ -21,5 +24,6 @@
     { "id": "skills.seagull_pentest", "name": "应用与网络安全验证", "nameEn": "Application and network security validation" },
     { "id": "skills.seagull_reverse", "name": "二进制与协议逆向", "nameEn": "Binary and protocol reverse engineering" }
   ],
-  "panels": ["capabilities"]
+  "panels": ["capabilities"],
+  "frontendModules": ["plugins/skills/SkillsSection.tsx"]
 }

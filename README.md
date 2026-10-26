@@ -1,60 +1,105 @@
-# Xueness 0.2.1 source archive
+<p align="center">
+  <img src="docs/images/xueness-hero.svg" alt="Xueness — Space to think. Tools to deliver." width="100%" />
+</p>
 
-2026-10-26 最新交接：[Windows 安装与全链路回归](HANDOVER-20261026-WINDOWS.md)。本版本含 35 个插件；原 17 项后端回归全部通过，全量 **2,328 通过、0 失败、62 项既有跳过**，正式桌面端 13 组 UI 交互与本地真实模型调用通过。
+<h3 align="center">让复杂任务，持续向前。</h3>
+<p align="center">一个属于你的 Agent 工作台。把对话、文件、工具与工作流，放进同一个工作空间。</p>
 
-2026-10-24 历史交接入口：[完整项目交接](HANDOVER-20261024.md)、[最新 ZCode 差异审计](docs/audits/20261024/AUDIT.md)、[完整对齐任务清单（15 阶段 / 82 小轮次）](docs/ZCODE-FULL-ALIGNMENT-TASKS-20261024.md)。本机桌面端已安装 0.2.1，包含 33 个插件和 11 项内置技能；后续全面引擎对齐尚未实施。以下 Z1–Z8 资料保留为历史交付记录，当前基线与待办以新交接为准。
+<p align="center">
+  <a href="https://github.com/xuediner-source/xueness/actions/workflows/ts-backend.yml"><img alt="TypeScript backend" src="https://github.com/xuediner-source/xueness/actions/workflows/ts-backend.yml/badge.svg" /></a>
+  <a href="https://github.com/xuediner-source/xueness/actions/workflows/windows-runtime-check.yml"><img alt="Windows runtime regression" src="https://github.com/xuediner-source/xueness/actions/workflows/windows-runtime-check.yml/badge.svg" /></a>
+  <a href="LICENSE"><img alt="Apache 2.0 license" src="https://img.shields.io/badge/license-Apache--2.0-353b32?style=flat-square" /></a>
+  <a href="ts/README.md"><img alt="Node 24.11 or later" src="https://img.shields.io/badge/Node-%E2%89%A524.11-728568?style=flat-square" /></a>
+</p>
 
-后端已完整迁移到 TypeScript（`ts/`），Python 后端在第 10 轮删除。使用入口、完整验收与迁移记录见
-[ts/README.md](ts/README.md) 和 [ts/HANDOVER.md](ts/HANDOVER.md)。
-最新阶段范围与状态见 [Z7 工作摘要](WORK-SUMMARY-20261023-Z7.md)、[Z7 app-server 与 headless 说明](docs/engine-z7.md)、[Z8 guarded、goal 与 memory dream 说明](ts/docs/z8-guarded-goal-memory.md)、[引擎路线图](ts/docs/engine-roadmap.md) 和 [PATCH-Z7.md](PATCH-Z7.md)。Z7 已交付范围为 Xueness 原生 JSON-RPC v1/v2 与单任务 headless，不宣称 ZCode V4 wire 兼容；source/built runtime、额外 shutdown drain、706 JS build 与搬迁 smoke 均有验收记录。Z8 完成 guarded 权限、会话目标与显式项目记忆整理；memory 的源码验收记录覆盖四个场景和五次 loopback provider 请求，详见 [z8-memory-source.json](验收资料/验证记录/z8-memory-source.json)。此前 [Z6](WORK-SUMMARY-20261023-Z6.md) 动态工作流、[Z5](docs/engine-z5.md) MCP/配置/hooks、[Z4](docs/engine-z4.md) 执行适配及 [Z3](docs/engine-z3.md) 事件、会话库与回退继续作为已交付能力记录。完整迁移与当前边界见 [HANDOVER §48](ts/HANDOVER.md)。
-这是源码归档；`desktop/` 包含 Electron 宿主源码，不包含 Windows 安装包。运行后端需要 Node.js 24.11+，并在首次使用前执行 `npm --prefix ts ci`。
+<p align="center">
+  <a href="https://github.com/xuediner-source/xueness/releases"><b>桌面端下载</b></a>　·　
+  <a href="#快速开始">快速开始</a>　·　
+  <a href="docs/xueness-desktop.md">使用文档</a>　·　
+  <a href="docs/optional-plugins-and-folder-skills.md">插件与技能</a>　·　
+  <a href="https://github.com/xuediner-source/xueness/issues">反馈问题</a>
+</p>
 
-终端聊天入口见[终端聊天使用说明](docs/xueness-terminal-chat.md)。
+---
 
-Nothing in this archive publishes files, creates tags, or signs artifacts.
-Release downloads and the complete repository are available at:
+### 一个工作台，贯穿任务始终
 
-- https://github.com/xuediner-source/xueness
-- https://github.com/xuediner-source/xueness/releases
+Xueness 是面向本机工作空间的开源 Agent 应用，提供 **桌面、浏览器和终端**三个入口。选择自己的模型连接，让模型读项目、改文件、运行工具；在同一处查看任务进展、工具结果与交付内容。
 
-The backend is the TypeScript workspace in `ts/` and needs Node.js 24.11 or
-newer; Node strips the types at run time, so no build step is required. Install
-its dependencies once with `npm --prefix ts ci`. The prebuilt browser interface
-is included under `webapp/dist/`. Docker Compose is optional.
+<table>
+<tr>
+<td width="33%" valign="top"><h4>01 / 保持上下文</h4>会话历史、任务目标、上下文压缩与项目记忆，让持续进行的工作有迹可循。支持停止、恢复和消息分叉。</td>
+<td width="33%" valign="top"><h4>02 / 连接真实工具</h4>文件、Shell、Git、终端与浏览器在工作区内协作。通过 MCP、技能、钩子和工作流扩展任务能力。</td>
+<td width="33%" valign="top"><h4>03 / 按你的方式运行</h4>连接 OpenAI 兼容接口或 Anthropic 接口，选择模型与推理档位，管理权限、插件开关和本机数据位置。</td>
+</tr>
+</table>
 
-Start from this directory with `bin/xueness-web --port 8138` (or
-`node ts/apps/server/src/main.ts --port 8138`), then open
-`http://127.0.0.1:8138`. The default port without this option is
-`http://127.0.0.1:8137`; `./install.sh` does the same with a private data
-directory. Configure a real model endpoint in Settings before sending a task.
-Local small models can use the lightweight profile described in
-`docs/xueness-local-lightweight-mode.md`. Use `bin/xueness` for the Agent CLI.
+<p align="center"><img src="docs/images/workbench.png" alt="Xueness 工作台实机界面" width="100%" /></p>
 
-Backend checks: `npm --prefix ts run check` (line limit, plugin gate,
-typecheck and tests). To rebuild the web interface: `npm --prefix webapp ci`,
-then `npm --prefix webapp run build`.
+### 快速开始
 
-The Electron host source is in `desktop/`. Build an installer on its target
-operating system and architecture; see `docs/xueness-desktop.md` for commands.
+**桌面使用**：前往 [Releases](https://github.com/xuediner-source/xueness/releases) 选择已发布的安装资产。Windows 提供 x64 安装与便携形式；Mac 构建区分 Apple Silicon 和 Intel。发行状态、系统授权和安装说明见[桌面端指南](docs/xueness-desktop.md)。首次启动后，在设置中添加自己的模型连接。
 
-Locally built installers are not automatically signed or published.
-
-Every product feature must be implemented by a trusted bundled plugin and
-listed in Settings > Plugins, including each new feature. See `AGENTS.md`,
-`CONTRIBUTING.md` and `docs/xueness-plugin-architecture.md`. Run
-`npm --prefix ts run check:plugins` before handing off a change.
-
-## Get the complete checkout
+**源码运行**：需要 Node.js 24.11 或更新版本。仓库附带预构建 Web 界面，后端直接运行 TypeScript。
 
 ```sh
 git clone https://github.com/xuediner-source/xueness.git
 cd xueness
+npm --prefix ts ci
+node ts/apps/server/src/main.ts --port 8138
 ```
 
-Use the desktop installer for your operating system and architecture if you
-prefer an application with its Node.js runtime already bundled.
+打开 **http://127.0.0.1:8138**，完成模型配置后即可开始任务。终端用户可使用 `bin/xueness`，详见[终端聊天指南](docs/xueness-terminal-chat.md)。
 
-Model credentials and other online-service configuration must be supplied by
-the operator at runtime. This archive contains no runtime state or credentials.
-See `LICENSE` and `NOTICE.md` before use or
-redistribution.
+### 能力按需扩展
+
+技能、钩子、MCP 连接器与协作代理属于内置能力，无需在市场重复安装。**订阅中心、返回模型监测、WorkBuddy 号池**由扩展市场从本仓库按需下载，安装后再到插件管理启用。
+
+| 入口 | 你可以做什么 |
+| :-- | :-- |
+| 技能 | 七项初始技能可见并可逐项启用；支持新建和从文件夹添加，保留脚本、参考资料和附件 |
+| MCP | 连接外部工具、资源与服务，查看连接状态和请求结果 |
+| 工作流与协作 | 拆分任务、配置钩子，查看执行进度与结果 |
+| 订阅中心 · 可选 | 导入自己授权的账号或登录凭证，使用其模型与可用额度 |
+| 返回模型监测 · 可选 | 被动比较请求型号与响应中报告的型号，不额外发送探测请求 |
+| WorkBuddy 号池 · 可选 | 添加自备账号认证、查看号池状态并使用可用模型 |
+
+安装、移除、文件夹导入范围与验证方式见[插件与技能指南](docs/optional-plugins-and-folder-skills.md)。
+
+<p align="center"><img src="docs/images/skills-folder.png" alt="技能列表与文件夹添加入口，初始技能提供独立开关" width="100%" /></p>
+
+### 开发与验证
+
+```sh
+# 后端：类型、插件归属、文件规模与完整测试
+npm --prefix ts run check
+
+# 前端：安装依赖、测试并构建
+npm --prefix webapp ci
+npm --prefix webapp test
+npm --prefix webapp run build
+```
+
+前端构建同时生成三个独立插件包，并从核心界面产物中移除对应代码与样式。桌面构建包含独立 Node 运行时；在目标系统与架构上构建，命令见[桌面开发指南](docs/xueness-desktop.md)。
+
+| 目录 | 内容 |
+| :-- | :-- |
+| [`ts/apps`](ts/apps) | HTTP、CLI 与桌面后端宿主 |
+| [`ts/packages`](ts/packages) | Agent、协议、权限、存储与插件基础设施 |
+| [`ts/plugins`](ts/plugins) | 按功能划分的插件实现及声明 |
+| [`webapp`](webapp) | React 工作台与插件界面 |
+| [`desktop`](desktop) | Electron 宿主、原生集成与安装构建 |
+| [`marketplace/packages`](marketplace/packages) | 按内容摘要命名的官方可选插件包 |
+
+验证以可复查的记录为准：[Windows 全链路验收](HANDOVER-20261026-WINDOWS.md) · [SSE 与 WorkBuddy 长任务压测](验收资料/20261026-workbuddy-benchmark) · [插件架构](docs/xueness-plugin-architecture.md) · [贡献指南](CONTRIBUTING.md)。长任务报告保留失败任务、预算限制与测试夹具问题，不把模型请求成功率等同于任务完成率。
+
+<details>
+<summary>历史交接与实现范围</summary>
+
+[2026-10-24 项目交接](HANDOVER-20261024.md)、[ZCode 差异审计](docs/audits/20261024/AUDIT.md)、[引擎路线图](ts/docs/engine-roadmap.md) 和 [TS 迁移交接](ts/HANDOVER.md) 保留各阶段的交付边界。首页的信息结构参考 [ZCode](https://github.com/zai-org/ZCode)，Xueness 使用自己的实现、视觉与验证记录。
+
+</details>
+
+---
+
+<p align="center">用自己的模型，处理自己的任务。<br/><sub>Apache-2.0 · 第三方组件与授权见 <a href="NOTICE.md">NOTICE</a></sub></p>

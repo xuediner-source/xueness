@@ -10,13 +10,13 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "nod
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, describe, it } from "node:test";
-import { BUNDLED_SKILLS_DIR, listAll, listedSkills, loadSkill, MAX_SKILL_BYTES, validateSkill, zcodeSkillsListing } from "../src/index.ts";
+import { BUNDLED_SKILLS_DIR, listAll, listedSkills, loadSkill, MAX_SKILL_BYTES, setFileSkillEnabled, validateSkill, zcodeSkillsListing } from "../src/index.ts";
 
 const base = mkdtempSync(join(tmpdir(), "xue-skills-bundled-"));
 after(() => rmSync(base, { recursive: true, force: true }));
 const NAMES = ["docx", "pdf", "pptx", "xlsx"];
 const SEAGULL_NAMES = ["seagull-game-security", "seagull-lab", "seagull-license-security", "seagull-memory", "seagull-pentest", "seagull-reverse"];
-const ALL = [...NAMES, "visualize", ...SEAGULL_NAMES].sort();
+const ALL = [...NAMES, "visualize", ...SEAGULL_NAMES, "ask-user-question"].sort();
 
 describe("bundled skills", () => {
   it("bundled skills are discovered and valid; the document skills are Apache-2.0 and free of ZCode-only syntax", () => {
@@ -36,9 +36,11 @@ describe("bundled skills", () => {
       assert.equal(/zcode/iu.test(text), false, `${name} has no ZCode-only citation syntax`);
       assert.match(readFileSync(join(BUNDLED_SKILLS_DIR, name, "LICENSE.txt"), "utf8"), /Apache License, Version 2\.0/u);
     }
-    for (const name of SEAGULL_NAMES) {
+    for (const name of [...SEAGULL_NAMES, "ask-user-question"]) {
       const text = readFileSync(join(BUNDLED_SKILLS_DIR, name, "SKILL.md"), "utf8");
       assert.equal(validateSkill(text).ok, true, name);
+      assert.equal(loadSkill(state, null, name, BUNDLED_SKILLS_DIR).ok, false, `${name} awaits the user's enable choice`);
+      setFileSkillEnabled(state, `file:bundled:${name}`, true);
       const loaded = loadSkill(state, null, name, BUNDLED_SKILLS_DIR);
       assert.ok(loaded.ok && loaded.source === "bundled" && !loaded.truncated, `${name} loads untruncated as bundled`);
       assert.ok(loaded.ok && loaded.content.includes(`Base directory for this skill: ${join(BUNDLED_SKILLS_DIR, name)}`), `${name} includes its base directory`);

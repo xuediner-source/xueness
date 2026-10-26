@@ -46,8 +46,8 @@ const HEADING = (tool: string, key: string): string => "Previously read skill re
   + "reconstructed from memory. Do not reload unrelated skills.\n";
 
 /** Python `context_reminder`; `zcode` names the Skill tool and its `skill` field instead of `skill_read`/`id`. */
-export function contextReminder(session: Row, zcode = false): string {
-  const rows = references(session);
+export function contextReminder(session: Row, zcode = false, allowed?: ReadonlySet<string>): string {
+  const rows = references(session).filter(row => !allowed || allowed.has(row.id));
   if (!rows.length) return "";
   const heading = zcode ? HEADING("Skill", "skill value") : HEADING("skill_read", "id");
   const field = zcode ? "skill" : "id";

@@ -1,3 +1,4 @@
+import { installOptionalFixture } from "../../../test-support/optional-artifacts.ts";
 /** F07.05: component package format, alwaysLoad, install/upgrade/uninstall, ownership panel. */
 import { strict as assert } from "node:assert";
 import { mkdtempSync, rmSync } from "node:fs";
@@ -132,7 +133,7 @@ it("refuses to uninstall an enabled package, then uninstalls a disabled one", ()
 it("uninstalls through the marketplace route and keeps optional plugins un-auto-installed", () => {
   const listing = marketplaceCatalog(stateDir, quietEnv);
   const workbuddy = listing.find((item) => item.id === "xueness-workbuddy")!;
-  assert.equal(installPackage(stateDir, "xueness-workbuddy", workbuddy.sha256, false, quietEnv).ok, true);
+  installOptionalFixture(stateDir, "workbuddy");
 
   const answer = dispatchMarketplace("POST", ["api", "plugins", "marketplace", "xueness-workbuddy", "uninstall"], {}, stateDir, quietEnv);
   assert.equal(answer![0], 200);

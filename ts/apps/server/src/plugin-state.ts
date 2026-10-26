@@ -4,6 +4,7 @@ import { BUNDLED_PLUGIN_IDS, isDict, pyJsonLoads } from "@xueness/contracts";
 import { isLink, readRegularBytes } from "@xueness/sessions";
 import { loadDataManifests } from "@xueness/plugin-extensions";
 import { loadManifests } from "./manifests.ts";
+import { optionalInstalled, OPTIONAL_IDS } from "@xueness/kernel";
 
 function readChoices(stateDir: string): { enabled: Record<string, boolean>; overlay: Record<string, boolean> } | null {
   const allowed = new Set<string>(BUNDLED_PLUGIN_IDS);
@@ -67,5 +68,6 @@ export function effectivePlugins(projectRoot: string, stateDir: string): (id: st
 
 /** `plugin_runtime._resolve_items`: the marketplace marker `(packageId, builtin)` is installed. */
 export function packageInstalled(stateDir: string, pluginId: string, packageId: string): boolean {
-  try { return loadDataManifests(stateDir).some((item) => item.id === packageId && item.builtin === pluginId); } catch { return false; }
+  try { return (!OPTIONAL_IDS.includes(pluginId as typeof OPTIONAL_IDS[number]) || optionalInstalled(stateDir, pluginId))
+    && loadDataManifests(stateDir).some((item) => item.id === packageId && item.builtin === pluginId); } catch { return false; }
 }

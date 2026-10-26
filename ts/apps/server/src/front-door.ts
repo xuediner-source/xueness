@@ -167,7 +167,7 @@ export function createFrontDoor(options: FrontDoorOptions): FrontDoor {
       sendJson(res, 200, status(), { close });
       return;
     }
-    const result = await serveStatic(path, settings.webappDir);
+    const result = await serveStatic(path, settings.webappDir, options.api?.asset);
     if (!result) sendJson(res, 404, { error: "not found" }, { close });
     else if (result.kind === "file") sendBody(res, 200, result.body, result.contentType, { close });
     else sendJson(res, result.status, result.payload, { close });

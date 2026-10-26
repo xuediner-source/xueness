@@ -84,3 +84,10 @@ The 2026-10-23 Z8 adaptation references ZCode v3.15.1 (aac4755666d09fdcd70272fcf
 
 
 The 2026-10-23 native_ops plugin adapts the fixed file/document worker and schemas from dsh-ops 0.4.0 (https://github.com/T-Auto/dsh-ops). The upstream LICENSE, NOTICE, document third-party notices and FastCtx Apache-2.0 notices are retained under ts/plugins/native_ops/assets/. Xueness supplies its own host adapter, permissions, session discovery and tool names. DSH host composition, its independent Bash payload and its JavaScript PTC host are not included. The batch_calls plugin adapts the guidance and successful-compaction reminder behavior from dsh-batch-tool-calls 1.1.2 (https://github.com/liancha22/dsh-batch-tool-calls); its original MIT license is retained under ts/plugins/batch_calls/LICENSE.
+
+## Ask user question skill
+
+`ts/plugins/skills/bundled/ask-user-question` contains the user-provided
+`ask-user-question.skill` 1.1.0 (xuediner-source, MIT), adapted to Xueness
+question schemas. Its original instructions, examples and validation helper
+are retained. The MIT notice is included in that directory.

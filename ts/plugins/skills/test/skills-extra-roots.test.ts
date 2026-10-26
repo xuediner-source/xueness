@@ -138,7 +138,7 @@ describe("F07.04 extra-root discovery, namespacing and merge", () => {
     assert.equal(docx.find((item) => item.source === "bundled")!.shadowedBy, "project");
     assert.equal(rows.find((item) => item.name === "pdf" && !item.shadowed)!.source, "extra");
     const bundled = rows.filter((item) => item.source === "bundled" && !item.shadowed);
-    assert.equal(bundled.length, 9, "the other bundled skills still list beside the extra roots");
+    assert.equal(bundled.length, 10, "the other bundled skills still list beside the extra roots");
     assert.ok(loadSkill(state, root, "pptx", BUNDLED_SKILLS_DIR).ok, "an untouched bundled skill still loads");
   });
   it("missing or unreadable extra roots and a corrupt document surface as diagnostics, never a failed listing", () => {

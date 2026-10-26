@@ -52,31 +52,35 @@ function onRequest(socket: net.Socket, onBody: () => void): void {
   socket.on("data", data);
 }
 
-async function failure(request: HttpRequestSpec): Promise<[ProviderTransportError, number]> {
+async function failure(request: HttpRequestSpec): Promise<[ProviderTransportError, number, number]> {
   const start = performance.now();
+  // Account for runner event-loop starvation using an independent deadline.
+  // Extending the network timeout still fails when the loop can run normally.
+  let schedulerLag = 0;
+  const deadline = setTimeout(() => { schedulerLag = Math.max(0, performance.now() - start - request.timeoutMs); }, request.timeoutMs);
   try {
     const response = await openHttp(request);
     response.close();
   } catch (error) {
     assert.ok(error instanceof ProviderTransportError, String(error));
-    return [error, performance.now() - start];
-  }
+    return [error, performance.now() - start, schedulerLag];
+  } finally { clearTimeout(deadline); }
   throw new Error("expected a transport failure");
 }
 
 describe("the idle timeout", () => {
   it("fails a stalled TLS handshake after one timeout", async () => {
     behavior = () => undefined;
-    const [error, elapsed] = await failure(spec("https", 300));
+    const [error, elapsed, schedulerLag] = await failure(spec("https", 300));
     assert.deepEqual([error.category, error.exceptionType], ["timeout", "URLError"]);
-    assert.ok(elapsed >= 300 && elapsed < 540, `waited ${elapsed} ms`);
+    assert.ok(elapsed >= 300 && elapsed < 540 + schedulerLag, `waited ${elapsed} ms`);
   });
 
   it("fails a stalled upload after one timeout, as urllib's URLError", async () => {
     behavior = (socket) => socket.pause();
-    const [error, elapsed] = await failure(spec("http", 250, Buffer.alloc(32 << 20, 0x20)));
+    const [error, elapsed, schedulerLag] = await failure(spec("http", 250, Buffer.alloc(32 << 20, 0x20)));
     assert.deepEqual([error.category, error.exceptionType], ["timeout", "URLError"]);
-    assert.ok(elapsed >= 250 && elapsed < 500, `waited ${elapsed} ms`);
+    assert.ok(elapsed >= 250 && elapsed < 500 + schedulerLag, `waited ${elapsed} ms`);
   });
 
   it("bounds the whole upload by one timeout, even while it progresses, like sendall", async () => {
@@ -90,9 +94,9 @@ describe("the idle timeout", () => {
         setTimeout(() => socket.resume(), 100);
       });
     };
-    const [error, elapsed] = await failure(spec("http", 150, Buffer.alloc(32 << 20, 0x20)));
+    const [error, elapsed, schedulerLag] = await failure(spec("http", 150, Buffer.alloc(32 << 20, 0x20)));
     assert.deepEqual([error.category, error.exceptionType], ["timeout", "URLError"]);
-    assert.ok(elapsed >= 150 && elapsed < 300, `waited ${elapsed} ms`);
+    assert.ok(elapsed >= 150 && elapsed < 300 + schedulerLag, `waited ${elapsed} ms`);
   });
 
   it("does not extend the upload's period for data arriving meanwhile", async () => {
@@ -104,9 +108,9 @@ describe("the idle timeout", () => {
       setTimeout(() => clearInterval(trickle), 600);
       socket.once("close", () => clearInterval(trickle));
     });
-    const [error, elapsed] = await failure(spec("http", 200, Buffer.alloc(32 << 20, 0x20)));
+    const [error, elapsed, schedulerLag] = await failure(spec("http", 200, Buffer.alloc(32 << 20, 0x20)));
     assert.deepEqual([error.category, error.exceptionType], ["timeout", "URLError"]);
-    assert.ok(elapsed >= 200 && elapsed < 400, `waited ${elapsed} ms`);
+    assert.ok(elapsed >= 200 && elapsed < 400 + schedulerLag, `waited ${elapsed} ms`);
   });
 
   it("reads an early response only once the request is out, like urllib", async () => {

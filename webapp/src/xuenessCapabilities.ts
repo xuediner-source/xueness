@@ -24,6 +24,10 @@ export type CapabilityItem = {
   description?: string;
   event?: string;
   command?: string;
+  /** File-backed items share the catalog without exposing JSON editing controls. */
+  readOnly?: boolean;
+  toggleable?: boolean;
+  removable?: boolean;
   /** kind-specific remainder (config fields), trimmed for display. */
   extra?: Record<string, unknown>;
 };

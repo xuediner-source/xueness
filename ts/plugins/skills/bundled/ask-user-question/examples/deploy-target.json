@@ -1,0 +1,23 @@
+{
+  "questions": [
+    {
+      "id": "deploy-target",
+      "header": "Deploy target",
+      "question": "Where should this change go?",
+      "options": [
+        {
+          "label": "Local only (Recommended)",
+          "description": "No remote push, no production change; stop on this machine."
+        },
+        {
+          "label": "Push to GitHub",
+          "description": "Commit and push; still no production deploy."
+        },
+        {
+          "label": "Production",
+          "description": "Remote and production; hard to undo."
+        }
+      ]
+    }
+  ]
+}

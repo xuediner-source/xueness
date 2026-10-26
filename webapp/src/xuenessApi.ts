@@ -195,6 +195,7 @@ export type XuenessPluginCatalog = { plugins: XuenessPlugin[] };
 export type MarketplaceItem = {
   id: string; name: string; description: string; version: string; sha256: string;
   installedVersion: string | null; manifest: Record<string, unknown>; source: string;
+  delivery?: 'official'; downloadBytes?: number;
 };
 /** One selectable composition profile: allowlisted plugin ids, booleans only. */
 export type PluginProfileRow = {
@@ -297,6 +298,10 @@ export async function post<T>(path: string, body: object, signal?: AbortSignal):
   return send<T>("POST", path, body, signal);
 }
 
+export async function put<T>(path: string, body: object, signal?: AbortSignal): Promise<T> {
+  return send<T>("PUT", path, body, signal);
+}
+
 export async function cancelSubagentTask(sessionId: string, taskId: string): Promise<{ cancelled: true; taskId: string }> {
   return post<{ cancelled: true; taskId: string }>(
     `/api/sessions/${encodeURIComponent(sessionId)}/tasks/${encodeURIComponent(taskId)}/cancel`,
@@ -333,10 +338,6 @@ export function newSubagentRequestId(): string {
 
 async function patch<T>(path: string, body: object, signal?: AbortSignal): Promise<T> {
   return send<T>("PATCH", path, body, signal);
-}
-
-async function put<T>(path: string, body: object, signal?: AbortSignal): Promise<T> {
-  return send<T>("PUT", path, body, signal);
 }
 
 export async function del<T>(path: string, signal?: AbortSignal): Promise<T> {

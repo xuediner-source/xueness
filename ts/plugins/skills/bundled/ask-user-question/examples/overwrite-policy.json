@@ -1,0 +1,19 @@
+{
+  "questions": [
+    {
+      "id": "overwrite-policy",
+      "header": "Overwrite",
+      "question": "The target file already exists. How should we proceed?",
+      "options": [
+        {
+          "label": "Keep existing file (Recommended)",
+          "description": "Do not overwrite; write to a new filename instead."
+        },
+        {
+          "label": "Overwrite in place",
+          "description": "Replace the current file. This is hard to undo."
+        }
+      ]
+    }
+  ]
+}

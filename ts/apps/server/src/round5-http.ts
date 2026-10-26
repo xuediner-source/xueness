@@ -3,7 +3,6 @@ import { isDict } from "@xueness/contracts";
 import { loadSettings } from "@xueness/plugin-settings";
 import { createDiagnosticsHttp } from "@xueness/plugin-diagnostics";
 import { createDesktopHttp } from "@xueness/plugin-desktop";
-import { createModelMonitorHttp } from "@xueness/plugin-model_monitor";
 import { createOnboardingHttp } from "@xueness/plugin-onboarding";
 import type { TaskRegistry } from "@xueness/plugin-subagents";
 import { createTerminalHttp, terminalBroker } from "@xueness/plugin-terminal";
@@ -13,6 +12,7 @@ import { createUsageHttp } from "@xueness/plugin-usage";
 import type { SessionStore } from "@xueness/sessions";
 import { BUNDLED_TS_PLUGINS } from "./bundled-plugins.ts";
 import { modelMonitorEnabled } from "./model-monitor-enabled.ts";
+import { createOptionalMonitor } from "./optional-integrations.ts";
 
 export interface Round5Options {
   stateDir: string;
@@ -48,7 +48,7 @@ export function createRound5(options: Round5Options) {
   const { stateDir, enabled, store } = options;
   const monitorOn = (id: string): boolean => id === "model_monitor" ? modelMonitorEnabled(stateDir, enabled("providers")) : enabled(id);
   const usageHttp = createUsageHttp({ enabled, store });
-  const modelMonitorHttp = createModelMonitorHttp({ stateDir, enabled: monitorOn });
+  const modelMonitorHttp = createOptionalMonitor({ stateDir, enabled: monitorOn, env: process.env });
   const onboardingHttp = createOnboardingHttp({ stateDir, enabled, desktop: !!options.desktopToken });
   const diagnosticsHttp = createDiagnosticsHttp({ stateDir, enabled, store, catalog: () => catalog(enabled) });
   const toolsHttp = createToolsHttp({ stateDir, enabled, store, allowedRoots: options.allowedRoots });

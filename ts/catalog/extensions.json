@@ -1,7 +1,7 @@
 {
   "id": "extensions",
   "name": "Extension marketplace",
-  "description": "Browse, install and upgrade data-only capability packages.",
+  "description": "Browse resource manifests and download host-pinned official plugins from GitHub.",
   "apiVersion": 1,
   "version": "1.0.0",
   "defaultEnabled": true,
@@ -36,6 +36,7 @@
     "creator_tooling"
   ],
   "features": [
+    { "id": "extensions.official_download", "name": "从 GitHub 下载并校验官方可选插件", "nameEn": "Download and verify official optional plugins from GitHub" },
     {
       "id": "extensions.marketplace",
       "name": "可信资源清单市场浏览",

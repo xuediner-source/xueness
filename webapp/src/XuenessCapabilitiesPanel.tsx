@@ -40,10 +40,15 @@ export type CapabilitySectionProps = {
   /** Internal list-search behavior: matched lists omit empty group content. */
   hideEmpty?: boolean;
   busyId?: string | null;
+  disabled?: boolean;
   onToggle?: (kind: CapabilityKind, item: CapabilityItem, next: boolean) => void;
   onCreate?: (kind: CapabilityKind) => void;
   onEdit?: (kind: CapabilityKind, item: CapabilityItem) => void;
   onDelete?: (kind: CapabilityKind, item: CapabilityItem) => void;
+  headerActions?: React.ReactNode;
+  render?: (props: CapabilitySectionProps) => React.JSX.Element;
+  searchQuery?: string;
+  scopeLabel?: string;
 };
 
 const KIND_ORDER: CapabilityKind[] = ["skills", "commands", "subagents", "mcp", "hooks", "plugins"];
@@ -117,7 +122,7 @@ function ItemRow({
   return (
     <li className="xn-resource-item" data-testid={`xn-cap-item-${kind}-${item.id}`}>
       <div className="xn-resource-item__main">
-        {onEdit ? (
+        {onEdit && !item.readOnly ? (
           <button
             type="button"
             className="xn-resource-item__edit"
@@ -134,7 +139,7 @@ function ItemRow({
         )}
       </div>
       <div className="xn-resource-item__actions">
-        {onDelete && (
+        {onDelete && (!item.readOnly || item.removable) && (
           <button
             type="button"
             className="xn-resource-item__delete"
@@ -152,7 +157,7 @@ function ItemRow({
             {forbiddenPluginCode ? tr("清单字段被拒绝") : item.enabled === true ? tr("清单已启用") : tr("清单已禁用")}
           </Badge>
         )}
-        {onToggle ? (
+        {onToggle && (!item.readOnly || item.toggleable) ? (
           <button
             type="button"
             role="switch"
@@ -187,10 +192,13 @@ export function CapabilitySection({
   userScopeReason,
   hideEmpty = false,
   busyId = null,
+  disabled = false,
   onToggle,
   onCreate,
   onEdit,
   onDelete,
+  headerActions,
+  scopeLabel,
 }: CapabilitySectionProps): React.JSX.Element {
   return (
     <section className="xn-cap-section" data-testid={`xn-cap-section-${kind}`}>
@@ -198,17 +206,19 @@ export function CapabilitySection({
         <span className="xn-cap-section__icon" aria-hidden="true"><KindIcon kind={kind} /></span>
         <h3 className="xn-cap-section__title">{label}</h3>
         <span className="xn-cap-section__count" data-testid={`xn-cap-count-${kind}`}>{items.length}</span>
-        {userScopeAvailable && <span className="xn-cap-section__scope">{tr("用户级")}</span>}
+        {userScopeAvailable && <span className="xn-cap-section__scope">{scopeLabel ?? tr("用户级")}</span>}
         {onCreate && (
           <button
             type="button"
             className="xn-cap-section__create"
             data-testid={`xn-cap-create-${kind}`}
+            disabled={disabled}
             onClick={() => onCreate(kind)}
           >
             <span aria-hidden="true">+</span>{tr("新建")}
           </button>
         )}
+        {headerActions}
       </header>
       {error && <p role="alert" className="xn-cap-error">{error}</p>}
       {loading && !error && <p className="xn-cap-loading">{tr("加载中…")}</p>}
@@ -221,7 +231,7 @@ export function CapabilitySection({
               {tr("用户级资源目录不可用")}{userScopeReason ? `：${userScopeReason}` : ""}
             </p>
           )}
-          {onCreate && <button type="button" className="xn-cap-empty__create" onClick={() => onCreate(kind)}>{tr("新建")}</button>}
+          {onCreate && <button type="button" className="xn-cap-empty__create" disabled={disabled} onClick={() => onCreate(kind)}>{tr("新建")}</button>}
         </div>
       )}
       {items.length > 0 && (
@@ -231,7 +241,7 @@ export function CapabilitySection({
               key={item.id}
               kind={kind}
               item={item}
-              busy={busyId === item.id}
+              busy={disabled || busyId === item.id}
               onToggle={onToggle}
               onEdit={onEdit}
               onDelete={onDelete}
@@ -357,10 +367,11 @@ export function CapabilitiesPanel({
       )}
       {pluginOnly && <p className="xn-plugin-resource-note">{tr("此处显示插件资源清单。清单安装、清单启用、功能插件启用是三个独立状态。清单只提供数据，不加载外部代码；可选内置功能会用清单标记可用性。")}</p>}
       {importError && <p className="xn-cap-error xn-plugin-import__error" role="alert" data-testid="xn-plugin-import-error">{importError}</p>}
-      {visibleSections.filter((section) => !needle || section.items.length > 0 || section.loading || Boolean(section.error)).map((section) => (
-        <CapabilitySection key={section.kind} {...section} hideEmpty={Boolean(needle)} />
+      {visibleSections.filter((section) => !needle || section.items.length > 0 || section.loading || Boolean(section.error) || section.render).map((section) => (
+        section.render ? <React.Fragment key={section.kind}>{section.render({ ...section, searchQuery: needle })}</React.Fragment>
+          : <CapabilitySection key={section.kind} {...section} hideEmpty={Boolean(needle)} />
       ))}
-      {needle && !hasMatch && !isLoading && !hasError && (
+      {needle && !hasMatch && !isLoading && !hasError && !visibleSections.some(section => section.render) && (
         <div className="xn-cap-search-empty" data-testid="xn-cap-search-empty">{tr("没有匹配的资源")}</div>
       )}
     </div>

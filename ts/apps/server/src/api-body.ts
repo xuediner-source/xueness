@@ -59,6 +59,8 @@ export interface ApiDispatcher {
   dispatch(method: string, parts: string[], query: Record<string, string[]>, data: Record<string, unknown>, request?: { accept?: string; lastEventId?: string; signal?: AbortSignal; remoteAddress?: string; hostCapability?: string | null }): Promise<[number, unknown, string?, Record<string, string>?] | null>;
   readonly csrfToken: string;
   readonly routes?: readonly string[];
+  /** Optional plugin owner serves only build-pinned asset names and bytes. */
+  asset?(name: string): Buffer | null;
 }
 
 export function apiLocation(url: string): { parts: string[]; query: Record<string, string[]> } {
