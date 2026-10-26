@@ -1,0 +1,29 @@
+{
+  "exitCode": 0,
+  "checks": [
+    {
+      "exitCode": 0,
+      "name": "check:lines"
+    },
+    {
+      "exitCode": 0,
+      "name": "check:plugins"
+    },
+    {
+      "exitCode": 0,
+      "name": "typecheck"
+    },
+    {
+      "exitCode": 0,
+      "name": "all-backend-test-globs"
+    }
+  ],
+  "finishedAt": "2026-10-26T08:54:40.7045801Z",
+  "startedAt": "2026-10-26T08:52:15.3221086Z",
+  "concurrency": 4,
+  "tests": 2397,
+  "pass": 2335,
+  "fail": 0,
+  "skipped": 62,
+  "cancelled": 0
+}

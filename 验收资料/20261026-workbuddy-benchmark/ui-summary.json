@@ -1,0 +1,162 @@
+{
+  "functionalFixtureOnly": true,
+  "checks": [
+    {
+      "name": "packaged-desktop-startup"
+    },
+    {
+      "name": "UI-send-stream-file-tool-journal",
+      "sessionId": "b7966c099f354817b08b2c8a8c411d47",
+      "modelRequests": 2,
+      "verified": true
+    },
+    {
+      "name": "UI-attachment-commit-preview-remove"
+    },
+    {
+      "name": "UI-write-approval-resume",
+      "verified": true
+    },
+    {
+      "name": "UI-complete-plugin-catalog",
+      "cards": 35
+    },
+    {
+      "name": "UI-plugin-switch-backend-effective"
+    },
+    {
+      "name": "UI-settings-all-panels",
+      "panels": [
+        {
+          "id": "xn-settings-nav-general",
+          "characters": 1080
+        },
+        {
+          "id": "xn-settings-nav-appearance",
+          "characters": 494
+        },
+        {
+          "id": "xn-settings-nav-providers",
+          "characters": 398
+        },
+        {
+          "id": "xn-settings-nav-browser",
+          "characters": 251
+        },
+        {
+          "id": "xn-settings-nav-network",
+          "characters": 557
+        },
+        {
+          "id": "xn-settings-nav-shortcuts",
+          "characters": 1177
+        },
+        {
+          "id": "xn-settings-nav-memory",
+          "characters": 50
+        },
+        {
+          "id": "xn-settings-nav-subagents",
+          "characters": 115
+        },
+        {
+          "id": "xn-settings-nav-plugins",
+          "characters": 2626
+        },
+        {
+          "id": "xn-settings-nav-mcp",
+          "characters": 117
+        },
+        {
+          "id": "xn-settings-nav-skills",
+          "characters": 50
+        },
+        {
+          "id": "xn-settings-nav-commands",
+          "characters": 45
+        },
+        {
+          "id": "xn-settings-nav-hooks",
+          "characters": 50
+        },
+        {
+          "id": "xn-settings-nav-usage",
+          "characters": 187
+        },
+        {
+          "id": "xn-settings-nav-workspace",
+          "characters": 83
+        },
+        {
+          "id": "xn-settings-nav-modules",
+          "characters": 2579
+        },
+        {
+          "id": "xn-settings-nav-agent",
+          "characters": 122
+        },
+        {
+          "id": "xn-settings-nav-marketplace",
+          "characters": 575
+        },
+        {
+          "id": "xn-settings-nav-automations",
+          "characters": 347
+        },
+        {
+          "id": "xn-settings-nav-about",
+          "characters": 71
+        },
+        {
+          "id": "xn-settings-nav-diagnostics",
+          "characters": 65
+        }
+      ]
+    },
+    {
+      "name": "UI-theme-saved-to-backend"
+    },
+    {
+      "name": "UI-cancellation-setting-wired"
+    },
+    {
+      "name": "UI-running-queue-admission"
+    },
+    {
+      "name": "UI-stop-preserves-partial-output",
+      "status": "stopped"
+    },
+    {
+      "name": "UI-narrow-window-no-horizontal-overflow",
+      "width": 800,
+      "scrollWidth": 800
+    },
+    {
+      "name": "full-desktop-restart-session-and-file-preserved",
+      "sessionId": "b7966c099f354817b08b2c8a8c411d47"
+    }
+  ],
+  "httpErrors": [],
+  "unhandledPageErrors": [],
+  "expectedNavigationOrShutdownAborts": 5,
+  "realModelPerformanceSource": false,
+  "deepLinkBefore": {
+    "label": "before",
+    "passed": false,
+    "realModelRequests": false,
+    "expected": "650255c754c443df91e0309f2f25e4fd",
+    "observed": "25419f4ffa914b26a8db3094b03e8940",
+    "requestedUrlPreserved": true,
+    "error": "AssertionError [ERR_ASSERTION]: an explicit session URL must win over the saved pane selection\n+ actual - expected\n\n+ '25419f4ffa914b26a8db3094b03e8940'\n- '650255c754c443df91e0309f2f25e4fd'\n"
+  },
+  "deepLinkAfter": {
+    "label": "after",
+    "passed": true,
+    "realModelRequests": false,
+    "expected": "97dbd9d1bd6c45f68080f73aef87a470",
+    "observed": "97dbd9d1bd6c45f68080f73aef87a470",
+    "requestedUrlPreserved": true
+  },
+  "affectedFrontendTests": 25,
+  "frontendTypecheckAndBuild": "passed"
+}

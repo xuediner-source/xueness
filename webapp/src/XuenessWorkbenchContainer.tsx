@@ -818,7 +818,8 @@ export function XuenessWorkbenchContainer() {
     setForkSource({ id: activeId, title: session.title || session.task || tr("未命名任务"), turn });
   }, [activeId, session, busy, isPluginEffective]);
 
-  const paneSelectionIntent = useRef(false);
+  // An explicit session URL takes priority over the restored pane selection.
+  const paneSelectionIntent = useRef(activeId !== null);
   const consumePaneSelectionIntent = useCallback(() => { const requested = paneSelectionIntent.current; paneSelectionIntent.current = false; return requested; }, []);
   const paneSelectionRef = useRef<PaneSelectionHandler | null>(null);
   const paneCreationRef = useRef<((sessionId: string) => void) | null>(null);

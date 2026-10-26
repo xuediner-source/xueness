@@ -17,24 +17,35 @@ export async function sendStream(res: ServerResponse, status: number, body: Asyn
   let onAbort: () => void = () => {};
   const stopped = new Promise<null>((resolve) => { onAbort = () => resolve(null); signal.addEventListener("abort", onAbort, { once: true }); if (signal.aborted) resolve(null); });
   try {
-    while (!signal.aborted && !res.destroyed) {
+    while (!signal.aborted && !res.destroyed && !res.socket?.destroyed) {
       const chunk = await Promise.race([iterator.next(), stopped]);
       if (!chunk) break;
       if (chunk.done) { complete = true; break; }
       if (!(chunk.value instanceof Uint8Array)) throw new TypeError("stream body must contain bytes");
-      // Bun's response wrapper can report `drain` while its socket is still
-      // congested; the socket's own drain is the honest signal.
+      // A false write needs an actual drain even if the socket currently
+      // reports no pressure. Response and socket buffers must both clear.
       const sink = res.socket ?? res;
-      if (!res.write(chunk.value) || sink.writableNeedDrain) await new Promise<void>((resolve, reject) => {
-        const cleanup = () => { res.off("drain", done); res.off("close", done); sink.off("drain", done); sink.off("close", done); sink.off("error", failed); signal.removeEventListener("abort", done); };
-        const done = () => {
-          if (!signal.aborted && !res.destroyed && sink.writableNeedDrain) return;
-          cleanup(); resolve();
-        }, failed = (error: Error) => { cleanup(); reject(error); };
-        res.on("drain", done); res.on("close", done);
-        sink.on("drain", done); sink.on("close", done); sink.on("error", failed);
-        signal.addEventListener("abort", done, { once: true });
-        done();
+      const accepted = res.write(chunk.value);
+      if (!accepted || res.writableNeedDrain || sink.writableNeedDrain) await new Promise<void>((resolve, reject) => {
+        let drained = accepted;
+        const targets = new Set([res, sink]);
+        const cleanup = () => {
+          for (const target of targets) { target.off("drain", onDrain); target.off("close", closed); target.off("error", failed); }
+          signal.removeEventListener("abort", closed);
+        };
+        const closed = () => { cleanup(); resolve(); };
+        const ready = () => {
+          if (signal.aborted || res.destroyed || sink.destroyed) closed();
+          else if (drained && !res.writableNeedDrain && !sink.writableNeedDrain) closed();
+        };
+        const onDrain = () => { drained = true; ready(); };
+        const failed = (error: Error) => {
+          if (signal.aborted || res.destroyed || sink.destroyed) closed();
+          else { cleanup(); reject(error); }
+        };
+        for (const target of targets) { target.on("drain", onDrain); target.on("close", closed); target.on("error", failed); }
+        signal.addEventListener("abort", closed, { once: true });
+        ready();
       });
     }
     if (!res.destroyed) res.end();

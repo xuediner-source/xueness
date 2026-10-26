@@ -1,0 +1,32 @@
+716ms)
+✔ evidence must be a file (11.6659ms)
+▶ frontend gate
+  ✔ accepts owned modules, shared kernel UI and matching panels (20.1831ms)
+  ✔ reports what tools/check_plugin_architecture.py reports (20.5984ms)
+  ﹣ keeps every Python manifest declaration in the TS manifests, in order (0.1396ms) # no Python manifests
+✔ frontend gate (43.0493ms)
+▶ plugin gate
+  ✔ requires a declared capability for builtins and engine exports that reach outside (9.9225ms)
+  ✔ treats global network APIs as net, but not the context's mediated ones (3.1806ms)
+  ✔ refuses code loading, foreign packages and paths outside the plugin (2.2274ms)
+  ✔ passes for the bundled plugins (1125.2125ms)
+  ✔ keeps shared persistence and provider adapters behind declared capabilities (0.3699ms)
+✔ plugin gate (1142.5551ms)
+▶ project manifest
+  ✔ excludes bare names on any segment, paths by prefix, and itself only at the root (0.894ms)
+  ✔ hashes files, keeps the previous order and reports changes (11.6652ms)
+✔ project manifest (13.6403ms)
+▶ desktop release staging
+  ✔ creates a draft from verified artifacts and merges the two macOS feeds (34.2193ms)
+  ✔ refuses runs that failed, built another commit or came from another workflow (0.6951ms)
+  ✔ refuses tampered installers and feeds (42.0679ms)
+  ✔ refreshes an existing draft and never touches a published release (47.5865ms)
+✔ desktop release staging (125.869ms)
+ℹ tests 2397
+ℹ suites 595
+ℹ pass 2335
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 62
+ℹ todo 0
+ℹ duration_ms 129861.5891

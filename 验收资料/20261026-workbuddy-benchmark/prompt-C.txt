@@ -1,0 +1,32 @@
+CASE_ID=C / Long repository contract indexing, interruption and recovery
+You are running inside the real Xueness desktop through a WorkBuddy account pool, MiniMax-M3.1-flash,
+reasoning_effort=max. This is a coding benchmark in a disposable workspace. Work only in this workspace, do not
+contact external services, install dependencies, touch user profiles, commit/push, or create subagents. Existing
+dependency junctions are read-only shared caches. Shell is Windows PowerShell; use portable Node scripts when useful.
+Do real work with tools, write PLAN.md first, keep it updated, run commands/tests and fix failures. Do not stop at a
+plan or an unverified claim. When blocked on an implementation choice, use the supplied contract and reasonable
+judgment. Do not weaken existing tests or edit supplied input/specification files. Final response lists exact tests,
+produced files, actual results and remaining limitations. Permissions are approved per action by the benchmark host.
+
+Build tools/contract-index.mjs as a Node standard-library-only repository contract auditor. Expose a named synchronous
+buildIndex(root) export and CLI: node tools/contract-index.mjs --root . --out benchmark-report/index.json.
+It must inspect every ts/plugins/<id>/manifest.json and ts/catalog/<id>.json plus recursively hash every regular .ts
+source under that plugin's src (no tests, no symlinks). Output exact schema:
+{schemaVersion:1,plugins:[{id,name,dependencies,transitiveDependencies,missingDependencies,features,panels,catalogPresent,
+sourceFiles:[{path,sha256}]}],summary:{pluginCount,featureCount,sourceFileCount},cycles:[...]}.
+plugins sorted by id; name is manifest.name; dependencies is the sorted unique direct manifest.dependencies string
+array; transitiveDependencies is sorted reachable existing plugin ids excluding self; missingDependencies is sorted
+direct ids absent from plugins. features is sorted unique manifest.features[].id; panels is sorted unique manifest.panels.
+catalogPresent is true iff the corresponding catalog file exists. source path is root-relative forward slashes; SHA-256
+is lowercase hex of exact bytes; files sorted by path. summary featureCount is the sum of each row's feature count.
+cycles is sorted strongly-connected components of dependency graph of size>1, also singleton self-loops; sort each
+component and sort outer array by joined ids. Never follow a symlink when scanning. Ignore non-plugin directories.
+Unknown/malformed arguments or missing root -> exit 2, useful stderr, no output overwrite. Normal CLI -> atomically
+publish JSON and exit 0. Optional --plugin <id> outputs the identical schema containing only that plugin's row and
+recomputed row counts (its transitiveDependencies still use the full graph; cycles remains the full graph's cycles).
+Unknown plugin -> exit 2. Importing the module must not run its CLI.
+Read architecture/gate and real manifest/catalog examples before coding. Add unit tests for a diamond dependency,
+cycle, missing dependency, symlink exclusion and byte hashes. Generate the complete real-repository index, and write
+CONTRACT-REVIEW.md reconciling at least eight plugins across manifests, catalog and source ownership, noting actual
+counts and limitations. This task will be stopped and resumed through a full desktop restart; PLAN.md and completed
+files must support safe continuation without duplicating or deleting work. Continue to completion after resume.

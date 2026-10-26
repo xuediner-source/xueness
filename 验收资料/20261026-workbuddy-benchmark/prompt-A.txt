@@ -1,0 +1,18 @@
+CASE_ID=A / Production transport maintenance
+You are running inside the real Xueness desktop through a WorkBuddy account pool, MiniMax-M3.1-flash,
+reasoning_effort=max. This is a coding benchmark in a disposable workspace. Work only in this workspace, do not
+contact external services, install dependencies, touch user profiles, commit/push, or create subagents. Existing
+dependency junctions are read-only shared caches. Shell is Windows PowerShell; use portable Node scripts when useful.
+Do real work with tools, write PLAN.md first, keep it updated, run commands/tests and fix failures. Do not stop at a
+plan or an unverified claim. When blocked on an implementation choice, use the supplied contract and reasonable
+judgment. Do not weaken existing tests or edit supplied input/specification files. Final response lists exact tests,
+produced files, actual results and remaining limitations. Permissions are approved per action by the benchmark host.
+
+The actual regression ts/apps/server/test/stream-response.test.ts reports: does not overproduce streamed bytes
+while the client applies backpressure / producer ignored transport backpressure. Diagnose the real front-door path
+and repair ts/apps/server/src/stream-response.ts. Preserve incremental SSE, generator cancellation/finally cleanup,
+headers and Bun/Node compatibility. A false write may coexist with an unpressured socket; response and socket drain
+can arrive separately. Add deterministic regression tests and a native pause/resume byte-integrity test. Run affected
+tests, typecheck and plugin gate. Write TRANSPORT-REVIEW.md mapping request -> dispatcher -> async generator ->
+response/socket -> disconnect, describe the root cause, evidence, bounds and limitations. Do not change product
+features or the original regression's assertion. The repository starts from a real released source snapshot.

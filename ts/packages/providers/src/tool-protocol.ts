@@ -182,7 +182,10 @@ export class NativeCallAssembler {
         target = { id: "", type: "function", function: { name: "", arguments: "" } };
         this.calls.set(index, target);
       }
-      const cid = Object.hasOwn(call, "id") ? call["id"] : null;
+      const hint = Object.hasOwn(call, "id") ? call["id"] : null;
+      // Some compatible gateways emit id: "" on a continuation/final delta.
+      // Only an already-bound identity can make that an omitted hint.
+      const cid = hint === "" && target.id ? null : hint;
       if (cid !== null && cid !== undefined) {
         if (typeof cid !== "string" || !cid || (target.id && target.id !== cid)
           || (this.#ids.has(cid) && this.#ids.get(cid) !== index)) {
