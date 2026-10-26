@@ -2,7 +2,7 @@
   "schemaVersion": 2,
   "product": "Xueness",
   "baseVersion": "0.1.8",
-  "migration": "TS M4.2/M4.3 + Windows packaging, 2026-10-18; ZCode-aligned completion, 2026-10-18; ZCode-aligned TS agent loop, 2026-10-18; ZCode full-alignment roadmap doc, 2026-10-18; ZCode roadmap step 1 permissions and approval flow, 2026-10-19; ZCode roadmap step 2 prompt, context and steering, 2026-10-19; ZCode roadmap step 3 round 1 core-tool contracts, ExitPlanMode, read/write/edit/bash, 2026-10-19; ZCode roadmap step 3 rounds 2-3 Glob/Grep/Task/Todo results, EnterPlanMode, ApplyPatch, Edit matchers, 2026-10-19; ZCode roadmap step 4 context compaction, 2026-10-19; ZCode roadmap step 5 round 1 MCP runtime, 2026-10-19; ZCode roadmap step 5 round 2 skills, 2026-10-19; ZCode roadmap step 5 round 3 lifecycle hooks, 2026-10-19; ZCode roadmap step 5 round 4 subagents to TS, 2026-10-19; ZCode roadmap step 5 round 5 memory plugin, 2026-10-19; ZCode roadmap step 6 round 1 Office plugin, 2026-10-19; ZCode roadmap step 6 round 2 TS browser plugin, 2026-10-19; ZCode roadmap step 6 round 3 network plugin and bundled ZCode document skills, 2026-10-19; ZCode roadmap step 7 round 1 settings and workspaces, 2026-10-19; ZCode roadmap step 7 round 2 composer and commands, 2026-10-19; ZCode roadmap step 7 rounds 3-9, 2026-10-19 to 2026-10-21; step 7 round 10 Python backend removed, 2026-10-21; round 11 cleanup, 2026-10-21; round 13 sessions fullscreen chat, inline approvals and local ConPTY acceptance, 2026-10-22; Round 14: sessions-owned TUI interaction alignment, structured dialogs, completions, cards, sidebar, clipboard, durable queue/steering and session navigation; targeted tests and local ConPTY verification; round 15 final wrap-up: full Linux verification (check, build, desktop, webapp, Linux PTY TUI acceptance), POSIX build LICENSE fix, paper palette pane frame fix, engine roadmap, 2026-10-22; 2026-10-22 round 16: engine Z1-1 ZCode model failure classification and retry; Round 17: ZCode Z1-2 empty completion retry, stream commit boundary, event idle timeout and persistent localized model failure status; Round 18: ZCode Z1-3 request shaping, opt-in strict schemas, signed reasoning history and closed tool stream assembly; Round 19: per-attempt fixed FIFO model admission, cancellable queue status, content-free local diagnostics and queue timing UI; 2026-10-22 Z2 stage: persisted turn runtime, cold history/file hydration, durable tool lifecycle, late steering, background terminal/lost notices, UTF-8 result budgets and session-scoped paging; 2026-10-23 Z3 stage: durable runtime events and SSE recovery, optional lossless SQLite snapshot library, child identities and stable forks, conversation/file rewind and compact operation recovery; 2026-10-23 Z4 execution adapter stage: Bash snapshots/startup, workspace range IO and revisions, validated redirects/full text cache/activity, provider paging registration; Windows targeted validation and source/built acceptance; 2026-10-23 Z5 stage: activation-scoped MCP leases/cancellation/catalog/subscriptions and metadata events; layered shell/MCP configuration with exact workspace trust; fresh hooks admission/output; plan-draft snapshot fix; Windows targeted and source/built validation; 2026-10-23 Z6: bounded native TypeScript workflow-script AST/compiler/schema/interpreter, dynamic workflows plugin runtime/API/tools/CLI, TUI workflow-card and sidebar integration; Windows targeted regression, source+built four-scenario loopback acceptance, build and relocated empty-PATH verification; 2026-10-23 Z7 native stdio v1/v2 protocol, durable command and projection adapters, bounded subscriptions and transfers, headless CLI; Windows source/built acceptance and shutdown draining verified; 2026-10-23 Z8 guarded permissions, durable goal lifecycle and explicit project memory curation; source and built loopback acceptance passed; desktop GUI startup unresolved and old installation restored; full project handover before deployment/cleanup/GitHub push; 2026-10-23 publish the verified installed Windows 0.2.1 snapshot with matching source and preserve user data while cleaning explicitly named old versions; 2026-10-23 local native_ops and batch_calls initial plugins, optional WorkBuddy/subscriptions/model-monitor, WorkBuddy account settings; publication and desktop deployment deferred pending skill selection; 2026-10-24: selected Seagull skills, current desktop evidence, pinned ZCode3.16.2 audit, 15-phase 82-round full-alignment plan and complete-source delivery; Preserve source bytes across Git checkouts for portable SHA-256 verification; 2026-10-26 Windows 0.2.1 deployment, full backend regression 2328 pass 0 fail 62 existing skips, native process cleanup and installed UI acceptance; 2026-10-26 sync tested prebuilt web assets and source-only acceptance evidence; 2026-10-26 install TS dependencies before frontend prebuild plugin gate in GitHub CI; 2026-10-26 retain browser-authenticated GitHub CI dependency-order correction; 2026-10-26 portable regression fixtures, current hook payloads, explicit foreground timeout and relocation of obsolete Python vendor license; 2026-10-26 preserve test source line endings for portable fixture corrections; Fix streamed transport backpressure and compatible tool identity continuations, honor explicit session URLs, and record real WorkBuddy long-task acceptance",
+  "migration": "TS M4.2/M4.3 + Windows packaging, 2026-10-18; ZCode-aligned completion, 2026-10-18; ZCode-aligned TS agent loop, 2026-10-18; ZCode full-alignment roadmap doc, 2026-10-18; ZCode roadmap step 1 permissions and approval flow, 2026-10-19; ZCode roadmap step 2 prompt, context and steering, 2026-10-19; ZCode roadmap step 3 round 1 core-tool contracts, ExitPlanMode, read/write/edit/bash, 2026-10-19; ZCode roadmap step 3 rounds 2-3 Glob/Grep/Task/Todo results, EnterPlanMode, ApplyPatch, Edit matchers, 2026-10-19; ZCode roadmap step 4 context compaction, 2026-10-19; ZCode roadmap step 5 round 1 MCP runtime, 2026-10-19; ZCode roadmap step 5 round 2 skills, 2026-10-19; ZCode roadmap step 5 round 3 lifecycle hooks, 2026-10-19; ZCode roadmap step 5 round 4 subagents to TS, 2026-10-19; ZCode roadmap step 5 round 5 memory plugin, 2026-10-19; ZCode roadmap step 6 round 1 Office plugin, 2026-10-19; ZCode roadmap step 6 round 2 TS browser plugin, 2026-10-19; ZCode roadmap step 6 round 3 network plugin and bundled ZCode document skills, 2026-10-19; ZCode roadmap step 7 round 1 settings and workspaces, 2026-10-19; ZCode roadmap step 7 round 2 composer and commands, 2026-10-19; ZCode roadmap step 7 rounds 3-9, 2026-10-19 to 2026-10-21; step 7 round 10 Python backend removed, 2026-10-21; round 11 cleanup, 2026-10-21; round 13 sessions fullscreen chat, inline approvals and local ConPTY acceptance, 2026-10-22; Round 14: sessions-owned TUI interaction alignment, structured dialogs, completions, cards, sidebar, clipboard, durable queue/steering and session navigation; targeted tests and local ConPTY verification; round 15 final wrap-up: full Linux verification (check, build, desktop, webapp, Linux PTY TUI acceptance), POSIX build LICENSE fix, paper palette pane frame fix, engine roadmap, 2026-10-22; 2026-10-22 round 16: engine Z1-1 ZCode model failure classification and retry; Round 17: ZCode Z1-2 empty completion retry, stream commit boundary, event idle timeout and persistent localized model failure status; Round 18: ZCode Z1-3 request shaping, opt-in strict schemas, signed reasoning history and closed tool stream assembly; Round 19: per-attempt fixed FIFO model admission, cancellable queue status, content-free local diagnostics and queue timing UI; 2026-10-22 Z2 stage: persisted turn runtime, cold history/file hydration, durable tool lifecycle, late steering, background terminal/lost notices, UTF-8 result budgets and session-scoped paging; 2026-10-23 Z3 stage: durable runtime events and SSE recovery, optional lossless SQLite snapshot library, child identities and stable forks, conversation/file rewind and compact operation recovery; 2026-10-23 Z4 execution adapter stage: Bash snapshots/startup, workspace range IO and revisions, validated redirects/full text cache/activity, provider paging registration; Windows targeted validation and source/built acceptance; 2026-10-23 Z5 stage: activation-scoped MCP leases/cancellation/catalog/subscriptions and metadata events; layered shell/MCP configuration with exact workspace trust; fresh hooks admission/output; plan-draft snapshot fix; Windows targeted and source/built validation; 2026-10-23 Z6: bounded native TypeScript workflow-script AST/compiler/schema/interpreter, dynamic workflows plugin runtime/API/tools/CLI, TUI workflow-card and sidebar integration; Windows targeted regression, source+built four-scenario loopback acceptance, build and relocated empty-PATH verification; 2026-10-23 Z7 native stdio v1/v2 protocol, durable command and projection adapters, bounded subscriptions and transfers, headless CLI; Windows source/built acceptance and shutdown draining verified; 2026-10-23 Z8 guarded permissions, durable goal lifecycle and explicit project memory curation; source and built loopback acceptance passed; desktop GUI startup unresolved and old installation restored; full project handover before deployment/cleanup/GitHub push; 2026-10-23 publish the verified installed Windows 0.2.1 snapshot with matching source and preserve user data while cleaning explicitly named old versions; 2026-10-23 local native_ops and batch_calls initial plugins, optional WorkBuddy/subscriptions/model-monitor, WorkBuddy account settings; publication and desktop deployment deferred pending skill selection; 2026-10-24: selected Seagull skills, current desktop evidence, pinned ZCode3.16.2 audit, 15-phase 82-round full-alignment plan and complete-source delivery; Preserve source bytes across Git checkouts for portable SHA-256 verification; 2026-10-26 Windows 0.2.1 deployment, full backend regression 2328 pass 0 fail 62 existing skips, native process cleanup and installed UI acceptance; 2026-10-26 sync tested prebuilt web assets and source-only acceptance evidence; 2026-10-26 install TS dependencies before frontend prebuild plugin gate in GitHub CI; 2026-10-26 retain browser-authenticated GitHub CI dependency-order correction; 2026-10-26 portable regression fixtures, current hook payloads, explicit foreground timeout and relocation of obsolete Python vendor license; 2026-10-26 preserve test source line endings for portable fixture corrections; Fix streamed transport backpressure and compatible tool identity continuations, honor explicit session URLs, and record real WorkBuddy long-task acceptance; Synchronize the verified prebuilt Web bundle with the installed explicit-session navigation fix",
   "sourceFileCount": 2953,
   "manifestExcludesItself": true,
   "originalManifests": "验收资料/原始清单/",
@@ -3029,7 +3029,7 @@
     {
       "path": "webapp/dist/index.html",
       "sizeBytes": 2686,
-      "sha256": "6579d3c193645c36a7118c0960f2cb09771442483ee9bfb1123f2e58f0a8c4d4"
+      "sha256": "5029c80c872eb912cb2be9e85b59a932ae2fa4f9461a634b89dd980d65c7c512"
     },
     {
       "path": "webapp/dist/third-party-notices.txt",
@@ -14367,356 +14367,6 @@
       "sha256": "ab69aa6862c9042eeade8f04c419b4e97a7cb6b51c5437a07d8b33a81c1c8062"
     },
     {
-      "path": "webapp/dist/assets/AppsUiHost-dcKmh8Gd.js",
-      "sizeBytes": 5210,
-      "sha256": "399d057c31307cc5ad03b09de9c621d58dba5808a892be91e30bd96b3fd19c6f"
-    },
-    {
-      "path": "webapp/dist/assets/ArchivedSessions-ODsgyYyM.js",
-      "sizeBytes": 7079,
-      "sha256": "11c0e4de93392b42da8e9dc9c5e87b10c17ec6d0200c7a0a0876fe699f05b86e"
-    },
-    {
-      "path": "webapp/dist/assets/BrowserPanel-BpHcDeac.js",
-      "sizeBytes": 12020,
-      "sha256": "b841ebf9c94747269d3679a94bc24c44e7cb1e97f5edeaa8972100a19878a6d0"
-    },
-    {
-      "path": "webapp/dist/assets/BrowserSettings-DcBisrP9.js",
-      "sizeBytes": 12441,
-      "sha256": "408b1b503c4c5422c9eda58e9761a9dda9a0f956a195b238f301171633377817"
-    },
-    {
-      "path": "webapp/dist/assets/CompletionChecks-Cd0OQKTd.js",
-      "sizeBytes": 6397,
-      "sha256": "d2bfc2b9ed288304c0124411042bc6173e3bc48e24aab99bd8cedfa43b4d488f"
-    },
-    {
-      "path": "webapp/dist/assets/ConversationSharing-LyBXgrmM.js",
-      "sizeBytes": 10382,
-      "sha256": "5c5205b0f4e5c528954b507c3099a305126f3f472f1822865db755386aa965bb"
-    },
-    {
-      "path": "webapp/dist/assets/DesktopAbout-BldAoArN.js",
-      "sizeBytes": 2005,
-      "sha256": "9f9503a0d666c9aed989ceea88c51645f9eae8c1293a9d6bd40e3cb626d1bb3d"
-    },
-    {
-      "path": "webapp/dist/assets/DesktopNotificationSettings-DLvnmG7b.js",
-      "sizeBytes": 862,
-      "sha256": "104d8cbb3f48fca9460c1a4d196afbe226307669021664795f2cc3fc9941e62f"
-    },
-    {
-      "path": "webapp/dist/assets/DesktopPermissionOnboarding-CBZ3hAIS.js",
-      "sizeBytes": 18650,
-      "sha256": "7f63eb1a3f17babe5c9486d21564bbb605a1d061d6ee8dc89816b8112944fc89"
-    },
-    {
-      "path": "webapp/dist/assets/DesktopUpdates-SFmA-kWv.js",
-      "sizeBytes": 7486,
-      "sha256": "4cfe10e4b220e706443ea461536848f13ac1370ac92f3ef54729177a19ea22b2"
-    },
-    {
-      "path": "webapp/dist/assets/DiffView-CCWh0rsf.js",
-      "sizeBytes": 5654,
-      "sha256": "b5f4ef0887ff63d7be847437926c20801fbe27cb9b8dc01a2705a7ac41889d17"
-    },
-    {
-      "path": "webapp/dist/assets/DirectoryBrowser-WtQuT9JD.js",
-      "sizeBytes": 3731,
-      "sha256": "a3f1a8f364fbae1b45bc601485c91e3237f48e03c0a0ca5041b98173d86ddda6"
-    },
-    {
-      "path": "webapp/dist/assets/ElicitationForm-CxTGdidI.js",
-      "sizeBytes": 14450,
-      "sha256": "aa59cc2cc783c06827f3fc1c87772f4659e82c191b969c5bab75bd978e37fb75"
-    },
-    {
-      "path": "webapp/dist/assets/FileBrowser-Bwe8DuM-.js",
-      "sizeBytes": 10786,
-      "sha256": "0e8796cf8caefec9beda0963185eb805dc8ab8f7b9d3e435565bea291fe504bd"
-    },
-    {
-      "path": "webapp/dist/assets/ForkSessionDialog-BcSQPWvb.js",
-      "sizeBytes": 7826,
-      "sha256": "f41d857c2e467c915eeb3437fd8ac340ae5e7cd28e787913efe999d80d194c25"
-    },
-    {
-      "path": "webapp/dist/assets/GoalEditorDialog-DhbNQYlP.js",
-      "sizeBytes": 3322,
-      "sha256": "3d1394c3dbcbcbf827da4256bfbe6819d03b599c17ce0200bd325691658b6fd8"
-    },
-    {
-      "path": "webapp/dist/assets/LocalRuntimeMonitor-CGxUAB1E.js",
-      "sizeBytes": 18880,
-      "sha256": "4fce4954b85b0864280a01b4bad62be93483bf3447d62140d8b8a1520857fea7"
-    },
-    {
-      "path": "webapp/dist/assets/MemoryPanel-CHUjmE6s.js",
-      "sizeBytes": 2447,
-      "sha256": "788ca1e09b17559d1cc2328c313518b71cd589f434ec665077f5c9ff7b3ff1ff"
-    },
-    {
-      "path": "webapp/dist/assets/MemorySettings-k4OoegFj.js",
-      "sizeBytes": 3862,
-      "sha256": "dc0cb9d72a1bbbf12f1630901a56983bb60fe3e3e9661fa81b5932756c2ac9eb"
-    },
-    {
-      "path": "webapp/dist/assets/ModelMonitorHome-Badwmz0t.js",
-      "sizeBytes": 5006,
-      "sha256": "df717b3b7a86aff4b8e5500f595985565ae16ab282b52467c70575707c53c5bc"
-    },
-    {
-      "path": "webapp/dist/assets/NetworkSettings-BUQ14uzd.js",
-      "sizeBytes": 14685,
-      "sha256": "a802d02cd4ba9d7ec24e57a24a71e4e3186a3b9bc803df15b0969cbd1fc9d3eb"
-    },
-    {
-      "path": "webapp/dist/assets/PendingQuestion-C7ZMfHan.js",
-      "sizeBytes": 8763,
-      "sha256": "3833931e737e8e371cdbe962c634e9428d21f6302f12b6d60830c7e8d32f332b"
-    },
-    {
-      "path": "webapp/dist/assets/PluginProfilePicker-Bq9M65n-.js",
-      "sizeBytes": 4717,
-      "sha256": "1eb9a11c438d82dc2fa38e0d7de7e72c99b88d3dbdfeae43a02e071c90490862"
-    },
-    {
-      "path": "webapp/dist/assets/ProjectContextMenu-CPluGWQ9.js",
-      "sizeBytes": 10624,
-      "sha256": "e7e7eaa226ddf860572f13a5ee1b867cb99dbfa803e3c298e055ca637f6d8766"
-    },
-    {
-      "path": "webapp/dist/assets/SessionContextPane-BjxGZBe5.js",
-      "sizeBytes": 4303,
-      "sha256": "bb640e5d4da59313f850398b6b9a70b72db8e14d39957a38713bec1cacc48348"
-    },
-    {
-      "path": "webapp/dist/assets/SessionExperimentSettings-DcjQ1KXx.js",
-      "sizeBytes": 1732,
-      "sha256": "aadf43a7bb8d9225657c6f8d587147c56a0919640fa9083b5f4f7f9ce9ddb251"
-    },
-    {
-      "path": "webapp/dist/assets/SessionGoal-HJqvM3Ry.js",
-      "sizeBytes": 2877,
-      "sha256": "56c2f671c6ddcfedab1c2bd12aad2ddb55d53dce3d7800e95d077f7c49f5956b"
-    },
-    {
-      "path": "webapp/dist/assets/SessionPaneWorkbench-C83ewuDL.js",
-      "sizeBytes": 94070,
-      "sha256": "0f9a93d8263d0f0c838c7cac49b4fa47974839dd0ce26ddf366cb6586c368139"
-    },
-    {
-      "path": "webapp/dist/assets/SessionQueue-DCdmwCD8.js",
-      "sizeBytes": 15038,
-      "sha256": "bb5c061d101f07c6eb9e2864bce3ffbbeb9454aca3fdde4689a2277fa6a36f3d"
-    },
-    {
-      "path": "webapp/dist/assets/SettingsSections-DhXAaTbn.js",
-      "sizeBytes": 21343,
-      "sha256": "182885e4fa13ddb248fbc30e73ffd747deb33346fb821748609db7fc0a402051"
-    },
-    {
-      "path": "webapp/dist/assets/StartPageRemoteDialog-DW6pBqoO.js",
-      "sizeBytes": 6217,
-      "sha256": "12d54787d5dbac4b45b10754d2f4f2652b0e22a2fc9d95f8d850d4f186668434"
-    },
-    {
-      "path": "webapp/dist/assets/StartPageWorkspaceMenu-CJrbLN_N.js",
-      "sizeBytes": 2865,
-      "sha256": "10c60d454944239bbea351c8a66aa3a9e0aa92217be8f8f843ec2fb9ab862720"
-    },
-    {
-      "path": "webapp/dist/assets/StarterIdeas-ttd0qhmI.js",
-      "sizeBytes": 2311,
-      "sha256": "4841f9fc4b51833c866ed8f5bdd3eda6aa071b40c9f6f3a7c23bc720a4d7d335"
-    },
-    {
-      "path": "webapp/dist/assets/SubagentSettings-DHtTnmee.js",
-      "sizeBytes": 17885,
-      "sha256": "cfe16735a38e0dac97859e1ea33eaa618c498cc82c08c7a23e209e0d09215f1f"
-    },
-    {
-      "path": "webapp/dist/assets/SubagentSidePane-CewPv6FB.js",
-      "sizeBytes": 15355,
-      "sha256": "32b9785721487d77b5b32896c6e46e34e215991c65b92bafe857576d5ffa17fa"
-    },
-    {
-      "path": "webapp/dist/assets/SubagentTranscript-s_W8CFRd.js",
-      "sizeBytes": 2492,
-      "sha256": "2959ab197f2d48b92a86277ee1dc74bea6ac78b900c6fd7d3fc2688b4ab3ac93"
-    },
-    {
-      "path": "webapp/dist/assets/UserMessageEditor-CNBegFyD.js",
-      "sizeBytes": 13651,
-      "sha256": "a4768c805ea106df5351e63deb4b1c84ed98d7b392f98f98c093de5667f5955c"
-    },
-    {
-      "path": "webapp/dist/assets/WorkbuddySettings-DNDoe3OA.js",
-      "sizeBytes": 7766,
-      "sha256": "c6975e01d50dc09c207406f2fd65d396a02b81aaa00aaa8ce6659613b0be4b3e"
-    },
-    {
-      "path": "webapp/dist/assets/XuenessCapabilitiesPanel-B9ElrEEX.js",
-      "sizeBytes": 9462,
-      "sha256": "ca0b73653377e9f91caba432ae92537d220466ebb74935cc454294d3e2daaa4a"
-    },
-    {
-      "path": "webapp/dist/assets/XuenessCapabilityDialog-Do9PIFFS.js",
-      "sizeBytes": 7920,
-      "sha256": "d7a9fab4d109d7f23f833dee0f5243244644d14bbbe4c2a3d45f22f2e59ec715"
-    },
-    {
-      "path": "webapp/dist/assets/XuenessCloneDialog-CEX3IRn4.js",
-      "sizeBytes": 4909,
-      "sha256": "dd6c95aeb104c6e461958f0dd8a8f48fe19435399ccea03ecb7627501e08d720"
-    },
-    {
-      "path": "webapp/dist/assets/XuenessGitView-JzCtP9GU.js",
-      "sizeBytes": 7403,
-      "sha256": "29e99d8264f8d950cb15f3356c032c8f8a4c19f762da155791de889322ea88ea"
-    },
-    {
-      "path": "webapp/dist/assets/XuenessRenameDialog-Jw-IKPAd.js",
-      "sizeBytes": 3286,
-      "sha256": "0390e5515511978c2afecd6b054e957d76677e7aab7e6d02597985f9b9d9fc86"
-    },
-    {
-      "path": "webapp/dist/assets/XuenessSettingsView-CYQXI7hG.js",
-      "sizeBytes": 10594,
-      "sha256": "78fb70fa914b79e54e386251b88737328f4749cf96e3c056bb71ea3ce3dd3577"
-    },
-    {
-      "path": "webapp/dist/assets/XuenessTerminalPreferences-Dnua1tJr.js",
-      "sizeBytes": 1246,
-      "sha256": "48aab4a87166a5e988796fa3fe331d7e3826803fdd4af7ea1404ed52648ce5e8"
-    },
-    {
-      "path": "webapp/dist/assets/XuenessUsageSettings-B3pb8G9U.js",
-      "sizeBytes": 13756,
-      "sha256": "4307e9dc731da37fcba002c4ae34759f37723cad00ab38a4d89fcbae18664431"
-    },
-    {
-      "path": "webapp/dist/assets/XuenessWorkspacePickerDialog-D5vfG97f.js",
-      "sizeBytes": 5894,
-      "sha256": "6c22d3470941492ddd34a76c4b24dc0da699e794809f5e803ef2a58523066c32"
-    },
-    {
-      "path": "webapp/dist/assets/XuenessWorkspaceSettings-DbxTu4A0.js",
-      "sizeBytes": 11244,
-      "sha256": "d2eaa4f6c91dbb94fe8a3ea6a61aecc34a174888eb4029315e55d994c35a038b"
-    },
-    {
-      "path": "webapp/dist/assets/approvalCommands-LyXvKVIi.js",
-      "sizeBytes": 4049,
-      "sha256": "79f3ce6d03ba31917a54b02c3522d4cc2433238844a27a79cbb07476d054d585"
-    },
-    {
-      "path": "webapp/dist/assets/commandClient-DWBjcbQe.js",
-      "sizeBytes": 14120,
-      "sha256": "1cd1e1835245eeab7e6785232e9b4ae9a5c2fad99596742b5367d0811a219e96"
-    },
-    {
-      "path": "webapp/dist/assets/composerAttachmentPreview-DNP2-a-L.js",
-      "sizeBytes": 3558,
-      "sha256": "d1211a4de9ce77cc1c28cc03729c60eb627605dd422475e056dcb5d4f64df6e6"
-    },
-    {
-      "path": "webapp/dist/assets/composerAttachmentPreviewDialog-Ywy7YN-Z.js",
-      "sizeBytes": 9026,
-      "sha256": "860156bbdaa3afccdc99b383ba727a3cdb91244a2b670d9f93146a67a5fb826b"
-    },
-    {
-      "path": "webapp/dist/assets/conversationWatch-CMxYlCr_.js",
-      "sizeBytes": 5282,
-      "sha256": "4935e81c94de094b766dac8680952093002aa9cb25e922edbb9b99ae3d3f15b1"
-    },
-    {
-      "path": "webapp/dist/assets/index-8gwzd9ap.js",
-      "sizeBytes": 15965,
-      "sha256": "fac625cf3c3ec9f20b57ff1de07ee9bce3fe795232811ab45a79e898dfc11795"
-    },
-    {
-      "path": "webapp/dist/assets/index-B4nOuyEE.js",
-      "sizeBytes": 4294,
-      "sha256": "a90ebe94ba6d0778e7ae16ee9bf0fac51ff7999e4d9d6ae7ec2a930587c439be"
-    },
-    {
-      "path": "webapp/dist/assets/index-BZkcd9qT.js",
-      "sizeBytes": 4206,
-      "sha256": "519777c09447eaf8f9c44fd4eeddeb848e71b3da08850b967dbcad6d71f6e15c"
-    },
-    {
-      "path": "webapp/dist/assets/index-BwWRc01O.js",
-      "sizeBytes": 5235,
-      "sha256": "1a64597a84e4fdc7c96bf7b0797cb73cb57e040b7d65e9b754add9bae5e158ff"
-    },
-    {
-      "path": "webapp/dist/assets/index-C3dl5HNZ.js",
-      "sizeBytes": 5884,
-      "sha256": "4a3267d5142078ae53399cbd59834f2ea204c03f50405ba360274ac2f99ae0ea"
-    },
-    {
-      "path": "webapp/dist/assets/index-CRpM159Q.js",
-      "sizeBytes": 15731,
-      "sha256": "f952d097bfe2d1d08f874358ef5c38799e9bfb67c61b92d15b96555eefabe55f"
-    },
-    {
-      "path": "webapp/dist/assets/index-CnhomYdM.js",
-      "sizeBytes": 14814,
-      "sha256": "73cdd45892a5c65e7862efa7b1f970471ad7f8f73bfde0b364b88aca85891153"
-    },
-    {
-      "path": "webapp/dist/assets/index-D6bCwiS0.js",
-      "sizeBytes": 58371,
-      "sha256": "a7274aceff2171be62252fd43a8dacfac9e147b1e8949cc77d30b5ef06b16b2b"
-    },
-    {
-      "path": "webapp/dist/assets/index-DKJsXoET.js",
-      "sizeBytes": 14006,
-      "sha256": "aac499c2a1f0ac796a63eff55650f947349f59fed396aa04dad54045289117c3"
-    },
-    {
-      "path": "webapp/dist/assets/index-lSKCwsqU.js",
-      "sizeBytes": 7737,
-      "sha256": "78cc25b08d9335cf14fcf0266da616e6dfb858c67feb31636dde83053a95b99d"
-    },
-    {
-      "path": "webapp/dist/assets/index-x5DIuGte.js",
-      "sizeBytes": 41006,
-      "sha256": "dea1975a234aa5030bfd7c256d3662e866f9909d6231c8de087a35b8da52f01e"
-    },
-    {
-      "path": "webapp/dist/assets/paneForkActions-D7UDs2vG.js",
-      "sizeBytes": 6417,
-      "sha256": "bda0e77c90e90b554aa09802022ff1acb63feaaa22d4829d48a71bed3da5d38a"
-    },
-    {
-      "path": "webapp/dist/assets/remoteSessionAdapter-B6RiWFF7.js",
-      "sizeBytes": 18760,
-      "sha256": "16b5e5cb2868125f2c2da4a7380dd008861a121ca560a77d4dbe5919ee1e7339"
-    },
-    {
-      "path": "webapp/dist/assets/scopedCommands-WWdLJSBW.js",
-      "sizeBytes": 12669,
-      "sha256": "d50bbf2d12d2d5ab42bb36ab3de6e8c8d59365a6318c3ab2b56d788f486f96bc"
-    },
-    {
-      "path": "webapp/dist/assets/sessionsRemoteConnectionState-DQt6KL0n.js",
-      "sizeBytes": 554,
-      "sha256": "1015c5d28c80669837dd7cd4992ef5714a67086004ac3af0af38a51564a59efc"
-    },
-    {
-      "path": "webapp/dist/assets/subagentRowProgress-lFTFmSOg.js",
-      "sizeBytes": 428,
-      "sha256": "1b224132cf5170a518a4641e0a48c2bbc7cf2cbb34dbd511f4e7611eee41110b"
-    },
-    {
-      "path": "webapp/dist/assets/workbench-CZTP__9o.js",
-      "sizeBytes": 824259,
-      "sha256": "84f915414d5c7989bad2eaa5b79ffdb5410e74a5b7d9b4fcf38fd67148ae550f"
-    },
-    {
       "path": "docs/licenses/subscriptions-vendor-LICENSE-MIT.txt",
       "sizeBytes": 1103,
       "sha256": "5b283f1178e4698ad6aa6ecc05af34e6f7c101e3e9a48ad3d0b5b39ea16c57e9"
@@ -14790,6 +14440,356 @@
       "path": "验收资料/20261026-workbuddy-benchmark/验收报告.md",
       "sizeBytes": 8089,
       "sha256": "1e09666eb8047bd94f02f239a2c61b3ffda7f94103b9bf2def211529d87e4a32"
+    },
+    {
+      "path": "webapp/dist/assets/AppsUiHost-CDdv7LZ4.js",
+      "sizeBytes": 5210,
+      "sha256": "145394afa1942f57098a940d379f73e76b6242b7c22caede0a771c329fc10c6d"
+    },
+    {
+      "path": "webapp/dist/assets/ArchivedSessions-BcwG4HK1.js",
+      "sizeBytes": 7079,
+      "sha256": "6a14ba81b98b5fd13d2cec056fadfd826a61a3da873cfbc05aa23528792455cf"
+    },
+    {
+      "path": "webapp/dist/assets/BrowserPanel-DxHkH1SP.js",
+      "sizeBytes": 12020,
+      "sha256": "74ca60b8075112afeba379bd2cb434eaf146e1a30c88eb6eb61e0280112bde76"
+    },
+    {
+      "path": "webapp/dist/assets/BrowserSettings-Bn9wQTnH.js",
+      "sizeBytes": 12441,
+      "sha256": "8f77202529dff3d6dccb0d6a1d391fe9e00759dbcae93f97a9dae62d900679c0"
+    },
+    {
+      "path": "webapp/dist/assets/CompletionChecks-BTqrT7pS.js",
+      "sizeBytes": 6397,
+      "sha256": "f3dfe4b59139401af3e085197269758b379357e643d4c9e12cfb1a1dc4f86d04"
+    },
+    {
+      "path": "webapp/dist/assets/ConversationSharing-B0IAJRqH.js",
+      "sizeBytes": 10382,
+      "sha256": "5a3a2a16d383a794d4e7132e4d404dc81e6b48e0e6aa45a1ebd3e091187087cb"
+    },
+    {
+      "path": "webapp/dist/assets/DesktopAbout-DFa61EGj.js",
+      "sizeBytes": 2005,
+      "sha256": "f0357ab9cd183547ea4d873bbfa0741f25f917bab576ec18e04a6870654484de"
+    },
+    {
+      "path": "webapp/dist/assets/DesktopNotificationSettings-DUAZXOhW.js",
+      "sizeBytes": 862,
+      "sha256": "4b9e5c463e18606f8a0f4abf193bcbc21563f855a429a3a17e3cf9fcc7c308c8"
+    },
+    {
+      "path": "webapp/dist/assets/DesktopPermissionOnboarding-DN2K23B9.js",
+      "sizeBytes": 18650,
+      "sha256": "70458a98c715df6b1ec5588142062227f4a1d39aacf8863286af596b96592719"
+    },
+    {
+      "path": "webapp/dist/assets/DesktopUpdates-CqUjQdT4.js",
+      "sizeBytes": 7486,
+      "sha256": "afa38601c509e5652fb619e6f0c13f02c6f93f594ee3cb3ac3bf082199c9392b"
+    },
+    {
+      "path": "webapp/dist/assets/DiffView-CPUT7jge.js",
+      "sizeBytes": 5654,
+      "sha256": "8a29c6e24bd1b4b3fd674d0a9f4b9acfbf43d8bb82cd28d939f04ac702f8c0b0"
+    },
+    {
+      "path": "webapp/dist/assets/DirectoryBrowser-Cw1fYALY.js",
+      "sizeBytes": 3731,
+      "sha256": "d43d19bca731cee45de659fb159a495126d7a2a7dd327848376f1549186b1410"
+    },
+    {
+      "path": "webapp/dist/assets/ElicitationForm-C1FxDyBr.js",
+      "sizeBytes": 14450,
+      "sha256": "eb8adf2d106ca670bc0b86309d4eb03cccce244c358ace03cb0c24ef8332592c"
+    },
+    {
+      "path": "webapp/dist/assets/FileBrowser-BJW8VgKw.js",
+      "sizeBytes": 10786,
+      "sha256": "032a2853d1b51b511fe826d00954d56dd0235a84dc8e7e159e5c2605df3a5f45"
+    },
+    {
+      "path": "webapp/dist/assets/ForkSessionDialog-BQBSfQwu.js",
+      "sizeBytes": 7826,
+      "sha256": "431aa9d755d8554d66982b3c2ffd9915afd8b179515cd5f06d93096a542fa45c"
+    },
+    {
+      "path": "webapp/dist/assets/GoalEditorDialog-CI-tQY7l.js",
+      "sizeBytes": 3322,
+      "sha256": "b4bc0aee8f5d7da177157f953fad4abf60bd2218cebb8b6c23c6ca5ba2b8d30c"
+    },
+    {
+      "path": "webapp/dist/assets/LocalRuntimeMonitor-ClRsz7yY.js",
+      "sizeBytes": 18880,
+      "sha256": "891219e406abe5ae5bee1947c35beceb5ffbac06a15f7e5abecf7dfe246896a4"
+    },
+    {
+      "path": "webapp/dist/assets/MemoryPanel-CmIm6IK0.js",
+      "sizeBytes": 2447,
+      "sha256": "792083c96789fb172612cb6d9745e6a43e6ebdf45373e6a247932f6ba2dab012"
+    },
+    {
+      "path": "webapp/dist/assets/MemorySettings-Bcvu-Ppq.js",
+      "sizeBytes": 3862,
+      "sha256": "8abced21f7f82f46ce274f9191d4001edfa8efc0d726f28ef80895caeb166f32"
+    },
+    {
+      "path": "webapp/dist/assets/ModelMonitorHome-BC5s_Bsz.js",
+      "sizeBytes": 5006,
+      "sha256": "21e7d2886e048b41a1cc066b9f4eebf0f8096d6419ae198c62a6a83b47b544f1"
+    },
+    {
+      "path": "webapp/dist/assets/NetworkSettings-066V-8AL.js",
+      "sizeBytes": 14685,
+      "sha256": "6d32d393f6f9eab6a4e02322c95333ad11bd4904e65f7081910725ab11cdd602"
+    },
+    {
+      "path": "webapp/dist/assets/PendingQuestion-OenIXPDe.js",
+      "sizeBytes": 8763,
+      "sha256": "4c9cad7454e78e7a9f8f7215f55e11c375d009da00ea0ba258f45974a9b5ca60"
+    },
+    {
+      "path": "webapp/dist/assets/PluginProfilePicker-BDLDJ1zo.js",
+      "sizeBytes": 4717,
+      "sha256": "e5369a781d5ccc97c49b11faf27c0f5b41be6ab0eb2d293c708a4982d34e2c49"
+    },
+    {
+      "path": "webapp/dist/assets/ProjectContextMenu-B82dWwFp.js",
+      "sizeBytes": 10624,
+      "sha256": "e7dc1a0e840ada106d78fd5cfe888ec45713f54693731b3e050f449c09fca2c6"
+    },
+    {
+      "path": "webapp/dist/assets/SessionContextPane-DQtTt4fL.js",
+      "sizeBytes": 4303,
+      "sha256": "e72bb07a2918480d753a7862a721c472a725860392d3c95057835b642523bc7b"
+    },
+    {
+      "path": "webapp/dist/assets/SessionExperimentSettings-BrdQ6eDQ.js",
+      "sizeBytes": 1732,
+      "sha256": "bcf84ed72c33215421eea9898e3a3abfae711df47a13c71fd3f4cb86de91bc67"
+    },
+    {
+      "path": "webapp/dist/assets/SessionGoal-LMBr6MpS.js",
+      "sizeBytes": 2877,
+      "sha256": "bd415382719c54d80a2c414a73d20ddb5468ca17efe77c47136bfb1e317f1b95"
+    },
+    {
+      "path": "webapp/dist/assets/SessionPaneWorkbench-NfJArQ1b.js",
+      "sizeBytes": 94070,
+      "sha256": "d4ee85c0a205ab1ad64d356d2f2549a9497ef509ea0c4c08ec6d3a881e7e3daa"
+    },
+    {
+      "path": "webapp/dist/assets/SessionQueue-7PsTvie0.js",
+      "sizeBytes": 15038,
+      "sha256": "88a6407c544f25c2d487a7c4b6c7eea01f19383f130fda209ea86adcf8e6de59"
+    },
+    {
+      "path": "webapp/dist/assets/SettingsSections-D1EQHukB.js",
+      "sizeBytes": 21343,
+      "sha256": "c7b815eb5af4f6894113439b4e3e0cf0d335a353b0ed182b739a5ea66ea2d258"
+    },
+    {
+      "path": "webapp/dist/assets/StartPageRemoteDialog-lFYQaR5u.js",
+      "sizeBytes": 6217,
+      "sha256": "17feb1432274adaa2e74a8e8c07082126398f014cd40a909316d22d8232030d6"
+    },
+    {
+      "path": "webapp/dist/assets/StartPageWorkspaceMenu-7myTnj-J.js",
+      "sizeBytes": 2865,
+      "sha256": "7ad9c01c7d0799036bd01de05e8d51c3bdd207658f8ceb2122a75fb9f5d6a999"
+    },
+    {
+      "path": "webapp/dist/assets/StarterIdeas-Bn_ajiqP.js",
+      "sizeBytes": 2311,
+      "sha256": "ee08ca2f6884dc0193a56d97829b7144904315629c5da3cc7edc241af6b47472"
+    },
+    {
+      "path": "webapp/dist/assets/SubagentSettings-BgVj3waN.js",
+      "sizeBytes": 17885,
+      "sha256": "d2f786bb7ff619e35c2594f312e075839d60d0a39110814c8ff69c4b66253ea0"
+    },
+    {
+      "path": "webapp/dist/assets/SubagentSidePane-DrGPIeCK.js",
+      "sizeBytes": 15355,
+      "sha256": "06e99f9ecdca72601d4ba4671193310792eee8d58fc82ab1dd565d65e1668c68"
+    },
+    {
+      "path": "webapp/dist/assets/SubagentTranscript-DQ04xYTl.js",
+      "sizeBytes": 2492,
+      "sha256": "fb4a8dadc42beb1037d8ebc9dac4b31ef4a00aff9d976f5e4db856e2958fb0d7"
+    },
+    {
+      "path": "webapp/dist/assets/UserMessageEditor-D5shwpXl.js",
+      "sizeBytes": 13651,
+      "sha256": "cf9f9acec3fecad6958c83a00df98077ae2e9ee3a257347fe0be94b564033aa1"
+    },
+    {
+      "path": "webapp/dist/assets/WorkbuddySettings-CwHpvUbe.js",
+      "sizeBytes": 7766,
+      "sha256": "5c63a90659c023903e7e507d8cf071403b55e205c70d6323ead4169d5ab55e12"
+    },
+    {
+      "path": "webapp/dist/assets/XuenessCapabilitiesPanel-CROwDp2U.js",
+      "sizeBytes": 9462,
+      "sha256": "0f4006db242bed64f6e4fa4a791e091c1ad2d2da5100134785b6e45c63975b41"
+    },
+    {
+      "path": "webapp/dist/assets/XuenessCapabilityDialog-Obk5udma.js",
+      "sizeBytes": 7920,
+      "sha256": "e5100ae25275a6a1fe052be7bca7a5cfcbf5e17f7ce8158534b8f5f227217615"
+    },
+    {
+      "path": "webapp/dist/assets/XuenessCloneDialog-BfMQa2XL.js",
+      "sizeBytes": 4909,
+      "sha256": "f3cd639d3abc83820ad15eae4dde50948a816618425ac0e783c3907b8c5a0208"
+    },
+    {
+      "path": "webapp/dist/assets/XuenessGitView-BbGQju_P.js",
+      "sizeBytes": 7403,
+      "sha256": "af7a157115f9d9d72c0e671172fe24984500da84ef8633654a7ee8fcfe8154ba"
+    },
+    {
+      "path": "webapp/dist/assets/XuenessRenameDialog-DAz6IvOv.js",
+      "sizeBytes": 3286,
+      "sha256": "39a155a05fc2ccc609afc19d5f22806f5e4d4a18374e209769bdd3d54726b1f2"
+    },
+    {
+      "path": "webapp/dist/assets/XuenessSettingsView-8xiS-3fH.js",
+      "sizeBytes": 10594,
+      "sha256": "fd49a9b4a5938e4d909c02ec41665491f10fb74d45368a2569af3c325609deff"
+    },
+    {
+      "path": "webapp/dist/assets/XuenessTerminalPreferences-D86JDPU2.js",
+      "sizeBytes": 1246,
+      "sha256": "0f5cb8e2ba7f9a1bd8be9eaae1dff25822eb12d7bc01e75eec3b82802fe124c8"
+    },
+    {
+      "path": "webapp/dist/assets/XuenessUsageSettings-C9WeyAxp.js",
+      "sizeBytes": 13756,
+      "sha256": "dd7b90f9186211166b7c3242927de188d5d0d999617f19cd1fb68d50b40dcb08"
+    },
+    {
+      "path": "webapp/dist/assets/XuenessWorkspacePickerDialog-BcwdBVsF.js",
+      "sizeBytes": 5894,
+      "sha256": "f62353c76595d1146d35227115419ea79bff5b644d6c3441e510d81fadb3b9ca"
+    },
+    {
+      "path": "webapp/dist/assets/XuenessWorkspaceSettings-Blg-oR_-.js",
+      "sizeBytes": 11244,
+      "sha256": "f98af75f07878844ac2333b7789cf7803adaca49df803aa5c963019ae6bc1d37"
+    },
+    {
+      "path": "webapp/dist/assets/approvalCommands-BOsaEBxE.js",
+      "sizeBytes": 4049,
+      "sha256": "a006431d311211d3940029529197b1a4bea02488eaeb42e4628fb36898ef43dd"
+    },
+    {
+      "path": "webapp/dist/assets/commandClient-BjaUhikf.js",
+      "sizeBytes": 14120,
+      "sha256": "ded99faa96151d72112c6380e8287e595ff10fdf5275ea32c65f084b939a7ae0"
+    },
+    {
+      "path": "webapp/dist/assets/composerAttachmentPreview-BhKfYvVo.js",
+      "sizeBytes": 3558,
+      "sha256": "e1a1dc4dc6c418aa8e64672c01d2d6f649f3945a0f924c34d6cf97c785fe1de3"
+    },
+    {
+      "path": "webapp/dist/assets/composerAttachmentPreviewDialog-Ygn2ni0x.js",
+      "sizeBytes": 9026,
+      "sha256": "55dac2d8eb38ea825a0298e34bc3c0bb0f99022df063130256e0dc27b4d67516"
+    },
+    {
+      "path": "webapp/dist/assets/conversationWatch-Cnla8QlK.js",
+      "sizeBytes": 5282,
+      "sha256": "34d61faa5ed7a60f256f97dfb6835c235d8a15f2ae76398a4439de69d3dbe6f7"
+    },
+    {
+      "path": "webapp/dist/assets/index-CpbQd2pY.js",
+      "sizeBytes": 4206,
+      "sha256": "10852e96491d35cf94e7d1e17365b91c36b906d5074e829f0fd14fcb1d7ad3e5"
+    },
+    {
+      "path": "webapp/dist/assets/index-Cw9-XZ9t.js",
+      "sizeBytes": 14006,
+      "sha256": "e4c37d8d7c840ca378add7af2969471ce318e76bc13a35a961c34edb1bd7d612"
+    },
+    {
+      "path": "webapp/dist/assets/index-CzDAPIPw.js",
+      "sizeBytes": 5235,
+      "sha256": "4a53ec55cb76ecb04be0f624a694ba5e2eff1c8b0e9469bfecd7ca42b638343f"
+    },
+    {
+      "path": "webapp/dist/assets/index-DFW01T3I.js",
+      "sizeBytes": 4294,
+      "sha256": "257b7e64705260681a51e58b21f8e2135e83d2aa0245bec57d8cce9a439f4cef"
+    },
+    {
+      "path": "webapp/dist/assets/index-DLEPuYeg.js",
+      "sizeBytes": 7737,
+      "sha256": "a9e4ce0d676643bb91002b81f61653b7798b9a891bd929417993b09cd59b55dd"
+    },
+    {
+      "path": "webapp/dist/assets/index-DLJ-PzuJ.js",
+      "sizeBytes": 15965,
+      "sha256": "adc550a1dd9a93d4fed7e7aaa0b8ed3a11f99a5161dc1954157d0ae1697264b1"
+    },
+    {
+      "path": "webapp/dist/assets/index-DlTfOhBo.js",
+      "sizeBytes": 15731,
+      "sha256": "5c9587459dbf1e1f9b3bd40d1876396ceab50ac4ab1ee2da3b797be722773136"
+    },
+    {
+      "path": "webapp/dist/assets/index-DqqkHCJh.js",
+      "sizeBytes": 5884,
+      "sha256": "cbc3261c72ca8c977e71e515a18e4c4cc9aaecd77e67d90dfbf461a4579bb71d"
+    },
+    {
+      "path": "webapp/dist/assets/index-H7vocSOS.js",
+      "sizeBytes": 14814,
+      "sha256": "24336a47304f0a761116b936e58dc111fbfa91005211600a1ca8de95c72854c6"
+    },
+    {
+      "path": "webapp/dist/assets/index-_9UTGlzQ.js",
+      "sizeBytes": 58371,
+      "sha256": "b11be5d4b92d974fa32624b337db36b79d9f9a2e0f717c4a5a8589ff4d923836"
+    },
+    {
+      "path": "webapp/dist/assets/index-dsxnH86a.js",
+      "sizeBytes": 41006,
+      "sha256": "f0f773069885b3d9bdfb7f2c02c3379a7ce2a0033f5b67e3ad0435504373e155"
+    },
+    {
+      "path": "webapp/dist/assets/paneForkActions-Bwgk5oxI.js",
+      "sizeBytes": 6417,
+      "sha256": "84ce358b2eb8dc609d58b174ad26cf15b3619a940c8f392a737d841c407dfb28"
+    },
+    {
+      "path": "webapp/dist/assets/remoteSessionAdapter-QjUEAeVr.js",
+      "sizeBytes": 18760,
+      "sha256": "cf11c4504e3fc4638d8d458d4442e4bbf4cb1d4f3b569f232a5a9159ab18a0e2"
+    },
+    {
+      "path": "webapp/dist/assets/scopedCommands-Crux7X-W.js",
+      "sizeBytes": 12669,
+      "sha256": "911219866fd825f05c77d732722f7856994979d738031d2333b5235559f0d8aa"
+    },
+    {
+      "path": "webapp/dist/assets/sessionsRemoteConnectionState-B8V_uwxl.js",
+      "sizeBytes": 554,
+      "sha256": "e7a16880492036a18ac7225ae95abd7912e26c8c21e4f8f5455ddaf1166667cd"
+    },
+    {
+      "path": "webapp/dist/assets/subagentRowProgress-BXFDThto.js",
+      "sizeBytes": 428,
+      "sha256": "10d68ea80ee174374b0e8421104a6daf37bee7b721bda74a6da2bea46661b7a6"
+    },
+    {
+      "path": "webapp/dist/assets/workbench-91j5R7dU.js",
+      "sizeBytes": 824265,
+      "sha256": "27ae2598227e965f94416221865331eab554d72f3141b7f336da76ae4e5aa26e"
     }
   ]
 }
