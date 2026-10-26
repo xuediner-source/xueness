@@ -12,7 +12,8 @@ let posix: ReturnType<typeof loadPosix> | undefined;
 function loadPosix() {
   const libc = koffi.load(process.platform === "darwin" ? "/usr/lib/libSystem.B.dylib" : null);
   return {
-    openat: libc.func("int openat(int, const char *, int, uint32)"),
+    // mode is variadic; Apple arm64 passes it on the stack, unlike fixed arguments.
+    openat: libc.func("int openat(int, const char *, int, ...)"),
     flock: libc.func("int flock(int, int)"),
   };
 }
@@ -27,7 +28,7 @@ function openPosix(directory: string, name: string): NativeHandle {
   const parent = openSync(directory, constants.O_RDONLY | constants.O_DIRECTORY | constants.O_NOFOLLOW);
   let fd = -1;
   try {
-    fd = a.openat(parent, name, constants.O_CREAT | constants.O_RDWR | constants.O_NOFOLLOW | constants.O_NONBLOCK | cloexec, 0o600);
+    fd = a.openat(parent, name, constants.O_CREAT | constants.O_RDWR | constants.O_NOFOLLOW | constants.O_NONBLOCK | cloexec, "uint32", 0o600);
     if (fd < 0) throw new PyOSError("session lock file could not be opened", `ERRNO_${koffi.errno()}`);
     if (!fstatSync(fd).isFile()) throw new PyValueError("invalid session lock");
   } catch (error) {

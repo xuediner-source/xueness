@@ -45,7 +45,7 @@ function posixRead(root: string, parts: string[], maximum: number, singleLink: b
   if (!constants.O_NOFOLLOW || !constants.O_DIRECTORY) return null;
   const closeOnExec = process.platform === "darwin" ? 0x1000000 : 0x80000;
   const library = koffi.load(process.platform === "darwin" ? "/usr/lib/libSystem.B.dylib" : null);
-  const openAt = library.func("int openat(int, str, int)");
+  const openAt = library.func("int openat(int, str, int, ...)");
   const descriptors: number[] = [];
   try {
     let parent = openSync(root, constants.O_RDONLY | constants.O_DIRECTORY | constants.O_NOFOLLOW); descriptors.push(parent);

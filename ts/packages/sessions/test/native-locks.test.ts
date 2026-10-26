@@ -17,6 +17,7 @@ describe("native operating-system locks", () => {
       const directory = process.platform === "darwin" ? "/dev/fd" : "/proc/self/fd";
       const fcntl = koffi.load(process.platform === "darwin" ? "/usr/lib/libSystem.B.dylib" : null).func("int fcntl(int, int)");
       const target = statSync(join(base, "cloexec.lock"));
+      assert.equal(target.mode & 0o777, 0o600 & ~process.umask(), "openat must receive the private creation mode through its variadic ABI");
       const descriptors = readdirSync(directory).filter((fd) => { try { const actual = fstatSync(Number(fd)); return actual.dev === target.dev && actual.ino === target.ino; } catch { return false; } });
       assert.equal(descriptors.length, 1);
       assert.equal(Number(fcntl(Number(descriptors[0]), 1)) & 1, 1, "FD_CLOEXEC must already be set on the live lock");

@@ -1473,8 +1473,8 @@
     },
     {
       "path": "ts/packages/sessions/src/native-locks.ts",
-      "sizeBytes": 4348,
-      "sha256": "2d24c0057a4c57d79711e268d6ed1d65c593d4f2d4db1b0af53d68a4fcda223d"
+      "sizeBytes": 4440,
+      "sha256": "28a689c581cc42c7e00455af465903e246f92af226f67ce33db981282fa3143d"
     },
     {
       "path": "ts/packages/sessions/src/realish.ts",
@@ -1483,8 +1483,8 @@
     },
     {
       "path": "ts/packages/sessions/src/secure-read.ts",
-      "sizeBytes": 5000,
-      "sha256": "cff1cae0e1a8345322aebf62c24fd87dd69bcc38b95538c74fdf8c7dd091b67e"
+      "sizeBytes": 5005,
+      "sha256": "598d3fb23187012d1624f7c0ca8a88eb4ff63357b9aceb1a4d5c9278a9eb6ba5"
     },
     {
       "path": "ts/packages/sessions/src/store.ts",
@@ -1543,8 +1543,8 @@
     },
     {
       "path": "ts/packages/sessions/test/native-locks.test.ts",
-      "sizeBytes": 6324,
-      "sha256": "9cbb8afb459bd464051209ec5a8980f3635ecd29e33fe0d9c60179c884e23a5b"
+      "sizeBytes": 6465,
+      "sha256": "7d1a5ca9a5b7bca10104761a6f34ee780312c30876d66ed0aa5cc29e1720e67b"
     },
     {
       "path": "ts/packages/sessions/test/oracle.ts",
