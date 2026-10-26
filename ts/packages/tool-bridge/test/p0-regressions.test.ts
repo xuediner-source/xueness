@@ -76,7 +76,7 @@ describe("P0 regressions through the tool bridge", () => {
     t.mock.timers.enable({ apis: ["setTimeout"] });
     const run = async (id: string, timeout: number) => {
       const marker = join(s.workspace, id);
-      const call = s.bridge.call({ id, name: "exec", input: { command: `touch ${id} && sleep 1 && echo done`, timeout_ms: timeout } });
+      const call = s.bridge.call({ id, name: "exec", input: { command: `touch ${id} && sleep 1 && echo done`, timeout_ms: timeout, auto_on_timeout: false } });
       await until(() => existsSync(marker));
       t.mock.timers.tick(31_000);
       return call;

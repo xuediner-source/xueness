@@ -2,6 +2,7 @@
 import assert from "node:assert/strict";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { describe, it } from "node:test";
 import { createModelMonitorHttp, readObservations, recordObservation } from "../src/index.ts";
 
@@ -10,7 +11,7 @@ const OTHER = "cd".repeat(16);
 
 describe("model monitor", () => {
   it("records only when enabled, filters by session, and clears on numeric true", () => {
-    const state = mkdtempSync(`${tmpdir()}\\xueness-monitor-`);
+    const state = mkdtempSync(join(tmpdir(), "xueness-monitor-"));
     try {
       recordObservation(state, { providerId: "p", requestedModel: "asked", returnedModels: ["got"], protocol: "openai", outcome: "success", sessionId: SID }, false);
       assert.deepEqual(readObservations(state), []);
@@ -32,7 +33,7 @@ describe("model monitor", () => {
   });
 
   it("rejects a bad session id and does not write while disabled", () => {
-    const state = mkdtempSync(`${tmpdir()}\\xueness-monitor-`);
+    const state = mkdtempSync(join(tmpdir(), "xueness-monitor-"));
     try {
       const off = createModelMonitorHttp({ stateDir: state, enabled: () => false });
       const denied = off.dispatch("GET", ["api", "model_monitor"], {}, null);

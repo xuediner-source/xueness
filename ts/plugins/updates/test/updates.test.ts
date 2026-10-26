@@ -11,7 +11,7 @@ const enabled = (id: string): boolean => id === "updates" || id === "desktop";
 
 describe("updates", () => {
   it("rejects a non-boolean setting and an extra prepare body", () => {
-    const state = mkdtempSync(`${tmpdir()}\\xueness-updates-`);
+    const state = mkdtempSync(join(tmpdir(), "xueness-updates-"));
     const http = createUpdatesHttp({ stateDir: state, enabled, desktopToken: "token", bridge: { request: () => ({ state: { phase: "idle" } }) } });
     try {
       assert.equal(http.owns("GET", ["api", "workflows"]), false);
@@ -26,7 +26,7 @@ describe("updates", () => {
 
   it("does not fetch a repository that has no origin", async () => {
     if (spawnSync("git", ["--version"], { windowsHide: true }).status !== 0) return;
-    const root = mkdtempSync(`${tmpdir()}\\xueness-update-repo-`);
+    const root = mkdtempSync(join(tmpdir(), "xueness-update-repo-"));
     try {
       assert.equal(spawnSync("git", ["init"], { cwd: root, windowsHide: true }).status, 0);
       writeFileSync(join(root, "README"), "temp");

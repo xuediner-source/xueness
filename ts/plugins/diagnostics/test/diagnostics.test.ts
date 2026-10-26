@@ -12,7 +12,7 @@ const LIVE = "b".repeat(32);
 
 describe("diagnostics", () => {
   it("owns the prefix, rejects a bad cutoff, and deletes only a settled log", async () => {
-    const state = mkdtempSync(`${tmpdir()}\\xueness-diagnostics-`);
+    const state = mkdtempSync(join(tmpdir(), "xueness-diagnostics-"));
     const workflows = join(state, "workflows");
     mkdirSync(workflows);
     writeFileSync(join(workflows, `${OLD}.json`), JSON.stringify({ id: OLD, status: "completed", updated_at: NOW - 10 * 86400 }));

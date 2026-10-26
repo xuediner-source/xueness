@@ -2,7 +2,7 @@
   "schemaVersion": 2,
   "product": "Xueness",
   "baseVersion": "0.1.8",
-  "migration": "TS M4.2/M4.3 + Windows packaging, 2026-10-18; ZCode-aligned completion, 2026-10-18; ZCode-aligned TS agent loop, 2026-10-18; ZCode full-alignment roadmap doc, 2026-10-18; ZCode roadmap step 1 permissions and approval flow, 2026-10-19; ZCode roadmap step 2 prompt, context and steering, 2026-10-19; ZCode roadmap step 3 round 1 core-tool contracts, ExitPlanMode, read/write/edit/bash, 2026-10-19; ZCode roadmap step 3 rounds 2-3 Glob/Grep/Task/Todo results, EnterPlanMode, ApplyPatch, Edit matchers, 2026-10-19; ZCode roadmap step 4 context compaction, 2026-10-19; ZCode roadmap step 5 round 1 MCP runtime, 2026-10-19; ZCode roadmap step 5 round 2 skills, 2026-10-19; ZCode roadmap step 5 round 3 lifecycle hooks, 2026-10-19; ZCode roadmap step 5 round 4 subagents to TS, 2026-10-19; ZCode roadmap step 5 round 5 memory plugin, 2026-10-19; ZCode roadmap step 6 round 1 Office plugin, 2026-10-19; ZCode roadmap step 6 round 2 TS browser plugin, 2026-10-19; ZCode roadmap step 6 round 3 network plugin and bundled ZCode document skills, 2026-10-19; ZCode roadmap step 7 round 1 settings and workspaces, 2026-10-19; ZCode roadmap step 7 round 2 composer and commands, 2026-10-19; ZCode roadmap step 7 rounds 3-9, 2026-10-19 to 2026-10-21; step 7 round 10 Python backend removed, 2026-10-21; round 11 cleanup, 2026-10-21; round 13 sessions fullscreen chat, inline approvals and local ConPTY acceptance, 2026-10-22; Round 14: sessions-owned TUI interaction alignment, structured dialogs, completions, cards, sidebar, clipboard, durable queue/steering and session navigation; targeted tests and local ConPTY verification; round 15 final wrap-up: full Linux verification (check, build, desktop, webapp, Linux PTY TUI acceptance), POSIX build LICENSE fix, paper palette pane frame fix, engine roadmap, 2026-10-22; 2026-10-22 round 16: engine Z1-1 ZCode model failure classification and retry; Round 17: ZCode Z1-2 empty completion retry, stream commit boundary, event idle timeout and persistent localized model failure status; Round 18: ZCode Z1-3 request shaping, opt-in strict schemas, signed reasoning history and closed tool stream assembly; Round 19: per-attempt fixed FIFO model admission, cancellable queue status, content-free local diagnostics and queue timing UI; 2026-10-22 Z2 stage: persisted turn runtime, cold history/file hydration, durable tool lifecycle, late steering, background terminal/lost notices, UTF-8 result budgets and session-scoped paging; 2026-10-23 Z3 stage: durable runtime events and SSE recovery, optional lossless SQLite snapshot library, child identities and stable forks, conversation/file rewind and compact operation recovery; 2026-10-23 Z4 execution adapter stage: Bash snapshots/startup, workspace range IO and revisions, validated redirects/full text cache/activity, provider paging registration; Windows targeted validation and source/built acceptance; 2026-10-23 Z5 stage: activation-scoped MCP leases/cancellation/catalog/subscriptions and metadata events; layered shell/MCP configuration with exact workspace trust; fresh hooks admission/output; plan-draft snapshot fix; Windows targeted and source/built validation; 2026-10-23 Z6: bounded native TypeScript workflow-script AST/compiler/schema/interpreter, dynamic workflows plugin runtime/API/tools/CLI, TUI workflow-card and sidebar integration; Windows targeted regression, source+built four-scenario loopback acceptance, build and relocated empty-PATH verification; 2026-10-23 Z7 native stdio v1/v2 protocol, durable command and projection adapters, bounded subscriptions and transfers, headless CLI; Windows source/built acceptance and shutdown draining verified; 2026-10-23 Z8 guarded permissions, durable goal lifecycle and explicit project memory curation; source and built loopback acceptance passed; desktop GUI startup unresolved and old installation restored; full project handover before deployment/cleanup/GitHub push; 2026-10-23 publish the verified installed Windows 0.2.1 snapshot with matching source and preserve user data while cleaning explicitly named old versions; 2026-10-23 local native_ops and batch_calls initial plugins, optional WorkBuddy/subscriptions/model-monitor, WorkBuddy account settings; publication and desktop deployment deferred pending skill selection; 2026-10-24: selected Seagull skills, current desktop evidence, pinned ZCode3.16.2 audit, 15-phase 82-round full-alignment plan and complete-source delivery; Preserve source bytes across Git checkouts for portable SHA-256 verification; 2026-10-26 Windows 0.2.1 deployment, full backend regression 2328 pass 0 fail 62 existing skips, native process cleanup and installed UI acceptance; 2026-10-26 sync tested prebuilt web assets and source-only acceptance evidence; 2026-10-26 install TS dependencies before frontend prebuild plugin gate in GitHub CI; 2026-10-26 retain browser-authenticated GitHub CI dependency-order correction",
+  "migration": "TS M4.2/M4.3 + Windows packaging, 2026-10-18; ZCode-aligned completion, 2026-10-18; ZCode-aligned TS agent loop, 2026-10-18; ZCode full-alignment roadmap doc, 2026-10-18; ZCode roadmap step 1 permissions and approval flow, 2026-10-19; ZCode roadmap step 2 prompt, context and steering, 2026-10-19; ZCode roadmap step 3 round 1 core-tool contracts, ExitPlanMode, read/write/edit/bash, 2026-10-19; ZCode roadmap step 3 rounds 2-3 Glob/Grep/Task/Todo results, EnterPlanMode, ApplyPatch, Edit matchers, 2026-10-19; ZCode roadmap step 4 context compaction, 2026-10-19; ZCode roadmap step 5 round 1 MCP runtime, 2026-10-19; ZCode roadmap step 5 round 2 skills, 2026-10-19; ZCode roadmap step 5 round 3 lifecycle hooks, 2026-10-19; ZCode roadmap step 5 round 4 subagents to TS, 2026-10-19; ZCode roadmap step 5 round 5 memory plugin, 2026-10-19; ZCode roadmap step 6 round 1 Office plugin, 2026-10-19; ZCode roadmap step 6 round 2 TS browser plugin, 2026-10-19; ZCode roadmap step 6 round 3 network plugin and bundled ZCode document skills, 2026-10-19; ZCode roadmap step 7 round 1 settings and workspaces, 2026-10-19; ZCode roadmap step 7 round 2 composer and commands, 2026-10-19; ZCode roadmap step 7 rounds 3-9, 2026-10-19 to 2026-10-21; step 7 round 10 Python backend removed, 2026-10-21; round 11 cleanup, 2026-10-21; round 13 sessions fullscreen chat, inline approvals and local ConPTY acceptance, 2026-10-22; Round 14: sessions-owned TUI interaction alignment, structured dialogs, completions, cards, sidebar, clipboard, durable queue/steering and session navigation; targeted tests and local ConPTY verification; round 15 final wrap-up: full Linux verification (check, build, desktop, webapp, Linux PTY TUI acceptance), POSIX build LICENSE fix, paper palette pane frame fix, engine roadmap, 2026-10-22; 2026-10-22 round 16: engine Z1-1 ZCode model failure classification and retry; Round 17: ZCode Z1-2 empty completion retry, stream commit boundary, event idle timeout and persistent localized model failure status; Round 18: ZCode Z1-3 request shaping, opt-in strict schemas, signed reasoning history and closed tool stream assembly; Round 19: per-attempt fixed FIFO model admission, cancellable queue status, content-free local diagnostics and queue timing UI; 2026-10-22 Z2 stage: persisted turn runtime, cold history/file hydration, durable tool lifecycle, late steering, background terminal/lost notices, UTF-8 result budgets and session-scoped paging; 2026-10-23 Z3 stage: durable runtime events and SSE recovery, optional lossless SQLite snapshot library, child identities and stable forks, conversation/file rewind and compact operation recovery; 2026-10-23 Z4 execution adapter stage: Bash snapshots/startup, workspace range IO and revisions, validated redirects/full text cache/activity, provider paging registration; Windows targeted validation and source/built acceptance; 2026-10-23 Z5 stage: activation-scoped MCP leases/cancellation/catalog/subscriptions and metadata events; layered shell/MCP configuration with exact workspace trust; fresh hooks admission/output; plan-draft snapshot fix; Windows targeted and source/built validation; 2026-10-23 Z6: bounded native TypeScript workflow-script AST/compiler/schema/interpreter, dynamic workflows plugin runtime/API/tools/CLI, TUI workflow-card and sidebar integration; Windows targeted regression, source+built four-scenario loopback acceptance, build and relocated empty-PATH verification; 2026-10-23 Z7 native stdio v1/v2 protocol, durable command and projection adapters, bounded subscriptions and transfers, headless CLI; Windows source/built acceptance and shutdown draining verified; 2026-10-23 Z8 guarded permissions, durable goal lifecycle and explicit project memory curation; source and built loopback acceptance passed; desktop GUI startup unresolved and old installation restored; full project handover before deployment/cleanup/GitHub push; 2026-10-23 publish the verified installed Windows 0.2.1 snapshot with matching source and preserve user data while cleaning explicitly named old versions; 2026-10-23 local native_ops and batch_calls initial plugins, optional WorkBuddy/subscriptions/model-monitor, WorkBuddy account settings; publication and desktop deployment deferred pending skill selection; 2026-10-24: selected Seagull skills, current desktop evidence, pinned ZCode3.16.2 audit, 15-phase 82-round full-alignment plan and complete-source delivery; Preserve source bytes across Git checkouts for portable SHA-256 verification; 2026-10-26 Windows 0.2.1 deployment, full backend regression 2328 pass 0 fail 62 existing skips, native process cleanup and installed UI acceptance; 2026-10-26 sync tested prebuilt web assets and source-only acceptance evidence; 2026-10-26 install TS dependencies before frontend prebuild plugin gate in GitHub CI; 2026-10-26 retain browser-authenticated GitHub CI dependency-order correction; 2026-10-26 portable regression fixtures, current hook payloads, explicit foreground timeout and relocation of obsolete Python vendor license; 2026-10-26 preserve test source line endings for portable fixture corrections",
   "sourceFileCount": 2939,
   "manifestExcludesItself": true,
   "originalManifests": "验收资料/原始清单/",
@@ -1603,8 +1603,8 @@
     },
     {
       "path": "ts/packages/tool-bridge/test/p0-regressions.test.ts",
-      "sizeBytes": 5228,
-      "sha256": "0bb777d8671118fd6b9d19726a63b6235a18746fc52b9183a895f7b8f1e28cdc"
+      "sizeBytes": 5252,
+      "sha256": "aa83d26e644cdd6e10036fe8e35991335fd0895ff82aa144710393c617359a22"
     },
     {
       "path": "ts/packages/tool-bridge/test/support.ts",
@@ -6618,8 +6618,8 @@
     },
     {
       "path": "ts/apps/server/test/agent-hooks.test.ts",
-      "sizeBytes": 10115,
-      "sha256": "1c5eacaaf4074791f0086d08e4ccd0955fa23cbb3d2f4c6a66b9896e7ec785aa"
+      "sizeBytes": 10445,
+      "sha256": "397eb581382375fa1e1ed7672684f5bf101268b56c9e4fe59c560205ff0a2116"
     },
     {
       "path": "ts/plugins/hooks/manifest.json",
@@ -8458,8 +8458,8 @@
     },
     {
       "path": "ts/plugins/desktop/test/desktop.test.ts",
-      "sizeBytes": 4285,
-      "sha256": "9ccfcdd62a17c3d7d74974e091c190e6270f9ebd9df57bbbb30361028b76e5b0"
+      "sizeBytes": 4291,
+      "sha256": "ce964c818edb068a6f6a112d9afe21290cd2862d9cc338d21e97fae9eccd0b75"
     },
     {
       "path": "ts/plugins/diagnostics/manifest.json",
@@ -8503,8 +8503,8 @@
     },
     {
       "path": "ts/plugins/diagnostics/test/diagnostics.test.ts",
-      "sizeBytes": 3646,
-      "sha256": "ef539ef05bb57932cf53489c884064fd9144b521fd5ead0e7885577873c875e2"
+      "sizeBytes": 3649,
+      "sha256": "fa7d9cbea4b5f305c1c45f5ff73e920378b459c84fb3476dd9ae0ae721460d47"
     },
     {
       "path": "ts/plugins/extensions/manifest.json",
@@ -8718,8 +8718,8 @@
     },
     {
       "path": "ts/plugins/model_monitor/test/model-monitor.test.ts",
-      "sizeBytes": 3406,
-      "sha256": "c98fbb635d270e0c7fda5f9dad7d56b6d4dc1bf84580c6d0e3c6c93251ff76fd"
+      "sizeBytes": 3446,
+      "sha256": "a569c74621c0b7e02e3be1304a4813baeffe6b481aa47cb52c1d4a0344021594"
     },
     {
       "path": "ts/plugins/network/src/http.ts",
@@ -8758,8 +8758,8 @@
     },
     {
       "path": "ts/plugins/onboarding/test/onboarding.test.ts",
-      "sizeBytes": 2525,
-      "sha256": "fc5bc53ebb0cd732c3dd23ae7b7446f86443ca7c67b990daa2a65172fcee1d8f"
+      "sizeBytes": 2565,
+      "sha256": "328bcd9d9fd21bc7c1ce70caee40c4df9f712d13788de00288d9bfca89501629"
     },
     {
       "path": "ts/plugins/remote/manifest.json",
@@ -9218,8 +9218,8 @@
     },
     {
       "path": "ts/plugins/tools/test/tools.test.ts",
-      "sizeBytes": 3020,
-      "sha256": "98e3e016273c24af4f43cf8a1e1d6b5a0291ff4e255f766a7dc4272e9993ecd2"
+      "sizeBytes": 3023,
+      "sha256": "1ad2ed9b273dee3c80c6fd7dd72014a0cb6f0a6dcce633b6f4fe1cbf7b6fdb16"
     },
     {
       "path": "ts/plugins/updates/manifest.json",
@@ -9248,8 +9248,8 @@
     },
     {
       "path": "ts/plugins/updates/test/updates.test.ts",
-      "sizeBytes": 2420,
-      "sha256": "73b92b800de9b0d0ae795df5f55c40abbf64ccdeacfd65067d41b06678d2bb7d"
+      "sizeBytes": 2426,
+      "sha256": "0cd3a9de00e431e629da83bb8bd9cc6cf8cd203707bc73eaf26d4ded9f3b2c09"
     },
     {
       "path": "ts/plugins/usage/manifest.json",
@@ -14312,11 +14312,6 @@
       "sha256": "55ee19127430f1f3f48201ca7f223acd95524b86a8dad9da4c67ea4a5e96f6d0"
     },
     {
-      "path": "xueness/bundled_plugins/subscriptions/vendor/LICENSE-MIT.txt",
-      "sizeBytes": 1103,
-      "sha256": "5b283f1178e4698ad6aa6ecc05af34e6f7c101e3e9a48ad3d0b5b39ea16c57e9"
-    },
-    {
       "path": "验收资料/20261026-windows-regression/desktop-e2e.mjs",
       "sizeBytes": 11325,
       "sha256": "332bec50c20394d5bc7d8ebe9ef8a46a8def610f1cbe9cb3b631d254c23747ea"
@@ -14720,6 +14715,11 @@
       "path": "webapp/dist/assets/workbench-CZTP__9o.js",
       "sizeBytes": 824259,
       "sha256": "84f915414d5c7989bad2eaa5b79ffdb5410e74a5b7d9b4fcf38fd67148ae550f"
+    },
+    {
+      "path": "docs/licenses/subscriptions-vendor-LICENSE-MIT.txt",
+      "sizeBytes": 1103,
+      "sha256": "5b283f1178e4698ad6aa6ecc05af34e6f7c101e3e9a48ad3d0b5b39ea16c57e9"
     }
   ]
 }

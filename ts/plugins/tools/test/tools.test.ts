@@ -10,7 +10,7 @@ const SID = "ab".repeat(16);
 
 describe("tools", () => {
   it("does not deny while dry-run is off and does not own other tools paths", async () => {
-    const state = mkdtempSync(`${tmpdir()}\\xueness-tools-`);
+    const state = mkdtempSync(join(tmpdir(), "xueness-tools-"));
     const workspace = join(state, "ws");
     mkdirSync(workspace, { recursive: true });
     const root = realpathSync(workspace);

@@ -45,14 +45,14 @@ describe("hooks on the TS agent service", { skip: process.platform === "win32" ?
       assert.equal(service.supports(session, request), true, "hooks run on the TS hooks plugin, not the Python executor");
       await service.createRunner(session, provider, policy(request)).run(session);
       assert.equal(session.status, "completed");
-      assert.deepEqual(lines(join(local.state, "start.log")), [{ session_id: session.id, workspace: local.root }]);
-      assert.deepEqual(lines(join(local.state, "prompt.log")), [{ session_id: session.id, prompt: "Read a.txt then touch b" }]);
+      assert.deepEqual(lines(join(local.state, "start.log")), [{ session_id: session.id, workspace: local.root, source: "startup", hook_event_name: "SessionStart" }]);
+      assert.deepEqual(lines(join(local.state, "prompt.log")), [{ session_id: session.id, prompt: "Read a.txt then touch b", hook_event_name: "UserPromptSubmit" }]);
       assert.equal(existsSync(join(local.root, "b")), false, "the vetoed command never ran");
       const blocked = (session.results as Row).b1 as Row;
       assert.deepEqual({ ok: blocked.ok, error: blocked.error, hook_blocked: blocked.hook_blocked, hook_output_untrusted: blocked.hook_output_untrusted }, { ok: false, error: "blocked by hook veto", hook_blocked: true, hook_output_untrusted: "no shell here" });
-      assert.deepEqual(lines(join(local.state, "post.log")), [{ session_id: session.id, tool: "read", tool_call_id: "r1", ok: true }]);
-      assert.deepEqual(lines(join(local.state, "fail.log")), [{ session_id: session.id, tool: "exec", tool_call_id: "b1", ok: false }]);
-      assert.deepEqual(lines(join(local.state, "stop.log")), [{ session_id: session.id, status: "completed", steps: session.steps }]);
+      assert.deepEqual(lines(join(local.state, "post.log")), [{ session_id: session.id, tool: "read", tool_call_id: "r1", ok: true, hook_event_name: "PostToolUse" }]);
+      assert.deepEqual(lines(join(local.state, "fail.log")), [{ session_id: session.id, tool: "exec", tool_call_id: "b1", ok: false, hook_event_name: "PostToolUseFailure" }]);
+      assert.deepEqual(lines(join(local.state, "stop.log")), [{ session_id: session.id, status: "running", steps: session.steps, stop_hook_active: false, hook_event_name: "Stop" }]);
       const log = (await local.store.load(String(session.id))).hook_log as Row[];
       assert.deepEqual(log.map((row) => [row.event, row.id, row.exit_code, row.blocked]), [["SessionStart", "start", 0, false], ["UserPromptSubmit", "prompt", 0, false],
         ["PostToolUse", "post", 0, false], ["PreToolUse", "veto", 2, true], ["PostToolUseFailure", "fail", 0, false], ["Stop", "stop", 0, false]]);
@@ -69,7 +69,7 @@ describe("hooks on the TS agent service", { skip: process.platform === "win32" ?
     const provider: AgentProvider = { async complete() { return requests++ === 0 ? { tool_calls: [call("b1", "Bash", { command: "touch b", description: "touch" })] } : { content: "Denied." }; } };
     try {
       await service.createRunner(session, provider, { ...policy({ allow_hooks: true }), disallowed: ["exec"] }).run(session);
-      assert.deepEqual(lines(join(local.state, "perm.log")), [{ session_id: session.id, tool_name: "exec", tool_call_id: "b1" }]);
+      assert.deepEqual(lines(join(local.state, "perm.log")), [{ session_id: session.id, tool_name: "exec", tool_call_id: "b1", hook_event_name: "PermissionRequest" }]);
       assert.equal(((session.results as Row).b1 as Row).ok, false, "a hook never grants");
       assert.equal(existsSync(join(local.root, "b")), false);
     } finally { await service.dispose(); local.close(); }
@@ -89,7 +89,7 @@ describe("hooks on the TS agent service", { skip: process.platform === "win32" ?
       await service.createRunner(session, provider, policy()).run(session);
       const piped = lines(join(local.state, "piped.log"));
       assert.equal(piped.length, 1);
-      assert.deepEqual({ ...piped[0], result: undefined }, { session_id: session.id, tool: "read", tool_call_id: "r1", ok: true, result: undefined });
+      assert.deepEqual({ ...piped[0], result: undefined }, { session_id: session.id, tool: "read", tool_call_id: "r1", ok: true, result: undefined, hook_event_name: "PostToolUse" });
       assert.match(String((piped[0]!.result as Row).output), /hello/);
       assert.deepEqual(lines(join(local.state, "legacy.log")), []); assert.deepEqual(lines(join(local.state, "stop.log")), []);
       assert.equal((await local.store.load(String(session.id))).hook_log, undefined, "pipeline firings are not audited");
@@ -112,7 +112,7 @@ describe("hooks on the TS agent service", { skip: process.platform === "win32" ?
       writeFileSync(join(local.state, "hook-trust.json"), JSON.stringify({ schemaVersion: 1, records: [{ workspace: found.workspace, digest: found.hooks[0]!.digest, decision: "trusted", grantedAt: "2026-10-19T00:00:00Z" }] }));
       const next = await local.store.new("Hi again", local.root);
       await service.createRunner(next, { complete: async () => ({ content: "Hello." }) }, policy({ allow_hooks: true })).run(next);
-      assert.deepEqual(lines(join(local.state, "ws.log")), [{ session_id: next.id, workspace: local.root }]);
+      assert.deepEqual(lines(join(local.state, "ws.log")), [{ session_id: next.id, workspace: local.root, source: "startup", hook_event_name: "SessionStart" }]);
     } finally { await service.dispose(); local.close(); }
   });
 });

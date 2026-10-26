@@ -2,6 +2,7 @@
 import assert from "node:assert/strict";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { describe, it } from "node:test";
 import { createOnboardingHttp } from "../src/index.ts";
 
@@ -9,7 +10,7 @@ const PATH = ["api", "onboarding", "desktop"] as const;
 
 describe("onboarding", () => {
   it("requires the desktop host and an exact completed true", () => {
-    const state = mkdtempSync(`${tmpdir()}\\xueness-onboarding-`);
+    const state = mkdtempSync(join(tmpdir(), "xueness-onboarding-"));
     const enabled = (id: string): boolean => id === "onboarding" || id === "desktop";
     try {
       const bare = createOnboardingHttp({ stateDir: state, enabled, desktop: false });
@@ -28,7 +29,7 @@ describe("onboarding", () => {
   });
 
   it("uses the kernel disabled body and no code field", () => {
-    const state = mkdtempSync(`${tmpdir()}\\xueness-onboarding-`);
+    const state = mkdtempSync(join(tmpdir(), "xueness-onboarding-"));
     try {
       const http = createOnboardingHttp({ stateDir: state, enabled: () => false, desktop: true });
       const denied = http.dispatch("GET", PATH, {}, null);

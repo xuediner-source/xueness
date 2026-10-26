@@ -18,7 +18,7 @@ function syncDesktop(http: ReturnType<typeof createDesktopHttp>) {
 
 describe("desktop", () => {
   it("serves status and tray without taking workspaces", () => {
-    const root = mkdtempSync(`${tmpdir()}\\xueness-desktop-`);
+    const root = mkdtempSync(join(tmpdir(), "xueness-desktop-"));
     const web = join(root, "web");
     mkdirSync(web);
     writeFileSync(join(web, "tray.html"), "<p>tray</p>");
@@ -47,7 +47,7 @@ describe("desktop", () => {
   });
 
   it("issues a ticket only when the setting is true and rejects a replay", () => {
-    const state = mkdtempSync(`${tmpdir()}\\xueness-desktop-cap-`);
+    const state = mkdtempSync(join(tmpdir(), "xueness-desktop-cap-"));
     writeFileSync(join(state, "settings.json"), JSON.stringify({ general: { desktopHostCapabilityEnabled: false } }));
     const off = syncDesktop(createDesktopHttp({ stateDir: state, enabled: true, desktopToken: "token" }));
     assert.equal(off.dispatch("POST", ["api", "desktop", "host-capability"], {}, {})?.[0], 400);
