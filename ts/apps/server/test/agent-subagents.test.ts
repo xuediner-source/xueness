@@ -1,6 +1,7 @@
+import { mkdtempSync } from "../../../test-support/canonical-temp.ts";
 /** Sub-agents on the TS front door: a read-only foreground child per Agent call, Python's child-session and task_runs layout, no Python fallback. */
 import assert from "node:assert/strict";
-import { existsSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, writeFileSync, mkdirSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync, realpathSync, rmSync, writeFileSync, mkdirSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, it } from "node:test";

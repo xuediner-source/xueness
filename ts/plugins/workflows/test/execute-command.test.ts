@@ -1,3 +1,4 @@
+import { mkdtempSync } from "../../../test-support/canonical-temp.ts";
 /**
  * Command-node execution: exit status, log capture and capping, cancellation,
  * timeout, and the workspace-lease refusals (Python `_execute` command branch
@@ -5,7 +6,7 @@
  */
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, rmSync, symlinkSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, it } from "node:test";

@@ -1,3 +1,4 @@
+import { mkdtempSync } from "../../../test-support/canonical-temp.ts";
 /**
  * F07.04 — additional skill directories: `<state>/skill-directories.json`
  * lists operator roots, each its own jail, optionally namespaced. Same-name
@@ -6,7 +7,7 @@
  * shipped bundled skills keep working beside the new roots.
  */
 import assert from "node:assert/strict";
-import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { mkdirSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, describe, it } from "node:test";

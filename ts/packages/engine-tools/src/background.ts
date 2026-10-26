@@ -300,8 +300,8 @@ export class BackgroundTasks {
   async read(id: string, options: { owner?: string | null; waitMs?: number; signal?: AbortSignal } = {}): Promise<TaskRead> {
     const task = this.#find(id, options.owner);
     if (options.waitMs && task.info.state === "running") await within(task.exited, options.waitMs, options.signal);
-    // Output written just before the exit arrives a moment later.
-    if (task.info.state !== "running" && task.info.outputOpen) await within(task.closed, 200, options.signal);
+    // closed also waits for log files; pipe EOF can arrive before their writes flush.
+    if (task.info.state !== "running") await within(task.closed, 200, options.signal);
     return { info: copy(task.info, task.started), stdout: task.unread.stdout.take(), stderr: task.unread.stderr.take() };
   }
 

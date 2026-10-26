@@ -1,3 +1,4 @@
+import { mkdtempSync } from "../../../test-support/canonical-temp.ts";
 /**
  * A host-owned directory (`hostWritable`, the session's visualization
  * directory): Read, Write and Edit reach it in every mode without approval and
@@ -5,7 +6,7 @@
  * win, and neither a link out of it nor a sibling path gets in.
  */
 import assert from "node:assert/strict";
-import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, symlinkSync } from "node:fs";
+import { mkdirSync, readFileSync, realpathSync, rmSync, symlinkSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { describe, it } from "node:test";

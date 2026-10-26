@@ -1,6 +1,7 @@
+import { mkdtempSync } from "../../../test-support/canonical-temp.ts";
 import assert from "node:assert/strict";
 import { createHash, randomBytes } from "node:crypto";
-import { linkSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import { linkSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { it } from "node:test";

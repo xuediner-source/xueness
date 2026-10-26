@@ -2,8 +2,8 @@
   "schemaVersion": 2,
   "product": "Xueness",
   "baseVersion": "0.1.8",
-  "migration": "TS M4.2/M4.3 + Windows packaging, 2026-10-18; ZCode-aligned completion, 2026-10-18; ZCode-aligned TS agent loop, 2026-10-18; ZCode full-alignment roadmap doc, 2026-10-18; ZCode roadmap step 1 permissions and approval flow, 2026-10-19; ZCode roadmap step 2 prompt, context and steering, 2026-10-19; ZCode roadmap step 3 round 1 core-tool contracts, ExitPlanMode, read/write/edit/bash, 2026-10-19; ZCode roadmap step 3 rounds 2-3 Glob/Grep/Task/Todo results, EnterPlanMode, ApplyPatch, Edit matchers, 2026-10-19; ZCode roadmap step 4 context compaction, 2026-10-19; ZCode roadmap step 5 round 1 MCP runtime, 2026-10-19; ZCode roadmap step 5 round 2 skills, 2026-10-19; ZCode roadmap step 5 round 3 lifecycle hooks, 2026-10-19; ZCode roadmap step 5 round 4 subagents to TS, 2026-10-19; ZCode roadmap step 5 round 5 memory plugin, 2026-10-19; ZCode roadmap step 6 round 1 Office plugin, 2026-10-19; ZCode roadmap step 6 round 2 TS browser plugin, 2026-10-19; ZCode roadmap step 6 round 3 network plugin and bundled ZCode document skills, 2026-10-19; ZCode roadmap step 7 round 1 settings and workspaces, 2026-10-19; ZCode roadmap step 7 round 2 composer and commands, 2026-10-19; ZCode roadmap step 7 rounds 3-9, 2026-10-19 to 2026-10-21; step 7 round 10 Python backend removed, 2026-10-21; round 11 cleanup, 2026-10-21; round 13 sessions fullscreen chat, inline approvals and local ConPTY acceptance, 2026-10-22; Round 14: sessions-owned TUI interaction alignment, structured dialogs, completions, cards, sidebar, clipboard, durable queue/steering and session navigation; targeted tests and local ConPTY verification; round 15 final wrap-up: full Linux verification (check, build, desktop, webapp, Linux PTY TUI acceptance), POSIX build LICENSE fix, paper palette pane frame fix, engine roadmap, 2026-10-22; 2026-10-22 round 16: engine Z1-1 ZCode model failure classification and retry; Round 17: ZCode Z1-2 empty completion retry, stream commit boundary, event idle timeout and persistent localized model failure status; Round 18: ZCode Z1-3 request shaping, opt-in strict schemas, signed reasoning history and closed tool stream assembly; Round 19: per-attempt fixed FIFO model admission, cancellable queue status, content-free local diagnostics and queue timing UI; 2026-10-22 Z2 stage: persisted turn runtime, cold history/file hydration, durable tool lifecycle, late steering, background terminal/lost notices, UTF-8 result budgets and session-scoped paging; 2026-10-23 Z3 stage: durable runtime events and SSE recovery, optional lossless SQLite snapshot library, child identities and stable forks, conversation/file rewind and compact operation recovery; 2026-10-23 Z4 execution adapter stage: Bash snapshots/startup, workspace range IO and revisions, validated redirects/full text cache/activity, provider paging registration; Windows targeted validation and source/built acceptance; 2026-10-23 Z5 stage: activation-scoped MCP leases/cancellation/catalog/subscriptions and metadata events; layered shell/MCP configuration with exact workspace trust; fresh hooks admission/output; plan-draft snapshot fix; Windows targeted and source/built validation; 2026-10-23 Z6: bounded native TypeScript workflow-script AST/compiler/schema/interpreter, dynamic workflows plugin runtime/API/tools/CLI, TUI workflow-card and sidebar integration; Windows targeted regression, source+built four-scenario loopback acceptance, build and relocated empty-PATH verification; 2026-10-23 Z7 native stdio v1/v2 protocol, durable command and projection adapters, bounded subscriptions and transfers, headless CLI; Windows source/built acceptance and shutdown draining verified; 2026-10-23 Z8 guarded permissions, durable goal lifecycle and explicit project memory curation; source and built loopback acceptance passed; desktop GUI startup unresolved and old installation restored; full project handover before deployment/cleanup/GitHub push; 2026-10-23 publish the verified installed Windows 0.2.1 snapshot with matching source and preserve user data while cleaning explicitly named old versions; 2026-10-23 local native_ops and batch_calls initial plugins, optional WorkBuddy/subscriptions/model-monitor, WorkBuddy account settings; publication and desktop deployment deferred pending skill selection; 2026-10-24: selected Seagull skills, current desktop evidence, pinned ZCode3.16.2 audit, 15-phase 82-round full-alignment plan and complete-source delivery; Preserve source bytes across Git checkouts for portable SHA-256 verification; 2026-10-26 Windows 0.2.1 deployment, full backend regression 2328 pass 0 fail 62 existing skips, native process cleanup and installed UI acceptance; 2026-10-26 sync tested prebuilt web assets and source-only acceptance evidence; 2026-10-26 install TS dependencies before frontend prebuild plugin gate in GitHub CI; 2026-10-26 retain browser-authenticated GitHub CI dependency-order correction; 2026-10-26 portable regression fixtures, current hook payloads, explicit foreground timeout and relocation of obsolete Python vendor license; 2026-10-26 preserve test source line endings for portable fixture corrections; Fix streamed transport backpressure and compatible tool identity continuations, honor explicit session URLs, and record real WorkBuddy long-task acceptance; Synchronize the verified prebuilt Web bundle with the installed explicit-session navigation fix",
-  "sourceFileCount": 2953,
+  "migration": "TS M4.2/M4.3 + Windows packaging, 2026-10-18; ZCode-aligned completion, 2026-10-18; ZCode-aligned TS agent loop, 2026-10-18; ZCode full-alignment roadmap doc, 2026-10-18; ZCode roadmap step 1 permissions and approval flow, 2026-10-19; ZCode roadmap step 2 prompt, context and steering, 2026-10-19; ZCode roadmap step 3 round 1 core-tool contracts, ExitPlanMode, read/write/edit/bash, 2026-10-19; ZCode roadmap step 3 rounds 2-3 Glob/Grep/Task/Todo results, EnterPlanMode, ApplyPatch, Edit matchers, 2026-10-19; ZCode roadmap step 4 context compaction, 2026-10-19; ZCode roadmap step 5 round 1 MCP runtime, 2026-10-19; ZCode roadmap step 5 round 2 skills, 2026-10-19; ZCode roadmap step 5 round 3 lifecycle hooks, 2026-10-19; ZCode roadmap step 5 round 4 subagents to TS, 2026-10-19; ZCode roadmap step 5 round 5 memory plugin, 2026-10-19; ZCode roadmap step 6 round 1 Office plugin, 2026-10-19; ZCode roadmap step 6 round 2 TS browser plugin, 2026-10-19; ZCode roadmap step 6 round 3 network plugin and bundled ZCode document skills, 2026-10-19; ZCode roadmap step 7 round 1 settings and workspaces, 2026-10-19; ZCode roadmap step 7 round 2 composer and commands, 2026-10-19; ZCode roadmap step 7 rounds 3-9, 2026-10-19 to 2026-10-21; step 7 round 10 Python backend removed, 2026-10-21; round 11 cleanup, 2026-10-21; round 13 sessions fullscreen chat, inline approvals and local ConPTY acceptance, 2026-10-22; Round 14: sessions-owned TUI interaction alignment, structured dialogs, completions, cards, sidebar, clipboard, durable queue/steering and session navigation; targeted tests and local ConPTY verification; round 15 final wrap-up: full Linux verification (check, build, desktop, webapp, Linux PTY TUI acceptance), POSIX build LICENSE fix, paper palette pane frame fix, engine roadmap, 2026-10-22; 2026-10-22 round 16: engine Z1-1 ZCode model failure classification and retry; Round 17: ZCode Z1-2 empty completion retry, stream commit boundary, event idle timeout and persistent localized model failure status; Round 18: ZCode Z1-3 request shaping, opt-in strict schemas, signed reasoning history and closed tool stream assembly; Round 19: per-attempt fixed FIFO model admission, cancellable queue status, content-free local diagnostics and queue timing UI; 2026-10-22 Z2 stage: persisted turn runtime, cold history/file hydration, durable tool lifecycle, late steering, background terminal/lost notices, UTF-8 result budgets and session-scoped paging; 2026-10-23 Z3 stage: durable runtime events and SSE recovery, optional lossless SQLite snapshot library, child identities and stable forks, conversation/file rewind and compact operation recovery; 2026-10-23 Z4 execution adapter stage: Bash snapshots/startup, workspace range IO and revisions, validated redirects/full text cache/activity, provider paging registration; Windows targeted validation and source/built acceptance; 2026-10-23 Z5 stage: activation-scoped MCP leases/cancellation/catalog/subscriptions and metadata events; layered shell/MCP configuration with exact workspace trust; fresh hooks admission/output; plan-draft snapshot fix; Windows targeted and source/built validation; 2026-10-23 Z6: bounded native TypeScript workflow-script AST/compiler/schema/interpreter, dynamic workflows plugin runtime/API/tools/CLI, TUI workflow-card and sidebar integration; Windows targeted regression, source+built four-scenario loopback acceptance, build and relocated empty-PATH verification; 2026-10-23 Z7 native stdio v1/v2 protocol, durable command and projection adapters, bounded subscriptions and transfers, headless CLI; Windows source/built acceptance and shutdown draining verified; 2026-10-23 Z8 guarded permissions, durable goal lifecycle and explicit project memory curation; source and built loopback acceptance passed; desktop GUI startup unresolved and old installation restored; full project handover before deployment/cleanup/GitHub push; 2026-10-23 publish the verified installed Windows 0.2.1 snapshot with matching source and preserve user data while cleaning explicitly named old versions; 2026-10-23 local native_ops and batch_calls initial plugins, optional WorkBuddy/subscriptions/model-monitor, WorkBuddy account settings; publication and desktop deployment deferred pending skill selection; 2026-10-24: selected Seagull skills, current desktop evidence, pinned ZCode3.16.2 audit, 15-phase 82-round full-alignment plan and complete-source delivery; Preserve source bytes across Git checkouts for portable SHA-256 verification; 2026-10-26 Windows 0.2.1 deployment, full backend regression 2328 pass 0 fail 62 existing skips, native process cleanup and installed UI acceptance; 2026-10-26 sync tested prebuilt web assets and source-only acceptance evidence; 2026-10-26 install TS dependencies before frontend prebuild plugin gate in GitHub CI; 2026-10-26 retain browser-authenticated GitHub CI dependency-order correction; 2026-10-26 portable regression fixtures, current hook payloads, explicit foreground timeout and relocation of obsolete Python vendor license; 2026-10-26 preserve test source line endings for portable fixture corrections; Fix streamed transport backpressure and compatible tool identity continuations, honor explicit session URLs, and record real WorkBuddy long-task acceptance; Synchronize the verified prebuilt Web bundle with the installed explicit-session navigation fix; Canonicalize CI temp fixtures across aliases and await background log drain after pipe EOF",
+  "sourceFileCount": 2956,
   "manifestExcludesItself": true,
   "originalManifests": "验收资料/原始清单/",
   "exclusions": [
@@ -628,8 +628,8 @@
     },
     {
       "path": "ts/apps/server/test/agent-service.test.ts",
-      "sizeBytes": 18069,
-      "sha256": "31697a1bc0f03053cd3e27207e607f177c12760883f01cca9e5031b997e81ffc"
+      "sizeBytes": 18127,
+      "sha256": "24c3ae701c65d3dfe2379670eef5fb2d77c7ecf4b095241c71724ab64ba65934"
     },
     {
       "path": "ts/apps/server/test/bundled-plugins.test.ts",
@@ -658,8 +658,8 @@
     },
     {
       "path": "ts/apps/server/test/native-lifecycle.test.ts",
-      "sizeBytes": 4996,
-      "sha256": "4de330e0f4e84681350863a6be1c829f363e01ac6a37c610e5c332b0e6a8ba98"
+      "sizeBytes": 5054,
+      "sha256": "b12acdab3c2af27b605ff124bb5e61d02299b85f730b2fe90e4df85e97206b1c"
     },
     {
       "path": "ts/apps/server/test/raw-http.ts",
@@ -953,8 +953,8 @@
     },
     {
       "path": "ts/packages/engine-tools/src/background.ts",
-      "sizeBytes": 19908,
-      "sha256": "5e15043535375e913bda6ad5935261af5b84ede547efc4406896a7e54facaf61"
+      "sizeBytes": 19904,
+      "sha256": "61938cfb760daf9b5913b24207b1eba97199a6a2343da22d2ab6e18fe87418e3"
     },
     {
       "path": "ts/packages/engine-tools/src/diff.ts",
@@ -1093,8 +1093,8 @@
     },
     {
       "path": "ts/packages/engine-tools/test/helpers.ts",
-      "sizeBytes": 1781,
-      "sha256": "2adce7b5ea0f8e70bf3f80e750457ea4d13644251e5d558949e2a3ed4143cb89"
+      "sizeBytes": 1839,
+      "sha256": "50f4412575850c870eb8bfacddfa26e6a35dc721c8a6d8ae2831c171a7e7931d"
     },
     {
       "path": "ts/packages/engine-tools/test/ignore-git.test.ts",
@@ -1173,8 +1173,8 @@
     },
     {
       "path": "ts/packages/kernel/test/capability-guard.test.ts",
-      "sizeBytes": 7912,
-      "sha256": "16f47a1afafb16dba951524af9b3690da98eaf5e869d8dd0d4b8665df857b3c2"
+      "sizeBytes": 7970,
+      "sha256": "ca5a094326512ffb5cc50955c3ee321f0b145eba2723a25c0ba2ca244fa9d216"
     },
     {
       "path": "ts/packages/kernel/test/plugin-host.test.ts",
@@ -2308,13 +2308,13 @@
     },
     {
       "path": "ts/plugins/sessions/test/attachment-faults.test.ts",
-      "sizeBytes": 13820,
-      "sha256": "03ebb34fb8dfc5c6006670f9725709494328ed015f8c1896797b48f89bd5357b"
+      "sizeBytes": 13878,
+      "sha256": "52104409fbf5f7f3a5929b9ca42fb8753a88cce56de488e756747d9a4d58b63c"
     },
     {
       "path": "ts/plugins/sessions/test/attachment-interop.test.ts",
-      "sizeBytes": 8822,
-      "sha256": "c60be26559008693a32149780fa01d0a03e95053e29bc53cf8037960dfc236f0"
+      "sizeBytes": 8880,
+      "sha256": "c61df5e80e20eaf0992809313cb6f2b8bde1ecd46dede3ea94b0dd7fc5247bad"
     },
     {
       "path": "ts/plugins/sessions/test/auto-title.test.ts",
@@ -6483,8 +6483,8 @@
     },
     {
       "path": "ts/apps/server/test/mcp-servers.test.ts",
-      "sizeBytes": 8716,
-      "sha256": "92048a89697315a71c2103bdef0638859edc43c9fc0d2f1aa4a5f20a92f5039a"
+      "sizeBytes": 8774,
+      "sha256": "f3bdc5acc3c575f7190595f91b994c07cbe2ce7af31271abc4106b0b00682fcb"
     },
     {
       "path": "ts/plugins/mcp/manifest.json",
@@ -6603,8 +6603,8 @@
     },
     {
       "path": "ts/plugins/skills/test/fixture.ts",
-      "sizeBytes": 4134,
-      "sha256": "1d87a9cf848e119f79d5f517b4a5e98b030dd24408924b822d7163d50a4f97b5"
+      "sizeBytes": 4192,
+      "sha256": "7dc017b762b6323d5901d68a65cf7451e5bf1a0cd89c49d3827d66cfb56b78c3"
     },
     {
       "path": "ts/plugins/skills/test/skills-python.test.ts",
@@ -6688,8 +6688,8 @@
     },
     {
       "path": "ts/apps/server/test/agent-subagents.test.ts",
-      "sizeBytes": 19545,
-      "sha256": "bcf15fa80cc0514306f78edbf54b94810785296e8f5200729019c215615c73af"
+      "sizeBytes": 19603,
+      "sha256": "34b743f30d663e6d390bf2dd810ce96c81c49265742b6dfef605635e5384a07e"
     },
     {
       "path": "ts/packages/agent/src/tool-contract/agent-contract.ts",
@@ -6738,8 +6738,8 @@
     },
     {
       "path": "ts/apps/server/test/agent-memory.test.ts",
-      "sizeBytes": 6615,
-      "sha256": "6800d6a1072a6b0e26baa56aad914bcfbefa9855194c371561d90ab2009c4762"
+      "sizeBytes": 6673,
+      "sha256": "b31625d2671f7f2757929e1decd8913b24caaa474ffa11f7be4a34390a9f9d04"
     },
     {
       "path": "ts/plugins/memory/manifest.json",
@@ -6763,8 +6763,8 @@
     },
     {
       "path": "ts/plugins/memory/test/fixture.ts",
-      "sizeBytes": 2547,
-      "sha256": "01482e48869ebd7d1903082ecc1476297aefc1215e5ef482567fdce9d0011406"
+      "sizeBytes": 2605,
+      "sha256": "61ab386028ee3c1f4c3cdafcd36b04c2d26573b912158c226ab92185f7d27065"
     },
     {
       "path": "ts/plugins/memory/test/memory-python.test.ts",
@@ -8253,8 +8253,8 @@
     },
     {
       "path": "ts/packages/tool-bridge/test/host-writable.test.ts",
-      "sizeBytes": 4045,
-      "sha256": "b8d1f05c9a8d1d7350c35a2851b0aec97c43b18d0cfe2b9969a0717425da964b"
+      "sizeBytes": 4103,
+      "sha256": "12654e4f4dcf29647bb73b43751610f271987c470a4008aded82e34e043ff76f"
     },
     {
       "path": "ts/plugins/automation/manifest.json",
@@ -8318,13 +8318,13 @@
     },
     {
       "path": "ts/plugins/automation/test/cron.test.ts",
-      "sizeBytes": 22928,
-      "sha256": "e7b86f323970fe0fb6aee6f641b0424cf22de6f0e7089aad45f8c26ee84c03c1"
+      "sizeBytes": 22986,
+      "sha256": "6b91e22eba959bc4e60a59a1f05f0bf62be649c71599dcd9f74afda4d28db7b3"
     },
     {
       "path": "ts/plugins/automation/test/scheduler.test.ts",
-      "sizeBytes": 2293,
-      "sha256": "ba3dfa48d4f63e2917788522eaf861b5bdfebb72fd0ab8f63db75403d01623a2"
+      "sizeBytes": 2351,
+      "sha256": "12ebc9b580ecb8d7e8f46f26850e8d43a643237f1daaa6262160f61e26ce9f4f"
     },
     {
       "path": "ts/plugins/bots/manifest.json",
@@ -9383,8 +9383,8 @@
     },
     {
       "path": "ts/plugins/workflows/test/drive.test.ts",
-      "sizeBytes": 14437,
-      "sha256": "430de1792311e981ce756af50ba4b4bff356d2c2866e744d497862be99a02bb9"
+      "sizeBytes": 14495,
+      "sha256": "76d9c15a2197ae68896fe9500e82c0c8b71fbd4e8ab37e04fd16a2020802954b"
     },
     {
       "path": "ts/plugins/workflows/test/dsl.test.ts",
@@ -9393,13 +9393,13 @@
     },
     {
       "path": "ts/plugins/workflows/test/dynamic-runs.test.ts",
-      "sizeBytes": 12198,
-      "sha256": "ad4e4694dbb2eff4b1c79f3da7809e2e3431b040dc63a9ce6eede8d8bd7a3525"
+      "sizeBytes": 12256,
+      "sha256": "7a8a1e5144ccc4199124b65818021bb7ec00e73109492cfc8b24f922f26aa409"
     },
     {
       "path": "ts/plugins/workflows/test/execute-command.test.ts",
-      "sizeBytes": 6986,
-      "sha256": "270877049f034384d35584b8e4028f9a990271bf35fd2a15771bcd1da897d211"
+      "sizeBytes": 7044,
+      "sha256": "c52c54f421f6fdf6f2eeb83689e7d73d14f60040202eb31ecce4c9be5169ee97"
     },
     {
       "path": "ts/plugins/workflows/test/http.test.ts",
@@ -9783,8 +9783,8 @@
     },
     {
       "path": "ts/packages/providers/test/stream-idle-timeout.test.ts",
-      "sizeBytes": 5068,
-      "sha256": "8583f7b8bafe87fdd0c6bf44428b3178566b560ffe39536f3152efdd077fc39a"
+      "sizeBytes": 5287,
+      "sha256": "b6611ea66cb84b4fdd318b9b963c69710191a8c9d60aab5e300f528471742ef6"
     },
     {
       "path": "ts/plugins/providers/src/model-status.ts",
@@ -10013,8 +10013,8 @@
     },
     {
       "path": "ts/plugins/files/test/read-state.test.ts",
-      "sizeBytes": 8070,
-      "sha256": "291e8c336c40e83a5a663d492e4865eb0e4d2184d9edbd539610778c44265d61"
+      "sizeBytes": 8128,
+      "sha256": "b8089b96ed84fe73ba9e75e714cd68cad80cbef3a949b1a652e6f430df099d14"
     },
     {
       "path": "ts/plugins/providers/src/result-budget.ts",
@@ -10313,8 +10313,8 @@
     },
     {
       "path": "ts/plugins/files/test/file-bytes-api.test.ts",
-      "sizeBytes": 3422,
-      "sha256": "a4bdac9ee42eb193eeb755c68159d628cd0a9ce2661633bbb232a37c42891c4c"
+      "sizeBytes": 3480,
+      "sha256": "849046b49bd8d4d950d936db1efa14133e20e23ca6ae0695ca20732208ff6749"
     },
     {
       "path": "ts/plugins/network/src/fetch-runtime.ts",
@@ -10463,8 +10463,8 @@
     },
     {
       "path": "ts/plugins/settings/test/runtime-config.test.ts",
-      "sizeBytes": 8175,
-      "sha256": "14572a627f72192354c5782be75b0e0eb9aa028897b4c0467ea741d4bb4b2cc6"
+      "sizeBytes": 8233,
+      "sha256": "6e93cee148fb676a3ef4aa6b8e830743303c331f72ae63c677f72ef74a35dc52"
     },
     {
       "path": "验收资料/验证记录/z5-baseline-web-audit.json",
@@ -11043,8 +11043,8 @@
     },
     {
       "path": "ts/plugins/memory/test/memory-dream.test.ts",
-      "sizeBytes": 16706,
-      "sha256": "c9d6e119116c86cc0af69648d18dcdda02d1c0dddc5508d73ff3122392351f82"
+      "sizeBytes": 16764,
+      "sha256": "7aad5a1098a591eac58490420c77200acb9b2edbf6fcb37daab47d57a25b8187"
     },
     {
       "path": "ts/plugins/planning/src/goal-state.ts",
@@ -11458,8 +11458,8 @@
     },
     {
       "path": "ts/plugins/native_ops/test/native-ops.test.ts",
-      "sizeBytes": 8911,
-      "sha256": "7e8b38b0af6efc2a6a5d17bee761cae0cd4a3ebfb8226ac1b2e87270d7fa47e2"
+      "sizeBytes": 8969,
+      "sha256": "962023ff022f05c53ee6e20472bbca146874ad1700bbad7fea2c653beb7cdc6b"
     },
     {
       "path": "ts/plugins/workbuddy/src/accounts.ts",
@@ -12933,8 +12933,8 @@
     },
     {
       "path": "ts/plugins/commands/test/commands-extra-roots.test.ts",
-      "sizeBytes": 9483,
-      "sha256": "a9c7230807e8d7dedb9f0623c9b38fd9dda30b714918a74d7f83187f708bb96d"
+      "sizeBytes": 9541,
+      "sha256": "c0bfa8cc3ce8aea2f7f2d5d6c25486fe03b1fc535a38deec99825e1d670c46ba"
     },
     {
       "path": "ts/plugins/deepseek_harness/manifest.json",
@@ -13393,8 +13393,8 @@
     },
     {
       "path": "ts/plugins/hooks/test/hooks-lifecycle.test.ts",
-      "sizeBytes": 10926,
-      "sha256": "540e6164e7d5909fc01750dacc5d1e914111c0db9500049354b353cc166be16f"
+      "sizeBytes": 10984,
+      "sha256": "58591b14ec7fd4f34853f41a0f040e3c0b1f0045f4a81ea79ebf97905db05a0f"
     },
     {
       "path": "ts/plugins/hooks/test/hooks-protocol.test.ts",
@@ -13498,13 +13498,13 @@
     },
     {
       "path": "ts/plugins/memory/test/memory-extraction.test.ts",
-      "sizeBytes": 13600,
-      "sha256": "257ea7e67b011424ad1952945fefaaf3a53d817432889464670774d7fcd18e41"
+      "sizeBytes": 13658,
+      "sha256": "f3d11387412108c7f5cd6eea065edcaf4364aa338f0371792820424110302f93"
     },
     {
       "path": "ts/plugins/memory/test/memory-manifest.test.ts",
-      "sizeBytes": 9438,
-      "sha256": "b7d5be27adb18281b57a77d36b6e822d73cb306bc44aee19b6766b3022c12f9a"
+      "sizeBytes": 9496,
+      "sha256": "bfe7a14abe122e6565f4a5f18717ae96457ef31a0af962b81e02c234e48fbdc3"
     },
     {
       "path": "ts/plugins/memory/test/memory-recall.test.ts",
@@ -13513,8 +13513,8 @@
     },
     {
       "path": "ts/plugins/memory/test/memory-tool-loop.test.ts",
-      "sizeBytes": 19065,
-      "sha256": "2ef66496ec1a2d4ceed3aab3b1616d3f423370d1f7c20119994b604c32033eab"
+      "sizeBytes": 19123,
+      "sha256": "c408c61f59b6126629858a0f71c914f87b3925143d7de73913be2b3e90ceb5cb"
     },
     {
       "path": "ts/plugins/network/src/citations.ts",
@@ -13758,8 +13758,8 @@
     },
     {
       "path": "ts/plugins/sessions/test/session-repair.test.ts",
-      "sizeBytes": 10494,
-      "sha256": "50500a6277ac5fc609ae1fd20ebc36c2237255ef4e72e0bcec8e0c0de41ddc94"
+      "sizeBytes": 10552,
+      "sha256": "1d5ede2056c6d98a366640f4c745445ccdf0684008b9e4742fed081243fb8d7c"
     },
     {
       "path": "ts/plugins/sessions/test/steering-priority.test.ts",
@@ -13778,8 +13778,8 @@
     },
     {
       "path": "ts/plugins/settings/test/runtime-config-layers.test.ts",
-      "sizeBytes": 7110,
-      "sha256": "426ecbcb70460ce773d5f53228f96e25077f41e5cb7cdd717ed8251e7670d0fd"
+      "sizeBytes": 7168,
+      "sha256": "023629b060234b21bac32162655030a1ef9bbe25bf3c1d25c717fd263bbc41aa"
     },
     {
       "path": "ts/plugins/shell/test/auto-background.test.ts",
@@ -13793,8 +13793,8 @@
     },
     {
       "path": "ts/plugins/skills/test/skills-extra-roots.test.ts",
-      "sizeBytes": 9462,
-      "sha256": "764b3f47d8dffcfe26e13058921a2186c066a4959dc9e6c33382a2226ca0b293"
+      "sizeBytes": 9520,
+      "sha256": "3db2d941ad845e0435cb4fac605d3fd8f3482aea28d2ed4a0a83084837e49a30"
     },
     {
       "path": "ts/plugins/subagents/src/background-receipts.ts",
@@ -14384,12 +14384,12 @@
     {
       "path": "验收资料/20261026-workbuddy-benchmark/backend-final-result.json",
       "sizeBytes": 522,
-      "sha256": "6a1f36179a0859c325205109a7fc853617121b0ec4fe0ad0bfb7f91751b208e1"
+      "sha256": "ac1576cd46955912f7ed3ed0eb23240a4c71b33bdb2779e952be11ebde162913"
     },
     {
       "path": "验收资料/20261026-workbuddy-benchmark/backend-final-summary.txt",
       "sizeBytes": 1594,
-      "sha256": "4680833d7fd9d577da6bc65bfb4dd38473be2e2a4ef85e8d433e2f09172d3396"
+      "sha256": "dc98ff1337958ec44957b9ca3256bbff012aac46fd0fd4d36c60243b2a4ff4e0"
     },
     {
       "path": "验收资料/20261026-workbuddy-benchmark/backpressure-stress.json",
@@ -14428,8 +14428,8 @@
     },
     {
       "path": "验收资料/20261026-workbuddy-benchmark/source-hashes.json",
-      "sizeBytes": 1081,
-      "sha256": "005de9e8d97f0a18b25e18ff202e8452bd02f3813d849c1d907490c0ec1d644b"
+      "sizeBytes": 7344,
+      "sha256": "7ea80d8d5bb9ac44be7a3b06da52402af9fd63d0c7546e16d56be6d06e56078b"
     },
     {
       "path": "验收资料/20261026-workbuddy-benchmark/ui-summary.json",
@@ -14438,8 +14438,8 @@
     },
     {
       "path": "验收资料/20261026-workbuddy-benchmark/验收报告.md",
-      "sizeBytes": 8089,
-      "sha256": "1e09666eb8047bd94f02f239a2c61b3ffda7f94103b9bf2def211529d87e4a32"
+      "sizeBytes": 8542,
+      "sha256": "f4f89bdc414ba4a15bbc1e073e24f3ea933b90699ea73cafc9df5031aa2ff1ed"
     },
     {
       "path": "webapp/dist/assets/AppsUiHost-CDdv7LZ4.js",
@@ -14790,6 +14790,21 @@
       "path": "webapp/dist/assets/workbench-91j5R7dU.js",
       "sizeBytes": 824265,
       "sha256": "27ae2598227e965f94416221865331eab554d72f3141b7f336da76ae4e5aa26e"
+    },
+    {
+      "path": "ts/packages/engine-tools/test/background-log-drain.test.ts",
+      "sizeBytes": 2561,
+      "sha256": "eed8c392805d9d5ab391450b85b4e4b296a1ed128fe0e92bbaf8600c5e035e2e"
+    },
+    {
+      "path": "ts/scripts/test/canonical-temp.test.ts",
+      "sizeBytes": 1237,
+      "sha256": "f11e726c6f729b43b0c3451d749c7048b7e21b0b1ad2fe9532818187dc262258"
+    },
+    {
+      "path": "ts/test-support/canonical-temp.ts",
+      "sizeBytes": 435,
+      "sha256": "0d5d74e5be914917b6639723ea91761230e1efb63f3b6c07528814e00bfe78cc"
     }
   ]
 }

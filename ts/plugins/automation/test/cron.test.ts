@@ -1,3 +1,4 @@
+import { mkdtempSync } from "../../../test-support/canonical-temp.ts";
 /**
  * `cron.ts` and `store.ts` against values captured from the Python oracle
  * (`automation/scheduler.py`: `_field`, `cron`, `next_run`, `Automations`).
@@ -9,7 +10,7 @@
  */
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, it } from "node:test";

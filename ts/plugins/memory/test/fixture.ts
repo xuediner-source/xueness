@@ -1,5 +1,6 @@
+import { mkdtempSync } from "../../../test-support/canonical-temp.ts";
 /** Memory-root fixtures shared by the Python and ZCode memory tests. */
-import { mkdirSync, mkdtempSync, symlinkSync, writeFileSync } from "node:fs";
+import { mkdirSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { projectHash } from "../src/index.ts";

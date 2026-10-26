@@ -1,6 +1,7 @@
+import { mkdtempSync } from "../../../test-support/canonical-temp.ts";
 /** F09.01 — the memory manifest/index: traceable entries, caps, provenance-only manifest, staleness. */
 import assert from "node:assert/strict";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, it } from "node:test";

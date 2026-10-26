@@ -1,5 +1,6 @@
+import { mkdtempSync } from "../../../test-support/canonical-temp.ts";
 /** A workspace and state directory with every skill-discovery case the Python loader distinguishes. */
-import { mkdirSync, mkdtempSync, symlinkSync, writeFileSync } from "node:fs";
+import { mkdirSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 

@@ -11,6 +11,8 @@ import {
 
 let port = 0;
 let server: http.Server;
+// Keep total stream time above one idle period, with CI scheduling headroom.
+const DATA_INTERVAL_MS = 700, TEST_IDLE_TIMEOUT_MS = 1200;
 
 before(async () => {
   server = http.createServer((request, response) => {
@@ -22,9 +24,9 @@ before(async () => {
     }
     const heartbeat = setInterval(() => response.write(": keepalive\n\n"), 10);
     const timers = [
-      setTimeout(() => response.write("data: first\n\n"), 70),
-      setTimeout(() => response.write("data: second\n\n"), 140),
-      setTimeout(() => { response.end("data: [DONE]\n\n"); }, 210),
+      setTimeout(() => response.write("data: first\n\n"), DATA_INTERVAL_MS),
+      setTimeout(() => response.write("data: second\n\n"), DATA_INTERVAL_MS * 2),
+      setTimeout(() => { response.end("data: [DONE]\n\n"); }, DATA_INTERVAL_MS * 3),
     ];
     response.on("close", () => {
       clearInterval(heartbeat);
@@ -103,7 +105,7 @@ describe("provider stream idle timeout", () => {
   });
 
   it("ignores comment heartbeats for idleness while each data payload starts a fresh period", async () => {
-    await assert.rejects(readPayloads("/comments", 120), isModelStreamIdleTimeoutError);
-    assert.deepEqual(await readPayloads("/data", 120), ["first", "second", "[DONE]"]);
+    await assert.rejects(readPayloads("/comments", TEST_IDLE_TIMEOUT_MS), isModelStreamIdleTimeoutError);
+    assert.deepEqual(await readPayloads("/data", TEST_IDLE_TIMEOUT_MS), ["first", "second", "[DONE]"]);
   });
 });
