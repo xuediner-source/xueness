@@ -1,0 +1,13 @@
+{
+  "name": "@xueness/cli",
+  "version": "0.2.1",
+  "private": true,
+  "type": "module",
+  "description": "Xueness developer CLI: the `xueness harness` command suite (install/list/run/bench/doctor).",
+  "bin": {
+    "xueness-harness": "./src/commands/harness-cmd.ts"
+  },
+  "exports": {
+    ".": "./src/commands/harness-cmd.ts"
+  }
+}

@@ -5,7 +5,7 @@ import { checkedUrl } from "./http.ts";
 import { validName, type Row } from "./names.ts";
 import { SUPPORTED_PROTOCOL_VERSIONS } from "./rpc.ts";
 
-const FIELDS = new Set(["id", "enabled", "type", "transport", "command", "args", "cwd", "env", "url", "headersEnv", "timeout", "timeoutMs", "protocolVersion", "elicitation", "allowLoopbackHttp", "oauth", "isolation"]);
+const FIELDS = new Set(["id", "enabled", "type", "transport", "command", "args", "cwd", "env", "url", "headersEnv", "timeout", "timeoutMs", "protocolVersion", "elicitation", "allowLoopbackHttp", "oauth", "isolation", "alwaysLoad"]);
 const TRANSPORTS = new Set(["stdio", "http", "streamable-http", "sse"]);
 const ENV_NAME = /^[A-Za-z_][A-Za-z0-9_]*$/;
 function fail(field: string): never { throw new TypeError(`invalid MCP runtime configuration: ${field}`); }
@@ -35,6 +35,9 @@ export function validateRuntimeMcpServers(value: unknown): asserts value is Reco
     if (row.protocolVersion !== undefined && !SUPPORTED_PROTOCOL_VERSIONS.includes(String(row.protocolVersion))) fail(`${id}: protocolVersion`);
     if (row.isolation !== undefined && row.isolation !== "session") fail(`${id}: only session isolation is supported`);
     if (row.oauth !== undefined && !isDict(row.oauth)) fail(`${id}: oauth`);
+    // Exposure only (C-TOOL-02): true keeps every tool of the connection in the request
+    // schema, an array names the server-side tools to keep there, false turns it off.
+    if (row.alwaysLoad !== undefined && row.alwaysLoad !== true && row.alwaysLoad !== false && (!Array.isArray(row.alwaysLoad) || row.alwaysLoad.some((name) => typeof name !== "string" || !name.trim() || name.includes("\0")))) fail(`${id}: alwaysLoad`);
     if (row.url !== undefined) checkedUrl(row);
   }
 }

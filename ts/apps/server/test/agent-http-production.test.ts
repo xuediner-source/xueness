@@ -190,51 +190,7 @@ describe("production native HTTP agent lifecycle", () => {
     const compacted = await store.load(id); assert.deepEqual((compacted.messages as Row[]).filter((row) => row.role === "user").map((row) => row.content), ["Keep this original requirement", "Keep this latest constraint"]);
     assert.ok((compacted.archived_messages as Row[]).length > 0);
   });
-  it("independently verifies and continues a native goal before draining queued user turns", async () => {
-    const id = await create("Explain both criteria");
-    const goal = await request(`/api/sessions/${id}/goal`, { text: "Explain criterion one and criterion two", budget: { maxRounds: 3, maxWallSeconds: 120 } }); assert.equal(goal.status, 200, await goal.clone().text());
-    let ready!: () => void, pending!: ServerResponse; const arrived = new Promise<void>((resolve) => { ready = resolve; });
-    script.push((_req, res) => { pending = res; ready(); }, (req, res) => {
-      const payload = JSON.parse(req.messages[1].content); assert.ok(req.messages[0].content.includes("independent completion verifier"));
-      reply(res, { content: JSON.stringify({ passed: false, reason: "Criterion two is missing.", remaining: ["Explain criterion two"], evidenceIds: [payload.evidence.at(-1).id] }) });
-    }, (req, res) => {
-      assert.ok(req.messages.at(-1).content.includes("核验发现仍需处理")); assert.ok(!req.messages.some((row: Row) => row.content === "Queued question")); reply(res, { content: "Criterion one is explained. Criterion two is also explained." });
-    }, (req, res) => {
-      const payload = JSON.parse(req.messages[1].content); reply(res, { content: JSON.stringify({ passed: true, reason: "Both requested criteria are explained.", remaining: [], evidenceIds: [payload.evidence.at(-1).id] }) });
-    }, (req, res) => { assert.equal(req.messages.at(-1).content, "Queued question"); reply(res, { content: "Queued answer" }); });
-    const running = run(id); await arrived;
-    const queued = await request(`/api/sessions/${id}/queue`, { text: "Queued question", request_id: "f".repeat(32) }); assert.equal(queued.status, 202, await queued.clone().text());
-    const busyEdit = await request(`/api/sessions/${id}/goal`, { action: "pause" }); assert.equal(busyEdit.status, 409);
-    reply(pending, { content: "Criterion one is explained." });
-    const response = await running; assert.equal(response.status, 200, await response.clone().text()); const result = await response.json() as Row; assert.equal(result.status, "completed"); assert.equal(result.steps, 3);
-    const persisted = await (await request(`/api/sessions/${id}/goal`)).json() as Row; assert.equal(persisted.goal.status, "complete"); assert.equal(persisted.goal.runtime.rounds, 2); assert.equal(persisted.goal.verification.kind, "independent_model_verifier");
-  });
-  it("runs planning task tools, pauses for a structured question and admits its exact answer once", async () => {
-    const id = await create("Choose a color");
-    script.push((req, res) => {
-      const ask = req.tools.find((tool: Row) => tool.function.name === "AskUserQuestion"); assert.ok(ask.function.parameters.properties.questions); assert.ok(!req.tools.some((tool: Row) => tool.function.name === "ask_user"));
-      reply(res, { tool_calls: [call("todo", "todo_write", { todos: [{ id: "choice", text: "Get the explicit color choice", status: "in_progress" }] }), call("question", "ask_user", { question: "Which color?", questions: [{ id: "color", header: "Color", question: "Choose a color", options: [{ label: "Blue", description: "Use blue" }, { label: "Green", description: "Use green" }] }] })] });
-    });
-    const paused = await run(id); assert.equal(paused.status, 200, await paused.clone().text()); assert.equal((await paused.json() as Row).status, "awaiting_user");
-    const pending = await (await request(`/api/sessions/${id}/question`)).json() as Row; assert.equal(pending.question.questions[0].id, "color");
-    const body = { questionId: pending.question.id, answers: { color: { selected: ["Blue"] } } };
-    const accepted = await request(`/api/sessions/${id}/answer-question`, body); assert.equal(accepted.status, 200, await accepted.clone().text()); assert.equal((await accepted.json() as Row).alreadyAnswered, false);
-    const duplicate = await request(`/api/sessions/${id}/answer-question`, body); assert.equal(duplicate.status, 200); assert.equal((await duplicate.json() as Row).alreadyAnswered, true);
-    script.push((req, res) => { assert.ok(req.messages.at(-1).content.includes("[color] Color: Blue")); reply(res, { content: "Blue is selected." }); });
-    const result = await run(id); assert.equal(result.status, 200, await result.clone().text()); assert.equal((await result.json() as Row).status, "completed");
-    const journal = await new SessionStore(join(base, "state")).load(id); assert.equal((journal.todos as Row[])[0]!.id, "choice"); assert.equal((journal.messages as Row[]).filter((row) => row.role === "user" && String(row.content).includes("[color] Color: Blue")).length, 1);
-  });
-  it("generates one bounded background title with the completed run's local adapter", async () => {
-    writeFileSync(join(base, "state", "settings.json"), JSON.stringify({ general: { sessionsAutoTitleEnabled: true } }));
-    const id = await create("A greeting exchange");
-    script.push((_req, res) => reply(res, { content: "Hello from the completed exchange" }), (req, res) => {
-      assert.ok(!req.tools || req.tools.length === 0); assert.ok(req.max_tokens <= 256); assert.ok(req.messages[0].content.includes("Generate a short conversation title"));
-      reply(res, { content: '{"title":"Local conversation title"}' });
-    });
-    const response = await run(id); assert.equal(response.status, 200, await response.clone().text());
-    let detail: Row = {}; const deadline = Date.now() + 5000;
-    while (Date.now() < deadline) { detail = await (await request(`/api/sessions/${id}`)).json() as Row; if (detail.title === "Local conversation title") break; await new Promise((resolve) => setTimeout(resolve, 25)); }
-    assert.equal(detail.title, "Local conversation title"); assert.equal((await new SessionStore(join(base, "state")).load(id)).title_source, "generated"); assert.deepEqual(modelFailures, []);
-    writeFileSync(join(base, "state", "settings.json"), JSON.stringify({ general: { sessionsAutoTitleEnabled: false } }));
-  });
+  // The goal-verification, structured-question and background-title flows moved to
+  // agent-http-goal.test.ts: their auxiliary model calls only settle within the
+  // default per-test timeout when the application starts fresh.
 });

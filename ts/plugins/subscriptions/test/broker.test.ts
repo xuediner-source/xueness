@@ -14,7 +14,7 @@ const out = (value) => process.stdout.write(JSON.stringify(value) + "\\n");
 for await (const line of createInterface({ input: process.stdin })) {
   const { id, action, data, target } = JSON.parse(line);
   if (action === "abort") { appendFileSync(process.env.FAKE_LOG, target + "\\n"); continue; }
-  if (action === "env") out({ id, result: { keys: Object.keys(process.env).sort(), store: process.env.XUENESS_SUBSCRIPTIONS_STORE, cwd: process.cwd() } });
+  if (action === "env") out({ id, result: { keys: Object.keys(process.env).sort(), store: process.env.XUENESS_SUBSCRIPTIONS_STORE, cwd: process.cwd(), pid: process.pid } });
   else if (action === "generate") {
     out({ id, chunk: { type: "reasoning", text: "think" } }); out({ id, chunk: { type: "content", text: "hel" } }); out({ id: "other", chunk: { type: "content", text: "stray" } });
     process.stdout.write(JSON.stringify({ id, chunk: { type: "content", text: "lo" } }).slice(0, 10)); setTimeout(() => process.stdout.write(JSON.stringify({ id, chunk: { type: "content", text: "lo" } }).slice(10) + "\\n"), 20);
@@ -34,7 +34,7 @@ describe("subscription worker broker", () => {
   const requireAvailable = (): void => { if (!available) throw new Error("plugin disabled or dependency unavailable: subscriptions"); };
   const env = { PATH: process.env.PATH, FAKE_LOG: log, OPENAI_API_KEY: "secret", MY_TOKEN: "secret", CODEX_HOME: "/codex", QODER_ACCESS_TOKEN: "kept" };
   const broker = new SubscriptionBroker(join(base, "state"), requireAvailable, env, script);
-  after(() => { broker.shutdown(); rmSync(base, { recursive: true, force: true }); });
+  after(async () => { await broker.shutdown(); rmSync(base, { recursive: true, force: true }); });
 
   it("does not start a worker for status-only calls and starts one on demand with a filtered environment", async () => {
     assert.deepEqual(await broker.call("status", "qoder", {}, { start: false }), {});
@@ -76,6 +76,17 @@ describe("subscription worker broker", () => {
     assert.equal(reply._request_attempts, 1); assert.ok(reply._usage);
     const bad = new NativeProvider(broker, requireAvailable, { ...record, model: "bad" });
     await assert.rejects(bad.complete([], []), (error: unknown) => error instanceof ProviderRequestError);
+  });
+
+  it("waits for the real owned process to exit before shutdown resolves", async () => {
+    const reply = await broker.call("env", "qoder");
+    const pid = reply.pid as number;
+    assert.ok(Number.isSafeInteger(pid) && pid > 0);
+    assert.doesNotThrow(() => process.kill(pid, 0));
+    await broker.shutdown();
+    assert.equal(broker.running(), false);
+    assert.throws(() => process.kill(pid, 0), "shutdown must release the actual process before resolving");
+    await broker.shutdown();
   });
 
   it("stops the worker when it exits or the plugin becomes unavailable", async () => {

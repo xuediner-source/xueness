@@ -2,6 +2,7 @@
 import { isDict, isPyIntValue, pyDeepCopy, pyUtcNow, pySubstring } from '@xueness/contracts';
 import { isPyOSError, pyExceptionName, type Session, type SessionStore } from '@xueness/sessions';
 import { messageRevision } from './journal-http.ts';
+import { applyCanonicalIntent, LineageSidecar, validateHistoryCommandId } from './lineage.ts';
 import type { Row } from './fork-common.ts';
 
 const SID = /^[0-9a-f]{32}$/;
@@ -13,7 +14,7 @@ export class RewindError extends Error {
   readonly status: number;
   constructor(message: string, status = 400) { super(message); this.name = 'RewindError'; this.status = status; }
 }
-export interface ConversationRewindRequest { messageId: string; revision: string; confirmed: true }
+export interface ConversationRewindRequest { messageId: string; revision: string; confirmed: true; commandId?: string }
 export type RewindTarget = { messageId: string; messageIndex: number; turn: string | number | null; preview: string };
 
 export function isRewindTarget(message: unknown): message is Row {
@@ -36,11 +37,12 @@ export function conversationRewindTargets(session: Session): RewindTarget[] {
 }
 
 function checkedRequest(value: unknown): ConversationRewindRequest {
-  if (!isDict(value) || Object.keys(value).some((key) => !['messageId', 'revision', 'confirmed'].includes(key))
+  if (!isDict(value) || Object.keys(value).some((key) => !['messageId', 'revision', 'confirmed', 'commandId'].includes(key))
     || !['messageId', 'revision', 'confirmed'].every((key) => Object.hasOwn(value, key))) throw new RewindError('expected messageId, revision, and confirmed:true');
   if (value.confirmed !== true) throw new RewindError('explicit confirmation is required', 428);
   if (typeof value.messageId !== 'string' || !MESSAGE_ID.test(value.messageId)) throw new RewindError('invalid rewind message id');
   if (typeof value.revision !== 'string' || !REVISION.test(value.revision)) throw new RewindError('invalid conversation revision');
+  if (value.commandId !== undefined) { try { validateHistoryCommandId(value.commandId); } catch { throw new RewindError('commandId must be c_<epoch-ms>_<uuid>'); } }
   return value as unknown as ConversationRewindRequest;
 }
 
@@ -112,36 +114,55 @@ export async function applyConversationRewind(
 ): Promise<Row> {
   if (!SID.test(sid)) throw new RewindError('session not found', 404);
   const request = checkedRequest(input);
-  let lease: Awaited<ReturnType<SessionStore['lease']>>;
-  try { lease = await store.lease(sid); }
-  catch (error) { if (pyExceptionName(error) === 'BlockingIOError') throw new RewindError('session is in use by another process', 409); throw error; }
-  try {
-    let session: Session;
-    try { session = await store.load(sid); }
-    catch (error) { if (isPyOSError(error)) throw new RewindError('session not found', 404); throw error; }
-    await beforeApply?.(session);
-    if (messageRevision(session) !== request.revision) throw new RewindError('conversation changed; refresh rewind targets', 409);
-    const messages = Array.isArray(session.messages) ? session.messages : [];
-    const target = conversationRewindTargets(session).find((row) => row.messageId === request.messageId);
-    if (!target) throw new RewindError('rewind target is no longer available', 409);
-    const prefix = messages.slice(0, target.messageIndex) as Row[];
-    if (!isDict(prefix[0]) || prefix[0].role !== 'system') throw new RewindError('session transcript has no system prompt', 409);
-    const tail = messages.slice(target.messageIndex).filter(isDict) as Row[];
-    const removedMessageIds = [...new Set(tail.flatMap((message) => typeof message._message_id === 'string' && MESSAGE_ID.test(message._message_id) ? [message._message_id] : []))];
-    const oldResults = isDict(session.results) ? pyDeepCopy(session.results) as Row : {};
-    const branchTasks = taskIdsInTail(tail, oldResults);
-    const cut = { generation: generation(session) + 1, targetMessageId: request.messageId, removedMessageIds, time: pyUtcNow(), previousRevision: request.revision };
-    session.messages = prefix;
-    pruneSuffix(session as Row, prefix, new Set(removedMessageIds));
-    markRemovedTaskFacts(session as Row, branchTasks);
-    const history = Array.isArray(session.rewind_history) ? session.rewind_history as Row[] : [];
-    session.rewind_history = [...history, cut].slice(-24);
-    session.steps = prefix.filter((message) => isDict(message) && message.role === 'assistant').length;
-    session.status = 'paused';
-    await store.save(session);
-    const result: Row = { id: sid, status: 'paused', generation: cut.generation, targetMessageId: request.messageId,
-      removedMessageIds, revision: messageRevision(session), steps: session.steps };
-    await afterApply?.(session, result);
-    return result;
-  } finally { await lease.release(); }
+  const execute = async (): Promise<{ status: number; result: Row }> => {
+    let lease: Awaited<ReturnType<SessionStore['lease']>>;
+    try { lease = await store.lease(sid); }
+    catch (error) { if (pyExceptionName(error) === 'BlockingIOError') return { status: 409, result: { error: 'session is in use by another process' } }; throw error; }
+    try {
+      let session: Session;
+      try { session = await store.load(sid); }
+      catch (error) { if (isPyOSError(error)) throw new RewindError('session not found', 404); throw error; }
+      await beforeApply?.(session);
+      if (messageRevision(session) !== request.revision) throw new RewindError('conversation changed; refresh rewind targets', 409);
+      const messages = Array.isArray(session.messages) ? session.messages : [];
+      const target = conversationRewindTargets(session).find((row) => row.messageId === request.messageId);
+      if (!target) throw new RewindError('rewind target is no longer available', 409);
+      const prefix = messages.slice(0, target.messageIndex) as Row[];
+      if (!isDict(prefix[0]) || prefix[0].role !== 'system') throw new RewindError('session transcript has no system prompt', 409);
+      const tail = messages.slice(target.messageIndex).filter(isDict) as Row[];
+      const removedMessageIds = [...new Set(tail.flatMap((message) => typeof message._message_id === 'string' && MESSAGE_ID.test(message._message_id) ? [message._message_id] : []))];
+      const oldResults = isDict(session.results) ? pyDeepCopy(session.results) as Row : {};
+      const branchTasks = taskIdsInTail(tail, oldResults);
+      const cut = { generation: generation(session) + 1, targetMessageId: request.messageId, removedMessageIds, time: pyUtcNow(), previousRevision: request.revision };
+      session.messages = prefix;
+      pruneSuffix(session as Row, prefix, new Set(removedMessageIds));
+      markRemovedTaskFacts(session as Row, branchTasks);
+      const history = Array.isArray(session.rewind_history) ? session.rewind_history as Row[] : [];
+      session.rewind_history = [...history, cut].slice(-24);
+      session.steps = prefix.filter((message) => isDict(message) && message.role === 'assistant').length;
+      session.status = 'paused';
+      await store.save(session);
+      const result: Row = { id: sid, status: 'paused', generation: cut.generation, targetMessageId: request.messageId,
+        removedMessageIds, revision: messageRevision(session), steps: session.steps };
+      await afterApply?.(session, result);
+      return { status: 200, result };
+    } catch (error) { if (error instanceof RewindError) return { status: error.status, result: { error: error.message } }; throw error; }
+    finally { await lease.release(); }
+  };
+  if (!request.commandId) {
+    const done = await execute();
+    if (done.status !== 200) throw new RewindError(String(done.result.error), done.status);
+    return done.result;
+  }
+  const outcome = await applyCanonicalIntent(new LineageSidecar(store.directory), sid,
+    { commandId: request.commandId, intent: 'rewind', payload: { messageId: request.messageId, revision: request.revision } }, execute,
+    (result) => ({ parentRevision: request.revision, messageId: request.messageId, generation: result.generation, removedMessageIds: result.removedMessageIds }));
+  const body = outcome.reply[1];
+  if (outcome.outcome === 'unknown') throw new RewindError(String(body.error), 503);
+  if (outcome.outcome === 'conflict') throw new RewindError(String(body.message ?? body.error), 409);
+  if (outcome.outcome === 'duplicate') {
+    const recorded = isDict(body.result) ? body.result as Row : {};
+    return { ...recorded, commandId: request.commandId, commandStatus: 'duplicate' };
+  }
+  return outcome.reply[1];
 }

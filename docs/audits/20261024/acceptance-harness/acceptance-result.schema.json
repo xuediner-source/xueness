@@ -1,0 +1,72 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "xueness.acceptance-results.v1",
+  "title": "Xueness 对照验收结果记录（批次文件）",
+  "description": "F00.04 建立的统一结果记录格式。每条 record 回填一个契约行 × 样本组合；contractId 必须存在于 public-capability-contracts.json，sampleId 必须存在于 samples.json。verdict 以 invariant 是否成立为准；复现已知断线/缺口记 fail（这是 harness 的成功、契约的失败）。样本数/文件数/LOC/百分比不是完成度或成功率：record 与批次文件都禁止携带 successRate/passRate/failureRate/coverage/completionPercent 等聚合率字段（check-results.ts 拒绝）。mode=live_model 且 verdict 为 pass/fail 时必须携带 costAuth 且 authorized=true——真实模型验证单列并记录费用授权。",
+  "type": "object",
+  "required": ["schema", "round", "recordedAt", "records"],
+  "properties": {
+    "schema": { "const": "xueness.acceptance-results.v1" },
+    "round": { "type": "string", "description": "产生本批记录的轮次，如 F00.04 / F02.02" },
+    "recordedAt": { "type": "string", "description": "ISO-8601 日期时间" },
+    "recordedBy": { "type": "string", "description": "执行者标识（如 ZCode GLM-5.3 Max）" },
+    "records": { "type": "array", "minItems": 1, "items": { "$ref": "#/definitions/record" } }
+  },
+  "definitions": {
+    "record": {
+      "type": "object",
+      "required": ["sampleId", "contractId", "mode", "verdict", "evidence", "recordedAt"],
+      "properties": {
+        "sampleId": { "type": "string", "pattern": "^S-[A-Z0-9]+-[0-9]+[A-Z]?$", "description": "samples.json 中的样本 ID" },
+        "contractId": { "type": "string", "pattern": "^C-(MDL|TOOL|SES|WFL|RMT|ADJ)-[0-9]+$", "description": "public-capability-contracts.json 的契约行 ID；一条记录回填一行" },
+        "mode": { "enum": ["offline", "live_model"] },
+        "verdict": {
+          "enum": ["pass", "fail", "blocked", "not_run"],
+          "description": "pass=invariant 在本样本下成立；fail=invariant 被违反（含复现已知缺口）；blocked=已定义未执行；not_run=推迟（如无费用授权）"
+        },
+        "verdictBasis": { "type": "string", "description": "引用 invariant 原文中的哪一子句被验证/违反，一句话" },
+        "evidence": {
+          "type": "object",
+          "required": ["command"],
+          "properties": {
+            "command": { "type": "string", "description": "实际执行的命令；probe_design/live_pending 写 'not executed (design/pending)'" },
+            "exitCode": { "type": "number", "description": "脚本退出码；0=复现了样本定义的边界形状，≠契约通过" },
+            "keyOutput": { "type": "array", "items": { "type": "string" }, "description": "判定所依据的关键输出行" },
+            "sourceAnchors": { "type": "array", "items": { "type": "string" }, "description": "涉及的 path:line 锚点" },
+            "corroboratingTests": { "type": "array", "items": { "type": "string" }, "description": "同形状既有回归测试入口（node --test 路径/用例名）" },
+            "artifacts": { "type": "array", "items": { "type": "string" }, "description": "落盘证据文件路径（如有）" }
+          }
+        },
+        "costAuth": {
+          "type": "object",
+          "required": ["authorized"],
+          "description": "仅 mode=live_model 相关；pass/fail 的 live_model 记录必须 authorized=true 并补齐授权与花费",
+          "properties": {
+            "authorized": { "type": "boolean" },
+            "authorizedBy": { "type": "string", "description": "授权来源（对话/工单引用）" },
+            "grantRef": { "type": "string", "description": "授权凭证或批次引用" },
+            "provider": { "type": "string" },
+            "model": { "type": "string" },
+            "cost": {
+              "type": "object",
+              "properties": {
+                "tokensIn": { "type": "number" },
+                "tokensOut": { "type": "number" },
+                "currency": { "type": "string" },
+                "amount": { "type": "number" }
+              },
+              "description": "实测花费原值；未知就整体省略，不得虚构"
+            }
+          }
+        },
+        "blocker": { "type": "string", "description": "verdict=blocked/not_run 时必填：为什么没跑" },
+        "recordedAt": { "type": "string" },
+        "notes": { "type": "string" }
+      }
+    }
+  },
+  "forbiddenKeys": {
+    "description": "校验规则（由 scripts/check-results.ts 执行，非 JSON Schema 标准关键字）：record 与批次顶层不得出现 successRate、passRate、failureRate、coverage、coveragePercent、completionPercent、completionRate 或任何匹配 /(rate|percent)/i 的自造聚合字段。计数只允许以整数列表/条数形式出现在 notes 或 keyOutput，且不得表述为成功率。",
+    "keys": ["successRate", "passRate", "failureRate", "coverage", "coveragePercent", "completionPercent", "completionRate", "score"]
+  }
+}

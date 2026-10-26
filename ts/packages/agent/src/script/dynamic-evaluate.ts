@@ -9,15 +9,19 @@ export async function evaluateDynamicWorkflow(
   options: DynamicEvaluationOptions = {},
 ): Promise<unknown> {
   const context = createContext(compiled, host, options);
-  const result = await evaluateProgram(context);
-  // Async callbacks can create further host tasks while an earlier batch settles.
-  let observed = 0;
-  while (observed < context.pending.length) {
-    const batch = context.pending.slice(observed);
-    observed = context.pending.length;
-    const outcomes = await Promise.allSettled(batch);
-    const failed = outcomes.find((outcome): outcome is PromiseRejectedResult => outcome.status === 'rejected');
-    if (failed) throw failed.reason;
+  try {
+    const result = await evaluateProgram(context);
+    // Async callbacks can create further host tasks while an earlier batch settles.
+    let observed = 0;
+    while (observed < context.pending.length) {
+      const batch = context.pending.slice(observed);
+      observed = context.pending.length;
+      const outcomes = await Promise.allSettled(batch);
+      const failed = outcomes.find((outcome): outcome is PromiseRejectedResult => outcome.status === 'rejected');
+      if (failed) throw failed.reason;
+    }
+    return result;
+  } finally {
+    if (options.usage) options.usage.operations = context.operations;
   }
-  return result;
 }

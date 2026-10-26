@@ -2,11 +2,13 @@
 import { isDict, pyLen, pySlice, pyStrip, PyValueError } from "@xueness/contracts";
 import { isPyOSError, isPyValueError, pyOSErrorText } from "@xueness/sessions";
 import type { SubscriptionBroker } from "./broker.ts";
+import { clearEntitlementConfig, publicEntitlementConfigs, saveEntitlementConfig } from "./entitlement-config.ts";
+import { pendingExternalConditions } from "./entitlements.ts";
 import { definition, publicAccounts, readDocument, writeDocument } from "./state.ts";
 
 type Row = Record<string, unknown>;
 export type Reply = [number, unknown];
-const ACTIONS = new Set(["connect", "login", "import", "manual", "cancel", "models", "quota", "disconnect", "set-models"]);
+const ACTIONS = new Set(["connect", "login", "import", "manual", "cancel", "models", "quota", "disconnect", "set-models", "entitlement"]);
 export const SUBSCRIPTION_ROUTES = ["GET /api/subscriptions", "GET /api/subscriptions/:id/status", "POST /api/subscriptions/:id/:action"];
 
 function text(value: unknown, limit = 256, empty = false): string {
@@ -44,7 +46,7 @@ export function createAccountsHttp(o: AccountsOptions) {
   };
   async function handle(method: string, parts: readonly string[], data: unknown): Promise<Reply> {
     o.requireAvailable();
-    if (parts.length === 2 && method === "GET") return [200, { accounts: publicAccounts(o.stateDir), workerRunning: o.broker.running() }];
+    if (parts.length === 2 && method === "GET") return [200, { accounts: publicAccounts(o.stateDir), workerRunning: o.broker.running(), entitlements: publicEntitlementConfigs(o.stateDir, true), pendingInterfaces: pendingExternalConditions() }];
     if (parts.length !== 4) return [404, { error: "subscription operation not found" }];
     const [pid, action] = [parts[2]!, parts[3]!];
     const item = definition(pid);
@@ -67,6 +69,14 @@ export function createAccountsHttp(o: AccountsOptions) {
         writeDocument(o.stateDir, "public-models.json", catalogs);
       });
       result = { saved: true };
+    } else if (action === "entitlement") {
+      if (!Object.keys(data).every((key) => key === "base" || key === "token")) throw new PyValueError("expected entitlement base URL and token");
+      if (Object.hasOwn(data, "token")) {
+        saveEntitlementConfig(o.stateDir, pid, data.base, data.token);
+        result = { saved: true };
+      } else {
+        result = { removed: clearEntitlementConfig(o.stateDir, pid) };
+      }
     } else {
       if (action === "manual") {
         if (Object.keys(data).join(",") !== "callback") throw new PyValueError("expected authorization callback");

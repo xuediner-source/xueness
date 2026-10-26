@@ -1,5 +1,7 @@
 /** Session-owned dynamic runs: explicit launch, durable recovery and host lifecycle. */
 import type { HeldFileLock } from '@xueness/sessions';
+import { blockedReminders as selectReminders, type BlockedReminder } from './dynamic-blocked-reminder.ts';
+import { coldResumeDecision } from './dynamic-lifecycle.ts';
 import { compileDynamicWorkflow } from './dynamic-compile.ts';
 import { DynamicWorkflowEngine } from './dynamic-engine.ts';
 import { DynamicWorkflowStore } from './dynamic-store.ts';
@@ -71,6 +73,11 @@ export class DynamicWorkflowService {
     if (compiled.sites.some(site => site.kind === 'ask') && (!options.allowReal || !this.#options.allowRealHost() || !this.#options.enabled('providers'))) fail(403, 'model execution requires the existing host switch and explicit allowReal');
     let lease: HeldFileLock;
     try { lease = this.store.acquire(id); } catch { return fail(409, 'workflow has a live owner'); }
+    // A start that raced `close()` across its awaits must not register a run
+    // the drain already passed: the closed check and the registration below
+    // are one synchronous section, so close() either saw this run or cannot
+    // start draining before it registers.
+    if (this.#closed) { lease.release(); return fail(409, 'workflow host is closed'); }
     const controller = new AbortController(), engine = new DynamicWorkflowEngine(this.store, id, this.#options.driver);
     try {
       this.store.update(id, value => { value.status = 'queued'; value.allowReal = options.allowReal === true; value.approvedDigest = options.digest; delete value.error; });
@@ -105,7 +112,10 @@ export class DynamicWorkflowService {
     let lease: HeldFileLock;
     try { lease = this.store.acquire(id); } catch { return fail(409, 'workflow has a live owner'); }
     try {
-      if (run.status !== 'running' && run.status !== 'queued') return run;
+      // The runner lease is the owner probe: acquiring it proves no live
+      // owner, so the cold-resume decision for a running/queued run is to
+      // mark it interrupted — never to execute alongside a wedged peer.
+      if (coldResumeDecision(run.status, false) !== 'recover_interrupted') return run;
       return this.store.update(id, value => {
         value.status = 'interrupted';
         for (const node of Object.values(value.nodes)) if (node.status === 'running') node.status = 'interrupted';
@@ -131,10 +141,26 @@ export class DynamicWorkflowService {
     return this.store.update(id, value => { const target = value.nodes[nodeId]!; target.status = 'pending'; delete target.question; value.status = 'paused'; });
   }
   async wait(id: string): Promise<void> { await this.#active.get(id)?.done; }
+  /**
+   * C-WFL-04: the session's live runs blocked on a pending question, as
+   * deduped reminder descriptors for the host's background-notice queue.
+   * Count-only changes never appear here because only `awaiting_user` runs
+   * with an awaiting node remind.
+   */
+  async blockedReminders(sessionId: string): Promise<BlockedReminder[]> {
+    return selectReminders(await this.list(sessionId));
+  }
   async close(): Promise<void> {
     this.#closed = true;
-    const active = [...this.#active.values()];
-    for (const run of active) run.controller.abort();
-    await Promise.allSettled(active.map(run => run.done));
+    // Drain, don't drop: every in-flight run is aborted and awaited — its
+    // engine settles the run on disk and the lease releases in the done
+    // chain — and the loop re-checks so a registration that slipped between
+    // the flag and a snapshot is still drained before close returns.
+    for (;;) {
+      const active = [...this.#active.values()];
+      if (!active.length) break;
+      for (const run of active) run.controller.abort();
+      await Promise.allSettled(active.map(run => run.done));
+    }
   }
 }

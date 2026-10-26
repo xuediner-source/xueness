@@ -27,7 +27,7 @@ import { readdirSync, readFileSync, statSync } from "node:fs";
 import { builtinModules } from "node:module";
 import { dirname, isAbsolute, join, relative, resolve } from "node:path";
 import ts from "typescript";
-import { catalogIssues, validateManifest, type PluginManifest } from "@xueness/contracts";
+import { catalogIssues, upgradeManifestV1, validateManifest, type PluginManifest } from "@xueness/contracts";
 import { frontendIssues } from "./frontend-gate.ts";
 
 export type Need = "exec" | "net" | "fs";
@@ -198,6 +198,11 @@ export function checkPlugins(root: string): { problems: string[]; plugins: numbe
     if (!manifest) continue;
     if (manifest.id !== id) problems.push(`plugins/${id}/manifest.json /id: must be the directory name ${JSON.stringify(id)}`);
     manifests.push(manifest);
+    const catalog = readJson(join(root, "catalog", `${id}.json`), problems, `catalog/${id}.json`);
+    const upgraded = upgradeManifestV1(catalog);
+    for (const issue of [...upgraded.issues, ...(upgraded.document ? validateManifest(upgraded.document).issues : [])]) {
+      problems.push(`catalog/${id}.json ${issue.path || "/"}: ${issue.message}`);
+    }
     const pkg = readJson(join(dir, "package.json"), problems, `plugins/${id}/package.json`) ?? {};
     if (pkg.name !== `@xueness/plugin-${id}`) problems.push(`plugins/${id}/package.json: name must be @xueness/plugin-${id}`);
     const deps = Object.keys((pkg.dependencies as Record<string, string> | undefined) ?? {});

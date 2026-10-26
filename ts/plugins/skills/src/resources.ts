@@ -57,7 +57,7 @@ export function resourceRows(stateDir: string): SkillRow[] {
     let size = 0;
     try { size = lstatSync(path).size; } catch { /* Python reports 0 */ }
     return { id, name, description: typeof item.description === "string" ? pyStrip(item.description) : "", tags: [], frontmatterKeys: [],
-      source: "resource", scope: "resource", path, directory: dirname(path), rootPath: dirname(path), bytes: size,
+      source: "resource", scope: "resource", namespace: null, path, directory: dirname(path), rootPath: dirname(path), bytes: size,
       attachments: [], attachmentsTruncated: false, shadowed: false, shadowedBy: null };
   });
 }

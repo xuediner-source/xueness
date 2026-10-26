@@ -46,7 +46,7 @@ it("keeps small strings and structured tool content unchanged", async () => {
 
 async function resultTool(getSession: () => Row | null): Promise<{ kernel: Context; tool: ToolDefinition<Row> }> {
   const kernel = Context.create();
-  await createProviderResultTools(getSession).plugin.apply(kernel, {});
+  await createProviderResultTools(getSession, { catalog: () => [] }).plugin.apply(kernel, {});
   const tool = kernel.tools.get<ToolDefinition<Row>>("tool_result_read");
   assert.ok(tool);
   return { kernel, tool };

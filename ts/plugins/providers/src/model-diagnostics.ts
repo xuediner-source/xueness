@@ -38,7 +38,7 @@ export function modelDebugRecord(sessionId: string, info: Row, requestSummary?: 
     sessionId: safeId(sessionId) ?? "unknown",
     timestamp: safeTimestamp(info.timestamp) ?? new Date().toISOString(),
   };
-  for (const key of ["requestId", "attemptId"] as const) {
+  for (const key of ["requestId", "attemptId", "selectionId"] as const) {
     const value = safeId(info[key]);
     if (value) record[key] = value;
   }

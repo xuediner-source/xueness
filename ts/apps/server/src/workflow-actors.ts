@@ -14,7 +14,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { platform, tmpdir } from "node:os";
 import { join } from "node:path";
 import { AgentRunner, answerSession, kernelAgentHooks, modelInputOf, toolContractExtension, toolMediaExtension, type AgentExtension, type AgentProvider, type ModelRequest, type Row } from "@xueness/agent";
-import { createToolEnv } from "@xueness/engine-tools";
+import { createToolEnv, type ToolDefinition } from "@xueness/engine-tools";
 import { Context, PluginHost } from "@xueness/kernel";
 import { PermissionSession } from "@xueness/permissions";
 import { files, filesReadStateExtension, filesHistoryExtension } from "@xueness/plugin-files";
@@ -81,7 +81,12 @@ export function createActorHost(options: ActorHostOptions): AgentNodeHost {
       const runtimeConfig = loadAgentRuntimeConfig({ stateDir: options.stateDir, root, enabled: options.enabled }).config;
       const shellConfig = runtimeConfig.plugins?.shell as unknown as ReturnType<typeof loadShellConfig>;
       // `ask_user` (planning) is how an actor waits for `answer_actor`.
-      const host = new PluginHost(kernel, [files, createShell(shellBinding, { stateDir: options.stateDir }), createProviderResultTools(() => current.session), createPlanning({ session: () => current.session }), createOffice({ session: () => current.session }), createNetwork({ stateDir: options.stateDir })],
+      const host = new PluginHost(kernel, [files, createShell(shellBinding, { stateDir: options.stateDir }), createProviderResultTools(() => current.session, {
+        // F02.02: identity/exposure projection of the live kernel catalog; the
+        // actor's resolved provider resolves the local/native ToolSearch mode.
+        catalog: () => kernel.tools.list<ToolDefinition>().map(({ name, description, alwaysLoad, shouldDefer }) => ({ name, description, alwaysLoad, shouldDefer })),
+        provider: () => provider,
+      }), createPlanning({ session: () => current.session }), createOffice({ session: () => current.session }), createNetwork({ stateDir: options.stateDir })],
         { enabled: { providers: options.enabled("providers"), files: options.enabled("files"), shell: options.enabled("shell"), planning: options.enabled("planning"), office: options.enabled("office"), network: options.enabled("network") }, config: runtimeConfig.plugins });
       try {
         await host.start();
@@ -91,7 +96,9 @@ export function createActorHost(options: ActorHostOptions): AgentNodeHost {
         env.modelInput = modelInputOf(provider);
         env.currentSession = () => session;
         const bridge = new ToolBridge({ kernel, permissions, env });
-        const hooks = kernelAgentHooks(kernel, { enabled: options.enabled, extensions: [sessionsRuntimeEventsExtension(), sessionsTurnRuntimeExtension(), sessionsStableBoundariesExtension(), sessionsCompactPersistenceExtension(), filesReadStateExtension(env.tracker), filesHistoryExtension(), shellBackgroundExtension(shellBinding), networkActivityExtension(env), toolContractExtension(), dependencyMemory(request.context, options.enabled), toolMediaExtension(), providerRequestShapingExtension(), providerModelExecutionExtension(), providerToolResultBudgetExtension()] });
+        // Workflow actors are governed traffic: they queue per workflow run id
+        // and rotate fairly against other runs and models under the shared cap.
+        const hooks = kernelAgentHooks(kernel, { enabled: options.enabled, extensions: [sessionsRuntimeEventsExtension(), sessionsTurnRuntimeExtension(), sessionsStableBoundariesExtension(), sessionsCompactPersistenceExtension(), filesReadStateExtension(env.tracker), filesHistoryExtension(), shellBackgroundExtension(shellBinding), networkActivityExtension(env), toolContractExtension(), dependencyMemory(request.context, options.enabled), toolMediaExtension(), providerRequestShapingExtension(), providerModelExecutionExtension({ admissionScope: { run: request.runId ?? "workflow-actor" } }), providerToolResultBudgetExtension()] });
         const hostSignal = request.signal ? AbortSignal.any([request.signal, ...options.hostSignal ? [options.hostSignal] : []]) : options.hostSignal;
         const runner = new AgentRunner({ root, store, stateDir: options.stateDir, provider, toolBridge: bridge, hooks, hostSignal });
         return await runner.run(session, { maxSteps: ACTOR_MAX_STEPS, maxWallSeconds: request.timeoutSeconds, shouldStop: request.shouldStop, ...request.signal ? { signal: request.signal } : {} }) as Row;

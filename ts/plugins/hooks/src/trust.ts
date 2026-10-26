@@ -14,6 +14,7 @@ import { isLink, lexists, readCapped, utf8 } from "./files.ts";
 import type { Row } from "./load.ts";
 import { canonicalWorkspace, discover, displayCommand, type Diagnostic } from "./workspace.ts";
 import { WORKSPACE_HOOK_ORIGIN, type WorkspaceHookOrigin } from "./origin.ts";
+import { authorizationRevision } from "./revision.ts";
 
 export const FEATURE_FILENAME = "workspace-hooks.json";
 export const FEATURE_MAX_BYTES = 4096;
@@ -23,7 +24,7 @@ export const MAX_TRUST_BYTES = 256 * 1024;
 export const MAX_TRUST_RECORDS = 512;
 export const MAX_DIAGNOSTICS = 50;
 const REQUIRED = ["workspace", "digest", "decision", "grantedAt"];
-const OPTIONAL = ["eventAtGrant", "displayCommandAtGrant", "sourcePathAtGrant"];
+const OPTIONAL = ["eventAtGrant", "displayCommandAtGrant", "sourcePathAtGrant", "configRevisionAtGrant"];
 const HEX64 = /^[0-9a-f]{64}$/;
 
 function readDocument(path: string, max: number): { status: "absent" | "corrupt" } | { status: "ok"; document: unknown } {
@@ -98,9 +99,21 @@ export function admitted(stateDir: string, root: unknown, session?: Row | null):
   if (workspace === null) return { ...empty, reason: "no_workspace" };
   const found = discover(workspace);
   const trust = loadTrust(stateDir);
-  const trusted = new Set(trust.status === "ok" ? trust.records.filter((record) => record.workspace === workspace).map((record) => record.digest) : []);
+  // A grant only holds while the configuration it was reviewed against is unchanged (F07.03).
+  const revision = authorizationRevision(stateDir, workspace);
+  const scoped = trust.status === "ok" ? trust.records.filter((record) => record.workspace === workspace) : [];
+  const fresh = new Set(scoped.filter((record) => record.configRevisionAtGrant === undefined || record.configRevisionAtGrant === revision).map((record) => record.digest));
+  // A re-written declaration has a new digest no record holds, so staleness is
+  // decided per workspace: any grant bound to an earlier revision means the
+  // configuration the user reviewed is gone and every unadmitted hook is
+  // `stale_trust`, never plain `pending_trust`.
+  const stale = scoped.some((record) => record.configRevisionAtGrant !== undefined && record.configRevisionAtGrant !== revision);
   const hooks: Row[] = []; const pending: Row[] = [];
-  for (const row of found.hooks) { if (!row.enabled) continue; (trusted.has(row.digest) ? hooks : pending).push(row); }
+  for (const row of found.hooks) {
+    if (!row.enabled) continue;
+    if (fresh.has(row.digest)) hooks.push(row);
+    else { pending.push(row); if (stale) (row as Row).staleTrust = true; }
+  }
   const reason = trust.status === "corrupt" ? "trust_store_corrupt" : !found.hooks.length ? "no_workspace_hooks" : pending.length ? "pending_trust" : hooks.length ? "trusted" : "no_enabled_hooks";
   notePendingTrust(session, pending);
   return { hooks, pending, reason, diagnostics: found.diagnostics, bundleDigest: found.bundleDigest, trustStatus: trust.status, corruptPath: trust.corruptPath, featureStatus: feature.status };
@@ -133,12 +146,17 @@ export function statusDocument(stateDir: string, root: unknown): Row {
     reason: feature.enabled ? "no_workspace" : "feature_disabled", trustStatus: "unknown", corruptPath: null, items: [], diagnostics: [] };
   const found = discover(workspace);
   const trust = loadTrust(stateDir);
-  const trusted = new Set(trust.status === "ok" ? trust.records.filter((record) => record.workspace === workspace).map((record) => record.digest) : []);
+  const revision = authorizationRevision(stateDir, workspace);
+  const scoped = trust.status === "ok" ? trust.records.filter((record) => record.workspace === workspace) : [];
+  const trusted = new Set(scoped.filter((record) => record.configRevisionAtGrant === undefined || record.configRevisionAtGrant === revision).map((record) => record.digest));
+  // Per-workspace, matching `admitted`: an earlier-revision grant makes every
+  // unadmitted declaration `stale_trust`.
+  const stale = scoped.some((record) => record.configRevisionAtGrant !== undefined && record.configRevisionAtGrant !== revision);
   const items = found.hooks.map((row) => ({ id: row.id, event: row.event, matcher: row.matcher ?? null, command: displayCommand(row), source: row.source,
-    sourcePath: row.sourceRelative, enabled: row.enabled, digest: row.digest, trustState: trusted.has(row.digest) ? "trusted" : "pending_trust" }));
+    sourcePath: row.sourceRelative, enabled: row.enabled, digest: row.digest, trustState: trusted.has(row.digest) ? "trusted" : stale ? "stale_trust" : "pending_trust" }));
   const enabledItems = items.filter((item) => item.enabled);
   const reason = trust.status === "corrupt" ? "trust_store_corrupt" : !items.length ? "no_workspace_hooks" : !enabledItems.length ? "no_enabled_hooks"
-    : enabledItems.some((item) => item.trustState !== "trusted") ? "pending_trust" : "trusted";
+    : enabledItems.some((item) => item.trustState === "stale_trust") ? "stale_trust" : enabledItems.some((item) => item.trustState !== "trusted") ? "pending_trust" : "trusted";
   return { workspace, featureEnabled: true, featureStatus: feature.status, bundleDigest: found.bundleDigest, reason, trustStatus: trust.status,
-    corruptPath: trust.corruptPath, items, diagnostics: found.diagnostics };
+    corruptPath: trust.corruptPath, items, diagnostics: found.diagnostics, authorizationRevision: revision };
 }

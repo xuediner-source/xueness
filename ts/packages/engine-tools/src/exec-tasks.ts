@@ -25,7 +25,7 @@ export function describeTask(info: BackgroundTaskInfo): string {
   const elapsed = duration(info.durationMs);
   switch (info.state) {
     case "running":
-      return `running for ${elapsed} (pid ${info.pid})`;
+      return `running for ${elapsed} (pid ${info.pid})${info.adopted ? "; moved to the background at its foreground timeout" : ""}`;
     case "exited":
       return `exited with code ${info.exitCode}${info.signal ? ` (${info.signal})` : ""} after ${elapsed}`;
     case "killed":

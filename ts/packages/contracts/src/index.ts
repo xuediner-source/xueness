@@ -1,5 +1,6 @@
 export * from "./events-v1.ts";
 export * from "./runtime-events.ts";
+export * from "./runtime-retention.ts";
 export * from "./derive-events.ts";
 export * from "./http-error.ts";
 export * from "./route-catalog.ts";
@@ -16,3 +17,10 @@ export * from "./py-float.ts";
 export * from "./py-values.ts";
 export * from "./py-text.ts";
 export * from './shell-parse.ts';
+export * from './v4-core.ts';
+export * from './v4-binary.ts';
+export * from './v4-wire.ts';
+export * from './v4-wire-fault.ts';
+export * from './v4-wire-codec.ts';
+export * from './v4-wire-reassembly.ts';
+export * from './v4-transport.ts';

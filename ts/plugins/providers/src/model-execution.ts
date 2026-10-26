@@ -1,9 +1,19 @@
 /** Plugin-owned process admission and optional content-free local diagnostics. */
 import { resolve } from "node:path";
 import type { AgentExtension, Row } from "@xueness/agent";
-import { providerAdmissionForState } from "./admission-policy.ts";
+import type { ModelRequestAdmissionScope } from "@xueness/providers";
+import { admissionWithScope, providerAdmissionForState } from "./admission-policy.ts";
 import { ModelDebugStore } from "./model-debug.ts";
 import { modelDebugRecord, summarizeModelRequest } from "./model-diagnostics.ts";
+
+export interface ProviderModelExecutionOptions {
+  /**
+   * Admission scope for every request this runtime issues: foreground traffic
+   * (the main task and its subagents) never queues behind background runs,
+   * while workflow actors pass their run id for cross-run round-robin.
+   */
+  admissionScope?: ModelRequestAdmissionScope;
+}
 
 const debugStores = new Map<string, ModelDebugStore>();
 function debugStore(stateDir: string): ModelDebugStore {
@@ -18,7 +28,7 @@ export function providerExecutionSnapshot(stateDir: string): Row {
   return { admission: admission ? { enabled: true, ...admission.snapshot() } : { enabled: false }, debug: debugStore(stateDir).snapshot() };
 }
 
-export function providerModelExecutionExtension(): AgentExtension {
+export function providerModelExecutionExtension(options: ProviderModelExecutionOptions = {}): AgentExtension {
   const requests = new WeakMap<Row, Row>();
   const record = (session: Row, stateDir: string, info: Row): void => {
     debugStore(stateDir).write(modelDebugRecord(String(session.id), info, requests.get(session)));
@@ -26,7 +36,9 @@ export function providerModelExecutionExtension(): AgentExtension {
   return { id: "providers", capabilities: ["providers.model_admission", "providers.model_debug"],
     prepareRequest(context, request) {
       requests.delete(context.session);
-      return { ...request, options: { ...request.options, modelRequestAdmission: providerAdmissionForState(context.stateDir) } };
+      const shared = providerAdmissionForState(context.stateDir);
+      const admission = shared ? admissionWithScope(shared, options.admissionScope) : undefined;
+      return { ...request, options: { ...request.options, modelRequestAdmission: admission } };
     },
     modelRequestPrepared(context, request) { requests.set(context.session, summarizeModelRequest(request)); },
     modelRequestCompleted(context, info) { record(context.session, context.stateDir, { ...info, type: "model_request_completed" }); },

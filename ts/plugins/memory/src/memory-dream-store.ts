@@ -14,7 +14,7 @@ const sha256 = (value: string): string => createHash("sha256").update(value, "ut
 function asRecord(value: unknown, id: string): MemoryDreamRecord {
   if (!isDict(value) || value.schemaVersion !== 1 || value.id !== id || typeof value.parentSessionId !== "string"
       || typeof value.root !== "string" || typeof value.startDigest !== "string" || !Array.isArray(value.sources)
-      || !Array.isArray(value.sourceSessionIds) || !["draft", "running", "ready", "applied", "failed", "cancelled"].includes(String(value.status))) {
+      || !Array.isArray(value.sourceSessionIds) || !["draft", "running", "ready", "applied", "reverted", "failed", "cancelled"].includes(String(value.status))) {
     throw new PyValueError("invalid memory dream record");
   }
   return value as unknown as MemoryDreamRecord;

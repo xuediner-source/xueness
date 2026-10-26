@@ -5,11 +5,12 @@
  * and every plugin route with the same framing checks, guards, headers and
  * error envelope as `web.py`. A path nobody owns gets web.py's 404 envelope.
  */
-import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
+import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
+import { createServer as createNetServer, type Server as NetServer, type Socket } from "node:net";
 import { bodyLimitFor, pyStrip } from "@xueness/contracts";
 import { checkRequest } from "./guards.ts";
 import {
-  applyHeadLimits, expireHead, HEADER_DEADLINE_MS, HEADER_IDLE_MS, headReceived, isHeadTimeout, trackHeadLimits,
+  applyHeadLimits, expireHead, frontSocketHead, HEADER_DEADLINE_MS, HEADER_IDLE_MS, headReceived, isHeadTimeout, trackHeadLimits,
   type HeadOutcomes,
 } from "./head-limits.ts";
 import { requestPath } from "./py-url.ts";
@@ -54,10 +55,12 @@ export interface FrontDoorStats {
   silentCloses: number;
 }
 
-export interface FrontDoor extends Server {
+export interface FrontDoor extends NetServer {
   /** Change settings live: the token and bundle apply to the next request, limits to the next head. */
   configure(update: FrontDoorSettings): void;
   stats(): FrontDoorStats;
+  /** Destroy every tracked TCP front socket (Bun net.Server has no closeAllConnections). */
+  closeAllConnections(): void;
 }
 
 /** Node compares these as whole milliseconds; 0 would switch a limit off. */
@@ -92,6 +95,7 @@ export const TS_ROUTES: readonly string[] = Object.freeze([
   "GET /api/csrf", "GET /api/health", "GET /healthz",
 ]);
 
+let frontDebugWired = false;
 export function createFrontDoor(options: FrontDoorOptions): FrontDoor {
   /** web.py's own GET routes, answered before the plugin dispatch. */
   const coreReply = (method: string, path: string): [number, Record<string, unknown>] | null => {
@@ -170,6 +174,10 @@ export function createFrontDoor(options: FrontDoorOptions): FrontDoor {
   };
 
   const onRequest = (req: IncomingMessage, res: ServerResponse): void => {
+    if (process.env.XUENESS_HEAD_DEBUG) {
+      process.stderr.write(`[front-debug] req ${req.method} ${req.url} t=${Date.now() % 100000}\n`);
+      res.once("finish", () => process.stderr.write(`[front-debug] res ${req.method} ${req.url} -> ${res.statusCode} t=${Date.now() % 100000}\n`));
+    }
     headReceived(req, res);
     const refusal = headRefusal(req);
     if (refusal) {
@@ -217,5 +225,30 @@ export function createFrontDoor(options: FrontDoorOptions): FrontDoor {
     if (update.headerDeadlineMs !== undefined) settings.headerDeadlineMs = limitMs(update.headerDeadlineMs);
     applyHeadLimits(server, limits());
   };
-  return Object.assign(server, { configure, stats: (): FrontDoorStats => ({ ...counts }) });
+  const sockets = new Set<Socket>();
+  // The TCP front owns each socket before the HTTP parser attaches: Bun's
+  // parser never surfaces head bytes (nor its own timeouts) to JavaScript, so
+  // heads are counted and timed here; Node's parser runs on as before.
+  const front = createNetServer((socket: Socket) => {
+    sockets.add(socket);
+    if (process.env.XUENESS_HEAD_DEBUG && !frontDebugWired) {
+      frontDebugWired = true;
+      front.on("close", () => process.stderr.write(`[front-debug] FRONT CLOSED t=${Date.now() % 100000}\n`));
+      front.on("error", (error) => process.stderr.write(`[front-debug] FRONT ERROR ${String(error)} t=${Date.now() % 100000}\n`));
+    }
+    if (process.env.XUENESS_HEAD_DEBUG) {
+      process.stderr.write(`[front-debug] conn t=${Date.now() % 100000}\n`);
+      socket.on("close", (hadError) => process.stderr.write(`[front-debug] close hadError=${hadError} destroyed=${socket.destroyed} t=${Date.now() % 100000}\n`));
+      socket.on("error", (error) => process.stderr.write(`[front-debug] error ${String(error)}\n`));
+    }
+    socket.once("close", () => sockets.delete(socket));
+    frontSocketHead(socket, limits, outcomes);
+    server.emit("connection", socket);
+  });
+  return Object.assign(front, {
+    configure,
+    stats: (): FrontDoorStats => ({ ...counts }),
+    /** Bun's `net.Server` has none of its own; the front tracks every socket. */
+    closeAllConnections: (): void => { for (const socket of sockets) socket.destroy(); },
+  });
 }

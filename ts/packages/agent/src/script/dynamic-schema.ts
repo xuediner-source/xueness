@@ -221,6 +221,7 @@ export function synthesizeDynamicSchemas(
 
 function isAskCall(node: ts.CallExpression): boolean {
   const expression = node.expression;
+  if (ts.isIdentifier(expression)) return expression.text === "ask";
   if (!ts.isPropertyAccessExpression(expression) || expression.name.text !== "ask") return false;
   return !expression.questionDotToken || expression.questionDotToken.kind === ts.SyntaxKind.QuestionDotToken;
 }

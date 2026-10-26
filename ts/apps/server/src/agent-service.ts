@@ -3,9 +3,10 @@ import { mkdirSync, mkdtempSync, realpathSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { isAbsolute, join, normalize, resolve } from "node:path";
 import { isDict, pyJsonDumps, PyValueError } from "@xueness/contracts";
+import type { ToolSearchProviderView } from "@xueness/providers";
 import { AgentRunner, UnsupportedAgentConfiguration, kernelAgentHooks, modelInputOf, promptContextExtension, toolContractExtension, toolMediaExtension, type AgentEvent, type AgentExtension, type AgentProvider, type Row, type RunOptions } from "@xueness/agent";
 import { Context, PluginHost } from "@xueness/kernel";
-import { createToolEnv, type ToolEnv } from "@xueness/engine-tools";
+import { createToolEnv, type ToolDefinition, type ToolEnv } from "@xueness/engine-tools";
 import { planModePort } from "./plan-mode-port.ts";
 import { PermissionSession } from "@xueness/permissions";
 import { files, filesReadStateExtension, filesHistoryExtension, workspaceInstructionsExtension } from "@xueness/plugin-files";
@@ -14,7 +15,7 @@ import { createProviderResultTools, providerToolResultBudgetExtension, providers
 import { sessionsTurnRuntimeExtension, sessionsSteeringExtension, sessionsRuntimeEventsExtension, sessionsStableBoundariesExtension, sessionsCompactPersistenceExtension } from "@xueness/plugin-sessions";
 import { createPlanning, guardedPermission, planning, type PlanModePort, planningDeliveryExtension, planningGoalExtension } from "@xueness/plugin-planning";
 import { createGitCheckpoints } from "@xueness/plugin-git";
-import { createMcp, resetElicitationState, mcpRuntimeExtension, type McpRuntimeBinding, type McpRun } from "@xueness/plugin-mcp";
+import { createMcp, resetAppsState, resetElicitationState, mcpRuntimeExtension, type McpRuntimeBinding, type McpRun } from "@xueness/plugin-mcp";
 import { BUNDLED_SKILLS_DIR, createSkills, skills, skillsExtension, visualizationDirectory } from "@xueness/plugin-skills";
 import { createNativeOps, createNativeOpsBinding, nativeOps, nativeOpsExtension, type NativeOpsBinding } from "@xueness/plugin-native_ops";
 import { batchCallsExtension } from "@xueness/plugin-batch_calls";
@@ -30,7 +31,7 @@ import { automation, createAutomationTools } from "@xueness/plugin-automation";
 import { createWorkflows, workflows, WorkflowStore, type WorkerLauncher, type DynamicWorkflowService } from "@xueness/plugin-workflows";
 import { answerWorkflowActor } from "./workflow-actors.ts";
 import { loadMcpServers, pluginGrants } from "./mcp-servers.ts";
-import { handoffModelJson, lightweightRuntimeExtension, loadSettings, ProfileStore, providerActivityExtension, providerModelExecutionExtension, providerRequestShapingExtension, requestConversationTitle, resolveSavedProvider, semanticCompactionExtension, titleProviderSupported, zcodeCompactionExtension } from "@xueness/plugin-providers";
+import { auxiliaryModelAdmission, handoffModelJson, lightweightRuntimeExtension, loadSettings, ProfileStore, providerActivityExtension, providerModelExecutionExtension, providerRequestShapingExtension, requestConversationTitle, resolveSavedProvider, semanticCompactionExtension, titleProviderSupported, zcodeCompactionExtension } from "@xueness/plugin-providers";
 import { bindMediaPrompt, sessions as sessionsPlugin, createAutoTitleWorker, recordApproval, normalizeQuestions, QUESTION_SCHEMA, sessionsCompletionExtension, sessionsToolActivityExtension, switchableProvider, loadProjectPermissionRules, type ApprovalBuckets, type MediaArtifactStore, type RunPolicy, type RuntimeSelection, type SwitchableAgentProvider } from "@xueness/plugin-sessions";
 import { foldHostPath, isLink, type Session, type SessionStore } from "@xueness/sessions";
 import { ApprovalWaits, ToolBridge, type Approver } from "@xueness/tool-bridge";
@@ -73,7 +74,7 @@ export interface AgentServiceOptions {
   workflowLauncher?: WorkerLauncher;
   dynamicWorkflows?: DynamicWorkflowService;
 }
-interface Environment { kernel: Context; host: PluginHost; env: ToolEnv; artifacts: string; root: string; configs: string; reconcile: Promise<void>; current: { session: Session | null; planMode: PlanModePort | null; mcp: McpRun | null }; hooks: HooksBinding; subagents: SubagentsBinding; shell: ShellRuntimeBinding; shellConfig: string; runtimeConfig: RuntimeConfigPatch; runtimeFingerprint: string; mcpRuntime: McpRuntimeBinding; nativeOps: NativeOpsBinding }
+interface Environment { kernel: Context; host: PluginHost; env: ToolEnv; artifacts: string; root: string; configs: string; reconcile: Promise<void>; current: { session: Session | null; planMode: PlanModePort | null; mcp: McpRun | null; provider: ToolSearchProviderView | null }; hooks: HooksBinding; subagents: SubagentsBinding; shell: ShellRuntimeBinding; shellConfig: string; runtimeConfig: RuntimeConfigPatch; runtimeFingerprint: string; mcpRuntime: McpRuntimeBinding; nativeOps: NativeOpsBinding }
 
 /** Lightweight sessions keep the earlier model handoff; standard sessions use ZCode compaction. */
 function lightweightSemanticCompaction(): AgentExtension {
@@ -92,7 +93,12 @@ export function createAgentService(options: AgentServiceOptions) {
   const liveApprovals = options.liveApprovals ?? new ApprovalWaits();
   const settings = options.settings ?? (() => loadSettings(options.stateDir));
   const enabled = (id: string): boolean => { try { return options.enabled(id) === true; } catch { return false; } };
-  const titles = createAutoTitleWorker({ store: options.store, enabled, settings, allowModelRequests: options.allowModelRequests === true, acceptProvider: titleProviderSupported, request: requestConversationTitle });
+  // Auxiliary model calls (titles, goal verification) join the state directory's
+  // governor under the foreground scope: counted and feeding feedback, never
+  // queued behind workflow runs (C-MDL-05).
+  const auxAdmission = () => auxiliaryModelAdmission(options.stateDir);
+  const titles = createAutoTitleWorker({ store: options.store, enabled, settings, allowModelRequests: options.allowModelRequests === true, acceptProvider: titleProviderSupported,
+    request: (provider, prompt, signal) => requestConversationTitle(provider, prompt, signal, { admission: auxAdmission() }) });
   let closed = false;
   const configurationFor = (root: string) => loadAgentRuntimeConfig({ stateDir: options.stateDir, root, enabled, env: options.configEnv, pluginConfig: options.pluginConfig?.() });
   const reconcile = async (environment: Environment): Promise<void> => {
@@ -123,11 +129,17 @@ export function createAgentService(options: AgentServiceOptions) {
       const runtimeConfig = configurationFor(String(session.root)).config;
       const configs = runtimeConfig.plugins ?? {};
       const nativeOpsBinding = createNativeOpsBinding();
-      const current = { session: session as Session | null, planMode: null as PlanModePort | null, mcp: null as McpRun | null };
+      const current = { session: session as Session | null, planMode: null as PlanModePort | null, mcp: null as McpRun | null, provider: null as ToolSearchProviderView | null };
       const hookBinding = hooksBinding(); const subagentBinding = subagentsBinding(); const shellBinding: ShellRuntimeBinding = {}; const mcpRuntime: McpRuntimeBinding = {};
       const workflowTools = createWorkflows({ stateDir: options.stateDir, enabled, dynamic: options.dynamicWorkflows, session: () => current.session, allowReal: () => options.allowModelRequests === true, allowRealHost: () => options.allowModelRequests === true,
         answerActor: (wid, nodeId, answer) => answerWorkflowActor(new WorkflowStore(options.stateDir), wid, nodeId, answer), ...(options.workflowLauncher ? { launcher: options.workflowLauncher } : {}) });
-      const host = new PluginHost(kernel, [files, createShell(shellBinding, { stateDir: options.stateDir }), createProviderResultTools(() => current.session), sessionsPlugin, workflowTools, createAutomationTools({ stateDir: options.stateDir }), createPlanning({ session: () => current.session, planMode: () => current.planMode, questionsSchema: QUESTION_SCHEMA, normalizeQuestions(value) { if (!enabled("sessions")) throw new PyValueError("structured questions require the planning and sessions plugins"); return normalizeQuestions(value); } }), createGitCheckpoints({ store: options.store, stateDir: options.stateDir, enabled, session: () => current.session }), createMcp({ run: () => current.mcp, binding: mcpRuntime }), createSkills({ stateDir: options.stateDir, root: () => current.session ? String(current.session.root) : null, bundled: BUNDLED_SKILLS_DIR }), createHooks(hookBinding), createSubagents(subagentBinding), createNativeOps(nativeOpsBinding), createOffice({ session: () => current.session }), createBrowser({ stateDir: options.stateDir }), createNetwork({ stateDir: options.stateDir, net: options.networkNet }), createRemote({ stateDir: options.stateDir })], { enabled: { providers: enabled("providers"), files: enabled("files"), shell: enabled("shell"), sessions: enabled("sessions"), workflows: enabled("workflows"), automation: enabled("automation"), planning: enabled("planning"), git: enabled("git"), mcp: false, skills: enabled("skills"), hooks: enabled("hooks"), subagents: enabled("subagents"), office: enabled("office"), browser: enabled("browser"), network: enabled("network"), remote: enabled("remote"), native_ops: enabled("native_ops") }, config: configs });
+      const host = new PluginHost(kernel, [files, createShell(shellBinding, { stateDir: options.stateDir }), createProviderResultTools(() => current.session, {
+        // F02.02: the search sees the live kernel catalog projected to identity and
+        // exposure metadata (registered = enabled plugins), and the run's provider
+        // resolves the local/native ToolSearch mode.
+        catalog: () => kernel.tools.list<ToolDefinition>().map(({ name, description, alwaysLoad, shouldDefer }) => ({ name, description, alwaysLoad, shouldDefer })),
+        provider: () => current.provider,
+      }), sessionsPlugin, workflowTools, createAutomationTools({ stateDir: options.stateDir }), createPlanning({ session: () => current.session, planMode: () => current.planMode, questionsSchema: QUESTION_SCHEMA, normalizeQuestions(value) { if (!enabled("sessions")) throw new PyValueError("structured questions require the planning and sessions plugins"); return normalizeQuestions(value); } }), createGitCheckpoints({ store: options.store, stateDir: options.stateDir, enabled, session: () => current.session }), createMcp({ run: () => current.mcp, binding: mcpRuntime }), createSkills({ stateDir: options.stateDir, root: () => current.session ? String(current.session.root) : null, bundled: BUNDLED_SKILLS_DIR }), createHooks(hookBinding), createSubagents(subagentBinding), createNativeOps(nativeOpsBinding), createOffice({ session: () => current.session }), createBrowser({ stateDir: options.stateDir }), createNetwork({ stateDir: options.stateDir, net: options.networkNet }), createRemote({ stateDir: options.stateDir })], { enabled: { providers: enabled("providers"), files: enabled("files"), shell: enabled("shell"), sessions: enabled("sessions"), workflows: enabled("workflows"), automation: enabled("automation"), planning: enabled("planning"), git: enabled("git"), mcp: false, skills: enabled("skills"), hooks: enabled("hooks"), subagents: enabled("subagents"), office: enabled("office"), browser: enabled("browser"), network: enabled("network"), remote: enabled("remote"), native_ops: enabled("native_ops") }, config: configs });
       try {
         await host.start();
         return { kernel, host, env: createToolEnv({ cwd: String(session.root), artifactsDir: artifacts, owner: sid }), artifacts, root: String(session.root), configs: pyJsonDumps(configs, { sortKeys: true }), reconcile: Promise.resolve(), current, hooks: hookBinding, subagents: subagentBinding, shell: shellBinding, shellConfig: pyJsonDumps(configs.shell ?? {}, { sortKeys: true }), runtimeConfig, runtimeFingerprint: pyJsonDumps(runtimeConfig, { sortKeys: true }), mcpRuntime, nativeOps: nativeOpsBinding };
@@ -214,6 +226,7 @@ export function createAgentService(options: AgentServiceOptions) {
           environment.current.planMode = planModePort(value, permissions, policy.permissionMode);
           const bridge = new ToolBridge({ kernel: environment.kernel, permissions, env: environment.env, approver: (options.approver ?? liveApprover)(sid, value, () => pendingCancel || !!runOptions.shouldStop?.()) });
           const runtimeProvider = switchableProvider(provider, value);
+          environment.current.provider = runtimeProvider;
           Object.defineProperty(environment.env, "modelInput", { configurable: true, enumerable: true, get: () => modelInputOf(runtimeProvider) });
           const productExtensions = options.extensions?.(value, policy) ?? [];
           const supportedCapabilities = new Set(["sessions.completion_policy", "sessions.approvals", "sessions.steering", "sessions.queue", "sessions.live_tool_activity", "providers.lightweight", "providers.semantic_compaction", "providers.activity", "files.workspace_instructions", "planning.delivery", "planning.goal_driver", "sessions.prompt_context", "remote.execution", ...productExtensions.flatMap((extension) => enabled(extension.id) ? [...extension.capabilities ?? []] : [])]);
@@ -247,7 +260,7 @@ export function createAgentService(options: AgentServiceOptions) {
             sessionsCompletionExtension(),
             remoteSessionExtension(),
             planningDeliveryExtension((context) => ({ enabled: context.enabled, canRead: (path) => permissions.preview({ tool: "read", kind: "read", subject: path, subjectKind: "path" }).behavior === "allow", officeText: deliveryContentText })),
-            planningGoalExtension(handoffModelJson),
+            planningGoalExtension((provider, messages, config) => handoffModelJson(provider, messages, { ...config, admission: auxAdmission() })),
             { id: 'planning', capabilities: ['planning.guarded'] },
             // The Office plugin's extractor backs Office delivery checks above; declaring it keeps them on TS.
             { id: "office", capabilities: ["office.delivery"] },
@@ -259,14 +272,24 @@ export function createAgentService(options: AgentServiceOptions) {
             skillsExtension({ stateDir: options.stateDir, bundled: BUNDLED_SKILLS_DIR, visualizations: () => visualizations }),
             ...remoteBound ? [] : [hooksExtension({ stateDir: options.stateDir, binding: environment.hooks, legacy: !!(policy.request.allow_hooks || policy.request.allowHooks) })],
             lightweightSemanticCompaction(),
-            lightweightRuntimeExtension({ toolPolicy: () => ({ disallow: policy.disallowed, readonlyDenied: environment.kernel.tools.list().filter((tool) => tool.mutating || ["write", "edit", "exec", "mcp"].includes(tool.gate)).map((tool) => tool.name) }) }),
+            lightweightRuntimeExtension({ discoveredCatalog: () => environment.kernel.tools.list().map((tool) => tool.name), toolPolicy: () => {
+              // F02.01 exposure policy: the registry's declared alwaysLoad/shouldDefer tools
+              // shape the lightweight selected view; a disabled plugin's tools never reach
+              // this list (kernel.tools only holds registered plugins).
+              const tools = environment.kernel.tools.list();
+              return { disallow: policy.disallowed,
+                alwaysLoad: tools.filter((tool) => tool.alwaysLoad === true).map((tool) => tool.name),
+                deferred: tools.filter((tool) => tool.shouldDefer === true).map((tool) => tool.name),
+                readonlyDenied: tools.filter((tool) => tool.mutating || ["write", "edit", "exec", "mcp"].includes(tool.gate)).map((tool) => tool.name) };
+            } }),
             subagentsExtension({ stateDir: options.stateDir, allowed: delegation, binding: environment.subagents }),
             promptContextExtension(),
             toolContractExtension(),
             nativeOpsExtension(environment.nativeOps), batchCallsExtension,
             zcodeCompactionExtension(),
             providerRequestShapingExtension(),
-            providerModelExecutionExtension(),
+            // The main task never queues behind workflow traffic (observer semantics).
+            providerModelExecutionExtension({ admissionScope: { foreground: true } }),
             providerActivityExtension(),
             { id: "mcp", capabilities: ["mcp.connections"] },
             approvalReplayExtension(bridge, approvals, enabled, (name) => environment.kernel.tools.ownerOf(name)),
@@ -290,8 +313,11 @@ export function createAgentService(options: AgentServiceOptions) {
             onEvent: (event) => options.onEvent?.(sid, event) });
           active.set(sid, runner);
           liveSessions.set(sid, value);
+          // F08.01 model ceiling: the models of every saved provider profile; a
+          // host with no saved profiles (env-configured) sets no ceiling.
+          const savedModels = [...new Set(new ProfileStore(options.stateDir).list().map((record) => String(record.model ?? "").trim()).filter(Boolean))];
           const childHost = delegation ? { kernel: environment.kernel, env: environment.env, stateDir: options.stateDir, enabled, parent: value, provider, disallowed: policy.disallowed, executionShell: { shell: environment.shell.dialect === "posix" ? "posix" as const : "powershell" as const, readOnlyCommands: environment.shell.dialect === "posix" && !appliedShellConfig.captureInit && !appliedShellConfig.startupScript },
-            resolveProvider, stopped: () => pendingCancel || !!runOptions.shouldStop?.() || closed, hostSignal: shutdown.signal, registry: options.taskRegistry, nativeOps: environment.nativeOps } : null;
+            resolveProvider, modelCeiling: savedModels.length ? savedModels : null, stopped: () => pendingCancel || !!runOptions.shouldStop?.() || closed, hostSignal: shutdown.signal, registry: options.taskRegistry, nativeOps: environment.nativeOps } : null;
           const background = childHost ? backgroundChildRunner(childHost) : null;
           environment.subagents.run = childHost ? childRunner(childHost) : null;
           environment.subagents.background = background;
@@ -309,7 +335,7 @@ export function createAgentService(options: AgentServiceOptions) {
           pendingSessions.set(sid, pending);
           try { const out = await pending; completed = true; return out; }
           finally { activeRuns.delete(pending);
-            if (mcpRun) { resetElicitationState(options.stateDir); await environment.host.disable("mcp").catch(() => {}); environment.current.mcp = null; }
+            if (mcpRun) { resetElicitationState(options.stateDir); resetAppsState(options.stateDir); await environment.host.disable("mcp").catch(() => {}); environment.current.mcp = null; }
             if (active.get(sid) === runner) {
               // Children outlive no turn: the coordinator's stop predicate is
               // already true here, and closing it releases every worker slot.

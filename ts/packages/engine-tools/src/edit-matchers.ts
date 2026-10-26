@@ -18,9 +18,10 @@ import {
 import { collectQuoteNormalizedCandidates } from "./edit-matchers-quotes.ts";
 import {
   collectSubstringCandidates,
+  hasVisibleEscapes,
   stripReadLineNumberPrefixes,
   unescapeUnicodeCharacters,
-  unescapeVisibleCharacters,
+  unescapeVisibleAndUnicodeCharacters,
 } from "./edit-matchers-text.ts";
 import type { Candidate, EditMatchResult, EditMatchStrategy } from "./edit-matchers-types.ts";
 
@@ -69,7 +70,12 @@ export function normalizeReplacementForMatch(
   strategy: EditMatchStrategy,
   newString: string,
 ): string {
-  return strategy === "escape_normalized" ? unescapeVisibleCharacters(newString) : newString;
+  if (strategy !== "escape_normalized") return newString;
+  // A paste that visibly escaped one token (\t, \n, ...) also escaped its other
+  // non-ASCII text as \uXXXX, so both decode together; a lone \uXXXX stays
+  // encoded like the unicode_escape_normalized path.
+  if (!hasVisibleEscapes(newString)) return newString;
+  return unescapeVisibleAndUnicodeCharacters(newString);
 }
 
 function collectCandidates(
@@ -122,7 +128,8 @@ function collectLineNumberPrefixCandidates(content: string, search: string): Can
 }
 
 function collectEscapeNormalizedCandidates(content: string, search: string): Candidate[] {
-  const unescaped = unescapeVisibleCharacters(search);
+  if (!hasVisibleEscapes(search)) return [];
+  const unescaped = unescapeVisibleAndUnicodeCharacters(search);
   if (unescaped === search) return [];
   return collectSubstringCandidates(content, unescaped);
 }

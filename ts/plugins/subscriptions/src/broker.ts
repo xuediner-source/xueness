@@ -38,6 +38,8 @@ interface Waiter { (value: Row | null): void }
 
 export class SubscriptionWorker {
   readonly process: ChildProcess;
+  /** Resolves only after the OS process and its stdio handles have closed. */
+  readonly stopped: Promise<void>;
   private readonly pending = new Map<string, Waiter>();
   private readonly monitor: NodeJS.Timeout;
   closed = false;
@@ -50,6 +52,7 @@ export class SubscriptionWorker {
     env.XUENESS_SUBSCRIPTIONS_STORE = directory(stateDir, true);
     if (baseEnv.XUENESS_DESKTOP_NODE) env.ELECTRON_RUN_AS_NODE = "1";
     this.process = spawn(baseEnv.XUENESS_DESKTOP_NODE || process.execPath, [script], { env, cwd: directory(stateDir), stdio: ["pipe", "pipe", "ignore"], windowsHide: true, detached: process.platform !== "win32" });
+    this.stopped = new Promise<void>((resolve) => this.process.once("close", () => resolve()));
     this.process.on("error", () => this.close());
     this.process.on("exit", () => this.close());
     this.process.stdin?.on("error", () => this.close());
@@ -113,8 +116,8 @@ export class SubscriptionWorker {
     }
   }
 
-  close(): void {
-    if (this.closed) return;
+  close(): Promise<void> {
+    if (this.closed) return this.stopped;
     this.closed = true; clearInterval(this.monitor);
     try { this.process.stdin?.end(); } catch { /* already closed */ }
     for (const waiter of this.pending.values()) waiter(null);
@@ -125,12 +128,14 @@ export class SubscriptionWorker {
       setTimeout(() => { if (this.process.exitCode === null && this.process.signalCode === null) kill("SIGKILL"); }, 500).unref();
     }
     this.process.stdout?.destroy();
+    return this.stopped;
   }
 }
 
 /** One worker per state directory, started on demand. */
 export class SubscriptionBroker {
   private worker: SubscriptionWorker | null = null;
+  private readonly workers = new Set<SubscriptionWorker>();
   private readonly stateDir: string;
   private readonly requireAvailable: () => void;
   private readonly env: NodeJS.ProcessEnv;
@@ -145,9 +150,15 @@ export class SubscriptionBroker {
     if (!this.worker) {
       if (options.start === false) return {};
       this.worker = new SubscriptionWorker(this.stateDir, this.requireAvailable, this.env, this.script);
+      const worker = this.worker;
+      this.workers.add(worker);
+      void worker.stopped.then(() => this.workers.delete(worker));
     }
     return this.worker.call(action, provider, data, { ...options, requestDeadline: requested });
   }
   running(): boolean { return !!this.worker && !this.worker.closed; }
-  shutdown(): void { const worker = this.worker; this.worker = null; worker?.close(); }
+  async shutdown(): Promise<void> {
+    this.worker = null;
+    await Promise.all([...this.workers].map((worker) => worker.close()));
+  }
 }

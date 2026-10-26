@@ -1,0 +1,278 @@
+{
+  "schema": "xueness.delivery-closure.v1",
+  "task": "F14.05",
+  "date": "2026-10-26",
+  "ledger": {
+    "total": 23,
+    "complete": 23,
+    "externalPending": 0,
+    "open": 0,
+    "items": [
+      {
+        "id": "G01",
+        "verdict": "complete",
+        "evidenceRefs": [
+          "models-runtime-evidence.md"
+        ],
+        "missingEvidence": [],
+        "countedWithoutEvidence": false
+      },
+      {
+        "id": "R01",
+        "verdict": "complete",
+        "evidenceRefs": [
+          "F00.02-result.md",
+          "models-runtime-evidence.md",
+          "F02.04-result.md"
+        ],
+        "missingEvidence": [],
+        "countedWithoutEvidence": false
+      },
+      {
+        "id": "G02",
+        "verdict": "complete",
+        "evidenceRefs": [
+          "models-runtime-evidence.md",
+          "F01.04-result.md",
+          "F01.05-result.md",
+          "ts/plugins/providers/src/admission-policy.ts",
+          "ts/plugins/providers/src/admission-controller.ts",
+          "ts/plugins/providers/src/aux-admission.ts"
+        ],
+        "missingEvidence": [],
+        "countedWithoutEvidence": false
+      },
+      {
+        "id": "G03",
+        "verdict": "complete",
+        "evidenceRefs": [
+          "models-runtime-evidence.md",
+          "F01.03-result.md",
+          "ts/packages/agent/src/execution-selection.ts",
+          "H03.05-06-result.md"
+        ],
+        "missingEvidence": [],
+        "countedWithoutEvidence": false
+      },
+      {
+        "id": "G04",
+        "verdict": "complete",
+        "evidenceRefs": [
+          "models-runtime-evidence.md",
+          "F02.05-result.md",
+          "ts/packages/tool-bridge/src/tool-deadline.ts",
+          "test/tool-deadline.test.ts"
+        ],
+        "missingEvidence": [],
+        "countedWithoutEvidence": false
+      },
+      {
+        "id": "D01",
+        "verdict": "complete",
+        "evidenceRefs": [
+          "models-runtime-evidence.md",
+          "F02.06-result.md",
+          "ts/packages/tool-bridge/src/batch-scheduler.ts",
+          "test/batch-scheduler.test.ts"
+        ],
+        "missingEvidence": [],
+        "countedWithoutEvidence": false
+      },
+      {
+        "id": "G05",
+        "verdict": "complete",
+        "evidenceRefs": [
+          "models-runtime-evidence.md",
+          "H03.05-06-result.md"
+        ],
+        "missingEvidence": [],
+        "countedWithoutEvidence": false
+      },
+      {
+        "id": "D02",
+        "verdict": "complete",
+        "evidenceRefs": [
+          "models-runtime-evidence.md",
+          "H03.05-06-result.md"
+        ],
+        "missingEvidence": [],
+        "countedWithoutEvidence": false
+      },
+      {
+        "id": "G06",
+        "verdict": "complete",
+        "evidenceRefs": [
+          "autonomy-workflows-evidence.md",
+          "H03.05-06-result.md"
+        ],
+        "missingEvidence": [],
+        "countedWithoutEvidence": false
+      },
+      {
+        "id": "G07",
+        "verdict": "complete",
+        "evidenceRefs": [
+          "autonomy-workflows-evidence.md",
+          "H03.05-06-result.md"
+        ],
+        "missingEvidence": [],
+        "countedWithoutEvidence": false
+      },
+      {
+        "id": "G08",
+        "verdict": "complete",
+        "evidenceRefs": [
+          "autonomy-workflows-evidence.md",
+          "H03.05-06-result.md"
+        ],
+        "missingEvidence": [],
+        "countedWithoutEvidence": false
+      },
+      {
+        "id": "G09",
+        "verdict": "complete",
+        "evidenceRefs": [
+          "autonomy-workflows-evidence.md",
+          "H03.05-06-result.md"
+        ],
+        "missingEvidence": [],
+        "countedWithoutEvidence": false
+      },
+      {
+        "id": "D03",
+        "verdict": "complete",
+        "evidenceRefs": [
+          "autonomy-workflows-evidence.md",
+          "H03.05-06-result.md"
+        ],
+        "missingEvidence": [],
+        "countedWithoutEvidence": false
+      },
+      {
+        "id": "G10",
+        "verdict": "complete",
+        "evidenceRefs": [
+          "extensions-config-evidence.md",
+          "H03.05-06-result.md"
+        ],
+        "missingEvidence": [],
+        "countedWithoutEvidence": false
+      },
+      {
+        "id": "D04",
+        "verdict": "complete",
+        "evidenceRefs": [
+          "extensions-config-evidence.md",
+          "H03.05-06-result.md"
+        ],
+        "missingEvidence": [],
+        "countedWithoutEvidence": false
+      },
+      {
+        "id": "G11",
+        "verdict": "complete",
+        "evidenceRefs": [
+          "extensions-config-evidence.md",
+          "H03.05-06-result.md"
+        ],
+        "missingEvidence": [],
+        "countedWithoutEvidence": false
+      },
+      {
+        "id": "G12",
+        "verdict": "complete",
+        "evidenceRefs": [
+          "extensions-config-evidence.md",
+          "H03.05-06-result.md"
+        ],
+        "missingEvidence": [],
+        "countedWithoutEvidence": false
+      },
+      {
+        "id": "D05",
+        "verdict": "complete",
+        "evidenceRefs": [
+          "extensions-config-evidence.md",
+          "H03.05-06-result.md"
+        ],
+        "missingEvidence": [],
+        "countedWithoutEvidence": false
+      },
+      {
+        "id": "D06",
+        "verdict": "complete",
+        "evidenceRefs": [
+          "sessions-protocol-evidence.md",
+          "H03.05-06-result.md"
+        ],
+        "missingEvidence": [],
+        "countedWithoutEvidence": false
+      },
+      {
+        "id": "G13",
+        "verdict": "complete",
+        "evidenceRefs": [
+          "sessions-protocol-evidence.md",
+          "H03.05-06-result.md"
+        ],
+        "missingEvidence": [],
+        "countedWithoutEvidence": false
+      },
+      {
+        "id": "D07",
+        "verdict": "complete",
+        "evidenceRefs": [
+          "sessions-protocol-evidence.md",
+          "H03.05-06-result.md"
+        ],
+        "missingEvidence": [],
+        "countedWithoutEvidence": false
+      },
+      {
+        "id": "P01",
+        "verdict": "complete",
+        "evidenceRefs": [
+          "models-runtime-evidence.md",
+          "H03.05-06-result.md"
+        ],
+        "missingEvidence": [],
+        "countedWithoutEvidence": false
+      },
+      {
+        "id": "P02",
+        "verdict": "complete",
+        "evidenceRefs": [
+          "autonomy-workflows-evidence.md",
+          "H03.05-06-result.md"
+        ],
+        "missingEvidence": [],
+        "countedWithoutEvidence": false
+      }
+    ]
+  },
+  "remainingExternal": [],
+  "ledgerViolations": [],
+  "manifest": {
+    "consistent": true,
+    "changed": [],
+    "added": [],
+    "removed": [],
+    "manifestCount": 2898,
+    "treeCount": 2898
+  },
+  "checksums": {
+    "complete-project-manifest.json": "24add88cbe0b984172cfe529c96716f78f534827bac7de04a2c3ec40008e49c0",
+    "docs/audits/20261024/gap-register.json": "687bf70a34fa8556ecf5eeedf3ee0530ffc5ce285fbdcd6466d3d836e8c6e545",
+    "docs/audits/20261024/public-capability-contracts.json": "e9374a562f2fe204737b115d9987dcf169a270ed93c79c860e1c3832c5723ba2",
+    "docs/audits/20261024/upstream-engine-delta.json": "2fe3408f8d80fde65078b86754115e7830fc43395e49c3c41ef2cbf4f5389ce8",
+    "docs/ZCODE-FULL-ALIGNMENT-TASKS-20261024.json": "f217f0dfe8a3afb9d9e836330a0515f297b87448188c3014b0e5320016ed831d",
+    "ts/package.json": "dcc8b30c58abdcd20f3e69e1d45934f30e49900a5c3f04f72786deda656bbfb2",
+    "README.md": "60d9afb4cfd8f68bd45fbe6fb65a30b5d50a61870c0aac2e62e9e740255ef8fa"
+  },
+  "gates": {
+    "ledgerEvidence": true,
+    "manifestConsistency": true,
+    "noExternalCountedComplete": true
+  },
+  "pass": true
+}

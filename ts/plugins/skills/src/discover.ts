@@ -6,12 +6,18 @@
  *   <workspace>/.xueness/skills   project
  *   <workspace>/.zcode/skills     project-compat
  *   <state>/skills                user
+ *   <skill-directories.json>      extra (F07.04: operator-listed roots, each
+ *                                  its own jail, optionally namespaced so a
+ *                                  same-name skill stays reachable as
+ *                                  `namespace:name` instead of being silently
+ *                                  overridden)
  *   <state>/resources/skills      resource (resources.ts)
  *   <plugin>/bundled              bundled (TS only: documentation, visualization,
- *                                 and Seagull research skills shipped with app; Python has no such source)
+ *                                  and Seagull research skills shipped with app; Python has no such source)
  */
 import { lstatSync, readdirSync } from "node:fs";
 import { join } from "node:path";
+import { extraSkillRoots, namespacedName } from "./extra-roots.ts";
 import { diagnostic, parseFrontmatter, stripFrontmatter, validateFrontmatter, type Diagnostic, type SkillMeta } from "./frontmatter.ts";
 import { contained, isDir, isFile, isLink, readText, real } from "./paths.ts";
 import { pyCompare, pyStrip } from "./text.ts";
@@ -20,13 +26,13 @@ export const SKILL_FILE_NAME = "SKILL.md";
 export const MAX_SKILL_FILE_BYTES = 256 * 1024;
 export const MAX_SKILLS_PER_ROOT = 128;
 const MAX_ATTACHMENTS_PER_SKILL = 32;
-const SOURCE_PRIORITY: Record<string, number> = { project: 0, "project-compat": 1, user: 2, resource: 3, bundled: 4 };
-const SCOPE_BY_SOURCE: Record<string, string> = { project: "project", "project-compat": "project", user: "user", resource: "resource", bundled: "bundled" };
+const SOURCE_PRIORITY: Record<string, number> = { project: 0, "project-compat": 1, user: 2, extra: 3, resource: 4, bundled: 5 };
+const SCOPE_BY_SOURCE: Record<string, string> = { project: "project", "project-compat": "project", user: "user", extra: "extra", resource: "resource", bundled: "bundled" };
 
-export type Source = "project" | "project-compat" | "user" | "resource" | "bundled";
+export type Source = "project" | "project-compat" | "user" | "extra" | "resource" | "bundled";
 export interface SkillRow {
   id: string; name: string; description: string; tags: string[]; frontmatterKeys: string[];
-  source: Source; scope: string; path: string; directory: string; rootPath: string; bytes: number;
+  source: Source; scope: string; namespace: string | null; path: string; directory: string; rootPath: string; bytes: number;
   attachments: { name: string; bytes: number }[]; attachmentsTruncated: boolean;
   shadowed: boolean; shadowedBy: string | null;
 }
@@ -67,13 +73,14 @@ function attachments(directory: string, jail: string): [SkillRow["attachments"],
   return [items, false];
 }
 
-function row(source: Source, directory: string, base: string, meta: SkillMeta, size: number, files: SkillRow["attachments"], truncated: boolean): SkillRow {
-  return { id: `file:${source}:${meta.name}`, name: meta.name, description: meta.description, tags: meta.tags, frontmatterKeys: meta.keys,
-    source, scope: SCOPE_BY_SOURCE[source] ?? "user", path: join(directory, SKILL_FILE_NAME), directory, rootPath: base, bytes: size,
+function row(source: Source, directory: string, base: string, meta: SkillMeta, size: number, files: SkillRow["attachments"], truncated: boolean, namespace: string | null): SkillRow {
+  const name = namespacedName(namespace, meta.name);
+  return { id: `file:${source}:${name}`, name, description: meta.description, tags: meta.tags, frontmatterKeys: meta.keys,
+    source, scope: SCOPE_BY_SOURCE[source] ?? "user", namespace, path: join(directory, SKILL_FILE_NAME), directory, rootPath: base, bytes: size,
     attachments: files, attachmentsTruncated: truncated, shadowed: false, shadowedBy: null };
 }
 
-function readEntry(source: Source, base: string, jail: string, directory: string, name: string): { row: SkillRow; issue: null } | { row: null; issue: Diagnostic } {
+function readEntry(source: Source, base: string, jail: string, directory: string, name: string, namespace: string | null): { row: SkillRow; issue: null } | { row: null; issue: Diagnostic } {
   const path = join(directory, SKILL_FILE_NAME);
   if (isLink(path)) return { row: null, issue: diagnostic("skill_file_symlink", "warning", `SKILL.md must not be a link: ${name}`, path) };
   const resolved = real(path);
@@ -88,10 +95,10 @@ function readEntry(source: Source, base: string, jail: string, directory: string
   const checked = validateFrontmatter(parsed.values, parsed.keys, path);
   if (!checked.meta) return { row: null, issue: checked.issue };
   const [files, truncated] = attachments(directory, jail);
-  return { row: row(source, directory, base, checked.meta, size ?? 0, files, truncated), issue: null };
+  return { row: row(source, directory, base, checked.meta, size ?? 0, files, truncated, namespace), issue: null };
 }
 
-function scanRoot(source: Source, base: string, jail: string, diagnostics: Diagnostic[], limit: number): SkillRow[] {
+function scanRoot(source: Source, base: string, jail: string, diagnostics: Diagnostic[], limit: number, namespace: string | null): SkillRow[] {
   if (isLink(base)) { diagnostics.push(diagnostic("skill_root_symlink", "error", "skill root must not be a link", base)); return []; }
   const resolved = real(base);
   if (resolved === null) { diagnostics.push(diagnostic("skill_root_unreadable", "warning", "skill root could not be resolved", base)); return []; }
@@ -105,7 +112,7 @@ function scanRoot(source: Source, base: string, jail: string, diagnostics: Diagn
     const directory = join(base, name);
     if (isLink(directory)) { diagnostics.push(diagnostic("skill_directory_symlink", "warning", `skill directory must not be a link: ${name}`, directory)); continue; }
     if (!isDir(directory)) continue;
-    const entry = readEntry(source, resolved, jail, directory, name);
+    const entry = readEntry(source, resolved, jail, directory, name, namespace);
     if (entry.issue) { diagnostics.push(entry.issue); continue; }
     if (rows.length >= limit) { diagnostics.push(diagnostic("skill_root_limit", "warning", `only the first ${limit} skills are read from this root`, base)); break; }
     rows.push(entry.row);
@@ -118,9 +125,14 @@ export function discover(stateDir: string, root: string | null, includeCompat = 
   const skills: SkillRow[] = [];
   const diagnostics: Diagnostic[] = [];
   const roots = skillRoots(stateDir, root, includeCompat);
+  for (const [source, base, jail] of roots) skills.push(...scanRoot(source, base, jail, diagnostics, limit, null));
+  // F07.04: operator-listed extra directories, each its own jail, before the shipped ones.
+  for (const extra of extraSkillRoots(stateDir)) {
+    if (extra.base === "") { diagnostics.push(...extra.diagnostics); continue; }
+    skills.push(...scanRoot("extra", extra.base, extra.jail, diagnostics, limit, extra.namespace));
+  }
   const shipped = bundled === null ? null : real(bundled);
-  if (shipped !== null) roots.push(["bundled", shipped, shipped]);
-  for (const [source, base, jail] of roots) skills.push(...scanRoot(source, base, jail, diagnostics, limit));
+  if (shipped !== null) skills.push(...scanRoot("bundled", shipped, shipped, diagnostics, limit, null));
   return { skills, diagnostics };
 }
 

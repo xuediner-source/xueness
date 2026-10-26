@@ -1,5 +1,5 @@
 /** Durable project-memory dream records and the host ports they depend on. */
-export type MemoryDreamStatus = "draft" | "running" | "ready" | "applied" | "failed" | "cancelled";
+export type MemoryDreamStatus = "draft" | "running" | "ready" | "applied" | "reverted" | "failed" | "cancelled";
 export type MemoryDreamRow = Record<string, unknown>;
 
 export interface MemoryDreamMessage {
@@ -45,6 +45,7 @@ export interface MemoryDreamRecord {
   startedAt?: string;
   settledAt?: string;
   appliedAt?: string;
+  revertedAt?: string;
 }
 
 export type MemoryDreamView = Omit<MemoryDreamRecord, "applyDigest"> & { active: boolean; applyDigest: string | null };
@@ -63,6 +64,25 @@ export interface MemoryDreamOptions {
   readKey(root: string): Promise<MemoryDreamKey>;
   writeKey(root: string, input: { content: string; digest: string; confirmed: true }): Promise<MemoryDreamKey>;
   synthesize(ownerSessionId: string, prompt: string, signal: AbortSignal): Promise<{ value: unknown; usage: unknown }>;
+  tools?: MemoryDreamTool[];
+}
+
+export interface MemoryDreamToolContext {
+  root: string;
+  sourceSessionIds: string[];
+}
+
+/** Read-only host tools the manual dream executor may call inside its bounded loop. */
+export interface MemoryDreamTool {
+  name: string;
+  description: string;
+  invoke(context: MemoryDreamToolContext, input: unknown, signal: AbortSignal): Promise<unknown>;
+}
+
+export interface MemoryDreamToolLog {
+  tool: string;
+  input: unknown;
+  output: unknown;
 }
 
 export interface MemoryDreamProposeOptions {

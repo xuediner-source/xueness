@@ -45,6 +45,21 @@ test('reload unknown run requires matching proof; hash-time rebind and disable n
 });
 function memory(){const values=new Map<string,string>();return {values,getItem:(k:string)=>values.get(k)??null,setItem:(k:string,v:string)=>{values.set(k,v);}};}
 
+test('a waiting tool answer can settle during its original run without retiring that run receipt',async()=>{
+  const storage=memory(),ledger=new CommandReceiptLedger('live-approval',storage);
+  await ledger.admit(sid,'original-run','run',{});
+  const client=new SessionCommandClient({receiptScope:'live-approval',receiptStorage:storage,isEffective:()=>true,
+    post:async(_path,value)=>{const body=value as {commandId:string;payload:{kind:string;tool_call_id:string}};
+      return {commandId:body.commandId,status:'accepted',result:{approved:body.payload,resumed:true}};},get:unused});
+  const result=await client.submitApproval(sid,'approve',{kind:'write',tool_call_id:'waiting-write'},unused);
+  assert.equal((result.result as {resumed:boolean}).resumed,true);
+  assert.deepEqual(client.pendingCommands(),[{sessionId:sid,commandId:'original-run',type:'run'}]);
+  await assert.rejects(client.submit(sid,'send',{text:'unrelated'},unused),/pending or unconfirmed/);
+  await ledger.admit(sid,'unknown-answer','reject',{kind:'write',tool_call_id:'another-call'});
+  await assert.rejects(ledger.admit(sid,'new-answer','approve',{kind:'write',tool_call_id:'third-call'}),/pending or unconfirmed/);
+  client.dispose();
+});
+
 test('fresh client reload retains original send and query-only fence without storing prompt or token',async()=>{
   const storage=memory();let receipt:unknown='unknown';let posts=0;
   const make=(scope='backend-one')=>new SessionCommandClient({receiptScope:scope,receiptStorage:storage,isEffective:()=>true,allowDirectFallback:false,queryAttempts:1,

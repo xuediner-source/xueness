@@ -22,6 +22,8 @@ import manifest from "../manifest.json" with { type: "json" };
 import { loadMemory, pyResolve, trackPaths, UNTRUSTED_PREAMBLE } from "./memory.ts";
 
 export * from "./memory.ts";
+export * from "./memory-index.ts";
+export * from "./memory-recall.ts";
 
 type Row = Record<string, unknown>;
 export const MEMORY_ROOT_ENV = "XUENESS_MEMORY_ROOT";
@@ -121,3 +123,8 @@ export { createMemoryHttp } from "./http.ts";
 export * from './memory-dream-types.ts';
 export * from './memory-dream-service.ts';
 export * from './memory-dream-http.ts';
+export * from './memory-dream-diff.ts';
+export * from './memory-dream-tools.ts';
+export * from './memory-tool-contract.ts';
+export * from './memory-tool-loop.ts';
+export * from './memory-extraction.ts';

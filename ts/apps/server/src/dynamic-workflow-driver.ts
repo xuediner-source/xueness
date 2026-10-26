@@ -48,7 +48,7 @@ export function createDynamicWorkflowDriver(options: Options): DynamicWorkflowDr
         const result = await host.run({ prompt, root: run.root, sessionId: sid, writable,
           providerId: typeof parent.provider_id === 'string' ? parent.provider_id : null,
           model: actor.persona.model ?? (typeof parent.model === 'string' ? parent.model : null),
-          context: null, timeoutSeconds: 300, sessions, signal,
+          context: null, timeoutSeconds: 300, sessions, signal, runId: run.id,
           shouldStop: () => signal.aborted || !options.enabled('workflows') || !options.enabled('providers') });
         if (result.status === 'awaiting_user') return { status: 'awaiting_user', question: String(result.pending_question ?? '') };
         if (result.status !== 'completed' && result.status !== 'needs_review') return { status: 'paused', question: String(result.pause_reason ?? 'actor did not complete') };

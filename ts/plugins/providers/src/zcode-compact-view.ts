@@ -1,7 +1,8 @@
 /**
  * Request-view pass for ZCode compaction; the journal itself is never rewritten here.
  * - A `_compact_summary` journal row becomes ZCode's user summary message, followed by its
- *   post-compact system-reminders (ZCode `compact-active.ts` buildPostCompactRuntimeEntries).
+ *   post-compact system-reminders (ZCode `compact-active.ts` buildPostCompactRuntimeEntries);
+ *   `tool_discovery` reminders (C-TOOL-05/F02.04) pass through as their own source.
  * - Optional microcompact (ZCode `microcompact.ts`; off by default as in ZCode).
  * - Read file_unchanged: ZCode's Read tool answers a repeated, unchanged read with a stub
  *   (ZCode `core/src/tool/handlers/read.ts` FILE_UNCHANGED_STUB). Xueness reads always return the
@@ -21,7 +22,8 @@ export function projectCompactSummaries(messages: readonly Row[]): Row[] {
     out.push({ ...rest, role: "user", content: typeof message.content === "string" ? message.content : "" });
     for (const reminder of Array.isArray(reminders) ? reminders.filter(isRow) : []) {
       if (typeof reminder.content !== "string" || !reminder.content) continue;
-      const source = reminder.source === "todo_reminder" ? "todo_reminder" : "resume_referenced_session_context";
+      const source = reminder.source === "todo_reminder" || reminder.source === "tool_discovery" || reminder.source === "resume_referenced_session_context"
+        ? reminder.source : "resume_referenced_session_context";
       out.push({ role: "user", content: wrapSystemReminderForSource(source, reminder.content), _meta_source: source });
     }
   }

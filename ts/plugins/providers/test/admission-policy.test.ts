@@ -9,6 +9,13 @@ import { ProviderAdmissionController, providerAdmissionForState } from "../src/a
 const alpha = { providerId: "anthropic", modelId: "claude-sonnet" };
 const beta = { providerId: "openai", modelId: "gpt-4o" };
 
+/** Snapshot totals without the per-model detail array and the change ring. */
+function totals(admission: ProviderAdmissionController): Record<string, number> {
+  const { models, changes, ...rest } = admission.snapshot();
+  void models; void changes;
+  return rest;
+}
+
 describe("provider admission policy", () => {
   it("grants FIFO within a model bucket while independent keys progress separately", async () => {
     const admission = new ProviderAdmissionController(1);
@@ -20,17 +27,22 @@ describe("provider admission policy", () => {
 
     assert.ok(other);
     assert.equal(admission.tryAcquire({ model: alpha }), undefined);
-    assert.deepEqual(admission.snapshot(), { limit: 1, active: 2, queued: 2, buckets: 2 });
+    assert.deepEqual(totals(admission), { limit: 1, active: 2, queued: 2, buckets: 2 });
+    const [firstModel] = admission.snapshot().models;
+    assert.ok(firstModel);
+    assert.equal(firstModel.key, JSON.stringify(["anthropic", "claude-sonnet"]));
+    assert.equal(firstModel.cap, 1);
+    assert.equal(firstModel.inFlight, 1);
     held.release();
     const firstTicket = await first;
     assert.deepEqual(order, [1]);
-    assert.deepEqual(admission.snapshot(), { limit: 1, active: 2, queued: 1, buckets: 2 });
+    assert.deepEqual(totals(admission), { limit: 1, active: 2, queued: 1, buckets: 2 });
     firstTicket.release();
     const secondTicket = await second;
     assert.deepEqual(order, [1, 2]);
     secondTicket.release();
     other.release();
-    assert.deepEqual(admission.snapshot(), { limit: 1, active: 0, queued: 0, buckets: 0 });
+    assert.deepEqual(totals(admission), { limit: 1, active: 0, queued: 0, buckets: 0 });
   });
 
   it("removes cancelled waiters and makes release-versus-abort races settle once", async () => {
@@ -47,7 +59,7 @@ describe("provider admission policy", () => {
     const result = await cancelledWaiter;
     assert.ok("error" in result && result.error instanceof ProviderCancelled);
     const nextTicket = await next;
-    assert.deepEqual(admission.snapshot(), { limit: 1, active: 1, queued: 0, buckets: 1 });
+    assert.deepEqual(totals(admission), { limit: 1, active: 1, queued: 0, buckets: 1 });
     nextTicket.release();
 
     const secondHeld = await admission.acquire({ model: beta });
@@ -57,17 +69,36 @@ describe("provider admission policy", () => {
     releaseWins.abort();
     const racingTicket = await racingAcquire;
     racingTicket.release();
-    assert.deepEqual(admission.snapshot(), { limit: 1, active: 0, queued: 0, buckets: 0 });
+    assert.deepEqual(totals(admission), { limit: 1, active: 0, queued: 0, buckets: 0 });
   });
 
   it("releases tickets idempotently and removes idle buckets", async () => {
     const admission = new ProviderAdmissionController(2);
     const ticket = admission.tryAcquire({ model: alpha });
     assert.ok(ticket);
-    assert.deepEqual(admission.snapshot(), { limit: 2, active: 1, queued: 0, buckets: 1 });
+    assert.deepEqual(totals(admission), { limit: 2, active: 1, queued: 0, buckets: 1 });
     ticket.release();
     ticket.release();
-    assert.deepEqual(admission.snapshot(), { limit: 2, active: 0, queued: 0, buckets: 0 });
+    assert.deepEqual(totals(admission), { limit: 2, active: 0, queued: 0, buckets: 0 });
+  });
+
+  it("dequeues an aborted waiter of one run without disturbing another run's queue", async () => {
+    const admission = new ProviderAdmissionController(1);
+    const held = await admission.acquire({ model: alpha, scope: { run: "a" } });
+    const abort = new AbortController();
+    const aborted = admission.acquire({ model: alpha, scope: { run: "a" }, signal: abort.signal }).then(
+      (ticket) => ({ ticket }),
+      (error: unknown) => ({ error }),
+    );
+    const waiting = admission.acquire({ model: alpha, scope: { run: "b" } });
+    abort.abort();
+    const outcome = await aborted;
+    assert.ok("error" in outcome && outcome.error instanceof ProviderCancelled);
+    assert.deepEqual(totals(admission), { limit: 1, active: 1, queued: 1, buckets: 1 });
+    held.release();
+    const granted = await waiting;
+    granted.release();
+    assert.deepEqual(totals(admission), { limit: 1, active: 0, queued: 0, buckets: 0 });
   });
 
   it("shares the first per-state limit, isolates other states, honors zero, and restores the environment", () => {
@@ -79,7 +110,9 @@ describe("provider admission policy", () => {
       assert.ok(shared);
       assert.equal(shared.limit, 2);
       process.env.XUENESS_MODEL_MAX_CONCURRENT = "7";
-      assert.equal(providerAdmissionForState(state.toUpperCase()), shared);
+      // Same directory, different spelling: resolve() folds "." away, so the
+      // shared controller comes back (win32 folds case too, but POSIX does not).
+      assert.equal(providerAdmissionForState(join(state, ".")), shared);
       assert.equal(providerAdmissionForState(`${state}-other`)?.limit, 7);
 
       process.env.XUENESS_MODEL_MAX_CONCURRENT = "0";

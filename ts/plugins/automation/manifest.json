@@ -24,7 +24,8 @@
     { "id": "automation.schedules", "name": "五字段 cron、时区与下次执行", "nameEn": "Five-field cron, time zones and next run" },
     { "id": "automation.approval", "name": "计划审批与无人值守触发", "nameEn": "Schedule approval and unattended triggers" },
     { "id": "automation.history", "name": "持久认领、运行历史与暂停", "nameEn": "Persistent claims, run history and pause" },
-    { "id": "automation.off_peak", "name": "闲时队列：本地低峰窗口排队执行、仅在空闲时与完成通知", "nameEn": "Off-peak queue: local idle-window runs, idle-only tasks and completion notices" }
+    { "id": "automation.off_peak", "name": "闲时队列：本地低峰窗口排队执行、仅在空闲时与完成通知", "nameEn": "Off-peak queue: local idle-window runs, idle-only tasks and completion notices" },
+    { "id": "automation.off_peak_tickets", "name": "闲时票据与用户接管：票据续期、无输出重签、已输出不重播与请求边界接管", "nameEn": "Off-peak tickets and user takeover: renewal, no-output re-sign, no replay after output and boundary takeover" }
   ],
   "frontendModules": [
     "plugins/automation/automationModel.ts",

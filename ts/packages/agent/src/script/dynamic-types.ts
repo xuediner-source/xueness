@@ -22,5 +22,7 @@ export interface DynamicScriptHost {
   phase(name: string): void;
   hole(siteId: string, name: string, prompt?: string): Promise<unknown>;
 }
-export interface DynamicEvaluationOptions { signal?: AbortSignal; maxOperations?: number; args?: unknown }
+export interface DynamicEvaluationOptions { signal?: AbortSignal; maxOperations?: number; args?: unknown; usage?: DynamicUsageBox }
+/** Filled in by the evaluator so harnesses can report real operation counts. */
+export interface DynamicUsageBox { operations: number }
 

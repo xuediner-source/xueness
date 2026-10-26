@@ -23,6 +23,8 @@ import type { PermissionDecision, PermissionRequest, PermissionSession, Remember
 import { ToolEventDispatcher, type ToolEventDiagnostic, type ToolEventPayload } from "./dispatch.ts";
 import { callSubject, type CallSubject } from "./subject.ts";
 import { withPlanExitDeniedTurnStop } from "./turn-control.ts";
+import { ToolDeadline, ToolDeadlineCancelledError, ToolDeadlineExceededError, deadlineFailure } from "./tool-deadline.ts";
+import { DEFAULT_BATCH_CONCURRENCY, parallelEligible, planBatches, runBatches } from "./batch-scheduler.ts";
 
 export interface ToolCall {
   /** The model's tool call id; a one-shot approval is bound to it. */
@@ -70,6 +72,8 @@ export interface ToolBridgeOptions {
   approver?: Approver;
   /** Bound on one observational tool event handler. */
   eventTimeoutMs?: number;
+  /** How many concurrency-safe calls of one batch run at once; default DEFAULT_BATCH_CONCURRENCY (10). */
+  batchConcurrency?: number;
   onDiagnostic?: (entry: ToolEventDiagnostic) => void;
 }
 
@@ -85,8 +89,8 @@ export interface CallOptions {
   onExecutionStarted?: (call: ToolCall) => void | Promise<void>;
 }
 
-/** How many concurrency-safe calls of one batch run at once. */
-export const BATCH_CONCURRENCY = 10;
+/** How many concurrency-safe calls of one batch run at once (C-TOOL-07 default; see batchConcurrency). */
+export const BATCH_CONCURRENCY = DEFAULT_BATCH_CONCURRENCY;
 
 type AnyTool = ToolDefinition<any, unknown>;
 interface Passage {
@@ -159,6 +163,7 @@ export class ToolBridge {
   readonly #permissions: PermissionSession;
   readonly #env: ToolEnv | (() => ToolEnv);
   readonly #approver: Approver | null;
+  readonly #batchConcurrency: number | undefined;
   readonly #events: ToolEventDispatcher;
 
   constructor(options: ToolBridgeOptions) {
@@ -167,6 +172,7 @@ export class ToolBridge {
     this.#permissions = options.permissions;
     this.#env = options.env;
     this.#approver = options.approver ?? null;
+    this.#batchConcurrency = options.batchConcurrency;
     this.#events = new ToolEventDispatcher(options.kernel, {
       ...(options.eventTimeoutMs !== undefined ? { timeoutMs: options.eventTimeoutMs } : {}),
       ...(options.onDiagnostic ? { onDiagnostic: options.onDiagnostic } : {}),
@@ -207,22 +213,15 @@ export class ToolBridge {
 
   /**
    * Run a model turn's calls, results in call order. Consecutive
-   * concurrency-safe calls (pure reads) run together, up to BATCH_CONCURRENCY
-   * at once; every other call runs alone, after the ones before it.
+   * concurrency-safe calls (pure reads) run together under the configured
+   * cap (batchConcurrency, default 10); every other call runs alone, after
+   * the ones before it. Planning is the C-TOOL-07 batch scheduler's.
    */
   async callAll(calls: readonly ToolCall[], options: CallOptions = {}): Promise<ToolResult[]> {
     const results: ToolResult[] = new Array(calls.length);
-    const safe = (index: number): boolean => this.#kernel.tools.get<AnyTool>((calls[index] as ToolCall)?.name)?.concurrencySafe === true;
-    for (let start = 0; start < calls.length;) {
-      let end = start + 1;
-      if (safe(start)) while (end < calls.length && safe(end)) end += 1;
-      let next = start;
-      const worker = async (): Promise<void> => {
-        for (let index = next++; index < end; index = next++) results[index] = await this.call(calls[index] as ToolCall, options);
-      };
-      await Promise.all(Array.from({ length: Math.min(BATCH_CONCURRENCY, end - start) }, worker));
-      start = end;
-    }
+    const eligible = (call: ToolCall): boolean => { const tool = this.#kernel.tools.get<AnyTool>(call.name); return !!tool && parallelEligible(tool) && !tool.mutating; };
+    const groups = planBatches({ calls, eligible, concurrencyCap: this.#batchConcurrency });
+    await runBatches({ calls, groups, execute: async (call, index) => { results[index] = await this.call(call, options); } });
     return results;
   }
 
@@ -250,7 +249,17 @@ export class ToolBridge {
     const roots = understood.draftRoot ? [...base.roots, understood.draftRoot] : base.roots;
     await options.onExecutionStarted?.(call);
     if (signal.aborted) return passage(cancelled(tool.name));
-    return passage(await runTool(tool, input, { ...base, roots, signal }));
+    // C-TOOL-06: a declared per-tool deadline charges active execution only; a nested
+    // model request's queue time pauses it (env.deadlineControl) and cancel wins instantly.
+    if (!(typeof tool.timeoutMs === "number" && Number.isFinite(tool.timeoutMs) && tool.timeoutMs > 0)) return passage(await runTool(tool, input, { ...base, roots, signal }));
+    const deadline = new ToolDeadline({ timeoutMs: tool.timeoutMs, signal });
+    try {
+      return passage(await deadline.race(runTool(tool, input, { ...base, roots, signal: deadline.signal, deadlineControl: deadline })));
+    } catch (error) {
+      if (error instanceof ToolDeadlineExceededError) return passage(deadlineFailure(tool.name, error));
+      if (error instanceof ToolDeadlineCancelledError) return passage(cancelled(tool.name));
+      throw error;
+    }
   }
 
   /** Null when the call may run; otherwise the refusal, the pending approval or the cancellation. */

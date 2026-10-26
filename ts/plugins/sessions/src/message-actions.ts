@@ -4,6 +4,7 @@ import { createHash } from "node:crypto";
 import { isDict, isPyIntValue, pyDecodeUtf8, pyDeepCopy, pyEquals, pyJsonLoads, pyLen, pyStrip, PyValueError, uuid4Hex } from "@xueness/contracts";
 import { isLink, isPyOSError, isPyValueError, pyExceptionName, readRegularBytes, type Session, type SessionStore } from "@xueness/sessions";
 import { messageRevision } from "./journal-http.ts";
+import { LineageSidecar, recordLineageRow, type LineageRow } from "./lineage.ts";
 import { MessageQueue } from "./queue.ts";
 import { externalRun } from "./queue-http.ts";
 import { pendingDenials } from "./public-session.ts";
@@ -61,13 +62,13 @@ async function update(options: SessionsApiOptions, preparedOptions: PreparedInpu
     if (stream != null && !isDict(stream)) fail("saved streaming state is invalid", 409);
     if (s.status === "running" || isDict(stream) && stream.status === "streaming") fail("session run already in progress", 409);
     if (!supportsMessageAction(s, data, options)) return null;
-    const queue = new MessageQueue(options.store, { stateDir: options.stateDir, enabled: options.enabled });
-    return await queue.locked(sid, async () => {
-      if (messageRevision(s) !== data.revision) throw new MessageActionError("conversation changed; refresh before editing this message", 409, true);
-      const messages = s.messages as Row[], index = Number(data.messageIndex), message = messages[index];
-      if (!message || !isDict(message)) fail("message not found", 404);
-      if (message.role !== (data.action === "edit" ? "user" : "assistant")) fail("message role does not support this action");
-      let prepared: Row | null = null, target: ReturnType<typeof bindMediaMessage> | null = null;
+      const queue = new MessageQueue(options.store, { stateDir: options.stateDir, enabled: options.enabled });
+      return await queue.locked(sid, async () => {
+        if (messageRevision(s) !== data.revision) throw new MessageActionError("conversation changed; refresh before editing this message", 409, true);
+        const messages = s.messages as Row[], index = Number(data.messageIndex), message = messages[index];
+        if (!message || !isDict(message)) fail("message not found", 404);
+        if (message.role !== (data.action === "edit" ? "user" : "assistant")) fail("message role does not support this action");
+        let prepared: Row | null = null, target: ReturnType<typeof bindMediaMessage> | null = null, editLineage: Omit<LineageRow, "parentId" | "time"> | null = null;
       if (data.action === "feedback") {
         if (!message.content) fail("message has no answer to rate"); s.message_annotations ??= {}; if (!isDict(s.message_annotations)) fail("invalid saved feedback", 409);
         const annotations = s.message_annotations as Row; annotations[String(index)] ??= {}; if (!isDict(annotations[String(index)])) fail("invalid saved message annotation", 409);
@@ -98,8 +99,9 @@ async function update(options: SessionsApiOptions, preparedOptions: PreparedInpu
         s.message_annotations = Object.fromEntries(Object.entries(isDict(s.message_annotations) ? s.message_annotations : {}).filter(([key]) => /^\d+$/u.test(key) && Number(key) < index));
         s.completion_history = ((s.completion_history ?? []) as Row[]).filter((r) => isDict(r) && /^turn-[1-9][0-9]*$/.test(String(r.turn_id)) && Number(String(r.turn_id).slice(5)) < turn);
         Object.assign(s, { status: "pending", steps: 0, completion: null, todos: [], pending_question: null, pause_code: null, pause_reason: null, streaming: null, runtime_activity: null, runtime_activity_history: [] }); delete s.current_queue_item_id; delete s.runtime_budget; options.lifecycle?.approvals.delete(sid); options.lifecycle?.liveApprovals?.close(sid);
+        if (command) editLineage = { commandId: command.id, intent: "edit_retry", parentRevision: data.revision, messageId: typeof edited._message_id === "string" ? edited._message_id : undefined, hiddenMessageIds: [...((s.history_hidden_message_ids ?? []) as string[])], context: { turn, messageIndex: index, keptToolCalls: [...calls], prepared: prepared !== null } };
       }
-      await options.store.save(s); if (prepared && target) await finalizePreparedMedia(preparedOptions, prepared, target, target);
+      await options.store.save(s); if (editLineage) recordLineageRow(new LineageSidecar(options.store.directory), sid, editLineage); if (prepared && target) await finalizePreparedMedia(preparedOptions, prepared, target, target);
       return { id: sid, messageIndex: data.messageIndex, revision: messageRevision(s), action: data.action };
     });
   } finally { await lease.release(); }

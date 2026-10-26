@@ -22,11 +22,19 @@ export async function sendStream(res: ServerResponse, status: number, body: Asyn
       if (!chunk) break;
       if (chunk.done) { complete = true; break; }
       if (!(chunk.value instanceof Uint8Array)) throw new TypeError("stream body must contain bytes");
-      if (!res.write(chunk.value)) await new Promise<void>((resolve, reject) => {
-        const cleanup = () => { res.off("drain", drained); res.off("close", drained); res.off("error", failed); signal.removeEventListener("abort", drained); };
-        const drained = () => { cleanup(); resolve(); }, failed = (error: Error) => { cleanup(); reject(error); };
-        res.once("drain", drained); res.once("close", drained); res.once("error", failed); signal.addEventListener("abort", drained, { once: true });
-        if (signal.aborted || res.destroyed) drained();
+      // Bun's response wrapper can report `drain` while its socket is still
+      // congested; the socket's own drain is the honest signal.
+      const sink = res.socket ?? res;
+      if (!res.write(chunk.value) || sink.writableNeedDrain) await new Promise<void>((resolve, reject) => {
+        const cleanup = () => { res.off("drain", done); res.off("close", done); sink.off("drain", done); sink.off("close", done); sink.off("error", failed); signal.removeEventListener("abort", done); };
+        const done = () => {
+          if (!signal.aborted && !res.destroyed && sink.writableNeedDrain) return;
+          cleanup(); resolve();
+        }, failed = (error: Error) => { cleanup(); reject(error); };
+        res.on("drain", done); res.on("close", done);
+        sink.on("drain", done); sink.on("close", done); sink.on("error", failed);
+        signal.addEventListener("abort", done, { once: true });
+        done();
       });
     }
     if (!res.destroyed) res.end();

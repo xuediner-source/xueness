@@ -10,6 +10,12 @@ import { reasoningOrigin } from "../../../packages/providers/src/reasoning-metad
 import { fixture } from "./fixtures.ts";
 
 const singleAttempt = { baseDelayMs: 0, jitter: false, maxAttempts: 1, random: () => 0 };
+/** Snapshot totals without the plugin's per-model AIMD detail and change ring. */
+function totals(admission: ProviderAdmissionController): Record<string, number> {
+  const { models, changes, ...rest } = admission.snapshot();
+  void models; void changes;
+  return rest;
+}
 
 function deferred<T = void>(): { promise: Promise<T>; resolve(value: T): void } {
   let resolve!: (value: T) => void;
@@ -104,7 +110,7 @@ describe("agent model request admission", () => {
       await within(firstEntered.promise, "first provider request");
       const admission = providerAdmissionForState(local.store.directory);
       assert.ok(admission);
-      assert.deepEqual(admission.snapshot(), { limit: 1, active: 1, queued: 0, buckets: 1 });
+      assert.deepEqual(totals(admission), { limit: 1, active: 1, queued: 0, buckets: 1 });
 
       runs.push(local.runner.run(second, { modelRetry: singleAttempt }));
       await within(queueSignals[0]!.promise, "first queued request");
@@ -112,7 +118,7 @@ describe("agent model request admission", () => {
       runs.push(local.runner.run(third, { modelRetry: singleAttempt }));
       await within(queueSignals[1]!.promise, "second queued request");
       await waitUntil(() => admission.snapshot().queued === 2, "second admission waiter");
-      assert.deepEqual(admission.snapshot(), { limit: 1, active: 1, queued: 2, buckets: 1 });
+      assert.deepEqual(totals(admission), { limit: 1, active: 1, queued: 2, buckets: 1 });
       releaseFirst.resolve();
       await Promise.all(runs);
 
@@ -133,7 +139,7 @@ describe("agent model request admission", () => {
         assert.ok(model.findIndex((row) => row.type === "model_request_admitted" && row.requestId === requestId)
           < model.findIndex((row) => row.type === "model_request_started" && row.requestId === requestId));
       }
-      assert.deepEqual(admission.snapshot(), { limit: 1, active: 0, queued: 0, buckets: 0 });
+      assert.deepEqual(totals(admission), { limit: 1, active: 0, queued: 0, buckets: 0 });
     } finally {
       releaseFirst.resolve();
       await Promise.allSettled(runs);
@@ -180,13 +186,13 @@ describe("agent model request admission", () => {
       assert.equal(waiting.status, "stopped");
       assert.deepEqual(calls, ["task"]);
       assert.equal(events.some((event) => event.type === "model_request_started" && event.requestId === queuedEvent.requestId), false);
-      assert.deepEqual(admission.snapshot(), { limit: 1, active: 1, queued: 0, buckets: 1 });
+      assert.deepEqual(totals(admission), { limit: 1, active: 1, queued: 0, buckets: 1 });
       const lease = await local.store.lease(String(waiting.id));
       await lease.release();
 
       releaseFirst.resolve();
       await within(firstRun, "first provider request completion");
-      assert.deepEqual(admission.snapshot(), { limit: 1, active: 0, queued: 0, buckets: 0 });
+      assert.deepEqual(totals(admission), { limit: 1, active: 0, queued: 0, buckets: 0 });
     } finally {
       releaseFirst.resolve();
       await Promise.allSettled([firstRun, waitingRun].filter((run): run is Promise<unknown> => !!run));
@@ -231,7 +237,7 @@ describe("agent model request admission", () => {
       await Promise.all(runs);
       assert.equal(secondQueued, true);
       assert.deepEqual(calls, ["retry request 1", "queued request", "retry request 2"]);
-      assert.deepEqual(admission.snapshot(), { limit: 1, active: 0, queued: 0, buckets: 0 });
+      assert.deepEqual(totals(admission), { limit: 1, active: 0, queued: 0, buckets: 0 });
       assert.equal(runnerEvents.filter((event) => event.type === "model_retry_scheduled").length, 1);
     } finally {
       allowFailure.resolve();
@@ -276,7 +282,7 @@ describe("agent model request admission", () => {
       const user = (local.session.messages as Row[]).find((message) => message.role === "user");
       assert.equal(user, originalMessage);
       assert.deepEqual(user, originalSnapshot);
-      assert.deepEqual(admission.snapshot(), { limit: 1, active: 0, queued: 0, buckets: 0 });
+      assert.deepEqual(totals(admission), { limit: 1, active: 0, queued: 0, buckets: 0 });
     } finally { local.close(); }
   });
 
@@ -366,14 +372,14 @@ describe("agent model request admission", () => {
 
         assert.equal(local.requests(), 0, `${scenario} must not call provider`);
         assert.equal(admission.snapshot().queued, 0, `${scenario} must remove its waiter`);
-        assert.deepEqual(admission.snapshot(), { limit: 1, active: 1, queued: 0, buckets: 1 });
+        assert.deepEqual(totals(admission), { limit: 1, active: 1, queued: 0, buckets: 1 });
         assert.equal(result.status, scenario === "host" ? "stopped" : "paused");
         if (scenario === "deadline") assert.equal(result.pause_code, "wall_time_limit_reached");
         if (scenario === "disabled") { assert.equal(queuedHooks, 1); assert.equal(failedHooks, 0); }
         const lease = await local.store.lease(String(local.session.id));
         await lease.release();
         held.release();
-        assert.deepEqual(admission.snapshot(), { limit: 1, active: 0, queued: 0, buckets: 0 });
+        assert.deepEqual(totals(admission), { limit: 1, active: 0, queued: 0, buckets: 0 });
       } finally {
         held.release();
         if (run) await Promise.allSettled([run]);

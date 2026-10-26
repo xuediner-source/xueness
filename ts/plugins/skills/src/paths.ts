@@ -12,6 +12,11 @@ export function isLink(path: string): boolean {
   try { return lstatSync(path).isSymbolicLink(); } catch (error) { return (error as NodeJS.ErrnoException).code !== "ENOENT"; }
 }
 
+/** `os.path.lexists`. */
+export function lexists(path: string): boolean {
+  try { lstatSync(path); return true; } catch { return false; }
+}
+
 /** Python `Path.resolve()` (non-strict): links resolved as far as the path exists. */
 export function real(path: string): string | null {
   const absolute = resolve(path);

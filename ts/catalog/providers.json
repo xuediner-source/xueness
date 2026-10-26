@@ -7,9 +7,9 @@
   "defaultEnabled": true,
   "dependencies": [],
   "tools": [
-    "tool_search",
     "tool_result_read",
-    "list_models"
+    "tool_search",
+    "deferred_tool_call"
   ],
   "commands": [
     "providers"
@@ -26,7 +26,11 @@
   ],
   "modules": [
     "admission_policy",
+    "admission_controller",
+    "aux_admission",
     "model_execution",
+    "execution_selection",
+    "execution_ports",
     "model_diagnostics",
     "model_debug",
     "proxy",
@@ -50,7 +54,9 @@
     "tool_arguments",
     "media_input",
     "result_budget",
-    "result_tool"
+    "result_tool",
+    "tool_search",
+    "deferred_call"
   ],
   "features": [
     {
@@ -140,8 +146,13 @@
     },
     {
       "id": "providers.tools",
-      "name": "精简工具、按需发现与有界结果分页",
-      "nameEn": "Minimal tools, discovery and bounded result paging"
+      "name": "精简工具、有界结果分页与按需工具发现",
+      "nameEn": "Minimal tools, bounded result paging and on-demand tool discovery"
+    },
+    {
+      "id": "providers.tool_search",
+      "name": "通用工具发现与真实工具引用",
+      "nameEn": "Generic tool discovery with real tool references"
     },
     {
       "id": "providers.json",
@@ -167,11 +178,6 @@
       "id": "providers.custom_empty",
       "name": "自定义模型空状态",
       "nameEn": "Custom model empty state"
-    },
-    {
-      "id": "providers.introspection",
-      "name": "模型配置内省工具（list_models）",
-      "nameEn": "Model configuration introspection tool (list_models)"
     },
     {
       "id": "providers.durable_media_input",
@@ -222,6 +228,21 @@
       "id": "providers.tool_result_budget",
       "name": "工具结果字节预算与分页读取",
       "nameEn": "Tool result byte budgets and paged reading"
+    },
+    {
+      "id": "providers.execution_fallback",
+      "name": "执行级临时模型选型与失败回退",
+      "nameEn": "Execution-scoped model selection with failure fallback"
+    },
+    {
+      "id": "providers.deferred_tool_call",
+      "name": "延迟工具调用（DeferredToolCall）",
+      "nameEn": "Deferred tool call envelope"
+    },
+    {
+      "id": "providers.execution_ports",
+      "name": "执行选择与请求认证端口",
+      "nameEn": "Execution selection and request-auth ports"
     }
   ],
   "frontendModules": [

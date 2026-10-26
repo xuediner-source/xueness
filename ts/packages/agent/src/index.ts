@@ -1,6 +1,9 @@
 export * from "./compaction.ts";
 export * from "./capabilities.ts";
+export * from "./accepted-call-ledger.ts";
+export * from "./command-priority.ts";
 export * from "./completion.ts";
+export * from "./execution-selection.ts";
 export * from "./messages.ts";
 export * from "./model-retry.ts";
 export * from "./kernel-hooks.ts";
@@ -16,3 +19,5 @@ export * from "./compact/index.ts";
 export * from './script/dynamic-types.ts';
 export * from './script/dynamic-compile.ts';
 export * from './script/dynamic-evaluate.ts';
+export * from './script/dynamic-language.ts';
+export * from './script/dynamic-harness.ts';

@@ -1,9 +1,10 @@
 /** A bounded, tool-free summarizer invocation never mutates the shared client. */
 import { isDict, pyJsonLoads, pyLen, PyValueError } from "@xueness/contracts";
 import type { AgentProvider, Row } from "@xueness/agent";
-import { AnthropicMessages, OpenAICompatible, ProviderCancelled, reportedUsage } from "@xueness/providers";
+import { AnthropicMessages, OpenAICompatible, ProviderCancelled, reportedUsage, type ModelRequestAdmission } from "@xueness/providers";
+import { runWithModelAdmission } from "./aux-admission.ts";
 
-export interface HandoffModelOptions { deadline?: number; signal?: AbortSignal; shouldStop?: () => boolean; outputTokens?: number; timeoutSeconds?: number; now?: () => number }
+export interface HandoffModelOptions { deadline?: number; signal?: AbortSignal; shouldStop?: () => boolean; outputTokens?: number; timeoutSeconds?: number; now?: () => number; admission?: ModelRequestAdmission }
 export function cloneHandoffProvider(provider: AgentProvider, cap: number): AgentProvider {
   const bound = (provider as AgentProvider & { boundProvider?: () => AgentProvider }).boundProvider;
   if (typeof bound === "function") { Reflect.get(provider, "complete"); provider = bound(); }
@@ -40,7 +41,7 @@ export async function handoffModelJson(provider: AgentProvider, messages: Row[],
   probe?.unref();
   const onDelta = (chunk: unknown): void => { check(); if (typeof chunk !== "string") throw new PyValueError("invalid model handoff stream"); chunks.push(chunk); chars += pyLen(chunk); if (chars > 16000) throw new PyValueError("model handoff output exceeds bound"); };
   let response: Row;
-  try { response = client.stream ? await client.stream(messages, [], { onDelta }, { signal }) : await client.complete(messages, [], { signal }); }
+  try { response = await runWithModelAdmission(config.admission, provider, signal, async () => client.stream ? await client.stream(messages, [], { onDelta }, { signal }) : await client.complete(messages, [], { signal })); }
   finally { if (probe) clearInterval(probe); }
   check();
   if (!isDict(response) || Array.isArray(response.tool_calls) && response.tool_calls.length || response._finish_reason !== undefined && response._finish_reason !== null && response._finish_reason !== "stop") throw new PyValueError("model handoff did not finish as bounded text");

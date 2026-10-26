@@ -2,6 +2,7 @@ import { isDict, pySlice, uuid4Hex } from "@xueness/contracts";
 import type { StreamObservers, ToolSnapshot } from "@xueness/providers";
 import { ProviderCancelled } from "@xueness/providers";
 import { settleReasoningTiming } from "@xueness/sessions";
+import type { AcceptedCallLike, DiscardedFragment } from "./accepted-call-ledger.ts";
 import type { AgentContext, Row } from "./types.ts";
 
 const stamp = (): string => new Date().toISOString().replace(/Z$/, "+00:00");
@@ -34,6 +35,8 @@ export class RequestStream {
   #closed = false;
   #committed = false;
   #toolPrelude = new Map<string, ToolSnapshot>();
+  #acceptedCalls: AcceptedCallLike[] = [];
+  #discardedFragments: DiscardedFragment[] = [];
   readonly #observerStarted = performance.now();
   readonly #diagnostics: Row = { textChunks: 0, textChars: 0, reasoningChunks: 0, reasoningChars: 0, toolSnapshots: 0 };
   constructor(context: AgentContext, showReasoning: boolean, transform?: (accumulated: string) => string, observe?: (text: string, reasoning: boolean) => void, observeTool?: (snapshot: ToolSnapshot, streamId: string) => void) {
@@ -72,13 +75,39 @@ export class RequestStream {
     this.#committed = true;
     const snapshots = [...this.#toolPrelude.values()];
     this.#toolPrelude.clear();
-    for (const snapshot of snapshots) this.#deliverTool(snapshot);
+    // Committed prelude snapshots were accepted by the stream (C-MDL-03): they
+    // enter the ledger view; discard tracking only keeps unaccepted fragments.
+    for (const snapshot of snapshots) {
+      if (typeof snapshot.call_id === "string" && snapshot.call_id) this.#acceptedCalls.push({ id: snapshot.call_id, name: snapshot.name });
+      this.#deliverTool(snapshot);
+    }
   }
   accept(response: Row): void {
-    if (Array.isArray(response.tool_calls) && response.tool_calls.length > 0) this.#commit();
-    else if (!this.#committed) this.discardPrelude();
+    if (Array.isArray(response.tool_calls) && response.tool_calls.length > 0) {
+      this.#commit();
+      for (const call of response.tool_calls as Row[]) {
+        if (typeof call.id === "string" && call.id) this.#acceptedCalls.push({ id: call.id, name: isDict(call.function) && typeof call.function.name === "string" ? call.function.name : "" });
+      }
+    } else if (!this.#committed) this.discardPrelude();
   }
-  discardPrelude(): void { this.#toolPrelude.clear(); }
+  discardPrelude(): void {
+    for (const snapshot of this.#toolPrelude.values()) {
+      if (typeof snapshot.call_id === "string" && snapshot.call_id) this.#discardedFragments.push({ id: snapshot.call_id, name: typeof snapshot.name === "string" ? snapshot.name : undefined });
+    }
+    this.#toolPrelude.clear();
+  }
+  /** Accepted tool calls of this stream (committed prelude + accepted response calls). */
+  acceptedToolCalls(): readonly AcceptedCallLike[] { return [...this.#acceptedCalls]; }
+  /** Unaccepted partial tool_use fragments (captured discards plus a still-live prelude); never executed. */
+  discardedPreludeFragments(): DiscardedFragment[] {
+    const fragments = [...this.#discardedFragments];
+    if (!this.#committed) {
+      for (const snapshot of this.#toolPrelude.values()) {
+        if (typeof snapshot.call_id === "string" && snapshot.call_id) fragments.push({ id: snapshot.call_id, name: typeof snapshot.name === "string" ? snapshot.name : undefined });
+      }
+    }
+    return fragments;
+  }
   #schedule(): void {
     if (this.#timer || this.#closed) return;
     this.#timer = setTimeout(() => { this.#timer = null; this.#save(); }, 200);

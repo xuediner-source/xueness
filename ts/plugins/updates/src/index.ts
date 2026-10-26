@@ -6,3 +6,4 @@ export { apply, check, safeOrigin } from "./git.ts";
 export { createUpdatesHttp, UPDATE_ROUTES, type UpdateBridge, type UpdatesHttpOptions } from "./http.ts";
 
 export const updates: BundledPlugin = { manifest, plugin: definePlugin({ name: "updates", apply() {} }) };
+export { buildRetentionReport, seedLegacyUserState, snapshotUserState, RETENTION_SCHEMA } from "./upgrade-retention.ts";

@@ -18,6 +18,7 @@ import { resolve, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createApplicationApi } from "./apps/server/src/application-api.js";
 import { createFrontDoor } from "./apps/server/src/front-door.js";
+import { BUNDLED_PLUGIN_IDS } from "@xueness/contracts";
 const runtime = process.cwd(), projectRoot = process.env.SMOKE_PROJECT;
 for (const pkg of ["sessions", "agent", "plugin-sessions", "plugin-providers"]) {
   const target = realpathSync(fileURLToPath(import.meta.resolve("@xueness/" + pkg)));
@@ -41,7 +42,7 @@ try {
   // The catalog lives beside the build, not beside the materialized package:
   // resolving it by a fixed depth from node_modules used to 500 here.
   const catalog = await (await fetch(origin + "/api/plugins")).json();
-  assert.equal(catalog.plugins.length, 31, "relocated build must resolve the bundled catalog");
+  assert.deepEqual(catalog.plugins.map(p => p.id).sort(), [...BUNDLED_PLUGIN_IDS].sort(), "relocated build must resolve the bundled catalog");
   console.log("Relocated JS/runtime: static UI, native session/history, plugin catalog, health and unowned-route 404 passed.");
 } finally {
   if (server) { server.closeAllConnections(); await new Promise((ready) => server.close(ready)); }

@@ -9,6 +9,7 @@ import { basename, dirname, join } from "node:path";
 import { pyLen, pySlice, pyStr, pyStrip, pyTruthy } from "@xueness/contracts";
 import { pyCodeCompare, pyOSErrorText } from "@xueness/sessions";
 import { BUILTIN_SOURCE, isBuiltinName } from "./builtin-prompts.ts";
+import { extraCommandRoots, namespacedCommandName } from "./extra-roots.ts";
 import { DESCRIPTION_MAX_CHARS, firstLineDescription, parseFrontmatter, stripFrontmatter } from "./frontmatter.ts";
 import { contained, isDir, isLink, readText, real } from "./paths.ts";
 
@@ -23,8 +24,8 @@ const SEGMENT = "[A-Za-z0-9._-]{1,64}";
 const SEGMENT_RE = new RegExp(`^${SEGMENT}\\n?$`);
 const NAME_RE = new RegExp(`^${SEGMENT}(?::${SEGMENT})?\\n?$`);
 const SUPPORTED_KEYS = new Set(["description", "argument-hint", "model"]);
-const PRIORITY = new Map<unknown, number>([["builtin", -1], ["project", 0], ["project-compat", 1], ["user", 2], ["resource", 3]]);
-const SCOPE = new Map<string, string>([["builtin", "builtin"], ["project", "project"], ["project-compat", "project"], ["user", "user"], ["resource", "resource"]]);
+const PRIORITY = new Map<unknown, number>([["builtin", -1], ["project", 0], ["project-compat", 1], ["user", 2], ["extra", 3], ["resource", 4]]);
+const SCOPE = new Map<string, string>([["builtin", "builtin"], ["project", "project"], ["project-compat", "project"], ["user", "user"], ["extra", "extra"], ["resource", "resource"]]);
 /** In-chat builtin slash commands a file command can never take over. */
 export const CHAT_BUILTIN_NAMES: ReadonlySet<string> = new Set(["attach", "attachments", "compact", "detach", "dwf", "effort", "end", "exit", "expert", "help", "mode", "model", "models", "paste", "paste-image", "quit", "retry", "skills", "status"]);
 const INLINE_SHELL_RE = /!`[^`\n]*`/;
@@ -130,14 +131,18 @@ function readEntry(source: string, base: string, name: string, path: string): [R
     shadowed: false, shadowedBy: null }, findings];
 }
 
-function scanRoot(source: string, base: string, jail: string, diagnostics: Diagnostic[], limit: number): Row[] {
+function scanRoot(source: string, base: string, jail: string, diagnostics: Diagnostic[], limit: number, namespace: string | null): Row[] {
   if (isLink(base)) { diagnostics.push(diagnostic("command_root_symlink", "error", "command root must not be a link", base)); return []; }
   const resolved = real(base);
   if (resolved === null) { diagnostics.push(diagnostic("command_root_unreadable", "warning", "command root could not be resolved", base)); return []; }
   if (!contained(resolved, jail)) { diagnostics.push(diagnostic("command_root_escapes", "error", "command root resolves outside its workspace", base)); return []; }
   if (!isDir(base)) return [];
   const rows: Row[] = [];
-  for (const [name, path] of commandFiles(resolved, diagnostics)) {
+  for (const [plain, path] of commandFiles(resolved, diagnostics)) {
+    // A namespaced extra root prefixes every command it holds (`namespace:name`);
+    // a prefixed name that stops being a valid single-colon name is refused, not listed.
+    const name = namespace === null ? plain : namespacedCommandName(namespace, plain);
+    if (namespace !== null && !isValidName(name)) { diagnostics.push(diagnostic("command_invalid_name", "error", `command name is not usable: ${name}`, path)); continue; }
     const [row, findings] = readEntry(source, resolved, name, path);
     diagnostics.push(...findings);
     if (row === null) continue;
@@ -149,7 +154,12 @@ function scanRoot(source: string, base: string, jail: string, diagnostics: Diagn
 
 export function discover(stateDir: string, root: string | null, includeCompat = true, limit = MAX_COMMANDS_PER_ROOT): { commands: Row[]; diagnostics: Diagnostic[] } {
   const commands: Row[] = [], diagnostics: Diagnostic[] = [];
-  for (const [source, base, jail] of commandRoots(stateDir, root, includeCompat)) commands.push(...scanRoot(source, base, jail, diagnostics, limit));
+  for (const [source, base, jail] of commandRoots(stateDir, root, includeCompat)) commands.push(...scanRoot(source, base, jail, diagnostics, limit, null));
+  // F07.04: operator-listed extra directories, each its own jail, after the workspace roots.
+  for (const extra of extraCommandRoots(stateDir)) {
+    if (extra.base === "") { diagnostics.push(...extra.diagnostics); continue; }
+    commands.push(...scanRoot("extra", extra.base, extra.jail, diagnostics, limit, extra.namespace));
+  }
   return { commands, diagnostics };
 }
 

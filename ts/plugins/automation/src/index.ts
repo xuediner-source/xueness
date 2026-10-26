@@ -17,6 +17,11 @@ import { offPeakCreateTool } from "./tool.ts";
 export { cronField, cron, nextRun, validZone } from "./cron.ts";
 export { Automations, type WorkflowBridge, type AutomationOptions, type RunOptions } from "./store.ts";
 export { OffPeakQueue, type OffPeakOptions } from "./off-peak-queue.ts";
+export {
+  ACTIVE_TICKET_SECONDS, TICKET_HEADER, TICKET_STATES, markTicketOutput, renewTicketState, resignTicketState,
+  settleTicketState, takeTicket, takeoverTicketState, ticketDeliveredOutput, ticketExpiry, ticketOf,
+  ticketRequestAuth, ticketRequestAuthPort, type TicketExpiry, type TicketFacts, type TicketState,
+} from "./off-peak-ticket.ts";
 export { Scheduler, type SchedulerOptions } from "./scheduler.ts";
 export { createAutomationHttp, AUTOMATION_ROUTES, type AutomationHttpOptions } from "./http.ts";
 export { offPeakCreateTool, offPeakTool, type OffPeakToolOptions } from "./tool.ts";

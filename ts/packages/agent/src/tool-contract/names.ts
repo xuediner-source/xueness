@@ -22,6 +22,7 @@ export const MODEL_TOOL_NAMES: Readonly<Record<string, string>> = Object.freeze(
   apply_patch: "ApplyPatch",
   skill_read: "Skill",
   task: "Agent",
+  reply_to_channel: "ReplyToChannel",
 });
 
 const INTERNAL_BY_MODEL: ReadonlyMap<string, string> = new Map(Object.entries(MODEL_TOOL_NAMES).map(([internal, model]) => [model, internal]));

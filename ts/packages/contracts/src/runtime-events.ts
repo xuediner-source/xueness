@@ -7,7 +7,7 @@ export const RUNTIME_TEXT_LIMIT = 16_000;
 export const RUNTIME_STREAM_LIMIT = 24_000;
 
 export const SESSION_RUNTIME_EVENT_TYPES = [
-  "RunStarted", "TurnPhase", "ModelRequest", "AssistantDelta", "ReasoningDelta",
+  "RunStarted", "TurnPhase", "ModelRequest", "ModelRetry", "ModelExecutionFallback", "AssistantDelta", "ReasoningDelta",
   "AssistantMessage", "ToolCall", "ToolResult", "RunSettled", "HistoryReset", "Compacted", "FileRewound", "NetworkRequest", "McpActivity",
 ] as const;
 export type SessionRuntimeEventType = typeof SESSION_RUNTIME_EVENT_TYPES[number];
@@ -79,6 +79,22 @@ function copyText(source: RuntimePayload, target: RuntimePayload, key: string, l
 function copyNumber(source: RuntimePayload, target: RuntimePayload, key: string): void { if (safeNumber(source[key])) target[key] = source[key]; }
 function copyBoolean(source: RuntimePayload, target: RuntimePayload, key: string): void { if (typeof source[key] === "boolean") target[key] = source[key]; }
 
+/** Provider-reported usage counters a ModelRequest completion may persist; absent counters stay absent. */
+const RUNTIME_USAGE_KEYS = ["prompt_tokens", "completion_tokens", "total_tokens", "input_tokens", "output_tokens", "cached_tokens", "cache_read_input_tokens", "cache_creation_input_tokens", "reasoning_tokens"] as const;
+const RUNTIME_USAGE_DETAIL_KEYS = ["cached_tokens", "reasoning_tokens"] as const;
+function copyUsage(source: RuntimePayload, target: RuntimePayload): void {
+  if (!object(source.usage)) return;
+  const usage: RuntimePayload = {};
+  for (const key of RUNTIME_USAGE_KEYS) copyNumber(source.usage, usage, key);
+  for (const key of ["prompt_tokens_details", "completion_tokens_details"] as const) {
+    if (!object(source.usage[key])) continue;
+    const detail: RuntimePayload = {};
+    for (const name of RUNTIME_USAGE_DETAIL_KEYS) copyNumber(source.usage[key], detail, name);
+    if (Object.keys(detail).length) usage[key] = detail;
+  }
+  if (Object.keys(usage).length) target.usage = usage;
+}
+
 /** Strip fields outside the runtime wire allowlists before a payload reaches durable storage. */
 export function sanitizeSessionRuntimePayload(type: SessionRuntimeEventType, source: RuntimePayload): RuntimePayload {
   const payload: RuntimePayload = {};
@@ -98,10 +114,28 @@ export function sanitizeSessionRuntimePayload(type: SessionRuntimeEventType, sou
       copyText(source, payload, "phase", 80); copyText(source, payload, "resultType", 80);
       copyNumber(source, payload, "requestCount"); copyNumber(source, payload, "toolCallCount"); break;
     case "ModelRequest": {
-      for (const key of ["phase", "requestId", "attemptId", "modelId", "providerKind", "reason", "errorCode", "failurePhase"] as const) copyText(source, payload, key, 160);
+      for (const key of ["phase", "requestId", "attemptId", "selectionId", "modelId", "providerKind", "reason", "errorCode", "failurePhase"] as const) copyText(source, payload, key, 160);
       for (const key of ["attempt", "maxAttempts", "durationMs", "queuedMs", "statusCode", "retryAfterMs"] as const) copyNumber(source, payload, key);
       for (const key of ["retryable", "terminal"] as const) copyBoolean(source, payload, key);
       if (object(source.response)) { const response: RuntimePayload = {}; copyNumber(source.response, response, "contentChars"); copyNumber(source.response, response, "toolCalls"); payload.response = response; }
+      copyUsage(source, payload);
+      break;
+    }
+    case "ModelRetry":
+      for (const key of ["requestId", "attemptId", "selectionId", "modelId", "providerKind", "reason", "errorCode"] as const) copyText(source, payload, key, 160);
+      for (const key of ["attempt", "nextAttempt", "maxAttempts", "delayMs", "statusCode", "retryAfterMs"] as const) copyNumber(source, payload, key);
+      break;
+    case "ModelExecutionFallback": {
+      copyBoolean(source, payload, "applied");
+      for (const key of ["selectionId", "requestId", "attemptId", "reason", "fromProviderId", "fromModelId", "toProviderId", "toModelId", "toSource", "providerErrorCode"] as const) copyText(source, payload, key, 160);
+      for (const key of ["attempt", "statusCode", "skippedCount"] as const) copyNumber(source, payload, key);
+      if (object(source.settled)) {
+        const settled: RuntimePayload = {};
+        copyText(source.settled, settled, "streamId", 128);
+        for (const key of ["textChars", "reasoningChars", "toolSnapshots"] as const) copyNumber(source.settled, settled, key);
+        copyBoolean(source.settled, settled, "truncated");
+        payload.settled = settled;
+      }
       break;
     }
     case "McpActivity":
@@ -275,6 +309,10 @@ export function reduceSessionRuntimeEvents(
         break;
       case "McpActivity": state.lastMcpActivity = { ...p }; break;
       case "NetworkRequest": state.lastNetworkRequest = { ...p }; break;
+      // Retry and fallback projections stay diagnostic ledger rows; recovery state
+      // (transcript, tools, stream) does not consume them.
+      case "ModelRetry":
+      case "ModelExecutionFallback":
       case 'FileRewound': break;
       case "Compacted":
         addTranscript(state, { id: payloadText(p, "operationId") || event.id, kind: "system", text: "History compacted", sequenceNumber: event.sequenceNumber, ...(event.turnId ? { turnId: event.turnId } : {}) });

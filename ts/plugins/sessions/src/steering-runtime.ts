@@ -4,9 +4,9 @@ import { beforeModelRequest, settleTurn } from './steering.ts';
 export function sessionsSteeringExtension(): AgentExtension {
   const delivered = new WeakSet<object>();
   return { id: 'sessions', capabilities: ['sessions.steering'],
-    async beforeModelRequest(context) { if (!delivered.delete(context)) await beforeModelRequest(context.session, context.store, context.stateDir, context.enabled, 1); },
+    async beforeModelRequest(context) { if (!delivered.delete(context)) await beforeModelRequest(context.session, context.store, context.stateDir, context.enabled, 1, 'model_request'); },
     async beforeFinalResponse(context) {
-      const count = await beforeModelRequest(context.session, context.store, context.stateDir, context.enabled, 1);
+      const count = await beforeModelRequest(context.session, context.store, context.stateDir, context.enabled, 1, 'final_response');
       if (count) delivered.add(context);
       return count > 0;
     },

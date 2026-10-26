@@ -1,4 +1,5 @@
 import { isDict, pyJsonDumps, pyJsonLoads, PyValueError } from "@xueness/contracts";
+import { AcceptedCallLedger, type AcceptedCallLike } from "@xueness/agent";
 import type { Row } from "@xueness/agent";
 
 const INTERRUPTED_RESULT: Row = {
@@ -89,6 +90,11 @@ export function hydrateSessionToolHistory(session: Row): { restored: number; int
   let restored = 0;
   let interrupted = 0;
   let messagesChanged = false;
+  // C-MDL-03 resume boundary: hydrated calls settle in the accepted-call ledger
+  // exactly once (executed vs interrupted), never duplicating journal rows.
+  const executedCalls: AcceptedCallLike[] = [];
+  const interruptedCalls: AcceptedCallLike[] = [];
+  const nameOf = (call: Row): string => isDict(call.function) && typeof call.function.name === "string" ? call.function.name : "";
   const hydrated: Row[] = [];
   const setResult = (id: string, value: Row): void => {
     results ??= resultMap(session);
@@ -108,6 +114,7 @@ export function hydrateSessionToolHistory(session: Row): { restored: number; int
           messagesChanged = true;
           restored += 1;
         }
+        executedCalls.push({ id, name: nameOf(call) });
         continue;
       }
 
@@ -116,16 +123,19 @@ export function hydrateSessionToolHistory(session: Row): { restored: number; int
         if (parsed) {
           setResult(id, parsed);
           restored += 1;
+          executedCalls.push({ id, name: nameOf(call) });
           continue;
         }
         const approval = approvalPlaceholder(existing);
         if (approval) {
           setResult(id, approval);
           restored += 1;
+          executedCalls.push({ id, name: nameOf(call) });
           continue;
         }
         setResult(id, interruptedResult());
         interrupted += 1;
+        interruptedCalls.push({ id, name: nameOf(call) });
         continue;
       }
 
@@ -134,10 +144,18 @@ export function hydrateSessionToolHistory(session: Row): { restored: number; int
       hydrated.push({ role: "tool", tool_call_id: id, content: pyJsonDumps(failed) });
       messagesChanged = true;
       interrupted += 1;
+      interruptedCalls.push({ id, name: nameOf(call) });
     }
   }
 
   if (messagesChanged) session.messages = hydrated;
+  if (executedCalls.length || interruptedCalls.length) {
+    const ledger = new AcceptedCallLedger();
+    ledger.accept("resumed", String(session.id ?? ""), [...executedCalls, ...interruptedCalls]);
+    for (const call of executedCalls) ledger.settle(String(call.id), "settled_executed", "resumed");
+    for (const call of interruptedCalls) ledger.settle(String(call.id), "settled_interrupted", "resumed");
+    ledger.project(session);
+  }
   return { restored, interrupted };
 }
 

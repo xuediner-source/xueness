@@ -26,6 +26,7 @@
     }
   },
   "features": [
+    { "id": "sessions.cancel_propagate", "name": "停止时中断正在进行的请求", "nameEn": "Interrupt in-flight requests when stopping" },
     {
       "id": "sessions.tui",
       "name": "全屏聊天、草稿与终端中断",

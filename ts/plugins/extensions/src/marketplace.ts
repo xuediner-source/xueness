@@ -8,6 +8,7 @@
  */
 import { isDict, pyJsonLoads, pyStr, pyTypeName, PyAttributeError, PyValueError } from "@xueness/contracts";
 import { isPyKeyError, isPyOSError, isPyValueError } from "@xueness/sessions";
+import { uninstallPackage } from "./components.ts";
 import { digest, installAll, loadManifests, validateDataManifest, type InstallResult } from "./sdk.ts";
 import type { ExtensionsReply } from "./validate.ts";
 
@@ -143,6 +144,11 @@ export function dispatchMarketplace(method: string, parts: readonly string[], da
   if (parts[0] !== "api" || parts[1] !== "plugins" || parts[2] !== "marketplace") return null;
   try {
     if (parts.length === 3 && method === "GET") return [200, { marketplace: marketplaceCatalog(stateDir, options) }];
+    if (parts.length === 5 && method === "POST" && parts[4] === "uninstall") {
+      const result = uninstallPackage(stateDir, parts[3] ?? "");
+      if (!result.ok) return [400, { error: result.error ?? "uninstall failed" }];
+      return [200, { ...result, marketplace: marketplaceCatalog(stateDir, options) }];
+    }
     if (parts.length === 5 && method === "POST" && (parts[4] === "install" || parts[4] === "update")) {
       if (!isDict(data)) throw new PyAttributeError(`'${pyTypeName(data)}' object has no attribute 'get'`);
       const result = installPackage(stateDir, parts[3] ?? "", data.sha256, parts[4] === "update", options);

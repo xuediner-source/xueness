@@ -6,6 +6,7 @@ import { observeUsage, runtimeOptions, type RuntimeProvider } from "./runtime-bu
 import { promptView } from "./runtime-prompt.ts";
 import { decodeTextResponse, partialAnswer, streamAnswerText, textMessages } from "./runtime-protocol.ts";
 import { selectRuntimeTools, type RuntimeToolPolicy } from "./runtime-tools.ts";
+import { flushDiscoveredToolsAnnouncement, hydrateDiscoveredTools } from "./tool-search.ts";
 
 export * from "./runtime-budget.ts";
 export * from "./runtime-prompt.ts";
@@ -13,14 +14,21 @@ export * from "./runtime-protocol.ts";
 export * from "./runtime-tools.ts";
 export * from "./runtime-window.ts";
 
-export interface LightweightRuntimeOptions { toolPolicy?: (context: AgentContext) => RuntimeToolPolicy }
+export interface LightweightRuntimeOptions {
+  toolPolicy?: (context: AgentContext) => RuntimeToolPolicy;
+  /** Live kernel tool names for C-TOOL-05 discovery-window hydration. */
+  discoveredCatalog?: () => readonly string[];
+}
 export function lightweightRuntimeExtension(config: LightweightRuntimeOptions = {}): AgentExtension {
   const active = (context: AgentContext): boolean => (context.session.runtime_profile ?? context.provider.runtimeProfile) === "lightweight";
   const attempts = new WeakMap<Row, { overflow: boolean; tools: Row[]; extraAttempt?: boolean }>();
   const build = (context: AgentContext, request: ModelRequest, shrink = 1): ModelRequest => {
     const provider = context.provider as RuntimeProvider;
     const [catalog, tools] = selectRuntimeTools(request.tools, context.session, provider, config.toolPolicy?.(context));
-    void catalog; // tool_search uses the registry catalog; the request receives only the selected view.
+    // F02.01: the registry catalog (kernel.tools, including `shouldDefer` tools) stays intact for
+    // discovery (F02.02); this request-side catalog carries only what the schema source exposed,
+    // and the selected view below is the lightweight exposure decision.
+    void catalog;
     const [messages, stats] = promptView(request.messages, tools, provider, { maxChars: context.options.maxChars,
       maxTokens: context.options.maxTokens, shrink, repair: request.repair, hostInstructions: request.hostInstructions,
       calibration: context.session.runtime_budget_calibration, injected: request.injected });
@@ -31,6 +39,11 @@ export function lightweightRuntimeExtension(config: LightweightRuntimeOptions = 
   return {
     id: "providers", capabilities: ["providers.lightweight"], preserveJournal: active,
     beforeRun(context) {
+      // C-TOOL-05: revalidate the persisted discovery window against the live catalog and
+      // flush the one-time hidden announcement before the runtime toolset is assembled.
+      const discoveredCatalog = config.discoveredCatalog?.() ?? [];
+      if (discoveredCatalog.length) hydrateDiscoveredTools(context.session, discoveredCatalog);
+      flushDiscoveredToolsAnnouncement(context.session);
       if (!active(context)) return;
       const provider = context.provider as RuntimeProvider;
       const options = runtimeOptions(provider);

@@ -180,9 +180,17 @@ async function assignExpression(node: ts.BinaryExpression, env: Environment, ctx
   if (kind === ts.SyntaxKind.BarBarEqualsToken && truthy(ref.read())) return ordinary(ref.read());
   if (kind === ts.SyntaxKind.QuestionQuestionEqualsToken && ref.read() !== null && ref.read() !== undefined) return ordinary(ref.read());
   const right = ordinary((await evalExpression(node.right, env, ctx)).value);
-  const value = kind === ts.SyntaxKind.EqualsToken ? right : applyBinary(compoundBase(kind), ordinary(ref.read()), right, node, ctx);
+  // Logical assignments either short-circuited above or assign the right side unchanged.
+  const value = kind === ts.SyntaxKind.EqualsToken || isLogicalAssignment(kind)
+    ? right
+    : applyBinary(compoundBase(kind), ordinary(ref.read()), right, node, ctx);
   ref.write(value);
   return value;
+}
+
+function isLogicalAssignment(kind: ts.SyntaxKind): boolean {
+  return kind === ts.SyntaxKind.AmpersandAmpersandEqualsToken ||
+    kind === ts.SyntaxKind.BarBarEqualsToken || kind === ts.SyntaxKind.QuestionQuestionEqualsToken;
 }
 
 function compoundBase(kind: ts.SyntaxKind): ts.SyntaxKind {
@@ -200,8 +208,8 @@ function compoundBase(kind: ts.SyntaxKind): ts.SyntaxKind {
 async function reference(node: ts.Expression, env: Environment, ctx: EvaluationContext): Promise<Reference> {
   if (ts.isIdentifier(node)) {
     const binding = env.get(node.text);
-    if (!binding) fail(node, ctx, `cannot assign to undeclared identifier '${node.text}'`);
-    if (binding.constant) fail(node, ctx, `cannot assign to constant '${node.text}'`);
+    if (!binding) fail(node, ctx, `cannot assign to undeclared identifier '${node.text}'`, "DYNAMIC_ASSIGNMENT");
+    if (binding.constant) fail(node, ctx, `cannot assign to constant '${node.text}'`, "DYNAMIC_ASSIGNMENT");
     return { read: () => binding.value, write: (value) => { binding.value = value; } };
   }
   if (ts.isPropertyAccessExpression(node)) {
@@ -221,6 +229,7 @@ function applyBinary(kind: ts.SyntaxKind, left: unknown, right: unknown, node: t
     case ts.SyntaxKind.AmpersandAmpersandToken: return truthy(left) ? right : left;
     case ts.SyntaxKind.BarBarToken: return truthy(left) ? left : right;
     case ts.SyntaxKind.QuestionQuestionToken: return left === null || left === undefined ? right : left;
+    case ts.SyntaxKind.CommaToken: return right;
     case ts.SyntaxKind.EqualsEqualsEqualsToken: return left === right;
     case ts.SyntaxKind.ExclamationEqualsEqualsToken: return left !== right;
     case ts.SyntaxKind.EqualsEqualsToken: return looseEqual(left, right);

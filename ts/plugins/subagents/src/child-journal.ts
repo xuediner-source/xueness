@@ -145,7 +145,8 @@ export function prepareResume(child: Row, message?: unknown): Row {
   return child;
 }
 
-function writeInbox(directory: string, row: Row): void {
+/** Atomic 0600 write of one journal row (`<row.id>.json`) under `directory`. */
+export function writeJournalRow(directory: string, row: Row): void {
   const bytes = pyEncodeUtf8(pyJsonDumps(row, { indent: 2 }));
   const temp = mkstemp(directory, ".session-");
   let fd: number | null = temp.fd;
@@ -162,10 +163,11 @@ function writeInbox(directory: string, row: Row): void {
   }
 }
 
-export function enqueueMessage(journal: ChildJournal, child: Row, message: unknown, requestId: unknown): Row {
+export function enqueueMessage(journal: ChildJournal, child: Row, message: unknown, requestId: unknown, options: { pendingQuestionOk?: boolean; summary?: unknown } = {}): Row {
   if (typeof message !== "string" || !pyStrip(message) || pyLen(message) > MAX_MESSAGE_CHARS || typeof requestId !== "string" || !REQUEST.test(requestId)) throw new PyValueError("valid message and requestId are required");
+  if (options.summary !== undefined && (typeof options.summary !== "string" || !pyStrip(options.summary) || pyLen(options.summary) > 200)) throw new PyValueError("summary must contain 1..200 characters");
   const delegationCancelled = isDict(child.delegation) && child.delegation.cancelled === true;
-  if ((child.status !== "pending" && child.status !== "running") || delegationCancelled || child.pending_question) throw new PyValueError("child cannot accept messages in its current state");
+  if ((child.status !== "pending" && child.status !== "running") || delegationCancelled || (child.pending_question && options.pendingQuestionOk !== true)) throw new PyValueError("child cannot accept messages in its current state");
   const directory = join(journal.directory, "inboxes");
   if (isLink(directory)) throw new PyValueError("invalid child inbox directory");
   try { mkdirSync(directory, { mode: 0o700 }); } catch (error) { if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error; }
@@ -185,7 +187,7 @@ export function enqueueMessage(journal: ChildJournal, child: Row, message: unkno
     if (settled < 0) throw new PyValueError("child message inbox is full");
     row.items.splice(settled, 1);
   }
-  row.items.push({ id: requestId, message, digest, status: "queued", createdAt: Date.now() / 1000 });
-  writeInbox(directory, row);
+  row.items.push({ id: requestId, message, digest, status: "queued", createdAt: Date.now() / 1000, ...(options.summary !== undefined ? { summary: options.summary } : {}) });
+  writeJournalRow(directory, row);
   return { id: requestId, status: "queued" };
 }

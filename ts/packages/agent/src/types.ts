@@ -1,6 +1,8 @@
 import type { MediaBinding, ModelRequestAdmission, ProviderCallOptions, StreamObservers, ToolSnapshot } from "@xueness/providers";
+import type { ToolDefinition } from "@xueness/engine-tools";
 import type { Session, SessionStore } from "@xueness/sessions";
 import type { ToolBridge, ToolCall } from "@xueness/tool-bridge";
+import type { ExecutionModelScope } from "./execution-selection.ts";
 import type { ModelRetryInfo, ModelRetrySettings } from "./model-retry.ts";
 
 export type Row = Record<string, unknown>;
@@ -34,6 +36,8 @@ export interface RunOptions {
   /** ZCode model retry policy; defaults follow ZCode (10 retries, 2 s doubling to 60 s) and `XUENESS_MODEL_RETRY_*`. */
   modelRetry?: ModelRetrySettings;
   modelRequestAdmission?: ModelRequestAdmission;
+  /** Execution-scoped temporary selection with declarative fallback; never rewrites the session model. */
+  executionModel?: ExecutionModelScope;
 }
 export interface AgentEvent extends Row { type: string }
 export interface AgentContext {
@@ -113,10 +117,14 @@ export interface AgentPluginHooks {
   enabled(id: string): boolean;
   /** Unknown/unowned tools are refused before dispatch. */
   toolOwner(name: string): string | null;
+  /** The live registry definition of a tool, for DeferredToolCall admission; null when unregistered. */
+  toolDefinition?(name: string): ToolDefinition | null;
   /** Fresh schemas from the live plugin registry at each model request. */
   tools(context: AgentContext): Awaitable<readonly Row[]>;
   /** True only for registry-declared pure reads with no interactive gate. */
   concurrencySafe?(name: string): boolean;
+  /** How many concurrency-safe calls of one batch run at once (C-TOOL-07); default 10. */
+  batchConcurrency?: number;
   extensions?: readonly AgentExtension[];
   showReasoning?(context: AgentContext): boolean;
   propagateCancellation?(context: AgentContext): boolean;

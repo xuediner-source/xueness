@@ -1,6 +1,7 @@
 /** HTTP view and settings-gated routes for runtime configuration and project trust. */
 import { statSync } from "node:fs";
 import { resolveStrict } from "./paths.ts";
+import { runtimeConfigOverrideMatrix } from "./layers.ts";
 import {
   decideWorkspaceConfigTrust, loadRuntimeConfig, mergeRuntimeConfigPatches, normalizeRuntimeConfigPatch,
   readRuntimeConfigUserPatch, saveRuntimeConfigUserPatch,
@@ -54,6 +55,7 @@ export function runtimeConfigHttpView(result: RuntimeConfigLoadResult): Record<s
     config: redactPatch(result.config),
     ...(result.workspaceCandidate === undefined ? {} : { workspaceCandidate: redactPatch(result.workspaceCandidate) }),
     sources: [...result.sources], provenance: { ...result.provenance }, diagnostics, workspace: { ...result.workspace },
+    matrix: runtimeConfigOverrideMatrix(result),
   };
 }
 

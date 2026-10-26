@@ -16,6 +16,7 @@ import {
   type AgentContext, type AgentExtension, type AutoCompactTokenOverride, type LocalMicrocompactPolicyConfig, type RebuildRequest, type Row,
 } from "@xueness/agent";
 import { isStreamStop } from "@xueness/providers";
+import { auxiliaryModelAdmission } from "./aux-admission.ts";
 import { compactConversation, type CompactConversationResult } from "./zcode-compact.ts";
 import { compactRequestView } from "./zcode-compact-view.ts";
 
@@ -84,7 +85,7 @@ export function zcodeCompactionExtension(config: ZCodeCompactionOptions = {}): A
       try {
         const result = await compactConversation(context.session, { provider: context.provider, rebuild, root: context.root, trigger: "auto", phase: "preflight", reason: "context_limit",
           preCompactTokens: decision.tokenCount, autoCompactThreshold: capped ? cap! : decision.threshold, signal: runSignal(context), shouldStop: context.options.shouldStop,
-          save: saver(context), emit: (event) => context.emit({ ...event, type: String(event.type) }) });
+          admission: auxiliaryModelAdmission(context.stateDir), save: saver(context), emit: (event) => context.emit({ ...event, type: String(event.type) }) });
         if (!result.compacted) return false;
         state.failures = 0; state.tracking = { consecutiveRapidRefills: rapid.consecutiveRapidRefills, toolTurnsSinceCompact: 0 }; state.justCompacted = true;
         return true;
@@ -103,7 +104,8 @@ export function zcodeCompactionExtension(config: ZCodeCompactionOptions = {}): A
       state.reactiveUsed = true;
       try {
         const result = await compactConversation(context.session, { provider: context.provider, rebuild, root: context.root, trigger: "reactive", phase: "reactive", reason: "context_limit",
-          overflowCause: error, signal: runSignal(context), shouldStop: context.options.shouldStop, save: saver(context), emit: (event) => context.emit({ ...event, type: String(event.type) }) });
+          overflowCause: error, signal: runSignal(context), shouldStop: context.options.shouldStop, admission: auxiliaryModelAdmission(context.stateDir),
+          save: saver(context), emit: (event) => context.emit({ ...event, type: String(event.type) }) });
         if (!result.compacted) return false;
         state.tracking = { consecutiveRapidRefills: rapid.consecutiveRapidRefills, toolTurnsSinceCompact: 0 }; state.justCompacted = true;
         return true;
@@ -129,5 +131,6 @@ export function zcodeCompactionExtension(config: ZCodeCompactionOptions = {}): A
 export async function compactSessionNow(context: AgentContext, rebuild: RebuildRequest, instructions: string | null): Promise<CompactConversationResult> {
   return compactConversation(context.session, { provider: context.provider, rebuild, root: context.root, trigger: "manual", phase: "manual", reason: "manual",
     ...instructions ? { customInstructions: instructions } : {}, preCompactTokens: estimateMessageTokens((await rebuild(context.session.messages as Row[])).messages),
-    signal: runSignal(context), shouldStop: context.options.shouldStop, save: saver(context), emit: (event) => context.emit({ ...event, type: String(event.type) }) });
+    signal: runSignal(context), shouldStop: context.options.shouldStop, admission: auxiliaryModelAdmission(context.stateDir),
+    save: saver(context), emit: (event) => context.emit({ ...event, type: String(event.type) }) });
 }

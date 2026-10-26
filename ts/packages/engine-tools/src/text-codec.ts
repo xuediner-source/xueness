@@ -48,6 +48,23 @@ function isUtf8(bytes: Uint8Array): boolean {
   }
 }
 
+/**
+ * Length of a trailing incomplete UTF-8 sequence (0-3 bytes). ZCode 3.16.2
+ * completes or drops such a tail before trying legacy encodings, so a UTF-8
+ * file truncated mid-character is never silently decoded as GBK.
+ */
+function incompleteUtf8Tail(bytes: Uint8Array): number {
+  const last = bytes[bytes.length - 1];
+  if (last === undefined) return 0;
+  if (last < 0x80 || (last >= 0xc0 && last <= 0xfd)) return last >= 0xc2 && last <= 0xf4 ? 1 : 0;
+  const second = bytes[bytes.length - 2];
+  if (second === undefined) return 0;
+  if (second >= 0xe0 && second <= 0xf4) return 2;
+  const third = bytes[bytes.length - 3];
+  if (third !== undefined && third >= 0xf0 && third <= 0xf4) return 3;
+  return 0;
+}
+
 /** True when a GB18030 four-byte sequence (lead, 0x30-0x39, ...) occurs. */
 function hasFourByteSequence(bytes: Uint8Array): boolean {
   for (let index = 0; index < bytes.length;) {
@@ -65,6 +82,10 @@ export function detectEncoding(bytes: Uint8Array): TextEncodingName {
   if (startsWith(bytes, [0xfe, 0xff])) return "utf-16be";
   if (looksBinary(bytes)) throw new BinaryFileError("binary file is not supported as text");
   if (isUtf8(bytes)) return "utf-8";
+  const tail = incompleteUtf8Tail(bytes);
+  if (tail > 0 && isUtf8(bytes.subarray(0, bytes.length - tail))) {
+    throw new UnsupportedEncodingError("file ends with an incomplete UTF-8 sequence; refusing to decode it as a legacy encoding");
+  }
   let text: string;
   try {
     text = new TextDecoder("gb18030", { fatal: true }).decode(bytes);

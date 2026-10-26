@@ -71,7 +71,7 @@ python3 -m xueness providers save local --name '本地轻量' \
 ## 实际变化
 
 - 初始工具为 `read`、`write`、`edit`、`exec`、`ask_user`、`tool_search`、`tool_result_read`；小于 4096 tokens 时先展示 `read`、`exec`、`ask_user`、`tool_search`。远程会话保留远程工具边界。
-- `tool_search` 查找当前启用且符合工具范围的能力，每次最多三个匹配项，下一次请求带上相应 schema；最多保留最近六个发现的工具。发现不启用插件或授予权限。
+- **2026-10-24 F02.02 已接线**：`tool_search` 现在有可执行实现（`ts/plugins/providers/src/tool-search.ts`，经 providers 工具面注册）。轻量选择器保留 `tool_search` 名称并消费 `session.discovered_tools`；执行器按 query 检索内核活目录（含 `shouldDefer` 工具、不含禁用插件工具），返回最多 `toolSearchResults`（默认 3）个真实工具引用，并把非延迟命中写入 `session.discovered_tools`（最新在尾、≤`maxDiscoveredTools`，设为 0 关闭记录）——下一次请求即带出所选工具 schema，可实际调用（权限/Gate 照常）。local 路径对所有支持工具调用的模型可用；native 仅在协议适配器真正声明 deferred-loading 能力时启用（本轮无适配器声明，稳定回落 local）。上文"查找能力、每次最多三个匹配项、下一次请求带上 schema、保留最近六个发现"自本轮起成立。`shouldDefer` 工具可被搜到并带 deferred 标记，但其直接调用要等延迟调用通路（F02.03）；发现的跨轮持久化、压缩后公告与 fork/resume 投影归 F02.04。发现不启用插件或授予权限的约束不变。
 - `read` 支持字符 `offset` / `limit`，轻量默认 4000、最多 12000 字符，分块扫描降低宿主内存分配。`tool_result_read` 分页读取当前会话的完整结果，默认 1200、每页最多 4000 字符，不跨会话。
 - 预算计入提示、消息、可选记忆/技能/仓库指导及工具 schema。默认窗口 8192、输出 1024；较小窗口默认输出为 `min(1024, window / 4)`。另预留 512 tokens；小于 4096 时预留 128。输出上限通过真实 API 参数发送。
 - 输入估算以 UTF-8 字节数 / 2 为基线，不是 tokenizer 测量。服务报告实际输入用量时，用当前会话最近八次请求校准低估，修正倍率不低于 1；不同路由、模型、协议、工具模式或窗口不共用校准。缓存命中的输入仍占上下文容量，不从预算扣除。没有 usage 时保持估算，不编造计数。

@@ -34,8 +34,11 @@ describe("bundled TypeScript plugins", () => {
     const host = new PluginHost(kernel, BUNDLED_TS_PLUGINS, { enabled: Object.fromEntries(manifests().map((manifest) => [manifest.id, true])) });
     for (const status of await host.start()) assert.equal(status.state, "active", `${status.id}: ${status.error ?? status.issues.join("; ")}`);
     // A tool family (`mcp__*`) registers its tools only while a run has servers, so none appear here.
-    const declared = manifests().flatMap((manifest) => manifest.tools.filter((tool) => !tool.name.endsWith("*")).map((tool) => [tool.name, manifest.id]));
-    assert.deepEqual(kernel.tools.list().map((tool) => [tool.name, kernel.tools.ownerOf(tool.name)]), declared);
+    // Cross-plugin registration order follows activation scheduling (dependency-free plugins can apply
+    // before dependants), so the assertion is on the (tool, owner) pairs, not their order.
+    const byTool = (rows: Array<[string, string | null]>): Array<[string, string | null]> => [...rows].sort((left, right) => left[0].localeCompare(right[0]));
+    const declared = manifests().flatMap((manifest) => manifest.tools.filter((tool) => !tool.name.endsWith("*")).map((tool) => [tool.name, manifest.id] as [string, string]));
+    assert.deepEqual(byTool(kernel.tools.list().map((tool) => [tool.name, kernel.tools.ownerOf(tool.name)] as [string, string | null])), byTool(declared));
     await host.dispose();
     assert.equal(kernel.tools.size, 0);
     await kernel.dispose();

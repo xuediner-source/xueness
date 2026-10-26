@@ -17,6 +17,7 @@ export * from "./line-endings.ts";
 export * from "./list.ts";
 export * from "./output-capture.ts";
 export * from "./paths.ts";
+export * from "./platform-matrix.ts";
 export * from "./process.ts";
 export * from "./pty.ts";
 export * from "./read.ts";
@@ -29,6 +30,8 @@ export * from "./write.ts";
 export * from "./apply-patch.ts";
 export * from "./patch-apply.ts";
 export * from "./patch-parser.ts";
+export * from "./repl.ts";
+export * from "./browsers.ts";
 
 import { applyPatchTool } from "./apply-patch.ts";
 import { editTool } from "./edit.ts";

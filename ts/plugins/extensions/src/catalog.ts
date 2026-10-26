@@ -12,6 +12,7 @@
  */
 import { BUNDLED_PLUGIN_IDS, PyValueError } from "@xueness/contracts";
 import { isPyOSError, isPyValueError, type FileLockProvider } from "@xueness/sessions";
+import { componentSummary } from "./components.ts";
 import { brokenState, readState, resolveRows, writeState, type SwitchState } from "./runtime.ts";
 
 type Dict = Record<string, unknown>;
@@ -96,6 +97,8 @@ export function catalogItems(options: PluginCatalogOptions): Dict[] {
     const item: Dict = { ...manifests.get(row.id) };
     const ui = options.ui.get(row.id);
     for (const key of UI_FIELDS) if (ui && (ui[key] !== undefined || Object.hasOwn(item, key))) item[key] = [...ui[key] ?? []];
+    // F07.05: the panel answers "which components live in this plugin" without a second round trip.
+    item.components = componentSummary(options.stateDir, row.id);
     Object.assign(item, { enabled: row.enabled, effective: row.effective, installed: row.installed, blockedBy: row.blockedBy }, error ? { configurationError: error } : {});
     return item;
   });

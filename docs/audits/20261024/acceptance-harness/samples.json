@@ -1,0 +1,259 @@
+{
+  "schema": "xueness.acceptance-samples.v1",
+  "date": "2026-10-24",
+  "round": "F00.04",
+  "purpose": "精简对照验收样本目录：每个样本绑定契约行（public-capability-contracts.json 的 C-* ID）、引用 invariant 原文、写明离线执行入口与判定。样本数不是成功率；verdict 以 invariant 是否成立为准。真实模型样本（mode=live_model）单列，未经费用授权只允许 not_run。",
+  "conventions": {
+    "verdictVocabulary": {
+      "pass": "该样本执行后契约行 invariant 成立（离线证据）",
+      "fail": "该样本执行后 invariant 被违反——包括『复现了已知断线/缺口』；复现成功是 harness 的成功，不是契约的通过",
+      "blocked": "样本已定义但本轮无法执行（记录 blocker）",
+      "not_run": "推迟执行（典型：live_model 无费用授权）"
+    },
+    "exitCodeSemantics": "脚本退出码 0 表示『复现/验证了样本定义的边界形状』，不表示契约 invariant 通过；每条脚本输出同时打印 [HARNESS]（复现是否成功）与 [CONTRACT]（invariant 今日结论）两行，两者不得混写。",
+    "invariantSource": "docs/audits/20261024/public-capability-contracts.json（F00.03，47 行）"
+  },
+  "samples": [
+    {
+      "sampleId": "S-TOOL-03A",
+      "category": "tool_events",
+      "title": "通用 tool_search 断线复现（注册链 → 请求 schema → 调用门禁）",
+      "contractIds": ["C-TOOL-03"],
+      "mode": "offline",
+      "status": "executable",
+      "preconditions": [
+        "npm --prefix ts ci 已安装（workspace 依赖）",
+        "无服务器、无模型；脚本在隔离进程内直接 import 生产源码模块"
+      ],
+      "entrypoint": "node docs/audits/20261024/acceptance-harness/scripts/repro-tool-search.ts",
+      "steps": [
+        "以生产工厂 PluginHost + createProviderResultTools 装配 providers 插件（镜像 ts/apps/server/src/agent-service.ts:130）",
+        "读注册表：kernel.tools.list() 与 ownerOf('tool_search')",
+        "经 kernelAgentHooks 构造模型可见请求 tools（镜像 driver.ts:85-98 的 owner 过滤）",
+        "以 tools.ts:54-57 的调用门禁形态调用 tool_search",
+        "向 lightweight 选择器注入 discovered_tools 验证消费侧，并读取真实一轮交互后的 session.discovered_tools"
+      ],
+      "invariantQuotes": {
+        "C-TOOL-03": "模型可用一个通用搜索工具按 query 检索启用插件的工具目录并得到引用；不启用未开插件、不提权；native 门控是协议能力而非『仅官方模型』。"
+      },
+      "expectedVerdictToday": "fail",
+      "harnessPassCriteria": "复现 F00.02 证实的断线形状：注册名不含 tool_search、ownerOf 为 null、请求 schema 永不暴露、模型调用结算为 { ok:false, error_code:'plugin_disabled' }。任何一条形状变化（如出现执行器）即脚本判 UNEXPECTED，提示契约状态需要重估。",
+      "invariantPassCriteria": "F02.02 落地后重跑：tool_search 出现在注册表与请求 schema，按 query 返回启用插件的真实工具引用，且对未启用插件不提权——届时 verdict 改 pass 并附新证据。",
+      "references": [
+        "F00.02-result.md（隔离复现 [1]-[6]，R01 → confirmed_broken_transfer_f02）",
+        "ts/plugins/providers/src/result-tool.ts:64-77",
+        "ts/plugins/providers/src/runtime-tools.ts:16-40"
+      ]
+    },
+    {
+      "sampleId": "S-TOOL-05A",
+      "category": "tool_events",
+      "title": "discovered_tools 生产者缺失与消费侧完好的边界",
+      "contractIds": ["C-TOOL-05"],
+      "mode": "offline",
+      "status": "executable",
+      "entrypoint": "node docs/audits/20261024/acceptance-harness/scripts/repro-tool-search.ts（与 S-TOOL-03A 同次运行，检查项 [5]/[6]）",
+      "preconditions": ["同 S-TOOL-03A"],
+      "steps": [
+        "注入 discovered_tools=['network_fetch'] 验证选择器把它并入下一轮视图（消费侧完好）",
+        "验证逐出约定：超过 maxDiscoveredTools(6) 时逐出最旧条目（[...discovered].reverse() 决定哪些存活；返回视图本身按名称排序）",
+        "走真实一轮交互后读取 session.discovered_tools（应为 undefined：无生产写入者）"
+      ],
+      "invariantQuotes": {
+        "C-TOOL-05": "工具发现跨轮持久并在历史/压缩恢复中投影回请求；公告一次持久化，fork/resume 不重复公告。"
+      },
+      "expectedVerdictToday": "fail",
+      "harnessPassCriteria": "复现：注入后选择器可带出（消费侧在），但真实交互后 discovered_tools 仍为 undefined（生产者缺失、无冷恢复 hydrate、无压缩后公告）。",
+      "invariantPassCriteria": "F02.04 落地后重跑：真实 tool_search 发现写入 session.discovered_tools、落盘并在冷恢复/压缩后仍投影回请求且公告去重——届时 verdict 改 pass。",
+      "references": [
+        "F00.02-result.md 缺口 3（写入语义转入 F02.04）",
+        "ts/packages/providers/src/options.ts:19（maxDiscoveredTools=6）",
+        "ts/plugins/providers/src/runtime-tools.ts:37"
+      ]
+    },
+    {
+      "sampleId": "S-MDL-02A",
+      "category": "model_stream",
+      "title": "流中取消：不重试、片段不进历史、租约释放",
+      "contractIds": ["C-MDL-02"],
+      "mode": "offline",
+      "status": "executable",
+      "entrypoint": "node docs/audits/20261024/acceptance-harness/scripts/repro-model-stream.ts（case A）",
+      "preconditions": ["脚本内建最小 fixture（临时状态目录 + 脚本化 provider），不依赖服务器或模型"],
+      "steps": [
+        "provider.stream 首个回调内调用 runner.cancel(session.id) 后继续投递 delta",
+        "等待 run 结算，统计 provider 调用次数与 model_retry_scheduled 事件数",
+        "检查 session.status、assistant 消息数（已投递片段不得写入历史）、租约可再获取"
+      ],
+      "invariantQuotes": {
+        "C-MDL-02": "同一失败从 adapter 到 runtime 只计一次预算；取消不重试；已消费的流式输出片段不重播；限流/Retry-After/连接断开/无输出失败按分类驱动退避。"
+      },
+      "expectedVerdictToday": "pass",
+      "harnessPassCriteria": "结算为 stopped；provider 恰好调用 1 次；0 条 model_retry_scheduled；无 assistant 消息入历史；结束后 store.lease 可立即获取。",
+      "invariantPassCriteria": "同 harnessPassCriteria（该边界即 invariant 的取消子句）。",
+      "references": [
+        "ts/packages/agent/src/model-request.ts:13-20（取消信号合成；停止即 ProviderCancelled）",
+        "ts/packages/agent/src/stream.ts:116（流中停止抛 ProviderCancelled）",
+        "ts/packages/agent/test/lifecycle.test.ts（stops a stream … resumes without replay）"
+      ]
+    },
+    {
+      "sampleId": "S-MDL-02B",
+      "category": "model_stream",
+      "title": "已提交片段后的失败：不重试、不重播",
+      "contractIds": ["C-MDL-02"],
+      "mode": "offline",
+      "status": "executable",
+      "entrypoint": "node docs/audits/20261024/acceptance-harness/scripts/repro-model-stream.ts（case B）",
+      "preconditions": ["同 S-MDL-02A"],
+      "steps": [
+        "provider.stream 投递一段 delta（使流 committed）后抛 503",
+        "统计 provider 调用次数、model_retry_scheduled 事件数、结算状态"
+      ],
+      "invariantQuotes": {
+        "C-MDL-02": "同一失败从 adapter 到 runtime 只计一次预算；取消不重试；已消费的流式输出片段不重播；限流/Retry-After/连接断开/无输出失败按分类驱动退避。"
+      },
+      "expectedVerdictToday": "pass",
+      "harnessPassCriteria": "provider 恰好调用 1 次（无第二次请求即无片段重播）；0 条 model_retry_scheduled；run 以 ProviderRequestError 拒绝。",
+      "invariantPassCriteria": "同 harnessPassCriteria（已提交不重播子句）。",
+      "references": [
+        "ts/packages/agent/src/stream.ts:70-80（committed 标记）",
+        "ts/packages/agent/src/model-retry.ts:137（committed 失败不允许重试）",
+        "ts/packages/agent/test/model-retry.test.ts（after committed output 用例）"
+      ]
+    },
+    {
+      "sampleId": "S-FAIL-01",
+      "category": "failure",
+      "title": "失败分类驱动退避与预算只计一次（503/429+Retry-After/401/空输出）",
+      "contractIds": ["C-MDL-02"],
+      "relatedHooks": ["C-TOOL-06（model_request_queued/admitted 事件与 queuedMs 是未来排队感知 ToolDeadline 的挂点，本轮只登记不验收）"],
+      "mode": "offline",
+      "status": "executable",
+      "entrypoint": "node docs/audits/20261024/acceptance-harness/scripts/repro-model-stream.ts（case C/D/E）",
+      "preconditions": ["同 S-MDL-02A"],
+      "steps": [
+        "case C：complete 依次抛 503 → 429(retryAfterMs=5) → 成功，校验 model_request_failed 的 reason/retryable/statusCode、model_retry_scheduled 的 delayMs 荣誉 Retry-After、全部 model_* 事件共享同一 requestId（同一失败只计一次预算）",
+        "case D：401 非重试，校验恰好 1 次调用、failed 事件 retryable=false、无重试排程",
+        "case E：空输出完成恰好重试一次后成功（canRetryEmpty 有界）"
+      ],
+      "invariantQuotes": {
+        "C-MDL-02": "同一失败从 adapter 到 runtime 只计一次预算；取消不重试；已消费的流式输出片段不重播；限流/Retry-After/连接断开/无输出失败按分类驱动退避。"
+      },
+      "expectedVerdictToday": "pass",
+      "harnessPassCriteria": "case C 三个断言组、case D 两个断言组、case E 的有界重试全部成立；事件序列与 model-retry.test.ts 既有基线一致。",
+      "invariantPassCriteria": "同 harnessPassCriteria（分类驱动退避与单次预算子句）。",
+      "references": [
+        "ts/packages/providers/src/failure-codes.ts:8-65（业务/网络码分类）",
+        "ts/packages/agent/src/model-retry.ts:129-154（预算/退避决策）",
+        "ts/packages/agent/test/model-retry.test.ts（既有回归基线）"
+      ]
+    },
+    {
+      "sampleId": "S-WFL-05A",
+      "category": "recovery",
+      "title": "跨进程会话租约探针：并发发布者使陈旧运行被拒、无租约不执行收尾",
+      "contractIds": ["C-WFL-05"],
+      "mode": "offline",
+      "status": "executable",
+      "entrypoint": "node docs/audits/20261024/acceptance-harness/scripts/probe-lease-drain.ts",
+      "preconditions": ["临时状态目录；两个独立锁实例模拟跨进程写者"],
+      "steps": [
+        "探针 1：在 runner 获取租约的瞬间让另一 SessionStore 持锁发布新修订，随后本方再取锁——校验 run 以 BlockingIOError 拒绝、beforeRun/close 钩子未跑、0 次模型请求、0 次工具副作用、磁盘字节与并发发布者一致、租约随后可再获取",
+        "探针 2：租约被他方持有时发起 run——校验同样拒绝且 close 钩子不执行（无租约不收尾写回）、会话文件字节不变"
+      ],
+      "invariantQuotes": {
+        "C-WFL-05": "运行收尾（结算、压缩、审计写回）受租约保护不被并发装配打断；宿主关闭/禁用时 drain 在途工作而不是丢弃。"
+      },
+      "expectedVerdictToday": "pass（限：仅覆盖『单机跨进程租约排他 + 无租约不收尾』这一可离线探针的子句）",
+      "harnessPassCriteria": "两个探针的全部断言成立（拒绝形态 BlockingIOError、无请求/副作用/收尾钩子、文件未被覆盖、isRunning=false、租约可再获取）。",
+      "invariantPassCriteria": "本子句即该探针；『宿主关闭/禁用时 drain 在途工作』的完整验收见 S-WFL-05B 与 workflows 侧既有覆盖（http.close 对在途动态运行取消且无重放，docs/engine-z6.md）。",
+      "references": [
+        "ts/packages/sessions/src/store.ts:119-122（session_lease：非阻塞 run 租约）",
+        "ts/packages/agent/test/runner-lease.test.ts（同形状既有回归）",
+        "ts/plugins/workflows/test/dynamic-runs.test.ts（幂等 cancel；drain 相邻覆盖）"
+      ]
+    },
+    {
+      "sampleId": "S-WFL-05B",
+      "category": "recovery",
+      "title": "上游 detached runner 收尾竞态探针（设计稿，本轮未跑）",
+      "contractIds": ["C-WFL-05"],
+      "mode": "offline",
+      "status": "probe_design",
+      "entrypoint": null,
+      "preconditions": [
+        "需要一个可注入的『收尾中(finalizing)宿主』试验台：能在结算/压缩/审计写回期间注入并发装配、宿主崩溃与重启",
+        "上游对照行为（residency-lease 对 detached runner 的保护时序）本机无上游树，需按 reference-baseline.json 的 commit 重取锚点"
+      ],
+      "steps": [
+        "设计：宿主 A 持租约进入收尾（结算+审计写回），宿主 B 并发对同一会话发起装配/写",
+        "期望：B 被租约排他（BlockingIOError 或等价拒绝），A 崩溃后 B 重启可获取租约并从修订链恢复，无并行写者、无半写状态",
+        "与 S-WFL-05A 的差别：A 侧处于收尾阶段而非请求阶段，且包含宿主崩溃恢复路径"
+      ],
+      "invariantQuotes": {
+        "C-WFL-05": "运行收尾（结算、压缩、审计写回）受租约保护不被并发装配打断；宿主关闭/禁用时 drain 在途工作而不是丢弃。"
+      },
+      "expectedVerdictToday": "blocked",
+      "harnessPassCriteria": "不适用（未执行）",
+      "invariantPassCriteria": "按上述设计落成可执行探针并全部通过；在此之前 C-WFL-05 保持 unverified（D07：需要行为探针后决定修复）。",
+      "blocker": "本机没有可注入收尾阶段故障的宿主试验台；上游侧时序锚点未采集（无上游源码树）。F03.06 轮次按此设计实现后再跑。",
+      "references": [
+        "docs/audits/20261024/gap-register.json D07（需要行为探针后决定修复）",
+        "docs/engine-z6.md（现有 cancel/drain 行为边界）"
+      ]
+    },
+    {
+      "sampleId": "S-MDL-01L",
+      "category": "model_stream",
+      "title": "真实模型逐字段规范化对照（live_model，单列）",
+      "contractIds": ["C-MDL-01"],
+      "mode": "live_model",
+      "status": "live_pending",
+      "entrypoint": null,
+      "preconditions": [
+        "费用授权：用户在本对话明确授权（记录 authorizedBy/grantRef）；授权前 verdict 只能 not_run",
+        "隔离状态目录与测试账号/端点；记录所用 provider/protocol/model 与样本请求"
+      ],
+      "steps": [
+        "对每协议（anthropic-messages / openai 类）发送含工具调用、reasoning、usage/cache 计数的固定请求",
+        "捕获归一后内部模型字段（tool_calls/reasoning/_usage/_finish_reason/流式事件序列）",
+        "按 C-MDL-01 invariant 逐字段记录：支持/显式报告不支持/未虚构"
+      ],
+      "invariantQuotes": {
+        "C-MDL-01": "每个协议的响应都归一为统一内部模型（工具调用、reasoning、usage/cache 计数、finish reason、流式事件）；不支持的字段显式报告，不静默丢弃，也不虚构缺失的 Token/用量。"
+      },
+      "expectedVerdictToday": "not_run",
+      "harnessPassCriteria": "不适用（未执行）",
+      "invariantPassCriteria": "授权后运行并逐字段留痕（trace/事件记录 + costAuth.cost），字段对照表无『静默丢弃/虚构用量』项。",
+      "blocker": "无费用授权（F00.04 默认离线）。fixture 回放不代替真实模型逐字段验证。",
+      "references": ["docs/audits/20261024/models-runtime-evidence.md §1", "docs/audits/20261024/acceptance-harness.md（真实模型验证单列）"]
+    },
+    {
+      "sampleId": "S-MDL-02L",
+      "category": "model_stream",
+      "title": "真实模型流取消/断连边界（live_model，单列）",
+      "contractIds": ["C-MDL-02"],
+      "mode": "live_model",
+      "status": "live_pending",
+      "entrypoint": null,
+      "preconditions": [
+        "费用授权同 S-MDL-01L；需要可控断连（代理中断 SSE）与用户取消时机注入",
+        "隔离状态目录；同一 provider/model 固定样本请求"
+      ],
+      "steps": [
+        "真实流输出途中取消：校验不重试、已收片段不重播、结算 stopped（对应 S-MDL-02A 的真实形态）",
+        "真实流中途断连（传输层）：校验分类为可重试传输失败、重试从请求边界而非片段续传（对应 S-FAIL-01 的真实形态）",
+        "记录 trace/事件与费用"
+      ],
+      "invariantQuotes": {
+        "C-MDL-02": "同一失败从 adapter 到 runtime 只计一次预算；取消不重试；已消费的流式输出片段不重播；限流/Retry-After/连接断开/无输出失败按分类驱动退避。"
+      },
+      "expectedVerdictToday": "not_run",
+      "harnessPassCriteria": "不适用（未执行）",
+      "invariantPassCriteria": "授权后运行：取消/断连两类边界的真实事件序列与离线样本形状一致；costAuth 完整。",
+      "blocker": "无费用授权（F00.04 默认离线）。",
+      "references": ["docs/audits/20261024/acceptance-harness.md（真实模型验证单列）"]
+    }
+  ]
+}

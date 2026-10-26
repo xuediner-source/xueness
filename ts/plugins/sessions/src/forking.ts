@@ -5,6 +5,7 @@ import { isPyOSError, isPyValueError, pyExceptionName, realish, SYSTEM_PROMPT, t
 import type { SessionsApiOptions, SessionReply } from "./http-api.ts";
 import { canonicalForkMessage, ForkError, forkTruncation, MAX_PREFIX_BYTES, readForkSnapshot, validForkText, type Row } from "./fork-common.ts";
 import { forkBoundaries } from "./fork-boundaries.ts";
+import { applyCanonicalIntent, LineageSidecar, validateHistoryCommandId } from "./lineage.ts";
 import { validateTitle } from "./session-management.ts";
 import { pendingDenials } from "./public-session.ts";
 import { messageOwner, messageRefs } from "./media-history.ts";
@@ -56,48 +57,65 @@ export async function makeFork(options: SessionsApiOptions, source: Row, revisio
     await media.adopt(old, target, refs.map((ref) => ref.id));
   }
   await options.store.save(child);
-  return { session: { id, status: "pending", root: child.root, title: cleanTitle }, sourceId: source.id, boundary: { turn: boundary.turn, preview: boundary.preview }, historyTruncated: truncated, truncationReason: reason, forkParent: { ...parent } };
+  const remap = Object.fromEntries([...callIds].slice(0, 64));
+  const mediaRefCount = mediaPairs.reduce((count, [, clean]) => count + messageRefs(clean).length, 0);
+  const context = { messages: messages.length, toolCalls: referenced.size, toolResults: toolIds.size, mediaRefsAdopted: mediaRefCount, toolCallRemap: remap };
+  return { session: { id, status: "pending", root: child.root, title: cleanTitle }, sourceId: source.id, boundary: { turn: boundary.turn, preview: boundary.preview }, historyTruncated: truncated, truncationReason: reason, forkParent: { ...parent }, context };
 }
-export const FORK_ROUTES = ["GET /api/sessions/:id/fork-boundaries", "POST /api/sessions/:id/fork", "POST /api/sessions/:id/fork-from-checkpoint"];
+export const FORK_ROUTES = ["GET /api/sessions/:id/fork-boundaries", "POST /api/sessions/:id/fork", "POST /api/sessions/:id/fork-from-checkpoint", "GET /api/sessions/:id/lineage"];
 export function createForkApi(options: SessionsApiOptions) {
-  const owns = (method: string, p: readonly string[]) => p[0] === "api" && p[1] === "sessions" && p.length === 4 && (method === "GET" && p[3] === "fork-boundaries" || method === "POST" && ["fork", "fork-from-checkpoint"].includes(p[3]!));
+  const owns = (method: string, p: readonly string[]) => p[0] === "api" && p[1] === "sessions" && p.length === 4 && (method === "GET" && ["fork-boundaries", "lineage"].includes(p[3]!) || method === "POST" && ["fork", "fork-from-checkpoint"].includes(p[3]!));
   return { routes: FORK_ROUTES, owns,
     async dispatch(method: string, p: string[], _query: Row, data: unknown): Promise<SessionReply | null> {
       if (!owns(method, p)) return null;
       if (!options.enabled("sessions")) return [403, { error: "plugin disabled or dependency unavailable: sessions", plugin: "sessions", code: "plugin_disabled" }];
       const sid = p[2]!; if (!/^[0-9a-f]{32}$/.test(sid)) return [404, { error: "session not found" }];
-      const checkpoint = p[3] === "fork-from-checkpoint", allowed = checkpoint ? ["checkpoint", "latest", "turn", "title"] : ["boundary", "revision", "title"];
+      const checkpoint = p[3] === "fork-from-checkpoint", allowed = checkpoint ? ["checkpoint", "latest", "turn", "title", "commandId"] : ["boundary", "revision", "title", "commandId"];
       if (method === "POST" && (!isDict(data) || Object.keys(data).some((k) => !allowed.includes(k)) || !checkpoint && !["boundary", "revision"].every((k) => Object.hasOwn(data, k)) || isDict(data) && Object.hasOwn(data, "title") && typeof data.title !== "string")) return [400, { error: checkpoint ? "expected checkpoint or latest, and optional title" : "expected boundary, revision, and optional title" }];
       const body = isDict(data) ? data : {};
       try {
+        if (method === "GET" && p[3] === "lineage") {
+          try { await options.store.load(sid); } catch { return [404, { error: "session not found" }]; }
+          return [200, { id: sid, lineage: [...new LineageSidecar(options.store.directory).readRecord(sid).lineage].reverse() }];
+        }
         if (method === "POST") {
           if (body.title !== undefined) { try { validateTitle(body.title); } catch (e) { throw new ForkError((e as Error).message); } }
           if (!checkpoint && (typeof body.revision !== "string" || !/^sha256:[0-9a-f]{64}$/.test(body.revision))) throw new ForkError("invalid session revision");
           if (!checkpoint && !validForkText(body.boundary, 80)) throw new ForkError("invalid fork boundary token");
           if (checkpoint) { if (body.checkpoint != null && pyTruthy(body.latest)) throw new ForkError("choose either a checkpoint id or --latest, not both"); if (body.checkpoint != null && !validForkText(body.checkpoint, 32)) throw new ForkError("invalid checkpoint id"); if (body.turn != null && (!isPyIntValue(body.turn) || Number(body.turn) < 1)) throw new ForkError("turn must be a positive integer"); }
+          if (body.commandId !== undefined) { try { validateHistoryCommandId(body.commandId); } catch { throw new ForkError("commandId must be c_<epoch-ms>_<uuid>"); } }
         }
         if (options.running?.has(sid)) throw new ForkError("session run already in progress", 409);
-        const lease = await options.store.lease(sid);
-        try {
-          if (options.running?.has(sid)) throw new ForkError("session run already in progress", 409);
-          const [source, revision] = readForkSnapshot(options.store, sid); if (pyTruthy(source.streaming)) throw new ForkError("session has an active or interrupted stream", 409);
-          if (!checkpoint) { try { await validateWorkspace(options, source); } catch { throw new ForkError("session workspace is no longer permitted", 403); } }
-          if (!existsSync(source.root) || !statSync(source.root).isDirectory()) throw new ForkError("session workspace is unavailable", 409);
-          if (method === "POST" && !checkpoint && revision !== body.revision) throw new ForkError("session changed; refresh fork boundaries", 409);
-          const index = forkBoundaries(source, revision); if (method === "GET") return [200, index];
-          let boundary: Row | undefined, linked: Row | undefined;
-          if (checkpoint) {
-            const records = Array.isArray(source.turn_checkpoints) ? source.turn_checkpoints.filter((r: unknown) => isDict(r) && pyTruthy(r.checkpointId)) : [];
-            let chosen: Row | undefined;
-            if (body.turn != null) { chosen = records.find((r: Row) => pyEquals(r.turn, body.turn)); if (!chosen) throw new ForkError("requested turn has no workspace checkpoint", 409); }
-            else { if (!records.length) throw new ForkError("该会话没有可用的轮次检查点", 409); chosen = pyTruthy(body.latest) || body.checkpoint == null ? records.at(-1) : records.find((r: Row) => r.checkpointId === body.checkpoint); if (!chosen) throw new ForkError("未知的轮次检查点", 404); }
-            if (typeof chosen.checkpointId !== "string" || !/^[0-9a-f]{32}$/.test(chosen.checkpointId)) throw new ForkError("checkpoint record is invalid", 409);
-            if (!isPyIntValue(chosen.turn) || Number(chosen.turn) < 2) throw new ForkError("that checkpoint has no earlier turn to fork from", 409);
-            boundary = index.boundaries.find((r: Row) => r.turn === Number(chosen.turn) - 1); if (!boundary) throw new ForkError("the turn before that checkpoint is not a safe closed boundary", 409);
-            linked = { checkpointId: chosen.checkpointId, turn: chosen.turn };
-          } else { boundary = index.boundaries.find((r: Row) => r.token === body.boundary); if (!boundary) throw new ForkError("fork boundary is no longer safe or was not offered", 409); }
-          const result = await makeFork(options, source, revision, boundary!, body.title as string | undefined, linked); if (linked) result.checkpoint = linked; return [201, result];
-        } finally { await lease.release(); }
+        const execute = async (): Promise<{ status: number; result: Row }> => {
+          const lease = await options.store.lease(sid);
+          try {
+            if (options.running?.has(sid)) throw new ForkError("session run already in progress", 409);
+            const [source, revision] = readForkSnapshot(options.store, sid); if (pyTruthy(source.streaming)) throw new ForkError("session has an active or interrupted stream", 409);
+            if (!checkpoint) { try { await validateWorkspace(options, source); } catch { throw new ForkError("session workspace is no longer permitted", 403); } }
+            if (!existsSync(source.root) || !statSync(source.root).isDirectory()) throw new ForkError("session workspace is unavailable", 409);
+            if (method === "POST" && !checkpoint && revision !== body.revision) throw new ForkError("session changed; refresh fork boundaries", 409);
+            const index = forkBoundaries(source, revision); if (method === "GET") return { status: 200, result: index };
+            let boundary: Row | undefined, linked: Row | undefined;
+            if (checkpoint) {
+              const records = Array.isArray(source.turn_checkpoints) ? source.turn_checkpoints.filter((r: unknown) => isDict(r) && pyTruthy(r.checkpointId)) : [];
+              let chosen: Row | undefined;
+              if (body.turn != null) { chosen = records.find((r: Row) => pyEquals(r.turn, body.turn)); if (!chosen) throw new ForkError("requested turn has no workspace checkpoint", 409); }
+              else { if (!records.length) throw new ForkError("该会话没有可用的轮次检查点", 409); chosen = pyTruthy(body.latest) || body.checkpoint == null ? records.at(-1) : records.find((r: Row) => r.checkpointId === body.checkpoint); if (!chosen) throw new ForkError("未知的轮次检查点", 404); }
+              if (typeof chosen.checkpointId !== "string" || !/^[0-9a-f]{32}$/.test(chosen.checkpointId)) throw new ForkError("checkpoint record is invalid", 409);
+              if (!isPyIntValue(chosen.turn) || Number(chosen.turn) < 2) throw new ForkError("that checkpoint has no earlier turn to fork from", 409);
+              boundary = index.boundaries.find((r: Row) => r.turn === Number(chosen.turn) - 1); if (!boundary) throw new ForkError("the turn before that checkpoint is not a safe closed boundary", 409);
+              linked = { checkpointId: chosen.checkpointId, turn: chosen.turn };
+            } else { boundary = index.boundaries.find((r: Row) => r.token === body.boundary); if (!boundary) throw new ForkError("fork boundary is no longer safe or was not offered", 409); }
+            const result = await makeFork(options, source, revision, boundary!, body.title as string | undefined, linked); if (linked) result.checkpoint = linked; return { status: 201, result };
+          } catch (e) { if (e instanceof ForkError) return { status: e.status, result: { error: e.message } }; throw e; }
+          finally { await lease.release(); }
+        };
+        if (method === "GET") { const done = await execute(); return [done.status, done.result]; }
+        const { commandId, ...payload } = body;
+        if (typeof commandId !== "string") { const done = await execute(); return [done.status, done.result]; }
+        const outcome = await applyCanonicalIntent(new LineageSidecar(options.store.directory), sid, { commandId, intent: "fork", payload }, execute,
+          (result) => ({ parentRevision: result.forkParent?.sourceRevision, childSessionId: result.session?.id, boundaryTurn: result.boundary?.turn, checkpointId: result.forkParent?.checkpointId, context: result.context }));
+        return outcome.reply;
       } catch (e) {
         if (e instanceof ForkError) return [e.status, { error: e.message }];
         if (pyExceptionName(e) === "BlockingIOError") return [409, { error: "session is in use by another process" }];

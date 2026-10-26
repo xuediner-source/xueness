@@ -5,8 +5,8 @@ import { MemoryDreamService, MemoryDreamServiceError } from "./memory-dream-serv
 const BASE = "/api/sessions/:id/memory-dreams";
 const ID = /^[a-f0-9]{32}$/;
 export const MEMORY_DREAM_ROUTES = [
-  `GET ${BASE}`, `POST ${BASE}`, `GET ${BASE}/:dreamId`,
-  ...["start", "cancel", "apply"].map((op) => `POST ${BASE}/:dreamId/${op}`),
+  `GET ${BASE}`, `POST ${BASE}`, `GET ${BASE}/:dreamId`, `GET ${BASE}/:dreamId/diff`,
+  ...["start", "cancel", "apply", "revert"].map((op) => `POST ${BASE}/:dreamId/${op}`),
 ];
 type Reply = [number, unknown] | null;
 const text = (value: unknown, name: string): string => {
@@ -39,8 +39,9 @@ export function createMemoryDreamApi(service: MemoryDreamService) {
         const id = parts[4] ?? "";
         if (!ID.test(id)) return [404, { error: "memory dream not found" }];
         if (parts.length === 5) return method === "GET" ? [200, await service.get(sessionId, id)] : [405, { error: "method not allowed" }];
-        if (parts.length !== 6 || method !== "POST") return [405, { error: "method not allowed" }];
+        if (parts.length !== 6 || (method !== "POST" && !(method === "GET" && parts[5] === "diff"))) return [405, { error: "method not allowed" }];
         const operation = parts[5];
+        if (operation === "diff") return method === "GET" ? [200, await service.diff(sessionId, id)] : [405, { error: "method not allowed" }];
         if (operation === "start") {
           if (body.confirmed !== undefined && typeof body.confirmed !== "boolean") throw new TypeError("confirmed must be a boolean");
           if (body.allowReal !== undefined && typeof body.allowReal !== "boolean") throw new TypeError("allowReal must be a boolean");
@@ -50,6 +51,10 @@ export function createMemoryDreamApi(service: MemoryDreamService) {
         if (operation === "apply") {
           if (body.confirmed !== undefined && typeof body.confirmed !== "boolean") throw new TypeError("confirmed must be a boolean");
           return [200, await service.apply(sessionId, id, { digest: text(body.digest, "digest"), confirmed: body.confirmed === true })];
+        }
+        if (operation === "revert") {
+          if (body.confirmed !== undefined && typeof body.confirmed !== "boolean") throw new TypeError("confirmed must be a boolean");
+          return [200, await service.revert(sessionId, id, { digest: text(body.digest, "digest"), confirmed: body.confirmed === true })];
         }
         return [404, { error: "memory dream operation not found" }];
       } catch (error) {

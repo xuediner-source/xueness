@@ -115,6 +115,16 @@ export class StreamCapture {
     }
   }
 
+  /**
+   * Raw capture so far, for handing the stream to a new owner (the
+   * foreground→background handoff): the in-memory chunks while everything
+   * fits the budget, else the spill file that holds the whole stream.
+   */
+  snapshot(): { chunks: Buffer[]; totalBytes: number; spillPath?: string } {
+    if (!this.#overflow) return { chunks: this.#chunks, totalBytes: this.#total };
+    return { chunks: [], totalBytes: this.#total, ...(this.#spoolPath ? { spillPath: this.#spoolPath } : {}) };
+  }
+
   async finish(): Promise<CapturedOutput> {
     if (!this.#overflow) {
       return { text: decodeOutput(Buffer.concat(this.#chunks)), totalBytes: this.#total, truncated: false };

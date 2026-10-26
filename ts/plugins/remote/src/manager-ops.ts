@@ -16,9 +16,10 @@ export const ALLOWED_METHODS = Object.freeze([
   "withdrawal/list", "withdrawal/get", "withdrawal/dismiss", "guidance/query", "guidance/read", "guidance/send", "guidance/cancel", "guidance/promote",
   "media/restore", "media/preview", "media/restore-status", "media/restore-abort", "media/restore-epoch", "history/fork-boundaries",
   'conversation/rowsRange', 'history/rewind-targets', 'history/rewind', 'files/rewind-preview', 'files/rewind',
+  "connection/flow", ...["conversation", "controller", "workflow"].flatMap((kind) => ["subscribe", "resync", "unsubscribe"].map((op) => `${kind}/${op}`)),
   ...['list', 'get', 'events', 'create', 'start', 'resume', 'cancel', 'recover', 'concurrency', 'resolve', 'amend', 'compile'].map((op) => 'workflow/' + op),
   ...['read', 'set', 'pause', 'resume', 'clear', 'budget'].map(op => 'goal/' + op),
-  ...['list', 'propose', 'get', 'start', 'cancel', 'apply'].map(op => 'memory/dream/' + op),
+  ...['list', 'propose', 'get', 'diff', 'start', 'cancel', 'apply', 'revert'].map(op => 'memory/dream/' + op),
 ]);
 const ALLOWED = new Set<string>(ALLOWED_METHODS);
 const FRAGMENT = new Set(["browser/action", "conversation/snapshot", "conversation/resume", 'conversation/rowsRange', 'workflow/get', 'workflow/events', "session/read", "history/fork-boundaries", "composer/catalog", "question/read", "withdrawal/list", "withdrawal/get", "guidance/read", "guidance/send", "guidance/promote", "media/restore", "media/preview", "media/restore-status"]);
@@ -42,6 +43,11 @@ export interface LiveItem {
   index: unknown;
   methods: unknown[];
   client: LiveClient | null;
+  /** Negotiated app-server protocol (1 or 2); 2 enables the projection subscription path. */
+  protocolVersion: number;
+  maxSubscriptions: number;
+  /** v2 projection driver; null until a v2 connection is established. */
+  subscriber: import('./projection-subscriber.ts').ProjectionDriver | null;
 }
 
 export interface RequestHost {
@@ -75,14 +81,35 @@ export function requirePosix(row: object): void {
   if (system !== "posix") throw new RemoteValueError("invalid remote system");
 }
 
-export function acceptHello(hello: unknown): hello is { workspaceIdentity: string; capabilities: Record<string, unknown>; methods: unknown[]; limits?: unknown } {
-  if (!isDict(hello) || hello.protocolName !== "xueness.app-server.v1" || hello.protocolVersion !== 1) return false;
+const SUBSCRIPTION_METHODS = Object.freeze(["connection/flow", ...["conversation", "controller", "workflow"].flatMap((kind) => ["subscribe", "resync", "unsubscribe"].map((op) => `${kind}/${op}`))]);
+
+/** Negotiated protocol facts the manager relies on after `initialize`. */
+export interface HelloFacts {
+  protocolVersion: number;
+  workspaceIdentity: string;
+  capabilities: Record<string, unknown>;
+  methods: unknown[];
+  limits?: unknown;
+  maxSubscriptions: number;
+}
+
+export function acceptHello(hello: unknown): hello is HelloFacts {
+  if (!isDict(hello)) return false;
+  const version = hello.protocolVersion;
+  if (version !== 1 && version !== 2) return false;
+  if (hello.protocolName !== `xueness.app-server.v${version}`) return false;
   const identity = hello.workspaceIdentity;
   const caps = hello.capabilities;
   if (typeof identity !== "string" || pyLen(identity) < 1 || pyLen(identity) > 4096 || !isDict(caps)) return false;
   if (!caps.durableCommands || !caps.conversationResume || caps.responseFragments !== true) return false;
   const methods = hello.methods;
-  return Array.isArray(methods) && REQUIRED_METHODS.every((method) => methods.includes(method));
+  if (!Array.isArray(methods) || !REQUIRED_METHODS.every((method) => methods.includes(method))) return false;
+  if (version === 1) return true;
+  // v2 must actually offer the projection subscription path, not just the name.
+  if (caps.projectionSubscriptions !== true) return false;
+  const maxSubscriptions = hello.maxSubscriptions;
+  if (typeof maxSubscriptions !== "number" || !Number.isInteger(maxSubscriptions) || maxSubscriptions < 1) return false;
+  return SUBSCRIPTION_METHODS.every((method) => methods.includes(method));
 }
 
 export function acceptIndex(index: unknown, identity: string): boolean {

@@ -79,7 +79,7 @@ export function compileDynamicWorkflow(source: string): CompiledDynamicWorkflow 
         report(node, "DYN_UNSUPPORTED_SYNTAX", "Only const and let declarations are supported.");
       }
       for (const declaration of node.declarationList.declarations) {
-        if (!ts.isIdentifier(declaration.name)) report(declaration.name, "DYN_UNSUPPORTED_SYNTAX", "Destructuring declarations are not supported.");
+        checkBindingPattern(declaration.name);
         if (declaration.type) checkTypeSyntax(declaration.type);
         if (declaration.initializer) checkExpression(declaration.initializer);
         else if ((node.declarationList.flags & ts.NodeFlags.Const) !== 0) report(declaration, "DYN_UNSUPPORTED_SYNTAX", "const declarations need an initializer.");
@@ -99,6 +99,15 @@ export function compileDynamicWorkflow(source: string): CompiledDynamicWorkflow 
       checkForBinding(node.initializer); checkExpression(node.expression); checkStatement(node.statement); return;
     }
     if (ts.isWhileStatement(node)) { checkExpression(node.expression); checkStatement(node.statement); return; }
+    if (ts.isDoStatement(node)) { checkStatement(node.statement); checkExpression(node.expression); return; }
+    if (ts.isSwitchStatement(node)) {
+      checkExpression(node.expression);
+      for (const clause of node.caseBlock.clauses) {
+        if (ts.isCaseClause(clause)) checkExpression(clause.expression);
+        for (const clauseStatement of clause.statements) checkStatement(clauseStatement);
+      }
+      return;
+    }
     if (ts.isBlock(node)) { for (const statement of node.statements) checkStatement(statement); return; }
     if (ts.isBreakStatement(node) || ts.isContinueStatement(node)) {
       if (node.label) report(node, "DYN_UNSUPPORTED_SYNTAX", "Labeled break and continue are not supported.");
@@ -119,14 +128,32 @@ export function compileDynamicWorkflow(source: string): CompiledDynamicWorkflow 
       if ((node.flags & (ts.NodeFlags.Const | ts.NodeFlags.Let)) === 0) {
         report(node, "DYN_UNSUPPORTED_SYNTAX", "Only const and let loop declarations are supported.");
       }
-      if (node.declarations.length !== 1 || !ts.isIdentifier(node.declarations[0]!.name)) {
-        report(node, "DYN_UNSUPPORTED_SYNTAX", "Loop declarations need one simple identifier.");
+      if (node.declarations.length !== 1) {
+        report(node, "DYN_UNSUPPORTED_SYNTAX", "Loop declarations need exactly one binding.");
       }
       for (const declaration of node.declarations) {
+        checkBindingPattern(declaration.name);
         if (declaration.type) checkTypeSyntax(declaration.type);
         if (declaration.initializer) checkExpression(declaration.initializer);
       }
     } else checkExpression(node);
+  };
+
+  /** Binding patterns for declarations, for..of targets and arrow parameters. */
+  const checkBindingPattern = (node: ts.BindingName): void => {
+    if (ts.isIdentifier(node)) return;
+    if (!ts.isArrayBindingPattern(node) && !ts.isObjectBindingPattern(node)) {
+      report(node, "DYN_UNSUPPORTED_SYNTAX", "Only identifiers and destructuring patterns can be bound.");
+      return;
+    }
+    for (const element of node.elements) {
+      if (!ts.isBindingElement(element)) { report(element, "DYN_UNSUPPORTED_SYNTAX", "Omitted bindings are not supported."); continue; }
+      if (element.propertyName && !ts.isIdentifier(element.propertyName) && !ts.isStringLiteralLike(element.propertyName) && !ts.isNumericLiteral(element.propertyName)) {
+        report(element.propertyName, "DYN_UNSUPPORTED_SYNTAX", "Pattern property names must be literal keys.");
+      }
+      checkBindingPattern(element.name);
+      if (element.initializer) checkExpression(element.initializer);
+    }
   };
 
   const checkFor = (node: ts.ForStatement): void => {
@@ -156,6 +183,11 @@ export function compileDynamicWorkflow(source: string): CompiledDynamicWorkflow 
     if (path === "agent") {
       if (node.arguments.length > 2) report(node, "DYN_UNSUPPORTED_CALL", "agent accepts at most name and persona arguments.");
       recordSite(node, "actor", textLiteral(node.arguments[0]));
+      return false;
+    }
+    if (path === "ask") {
+      if (node.arguments.length !== 2) report(node, "DYN_UNSUPPORTED_CALL", "ask accepts an actor and one instructions argument.");
+      recordSite(node, "ask");
       return false;
     }
     if (path?.endsWith(".ask") || (ts.isPropertyAccessExpression(node.expression) && node.expression.name.text === "ask")) {
@@ -193,9 +225,9 @@ export function compileDynamicWorkflow(source: string): CompiledDynamicWorkflow 
     if (ts.isArrowFunction(node)) {
       if (!arrowAllowed) report(node, "DYN_UNSUPPORTED_SYNTAX", "Arrow functions are supported only as map/filter callbacks.");
       for (const parameter of node.parameters) {
-        if (!ts.isIdentifier(parameter.name)) report(parameter.name, "DYN_UNSUPPORTED_SYNTAX", "Destructured arrow parameters are not supported.");
+        checkBindingPattern(parameter.name);
         if (parameter.type) checkTypeSyntax(parameter.type);
-        if (parameter.initializer || parameter.dotDotDotToken || parameter.questionToken) report(parameter, "DYN_UNSUPPORTED_SYNTAX", "Arrow parameters must be required simple identifiers.");
+        if (parameter.dotDotDotToken) report(parameter, "DYN_UNSUPPORTED_SYNTAX", "Rest parameters are not supported.");
       }
       if (node.type) checkTypeSyntax(node.type);
       if (ts.isBlock(node.body)) checkStatement(node.body); else checkExpression(node.body);
@@ -212,25 +244,31 @@ export function compileDynamicWorkflow(source: string): CompiledDynamicWorkflow 
     }
     if (ts.isBinaryExpression(node)) {
       if (node.operatorToken.kind === ts.SyntaxKind.CommaToken) {
-        report(node, "DYN_UNSUPPORTED_SYNTAX", "Comma expressions are not supported.");
         checkExpression(node.left); checkExpression(node.right); return;
       }
       if (!isSupportedBinaryOperator(node.operatorToken.kind)) report(node.operatorToken, "DYN_UNSUPPORTED_SYNTAX", "This binary operator is not supported.");
       checkExpression(node.left); checkExpression(node.right); return;
     }
     if (ts.isPrefixUnaryExpression(node)) {
-      if (![ts.SyntaxKind.ExclamationToken, ts.SyntaxKind.PlusToken, ts.SyntaxKind.MinusToken, ts.SyntaxKind.PlusPlusToken].includes(node.operator)) {
+      if (![ts.SyntaxKind.ExclamationToken, ts.SyntaxKind.PlusToken, ts.SyntaxKind.MinusToken, ts.SyntaxKind.PlusPlusToken, ts.SyntaxKind.MinusMinusToken,
+           ts.SyntaxKind.TildeToken, ts.SyntaxKind.TypeOfKeyword, ts.SyntaxKind.VoidKeyword].includes(node.operator)) {
         report(node, "DYN_UNSUPPORTED_SYNTAX", "This unary operator is not supported.");
       }
       checkExpression(node.operand); return;
     }
     if (ts.isPostfixUnaryExpression(node)) {
-      if (node.operator !== ts.SyntaxKind.PlusPlusToken) report(node, "DYN_UNSUPPORTED_SYNTAX", "Only ++ updates are supported.");
+      if (node.operator !== ts.SyntaxKind.PlusPlusToken && node.operator !== ts.SyntaxKind.MinusMinusToken) report(node, "DYN_UNSUPPORTED_SYNTAX", "Only ++ and -- updates are supported.");
       checkExpression(node.operand); return;
     }
     if (ts.isConditionalExpression(node)) { checkExpression(node.condition); checkExpression(node.whenTrue); checkExpression(node.whenFalse); return; }
+    if (ts.isAsExpression(node) || ts.isTypeAssertionExpression(node) || ts.isSatisfiesExpression(node)) {
+      checkTypeSyntax(node.type);
+      checkExpression(node.expression); return;
+    }
+    if (ts.isTypeOfExpression(node) || ts.isVoidExpression(node)) { checkExpression(node.expression); return; }
+    if (ts.isSpreadElement(node)) { checkExpression(node.expression); return; }
+    if (ts.isCommaListExpression(node)) { for (const element of node.elements) checkExpression(element); return; }
     if (ts.isParenthesizedExpression(node) || ts.isAwaitExpression(node) || ts.isNonNullExpression(node)) {
-      if (ts.isNonNullExpression(node)) report(node, "DYN_UNSUPPORTED_SYNTAX", "TypeScript non-null assertions are not supported.");
       checkExpression(node.expression); return;
     }
     if (ts.isArrayLiteralExpression(node)) { for (const element of node.elements) checkExpression(element); return; }
@@ -245,7 +283,9 @@ export function compileDynamicWorkflow(source: string): CompiledDynamicWorkflow 
         } else if (ts.isShorthandPropertyAssignment(property)) {
           if (FORBIDDEN_PROPERTIES.has(property.name.text)) report(property.name, "DYN_FORBIDDEN_PROPERTY", `Property '${property.name.text}' is forbidden.`);
           checkExpression(property.name);
-        } else report(property, "DYN_UNSUPPORTED_SYNTAX", "Object methods, accessors, and spreads are not supported.");
+        } else if (ts.isSpreadAssignment(property)) {
+          checkExpression(property.expression);
+        } else report(property, "DYN_UNSUPPORTED_SYNTAX", "Object methods and accessors are not supported.");
       }
       return;
     }
@@ -275,5 +315,6 @@ function isSupportedBinaryOperator(kind: ts.SyntaxKind): boolean {
     ts.SyntaxKind.LessThanToken, ts.SyntaxKind.LessThanEqualsToken,
     ts.SyntaxKind.GreaterThanToken, ts.SyntaxKind.GreaterThanEqualsToken,
     ts.SyntaxKind.AmpersandAmpersandToken, ts.SyntaxKind.BarBarToken, ts.SyntaxKind.QuestionQuestionToken,
+    ts.SyntaxKind.InKeyword, ts.SyntaxKind.CommaToken,
   ].includes(kind);
 }

@@ -129,6 +129,52 @@ it("keeps runtime hook events free of tool inputs, results, and private session 
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
 
+it("projects the model trace ledger with correlated IDs while usage stays honest and secrets never land", async () => {
+  const { root, stateDir } = temp();
+  try {
+    const session = { id: sid, status: "running", steps: 1, active_turn_id: "turn-1", streaming: null };
+    const context = { session, store: {} as AgentContext["store"], provider: {} as AgentContext["provider"], stateDir, root, signal: new AbortController().signal, deadline: 1, options: {}, save: async () => {}, enabled: () => true, emit: () => {} } as unknown as AgentContext;
+    const ext = sessionsRuntimeEventsExtension() as AgentExtension & { recordEvent(context: AgentContext, event: AgentEvent): void };
+    await ext.beforeRun?.(context); await ext.runStarted?.(context);
+    ext.recordEvent(context, { type: "model_request_started", requestId: "req-1", attemptId: "att-1", selectionId: "sel-1", attempt: 1, maxAttempts: 3, modelId: "GLM-5.3", providerKind: "openai" });
+    ext.recordEvent(context, { type: "model_request_failed", requestId: "req-1", attemptId: "att-1", selectionId: "sel-1", attempt: 1, maxAttempts: 3, reason: "server_error", errorCode: "model_server_error", message: "provider said Bearer sk-secret-123 is invalid", retryable: true, terminal: false, statusCode: 503, durationMs: 40 });
+    ext.recordEvent(context, { type: "model_retry_scheduled", requestId: "req-1", attemptId: "att-1", selectionId: "sel-1", attempt: 1, nextAttempt: 2, maxAttempts: 3, delayMs: 120, reason: "server_error", errorCode: "model_server_error", message: "retry because sk-secret-123", statusCode: 503 });
+    ext.recordEvent(context, { type: "model_request_started", requestId: "req-1", attemptId: "att-2", selectionId: "sel-1", attempt: 2, maxAttempts: 3 });
+    ext.recordEvent(context, { type: "model_request_completed", requestId: "req-1", attemptId: "att-2", selectionId: "sel-1", attempt: 2, maxAttempts: 3, durationMs: 1500.5, queuedMs: 40.25, response: { contentChars: 12, toolCalls: 0 }, usage: { prompt_tokens: 10, completion_tokens: 5, total_tokens: 15, cache_read_input_tokens: "not-a-number" } });
+    ext.recordEvent(context, { type: "model_request_completed", requestId: "req-2", attemptId: "att-3", selectionId: "sel-1", attempt: 1, response: { contentChars: 3, toolCalls: 0 } });
+    ext.recordEvent(context, { type: "model_execution_fallback", selectionId: "sel-1", requestId: "req-2", attemptId: "att-3", attempt: 1, applied: true, from: { providerId: "account:temp", modelId: "GLM-5.3-Turbo" }, to: { providerId: "builtin:session", modelId: "GLM-5.3" }, toSource: "session_selection", reason: "execution_request_failed", providerErrorCode: "3402", statusCode: 400, settled: { streamId: "stream-9", textChars: 7, reasoningChars: 0, toolSnapshots: 1, truncated: false }, skipped: [{ source: "declared_target", providerId: "builtin:missing", modelId: "GLM-4", error: "lookup failed for Bearer sk-secret-123" }] });
+    session.status = "completed";
+    await ext.settleRun?.(context, true);
+    const page = createSessionRuntimeEventLog(stateDir, sid).readPage({ limit: 500 });
+    const serialized = JSON.stringify(page.events);
+    // Failure messages and skipped-candidate errors are not ledger material.
+    assert.equal(serialized.includes("secret"), false);
+    assert.equal(serialized.includes("Bearer"), false);
+    const requests = page.events.filter((row) => row.type === "ModelRequest");
+    assert.deepEqual(requests.map((row) => [row.payload.phase, row.payload.selectionId, row.payload.requestId, row.payload.attemptId]),
+      [["started", "sel-1", "req-1", "att-1"], ["failed", "sel-1", "req-1", "att-1"], ["started", "sel-1", "req-1", "att-2"], ["completed", "sel-1", "req-1", "att-2"], ["completed", "sel-1", "req-2", "att-3"]]);
+    assert.deepEqual(requests[3]?.payload.usage, { prompt_tokens: 10, completion_tokens: 5, total_tokens: 15 });
+    assert.equal(requests[3]?.payload.durationMs, 1500.5);
+    assert.equal(requests[3]?.payload.queuedMs, 40.25);
+    // A completion without provider usage keeps the field absent (unknown), never zero-filled.
+    assert.equal(Object.hasOwn(requests[4]!.payload, "usage"), false);
+    const retry = page.events.find((row) => row.type === "ModelRetry");
+    assert.deepEqual(retry?.payload, { requestId: "req-1", attemptId: "att-1", selectionId: "sel-1", attempt: 1, nextAttempt: 2, maxAttempts: 3, delayMs: 120, statusCode: 503, reason: "server_error", errorCode: "model_server_error" });
+    const fallback = page.events.find((row) => row.type === "ModelExecutionFallback");
+    assert.deepEqual(fallback?.payload, {
+      applied: true, selectionId: "sel-1", requestId: "req-2", attemptId: "att-3", attempt: 1,
+      reason: "execution_request_failed", providerErrorCode: "3402", statusCode: 400,
+      fromProviderId: "account:temp", fromModelId: "GLM-5.3-Turbo", toProviderId: "builtin:session", toModelId: "GLM-5.3", toSource: "session_selection",
+      skippedCount: 1, settled: { streamId: "stream-9", textChars: 7, reasoningChars: 0, toolSnapshots: 1, truncated: false },
+    });
+    // Diagnostic rows only: the recovery projection consumes none of them.
+    const recovered = recoverRuntimeProjection(page);
+    assert.equal(recovered.status, "completed");
+    assert.equal(recovered.transcript.length, 0);
+    assert.equal(Object.hasOwn(recovered.lastModelRequest ?? {}, "usage"), false);
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
 it("keeps the complete ledger while bounding each page to 500 events", () => {
   const { root, stateDir } = temp();
   try {

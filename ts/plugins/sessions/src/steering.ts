@@ -6,6 +6,7 @@ import { MediaArtifactStore } from "./media-store.ts";
 import { Owner } from "./media-owner.ts";
 import { mediaRefs, type QueueMediaContext } from "./queue-media.ts";
 import { MessageQueue } from "./queue.ts";
+import { boundaryAdmissionOrder, guidancePriority, guidanceWaitWindow } from "./steering-priority.ts";
 import { ACTIVE, checkRevision, itemSize, MAX_ITEM_BYTES, MAX_PENDING, MAX_PENDING_BYTES, QueueConflict, QueueNotFound, SID, trimHistory, type Row } from "./queue-types.ts";
 export class SteeringInbox extends MessageQueue {
   constructor(store: SessionStore, media?: QueueMediaContext) { super(store, media, "session-turn-inputs", "steering"); }
@@ -17,7 +18,7 @@ export class SteeringInbox extends MessageQueue {
     }
     return r;
   }
-  override publicItem(item: Row, position?: number): Row { return { ...super.publicItem(item, position), delivery: "guide", targetTurnId: item.target_turn_id ?? null, editable: false }; }
+  override publicItem(item: Row, position?: number): Row { return { ...super.publicItem(item, position), delivery: "guide", targetTurnId: item.target_turn_id ?? null, priority: guidancePriority(item), editable: false }; }
   async admitLocked(sid: string, text: string, turnId: string, requestId: string, fingerprint: string, prepared: Row | null = null): Promise<[Row, boolean]> {
     const replay = await this.replayLocked(sid, requestId, fingerprint); if (replay) return [replay, true];
     const record = this.read(sid), items = trimHistory(record.items), pending = items.filter((r) => ACTIVE.has(r.status));
@@ -31,7 +32,7 @@ export class SteeringInbox extends MessageQueue {
   }
 }
 const seenInputs = (session: Session): Set<unknown> => new Set([session.messages, session.archived_messages].flatMap((messages) => Array.isArray(messages) ? messages.filter(isDict).filter((row) => typeof row._input_id === "string").map((row) => row._input_id) : []));
-export async function beforeModelRequest(session: Session, store: SessionStore, stateDir?: string, enabled: (id: string) => boolean = () => true, maxInputs = Infinity): Promise<number> {
+export async function beforeModelRequest(session: Session, store: SessionStore, stateDir?: string, enabled: (id: string) => boolean = () => true, maxInputs = Infinity, boundary: "model_request" | "final_response" = "model_request"): Promise<number> {
   const sid = session.id, turn = session.active_turn_id;
   if (!enabled("sessions") || typeof sid !== "string" || !SID.test(sid) || typeof turn !== "string" || !turn || !store.directory) return 0;
   const inbox = new SteeringInbox(store, stateDir ? { stateDir, enabled } : undefined); if (!existsSync(inbox.path(sid))) return 0;
@@ -39,12 +40,14 @@ export async function beforeModelRequest(session: Session, store: SessionStore, 
     const record = inbox.read(sid), messages = session.messages ??= [];
     if (!Array.isArray(messages)) throw new PyValueError("session messages are invalid");
     const seen = seenInputs(session); let count = 0, changed = false;
-    for (const item of record.items as Row[]) {
+    // Priority scheduling: a live send-now takeover is admitted before plain guides;
+    // equal priorities keep durable FIFO order, so single-guide turns are unchanged.
+    for (const item of boundaryAdmissionOrder(record.items as Row[])) {
       if (!["queued", "running"].includes(item.status)) continue;
       if (seen.has(item.id)) { item.status = "completed"; delete item.prepared; item.updated_at = pyUtcNow(); changed = true; continue; }
       if (item.target_turn_id !== turn) { item.status = "paused"; item.pause_reason = "The target turn has ended; withdraw this input before submitting it again."; item.updated_at = pyUtcNow(); changed = true; continue; }
       if (count >= maxInputs) continue;
-      const p = item.prepared ?? {}, message: Row = { role: "user", content: p.text ?? item.text, _message_id: item.id, _input_id: item.id, _input_kind: "guide", _turn_id: turn, _request_id: item.submission.id };
+      const p = item.prepared ?? {}, message: Row = { role: "user", content: p.text ?? item.text, _message_id: item.id, _input_id: item.id, _input_kind: "guide", _turn_id: turn, _request_id: item.submission.id, _input_boundary: boundary };
       if (isDict(p.metadata)) message._composer_metadata = p.metadata;
       await inbox.media.finalize(sid, item, session);
       if (mediaRefs(p).length) {
@@ -54,7 +57,7 @@ export async function beforeModelRequest(session: Session, store: SessionStore, 
       }
       messages.push(message);
       try { await store.save(session); } catch (e) { messages.pop(); throw e; }
-      seen.add(item.id); item.status = "completed"; item.updated_at = pyUtcNow(); delete item.prepared; changed = true; count += 1;
+      seen.add(item.id); item.status = "completed"; item.updated_at = pyUtcNow(); item.delivered_boundary = boundary; delete item.prepared; changed = true; count += 1;
     }
     if (changed) await inbox.atomicSave(sid, { schema: 1, accepting: true, items: trimHistory(record.items) });
     return count;
@@ -84,7 +87,13 @@ export async function pendingSnapshot(session: Session, store: SessionStore, sta
     for (const item of r.items as Row[]) if (["queued", "running"].includes(item.status) && item.target_turn_id !== session.active_turn_id) { item.status = "paused"; item.pause_reason = "The target turn has ended; withdraw this input before submitting it again."; item.updated_at = pyUtcNow(); changed = true; }
     if (changed) await inbox.atomicSave(sid, { schema: 1, accepting: true, items: trimHistory(r.items) });
   }); else await settleTurn(session, store, stateDir);
-  const snapshot = await inbox.snapshot(sid); return { pending_guidance: snapshot.queued_messages, guidance_history: snapshot.queue_history };
+  const snapshot = await inbox.snapshot(sid), wait = guidanceWaitWindow(session);
+  // Inside a compaction or waiting-tool window same-turn inputs stay queued
+  // (preserved) and receipts stay trackable; nothing settles mid-window.
+  const pending_guidance = wait && (wait.compacting || wait.waiting)
+    ? snapshot.queued_messages.map((row: Row) => row.targetTurnId === wait.turnId ? { ...row, preserved: true } : row)
+    : snapshot.queued_messages;
+  return { pending_guidance, guidance_history: snapshot.queue_history };
 }
 export async function reservePromotion(queue: MessageQueue, sid: string, id: string, requestId: string, fp: string, turnId: string | null = null, revision?: unknown): Promise<[Row, boolean]> {
   const record = queue.read(sid), item = record.items.find((r: Row) => r.id === id); if (!item) throw new QueueNotFound("queued message not found");

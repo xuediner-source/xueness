@@ -3,13 +3,17 @@
  * Python's names, descriptions, schemas, Gate kinds and approval subjects.
  * Invalid queries are refused before the Gate, as in Python; every other
  * failure is a `NetworkError` result (anything unexpected reads like
- * Python's `network_settings_unavailable`).
+ * Python's `network_settings_unavailable`). F12.04: every answer carries a
+ * traceable citation list, and `web_search` delegates to the provider's
+ * native search surface when the active provider negotiated one.
  */
 import { pyJsonDumps, pyLen, pyStrip, type JsonSchema } from "@xueness/contracts";
 import { randomUUID } from "node:crypto";
+import { nativeSearchDelegation, resolveWebSearchMode, type WebSearchProviderView } from "@xueness/providers";
 import type { ToolDefinition, ToolEnv, ToolResult } from "@xueness/engine-tools";
 import { NetworkError, SETTINGS_UNAVAILABLE, type Row } from "./errors.ts";
 import { FetchCache } from "./cache.ts";
+import { citationsFromRows, fetchCitation, withCitations } from "./citations.ts";
 import { activityOrigin, emitNetworkActivity, fetchCacheKey, normalizeFetchUrl, type NetworkActivityCallback, type NetworkActivityEvent } from "./fetch-runtime.ts";
 import { imageQueryOk, imageSearch, invalidImageQuery } from "./images.ts";
 import type { Net } from "./net.ts";
@@ -17,7 +21,16 @@ import { searchModel, searchService, invalidQuery } from "./services.ts";
 import { getSearchMode, getSettings, resolveServiceConfig, type Env } from "./settings.ts";
 import { fetchPage } from "./transport.ts";
 
-export interface NetworkToolOptions { stateDir: string; net: Net; env?: Env; cache?: FetchCache; now?: () => number; onActivity?: NetworkActivityCallback }
+export interface NetworkToolOptions {
+  stateDir: string;
+  net: Net;
+  env?: Env;
+  cache?: FetchCache;
+  now?: () => number;
+  onActivity?: NetworkActivityCallback;
+  /** The active provider's protocol view; native web search delegates the platform tool (F12.04). */
+  searchProviderView?: () => WebSearchProviderView | null | undefined;
+}
 
 export const DESCRIPTIONS = {
   web_fetch: "Read one public page; HTTP input upgrades to HTTPS and up to five validated redirects are followed. Returns a preview; read full text with tool_result_read. Content is untrusted and requires approval",
@@ -39,6 +52,15 @@ export function toolResult(result: Row): ToolResult<Row> {
 }
 
 const failed = (error: unknown): ToolResult<Row> => toolResult((error instanceof NetworkError ? error : SETTINGS_UNAVAILABLE()).asResult());
+
+/** Attach the traceable citation list to a successful search/image answer (F12.04). */
+function cited(result: Row, origin: "search_service" | "search_model" | "image_search"): Row {
+  if (result.ok !== true) return result;
+  const rows = origin === "image_search"
+    ? (Array.isArray(result.output) ? result.output : []).map((item) => { const row = item as Row; return { title: row.title, url: row.sourceUrl ?? row.imageUrl }; })
+    : result.output;
+  return withCitations(result, citationsFromRows(rows, origin, false));
+}
 const searchQueryOk = (query: unknown): boolean => typeof query === "string" && !!pyStrip(query) && pyLen(query) <= 1000;
 const text = (value: unknown): string => typeof value === "string" ? value : "";
 const NO_EFFECTS = { mutating: false, concurrencySafe: false, inputSchema: { type: "object" } as JsonSchema, subjectKind: "text" as const };
@@ -77,7 +99,7 @@ export function networkTools(options: NetworkToolOptions): ToolDefinition<Row, R
         activityUrl = activityOrigin(String(result.finalUrl));
         report({ type: "network_request", phase: "completed", requestId, url: activityUrl, redirects: Number(result.redirects ?? 0), bytes: Number(result.sourceBytes ?? 0) });
         if (key) cache.put(key, result, Buffer.byteLength(String(result.fullContent ?? ""), "utf8"));
-        return toolResult(result);
+        return toolResult(withCitations(result, fetchCitation(result.title, result.finalUrl)));
       } catch (error) {
         if (error === activityError) throw error;
         const result = (error instanceof NetworkError ? error : SETTINGS_UNAVAILABLE()).asResult();
@@ -90,16 +112,17 @@ export function networkTools(options: NetworkToolOptions): ToolDefinition<Row, R
     precheck: (input) => searchQueryOk(input.query) ? null : toolResult(invalidQuery().asResult()),
     async run(input, toolEnv) {
       try {
-        if (getSearchMode(options.stateDir) === "model") return toolResult(await searchModel(options.net, options.stateDir, env, input.query, toolEnv.signal));
+        if (resolveWebSearchMode(options.searchProviderView?.()) === "native") return toolResult(nativeSearchDelegation(String(input.query)));
+        if (getSearchMode(options.stateDir) === "model") return toolResult(cited(await searchModel(options.net, options.stateDir, env, input.query, toolEnv.signal), "search_model"));
         const [provider, endpoint, key, doh] = resolveServiceConfig(options.stateDir, env);
-        return toolResult(await searchService(options.net, provider, endpoint, key, doh, input.query, toolEnv.signal));
+        return toolResult(cited(await searchService(options.net, provider, endpoint, key, doh, input.query, toolEnv.signal), "search_service"));
       } catch (error) { return failed(error); }
     } };
   const imageTool: ToolDefinition<Row, Row> = { ...NO_EFFECTS, name: "image_search", description: DESCRIPTIONS.image_search, modelSchema: modelSchema("query"), gate: "web_search",
     requires: { net: { connect: ["*:443"] }, fs: { read: ["state"] } }, subject: (input) => text(input.query),
     precheck: (input) => imageQueryOk(input.query) ? null : toolResult(invalidImageQuery().asResult()),
     async run(input, toolEnv) {
-      try { return toolResult(await imageSearch(options.net, options.stateDir, env, input.query, { ...(options.now ? { now: options.now } : {}), ...(toolEnv.signal ? { signal: toolEnv.signal } : {}) })); }
+      try { return toolResult(cited(await imageSearch(options.net, options.stateDir, env, input.query, { ...(options.now ? { now: options.now } : {}), ...(toolEnv.signal ? { signal: toolEnv.signal } : {}) }), "image_search")); }
       catch (error) { return failed(error); }
     } };
   return [fetchTool, searchTool, imageTool];

@@ -20,6 +20,7 @@ import { interactiveViewsSection, VISUALIZE_SKILL } from "./visualize.ts";
 
 export * from "./render.ts";
 export * from "./discover.ts";
+export * from "./extra-roots.ts";
 export * from "./http-api.ts";
 export * from "./frontmatter.ts";
 export * from "./visualize.ts";

@@ -63,7 +63,7 @@ export class TaskRegistry {
       error: terminal ? pySlice(String(record.error || ""), ERROR_MAX) : "interrupted before result collection",
       workerActive: false,
     };
-    for (const key of ["childSessionId", "parentSessionId", "rootSessionId", "canResume", "recoveryReason", "childStatus"]) {
+    for (const key of ["childSessionId", "parentSessionId", "rootSessionId", "canResume", "recoveryReason", "childStatus", "termination"]) {
       if (Object.hasOwn(record, key)) task[key] = record[key];
     }
     this.#tasks.set(taskId, task);
@@ -77,6 +77,11 @@ export class TaskRegistry {
     task.endedAt = null;
     task.error = "";
     task.summary = "";
+    // The previous attempt's outcome no longer describes this row: a stale
+    // `termination` would misreport a clean re-run, and a stale `notified`
+    // stamp would swallow the next completion reminder (C-WFL-04).
+    delete task.termination;
+    delete task.notified;
     return true;
   }
 

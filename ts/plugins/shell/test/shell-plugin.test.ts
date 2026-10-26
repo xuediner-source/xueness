@@ -126,9 +126,15 @@ describe("shell plugin", () => {
       const restarted = await host.configure("shell", { defaultTimeoutMs: 1000, passEnv: ["XUENESS_SHELL_PLUGIN_TOKEN"] });
       assert.deepEqual([restarted.state, restarted.activations], ["active", 2]);
       assert.match((await exec(kernel, printToken)).output, /visible/);
-      const slow = await exec(kernel, [process.execPath, "-e", "setTimeout(() => {}, 20000)"]);
-      assert.equal(slow.data.timedOut, true, slow.output);
-      assert.ok(slow.data.durationMs < 10_000, `timed out after ${slow.data.durationMs} ms`);
+      // auto_on_timeout: false keeps this on the kill path so the restart test
+      // still observes the configured deadline ending the command; the adopt
+      // path has its own file (auto-background.test.ts).
+      const slow = await runTool(kernel.tools.get("exec") as ToolDefinition, {
+        argv: [process.execPath, "-e", "setTimeout(() => {}, 20000)"], auto_on_timeout: false,
+      }, env);
+      assert.equal(slow.ok, false, slow.output);
+      assert.equal(slow.error?.code, "command_timeout");
+      assert.ok((slow.data as ExecData).durationMs < 10_000, `timed out after ${(slow.data as ExecData).durationMs} ms`);
     } finally {
       delete process.env.XUENESS_SHELL_PLUGIN_TOKEN;
       await host.dispose();

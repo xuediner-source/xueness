@@ -12,6 +12,8 @@ export function register(sub: Sub): void {
   group.add("start").add("id").add("--session", { required: true }).add("--digest", { required: true }).add("--approve", { action: "store_true" }).add("--allow-real", { action: "store_true" });
   group.add("cancel").add("id").add("--session", { required: true });
   group.add("apply").add("id").add("--session", { required: true }).add("--digest", { required: true }).add("--approve", { action: "store_true" });
+  group.add("diff").add("id").add("--session", { required: true });
+  group.add("revert").add("id").add("--session", { required: true }).add("--digest", { required: true }).add("--approve", { action: "store_true" });
 }
 
 export async function execute(cli: Cli): Promise<number | null> {
@@ -25,7 +27,9 @@ export async function execute(cli: Cli): Promise<number | null> {
   }
   const id = encodeURIComponent(String(args.id)), target = `${base}/${id}`;
   if (args.action === "show") return cli.report(await cli.api("GET", target));
+  if (args.action === "diff") return cli.report(await cli.api("GET", `${target}/diff`));
   if (args.action === "cancel") return cli.report(await cli.api("POST", `${target}/cancel`));
+  if (args.action === "revert") return cli.report(await cli.api("POST", `${target}/revert`, { digest: args.digest, confirmed: args.approve === true }));
   if (args.action === "apply") return cli.report(await cli.api("POST", `${target}/apply`, { digest: args.digest, confirmed: args.approve === true }));
   if (args.action === "start") {
     const started = await cli.api("POST", `${target}/start`, { digest: args.digest, confirmed: args.approve === true, allowReal: args.allow_real === true });

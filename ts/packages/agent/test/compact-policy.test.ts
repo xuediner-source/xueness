@@ -107,6 +107,7 @@ describe("ZCode compact selection", () => {
   });
   it("recognizes context overflow errors and the token gap", () => {
     assert.equal(isModelContextExceededError({ contextOverflow: true }), true);
+    assert.equal(isModelContextExceededError({ providerCode: "1261" }), true);
     assert.equal(isModelContextExceededError({ cause: { code: "context_length_exceeded" } }), true);
     assert.equal(isModelContextExceededError(new Error("This model's maximum context length is exceeded")), true);
     assert.equal(isModelContextExceededError(new Error("rate limited")), false);

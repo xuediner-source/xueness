@@ -114,6 +114,21 @@
       "id": "remote.goal_memory_controls",
       "name": "限定会话的目标与记忆整理协议",
       "nameEn": "Scoped goal and memory-curation protocol controls"
+    },
+    {
+      "id": "remote.projection_hydration",
+      "name": "冷启动会话投影 Hydration 与 schema 映射",
+      "nameEn": "Cold-start projection hydration and schema mapping"
+    },
+    {
+      "id": "remote.port_forwarding",
+      "name": "SSH 本地端口转发生命周期与诊断",
+      "nameEn": "SSH local port forwarding lifecycle and diagnostics"
+    },
+    {
+      "id": "remote.wsl_diagnostics",
+      "name": "WSL 检测与跨平台路径诊断",
+      "nameEn": "WSL detection and cross-platform path diagnostics"
     }
   ],
   "panels": [

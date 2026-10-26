@@ -2,6 +2,7 @@
 import type { JsonSchema } from '@xueness/contracts';
 import type { ToolDefinition } from '@xueness/engine-tools';
 import type { DynamicWorkflowService } from './dynamic-service.ts';
+import { blockedReminderFor, blockedReminders } from './dynamic-blocked-reminder.ts';
 import type { Row } from './plan.ts';
 
 const string: JsonSchema = { type: 'string', minLength: 1 };
@@ -29,10 +30,10 @@ export function dynamicWorkflowTools(options: Options): ToolDefinition[] {
     tool('workflow_script_run', 'Start or explicitly resume the exact reviewed script digest in the background. Requires approval and explicit allowReal for actors; existing host/model permissions still apply.',
       schema({ runId: id, digest: string, allowReal: { type: 'boolean' } }, ['runId', 'digest']), true,
       (service, sid, input) => service.start(sid, input.runId as string, { digest: input.digest as string, confirmed: true, allowReal: input.allowReal === true })),
-    tool('workflow_script_status', 'Read a script run, node results, pending questions and metadata events of this session.', schema({ runId: id }, ['runId']), false,
-      (service, sid, input) => service.get(sid, input.runId as string)),
-    tool('workflow_script_list', 'List native script runs owned by this session.', schema({}, []), false,
-      (service, sid) => service.list(sid)),
+    tool('workflow_script_status', 'Read a script run, node results, pending questions and metadata events of this session. A run paused on a question carries one blockedReminder to answer via workflow_script_resolve.', schema({ runId: id }, ['runId']), false,
+      async (service, sid, input) => { const run = await service.get(sid, input.runId as string); return { ...run, blockedReminder: blockedReminderFor(run) }; }),
+    tool('workflow_script_list', 'List native script runs owned by this session, with the deduped blockedReminders of runs paused on questions.', schema({}, []), false,
+      async (service, sid) => { const runs = await service.list(sid); return runs.map((run) => ({ ...run, blockedReminder: blockedReminderFor(run) })); }),
     tool('workflow_script_cancel', 'Cancel a native script run and drain its actors without replaying completed work.', schema({ runId: id }, ['runId']), true,
       (service, sid, input) => service.cancel(sid, input.runId as string)),
     tool('workflow_script_concurrency', 'Change this script run concurrency from 1 to 8; actor asks remain FIFO.', schema({ runId: id, maxConcurrency: limit }, ['runId', 'maxConcurrency']), true,

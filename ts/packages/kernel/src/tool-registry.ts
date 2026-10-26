@@ -21,6 +21,14 @@ export interface ToolDescriptor {
   readonly gate: string;
   readonly mutating: boolean;
   readonly concurrencySafe: boolean;
+  /** No side effect at all; defaults to `!mutating` when undeclared (see engine-tools `toolSafetyMetadata`). */
+  readonly readOnly?: boolean;
+  /** Destroys or irreversibly changes state; defaults to false. */
+  readonly destructive?: boolean;
+  /** Always enters the active request schema, in every runtime profile and selection view. */
+  readonly alwaysLoad?: boolean;
+  /** Stays in the registry catalog but is held out of request schemas until discovered and resolved deferred. */
+  readonly shouldDefer?: boolean;
   readonly requires?: CapabilityDeclaration;
 }
 
@@ -67,7 +75,13 @@ interface Entry {
 }
 
 const declaration = (tool: ToolDescriptor): ToolDescriptor =>
-  Object.freeze({ name: tool.name, gate: tool.gate, mutating: tool.mutating, concurrencySafe: tool.concurrencySafe });
+  Object.freeze({
+    name: tool.name, gate: tool.gate, mutating: tool.mutating, concurrencySafe: tool.concurrencySafe,
+    ...(tool.readOnly === undefined ? {} : { readOnly: tool.readOnly }),
+    ...(tool.destructive === undefined ? {} : { destructive: tool.destructive }),
+    ...(tool.alwaysLoad === undefined ? {} : { alwaysLoad: tool.alwaysLoad }),
+    ...(tool.shouldDefer === undefined ? {} : { shouldDefer: tool.shouldDefer }),
+  });
 
 export class ToolRegistry {
   readonly #entries = new Map<string, Entry>();

@@ -1,6 +1,8 @@
 # Xueness 0.2.1 source archive
 
-2026-10-24 当前交接入口：[完整项目交接](HANDOVER-20261024.md)、[最新 ZCode 差异审计](docs/audits/20261024/AUDIT.md)、[完整对齐任务清单（15 阶段 / 82 小轮次）](docs/ZCODE-FULL-ALIGNMENT-TASKS-20261024.md)。本机桌面端已安装 0.2.1，包含 33 个插件和 11 项内置技能；后续全面引擎对齐尚未实施。以下 Z1–Z8 资料保留为历史交付记录，当前基线与待办以新交接为准。
+2026-10-26 最新交接：[Windows 安装与全链路回归](HANDOVER-20261026-WINDOWS.md)。本版本含 35 个插件；原 17 项后端回归全部通过，全量 **2,328 通过、0 失败、62 项既有跳过**，正式桌面端 13 组 UI 交互与本地真实模型调用通过。
+
+2026-10-24 历史交接入口：[完整项目交接](HANDOVER-20261024.md)、[最新 ZCode 差异审计](docs/audits/20261024/AUDIT.md)、[完整对齐任务清单（15 阶段 / 82 小轮次）](docs/ZCODE-FULL-ALIGNMENT-TASKS-20261024.md)。本机桌面端已安装 0.2.1，包含 33 个插件和 11 项内置技能；后续全面引擎对齐尚未实施。以下 Z1–Z8 资料保留为历史交付记录，当前基线与待办以新交接为准。
 
 后端已完整迁移到 TypeScript（`ts/`），Python 后端在第 10 轮删除。使用入口、完整验收与迁移记录见
 [ts/README.md](ts/README.md) 和 [ts/HANDOVER.md](ts/HANDOVER.md)。

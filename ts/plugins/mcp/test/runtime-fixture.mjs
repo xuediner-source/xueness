@@ -1,10 +1,11 @@
 import { appendFileSync } from "node:fs";
 import { createInterface } from "node:readline";
 
-const flags = new Set(process.argv.slice(2).map((arg) => arg.replace(/^--/, "")));
+const flags = new Map(process.argv.slice(2).map((arg) => { const [k, v = "1"] = arg.replace(/^--/, "").split("="); return [k, v]; }));
 const send = (message) => process.stdout.write(JSON.stringify(message) + "\n");
 let tools = flags.has("dynamic-tools") ? [{ name: "echo", inputSchema: { type: "object" } }] : [{ name: "echo", inputSchema: { type: "object" } }];
 const record = (name, value) => { if (process.env[name]) appendFileSync(process.env[name], `${value}\n`); };
+record("MCP_PID_FILE", String(process.pid));
 process.on("SIGTERM", () => { record("MCP_CLOSE_FILE", "closed"); process.exit(0); });
 const lines = createInterface({ input: process.stdin });
 lines.on("close", () => record("MCP_CLOSE_FILE", "closed"));
@@ -16,7 +17,9 @@ lines.on("line", (line) => {
   if (method === "initialize") {
     record("MCP_INIT_FILE", "initialize");
     const resources = flags.has("subscriptions") ? { resources: { subscribe: true } } : flags.has("resources") ? { resources: {} } : {};
-    answer({ protocolVersion: params.protocolVersion, capabilities: { tools: {}, ...resources }, serverInfo: { name: "runtime-fixture" } });
+    const reply = () => answer({ protocolVersion: params.protocolVersion, capabilities: { tools: {}, ...resources }, serverInfo: { name: "runtime-fixture" } });
+    if (flags.has("slow-init")) return setTimeout(reply, Number(flags.get("slow-init")) || 0);
+    reply();
   } else if (method === "notifications/initialized") return;
   else if (method === "notifications/cancelled") { record("MCP_CANCEL_FILE", String(params.requestId)); return; }
   else if (method === "tools/list") answer({ tools });

@@ -258,7 +258,7 @@ export function SessionQueue({ items, queueRevision, cancellingId, currentId, on
                 <pre tabIndex={0}>{item.text}</pre>
               </details> : <p>{item.text}</p>}
             </div>
-            {item.status === "paused" && item.pause_reason && <small className="xn-session-queue__pause-reason">{tf("暂停原因：{0}", [item.pause_reason])}</small>}
+            {item.status === "paused" && item.pause_reason && <small className="xn-session-queue__pause-reason">{tf("暂停原因：{0}", [item.pause_reason === "stopped" ? tr("任务已停止") : item.pause_reason])}</small>}
           </div>
           <span className="xn-session-queue__mode"><CornerDownRight size={13} aria-hidden="true" />{tr('排队')}</span>
           <span className="xn-session-queue__status" data-status={item.status}>{statusLabel(item.status)}</span>

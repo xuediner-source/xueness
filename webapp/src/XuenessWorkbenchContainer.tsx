@@ -153,6 +153,7 @@ import { ConversationSelectionActions, type ConversationTextSelection } from './
 import { buildConversationFindMatches } from './plugins/sessions/ConversationFind';
 import { updateConversationMessage, parseConversationSnapshot } from './xuenessWorkbench';
 const McpElicitation = lazy(() => import('./plugins/mcp/ElicitationForm').then(module => ({ default: module.McpElicitation })));
+const McpAppsHost = lazy(() => import('./plugins/mcp/AppsUiHost').then(module => ({ default: module.McpAppsHost })));
 import { CommandReceiptRecovery, receiptGuardedQuestionTransport, canAdmitSessionMutation, canAdmitSessionFollowup, sessionFollowupProof } from './plugins/sessions/CommandReceiptRecovery';
 const PendingQuestion = lazy(() => import('./plugins/sessions/PendingQuestion').then(module => ({ default: module.PendingQuestion })));
 const QuestionResume = lazy(() => import('./plugins/sessions/PendingQuestion').then(module => ({ default: module.QuestionResume })));
@@ -3147,6 +3148,7 @@ export function XuenessWorkbenchContainer() {
             </div>
           )}
           {isPluginEffective("mcp") && <Suspense fallback={null}><McpElicitation sessionId={session.id} /></Suspense>}
+          {isPluginEffective("mcp") && <Suspense fallback={null}><McpAppsHost sessionId={session.id} /></Suspense>}
           <Suspense fallback={null}><PendingQuestion transport={primaryQuestionTransport} sessionId={session.id} pendingQuestion={session.status === "awaiting_user" ? session.pending_question : null}
             enabled={isPluginEffective("sessions")}
             disabled={busy || runRequestSessions.has(session.id)} onSubmitted={handleQuestionSubmitted} /></Suspense>

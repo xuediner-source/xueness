@@ -14,6 +14,7 @@ import {
   resolveRetryOptionsForBudget, retryBudgetAllows, retryBudgetMaxAttempts, type ClassifiedModelFailure, type ModelRetryOptions, type ResolvedModelRetryOptions, type ModelRequestAdmissionTicket,
 } from "@xueness/providers";
 import type { AgentContext, AgentExtension, Row } from "./types.ts";
+import { selectionIdOf } from "./execution-selection.ts";
 
 export interface ModelRetrySettings extends ModelRetryOptions {
   /** Defaults to "single-attempt" for the lightweight profile (its own `transportRetries` apply), else "default". */
@@ -26,6 +27,8 @@ export interface ModelRetrySettings extends ModelRetryOptions {
 /** What `modelRetryScheduled` observers and `model_retry_scheduled` events carry. */
 export interface ModelRetryInfo extends Row {
   requestId: string;
+  /** Run-stable selection identity shared with every model request event of the run. */
+  selectionId?: string;
   attempt: number;
   nextAttempt: number;
   /** 0 means unbounded (ZCode `UNBOUNDED_RETRY_MAX_ATTEMPTS`). */
@@ -53,10 +56,10 @@ export class ModelRetry {
   #modelInfo?: Row;
   #emptyRetries = 0;
 
-  constructor(context: AgentContext, now: () => number) {
+  constructor(context: AgentContext, now: () => number, budgetOverride?: ModelRetryBudget) {
     const settings = context.options.modelRetry;
     const lightweight = (context.session.runtime_profile ?? context.provider.runtimeProfile) === "lightweight";
-    this.budget = settings?.budget ?? (lightweight ? ModelRetryBudget.SingleAttempt : ModelRetryBudget.Default);
+    this.budget = budgetOverride ?? settings?.budget ?? (lightweight ? ModelRetryBudget.SingleAttempt : ModelRetryBudget.Default);
     this.retry = resolveRetryOptionsForBudget(resolveModelRetryOptions(settings), this.budget);
     this.#random = settings?.random ?? Math.random;
     this.#now = now;
@@ -68,7 +71,7 @@ export class ModelRetry {
 
   #base(context: AgentContext): Row {
     const provider = context.provider.upcomingProvider?.() ?? context.provider;
-    return { requestId: this.requestId, attemptId: this.#attemptId, attempt: this.#attempt,
+    return { requestId: this.requestId, attemptId: this.#attemptId, selectionId: selectionIdOf(context), attempt: this.#attempt,
       maxAttempts: retryBudgetMaxAttempts(this.budget, this.retry.maxAttempts), timestamp: new Date().toISOString(),
       ...this.#queuedMs === undefined ? {} : { queuedMs: this.#queuedMs },
       ...this.#modelInfo ?? {
@@ -92,6 +95,15 @@ export class ModelRetry {
     await this.#publish(context, "model_request_admitted", this.#base(context), extensions);
   }
   facts(context: AgentContext): Row { return this.#base(context); }
+  /** The current attempt's trace identity, for correlation on escaping errors. */
+  attemptFacts(context: AgentContext): { requestId: string; attemptId: string; attempt: number; selectionId: string; modelId?: string; providerKind?: string } {
+    const base = this.#base(context);
+    return {
+      requestId: this.requestId, attemptId: this.#attemptId, attempt: this.#attempt, selectionId: selectionIdOf(context),
+      ...typeof base.modelId === "string" ? { modelId: base.modelId } : {},
+      ...typeof base.providerKind === "string" ? { providerKind: base.providerKind } : {},
+    };
+  }
   #duration(): number { return this.#started === null ? 0 : Math.max(0, (this.#now() - this.#started) * 1000); }
 
   async started(context: AgentContext, extensions: readonly AgentExtension[]): Promise<void> {

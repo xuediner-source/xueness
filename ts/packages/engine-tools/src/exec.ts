@@ -16,7 +16,7 @@ import type { BackgroundTaskInfo, BackgroundTasks } from "./background.ts";
 import { EXEC_BACKGROUND_DEFAULT_TIMEOUT_MS, EXEC_BACKGROUND_MAX_TIMEOUT_MS, startBackgroundTask } from "./exec-tasks.ts";
 import { cleanTerminalText } from "./output-capture.ts";
 import { resolveWorkspacePath } from "./paths.ts";
-import { runProcess, type ProcessResult } from "./process.ts";
+import { runProcess, type DeadlineHandoff, type ProcessResult } from "./process.ts";
 import { failure, statOrNull, type ToolDefinition, type ToolEnv, type ToolResult } from "./tool.ts";
 import { persistedOutputEnvelope } from "./zcode-text.ts";
 
@@ -33,6 +33,8 @@ export interface ExecInput {
   timeout_ms?: number;
   description?: string;
   background?: boolean;
+  /** Opt out of moving a foreground command to a background task at its timeout. */
+  auto_on_timeout?: boolean;
 }
 
 export interface ExecStreamInfo {
@@ -155,6 +157,19 @@ export function shellQuote(word: string): string {
   return /^[A-Za-z0-9_@%+=:,./-]+$/.test(word) ? word : `'${word.replace(/'/g, "'\\''")}'`;
 }
 
+/**
+ * ZCode bash-background-policy isBashAutoBackgroundEligible: an explicit
+ * background call is not a candidate, an empty command is not, and `sleep`
+ * (the probe of choice for a timeout) must die at its deadline instead of
+ * occupying a background slot. Direct argv runs are eligible.
+ */
+export function isAutoBackgroundEligible(input: Pick<ExecInput, "command" | "argv" | "background" | "auto_on_timeout">): boolean {
+  if (input.background === true || input.auto_on_timeout === false) return false;
+  if (input.command === undefined) return (input.argv?.length ?? 0) > 0;
+  const command = input.command.trim();
+  return command.length > 0 && command.split(/\s+/)[0] !== "sleep";
+}
+
 /** What the call runs, as one line: the shell command, or the argv words quoted. */
 export function execSubject(input: Pick<ExecInput, "command" | "argv">): string {
   return input.command ?? (input.argv ?? []).map(shellQuote).join(" ");
@@ -176,6 +191,8 @@ export function createExecTool(options: ExecOptions = {}): ToolDefinition<ExecIn
       "Long output keeps its beginning and end; the full output is saved to a file whose path is shown. stdin is closed.",
       "With background: true the command keeps running and a task id comes back at once (servers, watchers, long builds);",
       `read it with exec_output, stop it with exec_kill. A background task's timeout defaults to ${EXEC_BACKGROUND_DEFAULT_TIMEOUT_MS / 60_000} min (max ${EXEC_BACKGROUND_MAX_TIMEOUT_MS / 3_600_000} h).`,
+      "Without background, a command that reaches its timeout is moved to a background task and keeps running (auto_on_timeout) when it is eligible;",
+      "sleep and commands started where background tasks are unavailable are killed at the deadline instead.",
     ].join(" "),
     inputSchema: {
       type: "object",
@@ -187,6 +204,7 @@ export function createExecTool(options: ExecOptions = {}): ToolDefinition<ExecIn
         timeout_ms: { type: "integer", minimum: 1, maximum: EXEC_BACKGROUND_MAX_TIMEOUT_MS, description: `At most ${EXEC_MAX_TIMEOUT_MS} unless background is true.` },
         description: { type: "string", maxLength: 200, description: "Short description shown to the user." },
         background: { type: "boolean", description: "Start the command as a background task and return its id at once." },
+        auto_on_timeout: { type: "boolean", description: "Move this foreground command to a background task when it reaches its timeout (default true when background tasks are available)." },
       },
     },
     subject: execSubject,
@@ -233,17 +251,51 @@ export function createExecTool(options: ExecOptions = {}): ToolDefinition<ExecIn
       const spoolDir = join(env.artifactsDir, "exec");
       await mkdir(spoolDir, { recursive: true, mode: 0o700 });
       const stem = `${new Date().toISOString().replace(/[:.]/g, "-")}-${randomBytes(4).toString("hex")}`;
+      // A qualifying command whose deadline arrives is handed to the task
+      // manager alive (C-TOOL-08): its own background timeout applies from
+      // there, the parent cancel link is released, and the run comes back as
+      // a task id instead of a timeout.
+      let adoptedTask: BackgroundTaskInfo | undefined;
+      const deadline = (() => {
+        const manager = options.tasks;
+        if (!manager || !isAutoBackgroundEligible(input)) return undefined;
+        return {
+          canAdopt: () => manager.canAdopt(),
+          adopt: async (handoff: DeadlineHandoff): Promise<boolean> => {
+            const logDir = join(env.artifactsDir, "tasks");
+            await mkdir(logDir, { recursive: true, mode: 0o700 });
+            const info = await manager.adopt({
+              child: handoff.child, cwd: invocation.cwd, cwdDisplay: cwd.display, command: display,
+              timeoutMs: options.backgroundTimeoutMs ?? EXEC_BACKGROUND_DEFAULT_TIMEOUT_MS,
+              logDir, owner: env.owner ?? null, beganAt: handoff.startedAt, carried: handoff.carried,
+            });
+            adoptedTask = info ?? undefined;
+            return info !== null;
+          },
+        };
+      })();
       const result = await runProcess({
         file, args, cwd: invocation.cwd, env: invocation.env, timeoutMs,
         maxCaptureBytes: options.maxCaptureBytes ?? EXEC_MAX_CAPTURE_BYTES,
         spool: { stdout: join(spoolDir, `${stem}.stdout.log`), stderr: join(spoolDir, `${stem}.stderr.log`) },
         ...(invocation.windowsVerbatimArguments ? { windowsVerbatimArguments: true } : {}),
         ...(env.signal ? { signal: env.signal } : {}),
+        ...(deadline ? { onDeadline: deadline } : {}),
       });
       const data: ExecData = {
         command: display, exitCode: result.exitCode, signal: result.signal, timedOut: result.timedOut,
         cancelled: result.cancelled, durationMs: result.durationMs, stdout: streamInfo(result.stdout), stderr: streamInfo(result.stderr),
       };
+      if (result.adopted && adoptedTask) {
+        const task = adoptedTask;
+        const notice = [
+          `Command exceeded its foreground timeout of ${timeoutMs}ms and was moved to the background with ID: ${task.id}.`,
+          `Output is being written to: ${task.stdout.path} (stderr: ${task.stderr.path}).`,
+          `It is stopped after ${Math.round(task.timeoutMs / 1000)}s. Check it with exec_output (task_id "${task.id}"), stop it with exec_kill.`,
+        ].join(" ");
+        const output = [render(result, display), notice].filter(Boolean).join("\n");
+        return { ok: true, output, data: task };
+      }
       if (result.spawnError) {
         const missing = result.spawnError.code === "ENOENT";
         const message = missing ? `command not found: ${file}` : `could not start ${file}: ${result.spawnError.message}`;

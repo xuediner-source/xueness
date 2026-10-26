@@ -9,6 +9,7 @@ import { atomicWriteJson } from "@xueness/sessions";
 import { isLink } from "./files.ts";
 import type { Row } from "./load.ts";
 import { FEATURE_FILENAME, loadTrust, MAX_TRUST_RECORDS, TRUST_FILENAME, TRUST_SCHEMA_VERSION } from "./trust.ts";
+import { authorizationRevision } from "./revision.ts";
 import { displayCommand } from "./workspace.ts";
 
 export function setFeature(stateDir: string, enabled: unknown): Row {
@@ -28,17 +29,32 @@ export function grantTrust(stateDir: string, workspace: string, rows: readonly R
   const loaded = loadTrust(stateDir);
   if (loaded.status === "corrupt") return { ok: false, reason: "trust_store_corrupt", trustStatus: "corrupt", corruptPath: loaded.corruptPath };
   const records = [...loaded.records];
-  const existing = new Set(records.map((record) => JSON.stringify([record.workspace, record.digest])));
+  const existing = new Map(records.map((record, index) => [JSON.stringify([record.workspace, record.digest]), index]));
   const stamp = now || pyUtcNow();
+  // F07.03: each grant is bound to the configuration revision it was reviewed against.
+  const revision = authorizationRevision(stateDir, workspace);
   let granted = 0;
+  let added = 0;
   for (const row of rows) {
     const key = JSON.stringify([workspace, row.digest]);
-    if (existing.has(key)) continue;
-    existing.add(key);
-    records.push({ workspace, digest: row.digest, decision: "trusted", grantedAt: stamp, eventAtGrant: row.event, displayCommandAtGrant: displayCommand(row), sourcePathAtGrant: row.sourceRelative });
+    const fresh = { workspace, digest: row.digest, decision: "trusted", grantedAt: stamp, eventAtGrant: row.event,
+      displayCommandAtGrant: displayCommand(row), sourcePathAtGrant: row.sourceRelative, configRevisionAtGrant: revision };
+    const index = existing.get(key);
+    if (index === undefined) {
+      existing.set(key, records.length);
+      records.push(fresh);
+      granted += 1; added += 1;
+      continue;
+    }
+    // A record reviewed under an earlier revision is re-stamped in place: the
+    // user just re-reviewed this declaration, so keeping the old revision
+    // would leave the hook pending forever (re-granting could never restore it).
+    const record = records[index]!;
+    if (record.configRevisionAtGrant === revision) continue;
+    records[index] = fresh;
     granted += 1;
   }
-  if (granted && records.length > MAX_TRUST_RECORDS) return { ok: false, reason: "trust_store_full", trustStatus: "ok", corruptPath: null };
+  if (added && records.length > MAX_TRUST_RECORDS) return { ok: false, reason: "trust_store_full", trustStatus: "ok", corruptPath: null };
   if (granted && !writeTrust(join(stateDir, TRUST_FILENAME), records)) return { ok: false, reason: "trust_store_write_failed", trustStatus: loaded.status, corruptPath: null };
   return { ok: true, granted, records, trustStatus: "ok", corruptPath: null };
 }

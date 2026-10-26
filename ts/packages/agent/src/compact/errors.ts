@@ -27,7 +27,7 @@ export class CompactionError extends Error {
   }
 }
 
-const MARKERS = new Set(["model_context_exceeded", "context_exceeded", "context_length_exceeded", "context_window_exceeded", "model_context_window_exceeded", "prompt_too_long"]);
+const MARKERS = new Set(["model_context_exceeded", "context_exceeded", "context_length_exceeded", "context_window_exceeded", "model_context_window_exceeded", "prompt_too_long", "1261"]);
 const isMarker = (value: unknown): boolean => typeof value === "string" && MARKERS.has(value.trim().toLowerCase());
 function isOverflowMessage(value: unknown): boolean {
   const message = typeof value === "string" ? value.trim().toLowerCase() : "";
@@ -48,7 +48,7 @@ export function isModelContextExceededError(error: unknown): boolean {
     const record = current as Row;
     if (record.contextOverflow === true || record.context_overflow === true) return true;
     if (record.category === "context_overflow") return true;
-    if (isMarker(record.type) || isMarker(record.code) || isMarker(record.reason) || isMarker(record.stopReason) || isOverflowMessage(record.message)) return true;
+    if (isMarker(record.type) || isMarker(record.code) || isMarker(record.providerCode) || isMarker(record.reason) || isMarker(record.stopReason) || isOverflowMessage(record.message)) return true;
     const context = record.context && typeof record.context === "object" ? record.context as Row : undefined;
     if (context && (isMarker(context.type) || isMarker(context.code) || isMarker(context.reason))) return true;
     current = record.cause ?? record.lastError ?? record.error;

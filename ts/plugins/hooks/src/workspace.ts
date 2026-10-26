@@ -193,7 +193,7 @@ export function discover(root: unknown): Discovery {
       parsed = parsed.slice(0, MAX_HOOKS_PER_WORKSPACE - rows.length);
       diagnostics.push(diagnostic("hook_limit", "warning", `only the first ${MAX_HOOKS_PER_WORKSPACE} workspace hooks are read`, path));
     }
-    sources.push({ kind, path: relative, enabled: sourceEnabled });
+    sources.push({ kind, path: relative, file: path, enabled: sourceEnabled });
     rows.push(...parsed);
   });
   const seen = new Set<string>(); const unique: Row[] = [];

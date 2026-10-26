@@ -27,10 +27,29 @@ export interface ToolEnv {
   /** Where full command output goes. Must be outside the workspace. */
   artifactsDir: string;
   signal?: AbortSignal;
+  /**
+   * Queue-aware deadline for this call (C-TOOL-06): a tool whose run issues a
+   * nested model request pauses the countdown while that request queues and
+   * resumes it on admission, so queue time is never charged to the tool.
+   */
+  deadlineControl?: { pause(): void; resume(): void } | null;
   /** Who is calling (a session id); background tasks are only visible to their owner. */
   owner?: string;
   /** Host-bound result source; a child uses its own session even with a shared kernel. */
   currentSession?: () => Record<string, unknown> | null;
+  /**
+   * Host-bound for a subagent child run (F08.03): raises one blocking question
+   * to the parent coordinator. Absent everywhere else, which is how the
+   * `respond_to_coordinator` tool refuses to run outside a child.
+   */
+  escalationPort?: { escalate(question: string, requestId: string): Record<string, unknown> };
+  /**
+   * Host-bound for a run attached to an external bot channel (F12.05): sends
+   * one additional reply through that channel's authorized binding. The host
+   * alone resolves the task/input identity of the send; absent in every run
+   * without a channel binding, which is how `reply_to_channel` refuses.
+   */
+  channelReplyPort?: { reply(parts: ReadonlyArray<Record<string, unknown>>): Promise<Record<string, unknown>> };
   /** What the selected model accepts besides text (Read attaches PDFs only with `pdf`). */
   modelInput?: { image?: boolean; pdf?: boolean };
 }
@@ -68,6 +87,21 @@ export interface ToolDefinition<I = Record<string, unknown>, D = unknown> {
   mutating: boolean;
   /** A pure read that may run concurrently with other safe calls. */
   concurrencySafe: boolean;
+  /** No side effect at all; defaults to `!mutating`. Advisory only: the Gate, not this flag, authorizes a call. */
+  readOnly?: boolean;
+  /** Destroys or irreversibly changes state (deletes, force overwrites); defaults to false. */
+  destructive?: boolean;
+  /** Always enters the active request schema, in every runtime profile and selection view. */
+  alwaysLoad?: boolean;
+  /**
+   * Per-call deadline in ms charged to active execution only (C-TOOL-06):
+   * time a nested model request spends queued does not count (see ToolEnv
+   * deadlineControl), and exceeding it settles as a `tool_timeout` result
+   * whose data separates `queuedMs` from active time.
+   */
+  timeoutMs?: number;
+  /** Stays in the registry catalog but is held out of request schemas until discovered (F02.02) and resolved through the deferred-call path (F02.03). */
+  shouldDefer?: boolean;
   /** Powers the tool needs from its plugin's grant; the kernel refuses to register it otherwise. */
   requires: CapabilityDeclaration;
   /** What a permission decision is about: a path, a command, a task id. Defaults by gate kind. */
@@ -84,6 +118,31 @@ export interface ToolDefinition<I = Record<string, unknown>, D = unknown> {
 /** What the read-only and the writing file tools need. */
 export const READS_WORKSPACE: CapabilityDeclaration = Object.freeze({ fs: Object.freeze({ read: Object.freeze(["workspace"] as const) }) });
 export const WRITES_WORKSPACE: CapabilityDeclaration = Object.freeze({ fs: Object.freeze({ write: Object.freeze(["workspace"] as const) }) });
+
+/** Normalized safety metadata for any tool descriptor; declared values win, undeclared fields follow the documented defaults. */
+export interface ToolSafetyMetadata { readOnly: boolean; mutating: boolean; destructive: boolean; concurrencySafe: boolean }
+
+/**
+ * Deterministic defaults for tools whose plugin does not declare a field:
+ * `readOnly` falls back to `!mutating`, `destructive` to false, and an absent
+ * `concurrencySafe` to the read-only verdict. These flags describe behavior
+ * for scheduling and exposure; authorization stays with the Gate.
+ */
+export function toolSafetyMetadata(tool: { mutating?: boolean; concurrencySafe?: boolean; readOnly?: boolean; destructive?: boolean }): ToolSafetyMetadata {
+  const mutating = tool.mutating === true;
+  const readOnly = (tool.readOnly ?? !mutating) === true;
+  return { readOnly, mutating, destructive: tool.destructive === true, concurrencySafe: (tool.concurrencySafe ?? readOnly) === true };
+}
+
+/** How a tool enters request schemas: `always` beats `deferred`; an unclassified tool is `default`. */
+export type ToolExposure = "always" | "deferred" | "default";
+
+/** Exposure classification from the declared metadata; only visibility, never permissions. */
+export function toolExposure(tool: { alwaysLoad?: boolean; shouldDefer?: boolean }): ToolExposure {
+  if (tool.alwaysLoad === true) return "always";
+  if (tool.shouldDefer === true) return "deferred";
+  return "default";
+}
 
 export class ArtifactsInsideWorkspaceError extends Error {
   override name = "ArtifactsInsideWorkspaceError";

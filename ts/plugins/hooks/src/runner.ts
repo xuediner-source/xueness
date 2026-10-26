@@ -101,6 +101,13 @@ export interface FireOptions {
   signal?: AbortSignal;
   shouldRun?: () => boolean;
   admitWorkspaceHook?: (origin: WorkspaceHookOrigin) => boolean;
+  /**
+   * F07.02: the matcher subjects for this firing. `undefined` keeps the
+   * default (the tool name for tool events, none otherwise); an array matches
+   * those values (SessionStart matches its `source`); `null` skips the
+   * matcher entirely, as upstream does for UserPromptSubmit and Stop.
+   */
+  subjects?: readonly string[] | null;
 }
 
 export class HookRunner {
@@ -162,16 +169,23 @@ export class HookRunner {
 
   /** Python `fire`: every selected hook, one after another; [] when disabled or unmatched. */
   async fire(event: string, payload: unknown, options: FireOptions = {}): Promise<HookResult[]> {
-    const subjects: string[] = [];
-    if (isDict(payload) && TOOL_EVENTS.includes(event)) {
-      const name = payload.tool_name || payload.tool;
-      subjects.push(typeof name === "string" ? name : "");
-      if (options.alias && options.alias !== subjects[0]) subjects.push(options.alias);
+    let matches: Row[];
+    if (options.subjects === null) {
+      matches = this.enabled ? this.hooks.filter((hook) => isDict(hook) && hook.event === event) : [];
+    } else {
+      const subjects: string[] = [];
+      if (options.subjects !== undefined) subjects.push(...options.subjects);
+      else if (isDict(payload) && TOOL_EVENTS.includes(event)) {
+        const name = payload.tool_name || payload.tool;
+        subjects.push(typeof name === "string" ? name : "");
+        if (options.alias && options.alias !== subjects[0]) subjects.push(options.alias);
+      }
+      matches = this.matches(event, subjects);
     }
-    let matches = this.matches(event, subjects);
     if (POST_PIPELINE_EVENTS.includes(event)) matches = matches.filter((hook) => pyTruthy(hook.pipeline) === (options.pipeline ?? false));
     if (!matches.length) return [];
-    const data = isDict(payload) ? payload : { payload };
+    // F07.02 wire protocol: every stdin payload names its event, whatever the caller passed in.
+    const data: Row = isDict(payload) ? { ...payload, hook_event_name: event } : { payload, hook_event_name: event };
     const results: HookResult[] = [];
     for (const hook of matches) {
       if (options.signal?.aborted || options.shouldRun?.() === false) break;

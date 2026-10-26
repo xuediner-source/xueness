@@ -2,6 +2,7 @@
 import { isDict, PyValueError } from "@xueness/contracts";
 import { explicitRequestDeadline, notifyStreamCallback, ProviderRequestError, reportedUsage, type ProviderCallOptions, type StreamObservers } from "@xueness/providers";
 import { SubscriptionRequestError, type SubscriptionBroker } from "./broker.ts";
+import { EntitlementClient, EntitlementTickets } from "./entitlements.ts";
 import { definition } from "./state.ts";
 
 type Row = Record<string, unknown>;
@@ -25,12 +26,21 @@ export class NativeProvider {
   readonly reasoningEffort: string | null;
   private readonly broker: SubscriptionBroker;
   private readonly requireAvailable: () => void;
+  /** The user-authorized entitlement service for this account, when configured. */
+  private readonly entitlement: EntitlementClient | null;
+  private readonly tickets = new EntitlementTickets();
   constructor(broker: SubscriptionBroker, requireAvailable: () => void, record: Row, reasoningEffort: string | null = null) {
     this.broker = broker; this.requireAvailable = requireAvailable; this.reasoningEffort = reasoningEffort;
     this.accountId = String(record.subscriptionId); this.model = String(record.model); this.base = String(record.baseUrl);
     this.capabilities = new Set(Array.isArray(record.capabilities) ? record.capabilities.map(String) : []);
     this.contextWindow = typeof record.contextWindow === "number" ? record.contextWindow : null;
     this.maxOutputTokens = typeof record.maxOutputTokens === "number" ? record.maxOutputTokens : null;
+    const configured = record.entitlement;
+    const base = typeof configured === "object" && configured !== null && !Array.isArray(configured) ? (configured as Row).base : null;
+    const token = typeof configured === "object" && configured !== null && !Array.isArray(configured) ? (configured as Row).token : null;
+    this.entitlement = typeof base === "string" && base.trim() && typeof token === "string" && token.trim()
+      ? new EntitlementClient({ base, token })
+      : null;
   }
 
   complete(messages: Row[], tools: Row[], options: ProviderCallOptions = {}): Promise<Row> { return this.stream(messages, tools, {}, options); }
@@ -45,7 +55,15 @@ export class NativeProvider {
     let result: Row;
     try {
       const deadline = explicitRequestDeadline(this);
-      result = await this.broker.call("generate", this.accountId, { model: this.model, messages, tools: tools ?? [], sessionId: this.sessionId, reasoningEffort: this.reasoningEffort, maxTokens: this.maxOutputTokens },
+      // The real ticket path: when the account has a configured entitlement
+      // service, every generate carries a freshly issued (cached-until-expiry)
+      // ticket; without one the request runs exactly as before.
+      let ticket: string | null = null;
+      if (this.entitlement) {
+        const issued = await this.tickets.get("generate:" + this.accountId, (scope) => this.entitlement!.ticket(scope));
+        ticket = issued.ticket;
+      }
+      result = await this.broker.call("generate", this.accountId, { model: this.model, messages, tools: tools ?? [], sessionId: this.sessionId, reasoningEffort: this.reasoningEffort, maxTokens: this.maxOutputTokens, ...(ticket === null ? {} : { ticket }) },
         { onChunk: emit, requestDeadline: deadline, signal: options.signal ?? null });
     } catch (error) {
       if (error instanceof SubscriptionRequestError) throw new ProviderRequestError({ status: error.status, category: error.category, contextOverflow: error.category === "context_overflow", stage: "response", exceptionType: "SubscriptionRequestError" });

@@ -1,11 +1,13 @@
 import { isDict, pyJsonDumps, PyValueError } from "@xueness/contracts";
 import { finishReason, incompleteReason, isStreamStop, PAUSE_MESSAGES, ProviderCallbackError, ProviderRequestError, recordFailure } from "@xueness/providers";
+import { AcceptedCallLedger, settleStreamToolCalls } from "./accepted-call-ledger.ts";
 import { compact } from "./compaction.ts";
 import { currentTurnToolIds, recordCompletionHistory, toolExecutionStatus, turnId } from "./completion.ts";
 import { assessFinal, effectiveExtensions, finalize } from "./finalize.ts";
 import { isOutputTokenLimit, lastUserMessageId, MAX_OUTPUT_TOKEN_CONTINUATIONS, repeatedToolCallReminders, withContinuationPrompts, type RepeatedCallState } from "./loop-guards.ts";
 import { validateMessage } from "./messages.ts";
 import { performModelRequest } from "./model-request.ts";
+import { applyExecutionSelectionFallback } from "./execution-selection.ts";
 import { RequestStream } from "./stream.ts";
 import { retainReasoningMetadata } from "@xueness/providers";
 import { runTools } from "./tools.ts";
@@ -47,6 +49,20 @@ export async function driveRun(context: AgentContext, runner: AgentRunnerOptions
   await context.save();
   let protocolRepairs = 0;
   const repeated: RepeatedCallState = { streak: 0, warnings: 0 };
+  // C-MDL-03: one accepted-call ledger per run — accepted stream tool calls settle
+  // exactly once across interrupt, execution-selection switch, cancel and resume.
+  const ledger = new AcceptedCallLedger();
+  const settleDyingStream = (stream: RequestStream | null, cause: "model_interrupt" | "execution_fallback" | "cancelled"): void => {
+    if (!stream) return;
+    settleStreamToolCalls({
+      streamId: typeof stream.record.id === "string" ? stream.record.id : null,
+      turnId: String(session.active_turn_id ?? turnId(session)),
+      committed: stream.committed,
+      acceptedCalls: stream.acceptedToolCalls(),
+      preludeFragments: stream.discardedPreludeFragments(),
+      cause, ledger, session,
+    });
+  };
   let human = lastUserMessageId(session.messages as Row[]);
   const continued = new Set<string>();
   let continuations = 0;
@@ -131,7 +147,17 @@ export async function driveRun(context: AgentContext, runner: AgentRunnerOptions
       try { validateMessage(response, Object.keys(session.results as Row)); }
       catch { throw new ProviderRequestError({ category: "invalid_response", stage: "parse", exceptionType: "ValueError" }); }
     } catch (error) {
-      if (stream) await stream.interrupt();
+      // Execution-selection fallback precedes generic failure handling: with a declared
+      // fallback the temporary model gets one physical attempt, settles whatever its
+      // stream already accepted, and the turn continues on the original/session model
+      // instead of retrying the failed endpoint. A matched failure with no target keeps
+      // the original error and terminates below.
+      const executionFallback = await applyExecutionSelectionFallback(context, error, {
+        stream, stopped: stopped(),
+        ledger: { ledger, session, turnId: String(session.active_turn_id ?? turnId(session)) },
+      });
+      if (executionFallback.applied) { step -= 1; continue; }
+      if (!executionFallback.matched && stream) { settleDyingStream(stream, stopped() ? "cancelled" : "model_interrupt"); await stream.interrupt(); }
       if (stopped()) { await settle("stopped"); return; }
       if (!context.enabled("providers")) { await settle("paused", "providers plugin disabled"); return; }
       if (isStreamStop(error) && !expired()) { await settle("stopped"); return; }
@@ -145,8 +171,8 @@ export async function driveRun(context: AgentContext, runner: AgentRunnerOptions
       else await settle("paused", error instanceof ProviderCallbackError ? "local stream callback failed" : "local run failed");
       throw error;
     }
-    if (stopped()) { if (stream) await stream.interrupt(); await settle("stopped"); return; }
-    if (expired()) { if (stream) await stream.interrupt(); await wallLimit(); return; }
+    if (stopped()) { if (stream) { settleDyingStream(stream, "cancelled"); await stream.interrupt(); } await settle("stopped"); return; }
+    if (expired()) { if (stream) { settleDyingStream(stream, "model_interrupt"); await stream.interrupt(); } await wallLimit(); return; }
     if (incomplete) {
       const partial = typeof response.content === "string" ? response.content : "";
       if (outputLimited && continuations < MAX_OUTPUT_TOKEN_CONTINUATIONS) {
@@ -202,7 +228,15 @@ export async function driveRun(context: AgentContext, runner: AgentRunnerOptions
     const assessment = !calls.length ? assessFinal(context, message.content as string) : null;
     if (assessment) message.content = assessment.summary;
     (session.messages as Row[]).push(message); session.steps = Number(session.steps ?? 0) + 1;
-    await context.save(); // Durable intent boundary. No tool effect precedes publication.
+    // Durable intent boundary: accepted calls enter the ledger before publication,
+    // so no tool effect precedes their record and later settlement is exactly-once.
+    // Without a stream (non-streaming adapter) the accepted response calls themselves.
+    if (calls.length) {
+      ledger.accept(typeof stream?.record.id === "string" ? stream.record.id : "", String(session.active_turn_id ?? turnId(session)),
+        stream ? stream.acceptedToolCalls() : calls);
+      ledger.project(session);
+    }
+    await context.save(); // No tool effect precedes publication.
     if (stream) await stream.finish((session.messages as Row[]).length - 1);
     context.emit({ type: "assistant", text: message.content || "" });
     if (!calls.length) {
@@ -213,6 +247,22 @@ export async function driveRun(context: AgentContext, runner: AgentRunnerOptions
     for (const call of calls) { const fn = call.function as Row; context.emit({ type: "tool_call", id: call.id, name: fn.name, subject: String(fn.arguments ?? "").slice(0, 160) }); }
     if (assessment) { await finalize(context, extensions, assessment); return; }
     const outcomes = await runTools(context, runner, calls, request.tools);
+    // Accepted calls settle exactly once: executed when their result reached the
+    // journal, interrupted when the run stopped or paused before execution.
+    {
+      const results = session.results as Row;
+      for (const call of calls) {
+        if (typeof call.id !== "string") continue;
+        const stored = results[call.id];
+        const awaiting = isDict(stored) && (stored.awaiting_approval === true
+          || stored.awaiting_user === true
+          || isDict(stored.data) && (stored.data.awaitingApproval === true || stored.data.awaiting_user === true)
+          || isDict(stored.error) && stored.error.code === "approval_required");
+        const executed = isDict(stored) && stored.ok !== false && !awaiting;
+        ledger.settle(call.id, executed ? "settled_executed" : "settled_interrupted", stopped() ? "cancelled" : "completed");
+      }
+      ledger.project(session);
+    }
     if (stopped()) { await settle("stopped"); return; }
     if (outcomes.stopTurn) {
       // ZCode turn-control: a denied plan-mode exit ends the turn instead of feeding the model.

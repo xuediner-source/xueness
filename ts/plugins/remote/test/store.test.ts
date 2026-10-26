@@ -101,7 +101,7 @@ describe("remote connection store", () => {
     assert.deepEqual(manifest.tools, [{ name: "remote_exec", gate: "exec", mutating: true, concurrencySafe: false }]);
     assert.deepEqual(manifest.httpFamilies, ["remote"]);
     assert.deepEqual(manifest.commands, ["remote", "app-server"]);
-    assert.equal((manifest.features as unknown[]).length, 13);
+    assert.equal((manifest.features as unknown[]).length, 19);
   });
 
   it("fills defaults and rejects the same field mistakes Python names", () => {

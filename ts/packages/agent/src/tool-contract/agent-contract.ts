@@ -22,7 +22,7 @@ export const AGENT_DESCRIPTION = [
   "Reach for this when the task matches an available agent type, when you have independent work to delegate, or when answering would mean reading across several files — delegate it and you keep the conclusion, not the file dumps. For a single-fact lookup where you already know the file, symbol, or value, search directly. Once you've delegated a search, don't also run it yourself — wait for the result.",
   "",
   "- The agent's final message is returned to you as the tool result; it is not shown to the user — relay what matters.",
-  "- A new Agent call starts fresh: the agent does not see this conversation, so put everything it needs in the prompt.",
+  "- A new Agent call starts fresh: the agent does not see this conversation, so put everything it needs in the prompt. Set inherit_history: true to hand it a bounded copy of the recent turns instead — the copy is read-only and never changes this conversation.",
   "- Agents are read-only: they inspect and report, and cannot edit files, run state-changing commands or launch further agents.",
   "- Each agent type's model and tools come from its definition (the subagent settings).",
 ].join("\n");
@@ -41,6 +41,10 @@ export const AGENT_SCHEMA = {
   "subagent_type": {
    "type": "string",
    "description": "The type of specialized agent to use for this task"
+  },
+  "inherit_history": {
+   "type": "boolean",
+   "description": "Give the agent a bounded copy of this conversation's recent turns as context. Default false: the agent starts fresh"
   }
  },
  "required": [
@@ -50,16 +54,18 @@ export const AGENT_SCHEMA = {
  "additionalProperties": false
 } as unknown as JsonSchema;
 
-/** `subagent_type` selects the stored agent (Python `agent`); `description` is the run label. */
+/** `subagent_type` selects the stored agent (Python `agent`); `description` is the run label; `inherit_history` branches the parent's narration in (F08.01). */
 export const agentAdapter: InputAdapter = {
   toInternal(input) {
     const out: Record<string, unknown> = { prompt: input.prompt };
     if (typeof input.subagent_type === "string" && input.subagent_type.trim()) out.agent = input.subagent_type.trim();
     if (typeof input.description === "string" && input.description.trim()) out.description = input.description.trim();
+    if (input.inherit_history === true) out.inherit_history = true;
     return out;
   },
   toModel(input) {
     return { description: typeof input.description === "string" ? input.description : "", prompt: typeof input.prompt === "string" ? input.prompt : "",
-      ...(typeof input.agent === "string" ? { subagent_type: input.agent } : {}) };
+      ...(typeof input.agent === "string" ? { subagent_type: input.agent } : {}),
+      ...(input.inherit_history === true ? { inherit_history: true } : {}) };
   },
 };

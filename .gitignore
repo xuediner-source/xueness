@@ -65,3 +65,10 @@ desktop/update-smoke-evidence/
 
 # Local WorkBuddy account login seeds; never publish credentials
 ts/plugins/workbuddy/assets/auths/
+ts/node_modules
+
+# Local acceptance sessions and installed user data are never source artifacts
+acceptance/
+验收资料/20261026-windows-regression/data-*/
+验收资料/20261026-windows-regression/desktop-e2e/
+验收资料/20261026-windows-regression/real-model/

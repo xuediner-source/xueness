@@ -90,6 +90,7 @@ function SettingsFontSizeInput({
   min,
   max,
   disabled,
+  unit = "px",
   onCommit,
 }: {
   label: string;
@@ -97,6 +98,7 @@ function SettingsFontSizeInput({
   min: number;
   max: number;
   disabled: boolean;
+  unit?: "px" | "%";
   onCommit: (value: number) => void | Promise<unknown>;
 }): React.ReactElement {
   const [draft, setDraft] = useState(String(value));
@@ -129,7 +131,7 @@ function SettingsFontSizeInput({
           }
         }}
       />
-      <span aria-hidden="true">px</span>
+      <span aria-hidden="true">{unit}</span>
     </div>
   );
 }
@@ -283,7 +285,7 @@ export function SettingsSections({
           control={<AppearancePicker value={values.colorPalette} disabled={!onUpdateSetting || saving} onChange={(next) => { void update("colorPalette", next); }} />}
         />
         <SettingsRow label={tr("应用缩放")} description={tr("只缩放工作台，不改变系统显示设置。")}
-          control={<SettingsFontSizeInput label={tr("应用缩放百分比")} value={Math.round(Number(values.appZoom ?? 1) * 100)} disabled={!onUpdateSetting || saving} min={75} max={150} onCommit={next => update("appZoom", next / 100)} />} />
+          control={<SettingsFontSizeInput label={tr("应用缩放百分比")} unit="%" value={Math.round(Number(values.appZoom ?? 1) * 100)} disabled={!onUpdateSetting || saving} min={75} max={150} onCommit={next => update("appZoom", next / 100)} />} />
         <SettingsRow
           label={tr("界面字号")}
           description={tr("调整应用界面的文字大小，图标和布局尺寸不受影响。")}

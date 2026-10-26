@@ -9,7 +9,7 @@ import type { Row } from "../src/model-diagnostics.ts";
 
 function fixtureRecord(requestId = "req1", attemptId = "att1"): Row {
   return modelDebugRecord("session1", {
-    requestId, attemptId, attempt: 1, maxAttempts: 3, type: "model_request_completed", timestamp: "2026-10-22T00:00:00.000Z",
+    requestId, attemptId, selectionId: "sel1", attempt: 1, maxAttempts: 3, type: "model_request_completed", timestamp: "2026-10-22T00:00:00.000Z",
     modelId: "test-model", providerKind: "anthropic", durationMs: 12, finishReason: "stop", usage: { input_tokens: 2 },
   }, summarizeModelRequest({ messages: [{ role: "user", content: "hi" }], tools: [] }));
 }
@@ -31,7 +31,7 @@ describe("content-free model diagnostics", () => {
 
   it("projects a fixed safe schema and drops nested content, credentials, and unknown fields", () => {
     const summary = modelDebugRecord("session/../private", {
-      requestId: "req/one", attemptId: "try\u0001one", attempt: 2, maxAttempts: 0, durationMs: 41, queuedMs: 9,
+      requestId: "req/one", attemptId: "try\u0001one", selectionId: "sel/one", attempt: 2, maxAttempts: 0, durationMs: 41, queuedMs: 9,
       modelId: "\u0001model".padEnd(200, "x"), providerKind: "anthropic", type: "model_request_failed",
       reason: "network_error", errorCode: "connection_failed", retryable: true, terminal: false, statusCode: 503,
       phase: "response", finishReason: "tool_calls", usage: { input_tokens: 7, output_tokens: 3, apiKey: "KEY_SENTINEL" },
@@ -45,6 +45,7 @@ describe("content-free model diagnostics", () => {
     assert.equal(summary.sessionId, "session____private");
     assert.equal(summary.requestId, "req_one");
     assert.equal(summary.attemptId, "try_one");
+    assert.equal(summary.selectionId, "sel_one");
     assert.equal((summary.modelId as string).length, 160);
     assert.deepEqual(summary.request, { messageCount: 4, toolCount: 2, inputChars: 20, systemChars: 3, assistantChars: 5, toolCallCount: 1 });
     assert.deepEqual(summary.diagnostics, { textChunks: 2, textChars: 11, reasoningChunks: 1, reasoningChars: 8, toolSnapshots: 3, firstTextMs: 4, firstReasoningMs: 5 });

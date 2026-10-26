@@ -182,3 +182,24 @@ export class LocalFileLocks implements FileLockProvider {
 
   async close(): Promise<void> {}
 }
+
+/**
+ * Residency lease around one settle window (upstream `residency-lease.ts`):
+ * acquire the nonblocking lease once, run the detached runner's finalization
+ * under it, and release in a `finally` so normal and abnormal settles both
+ * give the lease back. A second writer never waits — `tryAcquire`'s
+ * `BlockingIOError` reaches the caller, who must stay a reader.
+ */
+export async function withSessionLease<T>(
+  provider: FileLockProvider,
+  directory: string,
+  name: string,
+  body: (lease: FileLockHandle) => Promise<T>,
+): Promise<T> {
+  const lease = await provider.tryAcquire(directory, name);
+  try {
+    return await body(lease);
+  } finally {
+    await lease.release();
+  }
+}

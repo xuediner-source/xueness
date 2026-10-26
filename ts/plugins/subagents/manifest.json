@@ -10,11 +10,15 @@
     { "name": "task", "gate": "planning", "mutating": false, "concurrencySafe": false },
     { "name": "task_collect", "gate": "planning", "mutating": false, "concurrencySafe": false },
     { "name": "task_resume", "gate": "planning", "mutating": false, "concurrencySafe": false },
-    { "name": "task_send_message", "gate": "planning", "mutating": false, "concurrencySafe": false }
+    { "name": "task_send_message", "gate": "planning", "mutating": false, "concurrencySafe": false },
+    { "name": "task_cancel", "gate": "planning", "mutating": false, "concurrencySafe": false },
+    { "name": "respond_to_coordinator", "gate": "planning", "mutating": false, "concurrencySafe": false },
+    { "name": "reply_to_channel", "gate": "planning", "mutating": false, "concurrencySafe": false }
   ],
   "features": [
     { "id": "subagents.tasks", "name": "只读子任务", "nameEn": "Read-only subtasks" },
     { "id": "subagents.coordination", "name": "后台派发、结果收集、恢复与引导", "nameEn": "Background dispatch, collection, resume and steering" },
+    { "id": "subagents.channel_reply", "name": "外部频道回复端口", "nameEn": "External channel reply port" },
     { "id": "subagents.listing", "name": "可用子代理类型清单", "nameEn": "Available agent types listing" },
     { "id": "subagents.durable_children", "name": "持久化子会话", "nameEn": "Durable child sessions" }
   ],

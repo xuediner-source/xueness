@@ -1,10 +1,12 @@
 /**
  * In-process elicitation waiters (Python `elicitation.py` bind / response / resolve).
  * The TS process has no CLI prompt: plan mode, children, and missing sessions decline.
- * A web session parks the request and the HTTP handler resolves it.
+ * A web session parks the request and the HTTP handler resolves it. A session may
+ * park a bounded queue of concurrent requests; each is attributed to the tool call
+ * that raised it when the server echoes `_meta.relatedRequestId`.
  */
 import { createHash } from "node:crypto";
-import { closeSync, fsyncSync, mkdirSync, unlinkSync } from "node:fs";
+import { closeSync, fsyncSync, mkdirSync, readFileSync, unlinkSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { isDict, pyEncodeUtf8, pyJsonDumps } from "@xueness/contracts";
 import { exists, fsyncDirectory, isLink, mkstemp, protectPrivateFile, replaceFile, writeAll } from "@xueness/sessions";
@@ -14,11 +16,15 @@ import type { Row } from "./names.ts";
 export const ELICITATION_PROTOCOL = "2025-06-18";
 export const USER_WAIT_SECONDS = 600;
 const MAX_NAME = 64;
+const MAX_QUEUE = 4;
+const MAX_TOOL_CALL = 200;
+const MAX_PUBLIC_BYTES = 65536;
 const MAX_DIAGNOSTICS = 50;
 const SESSION = /^[0-9a-f]{32}$/;
 interface Waiter { public: Row; action: string | null; content: Row | null; done: boolean; wake: (signaled: boolean) => void }
+export interface ElicitationContext { toolCallOf(relatedRequestId: unknown): string | null }
 
-const pending = new Map<string, Waiter>();
+const pending = new Map<string, Waiter[]>();
 const diagnostics: Row[] = [];
 
 export function elicitationEnabled(server: unknown): boolean {
@@ -58,7 +64,7 @@ function serverName(server: unknown): string {
 }
 
 function publicCopy(row: Row): Row {
-  return { id: row.id, serverId: row.serverId, serverName: row.serverName, message: row.message, requestedSchema: row.requestedSchema, expiresAt: row.expiresAt };
+  return { id: row.id, serverId: row.serverId, serverName: row.serverName, message: row.message, requestedSchema: row.requestedSchema, toolCall: typeof row.toolCall === "string" ? row.toolCall : null, expiresAt: row.expiresAt };
 }
 
 function writePrivate(path: string, item: Row): void {
@@ -81,10 +87,28 @@ function pendingPath(stateDir: string | null, sessionId: string): string | null 
   return path;
 }
 
-function writePublic(stateDir: string | null, sessionId: string, row: Row): void {
+/** The published row is the head of the session queue; the file survives a host restart. */
+function writePublic(stateDir: string | null, sessionId: string): void {
   const path = pendingPath(stateDir, sessionId);
   if (!path) return;
-  try { writePrivate(path, publicCopy(row)); } catch { /* a failed publication still lets the in-memory waiter answer */ }
+  const key = pendingKey(stateDir, sessionId);
+  const head = (pending.get(key) ?? []).find((waiter) => !waiter.done);
+  try {
+    if (head) writePrivate(path, publicCopy(head.public));
+  } catch { /* a failed publication still lets the in-memory waiter answer */ }
+}
+
+/** A parked request from a previous process: expired or unreadable rows are dropped. */
+function readPublic(stateDir: string | null, sessionId: string): Row | null {
+  const path = pendingPath(stateDir, sessionId);
+  if (!path || !exists(path)) return null;
+  try {
+    const text = readFileSync(path, "utf8");
+    if (!text.trim() || text.length > MAX_PUBLIC_BYTES) throw new Error("oversized");
+    const row = JSON.parse(text) as Row;
+    if (!isDict(row) || (typeof row.id !== "number" && typeof row.id !== "string") || typeof row.expiresAt !== "number" || row.expiresAt <= Date.now() / 1000) throw new Error("stale");
+    return publicCopy(row);
+  } catch { return null; }
 }
 
 export function deleteElicitationPublic(stateDir: string | null, sessionId: string): void {
@@ -101,17 +125,19 @@ function lookup(sessionId: string, stateDir: string | null): string | null {
 
 export function pendingPublic(sessionId: string, stateDir: string | null): Row | null {
   const key = lookup(sessionId, stateDir);
-  const waiter = key ? pending.get(key) : undefined;
-  if (!waiter || waiter.done) return null;
-  return publicCopy(waiter.public);
+  const waiter = key ? (pending.get(key) ?? []).find((item) => !item.done) : undefined;
+  if (waiter) return publicCopy(waiter.public);
+  return readPublic(stateDir, sessionId);
 }
 
 export function resolveElicitation(sessionId: string, rpcId: unknown, action: unknown, content: unknown, stateDir: string | null): "ok" | "missing" | "mismatch" | [string, string, string | null] {
   if (action !== "accept" && action !== "decline" && action !== "cancel") return ["invalid", "action", null];
   const key = lookup(sessionId, stateDir);
-  const waiter = key ? pending.get(key) : undefined;
-  if (!waiter || waiter.done) return "missing";
-  if (waiter.public.id !== rpcId) return "mismatch";
+  const queue = key ? pending.get(key) ?? [] : [];
+  const open = queue.filter((waiter) => !waiter.done);
+  if (!open.length) return "missing";
+  const waiter = open.find((item) => item.public.id === rpcId);
+  if (!waiter) return "mismatch";
   if (action === "accept") {
     const [clean, code, field] = validateContent(waiter.public.requestedSchema, content);
     if (code) return ["invalid", code, field];
@@ -120,7 +146,25 @@ export function resolveElicitation(sessionId: string, rpcId: unknown, action: un
   waiter.action = action;
   waiter.done = true;
   waiter.wake(true);
+  writePublic(stateDir, sessionId);
   return "ok";
+}
+
+/** A dropped connection must not park its elicitation for the full user wait. */
+export function cancelServerElicitations(stateDir: string | null, sessionId: string, serverId: string): number {
+  const key = lookup(sessionId, stateDir);
+  const queue = key ? pending.get(key) ?? [] : [];
+  let cancelled = 0;
+  for (const waiter of queue) {
+    if (waiter.done || waiter.public.serverId !== serverId) continue;
+    waiter.content = null;
+    waiter.action = "cancel";
+    waiter.done = true;
+    waiter.wake(true);
+    cancelled += 1;
+  }
+  if (cancelled) writePublic(stateDir, sessionId);
+  return cancelled;
 }
 
 function sessionUnattended(session: unknown): boolean {
@@ -139,15 +183,26 @@ function rpcError(id: unknown, code: number, message: string): Row {
   return { jsonrpc: "2.0", id, error: { code, message } };
 }
 
+/** `_meta.relatedRequestId` names the client request (a tools/call) that raised this elicitation. */
+function attributedToolCall(message: Row, context: ElicitationContext | undefined): string | null {
+  if (!context) return null;
+  const params = isDict(message.params) ? message.params : null;
+  const meta = params && isDict(params._meta) ? params._meta : null;
+  const related = meta ? meta.relatedRequestId : undefined;
+  const name = context.toolCallOf(related);
+  return typeof name === "string" && name ? name.slice(0, MAX_TOOL_CALL) : null;
+}
+
 async function park(sessionId: string, stateDir: string | null, row: Row, timeout: number): Promise<[string, Row | null]> {
   const key = pendingKey(stateDir, sessionId);
+  const queue = pending.get(key) ?? [];
+  if (queue.filter((waiter) => !waiter.done).length >= MAX_QUEUE) { note(String(row.serverId ?? ""), "busy"); return ["decline", null]; }
   let wake!: (signaled: boolean) => void;
   const event = new Promise<boolean>((resolve) => { wake = resolve; });
   const waiter: Waiter = { public: row, action: null, content: null, done: false, wake };
-  const current = pending.get(key);
-  if (current && !current.done) { note(String(row.serverId ?? ""), "busy"); return ["decline", null]; }
-  pending.set(key, waiter);
-  writePublic(stateDir, sessionId, row);
+  queue.push(waiter);
+  pending.set(key, queue);
+  writePublic(stateDir, sessionId);
   const timer = setTimeout(() => wake(false), timeout * 1000);
   try {
     const signaled = await event;
@@ -158,13 +213,15 @@ async function park(sessionId: string, stateDir: string | null, row: Row, timeou
     return [action, content];
   } finally {
     clearTimeout(timer);
-    if (pending.get(key) === waiter) pending.delete(key);
-    deleteElicitationPublic(stateDir, sessionId);
+    const rest = (pending.get(key) ?? []).filter((item) => item !== waiter);
+    if (rest.length) pending.set(key, rest); else pending.delete(key);
+    writePublic(stateDir, sessionId);
+    if (!(pending.get(key) ?? []).some((item) => !item.done)) deleteElicitationPublic(stateDir, sessionId);
   }
 }
 
 /** Answer one server request. The caller must not await this inside the read loop. */
-export async function responseFor(server: Row, message: Row): Promise<Row> {
+export async function responseFor(server: Row, message: Row, context?: ElicitationContext): Promise<Row> {
   const id = message.id;
   const sid = serverIdOf(server);
   try {
@@ -178,7 +235,7 @@ export async function responseFor(server: Row, message: Row): Promise<Row> {
       note(sid, "unattended");
       return rpcResult(id, "decline");
     }
-    const row = { id, serverId: sid, serverName: serverName(server), message: text, requestedSchema: schema, expiresAt: Math.trunc(Date.now() / 1000 + USER_WAIT_SECONDS) };
+    const row = { id, serverId: sid, serverName: serverName(server), message: text, requestedSchema: schema, toolCall: attributedToolCall(message, context), expiresAt: Math.trunc(Date.now() / 1000 + USER_WAIT_SECONDS) };
     let [action, content] = await park(session.id, stateDir, row, USER_WAIT_SECONDS);
     if (action === "timeout") { note(sid, "timeout"); action = "cancel"; }
     else if (action === "decline" || action === "cancel") note(sid, action === "decline" ? "declined" : "cancelled");
@@ -191,12 +248,14 @@ export async function responseFor(server: Row, message: Row): Promise<Row> {
 
 export function resetElicitationState(stateDir: string | null = null): void {
   const state = stateDir === null ? null : stateKey(stateDir);
-  for (const [key, waiter] of [...pending.entries()]) {
+  for (const [key, queue] of [...pending.entries()]) {
     if (state !== null && !key.startsWith(`${state}\0`)) continue;
-    waiter.content = null;
-    waiter.action = "cancel";
-    waiter.done = true;
-    waiter.wake(true);
+    for (const waiter of queue) {
+      waiter.content = null;
+      waiter.action = "cancel";
+      waiter.done = true;
+      waiter.wake(true);
+    }
     pending.delete(key);
   }
   if (state === null) diagnostics.length = 0;

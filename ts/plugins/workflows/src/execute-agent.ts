@@ -27,6 +27,8 @@ export interface AgentNodeHost {
     sessions: string;
     /** Host-owned dynamic workflow cancellation; legacy DAG callers may omit it. */
     signal?: AbortSignal;
+    /** The workflow run id: keys model-admission round-robin fairness across runs. */
+    runId?: string;
   }): Promise<Row>;
   /** Open or create the actor session in `sessions`; returns its id. */
   ensureSession(prompt: string, cwd: string, existingId: string | null, sessions: string): Promise<string>;
@@ -221,6 +223,7 @@ export async function executeAgentNode(
   try {
     result = await host.run({
       prompt, root, sessionId, writable, providerId, model, context, timeoutSeconds: timeout, sessions,
+      runId: wid,
       shouldStop: () => control.ownerGone() || store.load(wid).control === "cancel" || !host.enabled("workflows"),
     });
   } catch (error) {

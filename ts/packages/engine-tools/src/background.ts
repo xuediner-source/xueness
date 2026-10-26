@@ -11,12 +11,13 @@
  */
 import { spawn, type ChildProcess } from "node:child_process";
 import { randomBytes } from "node:crypto";
-import { createWriteStream, type WriteStream } from "node:fs";
+import { createReadStream, createWriteStream, type WriteStream } from "node:fs";
 import { rm } from "node:fs/promises";
 import { join } from "node:path";
 import type { Readable } from "node:stream";
 import { cutHead, cutTail, decodeOutput } from "./output-capture.ts";
-import { killTree, trackChild } from "./process.ts";
+import { killTree, trackChild, type CarriedCapture } from "./process.ts";
+import { hostWindowsJob } from "./windows-job.ts";
 
 export type TaskState = "running" | "exited" | "killed" | "timed_out" | "failed";
 
@@ -39,6 +40,8 @@ export interface BackgroundTaskInfo {
   signal: string | null;
   /** Something in the task's process tree still holds its output open. */
   outputOpen: boolean;
+  /** This task began as a foreground run that hit its deadline and moved over. */
+  adopted?: boolean;
   startedAt: string;
   durationMs: number;
   timeoutMs: number;
@@ -74,6 +77,21 @@ export interface StartTaskOptions {
   owner?: string | null;
   /** Preserve a caller-built Windows command line exactly (cmd batch-file bridge only). */
   windowsVerbatimArguments?: boolean;
+}
+
+/** A foreground run's still-live child, handed over at its deadline. */
+export interface AdoptTaskOptions {
+  child: ChildProcess;
+  cwd: string;
+  cwdDisplay?: string;
+  command: string;
+  timeoutMs: number;
+  logDir: string;
+  owner?: string | null;
+  /** performance.now() of the original spawn, so duration covers the foreground part. */
+  beganAt?: number;
+  /** Output the foreground run already captured and showed; goes into the logs only. */
+  carried?: { stdout?: CarriedCapture; stderr?: CarriedCapture };
 }
 
 export interface BackgroundTasksOptions {
@@ -150,6 +168,8 @@ interface Task {
   files: WriteStream[];
   exited: Promise<void>;
   closed: Promise<void>;
+  /** Record the exit and stop the task's own time limit. */
+  settle(): void;
   /** The task's own time limit; cleared when the main process exits. */
   timeout: NodeJS.Timeout | null;
   /** SIGKILL after the grace period; kept until the whole tree let go of the output. */
@@ -207,58 +227,18 @@ export class BackgroundTasks {
   /** Start a task; resolves once the process started (or failed to). */
   async start(options: StartTaskOptions): Promise<BackgroundTaskInfo> {
     if (this.#closed) throw new BackgroundTaskError("tasks_closed", "background tasks are shut down");
-    if (this.running >= this.#maxRunning) {
+    if (!this.#hasCapacity()) {
       throw new BackgroundTaskError("too_many_tasks", `at most ${this.#maxRunning} background tasks may run at once; stop one with exec_kill`);
     }
-    let id = `bg_${randomBytes(4).toString("hex")}`;
-    while (this.#tasks.has(id)) id = `bg_${randomBytes(4).toString("hex")}`;
-    const paths = { stdout: join(options.logDir, `${id}.stdout.log`), stderr: join(options.logDir, `${id}.stderr.log`) };
     const child = spawn(options.file, [...options.args], {
       cwd: options.cwd, env: options.env, stdio: ["ignore", "pipe", "pipe"], detached: process.platform !== "win32", windowsHide: true,
       ...(options.windowsVerbatimArguments ? { windowsVerbatimArguments: true } : {}),
     });
-    const untrack = trackChild(child);
-    // Later errors (a failed kill) must not be unhandled.
-    child.on("error", () => {});
-    const info: BackgroundTaskInfo = {
-      id, command: options.command, cwd: options.cwdDisplay ?? options.cwd, owner: options.owner ?? null, pid: child.pid ?? null,
-      state: "running", exitCode: null, signal: null, outputOpen: true, startedAt: new Date().toISOString(), durationMs: 0,
-      timeoutMs: options.timeoutMs, stdout: { bytes: 0, logged: 0, path: paths.stdout }, stderr: { bytes: 0, logged: 0, path: paths.stderr },
-    };
-    let markExited!: () => void;
-    let markClosed!: () => void;
-    const task: Task = {
-      info, child, started: performance.now(), unread: { stdout: new Unread(this.#unreadBytes), stderr: new Unread(this.#unreadBytes) }, files: [],
-      exited: new Promise((resolve) => (markExited = resolve)), closed: new Promise((resolve) => (markClosed = resolve)), timeout: null, escalate: null, stopping: null,
-    };
-    this.#tasks.set(id, task);
-    for (const name of STREAMS) task.files.push(this.#pipe(task, name, child[name] as Readable, paths[name]));
-    const settle = (): void => {
-      info.durationMs = Math.round(performance.now() - task.started);
-      if (task.timeout) clearTimeout(task.timeout);
-      task.timeout = null;
-      markExited();
-    };
-    child.on("exit", (code, signal) => {
-      info.exitCode = code;
-      info.signal = signal;
-      info.state = task.stopping ?? "exited";
-      settle();
+    const { task, carriedDone } = this.#register({
+      child, logDir: options.logDir, cwd: options.cwd, cwdDisplay: options.cwdDisplay, command: options.command,
+      timeoutMs: options.timeoutMs, owner: options.owner,
     });
-    child.on("close", () => {
-      info.outputOpen = false;
-      if (task.escalate) clearTimeout(task.escalate);
-      task.escalate = null;
-      untrack();
-      void Promise.all(task.files.map((file) => new Promise<void>((resolve) => {
-        if (file.closed) return resolve();
-        file.once("close", () => resolve());
-        file.end();
-      }))).then(() => {
-        markClosed();
-        this.#evict();
-      });
-    });
+    const info = task.info;
     const started = await new Promise<NodeJS.ErrnoException | null>((resolve) => {
       child.once("spawn", () => resolve(null));
       child.once("error", (error: NodeJS.ErrnoException) => resolve(error));
@@ -266,14 +246,45 @@ export class BackgroundTasks {
     if (started) {
       info.state = "failed";
       info.error = { code: started.code === "ENOENT" ? "command_not_found" : "spawn_failed", message: started.message };
-      settle();
-      this.#tasks.delete(id);
+      task.settle();
+      this.#tasks.delete(info.id);
       await task.closed;
-      await Promise.all(Object.values(paths).map((path) => rm(path, { force: true })));
+      await Promise.all([info.stdout.path, info.stderr.path].map((path) => rm(path, { force: true })));
       return copy(info, task.started);
     }
     task.timeout = setTimeout(() => this.#stop(task, "timed_out"), options.timeoutMs);
     return copy(info, task.started);
+  }
+
+  /** Whether a foreground deadline adoption would be taken right now. */
+  canAdopt(): boolean {
+    return !this.#closed && this.#hasCapacity();
+  }
+
+  /**
+   * Take over a still-running child as a background task: a foreground
+   * command whose deadline arrived and which may keep running. The output it
+   * wrote in the foreground goes into the task's log files (the model already
+   * saw it), so reads stay incremental and the logs stay complete. Null when
+   * it cannot be taken; the caller then settles the run as a plain timeout.
+   */
+  async adopt(options: AdoptTaskOptions): Promise<BackgroundTaskInfo | null> {
+    if (!this.canAdopt()) return null;
+    const child = options.child;
+    if (child.pid === undefined || child.exitCode !== null || child.killed) return null;
+    const { task, carriedDone } = this.#register({
+      child, logDir: options.logDir, cwd: options.cwd, cwdDisplay: options.cwdDisplay, command: options.command,
+      timeoutMs: options.timeoutMs, owner: options.owner, beganAt: options.beganAt, adopted: true, carried: options.carried,
+    });
+    // The handed-over streams stay paused until the carried output has been
+    // written, so the log keeps its order.
+    await Promise.all(carriedDone);
+    // The child may have exited while the carried output was being copied (a
+    // handoff at the very end of a run). Such a task is already over, so it
+    // gets no time limit: the timer would otherwise outlive it by the whole
+    // background timeout and hold the log files open for that long.
+    if (task.info.state === "running") task.timeout = setTimeout(() => this.#stop(task, "timed_out"), options.timeoutMs);
+    return copy(task.info, task.started);
   }
 
   get(id: string, owner?: string | null): BackgroundTaskInfo | undefined {
@@ -321,7 +332,82 @@ export class BackgroundTasks {
     await Promise.all(tasks.map((task) => within(task.closed, 1000)));
   }
 
-  #pipe(task: Task, name: "stdout" | "stderr", stream: Readable, path: string): WriteStream {
+  #hasCapacity(): boolean {
+    return this.running < this.#maxRunning;
+  }
+
+  /** Create the task record and wire pipes and exit/close handling for a live child. */
+  #register(meta: {
+    child: ChildProcess;
+    logDir: string;
+    cwd: string;
+    cwdDisplay?: string;
+    command: string;
+    timeoutMs: number;
+    owner?: string | null;
+    beganAt?: number;
+    adopted?: boolean;
+    carried?: { stdout?: CarriedCapture; stderr?: CarriedCapture };
+  }): { task: Task; carriedDone: Promise<void>[] } {
+    const child = meta.child;
+    let id = `bg_${randomBytes(4).toString("hex")}`;
+    while (this.#tasks.has(id)) id = `bg_${randomBytes(4).toString("hex")}`;
+    const paths = { stdout: join(meta.logDir, `${id}.stdout.log`), stderr: join(meta.logDir, `${id}.stderr.log`) };
+    // Windows: the host job object also holds background trees, so a host
+    // crash cannot leave them behind; per-child kills stay `killTree`'s job.
+    if (process.platform === "win32" && child.pid !== undefined) hostWindowsJob()?.assign(child.pid);
+    const untrack = trackChild(child);
+    // Later errors (a failed kill) must not be unhandled.
+    child.on("error", () => {});
+    const carried = (name: "stdout" | "stderr"): number => meta.carried?.[name]?.totalBytes ?? 0;
+    const info: BackgroundTaskInfo = {
+      id, command: meta.command, cwd: meta.cwdDisplay ?? meta.cwd, owner: meta.owner ?? null, pid: child.pid ?? null,
+      state: "running", exitCode: null, signal: null, outputOpen: true,
+      startedAt: new Date(Date.now() - (meta.beganAt === undefined ? 0 : performance.now() - meta.beganAt)).toISOString(),
+      durationMs: 0, timeoutMs: meta.timeoutMs,
+      stdout: { bytes: carried("stdout"), logged: 0, path: paths.stdout }, stderr: { bytes: carried("stderr"), logged: 0, path: paths.stderr },
+      ...(meta.adopted ? { adopted: true } : {}),
+    };
+    let markExited!: () => void;
+    let markClosed!: () => void;
+    const task: Task = {
+      info, child, started: meta.beganAt ?? performance.now(), unread: { stdout: new Unread(this.#unreadBytes), stderr: new Unread(this.#unreadBytes) }, files: [],
+      exited: new Promise((resolve) => (markExited = resolve)), closed: new Promise((resolve) => (markClosed = resolve)),
+      settle: () => {
+        info.durationMs = Math.round(performance.now() - task.started);
+        if (task.timeout) clearTimeout(task.timeout);
+        task.timeout = null;
+        markExited();
+      },
+      timeout: null, escalate: null, stopping: null,
+    };
+    this.#tasks.set(id, task);
+    const carriedDone: Promise<void>[] = [];
+    for (const name of STREAMS) task.files.push(this.#pipe(task, name, child[name] as Readable, paths[name], meta.carried?.[name], carriedDone));
+    child.on("exit", (code, signal) => {
+      info.exitCode = code;
+      info.signal = signal;
+      info.state = task.stopping ?? "exited";
+      task.settle();
+    });
+    child.on("close", () => {
+      info.outputOpen = false;
+      if (task.escalate) clearTimeout(task.escalate);
+      task.escalate = null;
+      untrack();
+      void Promise.all(task.files.map((file) => new Promise<void>((resolve) => {
+        if (file.closed) return resolve();
+        file.once("close", () => resolve());
+        file.end();
+      }))).then(() => {
+        markClosed();
+        this.#evict();
+      });
+    });
+    return { task, carriedDone };
+  }
+
+  #pipe(task: Task, name: "stdout" | "stderr", stream: Readable, path: string, carried: CarriedCapture | undefined, carriedDone: Promise<void>[]): WriteStream {
     const file = createWriteStream(path, { flags: "wx", mode: 0o600 });
     const stats = task.info[name];
     let failed = false;
@@ -329,9 +415,7 @@ export class BackgroundTasks {
       failed = true;
       stream.resume();
     });
-    stream.on("data", (chunk: Buffer) => {
-      stats.bytes += chunk.length;
-      task.unread[name].push(chunk);
+    const save = (chunk: Buffer): void => {
       const room = this.#maxLogBytes - stats.logged;
       if (failed || room <= 0) return;
       const part = chunk.length > room ? chunk.subarray(0, room) : chunk;
@@ -340,7 +424,29 @@ export class BackgroundTasks {
         stream.pause();
         file.once("drain", () => stream.resume());
       }
+    };
+    if (carried) {
+      // Foreground output the model already saw: into the log only, never
+      // repeated as unread output, so reads after the handoff stay incremental.
+      for (const chunk of carried.chunks) save(chunk);
+      if (carried.spillPath) {
+        const spill = createReadStream(carried.spillPath);
+        carriedDone.push(new Promise<void>((resolve) => {
+          spill.on("data", (chunk: string | Buffer) => save(typeof chunk === "string" ? Buffer.from(chunk) : chunk));
+          spill.on("end", () => resolve());
+          spill.on("error", () => resolve());
+        }));
+      }
+    }
+    stream.on("data", (chunk: Buffer) => {
+      stats.bytes += chunk.length;
+      task.unread[name].push(chunk);
+      save(chunk);
     });
+    // Attaching the listener above resumes a stream the handoff had paused;
+    // with a spill copy still running, keep it paused until the carried
+    // output is written, so the log keeps its order (the handoff resumes it).
+    if (carried?.spillPath) stream.pause();
     stream.on("error", () => {});
     return file;
   }

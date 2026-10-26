@@ -27,6 +27,8 @@ export interface RuntimeConfigLoadResult {
   provenance: Record<string, RuntimeConfigLayer>;
   diagnostics: RuntimeConfigDiagnostic[];
   workspace: RuntimeWorkspaceConfig;
+  /** Every accepted layer's own patch, in merge order — the override matrix input. */
+  layerPatches: Partial<Record<RuntimeConfigLayer, RuntimeConfigPatch>>;
 }
 export interface RuntimeConfigLoadOptions {
   stateDir: string;
@@ -36,6 +38,13 @@ export interface RuntimeConfigLoadOptions {
   env?: NodeJS.ProcessEnv;
   overrides?: RuntimeConfigPatch;
   validate?: (patch: RuntimeConfigPatch) => void;
+  /**
+   * F07.01: resolve the state layer from this value instead of re-reading the
+   * file. `undefined` reads the file as before; a patch reuses a cached read so
+   * switching workspace roots re-applies only the workspace layer; `null`
+   * reproduces the invalid-file diagnostic.
+   */
+  statePatch?: RuntimeConfigPatch | null;
 }
 
 const FORBIDDEN_KEYS = new Set(["__proto__", "constructor", "prototype"]);
@@ -167,25 +176,63 @@ interface WorkspaceSnapshot {
   patch: RuntimeConfigPatch | null;
   hooks: boolean;
   valid: boolean;
+  /** Legacy top-level keys that were mapped onto the patch shape for this snapshot. */
+  legacy: string[];
   bytes?: Buffer;
+}
+
+const LEGACY_KEYS = ["mcpServers", "enabledPlugins", "pluginOptions"] as const;
+
+/**
+ * F07.01 old-config compatibility: a pre-layering workspace document
+ * (`mcpServers` / `enabledPlugins` / `pluginOptions` at the top level) is
+ * mapped onto the patch shape in memory — the file on disk is never rewritten.
+ */
+export function migrateLegacyWorkspaceDocument(document: Record<string, unknown>): { patch: RuntimeConfigPatch | null; keys: string[] } {
+  const keys: string[] = [];
+  const plugins: Record<string, unknown> = {};
+  const servers: Record<string, unknown> = {};
+  if (isRecord(document.plugins)) Object.assign(plugins, document.plugins);
+  if (isRecord(document.mcp) && isRecord(document.mcp.servers)) Object.assign(servers, document.mcp.servers);
+  if (isRecord(document.mcpServers)) { Object.assign(servers, document.mcpServers); keys.push("mcpServers"); }
+  if (isRecord(document.pluginOptions)) {
+    keys.push("pluginOptions");
+    for (const [id, value] of Object.entries(document.pluginOptions)) {
+      if (!isRecord(value)) continue;
+      plugins[id] = { ...(isRecord(plugins[id]) ? plugins[id] : {}), ...value };
+    }
+  }
+  if (isRecord(document.enabledPlugins)) {
+    keys.push("enabledPlugins");
+    for (const [id, value] of Object.entries(document.enabledPlugins)) {
+      if (typeof value !== "boolean") continue;
+      plugins[id] = { ...(isRecord(plugins[id]) ? plugins[id] : {}), enabled: value };
+    }
+  }
+  if (!keys.length) return { patch: null, keys };
+  const patch = normalizeRuntimeConfigPatch({
+    ...(Object.keys(plugins).length ? { plugins } : {}),
+    ...(Object.keys(servers).length ? { mcp: { servers } } : {}),
+  });
+  return { patch, keys };
 }
 
 function workspaceSnapshot(rootInput: string | undefined): WorkspaceSnapshot {
   if (rootInput === undefined || !rootInput.trim()) {
-    return { workspace: { root: null, path: null, digest: null, status: "absent" }, patch: null, hooks: false, valid: true };
+    return { workspace: { root: null, path: null, digest: null, status: "absent" }, patch: null, hooks: false, valid: true, legacy: [] };
   }
   let root: string;
   try {
     root = resolveStrict(rootInput);
     if (!statSync(root).isDirectory()) throw new TypeError("root is not a directory");
   } catch {
-    return { workspace: { root: null, path: null, digest: null, status: "invalid" }, patch: null, hooks: false, valid: false };
+    return { workspace: { root: null, path: null, digest: null, status: "invalid" }, patch: null, hooks: false, valid: false, legacy: [] };
   }
   const path = join(root, ".xueness", "config.json");
   try { lstatSync(path); }
   catch (error) {
-    if ((error as NodeJS.ErrnoException).code === "ENOENT") return { workspace: { root, path, digest: null, status: "absent" }, patch: null, hooks: false, valid: true };
-    return { workspace: { root, path, digest: null, status: "invalid" }, patch: null, hooks: false, valid: false };
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return { workspace: { root, path, digest: null, status: "absent" }, patch: null, hooks: false, valid: true, legacy: [] };
+    return { workspace: { root, path, digest: null, status: "invalid" }, patch: null, hooks: false, valid: false, legacy: [] };
   }
   let hooks = false;
   try {
@@ -197,11 +244,16 @@ function workspaceSnapshot(rootInput: string | undefined): WorkspaceSnapshot {
     hooks = Object.hasOwn(parsed, "hooks");
     const document = { ...parsed };
     delete document.hooks;
-    const patch = normalizeRuntimeConfigPatch(document);
+    let patch = normalizeRuntimeConfigPatch(document);
+    let legacy: string[] = [];
+    if (!patch) {
+      const migrated = migrateLegacyWorkspaceDocument(document);
+      if (migrated.patch) { patch = migrated.patch; legacy = migrated.keys; }
+    }
     if (!patch) throw new TypeError("workspace config has an invalid shape");
-    return { workspace: { root, path: canonicalFile, digest: fileDigest, status: "pending" }, patch, hooks, valid: true, bytes };
+    return { workspace: { root, path: canonicalFile, digest: fileDigest, status: "pending" }, patch, hooks, valid: true, legacy, bytes };
   } catch {
-    return { workspace: { root, path, digest: null, status: "invalid" }, patch: null, hooks, valid: false };
+    return { workspace: { root, path, digest: null, status: "invalid" }, patch: null, hooks, valid: false, legacy: [] };
   }
 }
 
@@ -216,25 +268,30 @@ function parseEnvPatch(raw: string): RuntimeConfigPatch | null {
 
 export function loadRuntimeConfig(options: RuntimeConfigLoadOptions): RuntimeConfigLoadResult {
   const diagnostics: RuntimeConfigDiagnostic[] = [], sources: RuntimeConfigLayer[] = [], provenance: Record<string, RuntimeConfigLayer> = {};
+  const layerPatches: Partial<Record<RuntimeConfigLayer, RuntimeConfigPatch>> = {};
   const config: Record<string, unknown> = {};
   const add = (source: RuntimeConfigLayer, input: unknown): void => {
     const patch = normalizeRuntimeConfigPatch(input);
     if (!patch) { sourceDiagnostic(diagnostics, source, "invalid_shape"); return; }
     try { options.validate?.(patch); } catch { sourceDiagnostic(diagnostics, source, "validation_rejected"); return; }
     mergeInto(config, patch as Record<string, unknown>, "", source, provenance);
+    layerPatches[source] = patch;
     sources.push(source);
   };
 
   add("defaults", options.defaults ?? {});
   add("userDefaults", options.userDefaults ?? {});
 
-  const stored = readRuntimeConfigUserPatch(options.stateDir);
+  const stored = options.statePatch === undefined
+    ? readRuntimeConfigUserPatch(options.stateDir)
+    : options.statePatch === null ? { present: true, valid: false, patch: null } : { present: true, valid: true, patch: options.statePatch };
   if (!stored.valid) sourceDiagnostic(diagnostics, "state", "invalid_file");
   else if (stored.patch) add("state", stored.patch);
 
   let workspace: WorkspaceSnapshot = workspaceSnapshot(options.root);
   let workspaceCandidate: RuntimeConfigPatch | undefined;
   if (workspace.hooks) sourceDiagnostic(diagnostics, "workspace", "workspace_hooks_separate_trust");
+  if (workspace.legacy.length) sourceDiagnostic(diagnostics, "workspace", "workspace_legacy_migrated");
   if (!workspace.valid) sourceDiagnostic(diagnostics, "workspace", "invalid_file");
   else if (workspace.patch) {
     const trust = readTrust(options.stateDir);
@@ -258,7 +315,7 @@ export function loadRuntimeConfig(options: RuntimeConfigLoadOptions): RuntimeCon
     else add("environment", patch);
   }
   add("overrides", options.overrides ?? {});
-  return { config: config as RuntimeConfigPatch, workspaceCandidate, sources, provenance, diagnostics, workspace: workspace.workspace };
+  return { config: config as RuntimeConfigPatch, workspaceCandidate, sources, provenance, diagnostics, workspace: workspace.workspace, layerPatches };
 }
 
 function writePrivateAtomic(path: string, value: unknown, beforeRename?: () => void): void {

@@ -66,6 +66,16 @@
       "id": "mcp.resource_subscriptions",
       "name": "资源订阅与变更活动",
       "nameEn": "Resource subscriptions and change activity"
+    },
+    {
+      "id": "mcp.elicitation_flows",
+      "name": "表单与并发询问、取消及会话恢复",
+      "nameEn": "Form elicitation with concurrency, cancellation and session recovery"
+    },
+    {
+      "id": "mcp.apps_ui_host",
+      "name": "MCP Apps UI 宿主与连接代次复核",
+      "nameEn": "MCP Apps UI host with connection generation rechecks"
     }
   ],
   "panels": [
@@ -75,7 +85,8 @@
     "plugins/mcp/index.tsx",
     "plugins/mcp/McpDiagnostics.tsx",
     "plugins/mcp/ElicitationForm.tsx",
-    "plugins/mcp/elicitationSubscription.ts"
+    "plugins/mcp/elicitationSubscription.ts",
+    "plugins/mcp/AppsUiHost.tsx"
   ],
   "modules": [
     "config",
@@ -84,6 +95,7 @@
     "runtime_extension"
   ],
   "httpFamilies": [
-    "sessions/*/mcp-runtime"
+    "sessions/*/mcp-runtime",
+    "sessions/*/mcp-apps"
   ]
 }

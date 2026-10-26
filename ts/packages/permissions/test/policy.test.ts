@@ -153,6 +153,7 @@ describe("permission policy", () => {
     assert.deepEqual(permissionSettingsIssues({ allow: ["exec(npm test)"], deny: ["read(.env)"] }), []);
     assert.throws(() => new PermissionSession({ deny: ["exec(a && b)"] }), { code: "invalid_rule" });
     assert.throws(() => new PermissionSession({ mode: "auto" as never }), TypeError);
-    assert.equal(KNOWN_KINDS.size, 21);
+    assert.ok(KNOWN_KINDS.has("plan_enter"), "entering plan mode is a known permission kind");
+    assert.equal(KNOWN_KINDS.size, 22);
   });
 });

@@ -1,0 +1,58 @@
+{
+  "id": "os_cua",
+  "name": "OS Computer Use",
+  "description": "受审批约束的 OS 级计算机使用：平台适配端口上的有界屏幕截图、窗口列表与单步输入，带证据日志；无适配器平台明确不可用。",
+  "version": "1.0.0",
+  "apiVersion": 1,
+  "defaultEnabled": false,
+  "dependencies": [],
+  "tools": [
+    "os_screenshot",
+    "os_windows",
+    "os_input"
+  ],
+  "commands": [],
+  "panels": [],
+  "resources": [],
+  "capabilities": [
+    "filesystem-write"
+  ],
+  "modules": [
+    "tools",
+    "permissions",
+    "journal",
+    "platform"
+  ],
+  "features": [
+    {
+      "id": "os_cua.screen",
+      "name": "受审批约束的整屏与窗口截图（内存 PNG 证据）",
+      "nameEn": "Approval-gated full-screen and window capture (in-memory PNG evidence)"
+    },
+    {
+      "id": "os_cua.input",
+      "name": "单步坐标点击、滚动、按键与文本输入，无自由脚本",
+      "nameEn": "One-action coordinate click, scroll, key and text input; no free-form scripting"
+    },
+    {
+      "id": "os_cua.windows",
+      "name": "窗口列表、聚焦与窗口内坐标换算",
+      "nameEn": "Window listing, focus and window-relative coordinate mapping"
+    },
+    {
+      "id": "os_cua.permissions",
+      "name": "会话级 screen/input 授权账本，可撤销并持久化",
+      "nameEn": "Per-session screen/input grant ledger, revocable and persisted"
+    },
+    {
+      "id": "os_cua.platform_ports",
+      "name": "平台适配端口；无适配器的平台明确不可用",
+      "nameEn": "Platform adaptation port; explicitly unavailable without an adapter"
+    },
+    {
+      "id": "os_cua.evidence",
+      "name": "每次交互的证据日志（动作、目标、时间与序号）",
+      "nameEn": "Evidence journal for every interaction (action, target, time and sequence)"
+    }
+  ]
+}

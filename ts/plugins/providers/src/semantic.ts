@@ -1,9 +1,10 @@
 /** Model-assisted history handoffs, staged and published as one journal record. */
 import { isDict, pyDeepCopy, pyLen, pySlice, PyValueError, uuid4Hex } from "@xueness/contracts";
 import type { AgentExtension, AgentProvider, Row } from "@xueness/agent";
-import { isStreamStop, ProviderCancelled } from "@xueness/providers";
+import { isStreamStop, ProviderCancelled, type ModelRequestAdmission } from "@xueness/providers";
 import type { SessionStore } from "@xueness/sessions";
 import { safeHistoryGroups, semanticEncoded, semanticFingerprint, semanticIdentity, stageHandoff, sumHandoffUsage, validateHandoff } from "./semantic-core.ts";
+import { auxiliaryModelAdmission } from "./aux-admission.ts";
 import { handoffModelJson, type HandoffModelOptions } from "./semantic-model.ts";
 export * from "./semantic-core.ts";
 export * from "./semantic-model.ts";
@@ -21,6 +22,8 @@ export interface SemanticOptions {
   stamp?: () => string;
   uuid?: () => string;
   modelJson?: (provider: AgentProvider, messages: Row[], options: HandoffModelOptions) => Promise<[Row, Row]>;
+  /** Shared governor slot for each summary request; the aux foreground scope keeps the turn unblocked. */
+  admission?: ModelRequestAdmission;
 }
 export async function semanticBeforeModelRequest(session: Row, provider: AgentProvider, options: SemanticOptions): Promise<Row> {
   if (!options.enabled() || isDict(session.semantic_compaction) && session.semantic_compaction.enabled === false) return { changed: false, reason: "disabled" };
@@ -73,7 +76,7 @@ export async function semanticBeforeModelRequest(session: Row, provider: AgentPr
         { role: "user", content: semanticEncoded({ priorHandoff: handoff, history: payload, requiredCoverage: covered }) }];
       if (pyLen(semanticEncoded(prompt)) > inputLimit + summaryLimit + 2000) throw new PyValueError("summary request cannot fit within its input ceiling");
       const [raw, usage] = await (options.modelJson ?? handoffModelJson)(provider, prompt, { deadline: options.deadline, signal: options.signal,
-        shouldStop: options.shouldStop, outputTokens: Math.min(4096, Math.max(256, Math.floor(summaryLimit / 2))), now });
+        shouldStop: options.shouldStop, outputTokens: Math.min(4096, Math.max(256, Math.floor(summaryLimit / 2))), now, admission: options.admission });
       handoff = validateHandoff(raw, covered, summaryLimit); usages.push(usage);
     }
     check();
@@ -104,5 +107,6 @@ export async function semanticBeforeModelRequest(session: Row, provider: AgentPr
 }
 export const semanticCompactionExtension = (): AgentExtension => ({ id: "providers", capabilities: ["providers.semantic_compaction"], async beforeModelRequest(context) {
   await semanticBeforeModelRequest(context.session, context.provider, { enabled: () => context.enabled("providers"), maxChars: context.options.maxChars ?? 24000,
-    maxTokens: context.options.maxTokens, deadline: context.deadline, signal: context.signal, shouldStop: context.options.shouldStop, store: context.store, onEvent: (event) => context.emit({ ...event, type: String(event.type) }) });
+    maxTokens: context.options.maxTokens, deadline: context.deadline, signal: context.signal, shouldStop: context.options.shouldStop, store: context.store,
+    admission: auxiliaryModelAdmission(context.stateDir), onEvent: (event) => context.emit({ ...event, type: String(event.type) }) });
 } });

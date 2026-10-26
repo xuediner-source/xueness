@@ -1,0 +1,408 @@
+{
+  "schema": "xueness.failure-retry-contracts.v1",
+  "date": "2026-10-24",
+  "task": "F01.02",
+  "contractRef": "C-MDL-02",
+  "purpose": "从 adapter（ts/packages/providers：HTTP/传输/SSE 失败物化与内部尝试环）到 runtime（ts/packages/agent：model-request 重试环、model-retry 预算、stream 提交界）统一枚举失败类，逐类固定：触发信号、分类入口 path:line、runtime 消费点、预算计数、退避策略、重播/重试许可。四条 C-MDL-02 不变量逐条给出静态证据与测试背书；本轮为纯核对轮，无源码改动。",
+  "layering": {
+    "principle": "调度权单层归属：同一失败的退避调度要么完全在 adapter 内部尝试环，要么完全在 agent 重试环，不同时生效。",
+    "runnerOwnsSchedule": "runtime 预算可重试（Default maxAttempts=11 或 Unbounded）时，model-retry.ts:124-126 令 transportAttempts=1，经 model-request.ts:51-52 传入 adapter：每个逻辑尝试恰一次 HTTP 尝试，adapter 不内部重试，退避由 model-retry.ts:136 calculateRetryDelay 计算（openai.ts:41-44 将调用方尝试数钳制 1..3）。",
+    "adapterOwnsSchedule": "runtime 不可重试（SingleAttempt，或显式/环境配置把 maxAttempts 收窄为 1）时 transportAttempts 不传：标准 profile adapter 默认 3 次 HTTP 尝试（openai.ts:43，anthropic.ts 同），lightweight profile 用自身 transportRetries（options.ts:21 默认 0、:29 上限 2 → 1..3 次，openai.ts:75-84）；整个逻辑请求只计 1 个 runtime 预算位（retry-policy.ts:73-80），runtime 不再重试。",
+    "profileSeed": "session.runtime_profile 由 driver.ts:35 从 provider.runtimeProfile 播种，回合内两层 profile 一致；混合叠加（runtime Default × adapter lightweight 内部重试）在当前接线内不可达（见 boundaryNotes BN-06）。"
+  },
+  "budgetCounting": {
+    "counter": "ModelRetry.#attempt（model-retry.ts:47），唯一递增点在 model-retry.ts:152，位于一次完整且未被取消的退避等待之后；被取消的等待抛 ProviderCancelled 不递增（model-retry.ts:158-171）。",
+    "unit": "预算单位是逻辑模型尝试（一次 admission+invoke+流读全周期），不是 HTTP 尝试。adapter 内部重试不产生预算单位。",
+    "singleCountGuards": [
+      "model-request.ts:70,82 置 recorded=true，model-request.ts:91 使同一错误不二次进入 retry.next（空完成重试路径）",
+      "model-request.ts:92-105 未提交压缩/修复恢复用 recovered 一次性标志，且不经 retry.next（不消耗预算；重建请求不是同一失败的重试）",
+      "model-retry.ts:137-139 allowed 五重门（未提交+可重试+未停止+预算+deadline），不允许时失败即终局上抛"
+    ]
+  },
+  "rowFields": {
+    "id": "行 ID（FR-xx）",
+    "failureClass": "失败类（中文）",
+    "failureClassEn": "失败类（英文）",
+    "signals": "触发信号：http 状态 / exception 异常 / stream 流状态 / businessCode 业务码表键",
+    "adapterEntry": "adapter 侧物化与内部尝试环入口 path:line",
+    "classifier": "classifyModelFailure 分类梯入口与产物（code/reason/retryable）",
+    "runtimeConsumption": "runtime（model-request/model-retry/driver）消费点",
+    "budgetCount": "consumes_one_attempt=允许重试时恰耗一个预算位；terminal=不重试（失败尝试即最后）；adapter_internal=仅在 adapter 内部重试，runtime 预算不增",
+    "backoff": "退避策略",
+    "replayPolicy": "重播/重试许可"
+  },
+  "rows": [
+    {
+      "id": "FR-01",
+      "failureClass": "限流（可重试）",
+      "failureClassEn": "rate limited (transient)",
+      "signals": {
+        "http": ["429 无终局业务码（含 SSE error envelope 映射的 429）"],
+        "businessCode": ["rate_limited：1302/1303/1305/3002、rate_limit_reached_error、rate_limit_error（failure-codes.ts:16-18,27-28）"]
+      },
+      "adapterEntry": "transport.ts:169-183 openWithRetry 物化 RetryableProviderError(retryable=true)；transport.ts:216-220 raiseStreamError 同构；attempts.ts:79-89（流）/126-131（非流）内部重试判定",
+      "classifier": "failure.ts:159（429）与 failure.ts:149-153→BUSINESS.rate_limited（failure.ts:83）→ code=model_rate_limited、retryReason=rate_limited、retryable=true、携带 retryAfterMs",
+      "runtimeConsumption": "model-retry.ts:136-139 retryAfterMs→calculateRetryDelay；事件 model_request_failed/retry_scheduled 携带 retryAfterMs（model-retry.ts:118-119,133-135）",
+      "budgetCount": "consumes_one_attempt",
+      "backoff": "Retry-After 优先（≤5min 或 < 未封顶指数时原值），否则指数 base 2s·2^n 封顶 60s + 50-100% jitter（retry-policy.ts:92-99,30；默认参数 :19-21）；受回合 deadline 约束（model-retry.ts:139）",
+      "replayPolicy": "流未提交时可重试；重试前 discardPrelude（model-request.ts:108，stream.ts:81），新尝试新 RequestStream"
+    },
+    {
+      "id": "FR-02",
+      "failureClass": "限流（终局：配额/额度/限额）",
+      "failureClassEn": "rate limited (terminal quota)",
+      "signals": {
+        "http": ["429 且配额业务码"],
+        "businessCode": ["rate_limited_terminal：3008-3010/1304/1308/1313/1316-1321/2056/20097、insufficient_quota、credit_balance_exhausted、*spend_limit_exceeded、*usage_limit_exceeded、exceeded_current_quota_error、AccountQuotaExceeded、QUOTA_EXCEEDED（failure-codes.ts:14-17,20-25,30）"],
+        "exception": ["ProviderRequestError.category=quota_exhausted（transport.ts:113-114,177-178）"]
+      },
+      "adapterEntry": "transport.ts:176（quotaExhausted → retryable=false，adapter 内不重试）；错误体仅读有界 code/type/message 时间戳（transport.ts:98-120）",
+      "classifier": "failure.ts:149-153→BUSINESS.rate_limited_terminal（failure.ts:82）；failure.ts:154（category=quota_exhausted）→ retryable=false，不携带退避延迟",
+      "runtimeConsumption": "model-retry.ts:137 isRetryableFailure=false → 不重试；driver.ts:141-144 settle provider_error；quotaResetAt 随错误暴露（errors.ts:131）",
+      "budgetCount": "terminal",
+      "backoff": "无（用户需充值/等待重置；不自动重试）",
+      "replayPolicy": "不重试不重播"
+    },
+    {
+      "id": "FR-03",
+      "failureClass": "Retry-After 服务器指令（横切信号）",
+      "failureClassEn": "Retry-After directive (cross-cutting signal)",
+      "signals": {
+        "http": ["retry-after-ms 头（毫秒，优先）", "retry-after 头（秒数或 HTTP 日期）", "x-should-retry:false/0 头（禁用）"]
+      },
+      "adapterEntry": "retry-after.ts:153-167 retryAfterMilliseconds（x-should-retry 否决、retry-after-ms 优先于 retry-after）；retry-after.ts:135-146 retryAfterSeconds（Python 血统，clamp [0,2]s，供 adapter 内部 sleep）；transport.ts:161-162 于 openChecked 一并物化；errors.ts:99-103 有界 ≤1 天",
+      "classifier": "failure.ts:102-125 factsOf 读取 ProviderRequestError.retryAfterMs；failure.ts:127-134 build 仅在可重试分类（429/timeout/529/5xx/overloaded/network/proxy 等行）携带",
+      "runtimeConsumption": "model-retry.ts:136 calculateRetryDelay 尊重（retry-policy.ts:92-99：≤MAX_REASONABLE_RETRY_AFTER_MS=5min 或 < 未封顶指数时原值生效，否则本地曲线）；终局/不可重试分类仅作事件字段（model-retry.ts:118-119）",
+      "budgetCount": "n/a（信号行，作用于 FR-01/04/05/07/08/09/10 的退避）",
+      "backoff": "见 layering：runner 调度时未 clamp 值（≤5min 优先）；adapter 内部调度时 clamp [0,2]s（attempts.ts:89,131 sleepWithDeadline(error.delay)）——两层不同时生效",
+      "replayPolicy": "不改变所在失败类的重试许可"
+    },
+    {
+      "id": "FR-04",
+      "failureClass": "连接断开/网络失败",
+      "failureClassEn": "connection drop / network failure",
+      "signals": {
+        "exception": ["ProviderTransportError(connection_failed|service_unready)（http.ts 物化）", "ECONNRESET/ECONNREFUSED/EAI_AGAIN/ENOTFOUND/ENETUNREACH/EHOSTUNREACH/UND_ERR_SOCKET/UND_ERR_CONNECT_TIMEOUT/NETWORK_ERROR(_RETRYABLE)（failure-codes.ts:34,48）"],
+        "stream": ["SSE 未收到 finish 标记即断：streams.ts:145-146、anthropic-stream.ts:189 → ProviderTransportError(connection_failed,\"incomplete provider stream\")"]
+      },
+      "adapterEntry": "attempts.ts:90-94（流）/132-137（非流）传输失败内部重试，backoff 0.25s·2^n 封顶 2s（attempts.ts:59）；delivered 后立即 fail-closed 不内部重试（attempts.ts:93）",
+      "classifier": "failure.ts:171-173（category connection_failed/service_unready 或网络码）→ code=model_request_failed、retryReason=network_error、retryable=true；BUSINESS.network（failure.ts:85）承接业务网络码（1234 等）",
+      "runtimeConsumption": "同 FR-01 路径（model-retry.ts:136-139）；未提交时允许重试",
+      "budgetCount": "consumes_one_attempt（runtime 调度时）；adapter_internal（单次尝试预算时）",
+      "backoff": "runner：指数 2s·2^n≤60s+jitter；adapter 内部：0.25s·2^n≤2s",
+      "replayPolicy": "未提交可重试+discardPrelude；已交付（delivered/committed）终局（FR-13）"
+    },
+    {
+      "id": "FR-05",
+      "failureClass": "代理失败",
+      "failureClassEn": "proxy failure",
+      "signals": { "exception": ["transport 提示 proxy（errors.ts:137,205-211）", "code 含 PROXY（failure-codes.ts:64-66）"] },
+      "adapterEntry": "errors.ts:200-212 ProviderTransportError(hint=proxy) 经 toProviderRequestError 保留提示（errors.ts:286）",
+      "classifier": "failure.ts:170 → retryReason=network_error、retryable=true（与 TLS 的终局处理成对照）",
+      "runtimeConsumption": "同 FR-01",
+      "budgetCount": "consumes_one_attempt",
+      "backoff": "指数退避；若响应头带 Retry-After 则按 FR-03 优先",
+      "replayPolicy": "未提交可重试+discardPrelude"
+    },
+    {
+      "id": "FR-06",
+      "failureClass": "TLS 验证失败",
+      "failureClassEn": "TLS validation failure",
+      "signals": { "exception": ["transport 提示 tls", "code 含 CERT/TLS 或 UNABLE_TO_VERIFY_LEAF_SIGNATURE（failure-codes.ts:57-61）"] },
+      "adapterEntry": "同 FR-05 物化路径",
+      "classifier": "failure.ts:169 → reason=tls_error、retryable=false（配置问题，重试无益）",
+      "runtimeConsumption": "model-retry.ts:137 不重试；driver settle provider_error",
+      "budgetCount": "terminal",
+      "backoff": "无",
+      "replayPolicy": "不重试不重播"
+    },
+    {
+      "id": "FR-07",
+      "failureClass": "请求超时",
+      "failureClassEn": "request timeout",
+      "signals": {
+        "http": ["408", "504"],
+        "exception": ["category=timeout（errors.ts:24；DeadlineExpired→deadlineError，attempts.ts:55-56,104,147,160）", "ETIMEDOUT/ESOCKETTIMEDOUT/UND_ERR_HEADERS_TIMEOUT/UND_ERR_BODY_TIMEOUT（failure.ts:95）", "Error.name=TimeoutError（failure.ts:117）"]
+      },
+      "adapterEntry": "attempts.ts:92,129 deadline 界内判定；sleepWithDeadline 不越 deadline（transport.ts:72-81）",
+      "classifier": "failure.ts:156-158 → code=model_request_timeout、retryReason=timeout、retryable=true、携带 retryAfterMs（withDelay=true）",
+      "runtimeConsumption": "同 FR-01；回合 wall deadline 内才允许（model-retry.ts:139）",
+      "budgetCount": "consumes_one_attempt",
+      "backoff": "Retry-After 优先否则指数退避",
+      "replayPolicy": "未提交可重试+discardPrelude"
+    },
+    {
+      "id": "FR-08",
+      "failureClass": "流空闲超时",
+      "failureClassEn": "stream idle timeout",
+      "signals": { "exception": ["ModelStreamIdleTimeoutError（stream-idle-timeout.ts:25-32，category=timeout/stage=read）"] },
+      "adapterEntry": "stream-idle-timeout.ts:45-84 每个数据载荷重置空闲期；anthropic-stream/streams 读取环内抛出",
+      "classifier": "failure.ts:145-147（先于业务码梯）→ code=model_request_timeout、retryReason=stream_idle_timeout、retryable=true",
+      "runtimeConsumption": "model-request.ts:51 每次重试空闲界 +30s（stream-idle-timeout.ts:5,13-22，基准 10min）；允许重试",
+      "budgetCount": "consumes_one_attempt",
+      "backoff": "指数退避（无 Retry-After 可携）+ 空闲界递增",
+      "replayPolicy": "未提交可重试+discardPrelude；等待期取消不落 provider 失败（model-request.test.ts:173）"
+    },
+    {
+      "id": "FR-09",
+      "failureClass": "服务器错误（5xx）",
+      "failureClassEn": "server error (5xx)",
+      "signals": {
+        "http": ["500-599（502/503 经 category=service_unready 也落网络类 FR-04 之外的 5xx 通用行）"],
+        "businessCode": ["server：500/1120/1230/2007；1234 属 network（failure-codes.ts:13-15,18）"]
+      },
+      "adapterEntry": "transport.ts:176（429/5xx retryable）+ attempts 内部重试；最终失败物化保留 providerCode/retryAfterMs（attempts.ts:83-87,151-157）",
+      "classifier": "failure.ts:168（status≥500）→ retryReason=server_error、retryable=true、携带 retryAfterMs",
+      "runtimeConsumption": "同 FR-01",
+      "budgetCount": "consumes_one_attempt",
+      "backoff": "Retry-After 优先否则指数退避",
+      "replayPolicy": "未提交可重试+discardPrelude"
+    },
+    {
+      "id": "FR-10",
+      "failureClass": "供应商过载",
+      "failureClassEn": "provider overloaded",
+      "signals": {
+        "http": ["529"],
+        "businessCode": ["overloaded：1312、engine_overloaded_error、overloaded_error（failure-codes.ts:19,28-29）"]
+      },
+      "adapterEntry": "同 FR-09 物化路径",
+      "classifier": "failure.ts:160（529）/failure.ts:149-153→BUSINESS.overloaded（failure.ts:84）→ retryReason=provider_overloaded、retryable=true、携带 retryAfterMs",
+      "runtimeConsumption": "同 FR-01",
+      "budgetCount": "consumes_one_attempt",
+      "backoff": "Retry-After 优先否则指数退避",
+      "replayPolicy": "未提交可重试+discardPrelude"
+    },
+    {
+      "id": "FR-11",
+      "failureClass": "无输出失败（零输出完成）",
+      "failureClassEn": "no-output completion (zero output)",
+      "signals": {
+        "stream": ["响应完成但无文本/无工具调用/无 usage，且流未提交（committed=false）"],
+        "exception": ["EmptyModelCompletionError（empty-completion.ts:6-8，category=invalid_response/stage=response）"]
+      },
+      "adapterEntry": "adapter 正常返回；本类在 runtime 检出：empty-completion.ts:10-16 isZeroOutputCompletion（有 reasoning 内容或已提交流则不算）",
+      "classifier": "model-retry.ts:130-131 合成分类：code=invalid_model_response、retryReason=server_error、retryable=true（不经 failure.ts 业务梯）",
+      "runtimeConsumption": "model-request.ts:68-76；独立空重试预算：至多 1 次（canRetryEmpty，model-retry.ts:67），且仍需 attempt<maxAttempts（预算双门）；重试前 discardPrelude+finish(null,true)（:72）；重复空响应由 FR-12/终局兜住（model-request.test.ts:40）",
+      "budgetCount": "consumes_one_attempt（受独立 emptyRetries≤1 约束）",
+      "backoff": "指数退避（无 Retry-After）",
+      "replayPolicy": "未提交可重试一次；重试的新流从零开始，旧 prelude 丢弃"
+    },
+    {
+      "id": "FR-12",
+      "failureClass": "完成后可疑空响应（已记录完成）",
+      "failureClassEn": "suspicious empty completion after acceptance",
+      "signals": {
+        "stream": ["响应已被 accept+completed 记录（model-request.ts:79-80）后检出异常 finish+零内容/零 usage（empty-completion.ts:19-29）"]
+      },
+      "adapterEntry": "n/a（runtime 检出）",
+      "classifier": "同 FR-11 的 EmptyModelCompletionError 分类，但以 committed:true 走 retry.next（model-request.ts:83）",
+      "runtimeConsumption": "model-retry.ts:137 committed → allowed=false → 终局上抛（model-request.ts:84）；recorded=true 防二次处理（:82,91）；driver.ts:141-144 settle provider_error",
+      "budgetCount": "terminal（completed 事件已发布，不重试防重播）",
+      "backoff": "无",
+      "replayPolicy": "不重试不重播：completed 状态事件只发布一次"
+    },
+    {
+      "id": "FR-13",
+      "failureClass": "已输出/已提交失败",
+      "failureClassEn": "failure after committed output",
+      "signals": {
+        "stream": ["stream.committed=true：首个文本/推理 delta 已交付或 tool_calls 已被 accept（stream.ts:70-76,98-117,118-135,77-80）", "adapter delivered=true（attempts.ts:66,81；streams.ts:58-61,123,130；anthropic-stream.ts:120-171,253-259）"]
+      },
+      "adapterEntry": "attempts.ts:82,93 delivered → 立即物化上抛，不内部重试（fail closed；注释 :5-7 明示防重播前缀）",
+      "classifier": "按底层错误分类（如 FR-04 断流），但 runtime 以流状态否决重试",
+      "runtimeConsumption": "model-request.ts:92 跳过压缩/修复重建；model-request.ts:107→model-retry.ts:137 committed → allowed=false；stream.interrupt（:112，stream.ts:145-149）保留部分输出并归档；driver 依 incompleteReason 落 generation_* 暂停（driver.ts:114-117,150-171）或 provider_error（:141-144）",
+      "budgetCount": "terminal",
+      "backoff": "无（部分输出保留并显式报告，不自动重试）",
+      "replayPolicy": "不重试不重播：可见部分保留在原 stream 记录/会话，绝不重发前缀"
+    },
+    {
+      "id": "FR-14",
+      "failureClass": "取消/用户停止/宿主中止/回合 deadline",
+      "failureClassEn": "cancellation / user stop / host abort / turn deadline",
+      "signals": {
+        "exception": ["ProviderCancelled（errors.ts:164-170，xuenessStreamControl=stop）", "AbortError（failure.ts:97-100）", "信号合成：model-request.ts:16-17（AbortSignal.timeout×回合 deadline+propagate 的 context.signal+hostSignal）"]
+      },
+      "adapterEntry": "transport.ts:84-86 raiseIfCancelled；SYSTEM_CLOCK.sleep 拒绝（transport.ts:37-56）；stream-idle-timeout.ts:50,67-72；request-admission.ts:34-36,50-53,63-65,75,84-86,92-115 准入各阶段",
+      "classifier": "failure.ts:144 → code=model_request_cancelled、reason=cancelled、retryable=false；isRetryableFailure 显式排除 Cancelled（failure.ts:179-181）",
+      "runtimeConsumption": "model-request.ts:49（准入后停止即抛）；流观察者停止即抛（stream.ts:116,123,134）；model-retry.ts:130 stopped/aborted 强制取消分类、:137 allowed=false；退避等待期 250ms 切片检查停止（model-retry.ts:151,158-171）；driver 落 settle(\"stopped\")（driver.ts:60,135,137,148），不记 provider 失败",
+      "budgetCount": "terminal（取消不消耗也不触发重试；等待被取消时 attempt 不递增）",
+      "backoff": "无",
+      "replayPolicy": "不重试不重播；流标 interrupted"
+    },
+    {
+      "id": "FR-15",
+      "failureClass": "认证失败",
+      "failureClassEn": "authentication failure",
+      "signals": {
+        "http": ["401", "403"],
+        "businessCode": ["auth_refresh：1006；invalid_auth：3007（failure-codes.ts:13,15）", "category=authentication_failed（errors.ts:22）"]
+      },
+      "adapterEntry": "transport.ts:176（401/403 非 retryable）物化上抛",
+      "classifier": "failure.ts:161-163（status）/failure.ts:149-153（业务码 auth_refresh/invalid_auth）→ retryReason=auth_refresh、retryable=false",
+      "runtimeConsumption": "不重试；driver settle provider_error",
+      "budgetCount": "terminal",
+      "backoff": "无（凭据问题交由上层处理，重试无益）",
+      "replayPolicy": "不重试不重播"
+    },
+    {
+      "id": "FR-16",
+      "failureClass": "无效请求/被拒/模型不存在",
+      "failureClassEn": "invalid request / rejected / model not found",
+      "signals": {
+        "http": ["400", "413", "422", "404（endpoint_not_found 不在本梯单独分支，走终局/上下文判定）"],
+        "businessCode": ["rejected：1005；model_not_found：3006；invalid_request：3001（failure-codes.ts:13-15）"]
+      },
+      "adapterEntry": "transport.ts:176（非 429/5xx 不内部重试）",
+      "classifier": "failure.ts:164-166 / BUSINESS.rejected、model_not_found、invalid_request（failure.ts:78-80）→ retryable=false",
+      "runtimeConsumption": "不重试（400/413 带 contextOverflow 时转 FR-17）；driver settle provider_error",
+      "budgetCount": "terminal",
+      "backoff": "无",
+      "replayPolicy": "不重试不重播"
+    },
+    {
+      "id": "FR-17",
+      "failureClass": "上下文溢出",
+      "failureClassEn": "context overflow",
+      "signals": {
+        "http": ["400/413 且业务码 context_length_exceeded/context_window_exceeded/model_context_exceeded/model_context_window_exceeded/prompt_too_long（failure-codes.ts:33）"],
+        "businessCode": ["context：1261（failure-codes.ts:15）"]
+      },
+      "adapterEntry": "transport.ts:112（httpErrorMetadata 判 contextOverflow）",
+      "classifier": "failure.ts:164-166（4xx+overflow）/167（contextOverflow）/BUSINESS.context（failure.ts:86）→ code=model_context_exceeded、retryable=false",
+      "runtimeConsumption": "model-request.ts:94 溢出时释放 admission；:96 至多一次未提交 compactAfterOverflow 压缩重建（recovered 一次性标志 :92-105，不经预算）；无恢复则终局；driver 落 CompactionError/paused 或 provider_error",
+      "budgetCount": "terminal（恢复重建不消耗重试预算；每逻辑请求至多一次）",
+      "backoff": "无自动退避（压缩重建即时进行）",
+      "replayPolicy": "仅未提交流允许压缩重建；已提交（FR-13）不重建"
+    },
+    {
+      "id": "FR-18",
+      "failureClass": "响应解析失败/协议错误",
+      "failureClassEn": "invalid response / parse failure",
+      "signals": {
+        "exception": ["category=invalid_response 或 stage=parse（model-request.ts:77-78 validateMessage 失败物化 ValueError）"],
+        "stream": ["完整响应 JSON/形状非法（attempts.ts:95-100,138-142：已到达客户端的坏响应不重播）", "SSE 载荷在 finish 之后（providers 流机显式拒绝）"]
+      },
+      "adapterEntry": "attempts.ts:95-100（流）/138-142（非流）parse 阶段直接物化 ProviderRequestError，不内部重试",
+      "classifier": "failure.ts:140-141（梯首）→ code=invalid_model_response、retryable=false",
+      "runtimeConsumption": "不重试；driver.ts:173-187 协议修复环仅处理工具封套协议错误（repair，非重试）；recordFailure 落 session.model_failure 供 UI（tool-protocol.ts:118）",
+      "budgetCount": "terminal",
+      "backoff": "无",
+      "replayPolicy": "不重试不重播"
+    },
+    {
+      "id": "FR-19",
+      "failureClass": "本地流回调失败",
+      "failureClassEn": "local stream callback failure",
+      "signals": { "exception": ["ProviderCallbackError（errors.ts:152-161；notifyStreamCallback :188-197 包装，永不保留回调错误内容）"] },
+      "adapterEntry": "errors.ts:188-197 观察者异常物化（isStreamStop 透传）",
+      "classifier": "failure.ts:148 → code=model_request_failed、reason=unknown、retryable=false（本地 bug 不属于供应商失败）",
+      "runtimeConsumption": "不重试；driver.ts:145 settle paused(\"local stream callback failed\")",
+      "budgetCount": "terminal",
+      "backoff": "无",
+      "replayPolicy": "不重试不重播"
+    },
+    {
+      "id": "FR-20",
+      "failureClass": "未知终局（兜底）",
+      "failureClassEn": "unknown terminal (fallback)",
+      "signals": { "exception": ["任何未匹配上述梯级的错误（factsOf 泛读 status/code/providerCode/isRetryable）", "业务码表 terminal 行：1113/1309/1311/1008/1314/1315（failure-codes.ts:15-17,26）"] },
+      "adapterEntry": "attempts 各环最终物化（completeAttempts 末端 :150-163 保底 ProviderRequestError）",
+      "classifier": "failure.ts:174（对象显式 isRetryable=true → server_error 可重试，markedRetryable 通道）/175（其余 → BUSINESS.terminal，failure.ts:87，retryable=false）",
+      "runtimeConsumption": "按 retryable 布尔分流：true 走 FR-09 式重试，false 终局",
+      "budgetCount": "terminal 或 consumes_one_attempt（依 markedRetryable）",
+      "backoff": "可重试时指数退避；否则无",
+      "replayPolicy": "未提交可重试+discardPrelude；终局不重播"
+    }
+  ],
+  "invariants": [
+    {
+      "id": "INV-1",
+      "statement": "同一失败从 adapter 到 runtime 只计一次预算",
+      "verdict": "holds",
+      "evidence": [
+        "调度权单层归属：runtime 可重试时 adapter 每逻辑尝试恰 1 次 HTTP（model-retry.ts:124-126 → model-request.ts:51-52 → openai.ts:41-44）；runtime 不可重试时 adapter 有界内部尝试（标准 3 / lightweight 1+transportRetries∈[1,3]，openai.ts:43,75-84；options.ts:21,29）整体只占 1 个预算位（retry-policy.ts:73-80）",
+        "预算计数器唯一递增点 model-retry.ts:152 在完整退避等待之后；取消的等待抛出而不递增（model-retry.ts:158-171）",
+        "同一错误至多一次 retry.next：recorded 标志（model-request.ts:70,82,91）；恢复路径不经预算（:92-105，recovered 一次性）",
+        "空完成重试受双门约束（model-retry.ts:67,138）：emptyRetries≤1 且 attempt<maxAttempts"
+      ],
+      "tests": ["agent/test/model-retry.test.ts:15,45,74,107", "agent/test/model-request.test.ts:16,40", "providers/test/failure.test.ts:101"]
+    },
+    {
+      "id": "INV-2",
+      "statement": "取消不重试（ProviderCancelled/停止信号）",
+      "verdict": "holds",
+      "evidence": [
+        "分类：failure.ts:144 取消→retryable=false；failure.ts:179-181 isRetryableFailure 排除 Cancelled",
+        "调度：model-retry.ts:130 stopped/aborted 强制取消分类；:137 allowed 要求 !stopped&&!aborted；等待期 250ms 切片协作检查（:151,158-171）",
+        "入口：model-request.ts:49 准入后停止即抛；流观察者停止即抛（stream.ts:116,123,134）；准入各阶段 abort→ProviderCancelled（request-admission.ts:34-36,50-53,63-65,75,84-86,92-115）",
+        "回合层落 settle(\"stopped\")，不记 provider 失败（driver.ts:60,135,137,148；model-request.test.ts:173）"
+      ],
+      "tests": ["agent/test/model-retry.test.ts:94", "agent/test/model-request.test.ts:173", "agent/test/model-admission.test.ts:145,348", "providers/test/request-admission.test.ts:65"]
+    },
+    {
+      "id": "INV-3",
+      "statement": "已消费/已提交流式输出不重播（committed/discardPrelude）",
+      "verdict": "holds",
+      "evidence": [
+        "提交界：首个文本/推理 delta 或 accept 到的 tool_calls 置位（stream.ts:70-76,98-117,118-135,77-80）；未提交 tool 快照仅存私有 prelude 不公开（stream.ts:90-97）",
+        "adapter fail-closed：delivered 后任何可重试/传输错误立即上抛不内部重试（attempts.ts:82,93；头注释 attempts.ts:4-9）",
+        "runtime 否决：committed 跳过恢复（model-request.ts:92）、否决重试（:107 → model-retry.ts:137）、interrupt 保留部分输出（:112；stream.ts:145-149）",
+        "重试前清理：discardPrelude+finish(null,true)（model-request.ts:72,102,108；stream.ts:81），新尝试全新 RequestStream（model-request.ts:60-64）；已完成后的可疑空响应以 committed:true 终局，防 completed 事件重播（model-request.ts:81-85）"
+      ],
+      "tests": ["agent/test/stream-boundary.test.ts:28,55,75", "agent/test/model-request.test.ts:86,115", "agent/test/model-retry.test.ts:45"]
+    },
+    {
+      "id": "INV-4",
+      "statement": "限流/Retry-After/连接断开/无输出失败按分类驱动退避",
+      "verdict": "holds",
+      "evidence": [
+        "有序分类梯（failure.ts:137-176）：parse→invalid_request→取消→空闲超时→回调→业务码→配额→超时→429→529→认证→4xx→溢出→5xx→TLS→代理→网络→markedRetryable→终局",
+        "Retry-After 全链：retry-after.ts:153-167（retry-after-ms 优先、x-should-retry 否决）→ transport.ts:161-162 → errors.ts:99-103（≤1 天界）→ failure.ts:127-134（仅随可重试分类）→ retry-policy.ts:92-99（≤5min 或<指数时原值，否则 2s·2^n≤60s+jitter）",
+        "分类差异化退避：429/过载可重试（FR-01/10）vs 配额终局（FR-02）；网络/超时可重试（FR-04/07/08）vs TLS 终局（FR-06）；空完成合成 server_error 可重试一次（FR-11，model-retry.ts:130-131）",
+        "退避受回合 deadline 约束（model-retry.ts:139）；流空闲界随重试 +30s（stream-idle-timeout.ts:13-22）"
+      ],
+      "tests": ["providers/test/failure.test.ts:24,50,66,90,101,112,125,150", "agent/test/model-retry.test.ts:15,107", "providers/test/stream-idle-timeout.test.ts:60,105"]
+    }
+  ],
+  "boundaryNotes": [
+    {
+      "id": "BN-01",
+      "note": "调度权归属矩阵：transportAttempts=1 ⟺ runtime 预算>1（runner 拥有调度）；SingleAttempt/maxAttempts=1 ⟺ adapter 内部拥有调度（标准 3 次、lightweight 1+transportRetries 次）。两层退避曲线独立（adapter 0.25s·2^n≤2s vs runner 2s·2^n≤60s），因单层归属不会叠加在同一失败上。"
+    },
+    {
+      "id": "BN-02",
+      "note": "Retry-After 双血统语义：adapter 内部 sleep 用 Python urllib 血统的 clamp [0,2]s 值（retry-after.ts:135-146 → attempts.ts:89,131）；runner 调度用 ZCode 血统未 clamp 值（≤5min 优先，retry-policy.ts:30,92-99）。SSE error envelope 无响应头可用，故流中 429/5xx 信封不带 Retry-After（transport.ts:186-221）。"
+    },
+    {
+      "id": "BN-03",
+      "note": "未提交压缩/修复恢复（model-request.ts:92-105）不是重试：不经预算、每逻辑请求至多一次（recovered 标志）。副作用：恢复重建会使 model_request_started 以相同 attempt 编号、不同 attemptId 再次发布（model-retry.ts:86 begin 重置 attemptId）——状态事件工件，预算无重复计数；消费方应以 attemptId 区分。"
+    },
+    {
+      "id": "BN-04",
+      "note": "driver 层输出受限续跑（driver.ts:152-161）不是 provider 重试：保留 partial、以回合内 continuation 提示续写（MAX_OUTPUT_TOKEN_CONTINUATIONS 界），finish_reason 语义恢复而非失败重发。与 C-MDL-03 执行级回退（F01.03）明确分列。"
+    },
+    {
+      "id": "BN-05",
+      "note": "off-peak（automation 插件）走独立排队/票据，不经 model-retry 预算；ModelRetryReason.OffpeakQueued（failure.ts:30-31）仅为事件词汇保留。上游「off-peak 票据重试仅在流已产出前允许」对应到本树的通用规则：一切重试仅在 stream 未提交时允许（INV-3）。"
+    },
+    {
+      "id": "BN-06",
+      "note": "profile 一致性：session.runtime_profile 由 driver.ts:35 从 provider.runtimeProfile 播种，回合内 runner 与 adapter 的 profile 判定一致（model-retry.ts:58 与 openai.ts:241 读同源）。若未来接线允许会话标准 profile 搭配 lightweight adapter，最坏 HTTP 尝试数为 adapter(≤3)×runtime(maxAttempts)，但预算仍按逻辑尝试单计数，不构成双重计预算。"
+    }
+  ],
+  "confirmedGaps": [],
+  "gapDisposition": {
+    "C-MDL-03": "执行级选型回退（SingleAttempt 执行预算+已接收工具结算+原会话模型恢复）为上游独立通路，delta=gap，本轮仅在本表与普通重试分列（BN-04），实现留 F01.03。",
+    "FC-GAP-03": "F01.01 字段账本确认的剪断 tool_use 丢弃策略跨协议不一致（Anthropic 静默丢/OpenAI 保留），属同族已输出边界但为字段契约问题，留在 provider-field-contracts 账本，不在本轮修复。"
+  },
+  "testBacking": [
+    "agent/test/model-retry.test.ts（:15 瞬态重发+事件；:45 预算/不可重试/已提交即停；:74 lightweight 单次；:94 等待期用户停止；:107 wall 界）",
+    "agent/test/model-request.test.ts（:16 空完成重试一次+事件有序；:40 重复空响应与预算边界；:86 失败 tool prelude 不泄漏快照；:115 可见正文/隐藏推理后不重试；:173 空闲重试期取消不落 provider 失败）",
+    "agent/test/stream-boundary.test.ts（:28 快照私有；:55 有序 prelude 冲刷、空 delta 不提交；:75 隐藏推理提交界）",
+    "agent/test/model-admission.test.ts（:145 队列取消不调 provider；:198 退避前释放准入；:348 禁用/deadline/宿主中止清队）",
+    "providers/test/failure.test.ts（:24 状态梯；:50 业务码先于状态；:66 取消/回调/未知不重试；:90 环境变量；:101 预算档；:112 退避+合理 Retry-After 优先；:125 parseRetryAfterMs；:150 业务码+未 clamp Retry-After 保留）",
+    "providers/test/stream-idle-timeout.test.ts、providers/test/request-admission.test.ts（空闲界与准入取消语义）"
+  ],
+  "verdict": "aligned"
+}

@@ -8,6 +8,7 @@ import { ADAPTERS, type InputAdapter } from "./adapters.ts";
 import { APPLY_PATCH_DESCRIPTION, APPLY_PATCH_SCHEMA } from "./apply-patch-contract.ts";
 import { SKILL_DESCRIPTION, SKILL_SCHEMA } from "./skill-contract.ts";
 import { AGENT_DESCRIPTION, AGENT_SCHEMA } from "./agent-contract.ts";
+import { CHANNEL_REPLY_DESCRIPTION, CHANNEL_REPLY_SCHEMA } from "./channel-reply-contract.ts";
 import * as D from "./descriptions.ts";
 import { MODEL_TOOL_NAMES } from "./names.ts";
 import * as F from "./schemas-files.ts";
@@ -50,6 +51,7 @@ const SPEC: Readonly<Record<string, Pick<ToolContract, "description" | "schema" 
   apply_patch: { description: APPLY_PATCH_DESCRIPTION, schema: APPLY_PATCH_SCHEMA },
   skill_read: { description: SKILL_DESCRIPTION, schema: SKILL_SCHEMA },
   task: { description: AGENT_DESCRIPTION, schema: AGENT_SCHEMA },
+  reply_to_channel: { description: CHANNEL_REPLY_DESCRIPTION, schema: CHANNEL_REPLY_SCHEMA },
 };
 
 export const TOOL_CONTRACTS: ReadonlyMap<string, ToolContract> = new Map(Object.entries(SPEC).map(([internal, spec]) => {

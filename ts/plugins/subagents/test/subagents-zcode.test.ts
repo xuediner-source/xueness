@@ -59,7 +59,7 @@ describe("the Agent tool contract", () => {
     assert.equal(modelToolName("task"), "Agent"); assert.equal(internalToolName("Agent"), "task");
     const contract = contractFor("Agent")!;
     assert.equal(contract.internal, "task");
-    assert.deepEqual(Object.keys((AGENT_SCHEMA as { properties: object }).properties), ["description", "prompt", "subagent_type"]);
+    assert.deepEqual(Object.keys((AGENT_SCHEMA as { properties: object }).properties), ["description", "prompt", "subagent_type", "inherit_history"]);
     assert.ok(contract.description.startsWith("Launch a new agent to handle complex, multi-step tasks."));
     assert.ok(!contract.description.includes("SendMessage") && !contract.description.includes("CreateWorkflow") && !contract.description.includes("run_in_background"));
   });

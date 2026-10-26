@@ -6,13 +6,15 @@
  */
 import { isDict, JsonFloat, pyIter, pyStr } from "@xueness/contracts";
 import { pyCodeCompare } from "@xueness/sessions";
+import { validateComponents } from "./components.ts";
+import { BUILD_ONLY_FIELDS, validateContributionFields } from "./contribution.ts";
 import { digest, validateDataManifest, type DataManifest } from "./sdk.ts";
 
 const EXECUTABLE = new Set(["entrypoint", "command", "commands", "module", "modules", "import", "imports", "script", "scripts", "exec", "eval", "run", "shell", "bin", "binary", "hook", "hooks", "install", "postinstall", "uninstall", "url", "downloadUrl", "download", "homepage", "repository"]);
-const MANIFEST_FIELDS = new Set(["id", "version", "apiVersion", "enabled", "builtin", "capabilities", "dependencies", "name", "description", "sha256"]);
+const MANIFEST_FIELDS = new Set(["id", "version", "apiVersion", "enabled", "builtin", "capabilities", "dependencies", "name", "description", "sha256", "components", "settings", "events"]);
 const ENTRY_FIELDS = new Set(["id", "name", "description", "sha256", "manifest"]);
 const MARKETPLACE_FIELDS = new Set(["apiVersion", "items"]);
-const BUILD_ONLY = ["features", "frontendModules", "panels", "defaultEnabled"];
+const BUILD_ONLY: readonly string[] = BUILD_ONLY_FIELDS;
 const INLINE_TARGET = "<request body>";
 const MAX_ITEMS = 100;
 
@@ -57,6 +59,10 @@ export function validateManifestDocument(item: unknown, resolvable: ReadonlySet<
   const [manifest, shapeErrors] = validateDataManifest(item);
   for (const text of shapeErrors) errors.push(issue("invalid_manifest", text, item.id));
   if (!manifest) return [errors, warnings, null];
+  const [, componentIssues] = validateComponents(item.components, manifest.id);
+  for (const field of componentIssues) errors.push(issue("invalid_component", `${field.path}: ${field.message}`, manifest.id));
+  // Components are audited above; the contract pass covers `settings` and `events` so nothing is reported twice.
+  for (const field of validateContributionFields({ settings: item.settings, events: item.events }, manifest.id)) errors.push(issue("invalid_contract", `${field.path}: ${field.message}`, manifest.id));
   if (item.sha256 !== undefined && item.sha256 !== null) {
     const own: Row = {};
     for (const [key, value] of Object.entries(item)) if (key !== "sha256") own[key] = value;

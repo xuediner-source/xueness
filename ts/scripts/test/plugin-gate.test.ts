@@ -48,7 +48,7 @@ describe("plugin gate", () => {
   it("passes for the bundled plugins", () => {
     const result = checkPlugins(join(import.meta.dirname, "..", ".."));
     assert.deepEqual(result.problems, []);
-    assert.equal(result.plugins, 31);
+    assert.equal(result.plugins, 35);
   });
   it("keeps shared persistence and provider adapters behind declared capabilities", () => {
     assert.deepEqual(scan('import { SessionStore } from "@xueness/sessions";'), ["1: @xueness/sessions needs a declared fs capability"]);

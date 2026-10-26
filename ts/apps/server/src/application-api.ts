@@ -16,7 +16,7 @@ import { createPlanningApi, publicGoal, stageGoal } from "@xueness/plugin-planni
 import { createGitApi } from "@xueness/plugin-git";
 import { createHooksHttp } from "@xueness/plugin-hooks";
 import { createSkillsHttp } from "@xueness/plugin-skills";
-import { createElicitationHttp, createMcpOpsHttp, createMcpResourcesHttp } from "@xueness/plugin-mcp";
+import { createAppsHttp, createElicitationHttp, createMcpOpsHttp, createMcpResourcesHttp } from "@xueness/plugin-mcp";
 import { createSubagentTasksHttp, createSubagentsResourcesHttp, TaskRegistry } from "@xueness/plugin-subagents";
 import { createShellSettingsApi } from "@xueness/plugin-shell";
 import { createMcpRuntimeApi } from "@xueness/plugin-mcp";
@@ -170,6 +170,7 @@ export async function createApplicationApi(options: ApplicationApiOptions): Prom
   const mcpResources = createMcpResourcesHttp({ stateDir: options.stateDir, enabled });
   const mcpOps = createMcpOpsHttp({ stateDir: options.stateDir, enabled, projectDir, webRuns: options.webRuns, allowedRoots });
   const elicitationHttp = createElicitationHttp({ stateDir: options.stateDir, enabled });
+  const appsHttp = createAppsHttp({ stateDir: options.stateDir, enabled });
   const subagentResources = createSubagentsResourcesHttp({ stateDir: options.stateDir, enabled });
   const subagentTasks = createSubagentTasksHttp({ stateDir: options.stateDir, enabled, store, projectDir, webRuns: options.webRuns, allowedRoots, registry: taskRegistry,
     cancelEnabled: () => { const section = loadUserSettings(options.stateDir).agent; return section !== null && typeof section === "object" && !Array.isArray(section) && (section as { subagentCancelOneEnabled?: unknown }).subagentCancelOneEnabled === true; },
@@ -186,10 +187,10 @@ export async function createApplicationApi(options: ApplicationApiOptions): Prom
   } });
   const round5 = createRound5({ stateDir: options.stateDir, enabled, store, allowedRoots, resolveAllowed: (value) => workspaces.resolveAllowed(value), taskRegistry, sessionsRunning: () => running.size > 0, ...(options.desktopBridge ? { desktopBridge: options.desktopBridge } : {}), ...(options.desktopToken ? { desktopToken: options.desktopToken } : {}), ...(options.webappDir ? { webappDir: options.webappDir } : {}) });
   const round8 = createRound8({ projectRoot: options.projectRoot, stateDir: options.stateDir, locks, enabled });
-  const migratedOwns = (method: string, parts: readonly string[]): boolean => round8.owns(method, parts) || hooksHttp.owns(method, parts) || skillsHttp.owns(method, parts) || mcpResources.owns(method, parts) || mcpOps.owns(method, parts) || elicitationHttp.owns(method, parts) || subagentResources.owns(method, parts) || subagentTasks.owns(method, parts) || runtimeConfigApi.owns(method, parts) || shellHttp.owns(method, parts) || networkHttp.owns(method, parts) || memoryHttp.owns(method, parts) || filesHttp.owns(method, parts) || extensionsHttp.owns(method, parts) || round5.owns(method, parts) || round6.owns(method, parts) || round7.owns(method, parts);
+  const migratedOwns = (method: string, parts: readonly string[]): boolean => round8.owns(method, parts) || hooksHttp.owns(method, parts) || skillsHttp.owns(method, parts) || mcpResources.owns(method, parts) || mcpOps.owns(method, parts) || elicitationHttp.owns(method, parts) || appsHttp.owns(method, parts) || subagentResources.owns(method, parts) || subagentTasks.owns(method, parts) || runtimeConfigApi.owns(method, parts) || shellHttp.owns(method, parts) || networkHttp.owns(method, parts) || memoryHttp.owns(method, parts) || filesHttp.owns(method, parts) || extensionsHttp.owns(method, parts) || round5.owns(method, parts) || round6.owns(method, parts) || round7.owns(method, parts);
   return {
     agent, store, enabled, dynamicWorkflows, memoryDreams,
-    csrfToken: bridge.csrfToken, routes: [...memoryDreamApi.routes, ...settingsApi.routes, ...providers.routes, ...sessions.routes, ...commands.routes, ...composer.routes, ...hooksHttp.routes, ...skillsHttp.routes, ...mcpResources.routes, ...mcpOps.routes, ...elicitationHttp.routes, ...subagentResources.routes, ...subagentTasks.routes, ...runtimeConfigApi.routes, ...shellHttp.routes, ...networkHttp.routes, ...memoryHttp.routes, ...filesHttp.routes, ...extensionsHttp.routes, ...round5.routes, ...round6.routes, ...round7.routes, ...round8.routes],
+    csrfToken: bridge.csrfToken, routes: [...memoryDreamApi.routes, ...settingsApi.routes, ...providers.routes, ...sessions.routes, ...commands.routes, ...composer.routes, ...hooksHttp.routes, ...skillsHttp.routes, ...mcpResources.routes, ...mcpOps.routes, ...elicitationHttp.routes, ...appsHttp.routes, ...subagentResources.routes, ...subagentTasks.routes, ...runtimeConfigApi.routes, ...shellHttp.routes, ...networkHttp.routes, ...memoryHttp.routes, ...filesHttp.routes, ...extensionsHttp.routes, ...round5.routes, ...round6.routes, ...round7.routes, ...round8.routes],
     owns: (method, parts) => memoryDreamApi.owns(method, parts) || settingsApi.owns(method, parts) || providers.owns(method, parts) || sessions.owns(method, parts) || browserHandoff.owns(method, parts) || commands.owns(method, parts) || composer.owns(method, parts) || migratedOwns(method, parts),
     lossless: (method, parts) => settingsApi.lossless(method, parts) || commands.lossless(method, parts) || hooksHttp.lossless(method, parts) || skillsHttp.lossless(method, parts) || mcpResources.lossless(method, parts) || subagentResources.lossless(method, parts) || extensionsHttp.lossless(method, parts) || round7.lossless(method, parts),
     async dispatch(method, parts, query, data, request) {
@@ -204,6 +205,7 @@ export async function createApplicationApi(options: ApplicationApiOptions): Prom
       if (mcpResources.owns(method, parts)) return mcpResources.dispatch(method, parts, query, data);
       if (mcpOps.owns(method, parts)) return mcpOps.dispatch(method, parts, query, data);
       if (elicitationHttp.owns(method, parts)) return elicitationHttp.dispatch(method, parts, query, data);
+      if (appsHttp.owns(method, parts)) return appsHttp.dispatch(method, parts, query, data);
       if (subagentResources.owns(method, parts)) return subagentResources.dispatch(method, parts, query, data);
       if (subagentTasks.owns(method, parts)) return subagentTasks.dispatch(method, parts, query, data);
       if (runtimeConfigApi.owns(method, parts)) return (enabled("settings") ? runtimeConfigApiForRequest() : runtimeConfigApi).dispatch(method, parts, query, data);
@@ -219,6 +221,6 @@ export async function createApplicationApi(options: ApplicationApiOptions): Prom
       if (providerResult !== null) return providerResult;
       return sessions.dispatch(method, parts, query, data, request);
     },
-    async close() { round5.close(); round6.close(); await memoryDreams.close(); await dynamicWorkflows.close(); await agent.dispose(); await round7.close(); await locks.close(); },
+    async close() { round5.close(); await round6.close(); await memoryDreams.close(); await dynamicWorkflows.close(); await agent.dispose(); await round7.close(); await locks.close(); },
   };
 }

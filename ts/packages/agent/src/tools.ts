@@ -1,6 +1,7 @@
 import { isDict, pyJsonDumps } from "@xueness/contracts";
-import { argumentsObject } from "@xueness/providers";
-import { awaitingApprovalResult, turnControlOf, type ApprovalRequest, type ToolCall } from "@xueness/tool-bridge";
+import { argumentsObject, DEFERRED_TOOL_CALL, resolveDeferredToolCall } from "@xueness/providers";
+import { awaitingApprovalResult, planBatches, turnControlOf, type ApprovalRequest, type ToolCall } from "@xueness/tool-bridge";
+import { toolExposure } from "@xueness/engine-tools";
 import { evidenceAliases } from "./completion.ts";
 import { internalToolName } from "./tool-contract/names.ts";
 import { effectiveExtensions } from "./finalize.ts";
@@ -46,17 +47,42 @@ export async function runTools(context: AgentContext, runner: AgentRunnerOptions
   const paused = (): Row => ({ ok: false, error: "not executed: run paused", retryable: false, error_code: "run_paused" });
   const prepare = async (call: Row): Promise<{ call: ToolCall; result: Row | null }> => {
     const fn = call.function as Row;
-    const bridgeCall: ToolCall = { id: call.id as string, name: (fn.name as string).trim() };
+    let bridgeCall: ToolCall = { id: call.id as string, name: (fn.name as string).trim() };
     started.set(bridgeCall.id, performance.now() / 1000);
     if (isDict(results[bridgeCall.id])) return { call: bridgeCall, result: results[bridgeCall.id] as Row };
     if (halt || stopTurn || blockEffects || context.signal.aborted || context.options.shouldStop?.()) return { call: bridgeCall, result: paused() };
     if (!bridgeCall.name) return { call: bridgeCall, result: { ok: false, error: "unknown tool", error_code: "unknown_tool" } };
+    // DeferredToolCall admission (C-TOOL-04): a streamed deferred reference is admitted
+    // here and unwrapped into a real call to its registered target. Only a live envelope
+    // (the wrapper registered by an enabled plugin) is admitted, so disabling providers
+    // disables the whole path with it. The unwrapped call then takes the ordinary
+    // owner / active / bridge steps below — the same permission session, schema
+    // validation, gate and scheduling as a direct call, never a second table.
+    let admittedInput: Row | null = null;
+    if (bridgeCall.name === DEFERRED_TOOL_CALL && typeof runner.hooks.toolDefinition === "function") {
+      const wrapperOwner = runner.hooks.toolOwner(DEFERRED_TOOL_CALL);
+      if (!wrapperOwner || !context.enabled(wrapperOwner)) return { call: bridgeCall, result: { ok: false, error: "plugin disabled", error_code: "plugin_disabled", retryable: false,
+        user_reason: "工具所属插件已关闭；请在插件管理中启用后继续。" } };
+      let envelope: Row;
+      try { envelope = argumentsObject(fn.arguments); } catch { return { call: bridgeCall, result: { ok: false, error: "invalid tool arguments", error_code: "invalid_tool_arguments" } }; }
+      const resolved = resolveDeferredToolCall(envelope);
+      if ("issue" in resolved) return { call: bridgeCall, result: { ok: false, error: `invalid deferred tool call: ${resolved.issue}`, error_code: "invalid_tool_arguments" } };
+      // An unresolvable target keeps flowing as a real call: the owner check below
+      // answers plugin_disabled exactly like a direct call to an unknown name.
+      const definition = runner.hooks.toolDefinition(resolved.target);
+      if (definition && toolExposure(definition) !== "deferred") return { call: bridgeCall, result: { ok: false, error: `${resolved.target} is not a deferred tool; call it directly`, error_code: "not_deferred_tool" } };
+      bridgeCall = { id: bridgeCall.id, name: resolved.target };
+      admittedInput = resolved.input as Row;
+    }
     const owner = runner.hooks.toolOwner(bridgeCall.name);
     if (!owner || !context.enabled(owner)) return { call: bridgeCall, result: { ok: false, error: "plugin disabled", error_code: "plugin_disabled", retryable: false,
       user_reason: "工具所属插件已关闭；请在插件管理中启用后继续。" } };
-    if (!active.has(bridgeCall.name)) return { call: bridgeCall, result: { ok: false, error: "tool not active; discover it with tool_search first" } };
+    // A deferred target never sits in the request's tool view; its admission above
+    // stands in for the active check and cannot admit a non-deferred tool.
+    if (admittedInput === null && !active.has(bridgeCall.name)) return { call: bridgeCall, result: { ok: false, error: "tool not active; discover it with tool_search first" } };
     let input: Row;
-    try { input = argumentsObject(fn.arguments); } catch { return { call: bridgeCall, result: { ok: false, error: "invalid tool arguments", error_code: "invalid_tool_arguments" } }; }
+    if (admittedInput !== null) input = admittedInput;
+    else { try { input = argumentsObject(fn.arguments); } catch { return { call: bridgeCall, result: { ok: false, error: "invalid tool arguments", error_code: "invalid_tool_arguments" } }; } }
     const prepared = { ...bridgeCall, input };
     for (const extension of effectiveExtensions(context, extensions)) {
       const veto = await extension.beforeTool?.(context, prepared);
@@ -94,17 +120,15 @@ export async function runTools(context: AgentContext, runner: AgentRunnerOptions
     for (const extension of effectiveExtensions(context, extensions)) await extension.toolResultRecorded?.(context, call, result);
     context.emit({ type: "tool_result", id: call.id, name: call.name, ok: !!result.ok, error: result.error ?? "" });
   };
-  // Only explicitly classified reads run in parallel. Other calls are barriers,
-  // so an approval request prevents every subsequent side effect.
-  for (let start = 0; start < calls.length;) {
-    let end = start + 1;
-    const safe = (index: number): boolean => {
-      const name = (calls[index]!.function as Row).name as string;
-      return runner.hooks.concurrencySafe?.(name) === true;
-    };
-    if (safe(start) && !halt && !stopTurn && !blockEffects) while (end < calls.length && end - start < 10 && safe(end)) end += 1;
+  // Only explicitly classified reads run in parallel (C-TOOL-07 planning: bounded
+  // groups of consecutive safe calls). Other calls are barriers, so an approval
+  // request prevents every subsequent side effect.
+  const eligible = (call: Row): boolean => runner.hooks.concurrencySafe?.(internalToolName(String((call.function as Row).name ?? ""))) === true;
+  for (let offset = 0; offset < calls.length;) {
+    const remaining = calls.slice(offset);
+    const group = planBatches({ calls: remaining, eligible, concurrencyCap: runner.hooks.batchConcurrency, suspended: () => halt !== null || stopTurn !== null || blockEffects })[0]!;
     const prepared = [];
-    for (const call of calls.slice(start, end)) prepared.push(await prepare(call));
+    for (const call of remaining.slice(group.start, group.end)) prepared.push(await prepare(call));
     const outcomes = await Promise.all(prepared.map(async (item): Promise<Row> => {
       if (item.result) return item.result;
       try { return await runner.toolBridge.call(item.call, { signal: context.signal, onApprovalRequest,
@@ -112,7 +136,7 @@ export async function runTools(context: AgentContext, runner: AgentRunnerOptions
       catch (error) { return { ok: false, error: error instanceof Error ? error.name : "Error" }; }
     }));
     for (let index = 0; index < prepared.length; index += 1) await record(prepared[index]!.call, outcomes[index]!);
-    start = end;
+    offset += group.end;
   }
   return { awaitingUser, halt, stopTurn };
 }

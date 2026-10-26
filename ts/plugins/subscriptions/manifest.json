@@ -7,11 +7,11 @@
   "defaultEnabled": false,
   "installPackage": "xueness-subscriptions",
   "dependencies": ["providers"],
-  "capabilities": { "fs": { "read": ["state"], "write": ["state"] }, "exec": ["node"] },
+  "capabilities": { "fs": { "read": ["state"], "write": ["state"] }, "net": { "connect": ["*"] }, "exec": ["node"] },
   "httpFamilies": ["subscriptions"],
   "panels": ["subscriptions"],
   "provides": ["subscriptions.worker"],
-  "modules": ["state", "accounts", "broker", "provider"],
+  "modules": ["state", "accounts", "broker", "provider", "entitlements", "entitlement-config"],
   "frontendModules": ["plugins/subscriptions/api.ts", "plugins/subscriptions/index.tsx"],
   "backendAssets": ["assets/worker.mjs", "assets/protocols.mjs", "assets/compat.mjs", "assets/vendor/hub.mjs", "assets/vendor/commandcode.mjs", "assets/vendor/qoder.mjs", "assets/vendor/auth/oauth-flow.mjs", "assets/vendor/auth/qwen-device-flow.mjs", "assets/vendor/auth/safety.mjs"],
   "dataFiles": ["assets/catalog.json", "assets/vendor/LICENSE-MIT.txt"],
@@ -21,6 +21,8 @@
     { "id": "subscriptions.quota", "name": "上游实际额度与重置时间", "nameEn": "Upstream reported quota and reset times" },
     { "id": "subscriptions.models", "name": "实际型号发现与会话模型选择", "nameEn": "Model discovery and conversation selection" },
     { "id": "subscriptions.streams", "name": "多协议流式文本、思考与工具调用", "nameEn": "Streaming text, reasoning and tool calls across protocols" },
+    { "id": "subscriptions.entitlements", "name": "用户授权权益服务：账户、订阅、配额与票据适配", "nameEn": "User-authorized entitlement service: account, subscription, quota and ticket adapters" },
+    { "id": "subscriptions.tickets", "name": "可用时真实走票据路径，未公开权益接口列为待外部条件", "nameEn": "Real ticket path when available; unpublished vendor interfaces stay pending external conditions" },
     { "id": "subscriptions.lifecycle", "name": "可选安装、凭据保护与禁用即停", "nameEn": "Optional installation, private credentials and disable cleanup" }
   ]
 }

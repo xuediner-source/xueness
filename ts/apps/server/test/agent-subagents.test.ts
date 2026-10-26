@@ -9,6 +9,7 @@ import type { AgentProvider, Row } from "@xueness/agent";
 import type { RunPolicy } from "@xueness/plugin-sessions";
 import { createAgentService } from "../src/agent-service.ts";
 import { configuredAgentFeatures } from "../src/agent-features.ts";
+import { childSelection, childToolPolicy } from "../src/agent-subagents.ts";
 import { pythonUnavailableReason, runPython } from "../../../test-support/python-oracle.ts";
 
 const call = (id: string, name: string, input: Row): Row => ({ id, type: "function", function: { name, arguments: JSON.stringify(input) } });
@@ -69,7 +70,7 @@ describe("subagents on the TS agent service", () => {
       const runs = session.task_runs as Row[];
       assert.equal(runs.length, 1);
       assert.deepEqual({ ...runs[0], startedAt: 0, endedAt: 0 }, { id: taskId, parent: session.id, agent: "explore", promptChars: 33, status: "completed", steps: 2, startedAt: 0, endedAt: 0,
-        summary: "a.txt says secret-42", error: "", root: local.root, childSessionId: runs[0]!.childSessionId, parentSessionId: session.id, rootSessionId: session.id, canResume: true, recoveryReason: "followup_required" });
+        summary: "a.txt says secret-42", error: "", root: local.root, childSessionId: runs[0]!.childSessionId, parentSessionId: session.id, rootSessionId: session.id, canResume: true, recoveryReason: "followup_required", notified: true });
       const directory = join(local.state, "subagent-sessions", String(session.id));
       assert.deepEqual(readdirSync(directory).filter((name) => name.endsWith(".json")), [`${String(runs[0]!.childSessionId)}.json`]);
       const child = await new SessionStore(directory).load(String(runs[0]!.childSessionId));
@@ -183,6 +184,53 @@ print(json.dumps({"child": child["id"], "recovery": recovery_info(child), "rows"
       assert.equal(service.supports(session, {}), true);
       session.subagent_coordination = { "task-abc": { call_id: "t1", collected: true, turn: 1 } };
       assert.equal(service.supports(session, { allow_subagents: true }), true);
+    } finally { await service.dispose(); local.close(); }
+  });
+  it("F08.01: a definition's model override is clamped to the host ceiling and its tools never exceed the parent's", async () => {
+    const parent = { model_selection: { provider_id: "prov-a", model: "model-a", reasoning_effort: "low" } } as never;
+    // Inside the ceiling the override holds; outside it the parent's model wins.
+    assert.deepEqual(childSelection(parent, { providerId: "prov-a", model: "model-b" }, ["model-a", "model-b"]).selection, { provider_id: "prov-a", model: "model-b", reasoning_effort: "low" });
+    const clamped = childSelection(parent, { providerId: "prov-a", model: "model-z" }, ["model-a", "model-b"]);
+    assert.deepEqual(clamped.selection, { provider_id: "prov-a", model: "model-a", reasoning_effort: "low" });
+    // A host with no saved profiles (env-configured) declares no ceiling.
+    assert.deepEqual(childSelection(parent, { model: "model-z" }, null).selection.model, "model-z");
+    // The child's tools stay inside the parent's offered set minus every denial.
+    const grant = childToolPolicy({ tools: null, disallowedTools: ["Grep"] } as never, ["read", "grep", "bash", "Task"], ["bash"]);
+    assert.equal(grant.allowed("read"), true);
+    assert.equal(grant.allowed("bash"), false, "the parent's denial bounds the child");
+    assert.equal(grant.allowed("grep"), false, "the profile's denial applies through the alias");
+    assert.equal(grant.allowed("Task"), false, "delegation itself is denied");
+  });
+  it("F08.01: inherit_history branches the parent's narration into the child without touching the parent journal", async () => {
+    const local = scratch(); writeFileSync(join(local.root, "a.txt"), "x\n");
+    const session = await local.store.new("Branch history", local.root);
+    (session.messages as Row[]).push(
+      { role: "user", content: "earlier question" },
+      { role: "assistant", content: "earlier answer" },
+    );
+    const service = createAgentService({ store: local.store, stateDir: local.state, enabled });
+    let childPrompt: Row[] = []; let parent = 0;
+    const provider: AgentProvider = { async complete(messages, tools) {
+      if (isChild(messages)) { childPrompt = messages; return { content: "done" }; }
+      parent += 1;
+      if (parent === 1) return { tool_calls: [call("a1", "Agent", { description: "x", prompt: "Read a.txt", inherit_history: true })] };
+      return parent === 2 ? { tool_calls: [call("c1", "task_collect", { wait_seconds: 30, reason: "no_independent_work", detail: "need the branch" })] } : { content: "ok" };
+    } };
+    try {
+      await service.createRunner(session, provider, policy({ allow_subagents: true })).run(session);
+      const branch = childPrompt.filter((message) => message._meta_source === "inherited_history");
+      assert.deepEqual(branch.map((message) => [message.role, message.content]), [["user", "Branch history"], ["user", "earlier question"], ["assistant", "earlier answer"]],
+        "the inherited turns sit between the system and task prompts, tagged");
+      assert.ok(String(childPrompt[0]!.content).includes("This delegated task is read-only."));
+      const task = childPrompt.findIndex((message) => message._meta_source !== "inherited_history" && message.role === "user" && String(message.content).includes("Read a.txt"));
+      assert.ok(branch.length && task > branch.length, "the task prompt follows the branch");
+      const run = (session.task_runs as Row[])[0]!;
+      const child = await new SessionStore(join(local.state, "subagent-sessions", String(session.id))).load(String(run.childSessionId));
+      assert.deepEqual((child.delegation as Row).contextInherited !== undefined ? [(child.delegation as Row).contextInherited, (child.delegation as Row).inheritedMessages] : [false, 0], [true, 3]);
+      // The parent's own journal is unchanged: its turns carry no inherited tag.
+      assert.ok((session.messages as Row[]).every((message) => message._meta_source !== "inherited_history"));
+      const saved = await local.store.load(String(session.id));
+      assert.deepEqual((saved.messages as Row[]).map((message) => message.content), (session.messages as Row[]).map((message) => message.content));
     } finally { await service.dispose(); local.close(); }
   });
 });

@@ -1,9 +1,13 @@
 import type { AgentExtension, ModelRequest } from "@xueness/agent";
+import { appendUserTurn } from "@xueness/agent";
+import { goalDecisionFromRun, journalGoalStop, stopCodeIsTerminal } from "./goal-contract.ts";
 import { afterGoalRun } from "./goal-driver.ts";
 import { sanitizeGoal } from "./goal.ts";
+import { goalStamp } from "./goal-runtime.ts";
 import { beforeGoalRun } from "./goal-runtime.ts";
 import { goalStateReminder } from "./goal-state.ts";
 import type { GoalModelJson } from "./goal-verifier.ts";
+import type { Row } from "./delivery.ts";
 
 function lightweight(context: Parameters<NonNullable<AgentExtension["prepareRequest"]>>[0]): boolean {
   return (context.session.runtime_profile ?? context.provider.runtimeProfile) === "lightweight";
@@ -41,8 +45,27 @@ export function planningGoalExtension(model: GoalModelJson, now = () => performa
     prepareRequest(context, request) { return prepareGoalState(context, request, started === null ? undefined : Math.max(0, now() - started)); },
     async afterRun(context) {
       const elapsedSeconds = started === null ? null : Math.max(0, now() - started);
-      const decision = await afterGoalRun(context.session, context.provider, { enabled: context.enabled("planning"), model, goalId: runGoalId ?? undefined, shouldStop: () => context.signal.aborted || !context.enabled("planning") || !context.enabled("providers") || !!context.options.shouldStop?.(), signal: context.signal, requestDeadline: context.deadline, elapsedSeconds, now });
-      if (decision.action === "continue" && typeof decision.prompt === "string") return { action: "continue", prompt: decision.prompt, exclusive: true };
+      const decisionRow = await afterGoalRun(context.session, context.provider, { enabled: context.enabled("planning"), model, goalId: runGoalId ?? undefined, shouldStop: () => context.signal.aborted || !context.enabled("planning") || !context.enabled("providers") || !!context.options.shouldStop?.(), signal: context.signal, requestDeadline: context.deadline, elapsedSeconds, now });
+      // Planning only owns the continuation vote when this run actually drove
+      // an active goal; sessions queue draining stays free to continue instead.
+      if (runGoalId === null) return;
+      // Unified C-WFL-03 contract: continuation stays exclusive and is journaled
+      // as goal_continuation input (never a new human utterance); terminal stops
+      // carry a stop code the runner honors for the rest of the run.
+      const decision = goalDecisionFromRun(context.session, decisionRow);
+      journalGoalStop(context.session, decision, goalStamp());
+      if (decision.action === "stop" && decision.stopCode && !stopCodeIsTerminal(decision.stopCode)) return;
+      return decision;
+    },
+    async appendTurn(context, text) {
+      const goal = sanitizeGoal(context.session.goal);
+      if (!goal || goal.status !== "active") return false;
+      await appendUserTurn(context.session, context.store, text);
+      const journal = (context.session.messages ?? []) as Row[];
+      const last = journal[journal.length - 1];
+      if (last && last.role === "user") Object.assign(last, { _input_kind: "goal_continuation", _meta_source: "target_continuation", _goal_id: String(goal.id) });
+      await context.save();
+      return true;
     },
   };
 }

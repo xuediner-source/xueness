@@ -1,6 +1,7 @@
 import { performance } from "node:perf_hooks";
 import { isDict, PyValueError, uuid4Hex } from "@xueness/contracts";
 import { AnthropicMessages, OpenAICompatible, validateCompatibility } from "@xueness/providers";
+import { announceExecutionCapabilities, capabilityRows, type CapabilityFlags } from "./execution-capabilities.ts";
 import { defaultSelection, loadDefault } from "./default-selection.ts";
 import { providerExecutionSnapshot } from "./model-execution.ts";
 import { compatibilityTest, discoverModels, testConnection } from "./diagnostic-wire.ts";
@@ -13,11 +14,13 @@ export interface ProvidersApiOptions {
   allowReal?: boolean;
   enabled: (id: string) => boolean;
   resolveProvider?: (id: string) => ResolvedProvider;
+  /** Availability flags the front door owns (optional plugins, entitlement config). */
+  capabilityFlags?: (record: Dict) => CapabilityFlags;
   now?: () => string;
 }
-export const PROVIDER_ROUTES = ["GET /api/providers", "POST /api/providers", "DELETE /api/providers/:id", "GET /api/providers/default", "GET /api/providers/execution", "POST /api/providers/default", "POST /api/providers/test", "POST /api/providers/discover", "POST /api/providers/compatibility-test", "POST /api/providers/compatibility-adopt"];
+export const PROVIDER_ROUTES = ["GET /api/providers", "POST /api/providers", "DELETE /api/providers/:id", "GET /api/providers/default", "GET /api/providers/execution", "GET /api/providers/capabilities", "POST /api/providers/default", "POST /api/providers/test", "POST /api/providers/discover", "POST /api/providers/compatibility-test", "POST /api/providers/compatibility-adopt"];
 export function ownsProviderRoute(method: string, parts: readonly string[]): boolean {
-  return parts[0] === "api" && parts[1] === "providers" && (parts.length === 2 && ["GET", "POST"].includes(method) || parts.length === 3 && (method === "DELETE" || method === "POST" && ["default", "test", "discover", "compatibility-test", "compatibility-adopt"].includes(parts[2]!) || method === "GET" && ["default", "execution"].includes(parts[2]!)));
+  return parts[0] === "api" && parts[1] === "providers" && (parts.length === 2 && ["GET", "POST"].includes(method) || parts.length === 3 && (method === "DELETE" || method === "POST" && ["default", "test", "discover", "compatibility-test", "compatibility-adopt"].includes(parts[2]!) || method === "GET" && ["default", "execution", "capabilities"].includes(parts[2]!)));
 }
 export function createProvidersApi(options: ProvidersApiOptions) {
   const store = new ProfileStore(options.stateDir);
@@ -130,13 +133,21 @@ export function createProvidersApi(options: ProvidersApiOptions) {
       }
       return resolveSavedProvider(store, selection);
     },
-    async dispatch(method: string, parts: string[], _query: Dict, data: unknown): Promise<Reply | null> {
+    async dispatch(method: string, parts: string[], query: Dict, data: unknown): Promise<Reply | null> {
       if (!ownsProviderRoute(method, parts)) return null;
       if (!options.enabled("providers")) return [403, { error: "plugin disabled or dependency unavailable: providers", plugin: "providers", code: "plugin_disabled" }];
       try {
         if (parts.length === 2) return method === "GET" ? [200, { providers: allProfiles() }] : store.save(data);
         const action = parts[2]!;
         if (method === "GET" && action === "execution") return [200, providerExecutionSnapshot(options.stateDir)];
+        if (method === "GET" && action === "capabilities") {
+          const wanted = typeof query.id === "string" && query.id ? query.id : (loadDefault(store).providerId as string | null);
+          const record = wanted ? allProfiles().find((row) => row.id === wanted) : null;
+          if (!record) return [404, { error: "provider profile not found" }];
+          const requested = query.mode === "standard" || query.mode === "lightweight" ? query.mode : null;
+          const announcement = announceExecutionCapabilities(record, options.capabilityFlags?.(record) ?? {}, requested);
+          return [200, { announcement, capabilities: capabilityRows(announcement) }];
+        }
         if (method === "DELETE") return store.delete(action);
         if (action === "default") return defaultSelection(method, data, store);
         if (action === "compatibility-adopt") return adopt(data);

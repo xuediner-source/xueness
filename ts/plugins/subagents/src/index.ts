@@ -17,7 +17,8 @@ import { modelToolName, wrapSystemReminderForSource, type AgentContext, type Age
 import type { ToolDefinition, ToolResult } from "@xueness/engine-tools";
 import { definePlugin, type BundledPlugin } from "@xueness/kernel";
 import manifest from "../manifest.json" with { type: "json" };
-import { backgroundTools, BACKGROUND_TOOL_NAMES, type CoordinationBinding } from "./background-tools.ts";
+import { backgroundTools, BACKGROUND_TOOL_NAMES, replyToChannelTool, respondToCoordinatorTool, RESPOND_TOOL_NAME, type CoordinationBinding } from "./background-tools.ts";
+import { mergeSubagentNotices } from "./background-receipts.ts";
 import type { TaskCoordinator } from "./coordinator.ts";
 import { loadSubagents, TASK_TOOL_NAME, type Row } from "./definitions.ts";
 import { agentListing } from "./profiles.ts";
@@ -25,12 +26,18 @@ import { agentListing } from "./profiles.ts";
 export * from "./definitions.ts";
 export * from "./profiles.ts";
 export * from "./records.ts";
+export * from "./inheritance.ts";
 export * from "./resources-http.ts";
 export * from "./task-registry.ts";
 export * from "./child-journal.ts";
+export * from "./message-contract.ts";
 export * from "./coordinator.ts";
+export * from "./lifecycle.ts";
 export * from "./tasks-http.ts";
 export * from "./background-tools.ts";
+export * from "./background-receipts.ts";
+export * from "./channel-mention.ts";
+export * from "./channel-reply.ts";
 
 export const AGENT_LISTING_SOURCE = "agent_listing_delta";
 /**
@@ -39,7 +46,7 @@ export const AGENT_LISTING_SOURCE = "agent_listing_delta";
  * on the parent's session (questions, task list, delivery plan); Python's
  * durable workflow writes.
  */
-export const CHILD_DENIED_TOOLS: readonly string[] = Object.freeze([TASK_TOOL_NAME, "enter_plan_mode", "exit_plan_mode", "ask_user", "todo_read", "todo_write", "delivery_plan", "workflow_create", "workflow_amend"]);
+export const CHILD_DENIED_TOOLS: readonly string[] = Object.freeze([TASK_TOOL_NAME, "enter_plan_mode", "exit_plan_mode", "ask_user", "todo_read", "todo_write", "delivery_plan", "workflow_create", "workflow_amend", "reply_to_channel"]);
 
 /**
  * The host's binding for the run in progress. `run` is the foreground child
@@ -88,7 +95,7 @@ export function taskTool(binding: SubagentsBinding): ToolDefinition<Row> {
 }
 
 export function createSubagents(binding: SubagentsBinding): BundledPlugin {
-  const tools: readonly ToolDefinition<Row>[] = [taskTool(binding), ...backgroundTools(binding)];
+  const tools: readonly ToolDefinition<Row>[] = [taskTool(binding), ...backgroundTools(binding), respondToCoordinatorTool(), replyToChannelTool()];
   return { manifest, plugin: definePlugin({ name: "subagents", apply(ctx) { for (const tool of tools) ctx.tool(tool as ToolDefinition); } }) };
 }
 
@@ -130,6 +137,22 @@ export function subagentsExtension(options: { stateDir: string; allowed: boolean
       const listing = agentListing(loadSubagents(options.stateDir), available);
       const message = { role: "user", content: wrapSystemReminderForSource(AGENT_LISTING_SOURCE, listing), _meta_source: AGENT_LISTING_SOURCE };
       return { ...offered, messages: [request.messages[0]!, message, ...request.messages.slice(1)] };
+    },
+    // C-WFL-04 safe boundaries: the coordinator's live registry is mirrored
+    // into the journal, then terminal uncollected tasks merge one hidden
+    // notice each. No notices means no save and no continued loop, so an
+    // idle session never polls and count-only changes stay silent.
+    async beforeModelRequest(context) {
+      const coordinator = options.binding?.coordinator;
+      if (!coordinator) return;
+      coordinator.sync();
+      await mergeSubagentNotices(context);
+    },
+    async beforeFinalResponse(context, _response) {
+      const coordinator = options.binding?.coordinator;
+      if (!coordinator) return false;
+      coordinator.sync();
+      return mergeSubagentNotices(context);
     },
   };
 }

@@ -1,0 +1,122 @@
+[
+  {
+    "path": "ts/apps/server/src/application-api.ts",
+    "beforeSha256": "0ba7e2c47671335e0c706945e9b222f659883b8b1a951c9e5e3b44fed46af47e",
+    "afterSha256": "6573dc06c86df36e43643aaf9d5dceec316e0b5524e684e23df22aca6051eabc"
+  },
+  {
+    "path": "ts/apps/server/src/cli/app-server.ts",
+    "beforeSha256": "105de58a3df7497eaea79de5b0a247b1edcc8722e9c26f00120f089f8c59ceba",
+    "afterSha256": "093c975f1b0f97a6e80bddaf638df02f174dff9da54e1b4ebb0e7a538484d2ce"
+  },
+  {
+    "path": "ts/apps/server/src/round6-http.ts",
+    "beforeSha256": "3dc079d52bfad402e957dc3a0d7612649c702d6a42f16d2d8cdf23392f1465ec",
+    "afterSha256": "5efd0cc7eac4d085f0d57b247bed0329766b6b007aa6e0121771ab93b9351469"
+  },
+  {
+    "path": "ts/packages/permissions/test/policy.test.ts",
+    "beforeSha256": "ddefd3ce9dfc918958ed53f5201dd8a23ccd56ef38f44885801ed81545a016a1",
+    "afterSha256": "913a957beb1600a25a043edc14867c1470b5fafca0b9e858ef145ba1902067de"
+  },
+  {
+    "path": "ts/plugins/deepseek_harness/src/compat/rule-pack-importer.ts",
+    "beforeSha256": "7cecc0678c6c16acd38df638d2ad9d7d0194589a0cafa585120a1ff33844f16f",
+    "afterSha256": "c7974895c4755f25af1940e617880b1c3ac2055d3c60d06f702b6a2b6d4f568f"
+  },
+  {
+    "path": "ts/plugins/deepseek_harness/test/e2e-extensions.test.ts",
+    "beforeSha256": "aba6bbbbcc3cdfd360302bd83d030816e3d062bb69b6c7a00af2e1d9fa70b3c9",
+    "afterSha256": "9aa661836ba041de3e5ceb1d2e9e1482c31fb0d707edee421a9c9256f4b13aaf"
+  },
+  {
+    "path": "ts/plugins/deepseek_harness/test/loader.test.ts",
+    "beforeSha256": "64091cded502df671aaa2e1899054d7a255df7d84f5e54ea249ed35e3b89d078",
+    "afterSha256": "975c80e287a8562ed10a1470ec4dbf438c9490ecc2c8e098ebb41637358b2829"
+  },
+  {
+    "path": "ts/plugins/deepseek_harness/test/optimizer-loop.test.ts",
+    "beforeSha256": "f354a5578ccae8875221855bc30015ab7404b68e73f903eabf9fb9843ee2bf8c",
+    "afterSha256": "7fa24314db0cc21024baad0ae76ad90792b5baca658f6abfd2c6c8d34bac8a0a"
+  },
+  {
+    "path": "ts/plugins/deepseek_harness/test/rule-pack-importer.test.ts",
+    "beforeSha256": "33171e12c9fc293258eaf8b8c448befb7102302ce746faef8aec356181c46643",
+    "afterSha256": "3c1dd00b8e9c0af490365bb6df5c81efc1e7ada876660c0981d98515bedad183"
+  },
+  {
+    "path": "ts/plugins/deepseek_harness/test/sandbox-verifier.test.ts",
+    "beforeSha256": "4f0e4949b793ab5c3ab2082732f8217a462511212b2c5787cc23365dc58ce5d4",
+    "afterSha256": "32b1aeb8b93625fc48fbbc1ce5f26656116985aa9f958111d892a03eb0cde9fb"
+  },
+  {
+    "path": "ts/plugins/hooks/test/hooks-lifecycle.test.ts",
+    "beforeSha256": "f7f8c12491cc9bc58a71698f2da979d79e9952318c62f5900ddc09907d79e6fd",
+    "afterSha256": "540e6164e7d5909fc01750dacc5d1e914111c0db9500049354b353cc166be16f"
+  },
+  {
+    "path": "ts/plugins/mcp/test/oauth-discovery.test.ts",
+    "beforeSha256": "142e38fcf202a7b3f231137437cc7e60a3ed890f228e5572409ae1810f9b0e76",
+    "afterSha256": "44e74922a6bb3713e1e86cc3780735c15664a15cc3ed831493aaee7c1b2194f8"
+  },
+  {
+    "path": "ts/plugins/mcp/test/pool-lifecycle.test.ts",
+    "beforeSha256": "f23506ad3c201c804a20f83a6fd463fb6f45f69ce3cec255dc4be101d9324961",
+    "afterSha256": "c765bb3e1f0bf5972636b50b9366e8cd8bde498edceb224ce2f6d261acb5eb20"
+  },
+  {
+    "path": "ts/plugins/mcp/test/runtime-fixture.mjs",
+    "beforeSha256": "ef286aa303aa86a3de44066267b1bd288e6cf96a613c5d8096d77584d27efa1d",
+    "afterSha256": "091a6dc79c83a9ae8b38bf408a69bce0fb46694953390d44b2f2276bfb6b1413"
+  },
+  {
+    "path": "ts/plugins/native_ops/test/native-ops.test.ts",
+    "beforeSha256": "50caa388f7a51067003f6d569d76f1afe506da99540a5a47932714b674fa1aaf",
+    "afterSha256": "7e8b38b0af6efc2a6a5d17bee761cae0cd4a3ebfb8226ac1b2e87270d7fa47e2"
+  },
+  {
+    "path": "ts/plugins/remote/src/forwarding.ts",
+    "beforeSha256": "a7e8dfcc0217229cde5809195d39cc67a4cd281297dc312f588e1f04baeb5c7b",
+    "afterSha256": "b4219ef20bf515c9a1a9c18c42a90fc67431612f486896aad758240a5908124e"
+  },
+  {
+    "path": "ts/plugins/remote/test/forwarding.test.ts",
+    "beforeSha256": "68ca85cb0c67f825b57747bb9d2ffa4f6a2de555bc2345fd2f0620e2fa7920f8",
+    "afterSha256": "3a6367f99909e5722ecf37e70211511702f3c2ae3ca90d7f6b4bf84f891dcee7"
+  },
+  {
+    "path": "ts/plugins/shell/test/auto-background.test.ts",
+    "beforeSha256": "cd9262580eee176adfc1afbe173afccfc28c046069bde37e0d6234fe2bbd9854",
+    "afterSha256": "3a62fa69df5eb00f9555b712a8ef747068d33c1980f3de748eecd360d8056c26"
+  },
+  {
+    "path": "ts/plugins/subscriptions/src/broker.ts",
+    "beforeSha256": "6511689ce9d8c86d5f54895827bf5b46dc34d40e21a46730c007cecfc98e2fbc",
+    "afterSha256": "36570b34016bb4f32f11f64848922a354cb5aeb02df5b6f1e6c0be9b36a17758"
+  },
+  {
+    "path": "ts/plugins/subscriptions/src/index.ts",
+    "beforeSha256": "076825172dada5a3e653ccac190d0bcea87c6ca16d9c1c2292f0f34e5c644c21",
+    "afterSha256": "9dd83aa1143300516a1dff86fd95c5e636d9498e78540ba1fe766cb76761a5d2"
+  },
+  {
+    "path": "ts/plugins/subscriptions/test/broker.test.ts",
+    "beforeSha256": "9522a74fd31d372424d8a44874192f76e2b0e98aeb7d508e6856e5430d01d767",
+    "afterSha256": "8140f31e2a5ac14ba69188e6841d6187f87b97e8cfc1d9e8059d3668818b0b06"
+  },
+  {
+    "path": "ts/plugins/subscriptions/test/entitlement-config.test.ts",
+    "beforeSha256": "49771e56e57a18c547e5f32a1a3800acf4a92dc1d8f508d44662095d6fb64f16",
+    "afterSha256": "d58c948374d1ca08a968a7ccd0406907cf9030e96afff8d9bc321cfb4a6ef298"
+  },
+  {
+    "path": "ts/plugins/subscriptions/test/entitlements.test.ts",
+    "beforeSha256": "5334ee834c8d93e696fe9c3c398f7a694f1732e92cc278925cc00ea9635714ab",
+    "afterSha256": "b0823a1da9e1b325b144fad0fc3423774487b30a0bd218fd2efec6ecd3bc4e3a"
+  },
+  {
+    "path": "ts/test-support/private-file.ts",
+    "beforeSha256": null,
+    "afterSha256": "55ee19127430f1f3f48201ca7f223acd95524b86a8dad9da4c67ea4a5e96f6d0"
+  }
+]

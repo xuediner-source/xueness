@@ -6,12 +6,14 @@
  * a file later written, edited or patched is skipped, as ZCode's read state is replaced by
  * the write. Todos: ZCode `runtime-reminders.ts` buildTodoReminderBody text; ZCode relies on
  * its periodic todo reminder, which Xueness does not yet produce, so one is attached here.
+ * Discovered tools (C-TOOL-05, F02.04): one hidden reminder per distinct discovered set,
+ * deduplicated by `announced_compact_discovered_tools`.
  */
 import { isAbsolute, resolve } from "node:path";
 import { ESTIMATED_TOKEN_CHAR_DIVISOR } from "./policy.ts";
 
 type Row = Record<string, unknown>;
-export interface PostCompactReminder { source: "resume_referenced_session_context" | "todo_reminder"; content: string }
+export interface PostCompactReminder { source: "resume_referenced_session_context" | "todo_reminder" | "tool_discovery"; content: string }
 interface ReadCandidate { path: string; offset?: number; limit?: number; output: string }
 
 const isRow = (value: unknown): value is Row => typeof value === "object" && value !== null && !Array.isArray(value);
@@ -104,7 +106,18 @@ export function todoReminder(todos: unknown): PostCompactReminder | null {
   ].join("\n") };
 }
 
+/** C-TOOL-05: after compaction the discovery context is gone; one reminder per distinct discovered set. */
+export function discoveredToolsReminder(session: Row): PostCompactReminder | null {
+  const discovered = Array.isArray(session.discovered_tools) ? session.discovered_tools.filter((name): name is string => typeof name === "string") : [];
+  if (!discovered.length) return null;
+  const current = [...discovered].sort().join("\n");
+  const announced = Array.isArray(session.announced_compact_discovered_tools) ? session.announced_compact_discovered_tools.filter((name): name is string => typeof name === "string") : [];
+  if ([...announced].sort().join("\n") === current) return null;
+  return { source: "tool_discovery", content: ["Tools found earlier with tool_search stay callable in this session's tool view:", ...[...discovered].reverse().map((name) => `- ${name}`)].join("\n") };
+}
+
 export function buildPostCompactReminders(session: Row, root: string, summarized: readonly Row[], preserved: readonly Row[]): PostCompactReminder[] {
   const todo = todoReminder(session.todos);
-  return [...readStateReminders(collectReadCandidates(session, root, summarized, preserved)), ...todo ? [todo] : []];
+  const discovery = discoveredToolsReminder(session);
+  return [...readStateReminders(collectReadCandidates(session, root, summarized, preserved)), ...todo ? [todo] : [], ...discovery ? [discovery] : []];
 }

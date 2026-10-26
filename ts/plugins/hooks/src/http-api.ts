@@ -6,6 +6,8 @@
  */
 import { isAbsolute, join, relative } from "node:path";
 import { realish, resourceDispatch } from "@xueness/sessions";
+import { configSummary, type PluginHookContribution } from "./lifecycle.ts";
+import type { Row } from "./load.ts";
 import { statusDocument } from "./trust.ts";
 
 export interface HooksHttpOptions {
@@ -15,10 +17,12 @@ export interface HooksHttpOptions {
   enabled(id: string): boolean;
   /** `workspaces_api.allowed_roots`: operator-declared and remembered workspace roots. */
   allowedRoots(): readonly string[];
+  /** F07.03: trusted plugin hook contributions the summary should show; omitted lists none. */
+  pluginHooks?(): PluginHookContribution[];
 }
 type Reply = [number, unknown];
 type Query = Record<string, readonly string[] | undefined>;
-export const HOOKS_ROUTES = ["GET /api/resources/hooks", "POST /api/resources/hooks", "PUT /api/resources/hooks", "PATCH /api/resources/hooks/:id", "DELETE /api/resources/hooks/:id", "GET /api/resources/hooks/trust"];
+export const HOOKS_ROUTES = ["GET /api/resources/hooks", "POST /api/resources/hooks", "PUT /api/resources/hooks", "PATCH /api/resources/hooks/:id", "DELETE /api/resources/hooks/:id", "GET /api/resources/hooks/trust", "GET /api/resources/hooks/summary"];
 
 /** `parse_qs` drops blank values: the first non-blank one, or "". */
 export const queryValue = (query: Query, name: string): string => (Object.hasOwn(query, name) ? query[name] ?? [] : []).find((value) => value !== "") ?? "";
@@ -36,9 +40,10 @@ const disabled = (): Reply => [403, { error: "plugin disabled or dependency unav
 const verb = (method: string): string => method.toUpperCase();
 
 export function createHooksHttp(o: HooksHttpOptions) {
+  const readonlyDoc = (method: string, p: readonly string[]): boolean => p.length === 4 && verb(method) === "GET" && (p[3] === "trust" || p[3] === "summary");
   const owns = (method: string, p: readonly string[]): boolean => p[0] === "api" && p[1] === "resources" && p[2] === "hooks"
-    && (p.length === 4 && p[3] === "trust" && verb(method) === "GET" || p.length === 3 && ["GET", "POST", "PUT"].includes(verb(method)) || p.length === 4 && ["PATCH", "DELETE"].includes(verb(method)));
-  const trust = (query: Query): Reply => {
+    && (readonlyDoc(method, p) || p.length === 3 && ["GET", "POST", "PUT"].includes(verb(method)) || p.length === 4 && ["PATCH", "DELETE"].includes(verb(method)));
+  const document = (query: Query, build: (stateDir: string, root: string) => Row): Reply => {
     if (o.stateDir == null) return [400, { error: "state_dir missing from context" }];
     const raw = queryValue(query, "root");
     if (!raw) return [400, { error: "root query parameter is required" }];
@@ -46,18 +51,22 @@ export function createHooksHttp(o: HooksHttpOptions) {
     try { root = fencedRoot(raw, o); } catch { return [400, { error: "workspace root not permitted" }]; }
     try {
       const stateDir = realish(o.stateDir);
-      return [200, { ...statusDocument(stateDir, root), stateDir }];
+      return [200, { ...build(stateDir, root), stateDir }];
     } catch { return [500, { error: "workspace hooks could not be read" }]; }
   };
+  const trust = (query: Query): Reply => document(query, (stateDir, root) => statusDocument(stateDir, root));
+  /** F07.03: the UI state document — families, boundary, revision, derived state. */
+  const summary = (query: Query): Reply => document(query, (stateDir, root) => configSummary(stateDir, root, { contributions: o.pluginHooks?.() ?? [] }));
   return {
     routes: HOOKS_ROUTES,
     owns,
-    /** Stored hook documents keep Python's exact numbers. The trust GET does not. */
-    lossless: (method: string, p: readonly string[]): boolean => owns(method, p) && !(p.length === 4 && p[3] === "trust"),
+    /** Stored hook documents keep Python's exact numbers. The trust and summary GETs do not. */
+    lossless: (method: string, p: readonly string[]): boolean => owns(method, p) && !readonlyDoc(method, p),
     dispatch(method: string, p: string[], query: Query, data: unknown): Reply | null {
       if (!owns(method, p)) return null;
       if (!o.enabled("hooks")) return disabled();
       if (p.length === 4 && p[3] === "trust") return trust(query);
+      if (p.length === 4 && p[3] === "summary") return summary(query);
       if (o.stateDir == null) return [400, { error: "state_dir missing from context" }];
       return resourceDispatch(realish(o.stateDir), method, p, data);
     },

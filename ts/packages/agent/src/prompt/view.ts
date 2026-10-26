@@ -45,7 +45,10 @@ export function buildPromptView(messages: readonly Row[], input: PromptViewInput
     if (message._context_source === SKILLS_LISTING_SOURCE) { if (typeof message.content === "string") listings.push(message.content); continue; }
     if (message._context_source === DESKTOP_CONTEXT_SOURCE) { if (typeof message.content === "string") desktop.push(message.content); continue; }
     if (message.role === "user" && message._input_kind === "guide" && typeof message.content === "string" && message.content) {
-      rest.push({ ...message, content: wrapSystemReminderForSource("incoming_message", formatIncomingMessage(message.content, "user_steer")) });
+      // A subagent child's drained inbox items come from the coordinating
+      // parent, not the user, so they keep the coordinator attribution.
+      const presentation = message._coordination === true ? "coordinator_steer" : "user_steer";
+      rest.push({ ...message, content: wrapSystemReminderForSource("incoming_message", formatIncomingMessage(message.content, presentation)) });
       continue;
     }
     rest.push(message);

@@ -13,7 +13,8 @@
     "task",
     "task_collect",
     "task_resume",
-    "task_send_message"
+    "task_send_message",
+    "reply_to_channel"
   ],
   "commands": [],
   "panels": [
@@ -38,7 +39,9 @@
     "task_registry",
     "cancel_one",
     "child_sessions",
-    "child_api"
+    "child_api",
+    "channel_reply",
+    "channel_mention"
   ],
   "features": [
     {
@@ -60,6 +63,11 @@
       "id": "subagents.coordination",
       "name": "后台派发、结果收集、恢复与引导",
       "nameEn": "Background dispatch, collection, resume and steering"
+    },
+    {
+      "id": "subagents.channel_reply",
+      "name": "外部频道回复端口",
+      "nameEn": "External channel reply port"
     },
     {
       "id": "subagents.parallel_coordination",

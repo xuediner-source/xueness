@@ -7,13 +7,12 @@
 import { randomBytes, timingSafeEqual, createHash } from "node:crypto";
 import { closeSync, fsyncSync, mkdirSync, readFileSync, unlinkSync } from "node:fs";
 import { dirname, join } from "node:path";
-import { isDict, pyDecodeUtf8, pyEncodeUtf8, pyJsonDumps, pyJsonLoads, pyStr } from "@xueness/contracts";
+import { isDict, pyDecodeUtf8, pyEncodeUtf8, pyJsonDumps, pyJsonLoads } from "@xueness/contracts";
 import { exists, fsyncDirectory, isLink, mkstemp, protectPrivateFile, replaceFile, writeAll } from "@xueness/sessions";
-import { pyUrlSplit } from "@xueness/providers";
+import { mergeOauthConfig, revokeToken, type ResolvedOauth } from "./oauth-discovery.ts";
 import type { Row } from "./names.ts";
 
 const ID = /^[A-Za-z0-9_-]{1,64}$/;
-const LOOPBACK = new Set(["127.0.0.1", "::1", "localhost"]);
 const locks = new Map<string, Promise<void>>();
 
 function refuse(message: string): never {
@@ -39,24 +38,6 @@ function urlencode(params: readonly (readonly [string, string])[]): string {
 
 function tokenUrlsafe(bytes: number): string {
   return randomBytes(bytes).toString("base64url");
-}
-
-function endpoint(url: unknown): string {
-  if (typeof url !== "string" || url.length > 4096) refuse("invalid OAuth endpoint");
-  const parts = pyUrlSplit(url);
-  if (parts.scheme !== "https" || !parts.hostname || parts.username || parts.password || parts.fragment || parts.query) refuse("OAuth endpoints require HTTPS without credentials or query");
-  return url;
-}
-
-function oauthConfig(server: Row): Row {
-  const config = server.oauth;
-  if (!isDict(config) || typeof config.clientId !== "string" || !config.clientId || config.clientId.length > 500) refuse("OAuth client configuration required");
-  endpoint(config.authorizationEndpoint);
-  endpoint(config.tokenEndpoint);
-  const redirect = pyUrlSplit(typeof config.redirectUri === "string" ? config.redirectUri : "");
-  const loopback = redirect.scheme === "http" && redirect.hostname !== null && LOOPBACK.has(redirect.hostname);
-  if (!redirect.hostname || redirect.username || redirect.password || redirect.fragment || redirect.query || !(redirect.scheme === "https" || loopback)) refuse("invalid OAuth redirect URI");
-  return config;
 }
 
 function oauthPath(state: string, sid: string): string {
@@ -114,7 +95,7 @@ export function oauthStatus(state: string, sid: string): Row {
 }
 
 export async function oauthBegin(state: string, server: Row): Promise<Row> {
-  const config = oauthConfig(server);
+  const config = mergeOauthConfig(state, server);
   const sid = server.id;
   if (typeof sid !== "string") refuse("invalid OAuth server id");
   const verifier = tokenUrlsafe(48);
@@ -123,16 +104,16 @@ export async function oauthBegin(state: string, server: Row): Promise<Row> {
   await locked(state, async () => { writePrivate(oauthPath(state, sid), { verifier, state: nonce, pending_until: Date.now() / 1000 + 600 }); });
   if (typeof server.url !== "string") refuse("invalid OAuth endpoint");
   const params: (readonly [string, string])[] = [
-    ["response_type", "code"], ["client_id", String(config.clientId)], ["redirect_uri", String(config.redirectUri)],
+    ["response_type", "code"], ["client_id", config.clientId], ["redirect_uri", config.redirectUri],
     ["code_challenge", challenge], ["code_challenge_method", "S256"], ["state", nonce], ["resource", server.url],
   ];
-  if (pyTruthy(config.scope)) params.push(["scope", pyStr(config.scope).slice(0, 2000)]);
-  return { authorizationUrl: `${String(config.authorizationEndpoint)}?${urlencode(params)}`, state: nonce, expiresIn: 600 };
+  if (config.scope) params.push(["scope", config.scope.slice(0, 2000)]);
+  return { authorizationUrl: `${config.authorizationEndpoint}?${urlencode(params)}`, state: nonce, expiresIn: 600 };
 }
 
-async function tokenPost(config: Row, params: (readonly [string, string])[]): Promise<Row> {
+async function tokenPost(config: ResolvedOauth, params: (readonly [string, string])[]): Promise<Row> {
   try {
-    const response = await fetch(String(config.tokenEndpoint), {
+    const response = await fetch(config.tokenEndpoint, {
       method: "POST", redirect: "error", signal: AbortSignal.timeout(15_000),
       headers: { "Content-Type": "application/x-www-form-urlencoded", Accept: "application/json" },
       body: urlencode(params),
@@ -157,7 +138,7 @@ async function tokenPost(config: Row, params: (readonly [string, string])[]): Pr
 }
 
 export async function oauthFinish(state: string, server: Row, code: unknown, nonce: unknown): Promise<Row> {
-  const config = oauthConfig(server);
+  const config = mergeOauthConfig(state, server);
   const sid = server.id;
   const resource = server.url;
   if (typeof sid !== "string" || typeof resource !== "string") refuse("invalid OAuth server id");
@@ -172,16 +153,17 @@ export async function oauthFinish(state: string, server: Row, code: unknown, non
     if (typeof verifier !== "string") refuse("OAuth state expired or mismatched");
     writePrivate(oauthPath(state, sid), {});
     const token = await tokenPost(config, [
-      ["grant_type", "authorization_code"], ["code", code], ["client_id", String(config.clientId)],
-      ["redirect_uri", String(config.redirectUri)], ["code_verifier", verifier], ["resource", resource],
+      ["grant_type", "authorization_code"], ["code", code], ["client_id", config.clientId],
+      ["redirect_uri", config.redirectUri], ["code_verifier", verifier], ["resource", resource],
     ]);
+    token.revocation_endpoint = config.revocationEndpoint;
     writePrivate(oauthPath(state, sid), token);
   });
   return oauthStatus(state, sid);
 }
 
 export async function oauthBearer(state: string, server: Row): Promise<string> {
-  const config = oauthConfig(server);
+  const config = mergeOauthConfig(state, server);
   const sid = server.id;
   const resource = server.url;
   if (typeof sid !== "string" || typeof resource !== "string") refuse("OAuth authorization required");
@@ -192,9 +174,10 @@ export async function oauthBearer(state: string, server: Row): Promise<string> {
     if (expires <= Date.now() / 1000 + 30) {
       if (typeof row.refresh_token !== "string" || !row.refresh_token) refuse("OAuth authorization expired");
       const token = await tokenPost(config, [
-        ["grant_type", "refresh_token"], ["refresh_token", row.refresh_token], ["client_id", String(config.clientId)], ["resource", resource],
+        ["grant_type", "refresh_token"], ["refresh_token", row.refresh_token], ["client_id", config.clientId], ["resource", resource],
       ]);
       token.refresh_token = typeof token.refresh_token === "string" && token.refresh_token ? token.refresh_token : row.refresh_token;
+      token.revocation_endpoint = config.revocationEndpoint;
       writePrivate(oauthPath(state, sid), token);
       row = token;
     }
@@ -202,9 +185,26 @@ export async function oauthBearer(state: string, server: Row): Promise<string> {
   });
 }
 
-export async function oauthRevoke(state: string, sid: string): Promise<Row> {
-  await locked(state, async () => { writePrivate(oauthPath(state, sid), {}); });
+/** RFC 7009 best-effort server-side revocation, then the local state is gone either way. */
+export async function oauthRevoke(state: string, sid: string, server?: Row): Promise<Row> {
+  await locked(state, async () => {
+    const row = readOauth(state, sid);
+    // Revoking the refresh token is the credential that matters; RFC 7009 lets
+    // the server invalidate the derived access tokens with it.
+    const token = typeof row.refresh_token === "string" && row.refresh_token ? row.refresh_token
+      : typeof row.access_token === "string" && row.access_token ? row.access_token : null;
+    const endpoint = typeof row.revocation_endpoint === "string" && row.revocation_endpoint
+      ? row.revocation_endpoint
+      : server ? mergeOauthConfig(state, { ...server, id: sid }).revocationEndpoint : null;
+    if (endpoint && token) await revokeToken(endpoint, [token], clientIdOf(state, server, sid)).catch(() => {});
+    writePrivate(oauthPath(state, sid), {});
+  });
   return oauthStatus(state, sid);
+}
+
+function clientIdOf(state: string, server: Row | undefined, sid: string): string | null {
+  if (!server) return null;
+  try { return mergeOauthConfig(state, { ...server, id: sid }).clientId; } catch { return null; }
 }
 
 /** Python `mcp_http._headers`: a truthy `oauth` object replaces Authorization. */

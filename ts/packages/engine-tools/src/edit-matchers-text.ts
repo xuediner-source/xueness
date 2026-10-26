@@ -66,3 +66,15 @@ export function unescapeUnicodeCharacters(search: string): string {
     return String.fromCharCode(Number.parseInt(hex, 16));
   });
 }
+
+export function hasVisibleEscapes(search: string): boolean {
+  return unescapeVisibleCharacters(search) !== search;
+}
+
+/**
+ * Decodes `\uXXXX` first, then visible escapes, so a `\\u0041` shield keeps the
+ * escape literal while a paste mixing `\t` with `\u90E8` decodes both.
+ */
+export function unescapeVisibleAndUnicodeCharacters(search: string): string {
+  return unescapeVisibleCharacters(unescapeUnicodeCharacters(search));
+}

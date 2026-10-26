@@ -14,7 +14,7 @@ export function decodeTextResponse(response: Row, tools: Row[], id = (): string 
   try { finiteJsonText(object); }
   catch { return failure(response, "invalid_json_value", "Use finite JSON numbers and valid Unicode text without unpaired UTF-16 surrogates."); }
   if (Object.keys(object).sort().join(",") === "arguments,tool" && typeof object.tool === "string" && isDict(object.arguments)) {
-    if (!tools.some((schema) => runtimeToolName(schema) === object.tool)) return failure(response, "tool_unavailable", "That tool is unavailable. Discover optional tools using tool_search first.");
+    if (!tools.some((schema) => runtimeToolName(schema) === object.tool)) return failure(response, "tool_unavailable", "That tool is not part of the current tool view.");
     return { ...response, content: "", tool_calls: [{ id: id(), type: "function", function: { name: object.tool, arguments: pyJsonDumps(object.arguments) } }] };
   }
   const answerFields = ["answer", "summary"].filter((field) => Object.hasOwn(object, field));

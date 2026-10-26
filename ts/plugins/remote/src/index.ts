@@ -27,6 +27,26 @@ export { createAppProtocolMedia } from './app-protocol-media.ts';
 export { createAppProtocolGoals } from './app-protocol-goal.ts';
 export { createAppProtocolMemory } from './app-protocol-memory.ts';
 export { AppProtocolDeferredReply, AppProtocolSubscriptions } from './app-protocol-subscriptions.ts';
+export {
+  CONTROLLER_TOMBSTONES, FINISHED_TASKS, HYDRATION_SCHEMA, WORKFLOW_EVENTS,
+  hydrateBackgroundTask, hydrateConversation, hydrateMediaRestore, hydrateWorkflow, hydrateWorkspace,
+  hydrationDigest, type BackgroundTaskView, type BackgroundTasksView, type ConversationView,
+  type MediaRestoreView, type WorkflowView, type WorkspaceView,
+} from './app-protocol-hydration.ts';
+export {
+  ESTABLISH_GRACE_MS, MAX_FORWARDS, PORT_FORWARD_SCHEMA, PortForwardManager,
+  forwardArgv, validateForwardSpec, type ForwardSpec, type ForwardView, type PortForwardOptions,
+} from './forwarding.ts';
+export {
+  connectionDiagnostics, describeDiagnostic, detectWsl, fromWslPosixPath, toWslPosixPath,
+  type PathDiagnostic, type WslMode, type WslProbe,
+} from './wsl.ts';
+
+export { ProjectionSubscriber, type ProjectionCursor, type ProjectionFrame, type ProjectionKind, type SubscriptionState } from './projection-subscriber.ts';
+
+export { DEFAULT_REPLAY_DEADLINE_SECONDS, outcomeUnknown, replayCommand, settledReceipt, RECEIPT_STATUSES, type CommittedReplay, type ReplayOutcome, type UnknownReplay } from './command-replay.ts';
+
+export { createV4Facade, V4_PROTOCOL_NAME, V4_TO_NATIVE_ROUTES, v4HostCapabilities, type V4Facade, type V4FacadeOptions } from './v4-facade.ts';
 
 export function createRemote(options: { stateDir: string; runner?: SshRunner }): BundledPlugin {
   return { manifest, plugin: definePlugin({ name: "remote", apply(ctx) { ctx.tool(remoteExecTool(options)); } }) };

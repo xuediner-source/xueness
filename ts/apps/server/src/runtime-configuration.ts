@@ -24,7 +24,7 @@ export function loadAgentRuntimeConfig(options: {
 }): RuntimeConfigLoadResult {
   const userDefaults = legacyRuntimeConfig(options.stateDir);
   const loaded = options.enabled("settings") ? loadRuntimeConfig({ stateDir: options.stateDir, root: options.root, userDefaults,
-    ...(options.env ? { env: options.env } : {}), validate: validateAgentRuntimeConfig }) : { config: userDefaults, sources: ["userDefaults"] as import("@xueness/plugin-settings").RuntimeConfigLayer[], provenance: {}, diagnostics: [], workspace: { root: null, path: null, digest: null, status: "absent" as const } };
+    ...(options.env ? { env: options.env } : {}), validate: validateAgentRuntimeConfig }) : { config: userDefaults, sources: ["userDefaults"] as import("@xueness/plugin-settings").RuntimeConfigLayer[], provenance: {}, layerPatches: {}, diagnostics: [], workspace: { root: null, path: null, digest: null, status: "absent" as const } };
   // Settings owns the new layers; the shell plugin's established state remains available on its own.
   const config = options.enabled("settings") ? loaded.config : userDefaults;
   if (options.pluginConfig) config.plugins = { ...config.plugins, ...options.pluginConfig };

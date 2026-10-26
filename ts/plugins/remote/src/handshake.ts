@@ -210,7 +210,8 @@ function rejected(code: string, message: string, retryable: boolean, exitCode: u
   };
 }
 
-function classifyTransport(stderr: unknown): { code: string; retryable: boolean; message: string } | null {
+/** Shared with the port-forward lifecycle: the same ssh failure needles. */
+export function classifyTransport(stderr: unknown): { code: string; retryable: boolean; message: string } | null {
   if (typeof stderr !== "string" || !stderr) return null;
   const sample = pySubstring(stderr, -DIAGNOSTIC_SCAN).toLowerCase();
   for (const item of TRANSPORT) {

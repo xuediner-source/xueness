@@ -58,6 +58,6 @@ export function createRound6(o: Round6Options) {
     checkRemote: (remote: Row) => remoteConnection(stateDir, remote.id, remote.digest),
     remoteSummary: (session: Session) => new SessionRemoteSummary(stateDir).for_session(session) as Row | null,
     subscriptions,
-    close(): void { remoteHttp.close(); subscriptions.close(); workbuddy.close(); },
+    close(): Promise<void> { remoteHttp.close(); workbuddy.close(); return subscriptions.close(); },
   };
 }

@@ -63,16 +63,21 @@ function stripEntryHead(entry: string): string {
   return pyStrip(rest);
 }
 
-/** One track as `- body` bullets; blank entries are dropped. */
-export function renderTrack(text: string): string {
-  const bullets: string[] = [];
+/** One track's cleaned entry bodies (`renderTrack` bullets without the `- `), blanks dropped. */
+export function entryBodies(text: string): string[] {
+  const bodies: string[] = [];
   for (const entry of String(text).split(ENTRY_DELIMITER)) {
     let body = stripEntryHead(entry);
     if (!body) continue;
     body = pyStrip(body.replace(BULLET_PREFIX, ""));
-    if (body) bullets.push("- " + body.replace(/\n+/gu, "\n  "));
+    if (body) bodies.push(body);
   }
-  return bullets.join("\n");
+  return bodies;
+}
+
+/** One track as `- body` bullets; blank entries are dropped. */
+export function renderTrack(text: string): string {
+  return entryBodies(text).map((body) => "- " + body.replace(/\n+/gu, "\n  ")).join("\n");
 }
 
 /** `Path(p).resolve()` (non-strict): the longest existing prefix is canonical, the rest is appended. */

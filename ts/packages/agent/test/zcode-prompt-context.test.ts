@@ -17,7 +17,7 @@ const env: EnvInfo = { cwd: "/workspace", platform: "darwin", shell: "zsh", osVe
 
 describe("ZCode system-reminder sources", () => {
   it("defines every active source in lifecycle buckets", () => {
-    assert.equal(SYSTEM_REMINDER_SOURCES.length, 31); assert.equal(new Set(SYSTEM_REMINDER_SOURCES).size, 31);
+    assert.equal(SYSTEM_REMINDER_SOURCES.length, 32); assert.equal(new Set(SYSTEM_REMINDER_SOURCES).size, 32);
     assert.deepEqual([...SYSTEM_REMINDER_PREFIX_SOURCES], ["context_prefix", "skills_listing"]);
     assert.equal(SYSTEM_REMINDER_PER_REQUEST_SOURCES[0], "incoming_message");
     for (const source of SYSTEM_REMINDER_SOURCES) {

@@ -114,7 +114,11 @@ export class CommandReceiptLedger {
     const previous=entries.find(e=>e.sessionId===sessionId);
     const certifiedQueue = type==='queue' && followup?.sessionId===sessionId && payload.expected_turn_id===followup.expectedTurnId
       && matchesFollowupPending(entries,followup);
-    if(previous && !certifiedQueue && (type!=='stop'||sessionId===null||typeof payload.expected_turn_id!=='string'||!payload.expected_turn_id.trim()||payload.expected_turn_id.length>128||previous.commandId===commandId))throw Object.assign(new Error('Another command is pending or unconfirmed; check its original result first'),{requestNotSent:true});
+    // A synchronous run remains pending while its exact tool call awaits an answer.
+    // The server resolves the call id; retain the run receipt and fence any other write.
+    const sessionPending=entries.filter(e=>e.sessionId===sessionId);
+    const answeringRun=['approve','approval','reject'].includes(type) && sessionPending.length===1 && sessionPending[0].type==='run';
+    if(previous && !certifiedQueue && !answeringRun && (type!=='stop'||sessionId===null||typeof payload.expected_turn_id!=='string'||!payload.expected_turn_id.trim()||payload.expected_turn_id.length>128||previous.commandId===commandId))throw Object.assign(new Error('Another command is pending or unconfirmed; check its original result first'),{requestNotSent:true});
     if(entries.length>=128)throw Object.assign(new Error('Command recovery storage is full; check original results before sending'),{requestNotSent:true,receiptStorageBlocked:true});
     if(!canAdmit())throw Object.assign(new Error('Command cancelled before admission'),{requestNotSent:true});
     entries.push({sessionId,commandId,type,descriptor:d});

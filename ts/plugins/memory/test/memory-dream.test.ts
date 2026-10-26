@@ -4,14 +4,14 @@ import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, it } from "node:test";
-import type { MemoryDreamOptions, MemoryDreamRow } from "../src/memory-dream-types.ts";
+import type { MemoryDreamOptions, MemoryDreamRow, MemoryDreamTool, MemoryDreamToolContext } from "../src/memory-dream-types.ts";
 import { MemoryDreamService, MemoryDreamServiceError } from "../src/memory-dream-service.ts";
 import { createMemoryDreamApi, MEMORY_DREAM_ROUTES } from "../src/memory-dream-http.ts";
 
 const sid = (value: number): string => value.toString(16).padStart(32, "0");
 const digest = (content: string): string => createHash("sha256").update(Buffer.from(content, "utf8")).digest("hex");
 
-function fixture(synthesize?: MemoryDreamOptions["synthesize"]) {
+function fixture(synthesize?: MemoryDreamOptions["synthesize"], tools?: MemoryDreamTool[]) {
   const base = mkdtempSync(join(tmpdir(), "xueness-memory-dream-"));
   const rootA = join(base, "project-a"), rootB = join(base, "project-b"), stateDir = join(base, "state");
   const currentA = sid(1), sourceA = sid(2), currentB = sid(3), sourceB = sid(4);
@@ -53,6 +53,7 @@ function fixture(synthesize?: MemoryDreamOptions["synthesize"]) {
       if (synthesize) return synthesize(ownerSessionId, prompt, signal);
       return { value: { content: "Use pnpm for builds.\n", summary: "Confirmed build convention", sourceSessionIds: [sourceA] }, usage: { input_tokens: 8, output_tokens: 5 } };
     },
+    ...(tools ? { tools } : {}),
   };
   const service = new MemoryDreamService(options);
   return { base, rootA, rootB, stateDir, currentA, sourceA, currentB, sourceB, sessions, keys, enabled, service, get modelCalls() { return modelCalls; }, get writeCalls() { return writeCalls; } };
@@ -100,6 +101,95 @@ describe("memory dream service", () => {
       assert.equal(f.writeCalls, 1);
       await f.service.apply(f.currentA, draft.id, { digest: ready.applyDigest!, confirmed: true });
       assert.equal(f.writeCalls, 1);
+    } finally { await closeFixture(f); }
+  });
+
+  it("reviews a ready candidate as a unified diff and reverts an applied dream to its baseline", async () => {
+    const f = fixture();
+    try {
+      const draft = await proposeA(f);
+      await assert.rejects(f.service.diff(f.currentA, draft.id), (error: unknown) => error instanceof MemoryDreamServiceError && error.status === 409);
+      await f.service.start(f.currentA, draft.id, { digest: draft.startDigest, confirmed: true, allowReal: true });
+      await f.service.wait(draft.id);
+      const ready = await f.service.get(f.currentA, draft.id);
+      const diff = await f.service.diff(f.currentA, draft.id);
+      assert.equal(diff.baseDigest, digest("old A key"));
+      assert.equal(diff.candidateDigest, digest("Use pnpm for builds.\n"));
+      assert.equal(diff.oldLines, 1);
+      assert.equal(diff.newLines, 1);
+      assert.equal(diff.addedLines, 1);
+      assert.equal(diff.removedLines, 1);
+      assert.equal(diff.truncated, false);
+      assert.deepEqual(diff.hunks[0]?.lines.map((line) => line.op), ["remove", "add"]);
+      assert.deepEqual(diff.hunks[0]?.lines.map((line) => line.text), ["old A key", "Use pnpm for builds."]);
+      const applied = await f.service.apply(f.currentA, draft.id, { digest: ready.applyDigest!, confirmed: true });
+      assert.equal(applied.status, "applied");
+      await assert.rejects(f.service.revert(f.currentA, draft.id, { digest: ready.applyDigest!, confirmed: false }),
+        (error: unknown) => error instanceof MemoryDreamServiceError && error.status === 409);
+      await assert.rejects(f.service.revert(f.currentA, draft.id, { digest: digest("other candidate"), confirmed: true }),
+        (error: unknown) => error instanceof MemoryDreamServiceError && error.status === 409);
+      const reverted = await f.service.revert(f.currentA, draft.id, { digest: ready.applyDigest!, confirmed: true });
+      assert.equal(reverted.status, "reverted");
+      assert.equal(f.keys.get(f.rootA), "old A key");
+      assert.equal(f.writeCalls, 2);
+      assert.equal(typeof reverted.provenance?.revertKeyDigest, "string");
+      assert.equal(reverted.provenance?.source, "memory-dream");
+      await f.service.revert(f.currentA, draft.id, { digest: ready.applyDigest!, confirmed: true });
+      assert.equal(f.writeCalls, 2);
+      await assert.rejects(f.service.cancel(f.currentA, draft.id),
+        (error: unknown) => error instanceof MemoryDreamServiceError && error.status === 409);
+    } finally { await closeFixture(f); }
+  });
+
+  it("refuses to revert when project memory drifted or the owner session is read-only", async () => {
+    const f = fixture();
+    try {
+      const drifted = await proposeA(f);
+      await f.service.start(f.currentA, drifted.id, { digest: drifted.startDigest, confirmed: true, allowReal: true });
+      await f.service.wait(drifted.id);
+      const driftedReady = await f.service.get(f.currentA, drifted.id);
+      await f.service.apply(f.currentA, drifted.id, { digest: driftedReady.applyDigest!, confirmed: true });
+      f.keys.set(f.rootA, "operator edited KEY.md");
+      await assert.rejects(f.service.revert(f.currentA, drifted.id, { digest: driftedReady.applyDigest!, confirmed: true }),
+        (error: unknown) => error instanceof MemoryDreamServiceError && error.status === 409);
+      const second = await proposeA(f);
+      await f.service.start(f.currentA, second.id, { digest: second.startDigest, confirmed: true, allowReal: true });
+      await f.service.wait(second.id);
+      const secondReady = await f.service.get(f.currentA, second.id);
+      await f.service.apply(f.currentA, second.id, { digest: secondReady.applyDigest!, confirmed: true });
+      f.sessions.get(f.currentA)!.read_only = true;
+      await assert.rejects(f.service.revert(f.currentA, second.id, { digest: secondReady.applyDigest!, confirmed: true }),
+        (error: unknown) => error instanceof MemoryDreamServiceError && error.status === 403);
+    } finally { await closeFixture(f); }
+  });
+
+  it("runs the bounded read-only dream tool loop before producing the candidate", async () => {
+    const prompts: string[] = [], contexts: MemoryDreamToolContext[] = [];
+    const tool: MemoryDreamTool = {
+      name: "read_project_key", description: "Re-read the current project KEY.md (read-only).",
+      async invoke(context) { contexts.push({ root: context.root, sourceSessionIds: [...context.sourceSessionIds] }); return { content: "old A key", digest: "unchecked" }; },
+    };
+    let calls = 0;
+    const f = fixture(async (_owner, prompt) => {
+      prompts.push(prompt);
+      calls += 1;
+      return calls === 1
+        ? { value: { dreamTool: "read_project_key", input: {} }, usage: "unknown" }
+        : { value: { content: "Use pnpm for builds.\n", summary: "Confirmed build convention", sourceSessionIds: [f.sourceA] }, usage: { input_tokens: 8, output_tokens: 5 } };
+    }, [tool]);
+    try {
+      const draft = await proposeA(f);
+      await f.service.start(f.currentA, draft.id, { digest: draft.startDigest, confirmed: true, allowReal: true });
+      await f.service.wait(draft.id);
+      const ready = await f.service.get(f.currentA, draft.id);
+      assert.equal(ready.status, "ready");
+      assert.equal(f.modelCalls, 2);
+      assert.equal(calls, 2);
+      assert.match(prompts[0]!, /read_project_key/);
+      assert.match(prompts[1]!, /"tool":\s*"read_project_key"/);
+      assert.match(prompts[1]!, /old A key/);
+      assert.deepEqual(contexts, [{ root: f.rootA, sourceSessionIds: [f.sourceA] }]);
+      assert.equal(ready.candidate?.content, "Use pnpm for builds.\n");
     } finally { await closeFixture(f); }
   });
 
@@ -156,7 +246,7 @@ describe("memory dream service", () => {
       const api = createMemoryDreamApi(f.service), base = ["api", "sessions", f.currentA, "memory-dreams"];
       assert.deepEqual(api.routes, [
         "GET /api/sessions/:id/memory-dreams", "POST /api/sessions/:id/memory-dreams", "GET /api/sessions/:id/memory-dreams/:dreamId",
-        "POST /api/sessions/:id/memory-dreams/:dreamId/start", "POST /api/sessions/:id/memory-dreams/:dreamId/cancel", "POST /api/sessions/:id/memory-dreams/:dreamId/apply",
+        "GET /api/sessions/:id/memory-dreams/:dreamId/diff", "POST /api/sessions/:id/memory-dreams/:dreamId/start", "POST /api/sessions/:id/memory-dreams/:dreamId/cancel", "POST /api/sessions/:id/memory-dreams/:dreamId/apply", "POST /api/sessions/:id/memory-dreams/:dreamId/revert",
       ]);
       assert.equal(api.owns("POST", [...base, sid(31)]), true);
       assert.equal(api.owns("GET", ["api", "memory", "tracks"]), false);
@@ -166,6 +256,9 @@ describe("memory dream service", () => {
       assert.equal((await api.dispatch("POST", [...base, record.id], {}, {}))?.[0], 405);
       assert.equal((await api.dispatch("GET", [...base, record.id], {}, {}))?.[0], 200);
       assert.equal((await api.dispatch("POST", [...base, record.id, "start"], {}, { digest: "bad", confirmed: true, allowReal: true }))?.[0], 409);
+      assert.equal((await api.dispatch("GET", [...base, record.id, "diff"], {}, {}))?.[0], 409);
+      assert.equal((await api.dispatch("POST", [...base, record.id, "revert"], {}, { digest: "bad", confirmed: true }))?.[0], 409);
+      assert.equal((await api.dispatch("GET", [...base, "f".repeat(32), "diff"], {}, {}))?.[0], 404);
     } finally { await closeFixture(f); }
   });
 });

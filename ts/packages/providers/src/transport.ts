@@ -16,7 +16,7 @@ import { retryAfterMilliseconds, retryAfterSeconds } from "./retry-after.ts";
 import { matchesThinkingSignatureRejection } from "./reasoning-history-normalization.ts";
 
 export const QUOTA_ERROR_CODES = new Set(["AccountQuotaExceeded", "QUOTA_EXCEEDED", "insufficient_quota"]);
-export const CONTEXT_OVERFLOW_CODES = new Set(["context_length_exceeded", "context_window_exceeded", "prompt_too_long"]);
+export const CONTEXT_OVERFLOW_CODES = new Set(["context_length_exceeded", "context_window_exceeded", "model_context_exceeded", "model_context_window_exceeded", "context_exceeded", "prompt_too_long", "1261"]);
 const STREAM_ERROR_STATUSES: Record<string, number> = {
   invalid_request_error: 400, authentication_error: 401, invalid_api_key: 401, permission_error: 403,
   permission_denied: 403, not_found_error: 404, rate_limit_error: 429, rate_limit_exceeded: 429,

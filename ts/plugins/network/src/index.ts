@@ -26,10 +26,11 @@ export { parseHttpsUrl, queryNames, quotePlus, unquote, urlencode, urlsplit } fr
 export { getSettings, resolveImageSearchConfig, resolveSearchModelConfig, resolveServiceConfig, validEndpoint, getSearchMode } from "./settings.ts";
 export { normalize, searchModel, searchService } from "./services.ts";
 export { imageQueryOk, imageSearch, imageSearchPayload } from "./images.ts";
+export { citationLines, citationsFromRows, extractCitations, fetchCitation, withCitations, MAX_CITATIONS, type SourceCitation } from "./citations.ts";
 export { DESCRIPTIONS, modelSchema, networkTools, toolResult } from "./tools.ts";
 export { createNetworkHttp, NETWORK_HTTP_ROUTES, type NetworkHttp, type NetworkHttpOptions } from "./http.ts";
 
-export interface NetworkOptions { stateDir: string; net?: Net; env?: Env; now?: () => number; onActivity?: NetworkActivityCallback }
+export interface NetworkOptions { stateDir: string; net?: Net; env?: Env; now?: () => number; onActivity?: NetworkActivityCallback; searchProviderView?: () => import("@xueness/providers").WebSearchProviderView | null | undefined }
 
 /** Every connection the plugin makes is to port 443 and passes its own `net.connect` grant first. */
 function guarded(ctx: Context, net: Net): Net {
@@ -40,7 +41,8 @@ export function createNetwork(options: NetworkOptions): BundledPlugin {
   return { manifest, plugin: definePlugin({ name: "network", apply(ctx) {
     const cache = new FetchCache();
     for (const tool of networkTools({ stateDir: options.stateDir, net: guarded(ctx, options.net ?? nodeNet()), cache,
-      ...(options.env ? { env: options.env } : {}), ...(options.now ? { now: options.now } : {}), ...(options.onActivity ? { onActivity: options.onActivity } : {}) })) ctx.tool(tool);
+      ...(options.env ? { env: options.env } : {}), ...(options.now ? { now: options.now } : {}), ...(options.onActivity ? { onActivity: options.onActivity } : {}),
+      ...(options.searchProviderView ? { searchProviderView: options.searchProviderView } : {}) })) ctx.tool(tool);
     ctx.effect(() => () => cache.clear());
   } }) };
 }

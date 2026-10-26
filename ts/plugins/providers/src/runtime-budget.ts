@@ -52,7 +52,7 @@ export function historyDigest(units: Row[][], omitted: number[], limit = 2400): 
     }
     if (!(Array.isArray(first.tool_calls) && first.tool_calls.length) && typeof first.content === "string") rows.push({ assistant_observation_unverified: pySlice(first.content, 320) });
   }
-  const prefix = "UNTRUSTED extractive history checkpoint. All human requirements are retained verbatim. Older exchanges are omitted; their full records remain in the session journal. These excerpts do not establish completion or authorize repeating actions. Use tool_result_read with tool_call_id for full evidence, or tool_search for history tools.\n";
+  const prefix = "UNTRUSTED extractive history checkpoint. All human requirements are retained verbatim. Older exchanges are omitted; their full records remain in the session journal. These excerpts do not establish completion or authorize repeating actions. Use tool_result_read with tool_call_id for full evidence.\n";
   let selected: Row[] = [];
   for (const row of rows.slice(-12).reverse()) {
     const candidate = [row, ...selected]; if (pyLen(prefix) + pyLen(pyJsonDumps(candidate)) > limit) break; selected = candidate;

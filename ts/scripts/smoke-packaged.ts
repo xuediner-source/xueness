@@ -4,6 +4,7 @@ import { createRequire } from "node:module";
 import { existsSync, mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, relative, resolve } from "node:path";
+import { BUNDLED_PLUGIN_IDS } from "@xueness/contracts";
 const require = createRequire(import.meta.url);
 const { Backend } = require("../../desktop/src/backend.cjs");
 const { frontDoorCommand } = require("../../desktop/src/front-door.cjs");
@@ -34,7 +35,7 @@ try {
   const upload = await request("/api/composer/attachments/begin", "POST", { root, session_id: session.id, origin: "file", name: "readme.txt", mimeType: "text/plain", size: 2 });
   await request("/api/composer/attachments/commit", "POST", { root, session_id: session.id, id: upload.ref.id, data: "b2s=" });
   const preview = await request("/api/composer/attachments/preview", "POST", { root, session_id: session.id, id: upload.ref.id }); assert.equal(preview.preview.text, "ok");
-  const catalog = await request("/api/plugins"); assert.equal(catalog.plugins.length, 31, "installed layout must resolve the bundled catalog");
+  const catalog = await request("/api/plugins"); assert.deepEqual(catalog.plugins.map((p: { id: string }) => p.id).sort(), [...BUNDLED_PLUGIN_IDS].sort(), "installed layout must resolve the bundled catalog");
   const after = await stats(); assert.equal(after.backend.kind, "ts");
   if (process.argv[3]) writeFileSync(resolve(process.argv[3]), JSON.stringify({ routes: after.routes.ts, nativeRequestsVerified: 5, isolatedState: true, bundledRuntime: true }, null, 2) + "\n");
   console.log("Packaged bundled Node: native session/history/media, desktop guards, private locks and isolated startup passed.");

@@ -115,6 +115,26 @@
       "id": "providers.tool_result_budget",
       "name": "工具结果字节预算与分页读取",
       "nameEn": "Tool result byte budgets and paged reading"
+    },
+    {
+      "id": "providers.execution_fallback",
+      "name": "执行级临时模型选型与失败回退",
+      "nameEn": "Execution-scoped model selection with failure fallback"
+    },
+    {
+      "id": "providers.tool_search",
+      "name": "通用工具发现与真实工具引用",
+      "nameEn": "Generic tool discovery with real tool references"
+    },
+    {
+      "id": "providers.deferred_tool_call",
+      "name": "延迟工具调用（DeferredToolCall）",
+      "nameEn": "Deferred tool call envelope"
+    },
+    {
+      "id": "providers.execution_ports",
+      "name": "执行选择与请求认证端口",
+      "nameEn": "Execution selection and request-auth ports"
     }
   ],
   "panels": [
@@ -133,6 +153,18 @@
       "gate": "tool_result_read",
       "mutating": false,
       "concurrencySafe": true
+    },
+    {
+      "name": "tool_search",
+      "gate": "tool_search",
+      "mutating": false,
+      "concurrencySafe": true
+    },
+    {
+      "name": "deferred_tool_call",
+      "gate": "tool_search",
+      "mutating": false,
+      "concurrencySafe": false
     }
   ]
 }

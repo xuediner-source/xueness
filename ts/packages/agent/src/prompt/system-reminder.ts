@@ -8,7 +8,7 @@ export type SystemReminderLifecycle = "request_prefix" | "per_current_turn" | "r
 
 export const SYSTEM_REMINDER_PREFIX_SOURCES = ["context_prefix", "skills_listing"] as const;
 export const SYSTEM_REMINDER_PERSISTED_SOURCES = [
-  "agent_listing_delta", "todo_reminder", "task_status", "tool_result_warning", "resume_referenced_session_context",
+  "agent_listing_delta", "tool_discovery", "todo_reminder", "task_status", "tool_result_warning", "resume_referenced_session_context",
   "plan_file_reference", "resume_goal_state", "goal_state_change", "plugin_reference", "bot_topic_context",
   "target_continuation", "goal_completion_verification", "rewind_notice", "conversation_fork", "selection_side_chat",
   "queued_system_notification", "shell_environment_change",
@@ -36,6 +36,7 @@ const d = (channel: SystemReminderDeliveryChannel, lifecycle: SystemReminderLife
 
 const DESCRIPTORS: Record<SystemReminderSource, Shape> = {
   agent_listing_delta: d("current_turn", "resume_history", true, "agent_listing_delta"),
+  tool_discovery: d("history_continuity", "resume_history", true, "tool_discovery"),
   incoming_message: d("mid_turn_event", "mid_turn_event", true, "incoming_message"),
   bot_topic_context: d("history_continuity", "resume_history", true, "bot_topic_context"),
   context_prefix: d("request_prefix", "request_prefix", true, "context_prefix"),

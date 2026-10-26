@@ -2,9 +2,9 @@
 import { realpathSync, statSync } from "node:fs";
 import { parse, resolve } from "node:path";
 import { randomBytes } from 'node:crypto';
-import { deriveEvents, headSeq, isDict, pageEvents, pyJsonDumps, pyJsonLoads } from "@xueness/contracts";
+import { deriveEvents, headSeq, isDict, pageEvents, pyJsonDumps, pyJsonLoads, V4_REFUSAL_REASONS, V4_WIRE_PROTOCOL_VERSION } from "@xueness/contracts";
 import { pyExceptionName } from '@xueness/sessions';
-import { AppProtocolError as Refused, AppProtocolDeferredReply, AppProtocolSubscriptions, createAppProtocolCore, createAppProtocolGoals, createAppProtocolMemory, createAppProtocolControls, createAppProtocolMedia, type AppProtocolPort } from '@xueness/plugin-remote';
+import { AppProtocolError as Refused, AppProtocolDeferredReply, AppProtocolSubscriptions, createAppProtocolCore, createAppProtocolGoals, createAppProtocolMemory, createAppProtocolControls, createAppProtocolMedia, createV4Facade, type AppProtocolPort, type V4Facade } from '@xueness/plugin-remote';
 import { FRONT_DOOR_VERSION } from "../front-door.ts";
 import { allowRealDefault, type Cli, workspacePath } from "./host.ts";
 import { serveAppServerInput } from './app-server-input.ts';
@@ -76,6 +76,7 @@ export class AppServer {
   private readonly commands = new Map<Promise<Reply>, string>();
   private readonly core: ReturnType<typeof createAppProtocolCore>;
   private readonly subscriptions: AppProtocolSubscriptions;
+  private readonly v4: V4Facade;
   private readonly watchdog: ReturnType<typeof setInterval>;
   private readonly closed = new AbortController();
   readonly connectionId = randomBytes(16).toString('hex');
@@ -124,6 +125,7 @@ export class AppServer {
       shutdown: () => this.shutdown(),
       exit: () => this.shutdown(),
     };
+    this.v4 = createV4Facade({ port, connectionId: this.connectionId, xuenessVersion: FRONT_DOOR_VERSION, nativeMethods: () => this.methods, notify: (m, p) => this.notify(m, p) });
     this.watchdog = setInterval(() => { if (!this.stopping && !this.ownerEnabled()) void this.shutdown().catch((e) => this.log(String(e))); }, 250); this.watchdog.unref();
   }
 
@@ -165,6 +167,11 @@ export class AppServer {
 
   async initialize(params: Row): Promise<Row> {
     const version = params.protocolVersion ?? 1;
+    if (version === V4_WIRE_PROTOCOL_VERSION) {
+      if (this.initialized && this.protocolVersion !== V4_WIRE_PROTOCOL_VERSION) throw new Refused("unsupported protocol version or connection already initialized", INVALID_PARAMS, { reasonCode: V4_REFUSAL_REASONS.wrongProtocolFamily });
+      this.protocolVersion = V4_WIRE_PROTOCOL_VERSION; this.initialized = true;
+      return this.v4.initialize(params);
+    }
     if (![1, 2].includes(version) || this.initialized && version !== this.protocolVersion) throw new Refused("unsupported protocol version or connection already initialized", INVALID_PARAMS);
     this.protocolVersion = version; this.initialized = true;
     const [, catalog] = await this.call("GET", "/api/plugins");
@@ -248,7 +255,7 @@ export class AppServer {
     return this.shutdownTask ??= this.closeOwned().finally(() => this.closed.abort());
   }
   private async closeOwned(): Promise<Row> {
-    this.stopping = true; clearInterval(this.watchdog); this.subscriptions.close(); this.core.close();
+    this.stopping = true; clearInterval(this.watchdog); await this.subscriptions.close(); this.core.close();
     const turns = [...this.turns.values()], commands = [...this.commands], ids = [...new Set([...turns.map((t) => t.sid), ...commands.map(([, id]) => id)])];
     for (const id of ids) await this.call('POST', `/api/sessions/${id}/stop`).catch(() => null);
     for (const turn of turns) turn.stop = true;
@@ -271,7 +278,22 @@ export class AppServer {
     if (typeof method !== "string" || !method) { await this.error(id, INVALID_REQUEST, METHOD_STATUS[INVALID_REQUEST]!, { reason: "method must be a non-empty string" }); return; }
     const params = message.params ?? {};
     if (!isDict(params)) { await this.error(id, INVALID_PARAMS, METHOD_STATUS[INVALID_PARAMS]!, { reason: "params must be an object" }); return; }
-    const handler = Object.hasOwn(this.methods, method) ? this.methods[method] : undefined;
+    const legacyFamily = this.initialized && this.protocolVersion !== V4_WIRE_PROTOCOL_VERSION;
+    const v4Family = this.initialized && this.protocolVersion === V4_WIRE_PROTOCOL_VERSION;
+    let handler: ((params: Row) => unknown) | undefined;
+    if (method === "clientHello" && legacyFamily) {
+      handler = () => { throw new Refused("clientHello requires the V4 protocol family", INVALID_PARAMS, { reasonCode: V4_REFUSAL_REASONS.wrongProtocolFamily }); };
+    } else if (method === "clientHello") {
+      handler = (p) => this.v4.acceptClientHello(p);
+    } else if (v4Family && method !== "initialize" && method !== "shutdown" && method !== "exit") {
+      // Once V4 is negotiated the facade owns dispatch: it refuses legacy
+      // method names as a family mismatch instead of silently mixing families.
+      handler = (p) => this.v4.dispatch(method, p, false);
+    } else if (method.startsWith("v4/")) {
+      handler = (p) => this.v4.dispatch(method, p, legacyFamily);
+    } else {
+      handler = Object.hasOwn(this.methods, method) ? this.methods[method] : undefined;
+    }
     if (!handler) { await this.error(id, METHOD_NOT_FOUND, METHOD_STATUS[METHOD_NOT_FOUND]!, { method, known: Object.keys(this.methods).sort() }); return; }
     if (id === null && /\/(?:subscribe|resync)$/.test(method)) { await this.error(null, INVALID_REQUEST, 'subscription requests require an id'); return; }
     if (!["shutdown", "exit", "turn/cancel"].includes(method) && (this.stopping || !this.ownerEnabled())) {

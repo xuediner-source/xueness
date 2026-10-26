@@ -37,7 +37,11 @@ describe("ZCode model retry in the agent driver", () => {
       assert.deepEqual(failed.map((event) => [event.attempt, event.reason, event.retryable, event.statusCode]), [[1, "server_error", true, 503], [2, "rate_limited", true, 429]]);
       assert.deepEqual(retries.map((event) => [event.attempt, event.nextAttempt, event.maxAttempts, event.delayMs, event.reason]), [[1, 2, 11, 0, "server_error"], [2, 3, 11, 5, "rate_limited"]]);
       assert.equal(failed[1]?.providerErrorCode, "1302");
-      assert.equal(new Set(events.filter((event) => String(event.type).startsWith("model_")).map((event) => event.requestId)).size, 1);
+      const modelEvents = events.filter((event) => String(event.type).startsWith("model_"));
+      assert.equal(new Set(modelEvents.map((event) => event.requestId)).size, 1);
+      // One selection ID ties every attempt, retry and status event of the run together.
+      assert.equal(new Set(modelEvents.map((event) => event.selectionId)).size, 1);
+      assert.equal(new Set(modelEvents.map((event) => event.attemptId)).size, 3);
       assert.deepEqual(scheduled.map((info) => info.nextAttempt), [2, 3]);
     } finally { local.close(); }
   });

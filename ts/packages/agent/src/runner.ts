@@ -5,6 +5,7 @@ import { turnId } from "./completion.ts";
 import { agentSupport, UnsupportedAgentConfiguration } from "./capabilities.ts";
 import { driveRun } from "./driver.ts";
 import { effectiveExtensions } from "./finalize.ts";
+import { installExecutionModel, restoreExecutionModel } from "./execution-selection.ts";
 import { appendUserTurn } from "./turns.ts";
 import type { AgentContext, AgentRunnerOptions, Row, RunDecision, RunOptions } from "./types.ts";
 
@@ -52,6 +53,9 @@ export class AgentRunner {
     };
     let returned = false;
     let initialized = false;
+    // Execution-scoped temporary selection: resolving it is a pre-request decision
+    // whose failures end the run before any model call; restored in the finally below.
+    const execution = installExecutionModel(context);
     const previousStreamId = isDict(session.streaming) ? session.streaming.id : null;
     try {
       lease = await settings.store.lease(sid);
@@ -60,6 +64,9 @@ export class AgentRunner {
         if (!pyEquals(current.history_revision ?? null, session.history_revision ?? null) || !pyEquals(current.history_hash ?? null, session.history_hash ?? null)) throw Object.assign(new Error("session changed before its run lease was acquired"), { name: "BlockingIOError" });
       }
       ensureMessageIdentity(session);
+      // C-WFL-03: each run starts without a stop record; it is journaled below
+      // when a terminal decision, cancellation or deadline ends the rounds.
+      delete session.run_stop;
       initialized = true;
       for (const extension of effectiveExtensions(context, extensions)) {
         const lifecycle = await extension.beforeRun?.(context);
@@ -76,13 +83,30 @@ export class AgentRunner {
           if (iterationReturned) await context.save();
         }
         let decision: RunDecision | void = undefined;
+        // C-WFL-03: an explicit terminal stop (budget reached, user pause,
+        // completion) is final for this run; no later extension may start
+        // another round after it.
+        let terminalStop: RunDecision | null = null;
         for (const extension of effectiveExtensions(context, extensions)) {
           const next = await extension.afterRun?.(context);
+          if (next?.action === "stop") { terminalStop = { ...next, owner: next.owner ?? extension.id }; decision = undefined; break; }
           if (next?.action === "continue") decision = { ...next, owner: next.owner ?? extension.id };
           if (next?.action === "continue" && next.exclusive) break;
         }
+        // C-WFL-03: journal why the rounds ended — an extension's terminal
+        // decision, cancellation or the wall-clock deadline — so the stop is
+        // inspectable after the run; natural exhaustion journals nothing.
+        let runStop: Row | null = null;
+        if (signal.aborted || options.shouldStop?.()) runStop = { code: "cancelled", reason: "run was cancelled" };
+        else if (now() >= context.deadline) runStop = { code: "deadline", reason: "run exceeded its wall-clock deadline" };
+        else if (terminalStop) {
+          const extras = terminalStop as unknown as Row;
+          const code = extras.stopCode;
+          runStop = { code: typeof code === "string" && code ? code : "stopped", reason: String(extras.reason ?? terminalStop.owner ?? ""), owner: terminalStop.owner ?? null };
+        }
+        if (runStop) session.run_stop = runStop;
         await context.save();
-        if (signal.aborted || options.shouldStop?.() || now() >= context.deadline || !decision || decision.action !== "continue" || typeof decision.prompt !== "string" || !decision.prompt.trim() || decision.owner && !context.enabled(decision.owner)) break;
+        if (runStop || !decision || decision.action !== "continue" || typeof decision.prompt !== "string" || !decision.prompt.trim() || decision.owner && !context.enabled(decision.owner)) break;
         let appended = false;
         for (const extension of effectiveExtensions(context, extensions)) if (extension.appendTurn && await extension.appendTurn(context, decision.prompt)) { appended = true; break; }
         if (!appended && (!decision.owner || context.enabled(decision.owner))) await appendUserTurn(session, settings.store, decision.prompt);
@@ -91,6 +115,7 @@ export class AgentRunner {
       returned = true; return session;
     } finally {
       try {
+        restoreExecutionModel(context, execution);
         if (initialized) for (const extension of extensions) await extension.close?.(context);
         // settleRun cleanup may have changed journal metadata even on failure.
         if (initialized && !returned && isDict(session.streaming) && session.streaming.status === "interrupted" && context.enabled("sessions")) {

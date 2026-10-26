@@ -1,0 +1,9 @@
+{
+  "backendPayloadVerified": true,
+  "backendFiles": 2549,
+  "userFilesPreservedBeforeLaunch": 2467,
+  "userDataUnchangedBeforeLaunch": true,
+  "installed": "E:\\models\\apps\\Xueness\\resources\\backend-ts",
+  "backup": "E:\\models\\apps\\backups\\xueness-before-regression17-20261026",
+  "desktopExecutableSha256": "f62900680f24ecb332dcbfdd7d06275540ab67556fbb59d6da002af661760e7c"
+}

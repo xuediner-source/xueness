@@ -14,8 +14,9 @@ import {
   selectCompactEntries, selectCompactEntriesAfterPromptTooLong, selectCompactEntriesForInitialPromptTooLong, truncateForCompactRetry,
   type AgentProvider, type CompactSelection, type CompactTrigger, type RebuildRequest, type Row,
 } from "@xueness/agent";
-import { finishReason, incompleteReason, isStreamStop, ProviderCancelled, reportedUsage } from "@xueness/providers";
+import { finishReason, incompleteReason, isStreamStop, ProviderCancelled, reportedUsage, type ModelRequestAdmission } from "@xueness/providers";
 import { semanticIdentity, sumHandoffUsage } from "./semantic-core.ts";
+import { runWithModelAdmission } from "./aux-admission.ts";
 import { cloneHandoffProvider } from "./semantic-model.ts";
 import { beginCompactTimeline, finishCompactTimeline } from '@xueness/sessions';
 
@@ -40,6 +41,8 @@ export interface CompactConversationOptions {
   emit?: (event: Row) => void;
   stamp?: () => string;
   uuid?: () => string;
+  /** Shared governor slot for the summary request; hosts bind the aux foreground scope. */
+  admission?: ModelRequestAdmission;
 }
 export interface CompactConversationResult {
   compacted: boolean;
@@ -82,7 +85,7 @@ async function requestSummary(options: CompactConversationOptions, forSummary: R
   const tools = request.tools.length > COMPACT_TOOL_KEEP_MAX_COUNT ? [] : request.tools;
   const client = cloneHandoffProvider(options.provider, capCompactSummaryMaxOutputTokens(options.provider.maxOutputTokens));
   // Streamed when the adapter streams (as ZCode does), so a long summary is not cut by idle timeouts.
-  const response = client.stream ? await client.stream(messages, tools, {}, { signal: options.signal ?? null }) : await client.complete(messages, tools, { signal: options.signal ?? null });
+  const response = await runWithModelAdmission(options.admission, options.provider, options.signal, async () => client.stream ? await client.stream(messages, tools, {}, { signal: options.signal ?? null }) : await client.complete(messages, tools, { signal: options.signal ?? null }));
   usages.push(reportedUsage(response._usage));
   // A summary that stops on the context limit is the same failure as a thrown overflow.
   if (incompleteReason(finishReason(response._finish_reason), response._usage, options.provider) === "context_limit") throw Object.assign(new Error("compact summary hit the context limit"), { code: "context_exceeded" });
@@ -159,6 +162,11 @@ export async function compactConversation(session: Row, options: CompactConversa
       staged.messages = pyDeepCopy(newMessages);
       if (!Array.isArray(staged.compactions)) staged.compactions = [];
       (staged.compactions as Row[]).push(record);
+      // C-TOOL-05: the discovery reminder rides the summary row's staged batch; a failed
+      // compaction discards the ledger together with the summary, so the set re-announces then.
+      if (reminders.some((reminder) => isDict(reminder) && reminder.source === "tool_discovery") && Array.isArray(session.discovered_tools)) {
+        staged.announced_compact_discovered_tools = (session.discovered_tools as unknown[]).filter((name): name is string => typeof name === "string").sort();
+      }
       finishCompactTimeline(staged, timeline.id, { status: 'completed', checkpointId, summaryMessageId: summaryRow._message_id, finishedAt: at });
       delete staged.context_usage;
       if (options.save) await options.save(staged);

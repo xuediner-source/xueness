@@ -27,7 +27,7 @@ function upgradeAll(facts: Record<string, ToolFacts> = {}): { manifests: PluginM
 describe("version 1 manifests", () => {
   it("upgrade every bundled manifest to a valid version 2 manifest without losing a field", () => {
     const { manifests } = upgradeAll();
-    assert.equal(manifests.length, 31);
+    assert.equal(manifests.length, BUNDLED_PLUGIN_IDS.length);
     v1Manifests().forEach((v1, index) => {
       const v2 = manifests[index] as PluginManifest & Record<string, unknown>;
       for (const [key, value] of Object.entries(v1)) {
@@ -52,7 +52,7 @@ describe("version 1 manifests", () => {
     assert.deepEqual(new HttpFamilyIndex(manifests).families(), new HttpFamilyIndex(v1Manifests() as unknown as HttpFamilyManifest[]).families());
     const { order, cyclic } = dependencyOrder(manifests);
     assert.deepEqual(cyclic, []);
-    assert.equal(order.length, 31);
+    assert.equal(order.length, BUNDLED_PLUGIN_IDS.length);
     for (const manifest of manifests) {
       for (const dep of manifest.dependencies) assert.ok(order.indexOf(dep) < order.indexOf(manifest.id), `${dep} before ${manifest.id}`);
     }

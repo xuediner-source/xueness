@@ -19,6 +19,11 @@ import {
 } from "./off-peak.ts";
 import { buildTaskRow, readStateFile, stopWorkflow, withQueueLock, writeStateJson } from "./off-peak-state.ts";
 import { readSettings, writeSettings } from "./off-peak-settings.ts";
+import {
+  ACTIVE_TICKET_SECONDS, markTicketOutput, renewTicketState, resignTicketState, settleTicketState, takeoverTicketState,
+  takeTicket, ticketExpiry, ticketOf, ticketRequestAuth, type TicketFacts,
+} from "./off-peak-ticket.ts";
+import { resolveOutputDelivered } from "./off-peak-output.ts";
 
 /** A task a caller may still edit, approve or cancel. */
 const EDITABLE: ReadonlySet<unknown> = new Set(["queued", "failed"]);
@@ -30,6 +35,13 @@ export interface OffPeakOptions {
   allowRealHost?: boolean;
   idleCheck?: (state: string) => boolean;
   bridge?: WorkflowBridge;
+  /** One active-ticket segment; the upstream default is three hours (D26). */
+  activeTicketSeconds?: number;
+  /**
+   * Whether the run behind a workflow id has delivered output; `null` means
+   * unknowable, which the no-replay invariant treats as delivered.
+   */
+  outputSignal?: (workflowId: string) => boolean | null;
 }
 
 export class OffPeakQueue {
@@ -38,8 +50,10 @@ export class OffPeakQueue {
   readonly allowRealHost: boolean;
   readonly path: string;
   readonly settingsPath: string;
-  readonly #bridge: WorkflowBridge | null;
+  readonly activeTicketSeconds: number;
+  #bridge: WorkflowBridge | null;
   readonly #idleCheck: (state: string) => boolean;
+  readonly #outputSignal: ((workflowId: string) => boolean | null) | null;
 
   constructor(state: string, options: OffPeakOptions = {}) {
     this.state = realish(state);
@@ -49,6 +63,9 @@ export class OffPeakQueue {
     const check = options.idleCheck;
     // `idle_check if callable(idle_check) else lambda: host_is_idle(self.state)`
     this.#idleCheck = typeof check === "function" ? check : (directory: string) => hostIsIdle(directory, this.#bridge);
+    this.activeTicketSeconds = options.activeTicketSeconds ?? ACTIVE_TICKET_SECONDS;
+    if (!(this.activeTicketSeconds > 0)) throw new PyValueError("ticket segment length must be positive");
+    this.#outputSignal = options.outputSignal ?? null;
     this.path = join(this.state, QUEUE_FILE);
     this.settingsPath = join(this.state, SETTINGS_FILE);
   }
@@ -191,6 +208,9 @@ export class OffPeakQueue {
       row.claimedAt = now;
       row.runId = uuid4Hex();
       row.workflowId = null;
+      // The claim takes (or keeps) the task's live ticket; a run that already
+      // delivered output can never be claimed again.
+      takeTicket(row, now, this.activeTicketSeconds);
       appendHistory(row, { id: row.runId, at: now, status: "claimed" });
       // `dict(row)`: the snapshot is frozen before the queue lock is released.
       return ["claimed", { ...row }];
@@ -273,6 +293,13 @@ export class OffPeakQueue {
         row.status = "queued";
         row.holdUntil = nextWindowOpen(now, window, zone);
       }
+      // A terminal attempt settles the task's live ticket with it; a completed
+      // run certainly delivered output, so it can never be replayed.
+      const ticket = ticketOf(row);
+      if (ticket !== null && ticket.state === "active" && status !== "started") {
+        if (status === "completed") markTicketOutput(row, now);
+        settleTicketState(row);
+      }
       return { id: row.id, status, error: pick(record, "error") };
     });
     if (pyTruthy(cancelId)) this.#stop(cancelId);
@@ -295,7 +322,48 @@ export class OffPeakQueue {
     const status = pick(record, "status");
     if (status === "completed") return this.#settle(taskId, now, "completed", undefined, pyStr(workflowId));
     if (ACTIVE.has(status)) {
-      const claimedAt = pyTruthy(pick(row, "claimedAt")) ? Number(pick(row, "claimedAt")) : now;
+      // The live ticket gates the run first: expired with no output, the task
+      // re-signs and retries before output; expired after output, the run's
+      // outcome stands and is never replayed.
+      const expiry = ticketExpiry(row, now);
+      if (expiry === "resignable" || expiry === "settled") {
+        const wid = pyStr(workflowId);
+        if (expiry === "resignable" && this.#outputDelivered(wid) === false) {
+          const outcome = this.#mutate((rows) => {
+            const live = rows.find((item) => pick(item, "id") === taskId);
+            if (live === undefined || pick(live, "runId") !== pick(row, "runId")) return null;
+            resignTicketState(live, now, this.activeTicketSeconds);
+            live.status = "queued";
+            live.nextEligibleAt = timestamp(now);
+            live.holdUntil = null;
+            appendHistory(live, { id: uuid4Hex(), at: now, status: "ticket_expired", error: "ticket expired before output" });
+            return { id: live.id, status: "ticket_expired", ticket: ticketOf(live) };
+          });
+          if (outcome !== null) {
+            this.#stop(wid);
+            return outcome;
+          }
+          return null;
+        }
+        // Output was delivered — or cannot be observed, which the no-replay
+        // invariant also treats as delivered — so the ticket settles.
+        this.#mutate((rows) => {
+          const live = rows.find((item) => pick(item, "id") === taskId);
+          if (live === undefined || pick(live, "runId") !== pick(row, "runId")) return;
+          markTicketOutput(live, now);
+          settleTicketState(live);
+          appendHistory(live, { id: uuid4Hex(), at: now, status: "ticket_settled", error: "ticket expired after output" });
+        });
+        try { this.#bridge?.control(wid, "cancel"); } catch (error) {
+          if (!isPyValueError(error) && !isPyOSError(error) && !isPyKeyError(error)) throw error;
+        }
+        return this.#settle(taskId, now, "failed", "ticket expired after output", wid);
+      }
+      // The overall deadline anchors on the ticket episode's first claim, so
+      // re-signs cannot reset it (takeover starts a fresh episode).
+      const ticket = ticketOf(row);
+      const claimedAt = ticket !== null && ticket.startedAt > 0 ? ticket.startedAt
+        : pyTruthy(pick(row, "claimedAt")) ? Number(pick(row, "claimedAt")) : now;
       if (now < claimedAt + Number(pick(row, "deadlineSeconds"))) return null;
       try {
         this.#bridge?.control(pyStr(workflowId), "cancel");
@@ -364,4 +432,79 @@ export class OffPeakQueue {
     const [kind, payload] = claimed;
     return kind === "held" ? payload : this.#launch(payload, at);
   }
+
+  // ------------------------------------------------------------- live tickets
+
+  /** The task's live ticket facts, if any. */
+  ticket(taskId: string): TicketFacts | null {
+    const row = this.get(taskId);
+    return row === undefined ? null : ticketOf(row);
+  }
+
+  /** 票据续期: extend the running task's active ticket by one segment. */
+  renewTicket(taskId: string, now?: number): TicketFacts {
+    requireEnabled(this.state);
+    const at = now === undefined ? this.clock() : now;
+    return this.#mutate((rows) => {
+      const row = rows.find((item) => pick(item, "id") === taskId);
+      if (row === undefined) throw new PyValueError("闲时任务不存在");
+      return renewTicketState(row, at, this.activeTicketSeconds);
+    });
+  }
+
+  /** Records the run's first delivered output; the no-replay guard from then on. */
+  markTicketOutput(taskId: string, now?: number): TicketFacts | null {
+    requireEnabled(this.state);
+    const at = now === undefined ? this.clock() : now;
+    return this.#mutate((rows) => {
+      const row = rows.find((item) => pick(item, "id") === taskId);
+      if (row === undefined) throw new PyValueError("闲时任务不存在");
+      return markTicketOutput(row, at);
+    });
+  }
+
+  /**
+   * 用户接管: the interactive side supersedes the idle run. The active ticket
+   * is invalidated — the sub-execution's next request boundary refuses — the
+   * run stops, ownership of the host is released, and the task waits for the
+   * next window while interactive turns run on their ordinary session model.
+   */
+  takeover(taskId: string, now?: number): Row {
+    requireEnabled(this.state);
+    const at = now === undefined ? this.clock() : now;
+    let stopId: unknown = null;
+    const result = this.#mutate((rows) => {
+      const row = rows.find((item) => pick(item, "id") === taskId);
+      if (row === undefined) throw new PyValueError("闲时任务不存在");
+      if (SETTLED.has(pick(row, "status"))) throw new PyValueError("任务已结束");
+      const [window, zone] = this.#windowOf(row);
+      if (pick(row, "status") === RUNNING) {
+        takeoverTicketState(row);
+        stopId = pick(row, "workflowId");
+        row.status = "queued";
+        appendHistory(row, { id: uuid4Hex(), at, status: "taken_over", workflowId: stopId });
+      }
+      row.holdUntil = nextWindowOpen(at, window, zone);
+      row.takeoverAt = timestamp(at);
+      return { ...row };
+    });
+    if (pyTruthy(stopId)) this.#stop(stopId);
+    return result;
+  }
+
+  /** The request boundary: the header binding an off-peak model request presents. */
+  ticketRequestAuth(taskId: string, now?: number): { headers: Record<string, string> } {
+    const at = now === undefined ? this.clock() : now;
+    const row = this.get(taskId);
+    if (row === undefined) throw new PyValueError("闲时任务不存在");
+    return ticketRequestAuth(row, at);
+  }
+
+  /**
+   * Whether the run behind a workflow id has delivered output. The default
+   * observer reads the workflow record: a node that left `pending` or opened
+   * its session has started delivering; anything less is safely retryable.
+   * `null` when unknowable — which the no-replay invariant reads as delivered.
+   */
+  #outputDelivered(workflowId: string): boolean | null { return resolveOutputDelivered(workflowId, this.#outputSignal, this.#bridge); }
 }

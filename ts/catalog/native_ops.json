@@ -30,9 +30,8 @@
   "panels": [],
   "resources": [],
   "capabilities": [
-    "native_ops.files",
-    "native_ops.discovery",
-    "native_ops.documents"
+    "filesystem-write",
+    "command"
   ],
   "httpFamilies": [],
   "modules": [

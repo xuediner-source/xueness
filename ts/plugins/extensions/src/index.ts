@@ -17,6 +17,14 @@ import { dispatchValidate, type ExtensionsReply } from "./validate.ts";
 
 export { loadManifests as loadDataManifests } from "./sdk.ts";
 export { profileCommand, updatePackages, validatePath } from "./cli.ts";
+export {
+  COMPONENT_KINDS, componentOwner, componentOwners, componentSummary, componentsDigest, effectiveComponents, uninstallPackage,
+  type ActiveComponent, type ComponentDeclaration, type ComponentKind, type ComponentOwnership, type ComponentPackage, type ComponentsField, type UninstallResult,
+} from "./components.ts";
+export {
+  EXAMPLE_PACKAGE, SDK_API_VERSION, compatVerdict, contributionIssues, describePackage, validateContributionFields,
+  type ContributionIssue, type PackageDescription, type PluginPackageDocument, type SdkCompatibility,
+} from "./contribution.ts";
 export { activationPlan, catalogItems, dispatchPluginCatalog, ownsPluginCatalog, setPluginEnabled, UI_FIELDS, type PluginCatalogOptions, type UiDeclarations } from "./catalog.ts";
 
 export interface ExtensionsHttpOptions {
@@ -31,6 +39,7 @@ export const EXTENSIONS_ROUTES = [
   "GET /api/plugins/marketplace",
   "POST /api/plugins/marketplace/:id/install",
   "POST /api/plugins/marketplace/:id/update",
+  "POST /api/plugins/marketplace/:id/uninstall",
   "POST /api/plugins/marketplace/validate",
   "GET /api/plugins/profiles",
   "POST /api/plugins/profiles/apply",

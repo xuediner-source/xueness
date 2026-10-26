@@ -10,6 +10,7 @@ import { isAbsolute, posix, win32 } from "node:path";
 import { execSubject, shellQuote } from "@xueness/engine-tools";
 import { skillAdapter } from "./skill-contract.ts";
 import { agentAdapter } from "./agent-contract.ts";
+import { channelReplyAdapter } from "./channel-reply-contract.ts";
 
 type Row = Record<string, unknown>;
 export type InternalInput = Row | { error: string };
@@ -198,4 +199,5 @@ export const ADAPTERS: Readonly<Record<string, InputAdapter>> = Object.freeze({
   exec: bash, read, write: pathTool(["content"]), edit: pathTool(["old_string", "new_string", "replace_all"]),
   glob: globTool, grep, todo_read: same, todo_write: todoWrite, ask_user: askUser,
   exec_output: taskOutput, exec_kill: taskStop, exit_plan_mode: same, enter_plan_mode: same, apply_patch: same, skill_read: skillAdapter, task: agentAdapter,
+  reply_to_channel: channelReplyAdapter,
 });

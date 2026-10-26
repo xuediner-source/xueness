@@ -21,5 +21,12 @@ test('session auto-titling defaults on and stays switchable', () => {
 test('without a save handler the auto-titling switch is visible but inert', () => {
   const html = renderToStaticMarkup(<SessionExperimentSettings values={{ sessionsAutoTitleEnabled: true }} />);
   assert.match(html, /aria-checked="true"/);
-  assert.equal((html.match(/disabled=""/g) ?? []).length, 3, 'all three switches render disabled');
+  assert.equal((html.match(/disabled=""/g) ?? []).length, 4, 'all session switches render disabled');
+});
+
+test('in-flight cancellation is visible and preserves its explicit opt-in', () => {
+  const off=renderToStaticMarkup(<SessionExperimentSettings values={{sessionsAutoTitleEnabled:false}} onUpdate={()=>undefined} />);
+  assert.match(off,/aria-label="立即停止模型与工具请求" aria-checked="false"/);
+  const on=renderToStaticMarkup(<SessionExperimentSettings values={{sessionsCancelPropagateEnabled:true}} onUpdate={()=>undefined} />);
+  assert.match(on,/aria-label="立即停止模型与工具请求" aria-checked="true"/);
 });

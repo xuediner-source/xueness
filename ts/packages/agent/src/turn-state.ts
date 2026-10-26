@@ -15,19 +15,10 @@ export interface TurnState {
   reasoningChars: number;
   tools: TurnToolState[];
 }
-const transitions: Record<TurnPhase, readonly TurnPhase[]> = {
-  idle: ['processing_input'],
-  processing_input: ['awaiting_model_response', 'completing'],
-  awaiting_model_response: ['streaming', 'completing', 'error'],
-  streaming: ['scheduling_tools', 'aggregating_results', 'completing', 'error'],
-  scheduling_tools: ['executing_tools', 'awaiting_permission', 'aggregating_results', 'error'],
-  executing_tools: ['aggregating_results', 'awaiting_permission', 'error'],
-  awaiting_permission: ['executing_tools', 'aggregating_results', 'error'],
-  aggregating_results: ['awaiting_model_response', 'scheduling_tools', 'completing', 'error'],
-  completing: [], error: [],
-};
+/** The formal C-WFL-01 state table lives in command-priority.ts and is enforced here. */
+import { TURN_TRANSITION_TABLE } from './command-priority.ts';
 export const isTerminalTurnPhase = (phase: TurnPhase): boolean => phase === 'completing' || phase === 'error';
-export const canTransitionTurn = (from: TurnPhase, to: TurnPhase): boolean => from === to || transitions[from].includes(to);
+export const canTransitionTurn = (from: TurnPhase, to: TurnPhase): boolean => from === to || TURN_TRANSITION_TABLE[from].includes(to);
 
 /** Mutates only its own compact snapshot; the driver retains execution authority. */
 export class TurnMachine {

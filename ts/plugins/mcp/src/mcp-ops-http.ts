@@ -10,6 +10,7 @@ import { isDict } from "@xueness/contracts";
 import { Context } from "@xueness/kernel";
 import { isLink, pyCodeCompare, readJsonObject, resourceKindDir } from "@xueness/sessions";
 import { McpClient } from "./client.ts";
+import { discoverOauth } from "./oauth-discovery.ts";
 import { validName, type Row } from "./names.ts";
 import { oauthBegin, oauthFinish, oauthRevoke, oauthStatus } from "./oauth.ts";
 
@@ -110,7 +111,7 @@ export function createMcpOpsHttp(o: McpOpsOptions) {
     return (parts.length === 4 || parts.length === 5) && parts[0] === "api" && parts[1] === "mcp" && parts[3] === "oauth";
   };
   return {
-    routes: ["GET /api/mcp/:id/oauth", "POST /api/mcp/:id/oauth/start", "POST /api/mcp/:id/oauth/finish", "POST /api/mcp/:id/oauth/revoke", "POST /api/mcp/check", "POST /api/mcp/:id/resources", "POST /api/mcp/:id/prompts", "POST /api/mcp/:id/resources/read", "POST /api/mcp/:id/prompts/read"],
+    routes: ["GET /api/mcp/:id/oauth", "POST /api/mcp/:id/oauth/start", "POST /api/mcp/:id/oauth/finish", "POST /api/mcp/:id/oauth/revoke", "POST /api/mcp/:id/oauth/discover", "POST /api/mcp/check", "POST /api/mcp/:id/resources", "POST /api/mcp/:id/prompts", "POST /api/mcp/:id/resources/read", "POST /api/mcp/:id/prompts/read"],
     owns,
     async dispatch(method: string, parts: string[], _query: Query, data: unknown): Promise<Reply | null> {
       if (!owns(method, parts)) return null;
@@ -146,7 +147,15 @@ export function createMcpOpsHttp(o: McpOpsOptions) {
           const body = isDict(data) ? data : {};
           return [200, await oauthFinish(o.stateDir, server, body.code, body.state)];
         }
-        if (parts.length === 5 && verb === "POST" && parts[4] === "revoke") return [200, await oauthRevoke(o.stateDir, String(server.id))];
+        if (parts.length === 5 && verb === "POST" && parts[4] === "revoke") return [200, await oauthRevoke(o.stateDir, String(server.id), server)];
+        if (parts.length === 5 && verb === "POST" && parts[4] === "discover") {
+          // Metadata only: the response never carries tokens or client secrets.
+          const summary = await discoverOauth(o.stateDir, server);
+          return [200, { discovered: true, authorizationServers: summary.authorizationServers, endpoints: {
+            authorizationEndpoint: summary.authorizationEndpoint, tokenEndpoint: summary.tokenEndpoint,
+            revocationEndpoint: summary.revocationEndpoint, registrationEndpoint: summary.registrationEndpoint,
+          }, registered: summary.registered, alreadyConfigured: summary.alreadyConfigured }];
+        }
         return [405, { error: "method not allowed" }];
       } catch { return suppressed(); }
     },

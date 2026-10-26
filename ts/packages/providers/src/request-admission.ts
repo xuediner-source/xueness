@@ -6,14 +6,24 @@ export interface ModelRequestTarget {
   modelId: string;
 }
 
+/**
+ * Who is asking for a slot. `foreground` marks main-task traffic: it is
+ * admitted without queueing but still counts in flight and feeds feedback.
+ * `run` keys cross-run round-robin fairness; omitted scopes share one queue.
+ */
+export interface ModelRequestAdmissionScope {
+  foreground?: boolean;
+  run?: string;
+}
+
 export interface ModelRequestAdmissionTicket {
   publish?(info: Record<string, unknown>): void | Promise<void>;
   release(): void;
 }
 
 export interface ModelRequestAdmission {
-  tryAcquire?(input: { model: ModelRequestTarget }): ModelRequestAdmissionTicket | undefined;
-  acquire(input: { model: ModelRequestTarget; signal?: AbortSignal }): Promise<ModelRequestAdmissionTicket>;
+  tryAcquire?(input: { model: ModelRequestTarget; scope?: ModelRequestAdmissionScope }): ModelRequestAdmissionTicket | undefined;
+  acquire(input: { model: ModelRequestTarget; signal?: AbortSignal; scope?: ModelRequestAdmissionScope }): Promise<ModelRequestAdmissionTicket>;
 }
 
 export interface AttemptAdmission {
@@ -25,6 +35,7 @@ export interface AdmitAttemptInput {
   admission?: ModelRequestAdmission;
   model: ModelRequestTarget;
   signal?: AbortSignal;
+  scope?: ModelRequestAdmissionScope;
   onQueued?(): Promise<void>;
   onAdmitted?(queuedMs: number): Promise<void>;
 }
@@ -56,9 +67,10 @@ async function acquireTicket(
   admission: ModelRequestAdmission,
   model: ModelRequestTarget,
   signal?: AbortSignal,
+  scope?: ModelRequestAdmissionScope,
 ): Promise<ModelRequestAdmissionTicket> {
   try {
-    return await admission.acquire({ model, signal });
+    return await admission.acquire({ model, signal, scope });
   } catch (error) {
     return cancelledOrOriginal(error, signal);
   }
@@ -66,7 +78,7 @@ async function acquireTicket(
 
 /** Acquire a request-scoped ticket, invoking queue observers only on a slow path. */
 export async function admitAttempt(input: AdmitAttemptInput): Promise<AttemptAdmission> {
-  const { admission, model, signal, onQueued, onAdmitted } = input;
+  const { admission, model, signal, scope, onQueued, onAdmitted } = input;
   if (!admission) {
     assertNotAborted(signal);
     return emptyAdmission;
@@ -76,7 +88,7 @@ export async function admitAttempt(input: AdmitAttemptInput): Promise<AttemptAdm
   if (admission.tryAcquire) {
     let fastTicket: ModelRequestAdmissionTicket | undefined;
     try {
-      fastTicket = admission.tryAcquire({ model });
+      fastTicket = admission.tryAcquire({ model, scope });
     } catch (error) {
       return cancelledOrOriginal(error, signal);
     }
@@ -93,7 +105,7 @@ export async function admitAttempt(input: AdmitAttemptInput): Promise<AttemptAdm
     const queuedAt = performance.now();
     await onQueued?.();
     assertNotAborted(signal);
-    const ticket = await acquireTicket(admission, model, signal);
+    const ticket = await acquireTicket(admission, model, signal, scope);
     const result = withTicket(ticket);
     try {
       assertNotAborted(signal);
@@ -107,7 +119,7 @@ export async function admitAttempt(input: AdmitAttemptInput): Promise<AttemptAdm
   }
 
   assertNotAborted(signal);
-  const ticket = await acquireTicket(admission, model, signal);
+  const ticket = await acquireTicket(admission, model, signal, scope);
   const result = withTicket(ticket);
   if (signal?.aborted) {
     result.release();

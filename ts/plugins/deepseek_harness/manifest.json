@@ -1,0 +1,79 @@
+{
+  "apiVersion": 2,
+  "id": "deepseek_harness",
+  "name": "DeepSeek Harness",
+  "description": "Deterministic KV-cache prefix stabilization, reasoning_content/reasoning_effort dual-protocol bridging, post-edit acceptance gates, bounded self-repair, Critic-Solver orchestration and trajectory/KV-hit analysis for DeepSeek-style providers. Gate and repair features run configured commands under the declared exec capability.",
+  "version": "0.1.0",
+  "defaultEnabled": false,
+  "capabilities": {
+    "fs": {
+      "read": [
+        "workspace",
+        "state"
+      ],
+      "write": []
+    },
+    "net": {
+      "connect": [],
+      "listen": []
+    },
+    "exec": [
+      "*"
+    ],
+    "secrets": []
+  },
+  "modules": [
+    "builtins/auto-verify",
+    "builtins/self-repair",
+    "builtins/critic-solver",
+    "builtins/trajectory-recorder",
+    "builtins/repo-map",
+    "builtins/symbol-graph"
+  ],
+  "features": [
+    {
+      "id": "deepseek_harness.prefix_cache",
+      "name": "确定性 KV-cache 前缀稳定器",
+      "nameEn": "Deterministic KV-cache prefix stabilizer"
+    },
+    {
+      "id": "deepseek_harness.reasoning_bridge",
+      "name": "reasoning_content / reasoning_effort 双协议桥",
+      "nameEn": "reasoning_content / reasoning_effort dual-protocol bridge"
+    },
+    {
+      "id": "deepseek_harness.auto_verify",
+      "name": "编辑后自动验收门禁与压缩诊断",
+      "nameEn": "Post-edit acceptance gate runner with compressed diagnostics"
+    },
+    {
+      "id": "deepseek_harness.self_repair",
+      "name": "错误栈压缩与有限次自修复循环",
+      "nameEn": "Stack-trace compression and bounded self-repair loop"
+    },
+    {
+      "id": "deepseek_harness.critic_solver",
+      "name": "Critic-Solver 双模型补丁评审编排",
+      "nameEn": "Critic-Solver dual-model patch review orchestration"
+    },
+    {
+      "id": "deepseek_harness.trajectory",
+      "name": "JSONL 轨迹记录与 KV 命中率分析",
+      "nameEn": "JSONL trajectory recording and KV cache hit-rate analysis"
+    },
+    {
+      "id": "deepseek_harness.repo_map",
+      "name": "TS/Python 符号图仓库地图",
+      "nameEn": "TS/Python symbol graph repository map"
+    },
+    {
+      "id": "deepseek_harness.bench",
+      "name": "确定性 bench 套件、指标档案与回归报告",
+      "nameEn": "Deterministic bench suite, metric profiling and regression reports"
+    }
+  ],
+  "tools": [],
+  "commands": [
+    "harness"
+  ]
+}

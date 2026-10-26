@@ -1,7 +1,9 @@
 /** Physical model attempts, retry-safe stream prelude, recovery and status events. */
 import { admitAttempt, ProviderCancelled, reasoningOrigin, resolveModelStreamIdleTimeoutMs, type AttemptAdmission } from "@xueness/providers";
 import { ModelRetry } from "./model-retry.ts";
+import { attachModelAttemptFacts, attachReceivedStreamFacts, executionRetryBudgetOverride } from "./execution-selection.ts";
 import { RequestStream } from "./stream.ts";
+import { isModelContextExceededError } from "./compact/index.ts";
 import { EmptyModelCompletionError, isSuspiciousEmptyCompletion, isZeroOutputCompletion } from "./empty-completion.ts";
 import { effectiveExtensions } from "./finalize.ts";
 import { validateMessage } from "./messages.ts";
@@ -17,7 +19,10 @@ export async function performModelRequest(context: AgentContext, runner: AgentRu
   const signal = AbortSignal.any([timeout, propagate ? context.signal : undefined, context.hostSignal].filter((item): item is AbortSignal => !!item));
   const oldDeadline = context.provider.requestDeadline;
   if (finiteDeadline) context.provider.requestDeadline = context.deadline;
-  const retry = new ModelRetry(context, now);
+  // A declared execution fallback resolves to SingleAttempt: the failure must reach the
+  // driver's fallback route instead of being retried on the same provider.
+  const executionBudget = executionRetryBudgetOverride(context);
+  const retry = new ModelRetry(context, now, executionBudget);
   let request = initial, stream: RequestStream | null = null, recovered = false;
   try {
     for (;;) {
@@ -49,7 +54,8 @@ export async function performModelRequest(context: AgentContext, runner: AgentRu
         if (stopped() || !context.enabled("providers")) throw new ProviderCancelled();
         await retry.started(context, active());
         const options = { ...request.options, signal, streamIdleTimeoutMs: resolveModelStreamIdleTimeoutMs({ baseTimeoutMs: context.options.modelRetry?.streamIdleTimeoutMs, retryNumber: retry.retries }),
-          ...retry.transportAttempts ? { transportAttempts: retry.transportAttempts } : {} };
+          ...retry.transportAttempts ? { transportAttempts: retry.transportAttempts } : {},
+          ...executionBudget ? { transportAttempts: 1 } : {} };
         binding = await runner.bindPrompt?.(context, request.messages);
         const messages = binding?.messages ?? request.messages;
         if (binding) options.media = binding.media;
@@ -91,7 +97,7 @@ export async function performModelRequest(context: AgentContext, runner: AgentRu
         if (recorded) throw error;
         if (!stream?.committed && !recovered) {
           // Reactive compaction may issue its own model call; the failed attempt no longer owns capacity.
-          if (error instanceof ProviderRequestError && error.contextOverflow) admission?.release();
+          if (isModelContextExceededError(error)) admission?.release();
           let compacted = false;
           for (const extension of active()) if (!compacted && extension.compactAfterOverflow) compacted = await extension.compactAfterOverflow(context, request, error, rebuild);
           let repaired: ModelRequest | null = null;
@@ -109,7 +115,10 @@ export async function performModelRequest(context: AgentContext, runner: AgentRu
       } finally { await release(); }
     }
   } catch (error) {
-    if (stream) { stream.discardPrelude(); await stream.interrupt(); }
+    // The escaping error carries the failed attempt's trace identity so the driver's
+    // fallback route can correlate its record; classification never sees it.
+    attachModelAttemptFacts(error, retry.attemptFacts(context));
+    if (stream) { attachReceivedStreamFacts(error, stream); stream.discardPrelude(); await stream.interrupt(); }
     throw error;
   } finally { context.provider.requestDeadline = oldDeadline ?? null; }
 }

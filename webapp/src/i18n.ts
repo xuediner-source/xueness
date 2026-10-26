@@ -4,6 +4,9 @@ const listeners = new Set<() => void>();
 let locale: Locale = 'zh';
 try { if (typeof localStorage !== 'undefined' && localStorage.getItem('xueness.language') === 'en') locale = 'en'; } catch { /* Private browsing. */ }
 export const messages: Record<string, string> = {
+  '任务已停止': 'Task stopped',
+  '立即停止模型与工具请求': 'Interrupt model and tool requests immediately',
+  '停止时中断正在进行的请求并保留已收到的内容；关闭时等待当前请求结束。': 'Stop interrupts in-flight requests and preserves received content. When off, stopping waits for the current request to finish.',
   '守护执行': 'Guarded',
   '常规命令自动执行，已识别危险命令每次确认。': 'Ordinary commands run automatically; recognized dangerous commands require approval each time.',
   "这次回复已中断，收到的内容已保留。": "This response was interrupted. The received content is preserved.",
@@ -2451,6 +2454,13 @@ Object.assign(messages, {
   "「{0}」不符合要求": "“{0}” does not match the field",
   "允许 MCP 询问少量信息": "Allow MCP to ask for a few details",
   "没能提交这次回答，请重试。": "Could not submit this answer. Try again.",
+});
+
+// MCP Apps UI host (mcp.apps_ui_host). Status lines shown while an app frame connects or closes.
+Object.assign(messages, {
+  "正在等待应用连接…": "Waiting for the app connection…",
+  "应用连接已关闭。": "App connection closed.",
+  "关闭应用": "Close app",
 });
 
 // Desktop update download measurements (updates.desktop).

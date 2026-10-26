@@ -122,12 +122,27 @@ describe("native_ops fixed worker", () => {
     } finally { await f.close(); }
   });
 
-  it("removes tools on disable and drains an in-flight worker", async () => {
+  it("removes tools on disable and drains an in-flight worker", async (t) => {
     const f = await fixture("edit", "session-abort");
     try {
+      let notifyStarted!: () => void;
+      const started = new Promise<void>((resolve) => { notifyStarted = resolve; });
+      const spawn = Context.prototype.spawn;
+      t.mock.method(Context.prototype, "spawn", function (this: Context, ...args: Parameters<Context["spawn"]>) {
+        const child = spawn.apply(this, args);
+        child.once("spawn", notifyStarted);
+        return child;
+      });
       writeFileSync(join(f.workspace, "large-scan.txt"), Buffer.alloc(32 * 1024 * 1024, 120));
       const pending = f.call("xops_grep", { pattern: "a-token-that-is-absent", outputMode: "files_with_matches", limit: 1 }, "abort-scan");
-      await new Promise<void>((resolve) => setTimeout(resolve, 5));
+      let startupTimer: NodeJS.Timeout | undefined;
+      try {
+        await Promise.race([
+          started,
+          pending.then((result) => { throw new Error(`worker completed before startup was observed: ${result.output}`); }),
+          new Promise<never>((_, reject) => { startupTimer = setTimeout(() => reject(new Error("native worker did not start")), 5000); }),
+        ]);
+      } finally { clearTimeout(startupTimer); }
       assert.ok(activeNativeWorkerCount() > 0, "the fixed worker did not remain active long enough to abort");
       await f.host.disable("native_ops");
       const result = await pending;

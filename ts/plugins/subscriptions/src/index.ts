@@ -8,10 +8,13 @@ import { definePlugin, type BundledPlugin } from "@xueness/kernel";
 import manifest from "../manifest.json" with { type: "json" };
 import { createAccountsHttp } from "./accounts.ts";
 import { SubscriptionBroker } from "./broker.ts";
+import { entitlementSeam } from "./entitlement-config.ts";
 import { resolveSubscription } from "./provider.ts";
 import { definition, PREFIX, providerRecords } from "./state.ts";
 
 export * from "./state.ts";
+export * from "./entitlements.ts";
+export { entitlementConfig, saveEntitlementConfig, clearEntitlementConfig, entitlementClient, entitlementSeam, publicEntitlementConfigs, configurableEndpoint, type EntitlementServiceConfig } from "./entitlement-config.ts";
 export { SubscriptionBroker, SubscriptionRequestError, SubscriptionWorker, type CallOptions } from "./broker.ts";
 export { createAccountsHttp, SUBSCRIPTION_ROUTES, type AccountsOptions } from "./accounts.ts";
 export { NativeProvider, resolveSubscription } from "./provider.ts";
@@ -36,11 +39,15 @@ export function createSubscriptions(o: SubscriptionsOptions) {
   const broker = new SubscriptionBroker(o.stateDir, requireAvailable, o.env);
   const http = createAccountsHttp({ stateDir: o.stateDir, enabled: o.enabled, requireAvailable, broker });
   /** Saved-profile view for the providers plugin (Python `provider_records` / `provider_record`). */
+  const attach = (row: Row): Row => {
+    const seam = entitlementSeam(o.stateDir, String(row.subscriptionId));
+    return seam ? { ...row, entitlement: seam } : row;
+  };
   const profiles = {
-    list: (): Row[] => providerRecords(o.stateDir, available()),
+    list: (): Row[] => { try { return providerRecords(o.stateDir, available()).map(attach); } catch { return []; } },
     record(id: unknown): Row | null {
       if (typeof id !== "string" || !id.startsWith(PREFIX)) return null;
-      try { return providerRecords(o.stateDir, available()).find((row) => row.id === id) ?? null; } catch { return null; }
+      try { return providerRecords(o.stateDir, available()).map(attach).find((row) => row.id === id) ?? null; } catch { return null; }
     },
     resolve: (record: Row, selection: SubscriptionSelection = {}) => resolveSubscription(broker, requireAvailable, record, selection.model, selection.reasoningEffort, selection.runtimeProfile),
     /** `model_supplier_metadata` for subscription records. */
@@ -49,9 +56,9 @@ export function createSubscriptions(o: SubscriptionsOptions) {
       return account ? { supplierId: "subscription:" + String(account.id), supplierName: account.name, supplierNameEn: account.nameEn ?? account.name } : null;
     },
   };
-  const watcher = setInterval(() => { if (!available()) broker.shutdown(); }, 1000);
+  const watcher = setInterval(() => { if (!available()) void broker.shutdown(); }, 1000);
   watcher.unref();
-  return { http, profiles, broker, available, close(): void { clearInterval(watcher); broker.shutdown(); } };
+  return { http, profiles, broker, available, close(): Promise<void> { clearInterval(watcher); return broker.shutdown(); } };
 }
 export type Subscriptions = ReturnType<typeof createSubscriptions>;
 

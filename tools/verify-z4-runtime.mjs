@@ -114,7 +114,10 @@ try {
     const stored = contracts.pyJsonDumps(Object.fromEntries(Object.entries(result).filter(([key]) => !['media', '_read_state'].includes(key))));
     const offset = contracts.pyLen(stored.slice(0, stored.indexOf('FULL-CONTENT-TAIL-Z4')));
     const k = kernel.Context.create({ roots: { workspace: [workspace], state, temp: join(scratch, 'results') } });
-    const host = new kernel.PluginHost(k, [providerTools.createProviderResultTools(() => session)], { enabled: { providers: true } });
+    const host = new kernel.PluginHost(k, [providerTools.createProviderResultTools(() => session, {
+      // F02.02: required ProviderToolSearchBinding — live kernel catalog projection (empty-safe until host.start).
+      catalog: () => k.tools.list().map(({ name, description, alwaysLoad, shouldDefer }) => ({ name, description, alwaysLoad, shouldDefer })),
+    })], { enabled: { providers: true } });
     try {
       await host.start();
       const tool = k.tools.get('tool_result_read');

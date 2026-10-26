@@ -12,12 +12,14 @@ Xueness 已有较完整的通用运行基础，但若目标是完全对齐最新
 
 下表覆盖本次已定位的主要差异，并非未经运行验证的完整性能评级。阶段映射通向 [82 轮完整计划](../../ZCODE-FULL-ALIGNMENT-TASKS-20261024.md)。
 
+> 2026-10-24 F00.03：本账本各 ID 已映射进[公共能力与行为契约表](public-capability-contracts.md)（机器可读 [JSON](public-capability-contracts.json)），每条差异附归属、接线位置、不变量与验收轮次；账本本身保持不变。
+
 | ID | 能力 | 分类 | 后续阶段 | 证据与结论 |
 | --- | --- | --- | --- | --- |
-| G01 | 工具暴露与 deferred 调用 | 新增缺口 | F02 | [源码证据](models-runtime-evidence.md)：已有 lightweight selector；缺完整 generic ToolSearch/DeferredToolCall、结构化引用和历史 hydration。 |
-| R01 | tool_search 生产执行器和 discovered_tools 写入 | 待运行核验 | F00.02 / F02 | [源码证据](models-runtime-evidence.md)：全 TS 检索未定位生产执行器。result-tool.ts 仅注册 tool_result_read，agent-service 注入该工厂；catalog 声明不能代替可执行接线。 |
+| G01 | 工具暴露与 deferred 调用 | 仅剩 discovered_tools 持久化/公告半区（F02.04） | F02.02 ✅ / F02.03 ✅ / F02.04 | [源码证据](models-runtime-evidence.md)（§1 F02.01/F02.02/F02.03 注记）：暴露/安全元数据与双模式确定性暴露规则（F02.01）、generic ToolSearch 执行器与协议能力门控协商（[F02.02 结果](../../../F02.02-result.md)）、DeferredToolCall 同轮调用通路（[F02.03 结果](../../../F02.03-result.md)：信封 admit/unwrap 走直接调用同权限/调度路径，取消/未知/插件关闭契约一致）均已接线；仅缺 discovered_tools 生产写入与历史 hydration/压缩公告（F02.04）。 |
+| R01 | tool_search 生产执行器和 discovered_tools 写入 | 执行器半区已闭合（F02.02）；持久化/压缩公告半区留给 F02.04 | F02.02 ✅ / F02.04 | [F00.02 结果](../../../F00.02-result.md)证实断线后，[F02.02 结果](../../../F02.02-result.md)落地执行器：`providers/tool-search.ts` 经 `ctx.tool` 注册（`ownerOf("tool_search")="providers"`），宿主注入内核活目录（含 shouldDefer、无禁用插件工具），非延迟命中写 `session.discovered_tools`，轻量两步端到端单测锁死可调用；local/native 协商以协议能力门控。冷恢复 hydrate、压缩公告、fork/resume 投影仍待 F02.04。 |
 | G02 | 模型自适应 admission 与辅助请求归一 | 旧缺口 | F01 | [源码证据](models-runtime-evidence.md)：Xueness 固定 FIFO；上游 AIMD、公平轮转和冷却。标题/语义等需统一生产 admission。 |
-| G03 | 执行级临时模型与失败回退 | 新增缺口 | F01 / F13 | [源码证据](models-runtime-evidence.md)：上游先结算已接收工具，再回到原模型；普通 retry 不等价。 |
+| G03 | 执行级临时模型与失败回退 | 核心已对齐（F01.03）；F03.02 深化结算账本 | F01.03 / F03.02 / F13 | [F01.03 结案](../../../F01.03-result.md)：已接线 SingleAttempt、选择失败 vs 请求失败、settleAcceptedStreamCalls、恢复会话模型；C-MDL-03 delta=aligned。F03.02 仍负责更广 accepted-call 账本。 |
 | G04 | 排队感知工具 deadline | 旧缺口 | F02 | [源码证据](models-runtime-evidence.md)：已有请求和进程时限，缺通用工具计时器及嵌套模型排队暂停。 |
 | D01 | 安全工具并发元数据和配置 | 局部行为差异 | F02 | [源码证据](models-runtime-evidence.md)：双方已有默认10并发；上游 mapper dependsOn 当前为空，不能虚构活跃调用DAG优势。 |
 | G05 | 前台超时转后台 | 旧能力的行为缺口 | F05 | [源码证据](models-runtime-evidence.md)：Xueness 已有显式后台；上游 eligible Bash 到前台期限后转后台。新版还解除 off-peak 限制。 |
@@ -40,7 +42,7 @@ Xueness 已有较完整的通用运行基础，但若目标是完全对齐最新
 
 ## R01 的额外根代理追踪
 
-Xueness `ts/plugins/providers/src/result-tool.ts:64–76` 的 `createProviderResultTools` 仅注册 `tool_result_read`；`ts/apps/server/src/agent-service.ts:130` 注入该工厂，`providers/src/index.ts:25–26` 的 plugin apply 为空。`ts/catalog/providers.json:10` 宣告了 `tool_search`，而 `runtime-tools.ts:7–40` 消费 `session.discovered_tools`。全 TS 检索未定位该搜索执行器或写入生产者。该静态接线疑点优先进入 F00.02 的隔离运行核验；在确认前不把目录元数据当作已实现，也不据此声称所有工具发现均不存在。native_ops 的专属 discover 不是同一个通用接口。
+Xueness `ts/plugins/providers/src/result-tool.ts` 的 `createProviderResultTools` 现注册 `tool_result_read` 与 `tool_search`（F02.02 起为必选目录/provider 绑定，宿主 `agent-service.ts` 与 `workflow-actors.ts` 注入内核活目录投影与 run provider）；`runtime-tools.ts` 消费 `session.discovered_tools`。**2026-10-24 F00.02 曾完成隔离核验（接线为断），该执行器断线已由 F02.02 闭合，详见 [F02.02-result.md](../../../F02.02-result.md)。** 搜索只读活目录、不启用未开插件、不提权；native 协商以协议能力门控而非品牌名单。`discovered_tools` 的冷恢复 hydrate、压缩后公告与 fork/resume 投影仍归 F02.04。native_ops 的专属 discover 不是同一个通用接口。
 
 ## 重要边界与保留项
 

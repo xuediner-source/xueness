@@ -15,9 +15,9 @@ import { AgentRunner, CLI_PREFIX_PROMPT, internalToolName, kernelAgentHooks, mod
 import { createToolEnv, type ToolEnv, type ToolResult } from "@xueness/engine-tools";
 import type { Context } from "@xueness/kernel";
 import { PermissionSession } from "@xueness/permissions";
-import { agentToolAllowlist, CHILD_DENIED_TOOLS, selectSubagent, childSummary, childSystemPrompt, ChildJournal, ensureChildDirectory, finishRun, findProfile, loadSubagents, newChild, newTaskId,
-  normalizeDisallowedTools, prepareResume, PROMPT_MAX, recordRun, recoveryInfo, startRun, SUBAGENT_DENIED_TOOL_NAMES, SUBAGENT_MAX_STEPS, SUBAGENT_MAX_WALL_SECONDS, SUBAGENT_SUMMARY_MAX, agentOutputText,
-  activeProfiles, type AgentProfile, type TaskRegistry } from "@xueness/plugin-subagents";
+import { CHILD_DENIED_TOOLS, selectSubagent, childSummary, childSystemPrompt, ChildJournal, drainInbox, ensureChildDirectory, finishRun, findProfile, loadSubagents, newChild, newTaskId,
+  prepareResume, PROMPT_MAX, raiseEscalation, recordRun, recoveryInfo, startRun, SUBAGENT_DENIED_TOOL_NAMES, SUBAGENT_MAX_STEPS, SUBAGENT_MAX_WALL_SECONDS, SUBAGENT_SUMMARY_MAX, agentOutputText,
+  activeProfiles, branchHistory, childToolGrant, childWithInheritedHistory, clampModelSelection, type AgentProfile, type TaskRegistry } from "@xueness/plugin-subagents";
 import { createSessionsStore, sessionsTurnRuntimeExtension, sessionsRuntimeEventsExtension, sessionsStableBoundariesExtension, sessionsCompactPersistenceExtension, type RuntimeSelection } from "@xueness/plugin-sessions";
 import { filesReadStateExtension, filesHistoryExtension } from "@xueness/plugin-files";
 import { batchCallsExtension } from "@xueness/plugin-batch_calls";
@@ -38,6 +38,8 @@ export interface ChildRunHost {
   provider: AgentProvider;
   /** The parent run's disallowed tools (the child never gets more). */
   disallowed: readonly string[];
+  /** F08.01 model ceiling: every model the host configured; null when none are (unbounded). */
+  modelCeiling?: readonly string[] | null;
   resolveProvider?: (selection: RuntimeSelection, sid: string) => AgentProvider;
   /** The parent run is stopping. */
   stopped(): boolean;
@@ -51,30 +53,36 @@ const failure = (code: string, message: string, extra: Row = {}): ToolResult => 
 const MODEL_KEYS = [["providerId", "provider_id"], ["model", "model"], ["reasoningEffort", "reasoning_effort"]] as const;
 
 /** Python `provider_for_agent` + the durable `bound_selection`: the parent's saved selection, then the definition's overrides. */
-export function childSelection(parent: Session, definition: Row | undefined): { selection: Row; override: boolean } {
+export function childSelection(parent: Session, definition: Row | undefined, allowed: readonly string[] | null = null): { selection: Row; override: boolean } {
   const saved = isDict(parent.model_selection) ? parent.model_selection : {};
-  const selection: Row = {};
-  for (const [, key] of MODEL_KEYS) if (typeof saved[key] === "string") selection[key] = saved[key];
+  const base: Row = {};
+  for (const [, key] of MODEL_KEYS) if (typeof saved[key] === "string") base[key] = saved[key];
+  let wanted: Row = {};
   let override = false;
   if (definition) {
     for (const [source] of MODEL_KEYS) { const value = definition[source]; if (value !== undefined && value !== null && typeof value !== "string") throw new Error("invalid sub-agent " + source); }
     if (typeof definition.providerId === "string" && pyLen(definition.providerId) > 64 || typeof definition.model === "string" && pyLen(definition.model) > 200) throw new Error("invalid sub-agent model selection");
     for (const [source, target] of MODEL_KEYS) {
       const value = definition[source];
-      if (typeof value === "string" && pyStrip(value)) { selection[target] = pyStrip(value); override = true; }
+      if (typeof value === "string" && pyStrip(value)) { wanted[target] = pyStrip(value); override = true; }
     }
-    if (typeof definition.providerId === "string" && pyStrip(definition.providerId) && !(typeof definition.model === "string" && pyStrip(definition.model))) delete selection.model;
   }
+  // F08.01: a definition's override holds only inside the parent's model
+  // ceiling (`allowed` null: no ceiling configured); anything wider falls back
+  // to the parent's own selection for that key instead of escalating.
+  const selection: Row = { ...base, ...clampModelSelection(wanted, base, allowed).selection };
+  if (typeof definition?.providerId === "string" && pyStrip(definition.providerId) && !(typeof definition.model === "string" && pyStrip(definition.model))) delete selection.model;
   return { selection, override };
 }
 
-/** The child's tool boundary: the profile's allowlist minus every denial, by Xueness name. */
+/** The child's tool boundary: the plugin's one inheritance rule (F08.01), by Xueness name. */
 export function childToolPolicy(profile: AgentProfile, known: readonly string[], parentDisallowed: readonly string[]): { allowed(name: string): boolean; denied: string[] } {
-  const denied = new Set<string>([...CHILD_DENIED_TOOLS, ...SUBAGENT_DENIED_TOOL_NAMES, ...parentDisallowed]);
-  for (const name of normalizeDisallowedTools(profile.disallowedTools ?? [])) denied.add(internalToolName(name));
-  const allow = profile.tools ? agentToolAllowlist({ tools: profile.tools }, known, internalToolName) : null;
-  const allowed = (name: string): boolean => !denied.has(name) && !denied.has(modelToolName(name)) && (allow === null || allow.has(name));
-  return { allowed, denied: [...denied].filter((name) => known.includes(name)) };
+  const grant = childToolGrant({ profile: { tools: profile.tools, disallowedTools: profile.disallowedTools }, known, parentDisallowed,
+    forcedDenied: [...CHILD_DENIED_TOOLS, ...SUBAGENT_DENIED_TOOL_NAMES], alias: internalToolName });
+  const effective = new Set(grant.effective);
+  const denied = new Set(grant.denied);
+  const allowed = (name: string): boolean => effective.has(name) && !denied.has(modelToolName(name));
+  return { allowed, denied: [...denied] };
 }
 
 /** What one child run produced, before it is shaped as a tool result or a registry outcome. */
@@ -103,7 +111,7 @@ export async function executeChild(host: ChildRunHost, input: Row, taskId: strin
   const reject = (code: string, message: string): ChildOutcome => ({ result: failure(code, message), ok: false, summary: "", error: message, steps: 0, stopped: false });
   if (typeof prompt !== "string" || !pyStrip(prompt) || pyLen(prompt) > PROMPT_MAX) return reject("invalid_argument", `prompt must contain 1..${PROMPT_MAX} characters`);
   if (input.agent !== undefined && input.agent !== null && (typeof input.agent !== "string" || !pyStrip(input.agent))) return reject("invalid_argument", "agent must be a non-empty string");
-  if (input.inherit_history === true) return reject("invalid_argument", "inherit_history is not available in this runtime; put the needed context in the prompt");
+  if (input.inherit_history !== undefined && input.inherit_history !== null && typeof input.inherit_history !== "boolean") return reject("invalid_argument", "inherit_history must be a boolean");
   const agents = loadSubagents(host.stateDir);
   const profile = findProfile(agents, input.agent as string | undefined);
   if (!profile) return reject("agent_unknown_type", `Agent type '${String(input.agent)}' not found. Available agents: ${activeProfiles(agents).map((item) => item.name).join(", ")}`);
@@ -130,7 +138,7 @@ export async function executeChild(host: ChildRunHost, input: Row, taskId: strin
   };
   let provider = host.provider; let selection: Row;
   try {
-    const chosen = childSelection(parent, profile.definition);
+    const chosen = childSelection(parent, profile.definition, host.modelCeiling ?? null);
     selection = chosen.selection;
     if (chosen.override) {
       if (!host.resolveProvider) return fail("sub-agent model configuration is unavailable in this runtime");
@@ -144,12 +152,20 @@ export async function executeChild(host: ChildRunHost, input: Row, taskId: strin
   const env = sessionEnvInfo(String(parent.id), root);
   const system = childSystemPrompt(profile, { cwd: env.cwd, isGitRepository: env.isGitRepository === true, platform: env.platform, shell: env.shell, osVersion: env.osVersion }, CLI_PREFIX_PROMPT);
   const store = createSessionsStore(directory, { enabled: host.enabled });
+  // One journal for the whole run: the escalation port and the safe-boundary
+  // inbox drain must see the same inbox/escalation records the parent does.
+  const journal = new ChildJournal(host.stateDir, String(parent.id), { taskId, root });
   let child: Session;
   try {
     child = options.resumeSessionId
-      ? prepareResume(new ChildJournal(host.stateDir, String(parent.id), { taskId, root }).load(options.resumeSessionId), prompt) as Session
+      ? prepareResume(journal.load(options.resumeSessionId), prompt) as Session
       : newChild({ parent: String(parent.id), taskId, root, system, prompt, agent: agentId, selection,
         rootSessionId: isDict(parent.delegation) && typeof parent.delegation.rootSessionId === "string" ? parent.delegation.rootSessionId : undefined }) as Session;
+    // F08.01: `inherit_history` branches a bounded copy of the parent's turns
+    // into a fresh child between its system and task prompts; the branch is
+    // fresh objects, so the parent's own journal is never touched. A resumed
+    // child keeps its own history instead.
+    if (!options.resumeSessionId && input.inherit_history === true) childWithInheritedHistory(child as unknown as Row, branchHistory(parent as unknown as Row));
   } catch (error) { return fail(pySlice(error instanceof Error ? error.message : String(error), 500) || "child history is unavailable or unsafe for recovery"); }
   run.childSessionId = child.id; run.parentSessionId = parent.id; run.rootSessionId = (child.delegation as Row).rootSessionId;
   recordRun(parent as Row, run);
@@ -159,17 +175,36 @@ export async function executeChild(host: ChildRunHost, input: Row, taskId: strin
   const toolEnv = createToolEnv({ cwd: host.env.cwd, roots: host.env.roots, artifactsDir: host.env.artifactsDir, owner: String(child.id) });
   toolEnv.modelInput = modelInputOf(provider);
   toolEnv.currentSession = () => child;
+  // F08.03 child side: `respond_to_coordinator` runs only when this port is
+  // bound, and raising marks the child as holding a pending question so plain
+  // guide messages are refused until the parent answers it.
+  toolEnv.escalationPort = {
+    escalate: (question, requestId) => {
+      const outcome = raiseEscalation(journal, child, question, requestId, taskId);
+      child.pending_question = true;
+      return outcome;
+    },
+  };
+  // Safe-boundary delivery (F08.03): apply queued coordinator messages between
+  // steps, before the next provider call reads the transcript; an applied item
+  // is stamped in the same atomic step, so a replay never re-delivers it.
+  const drainCoordination = (): void => {
+    try { drainInbox(journal, child); } catch { /* retried at the next boundary */ }
+  };
   const bridge = new ToolBridge({ kernel: host.kernel, permissions, env: toolEnv,
     approver: () => ({ behavior: "deny", reason: "subagent_read_only", message: "A subagent is read-only and cannot ask for approval; report what you found instead." }) });
-  const base = kernelAgentHooks(host.kernel, { enabled: host.enabled, extensions: [sessionsRuntimeEventsExtension(), sessionsTurnRuntimeExtension(), sessionsStableBoundariesExtension(), sessionsCompactPersistenceExtension(), filesReadStateExtension(toolEnv.tracker), filesHistoryExtension(), networkActivityExtension(toolEnv), toolContractExtension(), batchCallsExtension, ...host.nativeOps ? [nativeOpsExtension(host.nativeOps)] : [], toolMediaExtension(), providerRequestShapingExtension(), providerModelExecutionExtension(), providerToolResultBudgetExtension()] });
+  // Subagent children inherit the parent's foreground admission scope: the
+  // user's turn waits on them, so they must not queue behind workflow runs.
+  const base = kernelAgentHooks(host.kernel, { enabled: host.enabled, extensions: [sessionsRuntimeEventsExtension(), sessionsTurnRuntimeExtension(), sessionsStableBoundariesExtension(), sessionsCompactPersistenceExtension(), filesReadStateExtension(toolEnv.tracker), filesHistoryExtension(), networkActivityExtension(toolEnv), toolContractExtension(), batchCallsExtension, ...host.nativeOps ? [nativeOpsExtension(host.nativeOps)] : [], toolMediaExtension(), providerRequestShapingExtension(), providerModelExecutionExtension({ admissionScope: { foreground: true } }), providerToolResultBudgetExtension()] });
   const hooks = { ...base, async tools(context: Parameters<typeof base.tools>[0]) { return (await base.tools(context)).filter((tool) => isDict(tool.function) && policy.allowed(String(tool.function.name))); } };
   const runner = new AgentRunner({ root, store, stateDir: host.stateDir, provider, toolBridge: bridge, hooks, hostSignal: host.hostSignal });
   const started = performance.now();
   let runError = false;
   try {
     await store.save(child);
+    drainCoordination();
     if (!isCancelled()) {
-      try { await runner.run(child, { maxSteps: SUBAGENT_MAX_STEPS, maxWallSeconds: SUBAGENT_MAX_WALL_SECONDS, maxChars: 24000, shouldStop: isCancelled, onStep: (steps) => { run.steps = steps; } }); }
+      try { await runner.run(child, { maxSteps: SUBAGENT_MAX_STEPS, maxWallSeconds: SUBAGENT_MAX_WALL_SECONDS, maxChars: 24000, shouldStop: isCancelled, onStep: (steps) => { drainCoordination(); run.steps = steps; } }); }
       catch { runError = true; }
     }
     if (isCancelled()) { child.status = "stopped"; (child.delegation as Row).cancelled = true; }

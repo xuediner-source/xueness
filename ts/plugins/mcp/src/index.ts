@@ -4,19 +4,29 @@ import type { ToolDefinition, ToolResult } from "@xueness/engine-tools";
 import { definePlugin, type BundledPlugin, type Context } from "@xueness/kernel";
 import manifest from "../manifest.json" with { type: "json" };
 import { McpClient } from "./client.ts";
+import { projectResourceContents } from "./content.ts";
 import { responseFor } from "./elicitation-protocol.ts";
 import { CATALOG_CHARS, clipChars, mcpSubject, parseNamespaced, sanitizeNamePart, toolSchema, type Row } from "./names.ts";
 import { McpConnectionPool, type McpActivityEvent, type McpConnectionLease, type McpRuntimeBinding } from "./runtime.ts";
 
 export * from "./names.ts";
+export * from "./content.ts";
 export * from "./resources-http.ts";
 export * from "./runtime.ts";
 export { mcpRuntimeExtension } from "./runtime-extension.ts";
 export { validateRuntimeMcpServers, mergeRuntimeMcpServers } from "./config.ts";
 export { createMcpRuntimeApi } from "./runtime-api.ts";
 export { checkServer, createMcpOpsHttp, loadServers } from "./mcp-ops-http.ts";
+export { discoverOauth, discoverOauthEndpoints, mergeOauthConfig, registerOAuthClient, revokeToken, wellKnownUrl } from "./oauth-discovery.ts";
 export { createElicitationHttp } from "./elicitation-http.ts";
-export { resetElicitationState } from "./elicitation-protocol.ts";
+export { resetElicitationState, cancelServerElicitations } from "./elicitation-protocol.ts";
+export { createAppsHttp } from "./apps-http.ts";
+export {
+  appsClientCapabilities, appsConnect, appsDisconnect, appsEnabled, appsReady, appsSnapshot, appsToolsVisible,
+  appsToolContext, appsResponseFor, isAppsUiUri, openAppsResource, resetAppsState, validateAppsConnect,
+  waitForAppConnection, APPS_CAPABILITY,
+  type AppsConnectionSnapshot, type AppsConnectParams, type AppsGuard, type AppsWaitResult,
+} from "./apps-protocol.ts";
 
 const failure = (code: string, message: string): ToolResult<never> => ({ ok: false, output: message, error: { code, message } });
 export { McpClient, kindOf } from "./client.ts";
@@ -51,8 +61,17 @@ function specialSchema(serverId: string, kind: ResourceKind, operation: Special[
   return toolSchema(serverId, { name: `_xueness_${kind}_${operation}`, description, inputSchema: { type: "object", properties, required: operation === "list" ? [] : ["key"] } });
 }
 
+/** C-TOOL-02: the connection's `alwaysLoad` config, matched against the server-side tool name (host specials carry none). */
+function alwaysLoadMatcher(server: Row): (rawName: string | null) => boolean {
+  const value = server.alwaysLoad;
+  if (value === true) return (rawName) => rawName !== null;
+  const names = Array.isArray(value) ? new Set(value.filter((name): name is string => typeof name === "string" && !!name.trim())) : null;
+  return (rawName) => rawName !== null && names?.has(rawName) === true;
+}
+
 export function serverTools(server: Row, tools: readonly Row[], capabilities: Row, call: (name: string, input: Row, signal?: AbortSignal) => Promise<ToolResult>): ToolDefinition[] {
   const id = String(server.id);
+  const alwaysLoad = alwaysLoadMatcher(server);
   const schemas = tools.map((tool) => toolSchema(id, tool));
   for (const kind of ["resources", "prompts"] as const) {
     if (!(kind in capabilities)) continue;
@@ -64,12 +83,15 @@ export function serverTools(server: Row, tools: readonly Row[], capabilities: Ro
       if (!schemas.some((row) => (row.function as Row).name === name)) schemas.push(schema);
     }
   }
-  return schemas.map((schema) => {
+  return schemas.map((schema, index) => {
     const fn = schema.function as Row;
     const name = String(fn.name);
+    // Only real server tools carry the connection's alwaysLoad; host specials are matched by nothing.
+    const raw = index < tools.length && isDict(tools[index]) && typeof (tools[index] as Row).name === "string" ? (tools[index] as Row).name as string : null;
     return {
       name, description: String(fn.description), inputSchema: VALIDATION_SCHEMA, modelSchema: fn.parameters as JsonSchema,
       gate: "mcp", mutating: true, concurrencySafe: false, requires: {}, subjectKind: "text",
+      ...(alwaysLoad(raw) ? { alwaysLoad: true } : {}),
       subject: (input: Row) => mcpSubject(name, input),
       run: (input: Row, env) => call(name, input, env.signal),
     } satisfies ToolDefinition<Row> as ToolDefinition;
@@ -145,6 +167,14 @@ export function createMcp(options: { run(): McpRun | null; binding?: McpRuntimeB
               else if (special.operation === "unsubscribe") await entry.client.unsubscribeResource(input.key, signal);
               else {
                 const result = special.operation === "list" ? await entry.client.catalog(special.kind, signal) : { result: await entry.client.read(special.kind, input.key, input.arguments, signal) };
+                if (special.operation === "read") {
+                  const rich = projectResourceContents(parsed[0], (result as Row).result as Row);
+                  if (rich) {
+                    return rich.media.length
+                      ? { ok: true, output: rich.text, media: rich.media, data: { server: parsed[0], untrusted: true, media: rich.attachments } }
+                      : { ok: true, output: rich.text, data: { server: parsed[0], untrusted: true } };
+                  }
+                }
                 const content = clipChars(pyJsonDumps(special.operation === "list" ? result : (result as Row).result, { ensureAscii: false }), CATALOG_CHARS);
                 return { ok: true, output: content, data: { server: parsed[0], untrusted: true } };
               }
@@ -152,7 +182,12 @@ export function createMcp(options: { run(): McpRun | null; binding?: McpRuntimeB
             }
             const outcome = await entry.client.callTool(entry.names.get(name) ?? parsed[1], input, signal);
             if (outcome.cancelled) return cancelled(name);
-            if (outcome.ok) return { ok: true, output: outcome.text, data: { server: parsed[0] } };
+            if (outcome.ok) {
+              // Media rides the ToolResult only when present, so plain-text calls keep their exact shape.
+              return outcome.media?.length
+                ? { ok: true, output: outcome.text, media: outcome.media, data: { server: parsed[0], media: outcome.attachments } }
+                : { ok: true, output: outcome.text, data: { server: parsed[0] } };
+            }
             return outcome.toolError
               ? { ok: false, output: `MCP tool returned an error:\n${outcome.error ?? ""}`, error: { code: "mcp_tool_error", message: outcome.error ?? "" }, data: { server: parsed[0] } }
               : failed(outcome.error ?? "mcp call failed");
@@ -184,7 +219,9 @@ export function createMcp(options: { run(): McpRun | null; binding?: McpRuntimeB
         };
 
         for (const server of run.servers) {
-          const lease = await pool.acquire(server, run.cwd);
+          // Disabling the plugin mid-start closes the pool: stop before spawning anything new.
+          if (pool.closed) break;
+          const lease = await pool.acquire(server, run.cwd).catch(() => null);
           if (!lease) continue;
           const entry: Bound = {
             lease, client: lease.client, server, names: new Map(), specials: new Map(), registered: new Set(), disposers: new Map(),

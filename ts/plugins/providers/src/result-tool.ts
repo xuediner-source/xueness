@@ -3,6 +3,8 @@ import type { Row } from "@xueness/agent";
 import { definePlugin, type BundledPlugin } from "@xueness/kernel";
 import { failure, type ToolDefinition, type ToolEnv, type ToolResult } from "@xueness/engine-tools";
 import manifest from "../manifest.json" with { type: "json" };
+import { createDeferredToolCallTool } from "./deferred-call.ts";
+import { createToolSearchTool, type ProviderToolSearchBinding } from "./tool-search.ts";
 
 const MAX_PAGE_CHARS = 4000;
 const DEFAULT_PAGE_CHARS = 1200;
@@ -61,7 +63,13 @@ function readResult(session: () => Row | null, input: ResultReadInput, env: Tool
   };
 }
 
-export function createProviderResultTools(session: () => Row | null): BundledPlugin {
+/**
+ * The providers tool face: bounded stored-result paging, the generic
+ * `tool_search` discovery executor and the DeferredToolCall envelope. The
+ * search binding is required, so every host that builds this factory wires
+ * the live kernel catalog (F02.02).
+ */
+export function providerResultTools(session: () => Row | null, tools: ProviderToolSearchBinding): ToolDefinition[] {
   const tool: ToolDefinition<ResultReadInput, ResultReadData> = {
     name: "tool_result_read",
     description: "Read a bounded page of the stored JSON text of a full recorded tool result from the current session.",
@@ -72,6 +80,16 @@ export function createProviderResultTools(session: () => Row | null): BundledPlu
     requires: {},
     async run(input, env) { return readResult(session, input, env); },
   };
-  const plugin = definePlugin({ name: "providers", apply(ctx) { ctx.tool(tool as unknown as ToolDefinition); } });
+  return [
+    tool as unknown as ToolDefinition,
+    createToolSearchTool(session, tools) as unknown as ToolDefinition,
+    createDeferredToolCallTool() as unknown as ToolDefinition,
+  ];
+}
+
+export function createProviderResultTools(session: () => Row | null, tools: ProviderToolSearchBinding): BundledPlugin {
+  const plugin = definePlugin({ name: "providers", apply(ctx) {
+    for (const tool of providerResultTools(session, tools)) ctx.tool(tool);
+  } });
   return { manifest, plugin };
 }
