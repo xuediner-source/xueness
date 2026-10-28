@@ -22,7 +22,14 @@ export interface PublicSessionOptions {
   activeContext?: ReadonlyMap<string, Dict>;
 }
 export function defaultToolInfo(name: string, args: Dict): ToolInfo | null {
-  if (["read", "list", "write", "edit"].includes(name)) return { kind: name, subject: String(args.path ?? ""), preview: name === "edit" ? "-" + String(args.old ?? "").slice(0, 200) + " / +" + String(args.new ?? "").slice(0, 200) : "" };
+  if (name === "edit") {
+    const part = (value: unknown, marker: string) => {
+      const text = String(value ?? "").slice(0, 200);
+      return text ? text.replace(/\r?\n$/, "").split(/\r?\n/).map(line => marker + line) : [];
+    };
+    return { kind: name, subject: String(args.path ?? ""), preview: ["--- a", "+++ b", ...part(args.old_string ?? args.old, "-"), ...part(args.new_string ?? args.new, "+")].join("\n") };
+  }
+  if (["read", "list", "write"].includes(name)) return { kind: name, subject: String(args.path ?? ""), preview: "" };
   if (["glob", "grep"].includes(name)) return { kind: name, subject: String(args.path ?? ".") };
   if (name === "exec") return { kind: "exec", subject: Array.isArray(args.argv) && args.argv.every((v) => typeof v === "string") ? pyJsonDumps(args.argv, { separators: [",", ":"] }) : typeof args.command === "string" ? args.command : "" };
   return null;
@@ -42,11 +49,13 @@ export function pendingDenials(session: Session, options: Pick<PublicSessionOpti
         info.subject = result.data.subject;
         if (typeof result.data.kind === "string") info.kind = result.data.kind;
       }
-      calls.set(c.id, { tool_call_id: c.id, name, subject: info.subject, preview: info.preview ?? "", ...(info.kind && !["read", "list", "glob", "grep"].includes(name) ? { kind: info.kind } : {}),
+      const data = isDict(result) && isDict(result.data) ? result.data : {}, remember = isDict(data.remember) ? data.remember : {};
+      const projectRules = data.reason === "approval_required" && Array.isArray(remember.exact) ? remember.exact.filter((v): v is string => typeof v === "string") : [];
+      calls.set(c.id, { ...(projectRules.length ? { projectRules } : {}), tool_call_id: c.id, name, subject: info.subject, preview: info.preview ?? "", ...(info.kind && !["read", "list", "glob", "grep"].includes(name) ? { kind: info.kind } : {}),
         // The call waits in process: an answer continues the same turn (no rerun).
         ...(isDict(result) && isDict(result.data) && result.data.waiting === true && session.status === "running" ? { waiting: true } : {}),
         // alwaysAsk / ask rules / remote exec: "allow for this session" does not apply.
-        ...(isDict(result) && isDict(result.data) && result.data.waiting === true && session.status === "running" && ONE_SHOT.has(String(result.data.reason)) ? { oneShot: true } : {}) });
+        ...(isDict(result) && isDict(result.data) && ONE_SHOT.has(String(result.data.reason)) ? { oneShot: true } : {}) });
     }
   }
   const succeeded = new Map<string, number>(), rows = [...calls.values()];
@@ -129,8 +138,14 @@ export function publicForkParent(session: Session): Dict | null {
 export async function publicSessionPayload(s: Session, options: PublicSessionOptions): Promise<Dict> {
   const buckets = options.approvals.get(String(s.id)), approved: Dict = {};
   for (const kind of ["write", "edit", "exec", "mcp"]) approved[kind] = [...(buckets?.get(kind)?.values() ?? [])].sort();
-  const pending = pendingDenials(s, options).map((p) => ({ ...p, granted: buckets?.get(String(p.kind || p.name))?.get(String(p.tool_call_id)) === p.subject }));
+  const pending: Dict[] = pendingDenials(s, options).map((p) => ({ ...p, granted: buckets?.get(String(p.kind || p.name))?.get(String(p.tool_call_id)) === p.subject }));
+  const compacting = ['started', 'retrying'].includes(String((Array.isArray(s.compact_timeline) ? s.compact_timeline.filter(isDict) : []).at(-1)?.status));
   const result: Dict = { id: s.id, task: s.task, title: s.title || s.task, root: s.root, status: s.status ?? null, steps: s.steps ?? 0, active_turn_id: s.active_turn_id ?? null, work_segments: publicSegments(s), tool_activity: [], history_revision: s.history_revision ?? 0, history_hash: s.history_hash ?? null, current_queue_item_id: s.current_queue_item_id ?? null, mode: s.mode ?? "build", mode_history: s.mode_history ?? [], permission_mode: s.permission_mode ?? "build", permission_mode_history: s.permission_mode_history ?? [], model_selection: {}, model_history: s.model_history ?? [], runtime_profile: s.runtime_profile ?? null, runtime_budget: publicRuntimeBudget(s.runtime_budget), runtime_activity: publicRuntimeActivity(s.runtime_activity), runtime_activity_history: Array.isArray(s.runtime_activity_history) ? s.runtime_activity_history.slice(-24).map(publicRuntimeActivity).filter((v) => v !== null) : [], model_failure: publicModelFailure(s.model_failure), protocol_diagnostics: publicDiagnostics(s.protocol_diagnostics), pause_reason: s.pause_reason ?? null, pause_code: s.pause_code ?? null, remote_connection: null, browser_enabled: s.browser_enabled ?? null, compactions: s.compactions ?? [], streaming: s.streaming ?? null, reasoning_history: [], reasoning_timing: [], provider_usage: s.provider_usage ?? [], completion: s.completion ?? null, todos: s.todos ?? [], delivery_requirements: s.delivery_requirements ?? [], goal: options.enabled("planning") ? options.goalView?.(s) ?? null : null, tool_timings: Array.isArray(s.tool_timings) ? s.tool_timings.slice(-200) : [], pending_question: s.pending_question ?? null, pending, approved, changed_files: [], forkParent: publicForkParent(s) };
+  result.compacting = compacting;
+  if (options.running && !options.running.has(String(s.id)) && pending.some(p => p.waiting)) {
+    for (const item of pending) delete item.waiting;
+    result.status = "paused"; result.pause_code = "approval_required"; result.pause_reason = "运行已中断，待审批操作已保留；确认后继续。";
+  }
   if (isDict(s.model_selection)) { const selection: Dict = {}; for (const key of ["provider_id", "model", "reasoning_effort"]) if (Object.hasOwn(s.model_selection, key) && (typeof s.model_selection[key] === "string" || s.model_selection[key] === null)) selection[key] = s.model_selection[key]; if (["native", "json"].includes(String(s.tool_calling))) selection.tool_calling = s.tool_calling; result.model_selection = selection; }
   if (isDict(s.remote_connection) && typeof s.remote_connection.id === "string" && typeof s.remote_connection.digest === "string" && s.remote_connection.digest.length === 64) result.remote_connection = { id: s.remote_connection.id, digest: s.remote_connection.digest };
   const messages = Array.isArray(s.messages) ? s.messages : [];

@@ -3,9 +3,9 @@
     "id": "subscriptions",
     "packageId": "xueness-subscriptions",
     "version": "1.0.0",
-    "sha256": "48aa364e28b7ed7e5cb17d15da1db2508eefdd8ba263a7ce8f28db8e60733655",
-    "bytes": 154823,
-    "url": "https://raw.githubusercontent.com/xuediner-source/xueness/main/marketplace/packages/xueness-subscriptions-1.0.0-48aa364e28b7ed7e.json.gz",
+    "sha256": "4bf75caf165f8bb18fce406eaed1e660e58dcc87919d39e9c3638e20c8b1e23c",
+    "bytes": 154894,
+    "url": "https://raw.githubusercontent.com/xuediner-source/xueness/main/marketplace/packages/xueness-subscriptions-1.0.0-4bf75caf165f8bb1.json.gz",
     "files": [
       {
         "path": "backend/assets/catalog.json",
@@ -75,8 +75,8 @@
       },
       {
         "path": "backend/manifest.json",
-        "bytes": 2518,
-        "sha256": "1b678a0fd69712a9075c0dbcf13edd13b9df3440779f8afead66efe596fa965c",
+        "bytes": 2502,
+        "sha256": "54fbb0e56a28fe2f83410b114d844d31c6f01dacb859ede0a185ebd1c054d9ce",
         "executable": false
       },
       {
@@ -128,9 +128,9 @@
         "executable": false
       },
       {
-        "path": "frontend/optional-subscriptions-CCAQmM0O.js",
-        "bytes": 13230,
-        "sha256": "f54ac888ce25be355a86c216d88fba98ee7e34a0f8fa5cd18dd7487ce165102b",
+        "path": "frontend/optional-subscriptions-DcWl80i1.js",
+        "bytes": 13315,
+        "sha256": "deec90ac5882dccafab0e1d4e57d452783ac3bf18813b8f6ba7a1840ac4dda11",
         "executable": false
       },
       {
@@ -145,9 +145,9 @@
     "id": "model_monitor",
     "packageId": "xueness-model-monitor",
     "version": "1.0.0",
-    "sha256": "3a9c6597ee51727520eae977adb49462fb44a74b024baeb2c6f11eafd12ae38b",
-    "bytes": 15096,
-    "url": "https://raw.githubusercontent.com/xuediner-source/xueness/main/marketplace/packages/xueness-model-monitor-1.0.0-3a9c6597ee517275.json.gz",
+    "sha256": "8fce95ac1ca0fac84b1c0bd6c3e9899484a0688ce3209bcdff1ee514a7e199cd",
+    "bytes": 15188,
+    "url": "https://raw.githubusercontent.com/xuediner-source/xueness/main/marketplace/packages/xueness-model-monitor-1.0.0-8fce95ac1ca0fac8.json.gz",
     "files": [
       {
         "path": "backend/manifest.json",
@@ -186,15 +186,15 @@
         "executable": false
       },
       {
-        "path": "frontend/optional-model_monitor-BzqPiqAr.js",
-        "bytes": 10680,
-        "sha256": "3e51aade116be22552f73f53953788fb2caeb723c32e62e27ecd3e1e9c864249",
-        "executable": false
-      },
-      {
         "path": "frontend/optional-model_monitor-DoCgZ5WQ.css",
         "bytes": 8098,
         "sha256": "59d72fce2033294583a314cdc068e3a4f5ab375611b4872a0817418986189c94",
+        "executable": false
+      },
+      {
+        "path": "frontend/optional-model_monitor-dDyA2Rp9.js",
+        "bytes": 10711,
+        "sha256": "617f505e6cc2dcb34d4fa99f658b56bb6eb4b803e4081fa71c36843c3a7e0e53",
         "executable": false
       }
     ]
@@ -203,9 +203,9 @@
     "id": "workbuddy",
     "packageId": "xueness-workbuddy",
     "version": "1.0.0",
-    "sha256": "c2be80e9e145199abf7644bd44261281b5e5c61402aefbf364ff0538e69f9692",
-    "bytes": 8427296,
-    "url": "https://raw.githubusercontent.com/xuediner-source/xueness/main/marketplace/packages/xueness-workbuddy-1.0.0-c2be80e9e145199a.json.gz",
+    "sha256": "1b805a3e9dabb4720f6b76f394ada28b8bc0bcf0c5c2aee70d72d5f031cd9dc9",
+    "bytes": 8427473,
+    "url": "https://raw.githubusercontent.com/xuediner-source/xueness/main/marketplace/packages/xueness-workbuddy-1.0.0-1b805a3e9dabb472.json.gz",
     "files": [
       {
         "path": "backend/assets/workbuddy2api-panel.exe",
@@ -215,8 +215,8 @@
       },
       {
         "path": "backend/manifest.json",
-        "bytes": 1941,
-        "sha256": "53349340a13dfeefd2ea5af0c75d1a84c30a211983e4f67cd073b0704b893eb8",
+        "bytes": 1929,
+        "sha256": "25161046d88bb1ca31e619b9e5d13cfc71bafa8d6b4d922ceb1f33fc68e9cc6a",
         "executable": false
       },
       {
@@ -263,8 +263,8 @@
       },
       {
         "path": "backend/src/models.ts",
-        "bytes": 1336,
-        "sha256": "a3ef56cf78f1ca7eb51240bc2ea6d1f9abffaf07f9ce76e0e6723e0cb6798da4",
+        "bytes": 1484,
+        "sha256": "7e69a40a3b9e64356384494576723f7b1cfb99f3a999f32a7d1dfdb68c4e11f0",
         "executable": false
       },
       {
@@ -274,15 +274,15 @@
         "executable": false
       },
       {
-        "path": "frontend/optional-workbuddy-BcTdm8U9.js",
-        "bytes": 7467,
-        "sha256": "d01d45946ced955554d91a968fd306de7c9729b957f74fc53df73591ea0a6892",
-        "executable": false
-      },
-      {
         "path": "frontend/optional-workbuddy-DjCxGD63.css",
         "bytes": 3677,
         "sha256": "9d43b025cfbff9fcc82be41285a25b1da7b1ad97802369b627f22931d149028a",
+        "executable": false
+      },
+      {
+        "path": "frontend/optional-workbuddy-iwZUvBs4.js",
+        "bytes": 7565,
+        "sha256": "ff89ab03ebea2b3e23d65cfa0aea8aa09daa90d81177745526640e0d23f2db5f",
         "executable": false
       }
     ]

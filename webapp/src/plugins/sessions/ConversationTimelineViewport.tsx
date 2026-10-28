@@ -299,7 +299,7 @@ export function ConversationTimelineViewport({ children, autoScroll, rowsVersion
     } else {
       updatePosition();
     }
-  }, [autoScroll, rowsVersion, streamingText, queuedMessages, commitFollowing, getActiveUserScrollIntent, markProgrammaticScroll, scrollToBottom, updatePosition]);
+  }, [autoScroll, rowsVersion, queuedMessages, commitFollowing, getActiveUserScrollIntent, markProgrammaticScroll, scrollToBottom, updatePosition]);
 
   useEffect(() => {
     const scroller = scrollerRef.current;

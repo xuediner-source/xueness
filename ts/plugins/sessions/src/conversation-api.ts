@@ -25,7 +25,7 @@ function attachSidecars(options: SessionsApiOptions, s: Session, journal: Row): 
   const rows = projectSubagents(s, journal.messages, subagents, tasks);
   if (rows.length) journal.message_subagents = rows;
 }
-async function paged(options: SessionsApiOptions, s: Session, rows: DisplayRow[], start: number, end: number, project: (s: Session) => Promise<Row> | Row): Promise<Row> {
+async function paged(options: SessionsApiOptions, s: Session, rows: DisplayRow[], start: number, end: number, revision: string, project: (s: Session) => Promise<Row> | Row): Promise<Row> {
   const display: unknown[] = [], indexes: (number | null)[] = [], annotations: Row = {}, reasoning: Row[] = [], timing: Row[] = [], local = new Map<number, number>();
   const savedAnnotations = isDict(s.message_annotations) ? s.message_annotations : {};
   for (const [index, [original, activeIndex]] of rows.slice(start, end).entries()) {
@@ -35,7 +35,7 @@ async function paged(options: SessionsApiOptions, s: Session, rows: DisplayRow[]
   }
   for (const r of Array.isArray(s.reasoning_history) ? s.reasoning_history : []) if (isDict(r) && isPyIntValue(r.message_index) && local.has(Number(r.message_index)) && typeof r.text === "string") reasoning.push({ message_index: local.get(Number(r.message_index)), text: r.text });
   for (const r of Array.isArray(s.reasoning_timing) ? s.reasoning_timing : []) if (isDict(r) && isPyIntValue(r.message_index) && local.has(Number(r.message_index)) && typeof r.started_at === "string" && r.started_at && typeof r.ended_at === "string" && r.ended_at) timing.push({ message_index: local.get(Number(r.message_index)), started_at: pySlice(r.started_at, 40), ended_at: pySlice(r.ended_at, 40) });
-  const revision = messageRevision(s), window = { start, end, total: rows.length, hasOlder: start > 0, olderCursor: start > 0 ? start : null, messageRevision: revision, historyRevision: s.history_revision ?? 0 }, turns = new Set(display.flatMap((m) => isDict(m) && typeof m._turn_id === "string" ? [m._turn_id] : []));
+  const window = { start, end, total: rows.length, hasOlder: start > 0, olderCursor: start > 0 ? start : null, messageRevision: revision, historyRevision: s.history_revision ?? 0 }, turns = new Set(display.flatMap((m) => isDict(m) && typeof m._turn_id === "string" ? [m._turn_id] : []));
   const ids = callIds(rows.slice(start, end)), journal: Row = { id: s.id, status: s.status ?? null, task: s.task ?? null, messages: display, message_revision: revision, history_revision: s.history_revision ?? 0, message_window: { ...window, messageIndices: indexes }, message_annotations: annotations, reasoning_history: reasoning, reasoning_timing: timing, completion_history: (Array.isArray(s.completion_history) ? s.completion_history : []).filter((r) => isDict(r) && turns.has(String(r.turn_id))).map(pyDeepCopy), results: Object.fromEntries(Object.entries(isDict(s.results) ? s.results : {}).filter(([id]) => ids.has(id))) };
   if (isDict(s.completion) && turns.has(String(s.completion.turn_id))) journal.completion = pyDeepCopy(s.completion);
   attachSidecars(options, s, journal);
@@ -46,10 +46,11 @@ export async function conversationSnapshot(options: SessionsApiOptions, sid: str
   if (!isDict(s) || s.id !== sid || !Array.isArray(s.messages)) throw new SnapshotError("saved conversation is invalid");
   overlay(s, options); const revision = messageRevision(s);
   if (guard != null && guard !== revision) throw new SnapshotError("conversation changed; reload the transcript window");
-  if (request) { const rows = displayRows(s), [start, end] = windowBounds(rows, request); return paged(options, s, rows, start, end, project); }
-  const projected = projectSessionMessages(s), events = deriveEvents(projected), timeline = { ...pageEvents(projected, events, 0, 500), events, nextCursor: events.at(-1)?.seq ?? 0, hasMore: false }, journal = { ...projected, message_revision: revision };
-  delete (journal as Row).active_run_command_id; attachSidecars(options, s, journal);
-  return { session: await project(s), journal, timeline };
+  const visible = await project(s), display = typeof visible.status === 'string' && visible.status !== s.status ? { ...s, status: visible.status } : s;
+  if (request) { const rows = displayRows(display), [start, end] = windowBounds(rows, request); return paged(options, display, rows, start, end, revision, () => visible); }
+  const projected = projectSessionMessages(display), events = deriveEvents(projected), timeline = { ...pageEvents(projected, events, 0, 500), events, nextCursor: events.at(-1)?.seq ?? 0, hasMore: false }, journal = { ...projected, message_revision: revision };
+  delete (journal as Row).active_run_command_id; attachSidecars(options, display, journal);
+  return { session: visible, journal, timeline };
 }
 export function createConversationApi(options: SessionsApiOptions, project: (s: Session) => Promise<Row> | Row) {
   return { routes: CONVERSATION_ROUTES, owns: ownsConversationRoute,

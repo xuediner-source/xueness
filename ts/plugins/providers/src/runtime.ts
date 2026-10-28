@@ -29,9 +29,11 @@ export function lightweightRuntimeExtension(config: LightweightRuntimeOptions = 
     // discovery (F02.02); this request-side catalog carries only what the schema source exposed,
     // and the selected view below is the lightweight exposure decision.
     void catalog;
+    const historyWindow = isDict(context.session.runtime_history_window) ? { ...context.session.runtime_history_window } : {};
     const [messages, stats] = promptView(request.messages, tools, provider, { maxChars: context.options.maxChars,
       maxTokens: context.options.maxTokens, shrink, repair: request.repair, hostInstructions: request.hostInstructions,
-      calibration: context.session.runtime_budget_calibration, injected: request.injected });
+      calibration: context.session.runtime_budget_calibration, historyWindow, injected: request.injected });
+    context.session.runtime_history_window = historyWindow;
     context.session.runtime_budget = stats;
     const state = attempts.get(context.session) ?? { overflow: false, tools: [] }; state.tools = tools; attempts.set(context.session, state);
     return { ...request, messages: provider.toolCalling === "json" ? textMessages(messages) : messages, tools };
@@ -49,11 +51,6 @@ export function lightweightRuntimeExtension(config: LightweightRuntimeOptions = 
       const options = runtimeOptions(provider);
       context.session.runtime_profile = "lightweight"; context.session.lightweight_options = { ...options };
       context.options.maxSteps = Math.min(context.options.maxSteps ?? options.stepLimit as number, options.stepLimit as number);
-      if (context.options.maxChars === undefined) {
-        let budget = Math.max(0, (provider.contextWindow || 8192) - (provider.maxOutputTokens || 1024) - (options.reserveTokens as number));
-        if (context.options.maxTokens !== null && context.options.maxTokens !== undefined) budget = Math.min(budget, context.options.maxTokens);
-        context.options.maxChars = Math.min(100000, Math.max(24000, budget * 2));
-      }
       attempts.set(context.session, { overflow: false, tools: [] });
       return options.wallTimeSeconds ? { deadlineSeconds: options.wallTimeSeconds as number } : undefined;
     },

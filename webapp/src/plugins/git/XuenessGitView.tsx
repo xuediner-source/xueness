@@ -15,6 +15,7 @@ import React, { useMemo, useState } from "react";
 import { CodeContent } from "../../ui/CodeContent";
 import "../../styles/git.css";
 import type { GitCheckpoint, GitCommit, GitDiff, GitStatus } from "../../xuenessGit";
+import { shouldDismissModalOnEscape, useModalFocusScope } from "../shared";
 
 const NOT_A_REPO = () => (tr("该工作区不是 git 仓库"));
 
@@ -206,6 +207,8 @@ export function XuenessGitView({
   const [branchName, setBranchName] = useState("");
   const [checkpointMessage, setCheckpointMessage] = useState("");
   const [confirmation, setConfirmation] = useState<{ title: string; detail: string; run: () => void } | null>(null);
+  const confirmationRef = React.useRef<HTMLElement>(null);
+  useModalFocusScope({ open: Boolean(confirmation), dialogRef: confirmationRef });
   const entries = useMemo(() => status?.entries ?? [], [status]);
   const confirmAction = (title: string, detail: string, run: () => void) => setConfirmation({ title, detail, run });
   const action = (title: string, detail: string, run: () => void) => confirmAction(title, detail, run);
@@ -264,7 +267,7 @@ export function XuenessGitView({
           <LogSection log={log} error={logError} loading={logLoading} />
         </>
       )}
-      {confirmation && <div className="xn-git__modal-backdrop" role="presentation"><section className="xn-git__confirm" role="alertdialog" aria-modal="true" aria-labelledby="git-confirm-title"><h4 id="git-confirm-title">{confirmation.title}</h4><pre>{confirmation.detail}</pre><div className="xn-git__controls"><button type="button" onClick={() => setConfirmation(null)}>{tr("取消")}</button><button type="button" disabled={actionBusy} onClick={() => { const run = confirmation.run; setConfirmation(null); run(); }}>{tr("确认操作")}</button></div></section></div>}
+      {confirmation && <div className="xn-git__modal-backdrop" role="presentation"><section ref={confirmationRef} className="xn-git__confirm" role="alertdialog" aria-modal="true" aria-labelledby="git-confirm-title" onKeyDown={event => { if (shouldDismissModalOnEscape(event)) { event.stopPropagation(); setConfirmation(null); } }}><h4 id="git-confirm-title">{confirmation.title}</h4><pre>{confirmation.detail}</pre><div className="xn-git__controls"><button type="button" onClick={() => setConfirmation(null)}>{tr("取消")}</button><button type="button" disabled={actionBusy} onClick={() => { const run = confirmation.run; setConfirmation(null); run(); }}>{tr("确认操作")}</button></div></section></div>}
     </div>
   );
 }

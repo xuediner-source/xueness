@@ -9,7 +9,7 @@ import type { PlanModePort } from "@xueness/plugin-planning";
 
 export function planModePort(session: Session, permissions: PermissionSession, permissionMode: PermissionMode): PlanModePort {
   return {
-    active: () => permissions.mode === "plan",
+    active: () => permissionMode === "yolo" ? session.mode === "plan" : permissions.mode === "plan",
     exit() {
       permissions.setMode(permissionMode === "plan" ? "build" : permissionMode);
       session.mode = "build";
@@ -17,7 +17,7 @@ export function planModePort(session: Session, permissions: PermissionSession, p
       if (history.at(-1)?.mode !== "build") history.push({ mode: "build", steps: Number(session.steps ?? 0) });
     },
     enter() {
-      permissions.setMode("plan");
+      if (permissionMode !== "yolo") permissions.setMode("plan");
       session.mode = "plan";
       const history = Array.isArray(session.mode_history) ? session.mode_history as Record<string, unknown>[] : (session.mode_history = []) as Record<string, unknown>[];
       if (history.at(-1)?.mode !== "plan") history.push({ mode: "plan", steps: Number(session.steps ?? 0) });

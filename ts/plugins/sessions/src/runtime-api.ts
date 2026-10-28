@@ -5,6 +5,7 @@ import { isPyOSError, isPyValueError, pyExceptionName, type Session, type Sessio
 import type { RuntimeSelection } from "./lifecycle-types.ts";
 import { CompactError, compactLeased } from "./manual-compact.ts";
 import { currentModelSelection, normalizeModelSwitch, planModelSelection, recordModelSwitch, type SwitchableAgentProvider } from "./model-switch.ts";
+import { createPermissionControlApi, type PermissionControl } from "./permission-control.ts";
 import type { SessionReply } from "./http-api.ts";
 type Row = Record<string, unknown>;
 export interface SessionRuntimeOptions {
@@ -12,6 +13,7 @@ export interface SessionRuntimeOptions {
   running: ReadonlySet<string>; activeContext: Map<string, Row>;
   resolveProvider(selection: RuntimeSelection, sid: string): AgentProvider;
   activeProvider(sid: string): SwitchableAgentProvider | null;
+  permissionControl?: (sid: string) => PermissionControl | null;
   levels(selection: Row): string[];
   configurationError(error: unknown): string;
   supportsSelection?: (session: Session, selected: Row) => boolean;
@@ -22,6 +24,7 @@ export interface SessionRuntimeOptions {
 }
 const SID = /^[0-9a-f]{32}$/;
 export function createSessionRuntimeApi(o: SessionRuntimeOptions) {
+  const permission = createPermissionControlApi({ ...o, permissionControl: o.permissionControl ?? (() => null) });
   const saveDefault = async (selected: Row): Promise<SessionReply | null> => o.defaultApi ? await o.defaultApi("POST", { providerId: selected.provider_id, model: selected.model, reasoningEffort: selected.reasoning_effort ?? null }) : [501, { error: "providers default selection is unavailable" }];
   const apply = async (sid: string, requested: Row): Promise<SessionReply | null> => {
     const [fields, error] = normalizeModelSwitch(requested); if (error) return [400, { error }];
@@ -59,9 +62,10 @@ export function createSessionRuntimeApi(o: SessionRuntimeOptions) {
     return [200, { id: sid, model_selection: selected, applied: switcher ? "next_request" : "immediate", levels: o.levels(selected), model_history: history, default_saved: !!fields.save_default }];
   };
   return {
-    routes: ["GET /api/sessions/:id/model", "POST /api/sessions/:id/model", "POST /api/sessions/:id/compact"],
-    owns(_method: string, parts: readonly string[]) { return parts.length === 4 && parts[0] === "api" && parts[1] === "sessions" && SID.test(parts[2]!) && ["model", "compact"].includes(parts[3]!); },
+    routes: [...permission.routes, "GET /api/sessions/:id/model", "POST /api/sessions/:id/model", "POST /api/sessions/:id/compact"],
+    owns(_method: string, parts: readonly string[]) { return permission.owns(_method, parts) || parts.length === 4 && parts[0] === "api" && parts[1] === "sessions" && SID.test(parts[2]!) && ["model", "compact"].includes(parts[3]!); },
     async dispatch(method: string, parts: string[], _query: Row, data: unknown): Promise<SessionReply | null> {
+      if (permission.owns(method, parts)) return permission.dispatch(method, parts, _query, data);
       if (!this.owns(method, parts)) return null;
       if (!o.enabled("sessions")) return [403, { error: "plugin disabled or dependency unavailable: sessions", plugin: "sessions" }];
       const sid = parts[2]!;

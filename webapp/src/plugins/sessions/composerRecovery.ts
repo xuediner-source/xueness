@@ -1,5 +1,5 @@
 import { editorStateHasContent } from './composerEditorState';
-import type { ComposerDraftState } from './XuenessWorkbenchView';
+import type { ComposerDraftState } from './composerTypes';
 
 export type RecoverableComposerDraft = Omit<ComposerDraftState, 'recoverableDrafts' | 'pendingSubmission'>;
 

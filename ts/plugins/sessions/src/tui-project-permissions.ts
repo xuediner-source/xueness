@@ -14,7 +14,7 @@ export function loadProjectPermissionRules(stateDir: string, root: string): stri
   const { path, project } = location(stateDir, root), record = readJsonObject(path);
   return record?.project === project && Array.isArray(record.allow) ? record.allow.filter((value): value is string => typeof value === "string") : [];
 }
-export function rememberProjectPermission(stateDir: string, root: string, request: TuiPermissionRequest, rules: readonly string[]): void {
+export function rememberProjectPermission(stateDir: string, root: string, request: Pick<TuiPermissionRequest, "code" | "remember">, rules: readonly string[]): void {
   if (request.code !== "approval_required" || !request.remember || !rules.length || rules.some((rule) => !request.remember!.exact.includes(rule))) throw new Error("only the offered exact project rules may be remembered");
   const { path, project } = location(stateDir, root);
   atomicWriteJson(path, { project, allow: [...new Set([...loadProjectPermissionRules(stateDir, root), ...rules])] });

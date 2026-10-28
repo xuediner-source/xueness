@@ -1,0 +1,20 @@
+{
+  "../webapp/src/plugins/automation/index.tsx": 646,
+  "../webapp/src/plugins/extensions/index.tsx": 450,
+  "../webapp/src/plugins/mcp/ElicitationForm.tsx": 537,
+  "../webapp/src/plugins/onboarding/DesktopPermissionOnboarding.tsx": 535,
+  "../webapp/src/plugins/providers/index.tsx": 1330,
+  "../webapp/src/plugins/providers/LightweightWorkbench.tsx": 1255,
+  "../webapp/src/plugins/sessions/commandClient.ts": 443,
+  "../webapp/src/plugins/sessions/secondaryPaneComposer.tsx": 489,
+  "../webapp/src/plugins/sessions/SidebarNav.tsx": 477,
+  "../webapp/src/plugins/sessions/XuenessComposerToolbar.tsx": 878,
+  "../webapp/src/plugins/sessions/XuenessTaskList.tsx": 638,
+  "../webapp/src/plugins/sessions/XuenessWorkbenchView.tsx": 1175,
+  "../webapp/src/plugins/sessions/ZCodeConversation.tsx": 702,
+  "../webapp/src/plugins/subagents/SubagentSidePane.tsx": 656,
+  "../webapp/src/xuenessApi.ts": 600,
+  "../webapp/src/XuenessShell.tsx": 697,
+  "../webapp/src/xuenessWorkbench.ts": 1660,
+  "../webapp/src/XuenessWorkbenchContainer.tsx": 3018
+}

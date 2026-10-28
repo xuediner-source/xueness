@@ -10,6 +10,7 @@ import React, { useCallback, useEffect, useRef, useState } from "react";
 import { ChartLine, ExternalLink, RefreshCw } from "lucide-react";
 import { t as tr } from "../../i18n";
 import { loadUsage, type UsageSummary } from "../../xuenessWorkspace";
+import { shouldDismissModalOnEscape } from "../shared";
 import "../../styles/usage-quick-card.css";
 
 /** 一次完整报告的 Token 汇总；requests 是报告完整的请求次数。 */
@@ -108,7 +109,7 @@ export function XuenessUsageQuickCardView({
       className="xn-usage-quick__card"
       data-testid="usage-quick-card"
       onKeyDown={(event) => {
-        if (event.key !== "Escape") return;
+        if (!shouldDismissModalOnEscape(event)) return;
         event.preventDefault();
         event.stopPropagation();
         onClose(true);

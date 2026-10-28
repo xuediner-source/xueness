@@ -32,7 +32,7 @@ export function addAgentFlags(p: Parser): Parser {
     .add("--mode", { choices: ["plan", "build"], help: "kernel ceiling: plan denies write/edit/exec before any approval lookup, including the plan draft; build keeps deny-by-default" })
     .add("--permission-mode", { choices: ["build", "edit", "yolo", "plan", "guarded"], help: "build asks; edit auto-approves workspace writes; yolo auto-approves writes, local commands and network but still asks for remote SSH; guarded auto-runs ordinary commands and asks each time for recognized dangerous commands; plan is read-only plus this session's plan draft. Legacy --allow-* flags stay in force for build. --mode plan is a hard ceiling over every permission mode" })
     .add("--disallow-tools", { default: "", help: "comma-separated tool deny list, e.g. 'exec,edit'; denied even with --allow-write/--allow-exec" })
-    .add("--steps", { type: "int", default: 8 }).add("--max-chars", { type: "int", default: 24000 })
+    .add("--steps", { type: "int", default: 8 }).add("--max-chars", { type: "int", default: null, help: "optional input character ceiling; lightweight mode otherwise uses its calibrated token budget" })
     .add("--max-tokens", { type: "int", help: "standard: advisory chars/4 estimate; lightweight: input estimate budget; neither calls a model" })
     .add("--memory-root", { help: "read-only dsh-grok-memory root; inject curated MEMORY.md/USER.md/KEY.md tracks as untrusted data" })
     .add("--skill-catalog", { action: "store_true", help: "load skill descriptions first; expose bounded skill_read on demand" })
@@ -66,8 +66,8 @@ export function register(sub: ReturnType<Parser["subparsers"]>): void {
 
 export function checkBudgets(cli: Cli, chat = false): void {
   const a = cli.args;
-  if (chat) { if (a.steps < 1 || a.max_chars < 1000 || (a.max_tokens !== null && a.max_tokens < 1)) cli.error("--steps/--max-tokens must be positive and --max-chars >= 1000"); return; }
-  if (a.steps < 1 || a.max_chars < 1000) cli.error("--steps must be positive and --max-chars >= 1000");
+  if (chat) { if (a.steps < 1 || (a.max_chars !== null && a.max_chars < 1000) || (a.max_tokens !== null && a.max_tokens < 1)) cli.error("--steps/--max-tokens must be positive and --max-chars >= 1000"); return; }
+  if (a.steps < 1 || (a.max_chars !== null && a.max_chars < 1000)) cli.error("--steps must be positive and --max-chars >= 1000");
   if (a.max_tokens !== null && a.max_tokens < 1) cli.error("--max-tokens must be a positive integer");
 }
 
@@ -162,7 +162,7 @@ export async function runAgent(cli: Cli, host: ApplicationApi, io: RunIo, sessio
   try {
     const runner = host.agent.createRunner(session, prepared.provider, prepared.policy);
     const a = cli.args;
-    return await runner.run(session, { maxSteps: a.steps, maxChars: a.max_chars, ...(a.max_tokens !== null ? { maxTokens: a.max_tokens } : {}), ...(a.max_wall_seconds !== null ? { maxWallSeconds: a.max_wall_seconds } : {}), shouldStop: () => io.terminal.stopRequested });
+    return await runner.run(session, { maxSteps: a.steps, ...(a.max_chars !== null ? { maxChars: a.max_chars } : {}), ...(a.max_tokens !== null ? { maxTokens: a.max_tokens } : {}), ...(a.max_wall_seconds !== null ? { maxWallSeconds: a.max_wall_seconds } : {}), shouldStop: () => io.terminal.stopRequested });
   } finally { io.terminal.running = false; io.sink = () => {}; }
 }
 

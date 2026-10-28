@@ -182,6 +182,15 @@ function readJson(path: string, problems: string[], shown: string): Record<strin
   }
 }
 
+/** Catalog v1 and executable manifests must describe the same owned surfaces. */
+export function manifestContractDrift(manifest: Pick<PluginManifest, "features" | "dependencies" | "frontendModules">, catalog: Pick<PluginManifest, "features" | "dependencies" | "frontendModules">): string[] {
+  const sameSet = (left: string[], right: string[]): boolean => JSON.stringify([...new Set(left)].sort()) === JSON.stringify([...new Set(right)].sort());
+  const fields: string[] = [];
+  if (!sameSet(manifest.features.map(feature => feature.id), catalog.features.map(feature => feature.id))) fields.push("features");
+  for (const field of ["dependencies", "frontendModules"] as const) if (!sameSet(manifest[field], catalog[field])) fields.push(field);
+  return fields;
+}
+
 /** Every problem with the plugins under `root`/plugins; empty when the gate passes. */
 export function checkPlugins(root: string): { problems: string[]; plugins: number; files: number } {
   const problems: string[] = [];
@@ -202,6 +211,10 @@ export function checkPlugins(root: string): { problems: string[]; plugins: numbe
     const upgraded = upgradeManifestV1(catalog);
     for (const issue of [...upgraded.issues, ...(upgraded.document ? validateManifest(upgraded.document).issues : [])]) {
       problems.push(`catalog/${id}.json ${issue.path || "/"}: ${issue.message}`);
+    }
+    if (upgraded.document) {
+      const catalogManifest = validateManifest(upgraded.document).manifest;
+      if (catalogManifest) for (const field of manifestContractDrift(manifest, catalogManifest)) problems.push(`catalog/${id}.json /${field}: ${field === "features" ? "feature IDs" : "declarations"} differ from the plugin manifest`);
     }
     const pkg = readJson(join(dir, "package.json"), problems, `plugins/${id}/package.json`) ?? {};
     if (pkg.name !== `@xueness/plugin-${id}`) problems.push(`plugins/${id}/package.json: name must be @xueness/plugin-${id}`);

@@ -35,101 +35,25 @@
     "app-server"
   ],
   "features": [
-    {
-      "id": "remote.app_server",
-      "name": "stdio JSON-RPC app-server 入口",
-      "nameEn": "Stdio JSON-RPC app-server entry point"
-    },
-    {
-      "id": "remote.frame_replay",
-      "name": "stdio 帧有界重放（实验，默认关闭）",
-      "nameEn": "Bounded stdio frame replay (experimental, off by default)"
-    },
-    {
-      "id": "remote.connections",
-      "name": "命名 SSH 主机连接配置",
-      "nameEn": "Named SSH host connection settings"
-    },
-    {
-      "id": "remote.exec",
-      "name": "明确批准的远程 argv 执行",
-      "nameEn": "Explicitly approved remote argv execution"
-    },
-    {
-      "id": "remote.handshake",
-      "name": "远程执行握手与能力协商（实验，默认关闭）",
-      "nameEn": "Remote execution handshake and capability check (experimental, off by default)"
-    },
-    {
-      "id": "remote.session_summary",
-      "name": "会话列表远程配置摘要",
-      "nameEn": "Remote configuration summaries in the session list"
-    },
-    {
-      "id": "remote.connection_state",
-      "name": "有界远程连接阶段只读投影",
-      "nameEn": "Bounded read-only remote connection phases"
-    },
-    {
-      "id": "remote.connection_lifecycle",
-      "name": "远程工作区连接、取消、重连与作用域路由",
-      "nameEn": "Remote workspace connect, cancel, reconnect and scoped routing"
-    },
-    {
-      "id": "remote.workspace_protocol",
-      "name": "远程会话命令回执、投影与媒体传输",
-      "nameEn": "Remote session command receipts, projection and media transport"
-    },
-    {
-      "id": "remote.pane_workflow_controls",
-      "name": "远程问题回答、撤回恢复与当前轮输入",
-      "nameEn": "Scoped remote questions, withdrawal recovery and current-turn guidance"
-    },
-    {
-      "id": "remote.history_media",
-      "name": "远程历史消息媒体恢复与有界预览",
-      "nameEn": "Remote historical message media restore and bounded preview"
-    },
-    {
-      "id": "remote.model_catalog",
-      "name": "远程公开模型和推理选项目录",
-      "nameEn": "Remote public model and reasoning option catalog"
-    },
-    {
-      "id": "remote.history_fork",
-      "name": "远程历史分叉边界与持久命令",
-      "nameEn": "Scoped remote history fork boundaries and durable commands"
-    },
-    {
-      "id": "remote.native_protocol",
-      "name": "原生持久命令、投影与媒体协议",
-      "nameEn": "Native durable commands, projections and media protocol"
-    },
-    {
-      "id": "remote.projection_subscriptions",
-      "name": "stdio 订阅、流控与显式重同步",
-      "nameEn": "Stdio subscriptions, flow control and explicit resync"
-    },
-    {
-      "id": "remote.goal_memory_controls",
-      "name": "限定会话的目标与记忆整理协议",
-      "nameEn": "Scoped goal and memory-curation protocol controls"
-    },
-    {
-      "id": "remote.projection_hydration",
-      "name": "冷启动会话投影 Hydration 与 schema 映射",
-      "nameEn": "Cold-start projection hydration and schema mapping"
-    },
-    {
-      "id": "remote.port_forwarding",
-      "name": "SSH 本地端口转发生命周期与诊断",
-      "nameEn": "SSH local port forwarding lifecycle and diagnostics"
-    },
-    {
-      "id": "remote.wsl_diagnostics",
-      "name": "WSL 检测与跨平台路径诊断",
-      "nameEn": "WSL detection and cross-platform path diagnostics"
-    }
+    {"id": "remote.app_server", "name": "stdio JSON-RPC app-server 入口", "nameEn": "Stdio JSON-RPC app-server entry point"},
+    {"id": "remote.frame_replay", "name": "stdio 帧有界重放（实验，默认关闭）", "nameEn": "Bounded stdio frame replay (experimental, off by default)"},
+    {"id": "remote.connections", "name": "命名 SSH 主机连接配置", "nameEn": "Named SSH host connection settings"},
+    {"id": "remote.exec", "name": "明确批准的远程 argv 执行", "nameEn": "Explicitly approved remote argv execution"},
+    {"id": "remote.handshake", "name": "远程执行握手与能力协商（实验，默认关闭）", "nameEn": "Remote execution handshake and capability check (experimental, off by default)"},
+    {"id": "remote.session_summary", "name": "会话列表远程配置摘要", "nameEn": "Remote configuration summaries in the session list"},
+    {"id": "remote.connection_state", "name": "有界远程连接阶段只读投影", "nameEn": "Bounded read-only remote connection phases"},
+    {"id": "remote.connection_lifecycle", "name": "远程工作区连接、取消、重连与作用域路由", "nameEn": "Remote workspace connect, cancel, reconnect and scoped routing"},
+    {"id": "remote.workspace_protocol", "name": "远程会话命令回执、投影与媒体传输", "nameEn": "Remote session command receipts, projection and media transport"},
+    {"id": "remote.pane_workflow_controls", "name": "远程问题回答、撤回恢复与当前轮输入", "nameEn": "Scoped remote questions, withdrawal recovery and current-turn guidance"},
+    {"id": "remote.history_media", "name": "远程历史消息媒体恢复与有界预览", "nameEn": "Remote historical message media restore and bounded preview"},
+    {"id": "remote.model_catalog", "name": "远程公开模型和推理选项目录", "nameEn": "Remote public model and reasoning option catalog"},
+    {"id": "remote.history_fork", "name": "远程历史分叉边界与持久命令", "nameEn": "Scoped remote history fork boundaries and durable commands"},
+    {"id": "remote.native_protocol", "name": "原生持久命令、投影与媒体协议", "nameEn": "Native durable commands, projections and media protocol"},
+    {"id": "remote.projection_subscriptions", "name": "stdio 订阅、流控与显式重同步", "nameEn": "Stdio subscriptions, flow control and explicit resync"},
+    {"id": "remote.goal_memory_controls", "name": "限定会话的目标与记忆整理协议", "nameEn": "Scoped goal and memory-curation protocol controls"},
+    {"id": "remote.projection_hydration", "name": "冷启动会话投影 Hydration 与 schema 映射", "nameEn": "Cold-start projection hydration and schema mapping"},
+    {"id": "remote.port_forwarding", "name": "SSH 本地端口转发生命周期与诊断", "nameEn": "SSH local port forwarding lifecycle and diagnostics"},
+    {"id": "remote.wsl_diagnostics", "name": "WSL 检测与跨平台路径诊断", "nameEn": "WSL detection and cross-platform path diagnostics"}
   ],
   "panels": [
     "remote"

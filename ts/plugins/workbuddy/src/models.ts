@@ -1,4 +1,4 @@
-/** The three WorkBuddy pool models this plugin exposes to conversations. */
+/** The WorkBuddy pool models this plugin exposes to conversations. */
 export interface WorkbuddyModel {
   /** Upstream model id sent to the gateway. */
   readonly id: string;
@@ -18,6 +18,10 @@ export const MODELS: readonly WorkbuddyModel[] = Object.freeze([
   {
     id: "deepseek-v4.1-flash", name: "DeepSeek V4.1 Flash",
     contextWindow: 1_000_000, maxOutputTokens: 128_000, reasoningLevels: ["low", "high", "max"],
+  },
+  {
+    id: "glm-5.3-flash", name: "GLM-5.3 Flash",
+    contextWindow: 1_000_000, maxOutputTokens: 131_072, reasoningLevels: ["low", "high", "max"],
   },
   {
     id: "deepseek-v4-pro", name: "DeepSeek V4 Pro",

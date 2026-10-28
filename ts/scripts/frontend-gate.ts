@@ -20,7 +20,7 @@ import { join, relative } from "node:path";
 
 /** `SHARED_FRONTEND`: kernel UI that no plugin owns. */
 export const SHARED_FRONTEND: ReadonlySet<string> = new Set([
-  "App.tsx", "main.tsx", "vite-env.d.ts", "i18n.ts",
+  "App.tsx", "main.tsx", "vite-env.d.ts", "i18n.ts", "i18n.en.ts",
   "XuenessShell.tsx", "XuenessWorkbenchContainer.tsx",
   "XuenessPluginManager.tsx", "xuenessPluginRegistry.ts",
   "XuenessCapabilitiesPanel.tsx", "XuenessCapabilityDialog.tsx",

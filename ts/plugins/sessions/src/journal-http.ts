@@ -4,7 +4,7 @@ import type { Session } from "@xueness/sessions";
 type Dict = Record<string, unknown>;
 export class StaleJournalCursor extends PyValueError { override name = "StaleJournalCursor"; }
 export function messageRevision(session: Session): string {
-  return "sha256:" + createHash("sha256").update(pyJsonDumps(session, { ensureAscii: true, sortKeys: true, separators: [",", ":"] }), "ascii").digest("hex");
+  return "sha256:" + createHash("sha256").update(JSON.stringify(session, (_key, value: unknown) => typeof value === "bigint" ? (JSON as typeof JSON & { rawJSON(text: string): unknown }).rawJSON(value.toString()) : value)).digest("hex");
 }
 export function oneQuery(query: Dict, key: string): unknown { const v = query[key]; return Array.isArray(v) ? v[0] : v; }
 export function isBackgroundTaskNotice(message: unknown): boolean {

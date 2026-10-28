@@ -1,5 +1,0 @@
-PASS: packaged Electron workbench renders, 30 plugins/254 features, isolated renderer and clean exit
-PASS: native window caption safe areas, workbench background theme and localized application menu
-PASS: Claudex and Xueness light/dark native caption colors and renderer safe areas
-PASS: distinct classic/Claudex sidebars, home composers and resize handles in both native themes
-PASS: packaged browser plugin uses the bundled Node/Playwright driver and an installed Chrome/Edge

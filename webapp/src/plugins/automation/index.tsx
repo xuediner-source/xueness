@@ -441,7 +441,7 @@ export function AutomationDetail({
                 <span className={`xn-automation__run-status status-${run.status}`}>{runStatusLabel(run.status)}</span>
                 <span>{formatDate(run.at)}</span>
                 {run.workflowId && <span>{tr("工作流运行 ID：")}<code>{run.workflowId}</code></span>}
-                {run.error && <span className="xn-automation__error-text">{run.error}</span>}
+                {run.error && <span className="xn-automation__error-text" role="alert">{run.error}</span>}
               </li>
             ))}
           </ol>

@@ -28,26 +28,11 @@
     "operator_cli"
   ],
   "features": [
-    {
-      "id": "memory.injection",
-      "name": "只读记忆轨道与上下文注入",
-      "nameEn": "Read-only memory tracks and context injection"
-    },
-    {
-      "id": "memory.editor",
-      "name": "手动编辑与版本冲突检测",
-      "nameEn": "Manual editing and version conflict checks"
-    },
-    {
-      "id": "memory.settings",
-      "name": "记忆能力与工作区配置",
-      "nameEn": "Memory capability and workspace settings"
-    },
-    {
-      "id": "memory.dream",
-      "name": "显式项目记忆整理、候选审阅与确认应用",
-      "nameEn": "Explicit project memory curation, candidate review and confirmed application"
-    }
+    {"id": "memory.injection", "name": "只读记忆轨道与上下文注入", "nameEn": "Read-only memory tracks and context injection"},
+    {"id": "memory.recall_reset", "name": "压缩后重新召回记忆", "nameEn": "Memory recall reset after compaction"},
+    {"id": "memory.dream", "name": "显式项目记忆整理、候选审阅与确认应用", "nameEn": "Explicit project memory curation, candidate review and confirmed application"},
+    {"id": "memory.editor", "name": "手动编辑与版本冲突检测", "nameEn": "Manual editing and version conflict checks"},
+    {"id": "memory.settings", "name": "记忆能力与工作区配置", "nameEn": "Memory capability and workspace settings"}
   ],
   "frontendModules": [
     "plugins/memory/MemoryPanel.tsx",

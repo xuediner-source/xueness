@@ -1,8 +1,4 @@
-import { getLocale, messages, tf } from "../../i18n";
-
-// i18n 以中文原文为 key（见 webapp/src/i18n.ts）；在此注册英文文案，
-// 与 i18n.ts 内部 Object.assign(messages, …) 的扩展方式一致。
-messages["昨天 {0}"] = "Yesterday {0}";
+import { getLocale, tf } from "../../i18n";
 
 // 移植自 zcode-reference/packages/ui/src/v4/messageTimeLabel.ts。
 // 品牌清理：@/i18n/IntlProvider.js → 相对路径 ../../i18n；

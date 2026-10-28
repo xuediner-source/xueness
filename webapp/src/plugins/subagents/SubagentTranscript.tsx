@@ -4,6 +4,7 @@ import { get } from "../../xuenessApi";
 import { toTimelineRows } from "../../xuenessWorkbench";
 import { parseEventsEnvelope } from "../../xuenessEvents";
 import { t as tr } from "../../i18n";
+import { startSessionPolling } from '../sessions/SessionPolling';
 import { ZCodeConversation } from "../sessions/ZCodeConversation";
 import "../../styles/subagent-sidepane.css";
 
@@ -53,7 +54,7 @@ export function SubagentTranscript({
 
   useEffect(() => {
     let cancelled = false;
-    let timer: ReturnType<typeof setTimeout> | undefined;
+    let stop = () => {};
     let controller: AbortController | null = null;
     const load = async () => {
       controller = new AbortController();
@@ -66,17 +67,17 @@ export function SubagentTranscript({
         if (cancelled) return;
         setTranscript(next);
         setError(null);
-        if (["pending", "running"].includes(next.status)) timer = setTimeout(() => void load(), 1800);
+        if (!["pending", "running"].includes(next.status)) stop();
       } catch (reason) {
         if (!cancelled && !controller.signal.aborted) {
           setError(reason instanceof Error ? reason.message : String(reason));
         }
       }
     };
-    void load();
+    stop = startSessionPolling({ refresh: load, initialDelayMs: 0, visibleDelayMs: 1800 });
     return () => {
       cancelled = true;
-      if (timer) clearTimeout(timer);
+      stop();
       controller?.abort();
     };
   }, [parentSessionId, taskId, childSessionId]);
@@ -90,7 +91,7 @@ export function SubagentTranscript({
     </header>
     {error ? <p className="xn-subagent-transcript__message" role="alert"><AlertTriangle size={14} />{error}</p>
       : !transcript ? <p className="xn-subagent-transcript__message"><LoaderCircle size={14} className="animate-spin" />{tr("正在加载子会话记录…")}</p>
-        : <div className="xn-subagent-transcript__conversation">
+        : <div className="xn-subagent-transcript__conversation" data-timeline-scroller>
           <ZCodeConversation sessionId={transcript.childSessionId} rows={transcript.rows} autoScroll />
         </div>}
   </section>;

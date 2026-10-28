@@ -34,40 +34,18 @@
     "turn_checkpoints"
   ],
   "features": [
-    {
-      "id": "git.inspect",
-      "name": "状态、差异、日志与分支查看",
-      "nameEn": "Status, diffs, logs and branches"
-    },
-    {
-      "id": "git.clone",
-      "name": "克隆远程仓库到已授权目录",
-      "nameEn": "Clone a remote repository into an authorized directory"
-    },
-    {
-      "id": "git.actions",
-      "name": "批准后的暂存、提交、分支与 stash",
-      "nameEn": "Approved stage, commit, branch and stash"
-    },
-    {
-      "id": "git.checkpoint",
-      "name": "检查点、恢复预览与恢复前备份",
-      "nameEn": "Checkpoints, restore review and recovery backups"
-    },
-    {
-      "id": "git.turn_checkpoints",
-      "name": "轮次首个写入前自动检查点",
-      "nameEn": "Automatic checkpoints before a turn's first change"
-    },
-    {
-      "id": "git.rewind",
-      "name": "回退工作区到轮次检查点",
-      "nameEn": "Rewind the workspace to a turn checkpoint"
-    }
+    {"id": "git.checkpoints", "name": "可恢复工作区检查点", "nameEn": "Recoverable workspace checkpoints"},
+    {"id": "git.turn_checkpoints", "name": "轮次首个写入前自动检查点", "nameEn": "Automatic checkpoints before a turn's first change"},
+    {"id": "git.rewind", "name": "回退工作区到轮次检查点", "nameEn": "Rewind the workspace to a turn checkpoint"},
+    {"id": "git.inspect", "name": "状态、差异、日志与分支查看", "nameEn": "Status, diffs, logs and branches"},
+    {"id": "git.clone", "name": "克隆远程仓库到已授权目录", "nameEn": "Clone a remote repository into an authorized directory"},
+    {"id": "git.actions", "name": "批准后的暂存、提交、分支与 stash", "nameEn": "Approved stage, commit, branch and stash"},
+    {"id": "git.checkpoint", "name": "检查点、恢复预览与恢复前备份", "nameEn": "Checkpoints, restore review and recovery backups"}
   ],
   "frontendModules": [
     "plugins/git/XuenessGitView.tsx",
     "plugins/git/XuenessCloneDialog.tsx",
-    "xuenessGit.ts"
+    "xuenessGit.ts",
+    "plugins/git/useGitPanel.ts"
   ]
 }

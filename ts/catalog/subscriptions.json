@@ -12,11 +12,13 @@
   "backendAssets": ["worker.mjs", "protocols.mjs", "compat.mjs", "vendor/hub.mjs", "vendor/commandcode.mjs", "vendor/qoder.mjs", "vendor/auth/oauth-flow.mjs", "vendor/auth/qwen-device-flow.mjs", "vendor/auth/safety.mjs"],
   "dataFiles": ["catalog.json", "vendor/LICENSE-MIT.txt"],
   "features": [
-    {"id":"subscriptions.accounts","name":"浏览器授权与本机登录导入","nameEn":"Browser authorization and local credential import"},
-    {"id":"subscriptions.providers","name":"订阅账号与登录凭证供应商目录","nameEn":"Subscription account and login credential catalog"},
-    {"id":"subscriptions.quota","name":"上游实际额度与重置时间","nameEn":"Upstream reported quota and reset times"},
-    {"id":"subscriptions.models","name":"实际型号发现与会话模型选择","nameEn":"Model discovery and conversation selection"},
-    {"id":"subscriptions.streams","name":"多协议流式文本、思考与工具调用","nameEn":"Streaming text, reasoning and tool calls across protocols"},
-    {"id":"subscriptions.lifecycle","name":"可选安装、凭据保护与禁用即停","nameEn":"Optional installation, private credentials and disable cleanup"}
+    {"id": "subscriptions.accounts", "name": "浏览器授权与本机登录导入", "nameEn": "Browser authorization and local credential import"},
+    {"id": "subscriptions.providers", "name": "订阅账号与登录凭证供应商目录", "nameEn": "Subscription account and login credential catalog"},
+    {"id": "subscriptions.quota", "name": "上游实际额度与重置时间", "nameEn": "Upstream reported quota and reset times"},
+    {"id": "subscriptions.models", "name": "实际型号发现与会话模型选择", "nameEn": "Model discovery and conversation selection"},
+    {"id": "subscriptions.streams", "name": "多协议流式文本、思考与工具调用", "nameEn": "Streaming text, reasoning and tool calls across protocols"},
+    {"id": "subscriptions.entitlements", "name": "用户授权权益服务：账户、订阅、配额与票据适配", "nameEn": "User-authorized entitlement service: account, subscription, quota and ticket adapters"},
+    {"id": "subscriptions.tickets", "name": "可用时真实走票据路径，未公开权益接口列为待外部条件", "nameEn": "Real ticket path when available; unpublished vendor interfaces stay pending external conditions"},
+    {"id": "subscriptions.lifecycle", "name": "可选安装、凭据保护与禁用即停", "nameEn": "Optional installation, private credentials and disable cleanup"}
   ]
 }

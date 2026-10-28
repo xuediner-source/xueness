@@ -9,19 +9,17 @@
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
     <title>Xueness</title>
     <style>html{background:Canvas;color:CanvasText} .xn-skip-link{position:fixed;left:16px;top:-80px} .xn-skip-link:focus{top:12px}</style>
-    <script type="module" crossorigin src="/assets/workbench-BcXmzP_i.js"></script>
+    <script type="module" crossorigin src="/assets/workbench-B2iKYeIq.js"></script>
+    <link rel="modulepreload" crossorigin href="/assets/modulepreload-polyfill-B5Qt9EMX.js">
     <link rel="modulepreload" crossorigin href="/assets/_commonjsHelpers-Cpj98o6Y.js">
-    <link rel="modulepreload" crossorigin href="/assets/react-vendor-CkNNwXoc.js">
-    <link rel="modulepreload" crossorigin href="/assets/chevron-right-C2UqwyfD.js">
-    <link rel="modulepreload" crossorigin href="/assets/index-DMIU-JKF.js">
-    <link rel="modulepreload" crossorigin href="/assets/markdown-vendor-hkRgCSAm.js">
-    <link rel="modulepreload" crossorigin href="/assets/Combination-CWVN4E0m.js">
-    <link rel="modulepreload" crossorigin href="/assets/radix-vendor-Dex_w2rK.js">
-    <link rel="stylesheet" crossorigin href="/assets/workbench-COUvvtbu.css">
-    <script>(()=>{function a(e){return e==="light"||e==="dark"?e:"system"}function l(e,t){const n=a(e);return n==="system"?t?"dark":"light":n}function u(e){return e==="claudex"||e==="claude"?"claudex":"xueness"}function c(){if(typeof document>"u"||typeof getComputedStyle>"u")return;const e=document.querySelector('meta[name="theme-color"]'),t=getComputedStyle(document.documentElement).getPropertyValue("--bg-window").trim();e&&/^#[0-9a-f]{6}$/i.test(t)&&(e.content=t)}function d(e,t=!0){if(typeof document>"u")return;const n=a(e),o=l(n,window.matchMedia?.("(prefers-color-scheme: dark)").matches??!1),r=document.documentElement;if(r.classList.toggle("dark",o==="dark"),r.style.colorScheme=o,r.dataset.xnTheme=o,c(),t)try{localStorage.setItem("xueness.theme",n)}catch{}}function m(e,t=!0){if(typeof document>"u")return;const n=u(e),o=document.documentElement;if(n==="xueness"?delete o.dataset.xnPalette:o.dataset.xnPalette=n,c(),t)try{localStorage.setItem("xueness.colorPalette",n)}catch{}}if(typeof window<"u"&&typeof document<"u"){let e="system",t="xueness";try{e=localStorage.getItem("xueness.theme"),t=localStorage.getItem("xueness.colorPalette"),document.documentElement.lang=localStorage.getItem("xueness.language")==="en"?"en":"zh-CN"}catch{}m(t,!1),d(e,!1),document.readyState==="loading"&&document.addEventListener("DOMContentLoaded",c,{once:!0})}})();
+    <link rel="modulepreload" crossorigin href="/assets/react-vendor-Ca5gwkdN.js">
+    <meta name="xn-appearance-xueness" content="/assets/appearance-xueness-f9b6cd6945.css">
+    <meta name="xn-appearance-claudex" content="/assets/appearance-claudex-9aada9862c.css">
+    <script>(()=>{function d(e){return e==="light"||e==="dark"?e:"system"}function s(e,t){const n=d(e);return n==="system"?t?"dark":"light":n}function i(e){return e==="claudex"||e==="claude"?"claudex":"xueness"}function m(){if(typeof document>"u"||typeof getComputedStyle>"u")return;const e=document.querySelector('meta[name="theme-color"]'),t=getComputedStyle(document.documentElement).getPropertyValue("--bg-window").trim();e&&/^#[0-9a-f]{6}$/i.test(t)&&(e.content=t)}function f(e,t=!0){if(typeof document>"u")return;const n=d(e),l=s(n,window.matchMedia?.("(prefers-color-scheme: dark)").matches??!1),c=document.documentElement;if(c.classList.toggle("dark",l==="dark"),c.style.colorScheme=l,c.dataset.xnTheme=l,m(),t)try{localStorage.setItem("xueness.theme",n)}catch{}}let r=null;function p(e,t=!0){if(typeof document>"u")return;const n=i(e),l=document.documentElement,c=()=>{if(n==="xueness"?delete l.dataset.xnPalette:l.dataset.xnPalette=n,m(),t)try{localStorage.setItem("xueness.colorPalette",n)}catch{}};r&&(r.onload=null,r.remove(),r=null);const a=document.getElementById("xn-appearance"),u=document.querySelector(`meta[name="xn-appearance-${n}"]`)?.content;if(!a||!u||a.getAttribute("href")===u){c();return}const o=document.createElement("link");o.rel="stylesheet",o.href=u,r=o,o.onload=()=>{a.remove(),o.id="xn-appearance",r=null,c()},o.onerror=()=>{o.remove(),r=null},document.head.append(o)}if(typeof window<"u"&&typeof document<"u"){let e="system",t="xueness";try{e=localStorage.getItem("xueness.theme"),t=localStorage.getItem("xueness.colorPalette"),document.documentElement.lang=localStorage.getItem("xueness.language")==="en"?"en":"zh-CN"}catch{}p(t,!1),f(e,!1),document.readyState==="loading"&&document.addEventListener("DOMContentLoaded",m,{once:!0})}})();
 </script>
+    <script>document.write('<link id="xn-appearance" rel="stylesheet" href="'+document.querySelector('meta[name="xn-appearance-'+(document.documentElement.dataset.xnPalette||'xueness')+'"]').content+'">')</script>
   </head>
-  <body class="bg-background text-foreground">
+  <body>
     <a class="xn-skip-link" href="#xn-shell-main"><span lang="zh-CN">跳转到主要内容</span><span lang="en">Skip to main content</span></a>
     <div id="root"></div>
   </body>

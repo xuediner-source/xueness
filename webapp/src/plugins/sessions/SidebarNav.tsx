@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useId, useRef, useState } from "react";
 import { IconLoader, IconPencil, IconPin, IconTrash, IconX } from "../../ui/icons";
 import { MoreHorizontal } from 'lucide-react';
-import { t as tr, tf } from "../../i18n";
+import { t as tr, tf, useLocale } from "../../i18n";
 import { normalizeChangeSummary, normalizePendingInteraction, normalizeRemoteSummary, remoteSummaryLabel } from './sessionsIndex';
 import type { SessionRemoteSummary } from './sessionsIndex';
 import { isImeComposingEvent } from "../../xuenessShortcutDisplay";
@@ -149,6 +149,7 @@ function SidebarNavItemBase({
   testIdPrefix = 'xn-sidebar-item-',
   onActivated,
 }: SidebarNavItemProps): React.JSX.Element {
+  useLocale();
   const isCurrent = item.active;
   const normalizedPending = normalizePendingInteraction(item.pendingInteraction);
   const pendingInteraction = Boolean(normalizedPending);

@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { t as tr, messages } from '../../i18n';
+import { t as tr } from '../../i18n';
 import {
   acceptsPaneDrag, boundPaneRatio, paneLayoutIsSplitVisible, paneWorkspaceLabel, readPaneDrop,
   PANE_RATIO_MIN, PANE_RATIO_MAX,
@@ -7,13 +7,6 @@ import {
 } from './paneLayout';
 import { startPaneResize } from './paneResize';
 import './pane-layout.css';
-
-messages['关闭分屏'] = 'Close split view';
-messages['分屏会话'] = 'Split conversation';
-messages['主会话'] = 'Primary conversation';
-messages['把侧栏会话拖到这里'] = 'Drag a sidebar session here';
-messages['等待拖入'] = 'Waiting for a session';
-messages['调整分屏尺寸'] = 'Resize split panes';
 
 type PaneDrag = {
   pointerId: number;
@@ -54,7 +47,7 @@ function PaneDivider({ containerRef, direction, ratio, onResize }: {
     drag.resize.cancel();
   };
   return <div className="xn-pane-divider" data-testid="xn-pane-divider" data-dragging="false"
-    role="separator" aria-label={tr('调整分屏尺寸')} aria-orientation={row ? 'vertical' : 'horizontal'}
+    role="separator" aria-label={tr('调整分屏尺寸', 'split')} aria-orientation={row ? 'vertical' : 'horizontal'}
     aria-valuemin={PANE_RATIO_MIN * 100} aria-valuemax={PANE_RATIO_MAX * 100} aria-valuenow={Math.round(ratio * 100)}
     tabIndex={0}
     onPointerDown={event => {
@@ -146,7 +139,7 @@ export function SessionPaneSplit({ enabled = true, wide, layout, onFocus, onClos
       <header className="xn-pane__chrome">
         <span className="xn-pane__title">{layout.secondary ? (secondaryTitle || layout.secondary.sessionId) : tr('分屏会话')}</span>
         <span className="xn-pane__workspace" title={secondaryWorkspace || undefined}>{workspace}</span>
-        <button type="button" className="xn-conv-header__action" data-testid="xn-pane-close" onClick={event => { event.stopPropagation(); onClose(); }}>{tr('关闭分屏')}</button>
+        <button type="button" className="xn-conv-header__action" data-testid="xn-pane-close" onClick={event => { event.stopPropagation(); onClose(); }}>{tr('关闭分屏', 'split')}</button>
       </header>
       <div className="xn-pane__body">
         {layout.secondary ? secondary : <p className="xn-pane__drop" data-testid="xn-pane-drop">{tr('把侧栏会话拖到这里')}</p>}

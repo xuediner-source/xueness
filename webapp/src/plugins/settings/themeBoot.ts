@@ -38,16 +38,35 @@ export function applyDocumentTheme(value: unknown, cache = true): void {
   }
 }
 
+let pendingAppearance: HTMLLinkElement | null = null;
 export function applyDocumentColorPalette(value: unknown, cache = true): void {
   if (typeof document === 'undefined') return;
   const palette = normalizeColorPalette(value);
   const root = document.documentElement;
-  if (palette === 'xueness') delete root.dataset.xnPalette;
-  else root.dataset.xnPalette = palette;
-  syncDocumentThemeColor();
-  if (cache) {
-    try { localStorage.setItem('xueness.colorPalette', palette); } catch { /* Private browsing. */ }
-  }
+  const apply = () => {
+    if (palette === 'xueness') delete root.dataset.xnPalette;
+    else root.dataset.xnPalette = palette;
+    syncDocumentThemeColor();
+    if (cache) {
+      try { localStorage.setItem('xueness.colorPalette', palette); } catch { /* Private browsing. */ }
+    }
+  };
+  if (pendingAppearance) { pendingAppearance.onload = null; pendingAppearance.remove(); pendingAppearance = null; }
+  const current = document.getElementById('xn-appearance') as HTMLLinkElement | null;
+  const href = document.querySelector<HTMLMetaElement>(`meta[name="xn-appearance-${palette}"]`)?.content;
+  if (!current || !href || current.getAttribute('href') === href) { apply(); return; }
+  const next = document.createElement('link');
+  next.rel = 'stylesheet';
+  next.href = href;
+  pendingAppearance = next;
+  next.onload = () => {
+    current.remove();
+    next.id = 'xn-appearance';
+    pendingAppearance = null;
+    apply();
+  };
+  next.onerror = () => { next.remove(); pendingAppearance = null; };
+  document.head.append(next);
 }
 
 // Compiled into a small classic script in <head>, before styles and React load.

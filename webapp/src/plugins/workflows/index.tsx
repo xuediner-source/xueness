@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { startSessionPolling } from '../sessions/SessionPolling';
 import { get, post } from '../../xuenessApi';
 import { IconWorkflow, IconTerminal, IconFolder, IconNewTask } from '../../ui/icons';
 import { t as tr, tf } from '../../i18n';
@@ -121,11 +122,9 @@ export function WorkflowPanel({ sessionId, subagentsEnabled }: { sessionId: stri
   }, [sessionId, subagentsEnabled]);
   useEffect(() => {
     let live = true;
-    let refreshing = false;
     const controller = new AbortController();
     const refresh = async () => {
-      if (!live || refreshing) return;
-      refreshing = true;
+      if (!live) return;
       try {
         await refreshWorkflowPanel({ active, sessionId, subagentsEnabled, signal: controller.signal,
           isCurrent: () => live && !controller.signal.aborted
@@ -134,11 +133,9 @@ export function WorkflowPanel({ sessionId, subagentsEnabled }: { sessionId: stri
             && refreshKey.current.subagentsEnabled === subagentsEnabled,
           onWorkflows: setItems, onWorkflow: setRecord, onTasks: setTasks });
       } catch (e) { if (live && !controller.signal.aborted) setError(errorText(e)); }
-      finally { refreshing = false; }
     };
-    void refresh();
-    const timer = setInterval(() => { void refresh(); }, 1000);
-    return () => { live = false; clearInterval(timer); controller.abort(); };
+    const stop = startSessionPolling({ refresh, initialDelayMs: 0, visibleDelayMs: 1000 });
+    return () => { live = false; stop(); controller.abort(); };
   }, [active, sessionId, subagentsEnabled]);
   async function perform(fn: (generation: number) => Promise<unknown>) {
     const generation = lifecycleGeneration.current;

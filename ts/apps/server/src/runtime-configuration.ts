@@ -4,11 +4,13 @@ import { loadRuntimeConfig, type RuntimeConfigPatch, type RuntimeConfigLoadResul
 import { loadShellConfig, shellConfig } from "@xueness/plugin-shell";
 import { validateRuntimeMcpServers } from "@xueness/plugin-mcp";
 import shellManifest from "../../../plugins/shell/manifest.json" with { type: "json" };
+import contextLensManifest from "../../../plugins/context_lens/manifest.json" with { type: "json" };
 
 export function validateAgentRuntimeConfig(patch: RuntimeConfigPatch): void {
   for (const [id, config] of Object.entries(patch.plugins ?? {})) {
-    if (id !== "shell") throw new TypeError("runtime configuration supports the shell plugin only");
-    const issues = validateSchema(shellManifest.config.schema as JsonSchema, config);
+    const schema = id === "shell" ? shellManifest.config.schema : id === "context_lens" ? contextLensManifest.config.schema : null;
+    if (!schema) throw new TypeError(`runtime configuration does not support plugin ${id}`);
+    const issues = validateSchema(schema as JsonSchema, config);
     if (issues.length) throw new TypeError(formatSchemaIssues(issues));
   }
   if (patch.mcp?.servers !== undefined) validateRuntimeMcpServers(patch.mcp.servers);

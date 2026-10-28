@@ -10,7 +10,7 @@ export type Row = Record<string, any>;
 /** A long poll can still relay while no response headers have been sent. */
 export class ExternalConversationRun extends Error {}
 export interface ConversationBase { epoch: string; seq: number; }
-interface Projection { epoch: string; seq: number; snapshot: Row; history: [number, string, string]; frames: Row[]; size: number; at: number; }
+interface Projection { epoch: string; seq: number; snapshot: Row; history: [number, string, string]; frames: Row[]; size: number; at: number; fingerprint: string; checkedAt: number; }
 const bytes = (v: unknown) => Buffer.byteLength(pyJsonDumps(v, { separators: [",", ":"] }));
 function historyStamp(o: SessionsApiOptions, sid: string, snapshot: Row, previous?: Projection): { stamp: [number, string, string]; broken: boolean } {
   const revision = snapshot.journal.history_revision ?? 0, stateHash = snapshot.session.history_hash;
@@ -62,18 +62,25 @@ export class ConversationCache {
     const release = await this.mutex.acquire("observe");
     try {
       await this.available([sid]);
-      const previous = this.entries.get(sid), observed = statSync(this.options.store.pathFor(sid), { bigint: true }).mtimeNs;
+      const previous = this.entries.get(sid), source = statSync(this.options.store.pathFor(sid), { bigint: true }), observed = source.mtimeNs;
+      const live = this.options.lifecycle?.activeContext.get(sid)?.active_session;
+      const hot = isDict(live) ? [live.streaming, live.runtime_activity, live.tool_activity, live.permission_mode] : null;
+      const fingerprint = `${source.ino}:${source.size}:${source.mtimeNs}:${source.ctimeNs}:` + JSON.stringify([hot, ["files", "planning", "subagents"].map(id => this.options.enabled(id))]);
+      let projection: Projection;
+      if (previous && previous.fingerprint === fingerprint && Date.now() - previous.checkedAt < 1000) projection = previous;
+      else {
       const snapshot = await conversationSnapshot(this.options, sid, { tail: true, before: 0, limit: 80 }, null, this.project), { stamp, broken } = historyStamp(this.options, sid, snapshot, previous);
       await this.available([sid]);
-      let projection: Projection;
-      if (!previous || broken || rewritten(previous.snapshot, snapshot)) { projection = { epoch: uuid4Hex(), seq: 1, snapshot, history: stamp, frames: [], size: 0, at: Date.now() }; this.version++; }
+      if (!previous || broken || rewritten(previous.snapshot, snapshot)) { projection = { epoch: uuid4Hex(), seq: 1, snapshot, history: stamp, frames: [], size: 0, at: Date.now(), fingerprint, checkedAt: Date.now() }; this.version++; }
       else {
         projection = previous; const operations = difference(previous.snapshot, snapshot);
         if (operations.length) { projection.frames.push({ kind: "delta", logEpoch: projection.epoch, fromSeq: projection.seq, toSeq: projection.seq + 1, operations }); projection.frames = projection.frames.slice(-64); projection.seq++; projection.snapshot = snapshot; this.version++; }
         projection.history = stamp; projection.at = Date.now();
       }
+      projection.fingerprint = fingerprint; projection.checkedAt = Date.now();
       const snapshotBytes = bytes(projection.snapshot); projection.size = snapshotBytes + projection.frames.reduce((n, frame) => n + bytes(frame), 0);
       while (projection.frames.length && projection.size > 2 * 1024 * 1024) projection.size -= bytes(projection.frames.shift()!);
+      }
       this.entries.delete(sid);
       if (projection.size <= 2 * 1024 * 1024) this.entries.set(sid, projection);
       while (this.entries.size > 64 || [...this.entries.values()].reduce((n, p) => n + p.size, 0) > 16 * 1024 * 1024) this.entries.delete(this.entries.keys().next().value!);

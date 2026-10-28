@@ -20,6 +20,7 @@ import { CHILD_DENIED_TOOLS, selectSubagent, childSummary, childSystemPrompt, Ch
   activeProfiles, branchHistory, childToolGrant, childWithInheritedHistory, clampModelSelection, type AgentProfile, type TaskRegistry } from "@xueness/plugin-subagents";
 import { createSessionsStore, sessionsTurnRuntimeExtension, sessionsRuntimeEventsExtension, sessionsStableBoundariesExtension, sessionsCompactPersistenceExtension, type RuntimeSelection } from "@xueness/plugin-sessions";
 import { filesReadStateExtension, filesHistoryExtension } from "@xueness/plugin-files";
+import { contextLensExtension } from "@xueness/plugin-context_lens";
 import { batchCallsExtension } from "@xueness/plugin-batch_calls";
 import { nativeOpsExtension, type NativeOpsBinding } from "@xueness/plugin-native_ops";
 import { providerToolResultBudgetExtension } from "@xueness/plugin-providers";
@@ -30,6 +31,7 @@ import { ToolBridge } from "@xueness/tool-bridge";
 
 export interface ChildRunHost {
   nativeOps?: NativeOpsBinding;
+  contextLensConfig?: () => Row;
   kernel: Context;
   env: ToolEnv;
   stateDir: string;
@@ -195,7 +197,7 @@ export async function executeChild(host: ChildRunHost, input: Row, taskId: strin
     approver: () => ({ behavior: "deny", reason: "subagent_read_only", message: "A subagent is read-only and cannot ask for approval; report what you found instead." }) });
   // Subagent children inherit the parent's foreground admission scope: the
   // user's turn waits on them, so they must not queue behind workflow runs.
-  const base = kernelAgentHooks(host.kernel, { enabled: host.enabled, extensions: [sessionsRuntimeEventsExtension(), sessionsTurnRuntimeExtension(), sessionsStableBoundariesExtension(), sessionsCompactPersistenceExtension(), filesReadStateExtension(toolEnv.tracker), filesHistoryExtension(), networkActivityExtension(toolEnv), toolContractExtension(), batchCallsExtension, ...host.nativeOps ? [nativeOpsExtension(host.nativeOps)] : [], toolMediaExtension(), providerRequestShapingExtension(), providerModelExecutionExtension({ admissionScope: { foreground: true } }), providerToolResultBudgetExtension()] });
+  const base = kernelAgentHooks(host.kernel, { enabled: host.enabled, extensions: [sessionsRuntimeEventsExtension(), sessionsTurnRuntimeExtension(), sessionsStableBoundariesExtension(), sessionsCompactPersistenceExtension(), filesReadStateExtension(toolEnv.tracker), filesHistoryExtension(), networkActivityExtension(toolEnv), toolContractExtension(), batchCallsExtension, ...host.nativeOps ? [nativeOpsExtension(host.nativeOps)] : [], toolMediaExtension(), providerRequestShapingExtension(), providerModelExecutionExtension({ admissionScope: { foreground: true } }), providerToolResultBudgetExtension(), contextLensExtension(host.contextLensConfig)] });
   const hooks = { ...base, async tools(context: Parameters<typeof base.tools>[0]) { return (await base.tools(context)).filter((tool) => isDict(tool.function) && policy.allowed(String(tool.function.name))); } };
   const runner = new AgentRunner({ root, store, stateDir: host.stateDir, provider, toolBridge: bridge, hooks, hostSignal: host.hostSignal });
   const started = performance.now();

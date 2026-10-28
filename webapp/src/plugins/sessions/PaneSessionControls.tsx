@@ -1,12 +1,13 @@
+import { setSessionPermissionMode } from './useLivePermissionMode';
 // sessions.pane_layout: all mutations are bound to this leaf and its runtime.
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { t as tr, messages } from '../../i18n';
+import { t as tr } from '../../i18n';
 import { approvePending, createSessionCommandClient, runSession, requestMutation, type WorkbenchSession, type PendingApproval } from '../../xuenessWorkbench';
 import type { RunChoices } from '../../xuenessBridge';
 import type { RemoteSessionAdapter } from '../remote/remoteSessionAdapter';
 import { paneBindingKey, type PaneIdentity } from './paneIdentity';
 import { useRunPermissionConfirmation } from './useRunPermissionConfirmation';
-import { Approvals } from './XuenessWorkbenchView';
+import { Approvals } from './Approvals';
 import { loadQuestion, answerQuestion, answerQuestionCards } from './questionApi';
 import { PendingQuestion, QuestionResume, type QuestionTransport } from './PendingQuestion';
 import { SessionQueue, QueueWithdrawalRecovery } from './SessionQueue';
@@ -18,13 +19,6 @@ import type { QueueWithdrawal } from './queueApi';
 import type { SessionCommandClient } from './commandClient';
 import { DeliveryUnconfirmedError } from './submissionTransport';
 import { CommandDeliveryUnconfirmedError, validateSendCommandResult } from './commandClient';
-
-messages['拒绝此工具请求'] = 'Reject this tool request';
-messages['继续已保留的立即发送消息'] = 'Continue reserved send-now message';
-messages['检查命令结果'] = 'Check command result';
-messages['命令结果仍未确认，请勿重复提交。'] = 'The command outcome is still unknown. Do not submit it again.';
-messages['远程答复通道尚不可用，请在远程会话中答复。'] = 'Remote question responses are unavailable. Answer in the remote conversation.';
-messages['命令结果已确认，请检查最新会话状态。'] = 'Command result confirmed. Check the latest conversation state.';
 
 export type PaneSessionControlsProps = {
   operationGate?: { acquire: () => (() => void) | null }; sharedCommands?: SessionCommandClient; identity: PaneIdentity; session: WorkbenchSession; enabled: boolean; choices: RunChoices;
@@ -99,13 +93,13 @@ export function PaneSessionControls({ operationGate, sharedCommands, identity, s
       throw new Error(result.error);
     }
   };
-  const approve = (rows: PendingApproval[]) => perform(async () => {
+  const approve = (rows: PendingApproval[], scope?: 'project') => perform(async () => {
     // Calls waiting in the running turn continue in place; only replays need a new run.
     let resumed = rows.length > 0;
     for (const row of rows) {
       if (!current() || !pendingApprovalMatches(row, live.current.session.pending ?? [])) return;
       receiptValidator.current = value => approvalReceiptMatches(value, row, false);
-      const result = await approvePending(session.id, row, commands);
+      const result = await approvePending(session.id, row, commands, 'approve', scope ? { scope } : {});
       if (!result.ok) {
         if (current() && result.outcomeUnknown) setUnknown(result.commandId ?? '');
         throw new Error(result.error);
@@ -114,13 +108,13 @@ export function PaneSessionControls({ operationGate, sharedCommands, identity, s
     }
     if (current() && !resumed) await run();
   });
-  const reject = (row: PendingApproval) => perform(async () => {
+  const reject = (row: PendingApproval, feedback?: string) => perform(async () => {
     if (!current() || !pendingApprovalMatches(row, live.current.session.pending ?? [])) return;
     const kind = row.kind ?? (row.name.startsWith('mcp__') ? 'mcp' : row.name);
     receiptValidator.current = value => approvalReceiptMatches(value, row, true);
-    await commands.submitApproval(session.id, 'reject', { kind, tool_call_id: row.tool_call_id, decision: 'reject' },
+    await commands.submitApproval(session.id, 'reject', { kind, tool_call_id: row.tool_call_id, decision: 'reject', ...(feedback ? { message: feedback } : {}) },
       signal => requestMutation('POST', `/api/sessions/${encodeURIComponent(session.id)}/approvals`,
-        { kind, tool_call_id: row.tool_call_id, decision: 'reject' }, signal, current));
+        { kind, tool_call_id: row.tool_call_id, decision: 'reject', ...(feedback ? { message: feedback } : {}) }, signal, current));
   });
   const guardedQuestion = useMemo<QuestionTransport | undefined>(() => {
     if (remote && !questionTransport) return undefined;
@@ -169,9 +163,10 @@ export function PaneSessionControls({ operationGate, sharedCommands, identity, s
           .finally(() => { lock.current = false; if (current()) setBusy(false); });
       }}>{tr('检查命令结果')}</button></>}
     {!!session.pending?.length && <><Approvals pending={session.pending} busy={disabled || running}
-      onApprove={row => approve([row])} onApproveAll={rows => approve(rows ?? session.pending ?? [])} />
-      {session.pending.map(row => <button key={row.tool_call_id} type="button" disabled={disabled || running}
-        aria-label={`${tr('拒绝此工具请求')}: ${row.name} ${row.subject}`} onClick={() => void reject(row)}>{tr('拒绝此工具请求')}: {row.name}</button>)}</>}
+      onApprove={row => approve([row])} onApproveAll={rows => approve(rows ?? session.pending ?? [])} onReject={reject}
+      onAllowProject={!remote ? row => approve([row], 'project') : undefined}
+      onFullAccess={!remote ? row => perform(async () => { await setSessionPermissionMode(session.id, 'yolo', true, session.active_turn_id); if (current()) { onChoicesChange({ ...choices, permission_mode: 'yolo', acknowledge_yolo: false }); if (!row.waiting) { const result = await approvePending(session.id, row, commands); if (!result.ok) throw new Error(result.error); const started = await runSession(session.id, { ...choices, permission_mode: 'yolo', acknowledge_yolo: true }, undefined, commands); if (!started.ok) throw new Error(started.error); } } }) : undefined} />
+</>}
     {(!remote || questionTransport) ? <PendingQuestion key={key} sessionId={session.id} enabled={enabled}
       pendingQuestion={session.status === 'awaiting_user' ? session.pending_question : null} disabled={disabled}
       transport={guardedQuestion} onSubmitted={async (_id, continueRun, questionCurrent) => {

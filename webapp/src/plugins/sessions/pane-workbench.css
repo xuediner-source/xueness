@@ -1,4 +1,8 @@
 .xn-pane-workbench { display: flex; flex-direction: column; flex: 1; min-width: 0; min-height: 0; width: 100%; height: 100%; }
+.xn-pane-workbench > .xn-pane-workbench__canvas[hidden] { display: none; }
+.xn-pane-workbench__view { flex: 1; min-width: 0; min-height: 0; overflow: auto; background: var(--bg-panel); }
+.xn-pane-workbench__fallback-header { display: flex; align-items: center; gap: 14px; flex: none; min-height: 44px; padding: 0 16px; border-bottom: 1px solid var(--border); }
+.xn-pane-workbench__fallback-header > span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .xn-pane-workbench__groups, .xn-pane-workbench__tabs { display: flex; gap: 4px; overflow-x: auto; flex: 0 0 auto; padding: 4px 8px; border-bottom: 1px solid var(--border, #8883); }
 .xn-pane-workbench__group { display: inline-flex; min-width: 0; }
 .xn-pane-workbench__group button, .xn-pane-workbench__tabs button, .xn-workbench-leaf__toolbar button { color: inherit; background: transparent; border: 0; border-radius: 4px; padding: 4px 7px; cursor: pointer; }

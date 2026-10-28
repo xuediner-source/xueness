@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import { ArrowDown, ArrowUp, ArrowUpFromLine, ChevronDown, CornerDownRight, CornerUpLeft, GripVertical,
   ListOrdered, MoreHorizontal, Pencil, Trash2 } from "lucide-react";
 import './SessionQueue.css';
-import { messages, t as tr, tf } from "../../i18n";
+import { t as tr, tf } from "../../i18n";
 import type { QueuedMessage } from "../../xuenessWorkbench";
 import { sessionStatusPresentation } from './statusPresentation';
 
@@ -22,10 +22,6 @@ function focusOutsideMenu(trigger: HTMLElement | null, menu: HTMLElement | null,
   next.focus();
   return true;
 }
-
-messages['更多排队操作'] = 'More queue actions';
-messages['排队消息操作'] = 'Queued message actions';
-messages['排队'] = 'Queue';
 
 function statusLabel(status: QueuedMessage["status"]): string {
   return sessionStatusPresentation(status)?.label ?? tr(String(status));
@@ -297,7 +293,6 @@ export function SessionQueue({ items, queueRevision, cancellingId, currentId, on
     {orderStatus && <p className="xn-session-queue__notice" role="status">{orderStatus}</p>}
   </section>;
 }
-
 
 /** Metadata is rediscovered after reload; fetching/restoring never consumes the server escrow. */
 export function QueueWithdrawalRecovery({ withdrawals, notice = '', error = '', disabled, onRefresh, onRestore, onDismiss }: {

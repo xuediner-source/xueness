@@ -1,0 +1,37 @@
+.xn-approvals { display: flex; flex-direction: column; gap: 10px; padding: 16px; border: 1px solid var(--border); border-radius: 16px; background: var(--bg-panel); box-shadow: var(--shadow-sm); }
+.xn-approval-item { border: 0; border-radius: 10px; min-width: 0; padding: 4px 0; font-size: 13px; display: flex; flex-direction: column; gap: 9px; }
+.xn-permission-dialog { color: var(--fg); min-width: 0; }
+.xn-permission-dialog__choices { display: flex; flex-direction: column; gap: 4px; }
+.xn-permission-dialog__choices > button { display: flex; align-items: baseline; gap: 16px; text-align: left; min-height: 42px; border: 0; border-radius: 12px; padding: 11px 15px; background: transparent; color: var(--fg); cursor: pointer; font: inherit; width: 100%; }
+.xn-permission-dialog__choices > button[aria-checked="true"] { background: var(--bg-hover); }
+.xn-permission-dialog__choices > button:hover { background: var(--bg-subtle); }
+.xn-permission-dialog__choices > button:focus-visible { outline: 2px solid var(--fg-muted); outline-offset: -2px; }
+.xn-permission-dialog__choices > button:disabled { cursor: default; color: var(--fg-muted); opacity: .65; }
+.xn-permission-dialog__number { color: var(--fg-muted); flex: 0 0 20px; font-variant-numeric: tabular-nums; }
+.xn-permission-dialog__copy { display: flex; align-items: baseline; flex-wrap: wrap; gap: 8px; min-width: 0; overflow-wrap: anywhere; }
+.xn-permission-dialog__copy strong { display: inline-flex; align-items: center; gap: 6px; font-weight: 500; }
+.xn-permission-dialog__copy small { color: var(--fg-muted); font-size: 12px; }
+.xn-permission-dialog__choices [data-choice="full"] strong { font-weight: 700; color: color-mix(in srgb, var(--danger) 80%, var(--fg)); }
+.xn-permission-dialog__feedback { width: calc(100% - 60px); margin: 7px 15px 8px 45px; border: 1px solid var(--border); border-radius: 8px; padding: 10px; color: var(--fg); background: var(--bg-input); font: inherit; box-sizing: border-box; }
+.xn-permission-dialog__footer { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 14px; padding: 18px 3px 0; }
+.xn-permission-dialog__footer > span { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--fg-muted); }
+.xn-permission-dialog__footer > button { border: 1px solid var(--border); border-radius: 9px; background: var(--fg); color: var(--bg-panel); font: inherit; padding: 8px 15px; cursor: pointer; }
+.xn-permission-dialog__footer > button:disabled { opacity: .5; cursor: default; }
+.xn-composer-toolbar__permission-option[data-permission="edit"] svg { color: var(--accent); }
+.xn-shell-layout .xn-composer-toolbar__permission-option[data-permission="guarded"] strong { color: color-mix(in srgb, var(--warning) 70%, var(--fg)); font-weight: 650; }
+.xn-composer-toolbar__permission-option[data-permission="guarded"] svg { color: color-mix(in srgb, var(--warning) 70%, var(--fg)); }
+.xn-composer-toolbar__permission-option[data-permission="yolo"] :is(strong, small, svg), .xn-composer-toolbar__mode-trigger.is-warning { color: color-mix(in srgb, var(--danger) 80%, var(--fg)); }
+.xn-shell-layout .xn-composer-toolbar__permission-option[data-permission="yolo"] strong { font-weight: 750; }
+.xn-composer-toolbar__permission-option[data-permission="yolo"] { background: color-mix(in srgb, var(--danger) 5%, var(--bg-panel)); }
+
+.xn-permission-request { min-width: 0; }
+.xn-permission-request > summary { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; cursor: pointer; list-style: none; color: var(--fg-muted); }
+.xn-permission-request > summary::-webkit-details-marker { display: none; }
+.xn-permission-request__target { color: var(--fg); overflow-wrap: anywhere; min-width: 0; }
+.xn-permission-request__directory { overflow-wrap: anywhere; font-size: 11px; }
+.xn-permission-request__added { color: var(--success); font-weight: 500; }
+.xn-permission-request__removed { color: var(--danger); font-weight: 500; }
+.xn-permission-request__detail { padding: 10px 0; line-height: 1.6; }
+.xn-permission-request__detail pre, .xn-approval-plan { white-space: pre-wrap; overflow-wrap: anywhere; max-height: 320px; overflow: auto; font-family: var(--font-mono); }
+.xn-permission-request[open] > summary > svg:last-child { transform: rotate(180deg); }
+.xn-approval-waiting { display: none; }

@@ -3,14 +3,16 @@
 // pane-secondary: so they stay apart from the primary session: draft.
 // Send, queue and stop go through command_ack, and only while sessions is effective.
 import React, { useEffect, useRef, useState, useSyncExternalStore } from 'react';
-import { t as tr, messages } from '../../i18n';
+import { t as tr } from '../../i18n';
 import { getRunChoices, setRunChoices, type RunChoices } from '../../xuenessBridge';
 import { prepareComposer, type ComposerInput } from '../../xuenessComposer';
 import { createSession, createSessionCommandClient, queueTurn, sendTurn, stopSession, type WorkbenchSession } from '../../xuenessWorkbench';
 import { panePendingCommands } from './paneCommandCoordinator';
 import { CommandDeliveryUnconfirmedError, type SessionCommandClient } from './commandClient';
 import { DeliveryUnconfirmedError } from './submissionTransport';
-import { Composer, readPersistedDraft, restoredDraft, persistDraft, type ComposerDraftState } from './XuenessWorkbenchView';
+import { Composer } from './XuenessWorkbenchView';
+import { readPersistedDraft, restoredDraft, persistDraft } from './composerDraftStore';
+import { type ComposerDraftState } from './composerTypes';
 import { paneBindingKey, paneComposerKey, paneDraftAddress, readPaneDraft, paneDraftAliasAdopted, markPaneDraftAliasAdopted, type PaneIdentity } from './paneIdentity';
 import type { PaneDraftAlias } from './paneTree';
 import { subscribeComposerDrafts, hasComposerDraftContent, composerDraftContent, notifyComposerDrafts } from './composerRecovery';
@@ -31,20 +33,6 @@ import { PaneOptionToolbar } from './PaneOptionToolbar';
 import { canAdmitSessionFollowup, sessionFollowupProof } from './CommandReceiptRecovery';
 import type { FollowupAdmission, FollowupProof } from './commandLedger';
 
-messages['在分屏会话中继续'] = 'Continue in this split conversation';
-messages['分屏输入'] = 'Split composer';
-messages['仍有待确认的分屏会话，请先检查会话列表。'] = 'Some split creations are still unconfirmed. Check the conversation list first.';
-messages['分屏会话命令已关闭'] = 'Split conversation commands are no longer enabled';
-messages['检查远程命令结果'] = 'Check remote command result';
-messages['没有待确认的后续输入。'] = 'There is no unconfirmed follow-up input.';
-messages['检查后续输入结果'] = 'Check follow-up input result';
-messages['检查命令结果'] = 'Check command result';
-messages['命令结果已确认，请检查最新会话状态。'] = 'Command result confirmed. Check the latest conversation state.';
-messages['命令结果仍未确认，草稿已保留。'] = 'The command outcome is still unknown. Your draft is retained.';
-messages['远程会话已创建，请检查会话状态后继续。'] = 'Remote conversation was created. Check its status before continuing.';
-messages['远程命令结果已确认，请检查会话状态。'] = 'Remote command result confirmed. Check the conversation status.';
-messages['远程命令结果仍未确认，草稿已保留。'] = 'Remote command result is still unconfirmed. Your draft is retained.';
-messages['此远程连接尚不支持创建会话。'] = 'This remote connection does not support conversation creation yet.';
 const noRemoteSubscription = () => () => undefined;
 const remoteUnavailable = () => false;
 

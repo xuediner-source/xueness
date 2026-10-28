@@ -1,0 +1,7 @@
+.xn-context-compaction-status { display: inline-flex; align-items: center; gap: 8px; min-width: 0; color: var(--fg-muted); font-size: 13px; font-weight: 400; line-height: 1.6; vertical-align: middle; }
+.xn-context-compaction-status > svg { flex: 0 0 17px; opacity: .8; }
+.xn-context-compaction-status[data-state="running"] > span { color: color-mix(in srgb, var(--fg-muted) 70%, var(--bg-panel)); animation: xn-compact-breathe 2.4s ease-in-out infinite; }
+.xn-zc-compaction { display: flex; align-items: center; min-width: 0; padding: 9px 0; margin: 2px 0 10px; }
+.xn-zc-compaction::before, .xn-zc-compaction::after { display: none; }
+@keyframes xn-compact-breathe { 50% { opacity: .6; } }
+@media (prefers-reduced-motion: reduce) { .xn-context-compaction-status[data-state="running"] > span { animation: none; } }

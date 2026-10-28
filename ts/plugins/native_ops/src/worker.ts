@@ -1,10 +1,10 @@
 import { createHash, randomUUID } from "node:crypto";
 import { readFile, realpath, stat } from "node:fs/promises";
-import { isAbsolute, relative, resolve } from "node:path";
+import { isAbsolute, parse, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { ChildProcess } from "node:child_process";
 import type { Context } from "@xueness/kernel";
-import { failure, isInside, resolveWorkspacePath, type ToolEnv, type ToolResult } from "@xueness/engine-tools";
+import { failure, hasUnrestrictedWorkspaceAccess, isInside, resolveWorkspacePath, type ToolEnv, type ToolResult } from "@xueness/engine-tools";
 import { NATIVE_OPS_MUTATIONS, type NativeOpsRawName, type NativeWorkerResult } from "./types.ts";
 
 const TIMEOUT_MS = 30_000;
@@ -27,8 +27,9 @@ function workerAsset(): string {
   return fileURLToPath(new URL(`../assets/runtime/${target}`, import.meta.url));
 }
 
-async function workspaceArgument(raw: unknown, cwd: string, rootReal: string): Promise<string> {
+async function workspaceArgument(raw: unknown, cwd: string, rootReal: string, env: ToolEnv): Promise<string> {
   if (typeof raw !== "string" || !raw.trim() || raw.includes("\0")) throw new TypeError("path must be a non-empty workspace path");
+  if (hasUnrestrictedWorkspaceAccess(env.roots)) return (await resolveWorkspacePath(raw, cwd, env.roots)).absolute;
   const lexicalRoot = resolve(cwd);
   const lexical = resolve(cwd, raw);
   if (!isInside(lexicalRoot, lexical)) throw Object.assign(new Error("path is outside the worker workspace"), { code: "path_outside_workspace" });
@@ -43,12 +44,12 @@ async function workerArguments(rawName: NativeOpsRawName, input: Record<string, 
   const rootReal = await realpath(env.cwd);
   const args: Record<string, unknown> = { ...input };
   if (["glob", "grep", "replace"].includes(rawName) && typeof args.path !== "string") args.path = ".";
-  if (typeof args.path === "string") args.path = await workspaceArgument(args.path, env.cwd, rootReal);
-  if (typeof args.to === "string") args.to = await workspaceArgument(args.to, env.cwd, rootReal);
+  if (typeof args.path === "string") args.path = await workspaceArgument(args.path, env.cwd, rootReal, env);
+  if (typeof args.to === "string") args.to = await workspaceArgument(args.to, env.cwd, rootReal, env);
   if (Array.isArray(args.files)) {
     args.files = await Promise.all(args.files.map(async (value) => {
       if (!isRecord(value)) return value;
-      return { ...value, path: await workspaceArgument(value.path, env.cwd, rootReal) };
+      return { ...value, path: await workspaceArgument(value.path, env.cwd, rootReal, env) };
     }));
   }
   return args;
@@ -87,7 +88,7 @@ async function recordOneRead(env: ToolEnv, path: unknown, digest: unknown, size:
   if (typeof path !== "string" || typeof digest !== "string" || !/^[a-f0-9]{64}$/.test(digest)
     || typeof size !== "number" || !Number.isSafeInteger(size) || size < 0 || size > MAX_TRACK_BYTES) return;
   try {
-    const target = await resolveWorkspacePath(path, env.cwd, [env.cwd]);
+    const target = await resolveWorkspacePath(path, env.cwd, env.roots);
     const info = await stat(target.absolute);
     if (!info.isFile() || info.size !== size) return;
     const bytes = await readFile(target.absolute);
@@ -203,14 +204,16 @@ export async function invokeNativeFileTool(
   try {
     if (!isAbsolute(env.cwd)) return workerFailure("invalid_argument", "The active workspace path must be absolute.");
     const args = await workerArguments(rawName, input, env);
+    const unrestricted = hasUnrestrictedWorkspaceAccess(env.roots), firstFile = Array.isArray(args.files) && isRecord(args.files[0]) ? args.files[0].path : null;
+    const root = unrestricted ? parse(typeof args.path === 'string' ? args.path : typeof firstFile === 'string' ? firstFile : env.cwd).root : env.cwd;
     const request = {
-      root: env.cwd,
+      root,
       scope: env.owner || "session",
       tool: rawName,
       args,
       read_only: !mutating,
-      write_roots: [env.cwd],
-      deny_credential_names: true,
+      write_roots: [root],
+      deny_credential_names: !unrestricted,
     };
     if (request.scope.length > 256) return workerFailure("invalid_argument", "The active session scope is too long.");
     const envelope = { version: 1, requestId: randomUUID(), component: "file", budget: { timeoutMs: TIMEOUT_MS, maxBytes: MAX_OUTPUT_BYTES }, request };

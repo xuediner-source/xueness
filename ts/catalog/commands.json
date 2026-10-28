@@ -29,31 +29,11 @@
     "files_api"
   ],
   "features": [
-    {
-      "id": "commands.templates",
-      "name": "自定义斜杠提示模板",
-      "nameEn": "Custom slash prompt templates"
-    },
-    {
-      "id": "commands.init",
-      "name": "内建 /init：调研工作区并生成或更新 AGENTS.md",
-      "nameEn": "Built-in /init: study the workspace and create or update AGENTS.md"
-    },
-    {
-      "id": "commands.resources",
-      "name": "命令资源创建、编辑与开关",
-      "nameEn": "Command resource creation, editing and switches"
-    },
-    {
-      "id": "commands.file_commands",
-      "name": "目录型 Markdown 命令发现与位置参数展开",
-      "nameEn": "File-shaped Markdown commands with positional argument expansion"
-    },
-    {
-      "id": "commands.cli",
-      "name": "commands list/inspect 命令与聊天 /commands",
-      "nameEn": "commands list/inspect commands and in-chat /commands"
-    }
+    {"id": "commands.templates", "name": "自定义斜杠提示模板", "nameEn": "Custom slash prompt templates"},
+    {"id": "commands.init", "name": "内建 /init：调研工作区并生成或更新 AGENTS.md", "nameEn": "Built-in /init: study the workspace and create or update AGENTS.md"},
+    {"id": "commands.resources", "name": "命令资源创建、编辑与开关", "nameEn": "Command resource creation, editing and switches"},
+    {"id": "commands.file_commands", "name": "目录型 Markdown 命令发现与位置参数展开", "nameEn": "File-shaped Markdown commands with positional argument expansion"},
+    {"id": "commands.cli", "name": "commands list/inspect 命令与聊天 /commands", "nameEn": "commands list/inspect commands and in-chat /commands"}
   ],
   "frontendModules": []
 }

@@ -5,6 +5,13 @@
 import { realpath } from "node:fs/promises";
 import { dirname, isAbsolute, relative, resolve, sep } from "node:path";
 
+const fullAccessRoots = new WeakSet<readonly string[]>();
+/** A host-issued capability; JSON and workspace configuration cannot forge it. */
+export function unrestrictedWorkspaceRoots(roots: readonly string[]): readonly string[] {
+  const scope = [...roots]; fullAccessRoots.add(scope); return scope;
+}
+export function hasUnrestrictedWorkspaceAccess(roots: readonly string[]): boolean { return fullAccessRoots.has(roots); }
+
 export class PathOutsideWorkspaceError extends Error {
   override name = "PathOutsideWorkspaceError";
   readonly code = "path_outside_workspace";
@@ -50,5 +57,6 @@ export async function resolveWorkspacePath(input: string, cwd: string, roots: re
       return { absolute, display: relative(realRoot, absolute).split(sep).join("/") || "." };
     }
   }
+  if (fullAccessRoots.has(roots)) return { absolute, display: absolute };
   throw new PathOutsideWorkspaceError(`path is outside the workspace: ${input}`);
 }

@@ -1,4 +1,4 @@
-import { t as tr, tf } from '../../i18n';
+import { getLocale, t as tr, type Locale } from '../../i18n';
 import type { TimelineRow } from '../../xuenessWorkbench';
 
 /**
@@ -22,15 +22,19 @@ export type SessionCompactionRecord = {
   /** ZCode compaction (ts/plugins/providers/src/zcode-compact.ts): model summary, flat scalar record. */
   kind?: string;
   trigger?: string;
+  manual?: boolean;
   kept?: number;
   summarizedMessageCount?: number;
   preCompactTokens?: number;
   postCompactTokens?: number;
   truePostCompactTokens?: number;
   willRetriggerNextTurn?: boolean;
+  /** 这次压缩本身花掉的墙钟时间（毫秒）；后端未上报时缺省。 */
+  elapsedMs?: number;
 };
 
 export type ConversationCompactionMarker = {
+  manual?: boolean;
   /** 分隔线渲染在「归档块之后第一条仍在模型上下文内的文本行」所属轮次的顶部。 */
   boundarySeq: number;
   /** 后端记录累计移出上下文的消息条数。 */
@@ -39,6 +43,8 @@ export type ConversationCompactionMarker = {
   masked: number;
   /** 最近一条压缩记录（可选）；ZCode 记录（kind "zcode"）用 ZCode 的文案。 */
   latest?: SessionCompactionRecord;
+  /** 所有压缩记录上报的耗时之和（毫秒）；后端全未上报时缺省。 */
+  elapsedMs?: number;
 };
 
 /** Attach archive provenance to tool rows: unlike text rows, tools have no
@@ -72,7 +78,7 @@ export function markArchivedToolRows(rows: TimelineRow[], journal: unknown): Tim
 }
 
 const NUMERIC_FIELDS: readonly string[] = ['removed', 'masked', 'previous_chars', 'estimatedTokens', 'kept_user_turns', 'targetChars', 'instructionsChars',
-  'kept', 'summarizedMessageCount', 'preCompactTokens', 'postCompactTokens', 'truePostCompactTokens'];
+  'kept', 'summarizedMessageCount', 'preCompactTokens', 'postCompactTokens', 'truePostCompactTokens', 'elapsedMs'];
 const BOOLEAN_FIELDS: readonly string[] = ['advisory', 'manual', 'willRetriggerNextTurn'];
 
 /** 防御性解析 session payload 的 compactions；形状意外时按空记录处理。 */
@@ -90,24 +96,41 @@ export function parseSessionCompactions(value: unknown): SessionCompactionRecord
   });
 }
 
-/** 压缩边界的单行说明；计数来自后端 compactions 记录，缺失时只陈述事实。 */
-export function conversationCompactionLabel(marker: Pick<ConversationCompactionMarker, 'removed' | 'masked' | 'latest'>): string {
-  // ZCode `transcript.compact.completed`「上下文已压缩」；条数是已移出上下文、由摘要接替的消息。
-  if (marker.latest?.kind === 'zcode') {
-    return marker.removed > 0 ? tf('上下文已压缩（{0} 条较早消息已摘要）', [marker.removed]) : tr('上下文已压缩');
-  }
-  if (marker.removed > 0 && marker.masked > 0) {
-    return tf('已压缩 {0} 条较早消息，另有 {1} 条旧输出已掩码', [marker.removed, marker.masked]);
-  }
-  if (marker.removed > 0) return tf('已压缩 {0} 条较早消息', [marker.removed]);
-  if (marker.masked > 0) return tf('已掩码 {0} 条较早的工具输出', [marker.masked]);
-  return tr('较早历史已压缩出上下文');
+/**
+ * 压缩耗时文本：`12秒` / `1分12秒` / `1小时2分`，en 为 `12s` / `1m 12s` / `1h 2m`。
+ *
+ * 耗时单位属于占位符实参（整句在 i18n 表里），所以单位必须跟着 locale 走，
+ * 否则 en 界面会在英文句子里混进中文单位。不足 1 秒按 1 秒计，避免「0秒」。
+ */
+export function formatCompactElapsed(ms: number, locale: Locale = getLocale()): string {
+  const totalSeconds = Math.max(1, Math.round(ms / 1000));
+  const hours = Math.floor(totalSeconds / 3_600);
+  const minutes = Math.floor((totalSeconds % 3_600) / 60);
+  const seconds = totalSeconds % 60;
+  if (hours > 0) return locale === 'en' ? `${hours}h ${minutes}m` : `${hours}小时${minutes}分`;
+  if (minutes > 0) return locale === 'en' ? `${minutes}m ${seconds}s` : `${minutes}分${seconds}秒`;
+  return locale === 'en' ? `${seconds}s` : `${seconds}秒`;
+}
+
+/** 压缩边界的单行说明；耗时来自后端 compactions 累计的 elapsedMs，缺失时只陈述事实。 */
+export function conversationCompactionLabel(
+  marker: Pick<ConversationCompactionMarker, 'removed' | 'masked' | 'latest' | 'elapsedMs' | 'manual'>,
+): string {
+  return tr(marker.manual || marker.latest?.trigger === 'manual' || marker.latest?.manual ? '上下文已压缩' : '上下文已自动压缩');
 }
 
 function recordCount(records: SessionCompactionRecord[], key: 'removed' | 'masked'): number {
   return records.reduce((total, record) => {
     const value = record[key];
     return typeof value === 'number' && Number.isSafeInteger(value) && value > 0 ? total + value : total;
+  }, 0);
+}
+
+/** 耗时允许小数毫秒，所以只要求有限正数，不要求整数。 */
+function recordElapsedMs(records: SessionCompactionRecord[]): number {
+  return records.reduce((total, record) => {
+    const value = record.elapsedMs;
+    return typeof value === 'number' && Number.isFinite(value) && value > 0 ? total + value : total;
   }, 0);
 }
 
@@ -142,11 +165,13 @@ export function conversationCompactionBoundary(
     if (seenArchived) {
       const records = parseSessionCompactions(compactions);
       const latest = records.at(-1);
+      const elapsedMs = recordElapsedMs(records);
       return {
         boundarySeq: row.seq,
         removed: recordCount(records, 'removed'),
         masked: recordCount(records, 'masked'),
-        ...(latest?.kind === 'zcode' ? { latest } : {}),
+        ...(elapsedMs > 0 ? { elapsedMs } : {}),
+        ...(latest?.kind === 'zcode' ? { latest } : latest?.manual || latest?.trigger === 'manual' ? { manual: true } : {}),
       };
     }
   }

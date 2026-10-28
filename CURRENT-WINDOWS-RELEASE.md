@@ -21,4 +21,4 @@
 
 用户已授权将当前源码同步到既有 GitHub 仓库，本次源码快照以对应交付提交为准。Windows 0.2.1 二进制 Release 仍为草稿；旧版本清理尚未执行。
 
-后续完整 ZCode 对齐以 [`docs/ZCODE-FULL-ALIGNMENT-TASKS-20261024.md`](docs/ZCODE-FULL-ALIGNMENT-TASKS-20261024.md) 为入口。新阶段尚未实现；已有 Z8 工作不代表完整 ZCode 对齐已经完成。
+后续完整 ZCode 对齐以 [`docs/ZCODE-FULL-ALIGNMENT-TASKS-20261024.md`](https://github.com/xuediner-source/xueness-private-tests/blob/main/archive/project/docs/ZCODE-FULL-ALIGNMENT-TASKS-20261024.md) 为入口。新阶段尚未实现；已有 Z8 工作不代表完整 ZCode 对齐已经完成。

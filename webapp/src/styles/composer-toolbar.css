@@ -826,7 +826,8 @@
 
 .xn-shell-layout .xn-composer-toolbar__mode-popover {
   left: 0;
-  width: min(256px, calc(100vw - 32px));
+  width: min(292px, calc(100vw - 32px));
+  max-height: min(440px, 80vh);
 }
 
 .xn-shell-layout .xn-composer-toolbar__model-popover {

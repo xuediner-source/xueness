@@ -61,5 +61,5 @@ export const BUNDLED_PLUGIN_IDS = Object.freeze([
   "sessions", "files", "shell", "planning", "providers", "memory", "settings", "usage", "git", "workflows",
   "terminal", "office", "commands", "skills", "hooks", "mcp", "subagents", "network", "automation", "extensions",
   "diagnostics", "browser", "remote", "bots", "onboarding", "updates", "desktop", "tools", "subscriptions", "model_monitor",
-  "workbuddy", "native_ops", "batch_calls", "os_cua", "deepseek_harness",
+  "workbuddy", "native_ops", "batch_calls", "os_cua", "deepseek_harness", "context_lens",
 ] as const);

@@ -67,7 +67,7 @@ export function WorkbuddyAccountCard({
       <div><dt>{tr('最近成功')}</dt><dd>{formatDate(account.lastSuccess)}</dd></div>
       {account.cooling && account.cooldownUntil && <div><dt>{tr('冷却中')}</dt><dd>{tf('冷却至：{0}', [formatDate(account.cooldownUntil)])}</dd></div>}
     </dl>
-    {account.lastError && <p className="xn-workbuddy__account-error"><strong>{tr('错误')}：</strong>{account.lastError}</p>}
+    {account.lastError && <p className="xn-workbuddy__account-error" role="alert"><strong>{tr('错误')}：</strong>{account.lastError}</p>}
     <footer className="xn-workbuddy__account-actions">
       {deleteConfirmation === account.id ? <>
         <span>{tr('删除此账号？')}</span>

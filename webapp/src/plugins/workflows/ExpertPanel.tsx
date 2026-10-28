@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { startSessionPolling } from '../sessions/SessionPolling';
 import { get, post } from '../../xuenessApi';
 import { t as tr } from '../../i18n';
 import { IconWorkflow } from '../../ui/icons';
@@ -82,11 +83,9 @@ export function ExpertPanel({ sessionId }: { sessionId: string | null }) {
     setRuns([]);
     setError('');
     let live = true;
-    let refreshing = false;
     const controller = new AbortController();
     const refresh = async () => {
-      if (!live || refreshing || controller.signal.aborted) return;
-      refreshing = true;
+      if (!live || controller.signal.aborted) return;
       try {
         await refreshExpertPanel({
           sessionId, signal: controller.signal,
@@ -97,13 +96,10 @@ export function ExpertPanel({ sessionId }: { sessionId: string | null }) {
         if (live && !controller.signal.aborted && !(e instanceof DOMException && e.name === 'AbortError')) {
           setError(errorText(e));
         }
-      } finally {
-        refreshing = false;
       }
     };
-    void refresh();
-    const timer = setInterval(() => { void refresh(); }, 2000);
-    return () => { live = false; clearInterval(timer); controller.abort(); };
+    const stop = startSessionPolling({ refresh, initialDelayMs: 0, visibleDelayMs: 2000 });
+    return () => { live = false; stop(); controller.abort(); };
   }, [sessionId]);
   async function perform(fn: () => Promise<unknown>) {
     setBusy(true); setError('');

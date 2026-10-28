@@ -63,42 +63,20 @@
       "concurrencySafe": true
     }
   ],
+  "modules": ["delivery", "delivery_wrapup", "work_policy"],
   "features": [
-    {
-      "id": "planning.goal_editor",
-      "name": "目标创建与显式替换",
-      "nameEn": "Goal creation and explicit replacement"
-    },
-    {
-      "id": "planning.goal_driver",
-      "name": "目标独立核验与有界继续执行",
-      "nameEn": "Independent goal verification and bounded continuation"
-    },
-    {
-      "id": "planning.task_tools",
-      "name": "会话任务清单与操作员问答",
-      "nameEn": "Session tasks and operator questions"
-    },
-    {
-      "id": "planning.delivery",
-      "name": "不可弱化的交付清单与实际内容核验",
-      "nameEn": "Immutable delivery plans and actual content checks"
-    },
-    {
-      "id": "planning.work_policy",
-      "name": "任务执行与验证指导",
-      "nameEn": "Work execution and verification guidance"
-    },
-    {
-      "id": "planning.guarded",
-      "name": "守护执行与危险命令逐次确认",
-      "nameEn": "Guarded execution with one-time dangerous-command approval"
-    },
-    {
-      "id": "planning.goal_lifecycle",
-      "name": "稳定目标标识、状态召回与累计预算",
-      "nameEn": "Stable goal identities, request state recall and cumulative budgets"
-    }
+    {"id": "planning.lightweight_wrapup", "name": "轻量模式预算收尾与交付缺项提醒", "nameEn": "Lightweight budget wrap-up and missing-output reminders"},
+    {"id": "planning.goal_editor", "name": "目标创建与显式替换", "nameEn": "Goal creation and explicit replacement"},
+    {"id": "planning.goal_driver", "name": "目标独立核验与有界继续执行", "nameEn": "Independent goal verification and bounded continuation"},
+    {"id": "planning.task_tools", "name": "会话任务清单与操作员问答", "nameEn": "Session tasks and operator questions"},
+    {"id": "planning.delivery", "name": "不可弱化的交付清单与实际内容核验", "nameEn": "Immutable delivery plans and actual content checks"},
+    {"id": "planning.work_policy", "name": "任务执行与验证指导", "nameEn": "Work execution and verification guidance"},
+    {"id": "planning.guarded", "name": "守护执行与危险命令逐次确认", "nameEn": "Guarded execution with one-time dangerous-command approval"},
+    {"id": "planning.goal_lifecycle", "name": "稳定目标标识、状态召回与累计预算", "nameEn": "Stable goal identities, request state recall and cumulative budgets"},
+    {"id": "planning.todos", "name": "待办计划读取与更新", "nameEn": "Read and update task plans"},
+    {"id": "planning.questions", "name": "提问、用户回答与继续", "nameEn": "Questions, user answers and continuation"},
+    {"id": "planning.session_goal", "name": "会话目标、暂停恢复、有限续作与独立核验", "nameEn": "Session goals with pause and resume, bounded continuation and independent verification"},
+    {"id": "planning.deliverable_files", "name": "交付文件卡片、检查状态与打开预览", "nameEn": "Deliverable file cards, check status and preview actions"}
   ],
   "frontendModules": [
     "plugins/planning/CompletionChecks.tsx",

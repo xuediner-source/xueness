@@ -11,6 +11,8 @@ import { createMemoryDreamDriver } from './memory-dream-driver.ts';
 import { isLink, isPyOSError, isPyValueError, NativeFileLocks, SessionStore, type Session } from "@xueness/sessions";
 import type { ApiDispatcher } from "./api-body.ts";
 import { effectivePlugins } from "./plugin-state.ts";
+import { createContextLensHttp, ownersFromManifests } from "@xueness/plugin-context_lens";
+import { BUNDLED_TS_PLUGINS } from "./bundled-plugins.ts";
 import { createAgentService, type AgentServiceOptions } from "./agent-service.ts";
 import { createPlanningApi, publicGoal, stageGoal } from "@xueness/plugin-planning";
 import { createGitApi } from "@xueness/plugin-git";
@@ -122,7 +124,7 @@ export async function createApplicationApi(options: ApplicationApiOptions): Prom
   const attachmentOptions = { store, stateDir: options.stateDir, webRuns: options.webRuns, projectDir, enabled,
     allowedRoots };
   const attachments = createAttachmentsApi(attachmentOptions);
-  const runtime = createSessionRuntimeApi({ store, stateDir: options.stateDir, enabled, running, activeContext, resolveProvider: agent.resolveProvider, activeProvider: agent.activeProvider,
+  const runtime = createSessionRuntimeApi({ store, stateDir: options.stateDir, enabled, running, activeContext, resolveProvider: agent.resolveProvider, activeProvider: agent.activeProvider, permissionControl: agent.permissionControl,
     levels: (selection) => declaredReasoningLevels(providers.store, selection.provider_id as string | null, selection.model as string | null), configurationError,
     ...options.allowReal === true ? { modelCompact: (session: Session, instructions: string | null, source: string) => agent.compactSession(session, instructions, source) } : {}, defaultApi: (method, data) => providers.dispatch(method, ["api", "providers", "default"], {}, data) });
   const sessions = createSessionsApi({ ...attachmentOptions,
@@ -130,6 +132,7 @@ export async function createApplicationApi(options: ApplicationApiOptions): Prom
     rememberWorkspace: (root) => workspaces.remember(root), expandCommands,
     applyGoal,
     featureApis: [attachments, runtime, dynamicWorkflowApi,
+      createContextLensHttp({ store, enabled, live: sid => activeContext.get(sid)?.active_session as Session ?? null, owners: ownersFromManifests(BUNDLED_TS_PLUGINS) }),
       createMcpRuntimeApi({ store, enabled, validateSession: session => validateSessionWorkspace(attachmentOptions, session), snapshot: sid => agent.mcpSnapshot(sid) }),
       createFileBytesApi({ store, stateDir: options.stateDir, enabled, validateSession: session => validateSessionWorkspace(attachmentOptions, session) }),
       createSessionStorageApi({ ...attachmentOptions, env }),

@@ -1,3 +1,4 @@
+import { unrestrictedWorkspaceRoots } from "@xueness/engine-tools";
 /**
  * Tool bridge: the one door from a model's tool call to a plugin's tool.
  *
@@ -226,6 +227,7 @@ export class ToolBridge {
   }
 
   async #through(lease: ToolLease<AnyTool>, call: ToolCall, base: ToolEnv, signal: AbortSignal, options: CallOptions): Promise<Passage> {
+    if (this.#permissions.mode === "yolo") base = { ...base, roots: unrestrictedWorkspaceRoots(base.roots) };
     const tool = lease.tool;
     const input = call.input ?? {};
     let prepared: CallSubject | ToolResult;

@@ -8,7 +8,8 @@
  * a later route; the manifest stays tools-only until the front door
  * takes these families.
  */
-import { applyPatchTool, editTool, globTool, grepTool, listTool, readTool, writeTool } from "@xueness/engine-tools";
+import { applyPatchTool, editTool, globTool, grepTool, listTool, readTool } from "@xueness/engine-tools";
+import { chunkWriteTool } from "./chunk-write.ts";
 import { definePlugin, type BundledPlugin } from "@xueness/kernel";
 import manifest from "../manifest.json" with { type: "json" };
 export * from "./instructions.ts";
@@ -22,8 +23,9 @@ export * from "./directory-level.ts";
 export * from "./directory-http.ts";
 export * from "./preview.ts";
 export * from "./files-http.ts";
+export * from "./chunk-write.ts";
 
-export const FILE_TOOLS = [readTool, listTool, globTool, grepTool, writeTool, editTool, applyPatchTool] as const;
+export const FILE_TOOLS = [readTool, listTool, globTool, grepTool, chunkWriteTool, editTool, applyPatchTool] as const;
 
 export const filesPlugin = definePlugin({
   name: "files",

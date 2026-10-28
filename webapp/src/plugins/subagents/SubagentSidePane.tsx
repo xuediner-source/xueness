@@ -1,10 +1,11 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { AlertTriangle, Bot, Check, ChevronDown, ChevronRight, LoaderCircle, RefreshCw, X } from "lucide-react";
+import { AlertTriangle, ArrowLeft, Bot, Check, ChevronDown, ChevronRight, LoaderCircle, RefreshCw, X } from "lucide-react";
 import { cancelSubagentTask, get, newSubagentRequestId, post, resumeSubagentTask, sendSubagentMessage } from "../../xuenessApi";
 import { t as tr, tf } from "../../i18n";
 import { isImeComposingEvent } from "../../xuenessShortcutDisplay";
 import { startSessionPolling } from "../sessions/SessionPolling";
 import { SubagentTranscript } from "./SubagentTranscript";
+import { SubagentEmptyState } from './SubagentEmptyState';
 import "../../styles/subagent-sidepane.css";
 
 export type SubagentTaskItem = {
@@ -281,8 +282,9 @@ export function SubagentSidePane({
     >
       <header className="xn-subagent-sidepane__header">
         <div className="xn-subagent-sidepane__title-wrap">
-          <Bot size={16} aria-hidden="true" />
-          <h2 className="xn-subagent-sidepane__title">{tr("子代理运行态")}</h2>
+          <Bot size={16} className="xn-subagent-sidepane__mark" aria-hidden="true" />
+          <div className="xn-subagent-sidepane__heading-copy"><h2 className="xn-subagent-sidepane__title">{tr(mode === 'panel' ? '智能体团队' : '子代理运行态')}</h2>
+            {mode === 'panel' && <p>{tr('集中查看子任务进展，随时跟进执行结果。')}</p>}</div>
           {tasks.length > 0 && (
             <span
               className={`xn-subagent-sidepane__badge ${runningTasks.length > 0 ? "xn-subagent-sidepane__badge--active" : ""}`}
@@ -310,11 +312,12 @@ export function SubagentSidePane({
             className="xn-subagent-sidepane__btn"
             aria-label={tr("刷新子任务")}
             title={tr("刷新子任务")}
-            disabled={loading}
+            disabled={loading || !subagentsEnabled || !sessionId}
             data-testid="subagent-sidepane-refresh"
             onClick={() => void loadTasks(true)}
           >
             <RefreshCw size={14} className={loading ? "animate-spin" : ""} aria-hidden="true" />
+            {mode === 'panel' && <span>{tr('刷新')}</span>}
           </button>
           {onClose && (
             <button
@@ -325,7 +328,7 @@ export function SubagentSidePane({
               data-testid="subagent-sidepane-close"
               onClick={onClose}
             >
-              <X size={16} aria-hidden="true" />
+              {mode === 'panel' ? <><ArrowLeft size={14} aria-hidden="true" /><span>{tr('返回会话')}</span></> : <X size={16} aria-hidden="true" />}
             </button>
           )}
         </div>
@@ -333,15 +336,9 @@ export function SubagentSidePane({
 
       <div className="xn-subagent-sidepane__body">
         {!subagentsEnabled ? (
-          <div className="xn-subagent-sidepane__empty" data-testid="subagent-sidepane-disabled">
-            <Bot size={28} aria-hidden="true" />
-            <p className="xn-subagent-sidepane__empty-title">{tr("子代理插件已禁用")}</p>
-          </div>
+          <SubagentEmptyState kind="disabled" />
         ) : !sessionId ? (
-          <div className="xn-subagent-sidepane__empty" data-testid="subagent-sidepane-no-session">
-            <Bot size={28} aria-hidden="true" />
-            <p className="xn-subagent-sidepane__empty-hint">{tr("选择会话后查看子代理任务。")}</p>
-          </div>
+          <SubagentEmptyState kind="no-session" />
         ) : loading && tasks.length === 0 ? (
           <div className="xn-subagent-sidepane__loading" data-testid="subagent-sidepane-loading">
             <LoaderCircle size={18} className="animate-spin" aria-hidden="true" />
@@ -359,13 +356,7 @@ export function SubagentSidePane({
             </button>
           </div>
         ) : tasks.length === 0 ? (
-          <div className="xn-subagent-sidepane__empty" data-testid="subagent-sidepane-empty">
-            <Bot size={28} aria-hidden="true" />
-            <p className="xn-subagent-sidepane__empty-title">{tr("暂无子代理任务")}</p>
-            <p className="xn-subagent-sidepane__empty-hint">
-              {tr("主代理派发只读子任务时，运行状态将在此实时显示。")}
-            </p>
-          </div>
+          <SubagentEmptyState kind="empty" />
         ) : (
           <>
             {runningTasks.length > 0 && (

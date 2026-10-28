@@ -67,15 +67,16 @@ export async function runTools(context: AgentContext, runner: AgentRunnerOptions
       try { envelope = argumentsObject(fn.arguments); } catch { return { call: bridgeCall, result: { ok: false, error: "invalid tool arguments", error_code: "invalid_tool_arguments" } }; }
       const resolved = resolveDeferredToolCall(envelope);
       if ("issue" in resolved) return { call: bridgeCall, result: { ok: false, error: `invalid deferred tool call: ${resolved.issue}`, error_code: "invalid_tool_arguments" } };
-      // An unresolvable target keeps flowing as a real call: the owner check below
-      // answers plugin_disabled exactly like a direct call to an unknown name.
+      // An unresolvable target follows the same unknown-tool contract as a direct call.
       const definition = runner.hooks.toolDefinition(resolved.target);
       if (definition && toolExposure(definition) !== "deferred") return { call: bridgeCall, result: { ok: false, error: `${resolved.target} is not a deferred tool; call it directly`, error_code: "not_deferred_tool" } };
       bridgeCall = { id: bridgeCall.id, name: resolved.target };
       admittedInput = resolved.input as Row;
     }
     const owner = runner.hooks.toolOwner(bridgeCall.name);
-    if (!owner || !context.enabled(owner)) return { call: bridgeCall, result: { ok: false, error: "plugin disabled", error_code: "plugin_disabled", retryable: false,
+    if (!owner) return { call: bridgeCall, result: { ok: false, error: "unknown tool: use a tool from the current request schemas. If a long tool call was truncated, retry with smaller arguments.", error_code: "unknown_tool", retryable: false,
+      user_reason: "模型请求的工具未注册；请使用当前可用工具。过长调用应拆小后重试。" } };
+    if (!context.enabled(owner)) return { call: bridgeCall, result: { ok: false, error: "plugin disabled", error_code: "plugin_disabled", retryable: false,
       user_reason: "工具所属插件已关闭；请在插件管理中启用后继续。" } };
     // A deferred target never sits in the request's tool view; its admission above
     // stands in for the active check and cannot admit a non-deferred tool.

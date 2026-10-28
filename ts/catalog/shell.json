@@ -24,36 +24,13 @@
     "config_api"
   ],
   "features": [
-    {
-      "id": "shell.exec",
-      "name": "批准后的 argv 命令执行",
-      "nameEn": "Approved argv command execution"
-    },
-    {
-      "id": "shell.background_notifications",
-      "name": "后台任务状态与完成通知",
-      "nameEn": "Background task state and completion notices"
-    },
-    {
-      "id": "shell.execution_adapter",
-      "name": "通用命令调用适配",
-      "nameEn": "Generic command invocation adapter"
-    },
-    {
-      "id": "shell.bash_provider",
-      "name": "Bash 与 Git Bash 选择",
-      "nameEn": "Bash and Git Bash selection"
-    },
-    {
-      "id": "shell.init_snapshot",
-      "name": "授权后懒加载 Shell 初始化快照",
-      "nameEn": "Lazy shell initialization snapshots after authorization"
-    },
-    {
-      "id": "shell.startup_script",
-      "name": "持久 Shell 启动脚本配置",
-      "nameEn": "Persisted shell startup scripts"
-    }
+    {"id": "shell.exec", "name": "批准后的 argv 命令执行", "nameEn": "Approved argv command execution"},
+    {"id": "shell.background", "name": "后台命令任务", "nameEn": "Background command tasks"},
+    {"id": "shell.background_notifications", "name": "后台任务状态与完成通知", "nameEn": "Background task state and completion notices"},
+    {"id": "shell.execution_adapter", "name": "通用命令调用适配", "nameEn": "Generic command invocation adapter"},
+    {"id": "shell.bash_provider", "name": "Bash 与 Git Bash 选择", "nameEn": "Bash and Git Bash selection"},
+    {"id": "shell.init_snapshot", "name": "授权后懒加载 Shell 初始化快照", "nameEn": "Lazy shell initialization snapshots after authorization"},
+    {"id": "shell.startup_script", "name": "持久 Shell 启动脚本配置", "nameEn": "Persisted shell startup scripts"}
   ],
   "frontendModules": [],
   "httpFamilies": [

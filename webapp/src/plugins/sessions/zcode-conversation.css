@@ -90,7 +90,10 @@
    纯静态展示（无过渡/动画），reduced-motion 下行为一致。 */
 .xn-zc-compaction { display: flex; align-items: center; gap: 10px; min-width: 0; color: var(--conversation-muted); font-size: 12px; line-height: 1.4; }
 .xn-zc-compaction::before, .xn-zc-compaction::after { content: ""; flex: 1 1 24px; border-top: 1px dashed color-mix(in oklab, var(--border) 80%, transparent); }
+/* 标签与提醒纵向排布：两侧虚线与容器保持同一行，正文换行不挤压分隔线。 */
+.xn-zc-compaction__body { display: flex; flex: 0 1 auto; flex-direction: column; gap: 2px; min-width: 0; }
 .xn-zc-compaction__label { flex: 0 1 auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.xn-zc-compaction__note { flex: 0 1 auto; min-width: 0; font-size: 11px; overflow-wrap: anywhere; }
 .xn-zc-ref { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 10px; max-width: 100%; margin: 0; padding: 8px 10px; border: 1px solid var(--border); border-radius: 8px; background: var(--bg-card); color: var(--conversation-fg); font-size: 12px; line-height: 1.45; }
 .xn-zc-ref[data-reference-mode="plain"] { border-style: dashed; color: var(--conversation-muted); }
 .xn-zc-ref__kind { flex: 0 0 auto; color: var(--conversation-muted); }

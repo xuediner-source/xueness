@@ -1,5 +1,0 @@
-
-> xueness-ts@0.2.0-dev.0 test:built
-> node scripts/smoke-built.ts
-
-Relocated JS/runtime: static UI, native session/history, native lock/ACL, Python interoperability passed.

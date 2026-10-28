@@ -1,17 +1,12 @@
+import { setSessionPermissionMode } from './useLivePermissionMode';
 import React, { useEffect, useRef, useState } from 'react';
-import { t as tr, messages } from '../../i18n';
+import { t as tr } from '../../i18n';
 import { loadComposerCatalog, canUseRuntimeProfile, type ComposerCatalog, type ComposerModel } from '../../xuenessComposer';
 import type { RunChoices } from '../../xuenessBridge';
 import { updatePaneRunOptions } from './paneRunOptions';
 import type { PermissionMode } from './permissionModes';
 import { normalizeReasoningLevels } from './ReasoningEffortSlider';
 import { isImeComposingEvent } from '../../xuenessShortcutDisplay';
-
-messages['远程连接未提供模型目录'] = 'This remote connection does not expose a model catalog';
-messages['当前模型不可用，请重新选择'] = 'The selected model is unavailable. Choose another model.';
-messages['分屏运行选项'] = 'Split conversation run options';
-messages['默认推理'] = 'Default reasoning';
-messages['守护执行'] = 'Guarded';
 
 const permissionLabels: Record<PermissionMode, string> = { plan: '计划', build: '变更前确认', edit: '自动编辑', yolo: '完全访问', guarded: '守护执行' };
 
@@ -53,10 +48,12 @@ export function PaneModelSetupAction({ onConfigure }: { onConfigure?: () => void
 
 /** Selection never persists a full-access acknowledgement or writes after a pane rebind. */
 export async function choosePanePermission(value: PermissionMode, choices: RunChoices,
-  ensure: PaneOptionToolbarProps['ensurePermission'], isCurrent: () => boolean, onChange: (choices: RunChoices) => void): Promise<boolean> {
+  ensure: PaneOptionToolbarProps['ensurePermission'], isCurrent: () => boolean, onChange: (choices: RunChoices) => void, save?: (choices: RunChoices) => Promise<unknown>): Promise<boolean> {
   if (!isCurrent()) return false;
   const confirmed = await ensure(updatePaneRunOptions(choices, { permission_mode: value, acknowledge_yolo: false }), value === 'yolo' ? undefined : choices.permission_mode);
   if (!confirmed || !isCurrent()) return false;
+  if (save) await save(confirmed);
+  if (!isCurrent()) return false;
   onChange({ ...confirmed, acknowledge_yolo: false });
   return true;
 }
@@ -136,7 +133,7 @@ export function PaneOptionToolbar(props: PaneOptionToolbarProps) {
       ] as PermissionMode[]).map<Option>(value => ({ id: value, label: tr(permissionLabels[value]), ...(value === 'guarded' ? { description: tr('常规命令自动执行，已识别危险命令每次确认。') } : {}), selected: permission === value, choose: () => {
         if (!current()) return;
         setConfirming(true);
-        void choosePanePermission(value, live.current.choices, live.current.ensurePermission, current, next => live.current.onChange(next)).finally(() => { if (current()) setConfirming(false); });
+        void choosePanePermission(value, live.current.choices, live.current.ensurePermission, current, next => live.current.onChange(next), !remote && sessionId ? next => setSessionPermissionMode(sessionId, next.permission_mode!, next.acknowledge_yolo === true) : undefined).catch(problem => { if (current()) setError(String(problem)); }).finally(() => { if (current()) setConfirming(false); });
       } })).concat(panePlanningAvailable(remote, catalog, effectivePluginIds) ? [{ id: 'planning', label: tr('计划模式'), checkbox: true, selected: choices.mode === 'plan',
         choose: () => { if (current() && panePlanningAvailable(live.current.remote, liveCatalog.current, live.current.effectivePluginIds)) live.current.onChange(updatePaneRunOptions(live.current.choices, { mode: live.current.choices.mode === 'plan' ? 'build' : 'plan' })); } }] : [])} />
     </div>

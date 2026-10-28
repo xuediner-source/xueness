@@ -16,7 +16,7 @@ export function providerKey(provider: RuntimeProvider): string {
 export function calibrationFactor(calibration: unknown, provider: RuntimeProvider): number {
   if (!isDict(calibration) || calibration.providerKey !== providerKey(provider)) return 1;
   const factor = calibration.factor;
-  return typeof factor === "number" && Number.isFinite(factor) && factor >= 1 && factor <= 8 ? factor : 1;
+  return typeof factor === "number" && Number.isFinite(factor) && factor >= 0.5 && factor <= 8 ? factor : 1;
 }
 export function observeUsage(session: Row, provider: RuntimeProvider, usage: unknown): void {
   const baseline = isDict(session.runtime_budget) ? session.runtime_budget.baseEstimatedInputTokens : null;
@@ -28,7 +28,10 @@ export function observeUsage(session: Row, provider: RuntimeProvider, usage: unk
   const samples = values.slice(-7).filter((value): value is number => typeof value === "number" && Number.isFinite(value) && value > 0 && value <= 8);
   samples.push(Math.min(8, actual / baseline));
   const maximum = Math.max(...samples);
-  session.runtime_budget_calibration = { providerKey: key, factor: Math.min(8, Math.max(1, maximum > 1 ? maximum * 1.1 : 1)), ratios: samples, lastReportedInputTokens: actual, lastBaseEstimatedTokens: baseline };
+  // Downward calibration needs several real observations; keep 20% headroom and
+  // use the highest recent ratio so a short ASCII response cannot set the budget.
+  const minimum = samples.length >= 3 ? 0.5 : 1;
+  session.runtime_budget_calibration = { providerKey: key, factor: Math.min(8, Math.max(minimum, maximum * 1.2)), ratios: samples, lastReportedInputTokens: actual, lastBaseEstimatedTokens: baseline };
 }
 export function estimateTokens(value: unknown): number { return Math.ceil(pyEncodeUtf8(pyJsonDumps(value, { separators: [",", ":"] })).length / 2); }
 

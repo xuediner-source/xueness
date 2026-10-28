@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link2, LoaderCircle, Share2, X } from 'lucide-react';
-import { messages, t as tr, tf } from '../../i18n';
+import { t as tr, tf } from '../../i18n';
 import type { WorkbenchSession } from '../../xuenessWorkbench';
 import {
   createConversationShare,
@@ -13,35 +13,6 @@ import {
 } from '../../xuenessWorkbench';
 import { shouldDismissModalOnEscape, useModalFocusScope } from '../shared';
 import './sessions.css';
-
-messages['分享会话'] = 'Share conversation';
-messages['创建只读链接'] = 'Create read-only link';
-messages['正在创建链接…'] = 'Creating link…';
-messages['复制链接'] = 'Copy link';
-messages['打开链接'] = 'Open link';
-messages['撤销链接'] = 'Revoke link';
-messages['分享全部轮次'] = 'Share all turns';
-messages['选择要分享的轮次'] = 'Choose turns to share';
-messages['选择至少一个轮次。'] = 'Choose at least one turn.';
-messages['此会话尚无可分享的完整历史。'] = 'This conversation has no history to share yet.';
-messages['此会话缺少最新历史版本，请刷新后重试。'] = 'The latest history revision is unavailable. Refresh and try again.';
-messages['分享链接已复制。'] = 'Share link copied.';
-messages['链接已撤销。'] = 'The link has been revoked.';
-messages['分享的对话'] = 'Shared conversation';
-messages['只读对话副本'] = 'Read-only conversation copy';
-messages['分享链接仅包含所选轮次的用户和助手文本，不包含工具数据或工作区文件。'] = 'Share links include only user and assistant text from selected turns, without tool data or workspace files.';
-messages['导入为新任务'] = 'Import as a new task';
-messages['正在导入…'] = 'Importing…';
-messages['此分享不存在或已撤销。'] = 'This share is unavailable or has been revoked.';
-messages['安全导入会创建一个暂停的新任务，不会自动调用模型。'] = 'Import creates a paused task and does not call a model automatically.';
-messages['导入失败'] = 'Import failed';
-messages['链接已创建。'] = 'The link is ready.';
-messages['轮次 {0}'] = 'Turn {0}';
-messages['只读分享'] = 'Read-only share';
-messages['关闭'] = 'Close';
-messages['加载分享轮次…'] = 'Loading shareable turns…';
-messages['刷新轮次'] = 'Refresh turns';
-messages['会话内容已变化，轮次列表已刷新；请检查选择后重新创建链接。'] = 'The conversation changed. The turn list was refreshed; review your selection and create the link again.';
 
 type ShareTurn = { id: string; preview: string };
 

@@ -1,12 +1,12 @@
 # Xueness 桌面端
 
-2026-10-09 Windows / macOS 会话统一：标准/轻量使用同一套 ZCode 源码参考的会话显示和完整输入工具栏；完全访问在发送前确认，取消保留草稿；消息可编辑重发、复制、保存反馈和从当前回合分叉。空交付检查收进更多菜单，实际要求与失败仍显示。后端及插件体系保留 Xueness 实现。Intel Mac 与 Apple Silicon 共用这套源码，原生窗口控制、系统授权及更新安装方式仍遵守各系统约定。见 [会话对齐与验收边界](zcode-conversation-parity.md)。
+2026-10-09 Windows / macOS 会话统一：标准/轻量使用同一套 ZCode 源码参考的会话显示和完整输入工具栏；完全访问在发送前确认，取消保留草稿；消息可编辑重发、复制、保存反馈和从当前回合分叉。空交付检查收进更多菜单，实际要求与失败仍显示。后端及插件体系保留 Xueness 实现。Intel Mac 与 Apple Silicon 共用这套源码，原生窗口控制、系统授权及更新安装方式仍遵守各系统约定。见 [会话对齐与验收边界](https://github.com/xuediner-source/xueness-private-tests/blob/main/archive/project/docs/zcode-conversation-parity.md)。
 
 自定义数据位置在 Windows 与 macOS 使用同样的启动偏好格式：系统 appData 下的 `Xueness/desktop-data-directory.json`，内容为 `{"apiVersion":1,"dataDirectory":"绝对路径"}`。Windows 的父目录通常为 `%APPDATA%`，Mac 通常为 `~/Library/Application Support`。显式 `XUENESS_DESKTOP_DATA` 优先；缺失、错误或相对路径的偏好不改变默认数据位置。更新后的直接启动沿用该偏好，不自动迁移会话、模型配置或插件开关。
 
 子代理的启用、并发派发、主代理继续工作及合理暂停条件见[子代理协作说明](xueness-subagent-coordination.md)。该能力属于 `subagents` 插件；安装包需要包含对应版本的后端与 Web 构建，源码变更不会自动改写已安装客户端。
 
-桌面端使用独立实现的 Electron 外壳，复用 Xueness 工作台与插件运行时。后端是 TypeScript 桌面宿主（`ts/apps/server/src/desktop-host.ts`），安装包内置编译后的 JS、生产依赖及 Node，并包含预构建 Web 资产；Python 后端已在第 10 轮删除，不再有回退开关。用户不需要安装 Node.js 或开发依赖。详细范围见 [TS 迁移交接](../ts/HANDOVER.md)。
+桌面端使用独立实现的 Electron 外壳，复用 Xueness 工作台与插件运行时。后端是 TypeScript 桌面宿主（`ts/apps/server/src/desktop-host.ts`），安装包内置编译后的 JS、生产依赖及 Node，并包含预构建 Web 资产；Python 后端已在第 10 轮删除，不再有回退开关。用户不需要安装 Node.js 或开发依赖。详细范围见 [TS 迁移交接](https://github.com/xuediner-source/xueness-private-tests/blob/main/archive/project/ts/HANDOVER.md)。
 
 ## 平台与产物
 

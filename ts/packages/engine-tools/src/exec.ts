@@ -185,7 +185,7 @@ export function createExecTool(options: ExecOptions = {}): ToolDefinition<ExecIn
     requires: { exec: ["*"], fs: { write: ["workspace", "state"] } },
     description: [
       "Run a command in the workspace and return its stdout, stderr and exit code.",
-      process.platform === "win32" ? "`command` runs in PowerShell." : "`command` runs in bash (or sh).",
+      process.platform === "win32" ? "`command` defaults to Windows PowerShell 5.1. Use `;` for sequential commands, `Get-Content -Tail N` for file tails, `Measure-Object -Line` for line counts, and `$LASTEXITCODE` for native exit codes. For exact BOMless UTF-8/LF files use write or Node fs.writeFileSync; PowerShell redirection and -Encoding utf8 add a BOM and can change newlines." : "`command` runs in bash (or sh).",
       "`argv` runs one executable directly without a shell. Give exactly one of them.",
       `Timeout defaults to ${EXEC_DEFAULT_TIMEOUT_MS / 1000}s (max ${EXEC_MAX_TIMEOUT_MS / 1000}s); the whole process tree is killed on timeout.`,
       "Long output keeps its beginning and end; the full output is saved to a file whose path is shown. stdin is closed.",
@@ -220,7 +220,10 @@ export function createExecTool(options: ExecOptions = {}): ToolDefinition<ExecIn
       const cwdInfo = await statOrNull(cwd.absolute);
       if (!cwdInfo?.isDirectory()) return failure("not_a_directory", `working directory not found: ${cwd.display}`);
       const shell = options.shell ?? defaultShell();
-      const baseArgv = input.argv ?? [...shell, input.command as string];
+      const command = process.platform === "win32" && /(?:^|[\\/])(?:powershell|pwsh)(?:\.exe)?$/i.test(shell[0] ?? "")
+        ? "$OutputEncoding = [Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false); $PSDefaultParameterValues['Out-File:Encoding'] = 'utf8'; $PSDefaultParameterValues['Get-Content:Encoding'] = 'utf8'; " + input.command
+        : input.command as string;
+      const baseArgv = input.argv ?? [...shell, command];
       let invocation: PreparedExecInvocation = { argv: baseArgv, cwd: cwd.absolute, env: commandEnv(process.env, options) };
       if (options.prepareInvocation) {
         try {
@@ -306,7 +309,9 @@ export function createExecTool(options: ExecOptions = {}): ToolDefinition<ExecIn
       if (result.cancelled) return { ok: false, output, data, error: { code: "command_cancelled", message: "cancelled" } };
       if (result.exitCode !== 0) {
         const code = commandNotFound(result) ? "command_not_found" : "command_failed";
-        return { ok: false, output, data, error: { code, message: result.signal ? `killed by ${result.signal}` : `exit code ${result.exitCode}` } };
+        const diagnostic = cleanTerminalText(result.stderr.text || result.stdout.text).trim().slice(-1600);
+        const reason = result.signal ? `killed by ${result.signal}` : `exit code ${result.exitCode}`;
+        return { ok: false, output, data, error: { code, message: diagnostic ? `${reason}: ${diagnostic}` : reason } };
       }
       return { ok: true, output, data };
     },

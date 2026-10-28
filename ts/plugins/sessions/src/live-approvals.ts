@@ -6,15 +6,16 @@
  * falls through to the journal path (approveSession), which records a grant for
  * the next run to replay: an older session, or one whose process restarted.
  */
-import { pyJsonDumps, pyStrip } from "@xueness/contracts";
+import { isDict, pyJsonDumps, pyStrip } from "@xueness/contracts";
+import { rememberProjectPermission } from "./tui-project-permissions.ts";
 import type { SessionReply } from "./http-api.ts";
 import type { LifecycleOptions, Row } from "./lifecycle-types.ts";
 
 /** Structural view of the tool bridge's ApprovalWaits; the sessions plugin only answers. */
 export interface LiveApprovalPort {
-  get(sessionId: string, callId: string): { readonly tool: string; readonly kind: string; readonly subject: string } | null;
+  get(sessionId: string, callId: string): { readonly tool: string; readonly kind: string; readonly subject: string; readonly code?: string; readonly remember?: { exact: readonly string[]; broad: readonly string[] } | null } | null;
   answered(sessionId: string, callId: string): "approve" | "reject" | null;
-  answer(sessionId: string, callId: string, decision: "approve" | "reject", message?: string, scope?: "once" | "session"): { readonly status: string };
+  answer(sessionId: string, callId: string, decision: "approve" | "reject", message?: string, scope?: "once" | "session" | "project"): { readonly status: string };
   close(sessionId: string, message?: string): number;
 }
 
@@ -52,7 +53,13 @@ export function answerLiveApproval(options: LifecycleOptions, sid: string, data:
   const message = decision === "reject" && typeof data.message === "string" && pyStrip(data.message) ? pyStrip(data.message).slice(0, 2000) : undefined;
   // "Allow for this session" (scope: "session") lives in the waiting layer's memory only.
   const scope = decision === "approve" && data.scope === "session" ? "session" : "once";
-  const outcome = live.answer(sid, callId, decision, message, scope);
+  if (decision === "approve" && data.scope === "project") {
+    const session = options.activeContext.get(sid)?.active_session;
+    if (!approval || approval.code !== "approval_required" || !approval.remember?.exact.length || !isDict(session) || typeof session.root !== "string") return [400, { error: "this operation cannot be remembered for the project" }];
+    try { rememberProjectPermission(options.stateDir, session.root, { code: approval.code, remember: approval.remember }, approval.remember.exact); }
+    catch { return [500, { error: "cannot save project permission; operation was not approved" }]; }
+  }
+  const outcome = live.answer(sid, callId, decision, message, decision === "approve" && data.scope === "project" ? "project" : scope);
   if (outcome.status === "answered") return [200, confirmation(approval?.subject)];
   if (outcome.status === "duplicate") return [200, { ...confirmation(approval?.subject), duplicate: true }];
   if (outcome.status === "conflict") return [409, { error: "approval already answered", code: "approval_already_answered" }];

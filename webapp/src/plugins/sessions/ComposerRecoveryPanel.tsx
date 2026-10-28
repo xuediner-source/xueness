@@ -2,7 +2,7 @@ import React from 'react';
 import { t as tr, tf } from '../../i18n';
 import type { RecoverableComposerDraft } from './composerRecovery';
 import type { ComposerCapability } from '../../xuenessComposer';
-import type { ComposerMention } from './XuenessWorkbenchView';
+import type { ComposerMention } from './composerInputHelpers';
 import './ComposerRecovery.css';
 
 export type RecoveryAttachmentState = 'available' | 'different-scope' | 'unknown-scope' | 'unavailable';
@@ -63,9 +63,9 @@ export function ComposerRecoveryPanel({ drafts, onRestore, onDiscard, references
           })}
         </ul>
       </div>}
-      {draft.attachmentError && <p className="xn-composer-recovery__error">{draft.attachmentError}</p>}
-      {draft.deliveryUnconfirmed ? <p className="xn-composer-recovery__error">{tr('消息接收状态暂时无法确认，请先查看会话与队列再重试。')}</p>
-        : draft.submissionError && <p className="xn-composer-recovery__error">{draft.submissionError}</p>}
+      {draft.attachmentError && <p className="xn-composer-recovery__error" role="alert">{draft.attachmentError}</p>}
+      {draft.deliveryUnconfirmed ? <p className="xn-composer-recovery__error" role="alert">{tr('消息接收状态暂时无法确认，请先查看会话与队列再重试。')}</p>
+        : draft.submissionError && <p className="xn-composer-recovery__error" role="alert">{draft.submissionError}</p>}
       <div><button type="button" onClick={() => onRestore(index)}>{tr('恢复草稿')}</button>
         <button type="button" onClick={() => onDiscard(index)}>{tr('丢弃此草稿')}</button></div>
     </li>)}</ul>

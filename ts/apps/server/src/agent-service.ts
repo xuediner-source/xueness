@@ -18,6 +18,7 @@ import { createGitCheckpoints } from "@xueness/plugin-git";
 import { createMcp, resetAppsState, resetElicitationState, mcpRuntimeExtension, type McpRuntimeBinding, type McpRun } from "@xueness/plugin-mcp";
 import { BUNDLED_SKILLS_DIR, createSkills, skills, skillsExtension, visualizationDirectory } from "@xueness/plugin-skills";
 import { createNativeOps, createNativeOpsBinding, nativeOps, nativeOpsExtension, type NativeOpsBinding } from "@xueness/plugin-native_ops";
+import { contextLens, contextLensExtension } from "@xueness/plugin-context_lens";
 import { batchCallsExtension } from "@xueness/plugin-batch_calls";
 import { createOffice, deliveryContentText, office } from "@xueness/plugin-office";
 import { browser, createBrowser } from "@xueness/plugin-browser";
@@ -31,8 +32,9 @@ import { automation, createAutomationTools } from "@xueness/plugin-automation";
 import { createWorkflows, workflows, WorkflowStore, type WorkerLauncher, type DynamicWorkflowService } from "@xueness/plugin-workflows";
 import { answerWorkflowActor } from "./workflow-actors.ts";
 import { loadMcpServers, pluginGrants } from "./mcp-servers.ts";
-import { auxiliaryModelAdmission, handoffModelJson, lightweightRuntimeExtension, loadSettings, ProfileStore, providerActivityExtension, providerModelExecutionExtension, providerRequestShapingExtension, requestConversationTitle, resolveSavedProvider, semanticCompactionExtension, titleProviderSupported, zcodeCompactionExtension } from "@xueness/plugin-providers";
+import { auxiliaryModelAdmission, handoffModelJson, lightweightRuntimeExtension, loadSettings, ProfileStore, providerActivityExtension, providerModelExecutionExtension, providerRequestShapingExtension, requestConversationTitle, resolveSavedProvider, titleProviderSupported, zcodeCompactionExtension } from "@xueness/plugin-providers";
 import { bindMediaPrompt, sessions as sessionsPlugin, createAutoTitleWorker, recordApproval, normalizeQuestions, QUESTION_SCHEMA, sessionsCompletionExtension, sessionsToolActivityExtension, switchableProvider, loadProjectPermissionRules, type ApprovalBuckets, type MediaArtifactStore, type RunPolicy, type RuntimeSelection, type SwitchableAgentProvider } from "@xueness/plugin-sessions";
+import { captureShutdownApprovals, restoreShutdownApprovals, type PermissionControl } from "@xueness/plugin-sessions";
 import { foldHostPath, isLink, type Session, type SessionStore } from "@xueness/sessions";
 import { ApprovalWaits, ToolBridge, type Approver } from "@xueness/tool-bridge";
 import { approvalReplayExtension } from "./agent-approvals.ts";
@@ -76,16 +78,11 @@ export interface AgentServiceOptions {
 }
 interface Environment { kernel: Context; host: PluginHost; env: ToolEnv; artifacts: string; root: string; configs: string; reconcile: Promise<void>; current: { session: Session | null; planMode: PlanModePort | null; mcp: McpRun | null; provider: ToolSearchProviderView | null }; hooks: HooksBinding; subagents: SubagentsBinding; shell: ShellRuntimeBinding; shellConfig: string; runtimeConfig: RuntimeConfigPatch; runtimeFingerprint: string; mcpRuntime: McpRuntimeBinding; nativeOps: NativeOpsBinding }
 
-/** Lightweight sessions keep the earlier model handoff; standard sessions use ZCode compaction. */
-function lightweightSemanticCompaction(): AgentExtension {
-  const semantic = semanticCompactionExtension();
-  return { ...semantic, capabilities: [], async beforeModelRequest(context) { if ((context.session.runtime_profile ?? context.provider.runtimeProfile) === "lightweight") await semantic.beforeModelRequest?.(context); } };
-}
-
 export function createAgentService(options: AgentServiceOptions) {
   const environments = new Map<string, Promise<Environment>>();
   const active = new Map<string, AgentRunner>();
   const switchers = new Map<string, SwitchableAgentProvider>();
+  const permissionControls = new Map<string, PermissionControl>();
   const activeRuns = new Set<Promise<Session>>();
   const liveSessions = new Map<string, Session>(), pendingSessions = new Map<string, Promise<Session>>();
   const shutdown = new AbortController();
@@ -139,7 +136,7 @@ export function createAgentService(options: AgentServiceOptions) {
         // resolves the local/native ToolSearch mode.
         catalog: () => kernel.tools.list<ToolDefinition>().map(({ name, description, alwaysLoad, shouldDefer }) => ({ name, description, alwaysLoad, shouldDefer })),
         provider: () => current.provider,
-      }), sessionsPlugin, workflowTools, createAutomationTools({ stateDir: options.stateDir }), createPlanning({ session: () => current.session, planMode: () => current.planMode, questionsSchema: QUESTION_SCHEMA, normalizeQuestions(value) { if (!enabled("sessions")) throw new PyValueError("structured questions require the planning and sessions plugins"); return normalizeQuestions(value); } }), createGitCheckpoints({ store: options.store, stateDir: options.stateDir, enabled, session: () => current.session }), createMcp({ run: () => current.mcp, binding: mcpRuntime }), createSkills({ stateDir: options.stateDir, root: () => current.session ? String(current.session.root) : null, bundled: BUNDLED_SKILLS_DIR }), createHooks(hookBinding), createSubagents(subagentBinding), createNativeOps(nativeOpsBinding), createOffice({ session: () => current.session }), createBrowser({ stateDir: options.stateDir }), createNetwork({ stateDir: options.stateDir, net: options.networkNet }), createRemote({ stateDir: options.stateDir })], { enabled: { providers: enabled("providers"), files: enabled("files"), shell: enabled("shell"), sessions: enabled("sessions"), workflows: enabled("workflows"), automation: enabled("automation"), planning: enabled("planning"), git: enabled("git"), mcp: false, skills: enabled("skills"), hooks: enabled("hooks"), subagents: enabled("subagents"), office: enabled("office"), browser: enabled("browser"), network: enabled("network"), remote: enabled("remote"), native_ops: enabled("native_ops") }, config: configs });
+      }), sessionsPlugin, contextLens, workflowTools, createAutomationTools({ stateDir: options.stateDir }), createPlanning({ session: () => current.session, planMode: () => current.planMode, questionsSchema: QUESTION_SCHEMA, normalizeQuestions(value) { if (!enabled("sessions")) throw new PyValueError("structured questions require the planning and sessions plugins"); return normalizeQuestions(value); } }), createGitCheckpoints({ store: options.store, stateDir: options.stateDir, enabled, session: () => current.session }), createMcp({ run: () => current.mcp, binding: mcpRuntime }), createSkills({ stateDir: options.stateDir, root: () => current.session ? String(current.session.root) : null, bundled: BUNDLED_SKILLS_DIR }), createHooks(hookBinding), createSubagents(subagentBinding), createNativeOps(nativeOpsBinding), createOffice({ session: () => current.session }), createBrowser({ stateDir: options.stateDir }), createNetwork({ stateDir: options.stateDir, net: options.networkNet }), createRemote({ stateDir: options.stateDir })], { enabled: { providers: enabled("providers"), files: enabled("files"), shell: enabled("shell"), sessions: enabled("sessions"), workflows: enabled("workflows"), automation: enabled("automation"), planning: enabled("planning"), git: enabled("git"), mcp: false, skills: enabled("skills"), hooks: enabled("hooks"), subagents: enabled("subagents"), office: enabled("office"), browser: enabled("browser"), network: enabled("network"), remote: enabled("remote"), native_ops: enabled("native_ops"), context_lens: enabled("context_lens") }, config: configs });
       try {
         await host.start();
         return { kernel, host, env: createToolEnv({ cwd: String(session.root), artifactsDir: artifacts, owner: sid }), artifacts, root: String(session.root), configs: pyJsonDumps(configs, { sortKeys: true }), reconcile: Promise.resolve(), current, hooks: hookBinding, subagents: subagentBinding, shell: shellBinding, shellConfig: pyJsonDumps(configs.shell ?? {}, { sortKeys: true }), runtimeConfig, runtimeFingerprint: pyJsonDumps(runtimeConfig, { sortKeys: true }), mcpRuntime, nativeOps: nativeOpsBinding };
@@ -173,6 +170,7 @@ export function createAgentService(options: AgentServiceOptions) {
     knownTools(): string[] { return [files, shell, providers, planning, skills, subagents, office, browser, network, remote, workflows, automation, nativeOps].flatMap((entry) => isDict(entry.manifest) && Array.isArray(entry.manifest.tools) ? entry.manifest.tools.filter(isDict).map((tool) => String(tool.name)) : []); },
     async mcpSnapshot(sid: string) { const pending = environments.get(sid); if (!pending) return null; const environment = await pending; return environment.mcpRuntime.current ? { active: true, ...environment.mcpRuntime.current.snapshot() } : null; },
     activeProvider(sid: string): SwitchableAgentProvider | null { return switchers.get(sid) ?? null; },
+    permissionControl(sid: string): PermissionControl | null { return permissionControls.get(sid) ?? null; },
     /** Read-only routing decision before the lifecycle mutates model selection. */
     supports(session: Session, request: Row): boolean {
       const builtin = new Set(["sessions.completion_policy", "sessions.approvals", "sessions.steering", "sessions.queue", "sessions.live_tool_activity", "providers.lightweight", "providers.semantic_compaction", "providers.activity", "files.workspace_instructions", "planning.delivery", "planning.goal_driver", "remote.execution"]);
@@ -215,15 +213,27 @@ export function createAgentService(options: AgentServiceOptions) {
           const visualizations = !remoteBound && enabled("skills") ? visualizationRoot(options.stateDir, sid) : null;
           const appliedShellConfig = JSON.parse(environment.shellConfig) as Record<string, unknown>;
           if (policy.permissionMode === 'guarded' && !enabled('planning')) throw new UnsupportedAgentConfiguration(['planning.guarded']);
-          const permissions = new PermissionSession({ mode: policy.mode === "plan" ? "plan" : policy.permissionMode,
+          const permissions = new PermissionSession({ mode: policy.permissionMode === "yolo" ? "yolo" : policy.mode === "plan" ? "plan" : policy.permissionMode,
             guarded: request => { if (!enabled('planning')) throw new UnsupportedAgentConfiguration(['planning.guarded']); return guardedPermission(request, environment.shell.dialect === 'posix' ? 'posix' : 'powershell'); },
             allow: enabled("sessions") ? loadProjectPermissionRules(options.stateDir, String(value.root)) : [],
             disallow: [...policy.disallowed, ...remoteBound ? remoteLocalTools(environment.kernel.tools.list().map((tool) => tool.name)) : []], readOnlyCommands: environment.shell.dialect === "posix" && !appliedShellConfig.captureInit && !appliedShellConfig.startupScript,
-            shell: environment.shell.dialect === "posix" ? "posix" : "powershell", planDraft: policy.permissionMode === "plan" && policy.mode !== "plan" ? {
+            shell: environment.shell.dialect === "posix" ? "posix" : "powershell", planDraft: policy.mode !== "plan" ? {
               path: draft, matches: (subject) => isAbsolute(subject) && foldHostPath(normalize(subject)) === foldHostPath(normalize(draft)),
               denial: (kind) => `${kind} denied：当前是计划模式（Plan mode），只允许读取与搜索；请先写出计划并保存到本会话的计划草稿文件 ${draft}（此模式下唯一可写路径）。需要改动工作区或执行命令时，请让操作员切换到 build/edit/yolo 权限模式。 / Plan mode is read-only: write the plan to this session's draft file ${draft} — the only writable path in this mode — and ask the operator to switch to build, edit or full access before changing workspace files or running commands.`,
             } : null, hostWritable: visualizations ? [visualizations] : [] });
           environment.current.planMode = planModePort(value, permissions, policy.permissionMode);
+          permissionControls.set(sid, { session: value,
+            setMode(mode) { policy.permissionMode = mode; permissions.setMode(mode === "yolo" ? "yolo" : policy.mode === "plan" ? "plan" : mode); environment.current.planMode = planModePort(value, permissions, mode); },
+            reconsider() {
+              let resumed = 0;
+              for (const ask of liveApprovals.waiting(sid)) {
+                const owner = environment.kernel.tools.ownerOf(ask.tool);
+                if (owner && enabled(owner) && permissions.preview({ tool: ask.tool, kind: ask.kind, subject: ask.subject, subjectKind: ["read", "write", "edit"].includes(ask.kind) ? "path" : ask.kind === "exec" ? "command" : "text" }).behavior === "allow") {
+                  if (liveApprovals.answer(sid, ask.callId, "approve").status === "answered") resumed++;
+                }
+              }
+              return resumed;
+            } });
           const bridge = new ToolBridge({ kernel: environment.kernel, permissions, env: environment.env, approver: (options.approver ?? liveApprover)(sid, value, () => pendingCancel || !!runOptions.shouldStop?.()) });
           const runtimeProvider = switchableProvider(provider, value);
           environment.current.provider = runtimeProvider;
@@ -271,13 +281,12 @@ export function createAgentService(options: AgentServiceOptions) {
             memoryExtension({ memoryRoot: () => memoryRootFromEnv(options.configEnv ?? process.env), allowed: () => { const general = settings().general; return !isDict(general) || general.memoryEnabled !== false; } }),
             skillsExtension({ stateDir: options.stateDir, bundled: BUNDLED_SKILLS_DIR, visualizations: () => visualizations }),
             ...remoteBound ? [] : [hooksExtension({ stateDir: options.stateDir, binding: environment.hooks, legacy: !!(policy.request.allow_hooks || policy.request.allowHooks) })],
-            lightweightSemanticCompaction(),
             lightweightRuntimeExtension({ discoveredCatalog: () => environment.kernel.tools.list().map((tool) => tool.name), toolPolicy: () => {
               // F02.01 exposure policy: the registry's declared alwaysLoad/shouldDefer tools
               // shape the lightweight selected view; a disabled plugin's tools never reach
               // this list (kernel.tools only holds registered plugins).
               const tools = environment.kernel.tools.list();
-              return { disallow: policy.disallowed,
+              return { disallow: policy.permissionMode === "yolo" ? [] : policy.disallowed,
                 alwaysLoad: tools.filter((tool) => tool.alwaysLoad === true).map((tool) => tool.name),
                 deferred: tools.filter((tool) => tool.shouldDefer === true).map((tool) => tool.name),
                 readonlyDenied: tools.filter((tool) => tool.mutating || ["write", "edit", "exec", "mcp"].includes(tool.gate)).map((tool) => tool.name) };
@@ -295,7 +304,7 @@ export function createAgentService(options: AgentServiceOptions) {
             approvalReplayExtension(bridge, approvals, enabled, (name) => environment.kernel.tools.ownerOf(name)),
 
             ...productExtensions,
-            providerToolResultBudgetExtension(),
+            providerToolResultBudgetExtension(), contextLensExtension(() => (JSON.parse(environment.configs).context_lens ?? {})),
             { id: "sessions", async beforeModelRequest() {
               await reconcile(environment);
               if (policy.permissionMode === 'guarded' && !enabled('planning')) throw new UnsupportedAgentConfiguration(['planning.guarded']);
@@ -317,7 +326,7 @@ export function createAgentService(options: AgentServiceOptions) {
           // host with no saved profiles (env-configured) sets no ceiling.
           const savedModels = [...new Set(new ProfileStore(options.stateDir).list().map((record) => String(record.model ?? "").trim()).filter(Boolean))];
           const childHost = delegation ? { kernel: environment.kernel, env: environment.env, stateDir: options.stateDir, enabled, parent: value, provider, disallowed: policy.disallowed, executionShell: { shell: environment.shell.dialect === "posix" ? "posix" as const : "powershell" as const, readOnlyCommands: environment.shell.dialect === "posix" && !appliedShellConfig.captureInit && !appliedShellConfig.startupScript },
-            resolveProvider, modelCeiling: savedModels.length ? savedModels : null, stopped: () => pendingCancel || !!runOptions.shouldStop?.() || closed, hostSignal: shutdown.signal, registry: options.taskRegistry, nativeOps: environment.nativeOps } : null;
+            resolveProvider, modelCeiling: savedModels.length ? savedModels : null, stopped: () => pendingCancel || !!runOptions.shouldStop?.() || closed, hostSignal: shutdown.signal, registry: options.taskRegistry, nativeOps: environment.nativeOps, contextLensConfig: () => (JSON.parse(environment.configs).context_lens ?? {}) } : null;
           const background = childHost ? backgroundChildRunner(childHost) : null;
           environment.subagents.run = childHost ? childRunner(childHost) : null;
           environment.subagents.background = background;
@@ -340,7 +349,7 @@ export function createAgentService(options: AgentServiceOptions) {
               // Children outlive no turn: the coordinator's stop predicate is
               // already true here, and closing it releases every worker slot.
               if (coordinator) await coordinator.close().catch(() => {});
-              active.delete(sid); liveSessions.delete(sid); pendingSessions.delete(sid); switchers.delete(sid); environment.current.session = null; environment.current.planMode = null;
+              active.delete(sid); permissionControls.delete(sid); liveSessions.delete(sid); pendingSessions.delete(sid); switchers.delete(sid); environment.current.session = null; environment.current.planMode = null;
               environment.subagents.run = null; environment.subagents.background = null; environment.subagents.coordinator = null;
               if (completed && Number(value.steps ?? 0) > beforeSteps) titles.schedule(value, runtimeProvider.boundProvider());
             } }
@@ -366,13 +375,14 @@ export function createAgentService(options: AgentServiceOptions) {
     async refresh(): Promise<void> { for (const environment of environments.values()) await reconcile(await environment); },
     async dispose(): Promise<void> {
       closed = true; clearInterval(watcher);
-      // Waiting approvals survive the restart as approval_required, to replay later.
-      if (liveApprovals.defer()) await new Promise((resolve) => setImmediate(resolve));
+      const deferred = captureShutdownApprovals(liveApprovals.waiting(), liveSessions);
+      liveApprovals.defer();
       shutdown.abort(); await titles.close();
       for (const runner of active.values()) for (const sid of environments.keys()) runner.cancel(sid);
       const current = await Promise.all(environments.values());
       await Promise.allSettled(current.map((environment) => environment.host.dispose()));
       await Promise.allSettled([...activeRuns]);
+      await restoreShutdownApprovals(options.store, deferred);
       for (const environment of current) { await environment.kernel.dispose(); rmSync(environment.artifacts, { recursive: true, force: true }); }
       environments.clear();
     },

@@ -4,7 +4,7 @@ import type { AttachmentPreviewTransport } from './composerAttachmentPreviewMode
 import { createRemoteMessageEditAttachmentTransport } from '../remote/remoteWorkflowTransport';
 import { usePaneHistoryActions } from './paneHistoryActions';
 import React, { useCallback, useMemo, useState, useSyncExternalStore, useRef, useEffect } from 'react';
-import { t as tr, messages } from '../../i18n';
+import { t as tr } from '../../i18n';
 import { parseConversationSnapshot, loadSession, createSessionCommandClient, type WorkbenchSession, type ConversationSnapshot } from '../../xuenessWorkbench';
 import { conversationCompactionBoundary } from './conversationCompaction';
 import { useConversationTransport } from './conversationTransport';
@@ -22,9 +22,6 @@ import { PaneSessionControls } from './PaneSessionControls';
 import type { QueueWithdrawal } from './queueApi';
 import type { RemoteSessionAdapter } from '../remote/remoteSessionAdapter';
 
-messages['远程分屏连接尚未就绪'] = 'This remote split connection is not available yet.';
-messages['正在连接分屏会话…'] = 'Connecting the split conversation…';
-messages['分屏会话投影无效'] = 'The split conversation projection is invalid.';
 const noRemoteSubscription = () => () => undefined;
 const remoteUnavailable = () => false;
 
@@ -129,10 +126,10 @@ export function SecondaryConversationPane({ sessionId, subscriberId, enabled, fi
       {snapshot && <ZCodeConversation sessionId={remote ? undefined : sessionId} rows={rows} compactionMarker={marker} timelineMarkers={session?.timeline_markers} collapseTools showReasoning
         messageEditTransport={editTransport} messageEditSessionId={remote ? sessionId : undefined}
         messageEditPreviewTransport={editPreviewTransport}
-        autoScroll streamingPending={running} onFork={fork.onFork} onEdit={history.onEdit} onRetry={history.onRetry} isSessionsEffective={history.isEffective}
+        autoScroll streamingPending={running || session?.compacting} onFork={fork.onFork} onEdit={history.onEdit} onRetry={history.onRetry} isSessionsEffective={history.isEffective}
         workActivity={session?.work_segments} toolActivity={session?.tool_activity} currentStreamId={session?.streaming?.id}
         currentTurnId={typeof session?.active_turn_id === 'string' ? session.active_turn_id : undefined}
-        activityPhase={session?.runtime_activity?.phase} effectivePluginIds={plugins} />}
+        activityPhase={session?.compacting ? 'compacting' : session?.runtime_activity?.phase} effectivePluginIds={plugins} />}
     </ConversationTimelineViewport>
     {history.controls}
     {fork.dialog}

@@ -18,31 +18,14 @@
   },
   "tools": [],
   "features": [
-    {
-      "id": "hooks.events",
-      "name": "七个生命周期事件",
-      "nameEn": "Seven lifecycle events"
-    },
-    {
-      "id": "hooks.pre_tool_block",
-      "name": "PreToolUse 拦截工具调用",
-      "nameEn": "PreToolUse can block a tool call"
-    },
-    {
-      "id": "hooks.workspace_trust",
-      "name": "工作区 hooks 按摘要授权",
-      "nameEn": "Workspace hooks run only after digest trust"
-    },
-    {
-      "id": "hooks.runtime_admission",
-      "name": "每次执行前重新核验工作区信任",
-      "nameEn": "Workspace trust revalidation before each dispatch"
-    },
-    {
-      "id": "hooks.output_control",
-      "name": "Hook 上下文、输入更新与有限续跑",
-      "nameEn": "Hook context, input updates and bounded continuation"
-    }
+    {"id": "hooks.events", "name": "七个生命周期事件", "nameEn": "Seven lifecycle events"},
+    {"id": "hooks.pre_tool_block", "name": "PreToolUse 拦截工具调用", "nameEn": "PreToolUse can block a tool call"},
+    {"id": "hooks.workspace_trust", "name": "工作区 hooks 按摘要授权", "nameEn": "Workspace hooks run only after digest trust"},
+    {"id": "hooks.runtime_admission", "name": "每次执行前重新核验工作区信任", "nameEn": "Workspace trust revalidation before each dispatch"},
+    {"id": "hooks.output_control", "name": "Hook 上下文、输入更新与有限续跑", "nameEn": "Hook context, input updates and bounded continuation"},
+    {"id": "hooks.lifecycle", "name": "明确启用的生命周期事件钩子", "nameEn": "Explicitly enabled lifecycle hooks"},
+    {"id": "hooks.approval", "name": "钩子命令审批与运行记录", "nameEn": "Hook command approval and run records"},
+    {"id": "hooks.tool_events", "name": "工具执行事件管线接入", "nameEn": "Tool event pipeline integration"}
   ],
   "panels": [
     "capabilities"

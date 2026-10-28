@@ -1,0 +1,162 @@
+.xl-root {
+  --xl-system: #7960ff; --xl-tools: #ff9d00; --xl-user: #08bd59; --xl-injected: #b149ff;
+  --xl-assistant: #3281ff; --xl-reasoning: #ec4899; --xl-tool: #00b8a6; --xl-output: #ed3ba7;
+  --xl-waiting: #3281ff; --xl-thinking: #9955ff; --xl-generating: #ed3ba7; --xl-other: #a1a8b5;
+  container: context-lens / inline-size; color: var(--fg); padding: 12px 14px 20px; width: 100%; max-width: 1680px; margin: 0 auto; min-width: 0; font-size: 12px;
+}
+.xl-root * { box-sizing: border-box; }
+.xl-root h2, .xl-root h3, .xl-root h4 { margin: 0; font-size: 14px; font-weight: 650; }
+.xl-root a, .xl-note, .xl-root small { color: var(--fg-muted); }
+.xl-root a { text-decoration: none; }
+.xl-root a:hover { text-decoration: underline; }
+.xl-root button, .xl-root input, .xl-root select { font: inherit; color: var(--fg); background: var(--bg-panel); border: 1px solid var(--border); border-radius: 6px; padding: 6px 10px; min-width: 0; max-width: 100%; }
+.xl-root button { cursor: pointer; }
+.xl-root button:disabled { opacity: .45; cursor: default; }
+.xl-root button:hover:not(:disabled) { background: var(--bg-hover); }
+.xl-root :is(button, input, select, summary):focus-visible { outline: 2px solid var(--xl-assistant); outline-offset: 2px; }
+.xl-panel-bar { display: flex; gap: 12px; align-items: center; justify-content: space-between; margin-bottom: 12px; min-width: 0; }
+.xl-tabs { display: flex; gap: 3px; overflow-x: auto; min-width: 0; scrollbar-width: none; }
+.xl-tabs button { border-color: transparent; padding: 7px 11px; white-space: nowrap; flex: none; color: var(--fg-muted); }
+.xl-tabs button[aria-pressed="true"] { background: color-mix(in srgb, var(--xl-assistant) 10%, transparent); color: var(--xl-assistant); }
+.xl-refresh { display: inline-flex; align-items: center; gap: 6px; flex: none; }
+.xl-controls { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
+.xl-controls input, .xl-controls select { flex: 1 1 200px; }
+.xl-card { padding: 12px; background: var(--bg-panel); border: 1px solid var(--border); border-radius: 9px; min-width: 0; overflow-wrap: anywhere; }
+.xl-card-title { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-width: 0; margin-bottom: 10px; }
+.xl-card-title > small { text-align: right; font-size: 11px; overflow-wrap: anywhere; }
+.xl-note { font-size: 11px; line-height: 1.6; }
+.xl-card-note { margin: 10px 0 0; }
+.xl-summary-grid { display: grid; grid-template-columns: minmax(0, 3fr) minmax(240px, 1fr); gap: 10px; margin-bottom: 10px; }
+.xl-summary > h3, .xl-plugin-info > h3 { margin-bottom: 12px; }
+.xl-flow { display: grid; grid-template-columns: minmax(0, 1fr) 148px minmax(0, 1fr); gap: 28px; align-items: stretch; }
+.xl-flow-column { display: grid; gap: 9px; align-content: stretch; }
+.xl-flow-box { border: 1px solid var(--border); border-radius: 7px; padding: 9px 10px; min-width: 0; }
+.xl-flow-box .xl-card-title { margin-bottom: 7px; }
+.xl-flow-box .xl-card-title span { color: var(--fg-muted); }
+.xl-chips { display: flex; flex-wrap: wrap; gap: 5px; font-size: 11px; }
+.xl-chips > span { padding: 3px 8px; border: 1px solid color-mix(in srgb, var(--border) 70%, transparent); border-radius: 8px; color: var(--fg-muted); }
+.xl-chips b { color: var(--fg); margin-left: 3px; }
+.xl-event-chips > span { color: var(--xl-user); background: color-mix(in srgb, var(--xl-user) 10%, transparent); border-color: transparent; }
+.xl-event-chips > span:nth-child(2) { color: var(--xl-output); background: color-mix(in srgb, var(--xl-output) 8%, transparent); }
+.xl-event-chips > span:nth-child(3) { color: var(--xl-system); background: color-mix(in srgb, var(--xl-system) 8%, transparent); }
+.xl-event-chips b { color: inherit; }
+.xl-flow-core { position: relative; display: flex; flex-direction: column; justify-content: center; gap: 12px; padding: 12px 8px; border: 1px solid color-mix(in srgb, var(--fg-muted) 45%, var(--border)); border-radius: 7px; outline: 4px solid var(--bg-surface); text-align: center; background: var(--bg-panel); }
+.xl-flow-core::before, .xl-flow-core::after { content: ''; position: absolute; top: 31px; left: -29px; width: 28px; height: 76px; border-top: 5px solid color-mix(in srgb, var(--xl-user) 22%, transparent); border-bottom: 5px solid color-mix(in srgb, var(--xl-injected) 22%, transparent); transform: skewY(28deg); pointer-events: none; }
+.xl-flow-core::after { left: auto; right: -29px; transform: skewY(-28deg); border-top-color: color-mix(in srgb, var(--xl-tool) 22%, transparent); border-bottom-color: color-mix(in srgb, var(--xl-output) 22%, transparent); }
+.xl-flow-core > span { color: var(--fg-muted); font-size: 11px; }
+.xl-flow-core > div { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.xl-flow-core strong { font-size: 18px; font-variant-numeric: tabular-nums; }
+.xl-flow-core small { display: block; font-size: 10px; font-weight: 400; margin-top: 3px; }
+.xl-network > span { display: flex; justify-content: space-between; gap: 10px; margin-top: 6px; color: var(--fg-muted); font-size: 11px; }
+.xl-network b { color: var(--fg); }
+.xl-network svg { vertical-align: -2px; }
+.xl-plugin-info dl { display: grid; gap: 13px; margin: 15px 0; }
+.xl-plugin-info dl > div { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+.xl-plugin-info dt { display: inline-flex; align-items: center; gap: 6px; color: var(--fg-muted); font-size: 11px; flex: none; }
+.xl-plugin-info dd { margin: 0; text-align: right; font-weight: 550; }
+.xl-plugin-info dd a { color: var(--fg); }
+.xl-plugin-info dd button { padding: 0; border: 0; background: transparent; color: var(--xl-assistant); }
+.xl-dashboard { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 10px; align-items: stretch; }
+.xl-donut-row { display: flex; align-items: center; gap: 16px; min-width: 0; min-height: 125px; }
+.xl-donut { position: relative; width: 112px; height: 112px; flex: 0 0 112px; }
+.xl-donut svg { display: block; width: 100%; height: 100%; overflow: visible; }
+.xl-donut-track { fill: none; stroke: var(--bg-surface); stroke-width: 11px; }
+.xl-donut > div { position: absolute; inset: 0; display: flex; flex-direction: column; justify-content: center; text-align: center; pointer-events: none; }
+.xl-donut strong { font-size: 17px; font-variant-numeric: tabular-nums; }
+.xl-donut small { margin-top: 2px; font-size: 10px; }
+.xl-slices { flex: 1; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 15px 18px; margin: 0; min-width: 0; }
+.xl-slices > div { min-width: 0; border-radius: 4px; }
+.xl-slices > div[data-active="true"] { background: var(--bg-hover); }
+.xl-slices dt { display: flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 550; }
+.xl-slices dt b { margin-left: auto; font-size: 11px; }
+.xl-slices i, .xl-legend i, .xl-chart-key i, .xl-context-group > summary > i { display: inline-block; width: 9px; height: 9px; border-radius: 2px; flex: 0 0 9px; }
+.xl-slices dd { margin: 5px 0 0 15px; font-size: 11px; color: var(--fg-muted); }
+.xl-timing { position: relative; min-width: 0; }
+.xl-timing > .xl-card { height: 100%; padding-bottom: 35px; }
+.xl-time-strip { position: absolute; bottom: 12px; left: 13px; right: 13px; height: 9px; display: flex; overflow: hidden; border-radius: 2px; }
+.xl-time-strip > div { display: flex; min-width: 1px; }
+.xl-time-strip span { display: block; }
+.xl-context-headline { display: flex; justify-content: space-between; gap: 8px; color: var(--fg-muted); margin: 15px 0 10px; font-size: 11px; }
+.xl-context-headline strong { font-size: 22px; color: var(--fg); font-variant-numeric: tabular-nums; }
+.xl-capacity { height: 17px; overflow: hidden; border-radius: 4px; background: repeating-linear-gradient(45deg, var(--bg-surface), var(--bg-surface) 6px, color-mix(in srgb, var(--xl-tools) 15%, var(--bg-panel)) 6px, color-mix(in srgb, var(--xl-tools) 15%, var(--bg-panel)) 12px); }
+.xl-capacity > div { height: 100%; }
+.xl-capacity .xl-composition, .xl-capacity .xl-composition__bar { height: 100%; border-radius: 0; }
+.xl-current > .xl-composition > .xl-composition__bar { display: none; }
+.xl-composition__bar { display: flex; height: 12px; overflow: hidden; border-radius: 3px; background: var(--bg-surface); }
+.xl-composition__bar span { display: block; min-width: 1px; }
+.xl-root [data-category] { background: var(--xl-assistant); }
+.xl-root [data-category="system"] { background: var(--xl-system); }
+.xl-root [data-category="tools"] { background: var(--xl-tools); }
+.xl-root [data-category="user"] { background: var(--xl-user); }
+.xl-root [data-category="injected"] { background: var(--xl-injected); }
+.xl-root [data-category="assistant"] { background: var(--xl-assistant); }
+.xl-root [data-category="reasoning"] { background: var(--xl-reasoning); }
+.xl-root [data-category="tool"] { background: var(--xl-tool); }
+.xl-root [data-category="output"] { background: var(--xl-output); }
+.xl-legend { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; margin: 16px 0 0; }
+.xl-legend div { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.xl-legend dt { display: flex; align-items: center; gap: 6px; font-size: 11px; }
+.xl-legend dd { display: flex; gap: 7px; margin: 0 0 0 15px; font-variant-numeric: tabular-nums; }
+.xl-legend dd small { margin-left: auto; font-size: 10px; }
+.xl-context-browser { grid-column: 2; grid-row: 2 / span 2; }
+.xl-context-browser > select { width: 100%; }
+.xl-step-controls { display: flex; flex: none; }
+.xl-step-controls button { font-size: 10px; padding: 3px 6px; border-radius: 0; }
+.xl-step-controls button:first-child { border-radius: 4px 0 0 4px; }
+.xl-step-controls button:last-child { border-radius: 0 4px 4px 0; margin-left: -1px; }
+.xl-browser-meta { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin: 12px 0 8px; font-size: 11px; }
+.xl-browser-meta > small { text-align: right; font-size: 10px; }
+.xl-content-search { display: flex; align-items: center; gap: 5px; color: var(--fg-muted); margin: 10px 0; }
+.xl-content-search input { width: 100%; border: 0; border-bottom: 1px solid var(--border); border-radius: 0; background: transparent; padding: 5px; font-size: 11px; }
+.xl-browser { max-height: 640px; overflow-y: auto; }
+.xl-root details { min-width: 0; }
+.xl-root summary { cursor: pointer; display: flex; align-items: center; gap: 8px; min-width: 0; list-style: none; }
+.xl-root summary::-webkit-details-marker { display: none; }
+.xl-root summary > span { flex: 1; min-width: 0; }
+.xl-context-group { border: 1px solid var(--border); border-radius: 6px; margin-top: 8px; padding: 9px 10px; }
+.xl-context-group > summary { font-size: 11px; }
+.xl-context-group > summary > span { color: var(--fg-muted); font-size: 10px; }
+.xl-disclosure { flex: none; color: var(--fg-muted); transition: transform .15s; }
+.xl-context-group[open] > summary .xl-disclosure { transform: rotate(90deg); }
+.xl-context-group > summary b { font-weight: 500; color: var(--fg-muted); }
+.xl-content-item { margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--border); font-size: 11px; }
+.xl-root pre { white-space: pre-wrap; overflow-wrap: anywhere; font-family: var(--font-mono); max-height: 300px; overflow: auto; padding: 10px; background: var(--bg-surface); border-radius: 5px; font-size: 11px; }
+.xl-request-detail { display: grid; gap: 6px; padding-top: 12px; margin-top: 10px; border-top: 1px solid var(--border); font-size: 11px; }
+.xl-segmented { display: inline-flex; border: 1px solid var(--border); border-radius: 5px; padding: 2px; gap: 2px; }
+.xl-segmented button { padding: 3px 7px; border: 0; font-size: 10px; background: transparent; }
+.xl-segmented button[aria-pressed="true"] { background: var(--fg); color: var(--bg-panel); border-radius: 3px; }
+.xl-trend-options { margin: 0 0 8px; }
+.xl-chart-area { display: flex; gap: 8px; margin: 16px 0 28px; }
+.xl-y-axis { display: flex; flex: 0 0 38px; flex-direction: column; justify-content: space-between; text-align: right; }
+.xl-y-axis small { font-size: 9px; }
+.xl-trend { flex: 1; display: flex; align-items: end; gap: 2px; height: 155px; min-width: 0; overflow-x: auto; overflow-y: hidden; padding-bottom: 20px; background: repeating-linear-gradient(to top, transparent, transparent calc(50% - 1px), var(--border) 50%); }
+.xl-root .xl-trend button { flex: 1 0 8px; max-width: 36px; height: 100%; display: flex; position: relative; align-items: end; padding: 0; border: 0; background: transparent; border-radius: 0; }
+.xl-root .xl-trend button[aria-pressed="true"] { outline: 2px solid var(--fg); outline-offset: 1px; }
+.xl-trend-stack { display: flex; flex-direction: column-reverse; width: 100%; border-radius: 2px 2px 0 0; overflow: hidden; }
+.xl-trend-stack i { display: block; flex-basis: 0; min-height: 0; }
+.xl-trend small { position: absolute; bottom: -18px; left: 0; font-size: 9px; }
+.xl-chart-key { display: flex; gap: 8px 13px; flex-wrap: wrap; font-size: 10px; color: var(--fg-muted); }
+.xl-chart-key span { display: flex; align-items: center; gap: 4px; }
+.xl-chart-key i { width: 7px; height: 7px; flex-basis: 7px; }
+.xl-events { margin-top: 10px; }
+.xl-events summary { justify-content: space-between; }
+.xl-events > details { border-top: 1px solid var(--border); margin-top: 12px; padding-top: 12px; }
+.xl-session-grid, .xl-family { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(220px, 100%), 1fr)); gap: 10px; margin-top: 12px; }
+.xl-session, .xl-family > div { display: flex; flex-direction: column; gap: 10px; text-align: left; }
+.xl-session small { overflow-wrap: anywhere; }
+.xl-days { display: flex; gap: 4px; height: 140px; padding-bottom: 24px; overflow-x: auto; margin-top: 12px; }
+.xl-days > div { flex: 1 0 28px; max-width: 50px; height: 100%; display: flex; align-items: end; position: relative; }
+.xl-days div > span { display: block; background: var(--xl-tool); width: 100%; border-radius: 3px 3px 0 0; }
+.xl-days small { position: absolute; bottom: -20px; left: 0; font-size: 10px; }
+.xl-files > div { display: grid; grid-template-columns: 2fr 2fr 1fr; gap: 10px; border-top: 1px solid var(--border); padding: 12px 0; }
+.xl-files code, .xl-tool summary { overflow-wrap: anywhere; word-break: break-word; }
+.xl-tool { border-top: 1px solid var(--border); padding: 12px 0; }
+.xl-provenance { padding: 16px 0 4px; text-align: center; font-size: 10px; }
+.xl-preferences > h3, .xl-preferences > .xl-note { margin-bottom: 12px; }
+.xl-preferences > label { display: flex; flex-direction: column; gap: 8px; margin: 18px 0; }
+.xl-preferences .xl-check { flex-direction: row; align-items: center; }
+.xl-preferences textarea { font: inherit; color: var(--fg); background: var(--bg-input); border: 1px solid var(--border); border-radius: 6px; padding: 12px; resize: vertical; width: 100%; }
+@container context-lens (max-width: 1100px) { .xl-summary-grid { grid-template-columns: 1fr; } .xl-plugin-info { display: none; } .xl-flow { grid-template-columns: minmax(0, 1fr) 135px minmax(0, 1fr); } .xl-slices { gap: 12px; } }
+@container context-lens (max-width: 800px) { .xl-dashboard { grid-template-columns: 1fr; } .xl-context-browser { grid-column: auto; grid-row: auto; } .xl-context-trend { grid-row: 3; } .xl-donut-row { gap: 20px; } }
+@container context-lens (max-width: 540px) { .xl-flow { grid-template-columns: 1fr; gap: 8px; } .xl-flow-core { grid-row: 1; outline: 0; padding: 9px; flex-direction: row; align-items: center; justify-content: space-between; } .xl-flow-core > div { display: flex; gap: 14px; } .xl-flow-core::before, .xl-flow-core::after { display: none; } .xl-flow-core strong { font-size: 16px; } .xl-flow-core small { font-size: 9px; } .xl-flow-column { grid-template-columns: 1fr; } .xl-legend { grid-template-columns: repeat(2, minmax(0, 1fr)); } .xl-slices { grid-template-columns: 1fr; gap: 10px; } .xl-donut { width: 96px; height: 96px; flex-basis: 96px; } .xl-context-headline strong { font-size: 19px; } .xl-context-headline { flex-wrap: wrap; } .xl-files > div { grid-template-columns: 1fr; } .xl-browser-meta { align-items: start; } }
+@media (prefers-reduced-motion: reduce) { .xl-disclosure { transition: none; } }

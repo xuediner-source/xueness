@@ -1,6 +1,4 @@
-import { messages, t as tr } from '../../i18n';
-
-messages['无法打开项目文件夹，请确认目录仍然存在且桌面端与文件插件已启用。'] = 'Unable to open the project folder. Check that it still exists and the desktop and files plugins are enabled.';
+import { t as tr } from '../../i18n';
 
 declare global {
   interface Window {

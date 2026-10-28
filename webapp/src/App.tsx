@@ -4,9 +4,16 @@
  * This is the Xueness-owned workbench, built on our own event protocol and data
  * layer. The web entry renders this application for every URL.
  */
+// Keep the same cascade order when the bootstrap loads this module lazily.
+import "./styles.css";
 import React, { lazy, Suspense } from "react";
 import { XuenessWorkbenchContainer } from "./XuenessWorkbenchContainer";
 import { RegionBoundary } from "./ui/primitives";
+import "./styles/workbench-refresh.css";
+import "./styles/conversation-refresh.css";
+import "./styles/composer-workspace.css";
+import "./styles/composer-toolbar.css";
+import "./styles/parity-final.css";
 
 const ConversationSharePage = lazy(() => import("./plugins/sessions/ConversationSharing").then(module => ({ default: module.ConversationSharePage })));
 

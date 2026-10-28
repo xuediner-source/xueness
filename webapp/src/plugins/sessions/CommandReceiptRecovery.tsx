@@ -1,6 +1,6 @@
 // sessions.command_ack: reload recovery queries original receipts; it never resends.
 import React, { useEffect, useRef, useState } from 'react';
-import { messages, t as tr } from '../../i18n';
+import { t as tr } from '../../i18n';
 import type { SessionCommandClient } from './commandClient';
 import { validateCreateCommandResult } from './commandReceipt';
 import { loadQuestion, answerQuestion, answerQuestionCards } from './questionApi';
@@ -8,10 +8,7 @@ import type { QuestionTransport } from './PendingQuestion';
 import { matchesFollowupPending, type FollowupProof, type PendingCommandReference } from './commandLedger';
 import type { WorkbenchSession } from '../../xuenessWorkbench';
 import { hasUnconfirmedLocalGuidance } from './steeringApi';
-messages['检查未确认的命令'] = 'Check unconfirmed commands';
-messages['命令结果仍未确认，请勿重复提交。'] = 'The command outcome is still unknown. Do not submit it again.';
-messages['命令结果已确认，请检查最新会话状态。'] = 'Command result confirmed. Check the latest conversation state.';
-messages['打开已确认创建的会话'] = 'Open confirmed conversation';
+import { startSessionPolling } from './SessionPolling';
 
 export function canAdmitSessionMutation(commands: SessionCommandClient, sessionId: string | null, enabled: () => boolean): boolean {
   return enabled() && commands.isEffective() && !commands.recoveryStorageError()
@@ -62,7 +59,7 @@ export function CommandReceiptRecovery({ commands, enabled, sessionId, autoCheck
   useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
   useEffect(() => { setBusy(false); lock.current = false; if (!enabled) return;
     // Local ledger observation only, never a network poll. Also observes lazy-client hydration.
-    const timer = setInterval(() => redraw(value => value + 1), 1000); return () => clearInterval(timer);
+    return startSessionPolling({ refresh: async () => { redraw(value => value + 1); }, isOnline: () => true });
   }, [commands, enabled, generation]);
   // A request this page is still awaiting is progress, not a lost receipt: a run
   // answers when its turn settles. Only receipts without a live request need recovery.

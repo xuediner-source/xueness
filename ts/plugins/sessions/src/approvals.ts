@@ -2,6 +2,7 @@ import { isAbsolute, join, relative } from "node:path";
 import { isDict, pyJsonDumps, pyLen, pySlice, pyStrip, pyUtcNow } from "@xueness/contracts";
 import { isPyOSError, isPyValueError, pyExceptionName, realish, type Session } from "@xueness/sessions";
 import { pendingDenials } from "./public-session.ts";
+import { rememberProjectPermission } from "./tui-project-permissions.ts";
 import { answerLiveApproval } from "./live-approvals.ts";
 import type { LifecycleOptions, Row } from "./lifecycle-types.ts";
 import type { SessionReply } from "./http-api.ts";
@@ -58,11 +59,23 @@ export async function approveSession(options: LifecycleOptions, sid: string, dat
       subject = String(entry.subject); response = { kind, tool_call_id: callId, subject };
     } else return [400, { error: "kind must be 'write', 'edit', 'exec' or 'mcp'" }];
     if (typeof callId !== "string") return [400, { error: "approval must reference an exact pending denied tool_call_id" }];
+    if (decision === "approve" && data.scope === "project") {
+      const result = isDict(session.results) ? session.results[callId] : null, details = isDict(result) && isDict(result.data) ? result.data : {}, remember = isDict(details.remember) ? details.remember : {};
+      if (details.reason !== "approval_required" || !Array.isArray(remember.exact) || !remember.exact.length || !remember.exact.every(rule => typeof rule === "string")) return [400, { error: "this operation cannot be remembered for the project" }];
+      try { rememberProjectPermission(options.stateDir, String(session.root), { code: "approval_required", remember: { exact: remember.exact, broad: [] } }, remember.exact); }
+      catch { return [500, { error: "cannot save project permission; operation was not approved" }]; }
+    }
+    if (decision === "reject") {
+      const note = typeof data.message === "string" ? data.message.trim().slice(0, 2000) : "";
+      const result = { ok: false, output: note ? `The user declined this operation: ${note}` : "The user declined this operation", error: { code: "permission_denied", message: note || "the user declined this operation" } };
+      if (isDict(session.results)) session.results[callId] = result;
+      for (const message of Array.isArray(session.messages) ? session.messages : []) if (isDict(message) && message.role === "tool" && message.tool_call_id === callId) message.content = pyJsonDumps(result);
+    }
     let buckets = options.approvals.get(sid); if (!buckets) { buckets = new Map(); options.approvals.set(sid, buckets); }
     let grants = buckets.get(String(kind)); if (!grants) { grants = new Map(); buckets.set(String(kind), grants); }
     if (decision === "reject") grants.delete(callId); else grants.set(callId, subject);
     recordApproval(session, decision === "reject" ? "cleared" : "granted", String(kind), callId, subject);
-    try { await options.store.save(session); } catch { /* In-memory decision remains live, like Python. */ }
+    try { await options.store.save(session); } catch { if (decision === "reject") return [500, { error: "cannot save rejection; refresh before continuing" }]; /* An allow grant remains in memory. */ }
     return [200, { [decision === "reject" ? "rejected" : "approved"]: response }];
   } catch (e) { if (pyExceptionName(e) === "BlockingIOError") return [409, { error: "session is in use by another process" }]; throw e; }
   finally { await lease?.release(); }

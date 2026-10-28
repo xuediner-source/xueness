@@ -11,6 +11,7 @@ export type SessionPollingOptions = {
   subscribeVisibility?: (listener: () => void) => () => void;
   isOnline?: () => boolean;
   schedule?: SessionPollSchedule;
+  initialDelayMs?: number;
   visibleDelayMs?: number;
   hiddenDelayMs?: number;
 };
@@ -50,6 +51,7 @@ export function startSessionPolling({
   subscribeVisibility = subscribeBrowserVisibility,
   isOnline = browserNetworkAvailable,
   schedule = { setTimeout: (callback, delay) => window.setTimeout(callback, delay), clearTimeout: handle => window.clearTimeout(handle as number) },
+  initialDelayMs,
   visibleDelayMs = 1000,
   hiddenDelayMs = 5000,
 }: SessionPollingOptions): () => void {
@@ -105,7 +107,7 @@ export function startSessionPolling({
   };
 
   const unsubscribe = subscribeVisibility(onVisibility);
-  scheduleNext(isVisible() ? visibleDelayMs : Math.max(hiddenDelayMs, visibleDelayMs));
+  scheduleNext(initialDelayMs ?? (isVisible() ? visibleDelayMs : Math.max(hiddenDelayMs, visibleDelayMs)));
   return () => {
     stopped = true;
     clearTimer();

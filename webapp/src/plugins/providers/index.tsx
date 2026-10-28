@@ -17,28 +17,13 @@ import {
 import { adoptProviderCompatibility, deleteProvider, discoverProviderModels, listProviders, saveProvider, testProviderCompatibility, testProviderConnection } from '../../xuenessApi';
 import type { ProviderCompatibilityCheckRecord, ProviderCompatibilityDiagnosticGroup, ProviderCompatibilityTest, ProviderCompatibilityTestMode, ProviderConnectionTest, ProviderDiscoveredModel, ProviderLightweightOptions, ProviderSummary } from '../../xuenessApi';
 import { Select } from '../../ui/Select';
-import { messages, t as tr, tf } from '../../i18n';
+import { t as tr, tf } from '../../i18n';
 import { OperationHeader } from '../shared';
 import { LocalRuntimeMonitor } from './LocalRuntimeMonitor';
 import '../../styles/operations.css';
 import '../../styles/model-parity.css';
 
 // Load setup translations with the providers panel, not the startup bundle.
-messages["请先保存更改，再测试或使用此配置。"] = "Save your changes before testing or using this profile.";
-messages["本地模型文档"] = "Local model guide";
-messages["第一次配置模型？从这里开始"] = "Setting up your first model? Start here";
-messages["使用在线 API"] = "Use an online API";
-messages["准备服务商提供的 API 地址、API 密钥和准确的模型名称。显示名称可以自己取；接口协议按服务商说明选择，运行档位通常用“标准”。"] = "Use the API URL, API key and exact model name from your provider. Choose any display name, follow the provider's protocol instructions and usually select Standard mode.";
-messages["使用本地模型"] = "Use a local model";
-messages["先在本机启动模型服务，再填入它的地址和已加载的模型名称，选择“本地轻量”。上下文窗口要与本地服务一致；这里不会下载或启动模型。"] = "Start your local model server first, enter its URL and loaded model name, then select Local lightweight. Match the context window to the server. This screen does not download or start models.";
-messages["保存后开始聊天"] = "Save and start chatting";
-messages["点击“保存配置”，再点击“用于当前运行”。返回会话后确认输入框下方显示所选模型，再发送第一条消息。高级参数可以先保留默认值。"] = "Click Save profile, then Use for current run. Return to your conversation, check the selected model below the composer and send your first message. You can keep the advanced defaults.";
-messages["不确定模型名称时，请从服务商的模型列表复制，避免把显示名称当作模型 ID。"] = "If you are unsure of the model name, copy it from the provider's model list. A display name is not a model ID.";
-messages["粘贴服务商提供的 API 密钥"] = "Paste the API key from your provider";
-messages["填写显示名称；配置 ID 已自动生成，通常无需修改。"] = "Enter a display name. The configuration ID is generated automatically and usually does not need changes.";
-messages["自动生成的 ID 可手动修改；保存后不能修改。"] = "You can edit the generated ID before saving; it cannot be changed afterward.";
-messages["只填入地址并切换到本地轻量；不会填写模型名称或发送请求。"] = "Fills the endpoint and selects local lightweight mode. It does not fill a model name or send a request.";
-messages["当前更改尚未保存；请先保存配置，再发现模型。"] = "Save the current changes before discovering models.";
 
 const ENVIRONMENT_KEY = '__environment__';
 const NEW_PROVIDER_KEY = '__new_provider__';

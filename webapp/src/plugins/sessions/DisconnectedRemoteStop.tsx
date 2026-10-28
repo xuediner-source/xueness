@@ -1,12 +1,8 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { t as tr, messages } from '../../i18n';
+import { t as tr } from '../../i18n';
 import type { WorkbenchSession } from '../../xuenessWorkbench';
 import type { RemoteSessionAdapter } from '../remote/remoteSessionAdapter';
 import { paneBindingKey, type PaneIdentity } from './paneIdentity';
-
-messages['停止上次确认的远程轮次'] = 'Stop the last confirmed remote turn';
-messages['停止请求已接受；远程运行是否结束尚未确认。'] = 'Stop request accepted; remote completion is not yet confirmed.';
-messages['远程停止结果尚未确认，请勿重复提交。'] = 'Remote stop outcome is unconfirmed. Do not submit again.';
 
 export type DisconnectedStopTarget = {
   identity: PaneIdentity; adapter: RemoteSessionAdapter; session: WorkbenchSession; enabled: boolean;

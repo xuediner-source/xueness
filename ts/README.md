@@ -1,6 +1,6 @@
 # Xueness TypeScript 后端
 
-Xueness 的后端全部在此目录。迁移从 Python 后端前面的 TS 前门开始，逐步接管全部插件；第 10 轮删除了 Python 后端、桥接与回退开关，Web 服务、桌面宿主和 CLI 都只运行 TypeScript。当前阶段范围及 Z7 source/built 验收结果见 [HANDOVER.md](HANDOVER.md)（第 48 节：Z7 app-server/headless）、[Z7 使用说明](../docs/engine-z7.md) 和 [Z7 工作摘要](../WORK-SUMMARY-20261023-Z7.md)。
+Xueness 的后端全部在此目录。迁移从 Python 后端前面的 TS 前门开始，逐步接管全部插件；第 10 轮删除了 Python 后端、桥接与回退开关，Web 服务、桌面宿主和 CLI 都只运行 TypeScript。当前阶段范围及 Z7 source/built 验收结果见 [HANDOVER.md](https://github.com/xuediner-source/xueness-private-tests/blob/main/archive/project/ts/HANDOVER.md)（第 48 节：Z7 app-server/headless）、[Z7 使用说明](https://github.com/xuediner-source/xueness-private-tests/blob/main/archive/project/docs/engine-z7.md) 和 [Z7 工作摘要](https://github.com/xuediner-source/xueness-private-tests/blob/main/archive/project/WORK-SUMMARY-20261023-Z7.md)。
 
 ## 运行
 
@@ -55,7 +55,7 @@ Python 差分对照（`test-support/python-oracle.ts`）仍保留：把 `XUENESS
 - 插件禁用后不再启动其新任务；运行环境、流订阅和后台任务在停止或退出时清理。
 - 编译产物的工作区依赖已物化，不含指向开发目录的绝对 junction。桌面使用随包 Node 和 JS（`backend-ts/`），不再携带冻结的 Python 后端。
 
-代码地图、逐项能力和迁移过程见 HANDOVER；第 33 节记录删除 Python 后的状态。原有 M0–M4.1 设计记录保存在 [docs/M0-M4.1-reference.md](docs/M0-M4.1-reference.md)，该文件是历史快照，不能代替本次状态。完全对齐 ZCode 的后续步骤见 [docs/zcode-alignment-roadmap.md](docs/zcode-alignment-roadmap.md)。
+代码地图、逐项能力和迁移过程见 HANDOVER；第 33 节记录删除 Python 后的状态。原有 M0–M4.1 设计记录保存在 [docs/M0-M4.1-reference.md](https://github.com/xuediner-source/xueness-private-tests/blob/main/archive/project/ts/docs/M0-M4.1-reference.md)，该文件是历史快照，不能代替本次状态。完全对齐 ZCode 的后续步骤见 [docs/zcode-alignment-roadmap.md](https://github.com/xuediner-source/xueness-private-tests/blob/main/archive/project/ts/docs/zcode-alignment-roadmap.md)。
 
 ## 验证边界
 

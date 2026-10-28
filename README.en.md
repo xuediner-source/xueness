@@ -2,7 +2,7 @@
 
 Xueness is a local-first agent CLI, Web workbench, and self-contained desktop app. Its backend and bundled product capabilities are implemented by trusted TypeScript plugins.
 
-[简体中文 README](README.md) · [Z8 guarded goals and memory notes](ts/docs/z8-guarded-goal-memory.md) · [Desktop guide](docs/xueness-desktop.md) · [Plugin architecture](docs/xueness-plugin-architecture.md)
+[简体中文 README](README.md) · [Z8 guarded goals and memory notes](docs/session-goals-and-context-compaction.md) · [Desktop guide](docs/xueness-desktop.md) · [Plugin architecture](docs/xueness-plugin-architecture.md)
 
 ## Local development
 

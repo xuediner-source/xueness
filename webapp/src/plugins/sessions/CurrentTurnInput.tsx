@@ -1,7 +1,7 @@
 import React, { useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Check, ChevronDown, CornerDownRight, MessageSquareText, Undo2 } from 'lucide-react';
-import { messages, t as tr } from '../../i18n';
+import { t as tr } from '../../i18n';
 import { isModKeyPressed } from '../../xuenessShortcutDisplay';
 import './CurrentTurnInput.css';
 
@@ -20,20 +20,6 @@ function focusOutsideMenu(trigger: HTMLElement | null, menu: HTMLElement | null,
   next.focus();
   return true;
 }
-
-messages['后续输入方式'] = 'Follow-up input behavior';
-messages['引导'] = 'Guide';
-messages['排队'] = 'Queue';
-messages['当前轮引导'] = 'Guide the current turn';
-messages['引导当前轮'] = 'Guide current turn';
-messages['立即发送'] = 'Send now';
-messages['在下一步模型请求前处理，不中断正在执行的工具。'] = 'Apply before the next model request, without interrupting an executing tool.';
-messages['当前轮结束后执行。'] = 'Run after the current turn finishes.';
-messages['等待当前轮就绪后可引导。'] = 'Guidance becomes available when the current turn is ready.';
-messages['撤回到输入框'] = 'Withdraw to composer';
-messages['待处理引导'] = 'Pending guidance';
-messages['目标轮次已结束，请撤回后重新发送。'] = 'The target turn has ended. Withdraw this input to send it again.';
-messages['原附件或上下文不会恢复，请重新添加。'] = 'Original attachments or context are not restored. Add them again before sending.';
 
 export type FollowupMode = 'guide' | 'queue';
 export type InputDelivery = FollowupMode | 'startNow';
@@ -173,7 +159,7 @@ export function CurrentTurnInput({ mode, onChange, disabled = false, canGuide = 
     <button type="button" role="menuitemradio" aria-checked={mode === 'guide'} disabled={!canGuide}
       data-testid="current-turn-input-guide" onClick={() => choose('guide')}>
       <CornerDownRight size={16} aria-hidden="true" />
-      <span className="xn-current-turn-input__option-copy"><strong>{tr('引导')}</strong>
+      <span className="xn-current-turn-input__option-copy"><strong>{tr('引导', 'followup')}</strong>
         <small>{tr('在下一步模型请求前处理，不中断正在执行的工具。')}</small></span>
       {mode === 'guide' && <Check size={15} aria-hidden="true" />}
     </button>
@@ -198,7 +184,7 @@ export function CurrentTurnInput({ mode, onChange, disabled = false, canGuide = 
         }
       }}>
       <CurrentIcon size={15} aria-hidden="true" />
-      <span>{tr(current.label)}</span>
+      <span>{tr(current.label, 'followup')}</span>
       <ChevronDown size={13} aria-hidden="true" className="xn-current-turn-input__chevron" />
     </button>
     {portalReady && typeof document !== 'undefined' ? createPortal(menu, document.body) : menu}
@@ -224,8 +210,8 @@ export function PendingGuidancePanel({ items, onWithdraw, busyId, disabled = fal
       <span className="xn-pending-guidance__leading" aria-hidden="true"><MessageSquareText size={15} /></span>
       <div className="xn-pending-guidance__copy"><p>{item.text}</p>
         {item.status === 'paused' && <small>{tr('目标轮次已结束，请撤回后重新发送。')}</small>}
-        {(item.has_attachments || item.has_context) && <small>{tr('原附件或上下文不会恢复，请重新添加。')}</small>}</div>
-      <span className="xn-pending-guidance__mode"><CornerDownRight size={14} aria-hidden="true" />{tr('引导')}</span>
+        {(item.has_attachments || item.has_context) && <small>{tr('原附件或上下文不会恢复，请重新添加。', 'followup')}</small>}</div>
+      <span className="xn-pending-guidance__mode"><CornerDownRight size={14} aria-hidden="true" />{tr('引导', 'followup')}</span>
       {onWithdraw && (item.status === 'queued' || item.status === 'paused') && <button type="button"
         className="xn-pending-guidance__withdraw" aria-label={tr(busyId === item.id ? '正在取消…' : '撤回到输入框')}
         title={tr(busyId === item.id ? '正在取消…' : '撤回到输入框')} disabled={disabled || Boolean(busyId)}

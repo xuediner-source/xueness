@@ -2,7 +2,7 @@
 
 2026-09-30。本批再次检查旧 ZCode 机壳的设置与目录服务，补齐 Xueness 原生工作台对应流程，并准备本地源码发布包。
 
-后续更新：2026-10-01 的[项目选择与会话历史导航](xueness-project-history-2026-10-01.md)已在 macOS 本机连接加入系统目录选择和持久项目登记。本页以下记录第二十四批的历史行为，“增加目录范围需要重启”已不适用于通过系统窗口选中的新项目。
+后续更新：2026-10-01 的[项目选择与会话历史导航](https://github.com/xuediner-source/xueness-private-tests/blob/main/archive/project/docs/xueness-project-history-2026-10-01.md)已在 macOS 本机连接加入系统目录选择和持久项目登记。本页以下记录第二十四批的历史行为，“增加目录范围需要重启”已不适用于通过系统窗口选中的新项目。
 
 ## 设置页面
 
@@ -42,7 +42,7 @@ python3 -m xueness.web --port 8138 --workspace-root /absolute/path/to/project
 
 ## 发布与验证
 
-使用 `tools/prepare_release.py` 创建本地 0.1.0 源码归档、逐文件 manifest 和 SHA-256 校验。包内包括预构建 Web，运行后端无需 Node.js；重建前端才需要安装 npm 依赖。归档排除本地状态、凭据、Git、依赖安装、截图与旧机壳。详见 [本地发布准备](release-preparation.md)。本批没有远程发布、创建 tag 或推送。
+使用 `tools/prepare_release.py` 创建本地 0.1.0 源码归档、逐文件 manifest 和 SHA-256 校验。包内包括预构建 Web，运行后端无需 Node.js；重建前端才需要安装 npm 依赖。归档排除本地状态、凭据、Git、依赖安装、截图与旧机壳。详见 [本地发布准备](https://github.com/xuediner-source/xueness-private-tests/blob/main/archive/project/docs/release-preparation.md)。本批没有远程发布、创建 tag 或推送。
 
 已完成全新 `npm ci --offline` 后的 TypeScript 检查、264 项前端测试、生产构建与自有事件/帧 golden 校验；构建只剩 PPTX 预览器的大分包体积提示。退役机壳检查扫描了 92 个原生源文件与 8 个构建资产，没有旧壳/vendor 引用。
 
@@ -54,10 +54,10 @@ python3 -m xueness.web --port 8138 --workspace-root /absolute/path/to/project
 
 验收截图：
 
-- [settings-general](screenshots/batch24-20260930T130126Z-settings-general.png)
-- [settings-workspace-default](screenshots/batch24-20260930T130126Z-settings-workspace-default.png)
-- [mobile-settings-320](screenshots/batch24-20260930T130126Z-mobile-settings-320.png)
-- [mobile-start-390](screenshots/batch24-20260930T130126Z-mobile-start-390.png)
+- settings-general
+- settings-workspace-default
+- mobile-settings-320
+- mobile-start-390
 
 
 ### 多绑定与应用缩放（2026-10-14）

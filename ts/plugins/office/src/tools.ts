@@ -5,9 +5,9 @@
  */
 import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
 import { closeSync, constants, fstatSync, fsyncSync, linkSync, lstatSync, openSync, readSync, realpathSync, renameSync, statSync, unlinkSync, writeSync } from "node:fs";
-import { dirname, join, relative, isAbsolute } from "node:path";
+import { basename, dirname, join, relative, isAbsolute } from "node:path";
 import { pyJsonDumps, pyLen } from "@xueness/contracts";
-import type { ToolDefinition, ToolResult } from "@xueness/engine-tools";
+import { hasUnrestrictedWorkspaceAccess, resolveWorkspacePath, type ToolDefinition, type ToolEnv, type ToolResult } from "@xueness/engine-tools";
 import { FORMATS, type OfficeFormat } from "./document.ts";
 import { buildDocument, MAX_FILE_BYTES, readDocument } from "./read.ts";
 import { MODEL_SCHEMAS } from "./schemas.ts";
@@ -115,6 +115,11 @@ const exists = (target: string): boolean => lstatOrNull(target) !== null;
 
 type Input = Record<string, unknown>;
 const base = { inputSchema: { type: "object" } as const, subject: (input: Input): string => typeof input.path === "string" ? input.path : "", subjectKind: "path" as const };
+async function officeLocation(env: ToolEnv, path: string, mustExist: boolean) {
+  const absolute = hasUnrestrictedWorkspaceAccess(env.roots) ? (await resolveWorkspacePath(path, env.cwd, env.roots)).absolute : null;
+  const root = absolute ? dirname(absolute) : env.cwd, name = absolute ? basename(absolute) : path;
+  return { root, name, target: officeTarget(root, name, mustExist) };
+}
 
 export function officeTools(options: OfficeToolsOptions): ToolDefinition<Input>[] {
   const read: ToolDefinition<Input> = {
@@ -123,7 +128,7 @@ export function officeTools(options: OfficeToolsOptions): ToolDefinition<Input>[
     async run(input, env) {
       const path = input.path;
       if (typeof path !== "string") throw valueError("path must be a string");
-      const target = officeTarget(env.cwd, path, true), format = suffixFormat(target);
+      const { target } = await officeLocation(env, path, true), format = suffixFormat(target);
       if (!(FORMATS as readonly string[]).includes(format)) throw valueError("supported formats are DOCX, PPTX, XLSX and PDF");
       const data = readOfficeBytes(target), digest = sha256(data);
       const { document, truncated } = readDocument(data, format as OfficeFormat);
@@ -142,13 +147,13 @@ export function officeTools(options: OfficeToolsOptions): ToolDefinition<Input>[
     async run(input, env) {
       const path = input.path;
       if (typeof path !== "string") throw valueError("path must be a string");
-      const format = formatFor(path, input.format), target = officeTarget(env.cwd, path, false);
+      const format = formatFor(path, input.format), { root, name, target } = await officeLocation(env, path, false);
       if (exists(target)) throw valueError("office_create only creates a new file; use office_read then office_replace");
       const data = buildDocument(format, input.document), owner = ownerOf(env.owner, options.session());
       if (!acquire(target, owner)) return busy();
       try {
         if (exists(target)) throw valueError("target appeared before document creation");
-        writeAtomic(target, data, true, env.cwd, path);
+        writeAtomic(target, data, true, root, name);
       } finally { if (locks.get(target) === owner) locks.delete(target); }
       return done({ ok: true, path, format, bytes: data.length, sha256: sha256(data) });
     },
@@ -161,16 +166,16 @@ export function officeTools(options: OfficeToolsOptions): ToolDefinition<Input>[
       if (typeof path !== "string") throw valueError("path must be a string");
       const format = formatFor(path, input.format), expected = input.expected_sha256;
       if (typeof expected !== "string" || !SHA256.test(expected)) throw valueError("expected_sha256 from office_read is required");
-      const target = officeTarget(env.cwd, path, true), session = options.session(), proofs = proofsOf(session, false);
+      const { root, name, target } = await officeLocation(env, path, true), session = options.session(), proofs = proofsOf(session, false);
       const proof = proofs?.[path] as Row | undefined;
       if (!proof || typeof proof !== "object" || proof.format !== format || typeof proof.sha256 !== "string" || !same(expected, proof.sha256)) throw permissionError("read this exact path in the current session before replacing it");
       if (!same(sha256(readOfficeBytes(target)), expected)) throw valueError("office file changed after office_read; read it again before replacing");
       const data = buildDocument(format, input.document), owner = ownerOf(env.owner, session);
       if (!acquire(target, owner)) return busy();
       try {
-        officeTarget(env.cwd, path, true);
+        officeTarget(root, name, true);
         if (!same(sha256(readOfficeBytes(target)), expected)) throw valueError("office file changed after office_read; read it again before replacing");
-        writeAtomic(target, data, false, env.cwd, path, expected);
+        writeAtomic(target, data, false, root, name, expected);
       } finally { if (locks.get(target) === owner) locks.delete(target); }
       if (proofs) delete proofs[path];
       return done({ ok: true, path, format, bytes: data.length, sha256: sha256(data) });

@@ -1,12 +1,6 @@
 import React, { useLayoutEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { messages, t as tr } from '../../i18n';
-
-messages['添加到当前任务'] = 'Add to current task';
-messages['在辅助对话中提问'] = 'Ask in side chat';
-messages['选中的文本过长'] = 'The selected text is too long';
-messages['选中文本操作'] = 'Selected text actions';
-messages['当前运行结束后才能打开辅助对话。'] = 'Wait for the current run to finish before opening a side chat.';
+import { t as tr } from '../../i18n';
 
 export type ConversationTextSelection = {
   text: string;

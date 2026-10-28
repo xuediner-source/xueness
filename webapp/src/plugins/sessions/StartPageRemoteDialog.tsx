@@ -1,18 +1,10 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Cloud, Search, X } from "lucide-react";
-import { messages, t as tr } from "../../i18n";
+import { t as tr } from "../../i18n";
 import { get } from "../../xuenessApi";
 import "./StartPageRemoteDialog.css";
 import { connectRemote, type RemoteSessionAdapter } from "../remote/remoteSessionAdapter";
-
-// Loaded with this chunk so startup catalog does not carry dialog phrases.
-messages["搜索远程连接"] = "Search remote connections";
-messages["没有匹配的远程连接"] = "No matching remote connections";
-messages["管理连接"] = "Manage connections";
-messages["当前工作区"] = "Current workspace";
-messages["连接远程工作区"] = "Connect remote workspace";
-messages["已保存的远程连接"] = "Saved remote connections";
-messages["重连"] = "Reconnect";
+import { shouldDismissModalOnEscape } from "../shared";
 
 export type RemoteConnectionInfo = {
   id: string;
@@ -131,7 +123,7 @@ export function StartPageRemoteDialog({
   if (!open || !allowRemote) return null;
 
   const handleKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
-    if (event.key === "Escape") {
+    if (shouldDismissModalOnEscape(event)) {
       event.stopPropagation();
       close();
     }

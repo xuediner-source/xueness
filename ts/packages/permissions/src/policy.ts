@@ -7,24 +7,10 @@
  * modes, and a fail-closed refusal of unknown kinds. Rules, "always allow"
  * and read-only commands come on top, in this order:
  *
- *   1. unknown Gate kind                   → deny  no_policy
- *   2. disallowed tool or kind             → deny  disallowed (also in yolo)
- *   3. a deny rule matches                 → deny  denied_by_rule (also in yolo)
- *   3b. leaving plan mode (plan_exit)       → ask   plan_exit in plan mode (one-shot), else allow
- *   4. plan mode, and the call is not a read-only command or the plan draft
- *                                          → deny  plan_mode
- *   5. an alwaysAsk rule matches           → ask   always_ask (read-only, allow, yolo and plan do not skip it)
- *   6. a remote SSH exec subject           → ask   remote_exec (one-shot only, also in yolo)
- *   7. guarded mode and a matched exec      → ask   guarded (one-shot only, before allow rules)
- *   8. yolo / guarded fallthrough           → allow mode (ask rules do not prompt)
- *   9. an ask rule matches                 → ask   ask_rule (only a one-shot approval passes)
- *  10. a kind that never asks              → allow auto_allowed
- *  11. allow rules, remembered rules, read-only commands → allow
- *  12. edit mode for write and edit        → allow mode
- *  13. a one-shot approval                 → allow approved
- *  14. otherwise                           → ask   approval_required, with rules to remember
+ * Full access bypasses application permission policy, including deny/disallow,
+ * always-ask and remote confirmation rules. Other modes retain their rules.
  *
- * A command line passes step 10 only when the parser understood all of it and
+ * Outside full access, a command line is read-only only when the parser understood all of it and
  * every simple command in it is read-only or matched by a rule, with no
  * variable assignments or writing redirections. Deny and ask rules look at
  * every command a line can run, nested and wrapped ones included. Allow
@@ -198,6 +184,7 @@ export class PermissionSession {
   }
 
   #decide(request: PermissionRequest, consume: boolean): PermissionDecision {
+    if (this.#mode === "yolo") return allow("mode", "full access mode");
     const { tool, kind, subject, subjectKind } = request;
     if (!KNOWN_KINDS.has(kind)) return deny("no_policy", `${kind} is not a known tool`);
     if (this.#disallow.has(kind) || this.#disallow.has(tool)) return deny("disallowed", `${this.#disallow.has(kind) ? kind : tool} is disallowed for this run`);
@@ -206,7 +193,7 @@ export class PermissionSession {
     if (denied) return deny("denied_by_rule", `${tool} is denied by the rule ${denied.text}`, denied.text);
     if (subjectKind === "path" && this.hostWritableTarget(kind, subject)) return allow("host_writable", "a host-owned directory of this session");
     if (kind === PLAN_EXIT_KIND) {
-      // ZCode ExitPlanMode: the plan is the user's to approve, one call at a time; yolo cannot skip it.
+      // ZCode ExitPlanMode: the plan is the user's to approve, one call at a time in modes that enforce approval.
       if (this.#mode !== "plan") return allow("auto_allowed", "not in plan mode; the tool reports it");
       return this.#spend(request, consume) ?? ask("plan_exit", `${tool} needs the user to approve the plan`, null);
     }
@@ -233,7 +220,6 @@ export class PermissionSession {
       }
       if (match) return this.#spend(request, consume) ?? ask("guarded", match.message, null, match.ruleId);
     }
-    if (this.#mode === "yolo") return allow("mode", "full access mode");
     if (this.#mode === "guarded" && !needsApproval) return allow("auto_allowed", `${kind} does not need approval`);
     if (this.#mode === "guarded") return allow("mode", "guarded mode allows calls outside its finite danger rules");
     const asked = this.#match(this.#ask, request, commands);

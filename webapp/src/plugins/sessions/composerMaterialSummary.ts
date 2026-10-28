@@ -1,5 +1,6 @@
 import type { ComposerInput, ComposerCapability } from '../../xuenessComposer';
-import type { ComposerMention, ComposerDraftState } from './XuenessWorkbenchView';
+import type { ComposerMention } from './composerInputHelpers';
+import type { ComposerDraftState } from './composerTypes';
 import { attachmentPayloadForSend, parseAttachmentRef } from './composerAttachmentRef';
 import type { AttachmentUploadItem } from './composerAttachmentUploadStore';
 

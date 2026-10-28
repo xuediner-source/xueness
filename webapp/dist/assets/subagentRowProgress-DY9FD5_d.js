@@ -1,0 +1,1 @@
+import{j as s}from"./react-vendor-Ca5gwkdN.js";import{a as r}from"./workbench-B2iKYeIq.js";import"./_commonjsHelpers-Cpj98o6Y.js";import"./modulepreload-polyfill-B5Qt9EMX.js";function p({steps:t}){return s.jsx("span",{className:"xn-zc-subagent__steps","data-testid":"subagent-row-steps",children:r("已进行 {0} 步",[t])})}export{p as SubagentStepProgress};

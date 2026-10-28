@@ -29,9 +29,13 @@
 
 .xn-subagent-sidepane--panel {
   width: 100%;
-  max-width: 800px;
+  max-width: 1120px;
   margin: 0 auto;
   border: none;
+  height: auto;
+  min-height: 100%;
+  padding: 28px 32px 36px;
+  background: var(--bg-panel);
 }
 
 .xn-subagent-sidepane__header {
@@ -59,6 +63,30 @@
   margin: 0;
   white-space: nowrap;
 }
+.xn-subagent-sidepane__heading-copy { min-width: 0; }
+.xn-subagent-sidepane__heading-copy > p { margin: 7px 0 0; color: var(--fg-muted); font-size: 12px; line-height: 1.6; }
+.xn-subagent-sidepane--panel .xn-subagent-sidepane__header { padding: 0 0 22px; border-bottom: 0; background: transparent; gap: 16px; }
+.xn-subagent-sidepane--panel .xn-subagent-sidepane__title-wrap { gap: 13px; }
+.xn-subagent-sidepane--panel .xn-subagent-sidepane__title { font-size: 19px; font-weight: 600; line-height: 1.35; }
+.xn-subagent-sidepane--panel .xn-subagent-sidepane__mark { flex: none; box-sizing: content-box; width: 21px; height: 21px; padding: 10px; border: 1px solid var(--border); border-radius: 11px; color: var(--fg-subtle); background: var(--bg-panel); }
+.xn-subagent-sidepane--panel .xn-subagent-sidepane__body { overflow: visible; padding: 0; gap: 24px; }
+.xn-subagent-sidepane--panel .xn-subagent-sidepane__btn { gap: 6px; width: auto; min-height: 30px; padding: 0 10px; border: 1px solid var(--border); background: var(--bg-panel); border-radius: 7px; font-size: 12px; }
+.xn-subagent-sidepane--panel .xn-subagent-sidepane__empty { flex: 1; min-height: 340px; padding: 60px 24px; border: 1px solid var(--border); border-radius: 14px; background: linear-gradient(180deg, var(--bg-panel), color-mix(in srgb, var(--bg-surface) 30%, var(--bg-panel))); }
+.xn-subagent-sidepane--panel .xn-subagent-sidepane__empty-title { font-size: 16px; font-weight: 550; }
+.xn-subagent-sidepane--panel .xn-subagent-sidepane__empty-hint { max-width: 360px; font-size: 13px; line-height: 1.8; }
+.xn-subagent-sidepane--panel .xn-subagent-card { border-radius: 10px; background: var(--bg-panel); box-shadow: none; }
+.xn-subagent-sidepane--panel .xn-subagent-card__header { padding: 15px 16px 8px; }
+.xn-subagent-sidepane--panel .xn-subagent-card__meta { padding-inline: 16px; }
+.xn-subagent-sidepane--panel .xn-subagent-card__summary-preview { margin-inline: 16px; }
+.xn-subagent-empty-network { position: relative; width: 176px; height: 108px; margin: 0 0 20px; color: var(--fg-muted); }
+.xn-subagent-empty-network::before { content: ''; position: absolute; top: 54px; left: 45px; width: 86px; height: 24px; border: 1px solid var(--border); border-bottom: 0; border-radius: 12px 12px 0 0; }
+.xn-subagent-empty-network::after { content: ''; position: absolute; top: 43px; left: 87px; height: 12px; border-left: 1px solid var(--border); }
+.xn-subagent-empty-network__root { position: absolute; z-index: 1; top: 0; left: 60px; display: grid; place-items: center; width: 56px; height: 48px; background: var(--bg-panel); border: 1px solid var(--border); border-radius: 14px; color: var(--fg-subtle); box-shadow: 0 4px 12px color-mix(in srgb, var(--fg) 4%, transparent); }
+.xn-subagent-empty-network__child { position: absolute; top: 77px; left: 30px; display: grid; place-items: center; width: 31px; height: 28px; border: 1px solid var(--border); border-radius: 8px; background: var(--bg-panel); color: var(--fg-muted); }
+.xn-subagent-empty-network__child:last-child { left: 115px; }
+.xn-subagent-empty-features { display: flex; justify-content: center; flex-wrap: wrap; gap: 10px; margin-top: 20px; }
+.xn-subagent-empty-features > span { display: inline-flex; align-items: center; gap: 5px; padding: 5px 8px; border: 1px solid var(--border); border-radius: 6px; color: var(--fg-muted); font-size: 10px; background: var(--bg-panel); }
+@media (max-width: 760px) { .xn-subagent-sidepane--panel { padding: 20px 16px 24px; } .xn-subagent-sidepane--panel .xn-subagent-sidepane__header { align-items: start; flex-wrap: wrap; padding-bottom: 20px; } .xn-subagent-sidepane--panel .xn-subagent-sidepane__actions { margin-left: auto; } .xn-subagent-sidepane--panel .xn-subagent-sidepane__empty { padding: 44px 18px; min-height: 320px; } }
 
 .xn-subagent-sidepane__badge {
   font-size: 11px;

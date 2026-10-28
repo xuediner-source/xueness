@@ -1,0 +1,78 @@
+{
+  "apiVersion": 1,
+  "id": "context_lens",
+  "name": "上下文透镜",
+  "description": "基于 dsh-context 的原生上下文洞察；实际用量、组成估算、请求趋势、文件命令活动与代理关系。",
+  "version": "1.0.0",
+  "defaultEnabled": true,
+  "dependencies": [
+    "sessions",
+    "providers"
+  ],
+  "capabilities": [],
+  "httpFamilies": [
+    "context-lens"
+  ],
+  "tools": [],
+  "commands": [],
+  "panels": [
+    "context-lens"
+  ],
+  "features": [
+    {
+      "id": "context_lens.insights",
+      "name": "会话用量与每日活动洞察",
+      "nameEn": "Session usage and daily activity insights"
+    },
+    {
+      "id": "context_lens.context",
+      "name": "上下文仪表盘、环形统计、DNA 趋势与分组浏览",
+      "nameEn": "Context dashboard, donut statistics, DNA trend and grouped browser"
+    },
+    {
+      "id": "context_lens.activity",
+      "name": "文件、命令与工具归属",
+      "nameEn": "File, command and tool ownership activity"
+    },
+    {
+      "id": "context_lens.fleet",
+      "name": "可验证的代理关系",
+      "nameEn": "Attested agent relationships"
+    },
+    {
+      "id": "context_lens.capture",
+      "name": "模型请求组成记录与提示词前后缀",
+      "nameEn": "Request composition capture and prompt prefix/suffix"
+    },
+    {
+      "id": "context_lens.command",
+      "name": "/context 原生面板命令",
+      "nameEn": "Native /context panel command"
+    },
+    {
+      "id": "context_lens.preferences",
+      "name": "上下文记录与提示词前后缀偏好",
+      "nameEn": "Capture and prompt prefix/suffix preferences"
+    }
+  ],
+  "frontendModules": [
+    "plugins/context_lens/types.ts",
+    "plugins/context_lens/labels.ts",
+    "plugins/context_lens/ContextView.tsx",
+    "plugins/context_lens/ActivityView.tsx",
+    "plugins/context_lens/ContextLensPanel.tsx",
+    "plugins/context_lens/commands.ts",
+    "plugins/context_lens/Preferences.tsx",
+    "plugins/context_lens/charts.tsx",
+    "plugins/context_lens/DashboardSummary.tsx",
+    "plugins/context_lens/ContextBrowser.tsx",
+    "plugins/context_lens/ContextTrend.tsx"
+  ],
+  "resources": [],
+  "modules": [
+    "context",
+    "projection",
+    "statistics",
+    "http"
+  ]
+}

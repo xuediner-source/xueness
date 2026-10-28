@@ -1,3 +1,5 @@
+import type { PendingApproval } from './plugins/sessions/approvalTypes';
+export type { PendingApproval } from './plugins/sessions/approvalTypes';
 import { projectJournalAssistantWork } from './plugins/sessions/conversationJournalProjection';
 import { internalToolName } from "./xuenessToolNames";
 import { parseSessionsIndex } from './plugins/sessions/sessionsIndex';
@@ -27,23 +29,6 @@ import { getRunChoices, readRunOptIns } from "./xuenessBridge";
 import { parseEventsEnvelope } from "./xuenessEvents";
 import type { PendingGuidance } from './plugins/sessions/CurrentTurnInput';
 
-export type PendingApproval = {
-  tool_call_id: string;
-  /** Canonical approval capability for newer journal events. Older snapshots omit it. */
-  kind?: string;
-  name: string;
-  subject: string;
-  preview: string;
-  /** Live one-shot approval, bound to this exact call and subject on the host. */
-  granted?: boolean;
-  /**
-   * The call waits in the running turn (ZCode in-process approval): answering
-   * continues that turn, so the client must not start another run.
-   */
-  waiting?: boolean;
-  /** Asked by an alwaysAsk / ask rule or remote exec: approve once only, no "allow for this session". */
-  oneShot?: boolean;
-};
 
 export type QueuedMessage = {
   id: string;
@@ -178,6 +163,7 @@ export type WorkbenchSession = {
   forkParent?: ForkParentInfo | null;
   /** 上下文压缩记录（progressive compaction）；形状由 sessions 插件解析。 */
   compactions?: import('./plugins/sessions/conversationCompaction').SessionCompactionRecord[];
+  compacting?: boolean;
 };
 
 export type SessionSummary = {
@@ -1310,7 +1296,7 @@ export async function approvePending(
   pending: PendingApproval,
   commands?: SessionCommandClient,
   decision: 'approve' | 'reject' = 'approve',
-  answer: { message?: string; scope?: 'session' } = {},
+  answer: { message?: string; scope?: 'session' | 'project' } = {},
 ): Promise<SubmissionResult<string>> {
   const commandWasEffective = commands?.isEffective() === true;
   return import('./plugins/sessions/approvalCommands').then(module => module.approvePending(id, pending, commands,

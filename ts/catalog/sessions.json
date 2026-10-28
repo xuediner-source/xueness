@@ -121,461 +121,105 @@
     "compact_runtime"
   ],
   "features": [
-    {
-      "id": "sessions.conversation_transport",
-      "name": "统一会话投影订阅、断线水位续传、有界重连与重同步",
-      "nameEn": "Unified conversation projection subscription, cursor resume after disconnect, bounded reconnect and resync"
-    },
-    {
-      "id": "sessions.command_ack",
-      "name": "命令回执、同标签页刷新恢复与未知结果防重复提交",
-      "nameEn": "Command receipts, same-tab reload recovery and uncertain-outcome replay protection"
-    },
-    {
-      "id": "sessions.auto_title",
-      "name": "会话自动命名：首个回答后生成短标题",
-      "nameEn": "Automatic session naming: short title after the first answer"
-    },
-    {
-      "id": "sessions.sidebar_resize",
-      "name": "侧栏宽度、收起状态与分外观记忆",
-      "nameEn": "Sidebar width, collapsed state and layout preferences"
-    },
-    {
-      "id": "sessions.context_pane",
-      "name": "会话信息侧栏：输出文件、工具来源与子智能体摘要",
-      "nameEn": "Session context pane: output files, tool sources and subagent summary"
-    },
-    {
-      "id": "sessions.native_evidence",
-      "name": "原生工具回答的 Markdown 与真实证据引用",
-      "nameEn": "Native tool answers with Markdown and genuine evidence references"
-    },
-    {
-      "id": "sessions.conversation",
-      "name": "会话创建与 Agent 对话",
-      "nameEn": "Sessions and agent conversations"
-    },
-    {
-      "id": "sessions.plan_mode",
-      "name": "计划权限模式（只读并先出计划）",
-      "nameEn": "Plan permission mode (read-only, plan first)"
-    },
-    {
-      "id": "sessions.management",
-      "name": "选择、搜索、重命名、固定与归档",
-      "nameEn": "Select, search, rename, pin and archive"
-    },
-    {
-      "id": "sessions.project_sidebar",
-      "name": "项目侧栏：置顶、显示名称、分区、资源管理器和归档操作",
-      "nameEn": "Project sidebar: pinning, display names, sections, Explorer and archive actions"
-    },
-    {
-      "id": "sessions.archived_delete",
-      "name": "归档会话恢复与带版本确认的永久删除",
-      "nameEn": "Restore archived conversations and permanently delete with revision confirmation"
-    },
-    {
-      "id": "sessions.history",
-      "name": "会话历史预览、阅读位置记忆与跨会话上下文检索",
-      "nameEn": "History previews, reading-position memory and session context search"
-    },
-    {
-      "id": "sessions.fork",
-      "name": "闭合历史轮次分叉与来源链接",
-      "nameEn": "Safe history forks and parent links"
-    },
-    {
-      "id": "sessions.fork_from_checkpoint",
-      "name": "从轮次检查点派生新会话",
-      "nameEn": "Fork a session from a turn checkpoint"
-    },
-    {
-      "id": "sessions.portable",
-      "name": "脱敏导出、导入与恢复",
-      "nameEn": "Redacted export, import and resume"
-    },
-    {
-      "id": "sessions.streaming",
-      "name": "文本、思考与工具增量流、可折叠工作过程、真实请求阶段和中断提示",
-      "nameEn": "Text, reasoning and tool streams, collapsible work history, actual phases and interruption notices"
-    },
-    {
-      "id": "sessions.reasoning_rows",
-      "name": "独立思考行、摘要折叠、思考时长、多段边界与中断状态恢复",
-      "nameEn": "Independent reasoning rows with collapsed summaries, duration, multi-segment boundaries and interrupted state recovery"
-    },
-    {
-      "id": "sessions.rich_message_rendering",
-      "name": "流式 Markdown 容错与收流后富文本渲染",
-      "nameEn": "Streaming Markdown tolerance with rich rendering after stream completion"
-    },
-    {
-      "id": "sessions.reference_rows",
-      "name": "有界文件引用、预览挂载与 artifact 行",
-      "nameEn": "Bounded file citations, preview mounts and artifact rows"
-    },
-    {
-      "id": "sessions.subagent_rows",
-      "name": "有界子代理行、父快照实时状态与步数、折叠摘要和只读详情",
-      "nameEn": "Bounded subagent rows with parent-snapshot status, step counts, collapsed summaries and read-only detail"
-    },
-    {
-      "id": "sessions.composer",
-      "name": "附件、上下文引用、即时反馈与跨桌面重启草稿恢复",
-      "nameEn": "Attachments, context, feedback and drafts across desktop restarts"
-    },
-    {
-      "id": "sessions.rich_composer",
-      "name": "每会话结构化编辑器草稿、有界附件引用与旧消息附件恢复",
-      "nameEn": "Per-session structured editor drafts, bounded attachment references and history attachment restoration"
-    },
-    {
-      "id": "sessions.attachment_preview",
-      "name": "已授权附件的图片、视频、PDF 与文本预览",
-      "nameEn": "Preview of authorized image, video, PDF and text attachments"
-    },
-    {
-      "id": "sessions.message_queue",
-      "name": "运行期间排队发送、接收回执去重、完整预览、安全编辑与顺序调整",
-      "nameEn": "Queue follow-ups with deduplicated receipts, full previews, safe editing and reordering"
-    },
-    {
-      "id": "sessions.refresh_recovery",
-      "name": "加载重试、断线恢复与就近继续入口",
-      "nameEn": "Load retries, connection recovery and contextual continuation"
-    },
-    {
-      "id": "sessions.tui",
-      "name": "多行 CLI、全屏 TUI 与中断恢复",
-      "nameEn": "Multiline CLI, fullscreen TUI and interruption"
-    },
-    {
-      "id": "sessions.command_palette",
-      "name": "命令面板搜索与键盘导航",
-      "nameEn": "Command palette search and keyboard navigation"
-    },
-    {
-      "id": "sessions.timeline_follow",
-      "name": "时间线跟随与回到底部",
-      "nameEn": "Timeline following and return to bottom"
-    },
-    {
-      "id": "sessions.start_page",
-      "name": "空会话起始页快捷动作与最近会话",
-      "nameEn": "Empty-session start page actions and recent sessions"
-    },
-    {
-      "id": "sessions.empty_state_workspace_picker",
-      "name": "空态工作区搜索、项目脱离与远程连接入口",
-      "nameEn": "Empty-state workspace search, project detach and remote connection entry"
-    },
-    {
-      "id": "sessions.composer_shortcuts",
-      "name": "Composer 发送与停止快捷键",
-      "nameEn": "Composer send and stop keyboard shortcuts"
-    },
-    {
-      "id": "sessions.manual_compact",
-      "name": "手动压缩上下文（/compact 与说明）",
-      "nameEn": "Manual context compaction (/compact with instructions)"
-    },
-    {
-      "id": "sessions.compaction_visibility",
-      "name": "时间线压缩标记：归档历史边界与旧输出掩码提示",
-      "nameEn": "Timeline compaction markers: archived-history boundary and masked older outputs"
-    },
-    {
-      "id": "sessions.tool_concurrency",
-      "name": "依赖感知的工具并发调度",
-      "nameEn": "Dependency-aware tool concurrency"
-    },
-    {
-      "id": "sessions.runtime_model_switch",
-      "name": "模型与推理档位切换（思考强度按钮、拖动弹层与 /model、/effort）",
-      "nameEn": "Model and reasoning-level switching (effort button, slider popover, /model and /effort)"
-    },
-    {
-      "id": "sessions.model_picker",
-      "name": "供应商子菜单、模型搜索与详情卡",
-      "nameEn": "Supplier submenus, model search and detail cards"
-    },
-    {
-      "id": "sessions.events_cursor",
-      "name": "会话事件增量游标拉取（实验，默认关闭）",
-      "nameEn": "Incremental session event cursor polling (experimental, off by default)"
-    },
-    {
-      "id": "sessions.event_resume",
-      "name": "会话事件代际续传与重同步（实验，默认关闭）",
-      "nameEn": "Session event epoch resume and resync (experimental, off by default)"
-    },
-    {
-      "id": "sessions.cancel_receipt",
-      "name": "停止请求的取消回执（实验，默认关闭）",
-      "nameEn": "Cancel receipt on stop (experimental, off by default)"
-    },
-    {
-      "id": "sessions.cancel_propagate",
-      "name": "停止可打断阻塞中的模型读取（实验，默认关闭）",
-      "nameEn": "Stop can interrupt a blocked model read (experimental, off by default)"
-    },
-    {
-      "id": "sessions.answer_question_experimental",
-      "name": "通过界面答复会话问题（实验，默认关闭）",
-      "nameEn": "Answer session questions in the UI (experimental, off by default)"
-    },
-    {
-      "id": "sessions.question_answer_ui",
-      "name": "会话问题答复界面",
-      "nameEn": "Session question answer UI"
-    },
-    {
-      "id": "sessions.composer_capabilities",
-      "name": "可搜索添加菜单、可见标签与插件能力上下文",
-      "nameEn": "Searchable Add menu, visible selections and plugin capability context"
-    },
-    {
-      "id": "sessions.usage_guide",
-      "name": "Xueness 使用与配置诊断指南",
-      "nameEn": "Xueness usage and configuration guide"
-    },
-    {
-      "id": "sessions.context_usage_ring",
-      "name": "当前请求上下文用量圆环与来源说明",
-      "nameEn": "Current-request context usage ring and provenance"
-    },
-    {
-      "id": "sessions.yolo_confirmation",
-      "name": "完全访问权限确认",
-      "nameEn": "Full access permission confirmation"
-    },
-    {
-      "id": "sessions.zcode_conversation",
-      "name": "统一会话展示、折叠工作过程与消息操作",
-      "nameEn": "Unified conversation, work history and message actions"
-    },
-    {
-      "id": "sessions.message_edit",
-      "name": "历史消息行内编辑与版本冲突保护",
-      "nameEn": "Inline history editing with revision conflict protection"
-    },
-    {
-      "id": "sessions.message_feedback",
-      "name": "持久化回复反馈",
-      "nameEn": "Persistent assistant feedback"
-    },
-    {
-      "id": "sessions.consistent_snapshot",
-      "name": "正文、工具、状态与版本的一致快照",
-      "nameEn": "Consistent conversation, tools, status and revision snapshots"
-    },
-    {
-      "id": "sessions.full_text_search",
-      "name": "分批搜索会话正文与已压缩历史",
-      "nameEn": "Paged transcript and compacted history search"
-    },
-    {
-      "id": "sessions.structured_questions",
-      "name": "结构化问题、选项、自定义答复与幂等保存",
-      "nameEn": "Structured questions, choices, custom answers and idempotent saving"
-    },
-    {
-      "id": "sessions.stable_history",
-      "name": "稳定消息身份与可回放修订历史",
-      "nameEn": "Stable message identity and replayable revision history"
-    },
-    {
-      "id": "sessions.live_updates",
-      "name": "会话增量推送、断线重连与快照重建",
-      "nameEn": "Incremental conversation push, reconnect and snapshot recovery"
-    },
-    {
-      "id": "sessions.current_turn_guidance",
-      "name": "当前轮引导",
-      "nameEn": "Current-turn guidance"
-    },
-    {
-      "id": "sessions.start_now",
-      "name": "立即发送排队消息",
-      "nameEn": "Send queued messages now"
-    },
-    {
-      "id": "sessions.conversation_selection",
-      "name": "当前任务引用选中文本与辅助会话提问",
-      "nameEn": "Add selected text to the current task or ask in a forked side chat"
-    },
-    {
-      "id": "sessions.conversation_find",
-      "name": "在当前对话中查找并定位匹配内容",
-      "nameEn": "Find and navigate matching text in the current conversation"
-    },
-    {
-      "id": "sessions.conversation_share",
-      "name": "选定轮次分享、撤销与导入",
-      "nameEn": "Selected-turn sharing, revocation and import"
-    },
-    {
-      "id": "sessions.transcript_paging",
-      "name": "长会话分段加载与原始历史恢复",
-      "nameEn": "Long-transcript paging and original history recovery"
-    },
-    {
-      "id": "sessions.read_state",
-      "name": "会话运行状态内省工具（read_state）",
-      "nameEn": "Session run-state introspection tool (read_state)"
-    },
-    {
-      "id": "sessions.tool_renderers",
-      "name": "按工具身份展示工具调用、进度与安全降级",
-      "nameEn": "Tool-identity renderers with progress states and safe fallback"
-    },
-    {
-      "id": "sessions.project_list",
-      "name": "项目右键菜单、持久移除与重新添加，保留文件和会话",
-      "nameEn": "Project context menu, persistent removal and re-add while keeping files and sessions"
-    },
-    {
-      "id": "sessions.sessions_index",
-      "name": "侧栏会话索引、活性、远程配置与连接阶段、时间线视图",
-      "nameEn": "Sidebar sessions index, activity, remote configuration and connection phases, and timeline view"
-    },
-    {
-      "id": "sessions.pane_layout",
-      "name": "四会话嵌套分屏、持久会话组、独立输入与焦点导航",
-      "nameEn": "Four-conversation nested panes, persistent groups, independent input and focus navigation"
-    },
-    {
-      "id": "sessions.scoped_commands",
-      "name": "作用域命令：输入换行、任务查找、选项菜单与分屏导航",
-      "nameEn": "Scoped composer, task find, option menus and pane navigation"
-    },
-    {
-      "id": "sessions.queue_withdrawal_recovery",
-      "name": "排队消息撤回与持久化纯文本找回",
-      "nameEn": "Atomic queued-message withdrawal and durable text-only recovery"
-    },
-    {
-      "id": "sessions.durable_media",
-      "name": "持久媒体引用与作用域所有权",
-      "nameEn": "Durable media references and scoped ownership"
-    },
-    {
-      "id": "sessions.work_activity",
-      "name": "事实工作分段与活跃时长",
-      "nameEn": "Factual work segments and active duration"
-    },
-    {
-      "id": "sessions.live_tool_activity",
-      "name": "实时工具输入与有界活动展示",
-      "nameEn": "Live tool input and bounded activity display"
-    },
-    {
-      "id": "sessions.timeline_markers",
-      "name": "基于真实记录的会话标记与上下文标签",
-      "nameEn": "Fact-based conversation markers and context labels"
-    },
-    {
-      "id": "sessions.attachment_restore_receipts",
-      "name": "历史附件恢复请求回执、查询与取消清理",
-      "nameEn": "History attachment restore receipts, query and cancellation cleanup"
-    },
-    {
-      "id": "sessions.starter_ideas",
-      "name": "新手任务起步卡与可编辑草稿",
-      "nameEn": "Beginner task starters with editable drafts"
-    },
-    {
-      "id": "sessions.material_manifest",
-      "name": "发送材料清单与准备状态",
-      "nameEn": "Message material receipt and readiness"
-    },
-    {
-      "id": "sessions.approval_impact",
-      "name": "审批操作影响与本次批量范围",
-      "nameEn": "Approval operation effects and batch scope"
-    },
-    {
-      "id": "sessions.tui_completion",
-      "name": "终端命令、模型、文件与会话补全",
-      "nameEn": "Terminal command, model, file and session completion"
-    },
-    {
-      "id": "sessions.tui_dialogs",
-      "name": "终端工具审批与多题澄清对话",
-      "nameEn": "Terminal tool approvals and multi-question dialogs"
-    },
-    {
-      "id": "sessions.tui_sidebar",
-      "name": "终端状态侧栏",
-      "nameEn": "Terminal status sidebar"
-    },
-    {
-      "id": "sessions.tui_cards",
-      "name": "可折叠推理、工具、压缩与工作流卡片",
-      "nameEn": "Foldable reasoning, tool, compaction and workflow cards"
-    },
-    {
-      "id": "sessions.tui_clipboard",
-      "name": "剪贴板文本复制与 PNG 图片附件",
-      "nameEn": "Clipboard text copying and PNG image attachments"
-    },
-    {
-      "id": "sessions.tui_queue",
-      "name": "后续输入队列与当前轮次指导",
-      "nameEn": "Follow-up queue and current-turn steering"
-    },
-    {
-      "id": "sessions.tui_sessions",
-      "name": "会话选择与只读子代理时间线",
-      "nameEn": "Session selection and read-only subagent timelines"
-    },
-    {
-      "id": "sessions.turn_runtime",
-      "name": "回合状态与工具结算",
-      "nameEn": "Turn lifecycle and tool settlement"
-    },
-    {
-      "id": "sessions.history_hydration",
-      "name": "中断会话与工具结果恢复",
-      "nameEn": "Interrupted session and tool result hydration"
-    },
-    {
-      "id": "sessions.steering_boundaries",
-      "name": "模型结束边界的当前回合指导",
-      "nameEn": "Current-turn guidance at model completion boundaries"
-    },
-    {
-      "id": "sessions.runtime_events",
-      "name": "持久运行事件与断点恢复",
-      "nameEn": "Durable runtime events and cursor recovery"
-    },
-    {
-      "id": "sessions.sqlite_storage",
-      "name": "可选 SQLite 会话库与迁移",
-      "nameEn": "Optional SQLite session library and migration"
-    },
-    {
-      "id": "sessions.conversation_rewind",
-      "name": "按消息回退会话分支",
-      "nameEn": "Conversation branch rewind"
-    },
-    {
-      "id": "sessions.stable_boundaries",
-      "name": "稳定分叉边界与独立身份",
-      "nameEn": "Stable fork boundaries and child identities"
-    },
-    {
-      "id": "sessions.compact_persistence",
-      "name": "压缩操作持久化与中断恢复",
-      "nameEn": "Durable compaction operations and recovery"
-    },
-    {
-      "id": "sessions.headless",
-      "name": "无头运行、恢复与机器输出",
-      "nameEn": "Headless execution, resume and machine output"
-    }
+    {"id": "sessions.header_navigation", "name": "会话顶栏、分屏组与插件标签", "nameEn": "Session header, pane groups and plugin tabs"},
+    {"id": "sessions.cancel_propagate", "name": "停止时中断正在进行的请求", "nameEn": "Interrupt in-flight requests when stopping"},
+    {"id": "sessions.tui", "name": "全屏聊天、草稿与终端中断", "nameEn": "Fullscreen chat, drafts and terminal interruption"},
+    {"id": "sessions.auto_title", "name": "自动命名会话", "nameEn": "Automatic conversation titles"},
+    {"id": "sessions.runtime_model_switch", "name": "运行中切换模型与推理档位", "nameEn": "Switch model and reasoning effort between requests"},
+    {"id": "sessions.manual_compact", "name": "手动压缩上下文", "nameEn": "Manual deterministic context compaction"},
+    {"id": "sessions.lifecycle", "name": "会话创建、续行与停止", "nameEn": "Session creation continuation and stopping"},
+    {"id": "sessions.management", "name": "会话标题、置顶与归档", "nameEn": "Session titles pins and archives"},
+    {"id": "sessions.archived_delete", "name": "确认后永久删除归档", "nameEn": "Confirmed permanent archive deletion"},
+    {"id": "sessions.portable", "name": "脱敏会话导入与导出", "nameEn": "Redacted session import and export"},
+    {"id": "sessions.fork", "name": "安全历史边界分叉", "nameEn": "Forking at safe history boundaries"},
+    {"id": "sessions.fork_from_checkpoint", "name": "从检查点前一轮分叉", "nameEn": "Forking before a checkpoint turn"},
+    {"id": "sessions.scoped_commands", "name": "持久会话命令回执", "nameEn": "Durable session command acknowledgements"},
+    {"id": "sessions.message_queue", "name": "持久消息队列与顺序执行", "nameEn": "Durable message queues and ordered execution"},
+    {"id": "sessions.queue_withdrawal_recovery", "name": "队列撤回与文本恢复", "nameEn": "Queue withdrawals and text recovery"},
+    {"id": "sessions.current_turn_guidance", "name": "当前轮次补充指导", "nameEn": "Guidance for the current turn"},
+    {"id": "sessions.start_now", "name": "已排队消息立即发送", "nameEn": "Sending a queued message now"},
+    {"id": "sessions.approvals", "name": "精确工具调用批准", "nameEn": "Approval for exact tool calls"},
+    {"id": "sessions.message_edit", "name": "版本绑定的消息编辑", "nameEn": "Revision bound message editing"},
+    {"id": "sessions.message_feedback", "name": "本地助手回答反馈", "nameEn": "Local assistant answer feedback"},
+    {"id": "sessions.consistent_snapshot", "name": "一致会话快照与分页", "nameEn": "Consistent conversation snapshots and paging"},
+    {"id": "sessions.events_cursor", "name": "事件前缀游标分页", "nameEn": "Event prefix cursor paging"},
+    {"id": "sessions.event_resume", "name": "事件纪元恢复", "nameEn": "Event epoch resume"},
+    {"id": "sessions.streaming", "name": "模型文本增量流", "nameEn": "Model text delta streams"},
+    {"id": "sessions.live_updates", "name": "会话快照实时补丁", "nameEn": "Live conversation snapshot patches"},
+    {"id": "sessions.reference_rows", "name": "受限文件引用展示", "nameEn": "Bounded file reference display"},
+    {"id": "sessions.subagent_rows", "name": "父会话子代理摘要", "nameEn": "Parent session subagent summaries"},
+    {"id": "sessions.read_state", "name": "版本绑定的已读水位", "nameEn": "Revision bound read watermarks"},
+    {"id": "sessions.live_tool_activity", "name": "受限工具输入流展示", "nameEn": "Bounded tool input stream display"},
+    {"id": "sessions.timeline_markers", "name": "持久变更时间线标记", "nameEn": "Timeline markers for persisted changes"},
+    {"id": "sessions.completion_policy", "name": "完成结论证据检查", "nameEn": "Completion evidence checks"},
+    {"id": "sessions.full_text_search", "name": "有界会话全文搜索", "nameEn": "Bounded conversation text search"},
+    {"id": "sessions.sessions_index", "name": "只读会话侧栏索引", "nameEn": "Read only session sidebar index"},
+    {"id": "sessions.conversation_share", "name": "选中轮次的只读分享", "nameEn": "Read only sharing of selected turns"},
+    {"id": "sessions.structured_questions", "name": "显式选择的结构化问题", "nameEn": "Structured questions with explicit choices"},
+    {"id": "sessions.answer_question_experimental", "name": "幂等操作员问题回答", "nameEn": "Idempotent operator question answers"},
+    {"id": "sessions.composer_attachments", "name": "附件上传与恢复", "nameEn": "Attachment upload and recovery"},
+    {"id": "sessions.history", "name": "会话历史", "nameEn": "Session history"},
+    {"id": "sessions.media_artifacts", "name": "私有媒体存储", "nameEn": "Private media artifacts"},
+    {"id": "sessions.media_binding", "name": "模型媒体绑定", "nameEn": "Provider media binding"},
+    {"id": "sessions.tui_completion", "name": "终端命令、模型、文件与会话补全", "nameEn": "Terminal command, model, file and session completion"},
+    {"id": "sessions.tui_dialogs", "name": "终端工具审批与多题澄清对话", "nameEn": "Terminal tool approvals and multi-question dialogs"},
+    {"id": "sessions.tui_sidebar", "name": "终端状态侧栏", "nameEn": "Terminal status sidebar"},
+    {"id": "sessions.tui_cards", "name": "可折叠推理、工具、压缩与工作流卡片", "nameEn": "Foldable reasoning, tool, compaction and workflow cards"},
+    {"id": "sessions.tui_clipboard", "name": "剪贴板文本复制与 PNG 图片附件", "nameEn": "Clipboard text copying and PNG image attachments"},
+    {"id": "sessions.tui_queue", "name": "后续输入队列与当前轮次指导", "nameEn": "Follow-up queue and current-turn steering"},
+    {"id": "sessions.tui_sessions", "name": "会话选择与只读子代理时间线", "nameEn": "Session selection and read-only subagent timelines"},
+    {"id": "sessions.turn_runtime", "name": "回合状态与工具结算", "nameEn": "Turn lifecycle and tool settlement"},
+    {"id": "sessions.history_hydration", "name": "中断会话与工具结果恢复", "nameEn": "Interrupted session and tool result hydration"},
+    {"id": "sessions.steering_boundaries", "name": "模型结束边界的当前回合指导", "nameEn": "Current-turn guidance at model completion boundaries"},
+    {"id": "sessions.runtime_events", "name": "持久运行事件与断点恢复", "nameEn": "Durable runtime events and cursor recovery"},
+    {"id": "sessions.sqlite_storage", "name": "可选 SQLite 会话库与迁移", "nameEn": "Optional SQLite session library and migration"},
+    {"id": "sessions.conversation_rewind", "name": "按消息回退会话分支", "nameEn": "Conversation branch rewind"},
+    {"id": "sessions.stable_boundaries", "name": "稳定分叉边界与独立身份", "nameEn": "Stable fork boundaries and child identities"},
+    {"id": "sessions.compact_persistence", "name": "压缩操作持久化与中断恢复", "nameEn": "Durable compaction operations and recovery"},
+    {"id": "sessions.headless", "name": "无头运行、恢复与机器输出", "nameEn": "Headless execution, resume and machine output"},
+    {"id": "sessions.conversation_transport", "name": "统一会话投影订阅、断线水位续传、有界重连与重同步", "nameEn": "Unified conversation projection subscription, cursor resume after disconnect, bounded reconnect and resync"},
+    {"id": "sessions.command_ack", "name": "命令回执、同标签页刷新恢复与未知结果防重复提交", "nameEn": "Command receipts, same-tab reload recovery and uncertain-outcome replay protection"},
+    {"id": "sessions.sidebar_resize", "name": "侧栏宽度、收起状态与分外观记忆", "nameEn": "Sidebar width, collapsed state and layout preferences"},
+    {"id": "sessions.context_pane", "name": "会话信息侧栏：输出文件、工具来源与子智能体摘要", "nameEn": "Session context pane: output files, tool sources and subagent summary"},
+    {"id": "sessions.native_evidence", "name": "原生工具回答的 Markdown 与真实证据引用", "nameEn": "Native tool answers with Markdown and genuine evidence references"},
+    {"id": "sessions.conversation", "name": "会话创建与 Agent 对话", "nameEn": "Sessions and agent conversations"},
+    {"id": "sessions.plan_mode", "name": "计划权限模式（只读并先出计划）", "nameEn": "Plan permission mode (read-only, plan first)"},
+    {"id": "sessions.project_sidebar", "name": "项目侧栏：置顶、显示名称、分区、资源管理器和归档操作", "nameEn": "Project sidebar: pinning, display names, sections, Explorer and archive actions"},
+    {"id": "sessions.reasoning_rows", "name": "独立思考行、摘要折叠、思考时长、多段边界与中断状态恢复", "nameEn": "Independent reasoning rows with collapsed summaries, duration, multi-segment boundaries and interrupted state recovery"},
+    {"id": "sessions.rich_message_rendering", "name": "流式 Markdown 容错与收流后富文本渲染", "nameEn": "Streaming Markdown tolerance with rich rendering after stream completion"},
+    {"id": "sessions.composer", "name": "附件、上下文引用、即时反馈与跨桌面重启草稿恢复", "nameEn": "Attachments, context, feedback and drafts across desktop restarts"},
+    {"id": "sessions.rich_composer", "name": "每会话结构化编辑器草稿、有界附件引用与旧消息附件恢复", "nameEn": "Per-session structured editor drafts, bounded attachment references and history attachment restoration"},
+    {"id": "sessions.attachment_preview", "name": "已授权附件的图片、视频、PDF 与文本预览", "nameEn": "Preview of authorized image, video, PDF and text attachments"},
+    {"id": "sessions.refresh_recovery", "name": "加载重试、断线恢复与就近继续入口", "nameEn": "Load retries, connection recovery and contextual continuation"},
+    {"id": "sessions.command_palette", "name": "命令面板搜索与键盘导航", "nameEn": "Command palette search and keyboard navigation"},
+    {"id": "sessions.timeline_follow", "name": "时间线跟随与回到底部", "nameEn": "Timeline following and return to bottom"},
+    {"id": "sessions.start_page", "name": "空会话起始页快捷动作与最近会话", "nameEn": "Empty-session start page actions and recent sessions"},
+    {"id": "sessions.empty_state_workspace_picker", "name": "空态工作区搜索、项目脱离与远程连接入口", "nameEn": "Empty-state workspace search, project detach and remote connection entry"},
+    {"id": "sessions.composer_shortcuts", "name": "Composer 发送与停止快捷键", "nameEn": "Composer send and stop keyboard shortcuts"},
+    {"id": "sessions.compaction_visibility", "name": "时间线压缩标记：归档历史边界与旧输出掩码提示", "nameEn": "Timeline compaction markers: archived-history boundary and masked older outputs"},
+    {"id": "sessions.tool_concurrency", "name": "依赖感知的工具并发调度", "nameEn": "Dependency-aware tool concurrency"},
+    {"id": "sessions.model_picker", "name": "供应商子菜单、模型搜索与详情卡", "nameEn": "Supplier submenus, model search and detail cards"},
+    {"id": "sessions.cancel_receipt", "name": "停止请求的取消回执（实验，默认关闭）", "nameEn": "Cancel receipt on stop (experimental, off by default)"},
+    {"id": "sessions.question_answer_ui", "name": "会话问题答复界面", "nameEn": "Session question answer UI"},
+    {"id": "sessions.composer_capabilities", "name": "可搜索添加菜单、可见标签与插件能力上下文", "nameEn": "Searchable Add menu, visible selections and plugin capability context"},
+    {"id": "sessions.usage_guide", "name": "Xueness 使用与配置诊断指南", "nameEn": "Xueness usage and configuration guide"},
+    {"id": "sessions.context_usage_ring", "name": "当前请求上下文用量圆环与来源说明", "nameEn": "Current-request context usage ring and provenance"},
+    {"id": "sessions.yolo_confirmation", "name": "完全访问权限确认", "nameEn": "Full access permission confirmation"},
+    {"id": "sessions.zcode_conversation", "name": "统一会话展示、折叠工作过程与消息操作", "nameEn": "Unified conversation, work history and message actions"},
+    {"id": "sessions.stable_history", "name": "稳定消息身份与可回放修订历史", "nameEn": "Stable message identity and replayable revision history"},
+    {"id": "sessions.conversation_selection", "name": "当前任务引用选中文本与辅助会话提问", "nameEn": "Add selected text to the current task or ask in a forked side chat"},
+    {"id": "sessions.conversation_find", "name": "在当前对话中查找并定位匹配内容", "nameEn": "Find and navigate matching text in the current conversation"},
+    {"id": "sessions.transcript_paging", "name": "长会话分段加载与原始历史恢复", "nameEn": "Long-transcript paging and original history recovery"},
+    {"id": "sessions.tool_renderers", "name": "按工具身份展示工具调用、进度与安全降级", "nameEn": "Tool-identity renderers with progress states and safe fallback"},
+    {"id": "sessions.project_list", "name": "项目右键菜单、持久移除与重新添加，保留文件和会话", "nameEn": "Project context menu, persistent removal and re-add while keeping files and sessions"},
+    {"id": "sessions.pane_layout", "name": "四会话嵌套分屏、持久会话组、独立输入与焦点导航", "nameEn": "Four-conversation nested panes, persistent groups, independent input and focus navigation"},
+    {"id": "sessions.durable_media", "name": "持久媒体引用与作用域所有权", "nameEn": "Durable media references and scoped ownership"},
+    {"id": "sessions.work_activity", "name": "事实工作分段与活跃时长", "nameEn": "Factual work segments and active duration"},
+    {"id": "sessions.attachment_restore_receipts", "name": "历史附件恢复请求回执、查询与取消清理", "nameEn": "History attachment restore receipts, query and cancellation cleanup"},
+    {"id": "sessions.starter_ideas", "name": "新手任务起步卡与可编辑草稿", "nameEn": "Beginner task starters with editable drafts"},
+    {"id": "sessions.material_manifest", "name": "发送材料清单与准备状态", "nameEn": "Message material receipt and readiness"},
+    {"id": "sessions.approval_impact", "name": "审批操作影响与本次批量范围", "nameEn": "Approval operation effects and batch scope"},
+    {"id": "sessions.runtime_permissions", "name": "运行中调整权限与重启后保留待审批操作", "nameEn": "Live permission changes and durable pending approvals"}
   ],
   "frontendModules": [
     "plugins/sessions/ArchivedSessions.tsx",
@@ -628,7 +272,6 @@
     "plugins/sessions/StartPageWorkspaceMenu.tsx",
     "plugins/sessions/StartPageRemoteDialog.tsx",
     "plugins/sessions/permissionModes.ts",
-    "plugins/sessions/TimelineVirtualWindow.ts#TimelineWindowModel",
     "plugins/sessions/TimelineVirtualWindow.ts#useTimelineVirtualWindow",
     "plugins/sessions/ListVirtualWindow.ts",
     "plugins/sessions/messageTimeLabel.ts#formatMessageTimeLabel",
@@ -723,6 +366,31 @@
     "plugins/sessions/SessionRecoveryNotice.tsx",
     "plugins/sessions/ComposerMaterialManifest.tsx",
     "plugins/sessions/composerMaterialSummary.ts",
-    "plugins/sessions/approvalImpact.ts"
+    "plugins/sessions/approvalImpact.ts",
+    "plugins/sessions/TaskList.tsx",
+    "plugins/sessions/diffPreview.ts",
+    "plugins/sessions/disclosureState.ts",
+    "plugins/sessions/ApprovalPreview.tsx",
+    "plugins/sessions/Approvals.tsx",
+    "plugins/sessions/composerInputHelpers.ts",
+    "plugins/sessions/composerDraftStore.ts",
+    "plugins/sessions/composerTypes.ts",
+    "plugins/sessions/composerKeyboard.ts",
+    "plugins/sessions/WorkbenchHeader.tsx",
+    "plugins/sessions/TimelineWindowModel.ts",
+    "plugins/sessions/conversationTurnPropsEqual.ts",
+    "ui/StreamingCommitGate.ts#prepareStreamingMarkdown",
+    "plugins/sessions/useLivePermissionMode.ts",
+    "plugins/sessions/ApprovalChoiceMenu.tsx",
+    "plugins/sessions/ApprovalRequestPreview.tsx",
+    "plugins/sessions/permissionChoices.tsx",
+    "plugins/sessions/approvalTypes.ts",
+    "plugins/sessions/WorkbenchViewSwitcher.tsx",
+    "plugins/sessions/ContextCompactionStatus.tsx",
+    "plugins/sessions/SessionCommandNotice.tsx",
+    "plugins/sessions/PaneGroupSwitcher.tsx",
+    "plugins/sessions/manualCompact.ts",
+    "xuenessToolNames.ts",
+    "plugins/sessions/Visualizations.tsx"
   ]
 }

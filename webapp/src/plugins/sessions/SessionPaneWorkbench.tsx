@@ -1,6 +1,6 @@
 import { usePaneControlShortcuts } from './paneShortcutActions';
 import React, { useEffect, useRef, useState } from 'react';
-import { t as tr, messages } from '../../i18n';
+import { t as tr } from '../../i18n';
 import type { RunChoices } from '../../xuenessBridge';
 import { ConversationPane } from './secondaryConversationPane';
 import type { PaneComposerProps } from './secondaryPaneComposer';
@@ -13,11 +13,9 @@ import { paneTreeGeometry, type PaneSplitGeometry } from './paneGeometry';
 import { PANE_SESSION_DRAG_MIME } from './paneLayout';
 import { paneDropSide, readTreePaneDrop } from './paneDrop';
 import { useScopedSessionCommands } from './scopedCommands';
+import { PaneGroupSwitcher } from './PaneGroupSwitcher';
 import type { RemoteSessionAdapter } from '../remote/remoteSessionAdapter';
 import './pane-workbench.css';
-
-messages['选择远程会话'] = 'Select a remote conversation';
-messages['仅显示最近 1000 个远程会话，已保存的分屏会话仍会保留。'] = 'Showing up to 1,000 recent remote conversations. Saved pane conversations are retained.';
 
 const SIDES: readonly PaneSide[] = ['left', 'right', 'up', 'down'];
 const LABELS: Record<PaneSide, string> = { left: '向左分屏', right: '向右分屏', up: '向上分屏', down: '向下分屏' };
@@ -39,6 +37,8 @@ export type PaneSelectionHandler = (sessionId: string) => boolean;
 type PaneSessionRow = { id: string; root?: string; title?: string; task?: string };
 export type SessionPaneWorkbenchProps = {
   enabled: boolean; primaryBinding: TreeBinding; children: React.ReactNode;
+  renderHeader?: (splitControls: React.ReactNode, groupSwitcher: React.ReactNode) => React.ReactNode;
+  auxiliaryView?: React.ReactNode;
   initialRunOptions: Readonly<RunChoices>; filesEffective: boolean; settingsEffective: boolean;
   effectivePluginIds: ReadonlySet<string>; sendShortcut: 'enter' | 'mod-enter'; shortcutBindings: Record<string, string>;
   sessions: readonly PaneSessionRow[];
@@ -113,7 +113,7 @@ export function SessionPaneWorkbench(props: SessionPaneWorkbenchProps) {
     ? null : candidateFocusedIdentity;
   const focusedIdentityKey = focusedIdentity ? paneBindingKey(focusedIdentity) : '';
   useEffect(() => { props.onFocusedIdentity?.(focusedIdentity); }, [focusedIdentityKey, props.onFocusedIdentity]);
-  usePaneControlShortcuts({ enabled: props.enabled && props.settingsEffective, root: bounds, focusedPaneId: focused, bindings: props.shortcutBindings });
+  usePaneControlShortcuts({ enabled: props.enabled && !props.auxiliaryView && props.settingsEffective, root: bounds, focusedPaneId: focused, bindings: props.shortcutBindings });
   const adapterForScope = (scope: PaneScope) => {
     const adapter = scope.remoteConnectionId ? props.resolveRemoteAdapter?.(scope) : undefined;
     return adapter?.isCurrent() ? adapter : undefined;
@@ -201,19 +201,22 @@ export function SessionPaneWorkbench(props: SessionPaneWorkbenchProps) {
     const session = sessionsForScope(binding.scope).find(item => item.id === binding.sessionId);
     return session?.title || session?.task || (binding.sessionId ?? tr('新会话'));
   };
+  const splitControls = <details className="xn-session-header__splits" onBlur={event => { if (!event.currentTarget.contains(event.relatedTarget as Node | null)) event.currentTarget.open = false; }}
+      onKeyDown={event => { if (event.key === 'Escape') { event.currentTarget.open = false; event.currentTarget.querySelector('summary')?.focus(); } }}>
+      <summary>{tr('分屏')} <span aria-hidden="true">⌄</span></summary><div>{SIDES.map(side => <button type="button" key={side} title={tr(LABELS[side])} aria-label={tr(LABELS[side])}
+        disabled={!controller.wide || geometry.leaves.length >= 4} onClick={event => { event.currentTarget.closest('details')!.open = false; controller.focus(focused); controller.split(side); }}>{tr(LABELS[side])}</button>)}</div></details>;
+  const groupSwitcher = <PaneGroupSwitcher value={group?.groupId} groups={controller.state.groups.map((item, index) => ({ id: item.groupId,
+    title: sessionsForScope(item.tree.bindings.primary.scope).find(session => session.id === item.tree.bindings.primary.sessionId)?.title || `${tr('分屏组')} ${index + 1}`,
+    panes: paneTreeGeometry(item.tree.root).leaves.length }))}
+    onSelect={id => selectRequiredPrimary(controller.activateGroup(id))} onClose={id => selectRequiredPrimary(controller.closeGroup(id))} />;
   return <div className="xn-pane-workbench" aria-label={tr('会话工作区')} data-testid="xn-pane-workbench">
+    {props.renderHeader?.(splitControls, groupSwitcher) ?? <header className="xn-pane-workbench__fallback-header"><span>{title(PRIMARY_PANE_ID)}</span>{groupSwitcher}{splitControls}</header>}
     {['invalid', 'pendingLegacy', 'unavailable'].includes(controller.storageStatus) && <p role="status" className="xn-pane-workbench__notice">{tr(controller.storageStatus === 'unavailable' ? '分屏布局未能保存' : '原有分屏记录已保留，当前布局仅在此窗口有效。')}</p>}
-    <div className="xn-pane-workbench__groups" role="toolbar" aria-label={tr('分屏组')}>
-      {controller.state.groups.map((item, index) => <span key={item.groupId} className="xn-pane-workbench__group">
-        <button type="button" aria-pressed={item.groupId === group?.groupId} onClick={() => selectRequiredPrimary(controller.activateGroup(item.groupId))}>
-          {sessionsForScope(item.tree.bindings.primary.scope).find(session => session.id === item.tree.bindings.primary.sessionId)?.title || `${tr('分屏组')} ${index + 1}`}</button>
-        {controller.state.groups.length > 1 && <button type="button" aria-label={`${tr('关闭分屏组')} ${index + 1}`} onClick={() => selectRequiredPrimary(controller.closeGroup(item.groupId))}>×</button>}
-      </span>)}
-    </div>
-    {!controller.wide && geometry.leaves.length > 1 && <div className="xn-pane-workbench__tabs" role="toolbar" aria-label={tr('显示此分屏')}>
+    {!props.auxiliaryView && !controller.wide && geometry.leaves.length > 1 && <div className="xn-pane-workbench__tabs" role="toolbar" aria-label={tr('显示此分屏')}>
       {geometry.leaves.map(leaf => <button type="button" key={leaf.paneId} aria-pressed={focused === leaf.paneId} onClick={() => focus(leaf.paneId)}>{title(leaf.paneId)}</button>)}
     </div>}
-    <div className="xn-pane-workbench__canvas" ref={bounds}>
+    {props.auxiliaryView && <div className="xn-pane-workbench__view xn-secondary-view__body">{props.auxiliaryView}</div>}
+    <div className="xn-pane-workbench__canvas" ref={bounds} hidden={!!props.auxiliaryView}>
       {geometry.leaves.map(leaf => {
         const primary = leaf.paneId === PRIMARY_PANE_ID;
         const identity = controller.identity(leaf.paneId);
@@ -242,7 +245,7 @@ export function SessionPaneWorkbench(props: SessionPaneWorkbenchProps) {
             const side = paneDropSide((event.clientX-rect.left)/rect.width,(event.clientY-rect.top)/rect.height); setDrop(null);
             if (binding) selectRequiredPrimary(controller.openSession(binding, side, leaf.paneId));
           }}>
-          <div className="xn-workbench-leaf__toolbar">
+          {geometry.leaves.length > 1 && <div className="xn-workbench-leaf__toolbar">
             <span title={title(leaf.paneId)}>{title(leaf.paneId)}</span>
             {remote && <select aria-label={tr('选择远程会话')} value={binding.sessionId ?? ''} disabled={!connectedAdapter || !identity}
               onChange={event => {
@@ -259,14 +262,14 @@ export function SessionPaneWorkbench(props: SessionPaneWorkbenchProps) {
             {SIDES.map(side => <button type="button" key={side} title={tr(LABELS[side])} aria-label={tr(LABELS[side])}
               disabled={!controller.wide || geometry.leaves.length >= 4} onClick={() => { controller.focus(leaf.paneId); controller.split(side); }}>{ {left:'←',right:'→',up:'↑',down:'↓'}[side] }</button>)}
             {!primary && <button type="button" aria-label={tr('关闭分屏')} onClick={() => controller.close(leaf.paneId)}>×</button>}
-          </div>
+          </div>}
           <div className="xn-workbench-leaf__content">
             {!primary && restore?.kind === 'unknown' && restore.reason !== 'remote-route-required' && <p role="status">{tr('会话连接尚未确认')} <button type="button" onClick={() => controller.retryRestore(leaf.paneId)}>{tr('重试连接')}</button></p>}
             {!primary && restore?.kind === 'absent' && <p role="status">{tr('此会话已不可用，分屏草稿仍保留。')}</p>}
             {primary && !remote ? (primaryScopeMismatch || (restore?.kind === 'unknown' && restore.reason === 'scope-mismatch') ? <p role="status">{tr('会话连接尚未确认')}</p> : props.children)
             : remote && !remoteAdapter ? <p role="status">{tr('远程分屏需要独立连接，当前未连接。')}</p> : identity && <ConversationPane identity={identity}
             choices={controller.runOptions(leaf.paneId)} onChoicesChange={choices => controller.updateRunOptions(leaf.paneId, choices)}
-            enabled={props.enabled && visible && (remote ? !!connectedAdapter : paneRestoreAllowsWrites(identity.sessionId, restore))}
+            enabled={props.enabled && !props.auxiliaryView && visible && (remote ? !!connectedAdapter : paneRestoreAllowsWrites(identity.sessionId, restore))}
             remoteAdapter={remoteAdapter} safetyStopEnabled={props.enabled && visible && props.effectivePluginIds.has('sessions') && props.effectivePluginIds.has('remote')} filesEffective={props.filesEffective} effectivePluginIds={props.effectivePluginIds}
             draftAlias={tree?.bindings[leaf.paneId]?.draftAlias} sendShortcut={props.sendShortcut} shortcutBindings={props.shortcutBindings}
             onForkSession={id => { const current = controller.identity(leaf.paneId, identity.groupId); if (current?.bindingRevision === identity.bindingRevision && current.sessionId === identity.sessionId) controller.replaceBinding(leaf.paneId, { scope: identity.scope, sessionId: id }, identity.groupId); }}

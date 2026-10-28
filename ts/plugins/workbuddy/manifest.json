@@ -2,7 +2,7 @@
   "apiVersion": 2,
   "id": "workbuddy",
   "name": "WorkBuddy 号池",
-  "description": "可选安装的本机 WorkBuddy 号池网关。在设置中添加或删除自备账号认证、查看号池状态，并在会话中使用三个 WorkBuddy 模型。",
+  "description": "可选安装的本机 WorkBuddy 号池网关。在设置中添加或删除自备账号认证、查看号池状态，并在会话中使用 WorkBuddy 模型。",
   "version": "1.0.0",
   "defaultEnabled": false,
   "installPackage": "xueness-workbuddy",
@@ -53,7 +53,7 @@
     },
     {
       "id": "workbuddy.models",
-      "name": "三个号池模型进入会话模型选择",
+      "name": "号池模型进入会话模型选择",
       "nameEn": "Pool models in conversation model selection"
     },
     {

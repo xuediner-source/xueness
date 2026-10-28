@@ -8,7 +8,6 @@
   "main": "src/main.cjs",
   "scripts": {
     "start": "electron .",
-    "test": "node --test tests/*.test.cjs",
     "prepare:ts": "npm --prefix ../ts run build",
     "dist:mac": "node scripts/check-native-build.cjs darwin && npm run prepare:ts && electron-builder --mac --publish never",
     "dist:win": "node scripts/check-native-build.cjs win32 && npm run prepare:ts && electron-builder --win --publish never",

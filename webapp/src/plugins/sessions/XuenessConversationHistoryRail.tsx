@@ -156,7 +156,7 @@ const RAIL_WINDOW_OVERSCAN_PX = 300;
 const RAIL_STRIDE_ESTIMATE_PX = 15;
 
 function findConversationScroller(root: HTMLElement): HTMLElement | null {
-  return root.closest<HTMLElement>(".xn-conversation__stream");
+  return root.closest<HTMLElement>(".xn-conversation__stream, [data-timeline-scroller]");
 }
 
 export function XuenessConversationHistoryRail({ rows, timelineRootRef, requestReveal }: XuenessConversationHistoryRailProps): React.JSX.Element | null {
@@ -247,10 +247,8 @@ export function XuenessConversationHistoryRail({ rows, timelineRootRef, requestR
 
     const updateActive = () => {
       const threshold = scroller.getBoundingClientRect().top + Math.min(112, scroller.clientHeight * 0.28);
-      const positions = items.flatMap((item) => {
-        const target = root.querySelector<HTMLElement>(`[data-history-user-seq="${item.seq}"]`);
-        return target ? [{ seq: item.seq, top: target.getBoundingClientRect().top }] : [];
-      });
+      const positions = Array.from(root.querySelectorAll<HTMLElement>('[data-history-user-seq]'), target =>
+        ({ seq: Number(target.dataset.historyUserSeq), top: target.getBoundingClientRect().top }));
       // A long assistant/tool block can exceed the virtual window overscan, so
       // there may be no user anchor mounted while it fills the viewport. Keep
       // the last known turn active until another user anchor becomes visible.
@@ -260,14 +258,19 @@ export function XuenessConversationHistoryRail({ rows, timelineRootRef, requestR
       });
     };
 
+    let frame = 0;
+    const schedule = () => {
+      if (!frame) frame = requestAnimationFrame(() => { frame = 0; updateActive(); });
+    };
     updateActive();
-    scroller.addEventListener("scroll", updateActive, { passive: true });
-    window.addEventListener("resize", updateActive);
-    const resizeObserver = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(updateActive);
+    scroller.addEventListener("scroll", schedule, { passive: true });
+    window.addEventListener("resize", schedule);
+    const resizeObserver = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(schedule);
     resizeObserver?.observe(root);
     return () => {
-      scroller.removeEventListener("scroll", updateActive);
-      window.removeEventListener("resize", updateActive);
+      scroller.removeEventListener("scroll", schedule);
+      window.removeEventListener("resize", schedule);
+      if (frame) cancelAnimationFrame(frame);
       resizeObserver?.disconnect();
     };
   }, [items, timelineRootRef]);

@@ -40,4 +40,4 @@ Brave 默认地址为 `https://api.search.brave.com/res/v1/web/search`。SearchM
 
 ## Z4 页面抓取补充
 
-WebFetch 现在将 HTTP 输入升级 HTTPS，并最多跟随五次逐跳 DNS 校验的 GET 跳转；拒绝降级、私网和循环。首次结果保留 16000 字符预览，全文存于当前会话结果，可通过 tool_result_read 分页。15 分钟 LRU 使用规范 URL 与 DoH 配置隔离。所有调用包括缓存命中继续经过批准，搜索 POST 不跟随跳转。请求活动写入本地会话事件时仅保留 origin，不记录 query。见 [Z4 使用说明](engine-z4.md)。
+WebFetch 现在将 HTTP 输入升级 HTTPS，并最多跟随五次逐跳 DNS 校验的 GET 跳转；拒绝降级、私网和循环。首次结果保留 16000 字符预览，全文存于当前会话结果，可通过 tool_result_read 分页。15 分钟 LRU 使用规范 URL 与 DoH 配置隔离。所有调用包括缓存命中继续经过批准，搜索 POST 不跟随跳转。请求活动写入本地会话事件时仅保留 origin，不记录 query。见 [Z4 使用说明](https://github.com/xuediner-source/xueness-private-tests/blob/main/archive/project/docs/engine-z4.md)。

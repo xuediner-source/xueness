@@ -1,11 +1,13 @@
+import { useGitPanel } from './plugins/git/useGitPanel';
+export { evaluateWorkbenchGlobalKey, type WorkbenchGlobalKeyAction } from './plugins/settings/workbenchShortcutActions';
 import { resolvePaneSidePanelBinding } from './plugins/sessions/paneSidePanelBinding';
 import type { PaneIdentity } from './plugins/sessions/paneIdentity';
 import { usePrimaryForkCommand } from './plugins/sessions/primaryForkCommand';
-import { useAppZoom, nextAppZoom, shortcutOwner } from './plugins/settings/workbenchShortcutActions';
+import { useAppZoom, nextAppZoom, evaluateWorkbenchGlobalKey } from './plugins/settings/workbenchShortcutActions';
 import { sessionContextUsage } from './plugins/sessions/sessionContextUsage';
-import { listPlugins, listResources, listCommandCatalog, setPluginEnabled, post, saveDefaultModelSelection, type XuenessPlugin } from "./xuenessApi";
+import { listPlugins, listResources, listCommandCatalog, setPluginEnabled, saveDefaultModelSelection, type XuenessPlugin } from "./xuenessApi";
 import { t as tr, tf, useLocale, setLocale } from './i18n';
-import { isImeComposingEvent, resolveHostPlatform } from './xuenessShortcutDisplay';
+import { resolveHostPlatform } from './xuenessShortcutDisplay';
 /**
  * Xueness workbench container — chat-first.
  *
@@ -23,49 +25,8 @@ import { isImeComposingEvent, resolveHostPlatform } from './xuenessShortcutDispl
  */
 import React, { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import "./styles/batch10.css";
-import {
-  approvePending,
-  createSession,
-  deleteSession,
-  renameSession,
-  pinSession,
-  deriveFileChanges,
-  loadFilePreview,
-  loadFiles,
-  loadJournal,
-  loadSession,
-  runSession,
-  createSessionCommandClient,
-  stopSession,
-  sendTurn,
-  queueTurn,
-  cancelQueuedTurn,
-  loadCompleteTimeline,
-  withAssistantStream,
-  loadConversationSnapshot,
-  loadOlderConversationPage,
-  mergeTimelineRowsByIdentity,
-  stabilizeSession,
-  stabilizeSessionList,
-  stabilizeTimelineRows,
-  type ForkSessionResponse,
-  type FileChangeSet,
-  type FilePreview,
-  type PendingApproval,
-  type Result,
-  type SessionSummary,
-  type TimelineRow,
-  type WorkbenchSession,
-  type QueuedMessage,
-} from "./xuenessWorkbench";
-import {
-  capabilityPatch,
-  loadWorkbenchSettings,
-  readAgentCapabilities,
-  saveWorkbenchSettings,
-  type AgentCapabilities,
-  type SettingsMap,
-} from "./xuenessSettings";
+import { approvePending, createSession, deleteSession, renameSession, pinSession, deriveFileChanges, loadFilePreview, loadFiles, loadJournal, loadSession, runSession, createSessionCommandClient, stopSession, sendTurn, queueTurn, cancelQueuedTurn, withAssistantStream, loadConversationSnapshot, loadOlderConversationPage, mergeTimelineRowsByIdentity, stabilizeSession, stabilizeSessionList, stabilizeTimelineRows, type ForkSessionResponse, type FileChangeSet, type FilePreview, type PendingApproval, type Result, type SessionSummary, type TimelineRow, type WorkbenchSession, type QueuedMessage } from "./xuenessWorkbench";
+import { loadWorkbenchSettings, readAgentCapabilities, saveWorkbenchSettings, type AgentCapabilities, type SettingsMap } from "./xuenessSettings";
 import {
   createFolder,
   loadDirectory,
@@ -82,6 +43,10 @@ import { getRunChoices, mergeRunChoices, setRunChoices, type RunChoices } from "
 import { useRunPermissionConfirmation } from "./plugins/sessions/useRunPermissionConfirmation";
 import { effectiveRuntimeProfile, emptyComposerCatalog, prepareComposer, runtimeProfileFromSession, switchComposerBranch, type ComposerCatalog, type ComposerInput, type ComposerModel } from "./xuenessComposer";
 import { createComposerCatalogLoader, clearWorkspaceComposerCatalog } from './plugins/sessions/composerCatalogLifecycle';
+import { openContextCommand } from "./plugins/context_lens/commands";
+import { WorkbenchViewSwitcher } from "./plugins/sessions/WorkbenchViewSwitcher";
+import { SessionCommandNotice } from "./plugins/sessions/SessionCommandNotice";
+import { useLivePermissionMode } from "./plugins/sessions/useLivePermissionMode";
 import { XuenessComposerToolbar } from "./plugins/sessions/XuenessComposerToolbar";
 import { DesktopTitlebar } from "./plugins/desktop/DesktopTitlebar";
 import { DesktopTrayBridge } from './plugins/desktop/DesktopTrayBridge';
@@ -112,14 +77,19 @@ import { PendingGuidancePanel, type InputDelivery } from './plugins/sessions/Cur
 import { replacementComposerDraftIdentity } from './plugins/sessions/composerAttachmentDraft';
 import { composerDraftContent, hasComposerDraftContent, notifyComposerDrafts, relocateEmptyComposerDraft } from './plugins/sessions/composerRecovery';
 import { editorStateForPlainText, retargetEditorText } from './plugins/sessions/composerEditorState';
-import { Approvals, Composer, WorkbenchHeader, heroGreeting, persistDraft, readPersistedDraft, restoredDraft, type ComposerDraftState, type ComposerModelRecovery, type PersistedComposerDraft } from "./plugins/sessions/XuenessWorkbenchView";
+import { Approvals } from "./plugins/sessions/Approvals";
+import { Composer } from "./plugins/sessions/XuenessWorkbenchView";
+import { WorkbenchHeader, heroGreeting } from "./plugins/sessions/WorkbenchHeader";
+import { persistDraft, readPersistedDraft, restoredDraft, type PersistedComposerDraft } from "./plugins/sessions/composerDraftStore";
+import { type ComposerDraftState } from "./plugins/sessions/composerTypes";
+import { type ComposerModelRecovery } from "./plugins/sessions/composerInputHelpers";
 import { XuenessStartPage, type StartPageAction } from "./plugins/sessions/XuenessStartPage";
 import { SessionRecoveryNotice, showInterruptedRecovery } from './plugins/sessions/SessionRecoveryNotice';
 import type { StartPageWorkspace } from "./plugins/sessions/StartPageWorkspaceMenu";
 import { loadWorkspaceCatalog, type RecentWorkspaceDirectory } from "./xuenessWorkspaces";
 import { XuenessUsageQuickCard } from "./plugins/usage/XuenessUsageQuickCard";
-import { IconBack, IconGear, IconNewTask, IconSearch, IconWorkflow, IconModel, IconXuenessMark } from "./ui/icons";
-import { CalendarClock, Archive, ArrowDownWideNarrow, ChevronsDownUp, Folder, FolderOpen, Hash, MessageCirclePlus, UserRound, CircleHelp, ChevronDown, Blocks, GitBranch, Bot, Server, House, MessagesSquare, Library, Brain, Monitor, SquarePen, PanelRight, Share2 } from "lucide-react";
+import { IconBack, IconGear, IconNewTask, IconSearch, IconXuenessMark } from "./ui/icons";
+import { CalendarClock, Folder, FolderOpen, UserRound, CircleHelp, ChevronDown, Blocks, GitBranch, Bot, Server, House, MessagesSquare, Library, Brain, Monitor, SquarePen, PanelRight, Share2 } from "lucide-react";
 import { Select } from "./ui/Select";
 import { RegionBoundary } from "./ui/primitives";
 import { XuenessTaskList, normalizeHiddenProjectRoots, sameSidebarProjectPath, projectArchivePlan, type SidebarPreferences } from "./plugins/sessions/XuenessTaskList";
@@ -133,7 +103,7 @@ import { useConversationUpdates } from './plugins/sessions/LiveConversation';
 import { useConversationTransport } from './plugins/sessions/conversationTransport';
 import { createSingleFlightRefresh, useSessionPolling } from "./plugins/sessions/SessionPolling";
 import { CodeDisplayProvider } from "./ui/CodeContent";
-import { SHORTCUT_COMMANDS, resolveShortcutBinding, matchesShortcut, isReservedShortcut, hasGlobalShortcutConflict, type ShortcutEventLike } from "./xuenessShortcutCommands";
+import { resolveShortcutBinding } from "./xuenessShortcutCommands";
 import { Shell, SidebarActions, type SidebarAction } from "./XuenessShell";
 import { ClaudexSidebarHeader, ClaudexSidebarRail } from "./plugins/sessions/ClaudexSidebar";
 import { SidebarResizeHandle, useSessionSidebarWidth } from './plugins/sessions/SidebarResizeHandle';
@@ -182,24 +152,7 @@ import {
   derivePluginAvailability,
   type PluginPanel,
 } from "./xuenessPluginRegistry";
-import {
-  loadGitStatus,
-  loadGitDiff,
-  loadGitLog,
-  loadGitCheckpoints,
-  initGitRepository,
-  stageGitPaths,
-  unstageGitPaths,
-  commitGitChanges,
-  switchGitBranch,
-  stashGitChanges,
-  createGitCheckpoint,
-  restoreGitCheckpoint,
-  type GitStatus,
-  type GitDiff,
-  type GitCommit,
-  type GitCheckpoint,
-} from "./xuenessGit";
+import { initGitRepository, stageGitPaths, unstageGitPaths, commitGitChanges, switchGitBranch, stashGitChanges, createGitCheckpoint, restoreGitCheckpoint, type GitStatus, type GitDiff, type GitCommit, type GitCheckpoint } from "./xuenessGit";
 
 // Static plugin imports load only when their permitted view mounts.
 const FileBrowser = lazy(() => import("./plugins/files/FileBrowser").then(module => ({ default: module.FileBrowser })));
@@ -229,6 +182,7 @@ const XuenessMcpTools = lazy(() => import("./plugins/mcp").then(module => ({ def
 const XuenessDiagnosticsPanel = lazy(() => import("./plugins/diagnostics").then(module => ({ default: module.XuenessDiagnosticsPanel })));
 const XuenessMemoryEditor = lazy(() => import("./plugins/memory").then(module => ({ default: module.XuenessMemoryEditor })));
 const XuenessMemorySettings = lazy(() => import("./plugins/memory/MemorySettings").then(module => ({ default: module.XuenessMemorySettings })));
+const ContextLensPanel = lazy(() => import("./plugins/context_lens/ContextLensPanel").then(module => ({ default: module.ContextLensPanel })));
 const XuenessUsageSettings = lazy(() => import("./plugins/usage/XuenessUsageSettings").then(module => ({ default: module.XuenessUsageSettings })));
 const BrowserPanel = lazy(() => import("./plugins/browser/BrowserPanel").then(module => ({ default: module.BrowserPanel })));
 const BrowserSettings = lazy(() => import("./plugins/browser/BrowserSettings").then(module => ({ default: module.BrowserSettings })));
@@ -272,42 +226,6 @@ const SETTINGS_DEFAULTS: SettingsMap = {
   bindings: {},
 };
 
-export type WorkbenchGlobalKeyAction =
-  | { type: "new-session" }
-  | { type: "command-palette" }
-  | { type: "open-settings" }
-  | { type: "toggle-sidebar" }
-  | { type: "refresh-session" }
-  | { type: "switch-theme" | "toggle-terminal" | "toggle-browser" | "zoom-in" | "zoom-out" | "reset-zoom" }
-  | null;
-
-export function evaluateWorkbenchGlobalKey(
-  event: ShortcutEventLike & { target?: unknown; defaultPrevented?: boolean },
-  context: {
-    bindings?: Record<string, string>;
-    isPluginEffective: (id: string) => boolean;
-    panel?: string;
-    busy?: boolean;
-    platform?: string;
-  },
-): WorkbenchGlobalKeyAction {
-  if (event.defaultPrevented || isImeComposingEvent(event) || event.repeat) return null;
-  const bindings = (context.bindings && typeof context.bindings === "object" ? context.bindings : {}) as Record<string, string>;
-  const command = SHORTCUT_COMMANDS.find((item) => {
-    if (item.scope !== "global") return false;
-    const binding = resolveShortcutBinding(item.id, bindings);
-    return Boolean(binding && !binding.split("|").some(value => value.trim() === "Enter") && !isReservedShortcut(binding) && matchesShortcut(event, binding, context.platform));
-  });
-  if (!command || command.scope !== "global") return null;
-  if (hasGlobalShortcutConflict(event, command.id, event.target, context.platform)) return null;
-  if ((command.id === "new-session" || command.id === "command-palette") && !context.isPluginEffective("sessions")) return null;
-  if (command.id === "open-settings" && !context.isPluginEffective("settings")) return null;
-  if (command.id === "toggle-sidebar" && context.panel === "settings") return null;
-  if (command.id === "refresh-session" && context.busy) return null;
-  const owner = shortcutOwner(command.id);
-  if (owner && (!context.isPluginEffective(owner) || !context.isPluginEffective("settings"))) return null;
-  return { type: command.id };
-}
 
 type Panel =
   | 'subscriptions'
@@ -320,6 +238,7 @@ type Panel =
   | "directory"
   | "providers"
   | "remote"
+  | "context-lens"
   | "usage"
   | "memory"
   | "capabilities"
@@ -456,6 +375,7 @@ export function XuenessWorkbenchContainer() {
   // In-flight and queued reads must consult the current catalog, not an old closure.
   const pluginEffectiveRef = useRef(isPluginEffective);
   pluginEffectiveRef.current = isPluginEffective;
+  const isSessionsEffective = useCallback(() => pluginEffectiveRef.current("sessions"), []);
 
   const mountedRef = useRef(true);
   const sessionCommands = useMemo(() => createSessionCommandClient(
@@ -474,7 +394,6 @@ export function XuenessWorkbenchContainer() {
   const previewAbortRef = useRef<AbortController | null>(null);
   const selectedPathRef = useRef<string | null>(null);
   const changesAbortRef = useRef<AbortController | null>(null);
-  const gitAbortRef = useRef<AbortController | null>(null);
   const listAbortRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
@@ -486,7 +405,6 @@ export function XuenessWorkbenchContainer() {
       filesAbortRef.current?.abort();
       previewAbortRef.current?.abort();
       changesAbortRef.current?.abort();
-      gitAbortRef.current?.abort();
       listAbortRef.current?.abort();
     };
   }, [sessionCommands]);
@@ -563,7 +481,7 @@ export function XuenessWorkbenchContainer() {
   const [queueContinuingSessions, setQueueContinuingSessions] = useState<Set<string>>(() => new Set());
   const queueContinuingSessionsRef = useRef(new Set<string>());
   const [queueCancelling, setQueueCancelling] = useState<{ sessionId: string; queueId: string } | null>(null);
-  const [queueError, setQueueError] = useState<{ sessionId: string; message: string } | null>(null);
+  const [queueError, setQueueError] = useState<{ sessionId: string; message: string; compact?: 'running' | 'complete' } | null>(null);
   const [remoteDialogOpen, setRemoteDialogOpen] = useState(false);
   const [remoteAdapter, setRemoteAdapter] = useState<RemoteSessionAdapter | null>(null);
   const [sidePanelSelection, setSidePanelSelection] = useState<{ identity: PaneIdentity | null; anchor: string } | null>(null);
@@ -668,16 +586,7 @@ export function XuenessWorkbenchContainer() {
   const [changesError, setChangesError] = useState("");
 
   // Git panel status, history, checkpoints, and explicitly confirmed local actions.
-  const [gitStatus, setGitStatus] = useState<GitStatus | null>(null);
-  const [gitStatusError, setGitStatusError] = useState("");
-  const [gitDiff, setGitDiff] = useState<GitDiff | null>(null);
-  const [gitDiffError, setGitDiffError] = useState("");
-  const [gitLog, setGitLog] = useState<GitCommit[] | null>(null);
-  const [gitLogError, setGitLogError] = useState("");
-  const [gitCheckpoints, setGitCheckpoints] = useState<GitCheckpoint[]>([]);
-  const [gitCheckpointError, setGitCheckpointError] = useState("");
-  const [gitLoading, setGitLoading] = useState(false);
-  const [gitActionBusy, setGitActionBusy] = useState(false);
+  const { gitStatus, gitStatusError, gitDiff, gitDiffError, gitLog, gitLogError, gitCheckpoints, gitCheckpointError, gitLoading, gitActionBusy, loadGitPanel, runGitAction } = useGitPanel(activeId, panel === 'git', isPluginEffective('git'));
 
   // Settings panel
   const [settingsValues, setSettingsValues] = useState<SettingsMap>(SETTINGS_DEFAULTS);
@@ -698,7 +607,6 @@ export function XuenessWorkbenchContainer() {
   const [dirError, setDirError] = useState("");
   const [dirLoading, setDirLoading] = useState(false);
 
-  // Providers / usage / memory panels
   const [providers, setProviders] = useState<ProviderSummary[]>([]);
   const [providersError, setProvidersError] = useState("");
   const [providersLoading, setProvidersLoading] = useState(false);
@@ -826,7 +734,7 @@ export function XuenessWorkbenchContainer() {
   const paneCreationRef = useRef<((sessionId: string) => void) | null>(null);
   const registerPaneCreation = useCallback((handler: ((sessionId: string) => void) | null) => { paneCreationRef.current = handler; }, []);
   const registerPaneSelection = useCallback((handler: PaneSelectionHandler | null) => { paneSelectionRef.current = handler; }, []);
-  const selectPrimaryPaneSession = useCallback((id: string | null) => { setRunError(""); setPanel("chat"); setActiveId(id); }, []);
+  const selectPrimaryPaneSession = useCallback((id: string | null) => { setRunError(""); setActiveId(id); }, []);
   const selectSession = useCallback((id: string) => {
     if (paneSelectionRef.current?.(id)) { setPanel("chat"); return; }
     paneSelectionIntent.current = true;
@@ -1326,8 +1234,6 @@ export function XuenessWorkbenchContainer() {
     previewAbortRef.current = null;
     changesAbortRef.current?.abort();
     changesAbortRef.current = null;
-    gitAbortRef.current?.abort();
-    gitAbortRef.current = null;
 
     setSession(null);
     setRows([]);
@@ -1343,14 +1249,6 @@ export function XuenessWorkbenchContainer() {
     setPreviewError(clean.previewError);
     setChangeSet(clean.changeSet);
     setChangesError(clean.changesError);
-    setGitStatus(clean.gitStatus);
-    setGitStatusError(clean.gitStatusError);
-    setGitDiff(clean.gitDiff);
-    setGitDiffError(clean.gitDiffError);
-    setGitLog(clean.gitLog);
-    setGitLogError(clean.gitLogError);
-    setGitCheckpoints(clean.gitCheckpoints);
-    setGitCheckpointError(clean.gitCheckpointError);
     setRunError(clean.runError);
   }, [activeId]);
   useEffect(() => {
@@ -1388,28 +1286,24 @@ export function XuenessWorkbenchContainer() {
   const handleReject = useCallback(
     async (pending: PendingApproval, feedback?: string) => {
       const targetSessionId = activeId;
-      if (!targetSessionId || !pending.waiting || !isPluginEffective("sessions")) return false;
+      if (!targetSessionId || !isPluginEffective("sessions")) return false;
       // ZCode permission-response: the rejection reason goes to the model with the denial.
       const res = await approvePending(targetSessionId, pending, sessionCommands, 'reject', feedback ? { message: feedback } : {});
       if (!res.ok) { setError(res.error); return false; }
+      if (!res.resumed) await runSessionRequest(targetSessionId, selected => runSession(targetSessionId, selected, undefined, sessionCommands));
       await loadActive(targetSessionId);
       return true;
     },
-    [activeId, isPluginEffective, loadActive, sessionCommands],
+    [activeId, isPluginEffective, loadActive, sessionCommands, runSessionRequest],
   );
 
-  // ZCode "允许本会话": identical calls in this session no longer ask (in memory; cleared on stop/close).
-  const handleAllowSession = useCallback(
-    async (pending: PendingApproval) => {
-      const targetSessionId = activeId;
-      if (!targetSessionId || !pending.waiting || !isPluginEffective("sessions")) return false;
-      const res = await approvePending(targetSessionId, pending, sessionCommands, 'approve', { scope: 'session' });
-      if (!res.ok) { setError(res.error); return false; }
-      await loadActive(targetSessionId);
-      return true;
-    },
-    [activeId, isPluginEffective, loadActive, sessionCommands],
-  );
+  const handleAllowProject = useCallback(async (pending: PendingApproval) => {
+    if (!activeId || !isPluginEffective("sessions") || !pending.projectRules?.length) return false;
+    const result = await approvePending(activeId, pending, sessionCommands, 'approve', { scope: 'project' });
+    if (!result.ok) { setError(result.error); return false; }
+    if (!result.resumed) await runSessionRequest(activeId, selected => runSession(activeId, selected, undefined, sessionCommands));
+    await loadActive(activeId); return true;
+  }, [activeId, isPluginEffective, sessionCommands, runSessionRequest, loadActive]);
 
   const handleApproveAll = useCallback(
     async (items?: PendingApproval[]) => {
@@ -1451,6 +1345,7 @@ export function XuenessWorkbenchContainer() {
 
   const handleSend = useCallback(
     async (text: string, input?: ComposerInput, onAccepted?: () => void, delivery?: InputDelivery) => {
+      if (openContextCommand(text, isPluginEffective("context_lens"), () => setPanel("context-lens"))) { onAccepted?.(); return; }
       const targetSessionId = activeId;
       const running = Boolean(targetSessionId && session?.id === targetSessionId && (
         session.status === "running" || session.streaming?.status === "streaming" || runRequestSessions.has(targetSessionId)
@@ -1464,17 +1359,17 @@ export function XuenessWorkbenchContainer() {
           throw new Error(sessionCommands.recoveryStorageError() || tr('命令结果仍未确认，请勿重复提交。'));
         }
         setBusy(true);
-        setQueueError({ sessionId: targetSessionId, message: tr('正在压缩上下文...') });
+        setQueueError({ sessionId: targetSessionId, message: tr('正在压缩上下文 · 可能需要几分钟'), compact: 'running' });
         try {
           const outcome = await requestManualCompact(targetSessionId, compactCommand.instructions);
           if (outcome.kind === 'failed') throw new Error(manualCompactNotice(outcome));
           onAccepted?.();
           await loadActive(targetSessionId, false);
           await refreshList();
-          if (activeIdRef.current === targetSessionId) setQueueError({ sessionId: targetSessionId, message: manualCompactNotice(outcome) });
+          if (activeIdRef.current === targetSessionId) setQueueError({ sessionId: targetSessionId, message: outcome.kind === 'compacted' ? tr('上下文已压缩') : manualCompactNotice(outcome), compact: 'complete' });
           return true;
         } catch (error) {
-          setQueueError(previous => previous?.sessionId === targetSessionId && previous.message === tr('正在压缩上下文...') ? null : previous);
+          setQueueError(previous => previous?.sessionId === targetSessionId && previous.compact === 'running' ? null : previous);
           throw error;
         } finally {
           setBusy(false);
@@ -1666,6 +1561,7 @@ export function XuenessWorkbenchContainer() {
       const deadline = Date.now() + 180_000;
       let idle = false;
       while (Date.now() < deadline) {
+        if (!mountedRef.current || activeIdRef.current !== targetSessionId) return;
         if (!sessionCommands.isEffective()) throw new Error('Session commands are no longer enabled');
         const latest = await loadSession(targetSessionId);
         if (!latest.ok) throw new Error(latest.error);
@@ -1676,6 +1572,7 @@ export function XuenessWorkbenchContainer() {
         }
         await new Promise(resolve => window.setTimeout(resolve, 250));
       }
+      if (!mountedRef.current || activeIdRef.current !== targetSessionId) return;
       if (!idle) throw new Error(tr('正在等待当前轮停止。保留的立即发送消息可在队列中查看。'));
 
       // A completed core turn can be visible before the route releases its
@@ -1686,6 +1583,7 @@ export function XuenessWorkbenchContainer() {
       trackSessionId(runRequestSessionsRef, setRunRequestSessions, targetSessionId, true);
       trackSessionId(executingSessionsRef, setExecutingSessions, targetSessionId, true);
       for (let attempt = 0; attempt < 12 && !started; attempt++) {
+        if (!mountedRef.current || activeIdRef.current !== targetSessionId) return;
         if (!sessionCommands.isEffective()) throw new Error('Session commands are no longer enabled');
         const result = await runSession(targetSessionId, selected,
           { continueQueue: true, promotionRequestId: reservation.value.request_id }, sessionCommands);
@@ -1709,8 +1607,10 @@ export function XuenessWorkbenchContainer() {
       trackSessionId(runRequestSessionsRef, setRunRequestSessions, targetSessionId, false);
       trackSessionId(executingSessionsRef, setExecutingSessions, targetSessionId, false);
       queueContinuingSessionsRef.current.delete(targetSessionId);
-      setQueueContinuingSessions(new Set(queueContinuingSessionsRef.current));
-      await loadActive(targetSessionId, false);
+      if (mountedRef.current) {
+        setQueueContinuingSessions(new Set(queueContinuingSessionsRef.current));
+        if (activeIdRef.current === targetSessionId) await loadActive(targetSessionId, false);
+      }
     }
   }, [activeId, isPluginEffective, runPermission.ensure, loadActive, refreshList, sessionCommands]);
 
@@ -2122,54 +2022,6 @@ export function XuenessWorkbenchContainer() {
     else if (panel === "changes" && isPluginEffective("files")) void handleLoadChanges();
   }, [panel, activeId, isPluginEffective, handleLoadFiles, handleLoadChanges]);
 
-  // -- git panel --------------------------------------------------------------
-  // Read-only round trips; a non-repo workspace surfaces its honest empty state.
-  const loadGitPanel = useCallback(async () => {
-    const currentId = activeId;
-    if (!currentId) return;
-    gitAbortRef.current?.abort();
-    const controller = new AbortController();
-    gitAbortRef.current = controller;
-    setGitLoading(true);
-    setGitStatusError("");
-    setGitDiffError("");
-    setGitLogError("");
-    const [status, diff, log, checkpoints] = await Promise.all([
-      loadGitStatus(currentId, controller.signal),
-      loadGitDiff(currentId, controller.signal),
-      loadGitLog(currentId, controller.signal),
-      loadGitCheckpoints(currentId, controller.signal),
-    ]);
-    if (shouldIgnoreSessionResponse(currentId, activeIdRef.current, mountedRef.current, controller.signal)) return;
-    setGitStatus(status.ok ? status.value : null);
-    setGitStatusError(status.ok ? "" : status.error);
-    setGitDiff(diff.ok ? diff.value : null);
-    setGitDiffError(diff.ok ? "" : diff.error);
-    setGitLog(log.ok ? log.value : null);
-    setGitLogError(log.ok ? "" : log.error);
-    setGitCheckpoints(checkpoints.ok ? checkpoints.value : []);
-    setGitCheckpointError(checkpoints.ok ? "" : checkpoints.error);
-    setGitLoading(false);
-  }, [activeId]);
-
-  const runGitAction = useCallback(async (action: () => Promise<{ ok: true; value: unknown } | { ok: false; error: string }>) => {
-    if (!activeId || gitActionBusy || !isPluginEffective("git")) return;
-    setGitActionBusy(true);
-    try {
-      const result = await action();
-      if (!mountedRef.current) return;
-      if (!result.ok) setGitCheckpointError(result.error);
-      else setGitCheckpointError("");
-      await loadGitPanel();
-    } finally {
-      if (mountedRef.current) setGitActionBusy(false);
-    }
-  }, [activeId, gitActionBusy, isPluginEffective, loadGitPanel]);
-
-  useEffect(() => {
-    if (panel === "git" && isPluginEffective("git")) void loadGitPanel();
-  }, [panel, isPluginEffective, loadGitPanel]);
-
   // -- directory panel -----------------------------------------------------
   // The browser shell has no native folder dialog, so browsing goes through the
   // host-side directory API. Errors are shown, never swallowed into an empty tree.
@@ -2209,7 +2061,6 @@ export function XuenessWorkbenchContainer() {
     [dirListing, isPluginEffective, browseDirectory],
   );
 
-  // -- providers / usage / memory panels -----------------------------------
   useEffect(() => {
     if (panel !== "providers" || !isPluginEffective("providers")) return;
     setProvidersLoading(true);
@@ -2376,6 +2227,9 @@ export function XuenessWorkbenchContainer() {
   const [goalEditorOpen, setGoalEditorOpen] = useState(false);
   const [deliveryEditorRequest, setDeliveryEditorRequest] = useState<{id: string; version: number} | null>(null);
   useEffect(() => setGoalEditorOpen(false), [activeId]);
+  const livePermissions = useLivePermissionMode(activeId, session?.active_turn_id ?? null, isPluginEffective("sessions"), async (id, permission_mode) => {
+    if (activeIdRef.current !== id) return; updateChoices({ permission_mode, acknowledge_yolo: false }); await loadActive(id);
+  });
   const composerControls = <>
     <XuenessComposerToolbar
       choices={choices} onChange={updateChoices} models={composerCatalog.models}
@@ -2388,12 +2242,15 @@ export function XuenessWorkbenchContainer() {
       backgroundCount={composerCatalog.backgroundCount ?? 0}
       browserEnabled={choices.browser === true}
       onToggleBrowser={activeId !== null && isPluginEffective("browser") ? enabled => updateChoices({ browser: enabled }) : undefined}
+      permissionDisabled={busy || branchBusy || livePermissions.saving}
+      onPermissionChange={activeId ? (mode, acknowledged) => livePermissions.change(mode, acknowledged) : undefined}
       disabled={busy || branchBusy || composerRunning}
       onOpenUsage={isPluginEffective("usage") ? () => setPanel("usage") : undefined}
       runtimeBudget={session?.id === activeId ? session.runtime_budget : undefined}
       contextReading={contextReading}
       pauseReason={session?.id === activeId ? session.pause_reason : undefined}
     />
+    {livePermissions.error && <p role="alert">{livePermissions.error}</p>}
     {usageQuickCard}
   </>;
   // 起始页右侧「最近项目」来自 settings 已登记的工作区（带 lastUsed）。插件未生效
@@ -2785,20 +2642,32 @@ export function XuenessWorkbenchContainer() {
   };
 
   // -- view switcher (conversation header) ----------------------------------
-  const viewSwitcher = (
-    <Select
-      className="xn-view-switcher"
-      aria-label={tr("切换视图")}
-      value={panel === "chat" ? "chat" : panel}
-      onChange={(e) => setPanel(e.target.value as Panel)}
-    >
-      {allowedPanels.filter(id => !lightweightLayout || id !== "subagents").map((id) => (
-        <option key={id} value={id}>
-          {PANEL_LABELS()[id]}
-        </option>
-      ))}
-    </Select>
-  );
+  const viewSwitcher = <WorkbenchViewSwitcher<Panel> value={panel} onChange={setPanel}
+    options={allowedPanels.filter(id => !lightweightLayout || id !== "subagents").map(id => ({ id, label: PANEL_LABELS()[id] }))} />;
+
+  const sessionHeader = (splitControls?: React.ReactNode, groupSwitcher?: React.ReactNode) => session ? (<WorkbenchHeader
+              session={session} navigation={viewSwitcher} groupSwitcher={groupSwitcher}
+              onOpenAgents={canShowPanel("subagents") && !lightweightLayout ? () => setPanel("subagents") : undefined}
+              actions={<>
+                {splitControls}{!lightweightLayout && <><button type="button" className="xn-conv-header__action xn-conv-header__fork" aria-label={tr("分叉会话")} title={tr("分叉会话")} disabled={busy || session.status === "running" || session.streaming?.status === "streaming"} onClick={() => beginFork()}><GitBranch size={14} aria-hidden="true" /><span>{tr("分叉会话")}</span></button></>}
+                <button type="button" className="xn-conv-header__action" aria-label={tr("会话信息")} title={tr("会话信息")}
+                  aria-pressed={contextSidepaneOpen} onClick={() => { setContextSidepaneOpen(value => !value); }}><PanelRight size={16} aria-hidden="true" /></button>
+              </>}
+            pinned={session.pinned === true} onTogglePin={() => activeId && void togglePin(activeId, session.pinned !== true)}
+            onRefresh={() => void handleRefreshAll()}
+            onRename={() => activeId && requestRename(activeId)}
+            onDelete={() => activeId && void deleteById(activeId)}
+            menuItems={<>
+              {isPluginEffective('planning') && <button type="button" className="xn-conv-header__action"
+                disabled={busy || activeSessionRunning}
+                onClick={() => setDeliveryEditorRequest(previous => ({id: session.id, version: (previous?.version ?? 0) + 1}))}>
+                {tr('编辑交付清单')}</button>}
+              {isPluginEffective('sessions') && <button type="button" className="xn-conv-header__action"
+                disabled={busy || activeSessionRunning}
+                onClick={() => setShareDialogOpen(true)}>
+                <Share2 size={14} aria-hidden="true" /><span>{tr('分享会话')}</span></button>}
+            </>}
+          />) : <WorkbenchHeader fallbackTitle={panel === 'chat' ? tr('新会话') : PANEL_LABELS()[panel]} navigation={viewSwitcher} groupSwitcher={groupSwitcher} actions={splitControls} />;
 
   const scopedSidePanel = resolvePaneSidePanelBinding(sidePanelSelection?.anchor === sidePanelAnchor ? sidePanelSelection.identity : null,
     { sessionId: activeId, root: (session?.id === activeId ? session.root : '') ?? '', remote: Boolean(choices.remote || (session?.id === activeId && Object.prototype.hasOwnProperty.call(session, 'remote_connection'))) },
@@ -2886,6 +2755,7 @@ export function XuenessWorkbenchContainer() {
     providers: (
       <ModelManager focusProviderId={providerFocusId} runtimeMonitorEnabled={isPluginEffective("providers") && isPluginEffective("diagnostics")} onSelect={id => { selectProviderForCurrentRun(id); setPanel("chat"); }} />
     ),
+    "context-lens": <ContextLensPanel enabled={isPluginEffective("context_lens")} settingsEnabled={isPluginEffective("settings")} sessionId={activeId} onOpenSession={selectSession} onSelectSession={id => { selectSession(id); setPanel("context-lens"); }} />,
     usage: <XuenessUsageSettings />,
     memory: <><MemoryPanel tracks={tracks} error={tracksError} loading={tracksLoading} /><XuenessMemoryEditor /></>,
     capabilities: <><CapabilitiesPanel sections={capSections} />{isPluginEffective("mcp") && <XuenessMcpTools />}</>,
@@ -2896,6 +2766,8 @@ export function XuenessWorkbenchContainer() {
     </XuenessSettingsView>,
   };
 
+  const secondaryContent = panel !== 'chat' && panel !== 'settings' ? canShowPanel(panel) && (!lightweightLayout || panel !== 'subagents')
+    ? secondaryPanels[panel] : <FeatureUnavailable feature={PANEL_LABELS()[panel]} onManage={() => setPanel('plugins')} /> : null;
   const runPaletteCommand = useCallback((id: string) => {
     setCommandOpen(false);
     if (id === "new-task") startNewTask();
@@ -2931,6 +2803,7 @@ export function XuenessWorkbenchContainer() {
       { id: "new-task", icon: claudexAppearance ? <SquarePen size={16} /> : <IconNewTask size={16} />, label: tr(claudexAppearance ? "新聊天" : "新建任务"), shortcut: resolveShortcutBinding("new-session", (settingsValues.bindings && typeof settingsValues.bindings === "object" ? settingsValues.bindings : {}) as Record<string, string>), onClick: startNewTask },
       { id: "search", icon: <IconSearch size={15} />, label: tr("搜索"), shortcut: resolveShortcutBinding("command-palette", (settingsValues.bindings && typeof settingsValues.bindings === "object" ? settingsValues.bindings : {}) as Record<string, string>), onClick: (event: React.MouseEvent<HTMLButtonElement>) => openCommandPalette(event.currentTarget) },
     ] : []),
+    ...(isPluginEffective("context_lens") ? [{ id: "context-lens", icon: <IconSearch size={16} />, label: tr("上下文透镜"), onClick: () => setPanel("context-lens") }] : []),
     ...(isPluginEffective("automation") ? [{ id: "automations", icon: <CalendarClock size={16} />, label: tr("自动化"), onClick: () => setPanel("automations") }] : []),
     ...(isPluginEffective("extensions") ? [{ id: "marketplace", icon: <Blocks size={16} />, label: tr("插件市场"), onClick: () => setPanel("marketplace") }] : []),
   ];
@@ -3069,23 +2942,15 @@ export function XuenessWorkbenchContainer() {
       )}
 
       <RegionBoundary resetKey={`${panel}:${activeId ?? "hero"}`} onReload={() => window.location.reload()} onRecover={() => setPanel("plugins")}><Suspense fallback={<p role="status" className="xn-view-loading">{tr("正在加载界面…")}</p>}>
-      {panel === "settings" ? secondaryPanels.settings : panel !== "chat" ? (
-        <div className="xn-secondary-view">
-          <div className="xn-secondary-view__bar">
+      {panel === "settings" ? secondaryPanels.settings : !isPluginEffective("sessions") ? panel === 'chat' ? (
+        <FeatureUnavailable feature={tr("会话")} onManage={() => setPanel("plugins")} />
+      ) : <div className="xn-secondary-view"><div className="xn-secondary-view__bar">
             <button type="button" className="xn-secondary-view__back" onClick={() => setPanel("chat")}>
               <IconBack size={14} />{tr("返回会话")}</button>
             <span className="xn-secondary-view__title">{PANEL_LABELS()[panel]}</span>
             <div className="xn-secondary-view__switcher">{viewSwitcher}</div>
-          </div>
-          <div className="xn-secondary-view__body">
-            {canShowPanel(panel) && (!lightweightLayout || panel !== "subagents")
-              ? secondaryPanels[panel]
-              : <FeatureUnavailable feature={PANEL_LABELS()[panel]} onManage={() => setPanel("plugins")} />}
-          </div>
-        </div>
-      ) : !isPluginEffective("sessions") ? (
-        <FeatureUnavailable feature={tr("会话")} onManage={() => setPanel("plugins")} />
-      ) : <SessionPaneWorkbench enabled={isPluginEffective('sessions')} onFocusedIdentity={receiveFocusedIdentity} onConfigureModels={composerStartActions.onModels}
+          </div><div className="xn-secondary-view__body">{secondaryContent}</div></div>
+      : <SessionPaneWorkbench renderHeader={sessionHeader} auxiliaryView={secondaryContent} enabled={isPluginEffective('sessions')} onFocusedIdentity={receiveFocusedIdentity} onConfigureModels={composerStartActions.onModels}
         hydrateEmptyPrimaryDraftScope={hydrateEmptyPrimaryDraftScope}
         remoteSessions={remoteAdapter?.sessions}
         resolveRemoteAdapter={scope => isPluginEffective('remote') && remoteAdapter?.isCurrent() && scope.remoteConnectionId === remoteAdapter.owner.connectionId && scope.workspaceIdentity === JSON.stringify(['remote', remoteAdapter.owner.connectionId, remoteAdapter.owner.workspaceIdentity]) ? remoteAdapter : undefined}
@@ -3099,29 +2964,6 @@ export function XuenessWorkbenchContainer() {
       ) : session ? (
         <div className="xn-conversation-container">
           <div className="xn-conversation">
-            <WorkbenchHeader
-              session={session}
-              actions={<>
-                {!lightweightLayout && <>{viewSwitcher}<button type="button" className="xn-conv-header__action xn-conv-header__fork" aria-label={tr("分叉会话")} title={tr("分叉会话")} disabled={busy || session.status === "running" || session.streaming?.status === "streaming"} onClick={() => beginFork()}><GitBranch size={14} aria-hidden="true" /><span>{tr("分叉会话")}</span></button></>}
-                <button type="button" className="xn-conv-header__action" aria-label={tr("会话信息")} title={tr("会话信息")}
-                  aria-pressed={contextSidepaneOpen} onClick={() => { setContextSidepaneOpen(value => !value); }}><PanelRight size={16} aria-hidden="true" /></button>
-              </>}
-            pinned={session.pinned === true}
-            onTogglePin={() => activeId && void togglePin(activeId, session.pinned !== true)}
-            onRefresh={() => void handleRefreshAll()}
-            onRename={() => activeId && requestRename(activeId)}
-            onDelete={() => activeId && void deleteById(activeId)}
-            menuItems={<>
-              {isPluginEffective('planning') && <button type="button" className="xn-conv-header__action"
-                disabled={busy || activeSessionRunning}
-                onClick={() => setDeliveryEditorRequest(previous => ({id: session.id, version: (previous?.version ?? 0) + 1}))}>
-                {tr('编辑交付清单')}</button>}
-              {isPluginEffective('sessions') && <button type="button" className="xn-conv-header__action"
-                disabled={busy || activeSessionRunning}
-                onClick={() => setShareDialogOpen(true)}>
-                <Share2 size={14} aria-hidden="true" /><span>{tr('分享会话')}</span></button>}
-            </>}
-          />
           {shareDialogOpen && <Suspense fallback={null}><ConversationShareDialog key={session.id} open session={session}
             onClose={() => setShareDialogOpen(false)} /></Suspense>}
           {isPluginEffective('model_monitor') && <Suspense fallback={null}><ModelMonitorHome key={session.id} sessionId={session.id}
@@ -3146,7 +2988,7 @@ export function XuenessWorkbenchContainer() {
             <Suspense fallback={<p role="status">{tr("正在加载界面…")}</p>}><LocalRuntimeMonitor lightweight session={runtimeMonitorSession} /></Suspense>}
           {session.pending && session.pending.length > 0 && (
             <div className="xn-conversation__approvals">
-              <Approvals pending={session.pending} onApprove={handleApprove} onApproveAll={handleApproveAll} onReject={handleReject} onAllowSession={handleAllowSession}
+              <Approvals pending={session.pending} onApprove={handleApprove} onApproveAll={handleApproveAll} onReject={handleReject} onAllowProject={handleAllowProject} onFullAccess={async p => { if (!await livePermissions.change("yolo", true)) return false; return p.waiting ? true : handleApprove(p); }}
                 busy={busy || runRequestSessions.has(session.id)} />
             </div>
           )}
@@ -3183,10 +3025,10 @@ export function XuenessWorkbenchContainer() {
               showReasoning={settingsValues.messageStreamShowReasoning !== false}
               autoScroll={settingsValues.autoScroll !== false}
               jsonToolProtocol={session.model_selection?.tool_calling === "json" && activeRuntimeProfile === "lightweight" && session.streaming?.text_format !== "markdown"}
-              streamingPending={activeSessionRunning} activityPhase={session.runtime_activity?.phase}
+              streamingPending={activeSessionRunning || session.compacting} activityPhase={session.compacting ? 'compacting' : session.runtime_activity?.phase}
               pendingToolIds={new Set((session.pending ?? []).map(item => item.tool_call_id))}
               effectivePluginIds={pluginAvailability.effectiveIds}
-              isSessionsEffective={() => pluginEffectiveRef.current("sessions")}
+              isSessionsEffective={isSessionsEffective}
               onRetry={!busy && !activeSessionRunning ? handleRetryTool : undefined}
               onEdit={!busy && !activeSessionRunning ? handleMessageEdit : undefined}
               onFeedback={!busy && !activeSessionRunning ? handleMessageFeedback : undefined}
@@ -3221,7 +3063,7 @@ export function XuenessWorkbenchContainer() {
                 withdrawals={queueWithdrawals.rows} notice={queueWithdrawals.notice} error={queueWithdrawals.error}
                 disabled={!isPluginEffective('sessions') || queueWithdrawals.busy} onRefresh={queueWithdrawals.refresh}
                 onRestore={queueWithdrawals.restore} onDismiss={queueWithdrawals.dismiss} /></Suspense>
-              {queueError?.sessionId === session.id && <p className="xn-session-queue__error" role="alert">{queueError.message}</p>}
+              {queueError?.sessionId === session.id && <SessionCommandNotice notice={queueError} compacting={session.compacting} />}
             </div>
           )}
             <CommandReceiptRecovery commands={sessionCommands} enabled={isPluginEffective('sessions')} sessionId={session.id}

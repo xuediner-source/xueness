@@ -2,14 +2,14 @@
 
 .xn-operations { width:100%; box-sizing:border-box; padding:32px 36px; max-width:1180px; margin:0 auto; display:flex; flex-direction:column; gap:22px; color:var(--fg); font-size:13px; }
 .xn-operations * { box-sizing:border-box; }
-.xn-operations h2,.xn-operations h3,.xn-operations h4,.xn-operations p { margin:0; }
+:where(.xn-operations) h2,:where(.xn-operations) h3,:where(.xn-operations) h4,:where(.xn-operations) p { margin:0; }
 .xn-operations h2 { font-size:23px; font-weight:650; letter-spacing:-.5px; }
 .xn-operations h3 { font-size:15px; font-weight:600; }
-.xn-operations p { color:var(--fg-muted); line-height:1.7; }
+:where(.xn-operations) p { color:var(--fg-muted); line-height:1.7; }
 .xn-operation-heading { display:flex; align-items:flex-start; gap:14px; }
 .xn-operation-heading p { margin-top:7px; max-width:700px; }
 .xn-operation-heading__icon { display:grid; place-items:center; width:44px; height:44px; flex-shrink:0; border-radius:12px; background:var(--primary-light); color:var(--primary-hover); border:1px solid color-mix(in srgb,var(--primary) 22%,transparent); }
-.xn-operations label { display:flex; gap:12px; align-items:center; min-width:0; color:var(--fg-subtle); }
+:where(.xn-operations) label { display:flex; gap:12px; align-items:center; min-width:0; color:var(--fg-subtle); }
 .xn-operations input:not([type=checkbox]),.xn-operations textarea,.xn-operations select { min-width:0; flex:1; padding:10px 12px; color:var(--fg); background:var(--bg); border:1px solid var(--border); border-radius:8px; font:inherit; line-height:1.5; transition:border-color .15s; }
 .xn-operations input::placeholder,.xn-operations textarea::placeholder { color:var(--fg-muted); }
 .xn-operations input:focus-visible,.xn-operations textarea:focus-visible,.xn-operations select:focus-visible,.xn-operations button:focus-visible,.xn-operations summary:focus-visible { outline:2px solid var(--border-focus); outline-offset:3px; }

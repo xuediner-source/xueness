@@ -295,3 +295,107 @@ export function useQuantizedStreamingText(text: string, streaming: boolean): str
 
   return streaming ? committed : text;
 }
+
+/**
+ * Keep a growing Markdown response structurally stable while it streams.
+ * `remark-gfm` promotes a header/separator pair to a table as soon as the
+ * separator arrives, and a link can change from text to an anchor when its
+ * closing delimiter is received.  Rendering such constructs from their raw
+ * text first and reparsing them later makes a live answer jump, so:
+ *
+ * - a table renders once its header and separator lines are complete, and then
+ *   grows one complete row at a time; a row (or header) still being received
+ *   is withheld instead of flashing as pipes;
+ * - an unfinished final line made only of block markers (a bullet, a setext
+ *   underline, a heading, quote or fence marker) is withheld, so the paragraph
+ *   above cannot flash as a heading;
+ * - links and bare URLs stay literal until the stream settles; the settled
+ *   render receives the original source and restores them.
+ *
+ * An unmatched fenced block gets a synthetic closing marker for parsing only.
+ * This keeps the block a code block while it grows (and lets CodeContent keep
+ * highlighting disabled via `after-stream`) without ever exposing the marker
+ * to the user.
+ */
+export function prepareStreamingMarkdown(text: string): string {
+  const normalized = text.replace(/\r\n?/gu, "\n");
+  const lines = normalized.split("\n");
+  // The last element is "" when the text ends with a newline; otherwise it is
+  // the line still being received.
+  const partial = normalized.endsWith("\n") ? -1 : lines.length - 1;
+  const lastLine = normalized.endsWith("\n") ? lines.length - 2 : lines.length - 1;
+  let withheldFrom = lines.length;
+  const withhold = (index: number) => { withheldFrom = Math.min(withheldFrom, index); };
+  if (partial >= 0 && /^\s*(?:[-=*+#>|`~:]+|\d{1,9}[.)])\s*$/u.test(lines[partial] ?? "")) withhold(partial);
+
+  let fence: { marker: string; length: number; start: number } | null = null;
+  const fencedLines = new Set<number>();
+  const tableDelimiter = /^\s*\|?\s*:?-{1,}:?\s*(?:\|\s*:?-{1,}:?\s*)*\|?\s*$/u;
+  const delimiterPrefix = /^\s*\|?[\s|:-]*$/u;
+  const tableRow = /^\s*(?:\|.*\||[^|\n]+(?:\|[^|\n]+)+)\s*$/u;
+  const tableContinuation = /^\s*.*\|.*$/u;
+  const pipeLed = /^\s*\|/u;
+
+  for (let index = 0; index < withheldFrom; index += 1) {
+    const line = lines[index] ?? "";
+    const fenceMatch = line.match(/^\s*(`{3,}|~{3,})/u);
+    if (fenceMatch) {
+      fencedLines.add(index);
+      const marker = fenceMatch[1] ?? "";
+      if (!fence) fence = { marker: marker[0] ?? "`", length: marker.length, start: index };
+      else if (fence.marker === marker[0] && marker.length >= fence.length) fence = null;
+      continue;
+    }
+    if (fence) {
+      fencedLines.add(index);
+      continue;
+    }
+    // A header that is still arriving may become a table: hold pipe-led ones.
+    if (index === partial) {
+      if (pipeLed.test(line)) withhold(index);
+      continue;
+    }
+    if (!tableRow.test(line)) continue;
+    const next = index + 1;
+    if (next > lastLine) {
+      // Complete header, separator not received yet.
+      if (pipeLed.test(line)) withhold(index);
+      continue;
+    }
+    const separator = lines[next] ?? "";
+    if (next === partial) {
+      if (delimiterPrefix.test(separator) && /[-|:]/u.test(separator)) withhold(index);
+      continue;
+    }
+    if (!tableDelimiter.test(separator)) continue;
+    // A confirmed table renders now; only its row still being received waits.
+    let end = next + 1;
+    while (end < withheldFrom && end <= lastLine && tableContinuation.test(lines[end] ?? "")) end += 1;
+    if (end - 1 === partial && end - 1 > next) withhold(end - 1);
+    index = end - 1;
+  }
+
+  // A fence opened on the line still being received has no body yet.
+  if (fence && fence.start >= withheldFrom) fence = null;
+  if (fence && fence.start === partial) {
+    withhold(partial);
+    fence = null;
+  }
+  const output = lines.slice(0, withheldFrom).map((line, index) => {
+    let value = line;
+    // Links and bare URLs are deferred together. Escape markdown link
+    // delimiters and insert a zero-width space into http(s)/www markers so
+    // GFM cannot promote or autolink them mid-stream; settled renders keep
+    // the original source without these parser-only tweaks.
+    if (!fencedLines.has(index)) {
+      value = value.replace(/(?<!\\)\[[^\]\n]*\](?:\([^)\n]*\)?|\([^\n]*$)|\[[^\]\n]*$/gu, match =>
+        match.replace(/(?<!\\)([[\]()])/gu, "\\$1"));
+      value = value.replace(/(https?:)\/\//gu, "$1\u200b//")
+        .replace(/(^|[\s(])www\./gu, "$1www\u200b.");
+    }
+    return value;
+  });
+
+  if (fence) output.push(fence.marker.repeat(fence.length));
+  return output.join("\n");
+}

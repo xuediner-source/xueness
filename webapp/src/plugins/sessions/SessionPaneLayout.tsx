@@ -1,12 +1,10 @@
 import React, { lazy, Suspense } from 'react';
-import { t as tr, messages } from '../../i18n';
+import { t as tr } from '../../i18n';
 import { paneLayoutIsSplitVisible, type PaneSplit } from './paneLayout';
 import type { SessionPaneSplit } from './SessionPaneSplit';
 
 // The closed/single layout never imports the split UI, pointer handlers or CSS.
 const LazyPaneSplit = lazy(() => import('./SessionPaneSplit').then(module => ({ default: module.SessionPaneSplit })));
-messages['向右分屏'] = 'Split right';
-messages['向下分屏'] = 'Split down';
 
 export function PaneSplitControls({ split, onSplitRight, onSplitDown }: {
   split: PaneSplit | null;

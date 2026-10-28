@@ -30,9 +30,23 @@ for (const selector of tokenSelectors) {
   if (matches.length !== 1) errors.push(`tokens.css: expected one ${selector} token block, got ${matches.length}`);
   blocks[selector] = Object.fromEntries([...(matches[0]?.[1] ?? '').matchAll(/(--[\w-]+)\s*:\s*([^;]+);/g)].map(m => [m[1], m[2].trim()]));
 }
-function luminance(hex) {
-  if (!/^#[0-9a-f]{6}$/i.test(hex)) throw new Error(`contrast color must be an opaque hex value: ${hex}`);
-  const channels = [1, 3, 5].map(i => parseInt(hex.slice(i, i + 2), 16) / 255).map(c => c <= .04045 ? c / 12.92 : ((c + .055) / 1.055) ** 2.4);
+function color(value, values = {}) {
+  const alias = /^var\((--[\w-]+)\)$/.exec(value);
+  if (alias) return color(values[alias[1]], values);
+  if (/^#[0-9a-f]{6}$/i.test(value)) return [1, 3, 5].map(i => parseInt(value.slice(i, i + 2), 16)).concat(1);
+  const rgb = /^rgba?\(([^)]+)\)$/.exec(value);
+  if (rgb) {
+    const parts = rgb[1].trim().split(/[,\s/]+/);
+    return parts.slice(0, 3).map(c => c.endsWith('%') ? parseFloat(c) * 2.55 : Number(c))
+      .concat(parts[3] === undefined ? 1 : parts[3].endsWith('%') ? parseFloat(parts[3]) / 100 : Number(parts[3]));
+  }
+  throw new Error(`unsupported contrast color (must be checked explicitly): ${value}`);
+}
+function composite(overlay, base) {
+  return overlay.slice(0, 3).map((c, i) => c * overlay[3] + base[i] * (1 - overlay[3])).concat(1);
+}
+function luminance(value) {
+  const channels = (Array.isArray(value) ? value : color(value)).slice(0, 3).map(c => c / 255).map(c => c <= .04045 ? c / 12.92 : ((c + .055) / 1.055) ** 2.4);
   return channels[0] * .2126 + channels[1] * .7152 + channels[2] * .0722;
 }
 // Resolved themes: default light/dark plus optional Claudex appearance light/dark.
@@ -45,13 +59,15 @@ const themes = {
 let minimum = Infinity;
 for (const [theme, values] of Object.entries(themes)) {
   for (const fg of ['--fg', '--fg-subtle', '--fg-muted']) for (const bg of ['--bg', '--bg-subtle', '--bg-card', '--bg-window', '--bg-sidebar', '--bg-panel', '--bg-input', '--bg-popover', '--bg-active']) {
-    // bg-active is a transparent overlay in light mode; all readable surfaces are checked separately.
-    if (!values[bg]?.startsWith('#')) continue;
     try {
-      const [light, dark] = [luminance(values[fg]), luminance(values[bg])].sort((a, b) => b - a);
-      const ratio = (light + .05) / (dark + .05);
-      minimum = Math.min(minimum, ratio);
-      if (ratio < 4.5) errors.push(`${theme}: ${fg} on ${bg} contrast ${ratio.toFixed(2)} < 4.5`);
+      const background = color(values[bg], values);
+      const bases = background[3] === 1 ? [background] : ['--bg', '--bg-card', '--bg-sidebar', '--bg-panel'].map(base => composite(background, color(values[base], values)));
+      for (const surface of bases) {
+        const [light, dark] = [luminance(color(values[fg], values)), luminance(surface)].sort((a, b) => b - a);
+        const ratio = (light + .05) / (dark + .05);
+        minimum = Math.min(minimum, ratio);
+        if (ratio < 4.5) errors.push(`${theme}: ${fg} on ${bg} contrast ${ratio.toFixed(2)} < 4.5`);
+      }
     } catch (error) { errors.push(`${theme}: ${error.message}`); }
   }
 }

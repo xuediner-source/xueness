@@ -3,15 +3,35 @@ import react from "@vitejs/plugin-react";
 import { resolve } from 'node:path';
 import { readFileSync } from 'node:fs';
 import { transformSync } from 'esbuild';
+import { createHash } from 'node:crypto';
+
+const appearances = Object.fromEntries(Object.entries({
+  xueness: 'xueness-superposition.css', claudex: 'claudex-scheme.css',
+}).map(([palette, file]) => {
+  const source = transformSync(readFileSync(resolve(import.meta.dirname, 'src/styles', file), 'utf8'), { loader: 'css', minify: true }).code;
+  const hash = createHash('sha256').update(source).digest('hex').slice(0, 10);
+  return [palette, { source, file, asset: `assets/appearance-${palette}-${hash}.css` }];
+}));
 
 export default defineConfig({
   plugins: [react(), {
     name: 'xueness-prepaint-theme',
+    generateBundle() {
+      for (const appearance of Object.values(appearances)) {
+        this.emitFile({ type: 'asset', fileName: appearance.asset, source: appearance.source });
+      }
+    },
     transformIndexHtml(html, context) {
       if (context.filename.endsWith('tray.html')) return html;
       const source = readFileSync(resolve(import.meta.dirname, 'src/plugins/settings/themeBoot.ts'), 'utf8');
       const { code } = transformSync(source, { loader: 'ts', format: 'iife', minify: true, target: 'es2020' });
-      return [{ tag: 'script', children: code, injectTo: 'head' }];
+      const hrefs = Object.fromEntries(Object.entries(appearances).map(([palette, appearance]) =>
+        [palette, context.server ? `/src/styles/${appearance.file}` : `/${appearance.asset}`]));
+      return [
+        ...Object.entries(hrefs).map(([palette, href]) => ({ tag: 'meta', attrs: { name: `xn-appearance-${palette}`, content: href }, injectTo: 'head' as const })),
+        { tag: 'script', children: code, injectTo: 'head' },
+        { tag: 'script', children: `document.write('<link id="xn-appearance" rel="stylesheet" href="'+document.querySelector('meta[name="xn-appearance-'+(document.documentElement.dataset.xnPalette||'xueness')+'"]').content+'">')`, injectTo: 'head' },
+      ];
     },
   }],
   build: { rollupOptions: {

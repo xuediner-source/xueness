@@ -1,4 +1,4 @@
-import type { ComposerDraftState } from './XuenessWorkbenchView';
+import type { ComposerDraftState } from './composerTypes';
 import { editorAttachmentRefs, parseRemoteAttachmentEndpoint, type RemoteAttachmentEndpoint, type ComposerAttachment } from './composerAttachmentRef';
 
 export type ComposerAttachmentOwner = { root: string; sessionId?: string; draftId: string; remote?: RemoteAttachmentEndpoint };

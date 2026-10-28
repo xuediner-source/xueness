@@ -10,7 +10,7 @@ import { useQuantizedStreamingText } from '../../ui/StreamingCommitGate';
 import { t as tr, tf } from '../../i18n';
 import { deferCompositionEnd, displayBinding, isImeComposingEvent, isModKeyPressed } from '../../xuenessShortcutDisplay';
 import type { TimelineRow, WorkbenchSession } from '../../xuenessWorkbench';
-import type { ComposerDraftState } from '../sessions/XuenessWorkbenchView';
+import type { ComposerDraftState } from '../sessions/composerTypes';
 import type { ComposerInput, ComposerModel } from '../../xuenessComposer';
 import type { RunChoices } from '../../xuenessBridge';
 import { isPermissionMode, type PermissionMode } from '../sessions/permissionModes';
@@ -621,7 +621,7 @@ export function LightweightToolRow({
             <pre className="xn-lightweight-tool__pre">{outputText}</pre>
           </section>
         )}
-        {errorText && <div className="xn-lightweight-tool__error">{errorText}</div>}
+        {errorText && <div className="xn-lightweight-tool__error" role="alert">{errorText}</div>}
       </div>
     </details>
   );

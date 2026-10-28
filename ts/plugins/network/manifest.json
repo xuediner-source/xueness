@@ -42,51 +42,17 @@
     }
   ],
   "features": [
-    {
-      "id": "network.fetch",
-      "name": "受限公网 HTTPS 页面读取",
-      "nameEn": "Restricted public HTTPS fetching"
-    },
-    {
-      "id": "network.search",
-      "name": "显式配置的网页搜索",
-      "nameEn": "Explicitly configured web search"
-    },
-    {
-      "id": "network.search_services",
-      "name": "Tavily、Brave 与 SearXNG 搜索适配",
-      "nameEn": "Tavily, Brave and SearXNG search adapters"
-    },
-    {
-      "id": "network.search_model",
-      "name": "独立 OpenAI 兼容搜索模型",
-      "nameEn": "Independent OpenAI-compatible search model"
-    },
-    {
-      "id": "network.fakeip_doh",
-      "name": "FakeIP 环境的显式 DoH 解析",
-      "nameEn": "Explicit DoH resolution in FakeIP environments"
-    },
-    {
-      "id": "network.image_search",
-      "name": "有界公网图片搜索与来源链接",
-      "nameEn": "Bounded public image search and source links"
-    },
-    {
-      "id": "network.fetch_cache",
-      "name": "网页读取 15 分钟缓存",
-      "nameEn": "15-minute web fetch cache"
-    },
-    {
-      "id": "network.fetch_redirects",
-      "name": "逐跳校验的网页重定向",
-      "nameEn": "Per-hop validated fetch redirects"
-    },
-    {
-      "id": "network.fetch_runtime",
-      "name": "网页请求活动与完整内容缓存",
-      "nameEn": "Fetch activity and full content caching"
-    }
+    {"id": "network.fetch", "name": "受限公网 HTTPS 页面读取", "nameEn": "Restricted public HTTPS fetching"},
+    {"id": "network.search", "name": "显式配置的网页搜索", "nameEn": "Explicitly configured web search"},
+    {"id": "network.search_services", "name": "Tavily、Brave 与 SearXNG 搜索适配", "nameEn": "Tavily, Brave and SearXNG search adapters"},
+    {"id": "network.search_model", "name": "独立 OpenAI 兼容搜索模型", "nameEn": "Independent OpenAI-compatible search model"},
+    {"id": "network.fakeip_doh", "name": "FakeIP 环境的显式 DoH 解析", "nameEn": "Explicit DoH resolution in FakeIP environments"},
+    {"id": "network.image_search", "name": "有界公网图片搜索与来源链接", "nameEn": "Bounded public image search and source links"},
+    {"id": "network.fetch_cache", "name": "网页读取 15 分钟缓存", "nameEn": "15-minute web fetch cache"},
+    {"id": "network.fetch_redirects", "name": "逐跳校验的网页重定向", "nameEn": "Per-hop validated fetch redirects"},
+    {"id": "network.fetch_runtime", "name": "网页请求活动与完整内容缓存", "nameEn": "Fetch activity and full content caching"},
+    {"id": "network.search_settings", "name": "搜索服务地址与密钥配置", "nameEn": "Search service endpoint and key settings"},
+    {"id": "network.dns_diagnostics", "name": "按需诊断 DNS 与搜索服务", "nameEn": "On-demand DNS and search service diagnostics"}
   ],
   "frontendModules": [
     "plugins/network/NetworkSettings.tsx"

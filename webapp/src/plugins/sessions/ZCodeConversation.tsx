@@ -1,3 +1,4 @@
+import { conversationTurnPropsEqual } from './conversationTurnPropsEqual';
 import type { AttachmentPreviewTransport } from './composerAttachmentPreviewModel';
 import type { MessageEditAttachmentTransport } from './messageEditAttachments';
 import { ConversationMarkers } from './conversationMarkers';
@@ -10,14 +11,15 @@ import { ConversationMarkers } from './conversationMarkers';
  */
 import React from 'react';
 import { Brain, Check, ChevronRight, Copy, FileText, TrendingUpDown, Pencil, Search, SquareTerminal, ThumbsUp, ThumbsDown, TriangleAlert } from 'lucide-react';
-import { t as tr, tf, getLocale } from '../../i18n';
+import { t as tr, tf, getLocale, useLocale } from '../../i18n';
 import type { TimelineRow } from '../../xuenessWorkbench';
 import { SimpleMarkdown, MarkdownRenderOptionsContext, type MarkdownRenderOptions } from '../../XuenessShell';
 import { useStreamingReveal } from '../../ui/StreamingCommitGate';
 import { assistantTextForDisplay, terminalResultForDisplay } from './XuenessTimeline';
-import { conversationCompactionLabel, type ConversationCompactionMarker } from './conversationCompaction';
+import type { ConversationCompactionMarker } from './conversationCompaction';
 import { completionPresentation, isDuplicateCompletionAnswer, shouldHideCompletionCard } from './completionPresentation';
 import { conversationActivityLabel, reasoningIsActive } from './conversationActivity';
+import { CompactionBoundary, ContextCompactionStatus } from './ContextCompactionStatus';
 import { conversationWorkSegments, conversationActiveDuration, conversationWorkLabel } from './conversationWorkSegments';
 import { formatConversationWorkDuration, conversationElapsedInterval } from './conversationWorkDuration';
 import { useTimelineVirtualWindow } from './TimelineVirtualWindow';
@@ -26,7 +28,8 @@ import { isImeComposingEvent, isModKeyPressed } from '../../xuenessShortcutDispl
 import './zcode-conversation.css';
 import './sessions.css';
 import { formatCommandArgv } from '../../xuenessWorkbench';
-import { parseDiffPreview, extractToolDiff, setPersistedDisclosure } from './XuenessWorkbenchView';
+import { parseDiffPreview, extractToolDiff } from './diffPreview';
+import { setPersistedDisclosure } from './disclosureState';
 import {
   applyConversationFindHighlights,
   buildConversationFindMatches,
@@ -153,7 +156,7 @@ export function buildConversationTurns(rows: TimelineRow[]): ConversationTurn[] 
   return turns;
 }
 
-function CopyAction({ text }: { text: string }) {
+function CopyAction({ text }: { text: string | (() => string) }) {
   const [copied, setCopied] = React.useState(false);
   const [error, setError] = React.useState(false);
   const timer = React.useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -165,7 +168,7 @@ function CopyAction({ text }: { text: string }) {
   return <><button type="button" className="xn-zc-action" aria-label={tr('复制')} title={tr('复制')}
     onClick={async () => {
       try {
-        await navigator.clipboard.writeText(text);
+        await navigator.clipboard.writeText(typeof text === 'function' ? text() : text);
         if (!mounted.current) return;
         setError(false); setCopied(true);
         if (timer.current) clearTimeout(timer.current);
@@ -470,27 +473,28 @@ function FeedbackActions({ row, onFeedback }: { row: Assistant; onFeedback: NonN
 
 /** 上下文压缩边界：归档历史与仍在模型上下文中的消息之间的浅色分隔行。
  * 纯展示、无动画；文案与计数由 sessions 插件的 compaction 记录推导。 */
-function CompactionBoundary({ marker }: { marker: ConversationCompactionMarker }): React.JSX.Element {
-  const label = conversationCompactionLabel(marker);
-  const note = tr('此边界以上的历史已压缩或掩码出模型上下文，原文保留在会话日志。');
-  return <div className="xn-zc-compaction" data-testid="timeline-compaction-boundary" role="note"
-    aria-label={`${label} ${note}`} title={note}>
-    <span className="xn-zc-compaction__label">{label}</span>
-  </div>;
-}
-
-function Turn({ turn, latest, props, activeFindRowKey, compactionMarker }: { turn: ConversationTurn; latest: boolean; props: ZCodeConversationProps; activeFindRowKey: string | null; compactionMarker?: ConversationCompactionMarker | null }) {
+function TurnView({ turn, latest, props, activeFindRowKey, compactionMarker }: { turn: ConversationTurn; latest: boolean; props: ZCodeConversationProps; activeFindRowKey: string | null; compactionMarker?: ConversationCompactionMarker | null }) {
+  useLocale();
   const { showReasoning = true, jsonToolProtocol = false, pendingToolIds, effectivePluginIds, onFork, onFeedback, onEdit, onRetry } = props;
   const canShowReasoning = showReasoning && (!effectivePluginIds || effectivePluginIds.has('sessions'));
-  const assistantRows = turn.rows.filter((row): row is Assistant => row.kind === 'assistant');
-  const completion = turn.rows.findLast((row): row is Completion => row.kind === 'completion');
-  const lastToolIndex = turn.rows.findLastIndex(row => row.kind === 'tool');
-  const finalCandidates = assistantRows.filter(row => turn.rows.indexOf(row) > lastToolIndex);
-  // A stopped partial is durable transcript content, not the turn's final
-  // answer. Keep it in the work segment so its explicit stopped status remains
-  // visible after the active stream and stop banner have gone away.
-  const final = finalCandidates.findLast(row => !row.interrupted
-    && Boolean(assistantTextForDisplay(visibleAssistantText(row), row.streaming, completion?.summary, jsonToolProtocol).trim()));
+  const assistantRows: Assistant[] = [];
+  let completion: Completion | undefined;
+  let lastToolIndex = -1;
+  for (const [index, row] of turn.rows.entries()) {
+    if (row.kind === 'assistant') assistantRows.push(row);
+    else if (row.kind === 'completion') completion = row;
+    else if (row.kind === 'tool') lastToolIndex = index;
+  }
+  // Stopped partials stay in the work segment, not the final answer.
+  let final: Assistant | undefined;
+  for (let index = turn.rows.length - 1; index > lastToolIndex; index -= 1) {
+    const row = turn.rows[index];
+    if (row.kind === 'assistant' && !row.interrupted
+      && assistantTextForDisplay(visibleAssistantText(row), row.streaming, completion?.summary, jsonToolProtocol).trim()) {
+      final = row;
+      break;
+    }
+  }
   const work = turn.rows.filter(row => {
     if (row.kind === 'tool') return true;
     if (row.kind === 'subagent' && effectivePluginIds?.has('sessions')) return true;
@@ -519,9 +523,9 @@ function Turn({ turn, latest, props, activeFindRowKey, compactionMarker }: { tur
   const factualLabel = conversationWorkLabel(facts, getLocale(), activeMs === undefined ? null : formatConversationWorkDuration(activeMs, getLocale()));
   const workLabel = factualLabel ?? (workPending ? tr('等待批准') : interrupted ? tr('已停止') : running || subagentRunning ? tr('工作中') : workFailed ? tr('运行失败') : duration ? (getLocale() === 'en' ? `Elapsed ${duration}` : `经过 ${duration}`) : tr('已完成'));
   const answer = final ? assistantTextForDisplay(visibleAssistantText(final), final.streaming, completion?.summary, jsonToolProtocol) : '';
-  const streamingRow = assistantRows.some(row => row.streaming);
-  const liveLabel = tr(conversationActivityLabel(props.activityPhase));
-  const copyText = assistantRows.map(row => assistantTextForDisplay(visibleAssistantText(row), row.streaming, completion?.summary, jsonToolProtocol)).filter(text => text.trim()).join('\n\n');
+  const streamingRow = props.activityPhase !== 'compacting' && assistantRows.some(row => row.streaming);
+  const liveLabel = props.activityPhase === 'compacting' ? <ContextCompactionStatus /> : tr(conversationActivityLabel(props.activityPhase));
+  const copyText = () => assistantRows.map(row => assistantTextForDisplay(visibleAssistantText(row), row.streaming, completion?.summary, jsonToolProtocol)).filter(text => text.trim()).join('\n\n');
   const referenceRows = turn.rows.filter(isReferenceTimelineRow);
   const userReferences = referenceRows.filter(row => row.anchorRole === 'user');
   const assistantReferences = referenceRows.filter(row => row.anchorRole !== 'user');
@@ -567,6 +571,8 @@ function Turn({ turn, latest, props, activeFindRowKey, compactionMarker }: { tur
   </section>;
 }
 
+const Turn = React.memo(TurnView, conversationTurnPropsEqual);
+
 /** Standard and lightweight runtimes use exactly the same conversation view. */
 export function ZCodeConversation(props: ZCodeConversationProps) {
   const [disclosures] = React.useState(() => zcodeConversationDisclosures);
@@ -593,6 +599,7 @@ export function ZCodeConversation(props: ZCodeConversationProps) {
   const activeFindIndex = foundActiveIndex >= 0 ? foundActiveIndex : findMatches.length ? 0 : -1;
   const activeFindMatch = activeFindIndex >= 0 ? findMatches[activeFindIndex] : null;
   const previousFindQuery = React.useRef(findQuery);
+  const findHighlightsApplied = React.useRef(false);
   const handledFindRequest = React.useRef<string | null>(null);
   const requestedFindTarget = React.useRef<{ query: string; rowKey: string; occurrence: number } | null>(null);
   React.useEffect(() => {
@@ -632,6 +639,7 @@ export function ZCodeConversation(props: ZCodeConversationProps) {
   React.useEffect(() => {
     const conversation = rootRef.current?.querySelector<HTMLElement>(".xn-zcode-conversation");
     if (!conversation) return;
+    if (!findQuery.trim() && !findHighlightsApplied.current) return;
     const turnIndex = activeFindMatch
       ? turns.findIndex(turn => turn.rows.some(row => conversationFindRowKey(row) === activeFindMatch.rowKey))
       : -1;
@@ -640,6 +648,7 @@ export function ZCodeConversation(props: ZCodeConversationProps) {
       return () => window.cancelAnimationFrame(frame);
     }
     applyConversationFindHighlights(conversation, findQuery, activeFindMatch?.rowKey ?? null, activeFindMatch?.occurrence ?? -1);
+    findHighlightsApplied.current = Boolean(findQuery.trim());
   }, [findQuery, activeFindMatch?.rowKey, activeFindMatch?.occurrence, turns, snapshot.start, snapshot.end, reveal, props.rows]);
   const updateFindQuery = React.useCallback((query: string) => {
     requestedFindTarget.current = null;
@@ -722,14 +731,14 @@ export function ZCodeConversation(props: ZCodeConversationProps) {
             </div>
             {props.renderSelectionAction && selection && <div className="xn-zc-selection-action" data-zcode-selection-action="true"
               onMouseDown={event => event.preventDefault()}>{props.renderSelectionAction(selection)}</div>}
-            {snapshot.topPad > 0 && <div aria-hidden="true" style={{ height: snapshot.topPad }} />}
+            {snapshot.topPad > 0 && <div data-testid="timeline-window-top-spacer" aria-hidden="true" style={{ height: snapshot.topPad }} />}
             {turns.slice(snapshot.start, snapshot.end).map((turn, offset) => <div data-window-index={snapshot.start + offset} key={turn.key}>
               <Turn turn={turn} latest={snapshot.start + offset === turns.length - 1} props={props}
                 activeFindRowKey={activeFindMatch?.rowKey ?? null}
                 compactionMarker={snapshot.start + offset === markerTurnIndex ? props.compactionMarker : null} />
             </div>)}
-            {snapshot.bottomPad > 0 && <div aria-hidden="true" style={{ height: snapshot.bottomPad }} />}
-            {!turns.length && props.streamingPending && <p className="xn-zc-live" role="status">{tr(conversationActivityLabel(props.activityPhase))}</p>}
+            {snapshot.bottomPad > 0 && <div data-testid="timeline-window-bottom-spacer" aria-hidden="true" style={{ height: snapshot.bottomPad }} />}
+            {!turns.length && props.streamingPending && <p className="xn-zc-live" role="status">{props.activityPhase === 'compacting' ? <ContextCompactionStatus /> : tr(conversationActivityLabel(props.activityPhase))}</p>}
           </div>
         </div>
       </div>

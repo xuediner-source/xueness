@@ -5,6 +5,7 @@
   "description": "只读子任务：ZCode Agent 工具、后台派发与结果收集、显式恢复与引导、内置与已存子代理类型清单、持久化子会话与 task_runs 记录。",
   "version": "0.3.0",
   "defaultEnabled": true,
+  "dependencies": ["sessions", "files"],
   "capabilities": { "fs": { "read": ["state"], "write": ["state"] } },
   "tools": [
     { "name": "task", "gate": "planning", "mutating": false, "concurrencySafe": false },
@@ -16,16 +17,25 @@
     { "name": "reply_to_channel", "gate": "planning", "mutating": false, "concurrencySafe": false }
   ],
   "features": [
-    { "id": "subagents.tasks", "name": "只读子任务", "nameEn": "Read-only subtasks" },
-    { "id": "subagents.coordination", "name": "后台派发、结果收集、恢复与引导", "nameEn": "Background dispatch, collection, resume and steering" },
-    { "id": "subagents.channel_reply", "name": "外部频道回复端口", "nameEn": "External channel reply port" },
-    { "id": "subagents.listing", "name": "可用子代理类型清单", "nameEn": "Available agent types listing" },
-    { "id": "subagents.durable_children", "name": "持久化子会话", "nameEn": "Durable child sessions" }
+    {"id": "subagents.tasks", "name": "只读子任务", "nameEn": "Read-only subtasks"},
+    {"id": "subagents.coordination", "name": "后台派发、结果收集、恢复与引导", "nameEn": "Background dispatch, collection, resume and steering"},
+    {"id": "subagents.channel_reply", "name": "外部频道回复端口", "nameEn": "External channel reply port"},
+    {"id": "subagents.listing", "name": "可用子代理类型清单", "nameEn": "Available agent types listing"},
+    {"id": "subagents.durable_children", "name": "持久化子会话", "nameEn": "Durable child sessions"},
+    {"id": "subagents.progress", "name": "子任务进度、结果与取消", "nameEn": "Subtask progress, results and cancellation"},
+    {"id": "subagents.cancel_one", "name": "单个子任务协作取消", "nameEn": "Cooperative cancellation for one subtask"},
+    {"id": "subagents.parallel_coordination", "name": "后台并发派发、主代理持续工作与结果收集", "nameEn": "Background delegation, parent progress and result collection"},
+    {"id": "subagents.context_restore", "name": "压缩后未收集子任务的状态恢复", "nameEn": "Uncollected subtask state restoration after compaction"},
+    {"id": "subagents.child_inbox", "name": "安全边界子任务消息", "nameEn": "Safe-boundary child messages"},
+    {"id": "subagents.child_transcript", "name": "只读子会话记录", "nameEn": "Read-only child conversation transcript"},
+    {"id": "subagents.settings", "name": "子代理资源与能力配置", "nameEn": "Subagent resources and capability settings"},
+    {"id": "subagents.sidepane", "name": "Web 端子代理运行态侧栏", "nameEn": "Web subagent runtime sidepane"}
   ],
   "panels": ["capabilities", "subagents"],
   "frontendModules": [
     "plugins/subagents/SubagentSettings.tsx",
     "plugins/subagents/SubagentSidePane.tsx",
-    "plugins/subagents/SubagentTranscript.tsx"
+    "plugins/subagents/SubagentTranscript.tsx",
+    "plugins/subagents/SubagentEmptyState.tsx"
   ]
 }

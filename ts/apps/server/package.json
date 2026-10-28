@@ -36,6 +36,7 @@
     "@xueness/plugin-commands": "0.2.1",
     "@xueness/plugin-workbuddy": "0.2.1",
     "@xueness/plugin-native_ops": "0.2.1",
-    "@xueness/plugin-batch_calls": "0.2.1"
+    "@xueness/plugin-batch_calls": "0.2.1",
+    "@xueness/plugin-context_lens": "0.2.1"
   }
 }

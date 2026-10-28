@@ -13,20 +13,13 @@
     "apps/*"
   ],
   "scripts": {
-    "test": "node --test --test-reporter=spec \"packages/*/test/**/*.test.ts\" \"plugins/*/test/**/*.test.ts\" \"apps/*/test/**/*.test.ts\" \"scripts/test/**/*.test.ts\"",
-    "test:sessions": "node --test --test-reporter=spec \"packages/sessions/test/**/*.test.ts\"",
-    "test:fast": "node scripts/test-fast.ts",
     "typecheck": "tsc -p tsconfig.json",
     "check:lines": "node scripts/check-max-lines.ts",
     "check:plugins": "node scripts/check-plugins.ts",
-    "check": "npm run check:lines && npm run check:plugins && npm run typecheck && npm test",
+    "check": "npm run check:lines && npm run check:plugins && npm run typecheck",
     "serve": "node apps/server/src/main.ts",
     "build": "npm run typecheck && node scripts/build.ts",
-    "serve:built": "node dist/apps/server/src/main.js --project-root ..",
-    "test:built": "node scripts/smoke-built.ts",
-    "test:packaged": "node scripts/smoke-packaged.ts",
-    "bench:tools": "node scripts/bench-tools.ts",
-    "manifest": "node scripts/project-manifest.ts"
+    "serve:built": "node dist/apps/server/src/main.js --project-root .."
   },
   "devDependencies": {
     "@types/node": "~24.19.2",

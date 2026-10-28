@@ -370,7 +370,7 @@ export function OffPeakTaskCard({
             <span>
               {statusLabel(attempt.status)} · {formatTime(attempt.at)}
               {attempt.workflowId && <> {tr("工作流运行 ID：")}<code>{attempt.workflowId}</code></>}
-              {attempt.error && <span className="xn-automation__error-text">{attempt.error}</span>}
+              {attempt.error && <span className="xn-automation__error-text" role="alert">{attempt.error}</span>}
             </span>
           )}
           {row.status === "queued" && row.holdUntil && (

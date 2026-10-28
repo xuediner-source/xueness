@@ -3,7 +3,7 @@ import { Archive, ArrowDownWideNarrow, BriefcaseBusiness, Check, ChevronsDownUp,
 import { SidebarNav } from './SidebarNav';
 import { Select } from '../../ui/Select';
 import { isImeComposingEvent } from '../../xuenessShortcutDisplay';
-import { t as tr, tf } from '../../i18n';
+import { t as tr, tf, useLocale } from '../../i18n';
 import type { SessionSummary } from '../../xuenessWorkbench';
 import { normalizeChangeSummary, normalizePendingInteraction } from './sessionsIndex';
 import { PANE_SESSION_DRAG_MIME, paneDragPayload } from './paneLayout';
@@ -306,6 +306,7 @@ export function XuenessTaskList({
   onOpenProjectExplorer,
   onArchiveProjectSessions,
 }: XuenessTaskListProps) {
+  useLocale();
   const [menu,setMenu]=useState<{id:string;x:number;y:number}|null>(null);
   const [projectMenu,setProjectMenu]=useState<{path:string;label:string;x:number;y:number}|null>(null);
   const [projectMenuOpenedOnce,setProjectMenuOpenedOnce]=useState(false);

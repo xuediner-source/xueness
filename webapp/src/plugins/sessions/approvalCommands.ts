@@ -101,7 +101,7 @@ export async function approvePending(
   commandWasEffective: boolean,
   decision: 'approve' | 'reject' = 'approve',
   /** `message`: reject feedback for the model; `scope: 'session'`: allow identical calls for this session. Waiting calls only. */
-  answer: { message?: string; scope?: 'session' } = {},
+  answer: { message?: string; scope?: 'session' | 'project' } = {},
 ): Promise<SubmissionResult<string>> {
   // Contract §4: validate and build the body locally first — rejected shapes
   // must fail without any network request.
@@ -149,7 +149,8 @@ export async function approvePending(
     if (decision === 'reject') {
       const message = typeof answer.message === 'string' ? answer.message.trim().slice(0, 2000) : '';
       body = { ...body, decision: 'reject', ...(message ? { message } : {}) };
-    } else if (answer.scope === 'session' && pending.waiting && !pending.oneShot) body = { ...body, scope: 'session' };
+    } else if (answer.scope === 'project' && pending.projectRules?.length) body = { ...body, scope: 'project' };
+    else if (answer.scope === 'session' && pending.waiting && !pending.oneShot) body = { ...body, scope: 'session' };
     const direct = (signal: AbortSignal) => post(body, signal);
     const result = commands ? (await commands.submitApproval(id, decision, body, direct))?.result
       : await direct(AbortSignal.timeout(20000));

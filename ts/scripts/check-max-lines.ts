@@ -3,6 +3,7 @@
 // - Test/spec files (*.test.ts, *.spec.ts, test/, tests/, __tests__/, test-support/) and i18n locales: max-lines off
 import { readdirSync, readFileSync } from "node:fs";
 import { join, relative } from "node:path";
+import { pathToFileURL } from "node:url";
 
 const MAX_LINES = Number(process.env.XUENESS_MAX_LINES ?? 400);
 const ROOT = join(import.meta.dirname, "..");
@@ -26,7 +27,7 @@ function isExemptFile(relPath: string): boolean {
   return segments.some((seg) => SKIPPED.has(seg));
 }
 
-function countEffectiveLines(source: string): number {
+export function countEffectiveLines(source: string): number {
   if (source.length === 0) return 0;
   const rawLines = source.replaceAll("\r\n", "\n").split("\n");
   if (rawLines.at(-1) === "") rawLines.pop();
@@ -74,7 +75,7 @@ function countEffectiveLines(source: string): number {
   return count;
 }
 
-function* typescriptFiles(dir: string): Generator<string> {
+function* typescriptFiles(dir: string, includeTsx = false): Generator<string> {
   let entries;
   try {
     entries = readdirSync(dir, { withFileTypes: true });
@@ -84,28 +85,44 @@ function* typescriptFiles(dir: string): Generator<string> {
   for (const entry of entries) {
     if (SKIPPED.has(entry.name)) continue;
     const path = join(dir, entry.name);
-    if (entry.isDirectory()) yield* typescriptFiles(path);
-    else if (entry.isFile() && entry.name.endsWith(".ts")) yield path;
+    if (entry.isDirectory()) yield* typescriptFiles(path, includeTsx);
+    else if (entry.isFile() && (entry.name.endsWith(".ts") || (includeTsx && entry.name.endsWith(".tsx")))) yield path;
   }
 }
 
-const tooLong: string[] = [];
-let count = 0;
-let largest = { file: "", lines: 0 };
-for (const top of SCANNED) {
-  for (const file of typescriptFiles(join(ROOT, top))) {
-    const rel = relative(ROOT, file);
-    if (isExemptFile(rel)) continue;
-    count += 1;
-    const text = readFileSync(file, "utf8");
-    const lines = countEffectiveLines(text);
-    if (lines > largest.lines) largest = { file: rel, lines };
-    if (lines > MAX_LINES) tooLong.push(`${rel}: ${lines} effective lines (max ${MAX_LINES})`);
+export type LineBaseline = Record<string, number>;
+
+/** Check backend under its existing rule and frontend against its gradual baseline. */
+export function checkLines(root: string, maxLines: number, baseline: LineBaseline) {
+  const tooLong: string[] = [];
+  let count = 0;
+  let largest = { file: "", lines: 0 };
+  const groups = [
+    ...SCANNED.map((top) => ({ dir: join(root, top), web: false })),
+    { dir: join(root, "..", "webapp", "src"), web: true },
+  ];
+  for (const group of groups) {
+    for (const file of typescriptFiles(group.dir, group.web)) {
+      const rel = relative(root, file).replaceAll("\\", "/");
+      if (isExemptFile(rel) || (group.web && /(?:^|\/)i18n\.[^.]+\.ts$/.test(rel))) continue;
+      count += 1;
+      const lines = countEffectiveLines(readFileSync(file, "utf8"));
+      if (lines > largest.lines) largest = { file: rel, lines };
+      // A legacy entry is a ceiling, not a permanent exemption. A newly created
+      // or renamed file must satisfy the normal limit.
+      const limit = group.web ? (baseline[rel] ?? 400) : maxLines;
+      if (lines > limit) tooLong.push(`${rel}: ${lines} effective lines (max ${limit})`);
+    }
   }
+  return { tooLong, count, largest };
 }
 
-if (tooLong.length) {
-  process.stderr.write(`Files over the ${MAX_LINES}-line limit (skipBlankLines + skipComments):\n${tooLong.map((line) => `  ${line}`).join("\n")}\n`);
-  process.exit(1);
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  const baseline = JSON.parse(readFileSync(join(ROOT, "scripts", "frontend-lines-baseline.json"), "utf8")) as LineBaseline;
+  const { tooLong, count, largest } = checkLines(ROOT, MAX_LINES, baseline);
+  if (tooLong.length) {
+    process.stderr.write(`Files over their effective-line limit (skipBlankLines + skipComments):\n${tooLong.map((line) => `  ${line}`).join("\n")}\n`);
+    process.exit(1);
+  }
+  process.stdout.write(`check:lines ok: ${count} prod files, largest ${largest.file} (${largest.lines} effective lines; backend max ${MAX_LINES}; frontend max 400 or baseline; tests/comments/blanks exempt)\n`);
 }
-process.stdout.write(`check:lines ok: ${count} prod files, largest ${largest.file} (${largest.lines} effective lines, max ${MAX_LINES}; tests/comments/blanks exempt per ZCode .oxlintrc.json)\n`);

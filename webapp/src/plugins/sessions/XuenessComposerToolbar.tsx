@@ -1,6 +1,8 @@
+import { permissionChoices } from './permissionChoices';
+import './ApprovalChoiceMenu.css';
 import { ContextUsageRing, type ContextUsageReading } from './ContextUsageRing';
 import React, { useCallback, useEffect, useRef, useState } from "react";
-import { ArrowLeft, ChevronRight, ClipboardList, Globe, Hand, Lightbulb, Search, ShieldAlert, ShieldCheck } from "lucide-react";
+import { ArrowLeft, ChevronRight, Globe, Lightbulb, Search } from "lucide-react";
 import { t as tr, tf, useLocale } from "../../i18n";
 import { IconCheck, IconChevronDown, IconPencil, IconRefresh, IconX } from "../../ui/icons";
 import { normalizeReasoningLevels, ReasoningEffortControl } from "./ReasoningEffortSlider";
@@ -14,6 +16,8 @@ import { isImeComposingEvent } from "../../xuenessShortcutDisplay";
 export type ComposerToolbarProps = {
   choices: RunChoices;
   onChange(patch: Partial<RunChoices>): void;
+  permissionDisabled?: boolean;
+  onPermissionChange?: (mode: PermissionMode, acknowledged: boolean) => void | Promise<unknown>;
   models: ComposerModel[];
   loading: boolean;
   error: string;
@@ -56,29 +60,6 @@ export function groupComposerModels(models: ComposerModel[], locale: 'zh' | 'en'
   }
   return [...groups.values()];
 }
-
-const permissionChoiceMeta: Record<PermissionMode, {
-  label: string;
-  description: string;
-  Icon: React.ComponentType<{ size?: number; className?: string }>;
-}> = {
-  plan: { label: "计划", description: "只读并先出计划。", Icon: ClipboardList },
-  build: { label: "变更前确认", description: "改文件前先问我。", Icon: Hand },
-  edit: { label: "自动编辑", description: "自动编辑文件。", Icon: ShieldCheck },
-  guarded: { label: '守护执行', description: '常规命令自动执行，已识别危险命令每次确认。', Icon: ShieldCheck },
-  yolo: { label: "完全访问", description: "跳过常规工具审批。", Icon: ShieldAlert },
-};
-
-/** 展示顺序。缺任一 PermissionMode 时下面的赋值无法通过类型检查。 */
-const PERMISSION_DISPLAY_ORDER = ["plan", "build", "edit", "guarded", "yolo"] as const satisfies readonly PermissionMode[];
-type _MissingPermissionMode = Exclude<PermissionMode, (typeof PERMISSION_DISPLAY_ORDER)[number]>;
-const _permissionModesCovered: [_MissingPermissionMode] extends [never] ? true : never = true;
-void _permissionModesCovered;
-
-const permissionChoices = PERMISSION_DISPLAY_ORDER.map((value) => ({
-  value,
-  ...permissionChoiceMeta[value],
-}));
 
 /** Wrap-aware movement for menu rows; exported so SSR tests can assert it. */
 export function nextIndex(current: number, length: number, key: "ArrowDown" | "ArrowUp" | "Home" | "End"): number {
@@ -630,7 +611,7 @@ export function XuenessComposerToolbar({
   runtimeBudget,
   pauseReason,
   onOpenUsage,
-  disabled = false,
+  disabled = false, permissionDisabled = disabled, onPermissionChange,
   minimal = false,
   minimalPermissionControl,
   inputRef,
@@ -712,7 +693,8 @@ export function XuenessComposerToolbar({
       setConfirmYoloOpen(true);
       return;
     }
-    onChange({ permission_mode: permission, acknowledge_yolo: permission === "yolo" });
+    if (onPermissionChange) void onPermissionChange(permission, permission === "yolo");
+    else onChange({ permission_mode: permission, acknowledge_yolo: permission === "yolo" });
     closeModeMenu(true);
   };
 
@@ -728,7 +710,7 @@ export function XuenessComposerToolbar({
 
   useEffect(() => {
     if (!modeMenuOpen) return;
-    modeMenuRef.current?.querySelector<HTMLButtonElement>("[role='menuitemcheckbox']")?.focus();
+    modeMenuRef.current?.querySelector<HTMLButtonElement>("[role='menuitemcheckbox']:not(:disabled), [role='menuitemradio']:not(:disabled)")?.focus();
   }, [modeMenuOpen]);
 
   useEffect(() => {
@@ -753,7 +735,7 @@ export function XuenessComposerToolbar({
   const openModeMenu = (key?: string) => {
     setModelMenuOpen(false);
     setModeMenuOpen(true);
-    if (key) requestAnimationFrame(() => modeMenuRef.current?.querySelector<HTMLButtonElement>(key === "ArrowUp" ? "[role='menuitemradio']:last-of-type" : "[role='menuitemcheckbox']")?.focus());
+    if (key) requestAnimationFrame(() => { const items = modeMenuRef.current?.querySelectorAll<HTMLButtonElement>("[role='menuitemcheckbox']:not(:disabled), [role='menuitemradio']:not(:disabled)"); items?.[key === "ArrowUp" ? items.length - 1 : 0]?.focus(); });
   };
   const openModelMenu = (key?: string) => {
     setModeMenuOpen(false);
@@ -777,7 +759,7 @@ export function XuenessComposerToolbar({
             aria-haspopup="menu"
             aria-expanded={modeMenuOpen}
             title={tr("模式")}
-            disabled={disabled}
+            disabled={permissionDisabled}
             onClick={() => modeMenuOpen ? closeModeMenu() : openModeMenu()}
             onKeyDown={(event) => {
               if (event.key === "ArrowDown" || event.key === "ArrowUp") {
@@ -828,8 +810,9 @@ export function XuenessComposerToolbar({
                       role="menuitemradio"
                       aria-checked={selected}
                       className="xn-composer-toolbar__menu-row xn-composer-toolbar__permission-option"
+                      data-permission={item.value}
                       key={item.value}
-                      disabled={disabled}
+                      disabled={permissionDisabled}
                       onClick={() => changePermission(item.value)}
                     >
                       <item.Icon size={18} aria-hidden="true" />
@@ -891,7 +874,8 @@ export function XuenessComposerToolbar({
         }}
         onConfirm={() => {
           setConfirmYoloOpen(false);
-          onChange({ permission_mode: "yolo", acknowledge_yolo: true });
+          if (onPermissionChange) void onPermissionChange("yolo", true);
+          else onChange({ permission_mode: "yolo", acknowledge_yolo: true });
           closeModeMenu(true);
         }}
       />

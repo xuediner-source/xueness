@@ -12,9 +12,14 @@
     { "name": "browser_screenshot", "gate": "exec", "mutating": false, "concurrencySafe": false }
   ],
   "features": [
-    { "id": "browser.pages", "name": "受审批约束的页面导航与检查", "nameEn": "Approved page navigation and inspection" },
-    { "id": "browser.actions", "name": "精确点击、输入与内存截图", "nameEn": "Exact click, fill and in-memory screenshots" },
-    { "id": "browser.snapshot", "name": "页面无障碍树快照", "nameEn": "Page accessibility tree snapshot" }
+    {"id": "browser.pages", "name": "受审批约束的页面导航与检查", "nameEn": "Approved page navigation and inspection"},
+    {"id": "browser.actions", "name": "精确点击、输入与内存截图", "nameEn": "Exact click, fill and in-memory screenshots"},
+    {"id": "browser.snapshot", "name": "页面无障碍树快照", "nameEn": "Page accessibility tree snapshot"},
+    {"id": "browser.settings", "name": "浏览器控制配置与生命周期清理", "nameEn": "Browser control settings and lifecycle cleanup"},
+    {"id": "browser.desktop_import", "name": "桌面 Chrome 资料选择、确认导入与持久浏览器环境检测", "nameEn": "Desktop Chrome profile selection, confirmed import and persistent browser runtime detection"},
+    {"id": "browser.composer_operation", "name": "添加菜单浏览器操作工作流", "nameEn": "Add-menu browser operation workflow"},
+    {"id": "browser.side_tabs", "name": "独立浏览器标签与逐操作审批预览", "nameEn": "Independent browser tabs with per-action approved preview"},
+    {"id": "browser.remote_tabs", "name": "远程连接作用域浏览器标签与逐次操作授权", "nameEn": "Remote connection-scoped browser tabs and per-action authorization"}
   ],
   "panels": ["browser"],
   "frontendModules": [

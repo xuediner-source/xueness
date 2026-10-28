@@ -18,6 +18,8 @@ export { createTuiSessionPort } from "./tui-session-port.ts";
 export { loadProjectPermissionRules, rememberProjectPermission } from "./tui-project-permissions.ts";
 export { readClipboardPng, writeClipboardText } from "./tui-clipboard.ts";
 export * from "./runtime-api.ts";
+export * from "./permission-control.ts";
+export * from "./shutdown-approvals.ts";
 export * from "./auto-title.ts";
 export * from "./lifecycle-api.ts";
 export * from "./run-validation.ts";

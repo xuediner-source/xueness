@@ -2,6 +2,7 @@ import React from "react";
 import { ChevronDown, ChevronUp, Search, X } from "lucide-react";
 import type { TimelineRow } from "../../xuenessWorkbench";
 import { t as tr } from "../../i18n";
+import { shouldDismissModalOnEscape } from "../shared";
 
 export type ConversationFindMatch = {
   rowKey: string;
@@ -156,7 +157,7 @@ export function ConversationFindBar({
       onChange={event => onQueryChange(event.currentTarget.value)}
       onKeyDown={event => {
         if (event.key === "Enter") { event.preventDefault(); event.shiftKey ? onPrevious() : onNext(); }
-        else if (event.key === "Escape") { event.preventDefault(); onClose(); }
+        else if (shouldDismissModalOnEscape(event)) { event.preventDefault(); onClose(); }
       }} />
     <span className="xn-zc-find__count" aria-live="polite" data-testid="conversation-find-count">{status}</span>
     <button type="button" aria-label={tr("上一个匹配项")} title={tr("上一个匹配项")} disabled={!resultCount} onClick={onPrevious}>

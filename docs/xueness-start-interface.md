@@ -53,10 +53,10 @@
 
 验收截图：
 
-- [开始页：中文浅色](screenshots/batch23-20260930T084433Z-start-configured.png)
-- [开始页：英文深色](screenshots/batch23-20260930T084433Z-start-english-dark.png)
-- [附件和引用标签](screenshots/batch23-20260930T084433Z-start-context-menu.png)
-- [实际协议对话](screenshots/batch23-20260930T084433Z-conversation-online.png)
-- [停止运行](screenshots/batch23-20260930T084433Z-conversation-stopped.png)
-- [自动修改文件](screenshots/batch23-20260930T084433Z-conversation-file-edit.png)
-- [390px](screenshots/batch23-20260930T084433Z-start-mobile-390.png) / [320px](screenshots/batch23-20260930T084433Z-start-mobile-320.png)
+- 开始页：中文浅色
+- 开始页：英文深色
+- 附件和引用标签
+- 实际协议对话
+- 停止运行
+- 自动修改文件
+- 390px / 320px

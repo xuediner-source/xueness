@@ -1,6 +1,6 @@
 # Xueness 工作台设计与验收
 
-> 当前目标已按用户最新要求调整为：除 Xueness 品牌外，详细对照 ZCode v3.14.3 的前端布局、设置和交互。最新实现、实测与剩余差异见 [2026-10-01 对照记录](zcode-ui-parity-2026-10-01.md)。公开离线入口和旧外壳已经移除；下文仅保留第二十二批的历史设计和验证记录，其中 Codex 风格、252px 侧栏及离线演示均不是当前设计目标。
+> 当前目标已按用户最新要求调整为：除 Xueness 品牌外，详细对照 ZCode v3.14.3 的前端布局、设置和交互。最新实现、实测与剩余差异见 [2026-10-01 对照记录](https://github.com/xuediner-source/xueness-private-tests/blob/main/archive/project/docs/zcode-ui-parity-2026-10-01.md)。公开离线入口和旧外壳已经移除；下文仅保留第二十二批的历史设计和验证记录，其中 Codex 风格、252px 侧栏及离线演示均不是当前设计目标。
 
 2026-09-30，第二十二批。功能继续参考 ZCode；界面按用户授权采用 Codex 式的简洁工作台方向。这里是 Xueness 自己的设计实现，不声称使用了 Codex 内部组件或官方设计 token。
 
@@ -44,10 +44,10 @@
 
 最终截图：
 
-- [桌面首页](screenshots/batch22-20260930T064640Z-hero-desktop-light.png)
-- [浅色会话](screenshots/batch22-20260930T064640Z-session-light.png) · [深色会话与 QA 错误摘要](screenshots/batch22-20260930T064640Z-session-dark.png)
-- [插件桌面列表](screenshots/batch22-20260930T064640Z-plugins-desktop-list.png) · [插件窄屏列表](screenshots/batch22-20260930T064640Z-plugins-mobile-320.png)
-- [移动会话](screenshots/batch22-20260930T064640Z-chat-mobile-390.png) · [移动抽屉](screenshots/batch22-20260930T064640Z-mobile-390-drawer-open.png)
-- [长错误展开](screenshots/batch22-20260930T064640Z-session-long-error-open.png)
+- 桌面首页
+- 浅色会话 · 深色会话与 QA 错误摘要
+- 插件桌面列表 · 插件窄屏列表
+- 移动会话 · 移动抽屉
+- 长错误展开
 
 临时后端、浏览器与隔离状态已清理。此次并行实现和审查的子代理使用 GPT-6Luna，推理等级 MAX。

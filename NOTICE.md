@@ -2,6 +2,10 @@
 
 Xueness is an independent local coding workbench. This notice records source attribution for its interface and third-party dependencies.
 
+## dsh-context native adaptation
+
+The 2026-10-27 Context Lens plugin adapts [dsh-context](https://github.com/bowenliang123/dsh-context) 0.77.0, commit `7ddaae4cae5aef0fe3d7fbe3ca28029bbe598f4b`, by bowenliang123, under Apache License 2.0. `src/shared/estimate.ts` and `src/shared/fileOps.ts` were adapted as `ts/plugins/context_lens/src/upstream-estimate.ts` and `upstream-fileOps.ts`, with attribution and local type imports. Xueness implements its own plugin lifecycle, journal projections, HTTP endpoints and React interface. The upstream license is retained in `ts/plugins/context_lens/LICENSE.dsh-context`; provenance and supported scope are in `ts/plugins/context_lens/UPSTREAM.md`. DeepSeek Harness and Cordis are not bundled by this adaptation.
+
 ## ZCode source attribution
 
 Xueness adapts interface material from [ZCode](https://github.com/zai-org/ZCode), licensed under Apache License 2.0, Copyright 2026 Z.AI Co., Ltd. The current comparison and adaptation reference is v3.14.3, commit `29628c9acdb81b703bbd4080c207a0e7ce5e276e`. Earlier interface material was pinned to commit `328c1a0c0ffaa5a4f65e8fa199af5e4c20706e5f`.

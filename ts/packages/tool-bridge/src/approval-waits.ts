@@ -37,7 +37,7 @@ import type { ApprovalAnswer, ApprovalRequest, Approver } from "./bridge.ts";
 
 export type LiveDecision = "approve" | "reject";
 /** "once" approves this call only; "session" also allows identical calls for the rest of the session. */
-export type LiveScope = "once" | "session";
+export type LiveScope = "once" | "session" | "project";
 
 export interface WaitingApproval {
   readonly sessionId: string;
@@ -47,6 +47,7 @@ export interface WaitingApproval {
   readonly subject: string;
   readonly code: string;
   readonly message: string;
+  readonly remember?: ApprovalRequest["remember"];
 }
 
 export type LiveAnswerOutcome =
@@ -87,7 +88,7 @@ export class ApprovalWaits {
   /** Register synchronously, so the request can be answered as soon as it is visible. */
   request(sessionId: string, request: ApprovalRequest, options: LiveApproverOptions = {}): Promise<ApprovalAnswer> {
     const approval: WaitingApproval = Object.freeze({
-      sessionId, callId: request.callId, tool: request.tool, kind: request.kind, subject: request.subject, code: request.code, message: request.message,
+      sessionId, callId: request.callId, tool: request.tool, kind: request.kind, subject: request.subject, code: request.code, message: request.message, remember: request.remember,
     });
     let sessions = this.#waiting.get(sessionId);
     if (sessions?.has(request.callId)) return Promise.resolve({ behavior: "deny", message: `approval already pending for ${request.callId}` });
@@ -163,7 +164,7 @@ export class ApprovalWaits {
       if (!allowed) { allowed = new Set(); this.#sessionAllowed.set(sessionId, allowed); }
       allowed.add(sessionKey(entry.approval));
     }
-    entry.settle(decision === "approve" ? { behavior: "allow" } : { behavior: "deny", reason: "user_denied", ...(message ? { feedback: message } : {}) });
+    entry.settle(decision === "approve" ? { behavior: "allow", ...(scope === "project" && entry.approval.code === "approval_required" ? { remember: entry.approval.remember?.exact ?? [] } : {}) } : { behavior: "deny", reason: "user_denied", ...(message ? { feedback: message } : {}) });
     return { status: "answered", approval: entry.approval };
   }
 

@@ -6,8 +6,7 @@
 <p align="center">一个属于你的 Agent 工作台。把对话、文件、工具与工作流，放进同一个工作空间。</p>
 
 <p align="center">
-  <a href="https://github.com/xuediner-source/xueness/actions/workflows/ts-backend.yml"><img alt="TypeScript backend" src="https://github.com/xuediner-source/xueness/actions/workflows/ts-backend.yml/badge.svg" /></a>
-  <a href="https://github.com/xuediner-source/xueness/actions/workflows/windows-runtime-check.yml"><img alt="Windows runtime regression" src="https://github.com/xuediner-source/xueness/actions/workflows/windows-runtime-check.yml/badge.svg" /></a>
+  <a href="https://github.com/xuediner-source/xueness/actions/workflows/desktop-build.yml"><img alt="Desktop installers" src="https://github.com/xuediner-source/xueness/actions/workflows/desktop-build.yml/badge.svg" /></a>
   <a href="LICENSE"><img alt="Apache 2.0 license" src="https://img.shields.io/badge/license-Apache--2.0-353b32?style=flat-square" /></a>
   <a href="ts/README.md"><img alt="Node 24.11 or later" src="https://img.shields.io/badge/Node-%E2%89%A524.11-728568?style=flat-square" /></a>
 </p>
@@ -76,7 +75,7 @@ npm --prefix ts run check
 
 # 前端：安装依赖、测试并构建
 npm --prefix webapp ci
-npm --prefix webapp test
+npm --prefix webapp run typecheck
 npm --prefix webapp run build
 ```
 
@@ -91,12 +90,12 @@ npm --prefix webapp run build
 | [`desktop`](desktop) | Electron 宿主、原生集成与安装构建 |
 | [`marketplace/packages`](marketplace/packages) | 按内容摘要命名的官方可选插件包 |
 
-验证以可复查的记录为准：[插件与技能实机验收](验收资料/20261026-plugins-skills/验收报告.md) · [Windows 全链路验收](HANDOVER-20261026-WINDOWS.md) · [SSE 与 WorkBuddy 长任务压测](验收资料/20261026-workbuddy-benchmark) · [插件架构](docs/xueness-plugin-architecture.md) · [贡献指南](CONTRIBUTING.md)。长任务报告保留失败任务、预算限制与测试夹具问题，不把模型请求成功率等同于任务完成率。
+单元测试、测试 CI、验收、审查和压测材料由[私有验证库](https://github.com/xuediner-source/xueness-private-tests)独立维护。公开源码保留应用与构建资源；功能归属见[插件架构](docs/xueness-plugin-architecture.md)，开发流程见[贡献指南](CONTRIBUTING.md)。
 
 <details>
 <summary>历史交接与实现范围</summary>
 
-[2026-10-24 项目交接](HANDOVER-20261024.md)、[ZCode 差异审计](docs/audits/20261024/AUDIT.md)、[引擎路线图](ts/docs/engine-roadmap.md) 和 [TS 迁移交接](ts/HANDOVER.md) 保留各阶段的交付边界。首页的信息结构参考 [ZCode](https://github.com/zai-org/ZCode)，Xueness 使用自己的实现、视觉与验证记录。
+历史交付与审查记录已迁入私有验证库。Xueness 的使用和构建以本仓库当前说明为准。
 
 </details>
 

@@ -13,6 +13,7 @@ export type PluginPanel =
   | "subscriptions"
   | "workbuddy"
   | "model-monitor"
+  | "context-lens"
   | "usage"
   | "memory"
   | "capabilities"
@@ -37,6 +38,7 @@ export const XUENESS_PLUGIN_REGISTRY = {
   batch_calls: { name: "批量调用", description: "鼓励同一步发起独立工具调用，并在上下文压缩后恢复批量调用约定。", panels: [] },
   os_cua: { name: "OS Computer Use", description: "受审批约束的 OS 级计算机使用：平台适配端口上的有界屏幕截图、窗口列表与单步输入，带证据日志；无适配器平台明确不可用。", panels: [] },
   model_monitor: { name: "返回模型监测", description: "随会话记录请求型号与上游返回型号，标记一致、不同及未报告。不会自动发起额外模型请求。", panels: ["model-monitor"] },
+  context_lens: { name: "上下文透镜", description: "基于 dsh-context 的上下文组成、逐请求趋势、内容浏览、文件命令活动与代理关系", panels: ["context-lens"] },
   usage: { name: "用量", description: "会话和步骤用量统计", panels: ["usage"] },
   memory: { name: "记忆", description: "记忆文件轨道状态", panels: ["memory"] },
   settings: { name: "设置", description: "工作台和运行设置", panels: ["settings"] },
@@ -77,6 +79,7 @@ export const PLUGIN_PANEL_LABELS: Record<PluginPanel, string> = {
   subscriptions: "订阅中心",
   workbuddy: "WorkBuddy 号池",
   "model-monitor": "返回模型监测",
+  "context-lens": "上下文透镜",
   usage: "用量",
   memory: "记忆",
   capabilities: "能力",
