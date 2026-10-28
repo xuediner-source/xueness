@@ -3,7 +3,7 @@ on:
   workflow_dispatch:
     inputs:
       build_run_id:
-        description: 'Successful focused native parity or full extended release test run for this exact commit'
+        description: 'Successful installer build for this exact commit; run private QA separately'
         type: string
         required: true
 permissions:
