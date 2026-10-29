@@ -17,8 +17,8 @@ async function missingBeneath(root: string, file: string): Promise<boolean> {
   return false;
 }
 
-export function reportFinish(options: (context: AgentContext) => DeliveryCheckOptions) {
-  const runs = new WeakMap<Row, { steps: number; messages: number; tried: boolean; target?: string }>();
+export function reportFinish(options: (context: AgentContext) => DeliveryCheckOptions, defer: (context: AgentContext) => boolean = () => false, now = () => performance.now() / 1000) {
+  const runs = new WeakMap<Row, { steps: number; messages: number; tried: boolean; longestCall: number; modelStarted?: number; target?: string }>();
   const active = (context: AgentContext): boolean => context.session.runtime_profile === "lightweight" && context.provider.toolCalling !== "json"
     && context.enabled("planning") && context.enabled("files") && !context.signal.aborted;
   return {
@@ -26,13 +26,18 @@ export function reportFinish(options: (context: AgentContext) => DeliveryCheckOp
       if (!active(context)) return;
       const messages = context.session.messages as Row[], turn = messages.at(-1)?._turn_id;
       const start = typeof turn === "string" ? messages.findIndex(message => message._turn_id === turn) : messages.length;
-      runs.set(context.session, { steps: Number(context.session.steps ?? 0), messages: Math.max(0, start), tried: false });
+      runs.set(context.session, { steps: Number(context.session.steps ?? 0), messages: Math.max(0, start), tried: false, longestCall: 0 });
+    },
+    modelRequestStarted(context: AgentContext): void {
+      const run = runs.get(context.session); if (run && active(context)) run.modelStarted = now();
     },
     async beforeModelRequest(context: AgentContext): Promise<void> {
       const run = runs.get(context.session);
       if (!run || run.tried || !active(context)) return;
       const remaining = (context.options.maxSteps ?? 24) - (Number(context.session.steps ?? 0) - run.steps);
-      if (remaining > 4 || remaining < 1) return;
+      const seconds = context.deadline - now();
+      const timeToSave = Number.isFinite(seconds) && seconds > 0 && seconds <= Math.min(120, (context.options.maxWallSeconds ?? 600) * 0.15) + run.longestCall;
+      if (!timeToSave && remaining > (defer(context) ? 1 : 4) || remaining < 1) return;
       const messages = context.session.messages as Row[];
       if (!messages.slice(run.messages).some(message => message.role === "assistant" && Array.isArray(message.tool_calls) && message.tool_calls.length)) return;
       seedDelivery(context.session);
@@ -45,7 +50,7 @@ export function reportFinish(options: (context: AgentContext) => DeliveryCheckOp
         run.tried = true; run.target = path;
         messages.push({ role: "user", content: wrapSystemReminderForSource("task_status", `Generate the explicitly requested report now. Destination path (data): ${JSON.stringify(path)}. Use actual observations, counts, commands, tests, failures and unfinished work already available. Do not invent results. Return the report body, around 4500 characters. Saving still uses the normal file permission flow.`),
           _input_kind: "background_notice", _meta_source: "task_status", _report_finish: true, _turn_id: messages.at(-1)?._turn_id });
-        await context.save(); context.emit({ type: "delivery_report_started", path, remaining });
+        await context.save(); context.emit({ type: "delivery_report_started", path, remaining, reason: timeToSave ? "wall_time_reserve" : "step_reserve", remainingSeconds: Number.isFinite(seconds) ? Math.max(0, Math.floor(seconds)) : null });
         break;
       }
     },
@@ -78,7 +83,9 @@ export function reportFinish(options: (context: AgentContext) => DeliveryCheckOp
       return { ...request, messages, tools: [write], systemPrompt: messages[0]!.content as string, hostInstructions: [], repair: null };
     },
     async afterModelResponse(context: AgentContext, response: Row): Promise<Row> {
-      const run = runs.get(context.session), path = run?.target;
+      const run = runs.get(context.session);
+      if (run?.modelStarted !== undefined) { run.longestCall = Math.max(run.longestCall, now() - run.modelStarted); delete run.modelStarted; }
+      const path = run?.target;
       if (!path || !run) return response;
       delete run.target;
       if (!active(context)) return response;

@@ -63,8 +63,9 @@
       "concurrencySafe": true
     }
   ],
-  "modules": ["delivery", "delivery_wrapup", "work_policy", "report_finish"],
+  "modules": ["delivery", "delivery_wrapup", "work_policy", "report_finish", "failure_repair"],
   "features": [
+    {"id": "planning.failure_repair", "name": "失败定向修复、原检查复跑与交付续作", "nameEn": "Focused failure repair, check reruns and unfinished-output continuation"},
     {"id": "planning.report_finish", "name": "轻量模式文本报告收尾生成", "nameEn": "Lightweight missing text report generation"},
     {"id": "planning.lightweight_wrapup", "name": "轻量模式分阶段收尾与具体缺项提醒", "nameEn": "Phased lightweight wrap-up and specific missing-output reminders"},
     {"id": "planning.goal_editor", "name": "目标创建与显式替换", "nameEn": "Goal creation and explicit replacement"},

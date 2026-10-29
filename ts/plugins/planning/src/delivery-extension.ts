@@ -5,15 +5,19 @@ import { workPolicy } from "./work-policy.ts";
 import { goalReminder, mergeGoalCompletion, verifyGoalCompletion } from "./goal-completion.ts";
 import { deliveryWrapup } from "./delivery-wrapup.ts";
 import { reportFinish } from "./report-finish.ts";
+import { failureRepair } from "./failure-repair.ts";
 export const DELIVERY_GUIDANCE = "The host registers explicit saved output paths from the task. Use delivery_plan to add missing requested outputs, content markers (contains), or source-link counts (min_links); do not register input/reference paths or repeat an already registered plan. A report written only in chat does not require a saved file unless requested. Save requested results and a truthful report during the work, including failed tests and unresolved issues; update them after fixes instead of waiting for every check to pass before creating them. Do not remove requirements to pass. Host file/content checks and successful tools do not establish behavioral correctness.";
 export function planningDeliveryExtension(options: (context: AgentContext) => DeliveryCheckOptions): AgentExtension {
-  const wrapup = deliveryWrapup(options), report = reportFinish(options);
-  return { id: "planning", capabilities: ["planning.delivery", "planning.lightweight_wrapup", "planning.report_finish"],
-    runStarted(context) { wrapup.runStarted(context); report.runStarted(context); },
-    async beforeModelRequest(context) { await wrapup.beforeModelRequest(context); await report.beforeModelRequest(context); },
-    prepareRequest: report.prepareRequest,
+  const repair = failureRepair(options), wrapup = deliveryWrapup(options), report = reportFinish(options, repair.pendingFailure);
+  return { id: "planning", capabilities: ["planning.delivery", "planning.lightweight_wrapup", "planning.report_finish", "planning.failure_repair"],
+    runStarted(context) { repair.runStarted(context); wrapup.runStarted(context); report.runStarted(context); },
+    toolResultRecorded: repair.toolResultRecorded,
+    modelRequestStarted: report.modelRequestStarted,
+    async beforeModelRequest(context) { await repair.beforeModelRequest(context); await wrapup.beforeModelRequest(context); await report.beforeModelRequest(context); },
+    prepareRequest(context, request) { return report.prepareRequest(context, repair.prepareRequest(context, request)); },
     afterModelResponse: report.afterModelResponse,
-    close(context) { wrapup.close(context); report.close(context); },
+    beforeFinalResponse: repair.beforeFinalResponse,
+    close(context) { repair.close(context); wrapup.close(context); report.close(context); },
     completionInstructions(context) {
       seedDelivery(context.session);
       const instructions = report.instructions(context);
