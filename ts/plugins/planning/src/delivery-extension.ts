@@ -4,12 +4,20 @@ import { checkDelivery, requestsFileOutput, seedDelivery, type DeliveryCheckOpti
 import { workPolicy } from "./work-policy.ts";
 import { goalReminder, mergeGoalCompletion, verifyGoalCompletion } from "./goal-completion.ts";
 import { deliveryWrapup } from "./delivery-wrapup.ts";
-export const DELIVERY_GUIDANCE = "For a requested saved file or other file artifact, call delivery_plan before doing the work. Register only requested outputs: paths supplied for reading, reference, or analysis are inputs, not deliverables. A report or research answer written only in this chat does not need delivery_plan just because it is called a report. Add each explicit output path, requested content marker (contains), and required source-link count (min_links). Do not remove requirements to pass. The host checks actual file content or the final summary; successful tool execution alone does not prove the delivery is complete. Missing checks are reported separately.";
+import { reportFinish } from "./report-finish.ts";
+export const DELIVERY_GUIDANCE = "The host registers explicit saved output paths from the task. Use delivery_plan to add missing requested outputs, content markers (contains), or source-link counts (min_links); do not register input/reference paths or repeat an already registered plan. A report written only in chat does not require a saved file unless requested. Save requested results and a truthful report during the work, including failed tests and unresolved issues; update them after fixes instead of waiting for every check to pass before creating them. Do not remove requirements to pass. Host file/content checks and successful tools do not establish behavioral correctness.";
 export function planningDeliveryExtension(options: (context: AgentContext) => DeliveryCheckOptions): AgentExtension {
-  return { id: "planning", capabilities: ["planning.delivery", "planning.lightweight_wrapup"], ...deliveryWrapup(options),
+  const wrapup = deliveryWrapup(options), report = reportFinish(options);
+  return { id: "planning", capabilities: ["planning.delivery", "planning.lightweight_wrapup", "planning.report_finish"],
+    runStarted(context) { wrapup.runStarted(context); report.runStarted(context); },
+    async beforeModelRequest(context) { await wrapup.beforeModelRequest(context); await report.beforeModelRequest(context); },
+    prepareRequest: report.prepareRequest,
+    afterModelResponse: report.afterModelResponse,
+    close(context) { wrapup.close(context); report.close(context); },
     completionInstructions(context) {
       seedDelivery(context.session);
-      return [workPolicy(context.session), ...(pyTruthy(context.session.delivery_requirements) || requestsFileOutput(context.session.task) ? [DELIVERY_GUIDANCE] : []), ...goalReminder(context.session) ? [goalReminder(context.session)] : []];
+      const instructions = report.instructions(context);
+      return [workPolicy(context.session), ...(pyTruthy(context.session.delivery_requirements) || requestsFileOutput(context.session.task) ? [DELIVERY_GUIDANCE] : []), ...goalReminder(context.session) ? [goalReminder(context.session)] : [], ...instructions ? [instructions] : []];
     },
     async completionChecks(context, answer) { return { planning: mergeGoalCompletion(await checkDelivery(context.root, context.session, answer, options(context)), verifyGoalCompletion(context.session, answer)) }; },
   };

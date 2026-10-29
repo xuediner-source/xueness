@@ -55,7 +55,7 @@ export interface AgentContext {
   enabled(id: string): boolean;
   emit(event: AgentEvent): void;
 }
-export interface ModelRequest { messages: Row[]; tools: Row[]; options: ProviderCallOptions; hostInstructions?: string[]; repair?: string | null; injected?: string[] }
+export interface ModelRequest { messages: Row[]; tools: Row[]; options: ProviderCallOptions; systemPrompt?: string; hostInstructions?: string[]; repair?: string | null; injected?: string[] }
 export type RebuildRequest = (messages: Row[]) => Promise<ModelRequest>;
 export interface RunLifecycle { stop?: boolean; deadlineSeconds?: number }
 export interface RunDecision { action: "continue" | "stop"; prompt?: string; owner?: string; exclusive?: boolean }

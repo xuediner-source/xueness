@@ -62,4 +62,4 @@ Read references/review.md, then follow the project-specific checks.
 
 回归覆盖下载后热加载、默认停用、旧清单不可激活、校验失败拒绝安装、移除后 API 拒绝访问、保留账号目录，以及技能文件夹的复制、取消、冲突和路径检查。真实桌面端验证使用独立测试数据目录，不读取用户的账号或会话。
 
-历史长任务压测另见 [WorkBuddy Benchmark](../验收资料/20261026-workbuddy-benchmark)。该报告使用此前版本执行，其任务成功率不能用来代替本次插件分发与文件夹导入验收。
+历史长任务压测另见私有验证库的 [WorkBuddy Benchmark](https://github.com/xuediner-source/xueness-private-tests/tree/main/archive/project/验收资料/20261026-workbuddy-benchmark)。该报告使用此前版本执行，其任务成功率不能用来代替本次插件分发与文件夹导入验收。

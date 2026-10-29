@@ -63,9 +63,10 @@
       "concurrencySafe": true
     }
   ],
-  "modules": ["delivery", "delivery_wrapup", "work_policy"],
+  "modules": ["delivery", "delivery_wrapup", "work_policy", "report_finish"],
   "features": [
-    {"id": "planning.lightweight_wrapup", "name": "轻量模式预算收尾与交付缺项提醒", "nameEn": "Lightweight budget wrap-up and missing-output reminders"},
+    {"id": "planning.report_finish", "name": "轻量模式文本报告收尾生成", "nameEn": "Lightweight missing text report generation"},
+    {"id": "planning.lightweight_wrapup", "name": "轻量模式分阶段收尾与具体缺项提醒", "nameEn": "Phased lightweight wrap-up and specific missing-output reminders"},
     {"id": "planning.goal_editor", "name": "目标创建与显式替换", "nameEn": "Goal creation and explicit replacement"},
     {"id": "planning.goal_driver", "name": "目标独立核验与有界继续执行", "nameEn": "Independent goal verification and bounded continuation"},
     {"id": "planning.task_tools", "name": "会话任务清单与操作员问答", "nameEn": "Session tasks and operator questions"},

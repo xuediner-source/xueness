@@ -42,6 +42,10 @@ export async function handoffModelJson(provider: AgentProvider, messages: Row[],
   const onDelta = (chunk: unknown): void => { check(); if (typeof chunk !== "string") throw new PyValueError("invalid model handoff stream"); chunks.push(chunk); chars += pyLen(chunk); if (chars > 16000) throw new PyValueError("model handoff output exceeds bound"); };
   let response: Row;
   try { response = await runWithModelAdmission(config.admission, provider, signal, async () => client.stream ? await client.stream(messages, [], { onDelta }, { signal }) : await client.complete(messages, [], { signal })); }
+  catch (error) {
+    if (timeout.aborted && !config.signal?.aborted && !config.shouldStop?.()) throw Object.assign(new Error("model handoff deadline exceeded", { cause: error }), { name: "TimeoutError" });
+    throw error;
+  }
   finally { if (probe) clearInterval(probe); }
   check();
   if (!isDict(response) || Array.isArray(response.tool_calls) && response.tool_calls.length || response._finish_reason !== undefined && response._finish_reason !== null && response._finish_reason !== "stop") throw new PyValueError("model handoff did not finish as bounded text");

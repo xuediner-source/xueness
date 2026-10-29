@@ -31,7 +31,7 @@ export function lightweightRuntimeExtension(config: LightweightRuntimeOptions = 
     void catalog;
     const historyWindow = isDict(context.session.runtime_history_window) ? { ...context.session.runtime_history_window } : {};
     const [messages, stats] = promptView(request.messages, tools, provider, { maxChars: context.options.maxChars,
-      maxTokens: context.options.maxTokens, shrink, repair: request.repair, hostInstructions: request.hostInstructions,
+      maxTokens: context.options.maxTokens, shrink, systemPrompt: request.systemPrompt, repair: request.repair, hostInstructions: request.hostInstructions,
       calibration: context.session.runtime_budget_calibration, historyWindow, injected: request.injected });
     context.session.runtime_history_window = historyWindow;
     context.session.runtime_budget = stats;

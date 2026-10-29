@@ -9,7 +9,7 @@ export const LIGHTWEIGHT_SYSTEM = "You are Xueness, a coding assistant. For gree
 export const JSON_INSTRUCTION = 'Tool protocol: reply with ONLY one JSON object, no surrounding prose. To call a tool: {"tool":"NAME","arguments":{...}}. To finish ordinary conversation: {"answer":"your natural Markdown answer","evidence":[]}. To finish a tool task: {"answer":"what you completed","evidence":[{"evidence_id":"E1","observation":"what the successful tool result showed"}]}. Each evidence entry MUST be an object with evidence_id and observation, never a string such as "E1". Replace E1 and the example observation with actual host-issued successful references and facts; a real tool_call_id may replace evidence_id. Never invent evidence. Never put tool instructions inside answer. Available tools: ';
 export const NATIVE_INSTRUCTION = 'Use native tool_calls. After tools, answer Markdown ending with a standalone "Evidence: E1, E2" line (actual successful result IDs only; the host checks and hides it). No evidence tool is needed.';
 export class ContextBudgetError extends Error { override name = "ContextBudgetError"; }
-export interface PromptViewOptions { maxChars?: number; maxTokens?: number | null; injected?: string[]; shrink?: number; repair?: string | null; hostInstructions?: string[]; calibration?: unknown; historyWindow?: Row }
+export interface PromptViewOptions { maxChars?: number; maxTokens?: number | null; injected?: string[]; shrink?: number; systemPrompt?: string; repair?: string | null; hostInstructions?: string[]; calibration?: unknown; historyWindow?: Row }
 
 export function promptView(messages: Row[], tools: Row[], provider: RuntimeProvider, config: PromptViewOptions = {}): [Row[], Row] {
   const context = provider.contextWindow || 8192; const output = provider.maxOutputTokens || 1024;
@@ -18,8 +18,8 @@ export function promptView(messages: Row[], tools: Row[], provider: RuntimeProvi
   if (config.maxTokens !== undefined && config.maxTokens !== null) budget = Math.min(budget, config.maxTokens);
   if (budget < 256) throw new ContextBudgetError("The context window leaves too little space for input and output.");
   const jsonMode = provider.toolCalling === "json";
-  let system = LIGHTWEIGHT_SYSTEM;
-  if (messages[0]?.role === "system" && typeof messages[0].content === "string" && messages[0].content.startsWith(LIGHTWEIGHT_SYSTEM)) system = pySlice(messages[0].content, 2500);
+  let system = config.systemPrompt ?? LIGHTWEIGHT_SYSTEM;
+  if (config.systemPrompt === undefined && messages[0]?.role === "system" && typeof messages[0].content === "string" && messages[0].content.startsWith(LIGHTWEIGHT_SYSTEM)) system = pySlice(messages[0].content, 2500);
   if (jsonMode) system += "\n" + JSON_INSTRUCTION + pyJsonDumps(tools, { separators: [",", ":"] });
   else if (context < 4096) system = system.replace("Always use the configured response format.", 'End tool answers with "Evidence: E1".');
   else system += "\n" + NATIVE_INSTRUCTION;
