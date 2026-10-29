@@ -6,12 +6,14 @@
   "version": "0.2.0",
   "defaultEnabled": true,
   "capabilities": {
+    "exec": ["node"],
     "fs": {
       "read": [
         "workspace"
       ],
       "write": [
-        "state"
+        "state",
+        "temp"
       ]
     }
   },
@@ -20,6 +22,7 @@
     "delivery/*"
   ],
   "tools": [
+    {"name": "delivery_verify", "gate": "exec", "mutating": true, "concurrencySafe": false},
     {
       "name": "delivery_plan",
       "gate": "todo_write",
@@ -63,8 +66,9 @@
       "concurrencySafe": true
     }
   ],
-  "modules": ["delivery", "delivery_wrapup", "work_policy", "report_finish", "failure_repair"],
+  "modules": ["delivery", "delivery_wrapup", "work_policy", "report_finish", "failure_repair", "repair_input", "delivery_verification", "delivery_verify_tool", "delivery_verify_extension", "import_probe"],
   "features": [
+    {"id": "planning.delivery_verification", "name": "独立交付与模块导入验收", "nameEn": "Independent delivery and module import verification"},
     {"id": "planning.failure_repair", "name": "失败定向修复、原检查复跑与交付续作", "nameEn": "Focused failure repair, check reruns and unfinished-output continuation"},
     {"id": "planning.report_finish", "name": "轻量模式文本报告收尾生成", "nameEn": "Lightweight missing text report generation"},
     {"id": "planning.lightweight_wrapup", "name": "轻量模式分阶段收尾与具体缺项提醒", "nameEn": "Phased lightweight wrap-up and specific missing-output reminders"},

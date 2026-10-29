@@ -84,6 +84,7 @@ export async function driveRun(context: AgentContext, runner: AgentRunnerOptions
     let outputLimited = false;
     let protocolError: unknown;
     let diagnostic: unknown;
+    let hostCalls: Row[] = [];
     try {
       for (const extension of effectiveExtensions(context, extensions)) await extension.beforeModelRequest?.(context);
       const guidance: string[] = [];
@@ -121,7 +122,9 @@ export async function driveRun(context: AgentContext, runner: AgentRunnerOptions
       }
       if (!context.enabled("providers")) { await settle("paused", "providers plugin disabled"); return; }
       ({ response, stream, request } = await performModelRequest(context, runner, request, rebuild, now, stopped));
+      const modelCallIds = new Set((Array.isArray(response.tool_calls) ? response.tool_calls : []).filter(isDict).map(call => call.id));
       for (const extension of effectiveExtensions(context, extensions)) if (extension.afterModelResponse) response = await extension.afterModelResponse(context, response);
+      hostCalls = (Array.isArray(response.tool_calls) ? response.tool_calls : []).filter(isDict).filter(call => !modelCallIds.has(call.id));
       response = { ...response };
       protocolError = response._protocol_error; diagnostic = response._protocol_diagnostic;
       delete response._protocol_error; delete response._protocol_diagnostic;
@@ -234,6 +237,10 @@ export async function driveRun(context: AgentContext, runner: AgentRunnerOptions
     if (calls.length) {
       ledger.accept(typeof stream?.record.id === "string" ? stream.record.id : "", String(session.active_turn_id ?? turnId(session)),
         stream ? stream.acceptedToolCalls() : calls);
+      // Trusted effective extensions can append calls after a stream completes.
+      // Admit only those new IDs here; unaccepted model fragments stay excluded.
+      if (stream && hostCalls.length) ledger.accept(typeof stream.record.id === "string" ? stream.record.id : "", String(session.active_turn_id ?? turnId(session)),
+        hostCalls.map(call => ({ id: call.id, name: isDict(call.function) ? call.function.name : undefined })));
       ledger.project(session);
     }
     await context.save(); // No tool effect precedes publication.

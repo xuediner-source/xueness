@@ -90,11 +90,14 @@ export async function checkDelivery(root: string, session: Row, summary: string,
         if (!read || read.size > MAX_DELIVERY_BYTES || read.raw.length > MAX_DELIVERY_BYTES) throw new Error("unreadable delivery file");
         text = office ? await options.officeText!(read.raw, suffix) : new TextDecoder("utf-8", { fatal: true, ignoreBOM: true }).decode(read.raw);
       } catch { missing.push("文件不存在、不可读取、插件已禁用、内容被截断或不支持文本检查"); text = ""; }
+      if (!missing.length && /\.json$/i.test(item.path)) {
+        try { JSON.parse(text.replace(/^\ufeff/, "")); } catch { missing.push("JSON 文件语法无效或内容为空"); }
+      }
       if (!missing.length && !pyStrip(text.replace(/^\ufeff+/, "")) && /报告|资料|research|report/i.test(pyStr(session.task ?? "") + " " + item.label)) missing.push("报告文件为空");
     }
     for (const marker of item.contains) if (!text.includes(marker)) missing.push("缺少内容：" + marker);
     const count = deliveryLinkCount(text); if (count < item.min_links) missing.push(`来源链接不足：${count}/${item.min_links}`);
     checked.push({ ...item, passed: !missing.length, missing, link_count: count });
   }
-  return { status: checked.every((item) => item.passed) ? "passed" : "failed", items: checked, scope: "文件存在与文本内容、必需条目和链接数量检查；不证明来源真实性或链接可达。" };
+  return { status: checked.every((item) => item.passed) ? "passed" : "failed", items: checked, scope: "文件存在、JSON语法、文本必需条目和链接数量；不证明完整程序行为、来源真实性或链接可达。" };
 }

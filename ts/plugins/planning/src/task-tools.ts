@@ -4,7 +4,7 @@ import type { ToolDefinition } from "@xueness/engine-tools";
 import { publicGoal } from "./goal.ts";
 import type { Row } from "./delivery.ts";
 import { enterPlanModeTool, exitPlanModeTool, type PlanModePort } from "./plan-exit.ts";
-export interface PlanningToolsOptions { session(): Row | null; normalizeQuestions?: (value: unknown) => unknown; questionsSchema?: JsonSchema; planMode?: () => PlanModePort | null }
+export interface PlanningToolsOptions { session(): Row | null; enabled?(id: string): boolean; normalizeQuestions?: (value: unknown) => unknown; questionsSchema?: JsonSchema; planMode?: () => PlanModePort | null }
 export function normalizeTodos(value: unknown): Row[] {
   if (!Array.isArray(value)) throw new PyValueError("todos must be an array");
   if (value.length > 50) throw new PyValueError("todos capped at 50 items");

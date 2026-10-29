@@ -86,7 +86,7 @@ export function createActorHost(options: ActorHostOptions): AgentNodeHost {
         // actor's resolved provider resolves the local/native ToolSearch mode.
         catalog: () => kernel.tools.list<ToolDefinition>().map(({ name, description, alwaysLoad, shouldDefer }) => ({ name, description, alwaysLoad, shouldDefer })),
         provider: () => provider,
-      }), createPlanning({ session: () => current.session }), createOffice({ session: () => current.session }), createNetwork({ stateDir: options.stateDir })],
+      }), createPlanning({ session: () => current.session, enabled: options.enabled }), createOffice({ session: () => current.session }), createNetwork({ stateDir: options.stateDir })],
         { enabled: { providers: options.enabled("providers"), files: options.enabled("files"), shell: options.enabled("shell"), planning: options.enabled("planning"), office: options.enabled("office"), network: options.enabled("network") }, config: runtimeConfig.plugins });
       try {
         await host.start();

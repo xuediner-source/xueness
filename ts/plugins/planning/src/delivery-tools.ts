@@ -4,6 +4,7 @@ import { definePlugin, type BundledPlugin } from "@xueness/kernel";
 import manifest from "../manifest.json" with { type: "json" };
 import { planDelivery, type Row } from "./delivery.ts";
 import { planningTaskTools, type PlanningToolsOptions } from "./task-tools.ts";
+import { deliveryVerifyTool } from "./delivery-verify-tool.ts";
 export function deliveryPlanTool(session: () => Row | null): ToolDefinition<{ items: unknown }> {
   return {
     name: "delivery_plan", description: "Register immutable output checks; each item needs a path, nonempty contains list, or min_links >= 1. Never register input/source paths as outputs.",
@@ -20,5 +21,5 @@ export function deliveryPlanTool(session: () => Row | null): ToolDefinition<{ it
   };
 }
 export function createPlanning(options: PlanningToolsOptions): BundledPlugin {
-  return { manifest, plugin: definePlugin({ name: "planning", apply(ctx) { ctx.tool(deliveryPlanTool(options.session)); for (const tool of planningTaskTools(options)) ctx.tool(tool); } }) };
+  return { manifest, plugin: definePlugin({ name: "planning", apply(ctx) { ctx.tool(deliveryPlanTool(options.session)); ctx.tool(deliveryVerifyTool(options)); for (const tool of planningTaskTools(options)) ctx.tool(tool); } }) };
 }
