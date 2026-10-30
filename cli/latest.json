@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 1,
+  "version": "0.2.1",
+  "sourceCommit": "cbf86a940fea70085068691c5f8e749d9c71b017",
+  "nodeVersion": "v24.19.0",
+  "platforms": {
+    "windows-x64": {
+      "url": "https://github.com/xuediner-source/xueness/releases/download/cli-v0.2.1/xueness-cli-0.2.1-windows-x64.zip",
+      "sha256": "e4228e7c6366a9d759971a407284da0539d8f113d29f4b5fa53b55a5e2401abe",
+      "bytes": 84903675
+    }
+  }
+}
