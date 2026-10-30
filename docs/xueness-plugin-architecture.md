@@ -21,6 +21,8 @@
 
 构建门禁检查插件归属、前端登记、模块边界和行数。验证套件、测试 CI 与历史审查证据在 [私有验证库](https://github.com/xuediner-source/xueness-private-tests)；公开仓库不包含这些材料。
 
+独立 CLI 分发归属 `desktop.cli_distribution`：PowerShell 安装器和终端启动器在 `desktop/src/` 登记，发布数据契约在 desktop 插件。`install.ps1` 只引导到此实现；`ts/scripts/package-cli.ts` 是复用后端构建产物的打包工具。安装是用户主动执行、早于应用状态存在的引导过程，管理自己的用户级程序目录和 PATH，不读取或迁移模型凭据。安装后的 CLI 仍由现有状态绑定入口分派，各业务命令继续执行所属插件开关和权限；启动器不增加另一套 Agent 或授权逻辑。
+
 planning 的独立交付验收由 `delivery_verify` 工具、请求扩展及独立 Node 探针提供。实际执行仍通过工具桥的 exec Gate、插件租约、运行取消和既有子进程基础设施。探针从真实 `.mjs` 消费者导入明确要求可导入的交付模块，检查导入返回与用户要求的静默行为；文件/JSON检查与导入检查分别报告，不代表完整行为正确。
 
 共享驱动的本轮调整仅补齐既有 `afterModelResponse` 接缝的通用记账：有效插件追加的新工具调用ID，也必须在执行前进入持久 intent/settlement ledger。模型流未接纳的片段仍不接纳；工具注册、schema、Gate、批准与生命周期检查均复用原分派。这是日志一致性的共享基础设施修正，验收触发条件和所有领域判断仍归 planning 插件。

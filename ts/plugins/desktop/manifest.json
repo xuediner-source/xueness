@@ -8,6 +8,7 @@
   "httpFamilies": ["desktop"],
   "capabilities": { "fs": { "read": ["state"] } },
   "features": [
+    { "id": "desktop.cli_distribution", "name": "Windows CLI 一键安装、内置运行时与用户级命令", "nameEn": "One-command Windows CLI installation, bundled runtime and user command" },
     { "id": "desktop.application", "name": "Windows / macOS 独立桌面应用与内置运行时", "nameEn": "Windows / macOS application with bundled runtime" },
     { "id": "desktop.folder_picker", "name": "窗口所属的原生项目文件夹选择", "nameEn": "Window-owned native project folder selection" },
     { "id": "desktop.lifecycle", "name": "单实例、固定数据目录、启动恢复与后台进程清理", "nameEn": "Single instance, persistent data location, startup recovery and backend cleanup" },
@@ -32,6 +33,8 @@
     "plugins/desktop/projectExplorer.ts"
   ],
   "desktopModules": [
+    "src/cli-install.ps1",
+    "src/cli-launcher.cjs",
     "src/main.cjs",
     "src/desktop-state-store.cjs",
     "src/data-directory.cjs",

@@ -19,9 +19,11 @@
     "host_capability",
     "bridge",
     "windows_job",
-    "permissions"
+    "permissions",
+    "cli_distribution"
   ],
   "features": [
+    { "id": "desktop.cli_distribution", "name": "Windows CLI 一键安装、内置运行时与用户级命令", "nameEn": "One-command Windows CLI installation, bundled runtime and user command" },
     {
       "id": "desktop.application",
       "name": "Windows / macOS 独立桌面应用与内置运行时",
@@ -90,6 +92,8 @@
     "plugins/desktop/projectExplorer.ts"
   ],
   "desktopModules": [
+    "src/cli-install.ps1",
+    "src/cli-launcher.cjs",
     "src/main.cjs",
     "src/desktop-state-store.cjs",
     "src/data-directory.cjs",

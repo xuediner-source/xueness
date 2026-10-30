@@ -37,6 +37,14 @@ Xueness 是面向本机工作空间的开源 Agent 应用，提供 **桌面、�
 
 ### 快速开始
 
+**Windows CLI**：PowerShell 一条命令安装，自带 Node.js，安装后直接运行 `xueness`：
+
+```powershell
+irm https://raw.githubusercontent.com/xuediner-source/xueness/main/install.ps1 | iex
+```
+
+首次使用运行 `xueness onboarding` 配置模型。更新时重复安装命令；支持范围和数据位置见 [CLI 安装指南](docs/xueness-cli-install.md)。
+
 **桌面使用**：前往 [Releases](https://github.com/xuediner-source/xueness/releases) 选择已发布的安装资产。Windows 提供 x64 安装与便携形式；Mac 构建区分 Apple Silicon 和 Intel。发行状态、系统授权和安装说明见[桌面端指南](docs/xueness-desktop.md)。首次启动后，在设置中添加自己的模型连接。
 
 **源码运行**：需要 Node.js 24.11 或更新版本。仓库附带预构建 Web 界面，后端直接运行 TypeScript。
