@@ -149,7 +149,10 @@
 .xn-command-hint kbd { min-width: 14px; border: 1px solid var(--border); border-radius: 4px; padding: 1px 3px; background: var(--bg-subtle); color: var(--fg-muted); font: inherit; text-align: center; }
 
 /* Session timeline viewport and return-to-tail control. */
-.xn-session-timeline-viewport { position: relative; flex: 1 1 auto; min-height: 0; }
+/* --xn-tail-chip-bottom is the chip's gap to the timeline's bottom edge, which
+   already ends above the docked composer and queue tray. Keeping it a variable
+   gives the chip one dock-aware offset instead of hard-coded pixels. */
+.xn-session-timeline-viewport { position: relative; flex: 1 1 auto; min-height: 0; --xn-tail-chip-bottom: var(--space-5); }
 /* overflow-anchor 关闭浏览器原生滚动锚定，滚动位置由时间线窗口补偿逻辑维护。 */
 .xn-session-timeline-viewport__scroll { width: 100%; height: 100%; overflow-anchor: none; }
 .xn-session-empty-composite { display: flex; min-height: 100%; flex-direction: column; align-items: center; justify-content: center; }
@@ -182,7 +185,7 @@
   position: absolute;
   z-index: 8;
   right: 20px;
-  bottom: var(--space-6);
+  bottom: var(--xn-tail-chip-bottom);
   display: inline-flex;
   min-height: 34px;
   align-items: center;
@@ -200,7 +203,7 @@
 }
 .xn-session-back-to-bottom:hover { border-color: var(--border-focus); background: var(--bg-hover); }
 .xn-session-back-to-bottom:focus-visible { outline: 2px solid var(--border-focus); outline-offset: 2px; }
-@media (max-width: 680px) { .xn-session-back-to-bottom { right: var(--space-3); bottom: var(--space-6); } }
+@media (max-width: 680px) { .xn-session-back-to-bottom { right: var(--space-3); bottom: var(--xn-tail-chip-bottom); } }
 
 .xn-reasoning {
   min-width: 0;
