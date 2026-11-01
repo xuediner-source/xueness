@@ -922,7 +922,9 @@
 }
 
 /* Shared states override palette send treatments without changing submit logic. */
-html .xn-shell-layout .xn-composer .xn-composer__send.xn-composer__queue { width: auto; max-width: 100%; gap: var(--space-1); padding-inline: var(--space-2); border: 1px solid var(--border-strong); background: var(--bg-input); color: var(--fg); box-shadow: none; font-size: var(--text-sm); }
+/* Queue is icon-only: a bordered ghost affordance next to the solid send/stop,
+   so the three actions stay distinguishable without widening the dock. */
+html .xn-shell-layout .xn-composer .xn-composer__send.xn-composer__queue { width: 28px; max-width: 100%; padding-inline: 0; border: 1px solid var(--border-strong); background: var(--bg-input); color: var(--fg); box-shadow: none; }
 html .xn-shell-layout .xn-composer .xn-composer__send.xn-composer__stop { border-radius: var(--radius-md); background: var(--fg); color: var(--bg); box-shadow: none; }
 html .xn-shell-layout .xn-composer .xn-composer__send:is(.xn-composer__stop, .xn-composer__queue):hover:not(:disabled) { transform: none; box-shadow: none; filter: brightness(.9); }
 html .xn-shell-layout .xn-composer .xn-composer__send:is(.xn-composer__stop, .xn-composer__queue):disabled { opacity: .45; cursor: not-allowed; }

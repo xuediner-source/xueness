@@ -1177,7 +1177,7 @@ export function Composer({
             onClick={event => { pointerDeliveryRef.current = followupPointerDelivery(effectiveFollowupMode, event, platform); }}
             className="xn-composer__send xn-composer__queue" aria-label={tr(queueBusy ? "正在排队…" : effectiveFollowupMode === 'guide' ? '引导当前轮' : "加入队列")}
             title={tr(queueBusy ? "正在排队…" : effectiveFollowupMode === 'guide' ? '引导当前轮' : "加入队列")} data-testid="composer-queue">
-            {queueBusy ? <IconLoader size={16} /> : <IconArrowUp size={16} />}<span>{tr(queueBusy ? "正在排队…" : effectiveFollowupMode === 'guide' ? '引导当前轮' : "加入队列")}</span>
+            {queueBusy ? <IconLoader size={16} /> : <IconArrowUp size={16} />}
           </button>}
           {showStopControl ? (
             <button
