@@ -701,7 +701,7 @@ html[data-xn-palette="claudex"] .xn-empty-state-shell .xn-hero__composer { margi
 html[data-xn-palette="claudex"] .xn-empty-state-shell .xn-start-page__side { display: block; }
 
 /* Paper keeps the greeting compact and leaves the composer in the first screen. */
-html[data-xn-palette="claudex"] .xn-empty-state-shell .xn-session-empty-composite { padding: var(--space-6) var(--space-4); }
+html[data-xn-palette="claudex"] .xn-empty-state-shell .xn-session-empty-composite { justify-content: flex-start; padding: clamp(24px, 8vh, 72px) var(--space-4) var(--space-4); }
 html[data-xn-palette="claudex"] .xn-shell-layout .xn-empty-state-shell .xn-hero__intro { flex: 0 0 auto; min-height: 0; gap: var(--space-2); margin: 0 0 var(--space-3); }
 html[data-xn-palette="claudex"] .xn-empty-state-shell .xn-start-page { margin-top: var(--space-3); gap: var(--space-3); }
 @media (max-height: 760px) {

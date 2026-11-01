@@ -310,11 +310,11 @@ html:not([data-xn-palette]) .xn-start-page__workspace-popover { border: 1px soli
  * Greeting → composer → quick actions → recent work. The empty-state wrappers
  * dissolve (display: contents) so the composer can sit directly under the
  * greeting; DOM order, focus order and test ids are unchanged. */
-html:not([data-xn-palette]) .xn-empty-state-shell .xn-session-empty-composite { position: relative; box-sizing: border-box; justify-content: safe center; padding: clamp(var(--space-6), 6vh, var(--space-12)) var(--space-6); }
+html:not([data-xn-palette]) .xn-empty-state-shell .xn-session-empty-composite { position: relative; box-sizing: border-box; justify-content: flex-start; padding: clamp(32px, 10vh, 96px) var(--space-6) var(--space-6); }
 html:not([data-xn-palette]) .xn-empty-state-shell .xn-session-timeline-empty--centered,
 html:not([data-xn-palette]) .xn-empty-state-shell .xn-empty-state-content { display: contents; }
 html:not([data-xn-palette]) .xn-empty-state-shell .xn-hero__bar { order: 0; }
-html:not([data-xn-palette]) .xn-empty-state-shell .xn-hero__intro { order: 1; display: flex; flex-direction: column; align-items: center; gap: 8px; width: min(720px, 100%); padding-top: 16px; margin-bottom: var(--space-6); }
+html:not([data-xn-palette]) .xn-empty-state-shell .xn-hero__intro { order: 1; display: flex; flex-direction: column; align-items: center; gap: 8px; width: min(720px, 100%); padding-top: 0; margin-bottom: var(--space-4); }
 html:not([data-xn-palette]) .xn-empty-state-shell .xn-session-composer-dock--centered { order: 2; flex: 0 0 auto; padding: 0; }
 html:not([data-xn-palette]) .xn-empty-state-shell .xn-start-page { order: 3; width: min(672px, 100%); margin-top: var(--space-4); }
 html:not([data-xn-palette]) .xn-empty-state-shell .xn-session-back-to-bottom { display: none; }
