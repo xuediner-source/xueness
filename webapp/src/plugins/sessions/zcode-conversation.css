@@ -121,19 +121,29 @@
 .xn-zc-fact-markers { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0; color: var(--conversation-muted); font-size: 12px; }
 .xn-zc-fact-chip { border: 1px solid var(--border); border-radius: 12px; padding: 2px 8px; overflow-wrap: anywhere; }
 
-/* The inline marker reserves the same advance after settling, including lists. */
-.xn-zc-answer .xn-md > :last-child { position: relative; }
-.xn-zc-answer .xn-md > :last-child::after { content: ""; display: inline-block; width: 2px; height: 1em; margin-inline-start: var(--space-1); vertical-align: -.12em; background: currentColor; opacity: 0; }
-.xn-zc-answer[data-live] .xn-md > :last-child::after { opacity: .65; }
+/* The streaming marker belongs to the answer, not to whichever markdown block
+   happens to be last, so reparses never move the caret between blocks. It reads
+   as a quiet progress tick under the text instead of a jumping bar. */
+.xn-zc-answer::after {
+  content: "";
+  display: none;
+  width: 10px;
+  height: 2px;
+  margin-block-start: var(--space-1);
+  border-radius: 1px;
+  background: currentColor;
+  opacity: .4;
+}
+.xn-zc-answer[data-live]::after { display: block; }
 .xn-zc-live { display: inline-flex; align-items: center; gap: var(--space-2); font-size: var(--text-sm); line-height: 1.5; }
 .xn-zcode-conversation > .xn-zc-live { margin: var(--space-5) var(--space-6); }
 .xn-zc-live::before { content: ""; width: 5px; height: 5px; flex: 0 0 auto; border-radius: 50%; background: currentColor; opacity: .6; }
 @media (prefers-reduced-motion: no-preference) {
   .xn-zc-user, .xn-zc-answer { animation: xn-message-appear var(--dur-normal) var(--ease-standard); }
   .xn-zc-tool[open] > .xn-zc-tool-body { animation: xn-message-appear var(--dur-normal) var(--ease-standard); }
-  .xn-zc-answer[data-live] .xn-md > :last-child::after { animation: xn-answer-caret calc(var(--dur-slow) * 5) step-end infinite; }
+  .xn-zc-answer[data-live]::after { animation: xn-answer-caret calc(var(--dur-slow) * 5) step-end infinite; }
   @keyframes xn-message-appear { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
-  @keyframes xn-answer-caret { 50% { opacity: 0; } }
+  @keyframes xn-answer-caret { 50% { opacity: .15; } }
   /* Native details retains keyboard semantics and avoids a clipping wrapper. */
   @supports (interpolate-size: allow-keywords) {
     .xn-zc-work::details-content, .xn-zc-reasoning::details-content {
