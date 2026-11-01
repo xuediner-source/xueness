@@ -149,9 +149,7 @@
 .xn-command-hint kbd { min-width: 14px; border: 1px solid var(--border); border-radius: 4px; padding: 1px 3px; background: var(--bg-subtle); color: var(--fg-muted); font: inherit; text-align: center; }
 
 /* Session timeline viewport and return-to-tail control. */
-/* --xn-tail-chip-bottom is the chip's gap to the timeline's bottom edge, which
-   already ends above the docked composer and queue tray. Keeping it a variable
-   gives the chip one dock-aware offset instead of hard-coded pixels. */
+/* Measured visible dock overlap, with a token minimum for sibling docks. */
 .xn-session-timeline-viewport { position: relative; flex: 1 1 auto; min-height: 0; --xn-tail-chip-bottom: var(--space-5); }
 /* overflow-anchor 关闭浏览器原生滚动锚定，滚动位置由时间线窗口补偿逻辑维护。 */
 .xn-session-timeline-viewport__scroll { width: 100%; height: 100%; overflow-anchor: none; }
@@ -902,6 +900,7 @@
 .xn-composer__editor-token--slash { font-family: var(--font-mono, ui-monospace, monospace); }
 
 @media (prefers-reduced-motion: no-preference) {
+  .xn-session-timeline-viewport[data-dock-lowering="true"] .xn-session-back-to-bottom { transition: bottom var(--dur-normal) var(--ease-standard); }
   .xn-session-back-to-bottom { animation: xn-tail-chip-enter var(--dur-normal) var(--ease-standard); }
   @keyframes xn-tail-chip-enter { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
 }

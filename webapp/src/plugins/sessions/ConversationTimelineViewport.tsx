@@ -20,6 +20,7 @@ import {
   saveSessionScrollMemoryState,
 } from "./sessionScrollMemory";
 import "./sessions.css";
+import { useTailDockClearance } from "./useTailDockClearance";
 
 export type ConversationTimelineViewportProps = {
   children?: React.ReactNode;
@@ -89,6 +90,7 @@ export function restoreSessionScroll(sessionId: string | null | undefined): "pin
 /** Sessions-owned scroll container keeps new output in view until the reader moves away. */
 export function ConversationTimelineViewport({ children, autoScroll, rowsVersion, streamingText, queuedMessages, sessionId, emptyState, bottomDock, centerEmptyStateWithDock = false }: ConversationTimelineViewportProps): React.JSX.Element {
   const scrollerRef = useRef<HTMLDivElement>(null);
+  useTailDockClearance(scrollerRef, centerEmptyStateWithDock, bottomDock !== undefined);
   const followingRef = useRef(initialFollowing());
   const smoothScrollRef = useRef(false);
   const smoothScrollTimerRef = useRef<number | undefined>(undefined);

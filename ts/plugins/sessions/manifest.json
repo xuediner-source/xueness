@@ -172,6 +172,7 @@
     "plugins/sessions/SessionQueue.tsx",
     "plugins/sessions/CommandPalette.tsx",
     "plugins/sessions/ConversationTimelineViewport.tsx",
+    "plugins/sessions/useTailDockClearance.ts",
     "plugins/sessions/SessionPolling.ts",
     "plugins/sessions/sessionsIndex.ts",
     "plugins/sessions/sessionsRemoteConnectionState.tsx#RemoteConnectionStateLabel",
