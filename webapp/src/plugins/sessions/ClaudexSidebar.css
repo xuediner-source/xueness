@@ -8,7 +8,7 @@ html[data-xn-palette="claudex"] .xn-shell-layout .xn-shell-sidebar--with-rail {
   background: var(--claudex-frame);
   min-width: 0;
 }
-html[data-xn-palette="claudex"] .xn-shell-layout--sidebar-collapsed .xn-shell-sidebar--with-rail { display: none; }
+/* Keep the hidden aside in grid flow: main must remain on the flexible track. */
 html[data-xn-palette="claudex"] .xn-shell-sidebar__rail {
   display: flex; flex-direction: column; align-items: center;
   min-width: 0; height: 100%; padding: 8px 0; box-sizing: border-box;
@@ -101,8 +101,7 @@ html[data-xn-palette="claudex"] .xn-shell-layout .xn-task-list__options-menu but
 .xn-task-list__options-menu button > span { flex: 1 1 auto; text-align: left; }
 .xn-task-list__options-menu [role="separator"] { height: 1px; margin: 5px 3px; background: var(--border); }
 @media (max-width: 900px) {
-  html[data-xn-palette="claudex"] .xn-shell-layout .xn-shell-sidebar--with-rail { display: none; width: var(--claudex-drawer-width); }
-  html[data-xn-palette="claudex"] .xn-shell-layout--sidebar-open .xn-shell-sidebar--with-rail { display: grid; }
+  html[data-xn-palette="claudex"] .xn-shell-layout .xn-shell-sidebar--with-rail { width: var(--claudex-drawer-width); }
   .xn-claudex-sidebar-head { padding-inline: 12px; }
 }
 
