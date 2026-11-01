@@ -244,3 +244,19 @@ html .xn-empty-state-shell .xn-session-back-to-bottom { display: none; }
   html .xn-empty-state-shell .xn-session-empty-composite { justify-content: flex-start; padding-block: var(--space-6); }
   html .xn-empty-state-shell .xn-hero__intro { margin-bottom: var(--space-4); }
 }
+
+/* Empty tasks share a wider column; conversation prose retains its own measure. */
+html .xn-empty-state-shell { --xn-start-width: 840px; --workbench-content-width: var(--xn-start-width); --claudex-column: var(--xn-start-width); }
+html body .xn-shell-layout .xn-empty-state-shell .xn-session-empty-composite :is(.xn-hero__intro, .xn-hero__composer, .xn-start-page) { width: min(var(--xn-start-width), 100%); }
+html body .xn-shell-layout .xn-empty-state-shell .xn-session-empty-composite .xn-hero__composer { display: flex; flex-direction: column; gap: 12px; }
+html body .xn-shell-layout .xn-empty-state-shell .xn-composer-region { width: 100%; max-width: var(--xn-start-width); margin-bottom: 0; }
+html body .xn-shell-layout .xn-empty-state-shell .xn-session-empty-composite { padding-top: clamp(24px, 5vh, 48px); }
+html body .xn-shell-layout .xn-empty-state-shell .xn-session-empty-composite .xn-hero__intro { gap: 8px; margin-bottom: 12px; }
+html body .xn-shell-layout .xn-empty-state-shell .xn-start-page { margin-top: 12px; gap: 12px; }
+@media (min-width: 1200px) {
+  html .xn-empty-state-shell .xn-starter-ideas > button { padding: 16px 18px; }
+  html .xn-empty-state-shell .xn-starter-ideas__detail { font-size: 12px; }
+}
+@media (max-height: 760px) {
+  html body .xn-shell-layout .xn-empty-state-shell .xn-session-empty-composite { padding-top: 24px; }
+}
