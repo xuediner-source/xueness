@@ -373,8 +373,10 @@ html[data-xn-palette="claudex"] .xn-shell-layout .xn-composer__send {
 }
 html[data-xn-palette="claudex"] .xn-shell-layout .xn-composer__send:hover:not(:disabled) { background: var(--claudex-send-bg); opacity: .85; }
 html[data-xn-palette="claudex"] .xn-shell-layout .xn-composer__send:disabled { background: var(--claudex-send-disabled); color: var(--claudex-send-fg); opacity: 1; }
-html[data-xn-palette="claudex"] .xn-shell-layout .xn-composer__stop,
-html[data-xn-palette="claudex"] .xn-shell-layout .xn-composer__stop:hover:not(:disabled) { width: 28px; height: 28px; background: var(--claudex-send-bg); color: var(--claudex-send-fg); }
+html[data-xn-palette="claudex"] .xn-shell-layout .xn-composer__stop { width: 28px; height: 28px; background: var(--claudex-send-bg); color: var(--claudex-send-fg); }
+
+/* Match the mode-rule specificity; keep its square radius and focus ring. */
+html[data-xn-palette="claudex"] .xn-shell-layout .xn-composer .xn-composer__stop:hover:not(:disabled) { background: color-mix(in srgb, var(--claudex-send-bg) 82%, var(--claudex-send-fg)); opacity: 1; filter: none; }
 
 /* Project strip: the workspace chooser sits on a grey band behind the card. */
 html[data-xn-palette="claudex"] .xn-shell-layout .xn-composer--with-top-content::before { content: none; }
