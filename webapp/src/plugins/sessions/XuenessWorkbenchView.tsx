@@ -1175,7 +1175,7 @@ export function Composer({
         <div className="xn-composer__submit-actions">
           {showQueueControl && <button type="submit" disabled={isSendDisabled}
             onClick={event => { pointerDeliveryRef.current = followupPointerDelivery(effectiveFollowupMode, event, platform); }}
-            className="xn-composer__send xn-composer__queue" aria-label={tr(queueBusy ? "正在排队…" : effectiveFollowupMode === 'guide' ? '引导当前轮' : "加入队列")}
+            data-composer-mode="queue" className="xn-composer__send xn-composer__queue" aria-label={tr(queueBusy ? "正在排队…" : effectiveFollowupMode === 'guide' ? '引导当前轮' : "加入队列")}
             title={tr(queueBusy ? "正在排队…" : effectiveFollowupMode === 'guide' ? '引导当前轮' : "加入队列")} data-testid="composer-queue">
             {queueBusy ? <IconLoader size={16} /> : <IconArrowUp size={16} />}
           </button>}
@@ -1183,7 +1183,7 @@ export function Composer({
             <button
               type="button"
               disabled={stopping}
-              className="xn-composer__send xn-composer__stop"
+              data-composer-mode={stopping ? "stopping" : "stop"} className="xn-composer__send xn-composer__stop"
               aria-label={stopping ? tr("正在停止") : tr("停止")}
               aria-keyshortcuts="Escape"
               title={stopping ? tr("正在停止") : tr("停止当前任务 (Esc)")}
@@ -1200,7 +1200,7 @@ export function Composer({
             <button
               type="submit"
               disabled={isSendDisabled}
-              className="xn-composer__send"
+              data-composer-mode="send" className="xn-composer__send"
               aria-label={tr(draft.pendingSubmission ? "正在发送…" : "发送")}
               title={tr(draft.pendingSubmission ? "正在发送…" : "发送")}
             >

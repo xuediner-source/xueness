@@ -932,3 +932,8 @@ html .xn-shell-layout .xn-composer__submit-actions { flex-shrink: 0; }
 @media (max-width: 680px) {
   html .xn-shell-layout .xn-queue-dock { width: calc(100% - 24px); }
 }
+
+/* Geometry carries mode independently of palette, including pane composers. */
+html .xn-shell-layout .xn-composer .xn-composer__send[data-composer-mode="send"] { border-radius: var(--radius-full); }
+html .xn-shell-layout .xn-composer .xn-composer__send[data-composer-mode="queue"] { border-radius: var(--radius-lg) var(--radius-sm); }
+html .xn-shell-layout .xn-composer .xn-composer__send:is([data-composer-mode="stop"], [data-composer-mode="stopping"]) { border-radius: var(--radius-sm); }
