@@ -937,3 +937,24 @@ html .xn-shell-layout .xn-composer__submit-actions { flex-shrink: 0; }
 html .xn-shell-layout .xn-composer .xn-composer__send[data-composer-mode="send"] { border-radius: var(--radius-full); }
 html .xn-shell-layout .xn-composer .xn-composer__send[data-composer-mode="queue"] { border-radius: var(--radius-lg) var(--radius-sm); }
 html .xn-shell-layout .xn-composer .xn-composer__send:is([data-composer-mode="stop"], [data-composer-mode="stopping"]) { border-radius: var(--radius-sm); }
+
+/* Disabled send remains legible without competing with the enabled solid action. */
+html .xn-shell-layout .xn-composer .xn-composer__send[data-composer-mode="send"]:disabled {
+  background: var(--bg-subtle); color: var(--fg-subtle); opacity: 1;
+  box-shadow: inset 0 0 0 1px var(--border-strong);
+}
+html .xn-shell-layout .xn-composer .xn-composer__setup { color: var(--fg-subtle); font-size: 12px; line-height: 1.5; }
+html .xn-shell-layout .xn-composer .xn-composer__setup button { color: var(--fg); font-weight: 600; text-decoration: underline; text-underline-offset: 3px; }
+html .xn-shell-layout .xn-composer-workspace { color: var(--fg-subtle); }
+@media (max-width: 480px) {
+  html .xn-shell-layout .xn-composer .xn-composer__row { align-items: flex-end; }
+  html .xn-shell-layout .xn-composer .xn-composer__tools { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 4px; }
+  html .xn-shell-layout .xn-composer .xn-composer__actions { grid-area: 1 / 1; }
+  html .xn-shell-layout .xn-composer .xn-composer-toolbar__left { grid-area: 1 / 2 / 2 / 4; }
+  html .xn-shell-layout .xn-composer .xn-composer-toolbar__right { grid-area: 2 / 1 / 3 / 3; margin: 0; min-width: 0; flex-wrap: nowrap; }
+  html .xn-shell-layout .xn-composer .xn-usage-quick { grid-area: 2 / 3; }
+  html .xn-shell-layout .xn-composer .xn-composer-toolbar__model-trigger { min-width: 0; max-width: 100%; }
+  html .xn-shell-layout .xn-composer .xn-composer-toolbar__model-trigger > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  html .xn-shell-layout .xn-composer .xn-usage-quick__trigger { width: 28px; padding: 0; justify-content: center; }
+  html .xn-shell-layout .xn-composer .xn-usage-quick__trigger > span { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+}
