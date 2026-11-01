@@ -958,3 +958,8 @@ html .xn-shell-layout .xn-composer-workspace { color: var(--fg-subtle); }
   html .xn-shell-layout .xn-composer .xn-usage-quick__trigger { width: 28px; padding: 0; justify-content: center; }
   html .xn-shell-layout .xn-composer .xn-usage-quick__trigger > span { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
 }
+
+/* Model selection is an actionable label, including the unconfigured state. */
+html .xn-shell-layout .xn-composer-toolbar :is(.xn-composer-toolbar__model-trigger, .xn-composer-toolbar__manage) { color: var(--fg); font-weight: 550; }
+html .xn-shell-layout .xn-composer-toolbar :is(.xn-composer-toolbar__model-trigger, .xn-composer-toolbar__manage):hover:not(:disabled) { background: var(--bg-hover); }
+html .xn-shell-layout .xn-composer-toolbar .xn-composer-toolbar__manage:focus-visible { outline: 2px solid var(--border-focus); outline-offset: 2px; }
