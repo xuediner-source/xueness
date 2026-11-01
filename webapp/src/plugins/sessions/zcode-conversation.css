@@ -1,5 +1,5 @@
 /* Modified adaptation of ZCode v3.14.3 conversation utility classes (Apache-2.0).
-   Geometry: max-w-4xl, turn px-4/@md:px-6 pt-14 pb-5 gap-5;
+   Original geometry: max-w-4xl, turn px-4/@md:px-6 pt-14 pb-5 gap-5;
    bubble max-w-xl px-4 py-3 rounded-xl rounded-tr-xs; summary gap-2 size-4. */
 .xn-zcode-conversation { width: 100%; max-width: 896px; margin-inline: auto; box-sizing: border-box; color: var(--conversation-fg); font: var(--xn-ui-font-size, 14px)/1.5 var(--font-sans); }
 .xn-zc-find__dock { position: sticky; top: 0; z-index: 3; display: flex; justify-content: flex-end; min-height: 0; padding: 8px 16px 0; pointer-events: none; }
@@ -15,7 +15,7 @@
 .xn-zc-find__match { border-radius: 2px; background: color-mix(in oklab, var(--warning-bg) 72%, transparent); color: inherit; }
 .xn-zc-find__match[data-xueness-find-active] { background: var(--warning-bg); outline: 1px solid color-mix(in oklab, var(--warning-fg) 65%, transparent); }
 .xn-zc-selection-action { position: sticky; top: 42px; z-index: 4; display: flex; justify-content: center; width: fit-content; max-width: 100%; margin: 0 auto; }
-.xn-zc-turn { min-width: 0; display: flex; flex-direction: column; gap: 20px; padding: 56px 24px 20px; }
+.xn-zc-turn { min-width: 0; display: flex; flex-direction: column; gap: 16px; padding: 44px 24px 20px; }
 .xn-zc-user { display: flex; flex-direction: column; align-items: flex-end; min-width: 0; }
 .xn-zc-user-bubble { box-sizing: border-box; max-width: min(100%, 576px); padding: 12px 16px; border: 1px solid var(--border); border-radius: 12px 2px 12px 12px; background: var(--conversation-user-surface); white-space: pre-wrap; overflow-wrap: anywhere; }
 .xn-zc-actions { display: flex; align-items: center; gap: 4px; margin-top: 4px; min-height: 24px; opacity: 0; transition: opacity var(--dur-normal) var(--ease-standard); }
@@ -40,7 +40,7 @@
 .xn-run-recovery .xn-zc-retry, .xn-run-error .xn-zc-retry { padding: 6px 12px; border: 1px solid var(--border); border-radius: 8px; background: var(--bg-card); color: var(--fg-subtle); font: var(--xn-ui-font-size, 14px)/1.5 var(--font-sans); cursor: pointer; }
 .xn-run-recovery .xn-zc-retry:hover, .xn-run-error .xn-zc-retry:hover { background: var(--bg-hover); color: var(--fg); }
 .xn-zc-retry:disabled { opacity: .5; cursor: default; }
-.xn-zc-answer { min-width: 0; width: 100%; overflow-wrap: anywhere; }
+.xn-zc-answer { position: relative; box-sizing: border-box; padding-block-end: 8px; min-width: 0; width: 100%; overflow-wrap: anywhere; }
 .xn-zc-answer .xn-md { padding: 0; font-size: inherit; line-height: 1.65; color: inherit; }
 .xn-zc-answer .xn-md > :first-child { margin-top: 0; }
 .xn-zc-answer .xn-md > :last-child { margin-bottom: 0; }
@@ -53,7 +53,7 @@
 .xn-zc-answer .xn-md__code-fence { margin-block: 16px; border: 1px solid var(--border); border-radius: 8px; background: var(--bg-card); }
 .xn-zc-work-status { display: flex; align-items: center; width: 100%; gap: 8px; padding-bottom: 8px; border-bottom: 1px solid color-mix(in oklab, var(--border) 50%, transparent); color: var(--conversation-muted); font-size: inherit; font-weight: 400; }
 .xn-zc-work > summary { cursor: pointer; }
-.xn-zc-work-content { display: flex; flex-direction: column; gap: 20px; padding-top: 20px; }
+.xn-zc-work-content { display: flex; flex-direction: column; gap: 16px; padding-top: 16px; }
 /* A running turn with no work rows yet has no content box to lose when it settles. */
 .xn-zc-work-content:empty { display: none; }
 .xn-zc-work-response { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
@@ -126,15 +126,30 @@
    as a quiet progress tick under the text instead of a jumping bar. */
 .xn-zc-answer::after {
   content: "";
-  display: none;
+  position: absolute;
+  inset-inline-start: 0;
+  bottom: 0;
+  visibility: hidden;
   width: 10px;
   height: 2px;
-  margin-block-start: var(--space-1);
   border-radius: 1px;
   background: currentColor;
   opacity: .4;
 }
-.xn-zc-answer[data-live]::after { display: block; }
+.xn-zc-answer[data-live]::after { visibility: visible; }
+/* Both markers occupy the permanent 8px answer gutter, independent of markdown
+   child type. A static fading hairline adds presence without another sweep. */
+.xn-zc-answer[data-live]::before {
+  content: "";
+  position: absolute;
+  inset-inline-start: 16px;
+  bottom: 0;
+  width: min(96px, 35%);
+  height: 1px;
+  background: linear-gradient(to right, currentColor, transparent);
+  opacity: .16;
+  pointer-events: none;
+}
 .xn-zc-live { display: inline-flex; align-items: center; gap: var(--space-2); font-size: var(--text-sm); line-height: 1.5; }
 .xn-zcode-conversation > .xn-zc-live { margin: var(--space-5) var(--space-6); }
 .xn-zc-live::before { content: ""; width: 5px; height: 5px; flex: 0 0 auto; border-radius: 50%; background: currentColor; opacity: .6; }
@@ -160,3 +175,13 @@
 }
 
 @media (forced-colors: active) { .xn-zc-live { color: CanvasText; background: none; animation: none; } }
+
+/* Keep find controls in their own row on very narrow panes; the input yields
+   before navigation/close controls, including with the history rail present. */
+@media (max-width: 360px) {
+  .xn-zc-find__dock { position: relative; padding-inline: 8px; }
+  html:not([data-xn-palette]) .xn-zc-find__dock > :is(.xn-zc-find, .xn-zc-find__toggle) { translate: none; }
+  .xn-zc-find { min-width: 0; box-sizing: border-box; gap: 3px; }
+  .xn-zc-find input { flex: 1 1 auto; width: 100%; min-width: 0; }
+  .xn-zc-find button, .xn-zc-find__count { flex-shrink: 0; }
+}

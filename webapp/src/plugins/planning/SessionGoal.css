@@ -13,8 +13,8 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  min-height: 26px;
-  padding: var(--space-1) var(--space-2);
+  min-height: 24px;
+  padding: 2px var(--space-2);
   list-style: none;
   cursor: pointer;
 }
@@ -37,8 +37,7 @@
 }
 .xn-session-goal__status {
   flex: 0 0 auto;
-  padding: 0 var(--space-1);
-  border-radius: 999px;
+  font-weight: 500;
   background: transparent;
   color: var(--fg-muted);
 }
