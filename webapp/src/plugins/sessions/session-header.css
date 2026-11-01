@@ -48,7 +48,7 @@ html[data-xn-palette] .xn-shell-layout .xn-session-header.xn-conv-header { heigh
   .xn-session-header__facts { font-size: 10px; }
   .xn-session-tabs { gap: 8px; }
   .xn-session-tabs__primary { gap: 12px; flex: 1 1 auto; }
-  .xn-session-tabs__primary > button { flex: 0 1 auto; min-width: 28px; display: block; overflow: hidden; text-overflow: ellipsis; }
+  .xn-session-tabs__primary > button { flex: none; min-width: 28px; }
   .xn-session-tabs__primary button { font-size: 11px; }
-  .xn-session-tabs__more { max-width: 60px; }
+  .xn-session-tabs__more { max-width: 128px; }
 }
