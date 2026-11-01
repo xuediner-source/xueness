@@ -693,3 +693,7 @@ html[data-xn-palette="claudex"] .xn-shell-layout .xn-usage-quick__trigger > span
 }
 html[data-xn-palette="claudex"] .xn-shell-layout--sidebar-collapsed:not(.xn-shell-layout--desktop-titlebar) .xn-conv-header,
 html[data-xn-palette="claudex"] .xn-shell-layout--sidebar-collapsed:not(.xn-shell-layout--desktop-titlebar) .xn-hero__bar { padding-left: 56px; }
+
+html[data-xn-palette="claudex"] .xn-empty-state-shell .xn-start-page { order: 3; margin-top: var(--space-4); }
+html[data-xn-palette="claudex"] .xn-empty-state-shell .xn-hero__composer { margin: 0 auto; }
+html[data-xn-palette="claudex"] .xn-empty-state-shell .xn-start-page__side { display: block; }

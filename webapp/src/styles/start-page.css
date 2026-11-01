@@ -9,7 +9,7 @@
 .xn-start-page {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
-  gap: 18px;
+  gap: var(--space-4);
   width: min(720px, 100%);
   margin-top: 12px;
   text-align: left;
@@ -230,4 +230,17 @@
   .xn-start-page__side[data-group-count="2"] {
     grid-template-columns: minmax(0, 1fr);
   }
+}
+
+/* One spacing rhythm for both palettes; wrappers preserve DOM and focus order. */
+html .xn-empty-state-shell .xn-session-empty-composite { position: relative; box-sizing: border-box; justify-content: safe center; padding: var(--space-12) var(--space-6); }
+html .xn-empty-state-shell .xn-session-timeline-empty--centered,
+html .xn-empty-state-shell .xn-empty-state-content { display: contents; }
+html .xn-empty-state-shell .xn-hero__intro { order: 1; display: flex; flex-direction: column; align-items: center; gap: var(--space-2); width: min(720px, 100%); margin: 0 0 var(--space-6); }
+html .xn-empty-state-shell .xn-session-composer-dock--centered { order: 2; flex: 0 0 auto; padding: 0; }
+html .xn-empty-state-shell .xn-start-page { order: 3; margin-top: var(--space-4); gap: var(--space-4); }
+html .xn-empty-state-shell .xn-session-back-to-bottom { display: none; }
+@media (max-height: 760px) {
+  html .xn-empty-state-shell .xn-session-empty-composite { justify-content: flex-start; padding-block: var(--space-6); }
+  html .xn-empty-state-shell .xn-hero__intro { margin-bottom: var(--space-4); }
 }

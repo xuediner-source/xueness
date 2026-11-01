@@ -310,13 +310,13 @@ html:not([data-xn-palette]) .xn-start-page__workspace-popover { border: 1px soli
  * Greeting → composer → quick actions → recent work. The empty-state wrappers
  * dissolve (display: contents) so the composer can sit directly under the
  * greeting; DOM order, focus order and test ids are unchanged. */
-html:not([data-xn-palette]) .xn-empty-state-shell .xn-session-empty-composite { position: relative; box-sizing: border-box; justify-content: center; padding: clamp(18px, 6vh, 64px) 24px clamp(20px, 5vh, 48px); }
+html:not([data-xn-palette]) .xn-empty-state-shell .xn-session-empty-composite { position: relative; box-sizing: border-box; justify-content: safe center; padding: clamp(var(--space-6), 6vh, var(--space-12)) var(--space-6); }
 html:not([data-xn-palette]) .xn-empty-state-shell .xn-session-timeline-empty--centered,
 html:not([data-xn-palette]) .xn-empty-state-shell .xn-empty-state-content { display: contents; }
 html:not([data-xn-palette]) .xn-empty-state-shell .xn-hero__bar { order: 0; }
-html:not([data-xn-palette]) .xn-empty-state-shell .xn-hero__intro { order: 1; display: flex; flex-direction: column; align-items: center; gap: 8px; width: min(720px, 100%); padding-top: 16px; margin-bottom: 26px; }
+html:not([data-xn-palette]) .xn-empty-state-shell .xn-hero__intro { order: 1; display: flex; flex-direction: column; align-items: center; gap: 8px; width: min(720px, 100%); padding-top: 16px; margin-bottom: var(--space-6); }
 html:not([data-xn-palette]) .xn-empty-state-shell .xn-session-composer-dock--centered { order: 2; flex: 0 0 auto; padding: 0; }
-html:not([data-xn-palette]) .xn-empty-state-shell .xn-start-page { order: 3; width: min(672px, 100%); margin-top: 18px; }
+html:not([data-xn-palette]) .xn-empty-state-shell .xn-start-page { order: 3; width: min(672px, 100%); margin-top: var(--space-4); }
 html:not([data-xn-palette]) .xn-empty-state-shell .xn-session-back-to-bottom { display: none; }
 
 html:not([data-xn-palette]) .xn-hero__brand { position: relative; display: grid; place-items: center; width: 64px; height: 64px; margin: 0 0 16px; border-radius: 15px; color: #fff; background: var(--xn-tile); box-shadow: 0 0 0 1px rgb(0 0 0 / .06), 0 1px 2px rgb(0 0 0 / .12), 0 14px 30px -14px rgb(0 0 0 / .45), inset 0 1px 0 rgb(255 255 255 / .1); isolation: isolate; }
@@ -356,8 +356,9 @@ html:not([data-xn-palette]) .xn-start-page__recent-meta { display: contents; }
 html:not([data-xn-palette]) .xn-start-page__recent-meta > span { display: none; }
 html:not([data-xn-palette]) .xn-start-page__recent-meta > time { grid-column: 2; grid-row: 1; color: var(--fg-muted); font-size: 11px; }
 @media (max-height: 760px) {
+  html:not([data-xn-palette]) .xn-empty-state-shell .xn-session-empty-composite { justify-content: flex-start; padding-block: var(--space-6); }
   html:not([data-xn-palette]) .xn-empty-state-shell .xn-hero__hint::after { display: none; }
-  html:not([data-xn-palette]) .xn-empty-state-shell .xn-hero__intro { padding-top: 4px; margin-bottom: 18px; }
+  html:not([data-xn-palette]) .xn-empty-state-shell .xn-hero__intro { padding-top: var(--space-1); margin-bottom: var(--space-4); }
 }
 
 /* ---------- Leftover hues from feature plugins, folded into ink ---------- */
