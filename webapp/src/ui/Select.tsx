@@ -5,7 +5,7 @@ import React from 'react';
 import * as R from '@radix-ui/react-select';
 import { Check, ChevronDown, ChevronUp } from 'lucide-react';
 import './select.css';
-type Props = Omit<React.SelectHTMLAttributes<HTMLSelectElement>, 'multiple' | 'size'>;
+type Props = Omit<React.SelectHTMLAttributes<HTMLSelectElement>, 'multiple' | 'size'> & { menuPosition?: 'item-aligned' | 'popper' };
 type Entry = { value: string; label: React.ReactNode; disabled: boolean; group?: string };
 const encode = (value: string) => value === '' ? '__xn_empty_value__' : `v:${value}`;
 const decode = (value: string) => value === '__xn_empty_value__' ? '' : value.slice(2);
@@ -18,7 +18,7 @@ function entries(children: React.ReactNode, group?: string): Entry[] {
     return [{ value: String(props.value ?? props.children ?? ''), label: props.children, disabled: props.disabled === true, group }];
   });
 }
-export function Select({ children, value, defaultValue, onChange, className = '', style, disabled, required, name, id, title, ...rest }: Props) {
+export function Select({ children, value, defaultValue, onChange, className = '', menuPosition = 'item-aligned', style, disabled, required, name, id, title, ...rest }: Props) {
   const items = entries(children);
   const portalOwner = React.useId().replace(/:/gu, '');
   const [localValue, setLocalValue] = React.useState(String(defaultValue ?? items[0]?.value ?? ''));
@@ -35,7 +35,7 @@ export function Select({ children, value, defaultValue, onChange, className = ''
       <R.Value>{items.find(item => item.value === selected)?.label ?? selected}</R.Value>
       <R.Icon asChild><ChevronDown size={14} /></R.Icon>
     </R.Trigger>
-    <R.Portal><R.Content className="xn-select-menu" data-xn-select-portal-owner={portalOwner} position="item-aligned">
+    <R.Portal><R.Content className="xn-select-menu" data-xn-select-portal-owner={portalOwner} position={menuPosition} side="bottom" align="end" sideOffset={4} collisionPadding={12} style={menuPosition === 'popper' ? { maxHeight: 'min(240px, var(--radix-select-content-available-height))', maxWidth: 'calc(100vw - 24px)' } : undefined}>
       <R.ScrollUpButton className="xn-select-scroll"><ChevronUp size={14} /></R.ScrollUpButton>
       <R.Viewport className="xn-select-viewport">
         {items.map((item, index) => <React.Fragment key={`${item.value}-${index}`}>
