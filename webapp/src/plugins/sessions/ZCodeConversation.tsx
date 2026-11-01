@@ -120,7 +120,10 @@ function useDisclosure(key: string, defaultOpen = false) {
     setOpen(saved.get(fullKey) ?? saved.get(key) ?? readStoredDisclosure(fullKey));
   }, [fullKey, key, saved]);
   const open = override ?? defaultOpen;
-  return { open, onToggle: (event: React.SyntheticEvent<HTMLDetailsElement>) => {
+  const shown = React.useRef({ key: fullKey, value: open });
+  if (shown.current.key !== fullKey) shown.current = { key: fullKey, value: open };
+  shown.current.value ||= open;
+  return { open, present: shown.current.value, onToggle: (event: React.SyntheticEvent<HTMLDetailsElement>) => {
     const next = event.currentTarget.open;
     if (next !== open) {
       setPersistedDisclosure(saved, fullKey, next);
@@ -217,7 +220,7 @@ function Reasoning({ row, activityPhase, findActive = false }: { row: Assistant;
     <summary><Brain size={16} /><span className="xn-zc-kind">{label}</span>
       {!open && summary && <span className="xn-zc-reasoning-preview" title={summary}>{summary.slice(-180)}</span>}
       <ChevronRight size={16} className="xn-zc-chevron" /></summary>
-    {open && <div className="xn-zc-reasoning-content"><MarkdownRenderOptionsContext.Provider value={row.streaming ? streamingMarkdown : settledMarkdown}><SimpleMarkdown text={row.reasoning ?? ''} /></MarkdownRenderOptionsContext.Provider></div>}
+    {(open || disclosure.present) && <div className="xn-zc-reasoning-content" inert={!open}><MarkdownRenderOptionsContext.Provider value={row.streaming ? streamingMarkdown : settledMarkdown}><SimpleMarkdown text={row.reasoning ?? ''} /></MarkdownRenderOptionsContext.Provider></div>}
   </details>;
 }
 
@@ -365,17 +368,14 @@ function Payload({ text }: { text: string }) {
     onClick={() => setLimit(value => Math.min(48_000, value + 12_000))}>{tr('显示更多')}</button>}</>;
 }
 
-function visibleAssistantText(row: Assistant): string {
-  return row.streaming ? row.text : (row.displayText ?? row.text);
-}
+function visibleAssistantText(row: Assistant): string { return row.streaming ? row.text : (row.displayText ?? row.text); }
 
 function AssistantText({ row, summary, protocol }: { row: Assistant; summary?: string; protocol: boolean }) {
-  // Reveal decoded answer text at an even pace. The streaming presentation is
-  // kept until the reveal catches up, so the end of a stream does not pop.
+  // Keep the caret live until paced reveal catches up with the received text.
   const target = assistantTextForDisplay(visibleAssistantText(row), row.streaming, summary, protocol);
   const { text: displayed, revealing } = useStreamingReveal(target, row.streaming === true);
   const live = row.streaming === true || revealing;
-  return displayed.trim() ? <div className="xn-zc-answer" data-role="assistant" data-testid={`timeline-item-assistant-${row.seq}`} {...rowData(row)}>
+  return displayed.trim() ? <div className="xn-zc-answer" data-live={live || undefined} data-role="assistant" data-testid={`timeline-item-assistant-${row.seq}`} {...rowData(row)}>
     <MarkdownRenderOptionsContext.Provider value={live ? streamingMarkdown : settledMarkdown}><SimpleMarkdown text={displayed} /></MarkdownRenderOptionsContext.Provider>
   </div> : null;
 }
@@ -547,7 +547,7 @@ function TurnView({ turn, latest, props, activeFindRowKey, compactionMarker }: {
     {userReferences.map(row => <ReferenceRowView key={`${row.kind}:${row.seq}`} row={row} sessionId={props.sessionId} effectivePluginIds={effectivePluginIds} />)}
     {(work.length > 0 || facts.length > 0) && (running || !final ? <div className="xn-zc-work"><div className="xn-zc-work-status" role="status">{workLabel}{facts.length > 1 && <span> · {facts.length} {getLocale() === 'en' ? 'segments' : '段工作'}</span>}</div><div className="xn-zc-work-content">{workRows}</div></div>
       : <details className="xn-zc-work" open={workOpen} onToggle={workDisclosure.onToggle}><summary className="xn-zc-work-status"><span>{workLabel}{facts.length > 1 && ` · ${facts.length} ${getLocale() === 'en' ? 'segments' : '段工作'}`}</span><ChevronRight size={16} className="xn-zc-chevron" /></summary>
-        {workOpen && <div className="xn-zc-work-content">{workRows}</div>}</details>)}
+        {(workOpen || workDisclosure.present) && <div className="xn-zc-work-content" inert={!workOpen}>{workRows}</div>}</details>)}
     <ConversationMarkers facts={props.timelineMarkers} rows={turn.rows} placement="work_tail" enabled={effectivePluginIds?.has('sessions') === true} />
     {final && <div className="xn-zc-final">
       {canShowReasoning && final.reasoning && <Reasoning row={final} activityPhase={props.activityPhase} findActive={activeFindRowKey === conversationFindRowKey(final)} />}
@@ -576,6 +576,8 @@ const Turn = React.memo(TurnView, conversationTurnPropsEqual);
 /** Standard and lightweight runtimes use exactly the same conversation view. */
 export function ZCodeConversation(props: ZCodeConversationProps) {
   const [disclosures] = React.useState(() => zcodeConversationDisclosures);
+  const appeared = React.useRef({ session: props.sessionId, rows: new Set<string>() });
+  if (appeared.current.session !== props.sessionId) appeared.current = { session: props.sessionId, rows: new Set() };
   const identityScope = `${props.sessionId ?? ''}:${props.currentTurnId ?? ''}`;
   const identities = React.useRef({ scope: identityScope, calls: new Map<string, string>() });
   if (identities.current.scope !== identityScope) identities.current = { scope: identityScope, calls: new Map() };
@@ -717,7 +719,11 @@ export function ZCodeConversation(props: ZCodeConversationProps) {
       <div className="xn-timeline-history-layout xn-zc-layout" data-testid="timeline-history-layout">
         <XuenessConversationHistoryRail rows={props.rows} timelineRootRef={rootRef} requestReveal={requestReveal} />
         <div className="xn-timeline-history-layout__content" ref={rootRef}>
-          <div className="xn-zcode-conversation" data-testid="zcode-conversation" ref={streamRef} aria-label={tr('会话')}>
+          <div className="xn-zcode-conversation" data-testid="zcode-conversation" ref={streamRef} aria-label={tr('会话')} onAnimationStart={event => {
+            const target = event.target as HTMLElement; if (!target.matches('.xn-zc-user, .xn-zc-answer')) return;
+            const key = `${props.sessionId}:${target.closest<HTMLElement>('[data-zcode-row-key]')?.dataset.zcodeRowKey}`;
+            if (appeared.current.rows.has(key)) target.style.animation = 'none'; else appeared.current.rows.add(key);
+          }}>
             <div className="xn-zc-find__dock">
               <ConversationFindBar open={findOpen || Boolean(findQuery)} query={findQuery} resultCount={findMatches.length}
                 activeIndex={activeFindIndex} onOpen={() => setFindOpen(true)} onQueryChange={updateFindQuery}

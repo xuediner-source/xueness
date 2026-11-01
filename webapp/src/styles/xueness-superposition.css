@@ -13,7 +13,7 @@ html:not([data-xn-palette]) {
   --xn-sheet-shadow: 0 0 0 1px var(--border), 0 1px 2px rgb(0 0 0 / .04), 0 12px 32px -20px rgb(0 0 0 / .2);
   --xn-lift: 0 0 0 1px rgb(0 0 0 / .045), 0 1px 2px rgb(0 0 0 / .06), 0 4px 12px -6px rgb(0 0 0 / .12);
   --xn-ring: 0 0 0 3px color-mix(in oklab, var(--fg) 9%, transparent);
-  --xn-ease: cubic-bezier(.2, .8, .2, 1);
+  --xn-ease: var(--ease-standard);
   --xn-row: color-mix(in oklab, var(--fg) 4.5%, transparent);
   --xn-dot: color-mix(in oklab, var(--fg) 22%, transparent);
   --xn-dash: color-mix(in oklab, var(--fg) 24%, transparent);
@@ -270,11 +270,11 @@ html:not([data-xn-palette]) .xn-conversation .xn-session-composer-dock:not(.xn-s
 html:not([data-xn-palette]) .xn-composer { border: 1px solid var(--border-strong); border-radius: 20px; background: var(--bg-input); box-shadow: 0 1px 2px rgb(0 0 0 / .04), 0 14px 36px -20px rgb(0 0 0 / .28); transition: border-color var(--dur-slow) var(--xn-ease), box-shadow var(--dur-slow) var(--xn-ease); }
 html.dark:not([data-xn-palette]) .xn-composer { box-shadow: 0 1px 0 rgb(255 255 255 / .03) inset, 0 18px 40px -22px rgb(0 0 0 / .9); }
 /* Trays above the composer (guidance, queue, withdrawal recovery) tuck under its straight top edge. */
-html:not([data-xn-palette]) .xn-queue-dock { width: min(856px, calc(100% - 88px)); }
+html:not([data-xn-palette]) .xn-queue-dock { width: min(896px, calc(100% - 48px)); }
 html:not([data-xn-palette]) .xn-queue-dock > .xn-session-queue,
 html:not([data-xn-palette]) .xn-queue-dock > .xn-session-queue__recovery { border-radius: 12px 12px 0 0; background: color-mix(in oklab, var(--bg-subtle) 90%, transparent); }
 /* An unconfirmed command outcome is literally a probability state: dotted edge, ink text. */
-html:not([data-xn-palette]) .xn-conversation > .xn-command-recovery { width: min(856px, calc(100% - 88px)); }
+html:not([data-xn-palette]) .xn-conversation > .xn-command-recovery { width: min(896px, calc(100% - 48px)); }
 html:not([data-xn-palette]) .xn-command-recovery { border: 1px dashed color-mix(in oklab, var(--fg) 22%, transparent); border-radius: 12px; background: color-mix(in oklab, var(--bg-subtle) 90%, transparent); }
 html:not([data-xn-palette]) .xn-composer:focus-within { border-color: color-mix(in oklab, var(--fg) 34%, transparent); box-shadow: 0 0 0 4px color-mix(in oklab, var(--fg) 6%, transparent), 0 14px 36px -20px rgb(0 0 0 / .32); }
 html:not([data-xn-palette]) .xn-composer__input { color: var(--fg); font-size: calc(var(--xn-ui-font-size, 14px) + .5px); line-height: 1.6; }

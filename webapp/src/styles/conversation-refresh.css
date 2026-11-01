@@ -274,7 +274,7 @@
 .xn-shell-layout .xn-md__code-fence .xn-code-content pre { padding: 12px; font-family: var(--font-mono); line-height: 1.55; }
 
 .xn-shell-layout .xn-msg__body { display: flex; min-width: 0; max-width: 100%; flex-direction: column; align-items: flex-end; }
-.xn-shell-layout .xn-msg__actions { display: flex; min-height: 28px; align-items: center; gap: 4px; margin-top: 4px; opacity: 0; transition: opacity 120ms ease; }
+.xn-shell-layout .xn-msg__actions { display: flex; min-height: 28px; align-items: center; gap: 4px; margin-top: 4px; opacity: 0; transition: opacity var(--dur-fast) var(--ease-standard); }
 .xn-shell-layout .xn-timeline-item--user:hover .xn-msg__actions,
 .xn-shell-layout .xn-timeline-item--assistant:hover .xn-msg__actions,
 .xn-shell-layout .xn-timeline-item--user:focus-within .xn-msg__actions,
@@ -460,7 +460,7 @@
 .xn-shell-layout .xn-toolcall__chevron {
   flex: 0 0 auto;
   color: var(--fg-muted);
-  transition: transform 120ms ease;
+  transition: transform var(--dur-fast) var(--ease-standard);
 }
 
 .xn-shell-layout .xn-toolcall__details[open] .xn-toolcall__chevron {
@@ -529,7 +529,7 @@
   display: inline-block;
   margin-right: 6px;
   color: var(--fg-muted);
-  transition: transform 120ms ease;
+  transition: transform var(--dur-fast) var(--ease-standard);
 }
 
 .xn-shell-layout .xn-msg__tool-details[open] > summary::before,
@@ -595,7 +595,7 @@
 .xn-tool-group__icon, .xn-tool-group__label, .xn-tool-group__count, .xn-tool-group__chevron { flex: 0 0 auto; }
 .xn-tool-group__count { font-size: 12px; font-variant-numeric: tabular-nums; }
 .xn-tool-group__preview { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; color: var(--fg-subtle); }
-.xn-tool-group__chevron { margin-inline-start: auto; transition: transform 120ms ease; transform: rotate(-90deg); }
+.xn-tool-group__chevron { margin-inline-start: auto; transition: transform var(--dur-fast) var(--ease-standard); transform: rotate(-90deg); }
 .xn-tool-group[open] > summary .xn-tool-group__chevron { transform: rotate(0); }
 .xn-tool-group > summary > strong { flex: 0 0 auto; color: var(--error-fg); font-size: 11px; font-weight: 500; }
 .xn-tool-group__running { flex: 0 0 auto; color: var(--fg-muted); font-size: 11px; }
@@ -613,7 +613,7 @@
 .xn-conversation-work-summary > button { display: inline-flex; min-width: 0; align-items: center; gap: 7px; border: 0; padding: 0; background: transparent; color: inherit; font: inherit; font-size: 13px; cursor: pointer; }
 .xn-conversation-work-summary > button:hover { color: var(--fg); }
 .xn-conversation-work-summary > button:focus-visible { outline: 2px solid var(--border-focus); outline-offset: 4px; border-radius: 3px; }
-.xn-conversation-work-summary > button > svg { flex: 0 0 auto; transition: transform 120ms ease; }
+.xn-conversation-work-summary > button > svg { flex: 0 0 auto; transition: transform var(--dur-fast) var(--ease-standard); }
 .xn-conversation-work-summary > button[aria-expanded="false"] > svg { transform: rotate(-90deg); }
 .xn-conversation-work-summary__count { margin-inline-start: auto; font-size: 11px; white-space: nowrap; }
 @media (prefers-reduced-motion: reduce) {
@@ -658,7 +658,7 @@
   border-radius: 16px;
   background: var(--bg-input, var(--bg-card));
   box-shadow: none;
-  transition: border-color 120ms ease, background-color 120ms ease;
+  transition: border-color var(--dur-fast) var(--ease-standard), background-color var(--dur-fast) var(--ease-standard);
 }
 
 .xn-shell-layout .xn-composer:hover {
@@ -919,4 +919,14 @@
   .xn-shell-layout .xn-msg__tool-error-details > summary::before {
     transition: none;
   }
+}
+
+/* Shared states override palette send treatments without changing submit logic. */
+html .xn-shell-layout .xn-composer .xn-composer__send.xn-composer__queue { width: auto; max-width: 100%; gap: var(--space-1); padding-inline: var(--space-2); border: 1px solid var(--border-strong); background: var(--bg-input); color: var(--fg); box-shadow: none; font-size: var(--text-sm); }
+html .xn-shell-layout .xn-composer .xn-composer__send.xn-composer__stop { border-radius: var(--radius-md); background: var(--fg); color: var(--bg); box-shadow: none; }
+html .xn-shell-layout .xn-composer .xn-composer__send:is(.xn-composer__stop, .xn-composer__queue):hover:not(:disabled) { transform: none; box-shadow: none; filter: brightness(.9); }
+html .xn-shell-layout .xn-composer .xn-composer__send:is(.xn-composer__stop, .xn-composer__queue):disabled { opacity: .45; cursor: not-allowed; }
+html .xn-shell-layout .xn-composer__submit-actions { flex-shrink: 0; }
+@media (max-width: 680px) {
+  html .xn-shell-layout .xn-queue-dock { width: calc(100% - 24px); }
 }

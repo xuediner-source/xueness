@@ -182,7 +182,7 @@
   position: absolute;
   z-index: 8;
   right: 20px;
-  bottom: 14px;
+  bottom: var(--space-6);
   display: inline-flex;
   min-height: 34px;
   align-items: center;
@@ -200,7 +200,7 @@
 }
 .xn-session-back-to-bottom:hover { border-color: var(--border-focus); background: var(--bg-hover); }
 .xn-session-back-to-bottom:focus-visible { outline: 2px solid var(--border-focus); outline-offset: 2px; }
-@media (max-width: 680px) { .xn-session-back-to-bottom { right: 12px; bottom: 12px; } }
+@media (max-width: 680px) { .xn-session-back-to-bottom { right: var(--space-3); bottom: var(--space-6); } }
 
 .xn-reasoning {
   min-width: 0;
@@ -213,7 +213,7 @@
 .xn-reasoning > summary:focus-visible { outline: 2px solid var(--border-focus); outline-offset: 3px; border-radius: 3px; }
 .xn-reasoning > summary > svg, .xn-reasoning__label { flex: 0 0 auto; }
 .xn-reasoning__preview { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--fg-subtle); font-size: 13px; }
-.xn-reasoning__chevron { transition: transform 120ms ease; transform: rotate(-90deg); }
+.xn-reasoning__chevron { transition: transform var(--dur-fast) var(--ease-standard); transform: rotate(-90deg); }
 .xn-reasoning[open] .xn-reasoning__chevron { transform: rotate(0); }
 .xn-completion-details > summary {
   width: fit-content;
@@ -227,7 +227,7 @@
   display: inline-block;
   margin-inline-end: 6px;
   content: "›";
-  transition: transform 120ms ease;
+  transition: transform var(--dur-fast) var(--ease-standard);
 }
 .xn-completion-details[open] > summary::before { transform: rotate(90deg); }
 .xn-reasoning__text {
@@ -587,7 +587,7 @@
   line-height: 1;
 }
 .xn-approval-item {
-  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  transition: border-color var(--dur-normal) var(--ease-standard), box-shadow var(--dur-normal) var(--ease-standard);
 }
 .xn-approval-item[data-focused="true"] {
   border-color: var(--primary) !important;
@@ -652,7 +652,7 @@
   color: var(--fg-subtle);
   font-size: 11px;
   cursor: pointer;
-  transition: background-color 0.15s ease, color 0.15s ease;
+  transition: background-color var(--dur-normal) var(--ease-standard), color var(--dur-normal) var(--ease-standard);
 }
 .xn-zc-retry-btn:hover {
   background: var(--bg-hover);
@@ -897,3 +897,8 @@
   vertical-align: baseline;
 }
 .xn-composer__editor-token--slash { font-family: var(--font-mono, ui-monospace, monospace); }
+
+@media (prefers-reduced-motion: no-preference) {
+  .xn-session-back-to-bottom { animation: xn-tail-chip-enter var(--dur-normal) var(--ease-standard); }
+  @keyframes xn-tail-chip-enter { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+}

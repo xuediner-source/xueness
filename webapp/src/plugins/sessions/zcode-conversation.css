@@ -18,7 +18,7 @@
 .xn-zc-turn { min-width: 0; display: flex; flex-direction: column; gap: 20px; padding: 56px 24px 20px; }
 .xn-zc-user { display: flex; flex-direction: column; align-items: flex-end; min-width: 0; }
 .xn-zc-user-bubble { box-sizing: border-box; max-width: min(100%, 576px); padding: 12px 16px; border: 1px solid var(--border); border-radius: 12px 2px 12px 12px; background: var(--conversation-user-surface); white-space: pre-wrap; overflow-wrap: anywhere; }
-.xn-zc-actions { display: flex; align-items: center; gap: 4px; margin-top: 4px; min-height: 24px; opacity: 0; transition: opacity 150ms; }
+.xn-zc-actions { display: flex; align-items: center; gap: 4px; margin-top: 4px; min-height: 24px; opacity: 0; transition: opacity var(--dur-normal) var(--ease-standard); }
 .xn-zc-user:hover > .xn-zc-actions, .xn-zc-final:hover > .xn-zc-actions, .xn-zc-actions:focus-within { opacity: 1; }
 /* Reserved while the turn runs: same box as the action row, so finishing never shifts the answer. */
 .xn-zc-actions--reserved { opacity: 1; pointer-events: none; }
@@ -64,7 +64,7 @@
 .xn-zc-reasoning-preview { max-width: min(60vw, 500px); }
 .xn-zc-tool-state { flex: 0 0 auto; white-space: nowrap; font-weight: 400; }
 .xn-zc-tool-state[data-failed], .xn-zc-tool-body [role="alert"] { color: var(--error-fg); }
-.xn-zc-chevron { flex: 0 0 auto; opacity: .7; transition: transform 150ms; }
+.xn-zc-chevron { flex: 0 0 auto; opacity: .7; transition: transform var(--dur-normal) var(--ease-standard); }
 .xn-zc-tool > summary > .xn-zc-chevron { opacity: 0; }
 .xn-zc-tool:hover > summary > .xn-zc-chevron, .xn-zc-tool[open] > summary > .xn-zc-chevron { opacity: .7; }
 .xn-zc-work[open] > summary > .xn-zc-chevron, .xn-zc-reasoning[open] > summary > .xn-zc-chevron, .xn-zc-tool[open] > summary > .xn-zc-chevron, .xn-zc-completion[open] > summary > .xn-zc-chevron { transform: rotate(90deg); }
@@ -120,3 +120,26 @@
 
 .xn-zc-fact-markers { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0; color: var(--conversation-muted); font-size: 12px; }
 .xn-zc-fact-chip { border: 1px solid var(--border); border-radius: 12px; padding: 2px 8px; overflow-wrap: anywhere; }
+
+/* The inline marker reserves the same advance after settling, including lists. */
+.xn-zc-answer .xn-md > :last-child { position: relative; }
+.xn-zc-answer .xn-md > :last-child::after { content: ""; display: inline-block; width: 2px; height: 1em; margin-inline-start: var(--space-1); vertical-align: -.12em; background: currentColor; opacity: 0; }
+.xn-zc-answer[data-live] .xn-md > :last-child::after { opacity: .65; }
+.xn-zc-live { display: inline-flex; align-items: center; gap: var(--space-2); font-size: var(--text-sm); line-height: 1.5; }
+.xn-zcode-conversation > .xn-zc-live { margin: var(--space-5) var(--space-6); }
+.xn-zc-live::before { content: ""; width: 5px; height: 5px; flex: 0 0 auto; border-radius: 50%; background: currentColor; opacity: .6; }
+@media (prefers-reduced-motion: no-preference) {
+  .xn-zc-user, .xn-zc-answer { animation: xn-message-appear var(--dur-normal) var(--ease-standard); }
+  .xn-zc-tool[open] > .xn-zc-tool-body { animation: xn-message-appear var(--dur-normal) var(--ease-standard); }
+  .xn-zc-answer[data-live] .xn-md > :last-child::after { animation: xn-answer-caret calc(var(--dur-slow) * 5) step-end infinite; }
+  @keyframes xn-message-appear { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+  @keyframes xn-answer-caret { 50% { opacity: 0; } }
+  /* Native details retains keyboard semantics and avoids a clipping wrapper. */
+  @supports (interpolate-size: allow-keywords) {
+    .xn-zc-work::details-content, .xn-zc-reasoning::details-content {
+      interpolate-size: allow-keywords; block-size: 0; opacity: 0;
+      transition: block-size var(--dur-normal) var(--ease-standard), opacity var(--dur-normal) var(--ease-standard), content-visibility var(--dur-normal) allow-discrete;
+    }
+    .xn-zc-work[open]::details-content, .xn-zc-reasoning[open]::details-content { block-size: auto; opacity: 1; }
+  }
+}
