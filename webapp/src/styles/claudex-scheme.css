@@ -6,7 +6,7 @@
 html[data-xn-palette="claudex"] .xn-shell-layout,
 html[data-xn-palette="claudex"] .xn-shell-layout--desktop-titlebar { grid-template-columns: var(--xn-shell-sidebar-width, calc(var(--claudex-sidebar-width) + var(--claudex-rail-width))) minmax(0, 1fr); background: var(--bg-sidebar); }
 html[data-xn-palette="claudex"] .xn-shell-layout--sidebar-collapsed,
-html[data-xn-palette="claudex"] .xn-shell-layout--desktop-titlebar.xn-shell-layout--sidebar-collapsed { grid-template-columns: minmax(0, 1fr); }
+html[data-xn-palette="claudex"] .xn-shell-layout--desktop-titlebar.xn-shell-layout--sidebar-collapsed { grid-template-columns: 0px minmax(0, 1fr); }
 html[data-xn-palette="claudex"] .xn-shell-layout:has(.xn-settings-view),
 html[data-xn-palette="claudex"] .xn-shell-layout--no-sidebar { grid-template-columns: minmax(0, 1fr); }
 html[data-xn-palette="claudex"] .xn-shell-layout:has(.xn-settings-view) .xn-shell-main { grid-column: 1; }

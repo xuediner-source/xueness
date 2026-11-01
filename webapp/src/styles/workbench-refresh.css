@@ -38,8 +38,8 @@
 .xn-shell-layout .xn-sidebar-archived { margin: 6px 12px; }
 .xn-shell-layout .xn-shell-backdrop { position: fixed; inset: 0; z-index: 35; border: 0; padding: 0; background: rgb(0 0 0 / .3); cursor: default; }
 .xn-shell-layout .xn-shell-main__panel { position: relative; display: flex; flex: 1 1 auto; flex-direction: column; min-width: 0; min-height: 0; overflow: hidden; border: 1px solid var(--border); border-radius: 12px; background: var(--bg); }
-.xn-shell-layout--sidebar-collapsed { grid-template-columns: minmax(0, 1fr); }
-.xn-shell-layout--sidebar-collapsed .xn-shell-sidebar { display: none; }
+.xn-shell-layout--sidebar-collapsed { grid-template-columns: 0px minmax(0, 1fr); }
+.xn-shell-layout--sidebar-collapsed .xn-shell-sidebar { visibility: hidden; transform: translateX(-100%); }
 .xn-shell-layout--sidebar-collapsed .xn-shell-sidebar-toggle { display: inline-flex; position: absolute; top: 12px; left: 14px; z-index: 31; }
 .xn-shell-layout--sidebar-collapsed .xn-conv-header,
 .xn-shell-layout--sidebar-collapsed .xn-secondary-view__bar,
@@ -140,9 +140,9 @@
 .xn-shell-layout--desktop-titlebar .xn-shell-sidebar-toggle { display: none; }
 .xn-shell-layout--desktop-titlebar .xn-hero { padding-top: 48px; }
 .xn-shell-layout--desktop-titlebar .xn-hero__bar { display: none; }
-.xn-shell-layout--desktop-titlebar.xn-shell-layout--sidebar-collapsed { grid-template-columns: minmax(0, 1fr); }
-.xn-shell-layout--desktop-titlebar.xn-shell-layout--sidebar-collapsed .xn-shell-sidebar { display: none; }
-.xn-shell-layout--desktop-titlebar.xn-shell-layout--sidebar-collapsed .xn-shell-main { grid-column: 1; }
+.xn-shell-layout--desktop-titlebar.xn-shell-layout--sidebar-collapsed { grid-template-columns: 0px minmax(0, 1fr); }
+
+.xn-shell-layout--desktop-titlebar.xn-shell-layout--sidebar-collapsed .xn-shell-main { grid-column: 2; }
 .xn-shell-layout--desktop-titlebar.xn-shell-layout--no-sidebar { grid-template-columns: minmax(0, 1fr); }
 .xn-shell-layout--desktop-titlebar.xn-shell-layout--no-sidebar .xn-shell-main { grid-column: 1; }
 
@@ -152,4 +152,22 @@
   .xn-shell-layout--desktop-titlebar .xn-shell-sidebar { grid-row: 2; inset-block-start: 40px; height: calc(100dvh - 40px); }
   .xn-shell-layout--desktop-titlebar .xn-shell-main { grid-column: 1; grid-row: 2; height: auto; }
   .xn-shell-layout--desktop-titlebar .xn-shell-sidebar-toggle { display: none; }
+}
+
+/* Keep the fixed-width sheet intact while its grid track closes. */
+.xn-shell-layout { overflow-x: clip; transition: grid-template-columns var(--dur-slow) var(--ease-standard); }
+.xn-shell-layout .xn-shell-sidebar { transition: transform var(--dur-slow) var(--ease-standard), visibility 0s; }
+.xn-shell-layout .xn-shell-backdrop { opacity: 0; visibility: hidden; pointer-events: none; transition: opacity var(--dur-slow) var(--ease-standard), visibility 0s; }
+.xn-shell-layout--sidebar-open .xn-shell-backdrop { opacity: 1; visibility: visible; pointer-events: auto; }
+.xn-shell-layout[data-sidebar-resizing="true"] { transition: none; }
+.xn-shell-layout--sidebar-collapsed .xn-shell-sidebar { transition-delay: 0s, var(--dur-slow); }
+.xn-shell-layout .xn-shell-backdrop { transition-delay: 0s, var(--dur-slow); }
+.xn-shell-layout--sidebar-open .xn-shell-backdrop { transition-delay: 0s; }
+@media (max-width: 900px) {
+  .xn-shell-layout .xn-shell-sidebar { transition-delay: 0s, var(--dur-slow); }
+  .xn-shell-layout--sidebar-open .xn-shell-sidebar { transition-delay: 0s; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .xn-shell-layout, .xn-shell-layout .xn-shell-sidebar, .xn-shell-layout .xn-shell-backdrop { transition: none; transition-delay: 0s; }
 }

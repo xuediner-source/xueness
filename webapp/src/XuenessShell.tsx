@@ -114,7 +114,7 @@ export function Shell({
   React.useEffect(() => {
     if (!narrow && previousCollapsed.current !== sidebarCollapsed) {
       if (sidebarCollapsed) toggleRef.current?.focus();
-      else asideRef.current?.querySelector<HTMLButtonElement>("button")?.focus();
+      else asideRef.current?.querySelector<HTMLButtonElement>("button:not(:disabled)")?.focus();
     }
     previousCollapsed.current = sidebarCollapsed;
   }, [sidebarCollapsed, narrow]);
@@ -183,7 +183,7 @@ export function Shell({
       {titlebar && <div className="xn-shell-layout__titlebar" data-testid="xn-shell-titlebar-host">{titlebar}</div>}
       {sidebar && (
         <aside
-          ref={asideRef}
+          ref={asideRef} inert={!expanded} aria-hidden={!expanded}
           id="xn-shell-sidebar"
           tabIndex={narrow && sidebarOpen ? -1 : undefined}
           className={`xn-shell-sidebar${sidebarRail ? " xn-shell-sidebar--with-rail" : ""}`}
@@ -252,7 +252,7 @@ export function Shell({
         </aside>
       )}
 
-      {sidebar && narrow && sidebarOpen && <button type="button" className="xn-shell-backdrop" aria-label={tr("收起侧栏")} tabIndex={-1} onClick={closeDrawer} />}
+      {sidebar && narrow && <button type="button" className="xn-shell-backdrop" inert={!sidebarOpen} aria-hidden={!sidebarOpen} aria-label={tr("收起侧栏")} tabIndex={-1} onClick={closeDrawer} />}
 
       <main id="xn-shell-main" ref={mainRef} tabIndex={-1} inert={Boolean(sidebar && narrow && sidebarOpen)} className="xn-shell-main" data-testid="xn-shell-main">
         {sidebar && !titlebar && (
