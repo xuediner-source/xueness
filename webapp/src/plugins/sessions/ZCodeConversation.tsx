@@ -556,8 +556,8 @@ function TurnView({ turn, latest, props, activeFindRowKey, compactionMarker }: {
           hover anyway); a settling turn shows its status there, so finishing
           does not add or remove a line below the answer. Distinct keys keep the
           reserved row's opacity from fading through the new buttons. */}
-      {running ? <div key="reserved" className="xn-zc-actions xn-zc-actions--reserved" aria-hidden={streamingRow ? true : undefined}>
-        {!streamingRow && <span className="xn-zc-live" role="status" data-testid="timeline-stream-loading">{liveLabel}</span>}
+      {running ? <div key="reserved" className="xn-zc-actions xn-zc-actions--reserved">
+        <span className="xn-zc-live" role="status" data-testid="timeline-stream-loading">{liveLabel}</span>
       </div>
       : <div key="actions" className="xn-zc-actions"><CopyAction text={copyText} />
         {onFeedback && final.messageRevision && final.messageIndex !== undefined && <FeedbackActions row={final} onFeedback={onFeedback} />}
@@ -719,10 +719,10 @@ export function ZCodeConversation(props: ZCodeConversationProps) {
       <div className="xn-timeline-history-layout xn-zc-layout" data-testid="timeline-history-layout">
         <XuenessConversationHistoryRail rows={props.rows} timelineRootRef={rootRef} requestReveal={requestReveal} />
         <div className="xn-timeline-history-layout__content" ref={rootRef}>
-          <div className="xn-zcode-conversation" data-testid="zcode-conversation" ref={streamRef} aria-label={tr('会话')} onAnimationStart={event => {
-            const target = event.target as HTMLElement; if (!target.matches('.xn-zc-user, .xn-zc-answer')) return;
+          <div className="xn-zcode-conversation" data-testid="zcode-conversation" ref={streamRef} aria-label={tr('会话')} onAnimationEnd={event => { const target = event.target as HTMLElement; if (target.matches('.xn-zc-user, .xn-zc-answer')) target.dataset.entered = 'true'; }} onAnimationStart={event => {
+            const target = event.target as HTMLElement; if (!['xn-message-appear', 'xn-live-appear'].includes(event.animationName) || !target.matches('.xn-zc-user, .xn-zc-answer')) return;
             const key = `${props.sessionId}:${target.closest<HTMLElement>('[data-zcode-row-key]')?.dataset.zcodeRowKey}`;
-            if (appeared.current.rows.has(key)) target.style.animation = 'none'; else appeared.current.rows.add(key);
+            if (appeared.current.rows.has(key)) target.dataset.entered = 'true'; else appeared.current.rows.add(key);
           }}>
             <div className="xn-zc-find__dock">
               <ConversationFindBar open={findOpen || Boolean(findQuery)} query={findQuery} resultCount={findMatches.length}

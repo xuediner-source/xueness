@@ -139,10 +139,15 @@
 .xn-zcode-conversation > .xn-zc-live { margin: var(--space-5) var(--space-6); }
 .xn-zc-live::before { content: ""; width: 5px; height: 5px; flex: 0 0 auto; border-radius: 50%; background: currentColor; opacity: .6; }
 @media (prefers-reduced-motion: no-preference) {
-  .xn-zc-user, .xn-zc-answer { animation: xn-message-appear var(--dur-normal) var(--ease-standard); }
+  .xn-zc-user:not([data-entered]), .xn-zc-answer:not([data-entered]) { animation: xn-message-appear var(--dur-fast) var(--ease-standard); }
+  .xn-zc-answer[data-live]:not([data-entered]) { animation: xn-live-appear var(--dur-slow) var(--ease-standard); }
+  .xn-zc-live { background: linear-gradient(100deg, var(--conversation-muted) 35%, var(--conversation-fg) 50%, var(--conversation-muted) 65%); background-size: 250% 100%; background-clip: text; -webkit-background-clip: text; color: transparent; animation: xn-live-presence calc(var(--dur-slow) * 14) linear infinite; }
+  .xn-zc-live::before { background: var(--conversation-muted); }
+  @keyframes xn-live-presence { from { background-position: 150% 0; } to { background-position: -150% 0; } }
+  @keyframes xn-live-appear { from { opacity: .45; } to { opacity: 1; } }
   .xn-zc-tool[open] > .xn-zc-tool-body { animation: xn-message-appear var(--dur-normal) var(--ease-standard); }
   .xn-zc-answer[data-live]::after { animation: xn-answer-caret calc(var(--dur-slow) * 5) step-end infinite; }
-  @keyframes xn-message-appear { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+  @keyframes xn-message-appear { from { opacity: 0; transform: translateY(2px); } to { opacity: 1; transform: none; } }
   @keyframes xn-answer-caret { 50% { opacity: .15; } }
   /* Native details retains keyboard semantics and avoids a clipping wrapper. */
   @supports (interpolate-size: allow-keywords) {
@@ -153,3 +158,5 @@
     .xn-zc-work[open]::details-content, .xn-zc-reasoning[open]::details-content { block-size: auto; opacity: 1; }
   }
 }
+
+@media (forced-colors: active) { .xn-zc-live { color: CanvasText; background: none; animation: none; } }
