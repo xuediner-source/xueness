@@ -35,8 +35,10 @@ export type SessionCompactionRecord = {
 
 export type ConversationCompactionMarker = {
   manual?: boolean;
-  /** 分隔线渲染在「归档块之后第一条仍在模型上下文内的文本行」所属轮次的顶部。 */
+  /** 活跃文本行的序号；尚无活跃行时使用最后一条归档行的稳定序号。 */
   boundarySeq: number;
+  /** 无后续活跃行时，挂在归档行所属轮次末尾；否则沿用轮次顶部。 */
+  placement?: 'after';
   /** 后端记录累计移出上下文的消息条数。 */
   removed: number;
   /** 后端记录累计掩码的旧工具输出条数。 */
@@ -138,42 +140,46 @@ function recordElapsedMs(records: SessionCompactionRecord[]): number {
  * 在合并后的时间线行里定位压缩边界。
  *
  * 窗口化 journal 水合后，仍在上下文中的 user/assistant 行携带重映射的
- * `messageIndex`，归档行没有该字段（工具/完成行两种情况都没有，无法判定，
- * 不参与定位）。真实压缩会话里原始任务行（seq 0，仍在上下文内）排在归档块
+ * `messageIndex`，归档文本行没有该字段，归档工具行有显式来源标记。
+ * 真实压缩会话里原始任务行（seq 0，仍在上下文内）排在归档块
  * 之前，所以边界 = 「归档文本行之后第一条带 `messageIndex` 的文本行」；
- * 流式追加行（`streaming`）永远属于活上下文。找不到这样的成对结构
- * （未窗口化、本页看不到归档块、或归档块之后没有活行）时返回 null——
- * 不渲染标记，不猜测边界位置。
+ * 尚无后续活跃文本行时，边界先挂在最后一条归档行所属轮次末尾。
+ * 未记录压缩或本页看不到归档块时不渲染标记；不以流式临时行定位。
  */
 export function conversationCompactionBoundary(
   rows: TimelineRow[],
   compactions: unknown,
 ): ConversationCompactionMarker | null {
   if (!Array.isArray(rows) || rows.length === 0) return null;
-  let seenArchived = false;
+  const records = parseSessionCompactions(compactions);
+  if (!records.length) return null;
+  let archivedSeq: number | undefined;
+  let liveSeq: number | undefined;
   for (const row of rows) {
     if (row.kind === 'tool' && row.archivedForCompaction === true) {
-      seenArchived = true;
+      archivedSeq = row.seq;
       continue;
     }
     if (row.kind !== 'user' && row.kind !== 'assistant') continue;
     if (row.kind === 'assistant' && row.streaming === true) continue;
     if (row.messageIndex === undefined) {
-      seenArchived = true;
+      archivedSeq = row.seq;
       continue;
     }
-    if (seenArchived) {
-      const records = parseSessionCompactions(compactions);
-      const latest = records.at(-1);
-      const elapsedMs = recordElapsedMs(records);
-      return {
-        boundarySeq: row.seq,
-        removed: recordCount(records, 'removed'),
-        masked: recordCount(records, 'masked'),
-        ...(elapsedMs > 0 ? { elapsedMs } : {}),
-        ...(latest?.kind === 'zcode' ? { latest } : latest?.manual || latest?.trigger === 'manual' ? { manual: true } : {}),
-      };
+    if (archivedSeq !== undefined) {
+      liveSeq = row.seq;
+      break;
     }
   }
-  return null;
+  if (archivedSeq === undefined) return null;
+  const latest = records.at(-1);
+  const elapsedMs = recordElapsedMs(records);
+  return {
+    boundarySeq: liveSeq ?? archivedSeq,
+    ...(liveSeq === undefined ? { placement: 'after' as const } : {}),
+    removed: recordCount(records, 'removed'),
+    masked: recordCount(records, 'masked'),
+    ...(elapsedMs > 0 ? { elapsedMs } : {}),
+    ...(latest?.kind === 'zcode' ? { latest } : latest?.manual || latest?.trigger === 'manual' ? { manual: true } : {}),
+  };
 }

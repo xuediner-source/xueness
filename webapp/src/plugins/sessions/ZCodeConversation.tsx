@@ -539,7 +539,7 @@ function TurnView({ turn, latest, props, activeFindRowKey, compactionMarker }: {
     </React.Fragment> : null);
   const stableTurnId = turn.rows.map(timelineRowTurnId).find(Boolean) ?? turn.key;
   return <section className="xn-zc-turn" data-turn-key={turn.key} data-zcode-turn-id={stableTurnId}>
-    {compactionMarker && <CompactionBoundary marker={compactionMarker} />}
+    {compactionMarker && compactionMarker.placement !== 'after' && <CompactionBoundary marker={compactionMarker} />}
     <ConversationMarkers facts={props.timelineMarkers} rows={turn.rows} placement="before_user" enabled={effectivePluginIds?.has('sessions') === true} />
     {turn.rows.filter((row): row is User => row.kind === 'user').map(row => <div key={`user:${row.messageId ?? row.messageIndex ?? row.seq}`} {...rowData(row)}><UserMessage editSessionId={props.messageEditSessionId} previewTransport={props.messageEditPreviewTransport} attachmentTransport={props.messageEditTransport} row={row} onEdit={onEdit} enabled={effectivePluginIds?.has('sessions') === true} isSessionsEffective={props.isSessionsEffective} /></div>)}
     {userReferences.map(row => <ReferenceRowView key={`${row.kind}:${row.seq}`} row={row} sessionId={props.sessionId} effectivePluginIds={effectivePluginIds} />)}
@@ -566,6 +566,7 @@ function TurnView({ turn, latest, props, activeFindRowKey, compactionMarker }: {
     {completion && <CompletionCheck row={completion} answer={answer} protocol={jsonToolProtocol} findActive={activeFindRowKey === conversationFindRowKey(completion)} />}
     {turn.rows.filter(row => row.kind === 'pending_question').map(row => row.kind === 'pending_question' ? <p key={`question:${row.seq}`} {...rowData(row)} role="status" className="xn-zc-question">{tr('等待回答')} · {row.question}</p> : null)}
     {running && !streamingRow && !final && <p className="xn-zc-live" role="status" data-testid="timeline-stream-loading">{liveLabel}</p>}
+    {compactionMarker?.placement === 'after' && <CompactionBoundary marker={compactionMarker} />}
   </section>;
 }
 
@@ -583,7 +584,7 @@ export function ZCodeConversation(props: ZCodeConversationProps) {
     currentTurnId: props.currentTurnId, currentStreamId: props.currentStreamId,
     effectivePluginIds: props.effectivePluginIds, identities: identities.current.calls });
   const turns = React.useMemo(() => buildConversationTurns(projectedRows), [projectedRows]);
-  // 压缩边界挂在「第一条仍在模型上下文内的行」所属轮次的顶部；归档轮次在前。
+  // 边界挂在首个活跃文本轮次顶部，或在尚无活跃行时挂在末个归档轮次末尾。
   const markerTurnIndex = React.useMemo(() => props.compactionMarker
     ? turns.findIndex(turn => turn.rows.some(row => row.seq >= props.compactionMarker!.boundarySeq))
     : -1, [turns, props.compactionMarker]);

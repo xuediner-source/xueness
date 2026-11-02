@@ -481,7 +481,7 @@ export function XuenessWorkbenchContainer() {
   const [queueContinuingSessions, setQueueContinuingSessions] = useState<Set<string>>(() => new Set());
   const queueContinuingSessionsRef = useRef(new Set<string>());
   const [queueCancelling, setQueueCancelling] = useState<{ sessionId: string; queueId: string } | null>(null);
-  const [queueError, setQueueError] = useState<{ sessionId: string; message: string; compact?: 'running' | 'complete' } | null>(null);
+  const [queueError, setQueueError] = useState<{ sessionId: string; message: string; compact?: 'running' | 'complete' | 'unchanged' } | null>(null);
   const [remoteDialogOpen, setRemoteDialogOpen] = useState(false);
   const [remoteAdapter, setRemoteAdapter] = useState<RemoteSessionAdapter | null>(null);
   const [sidePanelSelection, setSidePanelSelection] = useState<{ identity: PaneIdentity | null; anchor: string } | null>(null);
@@ -1366,7 +1366,7 @@ export function XuenessWorkbenchContainer() {
           onAccepted?.();
           await loadActive(targetSessionId, false);
           await refreshList();
-          if (activeIdRef.current === targetSessionId) setQueueError({ sessionId: targetSessionId, message: outcome.kind === 'compacted' ? tr('上下文已压缩') : manualCompactNotice(outcome), compact: 'complete' });
+          if (activeIdRef.current === targetSessionId) setQueueError({ sessionId: targetSessionId, message: outcome.kind === 'compacted' ? tr('上下文已压缩') : manualCompactNotice(outcome), compact: outcome.kind === 'compacted' ? 'complete' : 'unchanged' });
           return true;
         } catch (error) {
           setQueueError(previous => previous?.sessionId === targetSessionId && previous.compact === 'running' ? null : previous);
@@ -2793,6 +2793,7 @@ export function XuenessWorkbenchContainer() {
   const compactionMarker = useMemo(() => session && session.id === activeId
     ? conversationCompactionBoundary(displayTimelineRows, session.compactions)
     : null, [displayTimelineRows, session, activeId]);
+  const sessionCommandNotice = queueError?.sessionId === session?.id && !(queueError?.compact === 'complete' && compactionMarker) ? queueError : null;
   const claudexAppearance = normalizeColorPalette(settingsLoading && typeof document !== 'undefined'
     ? document.documentElement.dataset.xnPalette : settingsValues.colorPalette) === 'claudex';
   const sidebarAppearance = claudexAppearance ? 'claudex' : 'xueness';
@@ -3048,7 +3049,7 @@ export function XuenessWorkbenchContainer() {
               actionLabel={tr('重试运行')} onAction={!busy && !runRequestSessions.has(session.id) ? () => { void handleRetryRun(); } : undefined} />
           )}
           {/* 队列 bottom dock：贴在 composer 上方，与输入框融合成底 dock（对标 ZCode -mb-7 pb-7 磨砂贴合）。 */}
-          {((session.queued_messages?.length ?? 0) > 0 || (session.pending_guidance?.length ?? 0) > 0 || queueError?.sessionId === session.id || queueWithdrawals.rows.length > 0 || queueWithdrawals.unknown || Boolean(queueWithdrawals.error)) && (
+          {((session.queued_messages?.length ?? 0) > 0 || (session.pending_guidance?.length ?? 0) > 0 || sessionCommandNotice || queueWithdrawals.rows.length > 0 || queueWithdrawals.unknown || Boolean(queueWithdrawals.error)) && (
             <div className="xn-queue-dock" data-testid="session-queue-dock">
               <PendingGuidancePanel items={session.pending_guidance ?? []}
                 onWithdraw={handleWithdrawGuidance} busyId={queueCancelling?.sessionId === session.id ? queueCancelling.queueId : null}
@@ -3063,7 +3064,7 @@ export function XuenessWorkbenchContainer() {
                 withdrawals={queueWithdrawals.rows} notice={queueWithdrawals.notice} error={queueWithdrawals.error}
                 disabled={!isPluginEffective('sessions') || queueWithdrawals.busy} onRefresh={queueWithdrawals.refresh}
                 onRestore={queueWithdrawals.restore} onDismiss={queueWithdrawals.dismiss} /></Suspense>
-              {queueError?.sessionId === session.id && <SessionCommandNotice notice={queueError} compacting={session.compacting} />}
+              {sessionCommandNotice && <SessionCommandNotice notice={sessionCommandNotice} compacting={session.compacting} />}
             </div>
           )}
             <CommandReceiptRecovery commands={sessionCommands} enabled={isPluginEffective('sessions')} sessionId={session.id}
