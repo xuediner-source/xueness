@@ -118,7 +118,7 @@ export function isReasoningEffortSupported(model: Pick<ComposerModel, "reasoning
 
 /** Row hit area the detail card anchors to, in viewport coordinates. */
 export type ModelDetailAnchor = { top: number; left: number; right: number };
-export type ModelPopoverBounds = { top: number; bottom: number; left: number; right: number };
+export type ModelPopoverBounds = { top: number; bottom: number; left: number; right: number; minTop?: number };
 
 /**
  * Place the detail card beside the anchored row: left of it when the viewport
@@ -134,25 +134,29 @@ export function modelDetailCardStyle(
   const margin = 8;
   const gap = 10;
   const width = Math.max(0, Math.min(card.width, viewport.width - margin * 2));
-  const top = Math.max(margin, Math.min(anchor.top, viewport.height - card.maxHeight - margin));
+  // Empty-canvas details stay below the hero, even when the menu opens upward.
+  const minTop = Math.max(margin, popover?.minTop ?? margin);
+  const maxHeight = Math.max(0, Math.min(card.maxHeight, viewport.height - minTop - margin));
+  const top = Math.max(minTop, Math.min(anchor.top, viewport.height - maxHeight - margin));
   if (popover) {
     // Keep the detail card outside the interactive model menu. On a narrow
     // viewport neither side may fit, so put it above or below the whole menu.
     const leftSpace = popover.left - margin - gap;
     const rightSpace = viewport.width - popover.right - margin - gap;
     if (leftSpace >= width) {
-      return { top, left: popover.left - gap - width, width, maxHeight: card.maxHeight };
+      return { top, left: popover.left - gap - width, width, maxHeight };
     }
     if (rightSpace >= width) {
-      return { top, left: popover.right + gap, width, maxHeight: card.maxHeight };
+      return { top, left: popover.right + gap, width, maxHeight };
     }
-    const aboveSpace = Math.max(0, popover.top - margin - gap);
-    const belowSpace = Math.max(0, viewport.height - popover.bottom - margin - gap);
+    const aboveSpace = Math.max(0, popover.top - minTop - gap);
+    const belowTop = Math.max(minTop, popover.bottom + gap);
+    const belowSpace = Math.max(0, viewport.height - belowTop - margin);
     const above = aboveSpace >= belowSpace;
     const left = Math.max(margin, Math.min(popover.left, viewport.width - width - margin));
     return above
       ? { bottom: viewport.height - popover.top + gap, left, width, maxHeight: Math.min(card.maxHeight, aboveSpace) }
-      : { top: popover.bottom + gap, left, width, maxHeight: Math.min(card.maxHeight, belowSpace) };
+      : { top: belowTop, left, width, maxHeight: Math.min(card.maxHeight, belowSpace) };
   }
   if (anchor.left - gap - width >= margin) {
     return { top, right: viewport.width - anchor.left + gap, width, maxHeight: card.maxHeight };
@@ -371,10 +375,11 @@ export function ComposerModelMenu({
     cancelDetailClose();
     const rect = row.getBoundingClientRect();
     const menu = popoverElementRef.current?.getBoundingClientRect();
+    const hero = popoverElementRef.current?.closest('.xn-empty-state-shell')?.querySelector('.xn-hero__intro')?.getBoundingClientRect();
     setModelDetail({
       key,
       anchor: { top: rect.top, left: rect.left, right: rect.right },
-      popoverBounds: menu ? { top: menu.top, bottom: menu.bottom, left: menu.left, right: menu.right } : undefined,
+      popoverBounds: menu ? { top: menu.top, bottom: menu.bottom, left: menu.left, right: menu.right, minTop: hero ? hero.bottom + 10 : undefined } : undefined,
     });
   };
   useEffect(() => () => cancelDetailClose(), []);

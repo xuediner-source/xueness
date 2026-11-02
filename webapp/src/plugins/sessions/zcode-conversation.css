@@ -60,8 +60,7 @@
 .xn-zc-reasoning, .xn-zc-tool { min-width: 0; width: 100%; }
 .xn-zc-reasoning > summary, .xn-zc-tool > summary { display: inline-flex; align-items: center; gap: 8px; max-width: 100%; min-height: 20px; color: var(--conversation-subtlest); cursor: pointer; }
 .xn-zc-kind { flex: 0 0 auto; font-weight: 500; white-space: nowrap; }
-.xn-zc-tool-primary, .xn-zc-reasoning-preview { min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-weight: 400; }
-.xn-zc-reasoning-preview { max-width: min(60vw, 500px); }
+.xn-zc-tool-primary { min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-weight: 400; }
 .xn-zc-tool-state { flex: 0 0 auto; white-space: nowrap; font-weight: 400; }
 .xn-zc-tool-state[data-failed], .xn-zc-tool-body [role="alert"] { color: var(--error-fg); }
 .xn-zc-chevron { flex: 0 0 auto; opacity: .7; transition: transform var(--dur-normal) var(--ease-standard); }

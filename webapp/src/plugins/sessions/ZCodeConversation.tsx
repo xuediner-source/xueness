@@ -206,7 +206,6 @@ function Reasoning({ row, activityPhase, findActive = false }: { row: Assistant;
   const disclosure = useDisclosure(`reasoning:${row.messageId ?? row.messageIndex ?? row.seq}`);
   const open = disclosure.open || findActive;
   const active = reasoningIsActive(row.streaming, activityPhase, row.text);
-  const summary = row.reasoning?.trim().split(/\r?\n/u).filter(Boolean).at(-1);
   // Keep the reasoning block independent from the assistant prose while
   // retaining the legacy assistant row identity for old event consumers.
   // Empty streaming reasoning is intentionally absent until the first token.
@@ -218,7 +217,6 @@ function Reasoning({ row, activityPhase, findActive = false }: { row: Assistant;
   return <details className="xn-zc-reasoning" open={open} onToggle={disclosure.onToggle} {...rowData(row)} data-active={active || undefined}
     data-testid={`timeline-item-reasoning-${row.seq}`} data-state={state}>
     <summary><Brain size={16} /><span className="xn-zc-kind">{label}</span>
-      {!open && summary && <span className="xn-zc-reasoning-preview" title={summary}>{summary.slice(-180)}</span>}
       <ChevronRight size={16} className="xn-zc-chevron" /></summary>
     {(open || disclosure.present) && <div className="xn-zc-reasoning-content" inert={!open}><MarkdownRenderOptionsContext.Provider value={row.streaming ? streamingMarkdown : settledMarkdown}><SimpleMarkdown text={row.reasoning ?? ''} /></MarkdownRenderOptionsContext.Provider></div>}
   </details>;
