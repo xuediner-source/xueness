@@ -154,9 +154,13 @@
 /* overflow-anchor 关闭浏览器原生滚动锚定，滚动位置由时间线窗口补偿逻辑维护。 */
 .xn-session-timeline-viewport__scroll { width: 100%; height: 100%; overflow-anchor: none; }
 /* Short conversations rest near their composer. Auto margin yields to natural
-   overflow for long histories without compressing virtualized turns/spacers. */
+   overflow for long histories without compressing virtualized turns/spacers.
+   The margin goes on the first child, not on .xn-zc-layout: todos, the
+   load-older strip and recovery notices are siblings above the timeline and
+   must move down with it instead of stranding at the top of the viewport. */
 .xn-session-timeline-viewport__scroll:has(> .xn-zc-layout) { display: flex; flex-direction: column; }
-.xn-session-timeline-viewport__scroll > .xn-zc-layout { flex: none; margin-block-start: auto; }
+.xn-session-timeline-viewport__scroll:has(> .xn-zc-layout) > * { flex: none; }
+.xn-session-timeline-viewport__scroll:has(> .xn-zc-layout) > :first-child { margin-block-start: auto; }
 .xn-session-empty-composite { display: flex; min-height: 100%; flex-direction: column; align-items: center; justify-content: center; }
 .xn-session-timeline-empty { width: 100%; min-height: 0; }
 .xn-session-timeline-empty--centered { display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 24px 16px; box-sizing: border-box; }
