@@ -258,3 +258,12 @@ html body .xn-shell-layout .xn-empty-state-shell .xn-start-page { margin-top: 12
   html .xn-empty-state-shell .xn-starter-ideas > button { padding: 16px 18px; }
   html .xn-empty-state-shell .xn-starter-ideas__detail { font-size: 12px; }
 }
+
+/* Empty canvas: open composer menus below the trigger so they do not cover the hero heading.
+   Non-empty conversations keep the default upward popover above the docked composer. */
+html body .xn-shell-layout .xn-empty-state-shell .xn-composer-toolbar__popover,
+html body .xn-shell-layout .xn-empty-state-shell .xn-composer-toolbar__model-popover {
+  top: calc(100% + 4px);
+  bottom: auto;
+  max-height: min(360px, 50vh);
+}
