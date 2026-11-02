@@ -68,7 +68,7 @@ export function WorkbenchHeader({
     >
       <h2 className="xn-conv-header__title" data-project={project}>
         {project && <Folder size={16} className="xn-conv-header__project-icon" aria-hidden="true" />}
-        <span>{title}</span>
+        <span title={title}>{title}</span>
       </h2>
       {groupSwitcher}
       {navigation && session && <div className="xn-session-header__facts">

@@ -6,7 +6,7 @@
 }
 html[data-xn-palette] .xn-shell-layout .xn-session-header.xn-conv-header { height: auto; min-height: 76px; padding: 0 16px; flex-wrap: wrap; gap: 0 14px; }
 .xn-shell-layout .xn-session-header .xn-conv-header__title { display: flex; gap: 7px; align-items: center; flex: 1 1 180px; min-width: 0; margin: 0; padding: 0; height: 40px; font-size: 13px; font-weight: 550; line-height: 40px; overflow: hidden; }
-.xn-shell-layout .xn-session-header .xn-conv-header__title > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.xn-shell-layout .xn-session-header .xn-conv-header__title > span { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .xn-shell-layout .xn-session-header .xn-conv-header__project-icon { display: none; }
 .xn-session-header__facts { display: flex; gap: 16px; align-items: center; min-width: 0; height: 40px; color: var(--fg-muted); font-size: 11px; }
 .xn-session-header__facts > span, .xn-session-header__facts > button { display: inline-flex; align-items: center; gap: 5px; white-space: nowrap; }
@@ -51,4 +51,14 @@ html[data-xn-palette] .xn-shell-layout .xn-session-header.xn-conv-header { heigh
   .xn-session-tabs__primary > button { flex: none; min-width: 28px; }
   .xn-session-tabs__primary button { font-size: 11px; }
   .xn-session-tabs__more { max-width: 128px; }
+}
+@media (max-width: 390px) {
+  html[data-xn-palette] .xn-shell-layout .xn-session-header.xn-conv-header { column-gap: 8px; }
+  .xn-shell-layout .xn-session-header .xn-conv-header__title > .xn-conv-header__project-icon { display: none; }
+  .xn-session-header .xn-pane-group-picker > summary { gap: 3px; padding-inline: 3px; }
+  .xn-session-header .xn-pane-group-picker > summary > span { display: none; }
+  .xn-session-header .xn-pane-group-picker > summary > svg:first-child { display: block; }
+  .xn-session-header .xn-conv-header__main { order: 1; }
+  .xn-session-header__facts { order: 2; flex: 1 0 100%; height: 24px; }
+  .xn-session-header__navigation { order: 3; }
 }

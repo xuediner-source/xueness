@@ -11,7 +11,11 @@ export function WorkbenchViewSwitcher<T extends string>({ value, options, onChan
   React.useEffect(() => {
     const nav = navRef.current;
     if (!nav) return;
-    const observer = new ResizeObserver(([entry]) => setCompact(entry.contentRect.width < 520));
+    const observer = new ResizeObserver(([entry]) => {
+      const width = entry.contentRect.width;
+      // Keep the current layout while a pane hovers around the old 520px boundary.
+      setCompact(current => width < 500 ? true : width > 540 ? false : current);
+    });
     observer.observe(nav);
     return () => observer.disconnect();
   }, []);
