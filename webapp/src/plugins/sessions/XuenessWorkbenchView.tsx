@@ -788,7 +788,7 @@ export function Composer({
       <form
       aria-label={tr("消息编写器")}
       className={`xn-composer xn-composer--${variant}${topContent ? " xn-composer--with-top-content" : ""}`}
-      data-rich-composer={richComposer ? "true" : "false"}
+      data-rich-composer={richComposer ? "true" : "false"} data-running={running ? "true" : undefined}
       data-editor={tokenEditor ? "tokens" : structuredDraft ? "text" : "textarea"}
       data-drag-over={isDraggingOver ? "true" : undefined}
       onSubmit={(e) => {

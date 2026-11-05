@@ -26,8 +26,8 @@
     },
     {
       "id": "settings.appearance",
-      "name": "主题、应用缩放、语言、字体与代码显示",
-      "nameEn": "Theme, app zoom, language, fonts and code appearance"
+      "name": "主题、动效、应用缩放、语言、字体与代码显示",
+      "nameEn": "Theme, motion, app zoom, language, fonts and code appearance"
     },
     {
       "id": "settings.shortcuts",

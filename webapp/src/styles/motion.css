@@ -1,0 +1,309 @@
+/* Xueness motion layer — shared by every appearance.
+ *
+ * Principles
+ *  1. Motion explains state: things enter from where they come from (menus
+ *     from their trigger, the reply from below the question), never decorate.
+ *  2. Entrances 220–420 ms on an expo-out curve; exits are instant or shorter.
+ *     Entrances use fill-mode `backwards`, never `both`: a finished transform
+ *     animation that stays "in effect" keeps a stacking context, which would
+ *     trap popovers (e.g. composer menus under the starter cards).
+ *  3. Only opacity / translate / scale / clip-path animate, so nothing reflows.
+ *     Individual `translate`/`scale` properties compose with any positioning
+ *     `transform` a component already uses.
+ *  4. Continuous motion (shimmer, aurora, pulses) exists only while the agent
+ *     is actually working, and all of it stops under reduced motion — either
+ *     the system setting or html[data-xn-motion="reduced"].
+ * Appearance files own colour; this file owns time. */
+
+@property --xn-aurora-angle { syntax: "<angle>"; inherits: false; initial-value: 0deg; }
+
+@keyframes xn-fade-in { from { opacity: 0; } }
+@keyframes xn-rise-in { from { opacity: 0; translate: 0 10px; } }
+@keyframes xn-rise-in-sm { from { opacity: 0; translate: 0 5px; } }
+@keyframes xn-pop-in { from { opacity: 0; scale: .965; translate: 0 -4px; } }
+@keyframes xn-pop-up { from { opacity: 0; scale: .965; translate: 0 6px; } }
+@keyframes xn-dialog-in { from { opacity: 0; scale: .96; translate: 0 10px; } }
+@keyframes xn-bubble-in { from { opacity: 0; scale: .96; translate: 0 14px; } }
+@keyframes xn-reveal-down { from { opacity: 0; translate: 0 -4px; clip-path: inset(0 0 100% 0 round 8px); } to { clip-path: inset(0 0 0 0 round 0); } }
+@keyframes xn-shimmer { from { background-position: 100% 0; } to { background-position: 0 0; } }
+@keyframes xn-caret { 0%, 100% { opacity: .22; scale: .72; } 50% { opacity: .85; scale: 1; } }
+@keyframes xn-aurora-spin { to { --xn-aurora-angle: 360deg; } }
+@keyframes xn-orbit-spin { to { rotate: 360deg; } }
+@keyframes xn-ripple { 0% { opacity: .55; scale: .6; } 100% { opacity: 0; scale: 2.3; } }
+@keyframes xn-dot-pop { 0% { scale: 0; } 60% { scale: 1.35; } 100% { scale: 1; } }
+@keyframes xn-check-pop { 0% { opacity: 0; scale: .4; rotate: -25deg; } 100% { opacity: 1; scale: 1; rotate: 0deg; } }
+@keyframes xn-morph-in { from { opacity: 0; scale: .55; rotate: -90deg; } }
+@keyframes xn-attention { 0%, 100% { box-shadow: 0 0 0 0 color-mix(in oklab, var(--warn) 45%, transparent); } 50% { box-shadow: 0 0 0 4px color-mix(in oklab, var(--warn) 0%, transparent); } }
+@keyframes xn-header-lift { to { box-shadow: 0 1px 0 var(--border), 0 12px 28px -22px rgb(0 0 0 / .28); } }
+@keyframes xn-theme-reveal {
+  from { clip-path: circle(0 at var(--xn-reveal-x, 50%) var(--xn-reveal-y, 0)); }
+  to { clip-path: circle(var(--xn-reveal-r, 150vmax) at var(--xn-reveal-x, 50%) var(--xn-reveal-y, 0)); }
+}
+
+/* ── Overlays: menus and popovers grow from their trigger ───────────────── */
+:is(.xn-conv-header__menu, .xn-workbench-menu > div, .xn-sidebar-account__menu, .xn-desktop-titlebar__menu,
+  .xn-start-page__workspace-popover, .xn-claudex-sidebar-menu, .xn-select-menu, .xn-project-menu,
+  .xn-task-list__sort-menu) {
+  transform-origin: var(--xn-pop-origin, top center);
+  animation: xn-pop-in var(--dur-enter) var(--ease-out-expo) backwards;
+}
+/* Composer menus open upward from the toolbar at the bottom of the thread. */
+:is(.xn-composer-toolbar__popover, .xn-composer__plus-menu, .xn-effort-popover, .xn-composer-toolbar__menu) {
+  transform-origin: var(--xn-pop-origin, bottom left);
+  animation: xn-pop-up var(--dur-enter) var(--ease-out-expo) backwards;
+}
+.xn-select-menu[data-side="top"] { --xn-pop-origin: bottom center; animation-name: xn-pop-up; }
+
+/* Dialogs: the scrim fades, the surface settles from slightly below. */
+:is(.xn-dialog-overlay, .xn-command-overlay, .xn-session-fork__backdrop, .xn-clone-dialog__backdrop, .xn-share-backdrop,
+  .xn-project-dialog-backdrop, .xn-workspace-picker-dialog__backdrop, .xn-shell-backdrop) {
+  animation: xn-fade-in var(--dur-enter) ease-out backwards;
+}
+:is(.xn-dialog, .xn-command-panel, .xn-session-fork, .xn-clone-dialog__surface, .xn-share-dialog, .xn-project-dialog,
+  .xn-cap-dialog, .xn-permission-dialog) {
+  animation: xn-dialog-in var(--dur-reveal) var(--ease-out-expo) backwards;
+}
+.xn-command-option, .xn-select-option { transition: background-color var(--dur-fast) ease, color var(--dur-fast) ease; }
+
+/* ── Session entrance and switching ─────────────────────────────────────── */
+/* The viewport is keyed by session id, so every switch replays this once. */
+.xn-session-timeline-viewport { animation: xn-rise-in-sm var(--dur-enter) var(--ease-out-expo) backwards; }
+
+/* Only the newest turn animates: history never jiggles while scrolling. */
+.xn-zcode-conversation > [data-window-index]:not(:has(~ [data-window-index])) .xn-zc-user {
+  transform-origin: 100% 100%;
+  animation: xn-bubble-in var(--dur-reveal) var(--ease-out-expo) backwards;
+}
+.xn-zcode-conversation > [data-window-index]:not(:has(~ [data-window-index])) :is(.xn-zc-work, .xn-zc-final, .xn-zc-completion, .xn-zc-question) {
+  animation: xn-rise-in var(--dur-reveal) var(--ease-out-expo) backwards;
+}
+.xn-zc-live { animation: xn-fade-in var(--dur-enter) ease-out backwards; }
+
+/* Work log: steps arrive one by one while running; reopening a finished log
+ * cascades its steps (bounded, so long logs never feel slow). */
+.xn-zc-work-content > * { animation: xn-rise-in-sm var(--dur-enter) var(--ease-out-expo) backwards; }
+details.xn-zc-work > .xn-zc-work-content > :nth-child(2) { animation-delay: calc(var(--stagger) * 1); }
+details.xn-zc-work > .xn-zc-work-content > :nth-child(3) { animation-delay: calc(var(--stagger) * 2); }
+details.xn-zc-work > .xn-zc-work-content > :nth-child(4) { animation-delay: calc(var(--stagger) * 3); }
+details.xn-zc-work > .xn-zc-work-content > :nth-child(5) { animation-delay: calc(var(--stagger) * 4); }
+details.xn-zc-work > .xn-zc-work-content > :nth-child(n + 6) { animation-delay: calc(var(--stagger) * 5); }
+
+/* Disclosures unfold from their summary instead of popping open. */
+:is(.xn-zc-tool-body, .xn-zc-reasoning-content, .xn-zc-completion > div, .xn-zc-subagent__body, .xn-zc-ref pre, .xn-msg__tool-detail-body) {
+  animation: xn-reveal-down var(--dur-reveal) var(--ease-out-expo) backwards;
+}
+.xn-zcode-conversation .xn-zc-chevron { transition: rotate var(--dur-morph) var(--ease-spring), transform var(--dur-morph) var(--ease-spring), opacity var(--dur-fast) ease; }
+.xn-zcode-conversation :is(.xn-zc-tool, .xn-zc-reasoning, .xn-zc-work, .xn-zc-completion, .xn-zc-subagent) > summary { transition: color var(--dur-fast) ease; }
+
+/* ── Live work: shimmer on what is happening right now ──────────────────── */
+:is(.xn-zc-live, .xn-zc-work-status[data-running], .xn-zc-reasoning[data-active] > summary .xn-zc-kind, .xn-zc-kind[data-running]) {
+  color: transparent;
+  background-image: linear-gradient(100deg,
+    var(--conversation-muted) 0 38%,
+    var(--conversation-fg) 50%,
+    var(--conversation-muted) 62% 100%);
+  background-size: 260% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  animation: xn-shimmer 2.4s linear infinite;
+}
+.xn-zc-work-status[data-running] { width: fit-content; }
+/* The pulsing orb leads the live label so attention lands on it. */
+.xn-zc-live::before, .xn-zc-work-status[data-running]::before {
+  content: "";
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  margin-right: 8px;
+  border-radius: 50%;
+  background: var(--accent-brand);
+  box-shadow: 0 0 0 0 color-mix(in oklab, var(--accent-brand) 50%, transparent);
+  vertical-align: .08em;
+  animation: xn-caret 1.4s var(--ease-in-out-quint) infinite;
+}
+.xn-live-elapsed {
+  margin-left: 8px;
+  color: var(--conversation-subtlest);
+  -webkit-text-fill-color: var(--conversation-subtlest);
+  font-size: .92em;
+  font-variant-numeric: tabular-nums;
+  animation: xn-fade-in var(--dur-enter) ease-out backwards;
+}
+.xn-live-elapsed::before { content: "· "; }
+
+/* Streaming answer: a soft ink dot breathes at the end of the newest text. */
+.xn-zc-answer[data-live] .xn-md > :is(p, h1, h2, h3, h4, h5, h6):last-child::after,
+.xn-zc-answer[data-live] .xn-md > :is(ul, ol):last-child > li:last-child::after,
+.xn-zc-answer[data-live] .xn-md > blockquote:last-child > :last-child::after {
+  content: "";
+  display: inline-block;
+  width: .52em;
+  height: .52em;
+  margin-left: .32em;
+  border-radius: 50%;
+  background: currentColor;
+  vertical-align: .04em;
+  animation: xn-caret 1.05s var(--ease-in-out-quint) infinite;
+}
+/* Newly committed blocks settle in rather than snapping. */
+.xn-zc-answer[data-live] .xn-md > * { animation: xn-fade-in 240ms ease-out backwards; }
+
+/* ── Feedback micro-interactions ────────────────────────────────────────── */
+:is(.xn-zc-action, .xn-msg__copy-button, .xn-md__code-header button) > .lucide-check { animation: xn-check-pop 360ms var(--ease-spring) backwards; color: var(--ok-fg); }
+:is(.xn-zc-action, .xn-msg__copy-button) { transition: background-color var(--dur-fast) ease, color var(--dur-fast) ease, scale var(--dur-fast) var(--ease-out-quart); }
+:is(.xn-zc-action, .xn-msg__copy-button):active:not(:disabled) { scale: .9; }
+.xn-zc-action[aria-pressed="true"] > svg { animation: xn-check-pop 360ms var(--ease-spring) backwards; }
+.xn-zc-actions { transition: opacity var(--dur-normal) ease, translate var(--dur-normal) var(--ease-out-quart); }
+:is(.xn-zc-user, .xn-zc-final):not(:hover) > .xn-zc-actions:not(:focus-within):not(.xn-zc-actions--reserved) { translate: 0 -2px; }
+
+.xn-session-back-to-bottom {
+  animation: xn-pop-up var(--dur-enter) var(--ease-out-expo) backwards;
+  transition: background-color var(--dur-fast) ease, color var(--dur-fast) ease, translate var(--dur-fast) var(--ease-out-quart), box-shadow var(--dur-normal) ease;
+}
+.xn-session-back-to-bottom:hover { translate: 0 -1px; }
+.xn-session-back-to-bottom[data-unseen] { padding-right: 18px; }
+.xn-session-back-to-bottom[data-unseen]::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  right: 8px;
+  width: 6px;
+  height: 6px;
+  margin-top: -3px;
+  border-radius: 50%;
+  background: var(--accent-brand);
+  animation: xn-caret 1.4s var(--ease-in-out-quint) infinite;
+}
+
+/* ── Composer ───────────────────────────────────────────────────────────── */
+.xn-composer__send { transition: background-color var(--dur-normal) ease, color var(--dur-normal) ease, box-shadow var(--dur-normal) ease, scale var(--dur-normal) var(--ease-spring), opacity var(--dur-fast) ease; }
+.xn-composer__send:disabled { scale: .92; }
+.xn-composer__send:active:not(:disabled) { scale: .88; }
+.xn-composer__stop { animation: xn-morph-in var(--dur-morph) var(--ease-spring) backwards; }
+.xn-composer__chip { animation: xn-pop-in var(--dur-enter) var(--ease-out-expo) backwards; }
+.xn-composer[data-drag-over="true"] { scale: 1.006; transition: scale var(--dur-normal) var(--ease-spring); }
+
+/* While the agent works, a thin light travels around the composer edge — the
+ * one place you look to know it is still alive. Colour comes from the
+ * appearance via --xn-aurora-color. */
+.xn-composer[data-running]::after {
+  content: "";
+  position: absolute;
+  z-index: 0;
+  inset: -1px;
+  padding: 1px;
+  border-radius: inherit;
+  pointer-events: none;
+  background: conic-gradient(from var(--xn-aurora-angle),
+    transparent 0 52%,
+    color-mix(in oklab, var(--xn-aurora-color, var(--fg)) 18%, transparent) 64%,
+    var(--xn-aurora-color, color-mix(in oklab, var(--fg) 70%, transparent)) 80%,
+    transparent 94%);
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask: linear-gradient(#000 0 0) content-box exclude, linear-gradient(#000 0 0);
+  animation: xn-aurora-spin 3.6s linear infinite, xn-fade-in 600ms ease-out backwards;
+}
+
+/* ── Sidebar ────────────────────────────────────────────────────────────── */
+/* A running session shows an orbiting electron instead of a generic spinner. */
+.xn-sidebar-status--busy { position: relative; display: inline-grid; place-items: center; width: 14px; height: 14px; }
+.xn-sidebar-status--busy > svg { display: none; }
+.xn-sidebar-status--busy::before {
+  content: "";
+  position: absolute;
+  inset: 1px;
+  border-radius: 50%;
+  border: 1.5px solid color-mix(in oklab, var(--accent-brand) 22%, transparent);
+  border-top-color: var(--accent-brand);
+  animation: xn-orbit-spin 900ms linear infinite;
+}
+.xn-sidebar-status--busy::after {
+  content: "";
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: var(--accent-brand);
+  animation: xn-caret 1.4s var(--ease-in-out-quint) infinite;
+}
+.xn-sidebar-attention--unread { animation: xn-dot-pop 420ms var(--ease-spring) backwards; }
+.xn-sidebar-attention--pending { animation: xn-attention 1.8s ease-in-out 3; }
+.xn-shell-nav__item { transition: background-color var(--dur-fast) ease, box-shadow var(--dur-normal) ease, translate var(--dur-fast) var(--ease-out-quart); }
+.xn-shell-nav__item:active { translate: 1px 0; }
+
+/* ── Start page: one composed entrance, top to bottom ───────────────────── */
+.xn-empty-state-shell :is(.xn-hero__brand, .xn-hero__greeting, .xn-hero__hint, .xn-hero__composer, .xn-starter-ideas, .xn-start-page) {
+  animation: xn-rise-in var(--dur-reveal) var(--ease-out-expo) backwards;
+}
+.xn-empty-state-shell .xn-hero__greeting { animation-delay: calc(var(--stagger) * 1); }
+.xn-empty-state-shell .xn-hero__hint { animation-delay: calc(var(--stagger) * 2); }
+.xn-empty-state-shell .xn-hero__composer { animation-delay: calc(var(--stagger) * 3); }
+.xn-empty-state-shell .xn-starter-ideas { animation-delay: calc(var(--stagger) * 4); }
+.xn-empty-state-shell .xn-start-page { animation-delay: calc(var(--stagger) * 5); }
+/* The card's own lift lives in starter-ideas.css; here only the arrow leans out. */
+.xn-starter-ideas > button .xn-starter-ideas__top > svg:last-child { transition: translate var(--dur-normal) var(--ease-out-quart), opacity var(--dur-normal) ease; opacity: .45; }
+.xn-starter-ideas > button:hover:not(:disabled) .xn-starter-ideas__top > svg:last-child { translate: 2px -2px; opacity: 1; }
+
+/* ── View loading: nothing for the first 180 ms (fast loads never flash),
+ *    then a centred orbit and a shimmering label. ─────────────────────── */
+.xn-view-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  min-height: min(48vh, 420px);
+  margin: 0;
+  color: transparent;
+  background-image: linear-gradient(100deg, var(--fg-muted) 0 38%, var(--fg) 50%, var(--fg-muted) 62% 100%);
+  background-size: 260% 100%;
+  background-position: 100% 0;
+  -webkit-background-clip: text;
+  background-clip: text;
+  animation: xn-fade-in 320ms 180ms ease-out backwards, xn-shimmer 2.4s 500ms linear infinite;
+}
+.xn-view-loading::before {
+  content: "";
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: 2px solid color-mix(in oklab, var(--accent-brand) 16%, transparent);
+  border-top-color: var(--accent-brand);
+  animation: xn-orbit-spin 850ms linear infinite;
+}
+
+/* ── Header lifts off the thread only once the thread scrolls under it ─── */
+@supports (animation-timeline: scroll()) {
+  .xn-conversation { timeline-scope: --xn-thread; }
+  .xn-conversation .xn-session-timeline-viewport__scroll { scroll-timeline: --xn-thread block; }
+  .xn-conversation > .xn-conv-header {
+    animation: xn-header-lift linear both;
+    animation-timeline: --xn-thread;
+    animation-range: 0 56px;
+  }
+}
+
+/* ── View transitions ───────────────────────────────────────────────────── */
+::view-transition-group(*) { animation-duration: var(--dur-morph); animation-timing-function: var(--ease-out-expo); }
+/* Theme: the new appearance grows as a circle from the control you pressed. */
+html[data-xn-vt="theme"]::view-transition-old(root) { animation: none; }
+html[data-xn-vt="theme"]::view-transition-new(root) { animation: xn-theme-reveal 560ms var(--ease-in-out-quint) both; }
+/* Palette: a quiet cross-fade, the old paper dissolving into the new ink. */
+html[data-xn-vt="palette"]::view-transition-old(root) { animation: 280ms ease-in both reverse xn-fade-in; }
+html[data-xn-vt="palette"]::view-transition-new(root) { animation: 360ms ease-out both xn-fade-in; }
+/* Sidebar: the rail and the thread sheet morph between widths. */
+html[data-xn-vt="sidebar"] .xn-shell-sidebar { view-transition-name: xn-sidebar; }
+html[data-xn-vt="sidebar"] .xn-shell-main__panel { view-transition-name: xn-sheet; }
+html[data-xn-vt="sidebar"]::view-transition-old(xn-sidebar) { animation: var(--dur-exit) ease-in both reverse xn-fade-in; }
+html[data-xn-vt="sidebar"]::view-transition-new(xn-sidebar) { animation: var(--dur-morph) var(--ease-out-expo) both xn-rise-in-sm; }
+html[data-xn-vt="sidebar"]::view-transition-old(xn-sheet),
+html[data-xn-vt="sidebar"]::view-transition-new(xn-sheet) { height: 100%; animation: none; object-fit: cover; object-position: left top; }
+
+/* ── Reduced motion: everything above is decoration, so all of it yields ── */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; animation-delay: 0ms !important; transition-duration: .01ms !important; }
+  ::view-transition-group(*), ::view-transition-old(*), ::view-transition-new(*) { animation: none !important; }
+}
+html[data-xn-motion="reduced"] *, html[data-xn-motion="reduced"] *::before, html[data-xn-motion="reduced"] *::after {
+  animation-duration: .01ms !important; animation-iteration-count: 1 !important; animation-delay: 0ms !important; transition-duration: .01ms !important;
+}

@@ -706,6 +706,8 @@ Object.assign(messages, {
   "我们应该在 {0} 中做些什么？": "What should we do in {0}?",
   "中性配色，经典工作台": "Neutral colors, classic workbench",
   "温润纸色，简洁工作台": "Warm paper, quiet workbench",
+  "减少动效": "Reduce motion",
+  "停止界面过渡、流式光标与运行中的动态效果。系统开启“减少动态效果”时始终生效。": "Stops transitions, the streaming cursor and live activity effects. Always on when the system asks for reduced motion.",
   "Claudex 结合温润配色与简洁布局，支持浅色和深色。所有外观共用相同功能与运行设置。": "Claudex combines warm colors with a quiet layout, in light and dark. Every appearance shares the same features and runtime settings.",
   "正在搜索会话正文…": "Searching conversation content…",
   "正文搜索失败：{0}": "Conversation search failed: {0}",

@@ -369,7 +369,7 @@ html[data-xn-palette="claudex"] .xn-shell-layout .xn-composer__send {
   border-radius: 999px;
   background: var(--claudex-send-bg);
   color: var(--claudex-send-fg);
-  transition: background-color 120ms var(--claudex-ease), opacity 120ms var(--claudex-ease);
+  transition: background-color 120ms var(--claudex-ease), opacity 120ms var(--claudex-ease), scale 240ms var(--ease-spring), box-shadow 200ms var(--claudex-ease);
 }
 html[data-xn-palette="claudex"] .xn-shell-layout .xn-composer__send:hover:not(:disabled) { background: var(--claudex-send-bg); opacity: .85; }
 html[data-xn-palette="claudex"] .xn-shell-layout .xn-composer__send:disabled { background: var(--claudex-send-disabled); color: var(--claudex-send-fg); opacity: 1; }
@@ -419,9 +419,11 @@ html[data-xn-palette="claudex"] .xn-shell-layout .xn-hero__greeting {
   text-align: center;
 }
 html[data-xn-palette="claudex"] .xn-shell-layout .xn-hero__hint { display: none; }
-html[data-xn-palette="claudex"] .xn-shell-layout .xn-start-page { width: min(var(--claudex-column), 100%); margin: 16px 0 0; order: 1; }
+html[data-xn-palette="claudex"] .xn-shell-layout .xn-start-page { width: min(var(--claudex-column), 100%); margin: 16px auto 0; order: 1; }
 html[data-xn-palette="claudex"] .xn-shell-layout .xn-start-page__side { display: none; }
-html[data-xn-palette="claudex"] .xn-shell-layout .xn-hero__composer { width: min(var(--claudex-column), 100%); margin: auto 0 0; order: 2; flex: 0 0 auto; }
+/* Horizontal margins stay auto: once the column is narrower than the sheet
+ * (wide windows), a zero inline margin pinned the composer to the left. */
+html[data-xn-palette="claudex"] .xn-shell-layout .xn-hero__composer { width: min(var(--claudex-column), 100%); margin: auto auto 0; order: 2; flex: 0 0 auto; }
 html[data-xn-palette="claudex"] .xn-shell-layout .xn-hero__workspace {
   display: flex;
   align-items: flex-start;
@@ -613,8 +615,8 @@ html[data-xn-palette="claudex"] body .xn-command-panel {
   background: var(--bg-popover);
   box-shadow: var(--shadow-lg);
 }
-html[data-xn-palette="claudex"] body .xn-dialog__input,
-html[data-xn-palette="claudex"] body .xn-command-panel input { border-color: var(--border-strong); border-radius: 10px; background: var(--bg-input); }
+html[data-xn-palette="claudex"] body .xn-dialog__input { border-color: var(--border-strong); border-radius: 10px; background: var(--bg-input); }
+html[data-xn-palette="claudex"] body .xn-command-panel input { border-bottom-color: var(--claudex-hairline); background: transparent; }
 html[data-xn-palette="claudex"] body .xn-command-option { border-radius: 8px; }
 html[data-xn-palette="claudex"] body .xn-select-menu { border: 1px solid var(--border); border-radius: 12px; background: var(--bg-popover); box-shadow: var(--shadow-lg); }
 html[data-xn-palette="claudex"] body .xn-select-option { min-height: 30px; border-radius: 8px; }
@@ -692,3 +694,104 @@ html[data-xn-palette="claudex"] .xn-shell-layout .xn-usage-quick__trigger > span
 }
 html[data-xn-palette="claudex"] .xn-shell-layout--sidebar-collapsed:not(.xn-shell-layout--desktop-titlebar) .xn-conv-header,
 html[data-xn-palette="claudex"] .xn-shell-layout--sidebar-collapsed:not(.xn-shell-layout--desktop-titlebar) .xn-hero__bar { padding-left: 56px; }
+
+/* ── 10. Paper, ink and light: what makes it more than a flat cream ──────
+ * A real sheet has tooth, takes highlighter, casts a soft warm shadow and is
+ * written on with ink. Each effect stays below conscious notice on its own;
+ * together they read as paper. Contrast tokens are untouched (tokens.css). */
+html[data-xn-palette="claudex"] {
+  --xn-aurora-color: color-mix(in oklab, var(--accent-brand) 90%, transparent);
+  --claudex-highlight: rgb(250 204 21 / .32);
+  --claudex-highlight-strong: rgb(245 180 0 / .5);
+  --claudex-ink-shadow: 0 1px 0 rgb(255 255 255 / .75) inset, 0 1px 2px rgb(47 40 30 / .06), 0 12px 32px -16px rgb(47 40 30 / .24);
+  --claudex-lift: 0 1px 2px rgb(47 40 30 / .07), 0 6px 18px -10px rgb(47 40 30 / .22);
+  /* Fibre noise tinted warm brown; alpha stays near 3% so text contrast is unchanged. */
+  --claudex-grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='g'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 .32 0 0 0 0 .26 0 0 0 0 .18 0 0 0 -1.4 .78'/%3E%3C/filter%3E%3Crect width='200' height='200' filter='url(%23g)' opacity='.13'/%3E%3C/svg%3E");
+  --claudex-stroke: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 220 12' fill='none' stroke='%23000' stroke-linecap='round'%3E%3Cpath d='M3 8.5C38 4 74 9.6 110 6.4S180 3.2 217 6.8' stroke-width='3.2'/%3E%3Cpath d='M28 10.4C70 8 120 9.6 168 8.2' stroke-width='1.4' opacity='.55'/%3E%3C/svg%3E");
+}
+html.dark[data-xn-palette="claudex"] {
+  --claudex-highlight: rgb(223 171 134 / .26);
+  --claudex-highlight-strong: rgb(236 192 160 / .42);
+  --claudex-ink-shadow: 0 1px 0 rgb(255 255 255 / .04) inset, 0 14px 36px -18px rgb(0 0 0 / .75);
+  --claudex-lift: 0 1px 2px rgb(0 0 0 / .4), 0 6px 18px -10px rgb(0 0 0 / .6);
+  --claudex-grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='g'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 1 0 0 0 0 .95 0 0 0 0 .86 0 0 0 -1.4 .78'/%3E%3C/filter%3E%3Crect width='200' height='200' filter='url(%23g)' opacity='.09'/%3E%3C/svg%3E");
+}
+
+/* Tooth: the desk (frame) and the sheet share one fibre so they read as one material. */
+html[data-xn-palette="claudex"] .xn-shell-layout,
+html[data-xn-palette="claudex"] .xn-shell-layout .xn-shell-sidebar,
+html[data-xn-palette="claudex"] .xn-shell-layout .xn-shell-main__panel { background-image: var(--claudex-grain); background-size: 200px 200px; }
+html[data-xn-palette="claudex"] .xn-shell-layout .xn-conversation > .xn-conv-header,
+html[data-xn-palette="claudex"] .xn-shell-layout .xn-conv-header { background: transparent; }
+html[data-xn-palette="claudex"] .xn-shell-layout .xn-session-composer-dock:not(.xn-session-composer-dock--centered) { background: linear-gradient(to bottom, transparent, color-mix(in oklab, var(--bg) 94%, transparent) 26px); }
+html[data-xn-palette="claudex"] * { scrollbar-width: thin; scrollbar-color: color-mix(in oklab, var(--fg) 18%, transparent) transparent; }
+
+/* Highlighter, not a selection box. */
+html[data-xn-palette="claudex"] ::selection { background: var(--claudex-highlight); color: inherit; }
+html[data-xn-palette="claudex"] .xn-zc-find__match { padding: 0 1px; border-radius: 3px 2px 4px 2px; background: linear-gradient(176deg, transparent 8%, var(--claudex-highlight) 8% 90%, transparent 90%); }
+html[data-xn-palette="claudex"] .xn-zc-find__match[data-xueness-find-active] { background: linear-gradient(176deg, transparent 6%, var(--claudex-highlight-strong) 6% 92%, transparent 92%); outline: 0; box-shadow: 0 1.5px 0 var(--accent-brand); }
+
+/* The composer is a card resting on the sheet; focus warms its edge. */
+html[data-xn-palette="claudex"] .xn-shell-layout .xn-composer,
+html[data-xn-palette="claudex"] .xn-shell-layout .xn-composer:hover { box-shadow: var(--claudex-ink-shadow); transition: border-color 200ms var(--claudex-ease), box-shadow 260ms var(--claudex-ease); }
+html[data-xn-palette="claudex"] .xn-shell-layout .xn-composer:focus-within {
+  border-color: color-mix(in oklab, var(--accent-brand) 34%, var(--claudex-composer-border));
+  box-shadow: 0 0 0 4px color-mix(in oklab, var(--accent-brand) 8%, transparent), var(--claudex-ink-shadow);
+}
+html[data-xn-palette="claudex"] .xn-shell-layout .xn-composer[data-running] { border-color: color-mix(in oklab, var(--accent-brand) 18%, var(--claudex-composer-border)); }
+html[data-xn-palette="claudex"] .xn-shell-layout .xn-composer__send:not(:disabled) { box-shadow: 0 1px 0 rgb(255 255 255 / .18) inset, 0 3px 8px -3px rgb(41 37 31 / .45); }
+html[data-xn-palette="claudex"] .xn-shell-layout .xn-hero__workspace { box-shadow: inset 0 1px 0 rgb(255 255 255 / .5); }
+
+/* Messages: a note slid across the desk, its corner pointing at the writer. */
+html[data-xn-palette="claudex"] .xn-shell-layout .xn-zc-user-bubble { border-radius: 18px 18px 6px 18px; box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--fg) 5%, transparent); }
+html[data-xn-palette="claudex"] .xn-shell-layout .xn-zc-answer .xn-md__heading--2 { padding-bottom: 6px; background: linear-gradient(var(--claudex-hairline), var(--claudex-hairline)) left bottom / 32px 1px no-repeat; }
+html[data-xn-palette="claudex"] .xn-shell-layout .xn-md__code-fence { box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--fg) 4%, transparent); }
+html[data-xn-palette="claudex"] .xn-shell-layout .xn-md__code-header { border-bottom: 1px solid color-mix(in oklab, var(--fg) 5%, transparent); color: var(--fg-muted); font-size: 12px; letter-spacing: .02em; }
+html[data-xn-palette="claudex"] .xn-shell-layout .xn-md__blockquote { padding: 2px 0 2px 14px; border-left: 2px solid color-mix(in oklab, var(--accent-brand) 45%, var(--claudex-hairline)); font-style: normal; }
+
+/* Work log as a notebook margin: one rule, one ink node per step.
+ * Nodes are hollow while waiting, inked when done, pulse while running. */
+html[data-xn-palette="claudex"] .xn-shell-layout .xn-zc-work-content { margin-left: 7px; padding-left: 20px; border-left: 1px solid var(--claudex-hairline); }
+html[data-xn-palette="claudex"] .xn-shell-layout .xn-zc-work-content > :is(.xn-zc-tool, .xn-zc-reasoning, .xn-zc-subagent) { position: relative; }
+html[data-xn-palette="claudex"] .xn-shell-layout .xn-zc-work-content > :is(.xn-zc-tool, .xn-zc-reasoning, .xn-zc-subagent)::before {
+  content: ""; position: absolute; left: -24.5px; top: 6px; width: 8px; height: 8px; border-radius: 50%;
+  background: var(--bg); box-shadow: inset 0 0 0 1.5px var(--claudex-faint); pointer-events: none;
+  transition: background-color 240ms var(--claudex-ease), box-shadow 240ms var(--claudex-ease);
+}
+html[data-xn-palette="claudex"] .xn-shell-layout .xn-zc-work-content > .xn-zc-tool[data-status="ok"]::before,
+html[data-xn-palette="claudex"] .xn-shell-layout .xn-zc-work-content > .xn-zc-reasoning[data-state="complete"]::before { background: var(--claudex-faint); box-shadow: none; }
+html[data-xn-palette="claudex"] .xn-shell-layout .xn-zc-work-content > .xn-zc-tool[data-status="error"]::before { background: var(--bg); box-shadow: inset 0 0 0 2px var(--error); }
+html[data-xn-palette="claudex"] .xn-shell-layout .xn-zc-work-content > .xn-zc-tool[data-status="pendingApproval"]::before { background: var(--warn); box-shadow: 0 0 0 3px color-mix(in oklab, var(--warn) 22%, transparent); }
+html[data-xn-palette="claudex"] .xn-shell-layout .xn-zc-work-content > :is(.xn-zc-tool[data-status="running"], .xn-zc-tool[data-status="queued"], .xn-zc-reasoning[data-active])::before { background: var(--accent-brand); box-shadow: none; }
+html[data-xn-palette="claudex"] .xn-shell-layout .xn-zc-work-content > :is(.xn-zc-tool[data-status="running"], .xn-zc-tool[data-status="queued"], .xn-zc-reasoning[data-active])::after {
+  content: ""; position: absolute; left: -24.5px; top: 6px; width: 8px; height: 8px; border-radius: 50%;
+  background: var(--accent-brand); pointer-events: none; animation: xn-ripple 1.6s var(--ease-out-quart) infinite;
+}
+
+/* Sidebar: the open thread is marked by a short ink stroke in the margin. */
+html[data-xn-palette="claudex"] .xn-shell-layout .xn-shell-nav__item--active::after {
+  content: ""; position: absolute; left: 3px; top: 9px; bottom: 9px; width: 2.5px; border-radius: 2px;
+  background: var(--accent-brand); pointer-events: none; animation: xn-ink-bar 340ms var(--ease-spring) backwards;
+}
+@keyframes xn-ink-bar { from { scale: 1 0; opacity: 0; } }
+html[data-xn-palette="claudex"] .xn-shell-layout .xn-sidebar-action[aria-current="page"],
+html[data-xn-palette="claudex"] .xn-shell-layout .xn-sidebar-action--active { background: var(--bg-active); }
+html[data-xn-palette="claudex"] .xn-shell-layout .xn-claudex-rail button[aria-current="page"],
+html[data-xn-palette="claudex"] .xn-shell-layout .xn-claudex-rail button[aria-pressed="true"] { box-shadow: var(--claudex-lift); }
+
+/* Approvals and questions sit on the page as cards, not as flat boxes. */
+html[data-xn-palette="claudex"] .xn-shell-layout .xn-approvals { box-shadow: var(--claudex-ink-shadow) !important; }
+html[data-xn-palette="claudex"] .xn-shell-layout :is(.xn-pending-question, .xn-mcp-elicitation) { box-shadow: var(--claudex-ink-shadow); }
+
+/* Start: the greeting is underlined by hand, the stroke drawn left to right. */
+html[data-xn-palette="claudex"] .xn-shell-layout .xn-hero__greeting { position: relative; }
+html[data-xn-palette="claudex"] .xn-shell-layout .xn-hero__greeting::after {
+  content: ""; position: absolute; left: 50%; bottom: -14px; width: min(200px, 56%); height: 12px; translate: -50% 0;
+  background: var(--accent-brand); opacity: .5; pointer-events: none;
+  -webkit-mask: var(--claudex-stroke) center / 100% 100% no-repeat; mask: var(--claudex-stroke) center / 100% 100% no-repeat;
+  animation: xn-ink-draw 1100ms 380ms var(--ease-out-expo) backwards;
+}
+@keyframes xn-ink-draw { from { clip-path: inset(0 100% 0 0); } to { clip-path: inset(0 0 0 0); } }
+html[data-xn-palette="claudex"] .xn-shell-layout .xn-start-page__action { transition: background-color 140ms var(--claudex-ease), color 140ms var(--claudex-ease), translate 180ms var(--ease-out-quart); }
+html[data-xn-palette="claudex"] .xn-shell-layout .xn-start-page__action:hover { translate: 0 -1px; }
+html[data-xn-palette="claudex"] .xn-starter-ideas > button:hover:not(:disabled) { box-shadow: var(--claudex-lift); }

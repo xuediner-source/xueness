@@ -291,7 +291,7 @@ html:not([data-xn-palette]) .xn-composer-toolbar__model-trigger:hover,
 html:not([data-xn-palette]) .xn-effort-control__trigger:hover,
 html:not([data-xn-palette]) .xn-usage-quick__trigger:hover { color: var(--fg); background: var(--bg-hover); }
 html:not([data-xn-palette]) .xn-composer-toolbar__model-trigger { font-family: var(--font-mono); font-size: 11.5px; letter-spacing: -.01em; }
-html:not([data-xn-palette]) .xn-composer__send { width: 32px; height: 32px; border: 0; border-radius: 999px; color: var(--primary-fg); background: var(--primary); box-shadow: 0 2px 8px -3px rgb(0 0 0 / .4), inset 0 1px 0 rgb(255 255 255 / .12); transition: transform var(--dur-fast) var(--xn-ease), box-shadow var(--dur-normal) var(--xn-ease), filter var(--dur-normal) ease; }
+html:not([data-xn-palette]) .xn-composer__send { width: 32px; height: 32px; border: 0; border-radius: 999px; color: var(--primary-fg); background: var(--primary); box-shadow: 0 2px 8px -3px rgb(0 0 0 / .4), inset 0 1px 0 rgb(255 255 255 / .12); transition: transform var(--dur-fast) var(--xn-ease), box-shadow var(--dur-normal) var(--xn-ease), filter var(--dur-normal) ease, scale var(--dur-normal) var(--ease-spring), background-color var(--dur-normal) ease; }
 html:not([data-xn-palette]) .xn-composer__send:hover:not(:disabled) { transform: translateY(-1px); background: var(--primary-hover); box-shadow: 0 6px 14px -6px rgb(0 0 0 / .45), inset 0 1px 0 rgb(255 255 255 / .14); }
 html:not([data-xn-palette]) .xn-composer__send:active:not(:disabled) { transform: translateY(0); }
 html:not([data-xn-palette]) .xn-composer__send:disabled { color: var(--fg-muted); background: var(--bg-subtle); box-shadow: inset 0 0 0 1px var(--border); opacity: 1; }
@@ -391,8 +391,56 @@ html:not([data-xn-palette]) .xn-plugin-card:hover { background: var(--xn-row); }
 html:not([data-xn-palette]) .xn-plugin-card__state { border-radius: 999px; }
 
 /* Command palette. */
-html:not([data-xn-palette]) .xn-command-palette { border: 1px solid var(--border); border-radius: 18px; background: var(--bg-popover); box-shadow: 0 0 0 1px rgb(0 0 0 / .04), 0 30px 80px -24px rgb(0 0 0 / .45); overflow: hidden; }
-html:not([data-xn-palette]) .xn-command-palette input { border: 0; border-bottom: 1px solid var(--border); border-radius: 0; background: transparent; box-shadow: none; font-size: 15px; }
+html:not([data-xn-palette]) .xn-command-panel { border-color: var(--border); border-radius: 18px; }
+/* The search line is the whole header: no focus ring box around it. */
+html:not([data-xn-palette]) .xn-command-panel input:focus-visible { box-shadow: none; border-color: transparent; border-bottom-color: color-mix(in oklab, var(--fg) 22%, transparent); }
+html:not([data-xn-palette]) .xn-command-option[data-active="true"] { box-shadow: inset 2px 0 0 var(--fg); }
+
+/* ---------- Superposition in motion ----------
+ * The motif is a state that is not yet decided. While the agent works, its
+ * steps are probability nodes that pulse; once observed they collapse into
+ * solid ink. The composer's edge carries one travelling particle. */
+html:not([data-xn-palette]) { --xn-aurora-color: color-mix(in oklab, var(--fg) 72%, transparent); }
+html.dark:not([data-xn-palette]) { --xn-aurora-color: color-mix(in oklab, var(--fg) 80%, transparent); }
+
+/* The header hairline is earned by scrolling (motion.css draws it). */
+html:not([data-xn-palette]) .xn-conv-header { border-bottom-color: transparent; }
+@supports not (animation-timeline: scroll()) {
+  html:not([data-xn-palette]) .xn-conv-header { border-bottom-color: color-mix(in oklab, var(--fg) 6%, transparent); }
+}
+
+/* Work-log nodes: observed (ink), unobserved (hollow), superposed (pulsing). */
+html:not([data-xn-palette]) .xn-zc-work-content > :is(.xn-zc-tool, .xn-zc-reasoning)::before { transition: background-color 260ms var(--xn-ease), box-shadow 260ms var(--xn-ease), scale 260ms var(--ease-spring); }
+html:not([data-xn-palette]) .xn-zc-work-content > .xn-zc-tool[data-status="ok"]::before,
+html:not([data-xn-palette]) .xn-zc-work-content > .xn-zc-reasoning[data-state="complete"]::before { background: var(--fg-muted); box-shadow: none; scale: .8; }
+html:not([data-xn-palette]) .xn-zc-work-content > .xn-zc-tool[data-status="pendingApproval"]::before { background: var(--warn); box-shadow: 0 0 0 3px color-mix(in oklab, var(--warn) 22%, transparent); }
+html:not([data-xn-palette]) .xn-zc-work-content > :is(.xn-zc-tool[data-status="running"], .xn-zc-tool[data-status="queued"], .xn-zc-reasoning[data-active])::before { background: var(--fg); box-shadow: none; }
+html:not([data-xn-palette]) .xn-zc-work-content > :is(.xn-zc-tool[data-status="running"], .xn-zc-tool[data-status="queued"], .xn-zc-reasoning[data-active])::after {
+  content: ""; position: absolute; left: -24.75px; top: 6px; width: 8px; height: 8px; border-radius: 50%;
+  border: 1px dashed var(--fg); box-sizing: border-box; pointer-events: none; animation: xn-ripple 1.8s var(--ease-out-quart) infinite;
+}
+/* The trajectory itself is drawn while work is still in flight. */
+html:not([data-xn-palette]) .xn-zc-work:not(details) > .xn-zc-work-content { border-left-color: color-mix(in oklab, var(--fg) 30%, transparent); }
+
+/* User message: ink on a lifted slip, the signature folded corner kept. */
+html:not([data-xn-palette]) .xn-zc-user-bubble { border-color: transparent; box-shadow: 0 0 0 1px var(--border), 0 1px 2px rgb(0 0 0 / .04), 0 6px 16px -12px rgb(0 0 0 / .18); }
+html.dark:not([data-xn-palette]) .xn-zc-user-bubble { box-shadow: 0 0 0 1px var(--border), 0 8px 18px -12px rgb(0 0 0 / .7); }
+
+/* Live label and composer while running. */
+html:not([data-xn-palette]) .xn-composer[data-running] { border-color: color-mix(in oklab, var(--fg) 22%, transparent); }
+html:not([data-xn-palette]) .xn-zc-work-status[data-running] { border-style: dashed; border-color: color-mix(in oklab, var(--fg) 26%, transparent); }
+
+/* Active sidebar thread: the lifted card gains a probability tick on its edge. */
+html:not([data-xn-palette]) .xn-shell-layout .xn-shell-nav__item--active::after {
+  content: ""; position: absolute; left: -5px; top: 50%; width: 3px; height: 14px; margin-top: -7px; border-radius: 2px;
+  background: var(--fg); pointer-events: none; animation: xn-tick-in 320ms var(--ease-spring) backwards;
+}
+@keyframes xn-tick-in { from { scale: 1 0; opacity: 0; } }
+html:not([data-xn-palette]) .xn-sidebar-attention--unread { background: var(--fg); }
+
+/* Starter cards: a dashed invitation that resolves to solid on hover. */
+html:not([data-xn-palette]) .xn-starter-ideas > button { border-style: dashed; border-color: var(--xn-dash); background: transparent; }
+html:not([data-xn-palette]) .xn-starter-ideas > button:hover:not(:disabled) { border-style: solid; border-color: var(--border-strong); background: var(--bg-panel); box-shadow: var(--xn-lift); }
 
 @media (prefers-reduced-motion: reduce) {
   html:not([data-xn-palette]) .xn-hero__brand::before { animation: none; }

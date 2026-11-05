@@ -14,6 +14,8 @@ import "./styles/conversation-refresh.css";
 import "./styles/composer-workspace.css";
 import "./styles/composer-toolbar.css";
 import "./styles/parity-final.css";
+// Shared motion layer: time and easing for every appearance (colour stays in the appearance files).
+import "./styles/motion.css";
 
 const ConversationSharePage = lazy(() => import("./plugins/sessions/ConversationSharing").then(module => ({ default: module.ConversationSharePage })));
 

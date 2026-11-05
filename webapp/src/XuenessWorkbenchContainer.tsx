@@ -144,7 +144,7 @@ import type { CapabilitySectionProps } from "./XuenessCapabilitiesPanel";
 const CapabilitiesPanel = lazy(() => import('./XuenessCapabilitiesPanel').then(module => ({ default: module.CapabilitiesPanel })));
 const SkillsSection = lazy(() => import('./plugins/skills/SkillsSection').then(module => ({ default: module.SkillsSection })));
 import { shouldDismissModalOnEscape, useModalFocusScope } from "./plugins/shared";
-import { applyDocumentTheme, applyDocumentColorPalette, normalizeColorPalette } from "./plugins/settings/themeBoot";
+import { applyDocumentTheme, applyDocumentColorPalette, applyDocumentMotion, normalizeColorPalette } from "./plugins/settings/themeBoot";
 import { FeatureUnavailable, XuenessPluginManager, XuenessPluginSettingsPanel } from "./XuenessPluginManager";
 import {
   CAPABILITY_PLUGIN_BY_KIND,
@@ -1201,7 +1201,8 @@ export function XuenessWorkbenchContainer() {
     document.documentElement.style.setProperty("--xn-ui-font-size", `${Math.min(24, Math.max(12, Number(settingsValues.fontSize) || 14))}px`);
     document.documentElement.dataset.xnTabSize = String([2, 4, 8].includes(Number(settingsValues.tabSize)) ? Number(settingsValues.tabSize) : 2);
     document.documentElement.dataset.xnWordWrap = settingsValues.wordWrap === false ? "off" : "on";
-  }, [settingsValues.fontSize, settingsValues.tabSize, settingsValues.wordWrap]);
+    if (settingsHaveLoaded.current && !settingsLoading) applyDocumentMotion(settingsValues.reduceMotion === true);
+  }, [settingsValues.fontSize, settingsValues.tabSize, settingsValues.wordWrap, settingsValues.reduceMotion, settingsLoading]);
 
   useEffect(() => {
     if (!settingsHaveLoaded.current || settingsLoading) return;

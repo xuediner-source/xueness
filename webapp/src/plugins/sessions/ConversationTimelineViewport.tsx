@@ -449,7 +449,7 @@ export function ConversationTimelineViewport({ children, autoScroll, rowsVersion
       {awayFromTail && <button
         type="button"
         className="xn-session-back-to-bottom"
-        data-testid="session-back-to-bottom"
+        data-testid="session-back-to-bottom" data-unseen={unseenOutput ? "true" : undefined}
         aria-label={tr("回到底部")}
         title={tr("回到底部")}
         onClick={backToBottom}

@@ -284,6 +284,8 @@ export function SettingsSections({
           description={tr("选择经典或纸感工作台样式。两种外观共用功能、模型配置和运行设置。")}
           control={<AppearancePicker value={values.colorPalette} disabled={!onUpdateSetting || saving} onChange={(next) => { void update("colorPalette", next); }} />}
         />
+        <SettingsRow label={tr("减少动效")} description={tr("停止界面过渡、流式光标与运行中的动态效果。系统开启“减少动态效果”时始终生效。")}
+          control={<SettingsToggle label={tr("减少动效")} checked={values.reduceMotion === true} disabled={!onUpdateSetting || saving} onChange={(next) => { void update("reduceMotion", next); }} />} />
         <SettingsRow label={tr("应用缩放")} description={tr("只缩放工作台，不改变系统显示设置。")}
           control={<SettingsFontSizeInput label={tr("应用缩放百分比")} unit="%" value={Math.round(Number(values.appZoom ?? 1) * 100)} disabled={!onUpdateSetting || saving} min={75} max={150} onCommit={next => update("appZoom", next / 100)} />} />
         <SettingsRow

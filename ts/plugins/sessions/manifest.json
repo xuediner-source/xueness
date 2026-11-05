@@ -270,6 +270,7 @@
     "plugins/sessions/DisconnectedRemoteStop.tsx",
     "plugins/sessions/StarterIdeas.tsx",
     "plugins/sessions/sidebarPreference.ts",
+    "plugins/sessions/SessionMotion.tsx",
     "plugins/sessions/statusPresentation.ts",
     "plugins/sessions/SessionRecoveryNotice.tsx",
     "plugins/sessions/ComposerMaterialManifest.tsx",

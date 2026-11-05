@@ -44,6 +44,7 @@ import { NativeToolCallCard } from './NativeToolCallCard';
 import { nativeToolPayload } from './nativeToolPayload';
 import { toolActivityRows } from './toolActivity';
 import { TOOL_DISPLAY_STATUS_LABELS } from './toolDisplayStatus';
+import { LiveElapsed } from './SessionMotion';
 
 export function evaluateUserMessageEditKey(
   event: {
@@ -375,7 +376,7 @@ function AssistantText({ row, summary, protocol }: { row: Assistant; summary?: s
   const target = assistantTextForDisplay(visibleAssistantText(row), row.streaming, summary, protocol);
   const { text: displayed, revealing } = useStreamingReveal(target, row.streaming === true);
   const live = row.streaming === true || revealing;
-  return displayed.trim() ? <div className="xn-zc-answer" data-role="assistant" data-testid={`timeline-item-assistant-${row.seq}`} {...rowData(row)}>
+  return displayed.trim() ? <div className="xn-zc-answer" data-role="assistant" data-live={live || undefined} data-testid={`timeline-item-assistant-${row.seq}`} {...rowData(row)}>
     <MarkdownRenderOptionsContext.Provider value={live ? streamingMarkdown : settledMarkdown}><SimpleMarkdown text={displayed} /></MarkdownRenderOptionsContext.Provider>
   </div> : null;
 }
@@ -545,7 +546,7 @@ function TurnView({ turn, latest, props, activeFindRowKey, compactionMarker }: {
     <ConversationMarkers facts={props.timelineMarkers} rows={turn.rows} placement="before_user" enabled={effectivePluginIds?.has('sessions') === true} />
     {turn.rows.filter((row): row is User => row.kind === 'user').map(row => <div key={`user:${row.messageId ?? row.messageIndex ?? row.seq}`} {...rowData(row)}><UserMessage editSessionId={props.messageEditSessionId} previewTransport={props.messageEditPreviewTransport} attachmentTransport={props.messageEditTransport} row={row} onEdit={onEdit} enabled={effectivePluginIds?.has('sessions') === true} isSessionsEffective={props.isSessionsEffective} /></div>)}
     {userReferences.map(row => <ReferenceRowView key={`${row.kind}:${row.seq}`} row={row} sessionId={props.sessionId} effectivePluginIds={effectivePluginIds} />)}
-    {(work.length > 0 || facts.length > 0) && (running || !final ? <div className="xn-zc-work"><div className="xn-zc-work-status" role="status">{workLabel}{facts.length > 1 && <span> · {facts.length} {getLocale() === 'en' ? 'segments' : '段工作'}</span>}</div><div className="xn-zc-work-content">{workRows}</div></div>
+    {(work.length > 0 || facts.length > 0) && (running || !final ? <div className="xn-zc-work"><div className="xn-zc-work-status" role="status" data-running={running && !workPending || undefined}>{workLabel}{facts.length > 1 && <span> · {facts.length} {getLocale() === 'en' ? 'segments' : '段工作'}</span>}{running && !workPending && <LiveElapsed since={firstTime} />}</div><div className="xn-zc-work-content">{workRows}</div></div>
       : <details className="xn-zc-work" open={workOpen} onToggle={workDisclosure.onToggle}><summary className="xn-zc-work-status"><span>{workLabel}{facts.length > 1 && ` · ${facts.length} ${getLocale() === 'en' ? 'segments' : '段工作'}`}</span><ChevronRight size={16} className="xn-zc-chevron" /></summary>
         {workOpen && <div className="xn-zc-work-content">{workRows}</div>}</details>)}
     <ConversationMarkers facts={props.timelineMarkers} rows={turn.rows} placement="work_tail" enabled={effectivePluginIds?.has('sessions') === true} />
@@ -567,7 +568,7 @@ function TurnView({ turn, latest, props, activeFindRowKey, compactionMarker }: {
     {assistantReferences.map(row => <ReferenceRowView key={`${row.kind}:${row.seq}`} row={row} sessionId={props.sessionId} effectivePluginIds={effectivePluginIds} />)}
     {completion && <CompletionCheck row={completion} answer={answer} protocol={jsonToolProtocol} findActive={activeFindRowKey === conversationFindRowKey(completion)} />}
     {turn.rows.filter(row => row.kind === 'pending_question').map(row => row.kind === 'pending_question' ? <p key={`question:${row.seq}`} {...rowData(row)} role="status" className="xn-zc-question">{tr('等待回答')} · {row.question}</p> : null)}
-    {running && !streamingRow && !final && <p className="xn-zc-live" role="status" data-testid="timeline-stream-loading">{liveLabel}</p>}
+    {running && !streamingRow && !final && <p className="xn-zc-live" role="status" data-testid="timeline-stream-loading">{liveLabel}{work.length === 0 && <LiveElapsed since={firstTime} />}</p>}
   </section>;
 }
 
