@@ -146,6 +146,10 @@ export async function runDesktopHost(options: DesktopHostOptions): Promise<numbe
 }
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  // Source checkouts may run this host on Electron's own Node. Children must
+  // not inherit that switch, or Electron apps launched by tools start as Node;
+  // workers that need it set it explicitly.
+  delete process.env.ELECTRON_RUN_AS_NODE;
   runDesktopHost({ argv: process.argv.slice(2), forwardSignals: true }).then((code) => process.exit(code), (error: unknown) => {
     process.stderr.write(`desktop host: ${error instanceof Error ? error.message : String(error)}\n`);
     process.exit(1);

@@ -11,6 +11,11 @@ const LABELS = Object.freeze({
     backendStoppedMessage: '请重新打开应用以恢复会话。已保存的数据不会删除。',
     updateNotReady: '更新服务尚未准备完成。', updatePermission: '无法确认桌面更新权限。',
     updateBusy: '请先结束当前任务，再重启更新。',
+    nodeExplicitUnusable: 'XUENESS_FRONT_DOOR_NODE 指向的程序无法运行：{0}\n请把它改成 Node.js {1} 或更新版本的 node 可执行文件，或删除这个环境变量以使用内置运行时。',
+    nodeExplicitTooOld: 'XUENESS_FRONT_DOOR_NODE 指向的 Node 版本是 {0}，从源码运行需要 {1} 或更新版本。请更换路径，或删除这个环境变量以使用内置运行时。',
+    nodeMissing: '从源码运行需要 Node.js {1} 或更新版本，但没有找到可用的 Node{0}。请安装 Node.js 24 LTS，或把 XUENESS_FRONT_DOOR_NODE 设为 node 可执行文件的路径。',
+    backendLaunchFailed: '无法运行后端程序（{0}）。',
+    backendStartupLog: '后端输出：',
   }),
   en: Object.freeze({
     about: 'About Xueness', services: 'Services', hideApp: 'Hide Xueness', hideOthers: 'Hide Others', showAll: 'Show All',
@@ -24,11 +29,32 @@ const LABELS = Object.freeze({
     backendStoppedMessage: 'Reopen the app to restore your session. Saved data has not been deleted.',
     updateNotReady: 'The update service is not ready yet.', updatePermission: 'Could not verify desktop update permission.',
     updateBusy: 'Finish the current task before restarting to install the update.',
+    nodeExplicitUnusable: 'XUENESS_FRONT_DOOR_NODE points to a program that cannot run: {0}\nSet it to a Node.js {1}+ executable, or remove the variable to use the built-in runtime.',
+    nodeExplicitTooOld: 'XUENESS_FRONT_DOOR_NODE points to Node {0}; running from source needs {1} or newer. Change the path, or remove the variable to use the built-in runtime.',
+    nodeMissing: 'Running from source needs Node.js {1} or newer, but no usable Node was found{0}. Install Node.js 24 LTS, or set XUENESS_FRONT_DOOR_NODE to a node executable.',
+    backendLaunchFailed: 'The backend program could not be run ({0}).',
+    backendStartupLog: 'Backend output:',
   }),
 });
 
 function getNativeLabels(locale = 'zh') {
   return LABELS[locale] || LABELS.zh;
+}
+
+const fill = (template, ...values) => values.reduce((text, value, index) => text.replaceAll(`{${index}}`, String(value ?? '')), template);
+
+/** The startup error dialog body: the general message plus what actually failed. */
+function describeStartupFailure(error, labels) {
+  if (error?.code === 'XUENESS_NODE_RUNTIME') {
+    const { executable, version, minimum } = error.detail ?? {};
+    if (error.reason === 'explicit-unusable') return fill(labels.nodeExplicitUnusable, executable, minimum);
+    if (error.reason === 'explicit-too-old') return fill(labels.nodeExplicitTooOld, version, minimum);
+    return fill(labels.nodeMissing, version ? ` (PATH: ${version})` : '', minimum);
+  }
+  const parts = [labels.startupErrorMessage];
+  if (error?.spawnError) parts.push(fill(labels.backendLaunchFailed, error.spawnError));
+  if (error?.startupLog) parts.push(`${labels.backendStartupLog}\n${error.startupLog.split(/\r?\n/).slice(-12).join('\n')}`);
+  return parts.join('\n\n');
 }
 
 function buildApplicationMenu(locale, platform) {
@@ -69,4 +95,4 @@ function buildApplicationMenu(locale, platform) {
   ];
 }
 
-module.exports = { getNativeLabels, buildApplicationMenu };
+module.exports = { getNativeLabels, buildApplicationMenu, describeStartupFailure };

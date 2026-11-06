@@ -83,6 +83,8 @@ npm --prefix ts run test:packaged
 python desktop/scripts/checksums.py
 ```
 
+不打包、直接从源码启动（`npm --prefix desktop start`）时，后端运行时按顺序选择：设置了 `XUENESS_FRONT_DOOR_NODE` 就使用它（不可用或低于 24.11 时直接报出原因，不会悄悄换掉）；否则使用 PATH 上 24.11+ 的 `node`；都没有时使用 Electron 自带的 Node（`ELECTRON_RUN_AS_NODE`），因此源码目录无需另装系统 Node。宿主启动后立即清除该变量，代理执行的命令不会继承它。后端在报告 `ready` 之前的错误输出（尾部 4KB）会显示在启动失败对话框里；`ready` 之后的请求与模型输出仍不进入桌面日志。
+
 `dist:win` / `dist:mac` 会先构建 `ts/dist/`，把随包 Node、JS 和生产依赖一并复制到 `resources/backend-ts/`。构建产物在 `desktop/release/`，不提交到源码。后端分发包含 Node 许可证及适用依赖声明。安装包内置 IANA 时区数据，自动化计划不依赖 Windows 系统提供时区数据库；打包检查在关闭系统时区搜索路径后验证上海时区的定时计划。
 
 `.github/workflows/desktop-build.yml` 提供手动触发的 Windows x64、Intel Mac x64 与 Apple Silicon arm64 构建、TS 检查、打包应用检查和校验和产物。源码上传和 CI 构建不自动创建 GitHub Release 或部署服务。

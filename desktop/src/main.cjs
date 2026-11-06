@@ -10,7 +10,7 @@ const { UpdateCoordinator } = require('./update-coordinator.cjs');
 const { createElectronAssetRequest } = require('./electron-net-asset.cjs');
 const { createPermissionsHandler } = require('./permissions.cjs');
 const { createDesktopNotifications } = require('./notifications.cjs');
-const { buildApplicationMenu, getNativeLabels } = require('./native-labels.cjs');
+const { buildApplicationMenu, getNativeLabels, describeStartupFailure } = require('./native-labels.cjs');
 const { createDesktopStateStore } = require('./desktop-state-store.cjs');
 const { installProjectExplorer } = require('./project-explorer.cjs');
 const { autoUpdater } = require('electron-updater');
@@ -53,12 +53,13 @@ else {
     showMainWindow();
   });
   app.whenReady().then(start).catch(async error => {
+    const labels = getNativeLabels(desktopLocale);
     if (process.env.XUENESS_DESKTOP_SMOKE_FILE) {
-      writeFileSync(process.env.XUENESS_DESKTOP_SMOKE_FILE, JSON.stringify({ error: 'desktop startup failed', reason: error.message }));
+      writeFileSync(process.env.XUENESS_DESKTOP_SMOKE_FILE, JSON.stringify({ error: 'desktop startup failed', reason: error.message,
+        detail: describeStartupFailure(error, getNativeLabels('en')) }));
       if (backend) await backend.stop(); app.exit(1); return;
     }
-    const labels = getNativeLabels(desktopLocale);
-    dialog.showErrorBox(labels.startupErrorTitle, labels.startupErrorMessage);
+    dialog.showErrorBox(labels.startupErrorTitle, describeStartupFailure(error, labels));
     app.quit();
   });
 }
@@ -151,9 +152,10 @@ async function start() {
   installDesktopStateStorage(createDesktopStateStore(join(data, 'desktop-state-v1.json')));
   installProjectExplorer({ ipcMain, getWindow: () => window, getBackend: () => backend, shell });
   const assets = app.isPackaged ? join(process.resourcesPath, 'webapp') : join(root, 'webapp/dist');
-  const command = frontDoorCommand({ env: process.env, packaged: app.isPackaged, root, resourcesPath: process.resourcesPath, assets });
+  const command = frontDoorCommand({ env: process.env, packaged: app.isPackaged, root, resourcesPath: process.resourcesPath, assets,
+    electronExecPath: process.execPath, electronNodeVersion: process.versions.node });
   if (app.isPackaged && !existsSync(command.args[0])) throw new Error('Missing bundled backend');
-  backend = new Backend({ executable: command.executable, args: command.args,
+  backend = new Backend({ executable: command.executable, args: command.args, env: command.env,
     cwd: app.isPackaged ? data : root, data, node: process.execPath,
     playwright: app.isPackaged ? join(process.resourcesPath, 'browser-runtime/node_modules/playwright/index.mjs') : join(root, 'webapp/node_modules/playwright/index.mjs'),
     assets });
@@ -385,6 +387,10 @@ async function start() {
       }
       appearanceChecks.push({ ...appearance, nativeBackground: window.getBackgroundColor?.() || null });
       if (process.env.XUENESS_DESKTOP_SMOKE_SCREENSHOTS) {
+        // Appearance changes animate (html[data-xn-vt] while a view transition
+        // runs); capture the settled page, not the cross-fade.
+        await window.webContents.executeJavaScript(`new Promise(done => { const start = Date.now();
+          const tick = () => !document.documentElement.dataset.xnVt || Date.now() - start > 3000 ? setTimeout(done, 120) : setTimeout(tick, 30); tick(); })`);
         const captured = await window.webContents.capturePage();
         writeFileSync(join(process.env.XUENESS_DESKTOP_SMOKE_SCREENSHOTS, `${palette}-${theme}.png`), captured.toPNG());
       }

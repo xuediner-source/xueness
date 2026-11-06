@@ -62,27 +62,37 @@ function killProcessGroup(pid) {
   catch (error) { if (error.code !== 'ESRCH') throw error; }
 }
 
+const STARTUP_LOG_LIMIT = 4000;
+
 class Backend extends EventEmitter {
-  constructor({ executable, args, cwd, data, assets, node, playwright }) {
-    super(); this.config = { executable, args, cwd, data, assets, node, playwright };
+  constructor({ executable, args, env = {}, cwd, data, assets, node, playwright }) {
+    super(); this.config = { executable, args, env, cwd, data, assets, node, playwright };
     this.token = randomBytes(32).toString('hex'); this.stopping = false;
   }
   start() {
-    const { executable, args, cwd, data, assets, node, playwright } = this.config;
+    const { executable, args, env, cwd, data, assets, node, playwright } = this.config;
     this.child = spawn(executable, [...args, '--data', data, '--assets', assets], {
       cwd, stdio: ['pipe', 'pipe', 'pipe'], detached: process.platform !== 'win32', windowsHide: true,
-      env: { ...process.env, XUENESS_DESKTOP_TOKEN: this.token, XUENESS_DESKTOP_HOST: '1', PYTHONUNBUFFERED: '1',
+      env: { ...process.env, ...env, XUENESS_DESKTOP_TOKEN: this.token, XUENESS_DESKTOP_HOST: '1', PYTHONUNBUFFERED: '1',
         XUENESS_DESKTOP_NODE: node, XUENESS_DESKTOP_PLAYWRIGHT: playwright },
     });
     this.child.stdin.on('error', () => {});
-    this.child.stderr.on('data', () => {}); // Request/model output never enters desktop logs.
+    // Before `ready` no request has run, so the tail of startup stderr is kept
+    // to explain a failed start. After `ready` request/model output never
+    // enters desktop logs.
+    let settled = false, startupLog = '';
+    this.child.stderr.on('data', chunk => { if (!settled) startupLog = (startupLog + chunk.toString('utf8')).slice(-STARTUP_LOG_LIMIT); });
     return new Promise((resolve, reject) => {
-      let settled = false;
-      const fail = () => {
-        if (!settled) { settled = true; clearTimeout(timer); reject(new Error('Xueness backend did not start')); }
-        else if (!this.stopping) this.emit('failure');
+      const fail = cause => {
+        if (!settled) {
+          settled = true; clearTimeout(timer);
+          reject(Object.assign(new Error('Xueness backend did not start'), {
+            startupLog: startupLog.trim(), spawnError: cause instanceof Error ? cause.code ?? cause.message : undefined,
+            exitCode: typeof cause === 'number' ? cause : undefined, timedOut: cause === 'timeout',
+          }));
+        } else if (!this.stopping) this.emit('failure');
       };
-      const timer = setTimeout(() => { fail(); void this.stop(); }, 45000);
+      const timer = setTimeout(() => { fail('timeout'); void this.stop(); }, 45000);
       this.child.once('error', fail); this.child.once('exit', fail);
       const lines = createInterface({ input: this.child.stdout });
       lines.on('line', line => {
