@@ -1,3 +1,4 @@
+@layer plugins {
 .xn-appearance-picker { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; width: min(520px, 100%); }
 .xn-appearance-choice { position: relative; display: flex; flex-direction: column; gap: 0; min-width: 0; padding: 6px; border: 1px solid var(--border-strong); border-radius: 14px; background: var(--bg-card); cursor: pointer; transition: border-color var(--dur-normal) ease, box-shadow var(--dur-normal) ease, translate var(--dur-normal) var(--ease-out-quart, ease); }
 .xn-appearance-choice:hover:not(:has(input:disabled)) { translate: 0 -1px; border-color: color-mix(in oklab, var(--fg) 26%, transparent); box-shadow: 0 8px 24px -16px rgb(0 0 0 / .35); }
@@ -44,3 +45,4 @@
 .xn-appearance-preview__composer > i { width: 10px; height: 10px; border-radius: 50%; background: var(--p-ink); }
 .xn-appearance-choice[data-selected="true"] .xn-appearance-preview__composer > i { background: var(--p-accent); }
 @media (max-width: 520px) { .xn-appearance-picker { grid-template-columns: 1fr; } }
+}

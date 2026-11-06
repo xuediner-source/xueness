@@ -7,7 +7,7 @@
  * default. Optional palettes (e.g. Claudex 外观) override colors via
  * html[data-xn-palette="…"] without changing the default.
  */
-
+@layer tokens {
 :root {
   --font-sans: "Segoe UI Variable", "Segoe UI", "Microsoft YaHei UI", "Microsoft YaHei", -apple-system, BlinkMacSystemFont, "PingFang SC", "Hiragino Sans GB", "Noto Sans CJK SC", "Noto Sans", Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji";
   /* Windows 补 Cascadia Mono；中文字符回退到各平台 CJK 字体，避免 Windows 代码块里的中文落到宋体。 */
@@ -462,4 +462,4 @@
   --active-fg: var(--fg);
   --assistant-msg-bg: var(--bg-card);
 }
-
+}

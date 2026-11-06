@@ -1,4 +1,5 @@
 /* Sessions start page: concise entry points followed by plain recent lists. */
+@layer components {
 .xn-empty-state-shell { display: flex; flex: 1 1 auto; min-width: 0; min-height: 0; width: 100%; overflow: hidden; }
 .xn-empty-state-shell > .xn-session-timeline-viewport { width: 100%; }
 .xn-empty-state-content { position: relative; display: flex; width: min(760px, 100%); min-height: 0; flex-direction: column; align-items: center; justify-content: center; gap: 12px; padding: 76px 24px 24px; box-sizing: border-box; }
@@ -230,4 +231,5 @@
   .xn-start-page__side[data-group-count="2"] {
     grid-template-columns: minmax(0, 1fr);
   }
+}
 }

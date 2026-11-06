@@ -1,5 +1,5 @@
-@import '@xterm/xterm/css/xterm.css';
-
+@import '@xterm/xterm/css/xterm.css' layer(components);
+@layer components {
 .xn-operations { width:100%; box-sizing:border-box; padding:32px 36px; max-width:1180px; margin:0 auto; display:flex; flex-direction:column; gap:22px; color:var(--fg); font-size:13px; }
 .xn-operations * { box-sizing:border-box; }
 :where(.xn-operations) h2,:where(.xn-operations) h3,:where(.xn-operations) h4,:where(.xn-operations) p { margin:0; }
@@ -186,3 +186,4 @@
 .xn-expert-phase { display:flex; align-items:center; gap:8px; border:1px solid var(--border); border-radius:8px; padding:5px 10px; font-size:12px; color:var(--fg-subtle); }
 .xn-expert-phase-detail summary { font-size:12px; color:var(--fg-muted); }
 .xn-expert-run pre { max-height:220px; }
+}

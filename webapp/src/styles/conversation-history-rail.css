@@ -1,3 +1,4 @@
+@layer components {
 .xn-timeline-history-layout {
   --xn-history-rail-column: 36px;
   display: grid;
@@ -192,4 +193,5 @@
   .xn-conversation-history-rail__tick {
     transition: none;
   }
+}
 }

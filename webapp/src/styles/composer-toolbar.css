@@ -1,4 +1,5 @@
 /* Conversation-start composer actions and toolbar. All colours inherit app theme tokens. */
+@layer components {
 .xn-composer {
   overflow: visible;
 }
@@ -279,7 +280,7 @@
 }
 
 @media (min-width: 681px) {
-  /* conversation-refresh.css styles the shared row after this component's
+  /* conversation.css styles the shared row after this component's
      base rule. Keep the toolbar in the space between the action chips and
      Send so its model controls can align against the right edge. */
   .xn-shell-layout .xn-composer__tools > .xn-composer__settings {
@@ -1638,4 +1639,5 @@
 @media (prefers-reduced-motion: reduce) {
   .xn-reasoning-slider__energy,
   .xn-reasoning-slider__star { animation: none; }
+}
 }

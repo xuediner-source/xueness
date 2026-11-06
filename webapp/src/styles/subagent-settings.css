@@ -1,3 +1,5 @@
+@layer components {
+.xn-subagent-settings__row-actions input.xn-settings-switch,.xn-subagent-settings__enabled input.xn-settings-switch { width:32px!important; height:18px; }
 .xn-subagent-settings { gap: 20px; }
 .xn-subagent-settings > .xn-operation-heading { margin-bottom: 2px; }
 .xn-subagent-settings__experiment { display:flex; align-items:center; justify-content:space-between; gap:18px; padding:12px 14px; border:1px solid var(--border); border-radius:10px; background:var(--bg-card); }
@@ -86,4 +88,5 @@
   .xn-subagent-settings__top-grid > :nth-child(3) { grid-column:auto; }
   .xn-subagent-settings__tool-grid { grid-template-columns:1fr 1fr; }
   .xn-subagent-settings__form { padding:12px; }
+}
 }

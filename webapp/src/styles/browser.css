@@ -1,3 +1,9 @@
+@layer components {
+.xn-browser-settings__switch { border:0!important; }
+.xn-browser-settings__row-copy p,.xn-browser-settings__group-heading p,.xn-browser-settings__group-heading h4 { color:var(--fg-subtle); }
+.xn-browser-settings__row-copy h5,.xn-browser-settings__row-copy p,.xn-browser-settings__group-heading p { font-size:var(--xn-ui-font-size,14px); }
+.xn-browser-settings__row-copy p,.xn-browser-settings__group-heading p { line-height:1.7142857; }
+
 .xn-browser-settings {
   display: flex;
   flex-direction: column;
@@ -263,4 +269,5 @@
   .xn-browser-settings__switch {
     align-self: flex-start !important;
   }
+}
 }

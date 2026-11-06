@@ -1,3 +1,4 @@
+@layer plugins {
 .xn-pane-layout {
   display: flex;
   flex: 1 1 auto;
@@ -107,4 +108,5 @@
   margin: 0 8px 8px;
   color: var(--error-fg);
   font-size: 12px;
+}
 }

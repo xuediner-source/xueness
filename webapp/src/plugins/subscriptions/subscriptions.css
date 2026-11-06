@@ -1,3 +1,4 @@
+@layer plugins {
 .xn-subscriptions { display: grid; gap: 16px; min-width: 0; container-type: inline-size; color: var(--fg); }
 .xn-subscriptions button, .xn-subscriptions a { display: inline-flex; align-items: center; justify-content: center; gap: 7px; font: inherit; }
 .xn-subscriptions button { border: 1px solid var(--border); border-radius: 8px; padding: 8px 12px; background: var(--bg-card); color: var(--fg); cursor: pointer; }
@@ -30,3 +31,4 @@
 .xn-subscriptions__models { list-style: none; display: grid; gap: 8px; margin: 0; padding: 0; max-height: 350px; overflow: auto; }.xn-subscriptions__models > li { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; padding: 12px; border: 1px solid var(--border); border-radius: 9px; }.xn-subscriptions__models > li > span { display: grid; gap: 4px; min-width: 0; flex: 1 1 13rem; }.xn-subscriptions__models strong { font-weight: 550; overflow-wrap: anywhere; }.xn-subscriptions__models code { color: var(--fg-muted); font-size: .85em; overflow-wrap: anywhere; }.xn-subscriptions__models small { color: var(--fg-muted); font-size: .8em; }
 .xn-subscriptions details > summary { color: var(--fg-muted); cursor: pointer; margin-bottom: 10px; }.xn-subscriptions__disconnect { padding-top: 14px; border-top: 1px solid var(--border); }
 @container (max-width: 620px) { .xn-subscriptions__layout { grid-template-columns: minmax(0, 1fr); }.xn-subscriptions__providers { max-height: 210px; border-right: 0; border-bottom: 1px solid var(--border); }.xn-subscriptions__detail { padding: 16px; } }
+}

@@ -1,3 +1,4 @@
+@layer plugins {
 .xn-shell-layout .xn-composer__plus-menu:has(.xn-composer-add-search) {
   box-sizing: border-box;
   width: min(400px, calc(100vw - 48px));
@@ -62,3 +63,4 @@
 .xn-composer__setup { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .xn-composer__setup button { border: 0; border-radius: 4px; padding: 2px 4px; background: transparent; color: var(--fg); text-decoration: underline; cursor: pointer; font: inherit; }
 .xn-composer__setup button:focus-visible { outline: 2px solid var(--border-focus); outline-offset: 2px; }
+}

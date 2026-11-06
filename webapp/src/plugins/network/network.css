@@ -1,3 +1,4 @@
+@layer plugins {
 .xn-network-settings {
   display: grid;
   gap: 18px;
@@ -128,4 +129,5 @@
   .xn-network-settings__actions button {
     width: 100%;
   }
+}
 }

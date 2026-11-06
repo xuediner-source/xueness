@@ -1,4 +1,5 @@
 /* Real Claudex sidebar slots; the classic sheet preserves the original flex layout. */
+@layer plugins {
 .xn-shell-sidebar__classic-sheet { display: contents; }
 html[data-xn-palette="claudex"] .xn-shell-layout .xn-shell-sidebar--with-rail {
   display: grid;
@@ -127,3 +128,4 @@ html[data-xn-palette="claudex"] .xn-shell-layout .xn-task-list__recent .xn-shell
 html[data-xn-palette="claudex"] .xn-shell-layout .xn-shell-nav__group { margin: 6px 0 0; padding: 8px; }
 html[data-xn-palette="claudex"] .xn-shell-layout .xn-task-list__toolbar--compact { margin: 12px 0 4px; padding: 0 4px 0 8px; }
 @media (hover: none) { html[data-xn-palette="claudex"] .xn-shell-layout .xn-task-list .xn-shell-nav__item-actions { visibility: visible; opacity: 1; } html[data-xn-palette="claudex"] .xn-shell-layout .xn-task-list .xn-shell-nav__link { padding-right: 34px; } }
+}

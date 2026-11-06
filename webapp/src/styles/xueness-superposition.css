@@ -5,6 +5,19 @@
  * the motif — dotted orbits, dashed trajectories, dashed invitations.
  * Appearance only: no capability, permission or layout contract depends on
  * this layer. Every selector is scoped so the Claudex appearance is untouched. */
+@layer appearance {
+/* Workbench rules more specific than this appearance keep their values, as
+ * they did before cascade layers: revert-layer hands these properties back to
+ * the component and plugin layers. Each selector repeats the component rule
+ * exactly (the palette guard sits in :where()) so its weight is unchanged. */
+:where(html:not([data-xn-palette])) .xn-shell-layout .xn-composer--with-top-content:focus-within { border: revert-layer; background: revert-layer; }
+:where(html:not([data-xn-palette])) .xn-shell-layout .xn-md__heading:first-child { margin-top: revert-layer; }
+:where(html:not([data-xn-palette])) .xn-shell-layout .xn-conv-header__menu .xn-conv-header__action,
+:where(html:not([data-xn-palette])) .xn-shell-layout .xn-conv-header__menu .xn-conv-header__action--danger { color: revert-layer; }
+:where(html:not([data-xn-palette])) .xn-shell-layout .xn-conv-header__menu .xn-conv-header__action--danger:hover { background: revert-layer; }
+:where(html:not([data-xn-palette])) .xn-shell-layout .xn-conv-header__more[open] > summary { background: revert-layer; color: revert-layer; }
+:where(html:not([data-xn-palette])) .xn-shell-layout .xn-session-header.xn-conv-header { border: revert-layer; background: revert-layer; backdrop-filter: revert-layer; }
+:where(html:not([data-xn-palette])) .xn-shell-layout .xn-session-header .xn-conv-header__title { font-size: revert-layer; font-weight: revert-layer; }
 
 html:not([data-xn-palette]) {
   --xn-tile: #111111;
@@ -453,4 +466,5 @@ html:not([data-xn-palette]) .xn-starter-ideas > button:hover:not(:disabled) { bo
   html:not([data-xn-palette]) .xn-hero__brand::before { width: 200px; height: 200px; }
   html:not([data-xn-palette]) .xn-hero__brand::after { width: 280px; height: 170px; }
   html:not([data-xn-palette]) .xn-hero__brand-mark { width: 40px; height: 40px; }
+}
 }

@@ -1,3 +1,4 @@
+@layer plugins {
 .xn-shell-layout .xn-session-header.xn-conv-header {
   display: flex; flex-direction: row; flex-wrap: wrap; align-items: center; gap: 0 14px;
   flex: 0 0 auto; height: auto; min-height: 76px; padding: 0 16px; margin: 0; width: 100%;
@@ -24,7 +25,8 @@ html[data-xn-palette] .xn-shell-layout .xn-session-header.xn-conv-header { heigh
 .xn-session-tabs__primary button:hover { color: var(--fg); }
 .xn-session-tabs__primary button[aria-current="page"] { color: #4b78f6; }
 .xn-session-tabs__primary button[aria-current="page"]::after { content: ''; position: absolute; height: 2px; left: 0; right: 0; bottom: 0; background: currentColor; border-radius: 2px 2px 0 0; }
-.xn-session-tabs__more { flex: none; margin-left: auto; max-width: 150px; min-height: 28px; font-size: 11px; border: 0; color: var(--fg-muted); background: transparent; }
+/* Size, font, border colour and background come from the shared .xn-view-switcher (workbench.css). */
+.xn-session-tabs__more { flex: none; margin-left: auto; border-width: 0; border-style: none; color: var(--fg-muted); }
 .xn-session-header :is(button, select, summary):focus-visible { outline: 2px solid #4b78f6; outline-offset: 2px; }
 .xn-session-header__splits { position: relative; font-size: 11px; color: var(--fg-muted); }
 .xn-session-header__splits > summary { display: flex; align-items: center; gap: 6px; cursor: pointer; list-style: none; padding: 5px; border-radius: 4px; }
@@ -49,5 +51,5 @@ html[data-xn-palette] .xn-shell-layout .xn-session-header.xn-conv-header { heigh
   .xn-session-tabs { gap: 8px; }
   .xn-session-tabs__primary { gap: 18px; }
   .xn-session-tabs__primary button { font-size: 11px; }
-  .xn-session-tabs__more { max-width: 60px; }
+}
 }

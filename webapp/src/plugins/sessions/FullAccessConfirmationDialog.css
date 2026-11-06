@@ -1,3 +1,4 @@
+@layer plugins {
 .xn-dialog.xn-full-access {
   box-sizing: border-box;
   width: min(660px, calc(100vw - 32px));
@@ -27,4 +28,5 @@
   .xn-dialog.xn-full-access { padding: 20px; }
   .xn-full-access .xn-dialog__title { font-size: 20px; }
   .xn-full-access__permissions { padding: 4px 12px; }
+}
 }

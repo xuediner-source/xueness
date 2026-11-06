@@ -5,6 +5,10 @@ import { readFileSync } from 'node:fs';
 import { transformSync } from 'esbuild';
 import { createHash } from 'node:crypto';
 
+// The cascade layer order (src/styles/layers.css) is inlined first in every page's <head>, ahead of the
+// appearance <link> and the bundles, so precedence never depends on which stylesheet arrives first.
+const layerOrder = transformSync(readFileSync(resolve(import.meta.dirname, 'src/styles/layers.css'), 'utf8'), { loader: 'css', minify: true }).code.trim();
+
 const appearances = Object.fromEntries(Object.entries({
   xueness: 'xueness-superposition.css', claudex: 'claudex-scheme.css',
 }).map(([palette, file]) => {
@@ -22,12 +26,14 @@ export default defineConfig({
       }
     },
     transformIndexHtml(html, context) {
-      if (context.filename.endsWith('tray.html')) return html;
+      const layers = { tag: 'style', children: layerOrder, injectTo: 'head-prepend' as const };
+      if (context.filename.endsWith('tray.html')) return [layers];
       const source = readFileSync(resolve(import.meta.dirname, 'src/plugins/settings/themeBoot.ts'), 'utf8');
       const { code } = transformSync(source, { loader: 'ts', format: 'iife', minify: true, target: 'es2020' });
       const hrefs = Object.fromEntries(Object.entries(appearances).map(([palette, appearance]) =>
         [palette, context.server ? `/src/styles/${appearance.file}` : `/${appearance.asset}`]));
       return [
+        layers,
         ...Object.entries(hrefs).map(([palette, href]) => ({ tag: 'meta', attrs: { name: `xn-appearance-${palette}`, content: href }, injectTo: 'head' as const })),
         { tag: 'script', children: code, injectTo: 'head' },
         { tag: 'script', children: `document.write('<link id="xn-appearance" rel="stylesheet" href="'+document.querySelector('meta[name="xn-appearance-'+(document.documentElement.dataset.xnPalette||'xueness')+'"]').content+'">')`, injectTo: 'head' },

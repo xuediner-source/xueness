@@ -1,3 +1,4 @@
+@layer plugins {
 .xn-approvals { display: flex; flex-direction: column; gap: 10px; padding: 16px; border: 1px solid var(--border); border-radius: 16px; background: var(--bg-panel); box-shadow: var(--shadow-sm); }
 .xn-approval-item { border: 0; border-radius: 10px; min-width: 0; padding: 4px 0; font-size: 13px; display: flex; flex-direction: column; gap: 9px; }
 .xn-permission-dialog { color: var(--fg); min-width: 0; }
@@ -35,3 +36,4 @@
 .xn-permission-request__detail pre, .xn-approval-plan { white-space: pre-wrap; overflow-wrap: anywhere; max-height: 320px; overflow: auto; font-family: var(--font-mono); }
 .xn-permission-request[open] > summary > svg:last-child { transform: rotate(180deg); }
 .xn-approval-waiting { display: none; }
+}

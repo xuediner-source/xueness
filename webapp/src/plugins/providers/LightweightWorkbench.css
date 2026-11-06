@@ -1,6 +1,7 @@
 /* Lightweight Workbench Styles (providers plugin) */
 
 /* Timeline styling */
+@layer plugins {
 .xn-lightweight-timeline {
   display: flex;
   flex-direction: column;
@@ -663,4 +664,5 @@
   flex-wrap: wrap;
   gap: 4px;
   font-size: 10px;
+}
 }

@@ -21,7 +21,7 @@ import { t as tr, tf } from '../../i18n';
 import { OperationHeader } from '../shared';
 import { LocalRuntimeMonitor } from './LocalRuntimeMonitor';
 import '../../styles/operations.css';
-import '../../styles/model-parity.css';
+import '../../styles/provider-settings.css';
 
 // Load setup translations with the providers panel, not the startup bundle.
 

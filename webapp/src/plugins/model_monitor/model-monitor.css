@@ -1,3 +1,4 @@
+@layer plugins {
 .xn-model-monitor-home { margin: 4px 20px 8px; padding: 7px 10px; min-width: 0; border: 1px solid var(--border); border-radius: 10px; background: var(--bg-card); color: var(--fg); box-sizing: border-box; }
 .xn-model-monitor-home__heading { display: flex; min-width: 0; flex-wrap: wrap; align-items: center; gap: 8px; }
 .xn-model-monitor-home__icon { display: grid; flex: 0 0 24px; height: 24px; place-items: center; color: var(--fg-muted); }
@@ -53,4 +54,5 @@
   .xn-model-monitor--embedded { padding: 4px 0 24px; }
   .xn-model-monitor__record { padding: 22px 20px; }
   .xn-model-monitor dl { grid-template-columns: minmax(0, 1fr); gap: 22px; }
+}
 }

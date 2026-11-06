@@ -1,3 +1,4 @@
+@layer plugins {
 .xn-desktop-about { width: 100%; max-width: 680px; display: grid; gap: 28px; }
 .xn-desktop-about__brand { display: flex; align-items: center; gap: 16px; padding: 4px 0; }
 .xn-desktop-about__brand > svg { flex: 0 0 auto; color: var(--fg); }
@@ -15,3 +16,4 @@
 .xn-desktop-about__permissions button:focus-visible { outline: 2px solid var(--border-focus); outline-offset: 3px; }
 @media (max-width: 680px) { .xn-desktop-about__data { padding: 16px; } }
 @media (max-width: 480px) { .xn-desktop-about__permissions { align-items: flex-start; flex-direction: column; } }
+}

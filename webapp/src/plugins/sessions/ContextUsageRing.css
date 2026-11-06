@@ -1,3 +1,4 @@
+@layer plugins {
 .xn-context-usage-ring {
   position: relative;
   display: inline-grid;
@@ -99,4 +100,5 @@
   .xn-context-usage-ring__tooltip {
     transition: none;
   }
+}
 }

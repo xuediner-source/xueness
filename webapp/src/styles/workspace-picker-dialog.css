@@ -1,3 +1,4 @@
+@layer components {
 .xn-workspace-picker-dialog__backdrop {
   position: fixed;
   z-index: var(--z-dialog);
@@ -126,4 +127,5 @@
     from { opacity: 0; transform: translateY(5px) scale(.995); }
     to { opacity: 1; transform: translateY(0) scale(1); }
   }
+}
 }

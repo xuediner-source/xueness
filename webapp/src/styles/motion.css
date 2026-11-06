@@ -13,9 +13,12 @@
  *  4. Continuous motion (shimmer, aurora, pulses) exists only while the agent
  *     is actually working, and all of it stops under reduced motion — either
  *     the system setting or html[data-xn-motion="reduced"].
- * Appearance files own colour; this file owns time. */
+ * Appearance files own colour; this file owns time. Rules sit in the `motion`
+ * layer, after components and plugins and before the appearance (layers.css). */
 
 @property --xn-aurora-angle { syntax: "<angle>"; inherits: false; initial-value: 0deg; }
+
+@layer motion {
 
 @keyframes xn-fade-in { from { opacity: 0; } }
 @keyframes xn-rise-in { from { opacity: 0; translate: 0 10px; } }
@@ -299,11 +302,17 @@ html[data-xn-vt="sidebar"]::view-transition-new(xn-sidebar) { animation: var(--d
 html[data-xn-vt="sidebar"]::view-transition-old(xn-sheet),
 html[data-xn-vt="sidebar"]::view-transition-new(xn-sheet) { height: 100%; animation: none; object-fit: cover; object-position: left top; }
 
-/* ── Reduced motion: everything above is decoration, so all of it yields ── */
+}
+
+/* ── Reduced motion: everything above is decoration, so all of it yields ──
+ * The `reduced-motion` layer comes first (layers.css): among !important
+ * declarations the earliest layer wins, so these beat any component's own. */
+@layer reduced-motion {
 @media (prefers-reduced-motion: reduce) {
-  *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; animation-delay: 0ms !important; transition-duration: .01ms !important; }
+  *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; animation-delay: 0ms !important; transition-duration: .01ms !important; scroll-behavior: auto !important; }
   ::view-transition-group(*), ::view-transition-old(*), ::view-transition-new(*) { animation: none !important; }
 }
 html[data-xn-motion="reduced"] *, html[data-xn-motion="reduced"] *::before, html[data-xn-motion="reduced"] *::after {
   animation-duration: .01ms !important; animation-iteration-count: 1 !important; animation-delay: 0ms !important; transition-duration: .01ms !important;
+}
 }

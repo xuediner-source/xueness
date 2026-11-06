@@ -1,0 +1,23 @@
+/* Cascade layer order for every Xueness page. Precedence between stylesheets
+ * comes from this list, never from load order: a later layer wins over an
+ * earlier one whatever the selector weight, and a lazily loaded chunk cannot
+ * override a layer that comes after its own.
+ *
+ *   reduced-motion  motion.css's reduced-motion overrides. First on purpose:
+ *                   !important declarations in earlier layers win, so these
+ *                   beat every other !important.
+ *   tokens          design tokens (styles/tokens.css)
+ *   base            resets, element defaults and shared primitives (styles.css)
+ *   components      shared components (styles/*.css, ui/*.css)
+ *   plugins         feature styles (stylesheets under plugins/)
+ *   motion          time: entrances, transitions, live feedback (motion.css)
+ *   appearance      the selected palette (claudex-scheme.css or
+ *                   xueness-superposition.css), emitted as its own asset.
+ *                   Last, so it styles every component; motion sits under it
+ *                   because the palettes tune their own transitions.
+ *
+ * vite.config.ts inlines this statement as the first <style> of index.html and
+ * tray.html, ahead of the appearance <link>, so the order is fixed before any
+ * stylesheet arrives. Every stylesheet wraps its rules in one of these layers;
+ * an unlayered rule would beat all of them. */
+@layer reduced-motion, tokens, base, components, plugins, motion, appearance;

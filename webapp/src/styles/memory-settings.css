@@ -1,3 +1,4 @@
+@layer components {
 .xn-memory-settings { display:flex; flex-direction:column; gap:24px; }
 .xn-memory-settings .xn-setting-row { min-height:76px; padding:16px; }
 .xn-memory-settings__viewer { display:flex; flex-direction:column; gap:16px; }
@@ -23,3 +24,4 @@
 .xn-memory-settings__editor { display:flex; flex-direction:column; align-items:stretch; gap:8px; min-width:0; }
 .xn-memory-settings__editor > button { align-self:flex-end; font:13px/1.5 var(--font-sans); }
 @media(max-width:600px) { .xn-memory-settings__search { width:100%; } }
+}

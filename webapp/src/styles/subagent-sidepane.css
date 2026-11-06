@@ -1,5 +1,6 @@
 /* Subagent runtime sidepane styles. Conversation layout lives in sessions.css,
    which is always loaded with the session viewport. */
+@layer components {
 .xn-subagent-context-summary > p { margin: 5px 6px; color: var(--fg-muted); font-size: 12px; }
 .xn-subagent-context-summary__agents { display: inline-flex; flex-shrink: 0; gap: 4px; }
 .xn-subagent-context-summary__agents [data-agent-color="0"] { color: #38b99a; }
@@ -528,4 +529,5 @@
     width: min(340px, 92vw);
     box-shadow: -4px 0 16px rgba(0, 0, 0, 0.25);
   }
+}
 }

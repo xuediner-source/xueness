@@ -1,3 +1,4 @@
+@layer plugins {
 .xl-root {
   --xl-system: #7960ff; --xl-tools: #ff9d00; --xl-user: #08bd59; --xl-injected: #b149ff;
   --xl-assistant: #3281ff; --xl-reasoning: #ec4899; --xl-tool: #00b8a6; --xl-output: #ed3ba7;
@@ -160,3 +161,4 @@
 @container context-lens (max-width: 800px) { .xl-dashboard { grid-template-columns: 1fr; } .xl-context-browser { grid-column: auto; grid-row: auto; } .xl-context-trend { grid-row: 3; } .xl-donut-row { gap: 20px; } }
 @container context-lens (max-width: 540px) { .xl-flow { grid-template-columns: 1fr; gap: 8px; } .xl-flow-core { grid-row: 1; outline: 0; padding: 9px; flex-direction: row; align-items: center; justify-content: space-between; } .xl-flow-core > div { display: flex; gap: 14px; } .xl-flow-core::before, .xl-flow-core::after { display: none; } .xl-flow-core strong { font-size: 16px; } .xl-flow-core small { font-size: 9px; } .xl-flow-column { grid-template-columns: 1fr; } .xl-legend { grid-template-columns: repeat(2, minmax(0, 1fr)); } .xl-slices { grid-template-columns: 1fr; gap: 10px; } .xl-donut { width: 96px; height: 96px; flex-basis: 96px; } .xl-context-headline strong { font-size: 19px; } .xl-context-headline { flex-wrap: wrap; } .xl-files > div { grid-template-columns: 1fr; } .xl-browser-meta { align-items: start; } }
 @media (prefers-reduced-motion: reduce) { .xl-disclosure { transition: none; } }
+}

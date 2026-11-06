@@ -1,5 +1,6 @@
 /* Clone-repository dialog (git plugin, git.clone). Colours come from the shared
  * theme tokens so the dialog follows the workbench light/dark state. */
+@layer components {
 .xn-clone-dialog__backdrop {
   position: fixed;
   inset: 0;
@@ -143,4 +144,5 @@
   .xn-clone-dialog__actions .is-spinning {
     animation: none;
   }
+}
 }

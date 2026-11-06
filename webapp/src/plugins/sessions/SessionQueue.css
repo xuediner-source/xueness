@@ -1,3 +1,4 @@
+@layer plugins {
 .xn-session-queue__items { gap: 0; }
 .xn-session-queue__item { display: block; min-width: 0; padding: 0; }
 .xn-session-queue__row {
@@ -161,4 +162,5 @@
   .xn-session-queue__mode { gap: 3px; padding-inline: 3px; }
   .xn-queue-dock .xn-session-queue { width: 100%; }
   .xn-queue-dock .xn-session-queue__status { display: none; }
+}
 }

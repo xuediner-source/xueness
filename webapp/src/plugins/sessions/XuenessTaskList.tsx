@@ -26,7 +26,7 @@ import {
   togglePinnedProjectRoot,
   type SidebarProjectSection,
 } from './projectSidebar';
-import '../../styles/task-list-parity.css';
+import './task-list.css';
 const LazyProjectContextMenu = React.lazy(async () => {
   const module = await import('./ProjectContextMenu');
   return { default: module.ProjectContextMenu };

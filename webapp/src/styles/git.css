@@ -3,7 +3,7 @@
  * Kept out of styles.css so parallel lanes appending there cannot collide.
  * Uses only existing design tokens from styles/tokens.css.
  * ------------------------------------------------------------------------- */
-
+@layer components {
 .xn-git {
   display: flex;
   flex-direction: column;
@@ -252,3 +252,4 @@
 .xn-git__modal-backdrop { position:fixed; inset:0; z-index:1000; display:grid; place-items:center; background:rgba(0,0,0,.42); padding:20px; }
 .xn-git__confirm { width:min(520px,100%); padding:18px; border:1px solid var(--border); border-radius:var(--radius-lg); background:var(--bg-card); box-shadow:0 18px 60px rgba(0,0,0,.25); }
 .xn-git__confirm pre { white-space:pre-wrap; overflow-wrap:anywhere; font-size:12px; color:var(--fg-muted); }
+}

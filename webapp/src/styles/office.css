@@ -1,3 +1,4 @@
+@layer components {
 .xn-office {
   display: grid;
   gap: 18px;
@@ -47,4 +48,5 @@
   .xn-office-document { padding: 18px; }
   .xn-office-slide { padding: 8px; }
   .xn-office-shape { padding: 2px 3px; }
+}
 }

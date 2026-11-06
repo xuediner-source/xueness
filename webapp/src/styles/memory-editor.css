@@ -1,3 +1,4 @@
+@layer components {
 .xn-memory-editor {
   display: flex;
   flex-direction: column;
@@ -79,3 +80,4 @@
   .xn-memory-editor__footer > button { margin-left: auto; }
 }
 @media (prefers-reduced-motion: reduce) { .xn-memory-editor__loading { animation: none; } }
+}

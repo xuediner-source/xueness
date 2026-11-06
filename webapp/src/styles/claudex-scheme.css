@@ -2,6 +2,23 @@
  * Scoped to this appearance so the classic Xueness workbench stays distinct.
  * Product capabilities and runtime permissions are shared by both appearances.
  * See docs/claudex-reference-review.md for source provenance and scope. */
+@layer appearance {
+/* Workbench rules more specific than this appearance keep their values, as
+ * they did before cascade layers: revert-layer hands these properties back to
+ * the component and plugin layers. Each selector repeats the component rule
+ * exactly so its weight is unchanged. */
+html[data-xn-palette="claudex"] .xn-shell-layout .xn-shell-nav__leading:has(.xn-sidebar-status) { position: revert-layer; left: revert-layer; width: revert-layer; }
+html[data-xn-palette="claudex"] .xn-shell-layout .xn-task-list .xn-shell-nav__item:hover .xn-shell-nav__link,
+html[data-xn-palette="claudex"] .xn-shell-layout .xn-task-list .xn-shell-nav__item:focus-within .xn-shell-nav__link { padding-right: revert-layer; }
+html[data-xn-palette="claudex"] .xn-shell-layout .xn-task-list__recent .xn-shell-nav__link { padding-left: revert-layer; }
+@media (hover: none) {
+  html[data-xn-palette="claudex"] .xn-shell-layout .xn-task-list .xn-shell-nav__link { padding-right: revert-layer; }
+}
+html[data-xn-palette] .xn-shell-layout .xn-session-header.xn-conv-header { height: revert-layer; min-height: revert-layer; padding: revert-layer; flex-wrap: revert-layer; gap: revert-layer; }
+@media (max-width: 1023px) {
+  :where(html[data-xn-palette="claudex"]) .xn-settings-view:is([data-searching="true"], :has(.xn-settings-view__search:focus-within)) .xn-settings-account { border-color: revert-layer; background: revert-layer; }
+}
+
 /* Shell: compact sidebar, paper canvas, no inset panel. */
 html[data-xn-palette="claudex"] .xn-shell-layout,
 html[data-xn-palette="claudex"] .xn-shell-layout--desktop-titlebar { grid-template-columns: var(--xn-shell-sidebar-width, calc(var(--claudex-sidebar-width) + var(--claudex-rail-width))) minmax(0, 1fr); background: var(--bg-sidebar); }
@@ -522,8 +539,8 @@ html[data-xn-palette="claudex"] .xn-shell-layout .xn-toolcall__content { border:
 html[data-xn-palette="claudex"] .xn-shell-layout .xn-toolcall__body,
 html[data-xn-palette="claudex"] .xn-shell-layout .xn-msg__tool-detail-body { color: var(--fg-subtle); }
 html[data-xn-palette="claudex"] .xn-shell-layout .xn-toolcall__terminal { border: 0; border-radius: 10px; background: var(--claudex-card); }
-html[data-xn-palette="claudex"] .xn-shell-layout .xn-approvals { box-sizing: border-box; width: min(calc(100% - 48px), var(--claudex-column)); margin-inline: auto; border: 1px solid var(--claudex-hairline) !important; border-radius: 12px !important; background: var(--bg) !important; box-shadow: none !important; }
-html[data-xn-palette="claudex"] .xn-shell-layout .xn-approval-item { border-radius: 10px !important; background: transparent !important; }
+html[data-xn-palette="claudex"] .xn-shell-layout .xn-approvals { box-sizing: border-box; width: min(calc(100% - 48px), var(--claudex-column)); margin-inline: auto; border: 1px solid var(--claudex-hairline); border-radius: 12px; background: var(--bg); box-shadow: none; }
+html[data-xn-palette="claudex"] .xn-shell-layout .xn-approval-item { border-radius: 10px; background: transparent; }
 html[data-xn-palette="claudex"] .xn-shell-layout .xn-approval-item button[data-variant="primary"],
 html[data-xn-palette="claudex"] .xn-shell-layout .xn-approvals .xn-btn--primary { border-radius: 999px; background: var(--claudex-send-bg); color: var(--claudex-send-fg); }
 html[data-xn-palette="claudex"] .xn-shell-layout .xn-pending-question,
@@ -780,7 +797,7 @@ html[data-xn-palette="claudex"] .xn-shell-layout .xn-claudex-rail button[aria-cu
 html[data-xn-palette="claudex"] .xn-shell-layout .xn-claudex-rail button[aria-pressed="true"] { box-shadow: var(--claudex-lift); }
 
 /* Approvals and questions sit on the page as cards, not as flat boxes. */
-html[data-xn-palette="claudex"] .xn-shell-layout .xn-approvals { box-shadow: var(--claudex-ink-shadow) !important; }
+html[data-xn-palette="claudex"] .xn-shell-layout .xn-approvals { box-shadow: var(--claudex-ink-shadow); }
 html[data-xn-palette="claudex"] .xn-shell-layout :is(.xn-pending-question, .xn-mcp-elicitation) { box-shadow: var(--claudex-ink-shadow); }
 
 /* Start: the greeting is underlined by hand, the stroke drawn left to right. */
@@ -795,3 +812,4 @@ html[data-xn-palette="claudex"] .xn-shell-layout .xn-hero__greeting::after {
 html[data-xn-palette="claudex"] .xn-shell-layout .xn-start-page__action { transition: background-color 140ms var(--claudex-ease), color 140ms var(--claudex-ease), translate 180ms var(--ease-out-quart); }
 html[data-xn-palette="claudex"] .xn-shell-layout .xn-start-page__action:hover { translate: 0 -1px; }
 html[data-xn-palette="claudex"] .xn-starter-ideas > button:hover:not(:disabled) { box-shadow: var(--claudex-lift); }
+}

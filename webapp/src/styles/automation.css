@@ -1,3 +1,4 @@
+@layer components {
 .xn-automation {
   box-sizing: border-box;
   width: 100%;
@@ -395,4 +396,5 @@
 
 @media (max-width: 680px) {
   .xn-automation { padding: 18px 16px 24px; }
+}
 }

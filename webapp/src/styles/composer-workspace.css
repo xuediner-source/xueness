@@ -1,3 +1,4 @@
+@layer components {
 .xn-composer-workspace { display:flex; align-items:center; flex-wrap:wrap; gap:8px; margin:0 0 10px; color:var(--fg-muted); font-size:12px; }
 .xn-composer-workspace select { color:var(--fg); background:var(--bg-subtle); border:1px solid var(--border); border-radius:var(--radius-sm); padding:5px 8px; max-width:min(240px,100%); }
 .xn-composer-workspace span { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; min-width:0; flex:1; text-align:right; }
@@ -9,3 +10,8 @@
 .xn-model-options label { display:inline-flex !important; flex-direction:row !important; align-items:center; gap:5px; }
 .xn-model-options input { width:auto !important; }
 @media(max-width:680px) { .xn-composer-workspace span { flex-basis:100%; text-align:left; } .xn-composer-workspace select { max-width:100%; min-width:0; } }
+.xn-composer-workspace>.xn-select { max-width:240px; height:28px; border:0; background:transparent; }
+.xn-composer-workspace .xn-select>span { flex:initial; text-align:left; }
+.xn-composer-workspace>.xn-select:first-child { max-width:280px; }
+.xn-composer-workspace>svg { flex-shrink:0; margin-left:6px; margin-right:-6px; }
+}

@@ -1,5 +1,15 @@
 # Xueness 工作台设计与验收
 
+## 2026-11-06 样式层叠层（cascade layers）
+
+样式表之间的优先级改由显式层叠层决定，不再依赖加载顺序或选择器权重；界面表现不变。
+
+- 层序在 `webapp/src/styles/layers.css` 中声明一次：`reduced-motion, tokens, base, components, plugins, motion, appearance`。`vite.config.ts` 把它作为 `index.html` 与 `tray.html` 的第一个 `<style>` 内联，先于外观 `<link>` 与各个 chunk，因此懒加载的样式无法再覆盖后面的层，`main.tsx` 也不再需要把 `#xn-appearance` 挪到最后。
+- 归属：`tokens.css` → tokens；`styles.css`（及 `index.html`、`App.tsx` 的内联样式）→ base；`styles/*.css`、`ui/*.css` → components；`plugins/**` 下的样式 → plugins；`motion.css` → motion；两套外观 → appearance。新样式表必须包在其中一层里，未分层的规则会压过所有层。
+- 动效：减少动效的覆盖放在最前面的 `reduced-motion` 层——层与层之间 `!important` 的顺序相反，最早的层获胜，所以它压过任何组件自己的 `!important`；原先 `styles.css`、`workbench`、资源面板里重复的减少动效块已合并进来。`motion` 在 `appearance` 之前，因为两套外观会调整自己的过渡。
+- 历史补丁文件已并入所补的组件：`parity-final.css`、`batch10.css` 拆分并入 `styles.css`、`workbench.css`、`conversation.css`、`settings.css`、`browser.css` 等并删除；`workbench-refresh.css`、`conversation-refresh.css` 更名为组件文件 `workbench.css`、`conversation.css`；`task-list-parity.css`、`model-parity.css`、`resources-parity.css` 分别成为 `plugins/sessions/task-list.css`、`styles/provider-settings.css`、`styles/capabilities.css`。被同一文件中后续同名规则完全覆盖的声明已删除。
+- 原本靠更高权重压过外观的少数组件规则，在外观层顶部用 `revert-layer` 保留原值；Claudex 审批卡片不再需要 `!important`。
+
 ## 2026-11-05 动效系统与外观深化
 
 以 ZCode 式经典布局与 Codex 式纸感外观为基线，本轮补上两者都没有的“时间维度”：让状态变化可被看见，同时不增加任何能力或权限面。全部改动只影响表现；功能、权限、插件开关和请求均不变。
@@ -43,8 +53,8 @@
 ## 实现入口
 
 - `webapp/src/styles/tokens.css`：本地中性色与语义色。
-- `webapp/src/styles/workbench-refresh.css`：框架、导航、工具栏、页面与窄屏布局。
-- `webapp/src/styles/conversation-refresh.css`：输入区、文字和工具步骤。
+- `webapp/src/styles/workbench.css`：框架、导航、工具栏、页面与窄屏布局。
+- `webapp/src/styles/conversation.css`：输入区、文字和工具步骤。
 - `webapp/src/XuenessShell.tsx`：桌面/移动侧栏与焦点生命周期。
 - `webapp/src/XuenessWorkbenchContainer.tsx`：真实入口、加载恢复和插件受控视图。
 - `webapp/src/XuenessPluginManager.tsx`：搜索、状态筛选与模块开关。

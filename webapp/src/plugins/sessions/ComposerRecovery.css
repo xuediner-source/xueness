@@ -1,3 +1,4 @@
+@layer plugins {
 .xn-composer-recovery { margin: 0 12px 8px; padding: 8px 10px; border: 1px solid var(--border); border-radius: 8px; color: var(--fg); font-size: 12px; }
 .xn-composer-recovery summary { cursor: pointer; }
 .xn-composer-recovery p { margin: 6px 0; }
@@ -15,3 +16,4 @@
 .xn-composer-recovery--sending .xn-composer-recovery__preview { flex: 1 1 auto; min-width: 0; max-height: none; margin: 0; overflow: hidden; color: var(--fg); white-space: nowrap; text-overflow: ellipsis; }
 @keyframes xn-composer-sending-reveal { from { display: none; max-height: 0; margin-bottom: 0; padding-block: 0; border-width: 0; opacity: 0; } to { max-height: 40px; opacity: 1; } }
 @media (prefers-reduced-motion: reduce) { .xn-composer-recovery--sending { animation-duration: 0s; } }
+}

@@ -1,3 +1,4 @@
+@layer plugins {
 .xn-delivery-files { display: grid; gap: 7px; width: min(100% - 32px, 760px); margin: 0 auto 8px; }
 .xn-delivery-files:empty { display: none; }
 .xn-delivery-file { display: flex; align-items: center; gap: 12px; padding: 12px 14px; border: 1px solid var(--border); border-radius: 12px; background: var(--bg-card); color: var(--fg); }
@@ -188,4 +189,5 @@
   .xn-delivery-checks__requirement label:nth-of-type(3) { grid-column: auto; }
   .xn-delivery-checks__actions { display: grid; grid-template-columns: 1fr; }
   .xn-delivery-checks__actions .xn-delivery-checks__button { width: 100%; }
+}
 }

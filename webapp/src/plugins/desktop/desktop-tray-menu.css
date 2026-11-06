@@ -1,5 +1,5 @@
 @import "../../styles/tokens.css";
-
+@layer plugins {
 html, body {
   margin: 0;
   padding: 0;
@@ -142,4 +142,5 @@ body { max-height: 100vh; overflow: auto; }
   line-height: 18px;
   color: var(--menu-muted);
   margin-bottom: 2px;
+}
 }

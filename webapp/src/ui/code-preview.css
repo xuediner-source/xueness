@@ -1,3 +1,4 @@
+@layer components {
 .xn-code-preview-card {
   min-width: 0;
   overflow: hidden;
@@ -82,4 +83,5 @@
   .xn-code-preview-card__header { min-height: 56px; padding: 10px 12px; }
   .xn-code-preview-card__body { padding: 6px; }
   .xn-code-preview-card__code pre.shiki { padding: 10px; }
+}
 }

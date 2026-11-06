@@ -24,7 +24,6 @@ import { resolveHostPlatform } from './xuenessShortcutDisplay';
  * hang off the conversation header switcher and the sidebar footer, not tabs.
  */
 import React, { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import "./styles/batch10.css";
 import { approvePending, createSession, deleteSession, renameSession, pinSession, deriveFileChanges, loadFilePreview, loadFiles, loadJournal, loadSession, runSession, createSessionCommandClient, stopSession, sendTurn, queueTurn, cancelQueuedTurn, withAssistantStream, loadConversationSnapshot, loadOlderConversationPage, mergeTimelineRowsByIdentity, stabilizeSession, stabilizeSessionList, stabilizeTimelineRows, type ForkSessionResponse, type FileChangeSet, type FilePreview, type PendingApproval, type Result, type SessionSummary, type TimelineRow, type WorkbenchSession, type QueuedMessage } from "./xuenessWorkbench";
 import { loadWorkbenchSettings, readAgentCapabilities, saveWorkbenchSettings, type AgentCapabilities, type SettingsMap } from "./xuenessSettings";
 import {

@@ -20,7 +20,7 @@ import {
   type CapabilityKind,
   parsePluginManifestImport,
 } from "./xuenessCapabilities";
-import "./styles/resources-parity.css";
+import "./styles/capabilities.css";
 
 type CapabilityImportResult = { ok: true; value: CapabilityItem } | { ok: false; error: string };
 

@@ -1,3 +1,4 @@
+@layer components {
 .xn-code-content { width:100%; min-width:0; overflow:auto; border:1px solid var(--border); border-radius:8px; background:var(--bg-card); }
 .xn-code-content pre { margin:0; padding:16px; font:inherit; font-family:var(--font-mono); line-height:1.6; white-space:pre; tab-size:2; }
 .xn-code-content code { font:inherit; counter-reset:line-number; }
@@ -6,3 +7,4 @@
 .xn-code-content.wraps-lines pre { white-space:pre-wrap; overflow-wrap:anywhere; }
 .xn-code-content[data-tone=add] { border-color:var(--ok-border); }.xn-code-content[data-tone=add] pre { background:var(--ok-bg)!important; }
 .xn-code-content[data-tone=remove] { border-color:var(--error-border); }.xn-code-content[data-tone=remove] pre { background:var(--error-bg)!important; }
+}

@@ -1,3 +1,4 @@
+@layer plugins {
 .xn-desktop-titlebar {
   box-sizing: border-box;
   display: flex;
@@ -109,3 +110,4 @@
 }
 
 .xn-desktop-titlebar__menu select { width: 100%; max-width: 250px; }
+}

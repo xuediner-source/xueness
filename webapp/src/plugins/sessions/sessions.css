@@ -1,3 +1,4 @@
+@layer plugins {
 .xn-session-fork__backdrop {
   position: fixed;
   z-index: var(--z-dialog, 1100);
@@ -919,3 +920,7 @@
   vertical-align: baseline;
 }
 .xn-composer__editor-token--slash { font-family: var(--font-mono, ui-monospace, monospace); }
+
+/* On the start page the composer is narrower than the docked one above. */
+.xn-shell-layout .xn-hero__composer { width: min(672px, 100%); }
+}

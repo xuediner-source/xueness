@@ -1,6 +1,8 @@
 <!doctype html>
 <html lang="zh-CN">
   <head>
+    <style>@layer reduced-motion,tokens,base,components,plugins,motion,appearance;</style>
+
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="theme-color" content="#fafafa" />
@@ -8,13 +10,13 @@
     <link rel="alternate icon" href="/favicon.ico" sizes="any" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
     <title>Xueness</title>
-    <style>html{background:Canvas;color:CanvasText} .xn-skip-link{position:fixed;left:16px;top:-80px} .xn-skip-link:focus{top:12px}</style>
-    <script type="module" crossorigin src="/assets/workbench-B_LMH-GO.js"></script>
+    <style>@layer base{html{background:Canvas;color:CanvasText} .xn-skip-link{position:fixed;left:16px;top:-80px} .xn-skip-link:focus{top:12px}}</style>
+    <script type="module" crossorigin src="/assets/workbench-CesICVzP.js"></script>
     <link rel="modulepreload" crossorigin href="/assets/modulepreload-polyfill-B5Qt9EMX.js">
     <link rel="modulepreload" crossorigin href="/assets/_commonjsHelpers-Cpj98o6Y.js">
     <link rel="modulepreload" crossorigin href="/assets/react-vendor-Ca5gwkdN.js">
-    <meta name="xn-appearance-xueness" content="/assets/appearance-xueness-95a44e2b1d.css">
-    <meta name="xn-appearance-claudex" content="/assets/appearance-claudex-0cc03e4807.css">
+    <meta name="xn-appearance-xueness" content="/assets/appearance-xueness-a03aa4ea3f.css">
+    <meta name="xn-appearance-claudex" content="/assets/appearance-claudex-4fc255cbce.css">
     <script>(()=>{function m(e){return e==="light"||e==="dark"?e:"system"}function p(e,t){const o=m(e);return o==="system"?t?"dark":"light":o}function h(e){return e==="claudex"||e==="claude"?"claudex":"xueness"}function s(){if(typeof document>"u"||typeof getComputedStyle>"u")return;const e=document.querySelector('meta[name="theme-color"]'),t=getComputedStyle(document.documentElement).getPropertyValue("--bg-window").trim();e&&/^#[0-9a-f]{6}$/i.test(t)&&(e.content=t)}let i=null;typeof window<"u"&&window.addEventListener("pointerdown",e=>{i={x:e.clientX,y:e.clientY}},{capture:!0,passive:!0});function f(e,t,o){const r=document,n=r.documentElement,c=n.dataset.xnMotion==="reduced"||(window.matchMedia?.("(prefers-reduced-motion: reduce)").matches??!1);if(!t||c||typeof r.startViewTransition!="function"||r.visibilityState!=="visible"){o();return}const l=i?.x??window.innerWidth-48,a=i?.y??24;n.style.setProperty("--xn-reveal-x",`${Math.round(l)}px`),n.style.setProperty("--xn-reveal-y",`${Math.round(a)}px`),n.style.setProperty("--xn-reveal-r",`${Math.ceil(Math.hypot(Math.max(l,window.innerWidth-l),Math.max(a,window.innerHeight-a)))}px`),n.dataset.xnVt=e;const u=()=>{n.dataset.xnVt===e&&delete n.dataset.xnVt};try{r.startViewTransition(o).finished.then(u,u)}catch{u(),o()}}function x(e,t=!0){if(typeof document>"u")return;const o=m(e),r=p(o,window.matchMedia?.("(prefers-color-scheme: dark)").matches??!1),n=document.documentElement;if(f("theme",t&&n.dataset.xnTheme!==void 0&&n.dataset.xnTheme!==r,()=>{n.classList.toggle("dark",r==="dark"),n.style.colorScheme=r,n.dataset.xnTheme=r,s()}),t)try{localStorage.setItem("xueness.theme",o)}catch{}}function y(e,t=!0){if(!(typeof document>"u")&&(document.documentElement.dataset.xnMotion=e===!0?"reduced":"standard",t))try{localStorage.setItem("xueness.motion",e===!0?"reduced":"standard")}catch{}}let d=null;function w(e,t=!0){if(typeof document>"u")return;const o=h(e),r=document.documentElement,n=()=>{if(o==="xueness"?delete r.dataset.xnPalette:r.dataset.xnPalette=o,s(),t)try{localStorage.setItem("xueness.colorPalette",o)}catch{}};d&&(d.onload=null,d.remove(),d=null);const c=document.getElementById("xn-appearance"),l=document.querySelector(`meta[name="xn-appearance-${o}"]`)?.content;if(!c||!l||c.getAttribute("href")===l){n();return}const a=document.createElement("link");a.rel="stylesheet",a.href=l,d=a,a.onload=()=>f("palette",t,()=>{c.remove(),a.id="xn-appearance",d=null,n()}),a.onerror=()=>{a.remove(),d=null},document.head.append(a)}if(typeof window<"u"&&typeof document<"u"){let e="system",t="xueness";try{e=localStorage.getItem("xueness.theme"),t=localStorage.getItem("xueness.colorPalette"),y(localStorage.getItem("xueness.motion")==="reduced",!1),document.documentElement.lang=localStorage.getItem("xueness.language")==="en"?"en":"zh-CN"}catch{}w(t,!1),x(e,!1),document.readyState==="loading"&&document.addEventListener("DOMContentLoaded",s,{once:!0})}})();
 </script>
     <script>document.write('<link id="xn-appearance" rel="stylesheet" href="'+document.querySelector('meta[name="xn-appearance-'+(document.documentElement.dataset.xnPalette||'xueness')+'"]').content+'">')</script>

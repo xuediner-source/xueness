@@ -1,3 +1,4 @@
+@layer components {
 .xn-workspace-settings {
   box-sizing: border-box;
   width: min(1040px, calc(100% - 40px));
@@ -80,4 +81,5 @@
   .xn-workspace-settings__header { align-items: center; }
   .xn-workspace-settings__header h2 { font-size: 19px; }
   .xn-workspace-settings__scopes button { grid-template-columns: minmax(0, 1fr); gap: 2px; }
+}
 }

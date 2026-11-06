@@ -1,3 +1,4 @@
+@layer plugins {
 .xn-pane-group-picker { position: relative; flex: none; color: var(--fg-muted); font-size: 11px; }
 .xn-pane-group-picker > summary { display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 8px; border: 1px solid transparent; border-radius: 6px; cursor: pointer; list-style: none; white-space: nowrap; }
 .xn-pane-group-picker > summary::-webkit-details-marker { display: none; }
@@ -19,3 +20,4 @@
 .xn-pane-group-picker .xn-pane-group-picker__close:hover { background: var(--error-bg); color: var(--error-fg); }
 .xn-pane-group-picker :is(summary, button):focus-visible { outline: 2px solid var(--info-fg); outline-offset: -2px; }
 @media (max-width: 580px) { .xn-pane-group-picker > summary { padding-inline: 4px; gap: 4px; } .xn-pane-group-picker > summary > svg:first-child { display: none; } }
+}
