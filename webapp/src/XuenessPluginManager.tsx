@@ -1,6 +1,6 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { t as tr, tf, useLocale } from "./i18n";
-import type { XuenessPlugin, XuenessPluginFeature } from "./xuenessApi";
+import { listPlugins, setPluginEnabled, type XuenessPlugin, type XuenessPluginFeature } from "./xuenessApi";
 import { XUENESS_PLUGIN_REGISTRY } from "./xuenessPluginRegistry";
 import { isImeComposingEvent } from "./xuenessShortcutDisplay";
 import "./styles/plugins.css";
@@ -11,6 +11,66 @@ export type XuenessPluginManagerProps = {
   onRefresh: () => Promise<void>;
   onToggle: (id: string, enabled: boolean) => Promise<void>;
 };
+
+/** The server's plugin catalog: every feature asks `isPluginEffective` before it mounts or requests. */
+export function usePluginCatalog() {
+  const [pluginCatalog, setPluginCatalog] = useState<XuenessPlugin[]>([]);
+  const [pluginCatalogLoading, setPluginCatalogLoading] = useState(true);
+  const [pluginCatalogReady, setPluginCatalogReady] = useState(false);
+  const [pluginCatalogError, setPluginCatalogError] = useState("");
+  const isPluginEffective = useCallback(
+    (id: string) => pluginCatalogReady && pluginCatalog.some((plugin) => plugin.id === id && plugin.effective),
+    [pluginCatalog, pluginCatalogReady],
+  );
+  // In-flight and queued reads must consult the current catalog, not an old closure.
+  const pluginEffectiveRef = useRef(isPluginEffective);
+  pluginEffectiveRef.current = isPluginEffective;
+  const isSessionsEffective = useCallback(() => pluginEffectiveRef.current("sessions"), []);
+  const mountedRef = useRef(true);
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => { mountedRef.current = false; };
+  }, []);
+
+  const refreshPluginCatalog = useCallback(async () => {
+    setPluginCatalogLoading(true);
+    try {
+      const result = await listPlugins();
+      if (!mountedRef.current) return;
+      setPluginCatalog(result.plugins);
+      setPluginCatalogError("");
+    } catch (reason) {
+      if (!mountedRef.current) return;
+      setPluginCatalog([]);
+      setPluginCatalogError(reason instanceof Error ? reason.message : String(reason));
+    } finally {
+      if (mountedRef.current) {
+        setPluginCatalogReady(true);
+        setPluginCatalogLoading(false);
+      }
+    }
+  }, []);
+  const togglePlugin = useCallback(async (id: string, enabled: boolean) => {
+    try {
+      const result = await setPluginEnabled(id, enabled);
+      if (!mountedRef.current) return;
+      setPluginCatalog(result.plugins);
+      setPluginCatalogError("");
+      setPluginCatalogReady(true);
+    } catch (reason) {
+      if (mountedRef.current) {
+        await refreshPluginCatalog();
+      }
+      throw reason;
+    }
+  }, [refreshPluginCatalog]);
+
+  useEffect(() => {
+    void refreshPluginCatalog();
+  }, [refreshPluginCatalog]);
+
+  return { pluginCatalog, pluginCatalogLoading, pluginCatalogReady, pluginCatalogError, isPluginEffective, pluginEffectiveRef, isSessionsEffective, refreshPluginCatalog, togglePlugin };
+}
 
 export type PluginFilter = "all" | "active" | "disabled" | "blocked";
 

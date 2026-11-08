@@ -86,6 +86,36 @@ export function useModalFocusScope({
   }, [open, dialogRef, initialFocusRef, returnFocusTo]);
 }
 
+/**
+ * Panel data that loads whenever `active` holds as `deps` change (each panel
+ * passes its own trigger list). Errors keep the last value; nothing loads while
+ * the panel or its plugin is off.
+ */
+export function usePanelResource<T>(active: boolean, load: () => Promise<{ ok: true; value: T } | { ok: false; error: string }>, initial: T, deps: React.DependencyList) {
+  const mountedRef = React.useRef(true);
+  React.useEffect(() => {
+    mountedRef.current = true;
+    return () => { mountedRef.current = false; };
+  }, []);
+  const [value, setValue] = React.useState<T>(initial);
+  const [error, setError] = React.useState("");
+  const [loading, setLoading] = React.useState(false);
+  React.useEffect(() => {
+    if (!active) return;
+    setLoading(true);
+    void (async () => {
+      const res = await load();
+      if (!mountedRef.current) return;
+      setLoading(false);
+      if (res.ok) {
+        setValue(res.value);
+        setError("");
+      } else setError(res.error);
+    })();
+  }, deps);
+  return { value, error, loading };
+}
+
 export function shouldDismissModalOnEscape(event: {
   key: string;
   isComposing?: boolean;

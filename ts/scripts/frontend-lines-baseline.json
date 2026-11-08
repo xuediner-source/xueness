@@ -16,5 +16,5 @@
   "../webapp/src/xuenessApi.ts": 600,
   "../webapp/src/XuenessShell.tsx": 697,
   "../webapp/src/xuenessWorkbench.ts": 1660,
-  "../webapp/src/XuenessWorkbenchContainer.tsx": 3018
+  "../webapp/src/XuenessWorkbenchContainer.tsx": 539
 }

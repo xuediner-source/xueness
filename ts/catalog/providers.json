@@ -107,6 +107,8 @@
     "plugins/providers/LocalRuntimeMonitor.tsx",
     "plugins/providers/runtimeSampling.ts",
     "plugins/providers/index.tsx",
-    "plugins/providers/LightweightWorkbench.tsx"
+    "plugins/providers/LightweightWorkbench.tsx",
+    "plugins/providers/useDefaultModelSelection.ts",
+    "plugins/providers/useLightweightWorkbench.ts"
   ]
 }

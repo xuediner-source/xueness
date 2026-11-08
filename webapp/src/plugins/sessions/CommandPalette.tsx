@@ -1,6 +1,7 @@
-import React, { useEffect, useId, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { Clock3, Folder } from "lucide-react";
 import { t as tr, tf, useLocale } from "../../i18n";
+import { shouldDismissModalOnEscape, useModalFocusScope } from "../shared";
 import { fuzzyFilter } from "../../xuenessFuzzy";
 import type { SessionSummary } from "../../xuenessWorkbench";
 import { createDebouncer } from "./debounce";
@@ -335,4 +336,51 @@ export function CommandPalette({ dialogRef, inputRef, sessions, busy, sessionsEn
       </div>
     </div>
   );
+}
+
+/** Open state, focus scope and Escape handling for the workbench's Ctrl+K palette. */
+export function useCommandPaletteState(isPluginEffective: (id: string) => boolean) {
+  const [commandOpen, setCommandOpen] = useState(false);
+  const commandRef = useRef<HTMLInputElement | null>(null);
+  const commandDialogRef = useRef<HTMLDivElement | null>(null);
+  const commandOpenerRef = useRef<HTMLElement | null>(null);
+  const commandPaletteEnabled = commandOpen && isPluginEffective("sessions");
+  useModalFocusScope({
+    open: commandPaletteEnabled,
+    dialogRef: commandDialogRef,
+    initialFocusRef: commandRef,
+    returnFocusTo: commandOpenerRef.current,
+  });
+
+  const openCommandPalette = useCallback((returnFocusTo?: HTMLElement | null) => {
+    if (!isPluginEffective("sessions") || commandOpen) return;
+    const opener = returnFocusTo ?? (document.activeElement instanceof HTMLElement ? document.activeElement : null);
+    // Search closes the narrow sidebar. Return focus to its visible toggle.
+    commandOpenerRef.current = opener?.closest('#xn-shell-sidebar') && window.matchMedia('(max-width: 900px)').matches
+      ? document.querySelector<HTMLButtonElement>('[data-testid="xn-desktop-titlebar-sidebar"], [data-testid="xn-shell-sidebar-toggle"]')
+      : opener;
+    setCommandOpen(true);
+  }, [commandOpen, isPluginEffective]);
+
+  useEffect(() => {
+    if (!commandPaletteEnabled) return;
+    const onEscape = (event: KeyboardEvent) => {
+      if (event.key !== "Escape" || event.defaultPrevented) return;
+      const dialog = commandDialogRef.current;
+      if (!dialog || Array.from(document.querySelectorAll<HTMLElement>('[aria-modal="true"]')).at(-1) !== dialog) return;
+      // Leave composing Escape to the IME. Other shell listeners have the
+      // same guard, so candidate selection cannot dismiss the palette.
+      if (!shouldDismissModalOnEscape(event)) return;
+      event.preventDefault();
+      event.stopPropagation();
+      setCommandOpen(false);
+    };
+    document.addEventListener("keydown", onEscape, true);
+    return () => document.removeEventListener("keydown", onEscape, true);
+  }, [commandPaletteEnabled]);
+  useEffect(() => {
+    if (commandOpen && !isPluginEffective("sessions")) setCommandOpen(false);
+  }, [commandOpen, isPluginEffective]);
+
+  return { commandOpen, setCommandOpen, commandRef, commandDialogRef, commandPaletteEnabled, openCommandPalette };
 }

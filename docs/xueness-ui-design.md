@@ -1,5 +1,18 @@
 # Xueness 工作台设计与验收
 
+## 2026-11-07 工作台容器拆分
+
+`XuenessWorkbenchContainer.tsx` 从 3,012 行有效代码拆成各插件自己的 hook 与视图组件；容器只保留面板 / 会话导航与前进后退历史、插件视图挂载表和外壳布局（539 行）。行为与界面不变。
+
+- sessions：`useWorkbenchSessionData`（侧栏列表、当前会话快照、更早分页、推送 / 轮询，effect 顺序不变）、`useSessionRunActions`、`useSessionSend`、`useSessionQueueActions`、`useSessionListActions`、`useComposerCatalog`（运行选项、工作区目录、斜杠命令）、`useWorkspaceSelection`、`usePrimaryPaneSelection`、`workbenchSessionState`、`workbenchDrafts`；视图 `WorkbenchConversation`（对话与起始页）、`WorkbenchComposerControls`、`WorkbenchSessionHeader`、`WorkbenchSidebar`。命令面板、分叉和侧面板绑定的状态放在 `CommandPalette.tsx`、`primaryForkCommand.ts`、`paneSidePanelBinding.ts` 中。
+- settings：`useWorkbenchSettings`（设置读写队列与文档级外观效果）、`WorkbenchSettingsPanel`、`workbenchSettingsViews`（设置分区与工作台面板共用的懒加载视图，只声明一次，避免同一视图第二次挂起）；全局快捷键 `useWorkbenchGlobalShortcuts` 在 `workbenchShortcutActions.ts`。
+- files：`useWorkbenchFiles`；providers：`useDefaultModelSelection`、`useLightweightWorkbench`。
+- 共享内核（未扩大 `SHARED_FRONTEND`）：插件目录 `usePluginCatalog` 在 `XuenessPluginManager.tsx`，能力面板 `useCapabilitySections` 与 `WorkbenchPanel` 在 `xuenessPluginRegistry.ts`，面板数据加载 `usePanelResource` 在 `plugins/shared.tsx`。
+- 同一层叠层内后出现的样式表在同等权重下获胜，因此容器顶部按原顺序显式导入它所挂载组件的样式表，打包后的 CSS 与拆分前逐字节相同。
+- 新文件均登记在所属插件的 `manifest.json` 与 `ts/catalog/<id>.json` 的 `frontendModules`；容器行数上限从 3018 降到 539。
+
+**验收**：`npm --prefix ts run check`、`webapp typecheck`、`webapp build`（设计门禁与启动包预算）通过。在隔离状态目录、本机模拟模型下，起始页、展开工作记录的对话、Ctrl+K 面板与设置 → 外观在经典 / 纸感 × 浅色 / 深色、1440×900 离屏截图，拆分前后各三轮：除标题栏「分屏组」数量（3 或 4，取决于启动时序，拆分前后的构建交替运行时两种结果都会出现）外，截图逐像素一致，全部元素的计算样式一致。
+
 ## 2026-11-06 样式层叠层（cascade layers）
 
 样式表之间的优先级改由显式层叠层决定，不再依赖加载顺序或选择器权重；界面表现不变。
@@ -56,7 +69,7 @@
 - `webapp/src/styles/workbench.css`：框架、导航、工具栏、页面与窄屏布局。
 - `webapp/src/styles/conversation.css`：输入区、文字和工具步骤。
 - `webapp/src/XuenessShell.tsx`：桌面/移动侧栏与焦点生命周期。
-- `webapp/src/XuenessWorkbenchContainer.tsx`：真实入口、加载恢复和插件受控视图。
+- `webapp/src/XuenessWorkbenchContainer.tsx`：真实入口、加载恢复和插件受控视图；状态与动作在各插件的 hook 中（见 2026-11-07）。
 - `webapp/src/XuenessPluginManager.tsx`：搜索、状态筛选与模块开关。
 
 所有业务仍由可信插件注册表和服务器权限控制。视觉更改没有移除审批，也不会授权真实模型或外部连接。

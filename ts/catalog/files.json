@@ -64,6 +64,7 @@
   "frontendModules": [
     "plugins/files/DirectoryBrowser.tsx",
     "plugins/files/FileBrowser.tsx",
-    "plugins/files/DiffView.tsx"
+    "plugins/files/DiffView.tsx",
+    "plugins/files/useWorkbenchFiles.ts"
   ]
 }

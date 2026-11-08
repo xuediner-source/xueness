@@ -72,7 +72,10 @@
     "xuenessWorkspaces.ts",
     "plugins/settings/themeBoot.ts",
     "plugins/settings/AppearancePicker.tsx",
-    "plugins/settings/workbenchShortcutActions.ts"
+    "plugins/settings/workbenchShortcutActions.ts",
+    "plugins/settings/useWorkbenchSettings.ts",
+    "plugins/settings/WorkbenchSettingsPanel.tsx",
+    "plugins/settings/workbenchSettingsViews.ts"
   ],
   "modules": [
     "runtime_config",

@@ -1,7 +1,79 @@
-import { useEffect, useMemo, useRef } from 'react';
-import { forkSession } from '../../xuenessWorkbench';
+import type React from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { t as tr } from '../../i18n';
+import { forkSession, type ForkSessionResponse } from '../../xuenessWorkbench';
+import type { WorkbenchPanel } from '../../xuenessPluginRegistry';
 import type { SessionCommandClient } from './commandClient';
 import type { PaneForkCommand } from './paneForkActions';
+import type { ConversationTextSelection } from './ConversationSelectionActions';
+import { selectedTextPrompt } from './workbenchSessionState';
+import type { WorkbenchSessionData } from './useWorkbenchSessionData';
+
+type PrimaryForkInput = {
+  activeId: string | null;
+  activeIdRef: React.MutableRefObject<string | null>;
+  setActiveId: (id: string | null) => void;
+  setPanel: (panel: WorkbenchPanel) => void;
+  isPluginEffective: (id: string) => boolean;
+  busy: boolean;
+  setRunError: (message: string) => void;
+  data: WorkbenchSessionData;
+  appendTextToComposer: (targetSessionId: string | null, text: string, workspaceRoot?: string) => void;
+  loadedSessionChoices: React.MutableRefObject<string | null>;
+};
+
+/** The primary pane's fork dialog: fork from a turn, or ask about a selection in a side chat. */
+export function usePrimaryFork({ activeId, activeIdRef, setActiveId, setPanel, isPluginEffective, busy, setRunError, data, appendTextToComposer, loadedSessionChoices }: PrimaryForkInput) {
+  const { session, sessionSnapshotRef, sessionCommands, setSessions, refreshList } = data;
+  const [forkSource, setForkSource] = useState<{ id: string; title: string; turn?: number; root?: string; selectedText?: string; selectedTurnId?: string } | null>(null);
+
+  const handleAddSelectionToCurrentTask = useCallback((selection: ConversationTextSelection) => {
+    const targetSessionId = activeId;
+    const current = sessionSnapshotRef.current;
+    if (!targetSessionId || !current || current.id !== targetSessionId || !isPluginEffective('sessions')) return;
+    appendTextToComposer(targetSessionId, selectedTextPrompt(current.title || current.task, selection.turnId, selection.text));
+  }, [activeId, appendTextToComposer, isPluginEffective]);
+
+  const handleAskSelectionInSideChat = useCallback((selection: ConversationTextSelection) => {
+    const targetSessionId = activeId;
+    const current = sessionSnapshotRef.current;
+    if (!targetSessionId || !current || current.id !== targetSessionId || !isPluginEffective('sessions')
+      || current.status === 'running' || current.streaming?.status === 'streaming' || busy) return;
+    const turn = /^turn-([1-9][0-9]*)$/u.exec(selection.turnId);
+    setForkSource({ id: targetSessionId, title: current.title || current.task || tr('未命名任务'),
+      ...(current.root ? { root: current.root } : {}), ...(turn ? { turn: Number(turn[1]) } : {}),
+      selectedText: selection.text, selectedTurnId: selection.turnId });
+  }, [activeId, busy, isPluginEffective]);
+
+  const createPrimaryFork = usePrimaryForkCommand(sessionCommands, isPluginEffective("sessions"), activeId);
+  const beginFork = useCallback((turn?: number) => {
+    const isRunning = session?.status === "running" || session?.streaming?.status === "streaming";
+    if (!activeId || session?.id !== activeId || busy || isRunning || !isPluginEffective("sessions")) return;
+    setForkSource({ id: activeId, title: session.title || session.task || tr("未命名任务"), turn });
+  }, [activeId, session, busy, isPluginEffective]);
+
+  const completeFork = useCallback((result: ForkSessionResponse) => {
+    const source = forkSource;
+    setForkSource(null);
+    if (!source || result.sourceId !== source.id) return;
+    const child = result.session;
+    const title = child.title || tr("未命名任务");
+    if (source.selectedText) {
+      appendTextToComposer(child.id, selectedTextPrompt(source.title, source.selectedTurnId ?? `turn-${source.turn ?? 1}`, source.selectedText, true), child.root ?? source.root);
+    }
+    setSessions(previous => [{ id: child.id, task: title, title, status: child.status, root: child.root }, ...previous.filter(item => item.id !== child.id)]);
+    void refreshList();
+    // The modal is bound to its opening session. A slow fork must not steal focus
+    // if the user has navigated to a different conversation in the meantime.
+    if (activeIdRef.current !== source.id) return;
+    loadedSessionChoices.current = null;
+    setRunError("");
+    setPanel("chat");
+    setActiveId(child.id);
+  }, [forkSource, refreshList, appendTextToComposer]);
+
+  return { forkSource, setForkSource, createPrimaryFork, beginFork, completeFork, handleAddSelectionToCurrentTask, handleAskSelectionInSideChat };
+}
 
 /** Primary history retains unresolved fork intent independently of modal mounts.
  * Load fork admission only on use; receipt hydration remains synchronous in the

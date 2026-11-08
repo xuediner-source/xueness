@@ -1,5 +1,19 @@
-import type { CapabilityKind } from "./xuenessCapabilities";
-import type { XuenessPlugin } from "./xuenessApi";
+import type React from "react";
+import { useCallback, useEffect, useState } from "react";
+import { t as tr, tf } from "./i18n";
+import {
+  CAPABILITY_KINDS,
+  CAPABILITY_LABELS,
+  loadCapabilitySection,
+  toggleCapabilityItem,
+  createCapabilityItem,
+  updateCapabilityFields,
+  deleteCapabilityItem,
+  type CapabilityItem,
+  type CapabilityKind,
+} from "./xuenessCapabilities";
+import { listResources, type XuenessPlugin } from "./xuenessApi";
+import type { CapabilitySectionProps } from "./XuenessCapabilitiesPanel";
 
 /** Panels are selected from this static registry only. Plugin catalog data is
  * descriptive and cannot inject code or create arbitrary UI routes. */
@@ -119,4 +133,186 @@ export function derivePluginAvailability(plugins: XuenessPlugin[], catalogReady:
     .filter(([kind, id]) => id !== undefined && effectiveIds.has(id))
     .map(([kind]) => kind);
   return { panels, capabilityKinds, effectiveIds };
+}
+
+/** Workbench views: the registry's plugin panels plus the always-reachable plugin manager. */
+export type WorkbenchPanel = PluginPanel | "plugins";
+
+export const workbenchPanelLabels = (): Record<WorkbenchPanel, string> => ({
+  ...Object.fromEntries(Object.entries(PLUGIN_PANEL_LABELS).map(([id, label]) => [id, tr(label)])) as Record<PluginPanel, string>,
+  plugins: tr("插件管理"),
+});
+
+type CapSlot = {
+  items: CapabilityItem[];
+  loading: boolean;
+  error: string;
+  userScopeAvailable: boolean;
+  userScopeReason: string;
+};
+
+type CapabilitySectionInput = {
+  isPluginEffective: (id: string) => boolean;
+  capabilityKinds: CapabilityKind[];
+  /** Which sections are on screen: the capabilities panel, or one settings section. */
+  panel: string;
+  settingsSection: string;
+  /** Kinds with their own section UI (skills); the others use the default list. */
+  renderers?: Partial<Record<CapabilityKind, (props: CapabilitySectionProps) => React.JSX.Element>>;
+};
+
+/**
+ * Shared capabilities panel wiring: one slot per resource kind, loaded on panel
+ * open, plus the create / edit / delete dialog. Each kind only loads or writes
+ * while the plugin that owns it (`CAPABILITY_PLUGIN_BY_KIND`) is effective. A
+ * toggle failure surfaces on that kind's section; the switch never lies about
+ * a write that did not land.
+ */
+export function useCapabilitySections({ isPluginEffective, capabilityKinds, panel, settingsSection, renderers = {} }: CapabilitySectionInput) {
+  const emptyCapSlot: CapSlot = {
+    items: [],
+    loading: false,
+    error: "",
+    userScopeAvailable: true,
+    userScopeReason: "",
+  };
+  const [capSlots, setCapSlots] = useState<Record<CapabilityKind, CapSlot>>(
+    () => Object.fromEntries(CAPABILITY_KINDS.map((k) => [k, { ...emptyCapSlot }])) as Record<CapabilityKind, CapSlot>,
+  );
+  const [capBusyId, setCapBusyId] = useState<string | null>(null);
+
+  const loadCapSlot = useCallback(async (kind: CapabilityKind) => {
+    const pluginId = CAPABILITY_PLUGIN_BY_KIND[kind];
+    if (!pluginId || !isPluginEffective(pluginId)) return;
+    setCapSlots((prev) => ({ ...prev, [kind]: { ...prev[kind], loading: true, error: "" } }));
+    const res = await loadCapabilitySection(kind);
+    if (!isPluginEffective(pluginId)) return;
+    setCapSlots((prev) => ({
+      ...prev,
+      [kind]: res.ok
+        ? {
+            items: res.value.items,
+            loading: false,
+            error: "",
+            userScopeAvailable: res.value.userScopeAvailable,
+            userScopeReason: res.value.userScopeReason,
+          }
+        : { ...prev[kind], loading: false, error: res.error },
+    }));
+  }, [isPluginEffective]);
+
+  useEffect(() => {
+    const kinds = panel === "capabilities" ? capabilityKinds :
+      panel === "settings" ? capabilityKinds.filter(kind => kind === settingsSection) : [];
+    for (const kind of kinds) void loadCapSlot(kind);
+  }, [panel, settingsSection, capabilityKinds.join(","), loadCapSlot]);
+
+  const handleToggleCapabilityItem = useCallback(
+    async (kind: CapabilityKind, item: CapabilityItem, next: boolean) => {
+      const pluginId = CAPABILITY_PLUGIN_BY_KIND[kind];
+      if (!pluginId || !isPluginEffective(pluginId)) return;
+      setCapBusyId(item.id);
+      const res = await toggleCapabilityItem(kind, item.id, next);
+      setCapBusyId(null);
+      if (!res.ok) {
+        setCapSlots((prev) => ({ ...prev, [kind]: { ...prev[kind], error: res.error } }));
+        return;
+      }
+      await loadCapSlot(kind);
+    },
+    [isPluginEffective, loadCapSlot],
+  );
+
+  // -- capability create / edit / delete --------------------------------------
+  const [capDialog, setCapDialog] = useState<
+    { mode: "create" | "edit"; kind: CapabilityKind; initial: CapabilityItem | null } | null
+  >(null);
+  const [capDialogError, setCapDialogError] = useState("");
+  const [capDialogBusy, setCapDialogBusy] = useState(false);
+
+  useEffect(() => {
+    if (!capDialog) return;
+    const pluginId = CAPABILITY_PLUGIN_BY_KIND[capDialog.kind];
+    if (!pluginId || !isPluginEffective(pluginId)) setCapDialog(null);
+  }, [capDialog, isPluginEffective]);
+
+  const openCapCreate = useCallback((kind: CapabilityKind) => {
+    const pluginId = CAPABILITY_PLUGIN_BY_KIND[kind];
+    if (!pluginId || !isPluginEffective(pluginId)) return;
+    setCapDialogError("");
+    setCapDialog({ mode: "create", kind, initial: null });
+  }, [isPluginEffective]);
+
+  const openCapEdit = useCallback((kind: CapabilityKind, item: CapabilityItem) => {
+    const pluginId = CAPABILITY_PLUGIN_BY_KIND[kind];
+    if (!pluginId || !isPluginEffective(pluginId)) return;
+    setCapDialogError("");
+    // The list summary deliberately omits skill/command bodies. Fetch the
+    // current record before opening an editor so saving never blanks a body.
+    void listResources(kind).then(result => {
+      if (!isPluginEffective(pluginId)) return;
+      const raw = result.items.find(row => row.id === item.id);
+      if (!raw) throw new Error("Resource no longer exists");
+      setCapDialog({ mode: "edit", kind, initial: { ...item, extra: { ...item.extra, ...raw } } });
+    }).catch(error => setCapSlots(prev => ({ ...prev, [kind]: { ...prev[kind], error: String(error) } })));
+  }, [isPluginEffective]);
+
+  const handleCapDelete = useCallback(
+    async (kind: CapabilityKind, item: CapabilityItem) => {
+      const pluginId = CAPABILITY_PLUGIN_BY_KIND[kind];
+      if (!pluginId || !isPluginEffective(pluginId)) return;
+      if (!window.confirm(tf("删除{0}「{1}」？配置文件会从资源目录移除。", [tr(CAPABILITY_LABELS[kind]), item.id]))) return;
+      setCapBusyId(item.id);
+      const res = await deleteCapabilityItem(kind, item.id);
+      setCapBusyId(null);
+      if (!res.ok) {
+        setCapSlots((prev) => ({ ...prev, [kind]: { ...prev[kind], error: res.error } }));
+        return;
+      }
+      await loadCapSlot(kind);
+    },
+    [isPluginEffective, loadCapSlot],
+  );
+
+  const handleCapSubmit = useCallback(
+    async (payload: { id: string; fields: Record<string, unknown> }) => {
+      if (!capDialog) return;
+      const pluginId = CAPABILITY_PLUGIN_BY_KIND[capDialog.kind];
+      if (!pluginId || !isPluginEffective(pluginId)) return;
+      setCapDialogBusy(true);
+      setCapDialogError("");
+      const res =
+        capDialog.mode === "create"
+          ? await createCapabilityItem(capDialog.kind, { id: payload.id, ...payload.fields, createOnly: true })
+          : await updateCapabilityFields(capDialog.kind, capDialog.initial?.id ?? payload.id, payload.fields);
+      setCapDialogBusy(false);
+      if (!res.ok) {
+        setCapDialogError(res.error);
+        return;
+      }
+      setCapDialog(null);
+      await loadCapSlot(capDialog.kind);
+    },
+    [capDialog, isPluginEffective, loadCapSlot],
+  );
+
+  const capSections: CapabilitySectionProps[] = CAPABILITY_KINDS.filter((kind) =>
+    capabilityKinds.includes(kind),
+  ).map((kind) => ({
+    kind,
+    label: tr(CAPABILITY_LABELS[kind]),
+    items: capSlots[kind].items,
+    loading: capSlots[kind].loading,
+    error: capSlots[kind].error || undefined,
+    userScopeAvailable: capSlots[kind].userScopeAvailable,
+    userScopeReason: capSlots[kind].userScopeReason || undefined,
+    busyId: capBusyId,
+    onToggle: (k, item, next) => void handleToggleCapabilityItem(k, item, next),
+    onCreate: openCapCreate,
+    onEdit: openCapEdit,
+    onDelete: (k, item) => void handleCapDelete(k, item),
+    ...(renderers[kind] ? { render: renderers[kind] } : {}),
+  }));
+
+  return { capSections, loadCapSlot, capDialog, setCapDialog, capDialogError, capDialogBusy, handleCapSubmit };
 }

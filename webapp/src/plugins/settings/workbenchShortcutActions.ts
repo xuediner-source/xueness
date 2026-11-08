@@ -1,5 +1,7 @@
 import { SHORTCUT_COMMANDS, resolveShortcutBinding, matchesShortcut, isReservedShortcut, hasGlobalShortcutConflict, type ShortcutEventLike } from '../../xuenessShortcutCommands';
-import { isImeComposingEvent } from '../../xuenessShortcutDisplay';
+import { isImeComposingEvent, resolveHostPlatform } from '../../xuenessShortcutDisplay';
+import type { SettingsMap } from '../../xuenessSettings';
+import type { WorkbenchPanel } from '../../xuenessPluginRegistry';
 // settings.shortcut_keymap owns workbench appearance shortcut behavior.
 import { useEffect } from 'react';
 export const APP_ZOOM_MIN = 0.75;
@@ -62,4 +64,47 @@ export function evaluateWorkbenchGlobalKey(
   const owner = shortcutOwner(command.id);
   if (owner && (!context.isPluginEffective(owner) || !context.isPluginEffective("settings"))) return null;
   return { type: command.id };
+}
+
+type WorkbenchGlobalShortcutInput = {
+  settingsValues: SettingsMap;
+  isPluginEffective: (id: string) => boolean;
+  panel: WorkbenchPanel;
+  busy: boolean;
+  setPanel: (panel: WorkbenchPanel) => void;
+  startNewTask: () => void;
+  openCommandPalette: () => void;
+  setSidebarToggleToken: (update: (value: number) => number) => void;
+  handleRefreshAll: () => Promise<void>;
+  handleUpdateSetting: (key: string, value: unknown) => Promise<void>;
+};
+
+/** Window-level workbench shortcuts; open dialogs, menus and shortcut recording keep their keys. */
+export function useWorkbenchGlobalShortcuts({ settingsValues, isPluginEffective, panel, busy, setPanel, startNewTask, openCommandPalette, setSidebarToggleToken, handleRefreshAll, handleUpdateSetting }: WorkbenchGlobalShortcutInput): void {
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (document.querySelector("[aria-modal='true'], [role='dialog'], [role='menu'], .xn-shortcuts__recording")) return;
+      const action = evaluateWorkbenchGlobalKey(event, {
+        bindings: (settingsValues.bindings && typeof settingsValues.bindings === "object" ? settingsValues.bindings : {}) as Record<string, string>,
+        isPluginEffective,
+        panel,
+        busy,
+        platform: resolveHostPlatform(),
+      });
+      if (!action) return;
+      event.preventDefault();
+      event.stopPropagation();
+      if (action.type === "new-session") startNewTask();
+      else if (action.type === "command-palette") openCommandPalette();
+      else if (action.type === "open-settings") setPanel("settings");
+      else if (action.type === "toggle-sidebar") setSidebarToggleToken(value => value + 1);
+      else if (action.type === "refresh-session") void handleRefreshAll();
+      else if (action.type === "toggle-terminal") setPanel(panel === "terminal" ? "chat" : "terminal");
+      else if (action.type === "toggle-browser") setPanel(panel === "browser" ? "chat" : "browser");
+      else if (action.type === "switch-theme") void handleUpdateSetting("theme", document.documentElement.dataset.xnTheme === "dark" || settingsValues.theme === "dark" ? "light" : "dark");
+      else void handleUpdateSetting("appZoom", nextAppZoom(settingsValues.appZoom, action.type));
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [startNewTask, isPluginEffective, settingsValues, handleUpdateSetting, handleRefreshAll, panel, busy, openCommandPalette]);
 }
