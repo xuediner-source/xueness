@@ -199,6 +199,19 @@
   --user-msg-bg: var(--bg-subtle);
   --assistant-msg-bg: var(--bg-hover);
   --assistant-msg-fg: var(--fg);
+
+  /* Data colours for charts (usage, context lens). Eight categories, the last
+   * a neutral "other"; --xn-chart-heat is the full-intensity end of heat scales.
+   * Each appearance and theme sets its own so charts sit in their palette. */
+  --xn-chart-1: #4f6bed;
+  --xn-chart-2: #e0892b;
+  --xn-chart-3: #2f9e6e;
+  --xn-chart-4: #9b5de5;
+  --xn-chart-5: #d6457a;
+  --xn-chart-6: #1f9fb5;
+  --xn-chart-7: #c9a227;
+  --xn-chart-8: #8a919c;
+  --xn-chart-heat: var(--fg);
 }
 
 .dark {
@@ -283,6 +296,16 @@
   --user-msg-bg: var(--bg-subtle);
   --assistant-msg-bg: var(--bg-card);
   --assistant-msg-fg: var(--fg);
+
+  --xn-chart-1: #8197ff;
+  --xn-chart-2: #f0a457;
+  --xn-chart-3: #52c193;
+  --xn-chart-4: #b98af0;
+  --xn-chart-5: #ec7aa2;
+  --xn-chart-6: #4cc3d6;
+  --xn-chart-7: #e0bf55;
+  --xn-chart-8: #9aa1ab;
+  --xn-chart-heat: var(--fg);
 }
 
 /* Claudex: warm paper surfaces with a compact workbench. Appearance only.
@@ -378,6 +401,17 @@
   --accent: var(--accent-brand);
   --tool-accent: #c98a00;
   --tool-result-accent: #0285ff;
+
+  /* Earth and ink tones that sit on paper; heat scales use the brand terracotta. */
+  --xn-chart-1: #b9603e;
+  --xn-chart-2: #5b7b9a;
+  --xn-chart-3: #6f8f5a;
+  --xn-chart-4: #8a6aa8;
+  --xn-chart-5: #b5677d;
+  --xn-chart-6: #4f8a87;
+  --xn-chart-7: #b08a3e;
+  --xn-chart-8: #9a9184;
+  --xn-chart-heat: var(--accent-brand);
 }
 .dark[data-xn-palette="claudex"] {
 
@@ -461,5 +495,15 @@
   --tool-result-accent: #339cff;
   --active-fg: var(--fg);
   --assistant-msg-bg: var(--bg-card);
+
+  --xn-chart-1: #e08a65;
+  --xn-chart-2: #8fb0cf;
+  --xn-chart-3: #9dbd86;
+  --xn-chart-4: #b79ad3;
+  --xn-chart-5: #d892a6;
+  --xn-chart-6: #7fbab6;
+  --xn-chart-7: #d6b065;
+  --xn-chart-8: #b3ab9e;
+  --xn-chart-heat: var(--accent-brand);
 }
 }

@@ -3,9 +3,9 @@
     "id": "subscriptions",
     "packageId": "xueness-subscriptions",
     "version": "1.0.0",
-    "sha256": "6275b04130d117a66611fecdd54192e2f91c1e7c13e550e80325e47e39014c19",
-    "bytes": 154918,
-    "url": "https://raw.githubusercontent.com/xuediner-source/xueness/main/marketplace/packages/xueness-subscriptions-1.0.0-6275b04130d117a6.json.gz",
+    "sha256": "c0cc68ff9431451db0dc5de4e1eb99e09554bb89320055ecc5817c6b99fbbe6d",
+    "bytes": 154933,
+    "url": "https://raw.githubusercontent.com/xuediner-source/xueness/main/marketplace/packages/xueness-subscriptions-1.0.0-c0cc68ff9431451d.json.gz",
     "files": [
       {
         "path": "backend/assets/catalog.json",
@@ -128,15 +128,15 @@
         "executable": false
       },
       {
-        "path": "frontend/optional-subscriptions-C7SY9Qpp.js",
-        "bytes": 13315,
-        "sha256": "6208c15ac2d560b1f9c9ef3e9adc7d903ff1a0799a1426dbb972ed1a36baf77e",
-        "executable": false
-      },
-      {
         "path": "frontend/optional-subscriptions-CGHWLo1i.css",
         "bytes": 6143,
         "sha256": "b8f79df0e7d4f64ae62a7f737205c9ae28d81b332cf2ac0e357b45324131f529",
+        "executable": false
+      },
+      {
+        "path": "frontend/optional-subscriptions-CNV88FjK.js",
+        "bytes": 13315,
+        "sha256": "c6d9dc8e3f0a5627902ef4d9cbd0f38f6dc10d855b1544d1954be4a5255ae931",
         "executable": false
       }
     ]
@@ -145,9 +145,9 @@
     "id": "model_monitor",
     "packageId": "xueness-model-monitor",
     "version": "1.0.0",
-    "sha256": "e6ee8b135c5f9bc8116a1673cfecf91390e7062e21b5f2bf0db9b5f0e9126fde",
-    "bytes": 15206,
-    "url": "https://raw.githubusercontent.com/xuediner-source/xueness/main/marketplace/packages/xueness-model-monitor-1.0.0-e6ee8b135c5f9bc8.json.gz",
+    "sha256": "bbb260e8f025d50c855b1a4eef8ff4bc8bab3c8f6d35265a2dbbc272b9184031",
+    "bytes": 15204,
+    "url": "https://raw.githubusercontent.com/xuediner-source/xueness/main/marketplace/packages/xueness-model-monitor-1.0.0-bbb260e8f025d50c.json.gz",
     "files": [
       {
         "path": "backend/manifest.json",
@@ -192,9 +192,9 @@
         "executable": false
       },
       {
-        "path": "frontend/optional-model_monitor-D21_bfFy.js",
+        "path": "frontend/optional-model_monitor-CfAga6dn.js",
         "bytes": 10711,
-        "sha256": "1600c577af5643ef5911a6ae4096b26e5ef79d1c96e18f1b50e6ab8206b2937f",
+        "sha256": "5b63ec0d73c951d341c794a0c8768c3cb00f295751a0e54f3f1666e6ed7f1de3",
         "executable": false
       }
     ]
@@ -203,9 +203,9 @@
     "id": "workbuddy",
     "packageId": "xueness-workbuddy",
     "version": "1.0.0",
-    "sha256": "4b09934d1ccc32f19d6d2ba82f46b0266c799beb4a4c9bd451f731d2603ef902",
-    "bytes": 8427490,
-    "url": "https://raw.githubusercontent.com/xuediner-source/xueness/main/marketplace/packages/xueness-workbuddy-1.0.0-4b09934d1ccc32f1.json.gz",
+    "sha256": "2764bbbfd717cb6c61f138563f806ef6a8bed095b3be3134a18e1da49592617c",
+    "bytes": 8427447,
+    "url": "https://raw.githubusercontent.com/xuediner-source/xueness/main/marketplace/packages/xueness-workbuddy-1.0.0-2764bbbfd717cb6c.json.gz",
     "files": [
       {
         "path": "backend/assets/workbuddy2api-panel.exe",
@@ -274,15 +274,15 @@
         "executable": false
       },
       {
-        "path": "frontend/optional-workbuddy-DsjSw6Bn.css",
-        "bytes": 3693,
-        "sha256": "17f10eb0e4f842d3542865e9ff31302343174c5d476e22991696005a832ab0ad",
+        "path": "frontend/optional-workbuddy-Cssag1EI.js",
+        "bytes": 7565,
+        "sha256": "122f66f6ae235491824c0395182b2c953837450e435e248645d981001cdf15f4",
         "executable": false
       },
       {
-        "path": "frontend/optional-workbuddy-Dy3XR2ad.js",
-        "bytes": 7565,
-        "sha256": "ddb72c54a194298f2b3628253634c22440f4e742963ef5d9bd8edc5b917c35a0",
+        "path": "frontend/optional-workbuddy-DsjSw6Bn.css",
+        "bytes": 3693,
+        "sha256": "17f10eb0e4f842d3542865e9ff31302343174c5d476e22991696005a832ab0ad",
         "executable": false
       }
     ]

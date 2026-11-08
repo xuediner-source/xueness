@@ -281,7 +281,8 @@ export function MarketplaceDetail({
   </div>;
 }
 
-export function XuenessMarketplace({ onInstalled, onManagePlugins }: { onInstalled?: () => void; onManagePlugins?: () => void }): React.JSX.Element {
+/** `embedded`: inside a settings page that already shows the title, so only the note and actions remain. */
+export function XuenessMarketplace({ onInstalled, onManagePlugins, embedded = false }: { onInstalled?: () => void; onManagePlugins?: () => void; embedded?: boolean }): React.JSX.Element {
   const [items, setItems] = useState<MarketplaceItem[]>([]);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState("");
@@ -395,11 +396,11 @@ export function XuenessMarketplace({ onInstalled, onManagePlugins }: { onInstall
 
   const detailItem = detail ? items.find(item => item.id === detail.id) ?? detail : null;
   const visibleCountLabel = tf("显示 {0} 个扩展", [visibleItems.length]);
-  return <section className="xn-marketplace" data-testid="marketplace-panel">
+  return <section className="xn-marketplace" data-testid="marketplace-panel" data-embedded={embedded || undefined}>
     <header className="xn-marketplace__header">
       <div className="xn-marketplace__title">
-        <h3>{tr("扩展市场")}</h3>
-        <p>{tr("浏览可安装的扩展，在详情中查看能力和使用说明。")}</p>
+        {!embedded && <><h3>{tr("扩展市场")}</h3>
+        <p>{tr("浏览可安装的扩展，在详情中查看能力和使用说明。")}</p></>}
         <p className="xn-marketplace__status-note">{tr("发现可选插件，按需从 GitHub 下载。安装后前往插件管理启用，内置功能无需重复安装。")}</p>
       </div>
       <div className="xn-marketplace__header-actions">

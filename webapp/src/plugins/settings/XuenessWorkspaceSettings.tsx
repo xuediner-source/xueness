@@ -252,7 +252,7 @@ export function XuenessWorkspaceSettings({
     <section className="xn-workspace-settings" data-testid="workspace-settings">
       <header className="xn-workspace-settings__header">
         <div>
-          <p className="xn-workspace-settings__eyebrow">{tr("工作区设置")}</p>
+          {picking && <p className="xn-workspace-settings__eyebrow">{tr("工作区设置")}</p>}
           <h2 id={dialogTitleId} tabIndex={picking ? -1 : undefined} data-workspace-picker-title={picking ? "true" : undefined}>
             {picking ? tr("选择工作区") : tr("默认工作区")}
           </h2>

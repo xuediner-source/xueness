@@ -116,7 +116,7 @@ export function XuenessPluginSettingsPanel({ resourceContent, onBrowse, ...manag
     </nav>
     {view === "installed" ? <>
       <p className="xn-plugin-settings__note">{tr("此目录列出完整功能插件；卡片开关控制功能启用。市场清单安装和资源清单启用分别管理。")}</p>
-      <XuenessPluginManager {...managerProps} />
+      <XuenessPluginManager {...managerProps} embedded />
     </> : <div className="xn-plugin-settings__resources">
       <p className="xn-plugin-settings__note">{tr("资源清单是否已安装、清单自身是否启用、对应功能插件是否启用是三个独立状态。")}</p>
       {resourceContent ?? <p role="status">{tr("资源清单由扩展插件管理；启用扩展插件后可查看。")}</p>}
@@ -155,7 +155,8 @@ export function FeatureUnavailable({ feature, onManage }: { feature: string; onM
   );
 }
 
-export function XuenessPluginManager({ plugins, loading, error, onRefresh, onToggle }: XuenessPluginManagerProps) {
+/** `embedded`: inside a settings page that already shows a title; the description and actions stay. */
+export function XuenessPluginManager({ plugins, loading, error, onRefresh, onToggle, embedded = false }: XuenessPluginManagerProps & { embedded?: boolean }) {
   const locale = useLocale();
   const [busyId, setBusyId] = useState<string | null>(null);
   const [actionError, setActionError] = useState("");
@@ -201,7 +202,7 @@ export function XuenessPluginManager({ plugins, loading, error, onRefresh, onTog
     <section className="xn-plugins" aria-label={tr("插件管理")}>
       <header className="xn-plugins__header">
         <div>
-          <h2>{tr("插件管理")}</h2>
+          {!embedded && <h2>{tr("插件管理")}</h2>}
           <p>{tr("启用或停用工作台模块。执行工具仍按每次运行的审批设置决定。")}</p>
         </div>
         <div className="xn-plugins__header-actions">

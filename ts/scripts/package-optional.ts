@@ -32,7 +32,10 @@ for (const definition of definitions) {
   });
   files.push(...front.map(name => ({ path: `frontend/${name}`, bytes: readFileSync(join(assets, name)), executable: false })));
   const payload = { id: definition.id, version: manifest.version, files: files.map(file => ({ path: file.path, content: file.bytes.toString("base64") })) };
-  const compressed = gzipSync(Buffer.from(JSON.stringify(payload)), { level: 9 }), digest = sha(compressed);
+  const compressed = gzipSync(Buffer.from(JSON.stringify(payload)), { level: 9 });
+  // Use the gzip "unknown" OS byte so release pins agree across build hosts.
+  compressed[9] = 255;
+  const digest = sha(compressed);
   const filename = `${definition.packageId}-${manifest.version}-${digest.slice(0, 16)}.json.gz`;
   writeFileSync(join(out, filename), compressed);
   pins[definition.id] = { ...definition, version: manifest.version, sha256: digest, bytes: compressed.length,

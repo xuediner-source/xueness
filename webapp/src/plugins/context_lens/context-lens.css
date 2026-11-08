@@ -1,8 +1,10 @@
 @layer plugins {
 .xl-root {
-  --xl-system: #7960ff; --xl-tools: #ff9d00; --xl-user: #08bd59; --xl-injected: #b149ff;
-  --xl-assistant: #3281ff; --xl-reasoning: #ec4899; --xl-tool: #00b8a6; --xl-output: #ed3ba7;
-  --xl-waiting: #3281ff; --xl-thinking: #9955ff; --xl-generating: #ed3ba7; --xl-other: #a1a8b5;
+  /* Categories map onto the appearance's chart palette (tokens.css), keeping the
+   * upstream pairings: assistant/waiting, reasoning/output/generating, system/thinking. */
+  --xl-system: var(--xn-chart-4); --xl-tools: var(--xn-chart-2); --xl-user: var(--xn-chart-3); --xl-injected: var(--xn-chart-7);
+  --xl-assistant: var(--xn-chart-1); --xl-reasoning: var(--xn-chart-5); --xl-tool: var(--xn-chart-6); --xl-output: var(--xn-chart-5);
+  --xl-waiting: var(--xn-chart-1); --xl-thinking: var(--xn-chart-4); --xl-generating: var(--xn-chart-5); --xl-other: var(--xn-chart-8);
   container: context-lens / inline-size; color: var(--fg); padding: 12px 14px 20px; width: 100%; max-width: 1680px; margin: 0 auto; min-width: 0; font-size: 12px;
 }
 .xl-root * { box-sizing: border-box; }

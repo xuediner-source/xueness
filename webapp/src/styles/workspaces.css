@@ -13,6 +13,11 @@
 .xn-workspace-settings__header h2 { margin: 2px 0 7px; font-size: 22px; line-height: 1.3; font-weight: 600; letter-spacing: -.025em; }
 .xn-workspace-settings__header p { margin: 0; max-width: 680px; color: var(--fg-muted); font-size: 13px; line-height: 1.6; }
 .xn-workspace-settings__eyebrow { color: var(--fg-muted); font-size: 11px !important; letter-spacing: .06em; text-transform: uppercase; }
+/* As a settings section the page supplies the title and gutter; "默认工作区" is a
+ * section heading there, sized like the other settings groups. */
+.xn-settings-view__body > .xn-workspace-settings { width: 100%; margin: 0 0 28px; }
+.xn-settings-view__body > .xn-workspace-settings .xn-workspace-settings__header { margin-bottom: 14px; }
+.xn-settings-view__body > .xn-workspace-settings .xn-workspace-settings__header h2 { margin: 0 0 4px; font-size: calc(var(--xn-ui-font-size, 14px) + 2px); letter-spacing: normal; }
 .xn-workspace-settings__layout { display: grid; grid-template-columns: minmax(0, 1.55fr) minmax(250px, .8fr); align-items: start; gap: 16px; }
 .xn-workspace-settings__main,
 .xn-workspace-settings__side { display: grid; gap: 16px; min-width: 0; }

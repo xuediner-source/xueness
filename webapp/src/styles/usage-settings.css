@@ -115,14 +115,15 @@
 .xn-usage-settings__heatmap { min-width: 600px; gap: 4px; }
 .xn-usage-settings__heatmap-week { grid-template-columns: minmax(0, 1fr); grid-template-rows: 20px repeat(7, minmax(0, 1fr)); gap: 4px; }
 .xn-usage-settings__heatmap-month { width: 34px; overflow: visible; font-size: 10px; }
-.xn-usage-settings__scale span[data-level="1"], .xn-usage-settings__heatmap-week > span[role="gridcell"][data-level="1"] { background: color-mix(in srgb, #7874d8 22%, var(--bg-card)); }
-.xn-usage-settings__scale span[data-level="2"], .xn-usage-settings__heatmap-week > span[role="gridcell"][data-level="2"] { background: color-mix(in srgb, #7874d8 44%, var(--bg-card)); }
-.xn-usage-settings__scale span[data-level="3"], .xn-usage-settings__heatmap-week > span[role="gridcell"][data-level="3"] { background: color-mix(in srgb, #7874d8 72%, var(--bg-card)); }
-.xn-usage-settings__scale span[data-level="4"], .xn-usage-settings__heatmap-week > span[role="gridcell"][data-level="4"] { background: #7874d8; }
+/* Heat levels blend the appearance's heat colour into the card (tokens.css). */
+.xn-usage-settings__scale span[data-level="1"], .xn-usage-settings__heatmap-week > span[role="gridcell"][data-level="1"] { background: color-mix(in oklab, var(--xn-chart-heat) 14%, var(--bg-card)); }
+.xn-usage-settings__scale span[data-level="2"], .xn-usage-settings__heatmap-week > span[role="gridcell"][data-level="2"] { background: color-mix(in oklab, var(--xn-chart-heat) 34%, var(--bg-card)); }
+.xn-usage-settings__scale span[data-level="3"], .xn-usage-settings__heatmap-week > span[role="gridcell"][data-level="3"] { background: color-mix(in oklab, var(--xn-chart-heat) 60%, var(--bg-card)); }
+.xn-usage-settings__scale span[data-level="4"], .xn-usage-settings__heatmap-week > span[role="gridcell"][data-level="4"] { background: var(--xn-chart-heat); }
 .xn-usage-settings__chart-scroll { margin-top: 26px; }
 .xn-usage-settings__chart { height: 228px; gap: 8px; }
 .xn-usage-settings__chart-track { height: 196px; background: repeating-linear-gradient(to bottom, transparent 0, transparent 47px, var(--border) 48px, transparent 49px); }
-.xn-usage-settings__chart-bar { display: flex; flex-direction: column-reverse; width: min(64%, 42px); overflow: hidden; background: #89919d; border-radius: 6px 6px 2px 2px; }
+.xn-usage-settings__chart-bar { display: flex; flex-direction: column-reverse; width: min(64%, 42px); overflow: hidden; background: var(--xn-chart-8); border-radius: 6px 6px 2px 2px; }
 .xn-usage-settings__chart-segment { display: block; flex: 0 0 auto; width: 100%; min-height: 0; }
 .xn-usage-settings__chart-segment:hover { filter: brightness(1.12); }
 .xn-usage-settings__chart-label { font-size: 10px; line-height: 18px; }
@@ -135,9 +136,9 @@
 .xn-usage-settings__legend > span > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .xn-usage-settings__models { gap: 4px; margin-top: 20px; }
 .xn-usage-settings__model { padding: 17px 2px; gap: 13px 20px; }
-.xn-usage-settings__model-dot { background: var(--model-color, #89919d); width: 10px; height: 10px; flex-basis: 10px; }
+.xn-usage-settings__model-dot { background: var(--model-color, var(--xn-chart-8)); width: 10px; height: 10px; flex-basis: 10px; }
 .xn-usage-settings__model-meter { height: 5px; }
-.xn-usage-settings__model-meter > span { background: var(--model-color, #89919d); }
+.xn-usage-settings__model-meter > span { background: var(--model-color, var(--xn-chart-8)); }
 .xn-usage-settings__model-metrics { font-size: 12px; gap: 6px 16px; }
 .xn-usage-settings__tabs button { min-height: 32px; padding: 0 12px; font-size: 12px; }
 .xn-usage-settings__refresh { min-height: 39px; font-size: 12px; }

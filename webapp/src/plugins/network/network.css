@@ -34,8 +34,7 @@
   font-weight: 600;
 }
 
-.xn-network-settings__form input,
-.xn-network-settings__form select {
+.xn-network-settings__form input {
   width: 100%;
   min-height: 38px;
   padding: 8px 10px;
@@ -46,8 +45,20 @@
   font: inherit;
 }
 
+/* The shared dropdown, sized like the inputs beside it. */
+.xn-network-settings__form .xn-select {
+  width: 100%;
+  min-height: 38px;
+  padding: 0 10px;
+  border-color: var(--border-strong, var(--border));
+  border-radius: 8px;
+  background: var(--surface-raised, var(--surface));
+  font-size: 13px;
+  font-weight: 400;
+}
+
 .xn-network-settings__form input:focus-visible,
-.xn-network-settings__form select:focus-visible,
+.xn-network-settings__form .xn-select:focus-visible,
 .xn-network-settings button:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;

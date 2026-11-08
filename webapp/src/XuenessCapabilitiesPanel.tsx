@@ -13,7 +13,7 @@ import {
   Workflow,
   X,
 } from "lucide-react";
-import { Badge } from "./ui/primitives";
+import { Badge, EmptyState } from "./ui/primitives";
 import {
   CAPABILITY_LABELS,
   type CapabilityItem,
@@ -49,9 +49,23 @@ export type CapabilitySectionProps = {
   render?: (props: CapabilitySectionProps) => React.JSX.Element;
   searchQuery?: string;
   scopeLabel?: string;
+  /** Rendered inside the section after its list, e.g. a plugin's folded group. */
+  footer?: React.ReactNode;
+  /** Header count when the footer holds more of this kind than `items`. */
+  totalCount?: number;
 };
 
 const KIND_ORDER: CapabilityKind[] = ["skills", "commands", "subagents", "mcp", "hooks", "plugins"];
+
+/** What an empty list says: what the resource is for, not just "nothing configured". */
+const EMPTY_COPY: Record<CapabilityKind, [string, string]> = {
+  skills: ["还没有技能", "新建技能，或从文件夹添加已有的 SKILL.md。"],
+  commands: ["还没有自定义命令", "新建后可在输入框中用 / 调用。"],
+  subagents: ["还没有子代理", "新建子代理，让任务可以把工作交给它。"],
+  mcp: ["还没有 MCP 服务器", "添加服务器后，Agent 可按权限设置调用它提供的工具。"],
+  hooks: ["还没有钩子", "钩子会在工具调用前后运行你配置的命令。"],
+  plugins: ["尚无插件清单", "新建或导入符合 Xueness 内置适配器格式的数据清单。"],
+};
 
 function resourceName(item: CapabilityItem): string {
   const value = item.extra?.name;
@@ -90,7 +104,7 @@ function KindIcon({ kind }: { kind: CapabilityKind }): React.JSX.Element {
   }
 }
 
-function ItemRow({
+export function CapabilityItemRow({
   kind,
   item,
   busy,
@@ -199,13 +213,15 @@ export function CapabilitySection({
   onDelete,
   headerActions,
   scopeLabel,
+  footer,
+  totalCount,
 }: CapabilitySectionProps): React.JSX.Element {
   return (
     <section className="xn-cap-section" data-testid={`xn-cap-section-${kind}`}>
       <header className="xn-cap-section__head">
         <span className="xn-cap-section__icon" aria-hidden="true"><KindIcon kind={kind} /></span>
         <h3 className="xn-cap-section__title">{label}</h3>
-        <span className="xn-cap-section__count" data-testid={`xn-cap-count-${kind}`}>{items.length}</span>
+        <span className="xn-cap-section__count" data-testid={`xn-cap-count-${kind}`}>{totalCount ?? items.length}</span>
         {userScopeAvailable && <span className="xn-cap-section__scope">{scopeLabel ?? tr("用户级")}</span>}
         {onCreate && (
           <button
@@ -224,20 +240,15 @@ export function CapabilitySection({
       {loading && !error && <p className="xn-cap-loading">{tr("加载中…")}</p>}
       {!loading && !error && items.length === 0 && !hideEmpty && (
         <div className="xn-cap-empty" data-testid={`xn-cap-empty-${kind}`}>
-          <p className="xn-cap-empty__title">{kind === "plugins" ? tr("尚无插件清单") : tr("暂无配置")}</p>
-          {kind === "plugins" && <p className="xn-cap-empty__hint">{tr("新建或导入符合 Xueness 内置适配器格式的数据清单。")}</p>}
-          {userScopeAvailable === false && (
-            <p className="xn-cap-empty__hint">
-              {tr("用户级资源目录不可用")}{userScopeReason ? `：${userScopeReason}` : ""}
-            </p>
-          )}
-          {onCreate && <button type="button" className="xn-cap-empty__create" disabled={disabled} onClick={() => onCreate(kind)}>{tr("新建")}</button>}
+          <EmptyState compact icon={<KindIcon kind={kind} />} title={tr(EMPTY_COPY[kind][0])}
+            hint={userScopeAvailable === false ? `${tr("用户级资源目录不可用")}${userScopeReason ? `：${userScopeReason}` : ""}` : tr(EMPTY_COPY[kind][1])}
+            action={onCreate && <button type="button" className="xn-cap-empty__create" disabled={disabled} onClick={() => onCreate(kind)}><span aria-hidden="true">+</span>{tr("新建")}</button>} />
         </div>
       )}
       {items.length > 0 && (
         <ul className="xn-cap-list">
           {items.map((item) => (
-            <ItemRow
+            <CapabilityItemRow
               key={item.id}
               kind={kind}
               item={item}
@@ -249,6 +260,7 @@ export function CapabilitySection({
           ))}
         </ul>
       )}
+      {footer}
     </section>
   );
 }

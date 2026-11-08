@@ -375,10 +375,6 @@ html:not([data-xn-palette]) .xn-start-page__recent-meta > time { grid-column: 2;
 
 /* ---------- Leftover hues from feature plugins, folded into ink ---------- */
 html:not([data-xn-palette]) .xn-reasoning-slider__energy { background: linear-gradient(90deg, transparent, color-mix(in oklab, var(--fg) 46%, transparent), color-mix(in oklab, var(--fg) 72%, transparent)), linear-gradient(100deg, transparent 30%, rgb(255 255 255 / .35) 50%, transparent 70%); background-size: 100% 100%, 200% 100%; }
-html:not([data-xn-palette]) .xn-usage-settings__scale span[data-level="1"], html:not([data-xn-palette]) .xn-usage-settings__heatmap-week > span[role="gridcell"][data-level="1"] { background: color-mix(in oklab, var(--fg) 14%, var(--bg-card)); }
-html:not([data-xn-palette]) .xn-usage-settings__scale span[data-level="2"], html:not([data-xn-palette]) .xn-usage-settings__heatmap-week > span[role="gridcell"][data-level="2"] { background: color-mix(in oklab, var(--fg) 34%, var(--bg-card)); }
-html:not([data-xn-palette]) .xn-usage-settings__scale span[data-level="3"], html:not([data-xn-palette]) .xn-usage-settings__heatmap-week > span[role="gridcell"][data-level="3"] { background: color-mix(in oklab, var(--fg) 60%, var(--bg-card)); }
-html:not([data-xn-palette]) .xn-usage-settings__scale span[data-level="4"], html:not([data-xn-palette]) .xn-usage-settings__heatmap-week > span[role="gridcell"][data-level="4"] { background: var(--fg); }
 html:not([data-xn-palette]) .xn-model-monitor-home { border-color: var(--border); background: var(--bg-card); }
 html:not([data-xn-palette]) .xn-model-monitor-home.is-different { border-color: var(--border-strong); border-style: dashed; }
 html:not([data-xn-palette]) .xn-model-monitor-home__icon { border-color: var(--border); background: var(--bg-subtle); }

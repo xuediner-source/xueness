@@ -68,12 +68,15 @@ export function buildUsageChartDays(
   });
 }
 
-/** Model identity determines its color across charts, ranges and refreshes. */
+const MODEL_COLORS = ['var(--xn-chart-1)', 'var(--xn-chart-2)', 'var(--xn-chart-3)', 'var(--xn-chart-4)', 'var(--xn-chart-5)', 'var(--xn-chart-6)', 'var(--xn-chart-7)'];
+
+/** Model identity picks one of the appearance's seven chart colours, stable across
+ * charts, ranges and refreshes; unattributed usage takes the neutral eighth. */
 export function usageModelColor(model: Pick<UsageModelSummary, 'model' | 'protocol'>): string {
-  if (!model.model) return '#89919d';
+  if (!model.model) return 'var(--xn-chart-8)';
   let hash = 2166136261;
   for (const char of `${model.protocol ?? ''}:${model.model}`) hash = Math.imul(hash ^ char.charCodeAt(0), 16777619) >>> 0;
-  return `hsl(${hash % 360} 62% 49%)`;
+  return MODEL_COLORS[hash % MODEL_COLORS.length];
 }
 
 export function usageDaySegments(day: Pick<UsageChartDay, 'totalTokens' | 'models'>) {

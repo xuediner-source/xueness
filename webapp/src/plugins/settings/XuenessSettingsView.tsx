@@ -174,7 +174,7 @@ export function XuenessSettingsView({
   }, [activeSection, hasActiveExtension]);
 
   return (
-    <section className={`xn-settings-view${activeSection === "plugins" ? " xn-settings-view--plugin-catalog" : ""}`} aria-label={tr("设置")} data-testid="xn-settings-view" data-searching={searchActive || undefined}>
+    <section className={`xn-settings-view${activeSection === "plugins" || activeSection === "modules" ? " xn-settings-view--plugin-catalog" : ""}`} aria-label={tr("设置")} data-testid="xn-settings-view" data-searching={searchActive || undefined}>
       <aside className="xn-settings-view__sidebar">
         <div className="xn-settings-view__drag-space" aria-hidden="true" />
         {onBack && (

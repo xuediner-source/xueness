@@ -3038,5 +3038,17 @@ messages["完全访问会跳过全部工具审批与应用权限规则，包括�
 messages["文件工具可访问当前系统账户有权访问的位置。"] = "File tools can access locations permitted to the current OS account.";
 messages["已启用的联网和远程工具无需逐次确认。"] = "Enabled network and remote tools need no individual confirmation.";
 messages["应用内的审批、拒绝和强制询问规则在完全访问期间不生效。"] = "Application approval, deny and always-ask rules do not apply while full access is selected.";
+messages["还没有技能"] = "No skills yet";
+messages["新建技能，或从文件夹添加已有的 SKILL.md。"] = "Create a skill, or add an existing SKILL.md from a folder.";
+messages["还没有自定义命令"] = "No custom commands yet";
+messages["新建后可在输入框中用 / 调用。"] = "Once created, call it with / in the message box.";
+messages["还没有子代理"] = "No subagents yet";
+messages["新建子代理，让任务可以把工作交给它。"] = "Create a subagent so tasks can hand work to it.";
+messages["还没有 MCP 服务器"] = "No MCP servers yet";
+messages["添加服务器后，Agent 可按权限设置调用它提供的工具。"] = "Once added, the agent can call its tools as your permission settings allow.";
+messages["还没有钩子"] = "No hooks yet";
+messages["钩子会在工具调用前后运行你配置的命令。"] = "Hooks run commands you configure before or after tool calls.";
+messages["官方内置技能"] = "Official built-in skills";
+messages["已启用 {0} 个"] = "{0} enabled";
 
 }

@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { get, post } from "../../xuenessApi";
 import { useLocale } from "../../i18n";
+import { Select } from "../../ui/Select";
 import "./network.css";
 
 export type SearchProvider = "brave" | "tavily" | "searxng";
@@ -245,21 +246,21 @@ export function NetworkSettings({ enabled, disabled = false }: Props): React.JSX
         <form className="xn-network-settings__form" onSubmit={event => void save(event)}>
           <label>
             <span>{tr("搜索方式", "Search provider")}</span>
-            <select value={searchMode} disabled={disabled || saving} onChange={event => setSearchMode(event.currentTarget.value as "service" | "model")}>
+            <Select value={searchMode} disabled={disabled || saving} onChange={event => setSearchMode(event.currentTarget.value as "service" | "model")}>
               <option value="service">{tr("网页搜索服务", "Web search service")}</option>
               <option value="model">{tr("独立搜索模型", "Separate SearchModel")}</option>
-            </select>
+            </Select>
           </label>
           {searchMode === "service" ? <>
             <label><span>{tr("搜索服务", "Search service")}</span>
-              <select value={searchProvider} disabled={disabled || saving} onChange={event => {
+              <Select value={searchProvider} disabled={disabled || saving} onChange={event => {
                 const next = event.currentTarget.value as SearchProvider;
                 setSearchProvider(next);
                 setSearchEndpoint(selectedSearchService(settings, next)?.searchEndpoint ?? SEARCH_ENDPOINTS[next]);
                 setSearchKey(""); setResult(null); setNotice("");
               }}>
                 <option value="tavily">Tavily</option><option value="brave">Brave Search</option><option value="searxng">SearXNG</option>
-              </select>
+              </Select>
             </label>
             <p className="xn-network-settings__help">{searchProvider === "tavily"
               ? tr("使用基础搜索，每次最多 5 条结果；关闭自动参数、深度搜索和原文下载。", "Uses basic search with up to 5 results. Automatic parameters, advanced search, and raw content are disabled.")

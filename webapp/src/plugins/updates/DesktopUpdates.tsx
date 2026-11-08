@@ -100,7 +100,8 @@ export function DesktopUpdateIndicator({ state, failed = false, onManage }: { st
     <span className="xn-update-indicator__dot" aria-hidden="true" />
   </button>;
 }
-export function DesktopUpdates({ enabled, compact = false, onManage }: { enabled: boolean; compact?: boolean; onManage?: () => void }) {
+/** `embedded`: inside the settings page that already shows the "应用更新" title. */
+export function DesktopUpdates({ enabled, compact = false, embedded = false, onManage }: { enabled: boolean; compact?: boolean; embedded?: boolean; onManage?: () => void }) {
   const [state, setState] = useState<UpdateState | null>(null);
   const [autoDownload, setAutoDownload] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -126,7 +127,7 @@ export function DesktopUpdates({ enabled, compact = false, onManage }: { enabled
   if (!enabled) return null;
   if (compact) return <DesktopUpdateIndicator state={state} failed={Boolean(error)} onManage={onManage} />;
   const actions = updateActionAvailability(state, busy);
-  return <section className="xn-desktop-updates" data-testid="desktop-updates"><h2>{t('应用更新')}</h2>
+  return <section className="xn-desktop-updates" data-testid="desktop-updates" data-embedded={embedded || undefined}>{!embedded && <h2>{t('应用更新')}</h2>}
     <p>{t('启动时检查稳定版，此后定期检查。更新下载到客户端，安装前保留会话并检查运行中的任务。')}</p>
     <p>{t('当前版本')} {state?.currentVersion ?? '—'}{state?.version ? ` · ${t('更新版本')} ${state.version}` : ''}</p>
     <p role="status">{t(state?.reason ?? '正在读取更新状态…')}</p>
