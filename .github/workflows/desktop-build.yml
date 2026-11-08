@@ -55,6 +55,28 @@ jobs:
           const actual = createHash('sha256').update(readFileSync(file)).digest('hex');
           assert.equal(actual, checksums[name], `Electron checksum mismatch for ${name}`);
           NODE
+      - name: Preload the pinned installer tool archives
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cache="$RUNNER_TEMP/xueness-builder-cache"
+          printf 'ELECTRON_BUILDER_CACHE=%s\n' "$cache" >> "$GITHUB_ENV"
+          # electron-builder verifies cached archives with its own pinned checksums before extraction.
+          fetch_tool() {
+            gh release download "$1" --repo electron-userland/electron-builder-binaries --pattern "$2" --dir "$cache/$1"
+          }
+          if [ "$XUENESS_BUILD_PLATFORM" = win32 ]; then
+            fetch_tool '7zip@1.0.0' '7zip-win-x64.tar.gz'
+            fetch_tool 'winCodeSign-2.6.0' 'winCodeSign-2.6.0.7z'
+            fetch_tool 'nsis-3.0.4.1' 'nsis-3.0.4.1.7z'
+            fetch_tool 'nsis-resources-3.4.1' 'nsis-resources-3.4.1.7z'
+          else
+            arch="$XUENESS_BUILD_ARCH"
+            if [ "$arch" = x64 ]; then arch=x86_64; fi
+            fetch_tool '7zip@1.0.0' "7zip-darwin-$arch.tar.gz"
+            fetch_tool 'icons@1.1.0' 'icons-bundle.tar.gz'
+            fetch_tool 'dmg-builder@1.2.5' "dmgbuild-bundle-$arch-75c8a6c.tar.gz"
+          fi
       - name: Validate application structure and compile UI
         run: |
           npm --prefix ts run check
