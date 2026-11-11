@@ -77,7 +77,7 @@ export const XUENESS_PLUGIN_REGISTRY = {
   shell: { name: "Shell 工具", description: "执行命令工具", panels: [] },
   planning: { name: "规划工具", description: "待办、提问和交付完整性检查", panels: [] },
   tools: { name: "工具执行策略", description: "对其他插件工具调用的实验性执行策略（干跑预览、每轮工具调用预算）", panels: [] },
-  deepseek_harness: { name: "DeepSeek Harness", description: "DeepSeek 风格供应商的确定性 KV-cache 前缀稳定与 reasoning 双协议桥；在设置中导入和管理第三方声明式 DSH 扩展包", panels: [] },
+  deepseek_harness: { name: "DeepSeek Harness", description: "DeepSeek 风格供应商的确定性 KV-cache 前缀稳定与 reasoning 双协议桥；为通用扩展包导入提供 DSH 包类型", panels: [] },
 } as const satisfies Record<string, { name: string; description: string; panels: readonly PluginPanel[] }>;
 
 export type XuenessPluginId = keyof typeof XUENESS_PLUGIN_REGISTRY;

@@ -29,6 +29,7 @@
     "files_api"
   ],
   "features": [
+    {"id": "commands.rule_pack_type", "name": "Cursor 规则包类型：导入规则文件，启用后每条规则成为斜杠命令", "nameEn": "Cursor rule pack type: import rule files; once activated each rule is a slash command"},
     {"id": "commands.templates", "name": "自定义斜杠提示模板", "nameEn": "Custom slash prompt templates"},
     {"id": "commands.init", "name": "内建 /init：调研工作区并生成或更新 AGENTS.md", "nameEn": "Built-in /init: study the workspace and create or update AGENTS.md"},
     {"id": "commands.resources", "name": "命令资源创建、编辑与开关", "nameEn": "Command resource creation, editing and switches"},

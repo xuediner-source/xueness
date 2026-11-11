@@ -18,12 +18,18 @@
   "httpFamilies": [
     "plugins/marketplace",
     "plugins/profiles",
+    "plugins/imports",
     "resources/plugins"
   ],
   "pluginsActions": [
     "validate",
     "update",
-    "profile"
+    "profile",
+    "imports",
+    "import",
+    "unimport",
+    "activate",
+    "deactivate"
   ],
   "dataFiles": [
     "profiles.json"
@@ -33,7 +39,8 @@
     "profiles",
     "validate_update",
     "composer_capabilities",
-    "creator_tooling"
+    "creator_tooling",
+    "imports"
   ],
   "features": [
     { "id": "extensions.official_download", "name": "从桌面安装包或 GitHub 安装并校验官方可选插件", "nameEn": "Install and verify official optional plugins from the desktop package or GitHub" },
@@ -57,6 +64,8 @@
       "name": "插件组合 profile 档位",
       "nameEn": "Plugin composition profiles"
     },
+    { "id": "extensions.package_activation", "name": "启用已导入扩展包：把技能和提示模板登记为技能与命令插件的资源，可随时停用", "nameEn": "Activate imported packages: register their skills and prompt templates as resources of the skills and commands plugins, reversible at any time" },
+    { "id": "extensions.package_import", "name": "通用扩展包导入：按包类型预览、导入与移除，类型由所属插件提供", "nameEn": "General package import: preview, import and remove by package type, each type provided by its owning plugin" },
     {
       "id": "extensions.plugin_creator",
       "name": "插件创建与非执行清单校验",
@@ -65,6 +74,7 @@
   ],
   "frontendModules": [
     "plugins/extensions/index.tsx",
-    "plugins/extensions/PluginProfilePicker.tsx"
+    "plugins/extensions/PluginProfilePicker.tsx",
+    "plugins/extensions/PackageImports.tsx"
   ]
 }

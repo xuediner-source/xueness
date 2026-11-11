@@ -32,6 +32,7 @@
     }
   ],
   "features": [
+    {"id": "mcp.definitions_package_type", "name": "MCP 服务器定义包类型：导入 mcpServers 定义，默认关闭，逐个检查后启用", "nameEn": "MCP server definitions package type: import mcpServers definitions switched off, to be reviewed and enabled one by one"},
     {"id": "mcp.transports", "name": "stdio、HTTP 与旧 SSE 连接", "nameEn": "stdio, HTTP and legacy SSE connections"},
     {"id": "mcp.tools", "name": "外部工具、资源与提示词", "nameEn": "External tools, resources and prompts"},
     {"id": "mcp.recovery", "name": "调用时断线重连", "nameEn": "Reconnect on a dropped connection"},

@@ -41,7 +41,14 @@ export function resolveSavedProvider(store: ProfileStore, selection: Selection =
     if (external && store.external) return store.external.resolve(external, { model, reasoningEffort, runtimeProfile });
     throw new PyValueError("provider profile not found");
   }
-  return providerFromRecord(record, { model, reasoningEffort, runtimeProfile });
+  const provider = providerFromRecord(record, { model, reasoningEffort, runtimeProfile });
+  // A local server that rejects the usage field is remembered with the profile, so the probe is not repeated after a restart.
+  // An explicit `compatibility.streamUsage` always wins, and saving the profile again forgets what was learned.
+  if (provider instanceof OpenAICompatible) provider.onStreamUsage = (state) => {
+    if (state !== "rejected") return;
+    try { const current = store.read(providerId); if (current && current._streamUsageRejected !== true) { current._streamUsageRejected = true; store.write(providerId, current); } } catch { /* Learning is best effort. */ }
+  };
+  return provider;
 }
 export function providerFromRecord(record: Dict, selection: Selection = {}): OpenAICompatible | AnthropicMessages {
   const protocol = String(record.protocol ?? "openai");
@@ -66,5 +73,5 @@ export function providerFromRecord(record: Dict, selection: Selection = {}): Ope
   }
   if (protocol !== "openai") throw new PyValueError("provider profile uses an unsupported protocol");
   validateEffort(model, levels, selection.reasoningEffort, base);
-  return new OpenAICompatible({ base, model, key, capabilities: capabilities as string[] | undefined, reasoningEffort: selection.reasoningEffort, runtimeProfile: options.runtime_profile, contextWindow: options.context_window, maxOutputTokens: options.max_output_tokens, toolCalling: options.tool_calling, compatibility: options.compatibility, lightweightOptions: options.lightweight_options, allowLoopbackHttp: local ? true : null, allowEmptyKey: lightweight ? true : savedLoopback ? false : null });
+  return new OpenAICompatible({ streamUsageRejected: record._streamUsageRejected === true, base, model, key, capabilities: capabilities as string[] | undefined, reasoningEffort: selection.reasoningEffort, runtimeProfile: options.runtime_profile, contextWindow: options.context_window, maxOutputTokens: options.max_output_tokens, toolCalling: options.tool_calling, compatibility: options.compatibility, lightweightOptions: options.lightweight_options, allowLoopbackHttp: local ? true : null, allowEmptyKey: lightweight ? true : savedLoopback ? false : null });
 }

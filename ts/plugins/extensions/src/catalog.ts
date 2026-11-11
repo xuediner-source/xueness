@@ -13,6 +13,7 @@
 import { BUNDLED_PLUGIN_IDS, PyValueError } from "@xueness/contracts";
 import { isPyOSError, isPyValueError, type FileLockProvider } from "@xueness/sessions";
 import { componentSummary } from "./components.ts";
+import { optionalArtifact } from "@xueness/kernel";
 import { brokenState, readState, resolveRows, writeState, type SwitchState } from "./runtime.ts";
 
 type Dict = Record<string, unknown>;
@@ -99,6 +100,9 @@ export function catalogItems(options: PluginCatalogOptions): Dict[] {
     for (const key of UI_FIELDS) if (ui && (ui[key] !== undefined || Object.hasOwn(item, key))) item[key] = [...ui[key] ?? []];
     // F07.05: the panel answers "which components live in this plugin" without a second round trip.
     item.components = componentSummary(options.stateDir, row.id);
+    // Official plugins come in two kinds: shipped inside the app, or downloaded on demand from the plugin center.
+    // Imported third-party packages are not catalog rows; the import page lists them.
+    item.category = optionalArtifact(row.id) ? "center" : "bundled";
     Object.assign(item, { enabled: row.enabled, effective: row.effective, installed: row.installed, blockedBy: row.blockedBy }, error ? { configurationError: error } : {});
     return item;
   });

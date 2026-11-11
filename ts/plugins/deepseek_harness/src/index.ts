@@ -1,7 +1,7 @@
 /**
  * DeepSeek Harness plugin entry (H01.06): the `deepseek_harness` RPC
- * methods and the `xueness harness ...` CLI, both backed by one registry
- * the hot loader writes through.
+ * methods over one registry the hot loader writes through. Importing a
+ * package goes through the host's general import surface (`importer.ts`).
  *
  * RPC methods (method names are `<plugin>/<action>`):
  *   deepseek_harness/load    { source }   hot-load a directory or package
@@ -44,7 +44,7 @@ export * from "./reasoning-bridge.ts";
 export * from "./loader.ts";
 export * from "./registry.ts";
 export * from "./library.ts";
-export * from "./http.ts";
+export * from "./importer.ts";
 export * from "./hook-bridge.ts";
 export * from "./builtins/auto-verify.ts";
 export * from "./builtins/self-repair.ts";
@@ -53,7 +53,6 @@ export * from "./builtins/trajectory-recorder.ts";
 export * from "./builtins/repo-map.ts";
 export * from "./builtins/symbol-graph.ts";
 export * from "./compat/swe-bench-harness.ts";
-export * from "./compat/rule-pack-importer.ts";
 export * from "./compat/sandbox-verifier.ts";
 export * from "./bench/cases.ts";
 export { runBenchCase, runBenchCases, formatBenchReport, type BenchCase, type BenchCaseTimings, type BenchCaseResult as BenchTimedCaseResult, type BenchRunSummary as BenchTimedRunSummary, type BenchRunReport, type BenchRunOptions } from "./bench/runner.ts";
@@ -272,73 +271,6 @@ function coerceBenchRun(value: unknown): BenchRunSummary | null {
     if (item.error !== undefined && typeof item.error !== "string") return null;
   }
   return { label: value.label, model: value.model, createdAt: value.createdAt, cases: value.cases as BenchRunSummary["cases"] };
-}
-
-export interface HarnessCommandResult {
-  code: number;
-  output: string;
-}
-
-/**
- * The `xueness harness load|unload|list|verify` CLI: thin printing shell
- * over the same dispatch, so CLI and RPC cannot drift apart.
- */
-export async function harnessCommand(argv: readonly string[], options: HarnessApiOptions = {}): Promise<HarnessCommandResult> {
-  const api = createHarnessApi(options);
-  const [action, argument] = argv;
-  const usage = "usage: xueness harness <load <path> | unload <id> | list | verify [id] | bench [baseline-json] | tournament <models-csv> [turns] | optimize [--dry-run] | chaos [--calls N] [--concurrency N]>";
-  if (action === "optimize") {
-    const dryRun = argv.includes("--dry-run") || !argv.includes("--live");
-    const result = await api.dispatch("deepseek_harness/optimize", { dryRun });
-    if (!result.ok) return { code: 2, output: JSON.stringify(result) };
-    return { code: 0, output: JSON.stringify(result) };
-  }
-  if (action === "chaos") {
-    let calls = 2;
-    let concurrency = 2;
-    for (let i = 1; i < argv.length; i++) {
-      if (argv[i] === "--calls" && argv[i + 1]) { calls = Number(argv[++i]); continue; }
-      if (argv[i] === "--concurrency" && argv[i + 1]) { concurrency = Number(argv[++i]); continue; }
-    }
-    const result = await api.dispatch("deepseek_harness/chaos", { callsPerScenario: calls, concurrency });
-    if (result.error) return { code: 2, output: JSON.stringify(result) };
-    return { code: result.ok ? 0 : 1, output: JSON.stringify(result) };
-  }
-  if (action === "tournament") {
-    const models = (argument ?? "").split(",").map((part) => part.trim()).filter((part) => part.length > 0);
-    let turns: number | undefined;
-    const rawTurns = argv[2];
-    if (rawTurns !== undefined) {
-      turns = Number(rawTurns);
-      if (!Number.isInteger(turns) || turns < 1) return { code: 2, output: usage };
-    }
-    const result = await api.dispatch("deepseek_harness/tournament", turns === undefined ? { models } : { models, turns });
-    if (!result.ok) return { code: 2, output: JSON.stringify(result) };
-    // A stalled bracket (double forfeits) is a real answer, but not exit 0.
-    return { code: result.complete === false ? 1 : 0, output: JSON.stringify(result) };
-  }
-  if (action === "bench") {
-    let baseline: unknown;
-    if (argument !== undefined) {
-      try {
-        baseline = JSON.parse(argument);
-      } catch {
-        return { code: 2, output: usage };
-      }
-    }
-    const result = await api.dispatch("deepseek_harness/bench", baseline === undefined ? {} : { baseline });
-    if (!result.ok) return { code: 2, output: JSON.stringify(result) };
-    return { code: result.healthy === false ? 1 : 0, output: JSON.stringify(result) };
-  }
-  const call: readonly [string, Row] | null =
-    action === "load" && argument ? ["deepseek_harness/load", { source: argument }]
-    : action === "unload" && argument ? ["deepseek_harness/unload", { id: argument }]
-    : action === "list" ? ["deepseek_harness/list", {}]
-    : action === "verify" ? ["deepseek_harness/verify", argument ? { id: argument } : {}]
-    : null;
-  if (call === null) return { code: 2, output: usage };
-  const result = await api.dispatch(call[0], call[1]);
-  return { code: result.ok ? 0 : 1, output: JSON.stringify(result) };
 }
 
 /** The bundled plugin: manifest plus an empty apply — the API is created by the host. */

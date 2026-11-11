@@ -10,7 +10,17 @@
 
 浏览器工作台归 `browser.side_tabs`。地址栏、截图、元素检查器和标签内操作记录复用现有逐次批准，截图自动请求也会先等待批准。
 
-设置中的扩展包库归 `deepseek_harness.library`。启用该插件后，用户可以预览、导入、校验或移除声明式清单与引用的技能文本。扩展库用状态目录内的私有暂存目录和既有写锁完成导入。工具、钩子与校验命令在库中只供查看。
+通用扩展包导入归 `extensions.package_import`，入口是 `/api/plugins/imports`。包类型由拥有该格式的插件登记：Xueness 自有的声明式清单（`xueness`）由 extensions 提供，DeepSeek Harness 包（`dsh`）由 deepseek_harness 提供，两者地位相同。类型只在所属插件有效时可用；未指定类型时由唯一识别该清单的导入器处理。导入只读取数据，不执行包内代码，新导入的 Xueness 清单默认关闭。导入器以与格式无关的包视图回答，所以「设置 → 扩展与维护 → 扩展包导入」和命令行 `xueness plugin imports`、`plugin import <路径> [--type] [--replace] [--dry-run]`、`plugin unimport <类型> <ID>` 对所有类型使用同一套界面与流程；文件夹内的清单按各类型登记的文件名查找，包内文件只在导入器要求时读取。
+
+插件分三类。官方内置插件随应用一起发布，在功能模块页面标为「官方内置」。插件中心的可下载插件同样由 Xueness 官方制作，但不预装，由扩展市场按固定摘要下载后再启用，标为「插件中心」；目前是订阅中心、返回模型监测和 WorkBuddy 号池。第三类是用户从本机导入的扩展包，在扩展包导入页面标为「导入」，其中包括从 DeepSeek Harness 导入的声明式扩展包。前两类的代码都来自构建时确定的清单；导入的扩展包只有数据，不带可执行代码。
+
+DeepSeek Harness 生态中公开发布的插件（GitHub 主题 `dsh-plugin`）是代码插件：`package.json` 带有 `dsh` 块，由 `cordis.patch.yml` 把包的入口挂载到 DSH 的 Cordis 宿主，并调用 `@deepseek-ai/dsh-*` 运行时服务。Xueness 没有 Cordis 宿主，也不加载清单之外的代码，所以这类插件不能导入或运行。扩展包导入会识别它们，显示名称、版本、许可和所需的 DSH 运行时服务，并说明原因；包内的技能文件夹是纯文本，可以按「技能文件夹」类型单独导入。DSH 类型实际能导入的是声明式扩展包（`deepseek-harness.json`，或带 `xuenessHarness` 块的 `package.json`）。
+
+目前登记的包类型及归属：`xueness`（extensions，Xueness 声明式清单）、`skill`（skills，含 `SKILL.md` 的技能文件夹，走技能插件既有的分阶段文件夹导入，导入后与在技能页面添加的技能相同；为 Claude Code 编写的技能文件夹布局一致，可直接导入）、`cursor-rules`（commands，`.cursorrules` 与 `.cursor/rules` 下的 `.mdc`/`.md` 规则，启用后每条规则是一个斜杠命令）、`mcp-servers`（mcp，`.mcp.json`/`mcp.json` 中的 `mcpServers`，导入的服务器一律关闭并带来源标记，由用户在 MCP 页面逐个检查后启用；请求头凭据不导入）和 `dsh`（deepseek_harness）。没有自有存储的类型把导入副本放在 extensions 提供的文本包存储 `<状态目录>/package-imports/<类型>/` 中。导入器可以在预览结果中用 `wants` 列出需要的包内文件路径模式，客户端从所选文件夹读取后以 base64 发送；一次导入连同清单须在单个请求内（最多 100 个文件、600 KB）。
+
+已导入扩展包的启用归 `extensions.package_activation`。导入不等于启用：用户在扩展包导入页或用 `xueness plugin activate <类型> <ID>` 明确启用后，扩展包中的技能登记为技能插件的资源，提示模板登记为命令插件的资源（斜杠命令 `/<包ID>.<模板ID>`）。写入经过所属插件自己的资源接口，所以只在该插件有效时生效，并与用户手工创建的资源一样显示、编辑、关闭和受权限约束。写入的资源带有来源标记；启用不会覆盖没有该标记的同名资源，停用和移除扩展包只删除带标记的资源，替换已启用的扩展包会刷新它登记的内容。扩展包中声明的工具、钩子和校验命令指向要执行的行为，不属于可启用内容，仍然只供查看。包类型通过导入器的 `contributions` 提供可启用的文本；目前 DSH 类型提供，Xueness 声明式清单只有组件名称而没有内容，因此没有可启用项。
+
+DSH 包类型归 `deepseek_harness.library`。启用该插件后，通用扩展包导入可以预览、导入、校验或移除声明式 DSH 清单与引用的技能文本。扩展库用状态目录内的私有暂存目录和既有写锁完成导入。工具、钩子与校验命令在库中只供查看。原先仅供 DSH 使用的设置页、`/api/deepseek_harness` 路由和 `harness` 命令已并入通用导入。
 
 当前轻量模式的归属：
 

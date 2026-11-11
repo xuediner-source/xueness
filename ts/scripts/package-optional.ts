@@ -1,4 +1,4 @@
-/** Reproducible GitHub artifacts. Run after Vite; desktop receives core assets only. */
+/** Reproducible GitHub artifacts: pinned by payload, not by compressed bytes. Run after Vite; desktop receives core assets only. */
 import { existsSync, lstatSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { createHash } from "node:crypto";
@@ -32,13 +32,14 @@ for (const definition of definitions) {
   });
   files.push(...front.map(name => ({ path: `frontend/${name}`, bytes: readFileSync(join(assets, name)), executable: false })));
   const payload = { id: definition.id, version: manifest.version, files: files.map(file => ({ path: file.path, content: file.bytes.toString("base64") })) };
-  const compressed = gzipSync(Buffer.from(JSON.stringify(payload)), { level: 9 });
-  // Use the gzip "unknown" OS byte so release pins agree across build hosts.
-  compressed[9] = 255;
-  const digest = sha(compressed);
+  // The pin is the digest and size of the payload itself. A gzip stream differs between zlib builds
+  // (and so between Node versions and hosts) for identical input, so it must not be what is pinned.
+  const plain = Buffer.from(JSON.stringify(payload));
+  const compressed = gzipSync(plain, { level: 9 });
+  const digest = sha(plain);
   const filename = `${definition.packageId}-${manifest.version}-${digest.slice(0, 16)}.json.gz`;
   writeFileSync(join(out, filename), compressed);
-  pins[definition.id] = { ...definition, version: manifest.version, sha256: digest, bytes: compressed.length,
+  pins[definition.id] = { ...definition, version: manifest.version, sha256: digest, bytes: plain.length,
     url: `https://raw.githubusercontent.com/xuediner-source/xueness/main/marketplace/packages/${filename}`,
     files: files.map(file => ({ path: file.path, bytes: file.bytes.length, sha256: sha(file.bytes), executable: file.executable })) };
   removed.push(...front);

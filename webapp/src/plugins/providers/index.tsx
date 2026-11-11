@@ -19,7 +19,7 @@ import type { ProviderCompatibilityCheckRecord, ProviderCompatibilityDiagnosticG
 import { Select } from '../../ui/Select';
 import { t as tr, tf } from '../../i18n';
 import { OperationHeader } from '../shared';
-import { LocalRuntimeMonitor } from './LocalRuntimeMonitor';
+import { LocalRuntimeMonitor } from './LocalRuntimeMonitor'; import { LocalRuntimeProbe } from './LocalRuntimeProbe';
 import '../../styles/operations.css';
 import '../../styles/provider-settings.css';
 
@@ -641,7 +641,7 @@ export function ProviderEditor({
         <fieldset className="xn-provider-option-list" disabled={locked}>
           <legend>{tr('API 兼容设置')}</legend>
           <label>
-            <input type="checkbox" checked={draft.compatibility?.streamUsage ?? (runtimeProfile === 'standard')} onChange={event => onDraftChange({ ...draft, compatibility: { ...draft.compatibility, streamUsage: event.currentTarget.checked } })} />
+            <input type="checkbox" checked={draft.compatibility?.streamUsage ?? true} onChange={event => onDraftChange({ ...draft, compatibility: { ...draft.compatibility, streamUsage: event.currentTarget.checked } })} />
             <span>{tr('在流式请求中发送 stream_options.include_usage')}</span>
           </label>
         </fieldset>
@@ -851,7 +851,7 @@ export function ProviderEditor({
     {original && changed && <p className="xn-provider-hint" id={UNSAVED_ACTIONS_HELP_ID} role="status">{tr('请先保存更改，再测试或使用此配置。')}</p>}
     {isNew && <ProviderSetupGuide />}
     {!isNew && <p className="xn-provider-test-note">{tr('对话测试只检查一次简短文本回复，不验证工具调用；服务商可能收取少量费用。')}</p>}
-    {testResult && <p className="xn-provider-test-feedback" role="status"><Check size={15} aria-hidden="true" />{tf('对话测试成功，响应时间 {0} ms（未验证工具）', [testResult.latencyMs])}</p>}
+    {testResult && <p className="xn-provider-test-feedback" role="status"><Check size={15} aria-hidden="true" />{tf('对话测试成功，响应时间 {0} ms（未验证工具）', [testResult.latencyMs])}</p>}{testResult && original && !changed && <LocalRuntimeProbe providerId={original.id} runKey={testResult} disabled={busy || locked} onApply={s => onDraftChange({ ...draft, ...(s.contextWindow ? { contextWindow: s.contextWindow, maxOutputTokens: runtimeProfile === 'lightweight' ? adjustedLightweightOutput(s.contextWindow, draft.maxOutputTokens) : draft.maxOutputTokens } : {}), ...(s.toolCalling ? { toolCalling: s.toolCalling } : {}) })} />}
     {testError && <p className="xn-provider-test-feedback xn-provider-test-feedback--error" role="alert"><Radio size={15} aria-hidden="true" />{tr('连接测试失败：')}{testError}</p>}
 
     <section className="xn-provider-section">

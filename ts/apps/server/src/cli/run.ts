@@ -14,7 +14,8 @@ import type { ApplicationApi } from "../application-api.ts";
 import type { Args, Parser } from "./argparse.ts";
 import { dumps, err, errorText, out, type Cli } from "./host.ts";
 import { cliApprover, eventRenderer, Terminal, type CliTerminal, type GateFlags } from "./render.ts";
-import { chatCommand } from "./chat.ts";
+import { expandCommand } from "@xueness/plugin-commands";
+import { chatCommand, commandItems } from "./chat.ts";
 
 type Row = Record<string, any>;
 
@@ -189,7 +190,10 @@ async function runCommand(cli: Cli): Promise<number> {
     const attachments: Attachment[] = [];
     try { for (const name of a.attach) enqueueAttachment(attachments, await snapshot(root, name)); }
     catch (error) { cli.error(`无法添加附件: ${errorText(error)}`); }
-    s = await store.new(a.prompt, root, { attachments });
+    // A one-shot prompt that starts with a slash command expands exactly as it does in chat and the web composer.
+    const [content, invocation] = expandCommand(commandItems(cli, root), a.prompt);
+    s = await store.new(String(content), root, { attachments });
+    if (invocation) { s.command_invocations = [invocation]; await store.save(s); }
   } else {
     if (a.attach.length) cli.error("run --attach requires --prompt; use chat to attach files to an existing session");
     if (!a.id) cli.error("run needs a session id (or --prompt TASK --root DIR)");

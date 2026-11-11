@@ -12,6 +12,7 @@ import { McpConnectionPool, type McpActivityEvent, type McpConnectionLease, type
 export * from "./names.ts";
 export * from "./content.ts";
 export * from "./resources-http.ts";
+export { mcpPackageImporter } from "./package-importer.ts";
 export * from "./runtime.ts";
 export { mcpRuntimeExtension } from "./runtime-extension.ts";
 export { validateRuntimeMcpServers, mergeRuntimeMcpServers } from "./config.ts";

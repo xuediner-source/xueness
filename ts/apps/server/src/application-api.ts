@@ -17,14 +17,16 @@ import { createAgentService, type AgentServiceOptions } from "./agent-service.ts
 import { createPlanningApi, publicGoal, stageGoal } from "@xueness/plugin-planning";
 import { createGitApi } from "@xueness/plugin-git";
 import { createHooksHttp } from "@xueness/plugin-hooks";
-import { createSkillsHttp } from "@xueness/plugin-skills";
-import { createAppsHttp, createElicitationHttp, createMcpOpsHttp, createMcpResourcesHttp } from "@xueness/plugin-mcp";
+import { createSkillsHttp, skillPackageImporter } from "@xueness/plugin-skills";
+import { rulePackImporter } from "@xueness/plugin-commands";
+import { createAppsHttp, createElicitationHttp, createMcpOpsHttp, createMcpResourcesHttp, mcpPackageImporter } from "@xueness/plugin-mcp";
 import { createSubagentTasksHttp, createSubagentsResourcesHttp, TaskRegistry } from "@xueness/plugin-subagents";
 import { createShellSettingsApi } from "@xueness/plugin-shell";
 import { createMcpRuntimeApi } from "@xueness/plugin-mcp";
 import { legacyRuntimeConfig, validateAgentRuntimeConfig } from "./runtime-configuration.ts";
 import { createNetworkHttp, fetchPage, nodeNet } from "@xueness/plugin-network";
-import { createExtensionsHttp } from "@xueness/plugin-extensions";
+import { createExtensionsHttp, textPackageStore } from "@xueness/plugin-extensions";
+import { harnessImporter } from "@xueness/plugin-deepseek_harness";
 import { createBrowserHandoff } from "./browser-handoff.ts";
 import { createComposerFeatures } from "./composer-features.ts";
 import { isLoopbackAddress } from "./py-url.ts";
@@ -184,7 +186,7 @@ export async function createApplicationApi(options: ApplicationApiOptions): Prom
   const shellHttp = createShellSettingsApi({ stateDir: options.stateDir, enabled });
   const networkHttp = createNetworkHttp({ stateDir: options.stateDir, enabled, env });
   const catalogNet = nodeNet();
-  const extensionsHttp = createExtensionsHttp({ stateDir: options.stateDir, projectRoot: options.projectRoot, enabled, env, optionalChanged: () => round6.syncOptional(), fetchUrl: async (url) => {
+  const extensionsHttp = createExtensionsHttp({ stateDir: options.stateDir, projectRoot: options.projectRoot, enabled, env, importers: [skillPackageImporter({ stateDir: options.stateDir }), rulePackImporter({ store: textPackageStore(options.stateDir, "cursor-rules") }), mcpPackageImporter({ stateDir: options.stateDir }), harnessImporter({ stateDir: options.stateDir })], writeResource: (kind, data) => (kind === "skills" ? skillsHttp : commands).dispatch("POST", ["api", "resources", kind], {}, data), optionalChanged: () => round6.syncOptional(), fetchUrl: async (url) => {
     const page = await fetchPage(catalogNet, url);
     return { output: typeof page.output === "string" ? page.output : "", truncated: page.truncated === true };
   } });

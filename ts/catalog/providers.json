@@ -60,11 +60,13 @@
   ],
   "features": [
     {"id": "providers.usage_calibration", "name": "基于真实用量的双向预算校准", "nameEn": "Bidirectional budget calibration from reported usage"},
+    {"id": "providers.prefix_reuse", "name": "逐请求提示前缀复用测量", "nameEn": "Per-request prompt prefix reuse measurement"},
     {"id": "providers.stable_history_window", "name": "持久批量历史裁剪与缓存前缀复用", "nameEn": "Persistent batched history pruning and prefix reuse"},
     {"id": "providers.model_admission", "name": "模型请求排队与并发准入", "nameEn": "Model request queue and admission"},
     {"id": "providers.model_debug", "name": "本地请求诊断记录", "nameEn": "Local model request diagnostics"},
     {"id": "providers.profiles", "name": "模型配置", "nameEn": "Model profiles"},
     {"id": "providers.connection_test", "name": "连接测试", "nameEn": "Connection tests"},
+    {"id": "providers.local_runtime_probe", "name": "本地推理服务探测：实际上下文窗口与原生工具支持", "nameEn": "Local runtime probe: actual context window and native tool support"},
     {"id": "providers.model_discovery", "name": "模型发现", "nameEn": "Model discovery"},
     {"id": "providers.compatibility", "name": "兼容性诊断", "nameEn": "Compatibility diagnostics"},
     {"id": "providers.default_selection", "name": "默认模型", "nameEn": "Default model"},
@@ -105,6 +107,7 @@
   "frontendModules": [
     "plugins/providers/ProvidersPanel.tsx",
     "plugins/providers/LocalRuntimeMonitor.tsx",
+    "plugins/providers/LocalRuntimeProbe.tsx",
     "plugins/providers/runtimeSampling.ts",
     "plugins/providers/index.tsx",
     "plugins/providers/LightweightWorkbench.tsx",

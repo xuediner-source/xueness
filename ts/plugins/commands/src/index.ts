@@ -7,4 +7,5 @@ export * from "./file-commands.ts";
 export * from "./frontmatter.ts";
 export * from "./http-api.ts";
 export * from "./inspect.ts";
+export { rulePackImporter, ruleSlug, type RulePackStore } from "./rule-pack-importer.ts";
 export const commands: BundledPlugin = { manifest, plugin: definePlugin({ name: "commands", apply() {} }) };

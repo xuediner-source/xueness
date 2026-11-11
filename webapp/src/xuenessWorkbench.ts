@@ -149,7 +149,7 @@ export type WorkbenchSession = {
     estimateMethod?: string;
     omittedMessages?: number;
     activeTools?: number;
-    overflowRetry?: boolean;
+    overflowRetry?: boolean; prefixRequestChars?: number; prefixSharedChars?: number; prefixRequests?: number; prefixBreaks?: number; prefixTotalSharedChars?: number; prefixTotalChars?: number;
   } | null;
   runtime_activity?: WorkbenchRuntimeActivity | null;
   runtime_activity_history?: WorkbenchRuntimeActivity[] | null;

@@ -42,6 +42,7 @@ export type LocalRuntimeSession = {
     omittedMessages?: number;
     activeTools?: number;
     calibrationFactor?: number;
+    prefixRequestChars?: number; prefixSharedChars?: number; prefixRequests?: number; prefixBreaks?: number; prefixTotalSharedChars?: number; prefixTotalChars?: number;
   } | null;
   runtime_activity?: RuntimeActivity | null;
   runtime_activity_history?: RuntimeActivity[] | null;
@@ -309,6 +310,9 @@ function RuntimeActivityView({ session }: { session: LocalRuntimeSession | null 
       <small>{t('估算输入')} · {t('预留输出')} {formatCount(budget.reservedOutputTokens)} · {t('安全预留')} {formatCount(budget.safetyReserveTokens)}</small>
       {finite(budget.calibrationFactor) && budget.calibrationFactor > 1 && <small>
         {t('已按实际输入用量校准估算')} ×{budget.calibrationFactor.toFixed(2)} · {t('缓存 Token 仍占上下文')}
+      </small>}
+      {finite(budget.prefixSharedChars) && finite(budget.prefixRequestChars) && budget.prefixRequestChars > 0 && <small data-testid="prefix-reuse" title={t('按发送内容测得：与上一次请求相同的开头部分，本地推理服务可以直接复用缓存。')}>
+        {t('提示前缀复用')} {Math.floor(100 * budget.prefixSharedChars / budget.prefixRequestChars)}% · {t('会话累计')} {finite(budget.prefixTotalChars) && budget.prefixTotalChars > 0 ? Math.floor(100 * (budget.prefixTotalSharedChars ?? 0) / budget.prefixTotalChars) : 0}%（{formatCount(budget.prefixRequests)} {t('次请求')}） · {t('前缀中断')} {formatCount(budget.prefixBreaks)}{activity && finite(activity.reportedCachedTokens) && finite(activity.reportedInputTokens) && activity.reportedInputTokens > 0 ? ` · ${t('服务端报告缓存')} ${Math.floor(100 * activity.reportedCachedTokens / activity.reportedInputTokens)}%` : ''}
       </small>}
     </div>}
     <div className="xn-runtime-monitor__trend-wrap">

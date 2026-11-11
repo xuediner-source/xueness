@@ -22,6 +22,7 @@ export * from "./discover.ts";
 export * from "./extra-roots.ts";
 export * from "./switches.ts";
 export { BUNDLED_SKILLS_DIR } from "./bundled.ts";
+export { skillPackageImporter } from "./package-importer.ts";
 export * from "./http-api.ts";
 export * from "./frontmatter.ts";
 export * from "./visualize.ts";

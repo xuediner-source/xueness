@@ -70,7 +70,7 @@ export function pendingDenials(session: Session, options: Pick<PublicSessionOpti
 function publicRuntimeBudget(value: unknown): Dict | null {
   if (!isDict(value)) return null;
   const result: Dict = {};
-  for (const key of ["contextWindow", "reservedOutputTokens", "safetyReserveTokens", "inputBudgetTokens", "estimatedInputTokens", "previousEstimatedTokens", "baseEstimatedInputTokens", "checkpointChars", "omittedMessages", "activeTools"]) if (isPyIntValue(value[key]) && Number(value[key]) >= 0 && Number(value[key]) <= 100000000) result[key] = value[key];
+  for (const key of ["contextWindow", "reservedOutputTokens", "safetyReserveTokens", "inputBudgetTokens", "estimatedInputTokens", "previousEstimatedTokens", "baseEstimatedInputTokens", "checkpointChars", "omittedMessages", "activeTools", "prefixRequestChars", "prefixSharedChars", "prefixPreviousChars", "prefixSharedMessages", "prefixRequests", "prefixBreaks", "prefixTotalSharedChars", "prefixTotalChars"]) if (isPyIntValue(value[key]) && Number(value[key]) >= 0 && Number(value[key]) <= 100000000) result[key] = value[key];
   if (value.profile === "lightweight") result.profile = "lightweight";
   if (value.estimateMethod === "utf8-bytes/2") result.estimateMethod = value.estimateMethod;
   const factor = numericValue(value.calibrationFactor);

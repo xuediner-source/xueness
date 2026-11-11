@@ -1,4 +1,4 @@
-# Xueness 0.2.2
+# Xueness 0.2.3
 
 Xueness is a local-first agent CLI, Web workbench, and self-contained desktop app. Its backend and bundled product capabilities are implemented by trusted TypeScript plugins.
 

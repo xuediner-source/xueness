@@ -11,6 +11,7 @@
     { "name": "skill_validate", "gate": "read", "mutating": false, "concurrencySafe": true }
   ],
   "features": [
+    {"id": "skills.folder_package_type", "name": "技能文件夹包类型：经通用扩展包导入添加和移除技能文件夹", "nameEn": "Skill folder package type: add and remove skill folders through the general package import"},
     {"id": "skills.switches", "name": "预置技能列表与独立启用开关", "nameEn": "Initial skills listing and individual enable switches"},
     {"id": "skills.ask_user_question", "name": "结构化提问与用户选择", "nameEn": "Structured questions and user choices"},
     {"id": "skills.folder_import", "name": "从文件夹添加与移除技能", "nameEn": "Add and remove skills from a folder"},

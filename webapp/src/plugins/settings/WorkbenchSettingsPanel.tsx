@@ -31,7 +31,7 @@ const XuenessMemorySettings = lazy(() => import("../memory/MemorySettings").then
 const BrowserSettings = lazy(() => import("../browser/BrowserSettings").then(module => ({ default: module.BrowserSettings })));
 const XuenessSubagentSettings = lazy(() => import("../subagents/SubagentSettings").then(module => ({ default: module.XuenessSubagentSettings })));
 const XuenessWorkspaceSettings = lazy(() => import('./XuenessWorkspaceSettings').then(module => ({ default: module.XuenessWorkspaceSettings })));
-const HarnessLibrary = lazy(() => import('../deepseek_harness/HarnessLibrary').then(module => ({ default: module.HarnessLibrary })));
+const PackageImports = lazy(() => import('../extensions/PackageImports').then(module => ({ default: module.PackageImports })));
 
 type WorkbenchSettingsPanelProps = {
   settings: WorkbenchSettings;
@@ -98,7 +98,7 @@ function settingsContent({ settings, isPluginEffective, capabilityKinds, capSect
       if (!activeIdRef.current) updateChoices({ browser: enabled });
       await handleUpdateSetting("browserControlEnabled", enabled);
     }} />;
-  const pluginId = ({providers:"providers",subscriptions:'subscriptions',workbuddy:'workbuddy','model-monitor':'model_monitor',browser:"browser",memory:"memory",subagents:"subagents",mcp:"mcp",skills:"skills",commands:"commands",hooks:"hooks",usage:"usage",'deepseek-harness':'deepseek_harness'} as Record<string,string>)[settingsSection];
+  const pluginId = ({providers:"providers",subscriptions:'subscriptions',workbuddy:'workbuddy','model-monitor':'model_monitor',browser:"browser",memory:"memory",subagents:"subagents",mcp:"mcp",skills:"skills",commands:"commands",hooks:"hooks",usage:"usage",'package-imports':'extensions'} as Record<string,string>)[settingsSection];
   if (pluginId && !isPluginEffective(pluginId)) return <FeatureUnavailable feature={settingsSections.find(section => section.id === settingsSection)?.label ?? settingsSection} onManage={() => setSettingsSection("modules")} />;
   if (inlineSettings) return <SettingsSections embedded sections={[]} activeSection={settingsSection}
     values={{...settingsValues, language: settingsValues.language ?? locale}} capabilities={capabilities}
@@ -135,7 +135,7 @@ function settingsContent({ settings, isPluginEffective, capabilityKinds, capSect
   if (settingsSection === 'subscriptions') return <SubscriptionsPanel embedded onChanged={() => void refreshComposerCatalog()} onSelectModel={id => { updateChoices({ provider: 'real', provider_id: id, model: undefined, reasoning_effort: undefined }); void refreshComposerCatalog(); setPanel('chat'); }} />;
   if (settingsSection === 'workbuddy') return <WorkbuddySettingsPanel />;
   if (settingsSection === 'model-monitor') return <ModelMonitorPanel embedded />;
-  if (settingsSection === 'deepseek-harness') return <HarnessLibrary />;
+  if (settingsSection === 'package-imports') return <PackageImports onManagePlugins={() => setSettingsSection('modules')} />;
   if (settingsSection === "marketplace") return <XuenessMarketplace embedded onInstalled={() => void refreshPluginCatalog()} onManagePlugins={() => setSettingsSection('plugins')} />;
   if (settingsSection === "memory") return <XuenessMemorySettings enabled={settingsValues.memoryEnabled !== false} onEnabledChange={value => void handleUpdateSetting("memoryEnabled", value)} />;
   if (settingsSection === "usage") return <XuenessUsageSettings />;

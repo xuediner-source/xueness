@@ -5,6 +5,7 @@ import { announceExecutionCapabilities, capabilityRows, type CapabilityFlags } f
 import { defaultSelection, loadDefault } from "./default-selection.ts";
 import { providerExecutionSnapshot } from "./model-execution.ts";
 import { compatibilityTest, discoverModels, testConnection } from "./diagnostic-wire.ts";
+import { probeLocalRuntime } from "./local-runtime-probe.ts";
 import { configurationError, resolveSavedProvider, type ResolvedProvider, type Selection } from "./provider-config.ts";
 import { ProfileStore, publicProfile, validId, type Dict, type Reply } from "./profile-store.ts";
 import { hasProof, optionsHash, publicCheck, requiredModes, safeError, storedCheck, TEST_MODES } from "./verification.ts";
@@ -18,9 +19,9 @@ export interface ProvidersApiOptions {
   capabilityFlags?: (record: Dict) => CapabilityFlags;
   now?: () => string;
 }
-export const PROVIDER_ROUTES = ["GET /api/providers", "POST /api/providers", "DELETE /api/providers/:id", "GET /api/providers/default", "GET /api/providers/execution", "GET /api/providers/capabilities", "POST /api/providers/default", "POST /api/providers/test", "POST /api/providers/discover", "POST /api/providers/compatibility-test", "POST /api/providers/compatibility-adopt"];
+export const PROVIDER_ROUTES = ["GET /api/providers", "POST /api/providers", "DELETE /api/providers/:id", "GET /api/providers/default", "GET /api/providers/execution", "GET /api/providers/capabilities", "POST /api/providers/default", "POST /api/providers/test", "POST /api/providers/probe", "POST /api/providers/discover", "POST /api/providers/compatibility-test", "POST /api/providers/compatibility-adopt"];
 export function ownsProviderRoute(method: string, parts: readonly string[]): boolean {
-  return parts[0] === "api" && parts[1] === "providers" && (parts.length === 2 && ["GET", "POST"].includes(method) || parts.length === 3 && (method === "DELETE" || method === "POST" && ["default", "test", "discover", "compatibility-test", "compatibility-adopt"].includes(parts[2]!) || method === "GET" && ["default", "execution", "capabilities"].includes(parts[2]!)));
+  return parts[0] === "api" && parts[1] === "providers" && (parts.length === 2 && ["GET", "POST"].includes(method) || parts.length === 3 && (method === "DELETE" || method === "POST" && ["default", "test", "probe", "discover", "compatibility-test", "compatibility-adopt"].includes(parts[2]!) || method === "GET" && ["default", "execution", "capabilities"].includes(parts[2]!)));
 }
 export function createProvidersApi(options: ProvidersApiOptions) {
   const store = new ProfileStore(options.stateDir);
@@ -52,6 +53,10 @@ export function createProvidersApi(options: ProvidersApiOptions) {
       if (action === "discover") {
         if (!(provider instanceof OpenAICompatible)) return [400, { error: "provider protocol does not support model discovery" }];
         return [200, { ok: true, provider: { ...summary(profile), protocol: "openai" }, models: await discoverModels(provider) }];
+      }
+      if (action === "probe") {
+        // Management endpoints of a loopback server only; an online or non-OpenAI profile answers `local: false` without a request.
+        return [200, { ok: true, provider: summary(profile), ...(provider instanceof OpenAICompatible ? await probeLocalRuntime(provider) : { local: false, runtime: null, findings: [], suggestion: {} }) }];
       }
       await testConnection(provider as OpenAICompatible | AnthropicMessages);
       return [200, { ok: true, provider: summary(profile), latencyMs: Math.max(0, Math.floor(performance.now() - started)) }];

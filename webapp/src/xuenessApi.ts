@@ -173,7 +173,8 @@ export type XuenessPluginFeature = {
  * never contain executable frontend code. The UI maps IDs through its own
  * allowlisted registry before exposing panels. */
 export type XuenessPlugin = {
-  installed?: boolean;
+  /** `category`: `bundled` ships inside the app; `center` is official and downloaded on demand from the plugin center. */
+  installed?: boolean; category?: 'bundled' | 'center';
   id: string;
   name: string;
   description: string;

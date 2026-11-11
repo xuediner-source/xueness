@@ -258,8 +258,8 @@ export function XuenessPluginManager({ plugins, loading, error, onRefresh, onTog
             <article className={`xn-plugin-card is-${state}`} key={plugin.id} data-testid={`xn-installed-plugin-${plugin.id}`} data-effective={plugin.effective} role="listitem">
               <div className="xn-plugin-card__content">
                 <div className="xn-plugin-card__title-row">
-                  <h3>{name}</h3>
-                  {!local && <span className="xn-plugin-card__fallback">{tr("通用模块")}</span>}
+                  <h3>{name}</h3><span className="xn-plugin-card__fallback" data-category={plugin.category ?? 'bundled'}>{plugin.category === 'center' ? tr('插件中心') : tr('官方内置')}</span>
+                  {!local &&<span className="xn-plugin-card__fallback">{tr("通用模块")}</span>}
                   <span className={`xn-plugin-card__state ${state === "active" ? "is-effective" : ""}`}>
                     {state === "active" ? tr("生效中") : state === "disabled" ? tr("已禁用") :
                       state === "blocked" ? tr("等待依赖") : tr("不可用")}

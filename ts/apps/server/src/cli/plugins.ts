@@ -1,9 +1,10 @@
 /**
  * `plugins` / `plugin` (Python `plugin_cli`): the kernel lists and toggles
  * bundled features; `validate`, `update` and `profile` run in the plugin whose
- * manifest lists them in `pluginsActions`.
+ * manifest lists them in `pluginsActions`. `imports`, `import` and `unimport`
+ * drive the general package import surface for every registered package type.
  */
-import { profileCommand, updatePackages, validatePath } from "@xueness/plugin-extensions";
+import { importCommand, importSkillsCommand, profileCommand, updatePackages, validatePath } from "@xueness/plugin-extensions";
 import { loadCatalogManifests } from "../manifests.ts";
 import type { Parser } from "./argparse.ts";
 import { type Cli, dumps, err, out, pyPath } from "./host.ts";
@@ -20,6 +21,13 @@ export function register(sub: Sub): void {
     group.add("validate", "audit a data manifest, marketplace listing or directory of them without writing anything").add("path");
     const update = group.add("update", "upgrade installed data manifests from the marketplace");
     update.add("id", { nargs: "?" }).add("--all", { action: "store_true", help: "check every installed manifest" }).add("--dry-run", { action: "store_true", help: "report the plan without writing" });
+    group.add("imports", "list importable package types and imported packages");
+    const importing = group.add("import", "import a declarative package from a manifest file or a folder; nothing in it is executed");
+    importing.add("path").add("--type", { help: "package type when more than one recognises the manifest" }).add("--replace", { action: "store_true", help: "replace an imported package with the same id" }).add("--dry-run", { action: "store_true", help: "show what would be imported without writing" })
+      .add("--all-skills", { action: "store_true", help: "import every skill folder (SKILL.md) found under the folder, such as the checkout of a plugin for another harness; its code is not touched" });
+    group.add("unimport", "remove an imported package").add("type").add("id");
+    group.add("activate", "make an imported package's skills and prompt templates available through the skills and commands plugins").add("type").add("id");
+    group.add("deactivate", "remove the skills and commands an imported package activated").add("type").add("id");
     const profile = group.add("profile", "list or apply a plugin composition profile").subparsers("profile_action", true);
     profile.add("list", "list the selectable profiles");
     profile.add("show", "show one profile and the catalog it would produce").add("name");
@@ -41,6 +49,12 @@ export async function execute(cli: Cli): Promise<number | null> {
     const owner = actionOwner(cli, action);
     if (owner === null) { err(`ERROR: no plugin owns the ${action} subcommand`); return 1; }
     if (!cli.enabled(owner)) { err("ERROR: plugin disabled or dependency unavailable: " + owner); return 1; }
+    if (["imports", "import", "unimport", "activate", "deactivate"].includes(action)) {
+      const run = action === "import" && a.all_skills ? (api: Parameters<typeof importCommand>[0], _action: string, args: Parameters<typeof importCommand>[2]) => importSkillsCommand(api, args) : importCommand;
+      const done = await run((method, path, data) => cli.api(method, path, data), action, { path: a.path === undefined ? null : pyPath(a.path), type: a.type ?? null, id: a.id ?? null, replace: Boolean(a.replace), dryRun: Boolean(a.dry_run) });
+      out(dumps(done.output, 2));
+      return done.code;
+    }
     let result: Row;
     try {
       result = action === "validate" ? validatePath(pyPath(a.path))

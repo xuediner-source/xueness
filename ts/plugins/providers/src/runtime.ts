@@ -2,7 +2,8 @@
 import { isDict } from "@xueness/contracts";
 import type { AgentContext, AgentExtension, ModelRequest, Row } from "@xueness/agent";
 import { finishReason, incompleteReason, normalizeNative } from "@xueness/providers";
-import { observeUsage, runtimeOptions, type RuntimeProvider } from "./runtime-budget.ts";
+import { observeUsage, providerKey, runtimeOptions, type RuntimeProvider } from "./runtime-budget.ts";
+import { measurePrefixReuse } from "./runtime-prefix.ts";
 import { promptView } from "./runtime-prompt.ts";
 import { decodeTextResponse, partialAnswer, streamAnswerText, textMessages } from "./runtime-protocol.ts";
 import { selectRuntimeTools, type RuntimeToolPolicy } from "./runtime-tools.ts";
@@ -13,6 +14,7 @@ export * from "./runtime-prompt.ts";
 export * from "./runtime-protocol.ts";
 export * from "./runtime-tools.ts";
 export * from "./runtime-window.ts";
+export * from "./runtime-prefix.ts";
 
 export interface LightweightRuntimeOptions {
   toolPolicy?: (context: AgentContext) => RuntimeToolPolicy;
@@ -34,9 +36,13 @@ export function lightweightRuntimeExtension(config: LightweightRuntimeOptions = 
       maxTokens: context.options.maxTokens, shrink, systemPrompt: request.systemPrompt, repair: request.repair, hostInstructions: request.hostInstructions,
       calibration: context.session.runtime_budget_calibration, historyWindow, injected: request.injected });
     context.session.runtime_history_window = historyWindow;
-    context.session.runtime_budget = stats;
     const state = attempts.get(context.session) ?? { overflow: false, tools: [] }; state.tools = tools; attempts.set(context.session, state);
-    return { ...request, messages: provider.toolCalling === "json" ? textMessages(messages) : messages, tools };
+    // Measured on what is sent: JSON tool mode sends plain text messages and no `tools` field.
+    const outgoing = provider.toolCalling === "json" ? textMessages(messages) : messages;
+    const prefix = measurePrefixReuse(context.session.runtime_prefix_trace, providerKey(provider), outgoing, provider.toolCalling === "json" ? [] : tools);
+    context.session.runtime_prefix_trace = prefix.trace;
+    context.session.runtime_budget = { ...stats, ...prefix.stats };
+    return { ...request, messages: outgoing, tools };
   };
   return {
     id: "providers", capabilities: ["providers.lightweight"], preserveJournal: active,

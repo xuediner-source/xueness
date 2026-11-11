@@ -6,6 +6,7 @@
  */
 import { pyCasefold, pyGetItem, pyJsonDumps } from "@xueness/contracts";
 import { completeAttempts, postSpec, streamAttempts, type AttemptContext } from "./attempts.ts";
+import { ProviderRequestError } from "./errors.ts";
 import { ProviderConfigError, isLoopbackLiteral, loopbackHttpEnabled, pyUrlSplit, type SplitUrl } from "./endpoint.ts";
 import { openAiMessages, providerCapabilities, type MediaBinding } from "./media.ts";
 import { withReportedUsage, withRequestAttempts } from "./metadata.ts";
@@ -20,6 +21,8 @@ import { DeadlineExpired, SYSTEM_CLOCK, openWithRetry, type ProviderClock } from
 
 type Dict = Record<string, unknown>;
 
+/** Whether an endpoint accepts `stream_options.include_usage`, learned from its answers; keyed by base and model. */
+const STREAM_USAGE = new Map<string, "accepted" | "rejected">();
 export const REASONING_EFFORTS = new Set(["none", "minimal", "low", "medium", "high", "xhigh", "max"]);
 
 export interface ProviderCallOptions {
@@ -97,6 +100,8 @@ export interface OpenAiInit {
   compatibility?: unknown;
   allowEmptyKey?: boolean | null;
   lightweightOptions?: unknown;
+  /** The endpoint is already known to reject `stream_options.include_usage` (learned in an earlier process). */
+  streamUsageRejected?: boolean;
   env?: NodeJS.ProcessEnv;
   clock?: ProviderClock;
 }
@@ -121,6 +126,8 @@ export class OpenAICompatible implements ChatProvider {
    */
   readonly acceptsPdfDocuments = true;
   requestDeadline: number | null = null;
+  /** Called once when a stream shows whether the endpoint accepts `stream_options.include_usage`, so the host can remember it. */
+  onStreamUsage: ((state: "accepted" | "rejected") => void) | null = null;
   readonly clock: ProviderClock;
   readonly #url: SplitUrl;
 
@@ -171,6 +178,7 @@ export class OpenAICompatible implements ChatProvider {
     this.reasoningEffort = effort;
     this.capabilities = providerCapabilities(this.model, init.capabilities);
     this.#url = pyUrlSplit(`${this.base.replace(/\/+$/u, "")}/chat/completions`);
+    if (init.streamUsageRejected) STREAM_USAGE.set(`${this.base}\n${this.model}`, "rejected");
   }
 
   /** Current OpenAI reasoning families use `max_completion_tokens`. */
@@ -178,11 +186,11 @@ export class OpenAICompatible implements ChatProvider {
     return knownReasoningLevels(this.model).length ? "max_completion_tokens" : "max_tokens";
   }
 
-  #body(messages: Dict[], tools: Dict[], stream: boolean, media: MediaBinding | null): Uint8Array {
+  #body(messages: Dict[], tools: Dict[], stream: boolean, media: MediaBinding | null, streamUsage?: boolean): Uint8Array {
     const body = buildOpenAiPayload({
       model: this.model, messages: normalizeOpenAiCompatibleSystemMessages(openAiMessages(messages, this, media)), tools, runtimeProfile: this.runtimeProfile,
       contextWindow: this.contextWindow, maxOutputTokens: this.maxOutputTokens, toolCalling: this.toolCalling,
-      compatibility: this.compatibility, stream, reasoningEffort: this.reasoningEffort,
+      compatibility: streamUsage === undefined ? this.compatibility : { ...this.compatibility, streamUsage }, stream, reasoningEffort: this.reasoningEffort,
       defaultMaxTokensField: this.defaultMaxTokensField(), lightweightOptions: this.lightweightOptions,
     });
     return Buffer.from(pyJsonDumps(body, { ensureAscii: true }), "utf8");
@@ -235,15 +243,31 @@ export class OpenAICompatible implements ChatProvider {
   }
 
   async stream(messages: Dict[], tools: Dict[], observers: StreamObservers = {}, options: ProviderCallOptions = {}): Promise<Dict> {
-    const body = this.#body(messages, tools, true, options.media ?? null);
     let deadline: number | null;
     let attempts = transportAttempts(options);
     if (this.runtimeProfile === "lightweight") [deadline, attempts] = lightweightRequestSettings(this, this.clock);
     else deadline = explicitRequestDeadline(this);
-    return streamAttempts({
+    const run = (body: Uint8Array): Promise<Dict> => streamAttempts({
       attempts, deadline, clock: this.clock, signal: options.signal,
       run: (context) => this.#streamAttempt(body, deadline, context, observers, options.signal, options.streamIdleTimeoutMs),
     });
+    // The lightweight budget is calibrated from reported usage, so streams ask for it unless the profile says otherwise.
+    // A local server that rejects the field is asked once more without it and remembered for this process.
+    const endpoint = `${this.base}\n${this.model}`;
+    const probing = this.runtimeProfile === "lightweight" && !Object.hasOwn(this.compatibility, "streamUsage") && STREAM_USAGE.get(endpoint) !== "rejected";
+    if (!probing) return run(this.#body(messages, tools, true, options.media ?? null, this.runtimeProfile === "lightweight" && STREAM_USAGE.get(endpoint) === "rejected" ? false : undefined));
+    try {
+      const result = await run(this.#body(messages, tools, true, options.media ?? null, true));
+      STREAM_USAGE.set(endpoint, "accepted");
+      return result;
+    } catch (error) {
+      const rejected = error instanceof ProviderRequestError && (error.status === 400 || error.status === 422) && !error.contextOverflow && !error.reasoningSignatureRejected;
+      if (!rejected || STREAM_USAGE.get(endpoint) === "accepted") throw error;
+      const result = await run(this.#body(messages, tools, true, options.media ?? null, false));
+      STREAM_USAGE.set(endpoint, "rejected");
+      this.onStreamUsage?.("rejected");
+      return result;
+    }
   }
 
   async #streamAttempt(body: Uint8Array, deadline: number | null, context: AttemptContext, observers: StreamObservers,

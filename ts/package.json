@@ -16,7 +16,8 @@
     "typecheck": "tsc -p tsconfig.json",
     "check:lines": "node scripts/check-max-lines.ts",
     "check:plugins": "node scripts/check-plugins.ts",
-    "check": "npm run check:lines && npm run check:plugins && npm run typecheck",
+    "check:version": "node scripts/check-version.ts",
+    "check": "npm run check:lines && npm run check:plugins && npm run check:version && npm run typecheck",
     "serve": "node apps/server/src/main.ts",
     "build": "npm run typecheck && node scripts/build.ts",
     "serve:built": "node dist/apps/server/src/main.js --project-root .."

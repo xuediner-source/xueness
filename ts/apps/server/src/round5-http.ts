@@ -1,6 +1,5 @@
-/** Round-5 HTTP families. The front door stays thin; this module owns the nine plugins. */
+/** Round-5 HTTP families. The front door stays thin; this module owns eight plugins. */
 import { isDict } from "@xueness/contracts";
-import { createHarnessHttp } from "@xueness/plugin-deepseek_harness";
 import { loadSettings } from "@xueness/plugin-settings";
 import { createDiagnosticsHttp } from "@xueness/plugin-diagnostics";
 import { createDesktopHttp } from "@xueness/plugin-desktop";
@@ -70,8 +69,7 @@ export function createRound5(options: Round5Options) {
     ...(options.desktopBridge ? { permissionBridge: options.desktopBridge, nativePicker: true } : {}),
     header: () => hostCapability,
   });
-  const harnessHttp = createHarnessHttp({ stateDir, enabled });
-  const handlers = [usageHttp, modelMonitorHttp, onboardingHttp, diagnosticsHttp, toolsHttp, terminalHttp, updatesHttp, desktopHttp, harnessHttp];
+  const handlers = [usageHttp, modelMonitorHttp, onboardingHttp, diagnosticsHttp, toolsHttp, terminalHttp, updatesHttp, desktopHttp];
   return {
     routes: handlers.flatMap((handler) => handler.routes),
     owns: (method: string, parts: readonly string[]): boolean => handlers.some((handler) => handler.owns(method, parts)),
@@ -83,7 +81,6 @@ export function createRound5(options: Round5Options) {
       if (toolsHttp.owns(method, parts)) return toolsHttp.dispatch(method, parts, query);
       if (terminalHttp.owns(method, parts)) return terminalHttp.dispatch(method, parts, query, data);
       if (updatesHttp.owns(method, parts)) return updatesHttp.dispatch(method, parts, query, data);
-      if (harnessHttp.owns(method, parts)) return harnessHttp.dispatch(method, parts, query, data);
       if (desktopHttp.owns(method, parts)) {
         hostCapability = request?.hostCapability ?? null;
         return desktopHttp.dispatch(method, parts, query, data);

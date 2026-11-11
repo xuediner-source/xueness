@@ -20,8 +20,14 @@ import { downloadArtifact, fetchOfficialArtifact, removeOfficialArtifact, type A
 import { installAll } from "./sdk.ts";
 import { readState, writeState } from "./runtime.ts";
 import { uninstallPackage } from "./components.ts";
+import { dispatchImports, IMPORT_ROUTES, nativeImporter, ownsImports, type PackageImporter } from "./imports.ts";
+import type { ResourceWriter } from "./activation.ts";
 
 export { loadManifests as loadDataManifests } from "./sdk.ts";
+export { IMPORT_ROUTES, manifestDocument, nativeImporter, type PackageImporter, type PackagePreview, type PackageView } from "./imports.ts";
+export { importCommand, importSkillsCommand, type ImportApi, type ImportCommandArgs } from "./import-cli.ts";
+export { textPackageStore, type TextPackage, type TextPackageStore } from "./text-package-store.ts";
+export { ACTIVATION_KINDS, type ActivationKind, type PackageContribution, type ResourceWriter } from "./activation.ts";
 export { profileCommand, updatePackages, validatePath } from "./cli.ts";
 export {
   COMPONENT_KINDS, componentOwner, componentOwners, componentSummary, componentsDigest, effectiveComponents, uninstallPackage,
@@ -42,6 +48,10 @@ export interface ExtensionsHttpOptions {
   fetchUrl?: (url: string) => FetchUrlResult | Promise<FetchUrlResult>;
   downloadArtifact?: ArtifactDownload;
   optionalChanged?(id: string): Promise<void>;
+  /** Package types contributed by other plugins; the native Xueness manifest type is always registered. */
+  importers?: readonly PackageImporter[];
+  /** Writes one resource through the plugin that owns its kind (skills, commands). */
+  writeResource?: ResourceWriter;
 }
 
 export const EXTENSIONS_ROUTES = [
@@ -50,6 +60,7 @@ export const EXTENSIONS_ROUTES = [
   "POST /api/plugins/marketplace/:id/update",
   "POST /api/plugins/marketplace/:id/uninstall",
   "POST /api/plugins/marketplace/validate",
+  ...IMPORT_ROUTES,
   "GET /api/plugins/profiles",
   "POST /api/plugins/profiles/apply",
   "GET /api/resources/plugins",
@@ -60,11 +71,13 @@ export const EXTENSIONS_ROUTES = [
 ];
 
 const owns = (_method: string, parts: readonly string[]): boolean => parts[0] === "api" && parts.length >= 3
-  && (parts[1] === "plugins" && (parts[2] === "marketplace" || parts[2] === "profiles") || parts[1] === "resources" && parts[2] === "plugins");
+  && (parts[1] === "plugins" && (parts[2] === "marketplace" || parts[2] === "profiles" || parts[2] === "imports") || parts[1] === "resources" && parts[2] === "plugins");
 
 export function createExtensionsHttp(options: ExtensionsHttpOptions) {
   const enabledNow = (): boolean => (typeof options.enabled === "function" ? options.enabled("extensions") === true : options.enabled === true);
   const installing = new Set<string>();
+  const pluginEnabled = (id: string): boolean => (typeof options.enabled === "function" ? options.enabled(id) === true : options.enabled === true);
+  const importers = [nativeImporter(options.stateDir), ...options.importers ?? []];
   return {
     routes: EXTENSIONS_ROUTES,
     owns,
@@ -74,6 +87,7 @@ export function createExtensionsHttp(options: ExtensionsHttpOptions) {
     async dispatch(method: string, parts: string[], _query: Record<string, readonly string[] | undefined>, data: unknown): Promise<ExtensionsReply | null> {
       if (!owns(method, parts)) return null;
       if (!enabledNow()) return [403, { error: "plugin disabled or dependency unavailable: extensions", plugin: "extensions" }];
+      if (ownsImports(parts)) return dispatchImports({ importers, enabled: pluginEnabled, stateDir: options.stateDir, ...(options.writeResource ? { writeResource: options.writeResource } : {}) }, method, parts, data);
       const validated = dispatchValidate(method, parts, data);
       if (validated) return validated;
       const profiles = dispatchProfiles(method, parts, data, options.stateDir);

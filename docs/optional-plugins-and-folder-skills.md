@@ -65,3 +65,32 @@ Read references/review.md, then follow the project-specific checks.
 回归覆盖下载后热加载、默认停用、旧清单不可激活、校验失败拒绝安装、移除后 API 拒绝访问、保留账号目录，以及技能文件夹的复制、取消、冲突和路径检查。真实桌面端验证使用独立测试数据目录，不读取用户的账号或会话。
 
 历史长任务压测另见私有验证库的 [WorkBuddy Benchmark](https://github.com/xuediner-source/xueness-private-tests/tree/main/archive/project/验收资料/20261026-workbuddy-benchmark)。该报告使用此前版本执行，其任务成功率不能用来代替本次插件分发与文件夹导入验收。
+
+## 从本机导入扩展包
+
+「设置 → 扩展与维护 → 扩展包导入」可以导入本机的声明式扩展包：选择包含清单的文件夹，或只选清单文件，预览后确认导入。包类型自动识别，每种类型只在所属插件启用时可用：
+
+- Xueness 声明式扩展包（`xueness-plugin.json`）。导入后默认关闭，到插件管理中启用。
+- 技能文件夹（含 `SKILL.md` 的文件夹，连同其中的脚本和参考文件）。导入后技能立即可用，与在技能页面「从文件夹添加」相同；超过 100 个文件或 600 KB 的文件夹请在技能页面添加。
+- Cursor 规则包（项目里的 `.cursorrules`，以及 `.cursor/rules` 下的 `.mdc`/`.md`）。启用后每条规则是一个斜杠命令。
+- MCP 服务器定义（`.mcp.json` 或 `mcp.json`）。导入的服务器默认关闭，不会启动或连接；请在 MCP 服务器页面检查命令后逐个启用。请求头中的凭据不会导入。
+- DeepSeek Harness 扩展包（`deepseek-harness.json`，或带 `xuenessHarness` 块的 `package.json`），需要先启用 DeepSeek Harness 插件。
+
+导入只读取清单和包内文件，不运行包内代码。
+
+命令行使用同一流程：
+
+```sh
+xueness plugin imports
+xueness plugin import ./my-package --dry-run
+xueness plugin import ./my-package
+xueness plugin unimport dsh my-package
+```
+
+导入后的扩展包默认不生效。在扩展包导入页点「启用」，或运行 `xueness plugin activate dsh my-package`，它的技能会出现在技能列表中（名称为 `包ID:技能ID`），提示模板成为斜杠命令（`/包ID.模板ID`）。「停用」或 `xueness plugin deactivate dsh my-package` 撤回这些内容；移除扩展包时也会一并清理。技能插件或命令插件关闭时，对应内容不会启用，结果中会说明原因。扩展包里的工具、钩子和校验命令不会被启用或执行。
+
+Xueness 声明式扩展包可以在技能和命令组件里携带正文（`components.skills[].body`、`components.commands[].body`，各不超过 128 KB），带正文的组件同样可以启用。
+
+`xueness plugin import <文件夹> --all-skills` 会导入文件夹下每个含 `SKILL.md` 的目录，适合从其他工具的插件仓库（例如 DeepSeek Harness 插件）中取出技能；仓库里的代码不会被读取或执行。加 `--dry-run` 先看会导入哪些。
+
+一次性运行也会展开斜杠命令：`xueness run --prompt "/包ID.模板ID 参数" --root <目录>`。

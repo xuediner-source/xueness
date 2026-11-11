@@ -43,7 +43,7 @@ async function latestChat(store: SessionStore, root: string): Promise<Session | 
   return best ? best[2] : null;
 }
 
-function commandItems(cli: Cli, root: string): Row[] {
+export function commandItems(cli: Cli, root: string): Row[] {
   if (!cli.enabled("commands")) return [];
   try { return loadCommands({ stateDir: cli.state, root, language: cli.args.language, manifestCommands: new Set(manifestCommands(cli).keys()) }); } catch { return []; }
 }

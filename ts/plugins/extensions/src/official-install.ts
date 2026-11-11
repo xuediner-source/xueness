@@ -14,7 +14,7 @@ export async function downloadArtifact(artifact: OptionalArtifact, projectRoot?:
     const path = optionalPath(projectRoot, join("marketplace", "packages", basename(new URL(artifact.url).pathname)));
     if (existsSync(path)) {
       const file = lstatSync(path);
-      if (!file.isFile() || file.size !== artifact.bytes || file.size > 32 * 1024 * 1024) throw new Error("bundled plugin artifact size mismatch");
+      if (!file.isFile() || file.size > 32 * 1024 * 1024) throw new Error("bundled plugin artifact is not a file of an acceptable size");
       return readFileSync(path);
     }
   }
@@ -23,7 +23,7 @@ export async function downloadArtifact(artifact: OptionalArtifact, projectRoot?:
   const chunks: Uint8Array[] = []; let bytes = 0;
   for await (const chunk of response.body) {
     bytes += chunk.length;
-    if (bytes > artifact.bytes || bytes > 32 * 1024 * 1024) throw new Error("artifact download exceeds declared size");
+    if (bytes > 32 * 1024 * 1024) throw new Error("artifact download exceeds the size limit");
     chunks.push(chunk);
   }
   return Buffer.concat(chunks, bytes);
@@ -40,8 +40,10 @@ function privateFile(path: string, bytes: Buffer): void {
 
 /** Checks every byte before publishing the directory. Nothing is evaluated here. */
 export function storeOfficialArtifact(stateDir: string, artifact: OptionalArtifact, compressed: Buffer): void {
-  if (compressed.length !== artifact.bytes || artifactHash(compressed) !== artifact.sha256) throw new Error("official artifact checksum mismatch");
-  const value = JSON.parse(gunzipSync(compressed, { maxOutputLength: 64 * 1024 * 1024 }).toString("utf8"));
+  // `sha256` and `bytes` pin the decompressed payload; the output bound keeps a hostile stream from expanding unchecked.
+  const plain = gunzipSync(compressed, { maxOutputLength: Math.min(64 * 1024 * 1024, artifact.bytes + 1) });
+  if (plain.length !== artifact.bytes || artifactHash(plain) !== artifact.sha256) throw new Error("official artifact checksum mismatch");
+  const value = JSON.parse(plain.toString("utf8"));
   if (value.id !== artifact.id || value.version !== artifact.version || !Array.isArray(value.files) || value.files.length !== artifact.files.length) throw new Error("invalid official artifact");
   const files = artifact.files.map((entry, index) => {
     const row = value.files[index];

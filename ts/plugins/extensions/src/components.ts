@@ -24,12 +24,15 @@ export type ComponentKind = (typeof COMPONENT_KINDS)[number];
 const KIND_SET: ReadonlySet<string> = new Set(COMPONENT_KINDS);
 const MAX_COMPONENTS_PER_KIND = 64;
 const MAX_DESCRIPTION = 200;
+const MAX_BODY_CHARS = 128 * 1024;
 
 export interface ComponentDeclaration {
   kind: ComponentKind;
   id: string;
   description: string;
   alwaysLoad: boolean;
+  /** Text of a skill or a command, when the package carries it. */
+  body?: string;
 }
 
 export interface ComponentIssue {
@@ -82,8 +85,14 @@ export function validateComponents(value: unknown, manifestId = "<manifest>"): [
         issues.push({ path: at, message: `duplicate component: ${kind}/${id}` });
         continue;
       }
+      // A skill or command may carry its text; that is what activating the package registers. Other kinds only name things.
+      const body = entry.body;
+      if (body !== undefined && (typeof body !== "string" || !body.trim() || body.length > MAX_BODY_CHARS || (kind !== "skills" && kind !== "commands"))) {
+        issues.push({ path: `${at}/body`, message: `body must be non-empty text of at most ${MAX_BODY_CHARS} characters, on a skill or a command` });
+        continue;
+      }
       seen.add(`${kind}/${id}`);
-      components.push({ kind: kind as ComponentKind, id, description, alwaysLoad });
+      components.push({ kind: kind as ComponentKind, id, description, alwaysLoad, ...(typeof body === "string" ? { body } : {}) });
     }
   }
   return [components, issues];

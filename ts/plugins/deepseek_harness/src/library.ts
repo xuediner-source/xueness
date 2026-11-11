@@ -277,3 +277,21 @@ export function listLibrary(stateDir: string): Row {
     return { items, report, limits: { manifestBytes: MAX_MANIFEST_BYTES, files: MAX_PACKAGE_FILES, fileBytes: MAX_PACKAGE_FILE_BYTES } };
   });
 }
+
+/** The text a package offers for activation: skill files and prompt templates, read from the stored copy. Nothing else is returned. */
+export function packageTexts(stateDir: string, id: unknown): { version: string; skills: { id: string; text: string }[]; promptTemplates: { id: string; text: string }[] } | null {
+  if (typeof id !== "string" || !validId(id)) return null;
+  const found = withLibrary(stateDir, "read", root => {
+    const mounted = readLibrary(root).get(id);
+    if (!mounted) return null;
+    const skills: { id: string; text: string }[] = [];
+    for (const skill of mounted.manifest.skills) {
+      const path = skill.path ? packagePath(skill.path) : null;
+      if (path === null || !TEXT_FILE.test(path) || !present(mounted.source, path)) continue;
+      const file = join(mounted.source, ...path.split("/"));
+      if (lstatSync(file).size <= MAX_PACKAGE_FILE_BYTES) skills.push({ id: skill.id, text: readFileSync(file, "utf8") });
+    }
+    return { version: mounted.version, skills, promptTemplates: mounted.manifest.promptTemplates.map(template => ({ id: template.id, text: template.template })) };
+  });
+  return found && "version" in found ? found : null;
+}
