@@ -109,7 +109,7 @@ export async function createApplicationApi(options: ApplicationApiOptions): Prom
     }, answerActor: dynamicDriver.answer });
   const dynamicWorkflowApi = createDynamicWorkflowApi(dynamicWorkflows);
   const round7 = createRound7({ projectRoot: options.projectRoot, projectDir, stateDir: options.stateDir, webRuns: options.webRuns, enabled, store, allowedRoots, allowReal: options.allowReal === true, env, ...(options.scheduler === false ? { scheduler: false } : {}) });
-  const agent = createAgentService({ ...options.agent, store, stateDir: options.stateDir, configEnv: env, enabled, approvals, mediaStore: media, allowModelRequests: options.allowReal, taskRegistry, workflowLauncher: round7.launcher, dynamicWorkflows,
+  const agent = createAgentService({ ...options.agent, store, stateDir: options.stateDir, configEnv: env, enabled, approvals, mediaStore: media, desktopComputerUse: !!options.desktopToken && !!options.desktopBridge, allowModelRequests: options.allowReal, taskRegistry, workflowLauncher: round7.launcher, dynamicWorkflows,
     preparedRemote: round6.preparedRemote,
     appendQueued: (session, item) => appendAcceptedQueuedTurn({ store, stateDir: options.stateDir, webRuns: options.webRuns, enabled, applyGoal, expandCommands }, session, item),
     resolveProvider(selection, sid) {
@@ -184,7 +184,7 @@ export async function createApplicationApi(options: ApplicationApiOptions): Prom
   const shellHttp = createShellSettingsApi({ stateDir: options.stateDir, enabled });
   const networkHttp = createNetworkHttp({ stateDir: options.stateDir, enabled, env });
   const catalogNet = nodeNet();
-  const extensionsHttp = createExtensionsHttp({ stateDir: options.stateDir, enabled, env, optionalChanged: () => round6.syncOptional(), fetchUrl: async (url) => {
+  const extensionsHttp = createExtensionsHttp({ stateDir: options.stateDir, projectRoot: options.projectRoot, enabled, env, optionalChanged: () => round6.syncOptional(), fetchUrl: async (url) => {
     const page = await fetchPage(catalogNet, url);
     return { output: typeof page.output === "string" ? page.output : "", truncated: page.truncated === true };
   } });

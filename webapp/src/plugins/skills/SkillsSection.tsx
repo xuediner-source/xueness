@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { FolderOpen, LoaderCircle, X } from 'lucide-react';
-import { CapabilitySection, type CapabilitySectionProps } from '../../XuenessCapabilitiesPanel';
+import { ChevronRight, FolderOpen, LoaderCircle, X } from 'lucide-react';
+import { CapabilityItemRow, CapabilitySection, type CapabilitySectionProps } from '../../XuenessCapabilitiesPanel';
 import type { CapabilityItem } from '../../xuenessCapabilities';
 import { del, get, post, put } from '../../xuenessApi';
 import { t as tr, tf } from '../../i18n';
@@ -43,10 +43,31 @@ export async function uploadSkillFolder(files: readonly File[], signal: AbortSig
   return post<Imported>(`${ROOT}/imports/${encodeURIComponent(started.token)}/commit`, {}, signal);
 }
 
-export function fileSkillItem(skill: FolderSkill): CapabilityItem {
+/** `grouped`: shown under the built-in group heading, so the description drops its "内置技能 ·" prefix. */
+export function fileSkillItem(skill: FolderSkill, grouped = false): CapabilityItem {
   return { id: skill.id, enabled: skill.enabled !== false, readOnly: true, toggleable: true, removable: skill.imported === true,
-    description: `${skill.source === 'bundled' ? tr('内置技能') + ' · ' : ''}${skill.description}` + (skill.shadowed ? ` · ${tr('已被同名技能覆盖')}` : ''),
+    description: `${skill.source === 'bundled' && !grouped ? tr('内置技能') + ' · ' : ''}${skill.description}` + (skill.shadowed ? ` · ${tr('已被同名技能覆盖')}` : ''),
     extra: { name: skill.name, source: skill.source, directory: skill.directory, folderSkill: true } };
+}
+
+/** Built-in skills, folded by default; a search opens the group so matches stay visible.
+ * Opened rows show each skill's full description. */
+function BuiltInSkills({ items, searching, busy, onToggle, onDelete }: { items: CapabilityItem[]; searching: boolean; busy: boolean;
+  onToggle: CapabilitySectionProps['onToggle']; onDelete: CapabilitySectionProps['onDelete'] }) {
+  const [open, setOpen] = useState(false);
+  const enabled = items.filter(item => item.enabled === true).length;
+  return <details className="xn-cap-fold" open={open || searching} data-testid="skills-builtin-group"
+    onToggle={event => { if (!searching) setOpen(event.currentTarget.open); }}>
+    <summary className="xn-cap-fold__summary">
+      <ChevronRight className="xn-cap-fold__chevron" size={15} aria-hidden="true" />
+      <span className="xn-cap-fold__label">{tr('官方内置技能')}</span>
+      <span className="xn-cap-section__count">{items.length}</span>
+      <span className="xn-cap-fold__meta">{tf('已启用 {0} 个', [enabled])}</span>
+    </summary>
+    <ul className="xn-cap-list xn-cap-list--full">
+      {items.map(item => <CapabilityItemRow key={item.id} kind="skills" item={item} busy={busy} onToggle={onToggle} onDelete={onDelete} />)}
+    </ul>
+  </details>;
 }
 
 /** Skills owns folder IO; the resource shell only provides its normal list and header slot. */
@@ -110,13 +131,18 @@ export function SkillsSection(props: CapabilitySectionProps) {
     finally { if (mounted.current) setBusy(false); current.current = null; }
   };
   const query = props.searchQuery?.toLocaleLowerCase() ?? '';
-  const items = folders.filter(skill => !query || `${skill.name} ${skill.description}`.toLocaleLowerCase().includes(query)).map(fileSkillItem);
+  const matches = folders.filter(skill => !query || `${skill.name} ${skill.description}`.toLocaleLowerCase().includes(query));
+  const items = matches.filter(skill => skill.source !== 'bundled').map(skill => fileSkillItem(skill));
+  // Skills shipped with Xueness fold into one group so the user's own skills lead the list.
+  const bundled = matches.filter(skill => skill.source === 'bundled').map(skill => fileSkillItem(skill, true));
+  const onToggle: CapabilitySectionProps['onToggle'] = (kind, item, enabled) => { if (item.readOnly) void toggle(item, enabled); else props.onToggle?.(kind, item, enabled); };
+  const onDelete: CapabilitySectionProps['onDelete'] = (kind, item) => { if (item.readOnly) void remove(item); else props.onDelete?.(kind, item); };
   return <>
     <CapabilitySection {...props} render={undefined} loading={props.loading || loading} error={error || props.error}
-      scopeLabel={tr('内置与用户技能')}
-      items={[...props.items, ...items]} disabled={busy || props.disabled}
-      onToggle={(kind, item, enabled) => { if (item.readOnly) void toggle(item, enabled); else props.onToggle?.(kind, item, enabled); }}
-      onDelete={(kind, item) => { if (item.readOnly) void remove(item); else props.onDelete?.(kind, item); }}
+      scopeLabel={tr('内置与用户技能')} hideEmpty={Boolean(query) || bundled.length > 0}
+      items={[...props.items, ...items]} disabled={busy || props.disabled} totalCount={props.items.length + items.length + bundled.length}
+      footer={bundled.length > 0 && <BuiltInSkills items={bundled} searching={Boolean(query)} busy={busy || props.disabled === true} onToggle={onToggle} onDelete={onDelete} />}
+      onToggle={onToggle} onDelete={onDelete}
       headerActions={<>
         <input ref={input} type="file" multiple hidden {...{ webkitdirectory: '', directory: '' }} data-testid="skills-folder-input"
           onChange={event => { const files = Array.from(event.currentTarget.files ?? []); event.currentTarget.value = ''; void add(files); }} />

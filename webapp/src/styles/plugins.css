@@ -29,7 +29,6 @@
 }
 .xn-plugins__header-actions { display: flex; flex: none; align-items: center; gap: 7px; }
 .xn-plugins__header h2 { margin: 0 0 5px; font-size: 21px; letter-spacing: -.02em; }
-.xn-plugin-settings .xn-plugins__header h2 { display: none; }
 .xn-plugins__header p { margin: 0; max-width: 650px; color: var(--fg-muted); font-size: 12px; line-height: 1.5; }
 .xn-plugins__refresh,
 .xn-plugins__details-toggle {

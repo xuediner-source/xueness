@@ -14,7 +14,7 @@
   "pluginsActions": ["validate", "update", "profile"],
   "frontendModules": ["plugins/extensions/index.tsx", "plugins/extensions/PluginProfilePicker.tsx"],
   "features": [
-    { "id": "extensions.official_download", "name": "从 GitHub 下载并校验官方可选插件", "nameEn": "Download and verify official optional plugins from GitHub" },
+    { "id": "extensions.official_download", "name": "从桌面安装包或 GitHub 安装并校验官方可选插件", "nameEn": "Install and verify official optional plugins from the desktop package or GitHub" },
     { "id": "extensions.marketplace", "name": "可信资源清单市场浏览", "nameEn": "Trusted resource manifest marketplace" },
     { "id": "extensions.management", "name": "数据 manifest 安装、升级与移除", "nameEn": "Data manifest install, upgrade and removal" },
     { "id": "extensions.validate_update", "name": "插件市场清单只读校验与原子升级", "nameEn": "Read-only manifest validation and atomic upgrades" },

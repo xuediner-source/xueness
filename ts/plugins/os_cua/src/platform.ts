@@ -1,33 +1,45 @@
 /**
  * Platform adaptation port for OS Computer Use (F12.03).
  *
- * The plugin never spawns screenshot or input helpers itself: a host wires an
- * `OsAdapterPort` per platform, and every tool call goes through it. Platforms
+ * A desktop host wires an `OsAdapterPort`, and every tool call goes through it. Platforms
  * without a wired adapter are explicitly unavailable — the tools answer with a
  * stable "unavailable" result instead of pretending to act.
  */
 
-/** A toplevel window as the adapter sees it; bounds are in virtual-screen pixels. */
+export interface OsBounds { x: number; y: number; w: number; h: number }
+
+/** A toplevel window as the adapter sees it; bounds are in virtual-screen units. */
 export interface OsWindow {
   id: string;
   title: string;
   app: string;
-  bounds: { x: number; y: number; w: number; h: number };
+  bounds: OsBounds;
   focused: boolean;
 }
 
 /** One bounded interaction per call; there is no free-form script surface. */
+export const KEY_MODIFIERS = ["cmd", "ctrl", "alt", "shift"] as const;
+export type KeyModifier = typeof KEY_MODIFIERS[number];
+
 export type OsInputAction =
   | { type: "click"; x: number; y: number; button?: "left" | "right" | "middle"; windowId?: string }
   | { type: "double_click"; x: number; y: number; windowId?: string }
   | { type: "scroll"; x: number; y: number; deltaY: number; windowId?: string }
-  | { type: "key"; key: string; windowId?: string }
+  | { type: "key"; key: string; modifiers?: KeyModifier[]; windowId?: string }
   | { type: "text"; text: string; windowId?: string };
 
 export interface ScreenCapture {
   pngBase64: string;
   width: number;
   height: number;
+  /** Screen-space bounds before scaling, including Retina downsampling. */
+  bounds?: OsBounds;
+}
+
+export interface OsSnapshot {
+  window: OsWindow;
+  nodes: { depth: number; role: string; label?: string; enabled?: boolean; point?: { x: number; y: number } }[];
+  truncated: boolean;
 }
 
 /** What a platform adapter implements; `windowId` on input maps window-relative coordinates. */
@@ -35,9 +47,10 @@ export interface OsAdapterPort {
   platform: string;
   available: boolean;
   unavailableReason?: string;
-  listWindows(): Promise<OsWindow[]>;
-  captureScreen(options: { windowId?: string }): Promise<ScreenCapture>;
-  performInput(action: OsInputAction): Promise<{ applied: boolean }>;
+  listWindows(signal?: AbortSignal): Promise<OsWindow[]>;
+  captureScreen(options: { windowId?: string }, signal?: AbortSignal): Promise<ScreenCapture>;
+  inspectWindow?(windowId: string, signal?: AbortSignal): Promise<OsSnapshot>;
+  performInput(action: OsInputAction, signal?: AbortSignal): Promise<{ applied: boolean }>;
 }
 
 export interface AdapterAvailability {

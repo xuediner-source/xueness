@@ -164,11 +164,23 @@ export function Field({
   );
 }
 
-export function EmptyState({ title, hint }: { title: string; hint?: string }) {
+/** The one empty / error state plugins share: an optional icon, a title, a
+ * hint and an action. `tone="error"` announces itself; `compact` fits inside a
+ * list or card instead of filling a panel. */
+export function EmptyState({ title, hint, icon, action, tone = "neutral", compact = false }: {
+  title: string;
+  hint?: string;
+  icon?: React.ReactNode;
+  action?: React.ReactNode;
+  tone?: "neutral" | "error";
+  compact?: boolean;
+}) {
   return (
-    <div className="xn-empty" data-testid="empty-state">
+    <div className="xn-empty" data-testid="empty-state" data-tone={tone} data-compact={compact || undefined} role={tone === "error" ? "alert" : undefined}>
+      {icon && <span className="xn-empty__icon" aria-hidden="true">{icon}</span>}
       <p className="xn-empty__title">{title}</p>
       {hint && <p className="xn-empty__hint">{hint}</p>}
+      {action && <div className="xn-empty__actions">{action}</div>}
     </div>
   );
 }

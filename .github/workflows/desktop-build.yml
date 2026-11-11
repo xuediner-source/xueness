@@ -38,7 +38,45 @@ jobs:
           npm ci --prefix webapp --no-audit --no-fund
           npm ci --prefix desktop --no-audit --no-fund
           npm ci --prefix ts --no-audit --no-fund
-          node desktop/node_modules/electron/install.js
+      - name: Fetch and verify the pinned Electron archive
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          version=$(node -p "require('./desktop/node_modules/electron/package.json').version")
+          archive="electron-v${version}-${XUENESS_BUILD_PLATFORM}-${XUENESS_BUILD_ARCH}.zip"
+          download_dir="$RUNNER_TEMP/xueness-electron"
+          gh release download "v$version" --repo electron/electron --pattern "$archive" --dir "$download_dir"
+          node - "$download_dir/$archive" "$archive" <<'NODE'
+          const assert = require('node:assert/strict');
+          const { createHash } = require('node:crypto');
+          const { readFileSync } = require('node:fs');
+          const [, , file, name] = process.argv;
+          const checksums = require('./desktop/node_modules/electron/checksums.json');
+          const actual = createHash('sha256').update(readFileSync(file)).digest('hex');
+          assert.equal(actual, checksums[name], `Electron checksum mismatch for ${name}`);
+          NODE
+      - name: Preload the pinned installer tool archives
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cache="$RUNNER_TEMP/xueness-builder-cache"
+          printf 'ELECTRON_BUILDER_CACHE=%s\n' "$cache" >> "$GITHUB_ENV"
+          # electron-builder verifies cached archives with its own pinned checksums before extraction.
+          fetch_tool() {
+            gh release download "$1" --repo electron-userland/electron-builder-binaries --pattern "$2" --dir "$cache/$1"
+          }
+          if [ "$XUENESS_BUILD_PLATFORM" = win32 ]; then
+            fetch_tool '7zip@1.0.0' '7zip-win-x64.tar.gz'
+            fetch_tool 'winCodeSign-2.6.0' 'winCodeSign-2.6.0.7z'
+            fetch_tool 'nsis-3.0.4.1' 'nsis-3.0.4.1.7z'
+            fetch_tool 'nsis-resources-3.4.1' 'nsis-resources-3.4.1.7z'
+          else
+            arch="$XUENESS_BUILD_ARCH"
+            if [ "$arch" = x64 ]; then arch=x86_64; fi
+            fetch_tool '7zip@1.0.0' "7zip-darwin-$arch.tar.gz"
+            fetch_tool 'icons@1.1.0' 'icons-bundle.tar.gz'
+            fetch_tool 'dmg-builder@1.2.5' "dmgbuild-bundle-$arch-75c8a6c.tar.gz"
+          fi
       - name: Validate application structure and compile UI
         run: |
           npm --prefix ts run check
@@ -46,10 +84,10 @@ jobs:
           npm --prefix webapp run build
       - name: Build Windows installer and portable ZIP
         if: runner.os == 'Windows'
-        run: npm --prefix desktop run dist:win -- --x64
+        run: npm --prefix desktop run dist:win -- --x64 --config.electronDist="$RUNNER_TEMP/xueness-electron"
       - name: Build native Mac disk image and ZIP
         if: runner.os == 'macOS'
-        run: npm --prefix desktop run dist:mac -- --${{ matrix.arch }}
+        run: npm --prefix desktop run dist:mac -- --${{ matrix.arch }} --config.electronDist="$RUNNER_TEMP/xueness-electron"
       - name: Generate installer checksums
         run: python desktop/scripts/checksums.py
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a

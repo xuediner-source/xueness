@@ -50,7 +50,7 @@ export const XUENESS_PLUGIN_REGISTRY = {
   workbuddy: { name: "WorkBuddy 号池", description: "查看本机 WorkBuddy 账号状态并管理认证文件。", panels: ["workbuddy"] },
   native_ops: { name: "原生操作工具", description: "批量读取、文件修订与文档文本工具，按需发现并通过现有权限审批执行。", panels: [] },
   batch_calls: { name: "批量调用", description: "鼓励同一步发起独立工具调用，并在上下文压缩后恢复批量调用约定。", panels: [] },
-  os_cua: { name: "OS Computer Use", description: "受审批约束的 OS 级计算机使用：平台适配端口上的有界屏幕截图、窗口列表与单步输入，带证据日志；无适配器平台明确不可用。", panels: [] },
+  os_cua: { name: "OS Computer Use", description: "macOS 桌面窗口、截图、辅助功能树和单步输入，使用会话审批和系统权限。", panels: [] },
   model_monitor: { name: "返回模型监测", description: "随会话记录请求型号与上游返回型号，标记一致、不同及未报告。不会自动发起额外模型请求。", panels: ["model-monitor"] },
   context_lens: { name: "上下文透镜", description: "基于 dsh-context 的上下文组成、逐请求趋势、内容浏览、文件命令活动与代理关系", panels: ["context-lens"] },
   usage: { name: "用量", description: "会话和步骤用量统计", panels: ["usage"] },
@@ -77,7 +77,7 @@ export const XUENESS_PLUGIN_REGISTRY = {
   shell: { name: "Shell 工具", description: "执行命令工具", panels: [] },
   planning: { name: "规划工具", description: "待办、提问和交付完整性检查", panels: [] },
   tools: { name: "工具执行策略", description: "对其他插件工具调用的实验性执行策略（干跑预览、每轮工具调用预算）", panels: [] },
-  deepseek_harness: { name: "DeepSeek Harness", description: "DeepSeek 风格供应商的确定性 KV-cache 前缀稳定与 reasoning 双协议桥", panels: [] },
+  deepseek_harness: { name: "DeepSeek Harness", description: "DeepSeek 风格供应商的确定性 KV-cache 前缀稳定与 reasoning 双协议桥；在设置中导入和管理第三方声明式 DSH 扩展包", panels: [] },
 } as const satisfies Record<string, { name: string; description: string; panels: readonly PluginPanel[] }>;
 
 export type XuenessPluginId = keyof typeof XUENESS_PLUGIN_REGISTRY;

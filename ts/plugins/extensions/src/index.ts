@@ -16,7 +16,7 @@ import { dispatchMarketplace, NetworkError, type FetchUrlResult } from "./market
 import { dispatchProfiles } from "./profiles.ts";
 import { dispatchValidate, type ExtensionsReply } from "./validate.ts";
 import { marketplaceCatalog } from "./marketplace.ts";
-import { fetchOfficialArtifact, removeOfficialArtifact, type ArtifactDownload } from "./official-install.ts";
+import { downloadArtifact, fetchOfficialArtifact, removeOfficialArtifact, type ArtifactDownload } from "./official-install.ts";
 import { installAll } from "./sdk.ts";
 import { readState, writeState } from "./runtime.ts";
 import { uninstallPackage } from "./components.ts";
@@ -35,6 +35,7 @@ export { activationPlan, catalogItems, dispatchPluginCatalog, ownsPluginCatalog,
 
 export interface ExtensionsHttpOptions {
   stateDir: string;
+  projectRoot?: string;
   enabled: boolean | ((id: string) => boolean);
   env?: NodeJS.ProcessEnv;
   /** Sync, or a promise. A marketplace URL is fetched once per request, then replayed. */
@@ -109,7 +110,7 @@ export function createExtensionsHttp(options: ExtensionsHttpOptions) {
           if (!item || !data || typeof data !== "object" || (data as Record<string, unknown>).sha256 !== artifact.sha256) return [400, { error: "Catalog changed; review this plugin again" }];
           if (Boolean(item.installedVersion) !== (parts[4] === "update")) return [400, { error: "Refresh the catalog before installing" }];
           if (item.installedVersion === artifact.version) return [400, { error: "No newer plugin version available" }];
-          await fetchOfficialArtifact(options.stateDir, artifact.packageId, options.downloadArtifact);
+          await fetchOfficialArtifact(options.stateDir, artifact.packageId, options.downloadArtifact ?? (pin => downloadArtifact(pin, options.projectRoot)));
           const state = readState(options.stateDir); state.enabled[artifact.id] = false; writeState(options.stateDir, state.enabled, state.profile);
           const installed = installAll(options.stateDir, [{ ...(item.manifest as Record<string, unknown>), enabled: false }]);
           if (!installed.ok) throw new Error("Plugin manifest could not be saved");

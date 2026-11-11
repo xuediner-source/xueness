@@ -1,15 +1,23 @@
 /** Official executable artifacts are pinned in the host, independently of market data. */
 import { randomUUID } from "node:crypto";
-import { chmodSync, closeSync, existsSync, lstatSync, mkdirSync, openSync, realpathSync, renameSync, rmSync, symlinkSync } from "node:fs";
-import { dirname, join, resolve } from "node:path";
+import { chmodSync, closeSync, existsSync, lstatSync, mkdirSync, openSync, readFileSync, realpathSync, renameSync, rmSync, symlinkSync } from "node:fs";
+import { basename, dirname, join, resolve } from "node:path";
 import { gunzipSync } from "node:zlib";
 import { artifactHash, coreNodeModules, optionalArtifactByPackage, optionalInstalled, optionalPath, optionalRoot, type OptionalArtifact } from "@xueness/kernel";
 import { protectPrivateDirectory, protectPrivateFile, writeAll } from "@xueness/sessions";
 
 export type ArtifactDownload = (artifact: OptionalArtifact) => Promise<Buffer>;
 
-export const downloadArtifact: ArtifactDownload = async artifact => {
+export async function downloadArtifact(artifact: OptionalArtifact, projectRoot?: string): Promise<Buffer> {
   if (!artifact.url.startsWith("https://raw.githubusercontent.com/xuediner-source/xueness/main/marketplace/packages/")) throw new Error("untrusted artifact origin");
+  if (projectRoot) {
+    const path = optionalPath(projectRoot, join("marketplace", "packages", basename(new URL(artifact.url).pathname)));
+    if (existsSync(path)) {
+      const file = lstatSync(path);
+      if (!file.isFile() || file.size !== artifact.bytes || file.size > 32 * 1024 * 1024) throw new Error("bundled plugin artifact size mismatch");
+      return readFileSync(path);
+    }
+  }
   const response = await fetch(artifact.url, { redirect: "error", signal: AbortSignal.timeout(120_000), headers: { Accept: "application/octet-stream" } });
   if (!response.ok || !response.body) throw new Error(`GitHub download failed (${response.status})`);
   const chunks: Uint8Array[] = []; let bytes = 0;
@@ -19,7 +27,7 @@ export const downloadArtifact: ArtifactDownload = async artifact => {
     chunks.push(chunk);
   }
   return Buffer.concat(chunks, bytes);
-};
+}
 
 function privateDirectory(root: string, relative: string): string {
   const path = optionalPath(root, relative); mkdirSync(path, { recursive: true, mode: 0o700 }); protectPrivateDirectory(path); return path;
@@ -32,7 +40,7 @@ function privateFile(path: string, bytes: Buffer): void {
 
 /** Checks every byte before publishing the directory. Nothing is evaluated here. */
 export function storeOfficialArtifact(stateDir: string, artifact: OptionalArtifact, compressed: Buffer): void {
-  if (compressed.length !== artifact.bytes || artifactHash(compressed) !== artifact.sha256) throw new Error("GitHub artifact checksum mismatch");
+  if (compressed.length !== artifact.bytes || artifactHash(compressed) !== artifact.sha256) throw new Error("official artifact checksum mismatch");
   const value = JSON.parse(gunzipSync(compressed, { maxOutputLength: 64 * 1024 * 1024 }).toString("utf8"));
   if (value.id !== artifact.id || value.version !== artifact.version || !Array.isArray(value.files) || value.files.length !== artifact.files.length) throw new Error("invalid official artifact");
   const files = artifact.files.map((entry, index) => {

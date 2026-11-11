@@ -11,7 +11,7 @@
         "workspace",
         "state"
       ],
-      "write": []
+      "write": ["state"]
     },
     "net": {
       "connect": [],
@@ -28,7 +28,9 @@
     "builtins/critic-solver",
     "builtins/trajectory-recorder",
     "builtins/repo-map",
-    "builtins/symbol-graph"
+    "builtins/symbol-graph",
+    "http",
+    "library"
   ],
   "features": [
     {
@@ -70,10 +72,21 @@
       "id": "deepseek_harness.bench",
       "name": "确定性 bench 套件、指标档案与回归报告",
       "nameEn": "Deterministic bench suite, metric profiling and regression reports"
+    },
+    {
+      "id": "deepseek_harness.library",
+      "name": "第三方 DSH 声明式扩展包的本地导入、预览、校验与移除（只读数据，不运行包内代码）",
+      "nameEn": "Local import, preview, verification and removal of third-party declarative DSH packages (data only; package code never runs)"
     }
   ],
   "tools": [],
   "commands": [
     "harness"
+  ],
+  "httpFamilies": [
+    "deepseek_harness"
+  ],
+  "frontendModules": [
+    "plugins/deepseek_harness/HarnessLibrary.tsx"
   ]
 }

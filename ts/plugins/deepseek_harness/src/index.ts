@@ -43,6 +43,8 @@ export * from "./prefix-cache.ts";
 export * from "./reasoning-bridge.ts";
 export * from "./loader.ts";
 export * from "./registry.ts";
+export * from "./library.ts";
+export * from "./http.ts";
 export * from "./hook-bridge.ts";
 export * from "./builtins/auto-verify.ts";
 export * from "./builtins/self-repair.ts";

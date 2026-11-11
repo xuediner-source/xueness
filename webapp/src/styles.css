@@ -24,6 +24,10 @@ button, input, select, textarea {
   letter-spacing: inherit;
 }
 
+/* Native checkboxes, radios and sliders a plugin leaves unstyled take the
+ * appearance's primary colour instead of the browser's blue. */
+input[type="checkbox"], input[type="radio"], input[type="range"] { accent-color: var(--primary); }
+
 body {
   font-family: var(--font-sans);
   font-size: var(--xn-ui-font-size, 14px);
@@ -344,29 +348,60 @@ code, kbd, samp, pre {
   color: var(--fg-muted);
 }
 
-/* --- EmptyState --- */
+/* --- EmptyState: one look for "nothing here yet" and "this failed" in every plugin --- */
 .xn-empty {
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 32px 16px;
+  gap: 4px;
+  min-width: 0;
+  padding: 36px 20px;
   text-align: center;
+  color: var(--fg-muted);
 }
+.xn-empty[data-compact] { padding: 20px 16px; }
+
+.xn-empty__icon {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  margin-bottom: 8px;
+  border: 1px solid var(--border);
+  border-radius: 50%;
+  background: var(--bg-card);
+  color: var(--fg-muted);
+}
+.xn-empty[data-compact] .xn-empty__icon { width: 34px; height: 34px; margin-bottom: 4px; }
 
 .xn-empty__title {
   margin: 0;
   font-size: 13px;
-  font-weight: 500;
-  color: var(--fg-muted);
+  font-weight: 600;
+  line-height: 1.45;
+  color: var(--fg);
 }
 
 .xn-empty__hint {
-  margin: 4px 0 0;
+  max-width: 46ch;
+  margin: 0;
   font-size: 12px;
+  line-height: 1.55;
   color: var(--fg-muted);
-  opacity: 0.8;
+  text-wrap: balance;
 }
+
+.xn-empty__actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.xn-empty[data-tone="error"] .xn-empty__icon { border-color: var(--error-border); background: var(--error-bg); color: var(--error-fg); }
+.xn-empty[data-tone="error"] .xn-empty__hint { overflow-wrap: anywhere; }
 
 /* --- CodeBlock --- */
 .xn-code {
@@ -1597,23 +1632,6 @@ code, kbd, samp, pre {
   padding: 10px 14px;
   color: var(--fg-muted);
   font-size: 12px;
-}
-
-.xn-cap-empty {
-  padding: 14px;
-  text-align: center;
-}
-
-.xn-cap-empty__title {
-  margin: 0;
-  font-size: 12px;
-  color: var(--fg-muted);
-}
-
-.xn-cap-empty__hint {
-  margin: 4px 0 0;
-  font-size: 11px;
-  color: var(--fg-subtle);
 }
 
 /* -- Lane A: rename dialog + sidebar groups -- */

@@ -1,3 +1,6 @@
+const { basename } = require('node:path');
+const optionalPackages = require('../ts/packages/kernel/src/optional-packages.json');
+
 module.exports = {
   appId: 'app.xueness.desktop', productName: 'Xueness', asar: true,
   directories: { output: 'release', buildResources: 'build' },
@@ -8,6 +11,8 @@ module.exports = {
     // electron-builder excludes a source root's node_modules during extraResources copying.
     { from: '../ts/dist/node_modules', to: 'backend-ts/node_modules', filter: ['**/*', '!**/*.map', '!@xueness/plugin-{subscriptions,model_monitor,workbuddy}/{src,assets}/**/*'] },
     { from: '../webapp/dist', to: 'webapp' },
+    { from: '../marketplace/packages', to: 'marketplace/packages',
+      filter: Object.values(optionalPackages).map(artifact => basename(new URL(artifact.url).pathname)) },
     { from: '../webapp/node_modules/playwright', to: 'browser-runtime/node_modules/playwright' },
     { from: '../webapp/node_modules/playwright-core', to: 'browser-runtime/node_modules/playwright-core' },
     { from: '../LICENSE', to: 'LICENSE' },

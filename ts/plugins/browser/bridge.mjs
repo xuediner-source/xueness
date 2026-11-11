@@ -166,6 +166,9 @@ async function publicHttps(urlValue) {
   const url = new URL(urlValue);
   if (url.protocol !== 'https:' || url.username || url.password || (url.port && url.port !== '443')) return false;
   const addresses = await lookup(url.hostname, { all: true });
+  // A proxy in FakeIP mode answers every name from 198.18.0.0/15. Still refused,
+  // but named, so the person learns why instead of seeing a generic failure.
+  if (addresses.length > 0 && addresses.every(({ address }) => isIP(address) === 4 && inCidr4(address, ['198.18.0.0', 15]))) throw new Error('fakeip DNS answer blocked');
   return addresses.length > 0 && addresses.every(({ address }) => !privateAddress(address));
 }
 
@@ -246,6 +249,10 @@ async function act(command) {
     untrusted: true };
 }
 
+// The worker's own fixed refusal reasons may pass through; anything else (driver
+// or page errors, which can carry page text or paths) stays generic.
+const REASONS = new Set(['public HTTPS URL required', 'navigate to a public HTTPS page first', 'page unavailable', 'fakeip DNS answer blocked',
+  'screenshot exceeds the size limit', 'file screenshot output unsupported', 'invalid action', 'invalid page id']);
 for await (const line of input) {
   if (line.length > 100000) {
     process.stdout.write(JSON.stringify({ ok: false, error: 'request too large' }) + '\n');
@@ -254,8 +261,10 @@ for await (const line of input) {
   try {
     const result = await act(JSON.parse(line));
     process.stdout.write(JSON.stringify(result) + '\n');
-  } catch {
-    process.stdout.write(JSON.stringify({ ok: false, error: 'browser action failed' }) + '\n');
+  } catch (error) {
+    const reason = error instanceof Error && REASONS.has(error.message) ? error.message
+      : error instanceof Error && error.name === 'TimeoutError' ? 'page load timed out' : 'browser action failed';
+    process.stdout.write(JSON.stringify({ ok: false, error: reason }) + '\n');
   }
 }
 await context.close();

@@ -21,6 +21,8 @@ import { createNativeOps, createNativeOpsBinding, nativeOps, nativeOpsExtension,
 import { contextLens, contextLensExtension } from "@xueness/plugin-context_lens";
 import { batchCallsExtension } from "@xueness/plugin-batch_calls";
 import { createOffice, deliveryContentText, office } from "@xueness/plugin-office";
+import { desktop } from "@xueness/plugin-desktop";
+import { createOsCua, osCua, OS_CUA_TOOL_NAMES } from "@xueness/plugin-os_cua";
 import { browser, createBrowser } from "@xueness/plugin-browser";
 import { createNetwork, network, networkActivityExtension, type Net } from "@xueness/plugin-network";
 import { createHooks, hooksBinding, hooksExtension, type HooksBinding } from "@xueness/plugin-hooks";
@@ -56,6 +58,8 @@ export interface AgentServiceOptions {
   /** Deny an unanswered approval after this many ms; off by default, as in ZCode (permissionTimeoutMs). */
   approvalTimeoutMs?: number;
   mediaStore?: MediaArtifactStore;
+  /** Set by the managed desktop transport, never by chat request data. */
+  desktopComputerUse?: boolean;
   settings?: () => Row;
   /** Host transport port; production defaults to pinned native HTTPS. */
   networkNet?: Net;
@@ -97,6 +101,7 @@ export function createAgentService(options: AgentServiceOptions) {
   const titles = createAutoTitleWorker({ store: options.store, enabled, settings, allowModelRequests: options.allowModelRequests === true, acceptProvider: titleProviderSupported,
     request: (provider, prompt, signal) => requestConversationTitle(provider, prompt, signal, { admission: auxAdmission() }) });
   let closed = false;
+  const desktopCuaEnabled = () => options.desktopComputerUse === true && !closed && enabled("desktop") && enabled("os_cua");
   const configurationFor = (root: string) => loadAgentRuntimeConfig({ stateDir: options.stateDir, root, enabled, env: options.configEnv, pluginConfig: options.pluginConfig?.() });
   const reconcile = async (environment: Environment): Promise<void> => {
     environment.reconcile = environment.reconcile.catch(() => {}).then(async () => {
@@ -107,10 +112,11 @@ export function createAgentService(options: AgentServiceOptions) {
       const runtimeFingerprint = pyJsonDumps(runtimeConfig, { sortKeys: true });
       if (runtimeFingerprint !== environment.runtimeFingerprint && environment.current.session) active.get(String(environment.current.session.id))?.cancel(String(environment.current.session.id));
       if (environment.current.session?.permission_mode === 'guarded' && !enabled('planning')) active.get(String(environment.current.session.id))?.cancel(String(environment.current.session.id));
-      for (const id of ["providers", "files", "shell", "planning", "git", "skills", "hooks", "subagents", "office", "browser", "network", "remote", "native_ops"]) {
+      for (const id of ["providers", "files", "shell", "planning", "git", "skills", "hooks", "subagents", "office", "browser", "network", "remote", "native_ops", "desktop", "os_cua"]) {
         const current = environment.host.status(id);
-        if (enabled(id) && !current.enabled) await environment.host.enable(id);
-        if (!enabled(id) && current.enabled) await environment.host.disable(id);
+        const effective = id === "os_cua" ? desktopCuaEnabled() && !environment.current.session?.remote_connection : enabled(id);
+        if (effective && !current.enabled) await environment.host.enable(id);
+        if (!effective && current.enabled) await environment.host.disable(id);
         if (serialized !== environment.configs && configs[id]) await environment.host.configure(id, configs[id]!);
       }
       environment.configs = serialized; environment.shellConfig = shellConfig; environment.runtimeConfig = runtimeConfig; environment.runtimeFingerprint = runtimeFingerprint;
@@ -130,13 +136,14 @@ export function createAgentService(options: AgentServiceOptions) {
       const hookBinding = hooksBinding(); const subagentBinding = subagentsBinding(); const shellBinding: ShellRuntimeBinding = {}; const mcpRuntime: McpRuntimeBinding = {};
       const workflowTools = createWorkflows({ stateDir: options.stateDir, enabled, dynamic: options.dynamicWorkflows, session: () => current.session, allowReal: () => options.allowModelRequests === true, allowRealHost: () => options.allowModelRequests === true,
         answerActor: (wid, nodeId, answer) => answerWorkflowActor(new WorkflowStore(options.stateDir), wid, nodeId, answer), ...(options.workflowLauncher ? { launcher: options.workflowLauncher } : {}) });
-      const host = new PluginHost(kernel, [files, createShell(shellBinding, { stateDir: options.stateDir }), createProviderResultTools(() => current.session, {
+      const desktopCua = createOsCua({ stateDir: options.stateDir, desktop: { enabled: desktopCuaEnabled, session: () => current.session } });
+      const host = new PluginHost(kernel, [files, desktop, desktopCua, createShell(shellBinding, { stateDir: options.stateDir }), createProviderResultTools(() => current.session, {
         // F02.02: the search sees the live kernel catalog projected to identity and
         // exposure metadata (registered = enabled plugins), and the run's provider
         // resolves the local/native ToolSearch mode.
         catalog: () => kernel.tools.list<ToolDefinition>().map(({ name, description, alwaysLoad, shouldDefer }) => ({ name, description, alwaysLoad, shouldDefer })),
         provider: () => current.provider,
-      }), sessionsPlugin, contextLens, workflowTools, createAutomationTools({ stateDir: options.stateDir }), createPlanning({ session: () => current.session, enabled, planMode: () => current.planMode, questionsSchema: QUESTION_SCHEMA, normalizeQuestions(value) { if (!enabled("sessions")) throw new PyValueError("structured questions require the planning and sessions plugins"); return normalizeQuestions(value); } }), createGitCheckpoints({ store: options.store, stateDir: options.stateDir, enabled, session: () => current.session }), createMcp({ run: () => current.mcp, binding: mcpRuntime }), createSkills({ stateDir: options.stateDir, root: () => current.session ? String(current.session.root) : null, bundled: BUNDLED_SKILLS_DIR }), createHooks(hookBinding), createSubagents(subagentBinding), createNativeOps(nativeOpsBinding), createOffice({ session: () => current.session }), createBrowser({ stateDir: options.stateDir }), createNetwork({ stateDir: options.stateDir, net: options.networkNet }), createRemote({ stateDir: options.stateDir })], { enabled: { providers: enabled("providers"), files: enabled("files"), shell: enabled("shell"), sessions: enabled("sessions"), workflows: enabled("workflows"), automation: enabled("automation"), planning: enabled("planning"), git: enabled("git"), mcp: false, skills: enabled("skills"), hooks: enabled("hooks"), subagents: enabled("subagents"), office: enabled("office"), browser: enabled("browser"), network: enabled("network"), remote: enabled("remote"), native_ops: enabled("native_ops"), context_lens: enabled("context_lens") }, config: configs });
+      }), sessionsPlugin, contextLens, workflowTools, createAutomationTools({ stateDir: options.stateDir }), createPlanning({ session: () => current.session, enabled, planMode: () => current.planMode, questionsSchema: QUESTION_SCHEMA, normalizeQuestions(value) { if (!enabled("sessions")) throw new PyValueError("structured questions require the planning and sessions plugins"); return normalizeQuestions(value); } }), createGitCheckpoints({ store: options.store, stateDir: options.stateDir, enabled, session: () => current.session }), createMcp({ run: () => current.mcp, binding: mcpRuntime }), createSkills({ stateDir: options.stateDir, root: () => current.session ? String(current.session.root) : null, bundled: BUNDLED_SKILLS_DIR }), createHooks(hookBinding), createSubagents(subagentBinding), createNativeOps(nativeOpsBinding), createOffice({ session: () => current.session }), createBrowser({ stateDir: options.stateDir }), createNetwork({ stateDir: options.stateDir, net: options.networkNet }), createRemote({ stateDir: options.stateDir })], { enabled: { providers: enabled("providers"), files: enabled("files"), shell: enabled("shell"), sessions: enabled("sessions"), workflows: enabled("workflows"), automation: enabled("automation"), planning: enabled("planning"), git: enabled("git"), mcp: false, skills: enabled("skills"), hooks: enabled("hooks"), subagents: enabled("subagents"), office: enabled("office"), browser: enabled("browser"), network: enabled("network"), remote: enabled("remote"), native_ops: enabled("native_ops"), context_lens: enabled("context_lens"), desktop: enabled("desktop"), os_cua: desktopCuaEnabled() && !session.remote_connection }, config: configs });
       try {
         await host.start();
         return { kernel, host, env: createToolEnv({ cwd: String(session.root), artifactsDir: artifacts, owner: sid }), artifacts, root: String(session.root), configs: pyJsonDumps(configs, { sortKeys: true }), reconcile: Promise.resolve(), current, hooks: hookBinding, subagents: subagentBinding, shell: shellBinding, shellConfig: pyJsonDumps(configs.shell ?? {}, { sortKeys: true }), runtimeConfig, runtimeFingerprint: pyJsonDumps(runtimeConfig, { sortKeys: true }), mcpRuntime, nativeOps: nativeOpsBinding };
@@ -167,7 +174,7 @@ export function createAgentService(options: AgentServiceOptions) {
     approvals,
     liveApprovals,
     resolveProvider,
-    knownTools(): string[] { return [files, shell, providers, planning, skills, subagents, office, browser, network, remote, workflows, automation, nativeOps].flatMap((entry) => isDict(entry.manifest) && Array.isArray(entry.manifest.tools) ? entry.manifest.tools.filter(isDict).map((tool) => String(tool.name)) : []); },
+    knownTools(): string[] { return [files, shell, providers, planning, skills, subagents, office, browser, network, remote, workflows, automation, nativeOps, osCua].flatMap((entry) => isDict(entry.manifest) && Array.isArray(entry.manifest.tools) ? entry.manifest.tools.filter(isDict).map((tool) => String(tool.name)) : []); },
     async mcpSnapshot(sid: string) { const pending = environments.get(sid); if (!pending) return null; const environment = await pending; return environment.mcpRuntime.current ? { active: true, ...environment.mcpRuntime.current.snapshot() } : null; },
     activeProvider(sid: string): SwitchableAgentProvider | null { return switchers.get(sid) ?? null; },
     permissionControl(sid: string): PermissionControl | null { return permissionControls.get(sid) ?? null; },
@@ -216,6 +223,7 @@ export function createAgentService(options: AgentServiceOptions) {
           const permissions = new PermissionSession({ mode: policy.permissionMode === "yolo" ? "yolo" : policy.mode === "plan" ? "plan" : policy.permissionMode,
             guarded: request => { if (!enabled('planning')) throw new UnsupportedAgentConfiguration(['planning.guarded']); return guardedPermission(request, environment.shell.dialect === 'posix' ? 'posix' : 'powershell'); },
             allow: enabled("sessions") ? loadProjectPermissionRules(options.stateDir, String(value.root)) : [],
+            alwaysAsk: options.desktopComputerUse ? OS_CUA_TOOL_NAMES : [],
             disallow: [...policy.disallowed, ...remoteBound ? remoteLocalTools(environment.kernel.tools.list().map((tool) => tool.name)) : []], readOnlyCommands: environment.shell.dialect === "posix" && !appliedShellConfig.captureInit && !appliedShellConfig.startupScript,
             shell: environment.shell.dialect === "posix" ? "posix" : "powershell", planDraft: policy.mode !== "plan" ? {
               path: draft, matches: (subject) => isAbsolute(subject) && foldHostPath(normalize(subject)) === foldHostPath(normalize(draft)),

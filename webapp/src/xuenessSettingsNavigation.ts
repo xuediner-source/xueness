@@ -42,6 +42,7 @@ const definitions: readonly SectionDefinition[] = [
   ['subscriptions', '订阅中心', '通过账号授权或订阅凭证接入，查看实际额度。', 'extensions', 'subscriptions'],
   ['workbuddy', 'WorkBuddy 号池', '查看本机 WorkBuddy 账号状态并管理认证文件。', 'extensions', 'workbuddy'],
   ['model-monitor', '返回模型监测', '对比请求型号与上游返回型号。', 'extensions', 'model_monitor'],
+  ['deepseek-harness', 'DeepSeek Harness', '导入和管理其他作者制作的声明式 DSH 扩展包。', 'extensions', 'deepseek_harness'],
   ['remote', 'SSH 工作区', '管理远程工作区连接。', 'extensions', 'remote'],
   ['automations', '自动化', '管理定时任务与审批。', 'extensions', 'automation'],
   ['about', '关于 Xueness', '查看应用版本和本机数据位置。', 'extensions', 'desktop'],

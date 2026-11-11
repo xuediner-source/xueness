@@ -31,6 +31,7 @@ const XuenessMemorySettings = lazy(() => import("../memory/MemorySettings").then
 const BrowserSettings = lazy(() => import("../browser/BrowserSettings").then(module => ({ default: module.BrowserSettings })));
 const XuenessSubagentSettings = lazy(() => import("../subagents/SubagentSettings").then(module => ({ default: module.XuenessSubagentSettings })));
 const XuenessWorkspaceSettings = lazy(() => import('./XuenessWorkspaceSettings').then(module => ({ default: module.XuenessWorkspaceSettings })));
+const HarnessLibrary = lazy(() => import('../deepseek_harness/HarnessLibrary').then(module => ({ default: module.HarnessLibrary })));
 
 type WorkbenchSettingsPanelProps = {
   settings: WorkbenchSettings;
@@ -90,14 +91,14 @@ function settingsContent({ settings, isPluginEffective, capabilityKinds, capSect
   const inlineSettings = ["general", "appearance", "shortcuts", "agent"].includes(settingsSection);
   if (settingsSection === "about") return <DesktopAbout enabled={isPluginEffective("desktop")} onboardingEnabled={isPluginEffective("onboarding")} />;
   if (settingsSection === "network") return <NetworkSettings enabled={isPluginEffective('network')} disabled={busy || settingsSaving || pluginCatalogLoading} />;
-  if (settingsSection === 'updates') return <DesktopUpdates enabled={isPluginEffective('updates') && isPluginEffective('desktop')} />;
+  if (settingsSection === 'updates') return <DesktopUpdates embedded enabled={isPluginEffective('updates') && isPluginEffective('desktop')} />;
   if (settingsSection === "browser") return <BrowserSettings enabled={isPluginEffective("browser")} disabled={busy || settingsSaving || pluginCatalogLoading}
     onEnabledChange={async enabled => {
       await togglePlugin("browser", enabled);
       if (!activeIdRef.current) updateChoices({ browser: enabled });
       await handleUpdateSetting("browserControlEnabled", enabled);
     }} />;
-  const pluginId = ({providers:"providers",subscriptions:'subscriptions',workbuddy:'workbuddy','model-monitor':'model_monitor',browser:"browser",memory:"memory",subagents:"subagents",mcp:"mcp",skills:"skills",commands:"commands",hooks:"hooks",usage:"usage"} as Record<string,string>)[settingsSection];
+  const pluginId = ({providers:"providers",subscriptions:'subscriptions',workbuddy:'workbuddy','model-monitor':'model_monitor',browser:"browser",memory:"memory",subagents:"subagents",mcp:"mcp",skills:"skills",commands:"commands",hooks:"hooks",usage:"usage",'deepseek-harness':'deepseek_harness'} as Record<string,string>)[settingsSection];
   if (pluginId && !isPluginEffective(pluginId)) return <FeatureUnavailable feature={settingsSections.find(section => section.id === settingsSection)?.label ?? settingsSection} onManage={() => setSettingsSection("modules")} />;
   if (inlineSettings) return <SettingsSections embedded sections={[]} activeSection={settingsSection}
     values={{...settingsValues, language: settingsValues.language ?? locale}} capabilities={capabilities}
@@ -130,15 +131,16 @@ function settingsContent({ settings, isPluginEffective, capabilityKinds, capSect
     onCancelOneEnabledChange={value => void handleUpdateSetting("subagentCancelOneEnabled", value)}
   />;
   if (capabilityKinds.includes(settingsSection as CapabilityKind)) return <CapabilitiesPanel scopeLabel={settingsSection === 'skills' ? tr('内置与用户技能') : undefined} sections={capSections.filter(section => section.kind === settingsSection)} />;
-  if (settingsSection === "modules") return <XuenessPluginManager plugins={pluginCatalog} loading={pluginCatalogLoading} error={pluginCatalogError} onRefresh={refreshPluginCatalog} onToggle={togglePlugin} />;
+  if (settingsSection === "modules") return <XuenessPluginManager embedded plugins={pluginCatalog} loading={pluginCatalogLoading} error={pluginCatalogError} onRefresh={refreshPluginCatalog} onToggle={togglePlugin} />;
   if (settingsSection === 'subscriptions') return <SubscriptionsPanel embedded onChanged={() => void refreshComposerCatalog()} onSelectModel={id => { updateChoices({ provider: 'real', provider_id: id, model: undefined, reasoning_effort: undefined }); void refreshComposerCatalog(); setPanel('chat'); }} />;
   if (settingsSection === 'workbuddy') return <WorkbuddySettingsPanel />;
   if (settingsSection === 'model-monitor') return <ModelMonitorPanel embedded />;
-  if (settingsSection === "marketplace") return <XuenessMarketplace onInstalled={() => void refreshPluginCatalog()} onManagePlugins={() => setSettingsSection('plugins')} />;
+  if (settingsSection === 'deepseek-harness') return <HarnessLibrary />;
+  if (settingsSection === "marketplace") return <XuenessMarketplace embedded onInstalled={() => void refreshPluginCatalog()} onManagePlugins={() => setSettingsSection('plugins')} />;
   if (settingsSection === "memory") return <XuenessMemorySettings enabled={settingsValues.memoryEnabled !== false} onEnabledChange={value => void handleUpdateSetting("memoryEnabled", value)} />;
   if (settingsSection === "usage") return <XuenessUsageSettings />;
-  if (settingsSection === "automations") return <XuenessAutomationsPanel offPeakEnabled={isPluginEffective("automation")} />;
-  if (settingsSection === "diagnostics") return <XuenessDiagnosticsPanel />;
+  if (settingsSection === "automations") return <XuenessAutomationsPanel embedded offPeakEnabled={isPluginEffective("automation")} />;
+  if (settingsSection === "diagnostics") return <XuenessDiagnosticsPanel embedded />;
   if (settingsSection === "remote") return <RemoteConnections onUse={() => { startNewTask(); setRemoteDialogOpen(true); }} />;
   return null;
 }

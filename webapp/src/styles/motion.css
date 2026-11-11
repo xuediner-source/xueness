@@ -97,6 +97,10 @@ details.xn-zc-work > .xn-zc-work-content > :nth-child(n + 6) { animation-delay: 
 }
 .xn-zcode-conversation .xn-zc-chevron { transition: rotate var(--dur-morph) var(--ease-spring), transform var(--dur-morph) var(--ease-spring), opacity var(--dur-fast) ease; }
 .xn-zcode-conversation :is(.xn-zc-tool, .xn-zc-reasoning, .xn-zc-work, .xn-zc-completion, .xn-zc-subagent) > summary { transition: color var(--dur-fast) ease; }
+/* Folded resource groups (built-in skills) open the same way. */
+.xn-cap-fold[open] > .xn-cap-list { animation: xn-reveal-down var(--dur-reveal) var(--ease-out-expo) backwards; }
+.xn-cap-fold__chevron { transition: rotate var(--dur-morph) var(--ease-spring); }
+.xn-cap-fold__summary { transition: background-color var(--dur-fast) ease; }
 
 /* ── Live work: shimmer on what is happening right now ──────────────────── */
 :is(.xn-zc-live, .xn-zc-work-status[data-running], .xn-zc-reasoning[data-active] > summary .xn-zc-kind, .xn-zc-kind[data-running]) {

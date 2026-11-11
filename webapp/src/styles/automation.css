@@ -57,6 +57,9 @@
   line-height: 1.55;
 }
 .xn-automation__header p { margin-top: 8px; font-size: 13px; line-height: 1.6; }
+/* Inside a settings page: the page supplies the title and the gutter. */
+.xn-automation[data-embedded] { padding: 0; max-width: none; }
+.xn-automation__header .xn-automation__lede { margin-top: 0; align-self: center; }
 
 .xn-automation button {
   min-height: 34px;

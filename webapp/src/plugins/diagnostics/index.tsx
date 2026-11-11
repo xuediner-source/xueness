@@ -80,7 +80,8 @@ export function cleanupConfirmMessage(days: number): string {
   return tf("将删除早于 {0} 天的日志文件。其他存储数据不会更改。", [days]);
 }
 
-export function XuenessDiagnosticsPanel(): React.JSX.Element {
+/** `embedded`: inside the settings page that already shows the title; the actions stay. */
+export function XuenessDiagnosticsPanel({ embedded = false }: { embedded?: boolean } = {}): React.JSX.Element {
   const [snapshot, setSnapshot] = useState<Diagnostics | null>(null);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
@@ -146,8 +147,8 @@ export function XuenessDiagnosticsPanel(): React.JSX.Element {
     }
   };
   const counts = snapshot?.storage ?? {};
-  return <section className="xn-diagnostics" data-testid="diagnostics-panel">
-    <header><div><h3>{tr("诊断与维护")}</h3><p>{tr("导出内容已脱敏；清理只删除超过保留期的日志。")}</p></div><div><button type="button" disabled={busy} onClick={() => void refresh()}>{tr("刷新")}</button><button type="button" disabled={!snapshot} onClick={download}>{tr("导出脱敏 JSON")}</button></div></header>
+  return <section className="xn-diagnostics" data-testid="diagnostics-panel" data-embedded={embedded || undefined}>
+    <header><div>{!embedded && <h3>{tr("诊断与维护")}</h3>}<p>{tr("导出内容已脱敏；清理只删除超过保留期的日志。")}</p></div><div><button type="button" disabled={busy} onClick={() => void refresh()}>{tr("刷新")}</button><button type="button" disabled={!snapshot} onClick={download}>{tr("导出脱敏 JSON")}</button></div></header>
     {error && <p role="alert">{error}</p>}{notice && <p role="status">{notice}</p>}
     {snapshot && <>
       <div className="xn-diagnostics__cards">{Object.entries(counts).map(([key, value]) => <article key={key}><span>{key}</span><strong>{typeof value === "object" ? JSON.stringify(value) : String(value)}</strong></article>)}</div>

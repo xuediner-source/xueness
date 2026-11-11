@@ -2,14 +2,20 @@
   "apiVersion": 2,
   "id": "os_cua",
   "name": "OS Computer Use",
-  "description": "Approval-gated OS-level computer use over a platform adapter port: bounded screen capture, window listing and one-action coordinate/key/text input with an evidence journal. Explicitly unavailable on platforms without a wired adapter.",
+  "description": "macOS desktop computer use with window listing, screenshots, accessibility snapshots and approval-gated single-action input.",
   "version": "1.0.0",
   "defaultEnabled": false,
-  "dependencies": [],
+  "dependencies": [
+    "desktop"
+  ],
   "capabilities": {
+    "exec": [
+      "xueness-os-cua"
+    ],
     "fs": {
-      "read": ["state"],
-      "write": ["state"]
+      "read": [
+        "state"
+      ]
     }
   },
   "tools": [
@@ -30,38 +36,56 @@
       "gate": "exec",
       "mutating": true,
       "concurrencySafe": false
+    },
+    {
+      "name": "os_snapshot",
+      "gate": "exec",
+      "mutating": false,
+      "concurrencySafe": false
     }
   ],
   "features": [
     {
       "id": "os_cua.screen",
-      "name": "受审批约束的整屏与窗口截图（内存 PNG 证据）",
-      "nameEn": "Approval-gated full-screen and window capture (in-memory PNG evidence)"
+      "name": "主屏和指定窗口截图，直接提供给视觉模型",
+      "nameEn": "Primary display and window screenshots for vision models"
     },
     {
       "id": "os_cua.input",
-      "name": "单步坐标点击、滚动、按键与文本输入，无自由脚本",
-      "nameEn": "One-action coordinate click, scroll, key and text input; no free-form scripting"
+      "name": "指定窗口点击、滚动、快捷键与 Unicode 输入",
+      "nameEn": "Targeted clicks, scrolling, keyboard shortcuts and Unicode input"
     },
     {
       "id": "os_cua.windows",
-      "name": "窗口列表、聚焦与窗口内坐标换算",
-      "nameEn": "Window listing, focus and window-relative coordinate mapping"
+      "name": "可见窗口列表、目标聚焦与坐标换算",
+      "nameEn": "Visible windows, verified focus and coordinate mapping"
     },
     {
       "id": "os_cua.permissions",
-      "name": "会话级 screen/input 授权账本，可撤销并持久化",
-      "nameEn": "Per-session screen/input grant ledger, revocable and persisted"
+      "name": "逐次审批与 macOS 系统权限检查",
+      "nameEn": "Per-action approval and macOS permission checks"
     },
     {
       "id": "os_cua.platform_ports",
-      "name": "平台适配端口；无适配器的平台明确不可用",
-      "nameEn": "Platform adaptation port; explicitly unavailable without an adapter"
+      "name": "macOS 14 及以上桌面原生适配器",
+      "nameEn": "Native desktop adapter for macOS 14 or later"
     },
     {
       "id": "os_cua.evidence",
-      "name": "每次交互的证据日志（动作、目标、时间与序号）",
-      "nameEn": "Evidence journal for every interaction (action, target, time and sequence)"
+      "name": "交互证据包含动作、目标、时间和序号",
+      "nameEn": "Interaction evidence with action, target, timestamp and sequence"
+    },
+    {
+      "id": "os_cua.accessibility",
+      "name": "指定窗口的辅助功能树与控件坐标",
+      "nameEn": "Window accessibility tree and control coordinates"
     }
+  ],
+  "backendAssets": [
+    "native/build.mjs",
+    "native/Worker.swift",
+    "native/Windows.swift",
+    "native/Screen.swift",
+    "native/Input.swift"
   ]
 }

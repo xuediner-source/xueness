@@ -52,10 +52,11 @@ function runStatusLabel(status: string): string {
 }
 
 export function XuenessAutomationsPanel({
-  offPeakEnabled = false,
+  offPeakEnabled = false, embedded = false,
 }: {
-  /** 闲时任务区块只在 automation 插件生效时渲染；默认关闭，容器传入实际归属。 */
-  offPeakEnabled?: boolean;
+  /** 闲时任务区块只在 automation 插件生效时渲染；默认关闭，容器传入实际归属。
+   * `embedded`: inside a settings page that already shows the title, so only the actions stay. */
+  offPeakEnabled?: boolean; embedded?: boolean;
 }): React.JSX.Element {
   const [items, setItems] = useState<AutomationRecord[]>([]);
   const [form, setForm] = useState<AutomationDraft>(() => emptyAutomationDraft());
@@ -180,13 +181,13 @@ export function XuenessAutomationsPanel({
   };
 
   return (
-    <section className="xn-automation" data-testid="automations-panel" aria-labelledby="xn-automation-title">
+    <section className="xn-automation" data-testid="automations-panel" data-embedded={embedded || undefined} aria-labelledby={embedded ? undefined : "xn-automation-title"} aria-label={embedded ? tr("自动化") : undefined}>
       <header className="xn-automation__header">
-        <div>
+        {embedded ? <p className="xn-automation__lede">{tr("管理定时计划、工作流步骤、审批状态和运行记录。当前支持定时触发。")}</p> : <div>
           <span className="xn-automation__eyebrow">{tr("本地计划")}</span>
           <h3 id="xn-automation-title">{tr("自动化")}</h3>
           <p>{tr("管理定时计划、工作流步骤、审批状态和运行记录。当前支持定时触发。")}</p>
-        </div>
+        </div>}
         <div className="xn-automation__header-actions">
           <button type="button" disabled={busy || refreshing} onClick={() => void refresh()} aria-busy={refreshing}>
             {refreshing ? tr("正在刷新…") : tr("刷新")}

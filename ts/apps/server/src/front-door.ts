@@ -21,7 +21,7 @@ import { apiLocation, IntakeError, readApiBody, type ApiDispatcher } from "./api
 import { isAsyncBody, sendStream } from "./stream-response.ts";
 
 export const STATUS_PATH = "/api/front-door/status";
-export const FRONT_DOOR_VERSION = "0.2.1";
+export const FRONT_DOOR_VERSION = "0.2.2";
 
 /** Settings that can change while the front door runs (see `configure`). */
 export interface FrontDoorSettings {

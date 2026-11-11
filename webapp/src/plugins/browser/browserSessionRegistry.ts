@@ -1,7 +1,21 @@
 /** Tabs own resources; mounting a view never opens or navigates a browser. */
-export interface BrowserTab { pageId: string; workspaceId: string; sessionId: string; title: string; url: string; preview?: string; text?: string; error?: string; busy?: boolean; disposed?: boolean; pending?: { action: BrowserAction; approvalId: string; subject: string } }
+export interface BrowserTab { pageId: string; workspaceId: string; sessionId: string; title: string; url: string; preview?: string; text?: string; error?: string; busy?: boolean; disposed?: boolean; pending?: { action: BrowserAction; approvalId: string; subject: string }
+  /** The latest snapshot tree and page text kept apart (`text` stays the last result, as before);
+   * `textKind` names the newer one. Refs in `tree` are stale after a click or fill. */
+  tree?: string; treeStale?: boolean; pageText?: string; links?: BrowserLink[]; textKind?: 'tree' | 'text'; capturedAt?: number; running?: BrowserAction['action']; log?: BrowserLogEntry[] }
 export interface BrowserAction { action: 'navigate' | 'refresh' | 'inspect' | 'snapshot' | 'click' | 'fill' | 'screenshot'; url?: string; selector?: string; text?: string }
-export interface BrowserResult { ok?: boolean; error?: string; url?: string; title?: string; text?: string; tree?: string; imageDataUrl?: string; approvalRequired?: boolean; approvalId?: string; subject?: string }
+export interface BrowserResult { ok?: boolean; error?: string; url?: string; title?: string; text?: string; tree?: string; imageDataUrl?: string; links?: unknown; approvalRequired?: boolean; approvalId?: string; subject?: string }
+export interface BrowserLink { text: string; href: string }
+/** Client-side record of what happened in a tab; never sent anywhere. */
+export interface BrowserLogEntry { at: number; action: BrowserAction; status: 'awaiting' | 'done' | 'failed' | 'cancelled'; detail?: string }
+const LOG_LIMIT = 40;
+const pushLog = (tab: BrowserTab, entry: Omit<BrowserLogEntry, 'at'>) => {
+  const log = tab.log ??= [];
+  log.push({ at: Date.now(), ...entry });
+  if (log.length > LOG_LIMIT) log.splice(0, log.length - LOG_LIMIT);
+};
+const linksOf = (value: unknown): BrowserLink[] => Array.isArray(value) ? value.slice(0, 40).flatMap(item => item && typeof item === 'object'
+  && typeof (item as BrowserLink).href === 'string' ? [{ text: String((item as BrowserLink).text ?? '').slice(0, 200), href: (item as BrowserLink).href.slice(0, 2048) }] : []) : [];
 export interface BrowserApi { remote?: boolean; list(enabled?: () => boolean): Promise<{ tabs: BrowserTab[] }>; open(sessionId: string, enabled?: () => boolean): Promise<BrowserTab>; action(pageId: string, action: BrowserAction & { approvalId?: string }, enabled?: () => boolean): Promise<BrowserResult>; cancel(pageId: string, approval: { approvalId: string; subject: string }, enabled?: () => boolean): Promise<{ cancelled?: boolean; error?: string }>; close(pageId: string): Promise<unknown> }
 export function screenshotBlob(value: string): Blob {
   const prefix = 'data:image/png;base64,';
@@ -63,23 +77,31 @@ export class BrowserSessionRegistry {
     if (!this.enabled || tab.disposed || tab.busy || this.entries.get(tab.pageId) !== tab) return;
     const pending = tab.pending;
     if (approved && (!pending || JSON.stringify(pending.action) !== JSON.stringify(action))) return;
-    tab.busy = true; tab.error = ''; tab.pending = undefined; this.changed();
+    tab.busy = true; tab.error = ''; tab.pending = undefined; tab.running = action.action; this.changed();
     try {
       const result = await this.api.action(tab.pageId, { ...action, ...(approved ? { approvalId: pending!.approvalId } : {}) }, () => this.enabled && !tab.disposed && this.entries.get(tab.pageId) === tab);
       if (!this.enabled || tab.disposed) return;
-      if (result.approvalRequired && result.approvalId && result.subject) tab.pending = { action: { ...action }, approvalId: result.approvalId, subject: result.subject };
+      if (result.approvalRequired && result.approvalId && result.subject) { tab.pending = { action: { ...action }, approvalId: result.approvalId, subject: result.subject }; pushLog(tab, { action: { ...action }, status: 'awaiting' }); }
       else {
         if (!result.ok) throw new Error(result.error || 'Browser action failed');
         if (result.imageDataUrl) {
           const next = this.urls.create(screenshotBlob(result.imageDataUrl));
           if (tab.preview) this.urls.revoke(tab.preview);
-          tab.preview = next;
+          tab.preview = next; tab.capturedAt = Date.now();
         } else if (['navigate', 'refresh', 'click', 'fill'].includes(action.action) && tab.preview) { this.urls.revoke(tab.preview); tab.preview = undefined; }
         tab.url = result.url ?? tab.url; tab.title = result.title ?? tab.title;
         tab.text = result.tree ?? result.text ?? '';
+        // A new page invalidates every ref; a click or fill may have.
+        if (action.action === 'navigate' || action.action === 'refresh') { tab.tree = undefined; tab.treeStale = false; }
+        else if (action.action === 'click' || action.action === 'fill') tab.treeStale = Boolean(tab.tree);
+        if (result.tree !== undefined) { tab.tree = result.tree; tab.treeStale = false; tab.textKind = 'tree'; }
+        if (result.text !== undefined) { tab.pageText = result.text; tab.links = linksOf(result.links); if (action.action === 'inspect' || !tab.tree) tab.textKind = 'text'; }
+        pushLog(tab, { action: { ...action }, status: 'done' });
       }
-    } catch (error) { if (!tab.disposed) tab.error = error instanceof Error ? error.message : String(error); }
-    finally { tab.busy = false; this.changed(); }
+    } catch (error) {
+      if (!tab.disposed) { tab.error = error instanceof Error ? error.message : String(error); pushLog(tab, { action: { ...action }, status: 'failed', detail: tab.error }); }
+    }
+    finally { tab.busy = false; tab.running = undefined; this.changed(); }
   }
   async cancel(tab: BrowserTab) {
     if (!this.enabled || tab.disposed || tab.busy || !tab.pending || this.entries.get(tab.pageId) !== tab) return;
@@ -88,6 +110,7 @@ export class BrowserSessionRegistry {
     tab.pending = undefined; tab.busy = true; tab.error = ''; this.changed();
     try {
       const result = await this.api.cancel(tab.pageId, { approvalId: pending.approvalId, subject: pending.subject }, () => this.enabled && !tab.disposed && this.entries.get(tab.pageId) === tab);
+      if (!tab.disposed && result.cancelled) pushLog(tab, { action: { ...pending.action }, status: 'cancelled' });
       if (!tab.disposed && !result.cancelled) tab.error = result.error || 'Cancellation not confirmed. The action may already have been submitted; cancellation cannot undo its effects.';
     } catch {
       if (!tab.disposed) tab.error = 'Cancellation not confirmed. Do not reuse the old approval. No browser action was retried.';

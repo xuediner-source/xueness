@@ -26,6 +26,8 @@
     "plugins/browser/BrowserSettings.tsx",
     "plugins/browser/DesktopBrowserImport.tsx",
     "plugins/browser/BrowserPanel.tsx",
+    "plugins/browser/BrowserInspector.tsx",
+    "plugins/browser/browserPaneModel.ts",
     "plugins/browser/browserSessionRegistry.ts",
     "plugins/browser/browserLifecycle.ts",
     "plugins/browser/remoteBrowserTransport.ts"

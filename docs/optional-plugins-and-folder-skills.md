@@ -50,6 +50,8 @@ Read references/review.md, then follow the project-specific checks.
 
 官方插件包位于 [`marketplace/packages`](../marketplace/packages)，文件名带有内容摘要。`ts/packages/kernel/src/optional-packages.json` 固定本次核心构建允许的三个插件、下载地址、包摘要与每个文件的摘要。下载器验证整个压缩包和所有文件后，再原子发布到用户状态目录。
 
+桌面安装包带有与本次构建匹配的三个压缩包。扩展市场优先使用本机副本，安装和启用仍按原有开关流程。安装时校验整个包和逐个文件的摘要。
+
 只有这三个内置许可的官方插件可以加载代码。普通市场清单和用户导入的数据清单继续禁止 `entrypoint`、`command` 等可执行字段；远程目录不能扩展代码加载许可。
 
 `npm --prefix webapp run build` 会生成独立的插件界面分包、构建三个可复现下载包，并从核心 Web 产物中移除插件界面代码与样式。桌面打包规则同时排除三个插件的后端源码、执行代码与资源。核心保留名称、路由与能力声明，以便在未安装时显示下载入口。

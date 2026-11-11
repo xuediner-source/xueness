@@ -40,7 +40,7 @@ export function desktopStatus(options: DesktopHttpOptions): Record<string, unkno
   return {
     desktop: Boolean(options.desktopToken),
     platform: process.platform,
-    version: options.version ?? "0.2.1",
+    version: options.version ?? "0.2.3",
     frozen: options.frozen === true,
     dataDirectory: dirname(options.stateDir),
     nativeDirectoryPicker: options.nativePicker === true || typeof options.pickDirectory === "function",
@@ -55,7 +55,7 @@ export function createDesktopHttp(options: DesktopHttpOptions) {
       if (!owned(method, parts)) return null;
       if (!enabled(options)) return [403, { error: "plugin disabled or dependency unavailable: desktop", plugin: "desktop" }];
       const capability = capabilityDispatch(method, parts, data, {
-        stateDir: options.stateDir, desktop: Boolean(options.desktopToken), version: options.version ?? "0.2.1",
+        stateDir: options.stateDir, desktop: Boolean(options.desktopToken), version: options.version ?? "0.2.3",
         ...(options.pickDirectory ? { pickDirectory: options.pickDirectory } : {}),
         ...(options.header ? { header: options.header } : {}),
         ...(options.now ? { now: options.now } : {}),
