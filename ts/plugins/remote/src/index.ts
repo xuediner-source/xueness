@@ -53,4 +53,3 @@ export function createRemote(options: { stateDir: string; runner?: SshRunner }):
 }
 
 export const remote = createRemote({ stateDir: "." });
-export const remotePlugin = remote.plugin;

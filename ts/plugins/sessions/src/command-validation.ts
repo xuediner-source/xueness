@@ -1,5 +1,5 @@
 import { isDict, pyLen, pyStrip, PyValueError } from "@xueness/contracts";
-import { dict, keysAre, onlyKeys, SID, validateExpectedTurn, validateRevision, type Row } from "./queue-types.ts";
+import { keysAre, onlyKeys, SID, validateExpectedTurn, validateRevision, type Row } from "./queue-types.ts";
 export const COMMAND_TYPES = ["send", "queue", "edit_queue", "cancel_queue", "withdraw_queue", "reorder_queue", "stop", "run", "edit_message", "fork", "approve", "reject", "approval"];
 export function validateCommand(data: unknown, collection: boolean): Row {
   const types = collection ? ["create_session"] : COMMAND_TYPES;

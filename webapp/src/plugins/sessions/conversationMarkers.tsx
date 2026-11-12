@@ -1,4 +1,3 @@
-import React from 'react';
 import { getLocale } from '../../i18n';
 import type { TimelineRow } from '../../xuenessWorkbench';
 

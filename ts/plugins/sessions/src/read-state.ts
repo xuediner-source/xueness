@@ -4,7 +4,6 @@ import { isDict, isPyIntValue, JsonFloat, numericValue, pyDecodeUtf8, pyJsonLoad
 import { isLink, readRegularBytes, type SessionStore } from "@xueness/sessions";
 import { archiveSession, privateJson } from "./archive.ts";
 import { pendingDenials, type PublicSessionOptions } from "./public-session.ts";
-type Row = Record<string, unknown>;
 function markerPath(store: SessionStore, sid: string, create = false): string {
   store.pathFor(sid); const directory = join(store.directory, ".xueness-session-read");
   if (isLink(directory)) throw new PyValueError("session read state directory is a symbolic link");

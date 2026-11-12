@@ -9,11 +9,11 @@
 import { readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { isDict, isPyIntValue, numericValue, pyRepr, pyStr } from "@xueness/contracts";
+import { OPTIONAL_IDS } from "@xueness/kernel";
 import { isLink, pyCodeCompare, readJsonObject, resourceKindDir, validResourceId } from "@xueness/sessions";
 
-const API_VERSION = 1;
 const CAPABILITIES = ["command", "network", "filesystem-write"] as const;
-const BUILTINS = new Set(["skills", "hooks", "subagents", "mcp", "subscriptions", "model_monitor", "workbuddy", "tavern"]);
+const BUILTINS = new Set<string>(["skills", "hooks", "subagents", "mcp", ...OPTIONAL_IDS]);
 const VERSION = /^\d+\.\d+\.\d+$/;
 const FORBIDDEN = ["entrypoint", "command"] as const;
 

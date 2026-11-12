@@ -19,7 +19,6 @@ export type OffPeakDraft = {
 
 export const DEFAULT_OFF_PEAK_WINDOW: OffPeakSettings["window"] = { start: "00:00", end: "08:00" };
 export const OFF_PEAK_DEADLINE = { min: 60, max: 14_400, fallback: 3_600 };
-export const OFF_PEAK_MAX_TASKS = 50;
 
 const CLOCK = /^(?:[01]\d|2[0-3]):[0-5]\d$/;
 const ABSOLUTE_ROOT = /^(?:[A-Za-z]:[\\/]|[\\/])/;

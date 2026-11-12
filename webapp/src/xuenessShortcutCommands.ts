@@ -290,22 +290,6 @@ export function canonicalPhysicalBinding(binding: string, platform?: string): st
   return [...sorted, key].join("+");
 }
 
-export function isSamePhysicalBinding(a: string, b: string, platform?: string): boolean {
-  const canA = canonicalPhysicalBinding(a, platform);
-  const canB = canonicalPhysicalBinding(b, platform);
-  return canA !== null && canA === canB;
-}
-
-export function findShortcutConflict(
-  binding: string,
-  commandId: ShortcutCommandId,
-  overrides: Readonly<Record<string, string>>,
-  platform?: string,
-): ShortcutCommandId | null {
-  const conflict = findShortcutConflictIn(binding, commandId, overrides, SHORTCUT_COMMANDS, platform);
-  return conflict as ShortcutCommandId | null;
-}
-
 /** Same-scope conflicts only. A chord may be reused by another scope. */
 export function findShortcutConflictIn(
   binding: string,

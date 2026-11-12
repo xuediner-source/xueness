@@ -1,4 +1,3 @@
-import React from 'react';
 import { BookOpen, Blocks, FileText, FileSpreadsheet, Presentation, Globe, Image, Pencil, Check } from 'lucide-react';
 import { getLocale, t } from '../../i18n';
 import type { ComposerCapability } from '../../xuenessComposer';

@@ -1,4 +1,3 @@
-import React from 'react';
 import { t as tr, tf } from '../../i18n';
 import type { RecoverableComposerDraft } from './composerRecovery';
 import type { ComposerCapability } from '../../xuenessComposer';

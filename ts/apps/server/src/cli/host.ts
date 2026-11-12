@@ -10,7 +10,7 @@ import { NativeFileLocks, SessionStore } from "@xueness/sessions";
 import { createSessionsStore } from '@xueness/plugin-sessions';
 import { createApplicationApi, type ApplicationApi, type ApplicationApiOptions } from "../application-api.ts";
 import { effectivePlugins } from "../plugin-state.ts";
-import { CliExit, pyRepr, type Args, type Parser } from "./argparse.ts";
+import { pyRepr, type Args, type Parser } from "./argparse.ts";
 import { out, err, endCliOutput } from "./output.ts";
 export { out, err } from "./output.ts";
 
@@ -106,4 +106,3 @@ export class Cli {
   }
 }
 
-export function exitWith(code: number): never { throw new CliExit(code); }

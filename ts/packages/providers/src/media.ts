@@ -4,7 +4,7 @@
  * the OpenAI / Anthropic message conversions that embed attachments.
  */
 import {
-  PyTypeError, PyValueError, isDict, pyCasefold, pyDictGet, pyIter, pyJoin, pyJsonDumps, pyJsonLoads, pyStr,
+  PyTypeError, PyValueError, isDict, pyCasefold, pyDictGet, pyIter, pyJoin, pyJsonLoads, pyStr,
   pyTruthy, pyTypeName,
 } from "@xueness/contracts";
 import { withReportedUsage } from "./metadata.ts";

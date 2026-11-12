@@ -24,14 +24,6 @@ export function boundaryAdmissionOrder(items: readonly Row[]): Row[] {
     .sort((a, b) => commandPriority(guidanceCommandKind(a.item)) - commandPriority(guidanceCommandKind(b.item)) || a.index - b.index)
     .map((entry) => entry.item);
 }
-/**
- * Inputs stay preserved (queued) while the run is inside a compaction or
- * waiting-tool window of the turn they target; anything aimed at another
- * turn is no longer admissible and settles as paused by the normal path.
- */
-export function preservedInWaitWindow(item: Row, activeTurnId: string | null): boolean {
-  return typeof activeTurnId === "string" && item.target_turn_id === activeTurnId;
-}
 /** Receipt-facing priority class for pending snapshots: takeover or plain guide. */
 export const guidancePriority = (item: Row): string => (guidanceCommandKind(item) === "start_now" ? "takeover" : "guide");
 /**

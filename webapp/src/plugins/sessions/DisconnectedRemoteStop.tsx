@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { t as tr } from '../../i18n';
 import type { WorkbenchSession } from '../../xuenessWorkbench';
 import type { RemoteSessionAdapter } from '../remote/remoteSessionAdapter';

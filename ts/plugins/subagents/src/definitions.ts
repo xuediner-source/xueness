@@ -12,7 +12,6 @@ export type Row = Record<string, unknown>;
 export const PROMPT_MAX_CHARS = 4000;
 export const TASK_TOOL_NAME = "task";
 export const TRUNCATION_SUFFIX = "\n…(truncated)";
-export const PROMPT_SEPARATOR = "\n\n---\n\n# Sub-agent\n\n";
 export const PROMPT_KEYS = ["systemPrompt", "prompt", "description"] as const;
 /** Python's child-only exclusions (durable workflow writes). */
 export const SUBAGENT_DENIED_TOOL_NAMES: readonly string[] = Object.freeze(["workflow_create", "workflow_amend"]);
@@ -130,9 +129,3 @@ export function agentPromptText(agent: unknown): string {
   return "";
 }
 
-/** Python `build_system_prompt`. */
-export function buildSystemPrompt(agent: unknown, baseSystem: unknown): string {
-  const base = typeof baseSystem === "string" ? baseSystem : "";
-  const text = agentPromptText(agent);
-  return text ? clip(base + PROMPT_SEPARATOR + text, PROMPT_MAX_CHARS) : base;
-}

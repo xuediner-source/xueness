@@ -97,11 +97,6 @@ export interface XuenessEventsEnvelopeV1 {
   hasMore: boolean;
 }
 
-export interface PageEventsOptions {
-  cursor?: number;
-  limit?: number;
-}
-
 export interface PageEventsResult {
   events: XuenessEventV1[];
   cursor: number;

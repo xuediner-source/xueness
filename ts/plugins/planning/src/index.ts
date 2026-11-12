@@ -14,7 +14,6 @@ export * from "./task-tools.ts";
 export * from "./goal-actions.ts";
 export * from "./http-api.ts";
 export const planning = createPlanning({ session: () => null });
-export const planningPlugin = planning.plugin;
 export * from "./plan-exit.ts";
 export * from './guarded.ts';
 export * from './goal-state.ts';

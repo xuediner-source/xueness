@@ -10,7 +10,7 @@ import { createToolEnv, type ToolDefinition, type ToolEnv } from "@xueness/engin
 import { planModePort } from "./plan-mode-port.ts";
 import { PermissionSession } from "@xueness/permissions";
 import { files, filesReadStateExtension, filesHistoryExtension, workspaceInstructionsExtension } from "@xueness/plugin-files";
-import { shell, createShell, shellBackgroundExtension, loadShellConfig, type ShellRuntimeBinding } from "@xueness/plugin-shell";
+import { shell, createShell, shellBackgroundExtension, type ShellRuntimeBinding } from "@xueness/plugin-shell";
 import { createProviderResultTools, providerToolResultBudgetExtension, providers } from "@xueness/plugin-providers";
 import { sessionsTurnRuntimeExtension, sessionsSteeringExtension, sessionsRuntimeEventsExtension, sessionsStableBoundariesExtension, sessionsCompactPersistenceExtension } from "@xueness/plugin-sessions";
 import { createPlanning, guardedPermission, planning, type PlanModePort, planningDeliveryExtension, planningGoalExtension } from "@xueness/plugin-planning";
@@ -26,7 +26,7 @@ import { createOsCua, osCua, OS_CUA_TOOL_NAMES } from "@xueness/plugin-os_cua";
 import { browser, createBrowser } from "@xueness/plugin-browser";
 import { createNetwork, network, networkActivityExtension, type Net } from "@xueness/plugin-network";
 import { createHooks, hooksBinding, hooksExtension, type HooksBinding } from "@xueness/plugin-hooks";
-import { completionCheck, contextReminder, createSubagents, GUIDANCE, subagents, subagentsBinding, subagentsExtension, TaskCoordinator, type SubagentsBinding, type TaskRegistry } from "@xueness/plugin-subagents";
+import { createSubagents, subagents, subagentsBinding, subagentsExtension, TaskCoordinator, type SubagentsBinding, type TaskRegistry } from "@xueness/plugin-subagents";
 import { memoryExtension, memoryRootFromEnv } from "@xueness/plugin-memory";
 import { createRemote, remote, remoteLocalTools, remoteSessionExtension } from "@xueness/plugin-remote";
 import { backgroundChildRunner, childRunner } from "./agent-subagents.ts";

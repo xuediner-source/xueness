@@ -1,4 +1,4 @@
-import { t as tr, tf } from '../../i18n';
+import { t as tr } from '../../i18n';
 import React from "react";
 import { deferCompositionEnd, isImeComposingEvent } from '../../xuenessShortcutDisplay';
 

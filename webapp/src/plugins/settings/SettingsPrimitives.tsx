@@ -21,17 +21,6 @@ export type SettingsRowProps = {
   control: React.ReactNode;
 };
 
-export type SettingsEmptyStateProps = {
-  title: string;
-  description?: string;
-  icon?: React.ReactNode;
-  actionLabel?: string;
-  onAction?: () => void;
-  actionDisabled?: boolean;
-  linkLabel?: string;
-  href?: string;
-};
-
 export type SettingsAccountBadge = { label: string; title?: string };
 
 export type SettingsAccountCardProps = {
@@ -63,43 +52,6 @@ export function SettingsRow({ label, description, control }: SettingsRowProps): 
         {description && <p>{description}</p>}
       </div>
       <div className="xn-setting-control">{control}</div>
-    </div>
-  );
-}
-
-export function SettingsEmptyState({
-  title,
-  description,
-  icon,
-  actionLabel,
-  onAction,
-  actionDisabled = false,
-  linkLabel,
-  href,
-}: SettingsEmptyStateProps): React.ReactElement {
-  const hasLink = Boolean(linkLabel && href);
-  return (
-    <div className="xn-settings-empty" data-testid="xn-settings-empty">
-      {icon && <span className="xn-settings-empty__icon" aria-hidden="true">{icon}</span>}
-      <p className="xn-settings-empty__title">{title}</p>
-      {description && <p className="xn-settings-empty__description">{description}</p>}
-      {(actionLabel || hasLink) && (
-        <div className="xn-settings-empty__actions">
-          {actionLabel && (
-            <button
-              type="button"
-              className="xn-btn xn-btn--primary xn-btn--md"
-              disabled={actionDisabled || !onAction}
-              onClick={() => onAction?.()}
-            >
-              {actionLabel}
-            </button>
-          )}
-          {hasLink && (
-            <a className="xn-settings-empty__link" href={href}>{linkLabel}</a>
-          )}
-        </div>
-      )}
     </div>
   );
 }

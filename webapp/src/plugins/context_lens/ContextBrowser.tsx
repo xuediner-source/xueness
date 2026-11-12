@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { ChevronDown, ChevronRight, Search } from 'lucide-react';
 import { categories, categoryLabel, compact, format, label } from './labels';
 import { Composition } from './ContextView';

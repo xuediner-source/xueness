@@ -14,4 +14,3 @@ export { ChannelNotFound, poll, reply, type InboxOptions } from "./inbox.ts";
 export { BOTS_ROUTES, createBotsHttp, type BotsHttpOptions } from "./http.ts";
 
 export const bots: BundledPlugin = { manifest, plugin: definePlugin({ name: "bots", apply() { /* HTTP-only: no model tools */ } }) };
-export const botsPlugin = bots.plugin;

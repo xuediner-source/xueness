@@ -10,7 +10,7 @@ import { equalsInt, fakeIpOnly, ipText, isGlobal, parseIp } from "./ip.ts";
 import { failureKind, type Net, type HttpResponse } from "./net.ts";
 import { parseHttpsUrl, urlencode } from "./urls.ts";
 import { htmlText } from "./html.ts";
-import { activityOrigin, emitNetworkActivity, normalizeFetchUrl, type NetworkActivityCallback } from "./fetch-runtime.ts";
+import { emitNetworkActivity, normalizeFetchUrl, type NetworkActivityCallback } from "./fetch-runtime.ts";
 
 export const MAX_BYTES = 1_000_000;
 export const MAX_MODEL_REQUEST_BYTES = 65_536;

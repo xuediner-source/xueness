@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { t as tr } from '../../i18n';
 import { isImeComposingEvent } from '../../xuenessShortcutDisplay';
 import './sidebar-resize.css';

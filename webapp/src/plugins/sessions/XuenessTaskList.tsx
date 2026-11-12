@@ -176,10 +176,6 @@ export function projectArchivePlan(sessions: readonly SessionSummary[], root: st
   return { sessionIds, skippedActiveCount };
 }
 
-export function eligibleProjectSessionIds(sessions: readonly SessionSummary[], root: string): string[] {
-  return projectArchivePlan(sessions, root).sessionIds;
-}
-
 export interface XuenessTaskListProps {
   sessions: SessionSummary[];
   activeId: string | null;

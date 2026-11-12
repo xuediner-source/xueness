@@ -34,13 +34,6 @@ export interface ExecutionModelScope {
   resolveProvider(selection: ExecutionModelSelection): AgentProvider;
 }
 
-/** Pre-request class only: the provider/model registry could not resolve a selection. */
-export class ModelSelectionLookupError extends Error {
-  override name = "ModelSelectionLookupError";
-  readonly selection: ExecutionModelSelection;
-  constructor(message: string, selection: ExecutionModelSelection) { super(message); this.selection = selection; }
-}
-
 export type ExecutionFallbackCandidateSource = "declared_target" | "session_selection";
 export interface ExecutionFallbackCandidate { source: ExecutionFallbackCandidateSource; selection: ExecutionModelSelection }
 export interface ExecutionSelectionFallbackMatch { reason: string; providerErrorCode?: string; statusCode?: number }

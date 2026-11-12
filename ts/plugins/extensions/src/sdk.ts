@@ -11,11 +11,12 @@ import { readFileSync, unlinkSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { isDict, pyJsonDumps, pyRepr, PyValueError } from "@xueness/contracts";
 import { exists, isLink, jsonEntries, pyCodeCompare, readJsonObject, resourceKindDir, validResourceId } from "@xueness/sessions";
+import { OPTIONAL_IDS } from "@xueness/kernel";
 import { atomicWriteJson, isDirectory } from "./io.ts";
 
 const API_VERSION = 1;
 const CAPABILITIES = ["command", "network", "filesystem-write"];
-const BUILTINS = new Set(["skills", "hooks", "subagents", "mcp", "subscriptions", "model_monitor", "workbuddy", "tavern"]);
+const BUILTINS = new Set<string>(["skills", "hooks", "subagents", "mcp", ...OPTIONAL_IDS]);
 const VERSION = /^\d+\.\d+\.\d+$/;
 
 export interface DataManifest {

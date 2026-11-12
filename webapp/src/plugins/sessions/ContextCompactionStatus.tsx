@@ -1,4 +1,3 @@
-import React from 'react';
 import { t as tr } from '../../i18n';
 import { conversationCompactionLabel, type ConversationCompactionMarker } from './conversationCompaction';
 import './context-compaction-status.css';

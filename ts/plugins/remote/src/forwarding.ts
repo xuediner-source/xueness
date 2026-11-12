@@ -14,7 +14,7 @@ import { spawn, type ChildProcess, type SpawnOptions } from 'node:child_process'
 import { randomUUID } from 'node:crypto';
 import { killTree, trackChild } from '@xueness/engine-tools';
 import { boundText, classifyTransport } from './handshake.ts';
-import { digest, loadConnections, posixOrThrow, sshEnv, type RemoteConnection } from './store.ts';
+import { posixOrThrow, sshEnv, type RemoteConnection } from './store.ts';
 
 export const PORT_FORWARD_SCHEMA = 'xueness.port-forward.v1';
 export const MAX_FORWARDS = 8;

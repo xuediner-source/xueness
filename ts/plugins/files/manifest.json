@@ -3,7 +3,7 @@
   "id": "files",
   "name": "工作区文件",
   "description": "工作区文件工具：读取、列目录、glob、grep、写入、编辑与结构化补丁。",
-  "version": "0.2.0",
+  "version": "1.0.0",
   "defaultEnabled": true,
   "capabilities": {
     "fs": {

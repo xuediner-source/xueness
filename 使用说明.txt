@@ -44,7 +44,7 @@ Windows 默认用户数据目录是 %APPDATA%\Xueness，通常对应当前用户
 
 从源码重建 Windows 安装包
 --------------------------
-构建 Windows x64 桌面包需要 Windows x64 和 Node.js 24.11+；后端是 TypeScript（Python 后端已删除）。最后两条检查脚本只用 Python 3 标准库，可选。下面命令在 PowerShell 中执行；先进入完整项目 ZIP 解压后的项目根目录：
+构建 Windows x64 桌面包需要 Windows x64 和 Node.js 24.11+；后端是 TypeScript（Python 后端已删除）。最后一条校验和脚本只用 Python 3 标准库，可选。下面命令在 PowerShell 中执行；先进入完整项目 ZIP 解压后的项目根目录：
 
   npm --prefix webapp ci
   npm --prefix desktop ci
@@ -52,10 +52,7 @@ Windows 默认用户数据目录是 %APPDATA%\Xueness，通常对应当前用户
   node desktop/node_modules/electron/install.js
   npm --prefix ts run check
   npm --prefix webapp run build
-  npm --prefix desktop test
   npm --prefix desktop run dist:win -- --x64
-  npm --prefix ts run test:packaged
-  python desktop/scripts/check_app.py
   python desktop/scripts/checksums.py
 
 成功产物写入 desktop\release\。Windows 安装包须在 Windows 上构建（随包 Node 运行时取自构建机）。node_modules、编译缓存和 ts/dist 属于本机生成内容，不包含在源码 ZIP 中；依赖锁文件已随源码提供。

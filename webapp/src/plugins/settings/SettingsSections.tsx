@@ -4,7 +4,6 @@ import { t as tr, tf } from "../../i18n";
 import { XuenessTerminalShellSelect } from "../terminal/XuenessTerminalPreferences";
 import type { SettingsMap } from "../../xuenessWorkspace";
 import type { AgentCapabilities } from "../../xuenessSettings";
-import { Badge, Button, EmptyState, Field, Panel, Spinner, Stat } from "../../ui/primitives";
 import { Select } from "../../ui/Select";
 import { XuenessShortcutsPanel } from "./XuenessShortcutsPanel";
 import { registeredShortcutCommands, scopedShortcutSettingsPatch } from "../sessions/scopedCommands";
@@ -355,7 +354,6 @@ export function SettingsSections({
           />
         </div>
       </section>
-
 
     </>;
   } else if (activeSection === "workspace-display") {

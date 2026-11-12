@@ -1,4 +1,4 @@
-import { t as tr, tf } from '../../i18n';
+import { t as tr } from '../../i18n';
 /**
  * Git panel view. The container owns transport; every mutating affordance
  * first opens an operation review dialog and appears only with a handler.

@@ -1,5 +1,5 @@
 /** Feature-owned HTTP operations. Host retains framing, authentication and CSRF. */
-import { existsSync, mkdirSync } from "node:fs";
+import { existsSync } from "node:fs";
 import { isAbsolute, join, relative } from "node:path";
 import { isDict, pyInt, pyLen, pyStrip, PyValueError } from "@xueness/contracts";
 import { historyPage, isPyOSError, isPyValueError, pyExceptionName, realish, type Session, type SessionStore } from "@xueness/sessions";

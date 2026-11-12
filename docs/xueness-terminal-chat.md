@@ -30,4 +30,4 @@ POSIX 用户也可运行 `bin/xueness chat --tui`。隔离状态目录时，把 
 
 后端模式保留 Xueness 的 `plan`、`build`、`edit`、`yolo`；全屏 TUI 没有 ZCode 的 `guarded` 模式。全屏呈现只连接会话、权限和附件端口，不自行调用模型或网络。终端图片功能是从系统剪贴板读取 PNG 并作为附件，不支持终端内图像 / 图形协议。Windows 真实 ConPTY 和 Linux x64 伪终端的源码版与构建版都已通过本地模拟 provider 验收（Linux 记录见 `验收资料/验证记录/tui-linux-*.json`）；macOS 终端与各平台真实剪贴板未实机验证。
 
-本地复现：`node tools/verify-tui.mjs` 检查补全、审批和续聊，`node tools/verify-tui-queue.mjs` 检查排队与当前轮指导；构建后给两个命令增加 `--built`。第 14 轮在 Windows、第 15 轮在 Linux 上，这四个流程均通过，使用隔离临时状态与本地模拟 provider。完整结果与验证边界见 `ts/HANDOVER.md` 第 37、38 节。
+验证脚本在[私有验证库](https://github.com/xuediner-source/xueness-private-tests)：一个检查补全、审批和续聊，一个检查排队与当前轮指导，各有源码和构建产物两种运行方式。第 14 轮在 Windows、第 15 轮在 Linux 上，这四个流程均通过，使用隔离临时状态与本地模拟 provider。完整结果与验证边界见该库 HANDOVER 第 37、38 节。

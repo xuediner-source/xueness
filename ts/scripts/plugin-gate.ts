@@ -28,6 +28,7 @@ import { builtinModules } from "node:module";
 import { dirname, isAbsolute, join, relative, resolve } from "node:path";
 import ts from "typescript";
 import { catalogIssues, upgradeManifestV1, validateManifest, type PluginManifest } from "@xueness/contracts";
+import { OPTIONAL_IDS } from "@xueness/kernel";
 import { frontendIssues } from "./frontend-gate.ts";
 
 export type Need = "exec" | "net" | "fs";
@@ -215,6 +216,8 @@ export function checkPlugins(root: string): { problems: string[]; plugins: numbe
     if (upgraded.document) {
       const catalogManifest = validateManifest(upgraded.document).manifest;
       if (catalogManifest) for (const field of manifestContractDrift(manifest, catalogManifest)) problems.push(`catalog/${id}.json /${field}: ${field === "features" ? "feature IDs" : "declarations"} differ from the plugin manifest`);
+      // A plugin has one name, description and version; the catalog row is what people see, so the two may not drift.
+      if (catalogManifest) for (const field of ["name", "description", "version"] as const) if (manifest[field] !== catalogManifest[field]) problems.push(`catalog/${id}.json /${field}: differs from the plugin manifest`);
     }
     const pkg = readJson(join(dir, "package.json"), problems, `plugins/${id}/package.json`) ?? {};
     if (pkg.name !== `@xueness/plugin-${id}`) problems.push(`plugins/${id}/package.json: name must be @xueness/plugin-${id}`);
@@ -234,7 +237,7 @@ export function checkPlugins(root: string): { problems: string[]; plugins: numbe
   const listed = [...readFileSync(listFile, "utf8").matchAll(/from\s+["']@xueness\/plugin-([a-z][a-z0-9_]*)["']/g)].map((match) => match[1] as string).sort();
   // These reviewed optional implementations ship separately. Core keeps
   // their manifest ownership, and the kernel accepts only build-pinned bytes.
-  const optional = ["subscriptions", "model_monitor", "workbuddy", "tavern"];
+  const optional: readonly string[] = OPTIONAL_IDS;
   const metadata = [...readFileSync(listFile, "utf8").matchAll(/from\s+["']\.\.\/\.\.\/\.\.\/plugins\/([a-z_]+)\/manifest\.json["']/g)].map(match => match[1]!);
   for (const id of metadata) {
     const manifest = manifests.find(item => item.id === id);

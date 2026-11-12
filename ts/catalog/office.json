@@ -1,7 +1,7 @@
 {
   "id": "office",
   "name": "Office 内容预览",
-  "description": "DOCX/XLSX/PPTX 有界只读内容预览。",
+  "description": "DOCX/XLSX/PPTX/PDF 有界读取、结构化创建，以及先读取再进行的替换。",
   "version": "1.0.0",
   "apiVersion": 1,
   "defaultEnabled": true,

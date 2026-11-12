@@ -1,7 +1,7 @@
 {
   "apiVersion": 2, "id": "browser", "name": "Browser",
-  "description": "Explicitly approved browser operations: one persistent Playwright worker per state directory, no model-provided JavaScript.",
-  "version": "0.2.0", "defaultEnabled": false, "dependencies": ["files"],
+  "description": "经明确批准的浏览器操作。",
+  "version": "1.0.0", "defaultEnabled": false, "dependencies": ["files"],
   "capabilities": { "exec": ["*"], "fs": { "read": ["state"], "write": ["state"] } },
   "tools": [
     { "name": "browser_navigate", "gate": "exec", "mutating": false, "concurrencySafe": false },

@@ -7,7 +7,7 @@ name: xueness
 services:
   web:
     build: .
-    image: xueness-web:0.1
+    image: xueness-web:local
     container_name: xueness-web
     ports:
       - "127.0.0.1:8137:8137"

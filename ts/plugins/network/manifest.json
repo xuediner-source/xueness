@@ -1,9 +1,9 @@
 {
   "apiVersion": 2,
   "id": "network",
-  "name": "Network tools",
-  "description": "Approval-gated public HTTPS fetching, explicitly configured web and image search, FakeIP-only DoH resolution.",
-  "version": "0.2.0",
+  "name": "网络工具",
+  "description": "批准约束的公网 HTTPS 页面读取、网页搜索服务配置与 DNS 诊断。",
+  "version": "1.0.0",
   "defaultEnabled": true,
   "dependencies": [],
   "capabilities": {

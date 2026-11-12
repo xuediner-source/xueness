@@ -29,12 +29,12 @@ import { createExtensionsHttp, textPackageStore } from "@xueness/plugin-extensio
 import { harnessImporter } from "@xueness/plugin-deepseek_harness";
 import { createBrowserHandoff } from "./browser-handoff.ts";
 import { createComposerFeatures } from "./composer-features.ts";
-import { isLoopbackAddress } from "./py-url.ts";
-import { createRound5 } from "./round5-http.ts";
-import { createRound6 } from "./round6-http.ts";
+import { isLoopbackAddress } from "./loopback-url.ts";
+import { createHostServices } from "./host-services-http.ts";
+import { createIntegrations } from "./integrations-http.ts";
 import { observeOptionalProvider } from "./optional-integrations.ts";
-import { createRound7 } from "./round7-http.ts";
-import { createRound8 } from "./round8-http.ts";
+import { createWorkflowsAutomation } from "./workflows-http.ts";
+import { createPluginManager } from "./plugin-manager-http.ts";
 import { DynamicServiceError, DynamicWorkflowService, createDynamicWorkflowApi } from '@xueness/plugin-workflows';
 import { createDynamicWorkflowDriver } from './dynamic-workflow-driver.ts';
 
@@ -93,9 +93,9 @@ export async function createApplicationApi(options: ApplicationApiOptions): Prom
   const running = new Set<string>(), activeContext = new Map<string, Record<string, unknown>>();
   const projectDir = options.projectDir ?? options.projectRoot, defaultRoot = (): string => workspaces.defaultRoot(allowedRoots());
   const browseRoots = [...workspaces.options.declaredRoots, projectDir, options.webRuns];
-  const round6 = createRound6({ stateDir: options.stateDir, projectDir, enabled, store, locks, providers: providers.store, createRoots: () => browseRoots, env });
+  const integrations = createIntegrations({ stateDir: options.stateDir, projectDir, enabled, store, locks, providers: providers.store, createRoots: () => browseRoots, env });
   const { commands, composer } = createComposerFeatures({ projectRoot: options.projectRoot, projectDir, stateDir: options.stateDir, webRuns: options.webRuns, store, providers: providers.store,
-    running, enabled, allowedRoots, defaultRoot, allowReal: options.allowReal === true, env, remote: round6.composerRemote });
+    running, enabled, allowedRoots, defaultRoot, allowReal: options.allowReal === true, env, remote: integrations.composerRemote });
   const consumePrepared = (token: string, root: string): Promise<Record<string, unknown>> => composer.consumePrepared(token, root);
   const expandCommands = composer.expandCommands;
   const media = new MediaArtifactStore(options.stateDir, locks);
@@ -110,19 +110,19 @@ export async function createApplicationApi(options: ApplicationApiOptions): Prom
       return session;
     }, answerActor: dynamicDriver.answer });
   const dynamicWorkflowApi = createDynamicWorkflowApi(dynamicWorkflows);
-  const round7 = createRound7({ projectRoot: options.projectRoot, projectDir, stateDir: options.stateDir, webRuns: options.webRuns, enabled, store, allowedRoots, allowReal: options.allowReal === true, env, ...(options.scheduler === false ? { scheduler: false } : {}) });
-  const agent = createAgentService({ ...options.agent, store, stateDir: options.stateDir, configEnv: env, enabled, approvals, mediaStore: media, desktopComputerUse: !!options.desktopToken && !!options.desktopBridge, allowModelRequests: options.allowReal, taskRegistry, workflowLauncher: round7.launcher, dynamicWorkflows,
-    preparedRemote: round6.preparedRemote,
+  const workflowsAutomation = createWorkflowsAutomation({ projectRoot: options.projectRoot, projectDir, stateDir: options.stateDir, webRuns: options.webRuns, enabled, store, allowedRoots, allowReal: options.allowReal === true, env, ...(options.scheduler === false ? { scheduler: false } : {}) });
+  const agent = createAgentService({ ...options.agent, store, stateDir: options.stateDir, configEnv: env, enabled, approvals, mediaStore: media, desktopComputerUse: !!options.desktopToken && !!options.desktopBridge, allowModelRequests: options.allowReal, taskRegistry, workflowLauncher: workflowsAutomation.launcher, dynamicWorkflows,
+    preparedRemote: integrations.preparedRemote,
     appendQueued: (session, item) => appendAcceptedQueuedTurn({ store, stateDir: options.stateDir, webRuns: options.webRuns, enabled, applyGoal, expandCommands }, session, item),
     resolveProvider(selection, sid) {
       // Opaque conversation identity preserves subscription thread continuity.
       const provider = providers.resolve(selection);
-      round6.bindSession(provider, sid);
+      integrations.bindSession(provider, sid);
       return observeOptionalProvider({ stateDir: options.stateDir, enabled, env }, provider, sid, selection.providerId);
     } });
   const lifecycle: LifecycleOptions = { store, stateDir: options.stateDir, enabled, allowReal: options.allowReal === true,
     approvals, liveApprovals: agent.liveApprovals, running, activeContext, resolveProvider: agent.resolveProvider, createRunner: agent.createRunner, knownTools: agent.knownTools,
-    supports: (session, request) => agent.supports(session, request), goalView: publicGoal, settings: () => loadSettings(options.stateDir), runQueue: (session, _policy, run) => run(session), checkRemote: round6.checkRemote };
+    supports: (session, request) => agent.supports(session, request), goalView: publicGoal, settings: () => loadSettings(options.stateDir), runQueue: (session, _policy, run) => run(session), checkRemote: integrations.checkRemote };
   const attachmentOptions = { store, stateDir: options.stateDir, webRuns: options.webRuns, projectDir, enabled,
     allowedRoots };
   const attachments = createAttachmentsApi(attachmentOptions);
@@ -130,7 +130,7 @@ export async function createApplicationApi(options: ApplicationApiOptions): Prom
     levels: (selection) => declaredReasoningLevels(providers.store, selection.provider_id as string | null, selection.model as string | null), configurationError,
     ...options.allowReal === true ? { modelCompact: (session: Session, instructions: string | null, source: string) => agent.compactSession(session, instructions, source) } : {}, defaultApi: (method, data) => providers.dispatch(method, ["api", "providers", "default"], {}, data) });
   const sessions = createSessionsApi({ ...attachmentOptions,
-    enabled, running, lifecycle, consumePrepared, preparedRemote: round6.preparedRemote, checkRemote: round6.checkRemote, indexRemoteSummary: round6.remoteSummary,
+    enabled, running, lifecycle, consumePrepared, preparedRemote: integrations.preparedRemote, checkRemote: integrations.checkRemote, indexRemoteSummary: integrations.remoteSummary,
     rememberWorkspace: (root) => workspaces.remember(root), expandCommands,
     applyGoal,
     featureApis: [attachments, runtime, dynamicWorkflowApi,
@@ -186,23 +186,23 @@ export async function createApplicationApi(options: ApplicationApiOptions): Prom
   const shellHttp = createShellSettingsApi({ stateDir: options.stateDir, enabled });
   const networkHttp = createNetworkHttp({ stateDir: options.stateDir, enabled, env });
   const catalogNet = nodeNet();
-  const extensionsHttp = createExtensionsHttp({ stateDir: options.stateDir, projectRoot: options.projectRoot, enabled, env, importers: [skillPackageImporter({ stateDir: options.stateDir }), rulePackImporter({ store: textPackageStore(options.stateDir, "cursor-rules") }), mcpPackageImporter({ stateDir: options.stateDir }), harnessImporter({ stateDir: options.stateDir })], writeResource: (kind, data) => (kind === "skills" ? skillsHttp : kind === "hooks" ? hooksHttp : commands).dispatch("POST", ["api", "resources", kind], {}, data), optionalChanged: () => round6.syncOptional(), fetchUrl: async (url) => {
+  const extensionsHttp = createExtensionsHttp({ stateDir: options.stateDir, projectRoot: options.projectRoot, enabled, env, importers: [skillPackageImporter({ stateDir: options.stateDir }), rulePackImporter({ store: textPackageStore(options.stateDir, "cursor-rules") }), mcpPackageImporter({ stateDir: options.stateDir }), harnessImporter({ stateDir: options.stateDir })], writeResource: (kind, data) => (kind === "skills" ? skillsHttp : kind === "hooks" ? hooksHttp : commands).dispatch("POST", ["api", "resources", kind], {}, data), optionalChanged: () => integrations.syncOptional(), fetchUrl: async (url) => {
     const page = await fetchPage(catalogNet, url);
     return { output: typeof page.output === "string" ? page.output : "", truncated: page.truncated === true };
   } });
-  const round5 = createRound5({ stateDir: options.stateDir, enabled, store, allowedRoots, resolveAllowed: (value) => workspaces.resolveAllowed(value), taskRegistry, sessionsRunning: () => running.size > 0, ...(options.desktopBridge ? { desktopBridge: options.desktopBridge } : {}), ...(options.desktopToken ? { desktopToken: options.desktopToken } : {}), ...(options.webappDir ? { webappDir: options.webappDir } : {}) });
-  const round8 = createRound8({ projectRoot: options.projectRoot, stateDir: options.stateDir, locks, enabled });
-  const migratedOwns = (method: string, parts: readonly string[]): boolean => round8.owns(method, parts) || hooksHttp.owns(method, parts) || skillsHttp.owns(method, parts) || mcpResources.owns(method, parts) || mcpOps.owns(method, parts) || elicitationHttp.owns(method, parts) || appsHttp.owns(method, parts) || subagentResources.owns(method, parts) || subagentTasks.owns(method, parts) || runtimeConfigApi.owns(method, parts) || shellHttp.owns(method, parts) || networkHttp.owns(method, parts) || memoryHttp.owns(method, parts) || filesHttp.owns(method, parts) || extensionsHttp.owns(method, parts) || round5.owns(method, parts) || round6.owns(method, parts) || round7.owns(method, parts);
+  const hostServices = createHostServices({ stateDir: options.stateDir, enabled, store, allowedRoots, resolveAllowed: (value) => workspaces.resolveAllowed(value), taskRegistry, sessionsRunning: () => running.size > 0, ...(options.desktopBridge ? { desktopBridge: options.desktopBridge } : {}), ...(options.desktopToken ? { desktopToken: options.desktopToken } : {}), ...(options.webappDir ? { webappDir: options.webappDir } : {}) });
+  const pluginManager = createPluginManager({ projectRoot: options.projectRoot, stateDir: options.stateDir, locks, enabled });
+  const migratedOwns = (method: string, parts: readonly string[]): boolean => pluginManager.owns(method, parts) || hooksHttp.owns(method, parts) || skillsHttp.owns(method, parts) || mcpResources.owns(method, parts) || mcpOps.owns(method, parts) || elicitationHttp.owns(method, parts) || appsHttp.owns(method, parts) || subagentResources.owns(method, parts) || subagentTasks.owns(method, parts) || runtimeConfigApi.owns(method, parts) || shellHttp.owns(method, parts) || networkHttp.owns(method, parts) || memoryHttp.owns(method, parts) || filesHttp.owns(method, parts) || extensionsHttp.owns(method, parts) || hostServices.owns(method, parts) || integrations.owns(method, parts) || workflowsAutomation.owns(method, parts);
   return {
     agent, store, enabled, dynamicWorkflows, memoryDreams,
     asset: extensionsHttp.asset,
-    csrfToken: bridge.csrfToken, routes: [...memoryDreamApi.routes, ...settingsApi.routes, ...providers.routes, ...sessions.routes, ...commands.routes, ...composer.routes, ...hooksHttp.routes, ...skillsHttp.routes, ...mcpResources.routes, ...mcpOps.routes, ...elicitationHttp.routes, ...appsHttp.routes, ...subagentResources.routes, ...subagentTasks.routes, ...runtimeConfigApi.routes, ...shellHttp.routes, ...networkHttp.routes, ...memoryHttp.routes, ...filesHttp.routes, ...extensionsHttp.routes, ...round5.routes, ...round6.routes, ...round7.routes, ...round8.routes],
+    csrfToken: bridge.csrfToken, routes: [...memoryDreamApi.routes, ...settingsApi.routes, ...providers.routes, ...sessions.routes, ...commands.routes, ...composer.routes, ...hooksHttp.routes, ...skillsHttp.routes, ...mcpResources.routes, ...mcpOps.routes, ...elicitationHttp.routes, ...appsHttp.routes, ...subagentResources.routes, ...subagentTasks.routes, ...runtimeConfigApi.routes, ...shellHttp.routes, ...networkHttp.routes, ...memoryHttp.routes, ...filesHttp.routes, ...extensionsHttp.routes, ...hostServices.routes, ...integrations.routes, ...workflowsAutomation.routes, ...pluginManager.routes],
     owns: (method, parts) => memoryDreamApi.owns(method, parts) || settingsApi.owns(method, parts) || providers.owns(method, parts) || sessions.owns(method, parts) || browserHandoff.owns(method, parts) || commands.owns(method, parts) || composer.owns(method, parts) || migratedOwns(method, parts),
-    lossless: (method, parts) => settingsApi.lossless(method, parts) || commands.lossless(method, parts) || hooksHttp.lossless(method, parts) || skillsHttp.lossless(method, parts) || mcpResources.lossless(method, parts) || subagentResources.lossless(method, parts) || extensionsHttp.lossless(method, parts) || round7.lossless(method, parts),
+    lossless: (method, parts) => settingsApi.lossless(method, parts) || commands.lossless(method, parts) || hooksHttp.lossless(method, parts) || skillsHttp.lossless(method, parts) || mcpResources.lossless(method, parts) || subagentResources.lossless(method, parts) || extensionsHttp.lossless(method, parts) || workflowsAutomation.lossless(method, parts),
     async dispatch(method, parts, query, data, request) {
       if (settingsApi.owns(method, parts)) return settingsApi.dispatch(method, parts, query, data, { loopback: isLoopbackAddress((request?.remoteAddress ?? "").split("%")[0]!) });
       if (memoryDreamApi.owns(method, parts)) return memoryDreamApi.dispatch(method, parts, query, data);
-      if (round8.owns(method, parts)) return round8.dispatch(method, parts, query, data);
+      if (pluginManager.owns(method, parts)) return pluginManager.dispatch(method, parts, query, data);
       if (browserHandoff.owns(method, parts)) return browserHandoff.dispatch(method, parts, data);
       if (commands.owns(method, parts)) return commands.dispatch(method, parts, query, data);
       if (composer.owns(method, parts)) return composer.dispatch(method, parts, query, data);
@@ -220,13 +220,13 @@ export async function createApplicationApi(options: ApplicationApiOptions): Prom
       if (memoryHttp.owns(method, parts)) return memoryHttp.dispatch(method, parts, query, data);
       if (filesHttp.owns(method, parts)) return filesHttp.dispatch(method, parts, query, data);
       if (extensionsHttp.owns(method, parts)) return extensionsHttp.dispatch(method, parts, query, data);
-      if (round5.owns(method, parts)) return round5.dispatch(method, parts, query, data, request);
-      if (round6.owns(method, parts)) return round6.dispatch(method, parts, query, data);
-      if (round7.owns(method, parts)) return round7.dispatch(method, parts, query, data);
+      if (hostServices.owns(method, parts)) return hostServices.dispatch(method, parts, query, data, request);
+      if (integrations.owns(method, parts)) return integrations.dispatch(method, parts, query, data);
+      if (workflowsAutomation.owns(method, parts)) return workflowsAutomation.dispatch(method, parts, query, data);
       const providerResult = await providers.dispatch(method, parts, query, data);
       if (providerResult !== null) return providerResult;
       return sessions.dispatch(method, parts, query, data, request);
     },
-    async close() { round5.close(); await round6.close(); await memoryDreams.close(); await dynamicWorkflows.close(); await agent.dispose(); await round7.close(); await locks.close(); },
+    async close() { hostServices.close(); await integrations.close(); await memoryDreams.close(); await dynamicWorkflows.close(); await agent.dispose(); await workflowsAutomation.close(); await locks.close(); },
   };
 }

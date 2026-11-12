@@ -1,4 +1,4 @@
-import { chmodSync, closeSync, existsSync, fstatSync, fsyncSync, lstatSync, mkdirSync, openSync, readSync, constants, unlinkSync } from "node:fs";
+import { closeSync, existsSync, fstatSync, fsyncSync, lstatSync, mkdirSync, openSync, readSync, constants, unlinkSync } from "node:fs";
 import { join } from "node:path";
 import { isDict, pyDecodeUtf8, pyJsonDumps, pyJsonLoads, PyValueError } from "@xueness/contracts";
 import { fsyncDirectory, KeyedMutex, NativeFileLocks, mkstemp, protectPrivateDirectory, protectPrivateFile, replaceFile, writeAll, type FileLockProvider } from "@xueness/sessions";

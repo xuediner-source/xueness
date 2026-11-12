@@ -29,7 +29,6 @@ import { getRunChoices, readRunOptIns } from "./xuenessBridge";
 import { parseEventsEnvelope } from "./xuenessEvents";
 import type { PendingGuidance } from './plugins/sessions/CurrentTurnInput';
 
-
 export type QueuedMessage = {
   id: string;
   text: string;
@@ -1134,88 +1133,6 @@ export async function importConversationShare(
   } catch (error) { return { ok: false, error: toErrorMessage(error) }; }
 }
 
-export async function loadTimeline(
-  id: string,
-  cursor = 0,
-  limit = 200,
-  signal?: AbortSignal,
-): Promise<Result<TimelinePage>> {
-  try {
-    const query = new URLSearchParams({ cursor: String(cursor), limit: String(limit) });
-    const payload = await requestGet<unknown>(`${sessionPath(id, "/events.v1")}?${query.toString()}`, signal);
-    // Bad data counts as failure: the UI must never render an unvalidated envelope.
-    const envelope = parseEventsEnvelope(payload);
-    if (!envelope) throw new Error("invalid events.v1 envelope");
-    return {
-      ok: true,
-      value: {
-        events: envelope.events,
-        cursor: envelope.cursor,
-        nextCursor: envelope.nextCursor,
-        head: envelope.head,
-        hasMore: envelope.hasMore,
-      },
-    };
-  } catch (error) {
-    return { ok: false, error: toErrorMessage(error) };
-  }
-}
-
-/** Read every validated event through the head reported by the first page. */
-export async function loadCompleteTimeline(id: string, signal?: AbortSignal): Promise<Result<TimelinePage>> {
-  try {
-    const first = await loadTimeline(id, 0, 200, signal);
-    if (!first.ok) return first;
-
-    const snapshotHead = first.value.head;
-    const eventsBySeq = new Map<number, XuenessEventV1>();
-    let cursor = 0;
-    let page = first.value;
-
-    while (true) {
-      if (page.cursor !== cursor) throw new Error("timeline page cursor mismatch");
-      if (page.head < snapshotHead) throw new Error("timeline head changed before the snapshot was complete");
-      if (page.nextCursor < cursor || page.nextCursor > page.head) throw new Error("invalid timeline page cursor");
-
-      const maxEventSeq = page.events.reduce((max, event) => Math.max(max, event.seq), 0);
-      if (page.events.length === 0) {
-        if (page.nextCursor !== cursor) throw new Error("timeline cursor advanced without events");
-      } else if (page.nextCursor !== maxEventSeq) {
-        throw new Error("timeline next cursor did not match its events");
-      }
-
-      for (const event of page.events) {
-        if (event.seq > snapshotHead) continue;
-        const previous = eventsBySeq.get(event.seq);
-        if (previous && JSON.stringify(previous) !== JSON.stringify(event)) {
-          throw new Error(`conflicting timeline event at sequence ${event.seq}`);
-        }
-        eventsBySeq.set(event.seq, event);
-      }
-
-      if (page.nextCursor >= snapshotHead) break;
-      if (page.nextCursor <= cursor) throw new Error("timeline cursor did not advance");
-      if (!page.hasMore) throw new Error("timeline ended before the snapshot head");
-
-      cursor = page.nextCursor;
-      const next = await loadTimeline(id, cursor, 200, signal);
-      if (!next.ok) return next;
-      page = next.value;
-    }
-
-    const events = [...eventsBySeq.values()].sort((left, right) => left.seq - right.seq);
-    if (events.length !== snapshotHead || events.some((event, index) => event.seq !== index + 1)) {
-      throw new Error("timeline pages did not cover the snapshot head");
-    }
-    return {
-      ok: true,
-      value: { events, cursor: 0, nextCursor: snapshotHead, head: snapshotHead, hasMore: false },
-    };
-  } catch (error) {
-    return { ok: false, error: toErrorMessage(error) };
-  }
-}
-
 export async function loadFiles(id: string, signal?: AbortSignal): Promise<Result<WorkspaceListing>> {
   try {
     const value = await requestGet<WorkspaceListing>(sessionPath(id, "/files"), signal);
@@ -1894,7 +1811,6 @@ export function deriveFileChanges(journal: unknown): FileChangeSet {
 
   return { changes, source: "session-journal" };
 }
-
 
 /**
  * 把 argv 数组格式化成可读的命令行，用于审批卡片和时间线展示。

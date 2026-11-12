@@ -1,4 +1,3 @@
-import React from 'react';
 
 export function showInterruptedRecovery(status: string, streamStatus?: string, error?: string): boolean {
   return streamStatus === 'interrupted' && !error && !['provider_error', 'failed'].includes(status);

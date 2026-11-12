@@ -322,9 +322,3 @@ export function reduceSessionRuntimeEvents(
   return state;
 }
 
-/** Recover a bounded snapshot from one or more pages, optionally continuing an existing checkpoint. */
-export function recoverRuntimeProjection(page: RuntimeEventPage, initial?: SessionRuntimeProjection): SessionRuntimeProjection {
-  if (page.schema !== XUENESS_SESSION_RUNTIME_SCHEMA || !/^[0-9a-f]{32}$/.test(page.sessionId) || !page.epoch) throw new TypeError("invalid session runtime page");
-  const state = reduceSessionRuntimeEvents(page.events, initial ?? page.snapshot ?? emptyRuntimeProjection(page.sessionId));
-  return { ...state, lastSequenceNumber: Math.max(state.lastSequenceNumber, page.next) };
-}

@@ -4,7 +4,7 @@
  * support), compare it with the saved profile, and offer the suggested
  * values. Applying only edits the draft; the person still saves.
  */
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Cpu, TriangleAlert } from 'lucide-react';
 import { post } from '../../xuenessApi';
 import { t as tr, tf } from '../../i18n';

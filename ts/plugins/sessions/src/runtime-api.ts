@@ -1,6 +1,6 @@
 /** Session-owned model switching and manual context compaction HTTP controls. */
 import type { AgentProvider } from "@xueness/agent";
-import { isDict, pyEquals, pyTruthy } from "@xueness/contracts";
+import { isDict, pyEquals } from "@xueness/contracts";
 import { isPyOSError, isPyValueError, pyExceptionName, type Session, type SessionStore } from "@xueness/sessions";
 import type { RuntimeSelection } from "./lifecycle-types.ts";
 import { CompactError, compactLeased } from "./manual-compact.ts";

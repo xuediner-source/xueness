@@ -3,7 +3,6 @@ import type { Key } from "node:readline";
 import { activeEditor, type TuiUiState } from "./tui-ui-state.ts";
 import { toggleSidebar, toggleSidebarSection } from "./tui-sidebar.ts";
 import { expandWorkflows, toggleEntry } from "./tui-transcript.ts";
-import type { TuiSection } from "./tui-types.ts";
 
 export interface TuiKeyboardHost {
   ui: TuiUiState;

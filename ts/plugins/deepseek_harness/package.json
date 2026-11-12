@@ -8,7 +8,6 @@
     "./manifest.json": "./manifest.json"
   },
   "dependencies": {
-    "@xueness/contracts": "0.2.1",
     "@xueness/kernel": "0.2.1",
     "@xueness/sessions": "0.2.1"
   }

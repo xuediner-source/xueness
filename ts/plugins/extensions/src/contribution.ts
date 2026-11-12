@@ -12,7 +12,7 @@
  * exercises the whole contract without copying any main-app code.
  */
 import { isDict } from "@xueness/contracts";
-import { validateComponents, type ComponentDeclaration, type ComponentIssue } from "./components.ts";
+import { validateComponents, type ComponentIssue } from "./components.ts";
 import { validateDataManifest } from "./sdk.ts";
 
 export const SDK_API_VERSION = 1;
@@ -24,21 +24,6 @@ const MAX_SETTINGS = 32;
 const MAX_EVENTS = 32;
 
 export type ContributionIssue = ComponentIssue;
-
-/** Public SDK types. A package document is data; nothing in it executes. */
-export interface SettingDeclaration {
-  type: "string" | "number" | "boolean" | "enum";
-  title: string;
-  description: string;
-  default: unknown;
-  required: boolean;
-  options?: readonly string[];
-}
-
-export interface EventDeclaration {
-  name: string;
-  description: string;
-}
 
 export interface PluginPackageDocument {
   id: string;

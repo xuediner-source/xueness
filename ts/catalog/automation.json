@@ -1,7 +1,7 @@
 {
   "id": "automation",
-  "name": "Local automation",
-  "description": "Timezone cron with immutable plan approval and local history.",
+  "name": "自动化",
+  "description": "带不可变计划审批的时区 cron、闲时队列与本地运行历史。",
   "apiVersion": 1,
   "version": "1.0.0",
   "defaultEnabled": true,

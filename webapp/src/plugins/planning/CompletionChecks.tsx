@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { post } from '../../xuenessApi';
 import { t } from '../../i18n';
 import './CompletionChecks.css';

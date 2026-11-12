@@ -1,6 +1,6 @@
 import type { PaneOperationGate } from './paneForkActions';
 // sessions.pane_layout: history writes stay bound to one mounted leaf.
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { t as tr } from '../../i18n';
 import { createSessionCommandClient, runSession, updateConversationMessage, type TimelineRow, type WorkbenchSession } from '../../xuenessWorkbench';
 import type { RunChoices } from '../../xuenessBridge';

@@ -3,7 +3,7 @@
   "id": "memory",
   "name": "记忆",
   "description": "Curated memory tracks with explicit, reviewable project-memory consolidation.",
-  "version": "0.2.0",
+  "version": "1.0.0",
   "defaultEnabled": true,
   "capabilities": {
     "fs": {

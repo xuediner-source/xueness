@@ -1,18 +1,19 @@
 /** Reproducible GitHub artifacts: pinned by payload, not by compressed bytes. Run after Vite; desktop receives core assets only. */
 import { existsSync, lstatSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
-import { dirname, join, resolve } from "node:path";
+import { join, resolve } from "node:path";
 import { createHash } from "node:crypto";
 import { gzipSync } from "node:zlib";
+import { OPTIONAL_IDS } from "../packages/kernel/src/optional-packages.ts";
 
 const repo = resolve(import.meta.dirname, "../.."), assets = join(repo, "webapp/dist/assets");
 const out = join(repo, "marketplace/packages"); mkdirSync(out, { recursive: true });
 const sha = (raw: Buffer): string => createHash("sha256").update(raw).digest("hex");
-const definitions = [
-  { id: "subscriptions", packageId: "xueness-subscriptions" },
-  { id: "model_monitor", packageId: "xueness-model-monitor" },
-  { id: "workbuddy", packageId: "xueness-workbuddy" },
-  { id: "tavern", packageId: "xueness-tavern" },
-];
+// The kernel's allowlist names the optional plugins; each plugin's own manifest names its package.
+const definitions = OPTIONAL_IDS.map(id => {
+  const packageId = JSON.parse(readFileSync(join(repo, "ts/plugins", id, "manifest.json"), "utf8")).installPackage;
+  if (typeof packageId !== "string" || !packageId) throw new Error(`plugins/${id}/manifest.json has no installPackage`);
+  return { id, packageId };
+});
 function walk(directory: string, prefix: string): string[] {
   return readdirSync(directory, { withFileTypes: true }).sort((a, b) => a.name.localeCompare(b.name, "en")).flatMap(entry => {
     const relative = `${prefix}/${entry.name}`, path = join(directory, entry.name);

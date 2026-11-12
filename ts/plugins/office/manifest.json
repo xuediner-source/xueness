@@ -1,7 +1,7 @@
 {
   "apiVersion": 2, "id": "office", "name": "Office 内容预览",
-  "description": "DOCX/XLSX/PPTX/PDF bounded reading, structured creation and proof-gated replacement.",
-  "version": "0.2.0", "defaultEnabled": true, "dependencies": ["files"],
+  "description": "DOCX/XLSX/PPTX/PDF 有界读取、结构化创建，以及先读取再进行的替换。",
+  "version": "1.0.0", "defaultEnabled": true, "dependencies": ["files"],
   "capabilities": { "fs": { "read": ["workspace"], "write": ["workspace"] } },
   "tools": [
     { "name": "office_read", "gate": "read", "mutating": false, "concurrencySafe": true },

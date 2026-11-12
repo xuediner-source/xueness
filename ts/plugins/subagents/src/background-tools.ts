@@ -18,7 +18,6 @@ export const CANCEL_TOOL_NAME = "task_cancel";
 export const BACKGROUND_TOOL_NAMES: readonly string[] = Object.freeze([COLLECT_TOOL_NAME, RESUME_TOOL_NAME, SEND_MESSAGE_TOOL_NAME, CANCEL_TOOL_NAME]);
 
 export interface CoordinationBinding { coordinator: TaskCoordinator | null }
-export const coordinationBinding = (): CoordinationBinding => ({ coordinator: null });
 
 const failure = (code: string, message: string): ToolResult<never> => ({ ok: false, output: message, error: { code, message } });
 const UNAVAILABLE = "background subagents require an active parent run that allows subagents";

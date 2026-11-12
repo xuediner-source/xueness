@@ -1,7 +1,7 @@
 {
   "id": "skills",
   "name": "技能",
-  "description": "技能资源、目录型技能发现、目录摘要与按需正文读取。",
+  "description": "工作区、用户与已存技能的发现，ZCode 技能清单与 Skill 工具，SKILL.md 校验。",
   "version": "1.0.0",
   "apiVersion": 1,
   "defaultEnabled": true,

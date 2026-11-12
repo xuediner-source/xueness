@@ -69,22 +69,9 @@ const DESCRIPTORS: Record<SystemReminderSource, Shape> = {
   diagnostics: d("mid_turn_event", "mid_turn_event", true, "diagnostics"),
 };
 
-export const SYSTEM_REMINDER_SOURCES: readonly SystemReminderSource[] = Object.freeze([
-  ...SYSTEM_REMINDER_PREFIX_SOURCES, ...SYSTEM_REMINDER_PERSISTED_SOURCES, ...SYSTEM_REMINDER_PER_REQUEST_SOURCES,
-]);
-const NON_MID_CONVERSATION = new Set<SystemReminderSource>([
-  "context_prefix", "resume_referenced_session_context", "conversation_fork", "selection_side_chat",
-  "plan_file_reference", "target_continuation", "tool_result_warning", "goal_completion_verification",
-]);
 const TRAILING_NEWLINE = new Set<SystemReminderSource>(["context_prefix"]);
 const TAG = /<\/?system-reminder\b/i;
 const NESTED_TAGS = /<\/?system-reminder\b/gi;
-
-export function getSystemReminderDescriptor(source: SystemReminderSource): SystemReminderSourceDescriptor {
-  return { source, ...DESCRIPTORS[source] };
-}
-export function isSystemReminderMetaSource(source: SystemReminderSource): boolean { return DESCRIPTORS[source].isMeta; }
-export function isMidConversationSystemSource(source: SystemReminderSource): boolean { return !NON_MID_CONVERSATION.has(source); }
 
 export function wrapSystemReminder(body: string | readonly string[]): string {
   const content = typeof body === "string" ? body : body.join("\n");
@@ -120,4 +107,3 @@ export function formatIncomingMessage(body: string, presentation: RuntimeInputPr
     case "task_notification": return `${TASK_NOTIFICATION_PREFIX}${body}`;
   }
 }
-export function isMidTurnInputPresentation(presentation: RuntimeInputPresentation): boolean { return presentation.endsWith("_steer"); }

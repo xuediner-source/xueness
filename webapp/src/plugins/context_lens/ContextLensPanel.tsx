@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { RefreshCw } from 'lucide-react';
 import { Preferences } from './Preferences';
 import { get } from '../../xuenessApi';

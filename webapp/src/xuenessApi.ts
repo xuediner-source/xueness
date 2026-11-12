@@ -161,7 +161,6 @@ export type CommandCatalogRow = {
   shadowedBy?: string | null;
   [k: string]: unknown;
 };
-export type MemoryTracks = { tracks: MemoryTrack[] };
 
 export type XuenessPluginFeature = {
   id: string;
@@ -355,11 +354,6 @@ export async function getSettings(signal?: AbortSignal): Promise<SettingsMap> {
   return payload.settings ?? {};
 }
 
-/** GET /api/settings/<section> */
-export async function getSettingsSection(section: string, signal?: AbortSignal): Promise<SettingsSection> {
-  return get<SettingsSection>(`/api/settings/${encodeURIComponent(section)}`, signal);
-}
-
 /** POST /api/settings/<section> */
 export async function saveSettingsSection(
   section: string,
@@ -433,23 +427,6 @@ export async function deleteResource(kind: string, id: string): Promise<{ ok: bo
   return del<{ ok: boolean; id: string }>(
     `/api/resources/${encodeURIComponent(kind)}/${encodeURIComponent(id)}`,
   );
-}
-
-/**
- * PUT /api/resources/<kind> —— **整体替换**语义（Stage 4 契约）。
- *
- * 请求体 `{ items: [...] }`；列表里不存在的旧条目会被后端删除。任一项 id 非法时
- * 后端返回 400 且**不做任何改动**（先全量校验再落盘），这里按统一风格抛错。
- */
-export async function putResource(
-  kind: string,
-  body: { items: unknown[] },
-): Promise<{ items: ResourceItem[] }> {
-  const payload = await put<{ items: ResourceItem[] }>(
-    `/api/resources/${encodeURIComponent(kind)}`,
-    body,
-  );
-  return { items: Array.isArray(payload.items) ? payload.items : [] };
 }
 
 /* ------------------------------------------------------------------ */
@@ -540,12 +517,6 @@ export type DefaultModelSelection = {
   model?: string | null;
   reasoningEffort?: string | null;
 };
-
-/** GET /api/providers/default; ``null`` when nothing was saved or it no longer resolves. */
-export async function loadDefaultModelSelection(): Promise<DefaultModelSelection | null> {
-  const payload = await get<{ default: DefaultModelSelection | null }>("/api/providers/default");
-  return payload.default ?? null;
-}
 
 /** POST /api/providers/default; the server validates before storing and answers 400 otherwise. */
 export async function saveDefaultModelSelection(
@@ -725,9 +696,6 @@ export async function runOffPeakTask(id: string): Promise<{ result: { id: string
 /** 批准绑定已保存计划的摘要；真实服务商仍由主机决定是否放行。 */
 export async function approveOffPeakTask(id: string, allowReal: boolean): Promise<{ task: OffPeakTaskRecord }> {
   return post<{ task: OffPeakTaskRecord }>(`/api/automation/offpeak/${encodeURIComponent(id)}/approve`, { confirmed: true, allowReal });
-}
-export async function getOffPeakSettings(): Promise<{ settings: OffPeakSettings }> {
-  return get<{ settings: OffPeakSettings }>("/api/automation/offpeak/settings");
 }
 export async function saveOffPeakSettings(window: OffPeakSettings["window"], timezone: string | null): Promise<{ settings: OffPeakSettings }> {
   return post<{ settings: OffPeakSettings }>("/api/automation/offpeak/settings", { window, timezone });

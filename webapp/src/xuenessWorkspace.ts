@@ -52,7 +52,6 @@ export type SettingsMap = Record<string, unknown>;
 import {
   createDirectory,
   getMemoryTracks,
-  getSettings,
   getSystemHome,
   getUsage,
   listDirectory,
@@ -148,22 +147,3 @@ export async function loadMemoryTracks(): Promise<Result<MemoryTrack[]>> {
   }
 }
 
-/** The five settings sections, merged in contract order (later wins). */
-const SETTINGS_SECTIONS = ["general", "appearance", "shortcuts", "browser", "agent"] as const;
-
-export async function loadAllSettings(defaults: SettingsMap): Promise<Result<SettingsMap>> {
-  try {
-    // getSettings throws on non-2xx / non-JSON; that is the failure path below.
-    const sections = await getSettings();
-    const merged: SettingsMap = { ...defaults };
-    for (const section of SETTINGS_SECTIONS) {
-      const values = sections[section];
-      // Fail-soft: a missing or malformed section is skipped, never invented.
-      if (typeof values !== "object" || values === null || Array.isArray(values)) continue;
-      Object.assign(merged, values);
-    }
-    return { ok: true, value: merged };
-  } catch (error) {
-    return { ok: false, error: toErrorMessage(error) };
-  }
-}

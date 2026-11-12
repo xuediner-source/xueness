@@ -1,5 +1,5 @@
 import { findRemoteRestore, claimRemoteRestore, unclaimRemoteRestore, beginRemoteRestore, disposeRemoteRestore, ownRemoteRestoreRefs, releasedRemoteRestoreRef, remoteRestoreParams, validateRemoteRestoreReceipt } from './remoteRestoreLedger';
-import { deferComposerAttachmentAbort, deferComposerAttachmentRelease } from '../sessions/composerAttachmentCleanup';
+import { deferComposerAttachmentAbort } from '../sessions/composerAttachmentCleanup';
 import { isComposerAttachmentLifecycleEnabled } from '../sessions/composerAttachmentLifecycle';
 import { parseAttachmentRef } from '../sessions/composerAttachmentRef';
 import type { UploadTransport } from '../sessions/composerAttachmentUpload';

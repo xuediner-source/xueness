@@ -11,8 +11,6 @@ export const MICROCOMPACT_CLEARED_TOOL_RESULT_MESSAGE = "[Old tool result conten
 export const DEFAULT_MICROCOMPACT_KEEP_RECENT_TOOL_RESULTS = 5;
 export const DEFAULT_MICROCOMPACT_IDLE_THRESHOLD_MINUTES = 60;
 export const DEFAULT_MICROCOMPACT_MIN_TOKEN_SAVINGS = 256;
-export const DEFAULT_MICROCOMPACT_THRESHOLD_RATIO = 0.9;
-export const DEFAULT_MICROCOMPACT_THRESHOLD_BUFFER_TOKENS = 2_000;
 export const DEFAULT_MICROCOMPACT_COMPACTABLE_TOOLS = ["Read", "Bash", "Grep", "Glob", "WebFetch", "WebSearch", "Edit", "Write", "ApplyPatch"] as const;
 
 export interface LocalMicrocompactPolicyConfig {
@@ -30,11 +28,6 @@ export interface LocalMicrocompactResult {
   payload?: { clearedMessageCount: number; clearedToolCallIds: string[]; keptToolCallIds: string[]; preMicrocompactTokenCount: number; postMicrocompactTokenCount: number; tokensSaved: number; trigger: "time_based" | "token_pressure" };
 }
 const positiveInt = (value: number | undefined): number | undefined => value === undefined || !Number.isFinite(value) || value < 0 ? undefined : Math.floor(value);
-
-export function buildDefaultMicrocompactThreshold(autoCompactThreshold: number): number {
-  const ratio = Math.floor(autoCompactThreshold * DEFAULT_MICROCOMPACT_THRESHOLD_RATIO);
-  return Math.max(0, Math.min(ratio, autoCompactThreshold - DEFAULT_MICROCOMPACT_THRESHOLD_BUFFER_TOKENS));
-}
 
 function hasMedia(content: unknown): boolean {
   return Array.isArray(content) && content.some((block) => block && typeof block === "object" && ["image", "image_url", "video", "file"].includes(String((block as Row).type)));

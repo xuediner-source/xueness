@@ -1,4 +1,3 @@
-import { post } from "../../xuenessApi";
 
 /** One attachment identity for file selection, paste, drop, and workspace paths. */
 export type AttachmentOrigin = "file" | "paste" | "drop" | "workspace";
@@ -85,25 +84,6 @@ export function isBoundedWorkspacePath(path: string): boolean {
   if (path.startsWith("/") || path.startsWith("\\")) return false;
   if (/^[A-Za-z]:/u.test(path)) return false;
   return path.split("/").every(part => part !== "" && part !== "." && part !== "..");
-}
-
-export function attachmentRefFromLocalFile(
-  file: { name: string; type?: string; size: number },
-  origin: Exclude<AttachmentOrigin, "workspace">,
-  id = "local",
-): AttachmentRef {
-  return {
-    id,
-    name: attachmentBaseName(file.name),
-    mimeType: attachmentMime(file.name, file.type ?? "") ?? (file.type || "application/octet-stream"),
-    size: file.size,
-    origin,
-    source: "upload",
-  };
-}
-
-export function isPersistedAttachmentRef(value: unknown): value is AttachmentRef {
-  return parseAttachmentRef(value) !== null;
 }
 
 export function parseAttachmentRef(value: unknown): AttachmentRef | null {
@@ -202,82 +182,3 @@ export function attachmentPayloadForSend(
   return attachmentRefs.length ? { attachments: inline, attachmentRefs } : { attachments: inline };
 }
 
-type AttachmentResponse = { ref?: unknown; status?: unknown };
-
-function sessionBody(sessionId?: string): { session_id?: string } {
-  return sessionId ? { session_id: sessionId } : {};
-}
-
-export async function commitUploadedAttachment(input: {
-  root: string;
-  sessionId?: string;
-  name: string;
-  mimeType: string;
-  size: number;
-  origin: Exclude<AttachmentOrigin, "workspace">;
-  data: string;
-}): Promise<AttachmentRef> {
-  const begun = await post<AttachmentResponse>("/api/composer/attachments/begin", {
-    root: input.root,
-    ...sessionBody(input.sessionId),
-    name: input.name,
-    mimeType: input.mimeType,
-    size: input.size,
-    origin: input.origin,
-  });
-  const pending = parseAttachmentRef(begun.ref);
-  if (!pending) throw new Error("invalid attachment");
-  try {
-    const committed = await post<AttachmentResponse>("/api/composer/attachments/commit", {
-      root: input.root,
-      ...sessionBody(input.sessionId),
-      id: pending.id,
-      data: input.data,
-    });
-    const ref = parseAttachmentRef(committed.ref);
-    if (!ref || committed.status !== "committed") throw new Error("invalid attachment");
-    return ref;
-  } catch (error) {
-    await releaseComposerAttachment({ root: input.root, sessionId: input.sessionId, id: pending.id }).catch(() => undefined);
-    throw error;
-  }
-}
-
-export async function commitWorkspaceAttachment(input: {
-  root: string;
-  sessionId?: string;
-  path: string;
-}): Promise<AttachmentRef> {
-  if (!isBoundedWorkspacePath(input.path)) throw new Error("workspace file unavailable");
-  const name = attachmentBaseName(input.path);
-  const begun = await post<AttachmentResponse>("/api/composer/attachments/begin", {
-    root: input.root,
-    ...sessionBody(input.sessionId),
-    name,
-    origin: "workspace",
-    path: input.path,
-  });
-  const pending = parseAttachmentRef(begun.ref);
-  if (!pending) throw new Error("invalid attachment");
-  try {
-    const committed = await post<AttachmentResponse>("/api/composer/attachments/commit", {
-      root: input.root,
-      ...sessionBody(input.sessionId),
-      id: pending.id,
-    });
-    const ref = parseAttachmentRef(committed.ref);
-    if (!ref || committed.status !== "committed") throw new Error("invalid attachment");
-    return ref;
-  } catch (error) {
-    await releaseComposerAttachment({ root: input.root, sessionId: input.sessionId, id: pending.id }).catch(() => undefined);
-    throw error;
-  }
-}
-
-export async function releaseComposerAttachment(input: { root: string; sessionId?: string; id: string }): Promise<void> {
-  await post("/api/composer/attachments/release", {
-    root: input.root,
-    ...sessionBody(input.sessionId),
-    id: input.id,
-  });
-}

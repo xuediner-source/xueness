@@ -132,26 +132,6 @@ export async function toggleCapabilityItem(
   }
 }
 
-/** Local-timezone "yyyy-mm-dd hh:mm" rendering; "" when absent/invalid. */
-export function formatCapabilityTime(value?: string): string {
-  if (typeof value !== "string" || !value) return "";
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "";
-  const pad = (n: number) => String(n).padStart(2, "0");
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}`;
-}
-
-/** Compact, bounded rendering of a kind-specific extra payload. */
-export function summarizeExtra(extra?: Record<string, unknown>): string {
-  if (!extra || Object.keys(extra).length === 0) return "";
-  try {
-    const text = JSON.stringify(extra);
-    return text.length > 120 ? `${text.slice(0, 120)}…` : text;
-  } catch {
-    return "";
-  }
-}
-
 /* ------------------------------------------------------------------ */
 /* Batch10: create / delete + editable-field metadata                  */
 /* ------------------------------------------------------------------ */

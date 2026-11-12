@@ -9,7 +9,7 @@
  */
 import { createHash } from "node:crypto";
 import { resolve } from "node:path";
-import { readCapped, utf8 } from "./files.ts";
+import { readCapped } from "./files.ts";
 import { canonicalWorkspace, discover, sha256Payload } from "./workspace.ts";
 import { FEATURE_FILENAME, FEATURE_MAX_BYTES } from "./trust.ts";
 

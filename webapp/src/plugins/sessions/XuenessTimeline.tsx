@@ -1,26 +1,17 @@
 import { t as tr } from '../../i18n';
 import React from "react";
-import { useQuantizedStreamingText } from "../../ui/StreamingCommitGate";
 import { isRecord, protocolAnswerEnvelope, decodeJsonStringFragment, unwrapProtocolEnvelopeText } from './completionPresentation';
-
 
 import "./sessions.css";
 
-
 import "../../styles/conversation-history-rail.css";
 
-
-
 export { STREAM_COMMIT_INTERVAL_MS, StreamingCommitGate, useQuantizedStreamingText } from "../../ui/StreamingCommitGate";
-
-
 
 function isProtocolToolEnvelope(value: unknown): boolean {
   return isRecord(value) && Object.keys(value).length === 2
     && typeof value.tool === "string" && isRecord(value.arguments);
 }
-
-
 
 function protocolJsonBody(text: string): { body?: string; knownFence: boolean } {
   const source = text.trimStart();
@@ -31,8 +22,6 @@ function protocolJsonBody(text: string): { body?: string; knownFence: boolean } 
   const body = rest.replace(/^\r?\n/u, "");
   return { body: body.replace(/\r?\n```\s*$/u, "").trimEnd(), knownFence: true };
 }
-
-
 
 function isKnownAnswerEnvelopePrefix(text: string): boolean {
   const normalized = protocolJsonBody(text);
@@ -63,8 +52,6 @@ function isKnownAnswerEnvelopePrefix(text: string): boolean {
   return index >= source.length || source[index] === '"';
 }
 
-
-
 /** Decode the visible prefix of a JSON string without leaking its syntax. */
 function extractProtocolAnswerPrefix(text: string): string | undefined {
   const source = protocolJsonBody(text).body ?? "";
@@ -89,13 +76,9 @@ function extractProtocolAnswerPrefix(text: string): string | undefined {
   return decodeJsonStringFragment(content.slice(0, end));
 }
 
-
-
 function comparableText(value: string): string {
   return value.trim().replace(/\s+/gu, " ");
 }
-
-
 
 /** Keep ordinary JSON intact; unwrap only a server-confirmed or live protocol answer envelope. */
 export function assistantTextForDisplay(text: string, streaming = false, completionSummary?: string, jsonToolProtocol = false, protocolModePending = false): string {
@@ -130,8 +113,6 @@ export function assistantTextForDisplay(text: string, streaming = false, complet
   return text;
 }
 
-
-
 /** Only recognized text results become a terminal transcript. Unknown result
  * objects keep the generic view instead of being presented as process output. */
 export function terminalResultForDisplay(value: unknown, depth = 0): { output: string; stderr?: string; exitCode?: number } | null {
@@ -156,8 +137,6 @@ export function terminalResultForDisplay(value: unknown, depth = 0): { output: s
   }
   return null;
 }
-
-
 
 export function TaskTodos({ todos }: { todos: unknown[] }): React.JSX.Element | null {
   const items = todos.filter((item): item is { id: string; text: string; status: string } =>

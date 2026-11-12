@@ -3,7 +3,7 @@
   "id": "settings",
   "name": "配置设置",
   "description": "设置存储、偏好校验与工作区登记（含本机原生文件夹选择）。",
-  "version": "0.2.0",
+  "version": "1.0.0",
   "defaultEnabled": true,
   "capabilities": {
     "exec": [
@@ -60,7 +60,6 @@
   ],
   "frontendModules": [
     "plugins/settings/SettingsSections.tsx",
-    "plugins/settings/SettingsPanel.tsx",
     "plugins/settings/SettingsPrimitives.tsx",
     "plugins/settings/XuenessSettingsView.tsx",
     "plugins/settings/XuenessShortcutsPanel.tsx",

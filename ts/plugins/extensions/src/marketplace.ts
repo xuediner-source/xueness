@@ -1,8 +1,8 @@
 /**
  * Trusted marketplace catalog and install (`bundled_plugins/extensions/marketplace.py`).
  *
- * With no `XUENESS_MARKETPLACE_URL`, the catalog is the four built-in adapters
- * plus the subscriptions, model-monitor and WorkBuddy snapshots. A URL is fetched only
+ * With no `XUENESS_MARKETPLACE_URL`, the catalog is the official downloadable
+ * plugins (`OFFICIAL_ROWS`); the four built-in adapters are never listed. A URL is fetched only
  * through the injected `fetchUrl` (the network plugin's public-HTTPS fetch).
  * Install writes the manifest disabled and never imports it.
  */
@@ -33,6 +33,14 @@ export const MONITOR_MARKET_MANIFEST = { id: MONITOR_PACKAGE_ID, version: "1.0.0
 export const WORKBUDDY_MARKET_MANIFEST = { id: WORKBUDDY_PACKAGE_ID, version: "1.0.0", apiVersion: 1, builtin: "workbuddy", capabilities: [] as string[], enabled: false };
 export const TAVERN_MARKET_MANIFEST = { id: TAVERN_PACKAGE_ID, version: "1.0.0", apiVersion: 1, builtin: "tavern", capabilities: [] as string[], enabled: false };
 
+/** The official downloadable plugins, in the order the catalog lists them. */
+const OFFICIAL_ROWS = [
+  { manifest: SUBSCRIPTIONS_MARKET_MANIFEST, name: "订阅中心", description: "可选安装。通过账号授权或登录凭证接入 Claude、Codex 等订阅账号，查询真实额度并用于会话。" },
+  { manifest: MONITOR_MARKET_MANIFEST, name: "返回模型监测", description: "可选安装。随会话显示请求型号与上游返回型号，判断一致或不同；不自动发送额外请求。" },
+  { manifest: WORKBUDDY_MARKET_MANIFEST, name: "WorkBuddy 号池", description: "可选安装的本机号池网关。请自备认证文件并放入 state/workbuddy/auths；安装后还需在插件管理中启用。" },
+  { manifest: TAVERN_MARKET_MANIFEST, name: "酒馆", description: "可选安装。导入 SillyTavern 兼容的角色卡与世界书，从角色设定开始一段角色扮演对话；安装后还需在插件管理中启用。" },
+];
+
 const CORE_PACKAGES = new Set(["xueness-skills", "xueness-hooks", "xueness-mcp", "xueness-subagents"]);
 
 export interface MarketplaceOptions {
@@ -59,15 +67,11 @@ function remoteItems(url: string, fetchUrl: MarketplaceOptions["fetchUrl"]): unk
 function loadRows(url: string, fetchUrl: MarketplaceOptions["fetchUrl"]): unknown[] {
   const rows = url ? remoteItems(url, fetchUrl) : [];
   if (!Array.isArray(rows) || rows.length > 100) throw new PyValueError("invalid marketplace catalog");
-  const kept = rows.filter((row) => !isDict(row) || !CORE_PACKAGES.has(String(row.id)) && row.id !== SUBSCRIPTIONS_PACKAGE_ID);
-  kept.push(packageRow(SUBSCRIPTIONS_PACKAGE_ID, "订阅中心", "可选安装。通过账号授权或登录凭证接入 Claude、Codex 等订阅账号，查询真实额度并用于会话。", SUBSCRIPTIONS_MARKET_MANIFEST));
-  const withoutMonitor = kept.filter((row) => !isDict(row) || row.id !== MONITOR_PACKAGE_ID);
-  withoutMonitor.push(packageRow(MONITOR_PACKAGE_ID, "返回模型监测", "可选安装。随会话显示请求型号与上游返回型号，判断一致或不同；不自动发送额外请求。", MONITOR_MARKET_MANIFEST));
-  const withoutWorkbuddy = withoutMonitor.filter((row) => !isDict(row) || row.id !== WORKBUDDY_PACKAGE_ID);
-  withoutWorkbuddy.push(packageRow(WORKBUDDY_PACKAGE_ID, "WorkBuddy 号池", "可选安装的本机号池网关。请自备认证文件并放入 state/workbuddy/auths；安装后还需在插件管理中启用。", WORKBUDDY_MARKET_MANIFEST));
-  const withoutTavern = withoutWorkbuddy.filter((row) => !isDict(row) || row.id !== TAVERN_PACKAGE_ID);
-  withoutTavern.push(packageRow(TAVERN_PACKAGE_ID, "酒馆", "可选安装。导入 SillyTavern 兼容的角色卡与世界书，从角色设定开始一段角色扮演对话；安装后还需在插件管理中启用。", TAVERN_MARKET_MANIFEST));
-  return withoutTavern;
+  // A remote listing can neither replace the built-in adapters nor stand in for an official package.
+  const official = new Set(OFFICIAL_ROWS.map((row) => row.manifest.id));
+  const kept = rows.filter((row) => !isDict(row) || !CORE_PACKAGES.has(String(row.id)) && !official.has(String(row.id)));
+  for (const row of OFFICIAL_ROWS) kept.push(packageRow(row.manifest.id, row.name, row.description, row.manifest));
+  return kept;
 }
 
 /** `marketplace.catalog`. Throws `PyValueError` on a bad listing and `NetworkError` when fetch is missing. */

@@ -21,23 +21,15 @@ npm run serve            # 等同于 ../bin/xueness-web
 
 | 命令 | 用途 |
 | --- | --- |
-| `npm run check` | 行数、插件、类型与全部测试 |
-| `npm test` | 全部测试（Python 对照在没有 Python 后端时自动跳过） |
-| `npm run test:sessions` | 存储、修订链、锁和基础投影 |
-| `npm run test:fast` | 显式跳过 Python 对照的快速测试 |
-| `npm run build` | 编译 JS，准备生产依赖和随包 Node |
-| `npm run test:built` | 复制产物后在空 PATH 下启动验证 |
-| `npm run test:packaged` | 实际安装目录中的运行时与原生路由检查 |
-| `npm run serve:built` | 使用编译后的 JS 启动 |
-| `npm run typecheck` | 严格类型检查，不生成文件 |
-| `npm run check:plugins` | allowlist、manifest、import 与能力门禁 |
+| `npm run check` | 行数、插件、版本与类型检查 |
 | `npm run check:lines` | 每个 TS 文件最多 400 行 |
-| `npm run bench:tools` | 隔离工作区中的工具对照基准 |
-| `npm run manifest -- --write` | 重新生成项目根目录的 `complete-project-manifest.json`（不加 `--write` 只检查） |
+| `npm run check:plugins` | allowlist、manifest、import 与能力门禁 |
+| `npm run check:version` | 各处产品版本号一致 |
+| `npm run typecheck` | 严格类型检查，不生成文件 |
+| `npm run build` | 编译 JS，准备生产依赖和随包 Node |
+| `npm run serve:built` | 使用编译后的 JS 启动 |
 
-随机对照规模可用 `XUENESS_DIFF_CASES`（默认 3000）、`XUENESS_IGNORE_CASES`（150）、`XUENESS_GUARD_CASES`（4000）调整。测试输出中的跳过项不算通过。
-
-Python 差分对照（`test-support/python-oracle.ts`）仍保留：把 `XUENESS_PROJECT_ROOT` 指向第 9 轮检查点的解压目录（其中仍含 `xueness/`），并设置 `XUENESS_PYTHON` 指向 CPython 3.11+，即可重新与冻结的 Python 实现逐项比对。
+本仓库不含测试。单元、回归、浏览器测试以及与旧 Python 实现的差分对照都在[私有验证库](https://github.com/xuediner-source/xueness-private-tests)，按该库的说明在源码副本上运行。
 
 ## 生产链路
 

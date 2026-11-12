@@ -56,13 +56,6 @@ export function pyStartsWith(text: string, prefix: string): boolean {
   return !(cut > 0 && cut < text.length && isHigh(text.charCodeAt(cut - 1)) && isLow(text.charCodeAt(cut)));
 }
 
-/** `text.endswith(suffix)`: a suffix may not start inside a surrogate pair of `text`. */
-export function pyEndsWith(text: string, suffix: string): boolean {
-  if (!text.endsWith(suffix)) return false;
-  const cut = text.length - suffix.length;
-  return !(suffix.length > 0 && cut > 0 && isHigh(text.charCodeAt(cut - 1)) && isLow(text.charCodeAt(cut)));
-}
-
 function decompose(value: number): { mantissa: bigint; exponent: number } {
   const view = new DataView(new ArrayBuffer(8));
   view.setFloat64(0, Math.abs(value));

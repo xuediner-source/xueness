@@ -17,4 +17,3 @@ export function createOffice(options: OfficeToolsOptions): BundledPlugin {
   return { manifest, plugin: definePlugin({ name: "office", apply(ctx) { for (const tool of officeTools(options)) ctx.tool(tool); } }) };
 }
 export const office = createOffice({ session: () => null });
-export const officePlugin = office.plugin;

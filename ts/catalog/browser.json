@@ -1,7 +1,7 @@
 {
   "id": "browser",
   "name": "Browser",
-  "description": "Explicitly approved browser operations.",
+  "description": "经明确批准的浏览器操作。",
   "apiVersion": 1,
   "version": "1.0.0",
   "defaultEnabled": false,

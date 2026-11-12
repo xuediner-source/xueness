@@ -3,7 +3,7 @@
   "id": "subagents",
   "name": "子代理",
   "description": "只读子任务：ZCode Agent 工具、后台派发与结果收集、显式恢复与引导、内置与已存子代理类型清单、持久化子会话与 task_runs 记录。",
-  "version": "0.3.0",
+  "version": "1.0.0",
   "defaultEnabled": true,
   "dependencies": ["sessions", "files"],
   "capabilities": { "fs": { "read": ["state"], "write": ["state"] } },

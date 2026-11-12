@@ -9,41 +9,6 @@
 /** V4 physical wire protocol version; the name says V4, the wire says 3. */
 export const V4_WIRE_PROTOCOL_VERSION = 3 as const;
 
-/** V4 logical projection snapshots keep their own independent version. */
-export const V4_PROJECTION_PROTOCOL_VERSION = 1 as const;
-
-/** Clock rule: Unix ms, always the CLI/host clock; clients never diff against local time. */
-export type V4Timestamp = number;
-
-export type V4StreamablePath = 'text' | 'inputText' | 'output.text' | 'summaryText';
-
-export interface V4DeliveryProfile {
-  desktopOnlyRows: boolean;
-  flushWindowMs: number;
-  streamPaths: Record<V4StreamablePath, boolean>;
-  streamOutputCapBytes: number;
-  toolProgress: boolean;
-}
-
-export const V4_DELIVERY_PROFILES = {
-  continuous: {
-    desktopOnlyRows: true,
-    flushWindowMs: 30,
-    streamPaths: { text: true, inputText: true, 'output.text': true, summaryText: true },
-    streamOutputCapBytes: 262144,
-    toolProgress: false,
-  },
-  replayable: {
-    desktopOnlyRows: false,
-    flushWindowMs: 150,
-    streamPaths: { text: true, inputText: false, 'output.text': false, summaryText: false },
-    streamOutputCapBytes: 0,
-    toolProgress: true,
-  },
-} as const satisfies Record<string, V4DeliveryProfile>;
-
-export type V4DeliveryProfileName = keyof typeof V4_DELIVERY_PROFILES;
-
 /** Limits and quotas (initial values, tuned against real traffic upstream). */
 export const PROTOCOL_V4_LIMITS = {
   maxFrameBytes: 1024 * 1024,

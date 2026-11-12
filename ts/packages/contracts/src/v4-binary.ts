@@ -45,22 +45,3 @@ export function encodeWireBytesBase64(bytes: Uint8Array): string {
   return result + block;
 }
 
-/** Strict decoder: returns null for any malformed input instead of throwing. */
-export function decodeWireBase64(value: string): Uint8Array | null {
-  if (!isWireBase64(value)) return null;
-  const padding = value.endsWith('==') ? 2 : value.endsWith('=') ? 1 : 0;
-  const output = new Uint8Array((value.length / 4) * 3 - padding);
-  let writeOffset = 0;
-  for (let offset = 0; offset < value.length; offset += 4) {
-    const a = BASE64_ALPHABET.indexOf(value[offset]!);
-    const b = BASE64_ALPHABET.indexOf(value[offset + 1]!);
-    const c = value[offset + 2] === '=' ? 0 : BASE64_ALPHABET.indexOf(value[offset + 2]!);
-    const d = value[offset + 3] === '=' ? 0 : BASE64_ALPHABET.indexOf(value[offset + 3]!);
-    if (a < 0 || b < 0 || c < 0 || d < 0) return null;
-    const combined = (a << 18) | (b << 12) | (c << 6) | d;
-    if (writeOffset < output.length) output[writeOffset++] = combined >>> 16;
-    if (writeOffset < output.length) output[writeOffset++] = (combined >>> 8) & 0xff;
-    if (writeOffset < output.length) output[writeOffset++] = combined & 0xff;
-  }
-  return output;
-}

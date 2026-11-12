@@ -25,7 +25,7 @@ import { ToolEventDispatcher, type ToolEventDiagnostic, type ToolEventPayload } 
 import { callSubject, type CallSubject } from "./subject.ts";
 import { withPlanExitDeniedTurnStop } from "./turn-control.ts";
 import { ToolDeadline, ToolDeadlineCancelledError, ToolDeadlineExceededError, deadlineFailure } from "./tool-deadline.ts";
-import { DEFAULT_BATCH_CONCURRENCY, parallelEligible, planBatches, runBatches } from "./batch-scheduler.ts";
+import { parallelEligible, planBatches, runBatches } from "./batch-scheduler.ts";
 
 export interface ToolCall {
   /** The model's tool call id; a one-shot approval is bound to it. */
@@ -89,9 +89,6 @@ export interface CallOptions {
   /** Called after authorization and before entering the actual handler. */
   onExecutionStarted?: (call: ToolCall) => void | Promise<void>;
 }
-
-/** How many concurrency-safe calls of one batch run at once (C-TOOL-07 default; see batchConcurrency). */
-export const BATCH_CONCURRENCY = DEFAULT_BATCH_CONCURRENCY;
 
 type AnyTool = ToolDefinition<any, unknown>;
 interface Passage {

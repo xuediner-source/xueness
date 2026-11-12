@@ -1,4 +1,3 @@
-import React from 'react';
 import { FileText, Terminal, Pencil, ChevronDown } from 'lucide-react';
 import type { PendingApproval } from './approvalTypes';
 import { ApprovalItemPreview } from './ApprovalPreview';

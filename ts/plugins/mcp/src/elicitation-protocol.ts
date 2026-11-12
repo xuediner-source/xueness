@@ -5,7 +5,6 @@
  * park a bounded queue of concurrent requests; each is attributed to the tool call
  * that raised it when the server echoes `_meta.relatedRequestId`.
  */
-import { createHash } from "node:crypto";
 import { closeSync, fsyncSync, mkdirSync, readFileSync, unlinkSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { isDict, pyEncodeUtf8, pyJsonDumps } from "@xueness/contracts";
@@ -13,7 +12,6 @@ import { exists, fsyncDirectory, isLink, mkstemp, protectPrivateFile, replaceFil
 import { validateContent, validateRequested } from "./elicitation-schema.ts";
 import type { Row } from "./names.ts";
 
-export const ELICITATION_PROTOCOL = "2025-06-18";
 export const USER_WAIT_SECONDS = 600;
 const MAX_NAME = 64;
 const MAX_QUEUE = 4;
@@ -29,10 +27,6 @@ const diagnostics: Row[] = [];
 
 export function elicitationEnabled(server: unknown): boolean {
   return isDict(server) && server.elicitation === true;
-}
-
-export function initializeCapabilities(server: unknown): Row {
-  return elicitationEnabled(server) ? { elicitation: {} } : {};
 }
 
 function stateKey(stateDir: string | null): string {
@@ -261,6 +255,3 @@ export function resetElicitationState(stateDir: string | null = null): void {
   if (state === null) diagnostics.length = 0;
 }
 
-export function elicitationTopic(stateDir: string | null, sessionId: string): string {
-  return `mcp-elicitation:${createHash("sha256").update(`${stateKey(stateDir)}\0${sessionId}`).digest("hex").slice(0, 32)}`;
-}

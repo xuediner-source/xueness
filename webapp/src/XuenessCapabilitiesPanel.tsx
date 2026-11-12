@@ -15,7 +15,6 @@ import {
 } from "lucide-react";
 import { Badge, EmptyState } from "./ui/primitives";
 import {
-  CAPABILITY_LABELS,
   type CapabilityItem,
   type CapabilityKind,
   parsePluginManifestImport,

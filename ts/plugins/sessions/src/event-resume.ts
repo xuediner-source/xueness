@@ -1,5 +1,5 @@
 /** Finite event resume pages bind each continuation to an immutable prefix. */
-import { deriveEvents, isDict, pyJsonDumps, pyStr, pyStrip, PyValueError } from "@xueness/contracts";
+import { deriveEvents, pyJsonDumps, pyStr, pyStrip, PyValueError } from "@xueness/contracts";
 import { eventDigest, prefixHash, updateEventDigest } from "./legacy-events.ts";
 import { projectSessionMessages } from "./journal-http.ts";
 type Row = Record<string, any>;

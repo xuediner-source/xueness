@@ -1,4 +1,3 @@
-import React from 'react';
 import { BookOpen, Table2, WandSparkles, ArrowUpRight } from 'lucide-react';
 import { t } from '../../i18n';
 import './starter-ideas.css';

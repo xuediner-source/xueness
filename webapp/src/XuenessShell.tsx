@@ -1,13 +1,12 @@
 import { prepareStreamingMarkdown } from './ui/StreamingCommitGate';
 export { prepareStreamingMarkdown } from './ui/StreamingCommitGate';
-import { t as tr, tf, useLocale } from './i18n';
+import { t as tr } from './i18n';
 import { useSidebarPreference } from './plugins/sessions/sidebarPreference';
 import React, { useEffect, useRef, useState } from "react";
 import ReactMarkdown, { defaultUrlTransform, type Components } from "react-markdown";
 import remarkGfm from "remark-gfm";
-import { Check, Copy, TriangleAlert, X } from "lucide-react";
-import { Badge } from "./ui/primitives";
-import { IconBack, IconCheck, IconLoader, IconX, IconMenu, IconXuenessMark } from "./ui/icons";
+import { Check, Copy, X } from "lucide-react";
+import { IconBack, IconMenu, IconXuenessMark } from "./ui/icons";
 import { CodeContent } from "./ui/CodeContent";
 import type { CodeLanguage } from "./ui/CodePreview";
 import { displayBinding, isImeComposingEvent } from "./xuenessShortcutDisplay";
@@ -312,32 +311,6 @@ export function SidebarActions({ actions, platform }: { actions: SidebarAction[]
   );
 }
 
-/**
- * Timeline message forms matching the chat-workbench shape:
- * user = right-aligned bubble, assistant = borderless prose, tool = compact
- * one-line entry with a status badge, completion/question = distinct cards.
- */
-export type TimelineCardProps = {
-  role: string;
-  /** Tool name (role="tool"). */
-  name?: string;
-  /** Formatted tool subject, shown monospaced next to the name. */
-  subject?: string;
-  title?: string;
-  status?: "ok" | "error" | "pending" | string;
-  statusLabel?: string;
-  /** 正文（纯文本；等宽显示当 mono 为真） */
-  body: string;
-  mono?: boolean;
-  meta?: string;
-  /** Measured duration only; omit when timing was not provided. */
-  durationMs?: number;
-  /** Renders safe, deliberately limited Markdown for prose (not tool output). */
-  markdown?: boolean;
-  seq?: number;
-  detailsOpen?: boolean;
-};
-
 type ClipboardWriter = Pick<Clipboard, "writeText">;
 
 /** Resolve clipboard failures as data so both message and code actions can show feedback. */
@@ -409,187 +382,6 @@ function CopyFeedbackAction({
     </span>
   );
 }
-
-function statusToTone(status?: string): "ok" | "error" | "warn" | "neutral" {
-  if (status === "ok") return "ok";
-  if (status === "error") return "error";
-  if (status === "pending" || status === "running" || status === "review") return "warn";
-  return "neutral";
-}
-
-function ToolStatusIcon({ status, terminal = false }: { status?: string; terminal?: boolean }): React.JSX.Element {
-  const tone = statusToTone(status);
-  return (
-    <span className={`xn-msg__tool-icon xn-msg__tool-icon--${tone}`} aria-hidden="true">
-      {status === "ok" ? (
-        <IconCheck size={13} />
-      ) : status === "error" ? (
-        <IconX size={13} />
-      ) : status === "cancelled" ? (
-        <span style={{ display: "inline-block", width: 8, height: 2, background: "currentColor", borderRadius: 1 }} />
-      ) : terminal ? (
-        <TriangleAlert size={13} />
-      ) : (
-        <IconLoader size={13} className="xn-spin" />
-      )}
-    </span>
-  );
-}
-
-export const TimelineCard = React.memo(function TimelineCard({
-  role,
-  name,
-  subject,
-  title,
-  status,
-  statusLabel,
-  body,
-  mono,
-  meta,
-  durationMs,
-  markdown = false,
-  seq,
-  detailsOpen = false,
-}: TimelineCardProps): React.JSX.Element {
-  useLocale();
-  const terminalStatus = role === 'completion' && (status === 'pending' || status === 'running') ? 'review' : status;
-  const tone = statusToTone(terminalStatus);
-  const duration = typeof durationMs === "number" && Number.isFinite(durationMs) && durationMs >= 0
-    ? durationMs < 1000 ? `${Math.round(durationMs)} ms` : `${(durationMs / 1000).toFixed(1)} s`
-    : null;
-  const seqTag = typeof seq === "number" ? { "data-seq": seq } : {};
-
-  if (role === "user") {
-    const copyTestId = typeof seq === "number" ? `xn-copy-user-${seq}` : "xn-copy-user";
-    return (
-      <div
-        className="xn-msg xn-msg--user"
-        data-testid="xn-timeline-card"
-        data-role="user"
-        {...seqTag}
-      >
-        <div className="xn-msg__body">
-          <div className="xn-msg__bubble" data-testid="xn-card-body">
-            {body}
-          </div>
-          <div className="xn-msg__actions" role="group" aria-label={tr("消息操作")}>
-            <CopyFeedbackAction text={body} testId={copyTestId} label={tr("复制消息")} />
-          </div>
-        </div>
-        <span className="xn-msg__avatar" aria-hidden="true">{tr("你")}</span>
-      </div>
-    );
-  }
-
-  if (role === "tool") {
-    const label = name || title || "tool";
-    const longSubject = Boolean(subject && subject.length > 96);
-    const longError = status === "error" && body.length > 280;
-    return (
-      <div
-        className={`xn-msg xn-msg--tool ${status ? `xn-msg--status-${tone}` : ""}`}
-        data-testid="xn-timeline-card"
-        data-role="tool"
-        data-status={status}
-        {...seqTag}
-      >
-        <div className="xn-msg__tool-line">
-          <ToolStatusIcon status={status} />
-          <span className="xn-msg__tool-name">{label}</span>
-          {subject && (longSubject ? (
-            <details className="xn-msg__tool-details" open={detailsOpen}>
-              <summary className="xn-msg__tool-subject" title={subject}>{subject}</summary>
-              <pre className="xn-msg__tool-detail-body">{subject}</pre>
-            </details>
-          ) : <span className="xn-msg__tool-subject" title={subject}>{subject}</span>)}
-          <span className="xn-msg__tool-trailing">
-            {meta && <span className="xn-card__meta">{meta}</span>}
-            {duration && <span className="xn-card__duration" data-testid="xn-card-duration">{duration}</span>}
-            {status && (
-              <Badge tone={tone} data-testid="xn-card-status">
-                {status}
-              </Badge>
-            )}
-          </span>
-        </div>
-        {status === "error" && body && (
-          longError ? (
-            <details className="xn-msg__tool-error-details" open={detailsOpen}>
-              <summary className="xn-msg__tool-error" data-testid="xn-card-body">{body.slice(0, 240)}…</summary>
-              <pre className="xn-msg__tool-detail-body xn-msg__tool-detail-body--error">{body}</pre>
-            </details>
-          ) : <div className="xn-msg__tool-error" data-testid="xn-card-body">{body}</div>
-        )}
-      </div>
-    );
-  }
-
-  if (role === "completion") {
-    return (
-      <div
-        className={`xn-msg xn-msg--completion ${status ? `xn-msg--status-${tone}` : ""}`}
-        data-testid="xn-timeline-card"
-        data-role="completion"
-        data-status={terminalStatus}
-        {...seqTag}
-      >
-        <div className="xn-msg__tool-line">
-          <ToolStatusIcon status={terminalStatus} terminal />
-          <span className="xn-msg__tool-name">{title || tr("运行结束")}</span>
-          <span className="xn-msg__tool-trailing">
-            {status && (
-              <Badge tone={tone} data-testid="xn-card-status">
-                {statusLabel ?? tr('运行结束')}
-              </Badge>
-            )}
-          </span>
-        </div>
-        {body && (
-          <div className="xn-msg__prose" data-testid="xn-card-body">
-            {markdown ? <SimpleMarkdown text={body} /> : body}
-          </div>
-        )}
-      </div>
-    );
-  }
-
-  if (role === "question") {
-    return (
-      <div
-        className="xn-msg xn-msg--question"
-        data-testid="xn-timeline-card"
-        data-role="question"
-        {...seqTag}
-      >
-        <div className="xn-msg__tool-line">
-          <span className="xn-msg__tool-icon xn-msg__tool-icon--warn" aria-hidden="true">?</span>
-          <span className="xn-msg__tool-name">{title || tr("等待回答")}</span>
-        </div>
-        <div className="xn-msg__prose" data-testid="xn-card-body">
-          {body}
-        </div>
-      </div>
-    );
-  }
-
-  // assistant and everything else: borderless prose.
-  const copyTestId = typeof seq === "number" ? `xn-copy-assistant-${seq}` : "xn-copy-assistant";
-  return (
-    <div
-      className="xn-msg xn-msg--assistant"
-      data-testid="xn-timeline-card"
-      data-role={role}
-      {...seqTag}
-    >
-      <div className="xn-msg__prose" data-testid="xn-card-body">
-        {markdown ? <SimpleMarkdown text={body} /> : body}
-      </div>
-      <div className="xn-msg__actions" role="group" aria-label={tr("消息操作")}>
-        <CopyFeedbackAction text={body} testId={copyTestId} label={tr("复制消息")} />
-      </div>
-    </div>
-  );
-});
 
 const MARKDOWN_CODE_LANGUAGES: Record<string, CodeLanguage> = {
   bash: "bash", sh: "bash", shell: "bash", zsh: "bash",

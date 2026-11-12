@@ -7,14 +7,6 @@ import { DesktopBrowserImport, browserRuntimeLabel, readBrowserRuntime, type Bro
 
 export type BrowserDataOperation = "cache" | "all";
 
-export function dialogTabWrapTarget(activeIndex: number, count: number, shiftKey: boolean): number | null {
-  if (count < 1) return null;
-  if (activeIndex < 0) return shiftKey ? count - 1 : 0;
-  if (shiftKey && activeIndex === 0) return count - 1;
-  if (!shiftKey && activeIndex === count - 1) return 0;
-  return null;
-}
-
 export async function readBrowserProfilePresent(): Promise<boolean> {
   const result = await get<{ profilePresent: boolean }>("/api/browser/data");
   if (typeof result.profilePresent !== "boolean") throw new Error("Invalid browser profile response");

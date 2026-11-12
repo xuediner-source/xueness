@@ -1,4 +1,4 @@
-import type { AgentExtension, ModelRequest, Row } from "@xueness/agent";
+import type { AgentExtension, ModelRequest } from "@xueness/agent";
 
 export const MAX_TOOL_MODEL_BYTES = 65536;
 const OMITTED = "\n\n[... middle omitted ...]\n\n";

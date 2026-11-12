@@ -16,8 +16,8 @@
 import { existsSync, unlinkSync } from "node:fs";
 import { join } from "node:path";
 import { isDict, PyValueError } from "@xueness/contracts";
-import { isLink, jsonEntries, readJsonObject, resourceKindDir, validResourceId } from "@xueness/sessions";
-import { digest, loadManifests, validateDataManifest, type DataManifest } from "./sdk.ts";
+import { isLink, readJsonObject, resourceKindDir, validResourceId } from "@xueness/sessions";
+import { digest, loadManifests, type DataManifest } from "./sdk.ts";
 
 export const COMPONENT_KINDS = ["skills", "commands", "hooks", "mcp"] as const;
 export type ComponentKind = (typeof COMPONENT_KINDS)[number];

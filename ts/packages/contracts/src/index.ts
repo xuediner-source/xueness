@@ -20,7 +20,5 @@ export * from './shell-parse.ts';
 export * from './v4-core.ts';
 export * from './v4-binary.ts';
 export * from './v4-wire.ts';
-export * from './v4-wire-fault.ts';
 export * from './v4-wire-codec.ts';
-export * from './v4-wire-reassembly.ts';
 export * from './v4-transport.ts';

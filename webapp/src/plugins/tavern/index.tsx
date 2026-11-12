@@ -4,7 +4,7 @@
  * only that JSON is sent, so the picture never leaves this page. Starting a roleplay asks the server for the
  * opening brief and puts it into the composer of a new chat; the person reads it and sends it.
  */
-import React, { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { BookOpen, MessageSquarePlus, TriangleAlert, Upload, UserRound } from 'lucide-react';
 import { del, get, post } from '../../xuenessApi';
 import { t as tr, tf } from '../../i18n';

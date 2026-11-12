@@ -1,16 +1,6 @@
 import { readJsonResponse } from "./xuenessApi";
 import { isPermissionMode, type PermissionMode } from "./plugins/sessions/permissionModes";
 
-export type XuenessSession = {
-  id: string;
-  task: string;
-  status: string;
-  steps?: number;
-  mode?: string;
-  completion?: { verified?: boolean; summary?: string; evidence?: unknown[] } | null;
-  changed_files?: string[];
-};
-
 /** 后端 session_events() 派生的只读事件尾；payload 都是截断摘要，不含文件正文。 */
 export type XuenessEvent =
   | { type: "status"; status: string; steps: number }

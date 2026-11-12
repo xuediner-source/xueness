@@ -107,12 +107,6 @@ export class AcceptedCallLedger {
   }
 }
 
-/** Cold-resume view of the durable projection. */
-export function loadAcceptedCallProjection(session: Row): AcceptedCallRecord[] {
-  const history = Array.isArray(session[ACCEPTED_CALL_PROJECTION_KEY]) ? session[ACCEPTED_CALL_PROJECTION_KEY] as Row[] : [];
-  return history.filter((row) => typeof row.callId === "string").map((row) => row as unknown as AcceptedCallRecord);
-}
-
 export interface StreamSettlementInput {
   streamId: string | null;
   turnId: string;

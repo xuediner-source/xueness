@@ -2,7 +2,7 @@
 import type { JsonSchema } from '@xueness/contracts';
 import type { ToolDefinition } from '@xueness/engine-tools';
 import type { DynamicWorkflowService } from './dynamic-service.ts';
-import { blockedReminderFor, blockedReminders } from './dynamic-blocked-reminder.ts';
+import { blockedReminderFor } from './dynamic-blocked-reminder.ts';
 import type { Row } from './plan.ts';
 
 const string: JsonSchema = { type: 'string', minLength: 1 };

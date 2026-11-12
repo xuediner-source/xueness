@@ -1,4 +1,3 @@
-import React from 'react';
 import { tf, t as tr } from '../../i18n';
 import type { ComposerMaterial } from './composerMaterialSummary';
 

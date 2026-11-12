@@ -16,8 +16,6 @@
  */
 import { JsonFloat } from "./py-float.ts";
 
-export type JsonValue = null | boolean | number | string | JsonValue[] | { [key: string]: JsonValue };
-
 /** A JSON object, the shape Python sees as `dict`. */
 export function isDict(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value) && !(value instanceof JsonFloat);

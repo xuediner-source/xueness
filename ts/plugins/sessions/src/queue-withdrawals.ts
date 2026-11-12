@@ -1,10 +1,10 @@
 /** Atomic text-only recovery escrow. Metadata changes retain the queue CAS. */
-import { isDict, pyEquals, pyLen, pySubstring, pyTruthy, pyUtcNow, PyValueError } from "@xueness/contracts";
+import { pyEquals, pyLen, pySubstring, pyTruthy, pyUtcNow, PyValueError } from "@xueness/contracts";
 import { isPyOSError, isPyValueError, pyExceptionName } from "@xueness/sessions";
 import type { SessionReply } from "./http-api.ts";
 import { queueFor, validateWorkspace } from "./queue-http.ts";
 import { validateWithdrawals } from "./queue-validation.ts";
-import { ACTIVE, checkRevision, dict, issuedMs, QueueConflict, RETENTION_MS, trimHistory, type Row, type SessionCommandsOptions } from "./queue-types.ts";
+import { ACTIVE, checkRevision, issuedMs, QueueConflict, RETENTION_MS, trimHistory, type Row, type SessionCommandsOptions } from "./queue-types.ts";
 const prune = (record: Row): number => { const now = Math.max(Date.now(), record.withdrawalClock ?? 0); record.withdrawalClock = now; record.withdrawals = (record.withdrawals ?? []).filter((r: Row) => r.expiresAt > now); return now; };
 export async function withdrawQueue(o: SessionCommandsOptions, commandId: string, payload: Row, sid: string): Promise<SessionReply> {
   issuedMs(commandId); const queue = queueFor(o);

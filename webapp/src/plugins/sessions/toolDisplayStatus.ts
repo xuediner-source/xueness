@@ -43,16 +43,6 @@ export const TOOL_DISPLAY_STATUS_LABELS: Record<ToolDisplayStatus, string> = {
   stopped: "已停止",
 };
 
-/** 展示状态 → 色调（替代原来的三元链）。 */
-export const TOOL_DISPLAY_STATUS_TONES: Record<ToolDisplayStatus, "warn" | "ok" | "error" | "neutral"> = {
-  queued: "warn",
-  running: "warn",
-  ok: "ok",
-  error: "error",
-  cancelled: "neutral",
-  stopped: "neutral",
-};
-
 /** 行状态 → 展示状态：显式查表，无推导、无默认值分支。 */
 export function toolDisplayStatusOf(status: ToolRowStatus): ToolDisplayStatus {
   return TOOL_ROW_STATUS_TO_DISPLAY[status];

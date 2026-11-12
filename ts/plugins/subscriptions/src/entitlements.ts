@@ -8,9 +8,8 @@
  * against any implementation of it (tests run a real loopback service); the
  * private vendor items are listed as pending and are never claimed aligned.
  */
-import { isDict, pySlice, pyStr, PyValueError } from "@xueness/contracts";
+import { isDict, pyStr, PyValueError } from "@xueness/contracts";
 import { SubscriptionRequestError } from "./broker.ts";
-import { publicQuota } from "./state.ts";
 
 type Row = Record<string, unknown>;
 
@@ -186,32 +185,3 @@ export class EntitlementTickets {
   clear(): void { this.cache.clear(); }
 }
 
-const bounded = (value: unknown, limit: number): string | null => typeof value === "string" && value.trim() ? pySlice(value.trim(), limit) : null;
-
-/** Public account row: whitelisted fields only, bounded like `publicAccounts`; null when nothing survives. */
-export function publicEntitlementAccount(value: unknown): Row | null {
-  if (!isDict(value)) return null;
-  const row: Row = {};
-  const account = bounded(value.account, 160); if (account !== null) row.account = account;
-  const plan = bounded(value.plan, 120); if (plan !== null) row.plan = plan;
-  const region = bounded(value.region, 60); if (region !== null) row.region = region;
-  if (value.verified === true) row.verified = true;
-  return Object.keys(row).length ? row : null;
-}
-
-/** Public subscription row: status vocabulary is fixed, timestamps are epoch ms; null when nothing survives. */
-export function publicEntitlementSubscription(value: unknown): Row | null {
-  if (!isDict(value)) return null;
-  const row: Row = {};
-  if (["active", "trialing", "past_due", "expired", "unknown"].includes(value.status as string)) row.status = value.status;
-  const plan = bounded(value.plan, 120); if (plan !== null) row.plan = plan;
-  for (const key of ["renewsAt", "expiresAt", "startedAt"]) {
-    const stamp = value[key];
-    if (typeof stamp === "number" && Number.isFinite(stamp) && stamp >= 0) row[key] = stamp;
-  }
-  if (typeof value.seats === "number" && Number.isInteger(value.seats) && value.seats >= 0 && value.seats <= 1_000_000) row.seats = value.seats;
-  return Object.keys(row).length ? row : null;
-}
-
-/** Public quota row reuses the subscription store's sanitizer. */
-export function publicEntitlementQuota(value: unknown): Row | null { return publicQuota(value); }

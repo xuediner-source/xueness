@@ -2,7 +2,7 @@
   "apiVersion": 2,
   "id": "os_cua",
   "name": "OS Computer Use",
-  "description": "Desktop computer use on macOS and Windows: window listing, screenshots, accessibility snapshots and approval-gated single-action input.",
+  "description": "macOS 与 Windows 桌面计算机使用，支持窗口列表、截图、辅助功能树和受审批约束的单步输入。",
   "version": "1.0.0",
   "defaultEnabled": false,
   "dependencies": [

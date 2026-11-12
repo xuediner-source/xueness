@@ -3,7 +3,7 @@
   "id": "shell",
   "name": "命令执行",
   "description": "经审批的模型命令工具，含后台任务。",
-  "version": "0.2.0",
+  "version": "1.0.0",
   "defaultEnabled": true,
   "capabilities": {
     "exec": [

@@ -17,9 +17,8 @@ import { modelToolName, wrapSystemReminderForSource, type AgentContext, type Age
 import type { ToolDefinition, ToolResult } from "@xueness/engine-tools";
 import { definePlugin, type BundledPlugin } from "@xueness/kernel";
 import manifest from "../manifest.json" with { type: "json" };
-import { backgroundTools, BACKGROUND_TOOL_NAMES, replyToChannelTool, respondToCoordinatorTool, RESPOND_TOOL_NAME, type CoordinationBinding } from "./background-tools.ts";
+import { backgroundTools, BACKGROUND_TOOL_NAMES, replyToChannelTool, respondToCoordinatorTool, type CoordinationBinding } from "./background-tools.ts";
 import { mergeSubagentNotices } from "./background-receipts.ts";
-import type { TaskCoordinator } from "./coordinator.ts";
 import { loadSubagents, TASK_TOOL_NAME, type Row } from "./definitions.ts";
 import { agentListing } from "./profiles.ts";
 
@@ -36,8 +35,6 @@ export * from "./lifecycle.ts";
 export * from "./tasks-http.ts";
 export * from "./background-tools.ts";
 export * from "./background-receipts.ts";
-export * from "./channel-mention.ts";
-export * from "./channel-reply.ts";
 
 export const AGENT_LISTING_SOURCE = "agent_listing_delta";
 /**

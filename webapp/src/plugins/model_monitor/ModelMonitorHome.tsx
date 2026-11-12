@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Activity, AlertTriangle, ArrowRight, Check, ChevronDown, Radio, RefreshCw } from 'lucide-react';
 import { get } from '../../xuenessApi';
 import { t as tr } from '../../i18n';

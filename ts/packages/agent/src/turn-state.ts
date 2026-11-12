@@ -17,7 +17,6 @@ export interface TurnState {
 }
 /** The formal C-WFL-01 state table lives in command-priority.ts and is enforced here. */
 import { TURN_TRANSITION_TABLE } from './command-priority.ts';
-export const isTerminalTurnPhase = (phase: TurnPhase): boolean => phase === 'completing' || phase === 'error';
 export const canTransitionTurn = (from: TurnPhase, to: TurnPhase): boolean => from === to || TURN_TRANSITION_TABLE[from].includes(to);
 
 /** Mutates only its own compact snapshot; the driver retains execution authority. */

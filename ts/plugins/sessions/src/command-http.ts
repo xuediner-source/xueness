@@ -1,5 +1,5 @@
 /** Durable admission claims prevent retries from executing uncertain writes twice. */
-import { isDict, pyTruthy, PyValueError } from "@xueness/contracts";
+import { pyTruthy } from "@xueness/contracts";
 import { isPyOSError, isPyValueError } from "@xueness/sessions";
 import type { SessionReply } from "./http-api.ts";
 import { CommandReceipts, acknowledgement, MAX_COMMANDS } from "./command-receipts.ts";

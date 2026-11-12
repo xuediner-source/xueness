@@ -1,5 +1,5 @@
 // sessions.command_ack: reload recovery queries original receipts; it never resends.
-import React, { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { t as tr } from '../../i18n';
 import type { SessionCommandClient } from './commandClient';
 import { validateCreateCommandResult } from './commandReceipt';

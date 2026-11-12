@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { categories, categoryLabel, compact, label } from './labels';
 import type { ContextLensView } from './types';
 

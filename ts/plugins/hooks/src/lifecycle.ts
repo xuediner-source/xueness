@@ -17,7 +17,6 @@ import { join } from "node:path";
 import { isDict, isPyIntValue, pyJsonLoads } from "@xueness/contracts";
 import { isLink, lexists, readCapped, utf8 } from "./files.ts";
 import { isHookEvent, loadUserHooks, type Row } from "./load.ts";
-import { authorizationRevision } from "./revision.ts";
 import { featureStatus, statusDocument } from "./trust.ts";
 import { canonicalWorkspace } from "./workspace.ts";
 

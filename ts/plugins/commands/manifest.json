@@ -3,7 +3,7 @@
   "id": "commands",
   "name": "自定义命令",
   "description": "自定义斜杠提示模板、目录型 Markdown 命令、内建 /init 与命令资源管理。",
-  "version": "0.2.0",
+  "version": "1.0.0",
   "defaultEnabled": true,
   "capabilities": { "fs": { "read": ["state", "workspace"], "write": ["state"] } },
   "features": [

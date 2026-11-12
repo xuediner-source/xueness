@@ -265,12 +265,6 @@ export function windowBounds(window: unknown): [number, number] {
   return [start, end];
 }
 
-/** The window's length in minutes; `22:00 -> 06:00` is `1440 - 22*60 + 6*60`. */
-export function windowSpan(window: Row): number {
-  const [start, end] = windowBounds(window);
-  return start < end ? end - start : 24 * 60 - start + end;
-}
-
 /** `in_window`: half-open `[start, end)`, wrapping when start follows end. */
 export function inWindow(now: number, window: Row, timezoneName: string | null = null): boolean {
   const [start, end] = windowBounds(window);

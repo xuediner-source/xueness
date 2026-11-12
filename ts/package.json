@@ -2,7 +2,7 @@
   "name": "xueness-ts",
   "private": true,
   "version": "0.2.1",
-  "description": "Xueness TypeScript backend workspace (strangler migration from the Python backend).",
+  "description": "Xueness TypeScript backend workspace: kernel packages, plugins and the server/CLI app.",
   "type": "module",
   "engines": {
     "node": ">=24.11"

@@ -3,7 +3,7 @@
   "id": "skills",
   "name": "技能",
   "description": "工作区、用户与已存技能的发现，ZCode 技能清单与 Skill 工具，SKILL.md 校验。",
-  "version": "0.2.0",
+  "version": "1.0.0",
   "defaultEnabled": true,
   "capabilities": { "fs": { "read": ["state", "workspace"], "write": ["state"] } },
   "tools": [

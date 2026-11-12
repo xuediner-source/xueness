@@ -1,7 +1,7 @@
 {
   "id": "files",
   "name": "工作区文件",
-  "description": "文件工具、目录浏览、文件预览与改动视图。",
+  "description": "工作区文件工具：读取、列目录、glob、grep、写入、编辑与结构化补丁。",
   "version": "1.0.0",
   "apiVersion": 1,
   "defaultEnabled": true,

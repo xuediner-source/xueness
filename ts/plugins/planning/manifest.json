@@ -2,8 +2,8 @@
   "apiVersion": 2,
   "id": "planning",
   "name": "计划与问答",
-  "description": "Session goals, independent bounded verification, task lists, questions and immutable delivery content checks.",
-  "version": "0.2.0",
+  "description": "会话目标、独立的有界验证、任务清单、向用户提问，以及不可变的交付内容检查。",
+  "version": "1.0.0",
   "defaultEnabled": true,
   "capabilities": {
     "exec": ["node"],

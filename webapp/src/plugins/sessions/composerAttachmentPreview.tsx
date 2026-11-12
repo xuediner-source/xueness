@@ -1,4 +1,4 @@
-import React, { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
+import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { tf } from "../../i18n";
 import { IconX } from "../../ui/icons";
 import { parseAttachmentRef, type ComposerAttachment } from "./composerAttachmentRef";

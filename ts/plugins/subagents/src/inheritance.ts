@@ -16,7 +16,7 @@
  *   the parent's allowed models; anything wider falls back to the parent's
  *   selection instead of escalating.
  */
-import { isDict, pyJsonDumps, pyJsonLoads, pyLen, pyStrip } from "@xueness/contracts";
+import { isDict, pyJsonDumps, pyJsonLoads, pyLen } from "@xueness/contracts";
 import { agentToolAllowlist, normalizeDisallowedTools, type Row } from "./definitions.ts";
 import { CHILD_FORCED_DISALLOWED } from "./profiles.ts";
 

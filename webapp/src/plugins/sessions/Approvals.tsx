@@ -3,11 +3,9 @@ import React, { useEffect, useRef, useState } from "react";
 import type { PendingApproval } from "../../xuenessWorkbench";
 import { Button } from "../../ui/primitives";
 import { approvalImpactKind, pendingBatchApprovals } from './approvalImpact';
-import { displayBinding, isModKeyPressed } from '../../xuenessShortcutDisplay';
 import { formatSubject } from './diffPreview';
 import { ApprovalChoiceMenu } from './ApprovalChoiceMenu';
 import { ApprovalRequestPreview } from './ApprovalRequestPreview';
-
 
 export type ApprovalsProps = {
   pending: PendingApproval[];
@@ -25,13 +23,11 @@ export type ApprovalsProps = {
   busy?: boolean;
 };
 
-
 function approvalOperationLabel(kind: ReturnType<typeof approvalImpactKind>): string {
   return tr(kind === 'read' ? '读取' : kind === 'write' ? '写入' : kind === 'edit' ? '修改'
     : kind === 'execute' ? '执行命令' : kind === 'network' ? '访问网络'
       : kind === 'external' ? '调用外部工具' : kind === 'plan' ? '批准计划' : '执行操作');
 }
-
 
 function approvalImpactDescription(kind: ReturnType<typeof approvalImpactKind>): string {
   return tr(kind === 'read' ? '读取所列目标，不会修改文件。'
@@ -43,81 +39,9 @@ function approvalImpactDescription(kind: ReturnType<typeof approvalImpactKind>):
               : '按所列操作类型处理目标；请检查目标和详细预览。');
 }
 
-
 function approvalTarget(pending: PendingApproval): string {
   return pending.subject ? formatSubject(pending.kind ?? pending.name, pending.subject) : tr('未提供目标');
 }
-
-
-export type ApprovalsKeyAction =
-  | { type: "approve-item"; index: number; item: PendingApproval }
-  | { type: "approve-all" }
-  | { type: "approve-active"; index: number; item: PendingApproval }
-  | { type: "next" }
-  | { type: "prev" }
-  | null;
-
-
-export function evaluateApprovalsKeyDown(
-  event: {
-    key: string;
-    ctrlKey?: boolean;
-    metaKey?: boolean;
-    altKey?: boolean;
-    nativeEvent?: { isComposing?: boolean };
-    target?: unknown;
-    preventDefault?: () => void;
-  },
-  options: {
-    pending: PendingApproval[];
-    activeIndex: number;
-    platform?: string;
-  },
-): ApprovalsKeyAction {
-  if (event.nativeEvent?.isComposing) return null;
-  const targetEl = event.target as { closest?: (selector: string) => unknown } | null;
-  if (targetEl && typeof targetEl.closest === "function") {
-    if (targetEl.closest("input, textarea, select, button, a")) {
-      return null;
-    }
-  }
-
-  const isPlainKey = !event.ctrlKey && !event.metaKey && !event.altKey;
-
-  // Number keys 1..9: directly approve corresponding pending item (no modifier keys)
-  if (isPlainKey && /^[1-9]$/.test(event.key)) {
-    const idx = Number(event.key) - 1;
-    if (idx < options.pending.length) {
-      const item = options.pending[idx];
-      return item ? { type: "approve-item", index: idx, item } : null;
-    }
-  }
-
-  // A or Mod+Enter: batch approve
-  const isBatchKey =
-    (isPlainKey && (event.key === "a" || event.key === "A")) ||
-    (event.key === "Enter" && isModKeyPressed(event, options.platform));
-  if (isBatchKey && options.pending.length > 1) {
-    return { type: "approve-all" };
-  }
-
-  // Arrow navigation
-  if (event.key === "ArrowDown" || event.key === "ArrowRight") {
-    return { type: "next" };
-  }
-  if (event.key === "ArrowUp" || event.key === "ArrowLeft") {
-    return { type: "prev" };
-  }
-
-  // Enter on active item (plain Enter only, non-button target)
-  if (event.key === "Enter" && isPlainKey) {
-    const item = options.pending[options.activeIndex];
-    return item ? { type: "approve-active", index: options.activeIndex, item } : null;
-  }
-
-  return null;
-}
-
 
 export function Approvals({ pending, onApprove, onApproveAll, onReject, onAllowSession, onAllowProject, onFullAccess, busy = false }: ApprovalsProps) {
   const [focusedIndex, setFocusedIndex] = useState(0);
@@ -172,7 +96,6 @@ export function Approvals({ pending, onApprove, onApproveAll, onReject, onAllowS
       return outcome;
     });
   };
-
 
   const handleKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
     if (event.target !== event.currentTarget || event.nativeEvent.isComposing) return;

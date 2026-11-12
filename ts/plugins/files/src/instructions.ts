@@ -1,6 +1,6 @@
 /** Workspace AGENTS.md is bounded low-priority context, freshly read per request. */
 import { realpathSync, statSync } from "node:fs";
-import { dirname, isAbsolute, relative, resolve, sep } from "node:path";
+import { isAbsolute, relative, resolve } from "node:path";
 import { isDict, pyJsonLoads, pyLen, pySlice } from "@xueness/contracts";
 import type { AgentContext, AgentExtension, Awaitable, Row } from "@xueness/agent";
 import { readRegularBeneath } from "@xueness/sessions";
@@ -56,9 +56,6 @@ function boundedBody(root: string, path: string): string | null {
 
 /** Structured copy of each included file, for the ZCode-style `agentsMd` context reminder. */
 export interface InstructionBody { filePath: string; content: string }
-export async function loadWorkspaceInstructions(root: string, session: Row, check: (path: string) => Awaitable<boolean>, maxChars = 6000): Promise<[string, string[]]> {
-  const [guidance, sources] = await loadInstructionParts(root, session, check, maxChars); return [guidance, sources];
-}
 export async function loadInstructionParts(root: string, session: Row, check: (path: string) => Awaitable<boolean>, maxChars = 6000): Promise<[string, string[], InstructionBody[]]> {
   let workspace: string; try { workspace = realpathSync(root); if (!statSync(workspace).isDirectory()) return ["", [], []]; } catch { return ["", [], []]; }
   const limit = Number.isFinite(maxChars) ? Math.max(0, Math.trunc(maxChars)) : 0;

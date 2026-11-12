@@ -4,7 +4,7 @@
  * events fail with the same exception family (and therefore stage).
  */
 import {
-  PyTypeError, PyValueError, isDict, pyDictGet, pyJsonLoads, pySlice, pyTruthy, pyTypeName,
+  PyTypeError, PyValueError, isDict, pyJsonLoads, pySlice, pyTruthy, pyTypeName,
 } from "@xueness/contracts";
 import { ProviderTransportError, notifyStreamCallback } from "./errors.ts";
 import type { HttpResponse } from "./http.ts";

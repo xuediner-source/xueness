@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useReducer, useRef, useState } from 'react';
+import { useCallback, useEffect, useReducer, useRef, useState } from 'react';
 import { LoaderCircle, RefreshCw, Trash2, UserPlus } from 'lucide-react';
 import { t as tr, tf } from '../../i18n';
 import { addWorkbuddyAccount, deleteWorkbuddyAccount, listWorkbuddyAccounts, readWorkbuddyCredentialsFile, type CredentialFileError, type WorkbuddyAccount, type WorkbuddyAccountsResult } from './api';

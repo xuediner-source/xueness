@@ -3,7 +3,7 @@
   "id": "bots",
   "name": "Channel inbox",
   "description": "Opt-in Telegram allowlisted inbox and explicitly reviewed replies.",
-  "version": "0.2.0",
+  "version": "1.0.0",
   "defaultEnabled": false,
   "dependencies": ["sessions"],
   "capabilities": {

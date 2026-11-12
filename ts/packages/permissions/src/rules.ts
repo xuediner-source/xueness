@@ -53,20 +53,6 @@ export function parseRule(text: string): PermissionRule {
   return Object.freeze({ text: specifier === null ? tool : `${tool}(${specifier})`, tool, specifier });
 }
 
-/** Parse a rule list, collecting problems instead of throwing (for settings validation). */
-export function parseRules(texts: readonly unknown[]): { rules: PermissionRule[]; issues: string[] } {
-  const rules: PermissionRule[] = [];
-  const issues: string[] = [];
-  for (const [index, text] of texts.entries()) {
-    try {
-      rules.push(parseRule(text as string));
-    } catch (error) {
-      issues.push(`[${index}] ${(error as Error).message}`);
-    }
-  }
-  return { rules, issues };
-}
-
 /** Does the rule's tool part name this tool (by name, Gate kind or family)? */
 export function ruleCoversTool(rule: PermissionRule, tool: string, kind: string): boolean {
   if (rule.tool === "*") return true;

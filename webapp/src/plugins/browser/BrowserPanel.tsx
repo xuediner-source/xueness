@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { AppWindow, Camera, Globe, LoaderCircle, Lock, Maximize2, Minimize2, PanelRight, Plus, RotateCw, ShieldAlert, ShieldCheck, X } from 'lucide-react';
 import { get, post } from '../../xuenessApi';
 import { t as tr, tf } from '../../i18n';

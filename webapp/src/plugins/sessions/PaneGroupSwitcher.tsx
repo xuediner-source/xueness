@@ -1,4 +1,3 @@
-import React from 'react';
 import { Check, ChevronDown, PanelsTopLeft, X } from 'lucide-react';
 import { t as tr } from '../../i18n';
 import './pane-group-switcher.css';

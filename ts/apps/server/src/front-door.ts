@@ -13,7 +13,7 @@ import {
   applyHeadLimits, expireHead, frontSocketHead, HEADER_DEADLINE_MS, HEADER_IDLE_MS, headReceived, isHeadTimeout, trackHeadLimits,
   type HeadOutcomes,
 } from "./head-limits.ts";
-import { requestPath } from "./py-url.ts";
+import { requestPath } from "./loopback-url.ts";
 import { headRefusal, refuse } from "./request-head.ts";
 import { FRAMING_ERRORS, protocolReply, sendBody, sendJson, writeProtocolError } from "./respond.ts";
 import { ROOT_FILES, isStaticPath, serveStatic } from "./static.ts";

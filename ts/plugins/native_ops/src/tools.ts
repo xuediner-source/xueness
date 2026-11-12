@@ -94,10 +94,6 @@ export function nativeOpsTools(ctx: Context, binding: NativeOpsBinding): ToolDef
   return [...NATIVE_OPS_NAMES.map((name) => fileTool(ctx, name)), discoveryTool(binding)];
 }
 
-export function selectedNativeOps(binding: NativeOpsBinding, owner?: string): Set<string> {
-  return binding.selectedFor(owner);
-}
-
 export function nativeOpsSchema(rawName: NativeOpsRawName): NativeOpsSchemas["tools"][NativeOpsRawName] {
   return schemaData.tools[rawName];
 }

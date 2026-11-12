@@ -5,8 +5,11 @@ import { dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { execFileSync } from "node:child_process";
 import { cliReleaseManifest } from "../plugins/desktop/src/cli-distribution.ts";
+import { OPTIONAL_IDS } from "../packages/kernel/src/optional-packages.ts";
 
 const repo = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..");
+// Optional plugins ship as separately pinned packages; the CLI payload carries their manifests only.
+const optionalCode = new RegExp(`^(?:plugins/|node_modules/@xueness/plugin-)(?:${OPTIONAL_IDS.join("|")})/(?:src|assets)(?:/|$)`);
 if (process.platform !== "win32" || process.arch !== "x64") throw new Error("The initial standalone CLI artifact must be built on Windows x64");
 const output = resolve(process.argv[2] ?? join(repo, "desktop", "release", "cli"));
 const version = process.argv[3] ?? JSON.parse(readFileSync(join(repo, "ts", "package.json"), "utf8")).version;
@@ -21,7 +24,7 @@ cpSync(built, join(payload, "backend-ts"), { recursive: true, filter(path) {
   const rel = relative(built, path).replaceAll("\\", "/");
   return !path.endsWith(".map") && !/(?:^|\/)(?:tests?|__tests__)(?:\/|$)|\.(?:test|spec)\.[^.]+$/.test(rel)
     && !rel.startsWith("node_modules/.bin")
-    && !/^(?:plugins\/|node_modules\/@xueness\/plugin-)(?:subscriptions|model_monitor|workbuddy|tavern)\/(?:src|assets)(?:\/|$)/.test(rel);
+    && !optionalCode.test(rel);
 } });
 cpSync(join(repo, "desktop", "src", "cli-launcher.cjs"), join(payload, "cli-launcher.cjs"));
 for (const name of ["LICENSE", "NOTICE.md"]) cpSync(join(repo, name), join(payload, name));

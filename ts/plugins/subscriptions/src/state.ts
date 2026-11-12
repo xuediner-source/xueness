@@ -7,7 +7,6 @@ import { atomicWriteJson, isLink, protectPrivateDirectory } from "@xueness/sessi
 
 type Row = Record<string, unknown>;
 export const ASSETS = resolve(import.meta.dirname, "..", "assets");
-export const PACKAGE_ID = "xueness-subscriptions";
 export const PREFIX = "subscription.";
 const MAX_BYTES = 2_000_000;
 const DOCUMENTS = new Set(["auth.json", "connections.json", "public-models.json", "quota.json", "entitlements.json"]);

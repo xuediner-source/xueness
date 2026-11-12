@@ -53,8 +53,6 @@ export type AgentCapabilities = {
   allowHooks: boolean;
 };
 
-export type ResultT<T> = Result<T>;
-
 /**
  * Load all settings sections, merged over the caller's defaults.
  *
@@ -120,11 +118,3 @@ export function readAgentCapabilities(values: SettingsMap): AgentCapabilities {
   };
 }
 
-/** Build the settings patch for a capability state. */
-export function capabilityPatch(caps: AgentCapabilities): SettingsMap {
-  return {
-    allowMcp: caps.allowMcp === true,
-    allowSubagents: caps.allowSubagents === true,
-    allowHooks: caps.allowHooks === true,
-  };
-}

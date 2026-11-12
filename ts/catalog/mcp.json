@@ -1,7 +1,7 @@
 {
   "id": "mcp",
   "name": "MCP 连接",
-  "description": "stdio/HTTP MCP 工具、服务器配置与连接诊断。",
+  "description": "stdio、Streamable HTTP 与旧 SSE 的 MCP 工具；每轮按需连接，轮末关闭。",
   "version": "1.0.0",
   "apiVersion": 1,
   "defaultEnabled": true,
@@ -62,7 +62,6 @@
   ],
   "frontendModules": [
     "plugins/mcp/index.tsx",
-    "plugins/mcp/McpDiagnostics.tsx",
     "plugins/mcp/ElicitationForm.tsx",
     "plugins/mcp/elicitationSubscription.ts",
     "plugins/mcp/AppsUiHost.tsx"

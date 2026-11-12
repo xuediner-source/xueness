@@ -1,7 +1,7 @@
 /** Bounded, guarded JSON intake for routes migrated from Python. */
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { isDict, pyDecodeUtf8, pyJsonLoads, pyStrip } from "@xueness/contracts";
-import { requestPath } from "./py-url.ts";
+import { requestPath } from "./loopback-url.ts";
 
 export class IntakeError extends Error {
   readonly status: number;

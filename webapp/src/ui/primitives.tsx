@@ -185,45 +185,11 @@ export function EmptyState({ title, hint, icon, action, tone = "neutral", compac
   );
 }
 
-export function CodeBlock({
-  text,
-  tone = "neutral",
-}: {
-  text: string;
-  tone?: "neutral" | "add" | "remove";
-}) {
-  return (
-    <pre className="xn-code" data-testid="primitive-code" data-tone={tone}>
-      {text}
-    </pre>
-  );
-}
-
 export function Spinner({ label }: { label?: string } = {}) {
   return (
     <div className="xn-spinner" role="status" data-testid="primitive-spinner">
       <span className="xn-spinner__dot" />
       {label && <span className="xn-spinner__label">{label}</span>}
-    </div>
-  );
-}
-
-export function AppShell({
-  header,
-  sidebar,
-  children,
-}: {
-  header: React.ReactNode;
-  sidebar?: React.ReactNode;
-  children: React.ReactNode;
-}) {
-  return (
-    <div className="xn-shell" data-testid="primitive-shell">
-      <header className="xn-shell__header">{header}</header>
-      <div className="xn-shell__body">
-        {sidebar && <aside className="xn-shell__sidebar">{sidebar}</aside>}
-        <main className="xn-shell__main">{children}</main>
-      </div>
     </div>
   );
 }

@@ -81,13 +81,13 @@ Windows 工作区输入目录仅读取 Git 分支元数据，不在切换时扫�
 
 工作台根节点和原生表单控件统一继承系统字体，Windows 中文优先使用微软雅黑 UI；小高度窗口收紧开始页留白。市场与自动化使用同一页面层级，市场内置能力显示可搜索的本地化名称，外部目录保留自身名称和描述。
 
-品牌图标保留原来的量子 X 造型，统一为黑底、白色实线与中性灰概率点。矢量源在 `webapp/public/xueness-icon.svg`，PNG/ICO 由 `node tools/build_brand_assets.mjs [包含 node_modules/sharp 的目录]` 生成；Sharp 只用于生成资产，不属于应用运行时。Windows 托盘使用包含 16–256px 的 ICO。
+品牌图标保留原来的量子 X 造型，统一为黑底、白色实线与中性灰概率点。矢量源在 `webapp/public/xueness-icon.svg`，PNG/ICO 是由它生成后提交的资产；生成脚本和 Sharp 不在本仓库，也不属于应用运行时。Windows 托盘使用包含 16–256px 的 ICO。
 
 跨平台文件锁是已有 lease/写锁基础设施的适配。终端、后台命令管道与机器资源检测的 Windows 实现分别归 terminal、workflows、diagnostics，未堆入 Agent 内核。
 
 ## 从源码构建
 
-需要目标系统和 Node.js 24.11+；`check_app.py`、`checksums.py` 等检查脚本只用 Python 3 标准库。随包 Node 运行时取自构建机，因此 Windows 安装包必须在 Windows 构建；Intel Mac 与 Apple Silicon 也使用各自架构运行时。
+需要目标系统和 Node.js 24.11+；校验和脚本 `checksums.py` 只用 Python 3 标准库。随包 Node 运行时取自构建机，因此 Windows 安装包必须在 Windows 构建；Intel Mac 与 Apple Silicon 也使用各自架构运行时。
 
 ```sh
 npm --prefix webapp ci
@@ -96,17 +96,15 @@ npm --prefix ts ci
 node desktop/node_modules/electron/install.js
 npm --prefix ts run check
 npm --prefix webapp run build
-npm --prefix desktop test
 # Mac：选择当前机器架构
 npm --prefix desktop run dist:mac -- --arm64
 # Intel Mac 使用 --x64
 # Windows：
 npm --prefix desktop run dist:win -- --x64
-python desktop/scripts/check_app.py
-# Windows：检查安装目录中的随包 Node、TS 依赖和原生会话/附件请求
-npm --prefix ts run test:packaged
 python desktop/scripts/checksums.py
 ```
+
+打包后的应用检查、安装目录检查和浏览器回归不在本仓库，按[私有验证库](https://github.com/xuediner-source/xueness-private-tests)的说明运行。
 
 不打包、直接从源码启动（`npm --prefix desktop start`）时，后端运行时按顺序选择：设置了 `XUENESS_FRONT_DOOR_NODE` 就使用它（不可用或低于 24.11 时直接报出原因，不会悄悄换掉）；否则使用 PATH 上 24.11+ 的 `node`；都没有时使用 Electron 自带的 Node（`ELECTRON_RUN_AS_NODE`），因此源码目录无需另装系统 Node。宿主启动后立即清除该变量，代理执行的命令不会继承它。后端在报告 `ready` 之前的错误输出（尾部 4KB）会显示在启动失败对话框里；`ready` 之后的请求与模型输出仍不进入桌面日志。
 
@@ -114,7 +112,7 @@ python desktop/scripts/checksums.py
 
 `.github/workflows/desktop-build.yml` 提供手动触发的 Windows x64、Intel Mac x64 与 Apple Silicon arm64 构建、TS 检查、打包应用检查和校验和产物。源码上传和 CI 构建不自动创建 GitHub Release 或部署服务。
 
-`npm --prefix webapp run test:browser:conversation` 使用生产资产与隔离后端验证会话、权限确认、编辑/反馈、长历史和停止队列；通过 `XUENESS_CONVERSATION_PLATFORM=windows|macos` 检查两种平台响应。`node webapp/verify-desktop-parity.mjs` 检查原生按钮避让、⌘/Ctrl 快捷键、主题及更新帮助。浏览器中的平台响应验证与既有三平台原生构建验证分别记录；fixture 不代表真实模型性能。验收不读取用户状态。
+私有验证库中的会话浏览器回归使用生产资产与隔离后端验证会话、权限确认、编辑/反馈、长历史和停止队列，并分别检查 Windows 与 macOS 两种平台响应；桌面一致性检查覆盖原生按钮避让、⌘/Ctrl 快捷键、主题及更新帮助。浏览器中的平台响应验证与既有三平台原生构建验证分别记录；fixture 不代表真实模型性能。验收不读取用户状态。
 
 打包应用检查会使用隔离数据打开完整工作台，并启动真实的浏览器 worker 验证驱动与内置 Node；构建机器需要预装 Chrome/Edge。不会发送模型请求。
 
@@ -138,8 +136,8 @@ Xueness 没有复制上游桌面源码、品牌或图标，也没有加入上游
 
 Mac 更新下载使用 Electron `net.request`，在每次重定向事件中同步核验 HTTPS、端口与固定 GitHub 主机白名单后才继续。下载保留系统代理、流式写入、取消、文件大小限制与 SHA-256 检查；禁止目标不会收到请求。此前 0.1.2/0.1.3 使用 `net.fetch` 的手动重定向，可能显示 `Redirect was cancelled`。已受此问题影响的旧 Mac 客户端需要替换一次应用，修复随后随 0.1.4 客户端提供。应用替换保留数据目录。
 
-源码构建还需运行 `node desktop/scripts/check_electron_update_transport.cjs`，该检查启动真实 Electron，在隔离 loopback 服务中验证重定向下载、取消与禁止跳转目标；不请求模型或读取用户状态。完整公网下载的验证结果记录在发布说明中，loopback 回归不等于公网更新验证。
+更新传输检查（在私有验证库中）启动真实 Electron，在隔离 loopback 服务中验证重定向下载、取消与禁止跳转目标；不请求模型或读取用户状态。完整公网下载的验证结果记录在发布说明中，loopback 回归不等于公网更新验证。
 
-Windows 更新页显示实际传输字节、下载速度和预计剩余时间，缺失测量时明确保持未知。GitHub 线路影响下载速度，不能保证各地网络相同；这些指标不表示安装器已经运行。原生 Windows CI 另运行 `node desktop/scripts/check_windows_github_download.cjs`，通过真正的 NSIS 网络执行器下载公开稳定版并完成内置 SHA-512 校验，使用隔离旧版本与缓存且不执行安装器；安装、重启和数据保留由独立 loopback NSIS 验证负责。
+Windows 更新页显示实际传输字节、下载速度和预计剩余时间，缺失测量时明确保持未知。GitHub 线路影响下载速度，不能保证各地网络相同；这些指标不表示安装器已经运行。私有验证库的原生 Windows 检查另通过真正的 NSIS 网络执行器下载公开稳定版并完成内置 SHA-512 校验，使用隔离旧版本与缓存且不执行安装器；安装、重启和数据保留由独立 loopback NSIS 验证负责。
 
 起始页没有历史记录时仅显示快捷操作；最近项目和会话有实际记录后才显示，单组铺满、双组并排并在窄屏堆叠。

@@ -109,9 +109,6 @@ export async function reconcileLocalGuidanceReceipt(sessionId: string, enabled?:
   pendingOperations.delete(sessionId);
   return { result: 'accepted', operation: entry.operation, requestId: entry.requestId, receipt: result.receipt };
 }
-export async function reconcileLocalGuidance(sessionId: string, enabled?: () => boolean): Promise<boolean> {
-  return (await reconcileLocalGuidanceReceipt(sessionId, enabled)).result !== 'unknown';
-}
 
 export async function guideCurrentTurn(sessionId: string, expectedTurnId: string, text: string,
   preparedToken?: string, enabled?: () => boolean): Promise<SubmissionResult<AdmittedInput>> {

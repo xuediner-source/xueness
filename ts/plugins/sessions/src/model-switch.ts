@@ -1,6 +1,6 @@
 /** Next-request model selection, never retargeting a request already in flight. */
 import type { AgentProvider, Row } from "@xueness/agent";
-import { isDict, pyDeepCopy, pyStrip, pyTruthy, PyValueError } from "@xueness/contracts";
+import { isDict, pyDeepCopy, pyStrip, PyValueError } from "@xueness/contracts";
 import type { Session } from "@xueness/sessions";
 const ALIASES: Record<string, string> = { providerId: "provider_id", reasoningEffort: "reasoning_effort", runtimeProfile: "runtime_profile", saveDefault: "save_default" };
 const KEYS = ["provider_id", "model", "reasoning_effort", "selection", "save_default", "source", "runtime_profile"];

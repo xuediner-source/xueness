@@ -1,5 +1,5 @@
 /** Explicit lightweight JSON protocol; no executable intent is mined from prose. */
-import { isDict, pyJsonDumps, pyJsonLoads, pySlice, uuid4Hex } from "@xueness/contracts";
+import { isDict, pyJsonDumps, pyJsonLoads, uuid4Hex } from "@xueness/contracts";
 import { envelopeText, failure, finiteJsonText, strictJson } from "@xueness/providers";
 type Row = Record<string, unknown>;
 export const runtimeToolName = (schema: Row): string => isDict(schema.function) && typeof schema.function.name === "string" ? schema.function.name : "";

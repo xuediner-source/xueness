@@ -72,16 +72,6 @@ export function IconGear(props: IconProps) {
   );
 }
 
-/** 斜杠命令 */
-export function IconSlash(props: IconProps) {
-  return (
-    <Svg {...props}>
-      <path d="M17 5 7 19" />
-      <circle cx="12" cy="12" r="9.2" strokeOpacity="0.45" />
-    </Svg>
-  );
-}
-
 /** 附加上下文（回形针） */
 export function IconPaperclip(props: IconProps) {
   return (
@@ -197,10 +187,6 @@ export function IconWorkflow(props: IconProps) {
   return <Svg {...props}><rect x="3" y="3" width="6" height="6" rx="1.5" /><rect x="15" y="15" width="6" height="6" rx="1.5" /><path d="M6 9v9h9M9 6h9v9" /></Svg>;
 }
 
-export function IconModel(props: IconProps) {
-  return <Svg {...props}><rect x="6" y="6" width="12" height="12" rx="3" /><path d="M9 2v4m6-4v4M9 18v4m6-4v4M2 9h4m-4 6h4m12-6h4m-4 6h4M10 10h4v4h-4z" /></Svg>;
-}
-
 export function IconTerminal(props: IconProps) {
   return <Svg {...props}><rect x="3" y="4" width="18" height="16" rx="3" /><path d="m7 9 3 3-3 3m6 0h4" /></Svg>;
 }
@@ -229,14 +215,3 @@ export function IconXuenessMark({ size = 20, className, title }: IconProps): Rea
   );
 }
 
-/** Mark inside a rounded tile — the app-icon form used at larger sizes. */
-export function IconXuenessGlyph({ size = 28, className, title }: IconProps): React.JSX.Element {
-  return (
-    <Svg size={size} className={className} title={title} strokeWidth={1.8}>
-      <rect x="2.4" y="2.4" width="19.2" height="19.2" rx="5.4" opacity="0.25" />
-      <line x1="6.8" y1="6.8" x2="17.2" y2="17.2" />
-      <line x1="17.2" y1="6.8" x2="6.8" y2="17.2" strokeDasharray="0.1 3.4" opacity="0.65" />
-      <circle cx="12" cy="12" r="2.2" strokeWidth="1.4" />
-    </Svg>
-  );
-}

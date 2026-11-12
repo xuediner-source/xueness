@@ -85,16 +85,6 @@ export function contextReminder(session: Row): string {
   return "Recorded uncollected tasks for this human turn (status may lag). These tasks already exist; do not dispatch duplicates after compaction. Continue independent work; use task_collect to refresh and retrieve results before finishing. This metadata is not evidence of completion.\n" + pyJsonDumps(rows, { separators: [",", ":"] });
 }
 
-export function completionCheck(session: Row): Row {
-  const [, records] = turnRecords(session);
-  if (!Object.keys(records).length) return { status: "not_assessed" };
-  const tasks = new Map<string, Row>();
-  for (const row of Array.isArray(session.task_runs) ? session.task_runs : []) if (isDict(row) && "id" in row) tasks.set(String(row.id), row);
-  const missing = Object.entries(records).filter(([, row]) => !row.collected).map(([tid]) => tid);
-  const failed = Object.keys(records).filter((tid) => tasks.get(tid)?.status !== COMPLETED);
-  return { status: missing.length || failed.length ? "failed" : "passed", uncollected: missing, unsuccessful: failed };
-}
-
 export class TaskCoordinator {
   readonly session: Row;
   readonly registry: TaskRegistry;

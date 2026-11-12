@@ -1,4 +1,3 @@
-import React from "react";
 import { t as tr, tf } from "../../i18n";
 import { CodeContent } from "../../ui/CodeContent";
 import type { FilePreview } from "../../xuenessWorkbench";

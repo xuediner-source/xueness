@@ -6,7 +6,7 @@
  */
 // Layers (styles/layers.css) set precedence between these sheets; within a layer, a later import wins ties.
 import "./styles.css";
-import React, { lazy, Suspense } from "react";
+import { lazy, Suspense } from "react";
 import { XuenessWorkbenchContainer } from "./XuenessWorkbenchContainer";
 import { RegionBoundary } from "./ui/primitives";
 import "./styles/workbench.css";

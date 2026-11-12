@@ -9,7 +9,7 @@
 import { timingSafeEqual } from "node:crypto";
 import type { IncomingHttpHeaders } from "node:http";
 import { pyStrip } from "@xueness/contracts";
-import { isLoopbackAddress, parseNetloc, parsePort, splitSchemeNetloc } from "./py-url.ts";
+import { isLoopbackAddress, parseNetloc, parsePort, splitSchemeNetloc } from "./loopback-url.ts";
 
 export type Authority = readonly [hostname: string, port: number];
 export type HeaderValues = Record<string, readonly string[] | undefined>;

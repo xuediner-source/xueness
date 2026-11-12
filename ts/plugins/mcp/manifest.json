@@ -3,7 +3,7 @@
   "id": "mcp",
   "name": "MCP 连接",
   "description": "stdio、Streamable HTTP 与旧 SSE 的 MCP 工具；每轮按需连接，轮末关闭。",
-  "version": "0.2.0",
+  "version": "1.0.0",
   "defaultEnabled": true,
   "capabilities": {
     "exec": [
@@ -51,7 +51,6 @@
   ],
   "frontendModules": [
     "plugins/mcp/index.tsx",
-    "plugins/mcp/McpDiagnostics.tsx",
     "plugins/mcp/ElicitationForm.tsx",
     "plugins/mcp/elicitationSubscription.ts",
     "plugins/mcp/AppsUiHost.tsx"

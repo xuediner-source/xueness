@@ -2,7 +2,7 @@ import { existsSync, lstatSync, mkdirSync, readdirSync, statSync, writeFileSync 
 import { isAbsolute, join, relative, resolve } from "node:path";
 import { isDict, pyJsonDumps, pyJsonLoads, PyValueError } from "@xueness/contracts";
 import {
-  foldHostPath, historyPath, isLink, readRegularBytes, realish, scan, SessionStore, SESSIONS_SAVE_HOOK,
+  foldHostPath, historyPath, readRegularBytes, realish, scan, SessionStore, SESSIONS_SAVE_HOOK,
   type SaveHook, type Session, type SessionStoreOptions,
 } from "@xueness/sessions";
 import {
@@ -277,7 +277,6 @@ export async function repairSessions(store: SessionStore, options: RepairSession
   }
   return { repaired, ok, unrepairable, dryRun: options.dryRun === true, reports };
 }
-
 
 interface ParsedCommand {
   state: string;

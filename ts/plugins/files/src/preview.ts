@@ -179,11 +179,6 @@ export function workspaceBinaryPreview(root: string, relative: string, officePre
   return { path: stripped, size, truncated: false, embed: { mime: spec.mime, dataUrl } };
 }
 
-/** `workspace_image_preview`: every whitelisted binary kind, not images only. */
-export function workspaceImagePreview(root: string, relative: string, officePreview?: OfficePreview): Record<string, unknown> {
-  return workspaceBinaryPreview(root, relative, officePreview);
-}
-
 /** Suffix Python uses to choose the binary branch (`Path.suffix.lower()`). */
 export function previewSuffix(relative: string): string {
   const stripped = typeof relative === "string" ? pyStrip(relative) : "";

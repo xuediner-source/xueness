@@ -19,5 +19,3 @@ export * from "./compact/index.ts";
 export * from './script/dynamic-types.ts';
 export * from './script/dynamic-compile.ts';
 export * from './script/dynamic-evaluate.ts';
-export * from './script/dynamic-language.ts';
-export * from './script/dynamic-harness.ts';

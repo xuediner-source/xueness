@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { startSessionPolling } from '../sessions/SessionPolling';
 import { get, post } from '../../xuenessApi';
 import { IconWorkflow, IconTerminal, IconFolder, IconNewTask } from '../../ui/icons';

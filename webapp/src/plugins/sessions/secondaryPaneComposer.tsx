@@ -2,7 +2,7 @@
 // This module loads with the secondary conversation chunk. Drafts use
 // pane-secondary: so they stay apart from the primary session: draft.
 // Send, queue and stop go through command_ack, and only while sessions is effective.
-import React, { useEffect, useRef, useState, useSyncExternalStore } from 'react';
+import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { t as tr } from '../../i18n';
 import { getRunChoices, setRunChoices, type RunChoices } from '../../xuenessBridge';
 import { prepareComposer, type ComposerInput } from '../../xuenessComposer';

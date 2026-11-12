@@ -1,12 +1,10 @@
-> Historical reference from 2026-10-12, before the TypeScript/Z8 migration; current behavior is defined by [README.md](../README.md) and [ts/docs/z8-guarded-goal-memory.md](session-goals-and-context-compaction.md).
-
 # Deploying Xueness
 
-运行入口见 [README](../README.md#one-command-local-deploy)。后端需要 Python 3.10+，只使用标准库；仓库已包含 `webapp/dist`，运行预构建界面不需要 Node.js。
+运行入口见 [README](../README.md#one-command-local-deploy)。后端是 TypeScript，需要 Node.js 24.11+（直接运行源码，不需要编译）；仓库已包含 `webapp/dist`，运行预构建界面不需要重新构建前端。
 
 ## 本机运行
 
-`./install.sh` 默认在 `127.0.0.1:8137` 启动 Web，创建私有 `.xueness-data` 目录，不进行系统级安装。也可使用 `python3 -m xueness.web --port 8138`。端口已占用时打开已有服务或改用其它端口，不覆盖现有进程。
+`./install.sh` 默认在 `127.0.0.1:8137` 启动 Web，创建私有 `.xueness-data` 目录，不进行系统级安装。也可使用 `bin/xueness-web --port 8138`。端口已占用时打开已有服务或改用其它端口，不覆盖现有进程。
 
 在设置中配置自己的真实模型。会话、模型配置、凭据、工作区和导出 journal 均属于本机私有数据，不上传到源码仓库。
 

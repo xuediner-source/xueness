@@ -82,7 +82,6 @@ export const XUENESS_PLUGIN_REGISTRY = {
 } as const satisfies Record<string, { name: string; description: string; panels: readonly PluginPanel[] }>;
 
 export type XuenessPluginId = keyof typeof XUENESS_PLUGIN_REGISTRY;
-export const FRONTEND_PLUGIN_IDS = Object.keys(XUENESS_PLUGIN_REGISTRY) as XuenessPluginId[];
 
 export const PLUGIN_PANEL_LABELS: Record<PluginPanel, string> = {
   chat: "会话",

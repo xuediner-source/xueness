@@ -14,7 +14,6 @@
 type Dict = Record<string, unknown>;
 
 export type ExecutionMode = "standard" | "lightweight";
-export const EXECUTION_MODES: readonly ExecutionMode[] = ["standard", "lightweight"];
 
 export interface CapabilityReason {
   /** Stable machine code (`subscriptions.standard_only`); UIs and tests key on it. */
@@ -131,22 +130,6 @@ export function announceExecutionCapabilities(record: Dict, flags: CapabilityFla
   return {
     providerId: String(record.id ?? ""), model: String(record.model ?? ""), source: String(record.source ?? "saved"),
     modes, requested: asked, effective, fallback, notes,
-  };
-}
-
-/**
- * Resolve a user selection against an announcement: keep the requested mode
- * when it is available, otherwise degrade to the announced effective mode so
- * the model still runs — the choice and its explanation travel together.
- */
-export function degradeSelection(requested: unknown, announcement: ExecutionAnnouncement): { effective: ExecutionMode; fallback: FallbackNotice | null } {
-  if (!isMode(requested)) return { effective: announcement.effective, fallback: announcement.fallback };
-  if (requested === announcement.effective) return { effective: announcement.effective, fallback: announcement.fallback };
-  const mode = announcement.modes.find((entry) => entry.mode === requested);
-  if (mode?.available) return { effective: requested, fallback: null };
-  return {
-    effective: announcement.effective,
-    fallback: { from: requested, to: announcement.effective, reason: mode?.reasons[0]?.detail ?? `${requested} is not available for this model` },
   };
 }
 

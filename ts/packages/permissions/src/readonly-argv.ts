@@ -8,14 +8,11 @@ import {
   READONLY_COMMAND_POLICIES,
   READONLY_MULTIWORD_COMMAND_POLICIES,
 } from "./readonly-argv-commands.ts";
-import { isSedInPlaceOption } from "./readonly-argv-callbacks.ts";
 import {
   evaluateDirectReadonlyArgv,
-  isFindWriteOption,
 } from "./readonly-argv-direct.ts";
 import { isArgvAllowedByPolicy } from "./readonly-argv-match.ts";
 import {
-  hasDangerousGitGlobalOption,
   isGitReadOnlyCommand,
 } from "./readonly-argv-git.ts";
 import {
@@ -56,16 +53,6 @@ export function evaluateBashReadonlyPolicy(
   return true;
 }
 
-export function hasKnownBashWriteOption(commandPart: ReadonlyCommandPart): boolean {
-  const argv = stripSafeCommandWrappers(commandPart.argv);
-  const commandName = argv[0];
-  if (commandName === "sed") return argv.some(isSedInPlaceOption);
-  if (commandName === "find") return argv.some(isFindWriteOption);
-  if (commandName === "tree") return treeArgvHasOutputOption(argv);
-  if (commandName === "git") return hasDangerousGitGlobalOption(argv);
-  return false;
-}
-
 function evaluateReadonlyPrefixPolicy(
   argv: readonly string[],
   commandText: string,
@@ -100,13 +87,3 @@ function argsContainUnsafeSafeFlagText(args: readonly string[]): boolean {
   );
 }
 
-function treeArgvHasOutputOption(argv: readonly string[]): boolean {
-  for (let index = 1; index < argv.length; index += 1) {
-    const word = argv[index];
-    if (!word) continue;
-    if (word === "--") return false;
-    if (word === "-o" || word === "--output" || word.startsWith("--output=")) return true;
-    if (word.startsWith("-") && !word.startsWith("--") && word.slice(1).includes("o")) return true;
-  }
-  return false;
-}

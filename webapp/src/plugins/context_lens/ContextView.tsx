@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { categories, categoryLabel, compact, duration, format, label } from './labels';
 import { DonutCard, color } from './charts';
 import { DashboardSummary } from './DashboardSummary';

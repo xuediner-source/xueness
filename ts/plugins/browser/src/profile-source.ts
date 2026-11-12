@@ -4,18 +4,11 @@
  */
 import { closeSync, constants, fstatSync, lstatSync, openSync, readSync, readdirSync, realpathSync, type Dirent, type Stats } from "node:fs";
 import { join } from "node:path";
-import { COPY_PATHS, MAX_COPY_BYTES, MAX_COPY_FILES, MAX_DIRECTORY_DEPTH, MAX_LOCAL_STATE_BYTES, ProfileError, exists, isLink, sameSignature, signature, type FileSig } from "./profile-error.ts";
+import { COPY_PATHS, MAX_COPY_BYTES, MAX_COPY_FILES, MAX_DIRECTORY_DEPTH, MAX_LOCAL_STATE_BYTES, ProfileError, isLink, sameSignature, signature, type FileSig } from "./profile-error.ts";
 
 const NOFOLLOW = process.platform === "win32" ? 0 : constants.O_NOFOLLOW ?? 0;
 export interface SourceRecord { kind: "file" | "directory"; sig: FileSig }
 export type SourceSnapshot = Map<string, SourceRecord>;
-
-export function relativeParts(relative: string): string[] {
-  const value = process.platform === "win32" ? relative.replaceAll("\\", "/") : relative;
-  const parts = value.split("/");
-  if (!parts.length || parts.some((part) => part === "" || part === "." || part === ".." || part.includes("\0") || part.includes(":") || part.includes("/") || (process.platform === "win32" && part.includes("\\")))) throw new ProfileError("source_invalid");
-  return parts;
-}
 
 /** lstat each component. A symlink or a non-directory parent is `source_invalid`; a missing leaf is null. */
 export function sourceInfo(root: string, parts: readonly string[]): Stats | null {

@@ -17,6 +17,13 @@ const appearances = Object.fromEntries(Object.entries({
   return [palette, { source, file, asset: `assets/appearance-${palette}-${hash}.css` }];
 }));
 
+// Optional plugins get their own chunk, which the packager moves out of the core build. The kernel's
+// allowlist is the one list of them; it is read as text because this config cannot import backend code.
+const optionalIds = /OPTIONAL_IDS = \[([^\]]+)\]/.exec(readFileSync(resolve(import.meta.dirname, '../ts/packages/kernel/src/optional-packages.ts'), 'utf8'))?.[1]
+  .split(',').map(item => item.trim().replace(/["']/g, '')).filter(Boolean) ?? [];
+if (!optionalIds.length) throw new Error('Could not read OPTIONAL_IDS from the kernel');
+const optionalPlugin = new RegExp(`/src/plugins/(${optionalIds.join('|')})/`);
+
 export default defineConfig({
   plugins: [react(), {
     name: 'xueness-prepaint-theme',
@@ -43,7 +50,7 @@ export default defineConfig({
   build: { rollupOptions: {
     input: { workbench: resolve(import.meta.dirname, 'index.html'), tray: resolve(import.meta.dirname, 'tray.html') },
     output: { onlyExplicitManualChunks: true, manualChunks(id) {
-      const optional = /\/src\/plugins\/(subscriptions|model_monitor|workbuddy|tavern)\//.exec(id.replaceAll('\\', '/'));
+      const optional = optionalPlugin.exec(id.replaceAll('\\', '/'));
       if (optional) return `optional-${optional[1]}`;
       // Give the shared React runtime a stable cache identity across plugin chunks.
       if (/node_modules\/(react|react-dom|scheduler)\//.test(id)) return 'react-vendor';

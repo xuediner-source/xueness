@@ -53,10 +53,6 @@ function normalizeGitArgv(argv: readonly string[]): readonly string[] | undefine
   return undefined;
 }
 
-export function hasDangerousGitGlobalOption(argv: readonly string[]): boolean {
-  return argv.some(hasDangerousGitGlobalOptionWord);
-}
-
 function hasDangerousGitGlobalOptionWord(word: string): boolean {
   if (hasDangerousAttachedGitShortOptionWord(word)) return true;
   if (GIT_GLOBAL_DANGEROUS_FLAGS.has(word)) return true;

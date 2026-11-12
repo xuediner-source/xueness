@@ -12,23 +12,6 @@ export type DynamicColdResume =
   | 'start_queued'        // settled draft/pause; an explicit start re-queues it
   | 'settled';            // terminal; reuse results or amend into a new draft
 
-/** Allowed status transitions; `completed`, `failed` and `cancelled` are terminal. */
-export const DYNAMIC_RUN_LIFECYCLE: Readonly<Record<string, readonly string[]>> = Object.freeze({
-  draft: ['queued', 'cancelled'],
-  queued: ['running', 'interrupted', 'cancelled'],
-  running: ['completed', 'failed', 'cancelled', 'interrupted', 'paused', 'awaiting_user'],
-  awaiting_user: ['paused', 'cancelled', 'interrupted'],
-  paused: ['queued', 'cancelled', 'interrupted'],
-  interrupted: ['queued', 'cancelled'],
-  completed: [],
-  failed: [],
-  cancelled: [],
-});
-
-export function transitionAllowed(from: string, to: string): boolean {
-  return DYNAMIC_RUN_LIFECYCLE[from]?.includes(to) === true;
-}
-
 /**
  * The decision for a run found at rest. `hasLiveOwner` is the runner lease
  * probe: only `running`/`queued` runs can have one, and an owner makes any

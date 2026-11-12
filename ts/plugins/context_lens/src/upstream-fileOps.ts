@@ -42,10 +42,6 @@ export function opBearingTool(tool: string): boolean {
   return tool === 'str_replace_editor' || kindOfTool(tool) !== null
 }
 
-export function rawArgsNeeded(tool: string): boolean {
-  return opBearingTool(tool) || tool === 'run_code'
-}
-
 /** The operation's target path; for a pathless search it is the searched pattern itself. */
 export function pathOfArgs(tool: string, args: Record<string, unknown> | null): string | null {
   if (args === null) return null

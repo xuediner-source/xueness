@@ -1,11 +1,10 @@
 /** MCP tools, lifecycle and metadata runtime for one plugin activation. */
 import { isDict, pyJsonDumps, type JsonSchema } from "@xueness/contracts";
 import type { ToolDefinition, ToolResult } from "@xueness/engine-tools";
-import { definePlugin, type BundledPlugin, type Context } from "@xueness/kernel";
+import { definePlugin, type BundledPlugin } from "@xueness/kernel";
 import manifest from "../manifest.json" with { type: "json" };
 import { McpClient } from "./client.ts";
 import { projectResourceContents } from "./content.ts";
-import { responseFor } from "./elicitation-protocol.ts";
 import { CATALOG_CHARS, clipChars, mcpSubject, parseNamespaced, sanitizeNamePart, toolSchema, type Row } from "./names.ts";
 import { McpConnectionPool, type McpActivityEvent, type McpConnectionLease, type McpRuntimeBinding } from "./runtime.ts";
 

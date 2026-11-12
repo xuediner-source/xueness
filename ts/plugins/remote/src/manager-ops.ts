@@ -6,7 +6,6 @@ import { RemoteValueError } from "./manager.ts";
 import { TransportError } from "./client.ts";
 
 export const REQUIRED_METHODS = Object.freeze(["sessions/index", "command/execute", "command/query", "conversation/snapshot", "conversation/resume", "session/read", "response/read"]);
-const REQUIRED = new Set<string>(REQUIRED_METHODS);
 export const ALLOWED_METHODS = Object.freeze([
   "browser/cancel-open", "browser/list", "browser/open", "browser/action", "browser/cancel", "browser/close",
   "terminal/cancel-open", "terminal/list", "terminal/open", "terminal/read", "terminal/input", "terminal/resize", "terminal/close",
@@ -114,10 +113,6 @@ export function acceptHello(hello: unknown): hello is HelloFacts {
 
 export function acceptIndex(index: unknown, identity: string): boolean {
   return isDict(index) && index.workspaceIdentity === identity && Array.isArray(index.sessions) && index.sessions.length <= 10000;
-}
-
-export function hasRequiredMethods(methods: unknown): boolean {
-  return Array.isArray(methods) && [...REQUIRED].every((method) => methods.includes(method));
 }
 
 function valueOrOs(error: unknown): boolean {

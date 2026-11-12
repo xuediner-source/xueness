@@ -42,7 +42,6 @@ function full(pattern: RegExp, text: string): boolean {
 
 const norm = (path: string): string => WINDOWS ? path.replaceAll("/", "\\").toLowerCase() : path;
 const same = (a: string, b: string): boolean => norm(a) === norm(b);
-const rstripSlash = (text: string): string => text.replace(/\/+$/u, "");
 
 /** `PurePath` pieces with `.` collapsed and `..` kept, so the jail sees the same parts Python does. */
 function pure(raw: string): { absolute: boolean; segments: string[]; name: string; parent: string } {
@@ -132,21 +131,6 @@ function allowedRoots(options: CloneOptions): string[] {
 /** `_is_link`: a symlink or junction. An entry that cannot be inspected fails closed. */
 function isLink(path: string): boolean {
   try { return lstatSync(path).isSymbolicLink(); } catch (error) { return (error as NodeJS.ErrnoException).code !== "ENOENT"; }
-}
-
-export function suggestedName(url: unknown): string {
-  if (typeof url !== "string") return "";
-  let value = rstripSlash(pyStrip(url));
-  if (!value) return "";
-  const scheme = value.indexOf("://");
-  if (scheme >= 0) {
-    const remainder = value.slice(scheme + 3);
-    const slash = remainder.indexOf("/");
-    value = slash >= 0 ? remainder.slice(slash + 1) : "";
-  } else if ((value.split("/")[0] ?? "").includes(":")) value = value.slice(value.indexOf(":") + 1);
-  let tail = value.slice(value.lastIndexOf("/") + 1);
-  if (tail.endsWith(".git")) tail = tail.slice(0, -4);
-  return full(SAFE_NAME, tail) ? tail : "";
 }
 
 export function validatedUrl(url: unknown): string {

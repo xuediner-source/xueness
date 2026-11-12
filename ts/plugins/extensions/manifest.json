@@ -3,7 +3,7 @@
   "id": "extensions",
   "name": "Extension marketplace",
   "description": "Browse resource manifests and download host-pinned official plugins from GitHub.",
-  "version": "0.2.0",
+  "version": "1.0.0",
   "defaultEnabled": true,
   "dependencies": [],
   "capabilities": { "fs": { "read": ["state"], "write": ["state"] }, "net": { "connect": ["raw.githubusercontent.com"] } },

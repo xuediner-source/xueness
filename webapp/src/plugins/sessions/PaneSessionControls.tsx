@@ -1,6 +1,6 @@
 import { setSessionPermissionMode } from './useLivePermissionMode';
 // sessions.pane_layout: all mutations are bound to this leaf and its runtime.
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { t as tr } from '../../i18n';
 import { approvePending, createSessionCommandClient, runSession, requestMutation, type WorkbenchSession, type PendingApproval } from '../../xuenessWorkbench';
 import type { RunChoices } from '../../xuenessBridge';

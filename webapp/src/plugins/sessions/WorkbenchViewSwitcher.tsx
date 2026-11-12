@@ -1,4 +1,3 @@
-import React from 'react';
 import { Select } from '../../ui/Select';
 import { t as tr } from '../../i18n';
 import './session-header.css';

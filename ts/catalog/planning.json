@@ -1,7 +1,7 @@
 {
   "id": "planning",
   "name": "计划与问答",
-  "description": "会话 TODO 和等待用户回答工具。",
+  "description": "会话目标、独立的有界验证、任务清单、向用户提问，以及不可变的交付内容检查。",
   "version": "1.0.0",
   "apiVersion": 1,
   "defaultEnabled": true,

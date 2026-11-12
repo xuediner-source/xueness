@@ -1,7 +1,6 @@
 import React from "react";
 import { flushSync } from "react-dom";
 import { TimelineInitialTailOverrideContext, TimelineUserScrollIntentContext } from "./ConversationTimelineViewport";
-import type { TimelineUserScrollIntent } from "./timelineScrollAnchor";
 
 import { TimelineWindowModel, type TimelineWindowSnapshot } from "./TimelineWindowModel";
 export * from "./TimelineWindowModel";

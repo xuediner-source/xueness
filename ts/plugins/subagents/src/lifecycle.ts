@@ -185,36 +185,6 @@ export function terminateTask(registry: TaskRegistry, leases: TaskLeases | null,
   return row ? { ...row, releasedLeases: released.map((lease) => lease.resource) } : null;
 }
 
-export interface RecoveryReport { recovered: string[]; releasedLeases: string[]; revokedLeases: string[]; reasons: Record<string, TerminationReason> }
-
-/**
- * Cross-task recovery after a restart or a coordinator swap: every registry
- * row still `running` without a live worker is an orphan. Each is terminated
- * with `crash_recovery` (its leases and budget settle through the same funnel)
- * and expired leases of already-terminal holders are revoked, so the next
- * dispatch starts from a clean, diagnosable state.
- */
-export function recoverLifecycles(registry: TaskRegistry, leases: TaskLeases | null, options: { now?: () => number } = {}): RecoveryReport {
-  if (options.now) leases?.clock(options.now);
-  const report: RecoveryReport = { recovered: [], releasedLeases: [], revokedLeases: [], reasons: {} };
-  const revoked = leases?.revokeExpired() ?? [];
-  report.revokedLeases = revoked.map((lease) => `${lease.holder}:${lease.resource}`);
-  for (const row of registry.list()) {
-    if (row.status !== RUNNING) continue;
-    const terminated = terminateTask(registry, leases, String(row.id), {
-      cancelled: false, ok: false, reason: TERMINATION_REASONS.crash_recovery,
-      detail: "parent run ended before the child reported a result",
-    });
-    if (!terminated) continue;
-    const tid = String(row.id);
-    report.recovered.push(tid);
-    report.reasons[tid] = TERMINATION_REASONS.crash_recovery;
-    const released = Array.isArray(terminated.releasedLeases) ? terminated.releasedLeases.map(String) : [];
-    report.releasedLeases.push(...released);
-  }
-  return report;
-}
-
 // F08.02 — the unified background Dispatch/Collect/Resume state machine.
 
 export const OPERATIONS = ["dispatch", "collect", "wait", "send_message", "resume"] as const;

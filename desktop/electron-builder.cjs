@@ -1,5 +1,7 @@
 const { basename } = require('node:path');
 const optionalPackages = require('../ts/packages/kernel/src/optional-packages.json');
+// Optional plugins ship as pinned packages; the installer carries their manifests but not their code.
+const optionalIds = Object.keys(optionalPackages).join(',');
 
 module.exports = {
   appId: 'app.xueness.desktop', productName: 'Xueness', asar: true,
@@ -7,9 +9,9 @@ module.exports = {
   publish: [{ provider: 'github', owner: 'xuediner-source', repo: 'xueness', releaseType: 'release' }],
   files: ['src/**/*', 'package.json'],
   extraResources: [
-    { from: '../ts/dist', to: 'backend-ts', filter: ['**/*', '!**/*.map', '!plugins/{subscriptions,model_monitor,workbuddy,tavern}/{src,assets}/**/*'] },
+    { from: '../ts/dist', to: 'backend-ts', filter: ['**/*', '!**/*.map', `!plugins/{${optionalIds}}/{src,assets}/**/*`] },
     // electron-builder excludes a source root's node_modules during extraResources copying.
-    { from: '../ts/dist/node_modules', to: 'backend-ts/node_modules', filter: ['**/*', '!**/*.map', '!@xueness/plugin-{subscriptions,model_monitor,workbuddy,tavern}/{src,assets}/**/*'] },
+    { from: '../ts/dist/node_modules', to: 'backend-ts/node_modules', filter: ['**/*', '!**/*.map', `!@xueness/plugin-{${optionalIds}}/{src,assets}/**/*`] },
     { from: '../webapp/dist', to: 'webapp' },
     { from: '../marketplace/packages', to: 'marketplace/packages',
       filter: Object.values(optionalPackages).map(artifact => basename(new URL(artifact.url).pathname)) },

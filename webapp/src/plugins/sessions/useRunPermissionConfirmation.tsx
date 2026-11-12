@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { RunChoices } from "../../xuenessBridge";
 import type { PermissionMode } from "./permissionModes";
 import { FullAccessConfirmationDialog } from "./FullAccessConfirmationDialog";

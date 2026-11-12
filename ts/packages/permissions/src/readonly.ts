@@ -373,8 +373,3 @@ export function classifyShellCommand(line: string, depth = 0): Classification {
   return { readOnly: true, reason: [...new Set(reasons)].join(", ") };
 }
 
-/** Classify an argv run without a shell. */
-export function classifyArgv(argv: readonly string[]): Classification {
-  if (!argv.length) return { readOnly: false, reason: "empty command" };
-  return classifyWords(argv, 0);
-}

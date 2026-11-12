@@ -89,10 +89,6 @@ export function protocolReply(error: NodeJS.ErrnoException & { reason?: string }
   }
 }
 
-export function protocolStatus(error: NodeJS.ErrnoException & { reason?: string }): number {
-  return protocolReply(error).status;
-}
-
 export interface ProtocolErrorOptions {
   code?: string;
   message?: string;

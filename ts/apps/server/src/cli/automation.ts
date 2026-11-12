@@ -8,7 +8,7 @@ import { readFileSync } from "node:fs";
 import { pyJsonLoadsBytes } from "@xueness/contracts";
 import { Automations, bindPluginEnabled, OffPeakQueue, Scheduler } from "@xueness/plugin-automation";
 import { setWorkerLauncher, validatePlan, workflowBridge } from "@xueness/plugin-workflows";
-import { workerLauncher } from "../round7-http.ts";
+import { workerLauncher } from "../workflows-http.ts";
 import type { Parser } from "./argparse.ts";
 import { type Cli, dumps, err, osErrorText, out } from "./host.ts";
 

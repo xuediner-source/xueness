@@ -26,7 +26,7 @@ import { nativeOpsExtension, type NativeOpsBinding } from "@xueness/plugin-nativ
 import { providerToolResultBudgetExtension } from "@xueness/plugin-providers";
 import { providerModelExecutionExtension, providerRequestShapingExtension } from "@xueness/plugin-providers";
 import { networkActivityExtension } from "@xueness/plugin-network";
-import { SessionStore, type Session } from "@xueness/sessions";
+import { type Session } from "@xueness/sessions";
 import { ToolBridge } from "@xueness/tool-bridge";
 
 export interface ChildRunHost {

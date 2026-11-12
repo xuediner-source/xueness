@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { pyInt, pyJsonDumps, PyValueError, type DerivedEnvelope, deriveEvents, ERROR_CODES, pageEvents, sseBody } from "@xueness/contracts";
+import { pyInt, PyValueError, type DerivedEnvelope, deriveEvents, ERROR_CODES, pageEvents, sseBody } from "@xueness/contracts";
 import type { Session } from "@xueness/sessions";
 type Dict = Record<string, unknown>;
 export class StaleJournalCursor extends PyValueError { override name = "StaleJournalCursor"; }

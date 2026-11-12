@@ -5,8 +5,6 @@ import { providerResultTools } from "./result-tool.ts";
 export * from "./http-api.ts";
 export * from "./profile-store.ts";
 export * from "./provider-config.ts";
-export * from "./execution-selection.ts";
-export * from "./execution-ports.ts";
 export * from "./diagnostic-wire.ts";
 export * from "./verification.ts";
 export * from "./default-selection.ts";
@@ -30,7 +28,6 @@ export * from "./tool-search.ts";
 export * from "./selection-levels.ts";
 export * from "./title-model.ts";
 export * from "./composer-models.ts";
-export * from "./live-tasks.ts";
 /**
  * The bundled face: it registers the manifest's three tools with no session
  * and the live registry declarations as the search catalog (plugins see tool

@@ -11,7 +11,7 @@
  * plugin is enabled.
  */
 import { mkdtempSync, rmSync } from "node:fs";
-import { platform, tmpdir } from "node:os";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { AgentRunner, answerSession, kernelAgentHooks, modelInputOf, toolContractExtension, toolMediaExtension, type AgentExtension, type AgentProvider, type ModelRequest, type Row } from "@xueness/agent";
 import { createToolEnv, type ToolDefinition } from "@xueness/engine-tools";
@@ -27,7 +27,7 @@ import { createShell, shellBackgroundExtension, loadShellConfig, type ShellRunti
 import { createSessionsStore, sessionsTurnRuntimeExtension, sessionsRuntimeEventsExtension, sessionsStableBoundariesExtension, sessionsCompactPersistenceExtension } from "@xueness/plugin-sessions";
 import { createProviderResultTools, providerToolResultBudgetExtension } from "@xueness/plugin-providers";
 import type { AgentNodeHost, WorkflowStore } from "@xueness/plugin-workflows";
-import { SessionStore, type Session } from "@xueness/sessions";
+import { type Session } from "@xueness/sessions";
 import { loadAgentRuntimeConfig } from "./runtime-configuration.ts";
 import { ToolBridge } from "@xueness/tool-bridge";
 

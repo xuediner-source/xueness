@@ -10,8 +10,6 @@ export const XUENESS_EVENT_SCHEMA = "xueness.event.v1" as const;
 export const XUENESS_EVENTS_SCHEMA = "xueness.events.v1" as const;
 export const XUENESS_PROTOCOL_VERSION = 1 as const;
 
-/** Bound on how many events an unpaginated caller can pull in one response. */
-export const DEFAULT_EVENTS_LIMIT = 200;
 export const MAX_EVENTS_LIMIT = 500;
 
 export const ERROR_CODES = {

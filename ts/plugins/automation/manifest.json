@@ -3,7 +3,7 @@
   "id": "automation",
   "name": "自动化",
   "description": "带不可变计划审批的时区 cron、闲时队列与本地运行历史。",
-  "version": "0.2.0",
+  "version": "1.0.0",
   "defaultEnabled": true,
   "dependencies": ["workflows"],
   "provides": ["automation.scheduler"],

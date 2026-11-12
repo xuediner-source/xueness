@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { compact, format } from './labels';
 
 export interface Segment { id: string; label: string; value: number; detail?: string; }

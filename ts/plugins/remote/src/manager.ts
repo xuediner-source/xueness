@@ -67,10 +67,6 @@ function sameSignature(left: Signature, right: Signature): boolean {
   return left.connectionId === right.connectionId && left.digest === right.digest && left.reconnect === right.reconnect && Object.is(left.generation, right.generation);
 }
 
-function defaultFactory(row: RemoteConnection, root: string, onClose: (reason: string) => void): LiveClient {
-  return new SessionClient({ row, root, onClose }) as unknown as LiveClient;
-}
-
 /** Manager-owned spawn: the transport's notifications feed the live v2 subscriber. */
 function managerFactory(manager: ConnectionManager): (row: RemoteConnection, root: string, onClose: (reason: string) => void) => LiveClient {
   return (row, root, onClose) => {

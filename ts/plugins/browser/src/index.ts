@@ -45,5 +45,4 @@ export function createBrowser(options: BrowserOptions): BundledPlugin {
 }
 
 export const browser = createBrowser({ stateDir: "." });
-export const browserPlugin = browser.plugin;
 

@@ -3,7 +3,7 @@ export * from "./front-door.ts";
 export * from "./guards.ts";
 export * from "./head-limits.ts";
 export * from "./manifests.ts";
-export * from "./py-url.ts";
+export * from "./loopback-url.ts";
 export * from "./request-head.ts";
 export * from "./respond.ts";
 export * from "./static.ts";

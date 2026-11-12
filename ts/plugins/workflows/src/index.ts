@@ -14,7 +14,7 @@
  */
 import { definePlugin, type BundledPlugin } from "@xueness/kernel";
 import manifest from "../manifest.json" with { type: "json" };
-import { drive, type DriveOptions, type NodeExecutor } from "./drive.ts";
+import { type NodeExecutor } from "./drive.ts";
 import { executeAgentNode, type AgentNodeHost } from "./execute-agent.ts";
 import { executeCommandNode, type RunControl } from "./execute-command.ts";
 import type { Row } from "./plan.ts";
@@ -22,9 +22,6 @@ import { SavedWorkflowLibrary } from "./saved-library.ts";
 import { WorkflowStore, type WorkerLauncher } from "./store.ts";
 import { workflowTools, type WorkflowToolsOptions } from "./tools.ts";
 export * from './dynamic-types.ts';
-export * from './dynamic-artifacts.ts';
-export * from './dynamic-streams.ts';
-export * from './dynamic-dashboard.ts';
 export * from './dynamic-compile.ts';
 export * from './dynamic-evaluate.ts';
 export * from './dynamic-store.ts';
@@ -34,8 +31,6 @@ export * from './dynamic-blocked-reminder.ts';
 export * from './dynamic-lifecycle.ts';
 export * from './dynamic-http.ts';
 export * from './dynamic-tools.ts';
-export * from './dynamic-actors.ts';
-export * from './dynamic-world.ts';
 import type { DynamicWorkflowService } from './dynamic-service.ts';
 
 export { ID, NODE, ACTIVE, nowSeconds, stamp, resolvePath, isDirectory, isInside, validatePlan, workflowPlanDigest, workspaceFingerprint, type Row } from "./plan.ts";
@@ -85,27 +80,6 @@ export function recordControl(store: WorkflowStore, wid: string, ownerGone: () =
       return typeof value === "string" ? value : "run";
     },
     ownerGone,
-  };
-}
-
-/**
- * The default launcher: drive the run in this process. A detached worker would
- * need a second entry point, which belongs to the CLI round; the `.runner` lock
- * still makes this the single owner, so a CLI worker and this one cannot both
- * drive the same run.
- */
-export function localLauncher(options: {
-  execute: NodeExecutor;
-  ownerGone?: () => boolean;
-  enabled?: (id: string) => boolean;
-}): WorkerLauncher {
-  const driveOptions: DriveOptions = options.enabled === undefined ? {} : { enabled: () => options.enabled!("workflows") };
-  return (store, wid) => {
-    const control = recordControl(store, wid, options.ownerGone);
-    void drive(store, wid, options.execute, control, driveOptions).catch(() => {
-      // A crashed driver leaves the record active; `recover` is the operator's
-      // way out, exactly as a lost Python worker behaves.
-    });
   };
 }
 

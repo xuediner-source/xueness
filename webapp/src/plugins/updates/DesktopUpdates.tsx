@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { CircleArrowUp, LoaderCircle } from 'lucide-react';
 import { get, post } from '../../xuenessApi';
 import { t, tf } from '../../i18n';

@@ -35,12 +35,6 @@ export function goalDecisionFromRun(session: Row, row: Row): GoalDecision {
   if (reason.includes("没有有效目标") || reason.includes("目标已变化") || reason.includes("未处于进行中")) return goalStopDecision("changed", reason);
   return goalStopDecision("boundary", reason);
 }
-/** The terminal stop code a runner should honor for the rest of the run, if any. */
-export function decisionStopCode(decision: RunDecision | void): GoalStopCode | null {
-  if (!decision || decision.action !== "stop") return null;
-  const code = (decision as GoalDecision).stopCode;
-  return typeof code === "string" && code ? code : "boundary";
-}
 /** Stop codes after which the goal must never schedule another round. */
 export const GOAL_TERMINAL_STOPS: ReadonlySet<string> = new Set(["complete", "budget_limited", "paused", "blocked", "changed", "unavailable"]);
 /** Budget exhaustion and user pauses are always terminal; waiting/boundary stops may resume later. */

@@ -1,4 +1,4 @@
-import React, { useRef, useState } from 'react';
+import { useRef, useState } from 'react';
 import { post } from '../../xuenessApi';
 import { t } from '../../i18n';
 import { useModalFocusScope, shouldDismissModalOnEscape } from '../shared';

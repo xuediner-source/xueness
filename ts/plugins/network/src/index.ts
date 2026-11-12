@@ -48,4 +48,3 @@ export function createNetwork(options: NetworkOptions): BundledPlugin {
 }
 
 export const network = createNetwork({ stateDir: "." });
-export const networkPlugin = network.plugin;

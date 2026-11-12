@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { get, post } from '../../xuenessApi';
 import { IconTerminal } from '../../ui/icons';
 import { t as tr } from '../../i18n';

@@ -58,64 +58,8 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
-const CLIENT_MODES = new Set(['desktop-continuous', 'web-remote-replayable']);
 const CLIENT_KINDS = new Set(['desktop', 'web', 'mobileRemote', 'mobileApp']);
-const HOST_CAPABILITY_KEYS = new Set([
-  'nativeDialogs', 'localTerminal', 'binaryFrames', 'compression',
-  'workspaceHookReview', 'independentPlanState', 'workflowRunDeltas',
-]);
 const CLIENT_CAPABILITY_KEYS = new Set(['workspaceHookReviewUi', 'workflowRunDeltas']);
-
-function parseHostCapabilities(input: unknown): V4Parsed<V4HostCapabilities> {
-  if (!isPlainObject(input)) return { ok: false, issue: 'capabilities must be an object' };
-  const unknown = Object.keys(input).filter((key) => !HOST_CAPABILITY_KEYS.has(key)).sort();
-  if (unknown.length) return { ok: false, issue: `unknown host capabilities: ${unknown.join(', ')}` };
-  for (const key of ['nativeDialogs', 'localTerminal', 'binaryFrames'] as const) {
-    if (typeof input[key] !== 'boolean') return { ok: false, issue: `capability ${key} must be a boolean` };
-  }
-  if (input.compression !== 'none' && input.compression !== 'permessage-deflate') {
-    return { ok: false, issue: 'compression must be "none" or "permessage-deflate"' };
-  }
-  for (const key of ['workspaceHookReview', 'independentPlanState', 'workflowRunDeltas'] as const) {
-    if (input[key] !== undefined && typeof input[key] !== 'boolean') {
-      return { ok: false, issue: `capability ${key} must be a boolean when present` };
-    }
-  }
-  return { ok: true, value: input as unknown as V4HostCapabilities };
-}
-
-/** Host hello: strict shape; clientMode and deliveryProfile are a trusted pair. */
-export function parseV4HelloMessage(input: unknown): V4Parsed<V4HelloMessage> {
-  if (!isPlainObject(input)) return { ok: false, issue: 'hello must be an object' };
-  const unknown = Object.keys(input).filter((key) =>
-    !['kind', 'protocolVersion', 'connectionId', 'clientMode', 'deliveryProfile', 'serverTime', 'capabilities', 'auth'].includes(key)).sort();
-  if (unknown.length) return { ok: false, issue: `unexpected hello keys: ${unknown.join(', ')}` };
-  if (input.kind !== 'hello') return { ok: false, issue: 'kind must be "hello"' };
-  if (input.protocolVersion !== V4_WIRE_PROTOCOL_VERSION) {
-    return { ok: false, issue: `protocolVersion must be ${V4_WIRE_PROTOCOL_VERSION}` };
-  }
-  if (typeof input.connectionId !== 'string' || !input.connectionId) return { ok: false, issue: 'connectionId must be a non-empty string' };
-  if (typeof input.clientMode !== 'string' || !CLIENT_MODES.has(input.clientMode)) {
-    return { ok: false, issue: 'clientMode must be "desktop-continuous" or "web-remote-replayable"' };
-  }
-  const clientMode = input.clientMode as V4ClientMode;
-  if (input.deliveryProfile !== 'continuous' && input.deliveryProfile !== 'replayable') {
-    return { ok: false, issue: 'deliveryProfile must be "continuous" or "replayable"' };
-  }
-  if (input.deliveryProfile !== (clientMode === 'desktop-continuous' ? 'continuous' : 'replayable')) {
-    return { ok: false, issue: 'trusted clientMode and deliveryProfile must match' };
-  }
-  if (typeof input.serverTime !== 'number' || !Number.isFinite(input.serverTime)) {
-    return { ok: false, issue: 'serverTime must be a finite number (host Unix ms)' };
-  }
-  const capabilities = parseHostCapabilities(input.capabilities);
-  if (!capabilities.ok) return capabilities;
-  if (!isPlainObject(input.auth)) return { ok: false, issue: 'auth must be an object' };
-  if (input.auth.userId !== undefined && typeof input.auth.userId !== 'string') {
-    return { ok: false, issue: 'auth.userId must be a string when present' };
-  }
-  return { ok: true, value: input as unknown as V4HelloMessage };
-}
 
 /**
  * Client hello: `.strict()` semantics matter more here than anywhere else.
@@ -150,59 +94,11 @@ export function parseV4ClientHello(input: unknown): V4Parsed<V4ClientHello> {
   return { ok: true, value: input as unknown as V4ClientHello };
 }
 
-/** Capability checks are `=== true` on purpose: a missing key is wire-compatible false. */
-export function hostSupportsWorkspaceHookReview(capabilities: V4HostCapabilities): boolean {
-  return capabilities.workspaceHookReview === true;
-}
-
-export function clientSupportsWorkspaceHookReview(clientHello: V4ClientHello): boolean {
-  return clientHello.capabilities?.workspaceHookReviewUi === true;
-}
-
 export function hostSupportsWorkflowRunDeltas(capabilities: V4HostCapabilities): boolean {
   return capabilities.workflowRunDeltas === true;
 }
 
-export function clientSupportsWorkflowRunDeltas(clientHello: V4ClientHello): boolean {
-  return clientHello.capabilities?.workflowRunDeltas === true;
-}
-
 // ── Subscription envelopes ──
-
-export interface V4SubscribeParams {
-  topic: string;
-  /** Watermark invariant: only send when the client truly holds that consistent state. */
-  base?: { logEpoch: string; seq: number };
-  /** QoS hint; affects scheduling only, never semantics. */
-  visibility?: 'foreground' | 'background';
-}
-
-export interface V4SubscribeAck {
-  subscriptionId: string;
-  /** resume = base was valid and deltas continue from base.seq; otherwise snapshot. */
-  mode: 'snapshot' | 'resume';
-  logEpoch: string;
-}
-
-export function parseV4SubscribeParams(input: unknown): V4Parsed<V4SubscribeParams> {
-  if (!isPlainObject(input)) return { ok: false, issue: 'subscribe params must be an object' };
-  const unknown = Object.keys(input).filter((key) => !['topic', 'base', 'visibility'].includes(key)).sort();
-  if (unknown.length) return { ok: false, issue: `unexpected subscribe keys: ${unknown.join(', ')}` };
-  if (typeof input.topic !== 'string' || !input.topic) return { ok: false, issue: 'topic must be a non-empty string' };
-  if (input.base !== undefined) {
-    if (!isPlainObject(input.base)) return { ok: false, issue: 'base must be an object' };
-    const baseKeys = Object.keys(input.base).sort();
-    if (baseKeys.join(',') !== 'logEpoch,seq') return { ok: false, issue: 'base must have exactly logEpoch and seq' };
-    if (typeof input.base.logEpoch !== 'string' || !input.base.logEpoch) return { ok: false, issue: 'base.logEpoch must be a non-empty string' };
-    if (typeof input.base.seq !== 'number' || !Number.isSafeInteger(input.base.seq) || input.base.seq < 0) {
-      return { ok: false, issue: 'base.seq must be a nonnegative integer' };
-    }
-  }
-  if (input.visibility !== undefined && input.visibility !== 'foreground' && input.visibility !== 'background') {
-    return { ok: false, issue: 'visibility must be "foreground" or "background"' };
-  }
-  return { ok: true, value: input as unknown as V4SubscribeParams };
-}
 
 // ── v4 RPC surface (host channel layer) ──
 
@@ -243,22 +139,6 @@ export const V4_METHODS = {
 
 export type V4Method = (typeof V4_METHODS)[keyof typeof V4_METHODS];
 
-export const V4_NOTIFICATIONS = {
-  /** Downstream frames (snapshot / deltas); params = topic wire frame payload. */
-  conversationFrame: 'v4/conversation/frame',
-  /** Bodyless live-ingest facts only; never enter topic snapshot/recovery. */
-  conversationTelemetryFact: 'v4/telemetry/event',
-  localTtftFacts: 'v4/telemetry/local-ttft',
-  /** Live ToolCallResult only; history and replayable paths must not fabricate. */
-  cuaPermissionObservation: 'v4/cua/permission-observation',
-} as const;
-
-export type V4Notification = (typeof V4_NOTIFICATIONS)[keyof typeof V4_NOTIFICATIONS];
-
-export const V4_MAX_LEGACY_TASK_IDS_PER_SUBSCRIBE = 200;
-
-export type V4ConnectionFlowState = 'saturated' | 'drained' | 'closed';
-
 // ── Error vocabulary ──
 
 /** JSON-RPC 2.0 base codes, shared with the legacy carrier. */
@@ -284,10 +164,6 @@ export const V4_REFUSAL_REASONS = {
 
 export function isV4Method(method: string): method is V4Method {
   return Object.values(V4_METHODS).includes(method as V4Method);
-}
-
-export function isV4Notification(method: string): method is V4Notification {
-  return Object.values(V4_NOTIFICATIONS).includes(method as V4Notification);
 }
 
 /** Every V4 route is `v4/`-prefixed and the table has no duplicates — load-bearing for routing. */

@@ -90,7 +90,6 @@ export function createShell(binding?: ShellRuntimeBinding, runtimeOptions: Shell
 }
 
 export const shell: BundledPlugin = createShell();
-export const shellPlugin = shell.plugin;
 export { resolveBashShell, type BashShellProvider, type ShellDialect } from "./shell-provider.ts";
 export { buildSnapshotScript, ShellInitSnapshotManager, windowsPathToBashPath } from "./shell-snapshot.ts";
 export { buildBashCommand, StartupScriptManager } from "./startup-script.ts";

@@ -3,7 +3,7 @@
   "id": "workflows",
   "name": "工作流与后台任务",
   "description": "持久化 DAG、恢复复用、并发控制和后台命令。",
-  "version": "0.2.0",
+  "version": "1.0.0",
   "defaultEnabled": true,
   "dependencies": [
     "sessions",

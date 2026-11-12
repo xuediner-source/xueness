@@ -1,5 +1,5 @@
 import { isDict, pyJsonLoads } from "@xueness/contracts";
-import type { AgentContext, AgentExtension } from "@xueness/agent";
+import type { AgentExtension } from "@xueness/agent";
 import {
   FileStateTracker,
   resolveWorkspacePath,

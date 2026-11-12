@@ -104,13 +104,6 @@ export function formatContextWindow(tokens: number | undefined | null): string |
   return String(tokens);
 }
 
-/** Row-level reasoning summary: at most three levels plus a "+" marker. */
-export function modelReasoningSummary(model: Pick<ComposerModel, "reasoningLevels">): string | null {
-  const levels = (model.reasoningLevels ?? []).filter(level => typeof level === "string" && level.length > 0);
-  if (levels.length === 0) return null;
-  return levels.slice(0, 3).join("/") + (levels.length > 3 ? "+" : "");
-}
-
 /** Keep restored or edited model choices from sending an undeclared effort. */
 export function isReasoningEffortSupported(model: Pick<ComposerModel, "reasoningLevels"> | undefined, effort: string | undefined): boolean {
   return !effort || !model || model.reasoningLevels?.includes(effort) === true;

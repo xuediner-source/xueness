@@ -5,7 +5,7 @@
  */
 import { randomBytes } from "node:crypto";
 import { dirname, basename } from "node:path";
-import { isDict, pyLen, pyStrip } from "@xueness/contracts";
+import { pyLen, pyStrip } from "@xueness/contracts";
 import { attachmentMetadata, realish, withAttachments, type Attachment } from "@xueness/sessions";
 import { decodeBrowserAttachments, checkKeys, resolveRefs, workspaceAttachments } from "./composer-attachments.ts";
 import { skillsCatalog, type ComposerCatalogOptions } from "./composer-catalog.ts";

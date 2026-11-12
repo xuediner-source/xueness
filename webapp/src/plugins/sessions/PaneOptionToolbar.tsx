@@ -1,5 +1,5 @@
 import { setSessionPermissionMode } from './useLivePermissionMode';
-import React, { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { t as tr } from '../../i18n';
 import { loadComposerCatalog, canUseRuntimeProfile, type ComposerCatalog, type ComposerModel } from '../../xuenessComposer';
 import type { RunChoices } from '../../xuenessBridge';

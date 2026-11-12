@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { ChevronRight, FolderOpen, LoaderCircle, X } from 'lucide-react';
 import { CapabilityItemRow, CapabilitySection, type CapabilitySectionProps } from '../../XuenessCapabilitiesPanel';
 import type { CapabilityItem } from '../../xuenessCapabilities';

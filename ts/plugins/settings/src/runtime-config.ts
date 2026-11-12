@@ -87,10 +87,6 @@ export function normalizeRuntimeConfigPatch(value: unknown): RuntimeConfigPatch 
   return clean as RuntimeConfigPatch;
 }
 
-function copyRecord(value: Record<string, unknown>): Record<string, unknown> {
-  return cleanValue(value) as Record<string, unknown>;
-}
-
 function eraseProvenance(provenance: Record<string, RuntimeConfigLayer>, path: string): void {
   for (const key of Object.keys(provenance)) if (key === path || key.startsWith(`${path}/`)) delete provenance[key];
 }
@@ -180,8 +176,6 @@ interface WorkspaceSnapshot {
   legacy: string[];
   bytes?: Buffer;
 }
-
-const LEGACY_KEYS = ["mcpServers", "enabledPlugins", "pluginOptions"] as const;
 
 /**
  * F07.01 old-config compatibility: a pre-layering workspace document

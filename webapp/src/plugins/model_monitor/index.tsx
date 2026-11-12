@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AlertTriangle, Check, RefreshCw, Search, Trash2 } from 'lucide-react';
 import { get, post } from '../../xuenessApi';
 import { t as tr, tf } from '../../i18n';

@@ -182,7 +182,3 @@ export function joinedText(element: XmlElement, path: string, ns: Namespaces): s
   return findall(element, path, ns).map((node) => node.text ?? "").join("");
 }
 
-export function escapeXml(text: string, attribute = false): string {
-  const escaped = text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-  return attribute ? escaped.replace(/"/g, "&quot;").replace(/\n/g, "&#10;").replace(/\r/g, "&#13;").replace(/\t/g, "&#09;") : escaped;
-}

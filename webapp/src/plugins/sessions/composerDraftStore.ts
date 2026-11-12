@@ -6,21 +6,17 @@ import { getWorkbenchStorage } from '../desktop/desktopStorage';
 import { MAX_PROMPT_HISTORY } from './composerInputHelpers';
 import { ComposerDraftState, emptyComposerDraft } from './composerTypes';
 
-
 export interface StorageLike {
   getItem(key: string): string | null;
   setItem(key: string, value: string): void;
   removeItem?(key: string): void;
 }
 
-
 export function getBrowserStorage(): StorageLike | null {
   return getWorkbenchStorage();
 }
 
-
 export const PROMPT_HISTORY_STORAGE_KEY_PREFIX = "xueness:chat-prompt-history:";
-
 
 export function readPromptHistoryEntries(
   workspaceKey: string,
@@ -42,7 +38,6 @@ export function readPromptHistoryEntries(
   }
 }
 
-
 export function persistPromptHistoryEntries(
   workspaceKey: string,
   entries: readonly string[],
@@ -59,9 +54,7 @@ export function persistPromptHistoryEntries(
   } catch {}
 }
 
-
 export const COMPOSER_DRAFT_STORAGE_KEY_PREFIX = "xueness:composer-drafts:v1:";
-
 
 export type PersistedComposerDraft = {
   draftId?: string;
@@ -84,11 +77,9 @@ export type PersistedComposerDraft = {
   pendingSubmission?: PersistedComposerDraft;
 };
 
-
 function persistedEditorState(text: string, stored: unknown): ComposerEditorState | undefined {
   return editorStateMatching(text, stored) ?? undefined;
 }
-
 
 export function restoredDraft(value: PersistedComposerDraft): ComposerDraftState {
   const recovered = value.recoverableDrafts?.map(item => restoredDraft({ ...item, recoverableDrafts: undefined, pendingSubmission: undefined })) ?? [];
@@ -105,7 +96,6 @@ export function restoredDraft(value: PersistedComposerDraft): ComposerDraftState
     hadAttachments: value.hadAttachments === true, deliveryUnconfirmed: value.deliveryUnconfirmed === true,
     recoverableDrafts: recovered };
 }
-
 
 function readStoredDraft(value: unknown, includeRecovery = true): PersistedComposerDraft | null {
   if (!value || typeof value !== 'object' || Array.isArray(value) || !('text' in value) || typeof value.text !== 'string') return null;
@@ -125,7 +115,6 @@ function readStoredDraft(value: unknown, includeRecovery = true): PersistedCompo
       .map(item => readStoredDraft(item, false)).filter((item): item is PersistedComposerDraft => item !== null) } : {}) };
 }
 
-
 export function readPersistedDraft(
   workspaceKey: string,
   scope: string,
@@ -143,7 +132,6 @@ export function readPersistedDraft(
     return null;
   }
 }
-
 
 export function persistDraft(
   workspaceKey: string,
@@ -209,30 +197,6 @@ export function persistDraft(
   } catch {}
 }
 
-
-export function clearPersistedDraft(
-  workspaceKey: string,
-  scope: string,
-  storage: StorageLike | null = getBrowserStorage(),
-): void {
-  if (!storage) return;
-  try {
-    const storageKey = `${COMPOSER_DRAFT_STORAGE_KEY_PREFIX}${encodeURIComponent(workspaceKey)}`;
-    const raw = storage.getItem(storageKey);
-    if (!raw) return;
-    const parsed = JSON.parse(raw);
-    if (!parsed || !parsed.scopes || !parsed.scopes[scope]) return;
-    delete parsed.scopes[scope];
-    if (Object.keys(parsed.scopes).length === 0) {
-      if (storage.removeItem) storage.removeItem(storageKey);
-      else storage.setItem(storageKey, "");
-    } else {
-      storage.setItem(storageKey, JSON.stringify(parsed));
-    }
-  } catch {}
-}
-
-
 /** Clear only the submitted session's draft, and only if nobody edited it since submission. */
 export function clearSubmittedComposerDraft(
   drafts: Map<string, ComposerDraftState>,
@@ -245,7 +209,6 @@ export function clearSubmittedComposerDraft(
   next.set(draftKey, { ...emptyComposerDraft(), recoverableDrafts: current.recoverableDrafts, pendingSubmission: current.pendingSubmission, revision: current.revision + 1 });
   return next;
 }
-
 
 /** A rejected submission may restore its snapshot only while the cleared draft is still untouched. */
 export function restoreSubmittedComposerDraft(

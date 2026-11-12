@@ -16,7 +16,6 @@
     { "id": "usage.quick_card", "name": "工作台用量速览卡片", "nameEn": "Workbench usage quick card" }
   ],
   "frontendModules": [
-    "plugins/usage/UsagePanel.tsx",
     "plugins/usage/XuenessUsageSettings.tsx",
     "plugins/usage/XuenessUsageQuickCard.tsx"
   ]

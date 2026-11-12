@@ -1,4 +1,4 @@
-import React, { useRef, useState } from 'react';
+import { useRef, useState } from 'react';
 import { Info, ShieldAlert } from 'lucide-react';
 import { t as tr } from '../../i18n';
 import { isImeComposingEvent } from '../../xuenessShortcutDisplay';

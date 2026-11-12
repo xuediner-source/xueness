@@ -6,7 +6,6 @@ import { dirname, basename } from "node:path";
 import { MediaArtifactStore } from "./media-store.ts";
 import { Owner } from "./media-owner.ts";
 import { mediaRefs, ownerRow, rowOwner } from "./queue-media.ts";
-import { requestedSelection, selectionRecord } from "./run-validation.ts";
 type Row = Record<string, any>;
 export interface PreparedInputOptions {
   store: SessionStore;

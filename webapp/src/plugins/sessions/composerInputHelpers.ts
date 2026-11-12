@@ -1,55 +1,5 @@
 import { t as tr } from '../../i18n';
 
-
-
-/** A slash command or @-file suggestion shown above the composer. */
-export type ComposerSuggestion = {
-  kind: "command" | "file";
-  /** Command id (without "/") or workspace file path. */
-  token: string;
-  description?: string;
-};
-
-
-/** Pure token analysis so SSR tests can assert suggestion behaviour. */
-export function composerSuggestions(
-  text: string,
-  commands: { id: string; description?: string }[],
-  files: string[],
-): ComposerSuggestion[] {
-  // "/name" with no whitespace yet → command suggestions by id prefix.
-  const slash = /^\/([A-Za-z0-9._-]*)$/.exec(text);
-  if (slash) {
-    const prefix = slash[1].toLowerCase();
-    return commands
-      .filter((c) => c.id.toLowerCase().startsWith(prefix))
-      .slice(0, 8)
-      .map((c) => ({ kind: "command" as const, token: c.id, description: c.description }));
-  }
-  // An unfinished "@path" fragment at the end (no whitespace after the last @)
-  // → file suggestions by substring, deepest-path-friendly: plain includes().
-  const at = /(?:^|\s)@([^\s@]*)$/.exec(text);
-  if (at) {
-    const needle = at[1].toLowerCase();
-    return files
-      .filter((f) => f.toLowerCase().includes(needle))
-      .slice(0, 8)
-      .map((f) => ({ kind: "file" as const, token: f }));
-  }
-  return [];
-}
-
-
-/** Replace the trailing "/cmd" or "@path" fragment with the chosen token. */
-export function applySuggestion(text: string, suggestion: ComposerSuggestion): string {
-  if (suggestion.kind === "command") return `/${suggestion.token} `;
-  return text.replace(/(?:^|\s)@([^\s@]*)$/, (m) => {
-    const lead = m.match(/^\s*/)?.[0] ?? "";
-    return `${lead}@${suggestion.token} `;
-  });
-}
-
-
 export type ComposerMention = {
   id: string;
   label: string;
@@ -57,14 +7,12 @@ export type ComposerMention = {
   description?: string;
 };
 
-
 export type ContextComposerSuggestion = {
   kind: "command" | "file" | "session" | "skill" | "plugin" | "goal" | "workflow";
   token: string;
   label?: string;
   description?: string;
 };
-
 
 export type ComposerStartActions = {
   canGoal: boolean;
@@ -76,14 +24,12 @@ export type ComposerStartActions = {
   onModels?: () => void;
 };
 
-
 /** Recovery shown when an active composer cannot send because its model catalog is unavailable. */
 export type ComposerModelRecovery =
   | { kind: "loading" }
   | { kind: "error"; onRetry: () => void }
   | { kind: "missing"; onConfigure: () => void }
   | { kind: "blocked" };
-
 
 /** Shared autocomplete for the hero and conversation composer. */
 export function contextComposerSuggestions(
@@ -129,47 +75,17 @@ export function contextComposerSuggestions(
     }));
 }
 
-
-export function applyContextSuggestion(
-  text: string,
-  suggestion: ContextComposerSuggestion,
-  cursorOffset?: number,
-): string {
-  const offset = typeof cursorOffset === "number" ? cursorOffset : text.length;
-  const before = text.slice(0, offset);
-  const after = text.slice(offset);
-
-  if (suggestion.kind === "command") {
-    const replaced = before.replace(/(?:^|\s)\/[A-Za-z0-9._-]*$/, (match) =>
-      (match.match(/^\s*/)?.[0] ?? "") + "/" + suggestion.token + " ",
-    );
-    return replaced + after;
-  }
-  if (suggestion.kind === "goal" || suggestion.kind === "workflow") {
-    const replaced = before.replace(/(?:^|\s)\/[A-Za-z0-9._-]*$/, (match) => match.match(/^\s*/)?.[0] ?? "");
-    return replaced + after;
-  }
-  const expression = suggestion.kind === "skill"
-    ? /(?:^|\s)\$([^\s@#$]*)$/
-    : /(?:^|\s)@[^\s@#$]*$/;
-  const replaced = before.replace(expression, (match) => match.match(/^\s*/)?.[0] ?? "");
-  return replaced + after;
-}
-
-
 export const COMPOSER_ATTACHMENT_LIMITS = {
   count: 4,
   eachBytes: 2 * 1024 * 1024,
   totalBytes: 4 * 1024 * 1024,
 } as const;
 
-
 export function composerAttachmentBytes(data: string): number {
   if (!data) return 0;
   const padding = data.endsWith("==") ? 2 : data.endsWith("=") ? 1 : 0;
   return Math.max(0, Math.floor(data.length * 3 / 4) - padding);
 }
-
 
 export async function encodeComposerFile(file: File): Promise<string> {
   const bytes = new Uint8Array(await file.arrayBuffer());
@@ -180,7 +96,6 @@ export async function encodeComposerFile(file: File): Promise<string> {
   }
   return btoa(binary);
 }
-
 
 export function extractFilesFromClipboard(clipboardData: DataTransfer | null): File[] {
   if (!clipboardData) return [];
@@ -202,7 +117,6 @@ export function extractFilesFromClipboard(clipboardData: DataTransfer | null): F
   return files;
 }
 
-
 export function isFileDragEvent(dataTransfer: DataTransfer | null): boolean {
   if (!dataTransfer?.types) return false;
   return Array.from(dataTransfer.types).some(
@@ -210,9 +124,7 @@ export function isFileDragEvent(dataTransfer: DataTransfer | null): boolean {
   );
 }
 
-
 export const MAX_PROMPT_HISTORY = 30;
-
 
 export function appendPromptHistoryEntry(
   entries: readonly string[],
@@ -229,7 +141,6 @@ export function appendPromptHistoryEntry(
   const normalizedLimit = Math.max(1, Math.trunc(limit));
   return [...entries, trimmed].slice(-normalizedLimit);
 }
-
 
 export function navigatePromptHistory(
   entries: readonly string[],

@@ -1,4 +1,3 @@
-import React from 'react';
 import { ExternalLink, Puzzle, Settings2, Network } from 'lucide-react';
 import { compact, format, label } from './labels';
 import type { ContextLensView } from './types';

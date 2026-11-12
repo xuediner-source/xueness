@@ -45,7 +45,6 @@
     }
   ],
   "frontendModules": [
-    "plugins/usage/UsagePanel.tsx",
     "plugins/usage/XuenessUsageSettings.tsx",
     "plugins/usage/XuenessUsageQuickCard.tsx"
   ]

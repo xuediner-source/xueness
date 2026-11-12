@@ -1,4 +1,3 @@
-import React from 'react';
 import { ContextCompactionStatus } from './ContextCompactionStatus';
 
 export function SessionCommandNotice({ notice, compacting }: { notice: { message: string; compact?: 'running' | 'complete' }; compacting?: boolean }) {

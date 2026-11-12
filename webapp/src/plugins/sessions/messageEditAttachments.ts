@@ -87,16 +87,6 @@ export async function restoreMessageEditDraft(input: {
   }
 }
 
-export async function releaseMessageEditDraft(draft: MessageEditDraft, sessionId: string | undefined, isEffective: () => boolean, transport?: MessageEditAttachmentTransport): Promise<void> {
-  if (!isEffective()) return;
-  draft.disposeRestore?.();
-  if (draft.restoreIdentity) disposeMessageRestore(draft.restoreIdentity);
-  if (!draft.root || (transport && !sessionId)) return;
-  await Promise.all(draft.attachments.map(attachment => (transport ? transport.release({ sessionId: sessionId!, root: draft.root!, id: attachment.ref!.id }, isEffective) : requestMutation('POST', '/api/composer/attachments/release', {
-    root: draft.root, session_id: sessionId, id: attachment.ref!.id,
-  }, undefined, isEffective)).catch(() => undefined)));
-}
-
 /** Explicit complete replacement. Only opaque server refs cross the command boundary. */
 export async function prepareMessageEditDraft(draft: MessageEditDraft, sessionId: string,
   isEffective: () => boolean, transport?: MessageEditAttachmentTransport): Promise<string> {

@@ -1,6 +1,6 @@
 /** Anthropic Messages stream parsing and compatibility state. */
 import {
-  PyTypeError, PyValueError, isDict, pyAdd, pyDictGet, pyHashKey, pyJoin, pyJsonDumps, pyJsonLoads, pySlice,
+  PyTypeError, PyValueError, isDict, pyAdd, pyDictGet, pyHashKey, pyJoin, pyJsonLoads, pySlice,
   pySortKeys, pyTruthy, pyTypeName,
 } from "@xueness/contracts";
 import { ProviderTransportError, notifyStreamCallback } from "./errors.ts";

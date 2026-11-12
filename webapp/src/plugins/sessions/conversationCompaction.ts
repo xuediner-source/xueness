@@ -1,4 +1,4 @@
-import { getLocale, t as tr, type Locale } from '../../i18n';
+import { t as tr } from '../../i18n';
 import type { TimelineRow } from '../../xuenessWorkbench';
 
 /**
@@ -94,22 +94,6 @@ export function parseSessionCompactions(value: unknown): SessionCompactionRecord
       return typeof field === 'string' || typeof field === 'number' || typeof field === 'boolean';
     });
   });
-}
-
-/**
- * 压缩耗时文本：`12秒` / `1分12秒` / `1小时2分`，en 为 `12s` / `1m 12s` / `1h 2m`。
- *
- * 耗时单位属于占位符实参（整句在 i18n 表里），所以单位必须跟着 locale 走，
- * 否则 en 界面会在英文句子里混进中文单位。不足 1 秒按 1 秒计，避免「0秒」。
- */
-export function formatCompactElapsed(ms: number, locale: Locale = getLocale()): string {
-  const totalSeconds = Math.max(1, Math.round(ms / 1000));
-  const hours = Math.floor(totalSeconds / 3_600);
-  const minutes = Math.floor((totalSeconds % 3_600) / 60);
-  const seconds = totalSeconds % 60;
-  if (hours > 0) return locale === 'en' ? `${hours}h ${minutes}m` : `${hours}小时${minutes}分`;
-  if (minutes > 0) return locale === 'en' ? `${minutes}m ${seconds}s` : `${minutes}分${seconds}秒`;
-  return locale === 'en' ? `${seconds}s` : `${seconds}秒`;
 }
 
 /** 压缩边界的单行说明；耗时来自后端 compactions 累计的 elapsedMs，缺失时只陈述事实。 */

@@ -7,7 +7,7 @@
  * package files, the page sends them from the picked folder. Nothing in a
  * package runs.
  */
-import React, { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Boxes, FolderOpen, PackageOpen, PackagePlus, RefreshCw, ShieldCheck, SquareTerminal, TriangleAlert } from 'lucide-react';
 import { get, post } from '../../xuenessApi';
 import { t as tr, tf } from '../../i18n';

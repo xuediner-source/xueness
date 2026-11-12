@@ -8,7 +8,7 @@ import { readFileSync } from "node:fs";
 import { basename, extname, resolve } from "node:path";
 import { pyJsonLoads } from "@xueness/contracts";
 import { ACTIVE, compileWorkflowScript, DynamicRunError, invoke, latestRunPlan, loadExpert, resolveExpertTarget, resumeExpert, SavedWorkflowLibrary, setWorkerLauncher, sourcePlan, startExpert, stopExpert, WorkflowStore } from "@xueness/plugin-workflows";
-import { workerLauncher } from "../round7-http.ts";
+import { workerLauncher } from "../workflows-http.ts";
 import type { Parser } from "./argparse.ts";
 import { type Cli, dumps, err, out, pyPath } from "./host.ts";
 

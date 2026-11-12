@@ -1,7 +1,7 @@
 {
   "id": "commands",
   "name": "自定义命令",
-  "description": "自定义斜杠提示模板、目录型 Markdown 命令与资源管理。",
+  "description": "自定义斜杠提示模板、目录型 Markdown 命令、内建 /init 与命令资源管理。",
   "version": "1.0.0",
   "apiVersion": 1,
   "defaultEnabled": true,

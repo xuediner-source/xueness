@@ -131,11 +131,6 @@ function mappedEvent(context: AgentContext, event: AgentEvent): { type: Paramete
   return null;
 }
 
-export function runtimeEventMetadata(context: AgentContext): Readonly<Metadata> | null {
-  const value = metadata.get(context);
-  return value ? { ...value } : null;
-}
-
 export function sessionsRuntimeEventsExtension(): AgentExtension {
   const extension: RuntimeExtension = {
     id: "sessions",

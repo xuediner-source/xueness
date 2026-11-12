@@ -25,8 +25,6 @@ export interface InputAdapter {
   toModel(input: Row, context: AdapterContext): Row;
 }
 
-/** ZCode `bash-timeout-policy.ts` defaults. */
-export const BASH_DEFAULT_TIMEOUT_MS = 120_000;
 export const BASH_MAX_TIMEOUT_MS = 600_000;
 const TASK_OUTPUT_DEFAULT_TIMEOUT_MS = 30_000;
 const EXEC_OUTPUT_MAX_WAIT_MS = 30_000;

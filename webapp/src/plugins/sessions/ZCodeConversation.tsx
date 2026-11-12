@@ -28,7 +28,7 @@ import { isImeComposingEvent, isModKeyPressed } from '../../xuenessShortcutDispl
 import './zcode-conversation.css';
 import './sessions.css';
 import { formatCommandArgv } from '../../xuenessWorkbench';
-import { parseDiffPreview, extractToolDiff } from './diffPreview';
+import { extractToolDiff } from './diffPreview';
 import { setPersistedDisclosure } from './disclosureState';
 import {
   applyConversationFindHighlights,

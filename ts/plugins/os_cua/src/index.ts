@@ -45,4 +45,3 @@ export function createOsCua(options: OsCuaOptions): BundledPlugin {
 
 /** Catalog-only binding outside the managed desktop agent. */
 export const osCua = createOsCua({ stateDir: "." });
-export const osCuaPlugin = osCua.plugin;

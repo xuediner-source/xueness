@@ -66,22 +66,6 @@ const FALLBACK_RENDERER: ToolRenderer = Object.freeze({
   safeLabel: "工具详情不可用",
 });
 
-/** Public, immutable registry.  Renderer order is part of the contract:
- * specific identities are resolved before the safe fallback. */
-export const TOOL_RENDERER_REGISTRY: Readonly<Record<ToolRendererId, ToolRenderer>> = Object.freeze({
-  read: READ_RENDERER,
-  edit: EDIT_RENDERER,
-  exec: EXEC_RENDERER,
-  files: FILES_RENDERER,
-  browser: BROWSER_RENDERER,
-  workflow: WORKFLOW_RENDERER,
-  task: TASK_RENDERER,
-  fallback: FALLBACK_RENDERER,
-});
-/** Naming aliases keep the registry usable by sessions subviews that follow
- * the ToolCallBlock terminology used by the reference implementation. */
-export const toolRendererRegistry = TOOL_RENDERER_REGISTRY;
-
 export const TOOL_RENDERER_ORDER: readonly ToolRenderer[] = Object.freeze([
   READ_RENDERER,
   EDIT_RENDERER,
@@ -103,7 +87,6 @@ export function resolveToolRenderer(name: string, effectivePluginIds?: ReadonlyS
   const candidate = TOOL_RENDERER_ORDER.find(renderer => renderer.id !== "fallback" && renderer.matches(internal)) ?? FALLBACK_RENDERER;
   return dependenciesEffective(candidate, effectivePluginIds) ? candidate : FALLBACK_RENDERER;
 }
-export const resolveToolCallRenderer = resolveToolRenderer;
 
 export type ToolStatusShellProps = {
   status: ToolDisplayStatus;

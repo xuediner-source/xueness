@@ -1,5 +1,5 @@
 import * as ts from "typescript";
-import { DynamicEvaluationError, type EvaluationContext, type Marker, fail, forbiddenKey, isMarker, marker, namespace, safeKey, sameValueZero, toSafeString } from "./dynamic-evaluate-internal.ts";
+import { DynamicEvaluationError, type EvaluationContext, fail, forbiddenKey, isMarker, marker, safeKey, sameValueZero } from "./dynamic-evaluate-internal.ts";
 
 export const SHORT_CIRCUIT = marker({ kind: "short" });
 const ARRAY_METHODS = new Set(["map", "filter", "join", "includes", "slice", "concat"]);
@@ -102,6 +102,3 @@ export function isOptionalChain(node: ts.Node): boolean {
     ((ts.isPropertyAccessExpression(node) || ts.isElementAccessExpression(node) || ts.isCallExpression(node)) && node.questionDotToken !== undefined);
 }
 
-export function jsonNamespace(): Marker { return namespace("JSON"); }
-export function mathNamespace(): Marker { return namespace("Math"); }
-export function promiseNamespace(): Marker { return namespace("Promise"); }

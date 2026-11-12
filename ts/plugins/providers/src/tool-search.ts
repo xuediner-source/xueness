@@ -94,8 +94,6 @@ function recordDiscovered(session: Row, names: string[], maxDiscovered: number):
   return next;
 }
 
-export interface DiscoveredToolReference { name: string; description: string }
-
 /** C-TOOL-05: revalidate the persisted discovery window against the live catalog (cold restore, fork/resume). */
 export function hydrateDiscoveredTools(session: Row, catalogNames: readonly string[]): void {
   if (!catalogNames.length) return;

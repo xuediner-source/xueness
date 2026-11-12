@@ -1,4 +1,3 @@
-import React from 'react';
 import { Activity, Bot, FileCheck2, ScrollText } from 'lucide-react';
 import { t as tr } from '../../i18n';
 

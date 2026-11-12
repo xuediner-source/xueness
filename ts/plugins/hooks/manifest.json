@@ -3,7 +3,7 @@
   "id": "hooks",
   "name": "生命周期钩子",
   "description": "按调用授权执行生命周期钩子；工作区钩子经摘要审查与显式信任后并入同一执行器。",
-  "version": "0.2.0",
+  "version": "1.0.0",
   "defaultEnabled": true,
   "capabilities": {
     "exec": [

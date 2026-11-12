@@ -1,6 +1,5 @@
 /** Host ports for the memory plugin's explicit, tool-free project-memory dream. */
 import { readdirSync } from "node:fs";
-import { join } from "node:path";
 import { isDict } from "@xueness/contracts";
 import type { AgentProvider } from "@xueness/agent";
 import { auxiliaryModelAdmission, handoffModelJson } from "@xueness/plugin-providers";

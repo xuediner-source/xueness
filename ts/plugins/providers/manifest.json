@@ -2,8 +2,8 @@
   "apiVersion": 2,
   "id": "providers",
   "name": "模型供应商",
-  "description": "Saved model profiles, bounded connection tests, model discovery and verified compatibility diagnostics.",
-  "version": "0.2.0",
+  "description": "保存模型配置，发现 OpenAI 兼容服务模型，设置轻量参数并诊断本地接口兼容性。",
+  "version": "1.0.0",
   "defaultEnabled": true,
   "capabilities": {
     "fs": {
@@ -47,7 +47,6 @@
     {"id": "providers.execution_fallback", "name": "执行级临时模型选型与失败回退", "nameEn": "Execution-scoped model selection with failure fallback"},
     {"id": "providers.tool_search", "name": "通用工具发现与真实工具引用", "nameEn": "Generic tool discovery with real tool references"},
     {"id": "providers.deferred_tool_call", "name": "延迟工具调用（DeferredToolCall）", "nameEn": "Deferred tool call envelope"},
-    {"id": "providers.execution_ports", "name": "执行选择与请求认证端口", "nameEn": "Execution selection and request-auth ports"},
     {"id": "providers.setup_guidance", "name": "在线与本地模型的首次配置指引", "nameEn": "First-time setup guidance for online and local models"},
     {"id": "providers.tool_recovery", "name": "工具协议诊断、连续错误修复与调用身份校验", "nameEn": "Tool protocol diagnostics, consecutive-error recovery and call identity validation"},
     {"id": "providers.termination", "name": "生成结束原因、截断与步骤时限的可续暂停", "nameEn": "Generation termination, truncation and resumable step or time limits"},
@@ -70,7 +69,6 @@
     "providers"
   ],
   "frontendModules": [
-    "plugins/providers/ProvidersPanel.tsx",
     "plugins/providers/LocalRuntimeMonitor.tsx",
     "plugins/providers/LocalRuntimeProbe.tsx",
     "plugins/providers/runtimeSampling.ts",

@@ -23,9 +23,9 @@
 主机批准的范围包括项目目录、独立任务目录与显式配置的项目根。浏览器的路径提示只是预检，服务器会再次规范化路径并检查目录范围、文件类型与写权限。不能通过保存默认目录扩大宿主允许范围。
 
 ```sh
-python3 -m xueness.web --port 8138
+bin/xueness-web --port 8138
 # 额外批准一个已存在的项目根；可以重复指定
-python3 -m xueness.web --port 8138 --workspace-root /absolute/path/to/project
+bin/xueness-web --port 8138 --workspace-root /absolute/path/to/project
 ```
 
 需要增加范围时重启服务并使用 `--workspace-root`，或使用既有宿主环境根配置。相对路径、普通文件、不存在的目录和整个 `/`、`/tmp` 根不能成为默认工作区。macOS `/var` 与 `/private/var` 等路径别名由服务器规范化处理。
@@ -42,7 +42,7 @@ python3 -m xueness.web --port 8138 --workspace-root /absolute/path/to/project
 
 ## 发布与验证
 
-使用 `tools/prepare_release.py` 创建本地 0.1.0 源码归档、逐文件 manifest 和 SHA-256 校验。包内包括预构建 Web，运行后端无需 Node.js；重建前端才需要安装 npm 依赖。归档排除本地状态、凭据、Git、依赖安装、截图与旧机壳。详见 [本地发布准备](https://github.com/xuediner-source/xueness-private-tests/blob/main/archive/project/docs/release-preparation.md)。本批没有远程发布、创建 tag 或推送。
+（历史记录，该脚本已随 Python 后端移除）当时使用 `tools/prepare_release.py` 创建本地 0.1.0 源码归档、逐文件 manifest 和 SHA-256 校验。包内包括预构建 Web，运行后端无需 Node.js；重建前端才需要安装 npm 依赖。归档排除本地状态、凭据、Git、依赖安装、截图与旧机壳。详见 [本地发布准备](https://github.com/xuediner-source/xueness-private-tests/blob/main/archive/project/docs/release-preparation.md)。本批没有远程发布、创建 tag 或推送。
 
 已完成全新 `npm ci --offline` 后的 TypeScript 检查、264 项前端测试、生产构建与自有事件/帧 golden 校验；构建只剩 PPTX 预览器的大分包体积提示。退役机壳检查扫描了 92 个原生源文件与 8 个构建资产，没有旧壳/vendor 引用。
 
