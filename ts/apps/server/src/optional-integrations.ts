@@ -1,8 +1,9 @@
-/** Wiring for the host's three reviewed optional ports. No implementation is shipped here. */
+/** Wiring for the host's reviewed optional ports. No implementation is shipped here. */
 import { loadOptionalModule, optionalInstalled } from "@xueness/kernel";
 import type * as SubscriptionModule from "@xueness/plugin-subscriptions";
 import type * as WorkbuddyModule from "@xueness/plugin-workbuddy";
 import type * as MonitorModule from "@xueness/plugin-model_monitor";
+import type * as TavernModule from "@xueness/plugin-tavern";
 import type { ChatProvider } from "@xueness/providers";
 import type { ExternalProfiles } from "@xueness/plugin-providers";
 
@@ -70,6 +71,15 @@ export function createOptionalMonitor(o: Context): HttpPort {
   return httpPort(o, "model_monitor", ["GET /api/model_monitor", "POST /api/model_monitor/clear"], () => {
     if (!o.enabled("model_monitor") || !optionalInstalled(o.stateDir, "model_monitor")) { implementation = null; return null; }
     implementation ??= (loadOptionalModule(o.stateDir, "model_monitor") as typeof MonitorModule).createModelMonitorHttp(o);
+    return { http: implementation };
+  });
+}
+
+export function createOptionalTavern(o: Context): HttpPort {
+  let implementation: ReturnType<typeof TavernModule.createTavernHttp> | null = null;
+  return httpPort(o, "tavern", ["GET /api/tavern", "POST /api/tavern/characters", "DELETE /api/tavern/characters/:id", "POST /api/tavern/worldbooks", "DELETE /api/tavern/worldbooks/:id", "POST /api/tavern/brief"], () => {
+    if (!o.enabled("tavern") || !optionalInstalled(o.stateDir, "tavern")) { implementation = null; return null; }
+    implementation ??= (loadOptionalModule(o.stateDir, "tavern") as typeof TavernModule).createTavernHttp(o);
     return { http: implementation };
   });
 }

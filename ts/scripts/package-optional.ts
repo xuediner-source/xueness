@@ -11,6 +11,7 @@ const definitions = [
   { id: "subscriptions", packageId: "xueness-subscriptions" },
   { id: "model_monitor", packageId: "xueness-model-monitor" },
   { id: "workbuddy", packageId: "xueness-workbuddy" },
+  { id: "tavern", packageId: "xueness-tavern" },
 ];
 function walk(directory: string, prefix: string): string[] {
   return readdirSync(directory, { withFileTypes: true }).sort((a, b) => a.name.localeCompare(b.name, "en")).flatMap(entry => {

@@ -3,9 +3,9 @@
     "id": "subscriptions",
     "packageId": "xueness-subscriptions",
     "version": "1.0.0",
-    "sha256": "581aa22e1a9383482db752879923a544bdac0485878d86acf0ea7900e30b4622",
+    "sha256": "4c27c14e929aa0025351476d3ab9f11468878d0fb0dff764620a08962b9a56d2",
     "bytes": 502007,
-    "url": "https://raw.githubusercontent.com/xuediner-source/xueness/main/marketplace/packages/xueness-subscriptions-1.0.0-581aa22e1a938348.json.gz",
+    "url": "https://raw.githubusercontent.com/xuediner-source/xueness/main/marketplace/packages/xueness-subscriptions-1.0.0-4c27c14e929aa002.json.gz",
     "files": [
       {
         "path": "backend/assets/catalog.json",
@@ -134,9 +134,9 @@
         "executable": false
       },
       {
-        "path": "frontend/optional-subscriptions-kDtkUHWK.js",
+        "path": "frontend/optional-subscriptions-D0v-z5vG.js",
         "bytes": 13315,
-        "sha256": "6b20ce07a542f136677a748789d722dd5023b3217cb92a359d1ec37dc03bf81c",
+        "sha256": "4dd614b73c6172eb0b8c3d7b180e3245dcd7272c1f8840d2ea66e2fc9feb6c21",
         "executable": false
       }
     ]
@@ -145,9 +145,9 @@
     "id": "model_monitor",
     "packageId": "xueness-model-monitor",
     "version": "1.0.0",
-    "sha256": "42f1d1940c0452d2d710fab2e51537eb3e340751a934fb3807457c8b1e790641",
+    "sha256": "5d2e4ded9aba994c48549702f1c8d42d25539f7b90cedd194d7ec3866606d80d",
     "bytes": 41958,
-    "url": "https://raw.githubusercontent.com/xuediner-source/xueness/main/marketplace/packages/xueness-model-monitor-1.0.0-42f1d1940c0452d2.json.gz",
+    "url": "https://raw.githubusercontent.com/xuediner-source/xueness/main/marketplace/packages/xueness-model-monitor-1.0.0-5d2e4ded9aba994c.json.gz",
     "files": [
       {
         "path": "backend/manifest.json",
@@ -186,15 +186,15 @@
         "executable": false
       },
       {
-        "path": "frontend/optional-model_monitor-BQ4uLVXj.css",
-        "bytes": 8114,
-        "sha256": "39f1707119e9b1f1a1531d7d18adbfde9ade329410a0de41d0450f649e62fc0c",
+        "path": "frontend/optional-model_monitor-4V5KZ1z4.js",
+        "bytes": 10711,
+        "sha256": "ef0ccfabad2acac2b4225d0f6ed135c8479f776fc6d4875c3f8066be57d65553",
         "executable": false
       },
       {
-        "path": "frontend/optional-model_monitor-DBe6unzR.js",
-        "bytes": 10711,
-        "sha256": "fd571fa9a5db7de698091a9b8052f570b687a95612b418ee8f54ccf69ede1abf",
+        "path": "frontend/optional-model_monitor-BQ4uLVXj.css",
+        "bytes": 8114,
+        "sha256": "39f1707119e9b1f1a1531d7d18adbfde9ade329410a0de41d0450f649e62fc0c",
         "executable": false
       }
     ]
@@ -203,9 +203,9 @@
     "id": "workbuddy",
     "packageId": "xueness-workbuddy",
     "version": "1.0.0",
-    "sha256": "c058d8f71331512693db27d520eaed5f71955b916059f4bbec29a3093a097b9e",
+    "sha256": "a4c5381f419a4dadcd45a51d8a0f07ec4db28ce238f4899b2a42c5b72cde6c34",
     "bytes": 18134136,
-    "url": "https://raw.githubusercontent.com/xuediner-source/xueness/main/marketplace/packages/xueness-workbuddy-1.0.0-c058d8f713315126.json.gz",
+    "url": "https://raw.githubusercontent.com/xuediner-source/xueness/main/marketplace/packages/xueness-workbuddy-1.0.0-a4c5381f419a4dad.json.gz",
     "files": [
       {
         "path": "backend/assets/workbuddy2api-panel.exe",
@@ -274,15 +274,79 @@
         "executable": false
       },
       {
-        "path": "frontend/optional-workbuddy-C716SelN.js",
+        "path": "frontend/optional-workbuddy-BBfjRueT.js",
         "bytes": 7565,
-        "sha256": "f7bf11a0c2ca5edc39d1ab2494a986d51409c68d6d714f730f5ce3e1eee6b94d",
+        "sha256": "6af38ffd1b4963b3ebc37e291bc93e085ca446f80cc54d167b0164a87ad21677",
         "executable": false
       },
       {
         "path": "frontend/optional-workbuddy-DsjSw6Bn.css",
         "bytes": 3693,
         "sha256": "17f10eb0e4f842d3542865e9ff31302343174c5d476e22991696005a832ab0ad",
+        "executable": false
+      }
+    ]
+  },
+  "tavern": {
+    "id": "tavern",
+    "packageId": "xueness-tavern",
+    "version": "1.0.0",
+    "sha256": "754530ff257b0705fda63f73c448421b23922b7e51daa260edc934d2b54dc98a",
+    "bytes": 42942,
+    "url": "https://raw.githubusercontent.com/xuediner-source/xueness/main/marketplace/packages/xueness-tavern-1.0.0-754530ff257b0705.json.gz",
+    "files": [
+      {
+        "path": "backend/manifest.json",
+        "bytes": 1287,
+        "sha256": "caeb83be7e5b10d666adfb0c8054c6d7cd55968d5f7d1b2268c7bc7d64400dca",
+        "executable": false
+      },
+      {
+        "path": "backend/package.json",
+        "bytes": 278,
+        "sha256": "7a6165a3ff1ca621c6b2083e984eb65296e2c68c64128a97907a5e1e8946926c",
+        "executable": false
+      },
+      {
+        "path": "backend/src/cards.ts",
+        "bytes": 6482,
+        "sha256": "51ec9a053c314235179c7a5b3a9ee90a728a0ce73f393ad98e1834cebe6730d2",
+        "executable": false
+      },
+      {
+        "path": "backend/src/http.ts",
+        "bytes": 5512,
+        "sha256": "0f5444573e8ba7e0a6fe1321918d7e08b65bf3f83b43c47b0b77d86db54f9a83",
+        "executable": false
+      },
+      {
+        "path": "backend/src/index.ts",
+        "bytes": 983,
+        "sha256": "4a1453a8cb1d8f711e69a194e3573e3762f12d2ae864c4e0efeb3c910a8839c5",
+        "executable": false
+      },
+      {
+        "path": "backend/src/prompt.ts",
+        "bytes": 4018,
+        "sha256": "3792a41f08b7be5ea8e7aa1b939db5459258cca979b419dc6148f56c3a23045b",
+        "executable": false
+      },
+      {
+        "path": "backend/src/store.ts",
+        "bytes": 2715,
+        "sha256": "e0382da06f383312ca3c5771c3a7829da7e36697dbca87fab7286303ded0aac3",
+        "executable": false
+      },
+      {
+        "path": "frontend/optional-tavern-B0GHgonL.css",
+        "bytes": 3279,
+        "sha256": "64e267c1a59082d2e0481d8ec58f4e60ded66e5065c1aa1485b705f57ea26f8b",
+        "executable": false
+      },
+      {
+        "path": "frontend/optional-tavern-CbNo8ga4.js",
+        "bytes": 7282,
+        "sha256": "f1b1c68c1aa72946b038edbed806c12e58469ee4167781633c49b3519d2c1f8f",
         "executable": false
       }
     ]

@@ -7,7 +7,7 @@ import pins from "./optional-packages.json" with { type: "json" };
 
 export type OptionalFile = { path: string; bytes: number; sha256: string; executable: boolean };
 export type OptionalArtifact = { id: string; packageId: string; version: string; sha256: string; bytes: number; url: string; files: OptionalFile[] };
-export const OPTIONAL_IDS = ["subscriptions", "model_monitor", "workbuddy"] as const;
+export const OPTIONAL_IDS = ["subscriptions", "model_monitor", "workbuddy", "tavern"] as const;
 export type OptionalId = typeof OPTIONAL_IDS[number];
 const registry = pins as Record<string, OptionalArtifact>;
 const requireModule = createRequire(import.meta.url);

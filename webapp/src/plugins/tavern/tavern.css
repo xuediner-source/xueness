@@ -1,0 +1,34 @@
+@layer plugins {
+/* Settings → 酒馆: character and world-book library, and the start-a-roleplay controls. */
+.xn-tavern { display: flex; flex-direction: column; gap: 14px; min-width: 0; color: var(--fg); font-size: 13px; }
+.xn-tavern p, .xn-tavern h3 { margin: 0; }
+.xn-tavern h3 { margin-top: 6px; font-size: calc(var(--xn-ui-font-size, 14px) + 1px); font-weight: 600; }
+.xn-tavern__intro { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.xn-tavern__intro > p { max-width: 62ch; color: var(--fg-muted); line-height: 1.6; }
+.xn-tavern__actions { display: flex; flex: none; gap: 8px; }
+.xn-tavern__field { display: flex; align-items: center; gap: 10px; color: var(--fg-muted); font-size: 12px; }
+.xn-tavern__field input { width: 220px; min-height: 30px; padding: 0 10px; border: 1px solid var(--border-strong); border-radius: 8px; background: var(--bg-card); color: var(--fg); font: inherit; }
+.xn-tavern__field input:focus-visible, .xn-tavern-card select:focus-visible, .xn-tavern-button:focus-visible { outline: 2px solid var(--border-focus); outline-offset: 2px; }
+.xn-tavern__muted { color: var(--fg-muted); line-height: 1.6; }
+.xn-tavern__error { display: flex; align-items: center; gap: 8px; padding: 10px 12px; border: 1px solid var(--error-border); border-radius: var(--radius-md); background: var(--error-bg); color: var(--error-fg); font-size: 12px; }
+.xn-tavern__notice { padding: 9px 12px; border: 1px solid var(--ok-border); border-radius: var(--radius-md); background: var(--ok-bg); color: var(--ok-fg); font-size: 12px; }
+.xn-tavern__list { display: flex; flex-direction: column; gap: 10px; margin: 0; padding: 0; list-style: none; }
+.xn-tavern > .xn-empty { border: 1px dashed var(--border-strong); border-radius: var(--radius-lg, 12px); }
+.xn-tavern-button { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 30px; padding: 0 12px; border: 1px solid var(--border-strong); border-radius: 8px; background: var(--bg-card); color: var(--fg); font: inherit; font-size: 12px; white-space: nowrap; cursor: pointer; }
+.xn-tavern-button:hover:not(:disabled) { background: var(--bg-hover); }
+.xn-tavern-button:disabled { opacity: .45; cursor: default; }
+.xn-tavern-button--primary { border-color: var(--primary); background: var(--primary); color: var(--primary-fg); }
+.xn-tavern-button--primary:hover:not(:disabled) { background: color-mix(in srgb, var(--primary) 86%, var(--bg)); }
+.xn-tavern-card { display: flex; flex-direction: column; gap: 8px; padding: 14px 16px; border: 1px solid var(--border); border-radius: 12px; background: var(--bg-card); }
+.xn-tavern-card > header { display: flex; align-items: baseline; gap: 10px; min-width: 0; }
+.xn-tavern-card > header label { display: inline-flex; align-items: center; gap: 8px; }
+.xn-tavern-card > header strong { font-size: 14px; font-weight: 600; }
+.xn-tavern-card > header span, .xn-tavern-card > small { overflow: hidden; color: var(--fg-muted); font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
+.xn-tavern-card > p { display: -webkit-box; overflow: hidden; color: var(--fg-muted); font-size: 12px; line-height: 1.6; -webkit-line-clamp: 3; -webkit-box-orient: vertical; }
+.xn-tavern-card > footer { display: flex; align-items: center; justify-content: flex-end; gap: 8px; padding-top: 10px; border-top: 1px solid color-mix(in srgb, var(--border) 70%, transparent); }
+.xn-tavern-card select { min-width: 0; max-width: 320px; margin-right: auto; min-height: 30px; padding: 0 8px; border: 1px solid var(--border-strong); border-radius: 8px; background: var(--bg-card); color: var(--fg); font: inherit; font-size: 12px; }
+
+@media (max-width: 720px) {
+  .xn-tavern__intro { flex-direction: column; align-items: stretch; }
+}
+}

@@ -35,6 +35,7 @@ import { remote } from "@xueness/plugin-remote";
 import { bots } from "@xueness/plugin-bots";
 import subscriptionsManifest from "../../../plugins/subscriptions/manifest.json" with { type: "json" };
 import workbuddyManifest from "../../../plugins/workbuddy/manifest.json" with { type: "json" };
+import tavernManifest from "../../../plugins/tavern/manifest.json" with { type: "json" };
 import { nativeOps } from "@xueness/plugin-native_ops";
 import { batchCalls } from "@xueness/plugin-batch_calls";
 import { osCua } from "@xueness/plugin-os_cua";
@@ -46,5 +47,6 @@ import { deepseekHarness } from "@xueness/plugin-deepseek_harness";
 const modelMonitor: BundledPlugin = { manifest: modelMonitorManifest, plugin: definePlugin({ name: "model_monitor", apply() {} }) };
 const subscriptions: BundledPlugin = { manifest: subscriptionsManifest, plugin: definePlugin({ name: "subscriptions", apply() {} }) };
 const workbuddy: BundledPlugin = { manifest: workbuddyManifest, plugin: definePlugin({ name: "workbuddy", apply() {} }) };
+const tavern: BundledPlugin = { manifest: tavernManifest, plugin: definePlugin({ name: "tavern", apply() {} }) };
 
-export const BUNDLED_TS_PLUGINS: readonly BundledPlugin[] = Object.freeze([files, shell, providers, sessions, commands, settings, planning, git, mcp, skills, hooks, subagents, memory, network, remote, workflows, office, browser, extensions, diagnostics, tools, terminal, updates, desktop, usage, modelMonitor, onboarding, bots, subscriptions, automation, workbuddy, nativeOps, batchCalls, osCua, deepseekHarness, contextLens]);
+export const BUNDLED_TS_PLUGINS: readonly BundledPlugin[] = Object.freeze([files, shell, providers, sessions, commands, settings, planning, git, mcp, skills, hooks, subagents, memory, network, remote, workflows, office, browser, extensions, diagnostics, tools, terminal, updates, desktop, usage, modelMonitor, onboarding, bots, subscriptions, automation, workbuddy, nativeOps, batchCalls, osCua, deepseekHarness, contextLens, tavern]);

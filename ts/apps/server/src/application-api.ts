@@ -186,7 +186,7 @@ export async function createApplicationApi(options: ApplicationApiOptions): Prom
   const shellHttp = createShellSettingsApi({ stateDir: options.stateDir, enabled });
   const networkHttp = createNetworkHttp({ stateDir: options.stateDir, enabled, env });
   const catalogNet = nodeNet();
-  const extensionsHttp = createExtensionsHttp({ stateDir: options.stateDir, projectRoot: options.projectRoot, enabled, env, importers: [skillPackageImporter({ stateDir: options.stateDir }), rulePackImporter({ store: textPackageStore(options.stateDir, "cursor-rules") }), mcpPackageImporter({ stateDir: options.stateDir }), harnessImporter({ stateDir: options.stateDir })], writeResource: (kind, data) => (kind === "skills" ? skillsHttp : commands).dispatch("POST", ["api", "resources", kind], {}, data), optionalChanged: () => round6.syncOptional(), fetchUrl: async (url) => {
+  const extensionsHttp = createExtensionsHttp({ stateDir: options.stateDir, projectRoot: options.projectRoot, enabled, env, importers: [skillPackageImporter({ stateDir: options.stateDir }), rulePackImporter({ store: textPackageStore(options.stateDir, "cursor-rules") }), mcpPackageImporter({ stateDir: options.stateDir }), harnessImporter({ stateDir: options.stateDir })], writeResource: (kind, data) => (kind === "skills" ? skillsHttp : kind === "hooks" ? hooksHttp : commands).dispatch("POST", ["api", "resources", kind], {}, data), optionalChanged: () => round6.syncOptional(), fetchUrl: async (url) => {
     const page = await fetchPage(catalogNet, url);
     return { output: typeof page.output === "string" ? page.output : "", truncated: page.truncated === true };
   } });

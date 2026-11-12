@@ -27,9 +27,11 @@ export interface FetchUrlResult {
 export const SUBSCRIPTIONS_PACKAGE_ID = "xueness-subscriptions";
 export const MONITOR_PACKAGE_ID = "xueness-model-monitor";
 export const WORKBUDDY_PACKAGE_ID = "xueness-workbuddy";
+export const TAVERN_PACKAGE_ID = "xueness-tavern";
 export const SUBSCRIPTIONS_MARKET_MANIFEST = { id: SUBSCRIPTIONS_PACKAGE_ID, version: "1.0.0", apiVersion: 1, builtin: "subscriptions", capabilities: [] as string[], enabled: false };
 export const MONITOR_MARKET_MANIFEST = { id: MONITOR_PACKAGE_ID, version: "1.0.0", apiVersion: 1, builtin: "model_monitor", capabilities: [] as string[], enabled: false };
 export const WORKBUDDY_MARKET_MANIFEST = { id: WORKBUDDY_PACKAGE_ID, version: "1.0.0", apiVersion: 1, builtin: "workbuddy", capabilities: [] as string[], enabled: false };
+export const TAVERN_MARKET_MANIFEST = { id: TAVERN_PACKAGE_ID, version: "1.0.0", apiVersion: 1, builtin: "tavern", capabilities: [] as string[], enabled: false };
 
 const CORE_PACKAGES = new Set(["xueness-skills", "xueness-hooks", "xueness-mcp", "xueness-subagents"]);
 
@@ -63,7 +65,9 @@ function loadRows(url: string, fetchUrl: MarketplaceOptions["fetchUrl"]): unknow
   withoutMonitor.push(packageRow(MONITOR_PACKAGE_ID, "返回模型监测", "可选安装。随会话显示请求型号与上游返回型号，判断一致或不同；不自动发送额外请求。", MONITOR_MARKET_MANIFEST));
   const withoutWorkbuddy = withoutMonitor.filter((row) => !isDict(row) || row.id !== WORKBUDDY_PACKAGE_ID);
   withoutWorkbuddy.push(packageRow(WORKBUDDY_PACKAGE_ID, "WorkBuddy 号池", "可选安装的本机号池网关。请自备认证文件并放入 state/workbuddy/auths；安装后还需在插件管理中启用。", WORKBUDDY_MARKET_MANIFEST));
-  return withoutWorkbuddy;
+  const withoutTavern = withoutWorkbuddy.filter((row) => !isDict(row) || row.id !== TAVERN_PACKAGE_ID);
+  withoutTavern.push(packageRow(TAVERN_PACKAGE_ID, "酒馆", "可选安装。导入 SillyTavern 兼容的角色卡与世界书，从角色设定开始一段角色扮演对话；安装后还需在插件管理中启用。", TAVERN_MARKET_MANIFEST));
+  return withoutTavern;
 }
 
 /** `marketplace.catalog`. Throws `PyValueError` on a bad listing and `NetworkError` when fetch is missing. */
@@ -83,8 +87,9 @@ export function marketplaceCatalog(stateDir: string, options: MarketplaceOptions
     const declared = Object.hasOwn(row, "sha256") ? row.sha256 : itemDigest;
     if (declared !== itemDigest) throw new PyValueError("marketplace digest mismatch");
     const current = installed.get(manifest.id);
-    const reserved = manifest.id === SUBSCRIPTIONS_PACKAGE_ID || manifest.id === MONITOR_PACKAGE_ID || manifest.id === WORKBUDDY_PACKAGE_ID;
-    const artifact = reserved ? optionalArtifactByPackage(manifest.id) : null;
+    // Official downloadable plugins are exactly the packages the kernel pins; nothing else may claim that delivery.
+    const artifact = optionalArtifactByPackage(manifest.id);
+    const reserved = artifact !== null;
     const available = !reserved || optionalInstalled(stateDir, manifest.builtin);
     output.push({
       id: manifest.id,
@@ -118,7 +123,7 @@ function versionAtMost(left: string, right: string): boolean {
 
 /** `marketplace.install`. The written manifest is forced `enabled: false`. */
 export function installPackage(stateDir: string, id: string, expected: unknown, update: boolean, options: MarketplaceOptions = {}): InstallResult {
-  if ([SUBSCRIPTIONS_PACKAGE_ID, MONITOR_PACKAGE_ID, WORKBUDDY_PACKAGE_ID].includes(id)) throw new PyValueError("official plugins must be downloaded and verified before installation");
+  if (optionalArtifactByPackage(id) !== null) throw new PyValueError("official plugins must be downloaded and verified before installation");
   const item = marketplaceCatalog(stateDir, options).find((row) => row.id === id);
   if (!item || expected !== item.sha256) throw new PyValueError("catalog changed; review the package again");
   const installed = item.installedVersion;

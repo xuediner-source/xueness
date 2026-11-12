@@ -5,6 +5,7 @@ import { EvidenceJournal } from "./journal.ts";
 import { PermissionLedger, type LedgerState } from "./permissions.ts";
 import { unwiredAdapter, type OsAdapterPort } from "./platform.ts";
 import { createMacOsAdapter } from "./macos.ts";
+import { createWindowsAdapter } from "./windows.ts";
 import { osCuaTools } from "./tools.ts";
 
 export { EvidenceJournal, DEFAULT_MAX_ENTRIES, type JournalEntry } from "./journal.ts";
@@ -31,7 +32,7 @@ export function createOsCua(options: OsCuaOptions): BundledPlugin {
   if (options.grants) ledger?.restore(options.grants, now?.());
   const journal = new EvidenceJournal({ now });
   return { manifest, plugin: definePlugin({ name: "os_cua", apply(ctx) {
-    const adapter = options.adapter ?? (desktop ? createMacOsAdapter(ctx, desktop.enabled) : unwiredAdapter(process.platform));
+    const adapter = options.adapter ?? (!desktop ? unwiredAdapter(process.platform) : process.platform === "win32" ? createWindowsAdapter(ctx, desktop.enabled) : createMacOsAdapter(ctx, desktop.enabled));
     for (const tool of osCuaTools({
       adapter: async () => adapter, ledger, journal, now, windowRequired: !!desktop,
       admit: desktop ? (env) => {

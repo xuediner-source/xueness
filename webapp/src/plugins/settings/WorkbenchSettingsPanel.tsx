@@ -16,7 +16,7 @@ import { RegionBoundary } from "../../ui/primitives";
 import { ToolExecutionSettings } from "../tools/ToolExecutionSettings";
 import type { ComposerCatalogState } from "../sessions/useComposerCatalog";
 import type { WorkbenchSettings } from "./useWorkbenchSettings";
-import { CapabilitiesPanel, DesktopUpdates, ModelManager, ModelMonitorPanel, RemoteConnections, SubscriptionsPanel, WorkbuddySettingsPanel,
+import { CapabilitiesPanel, DesktopUpdates, ModelManager, ModelMonitorPanel, RemoteConnections, TavernPanel, SubscriptionsPanel, WorkbuddySettingsPanel,
   XuenessAutomationsPanel, XuenessDiagnosticsPanel, XuenessMarketplace, XuenessMcpTools, XuenessUsageSettings } from "./workbenchSettingsViews";
 
 const DesktopNotificationSettings = lazy(() => import('../desktop/DesktopNotificationSettings').then(module => ({ default: module.DesktopNotificationSettings })));
@@ -53,6 +53,7 @@ type WorkbenchSettingsPanelProps = {
   providerFocusId: string | undefined;
   setPanel: (panel: WorkbenchPanel) => void;
   startNewTask: () => void;
+  appendTextToComposer: (targetSessionId: string | null, text: string, workspaceRoot?: string) => void;
   setRemoteDialogOpen: (open: boolean) => void;
 };
 
@@ -85,7 +86,7 @@ export function WorkbenchSettingsPanel(props: WorkbenchSettingsPanelProps) {
 
 /** The selected section's content, rendered directly inside the section's suspense boundary. */
 function settingsContent({ settings, isPluginEffective, capabilityKinds, capSections, loadCapSlot, pluginCatalog, pluginCatalogLoading, pluginCatalogError, refreshPluginCatalog,
-  togglePlugin, locale, busy, session, activeId, activeIdRef, composer, providerFocusId, setPanel, startNewTask, setRemoteDialogOpen }: WorkbenchSettingsPanelProps) {
+  togglePlugin, locale, busy, session, activeId, activeIdRef, composer, providerFocusId, setPanel, startNewTask, appendTextToComposer, setRemoteDialogOpen }: WorkbenchSettingsPanelProps) {
   const { settingsValues, capabilities, settingsSections, settingsSection, setSettingsSection, settingsSaving, handleToggleCapability, handleUpdateSetting } = settings;
   const { draftRoot, composerCatalog, setDraftRoot, setIsolatedWorkspace, updateChoices, refreshComposerCatalog, selectProviderForCurrentRun } = composer;
   const inlineSettings = ["general", "appearance", "shortcuts", "agent"].includes(settingsSection);
@@ -98,7 +99,7 @@ function settingsContent({ settings, isPluginEffective, capabilityKinds, capSect
       if (!activeIdRef.current) updateChoices({ browser: enabled });
       await handleUpdateSetting("browserControlEnabled", enabled);
     }} />;
-  const pluginId = ({providers:"providers",subscriptions:'subscriptions',workbuddy:'workbuddy','model-monitor':'model_monitor',browser:"browser",memory:"memory",subagents:"subagents",mcp:"mcp",skills:"skills",commands:"commands",hooks:"hooks",usage:"usage",'package-imports':'extensions'} as Record<string,string>)[settingsSection];
+  const pluginId = ({providers:"providers",subscriptions:'subscriptions',workbuddy:'workbuddy','model-monitor':'model_monitor',tavern:'tavern',browser:"browser",memory:"memory",subagents:"subagents",mcp:"mcp",skills:"skills",commands:"commands",hooks:"hooks",usage:"usage",'package-imports':'extensions'} as Record<string,string>)[settingsSection];
   if (pluginId && !isPluginEffective(pluginId)) return <FeatureUnavailable feature={settingsSections.find(section => section.id === settingsSection)?.label ?? settingsSection} onManage={() => setSettingsSection("modules")} />;
   if (inlineSettings) return <SettingsSections embedded sections={[]} activeSection={settingsSection}
     values={{...settingsValues, language: settingsValues.language ?? locale}} capabilities={capabilities}
@@ -135,6 +136,7 @@ function settingsContent({ settings, isPluginEffective, capabilityKinds, capSect
   if (settingsSection === 'subscriptions') return <SubscriptionsPanel embedded onChanged={() => void refreshComposerCatalog()} onSelectModel={id => { updateChoices({ provider: 'real', provider_id: id, model: undefined, reasoning_effort: undefined }); void refreshComposerCatalog(); setPanel('chat'); }} />;
   if (settingsSection === 'workbuddy') return <WorkbuddySettingsPanel />;
   if (settingsSection === 'model-monitor') return <ModelMonitorPanel embedded />;
+  if (settingsSection === 'tavern') return <TavernPanel onStart={text => { startNewTask(); appendTextToComposer(null, text); }} />;
   if (settingsSection === 'package-imports') return <PackageImports onManagePlugins={() => setSettingsSection('modules')} />;
   if (settingsSection === "marketplace") return <XuenessMarketplace embedded onInstalled={() => void refreshPluginCatalog()} onManagePlugins={() => setSettingsSection('plugins')} />;
   if (settingsSection === "memory") return <XuenessMemorySettings enabled={settingsValues.memoryEnabled !== false} onEnabledChange={value => void handleUpdateSetting("memoryEnabled", value)} />;

@@ -61,20 +61,11 @@ xueness plugin import ./dsh-agent-teams --all-skills
 
 导入只读取数据。扩展包里没有任何内容会被 import、求值或执行。
 
-## 4. 插件内尚未接入运行流程的库代码
+## 4. 插件的范围
 
-下列模块随插件一起发布并通过类型检查，但 Agent 运行流程没有调用它们。它们在功能模块页面列出的功能项目前不产生运行时效果。
+DeepSeek Harness 插件现在只做一件事：扩展包导入库（功能 `deepseek_harness.library`）。模块是 `library`（私有副本的写入、重检和移除）、`importer`（接入通用扩展包导入）、`cordis-plugin`（识别 DSH 代码插件并说明为什么不能导入）、`loader` 和 `registry`（清单校验与贡献名登记）。
 
-| 模块 | 内容 |
-| --- | --- |
-| `prefix-cache.ts` | 请求前缀的规范化与公共前缀测量。实际会话中的前缀复用测量由 providers 插件的 `runtime-prefix.ts` 提供 |
-| `reasoning-bridge.ts` | `reasoning_content` / `reasoning_effort` 与 Anthropic `thinking` 的双向转换 |
-| `builtins/` | 编辑后验收门禁、有限次自修复、Critic-Solver 评审编排、轨迹记录、仓库地图 |
-| `bench/`、`chaos/`、`tournament/`、`optimizer/`、`swarm/` | 确定性基准、压力场景、淘汰赛计分、基因优化循环、槽位协调 |
-| `compat/` | SWE-bench 任务导入与评估、沙箱校验 |
-| `hook-bridge.ts`、`adapter.ts`、`registry.ts`、`loader.ts` | 清单加载、挂载登记与钩子映射。导入库使用其中的 `loader` 和 `registry` |
-
-是否把其中有通用价值的部分移到各自归属的插件，或者从功能目录中移除，见任务清单 D1。
+早期版本随插件发布过一批没有被 Agent 运行流程调用的模块（前缀缓存、推理字段转换、验收门禁、基准、压力场景、淘汰赛、优化循环、槽位协调、SWE-bench 导入等）。它们从未产生运行时效果，已经删除，功能目录中的对应条目也一并移除。会话中的前缀复用测量由 providers 插件的 `runtime-prefix.ts` 提供。
 
 ## 5. 开发检查
 

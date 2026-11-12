@@ -15,7 +15,7 @@ import { atomicWriteJson, isDirectory } from "./io.ts";
 
 const API_VERSION = 1;
 const CAPABILITIES = ["command", "network", "filesystem-write"];
-const BUILTINS = new Set(["skills", "hooks", "subagents", "mcp", "subscriptions", "model_monitor", "workbuddy"]);
+const BUILTINS = new Set(["skills", "hooks", "subagents", "mcp", "subscriptions", "model_monitor", "workbuddy", "tavern"]);
 const VERSION = /^\d+\.\d+\.\d+$/;
 
 export interface DataManifest {

@@ -12,6 +12,7 @@ export const ModelManager = lazy(() => import("../providers").then(module => ({ 
 export const SubscriptionsPanel = lazy(() => import('../subscriptions').then(module => ({ default: module.SubscriptionsPanel })));
 export const WorkbuddySettingsPanel = lazy(() => import('../workbuddy/WorkbuddySettings').then(module => ({ default: module.WorkbuddySettingsPanel })));
 export const ModelMonitorPanel = lazy(() => import('../model_monitor').then(module => ({ default: module.ModelMonitorPanel })));
+export const TavernPanel = lazy(() => import('../tavern').then(module => ({ default: module.TavernPanel })));
 export const RemoteConnections = lazy(() => import("../remote").then(module => ({ default: module.RemoteConnections })));
 export const XuenessMarketplace = lazy(() => import("../extensions").then(module => ({ default: module.XuenessMarketplace })));
 export const XuenessAutomationsPanel = lazy(() => import("../automation").then(module => ({ default: module.XuenessAutomationsPanel })));

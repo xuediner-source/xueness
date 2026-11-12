@@ -2,7 +2,7 @@
   "apiVersion": 2,
   "id": "os_cua",
   "name": "OS Computer Use",
-  "description": "macOS desktop computer use with window listing, screenshots, accessibility snapshots and approval-gated single-action input.",
+  "description": "Desktop computer use on macOS and Windows: window listing, screenshots, accessibility snapshots and approval-gated single-action input.",
   "version": "1.0.0",
   "defaultEnabled": false,
   "dependencies": [
@@ -10,7 +10,8 @@
   ],
   "capabilities": {
     "exec": [
-      "xueness-os-cua"
+      "xueness-os-cua",
+      "powershell.exe"
     ],
     "fs": {
       "read": [
@@ -62,13 +63,13 @@
     },
     {
       "id": "os_cua.permissions",
-      "name": "逐次审批与 macOS 系统权限检查",
-      "nameEn": "Per-action approval and macOS permission checks"
+      "name": "逐次审批；macOS 检查系统权限，Windows 报告无法操作的管理员窗口",
+      "nameEn": "Per-action approval; macOS permission checks, and refusal of elevated windows on Windows"
     },
     {
       "id": "os_cua.platform_ports",
-      "name": "macOS 14 及以上桌面原生适配器",
-      "nameEn": "Native desktop adapter for macOS 14 or later"
+      "name": "macOS 14 及以上、Windows 10 及以上的桌面原生适配器",
+      "nameEn": "Native desktop adapters for macOS 14 or later and Windows 10 or later"
     },
     {
       "id": "os_cua.evidence",
@@ -86,6 +87,7 @@
     "native/Worker.swift",
     "native/Windows.swift",
     "native/Screen.swift",
-    "native/Input.swift"
+    "native/Input.swift",
+    "native/windows-worker.ps1"
   ]
 }

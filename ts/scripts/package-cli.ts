@@ -21,7 +21,7 @@ cpSync(built, join(payload, "backend-ts"), { recursive: true, filter(path) {
   const rel = relative(built, path).replaceAll("\\", "/");
   return !path.endsWith(".map") && !/(?:^|\/)(?:tests?|__tests__)(?:\/|$)|\.(?:test|spec)\.[^.]+$/.test(rel)
     && !rel.startsWith("node_modules/.bin")
-    && !/^(?:plugins\/|node_modules\/@xueness\/plugin-)(?:subscriptions|model_monitor|workbuddy)\/(?:src|assets)(?:\/|$)/.test(rel);
+    && !/^(?:plugins\/|node_modules\/@xueness\/plugin-)(?:subscriptions|model_monitor|workbuddy|tavern)\/(?:src|assets)(?:\/|$)/.test(rel);
 } });
 cpSync(join(repo, "desktop", "src", "cli-launcher.cjs"), join(payload, "cli-launcher.cjs"));
 for (const name of ["LICENSE", "NOTICE.md"]) cpSync(join(repo, name), join(payload, name));

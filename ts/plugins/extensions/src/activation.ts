@@ -2,25 +2,30 @@
  * Activating an imported package: its declarative text contributions become
  * ordinary resources of the plugins that own those kinds.
  *
- * A skill becomes a skill resource and a prompt template becomes a command
- * resource, written through the owning plugin's own handler, so each one
+ * A skill becomes a skill resource, a prompt template a command resource
+ * and a hook a hook resource, written through the owning plugin's own handler, so each one
  * works only while that plugin is effective and is listed, edited, switched
  * off and gated exactly like a resource the person created by hand. Every
  * resource written here carries `sourcePackage`; activation never overwrites
  * a resource without that tag, and deactivation removes only tagged ones.
  *
  * Importing is not activating: nothing is written until the person asks.
- * Contributions that name behaviour to execute (tools, hooks, verifier
- * commands) are not contributions in this sense and are never activated.
+ * A hook names a command to run, so activating one only registers it,
+ * switched off; the person reads the command on the hooks page and enables
+ * each hook there. Tools and verifier commands are never contributions.
  */
 import { isDict } from "@xueness/contracts";
 import { resourceDispatch, validResourceId } from "@xueness/sessions";
 
 type Row = Record<string, unknown>;
-export const ACTIVATION_KINDS = ["skills", "commands"] as const;
+export const ACTIVATION_KINDS = ["skills", "commands", "hooks"] as const;
 export type ActivationKind = (typeof ACTIVATION_KINDS)[number];
-/** One piece of text a package offers: a skill body or a prompt template. */
-export interface PackageContribution { kind: ActivationKind; id: string; name: string; description: string; body: string }
+/**
+ * One thing a package offers: a skill body, a prompt template, or a hook. For a hook, `body` is the command it
+ * would run and `hook` says when. A hook is registered switched off: the person reads the command on the hooks
+ * page and enables each one there. Text kinds take effect as soon as they are written.
+ */
+export interface PackageContribution { kind: ActivationKind; id: string; name: string; description: string; body: string; hook?: { event: string; matcher?: string; timeout?: number } }
 /** The owning plugin's resource handler (`/api/resources/<kind>`), which enforces that plugin's switch. */
 export type ResourceWriter = (kind: ActivationKind, data: Row) => Promise<[number, unknown] | null> | [number, unknown] | null;
 
@@ -34,18 +39,21 @@ function stored(stateDir: string, kind: ActivationKind): Row[] {
   return reply && reply[0] === 200 && Array.isArray(reply[1].items) ? reply[1].items.filter(isDict) : [];
 }
 
-export interface ActivationState { state: "none" | "inactive" | "partial" | "active"; total: number; active: number; kinds: { kind: ActivationKind; total: number; active: number }[] }
+/** `review` counts registered hooks that are still switched off, waiting for the person to enable them. */
+export interface ActivationState { state: "none" | "inactive" | "partial" | "active"; total: number; active: number; review: number; kinds: { kind: ActivationKind; total: number; active: number }[] }
 
 /** Read from the store itself, so it stays truthful while an owning plugin is switched off. */
 export function activationState(stateDir: string, type: string, packageId: string, contributions: readonly PackageContribution[]): ActivationState {
   const tag = packageTag(type, packageId);
+  let review = 0;
   const kinds = ACTIVATION_KINDS.map((kind) => {
     const wanted = new Set(contributions.filter((item) => item.kind === kind).map((item) => contributionResourceId(packageId, item.id)));
     const present = stored(stateDir, kind).filter((row) => row.sourcePackage === tag && typeof row.id === "string" && wanted.has(row.id));
+    if (kind === "hooks") review = present.filter((row) => row.enabled !== true).length;
     return { kind, total: wanted.size, active: present.length };
   }).filter((row) => row.total > 0);
   const total = kinds.reduce((sum, row) => sum + row.total, 0), active = kinds.reduce((sum, row) => sum + row.active, 0);
-  return { state: total === 0 ? "none" : active === 0 ? "inactive" : active < total ? "partial" : "active", total, active, kinds };
+  return { state: total === 0 ? "none" : active === 0 ? "inactive" : active < total ? "partial" : "active", total, active, review, kinds };
 }
 
 export interface ActivationResult { ok: boolean; written: { kind: ActivationKind; id: string }[]; skipped: { kind: ActivationKind; id: string; reason: string }[]; removed: number }
@@ -70,7 +78,16 @@ export async function activatePackage(options: { stateDir: string; enabled(id: s
       const current = existing.get(id);
       if (current && current.sourcePackage !== tag) { skip("name_taken"); continue; }
       const base = { id, name: item.name, description: item.description, enabled: true, sourcePackage: tag, sourceVersion: version };
-      const reply = await options.write(kind, kind === "skills" ? { ...base, body: item.body } : { ...base, prompt: item.body });
+      let document: Row;
+      if (kind === "hooks") {
+        if (!item.hook) { skip("invalid_hook"); continue; }
+        const hook = { event: item.hook.event, command: item.body, ...(item.hook.matcher ? { matcher: item.hook.matcher } : {}), ...(item.hook.timeout ? { timeout: item.hook.timeout } : {}) };
+        // A hook runs a command, so it starts switched off. One the person already enabled stays on only while
+        // what it runs, and when, is unchanged; any change sends it back for review.
+        const unchanged = current?.enabled === true && current.event === hook.event && current.command === hook.command && (current.matcher ?? "") === (hook.matcher ?? "");
+        document = { ...base, ...hook, enabled: unchanged };
+      } else document = kind === "skills" ? { ...base, body: item.body } : { ...base, prompt: item.body };
+      const reply = await options.write(kind, document);
       if (reply && reply[0] === 200) { result.written.push({ kind, id: item.id }); keep.add(`${kind}/${id}`); } else skip(reply?.[0] === 403 ? "plugin_disabled" : "write_failed");
     }
   }

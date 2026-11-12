@@ -20,7 +20,7 @@ type View = {
   facts: { label: string; value: string }[]; counts: { label: string; count: number }[];
   sections: { title: string; rows: { name: string; note?: string; body?: string; chips?: Chip[] }[] }[];
 };
-type Activation = { state: 'none' | 'inactive' | 'partial' | 'active'; total: number; active: number; kinds: { kind: string; total: number; active: number }[] };
+type Activation = { state: 'none' | 'inactive' | 'partial' | 'active'; total: number; active: number; review?: number; kinds: { kind: string; total: number; active: number }[] };
 type Changed = { ok: boolean; written?: unknown[]; skipped?: { kind: string; id: string; reason: string }[]; error?: Failure['error'] };
 type Item = View & { activation?: Activation; type: string; status?: 'ok' | 'attention'; checks?: { label: string; ok: boolean; detail: string }[]; importedAt?: string; fileName?: string; enabled?: boolean; managed?: boolean };
 type Preview = View & { replaces: string | null; missing: string[]; wants?: string[]; blocked: boolean; notes: { tone: 'warn' | 'danger'; text: string; args?: string[] }[] };
@@ -103,6 +103,7 @@ export function PackageImports({ onManagePlugins }: { onManagePlugins?: () => vo
   const [notice, setNotice] = useState('');
   const [busy, setBusy] = useState(true);
   const [staged, setStaged] = useState<{ body: Body; type: string; preview: Preview } | null>(null);
+  const [picked, setPicked] = useState<File[]>([]);
   const [removing, setRemoving] = useState('');
   const fileInput = useRef<HTMLInputElement>(null);
   const folderInput = useRef<HTMLInputElement>(null);
@@ -134,42 +135,65 @@ export function PackageImports({ onManagePlugins }: { onManagePlugins?: () => vo
   const limits = { manifestBytes: 256 * 1024, fileBytes: 128 * 1024, folderFiles: 100, folderBytes: 600 * 1024, ...listing?.limits };
   const types = listing?.types ?? [];
   const typeName = (type: string) => { const found = types.find(item => item.type === type); return found ? tr(found.name) : type; };
+  /** Preview one manifest, then send the package files its importer asks for and preview again. */
+  const prepare = async (candidate: Candidate, signal: AbortSignal, type?: string): Promise<{ body: Body & { type?: string }; type: string; preview: Preview } | Failure['error']> => {
+    const body: Body & { type?: string } = { ...candidate.body, ...(type ? { type } : {}) };
+    let result = await post<{ ok: true; type: string; preview: Preview } | Failure>(`${API}/preview`, body, signal);
+    if (failed(result)) return result.error;
+    if (result.preview.missing.length) {
+      const files: NonNullable<Body['files']> = [];
+      for (const path of result.preview.missing) {
+        const file = candidate.file(path);
+        if (file && file.size <= limits.fileBytes) files.push({ path, content: await file.text() });
+      }
+      if (files.length) body.files = files;
+    }
+    if (result.preview.wants?.length) {
+      // The importer asked for the package's other files; they travel as bytes.
+      const wanted = candidate.folder(result.preview.wants);
+      if (wanted.length > limits.folderFiles || wanted.reduce((sum, item) => sum + item.file.size, 0) > limits.folderBytes) {
+        return { code: 'too_large', message: tf('文件夹超过导入上限（{0} 个文件，共 {1} KB）。', [limits.folderFiles, Math.floor(limits.folderBytes / 1024)]) };
+      }
+      for (const item of wanted) body.files = [...(body.files ?? []), { path: item.path, content: await base64(item.file), encoding: 'base64' }];
+    }
+    if (body.files?.length) {
+      result = await post<{ ok: true; type: string; preview: Preview } | Failure>(`${API}/preview`, body, signal);
+      if (failed(result)) return result.error;
+    }
+    return { body, type: result.type, preview: result.preview };
+  };
   /** Preview the candidates in order; the first one a registered type recognises is staged. */
   const stage = (read: () => Promise<Candidate[]>) => run(async signal => {
     setStaged(null);
-    const candidates = await read();
     let refusal: Failure['error'] | null = null;
-    for (const candidate of candidates) {
+    for (const candidate of await read()) {
       signal.throwIfAborted();
-      const body = { ...candidate.body };
-      let result = await post<{ ok: true; type: string; preview: Preview } | Failure>(`${API}/preview`, body, signal);
+      const prepared = await prepare(candidate, signal);
       if (signal.aborted) return;
-      if (failed(result)) { refusal = result.error; if (result.error.code === 'unknown_package_type') continue; break; }
-      if (result.preview.missing.length) {
-        const files: NonNullable<Body['files']> = [];
-        for (const path of result.preview.missing) {
-          const file = candidate.file(path);
-          if (file && file.size <= limits.fileBytes) files.push({ path, content: await file.text() });
-        }
-        if (files.length) body.files = files;
-      }
-      if (result.preview.wants?.length) {
-        // The importer asked for the package's other files; they travel as bytes.
-        const wanted = candidate.folder(result.preview.wants);
-        if (wanted.length > limits.folderFiles || wanted.reduce((sum, item) => sum + item.file.size, 0) > limits.folderBytes) {
-          throw new Error(tf('文件夹超过导入上限（{0} 个文件，共 {1} KB）。', [limits.folderFiles, Math.floor(limits.folderBytes / 1024)]));
-        }
-        for (const item of wanted) body.files = [...(body.files ?? []), { path: item.path, content: await base64(item.file), encoding: 'base64' }];
-      }
-      if (body.files?.length) {
-        result = await post<{ ok: true; type: string; preview: Preview } | Failure>(`${API}/preview`, body, signal);
-        if (signal.aborted) return;
-        if (failed(result)) { refusal = result.error; break; }
-      }
-      setStaged({ body, type: result.type, preview: result.preview });
-      return;
+      if ('preview' in prepared) { setStaged(prepared); return; }
+      refusal = prepared;
+      if (prepared.code !== 'unknown_package_type') break;
     }
     if (refusal) setError(refusal);
+  });
+  /** Every folder with a SKILL.md in what was picked, for instance the checkout of a plugin written for another harness. */
+  const skillManifests = picked.filter(file => file.name === 'SKILL.md');
+  const importSkills = () => run(async signal => {
+    setStaged(null);
+    const done: string[] = [], skipped: string[] = [];
+    for (const manifest of skillManifests) {
+      signal.throwIfAborted();
+      const [candidate] = await folderCandidates(picked.filter(file => relative(file).startsWith(relative(manifest).slice(0, -'SKILL.md'.length))), ['SKILL.md'], limits.manifestBytes);
+      const prepared = await prepare(candidate!, signal, 'skill');
+      if (signal.aborted) return;
+      const folder = relative(manifest).split('/').slice(-2, -1)[0] ?? 'SKILL.md';
+      if (!('preview' in prepared) || prepared.preview.blocked) { skipped.push(`${folder}（${'preview' in prepared ? tr('已有同名技能') : errorText(prepared)}）`); continue; }
+      const result = await post<{ ok: true; item: Item } | Failure>(`${API}/install`, { ...prepared.body, type: 'skill', replace: prepared.preview.replaces !== null }, signal);
+      if (failed(result)) skipped.push(`${folder}（${errorText(result.error)}）`); else done.push(result.item.name);
+    }
+    setPicked([]);
+    setNotice(skipped.length ? tf('已导入 {0} 个技能；未导入：{1}', [done.length, skipped.join('、')]) : tf('已导入 {0} 个技能', [done.length]));
+    await refresh(signal);
   });
   const confirm = () => staged && run(async signal => {
     const result = await post<{ ok: true; item: Item } | Failure>(`${API}/install`, { ...staged.body, type: staged.type, replace: staged.preview.replaces !== null }, signal);
@@ -184,7 +208,7 @@ export function PackageImports({ onManagePlugins }: { onManagePlugins?: () => vo
   });
   // Unavailable types are tried too: the server then names the plugin to enable.
   const SKIP_REASONS: Record<string, string> = { plugin_disabled: '所属插件未启用', name_taken: '已有同名资源', invalid_id: '名称不可用', empty: '内容为空', too_large: '内容过大', write_failed: '写入失败' };
-  const KIND_NAMES: Record<string, string> = { skills: '技能', commands: '命令' };
+  const KIND_NAMES: Record<string, string> = { skills: '技能', commands: '命令', hooks: '钩子' };
   const toggle = (item: Item, on: boolean) => run(async signal => {
     const result = await post<Changed>(`${API}/${on ? 'activate' : 'deactivate'}`, { type: item.type, id: item.id }, signal);
     if (signal.aborted) return;
@@ -199,7 +223,7 @@ export function PackageImports({ onManagePlugins }: { onManagePlugins?: () => vo
     <input ref={fileInput} type="file" accept=".json,application/json" hidden onChange={event => { const file = event.currentTarget.files?.[0]; event.currentTarget.value = '';
       if (file) void stage(async () => { if (file.size > limits.manifestBytes) throw new Error(tr('清单文件超过 256 KB。')); return [{ body: { manifest: await file.text(), fileName: file.name }, file: () => undefined, folder: () => [] }]; }); }} />
     <input ref={folderInput} type="file" multiple hidden {...{ webkitdirectory: '', directory: '' }} onChange={event => { const files = Array.from(event.currentTarget.files ?? []); event.currentTarget.value = '';
-      if (files.length) void stage(() => folderCandidates(files, names, limits.manifestBytes)); }} />
+      if (files.length) { setPicked(files); void stage(() => folderCandidates(files, names, limits.manifestBytes)); } }} />
     <div className="xn-imports__intro">
       <p>{tr('从本机导入声明式扩展包：选择包含清单文件的文件夹，或只选清单文件。包类型会自动识别，每种类型由拥有该格式的插件提供。')}</p>
       <div className="xn-imports__pickers">
@@ -222,6 +246,9 @@ export function PackageImports({ onManagePlugins }: { onManagePlugins?: () => vo
         : <li key={index}><code>{issue.path || '/'}</code> {issue.message}</li>)}</ul>}
     </div></div>}
     {notice && <p className="xn-imports__notice" role="status">{notice}</p>}
+    {skillManifests.length > 0 && (skillManifests.length > 1 || staged?.type !== 'skill') && <p className="xn-imports__notice" data-testid="import-all-skills">
+      {tf('所选文件夹里有 {0} 个技能文件夹（含 SKILL.md）。技能是纯文本，可以单独导入；文件夹里的代码不会被读取或执行。', [skillManifests.length])}{' '}
+      <button type="button" className="xn-imports-button xn-imports-button--primary" disabled={busy} onClick={() => void importSkills()}>{tf('导入这 {0} 个技能', [skillManifests.length])}</button></p>}
     {staged && <article className="xn-imports-card xn-imports-card--preview" aria-label={tr('导入预览')}>
       <header><span className="xn-imports-card__icon" aria-hidden="true"><PackagePlus size={17} /></span>
         <div><strong>{staged.preview.name}</strong><span>{staged.preview.id}{staged.preview.version ? ` · v${staged.preview.version}` : ''}{staged.preview.author ? ` · ${staged.preview.author}` : ''}</span></div>
@@ -257,7 +284,8 @@ export function PackageImports({ onManagePlugins }: { onManagePlugins?: () => vo
           </details>
           <footer><small>{item.importedAt ? tf('导入于 {0}', [new Date(item.importedAt).toLocaleString()]) : ''}{item.fileName ? ` · ${item.fileName}` : ''}{item.managed ? tr('由扩展市场管理') : ''}</small>
             {item.activation && item.activation.total > 0 && <span className="xn-imports-card__confirm">
-              <small>{item.activation.active > 0 ? tf('已启用 {0}/{1} 项', [item.activation.active, item.activation.total]) : tf('可启用 {0} 项技能或提示模板', [item.activation.total])}</small>
+              <small>{item.activation.active > 0 ? tf('已启用 {0}/{1} 项', [item.activation.active, item.activation.total]) : tf('可启用 {0} 项', [item.activation.total])}
+                {(item.activation.review ?? 0) > 0 ? ` · ${tf('{0} 个钩子已登记但未开启，请到钩子页面检查命令后逐个启用', [item.activation.review])}` : ''}</small>
               {item.activation.active < item.activation.total && <button type="button" className="xn-imports-button xn-imports-button--primary" disabled={busy} onClick={() => void toggle(item, true)}>{tr('启用')}</button>}
               {item.activation.active > 0 && <button type="button" className="xn-imports-button" disabled={busy} onClick={() => void toggle(item, false)}>{tr('停用')}</button>}</span>}            {item.managed ? null : removing === key
               ? <span className="xn-imports-card__confirm">{tr('移除后需要重新导入。')}<button type="button" className="xn-imports-button" onClick={() => setRemoving('')}>{tr('取消')}</button>

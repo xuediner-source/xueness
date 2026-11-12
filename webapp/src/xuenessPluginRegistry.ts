@@ -47,10 +47,11 @@ export const XUENESS_PLUGIN_REGISTRY = {
   git: { name: "Git", description: "工作区状态、差异和提交记录", panels: ["git"] },
   providers: { name: "供应商", description: "模型配置、模型发现、本地轻量模式与接口兼容诊断", panels: ["providers"] },
   subscriptions: { name: "订阅中心", description: "选择安装后通过账号授权、CLI 登录或订阅凭证接入，在会话中使用模型并查询上游真实额度。", panels: ["subscriptions"] },
+  tavern: { name: "酒馆", description: "角色扮演：导入 SillyTavern 兼容的角色卡与世界书，从角色设定开始一段对话。", panels: [] },
   workbuddy: { name: "WorkBuddy 号池", description: "查看本机 WorkBuddy 账号状态并管理认证文件。", panels: ["workbuddy"] },
   native_ops: { name: "原生操作工具", description: "批量读取、文件修订与文档文本工具，按需发现并通过现有权限审批执行。", panels: [] },
   batch_calls: { name: "批量调用", description: "鼓励同一步发起独立工具调用，并在上下文压缩后恢复批量调用约定。", panels: [] },
-  os_cua: { name: "OS Computer Use", description: "macOS 桌面窗口、截图、辅助功能树和单步输入，使用会话审批和系统权限。", panels: [] },
+  os_cua: { name: "OS Computer Use", description: "macOS 与 Windows 桌面窗口、截图、辅助功能树和单步输入，使用会话审批。", panels: [] },
   model_monitor: { name: "返回模型监测", description: "随会话记录请求型号与上游返回型号，标记一致、不同及未报告。不会自动发起额外模型请求。", panels: ["model-monitor"] },
   context_lens: { name: "上下文透镜", description: "基于 dsh-context 的上下文组成、逐请求趋势、内容浏览、文件命令活动与代理关系", panels: ["context-lens"] },
   usage: { name: "用量", description: "会话和步骤用量统计", panels: ["usage"] },
@@ -77,7 +78,7 @@ export const XUENESS_PLUGIN_REGISTRY = {
   shell: { name: "Shell 工具", description: "执行命令工具", panels: [] },
   planning: { name: "规划工具", description: "待办、提问和交付完整性检查", panels: [] },
   tools: { name: "工具执行策略", description: "对其他插件工具调用的实验性执行策略（干跑预览、每轮工具调用预算）", panels: [] },
-  deepseek_harness: { name: "DeepSeek Harness", description: "DeepSeek 风格供应商的确定性 KV-cache 前缀稳定与 reasoning 双协议桥；为通用扩展包导入提供 DSH 包类型", panels: [] },
+  deepseek_harness: { name: "DeepSeek Harness", description: "为通用扩展包导入提供 DSH 包类型：导入声明式 DSH 扩展包，并识别公开发布的 DSH 代码插件。", panels: [] },
 } as const satisfies Record<string, { name: string; description: string; panels: readonly PluginPanel[] }>;
 
 export type XuenessPluginId = keyof typeof XUENESS_PLUGIN_REGISTRY;

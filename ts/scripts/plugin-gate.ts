@@ -232,9 +232,9 @@ export function checkPlugins(root: string): { problems: string[]; plugins: numbe
   for (const issue of frontendIssues(join(root, ".."), manifests)) problems.push(`frontend: ${issue}`);
   const listFile = join(root, "apps", "server", "src", "bundled-plugins.ts");
   const listed = [...readFileSync(listFile, "utf8").matchAll(/from\s+["']@xueness\/plugin-([a-z][a-z0-9_]*)["']/g)].map((match) => match[1] as string).sort();
-  // These three reviewed optional implementations ship separately. Core keeps
+  // These reviewed optional implementations ship separately. Core keeps
   // their manifest ownership, and the kernel accepts only build-pinned bytes.
-  const optional = ["subscriptions", "model_monitor", "workbuddy"];
+  const optional = ["subscriptions", "model_monitor", "workbuddy", "tavern"];
   const metadata = [...readFileSync(listFile, "utf8").matchAll(/from\s+["']\.\.\/\.\.\/\.\.\/plugins\/([a-z_]+)\/manifest\.json["']/g)].map(match => match[1]!);
   for (const id of metadata) {
     const manifest = manifests.find(item => item.id === id);

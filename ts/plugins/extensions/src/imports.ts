@@ -105,7 +105,10 @@ function nativeView(manifest: { id: string; version: string; builtin: string; ca
     counts: COMPONENT_KINDS.map(kind => ({ label: KIND_LABELS[kind], count: of(kind).length })),
     sections: COMPONENT_KINDS.filter(kind => of(kind).length).map(kind => ({ title: KIND_LABELS[kind],
       rows: of(kind).map(component => ({ name: component.id, note: component.description,
-        ...(component.alwaysLoad || component.body ? { chips: [...(component.alwaysLoad ? [{ text: "始终加载" }] : []), ...(component.body ? [{ text: "含内容" }] : [])] } : {}) })) })),
+        // A hook's command is shown in full before anything is saved: it is what would run.
+        ...(component.hook ? { body: component.hook.command } : {}),
+        ...(component.alwaysLoad || component.body || component.hook ? { chips: [...(component.alwaysLoad ? [{ text: "始终加载" }] : []), ...(component.body ? [{ text: "含内容" }] : []),
+          ...(component.hook ? [{ text: component.hook.event }, { text: "需逐个检查后启用", tone: "warn" as const }] : [])] } : {}) })) })),
   };
 }
 
@@ -152,8 +155,16 @@ export function nativeImporter(stateDir: string): PackageImporter {
     /** Skills and commands whose text the package carries; components that only name something have nothing to activate. */
     contributions(id) {
       const pkg = loadComponentPackages(stateDir).find(item => item.id === id);
-      return (pkg?.components ?? []).flatMap(component => (component.kind === "skills" || component.kind === "commands") && component.body
-        ? [{ kind: component.kind, id: component.id, name: component.kind === "skills" ? `${id}:${component.id}` : `${id}.${component.id}`, description: component.description, body: component.body }] : []);
+      return (pkg?.components ?? []).flatMap((component): PackageContribution[] => {
+        if ((component.kind === "skills" || component.kind === "commands") && component.body) {
+          return [{ kind: component.kind, id: component.id, name: component.kind === "skills" ? `${id}:${component.id}` : `${id}.${component.id}`, description: component.description, body: component.body }];
+        }
+        if (component.kind === "hooks" && component.hook) {
+          const { command, ...when } = component.hook;
+          return [{ kind: "hooks", id: component.id, name: `${id}.${component.id}`, description: component.description, body: command, hook: when }];
+        }
+        return [];
+      });
     },
     version: id => installed(id) ?? "",
   };

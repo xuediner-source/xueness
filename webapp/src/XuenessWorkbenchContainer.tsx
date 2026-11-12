@@ -397,7 +397,7 @@ export function XuenessWorkbenchContainer() {
     settings: <WorkbenchSettingsPanel settings={settings} isPluginEffective={isPluginEffective} capabilityKinds={pluginAvailability.capabilityKinds} capSections={capSections}
       loadCapSlot={loadCapSlot} pluginCatalog={pluginCatalog} pluginCatalogLoading={pluginCatalogLoading} pluginCatalogError={pluginCatalogError}
       refreshPluginCatalog={refreshPluginCatalog} togglePlugin={togglePlugin} locale={locale} busy={busy} session={session} activeId={activeId} activeIdRef={activeIdRef}
-      composer={composer} providerFocusId={defaultModel.providerFocusId} setPanel={setPanel} startNewTask={startNewTask} setRemoteDialogOpen={setRemoteDialogOpen} />,
+      composer={composer} providerFocusId={defaultModel.providerFocusId} setPanel={setPanel} startNewTask={startNewTask} appendTextToComposer={appendTextToComposer} setRemoteDialogOpen={setRemoteDialogOpen} />,
   };
 
   const secondaryContent = panel !== 'chat' && panel !== 'settings' ? canShowPanel(panel) && (!lightweightLayout || panel !== 'subagents')

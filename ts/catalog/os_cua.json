@@ -1,7 +1,7 @@
 {
   "id": "os_cua",
   "name": "OS Computer Use",
-  "description": "macOS 桌面计算机使用，支持窗口列表、截图、辅助功能树和受审批约束的单步输入。",
+  "description": "macOS 与 Windows 桌面计算机使用，支持窗口列表、截图、辅助功能树和受审批约束的单步输入。",
   "version": "1.0.0",
   "apiVersion": 1,
   "defaultEnabled": false,
@@ -26,7 +26,9 @@
     "journal",
     "platform",
     "macos_adapter",
-    "native_helper"
+    "native_helper",
+    "helper",
+    "windows_adapter"
   ],
   "features": [
     {
@@ -46,13 +48,13 @@
     },
     {
       "id": "os_cua.permissions",
-      "name": "逐次审批与 macOS 系统权限检查",
-      "nameEn": "Per-action approval and macOS permission checks"
+      "name": "逐次审批；macOS 检查系统权限，Windows 报告无法操作的管理员窗口",
+      "nameEn": "Per-action approval; macOS permission checks, and refusal of elevated windows on Windows"
     },
     {
       "id": "os_cua.platform_ports",
-      "name": "macOS 14 及以上桌面原生适配器",
-      "nameEn": "Native desktop adapter for macOS 14 or later"
+      "name": "macOS 14 及以上、Windows 10 及以上的桌面原生适配器",
+      "nameEn": "Native desktop adapters for macOS 14 or later and Windows 10 or later"
     },
     {
       "id": "os_cua.evidence",
@@ -70,6 +72,7 @@
     "native/Worker.swift",
     "native/Windows.swift",
     "native/Screen.swift",
-    "native/Input.swift"
+    "native/Input.swift",
+    "native/windows-worker.ps1"
   ]
 }

@@ -35,6 +35,16 @@
 
 截图采用 macOS 的窗口过滤与单帧捕获接口。[Apple ScreenCaptureKit 指南](https://developer.apple.com/documentation/screencapturekit/capturing-screen-content-in-macos)
 
+## Windows 桌面计算机使用
+
+Windows 10/11 上同一个 **OS Computer Use** 插件提供相同的四个工具（`os_windows`、`os_screenshot`、`os_snapshot`、`os_input`），同样默认关闭、依赖「桌面端」插件，审批和取消规则与 macOS 一致。实现是随插件发布的 PowerShell 脚本 `native/windows-worker.ps1`，由系统自带的 Windows PowerShell 5.1 运行，不需要另装运行时；每次调用启动一个辅助进程，20 秒超时，取消会话或关闭插件会结束它。
+
+- 窗口列表来自可见的顶层窗口；控件快照使用 UI Automation，跳过密码字段和可编辑字段的值。
+- 截图可以截取主屏或单个窗口，过大的图像会按比例缩小后再回传。
+- Windows 没有与 macOS 对应的辅助功能授权步骤。以管理员身份运行的窗口不接受普通权限进程的输入，Xueness 不会提升自身权限。
+
+当前验证范围：窗口列表、截图和控件快照已在 Windows 11 上通过真实工具调用验证；`os_input`（点击、滚动、按键、文本）的代码已随插件发布，但尚未在真实桌面上执行过，使用前请先在不重要的窗口上试一次。
+
 ## 数据与升级
 
 Windows 可在 `%APPDATA%\Xueness\desktop-data-directory.json` 保存 `{"apiVersion":1,"dataDirectory":"绝对数据目录"}`。直接启动和更新后启动都会使用该位置，`XUENESS_DESKTOP_DATA` 显式环境变量优先，用于隔离测试或临时选择。该文件只保存目录数据，不引入代码；无配置时仍使用 Electron 默认数据目录。

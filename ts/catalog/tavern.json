@@ -1,0 +1,44 @@
+{
+  "id": "tavern",
+  "name": "酒馆",
+  "description": "角色扮演：导入 SillyTavern 兼容的角色卡与世界书，从角色设定开始一段对话。",
+  "version": "1.0.0",
+  "apiVersion": 1,
+  "defaultEnabled": false,
+  "installPackage": "xueness-tavern",
+  "dependencies": [
+    "sessions"
+  ],
+  "tools": [],
+  "commands": [],
+  "panels": [],
+  "resources": [],
+  "capabilities": [],
+  "httpFamilies": [
+    "tavern"
+  ],
+  "modules": [
+    "library",
+    "brief"
+  ],
+  "frontendModules": [
+    "plugins/tavern/index.tsx"
+  ],
+  "features": [
+    {
+      "id": "tavern.characters",
+      "name": "导入、查看与移除 SillyTavern 兼容角色卡（JSON 与 PNG，V1/V2/V3）",
+      "nameEn": "Import, view and remove SillyTavern-compatible character cards (JSON and PNG, V1/V2/V3)"
+    },
+    {
+      "id": "tavern.worldbooks",
+      "name": "导入世界书与角色卡内嵌的世界信息",
+      "nameEn": "Import world books and world information embedded in character cards"
+    },
+    {
+      "id": "tavern.roleplay",
+      "name": "按角色设定、场景、世界信息和开场白生成开场消息并开始对话",
+      "nameEn": "Build an opening message from the character, scenario, world information and greeting, and start a chat"
+    }
+  ]
+}

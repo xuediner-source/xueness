@@ -25,6 +25,9 @@ const KIND_SET: ReadonlySet<string> = new Set(COMPONENT_KINDS);
 const MAX_COMPONENTS_PER_KIND = 64;
 const MAX_DESCRIPTION = 200;
 const MAX_BODY_CHARS = 128 * 1024;
+const MAX_COMMAND_CHARS = 2000;
+/** The events the hooks plugin runs user hooks on (`plugins/hooks/src/load.ts`). */
+const HOOK_EVENTS = ["SessionStart", "UserPromptSubmit", "PreToolUse", "PermissionRequest", "PostToolUse", "PostToolUseFailure", "Stop"];
 
 export interface ComponentDeclaration {
   kind: ComponentKind;
@@ -33,6 +36,8 @@ export interface ComponentDeclaration {
   alwaysLoad: boolean;
   /** Text of a skill or a command, when the package carries it. */
   body?: string;
+  /** What a hook component would run and when, when the package carries it. */
+  hook?: { event: string; command: string; matcher?: string; timeout?: number };
 }
 
 export interface ComponentIssue {
@@ -91,8 +96,19 @@ export function validateComponents(value: unknown, manifestId = "<manifest>"): [
         issues.push({ path: `${at}/body`, message: `body must be non-empty text of at most ${MAX_BODY_CHARS} characters, on a skill or a command` });
         continue;
       }
+      // A hook may carry its definition: when it fires and the command it runs. Registering it never enables it.
+      let hook: ComponentDeclaration["hook"];
+      if (entry.event !== undefined || entry.command !== undefined) {
+        const { event, command, matcher, timeout } = entry;
+        if (kind !== "hooks" || typeof event !== "string" || !HOOK_EVENTS.includes(event) || typeof command !== "string" || !command.trim() || command.length > MAX_COMMAND_CHARS
+          || (matcher !== undefined && (typeof matcher !== "string" || matcher.length > 200)) || (timeout !== undefined && (typeof timeout !== "number" || !(timeout > 0 && timeout <= 600)))) {
+          issues.push({ path: at, message: `a hook definition needs an event (${HOOK_EVENTS.join(", ")}) and a command of at most ${MAX_COMMAND_CHARS} characters; matcher and timeout are optional` });
+          continue;
+        }
+        hook = { event, command, ...(matcher ? { matcher } : {}), ...(timeout ? { timeout } : {}) };
+      }
       seen.add(`${kind}/${id}`);
-      components.push({ kind: kind as ComponentKind, id, description, alwaysLoad, ...(typeof body === "string" ? { body } : {}) });
+      components.push({ kind: kind as ComponentKind, id, description, alwaysLoad, ...(typeof body === "string" ? { body } : {}), ...(hook ? { hook } : {}) });
     }
   }
   return [components, issues];
