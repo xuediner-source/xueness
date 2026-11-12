@@ -27,6 +27,7 @@ export * from "./run-errors.ts";
 export * from "./completion-policy.ts";
 export * from "./turn-runtime.ts";
 export * from "./steering-runtime.ts";
+export * from "./work-activity-extension.ts";
 export * from "./history-hydration.ts";
 export * from "./approvals.ts";
 export * from "./live-approvals.ts";

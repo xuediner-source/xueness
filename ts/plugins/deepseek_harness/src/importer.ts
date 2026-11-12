@@ -2,16 +2,19 @@
  * The DSH package type for the host's general package import surface.
  *
  * Xueness imports several package formats through one registry owned by the
- * extensions plugin; this adapter makes DeepSeek Harness packages one of
- * them. It stores nothing itself: it is a view over `library.ts` that
- * answers in the registry's format-neutral package view, so the settings
- * page and the CLI need no knowledge of harness manifests. The shape matches
- * the registry's importer contract structurally; this plugin does not depend
- * on the plugin that owns the registry.
+ * extensions plugin; this adapter is the entry for DeepSeek Harness plugins.
+ * A published DSH plugin is Cordis code and is recognised and declined with
+ * the reason (`cordis-plugin.ts`). The declarative harness manifest
+ * (`deepseek-harness.json`, or a `package.json` with an `xuenessHarness`
+ * block) was a Xueness format that no DSH plugin uses; it is retired, so a
+ * manifest in it is shown and refused with a pointer to the native format,
+ * while packages imported earlier stay listed, usable and removable. The
+ * shape matches the registry's importer contract structurally; this plugin
+ * does not depend on the plugin that owns the registry.
  */
 import { cordisPlugin, cordisPluginPreview, type CordisPlugin } from "./cordis-plugin.ts";
 import { MAX_MANIFEST_BYTES } from "./loader.ts";
-import { importPackage, listLibrary, packageTexts, previewImport, removePackage } from "./library.ts";
+import { listLibrary, packageTexts, previewImport, removePackage } from "./library.ts";
 
 type Row = Record<string, unknown>;
 const isObject = (value: unknown): value is Row => typeof value === "object" && value !== null && !Array.isArray(value);
@@ -61,15 +64,18 @@ function itemView(item: Row, report?: Row): Row {
     importedAt: text(item.importedAt), fileName: text(item.fileName) };
 }
 
+const RETIRED = "the declarative harness format (deepseek-harness.json or a package.json xuenessHarness block) is retired: no DeepSeek Harness plugin uses it. Use a Xueness package (xueness-plugin.json) or import the skill folders";
+const RETIRED_NOTE = { tone: "danger", text: "这种声明式清单（deepseek-harness.json，或 package.json 里的 xuenessHarness 块）是 Xueness 早先自定的格式，DeepSeek Harness 插件并不使用，已停止导入。技能和提示模板请写成 Xueness 扩展包（xueness-plugin.json），带文件的技能请按「技能文件夹」导入。已经导入的包仍可启用和移除。" };
+
 function publishedPlugin(body: Row): CordisPlugin | null {
   const manifest = body.manifest;
   if (typeof manifest !== "string" || Buffer.byteLength(manifest, "utf8") > MAX_MANIFEST_BYTES) return null;
   try { return cordisPlugin(JSON.parse(manifest.replace(/^﻿/, ""))); } catch { return null; }
 }
 
-export function harnessImporter(options: { stateDir: string; now?: () => string }) {
+export function harnessImporter(options: { stateDir: string }) {
   return {
-    type: "dsh", owner: "deepseek_harness", name: "DeepSeek Harness 扩展包", nameEn: "DeepSeek Harness package",
+    type: "dsh", owner: "deepseek_harness", name: "DeepSeek Harness 插件", nameEn: "DeepSeek Harness plugin",
     manifestNames: ["package.json", "deepseek-harness.json"],
     detect: (body: Row): boolean => looksLikeHarness(body) || publishedPlugin(body) !== null,
     list(): Row[] {
@@ -81,23 +87,21 @@ export function harnessImporter(options: { stateDir: string; now?: () => string 
       // A published DSH plugin is code for a DSH host: describe it and leave it unimported.
       const published = looksLikeHarness(body) ? null : publishedPlugin(body);
       if (published) return { ok: true, preview: cordisPluginPreview(published) };
+      // A retired declarative manifest: show what it holds and why it is not imported.
       const result = previewImport(options.stateDir, body) as Row;
-      if (result.ok !== true || !isObject(result.preview)) return result;
+      if (result.ok !== true || !isObject(result.preview)) return { ok: false, error: { code: "format_retired", message: RETIRED } };
       const preview = result.preview;
       const info = isObject(preview.info) ? preview.info : {};
       const missing = Array.isArray(preview.missing) ? preview.missing.map(String) : [];
-      const clashes = Array.isArray(preview.clashes) ? preview.clashes.map(String) : [];
       return { ok: true, preview: { id: preview.id, version: preview.version, name: text(info.name) || preview.id, description: text(info.description), author: text(info.author),
         facts: sourceFact(preview.kind), ...contributions(isObject(preview.manifest) ? preview.manifest : {}, missing),
-        replaces: preview.replaces ?? null, missing, blocked: clashes.length > 0,
-        notes: clashes.length ? [{ tone: "danger", text: "与已导入的扩展冲突：{0}。请先移除冲突的扩展。", args: [clashes.join("、")] }] : [] } };
+        replaces: null, missing, blocked: true, notes: [RETIRED_NOTE] } };
     },
     install(body: Row): Row {
       if (!looksLikeHarness(body) && publishedPlugin(body)) {
         return { ok: false, error: { code: "code_package", message: "a published DeepSeek Harness plugin is code for a DSH Cordis host and cannot be imported or run here" } };
       }
-      const result = importPackage(options.stateDir, body, options.now) as Row;
-      return result.ok === true && isObject(result.item) ? { ok: true, item: itemView(result.item) } : result;
+      return { ok: false, error: { code: "format_retired", message: RETIRED } };
     },
     remove: (id: unknown): Row => removePackage(options.stateDir, id),
     /** Skills and prompt templates are text the host may activate; tools, hooks and verifier commands name behaviour and are never offered. */

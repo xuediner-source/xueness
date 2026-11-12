@@ -43,13 +43,6 @@ export interface ToolEnv {
    * `respond_to_coordinator` tool refuses to run outside a child.
    */
   escalationPort?: { escalate(question: string, requestId: string): Record<string, unknown> };
-  /**
-   * Host-bound for a run attached to an external bot channel (F12.05): sends
-   * one additional reply through that channel's authorized binding. The host
-   * alone resolves the task/input identity of the send; absent in every run
-   * without a channel binding, which is how `reply_to_channel` refuses.
-   */
-  channelReplyPort?: { reply(parts: ReadonlyArray<Record<string, unknown>>): Promise<Record<string, unknown>> };
   /** What the selected model accepts besides text (Read attaches PDFs only with `pdf`). */
   modelInput?: { image?: boolean; pdf?: boolean };
 }

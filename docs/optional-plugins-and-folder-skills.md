@@ -74,7 +74,7 @@ Read references/review.md, then follow the project-specific checks.
 - 技能文件夹（含 `SKILL.md` 的文件夹，连同其中的脚本和参考文件）。导入后技能立即可用，与在技能页面「从文件夹添加」相同；超过 100 个文件或 600 KB 的文件夹请在技能页面添加。
 - Cursor 规则包（项目里的 `.cursorrules`，以及 `.cursor/rules` 下的 `.mdc`/`.md`）。启用后每条规则是一个斜杠命令。
 - MCP 服务器定义（`.mcp.json` 或 `mcp.json`）。导入的服务器默认关闭，不会启动或连接；请在 MCP 服务器页面检查命令后逐个启用。请求头中的凭据不会导入。
-- DeepSeek Harness 扩展包（`deepseek-harness.json`，或带 `xuenessHarness` 块的 `package.json`），需要先启用 DeepSeek Harness 插件。
+- DeepSeek Harness 插件（需要先启用 DeepSeek Harness 插件）：公开发布的 DSH 插件是代码，导入页会识别并说明不能导入的原因，其中的技能文件夹可以按「技能文件夹」导入。声明式清单 `deepseek-harness.json`（或带 `xuenessHarness` 块的 `package.json`）已停止导入，以前导入的包仍可启用和移除；新内容请写成 Xueness 扩展包。
 
 导入只读取清单和包内文件，不运行包内代码。
 

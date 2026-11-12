@@ -121,7 +121,7 @@ export async function createApplicationApi(options: ApplicationApiOptions): Prom
       return observeOptionalProvider({ stateDir: options.stateDir, enabled, env }, provider, sid, selection.providerId);
     } });
   const lifecycle: LifecycleOptions = { store, stateDir: options.stateDir, enabled, allowReal: options.allowReal === true,
-    approvals, liveApprovals: agent.liveApprovals, running, activeContext, resolveProvider: agent.resolveProvider, createRunner: agent.createRunner, knownTools: agent.knownTools,
+    approvals, liveApprovals: agent.liveApprovals, running, activeContext, resolveProvider: agent.resolveProvider, createRunner: agent.createRunner, knownTools: agent.knownTools, tasks: (sid) => taskRegistry.list(sid),
     supports: (session, request) => agent.supports(session, request), goalView: publicGoal, settings: () => loadSettings(options.stateDir), runQueue: (session, _policy, run) => run(session), checkRemote: integrations.checkRemote };
   const attachmentOptions = { store, stateDir: options.stateDir, webRuns: options.webRuns, projectDir, enabled,
     allowedRoots };

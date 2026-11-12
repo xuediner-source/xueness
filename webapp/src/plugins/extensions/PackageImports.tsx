@@ -74,7 +74,8 @@ async function folderCandidates(list: File[], names: string[], limit: number): P
 const ERROR_TEXT: Record<string, string> = {
   unknown_package_type: '没有已登记的包类型能识别这个清单。',
   ambiguous_package_type: '有多个包类型都能识别这个清单，无法自动选择。',
-  code_package: '这是需要运行自身代码的插件包，不能导入。DeepSeek Harness 的代码插件只能在 DSH 中运行；声明式扩展包需要 deepseek-harness.json 或带 xuenessHarness 块的 package.json。',
+  code_package: '这是需要运行自身代码的插件包，不能导入。DeepSeek Harness 的代码插件只能在 DSH 中运行；其中的技能文件夹可以按「技能文件夹」导入。',
+  format_retired: '这种声明式清单格式已停止导入。技能和提示模板请写成 Xueness 扩展包（xueness-plugin.json），带文件的技能请按「技能文件夹」导入。',
   invalid_manifest: '清单没有通过校验，按下面的条目修改后再导入。',
   invalid_json: '清单不是有效的 JSON。',
   too_large: '文件超过大小上限：清单最大 256 KB，每个包内文件最大 128 KB。',

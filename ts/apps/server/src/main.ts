@@ -6,6 +6,7 @@
  *        [--workspace-root DIR]... [--allow-real-provider] [--project-root DIR]
  */
 import { realpathSync, statSync } from "node:fs";
+import { flushCompileCache } from "node:module";
 import { homedir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -73,6 +74,9 @@ export async function main(argv: readonly string[]): Promise<number> {
     server.once("error", fail);
     server.listen(port, host, () => ready());
   });
+  // Every module is loaded by now. When the launcher enabled Node's compile cache
+  // (NODE_COMPILE_CACHE), write it here: a killed server never reaches the exit-time write.
+  flushCompileCache();
   const scope = loopbackHost(host) ? "loopback only" : "container bind (host publish controls exposure)";
   process.stdout.write(`Xueness Web UI on http://${host}:${port} (${scope}, real provider ${allowReal ? "on" : "off"})\n`);
   return new Promise<number>((done) => {

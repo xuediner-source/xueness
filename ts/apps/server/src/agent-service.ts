@@ -12,7 +12,7 @@ import { PermissionSession } from "@xueness/permissions";
 import { files, filesReadStateExtension, filesHistoryExtension, workspaceInstructionsExtension } from "@xueness/plugin-files";
 import { shell, createShell, shellBackgroundExtension, type ShellRuntimeBinding } from "@xueness/plugin-shell";
 import { createProviderResultTools, providerToolResultBudgetExtension, providers } from "@xueness/plugin-providers";
-import { sessionsTurnRuntimeExtension, sessionsSteeringExtension, sessionsRuntimeEventsExtension, sessionsStableBoundariesExtension, sessionsCompactPersistenceExtension } from "@xueness/plugin-sessions";
+import { sessionsTurnRuntimeExtension, sessionsSteeringExtension, sessionsRuntimeEventsExtension, sessionsStableBoundariesExtension, sessionsCompactPersistenceExtension, sessionsWorkActivityExtension } from "@xueness/plugin-sessions";
 import { createPlanning, guardedPermission, planning, type PlanModePort, planningDeliveryExtension, planningGoalExtension } from "@xueness/plugin-planning";
 import { createGitCheckpoints } from "@xueness/plugin-git";
 import { createMcp, resetAppsState, resetElicitationState, mcpRuntimeExtension, type McpRuntimeBinding, type McpRun } from "@xueness/plugin-mcp";
@@ -273,7 +273,7 @@ export function createAgentService(options: AgentServiceOptions) {
           if (coordinator) supportedCapabilities.add("subagents.coordination");
           const requiredFeatures = (): string[] => required(value, policy.request, runtimeProvider);
           const extensions: AgentExtension[] = [
-            sessionsRuntimeEventsExtension(), sessionsTurnRuntimeExtension(), sessionsStableBoundariesExtension(), sessionsCompactPersistenceExtension(), mcpRuntimeExtension(environment.mcpRuntime),
+            sessionsRuntimeEventsExtension(), sessionsTurnRuntimeExtension(), sessionsWorkActivityExtension(), sessionsStableBoundariesExtension(), sessionsCompactPersistenceExtension(), mcpRuntimeExtension(environment.mcpRuntime),
             filesReadStateExtension(environment.env.tracker), filesHistoryExtension(), shellBackgroundExtension(environment.shell), networkActivityExtension(environment.env), sessionsSteeringExtension(),
             sessionsCompletionExtension(),
             remoteSessionExtension(),

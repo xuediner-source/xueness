@@ -17,7 +17,7 @@ import { modelToolName, wrapSystemReminderForSource, type AgentContext, type Age
 import type { ToolDefinition, ToolResult } from "@xueness/engine-tools";
 import { definePlugin, type BundledPlugin } from "@xueness/kernel";
 import manifest from "../manifest.json" with { type: "json" };
-import { backgroundTools, BACKGROUND_TOOL_NAMES, replyToChannelTool, respondToCoordinatorTool, type CoordinationBinding } from "./background-tools.ts";
+import { backgroundTools, BACKGROUND_TOOL_NAMES, respondToCoordinatorTool, type CoordinationBinding } from "./background-tools.ts";
 import { mergeSubagentNotices } from "./background-receipts.ts";
 import { loadSubagents, TASK_TOOL_NAME, type Row } from "./definitions.ts";
 import { agentListing } from "./profiles.ts";
@@ -43,7 +43,7 @@ export const AGENT_LISTING_SOURCE = "agent_listing_delta";
  * on the parent's session (questions, task list, delivery plan); Python's
  * durable workflow writes.
  */
-export const CHILD_DENIED_TOOLS: readonly string[] = Object.freeze([TASK_TOOL_NAME, "enter_plan_mode", "exit_plan_mode", "ask_user", "todo_read", "todo_write", "delivery_plan", "workflow_create", "workflow_amend", "reply_to_channel"]);
+export const CHILD_DENIED_TOOLS: readonly string[] = Object.freeze([TASK_TOOL_NAME, "enter_plan_mode", "exit_plan_mode", "ask_user", "todo_read", "todo_write", "delivery_plan", "workflow_create", "workflow_amend"]);
 
 /**
  * The host's binding for the run in progress. `run` is the foreground child
@@ -92,7 +92,7 @@ export function taskTool(binding: SubagentsBinding): ToolDefinition<Row> {
 }
 
 export function createSubagents(binding: SubagentsBinding): BundledPlugin {
-  const tools: readonly ToolDefinition<Row>[] = [taskTool(binding), ...backgroundTools(binding), respondToCoordinatorTool(), replyToChannelTool()];
+  const tools: readonly ToolDefinition<Row>[] = [taskTool(binding), ...backgroundTools(binding), respondToCoordinatorTool()];
   return { manifest, plugin: definePlugin({ name: "subagents", apply(ctx) { for (const tool of tools) ctx.tool(tool as ToolDefinition); } }) };
 }
 

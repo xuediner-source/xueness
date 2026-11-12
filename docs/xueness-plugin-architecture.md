@@ -14,7 +14,7 @@
 
 插件分三类。官方内置插件随应用一起发布，在功能模块页面标为「官方内置」。插件中心的可下载插件同样由 Xueness 官方制作，但不预装，由扩展市场按固定摘要下载后再启用，标为「插件中心」；目前是订阅中心、返回模型监测、WorkBuddy 号池和酒馆（`tavern`：导入 SillyTavern 兼容的角色卡与世界书并开始角色扮演对话）。哪些包属于这一类只由内核固定的包清单决定，扩展市场和导入器都从它判断，不各自维护名单。第三类是用户从本机导入的扩展包，在扩展包导入页面标为「导入」，其中包括从 DeepSeek Harness 导入的声明式扩展包。前两类的代码都来自构建时确定的清单；导入的扩展包只有数据，不带可执行代码。
 
-DeepSeek Harness 生态中公开发布的插件（GitHub 主题 `dsh-plugin`）是代码插件：`package.json` 带有 `dsh` 块，由 `cordis.patch.yml` 把包的入口挂载到 DSH 的 Cordis 宿主，并调用 `@deepseek-ai/dsh-*` 运行时服务。Xueness 没有 Cordis 宿主，也不加载清单之外的代码，所以这类插件不能导入或运行。扩展包导入会识别它们，显示名称、版本、许可和所需的 DSH 运行时服务，并说明原因；包内的技能文件夹是纯文本，可以按「技能文件夹」类型单独导入。DSH 类型实际能导入的是声明式扩展包（`deepseek-harness.json`，或带 `xuenessHarness` 块的 `package.json`）。
+DeepSeek Harness 生态中公开发布的插件（GitHub 主题 `dsh-plugin`）是代码插件：`package.json` 带有 `dsh` 块，由 `cordis.patch.yml` 把包的入口挂载到 DSH 的 Cordis 宿主，并调用 `@deepseek-ai/dsh-*` 运行时服务。Xueness 没有 Cordis 宿主，也不加载清单之外的代码，所以这类插件不能导入或运行。扩展包导入会识别它们，显示名称、版本、许可和所需的 DSH 运行时服务，并说明原因；包内的技能文件夹是纯文本，可以按「技能文件夹」类型单独导入。DSH 类型以前还能导入一种声明式扩展包（`deepseek-harness.json`，或带 `xuenessHarness` 块的 `package.json`）。这是 Xueness 自己定义的格式，DSH 插件并不使用，2026-11-12 起停止导入；以前导入的包仍可启用和移除，新内容请写成 Xueness 扩展包（`xueness-plugin.json`）。
 
 目前登记的包类型及归属：`xueness`（extensions，Xueness 声明式清单）、`skill`（skills，含 `SKILL.md` 的技能文件夹，走技能插件既有的分阶段文件夹导入，导入后与在技能页面添加的技能相同；为 Claude Code 编写的技能文件夹布局一致，可直接导入）、`cursor-rules`（commands，`.cursorrules` 与 `.cursor/rules` 下的 `.mdc`/`.md` 规则，启用后每条规则是一个斜杠命令）、`mcp-servers`（mcp，`.mcp.json`/`mcp.json` 中的 `mcpServers`，导入的服务器一律关闭并带来源标记，由用户在 MCP 页面逐个检查后启用；请求头凭据不导入）和 `dsh`（deepseek_harness）。没有自有存储的类型把导入副本放在 extensions 提供的文本包存储 `<状态目录>/package-imports/<类型>/` 中。导入器可以在预览结果中用 `wants` 列出需要的包内文件路径模式，客户端从所选文件夹读取后以 base64 发送；一次导入连同清单须在单个请求内（最多 100 个文件、600 KB）。
 

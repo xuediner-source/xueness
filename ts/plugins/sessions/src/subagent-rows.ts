@@ -28,6 +28,8 @@ export function projectSubagents(session: Row, messages: unknown, enabled: boole
     if (identities.size !== 1) continue; const task = [...identities][0]!, r = tasks.get(task); if (!r) continue;
     const agent = text(r.agent, 80), latest = live.get(task); let status = r.status, summary = text(r.summary, 600) || text(r.error, 600), steps = r.steps;
     if (latest) { status = statuses.has(String(latest.status)) ? latest.status : "unknown"; summary = text(latest.summary, 600) || text(latest.error, 600) || summary; steps = latest.steps; }
+    // Children run in this process only: a saved "running" row the live registry does not know was cut off by a host exit.
+    else if (Array.isArray(liveTasks) && status === "running") { status = "failed"; summary ||= "interrupted before result collection"; }
     const row: Row = { tool_call_id: id, task_id: task, agent, label: text(r.label, 80) || agent || pySlice(task, 80), status: statuses.has(String(status)) ? status : "unknown", summary };
     if (isPyIntValue(steps) && Number(steps) >= 1 && Number(steps) <= 64) row.steps = steps;
     if (enabled && typeof r.childSessionId === "string" && /^[0-9a-f]{32}$/.test(r.childSessionId) && r.childSessionId.toLowerCase() !== session.id.toLowerCase()) row.child_session_id = r.childSessionId;

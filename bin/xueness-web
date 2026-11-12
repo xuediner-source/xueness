@@ -1,4 +1,6 @@
 #!/bin/sh
 # Run the Xueness web UI server from the source checkout (Node 24 strips the TypeScript types).
 ROOT=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
+# Node's compile cache roughly halves later starts from source; NODE_DISABLE_COMPILE_CACHE=1 turns it off.
+export NODE_COMPILE_CACHE="${NODE_COMPILE_CACHE:-${XDG_CACHE_HOME:-$HOME/.cache}/xueness/node-compile-cache}"
 exec "${XUENESS_NODE:-node}" "$ROOT/ts/apps/server/src/main.ts" --project-root "$ROOT" "$@"

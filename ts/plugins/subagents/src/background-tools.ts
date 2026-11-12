@@ -128,7 +128,6 @@ export function cancelTool(binding: CoordinationBinding): ToolDefinition<Row> {
 }
 
 export const RESPOND_TOOL_NAME = "respond_to_coordinator";
-export const REPLY_CHANNEL_TOOL_NAME = "reply_to_channel";
 
 /**
  * The child side of the escalation protocol (F08.03): ask the coordinating
@@ -169,58 +168,4 @@ export function respondToCoordinatorTool(): ToolDefinition<Row> {
 
 export function backgroundTools(binding: CoordinationBinding): readonly ToolDefinition<Row>[] {
   return [collectTool(binding), resumeTool(binding), sendMessageTool(binding), cancelTool(binding)];
-}
-
-/**
- * The external channel reply port (F12.05): an additional reply through the
- * bot conversation this run is attached to. It exists on the kernel but only
- * runs where the host bound `channelReplyPort` — the send binding (task,
- * input, authorization) is resolved by the Host, never by the caller. This is
- * a channel delivery with its own receipt, entirely distinct from the
- * coordinator's `task_send_message` (subagent steering), and it needs no
- * additional tool approval: the user authorized the conversation by talking
- * to the bot, and the binding checks are the authorization boundary.
- */
-export function replyToChannelTool(): ToolDefinition<Row> {
-  return {
-    name: REPLY_CHANNEL_TOOL_NAME,
-    description: "Send an additional reply to the current Feishu/Lark conversation ONLY when the user explicitly asks you to send or mention someone. No additional tool approval is needed for this authorized conversation. Prefer trusted mention refIds; when the user supplies only a name, use mentionName and let Host resolve the current group directory and trusted task mentions. Preserve spaces inside a full name (Alex Smith is one recipient); split multiple recipients only on explicit list delimiters such as 、, commas, or newlines, never whitespace alone. Host uses name containment and automatically selects a unique candidate or a unique exact name among multiple matches. Never guess platform IDs. needs_clarification lists ALL unresolved names after checking every requested name and means NOTHING was sent. Only report the returned facts; never claim delivery or invent a match. Keep all original recipients when retrying after clarification: show candidate labels and ask the user to choose; never select an ambiguous candidate yourself. After an explicit choice use a new call with name and the returned candidateRef. For not_found/unavailable/selection_expired or truncated candidates, explain the issue and ask for a native @ mention. Group member APIs do not enumerate bots; unknown bots need a native mention first. Normal final answers are delivered automatically. After sent, do not duplicate that request. A sent message does not mean another bot responded.",
-    inputSchema: {
-      type: "object",
-      properties: {
-        parts: {
-          type: "array",
-          minItems: 1,
-          maxItems: 50,
-          description: "1-50 content parts of the reply.",
-          items: {
-            type: "object",
-            additionalProperties: false,
-            required: ["type"],
-            properties: {
-              type: { type: "string", enum: ["text", "mention", "mentionName"], description: "Part kind." },
-              text: { type: "string", maxLength: 2000, description: "Required only for type=text; omit refId." },
-              refId: { type: "string", minLength: 1, maxLength: 200, description: "Required only for type=mention; use the current trusted reference and omit text." },
-              name: { type: "string", minLength: 1, maxLength: 200, description: "Required only for mentionName: recipient name or partial name supplied by the user; preserve internal spaces, one explicit list item per part; omit text/refId." },
-              candidateRef: { type: "string", minLength: 1, maxLength: 200, description: "Only for mentionName after the user explicitly selects a returned candidate; never invent or auto-select." },
-            },
-          },
-        },
-      },
-      required: ["parts"],
-      additionalProperties: false,
-    },
-    gate: "planning", mutating: false, concurrencySafe: false, requires: {}, subjectKind: "text",
-    subject: (input) => Array.isArray(input.parts) ? JSON.stringify(input.parts).slice(0, 400) : "",
-    async run(input, env) {
-      const port = env.channelReplyPort;
-      if (!port) return failure("channel_reply_unavailable", "reply_to_channel requires a run attached to an authorized bot channel");
-      const parts = Array.isArray(input.parts) ? input.parts : [];
-      if (!parts.length) return failure("invalid_argument", "parts must contain 1..50 content parts");
-      const outcome = await port.reply(parts as Row[]);
-      if (outcome.ok === false)
-        return failure("channel_reply_refused", typeof outcome.error === "string" && outcome.error ? outcome.error : "channel reply refused");
-      return { ok: true, output: pyJsonDumps(outcome, { separators: [",", ":"] }), data: outcome };
-    },
-  };
 }

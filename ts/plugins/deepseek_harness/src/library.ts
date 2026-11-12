@@ -1,17 +1,16 @@
 /**
- * The local library of imported third-party DSH harness packages (H01.07).
+ * The local library of declarative harness packages imported before the
+ * format was retired (H01.07, retired 2026-11-12).
  *
- * A package is the declarative manifest the loader already understands
+ * A package is the declarative manifest the loader understands
  * (`deepseek-harness.json`, or a `package.json` with an `xuenessHarness`
  * block) plus the skill files its `skills[].path` entries reference. The
- * webapp reads them from a file or folder the person picks and sends the text;
- * this module validates it with the loader's rules, copies it under the state
- * directory and indexes the library on demand.
+ * format was defined by Xueness, not by DeepSeek Harness, and no published
+ * DSH plugin uses it, so new imports are refused (`importer.ts`); this module
+ * still validates a manifest for the refusal's preview, and lists, re-checks,
+ * reads and removes the packages already in the library.
  *
- * Importing reads data only: nothing in a package is imported, evaluated or
- * executed, declared verifier commands and hook handlers are listed and never
- * run, and a package that needs its own code (a plain `package.json` without
- * an `xuenessHarness` block) is refused with that reason.
+ * Nothing in a package is imported as code, evaluated or executed.
  */
 import { createHash, randomBytes } from "node:crypto";
 import { existsSync, lstatSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
@@ -49,12 +48,11 @@ const line = (value: unknown, max: number): string => typeof value === "string" 
 const validId = (id: string): boolean => ID.test(id) && !RESERVED_NAME.test(id);
 const digest = (value: string): string => createHash("sha256").update(value).digest("hex");
 
-function withLibrary<T>(stateDir: string, mode: "read" | "import" | "remove", action: (root: string) => T): T | ReturnType<typeof fail> {
+function withLibrary<T>(stateDir: string, mode: "read" | "remove", action: (root: string) => T): T | ReturnType<typeof fail> {
   const root = join(stateDir, LIBRARY_DIR);
   const lock = join(root, ".library.lock");
   if ([stateDir, dirname(root), root, lock].some(isLink)) return fail("unsafe_library", "the harness library cannot use symbolic links");
   try {
-    if (mode === "import") mkdirSync(root, { recursive: true, mode: 0o700 });
     if (!existsSync(root)) return action(root);
     return withFileLockSync(lock, { shared: mode === "read", timeoutSeconds: 2 }, () => action(root));
   } catch {
@@ -168,53 +166,6 @@ export function previewImport(stateDir: string, request: Row): { ok: true; previ
 
 function discard(path: string): void {
   try { rmSync(path, { recursive: true, force: true }); } catch { /* The library no longer references this directory. */ }
-}
-
-/** Copy one validated package into the library and mount it; all or nothing. */
-export function importPackage(stateDir: string, request: Row, now: () => string = () => new Date().toISOString()): { ok: true; item: Row } | { ok: false; error: LibraryError } {
-  const parsed = parsePackage(request);
-  if (!parsed.ok) return parsed;
-  return withLibrary(stateDir, "import", root => installPackage(root, parsed.value, request, now()));
-}
-
-function installPackage(root: string, { manifest, kind, info, files }: ParsedPackage, request: Row, importedAt: string) {
-  const target = join(root, manifest.id);
-  if (isLink(target)) return fail("unsafe_library", "the imported harness directory cannot be a symbolic link");
-  const registry = readLibrary(root);
-  const hadPrevious = existsSync(target);
-  if (hadPrevious && request.replace !== true) return fail("already_imported", `harness ${manifest.id} is already imported`);
-  const clashes = clashesFor(registry, manifest);
-  if (clashes.length) return fail("contribution_clash", `contributions already provided by another harness: ${clashes.join(", ")}`);
-  const tag = randomBytes(6).toString("hex");
-  const staging = join(root, `.incoming-${tag}`);
-  const backup = join(root, `.previous-${tag}`);
-  try {
-    mkdirSync(staging, { mode: 0o700 });
-    protectPrivateDirectory(staging);
-    const manifestText = JSON.stringify(manifest, null, 2) + "\n";
-    writeFileSync(join(staging, HARNESS_MANIFEST_FILE), manifestText, { mode: 0o600 });
-    for (const file of files) {
-      const path = join(staging, ...file.path.split("/"));
-      mkdirSync(dirname(path), { recursive: true });
-      writeFileSync(path, file.content, { encoding: "utf8", mode: 0o600 });
-    }
-    writeFileSync(join(staging, META_FILE), JSON.stringify({ ...info, kind, importedAt, manifestSha256: digest(manifestText),
-      fileName: line(request.fileName, 200) }, null, 2) + "\n", { mode: 0o600 });
-    registry.unmount(manifest.id);
-    const loaded = loadHarness(registry, staging, { now: () => importedAt });
-    if (!loaded.ok) return fail(loaded.error.code, loaded.error.message, loaded.error.issues);
-    if (hadPrevious) renameSync(target, backup);
-    try {
-      renameSync(staging, target);
-    } catch (error) {
-      if (hadPrevious) renameSync(backup, target);
-      throw error;
-    }
-    if (hadPrevious) discard(backup);
-    return { ok: true as const, item: describeHarness({ ...registry.get(manifest.id)!, source: target }) };
-  } finally {
-    discard(staging);
-  }
 }
 
 /** Unmount one imported harness and delete its library copy. */

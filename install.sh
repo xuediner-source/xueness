@@ -33,6 +33,9 @@ fi
 mkdir -p "$DATA_DIR/state" "$DATA_DIR/runs"
 chmod 700 "$DATA_DIR" 2>/dev/null || true
 
+# Node's compile cache roughly halves later starts from source; NODE_DISABLE_COMPILE_CACHE=1 turns it off.
+export NODE_COMPILE_CACHE="${NODE_COMPILE_CACHE:-${XDG_CACHE_HOME:-$HOME/.cache}/xueness/node-compile-cache}"
+
 echo "Xueness: http://127.0.0.1:${PORT}  (data: ${DATA_DIR})"
 echo "Local only. Press Ctrl-C to stop."
 exec "$NODE" ts/apps/server/src/main.ts --project-root "$HERE" --port "$PORT" --state "$DATA_DIR/state" --web-runs "$DATA_DIR/runs"
