@@ -55,7 +55,7 @@ export const XUENESS_PLUGIN_REGISTRY = {
   model_monitor: { name: "返回模型监测", description: "随会话记录请求型号与上游返回型号，标记一致、不同及未报告。不会自动发起额外模型请求。", panels: ["model-monitor"] },
   context_lens: { name: "上下文透镜", description: "基于 dsh-context 的上下文组成、逐请求趋势、内容浏览、文件命令活动与代理关系", panels: ["context-lens"] },
   usage: { name: "用量", description: "会话和步骤用量统计", panels: ["usage"] },
-  memory: { name: "记忆", description: "记忆文件轨道状态", panels: ["memory"] },
+  memory: { name: "记忆", description: "记忆之海：跨会话记忆星图与记忆轨道", panels: ["memory"] },
   settings: { name: "设置", description: "工作台和运行设置", panels: ["settings"] },
   workflows: { name: "工作流", description: "工作流和后台任务", panels: ["workflows"] },
   terminal: { name: "终端", description: "工作区本地与连接作用域远程交互式终端", panels: ["terminal"] },

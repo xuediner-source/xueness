@@ -41,6 +41,8 @@ export function buildSidebarActions({ isPluginEffective, claudexAppearance, shor
     ] : []),
     ...(isPluginEffective("context_lens") ? [{ id: "context-lens", icon: <IconSearch size={16} />, label: tr("上下文透镜"), onClick: () => setPanel("context-lens") }] : []),
     ...(isPluginEffective("automation") ? [{ id: "automations", icon: <CalendarClock size={16} />, label: tr("自动化"), onClick: () => setPanel("automations") }] : []),
+    // The Claudex rail has its own memory entry; the paper sidebar needs this one to reach Memory Ocean.
+    ...(isPluginEffective("memory") && !claudexAppearance ? [{ id: "memory", icon: <Brain size={16} />, label: tr("记忆之海"), onClick: () => setPanel("memory") }] : []),
     ...(isPluginEffective("extensions") ? [{ id: "marketplace", icon: <Blocks size={16} />, label: tr("插件市场"), onClick: () => setPanel("marketplace") }] : []),
   ];
 

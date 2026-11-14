@@ -1,0 +1,200 @@
+@layer plugins {
+/* Memory Ocean. The canvas is always a night sea; text drawn straight on it
+ * uses fixed light colours. Cards, drawers, the dialog and the controls use
+ * the app's tokens, so they follow the light/dark theme and the appearance.
+ * Entrances animate with the motion tokens; the global reduced-motion layer
+ * stops them. */
+.xn-ocean {
+  position: relative;
+  height: clamp(520px, calc(100vh - 120px), 1200px);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  isolation: isolate;
+  background: #04192a;
+  color: var(--fg);
+  font-family: var(--font-sans);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.06), var(--shadow-md);
+}
+.xn-ocean[data-mood="paper"] { background: #111830; }
+.xn-ocean__canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; cursor: grab; touch-action: none; outline: none; }
+.xn-ocean__canvas:focus-visible { box-shadow: inset 0 0 0 2px var(--border-focus); }
+
+.xn-ocean__head {
+  position: absolute; inset: 16px 16px auto 16px; z-index: 2;
+  display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: 12px;
+  pointer-events: none;
+}
+.xn-ocean__head > * { pointer-events: auto; }
+.xn-ocean__title h2 {
+  display: flex; align-items: center; gap: 8px; margin: 0;
+  font-size: 22px; font-weight: 600; letter-spacing: 0.08em;
+  color: #eef7ff; text-shadow: 0 0 18px rgba(120, 220, 255, 0.45), 0 1px 2px rgba(0, 0, 0, 0.6);
+}
+.xn-ocean[data-mood="paper"] .xn-ocean__title h2 { color: #fbf1e1; text-shadow: 0 0 18px rgba(255, 210, 150, 0.4), 0 1px 2px rgba(0, 0, 0, 0.6); }
+.xn-ocean__title h2 svg { color: #9ee7ff; filter: drop-shadow(0 0 6px rgba(158, 231, 255, 0.8)); }
+.xn-ocean[data-mood="paper"] .xn-ocean__title h2 svg { color: #ffd59a; filter: drop-shadow(0 0 6px rgba(255, 213, 154, 0.8)); }
+.xn-ocean__title p { margin: 4px 0 0; font-size: 12.5px; color: rgba(226, 240, 255, 0.78); text-shadow: 0 1px 2px rgba(0, 0, 0, 0.7); }
+
+.xn-ocean__tools { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.xn-ocean__search, .xn-ocean__segment, .xn-ocean-icon, .xn-ocean-button, .xn-ocean__legend button, .xn-ocean__zoom {
+  backdrop-filter: blur(10px) saturate(1.2);
+}
+.xn-ocean__search {
+  display: flex; align-items: center; gap: 6px; height: 32px; padding: 0 10px;
+  border-radius: var(--radius-full); border: 1px solid var(--border);
+  background: color-mix(in srgb, var(--bg-popover) 88%, transparent); color: var(--fg-muted);
+}
+.xn-ocean__search input { width: 150px; border: 0; outline: none; background: transparent; color: var(--fg); font: inherit; font-size: 13px; }
+.xn-ocean__search:focus-within { border-color: var(--border-focus); }
+.xn-ocean__segment { display: inline-flex; padding: 2px; border-radius: var(--radius-full); border: 1px solid var(--border); background: color-mix(in srgb, var(--bg-popover) 88%, transparent); }
+.xn-ocean__segment button { height: 26px; padding: 0 12px; border: 0; border-radius: var(--radius-full); background: transparent; color: var(--fg-muted); font: inherit; font-size: 12.5px; cursor: pointer; }
+.xn-ocean__segment button[aria-pressed="true"] { background: var(--bg-active); color: var(--fg); }
+.xn-ocean__segment button:disabled { opacity: 0.5; cursor: default; }
+
+.xn-ocean-icon {
+  display: inline-grid; place-items: center; width: 32px; height: 32px; padding: 0;
+  border-radius: var(--radius-full); border: 1px solid var(--border);
+  background: color-mix(in srgb, var(--bg-popover) 88%, transparent); color: var(--fg-muted); cursor: pointer;
+  transition: color var(--dur-fast) ease, background var(--dur-fast) ease, transform var(--dur-fast) var(--ease-out-quart);
+}
+.xn-ocean-icon:hover { color: var(--fg); background: var(--bg-popover); transform: translateY(-1px); }
+/* Pressed buttons sit on the dark sea: a solid surface and an accent ring, never the theme's translucent active tint. */
+.xn-ocean-icon[aria-pressed="true"] { color: var(--accent-brand); border-color: transparent; background: var(--bg-popover); box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent-brand) 70%, transparent); }
+.xn-ocean-button {
+  display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 14px;
+  border-radius: var(--radius-full); border: 1px solid var(--border);
+  background: color-mix(in srgb, var(--bg-popover) 92%, transparent); color: var(--fg); font: inherit; font-size: 13px; cursor: pointer;
+  transition: background var(--dur-fast) ease, transform var(--dur-fast) var(--ease-out-quart), box-shadow var(--dur-fast) ease;
+}
+.xn-ocean-button:hover:not(:disabled) { transform: translateY(-1px); background: var(--bg-popover); }
+.xn-ocean-button:disabled { opacity: 0.55; cursor: default; }
+.xn-ocean-button--primary { border-color: transparent; background: var(--accent-brand); color: var(--accent-brand-fg); box-shadow: 0 0 22px color-mix(in srgb, var(--accent-brand) 45%, transparent); }
+.xn-ocean-button--primary:hover:not(:disabled) { background: var(--accent-brand-hover); }
+.xn-ocean-button--danger { border-color: transparent; background: var(--danger); color: var(--fg-inverted); }
+.xn-ocean-button--quiet { background: transparent; color: var(--fg-muted); }
+.xn-ocean-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; flex: none; }
+.xn-ocean-chip { display: inline-flex; align-items: center; gap: 6px; padding: 2px 9px; border-radius: var(--radius-full); background: var(--bg-subtle); color: var(--fg-muted); font-size: 11.5px; }
+.xn-ocean-chip--muted { background: var(--bg-active); }
+
+.xn-ocean__legend { position: absolute; left: 16px; bottom: 16px; z-index: 2; display: flex; flex-wrap: wrap; gap: 6px; max-width: calc(100% - 160px); }
+.xn-ocean__legend button {
+  display: inline-flex; align-items: center; gap: 7px; height: 28px; padding: 0 11px;
+  border-radius: var(--radius-full); border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(6, 18, 34, 0.5); color: rgba(236, 246, 255, 0.9); font: inherit; font-size: 12px; cursor: pointer;
+  transition: opacity var(--dur-normal) ease, border-color var(--dur-fast) ease;
+}
+.xn-ocean__legend button small { color: rgba(236, 246, 255, 0.6); font-variant-numeric: tabular-nums; }
+.xn-ocean__legend button[aria-pressed="true"] { border-color: rgba(255, 255, 255, 0.5); }
+.xn-ocean__legend button[data-dim] { opacity: 0.45; }
+.xn-ocean__zoom { position: absolute; right: 16px; bottom: 16px; z-index: 2; display: flex; gap: 6px; border-radius: var(--radius-full); }
+
+.xn-ocean-detail, .xn-ocean-drawer {
+  position: absolute; z-index: 3; top: 72px; bottom: 60px;
+  display: flex; flex-direction: column; gap: 10px; overflow: auto;
+  padding: 16px; border-radius: var(--radius-lg); border: 1px solid var(--border);
+  background: color-mix(in srgb, var(--bg-popover) 94%, transparent); color: var(--fg);
+  box-shadow: var(--shadow-lg); backdrop-filter: blur(16px) saturate(1.2);
+  animation: xn-ocean-rise var(--dur-slow) var(--ease-out-expo) both;
+}
+.xn-ocean-detail { right: 16px; width: min(360px, calc(100% - 32px)); bottom: auto; max-height: calc(100% - 140px); }
+.xn-ocean-drawer--list { left: 16px; width: min(320px, calc(100% - 32px)); }
+.xn-ocean-drawer--tracks { right: 16px; width: min(560px, calc(100% - 32px)); z-index: 4; }
+.xn-ocean-drawer header, .xn-ocean-detail header { display: flex; align-items: center; gap: 8px; }
+.xn-ocean-drawer header h3 { flex: 1; margin: 0; font-size: 14px; font-weight: 600; }
+.xn-ocean-detail header .xn-ocean-icon { margin-left: auto; width: 28px; height: 28px; background: transparent; }
+.xn-ocean-drawer__body { overflow: auto; }
+.xn-ocean-drawer ul { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 2px; }
+.xn-ocean-drawer li button {
+  display: flex; gap: 10px; align-items: flex-start; width: 100%; padding: 8px 10px; text-align: left;
+  border: 0; border-radius: var(--radius-md); background: transparent; color: var(--fg); font: inherit; cursor: pointer;
+}
+.xn-ocean-drawer li button .xn-ocean-dot { margin-top: 6px; }
+.xn-ocean-drawer li button:hover, .xn-ocean-drawer li button[aria-current] { background: var(--bg-hover); }
+.xn-ocean-drawer li button[data-archived] { opacity: 0.6; }
+.xn-ocean-drawer li strong { display: block; font-size: 13px; font-weight: 500; line-height: 1.4; }
+.xn-ocean-drawer li small { display: block; margin-top: 2px; color: var(--fg-muted); font-size: 11.5px; }
+
+.xn-ocean-detail h3 { margin: 2px 0 0; font-size: 16px; font-weight: 600; line-height: 1.45; }
+.xn-ocean-detail__text { margin: 0; white-space: pre-wrap; font-size: 13px; line-height: 1.6; color: var(--fg); }
+.xn-ocean-detail__stars { display: inline-flex; gap: 1px; color: #f5b83d; }
+.xn-ocean-detail__tags { display: flex; flex-wrap: wrap; gap: 6px; margin: 0; }
+.xn-ocean-detail__tags span { font-size: 12px; color: var(--accent-brand); }
+.xn-ocean-detail dl { display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; margin: 4px 0 0; font-size: 12.5px; }
+.xn-ocean-detail dt { color: var(--fg-muted); }
+.xn-ocean-detail dd { margin: 0; color: var(--fg); overflow-wrap: anywhere; }
+.xn-ocean-detail__links h4 { margin: 6px 0 4px; font-size: 12px; font-weight: 600; color: var(--fg-muted); }
+.xn-ocean-detail__links ul { margin: 0; padding: 0; list-style: none; }
+.xn-ocean-detail__links button {
+  display: flex; align-items: center; gap: 8px; width: 100%; padding: 6px 8px; border: 0; border-radius: var(--radius-sm);
+  background: transparent; color: var(--fg); font: inherit; font-size: 12.5px; text-align: left; cursor: pointer;
+}
+.xn-ocean-detail__links button:hover { background: var(--bg-hover); }
+.xn-ocean-detail__link-text { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.xn-ocean-detail__links small { color: var(--fg-subtle); font-size: 11px; }
+.xn-ocean-detail__note { margin: 0; font-size: 12px; color: var(--fg-muted); }
+.xn-ocean-detail footer, .xn-ocean-detail__confirm div { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 4px; }
+.xn-ocean-detail__confirm p { margin: 0 0 4px; font-size: 12.5px; color: var(--fg); }
+
+.xn-ocean-tip {
+  position: absolute; z-index: 3; max-width: 280px; pointer-events: none;
+  display: flex; flex-direction: column; gap: 4px; padding: 9px 11px;
+  border-radius: var(--radius-md); border: 1px solid var(--border);
+  background: color-mix(in srgb, var(--bg-popover) 95%, transparent); color: var(--fg);
+  box-shadow: var(--shadow-md); font-size: 12.5px; line-height: 1.45;
+  animation: xn-ocean-fade var(--dur-fast) ease both;
+}
+.xn-ocean-tip .xn-ocean-chip { align-self: flex-start; }
+.xn-ocean-tip strong { font-weight: 500; }
+.xn-ocean-tip small { color: var(--fg-muted); }
+
+.xn-ocean__empty, .xn-ocean__error {
+  position: absolute; left: 50%; top: 52%; z-index: 2; transform: translate(-50%, -50%);
+  width: min(440px, calc(100% - 40px)); text-align: center;
+  display: flex; flex-direction: column; align-items: center; gap: 10px;
+  animation: xn-ocean-fade var(--dur-reveal) var(--ease-out-expo) both;
+}
+.xn-ocean__empty h3 { margin: 0; font-size: 20px; font-weight: 500; letter-spacing: 0.12em; color: #eaf6ff; text-shadow: 0 0 20px rgba(140, 220, 255, 0.5); }
+.xn-ocean[data-mood="paper"] .xn-ocean__empty h3 { color: #fbf1e1; text-shadow: 0 0 20px rgba(255, 214, 160, 0.45); }
+.xn-ocean__empty p, .xn-ocean__error p { margin: 0; font-size: 13px; line-height: 1.7; color: rgba(226, 240, 255, 0.82); text-shadow: 0 1px 2px rgba(0, 0, 0, 0.7); }
+
+.xn-ocean-dialog__backdrop { position: fixed; inset: 0; z-index: var(--z-modal); display: grid; place-items: center; padding: 20px; background: rgba(2, 8, 20, 0.55); backdrop-filter: blur(3px); animation: xn-ocean-fade var(--dur-normal) ease both; }
+.xn-ocean-dialog {
+  width: min(520px, 100%); max-height: calc(100vh - 40px); overflow: auto;
+  display: flex; flex-direction: column; gap: 8px; padding: 20px 22px;
+  border-radius: var(--radius-lg); border: 1px solid var(--border); background: var(--bg-popover); color: var(--fg);
+  box-shadow: var(--shadow-lg); outline: none;
+  animation: xn-ocean-rise var(--dur-slow) var(--ease-out-expo) both;
+}
+.xn-ocean-dialog h3 { margin: 0; font-size: 17px; font-weight: 600; }
+.xn-ocean-dialog__hint { margin: 0 0 4px; font-size: 12.5px; color: var(--fg-muted); line-height: 1.6; }
+.xn-ocean-dialog label, .xn-ocean-dialog legend { font-size: 12px; font-weight: 600; color: var(--fg-muted); }
+.xn-ocean-dialog textarea, .xn-ocean-dialog input {
+  width: 100%; box-sizing: border-box; padding: 8px 10px; border-radius: var(--radius-md); border: 1px solid var(--border);
+  background: var(--bg-input); color: var(--fg); font: inherit; font-size: 13px; resize: vertical;
+}
+.xn-ocean-dialog textarea:focus, .xn-ocean-dialog input:focus { outline: none; border-color: var(--border-focus); box-shadow: 0 0 0 3px var(--focus-ring); }
+.xn-ocean-dialog fieldset { display: flex; flex-wrap: wrap; gap: 6px; margin: 0; padding: 0; border: 0; }
+.xn-ocean-dialog fieldset legend { width: 100%; margin-bottom: 4px; }
+.xn-ocean-dialog fieldset button {
+  display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 11px; border-radius: var(--radius-full);
+  border: 1px solid var(--border); background: transparent; color: var(--fg-muted); font: inherit; font-size: 12.5px; cursor: pointer;
+}
+.xn-ocean-dialog fieldset button[aria-pressed="true"] { border-color: var(--border-strong); background: var(--bg-active); color: var(--fg); }
+.xn-ocean-dialog fieldset button:disabled { opacity: 0.5; cursor: default; }
+.xn-ocean-dialog__importance button { width: 30px; padding: 0; justify-content: center; }
+.xn-ocean-dialog__importance button[aria-pressed="true"] { color: #f5b83d; }
+.xn-ocean-dialog__row { display: flex; flex-wrap: wrap; gap: 18px; }
+.xn-ocean-dialog__error { margin: 0; font-size: 12.5px; color: var(--error-fg); }
+.xn-ocean-dialog footer { display: flex; justify-content: flex-end; gap: 8px; margin-top: 8px; }
+
+@keyframes xn-ocean-rise { from { opacity: 0; transform: translateY(10px) scale(0.985); } to { opacity: 1; transform: none; } }
+@keyframes xn-ocean-fade { from { opacity: 0; } to { opacity: 1; } }
+
+@media (max-width: 720px) {
+  .xn-ocean { height: clamp(480px, calc(100vh - 96px), 900px); border-radius: var(--radius-md); }
+  .xn-ocean__search input { width: 110px; }
+  .xn-ocean__legend { max-width: calc(100% - 32px); bottom: 60px; }
+  .xn-ocean-detail { top: auto; bottom: 12px; left: 12px; right: 12px; width: auto; max-height: 55%; }
+  .xn-ocean-drawer--list, .xn-ocean-drawer--tracks { left: 12px; right: 12px; width: auto; top: 112px; bottom: 12px; }
+}
+}

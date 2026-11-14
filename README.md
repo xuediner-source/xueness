@@ -27,7 +27,7 @@ Xueness 是面向本机工作空间的开源 Agent 应用，提供 **桌面、�
 
 <table>
 <tr>
-<td width="33%" valign="top"><h4>01 / 保持上下文</h4>会话历史、任务目标、上下文压缩与项目记忆，让持续进行的工作有迹可循。支持停止、恢复和消息分叉。</td>
+<td width="33%" valign="top"><h4>01 / 保持上下文</h4>会话历史、任务目标、上下文压缩与跨会话的<a href="docs/xueness-memory-ocean.md">记忆之海</a>，让持续进行的工作有迹可循。支持停止、恢复和消息分叉。</td>
 <td width="33%" valign="top"><h4>02 / 连接真实工具</h4>文件、Shell、Git、终端与浏览器在工作区内协作。通过 MCP、技能、钩子和工作流扩展任务能力。</td>
 <td width="33%" valign="top"><h4>03 / 按你的方式运行</h4>连接 OpenAI 兼容接口或 Anthropic 接口，选择模型与推理档位，管理权限、插件开关和本机数据位置。</td>
 </tr>

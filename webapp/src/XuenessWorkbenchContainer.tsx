@@ -114,12 +114,11 @@ export { composerModelRecoveryFor, shouldPreservePersistedDefaultDraftScope, sho
 const FileBrowser = lazy(() => import("./plugins/files/FileBrowser").then(module => ({ default: module.FileBrowser })));
 const DiffView = lazy(() => import("./plugins/files/DiffView").then(module => ({ default: module.DiffView })));
 const DirectoryBrowser = lazy(() => import("./plugins/files/DirectoryBrowser").then(module => ({ default: module.DirectoryBrowser })));
-const MemoryPanel = lazy(() => import("./plugins/memory/MemoryPanel").then(module => ({ default: module.MemoryPanel })));
+const MemoryOcean = lazy(() => import("./plugins/memory/MemoryOcean").then(module => ({ default: module.MemoryOcean })));
 const DesktopPermissionOnboarding = lazy(() => import("./plugins/onboarding/DesktopPermissionOnboarding").then(module => ({ default: module.DesktopPermissionOnboarding })));
 const WorkflowPanel = lazy(() => import("./plugins/workflows").then(module => ({ default: module.WorkflowPanel })));
 const TerminalPanel = lazy(() => import("./plugins/terminal").then(module => ({ default: module.TerminalPanel })));
 const XuenessGitView = lazy(() => import("./plugins/git/XuenessGitView").then(module => ({ default: module.XuenessGitView })));
-const XuenessMemoryEditor = lazy(() => import("./plugins/memory").then(module => ({ default: module.XuenessMemoryEditor })));
 const ContextLensPanel = lazy(() => import("./plugins/context_lens/ContextLensPanel").then(module => ({ default: module.ContextLensPanel })));
 const BrowserPanel = lazy(() => import("./plugins/browser/BrowserPanel").then(module => ({ default: module.BrowserPanel })));
 const SkillsSection = lazy(() => import('./plugins/skills/SkillsSection').then(module => ({ default: module.SkillsSection })));
@@ -392,7 +391,7 @@ export function XuenessWorkbenchContainer() {
     ),
     "context-lens": <ContextLensPanel enabled={isPluginEffective("context_lens")} settingsEnabled={isPluginEffective("settings")} sessionId={activeId} onOpenSession={selectSession} onSelectSession={id => { selectSession(id); setPanel("context-lens"); }} />,
     usage: <XuenessUsageSettings />,
-    memory: <><MemoryPanel tracks={memoryTracks.value} error={memoryTracks.error} loading={memoryTracks.loading} /><XuenessMemoryEditor /></>,
+    memory: <MemoryOcean workspaceRoot={typeof session?.root === "string" ? session.root : undefined} tracks={memoryTracks} />,
     capabilities: <><CapabilitiesPanel sections={capSections} />{isPluginEffective("mcp") && <XuenessMcpTools />}</>,
     settings: <WorkbenchSettingsPanel settings={settings} isPluginEffective={isPluginEffective} capabilityKinds={pluginAvailability.capabilityKinds} capSections={capSections}
       loadCapSlot={loadCapSlot} pluginCatalog={pluginCatalog} pluginCatalogLoading={pluginCatalogLoading} pluginCatalogError={pluginCatalogError}

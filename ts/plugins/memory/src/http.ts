@@ -8,13 +8,15 @@
  *
  * Other methods on a track editor path are 405. A disabled plugin is 403 before
  * any of that work. Paths and errors match the Python modules, including the
- * generic editor failure string.
+ * generic editor failure string. The Memory Ocean routes (`/api/memory/ocean…`)
+ * are handled by `memory-ocean-http.ts`.
  */
 import { createHash, randomBytes } from "node:crypto";
 import { closeSync, constants, fsyncSync, lstatSync, mkdirSync, openSync, readFileSync, renameSync, statSync, unlinkSync, writeSync } from "node:fs";
 import { basename, dirname, join } from "node:path";
 import { pyDecodeUtf8, pyEncodeUtf8, pyLen, PyUnicodeDecodeError, PyUnicodeEncodeError, pyStrip } from "@xueness/contracts";
 import { isRelativeTo, pyResolve, TRACK_NAMES, trackPaths, type TrackName } from "./memory.ts";
+import { OCEAN_HTTP_ROUTES, oceanDispatch, ownsOcean } from "./memory-ocean-http.ts";
 
 const MEMORY_ROOT_ENV = "XUENESS_MEMORY_ROOT";
 const MAX_BYTES = 100_000;
@@ -248,14 +250,16 @@ export function createMemoryHttp(options: MemoryHttpOptions) {
   const owns = (method: string, parts: readonly string[]): boolean => parts[0] === "api" && parts[1] === "memory"
     && (parts.length === 3 && parts[2] === "tracks" && method === "GET"
       || parts.length === 3 && parts[2] === "workspaces" && method === "GET"
-      || parts.length === 4 && parts[2] === "tracks");
+      || parts.length === 4 && parts[2] === "tracks"
+      || ownsOcean(method, parts));
   return {
-    routes: [...MEMORY_HTTP_ROUTES],
+    routes: [...MEMORY_HTTP_ROUTES, ...OCEAN_HTTP_ROUTES],
     owns,
     dispatch(method: string, parts: readonly string[], query: Record<string, unknown> = {}, data: unknown = {}): Reply | null {
       if (!owns(method, parts)) return null;
       if (!options.enabled("memory")) return [403, { error: "plugin disabled or dependency unavailable: memory", plugin: "memory" }];
       const env = envOf();
+      if (ownsOcean(method, parts)) return oceanDispatch({ stateDir: options.stateDir, projectDir: options.projectDir, memoryRoot: () => memoryRoot(env) }, method, parts, query, data);
       try {
         if (parts.length === 3 && parts[2] === "workspaces") return [200, workspaceList(options, env)];
         if (parts.length === 3) return [200, { tracks: memoryRoot(env) == null ? [] : trackEntries(memoryRoot(env)!, cwdOf(options, undefined)) }];

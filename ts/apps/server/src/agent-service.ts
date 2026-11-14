@@ -27,7 +27,7 @@ import { browser, createBrowser } from "@xueness/plugin-browser";
 import { createNetwork, network, networkActivityExtension, type Net } from "@xueness/plugin-network";
 import { createHooks, hooksBinding, hooksExtension, type HooksBinding } from "@xueness/plugin-hooks";
 import { createSubagents, subagents, subagentsBinding, subagentsExtension, TaskCoordinator, type SubagentsBinding, type TaskRegistry } from "@xueness/plugin-subagents";
-import { memoryExtension, memoryRootFromEnv } from "@xueness/plugin-memory";
+import { createMemory, memory, memoryExtension, memoryRootFromEnv } from "@xueness/plugin-memory";
 import { createRemote, remote, remoteLocalTools, remoteSessionExtension } from "@xueness/plugin-remote";
 import { backgroundChildRunner, childRunner } from "./agent-subagents.ts";
 import { automation, createAutomationTools } from "@xueness/plugin-automation";
@@ -102,6 +102,8 @@ export function createAgentService(options: AgentServiceOptions) {
     request: (provider, prompt, signal) => requestConversationTitle(provider, prompt, signal, { admission: auxAdmission() }) });
   let closed = false;
   const desktopCuaEnabled = () => options.desktopComputerUse === true && !closed && enabled("desktop") && enabled("os_cua");
+  /** Settings → 记忆 can switch memory off without disabling the plugin; its tools follow that switch too. */
+  const memoryAllowed = (): boolean => { const general = settings().general; return !isDict(general) || general.memoryEnabled !== false; };
   const configurationFor = (root: string) => loadAgentRuntimeConfig({ stateDir: options.stateDir, root, enabled, env: options.configEnv, pluginConfig: options.pluginConfig?.() });
   const reconcile = async (environment: Environment): Promise<void> => {
     environment.reconcile = environment.reconcile.catch(() => {}).then(async () => {
@@ -112,9 +114,9 @@ export function createAgentService(options: AgentServiceOptions) {
       const runtimeFingerprint = pyJsonDumps(runtimeConfig, { sortKeys: true });
       if (runtimeFingerprint !== environment.runtimeFingerprint && environment.current.session) active.get(String(environment.current.session.id))?.cancel(String(environment.current.session.id));
       if (environment.current.session?.permission_mode === 'guarded' && !enabled('planning')) active.get(String(environment.current.session.id))?.cancel(String(environment.current.session.id));
-      for (const id of ["providers", "files", "shell", "planning", "git", "skills", "hooks", "subagents", "office", "browser", "network", "remote", "native_ops", "desktop", "os_cua"]) {
+      for (const id of ["providers", "files", "shell", "planning", "git", "skills", "hooks", "subagents", "office", "browser", "network", "remote", "native_ops", "desktop", "os_cua", "memory"]) {
         const current = environment.host.status(id);
-        const effective = id === "os_cua" ? desktopCuaEnabled() && !environment.current.session?.remote_connection : enabled(id);
+        const effective = id === "os_cua" ? desktopCuaEnabled() && !environment.current.session?.remote_connection : id === "memory" ? enabled(id) && memoryAllowed() : enabled(id);
         if (effective && !current.enabled) await environment.host.enable(id);
         if (!effective && current.enabled) await environment.host.disable(id);
         if (serialized !== environment.configs && configs[id]) await environment.host.configure(id, configs[id]!);
@@ -143,7 +145,7 @@ export function createAgentService(options: AgentServiceOptions) {
         // resolves the local/native ToolSearch mode.
         catalog: () => kernel.tools.list<ToolDefinition>().map(({ name, description, alwaysLoad, shouldDefer }) => ({ name, description, alwaysLoad, shouldDefer })),
         provider: () => current.provider,
-      }), sessionsPlugin, contextLens, workflowTools, createAutomationTools({ stateDir: options.stateDir }), createPlanning({ session: () => current.session, enabled, planMode: () => current.planMode, questionsSchema: QUESTION_SCHEMA, normalizeQuestions(value) { if (!enabled("sessions")) throw new PyValueError("structured questions require the planning and sessions plugins"); return normalizeQuestions(value); } }), createGitCheckpoints({ store: options.store, stateDir: options.stateDir, enabled, session: () => current.session }), createMcp({ run: () => current.mcp, binding: mcpRuntime }), createSkills({ stateDir: options.stateDir, root: () => current.session ? String(current.session.root) : null, bundled: BUNDLED_SKILLS_DIR }), createHooks(hookBinding), createSubagents(subagentBinding), createNativeOps(nativeOpsBinding), createOffice({ session: () => current.session }), createBrowser({ stateDir: options.stateDir }), createNetwork({ stateDir: options.stateDir, net: options.networkNet }), createRemote({ stateDir: options.stateDir })], { enabled: { providers: enabled("providers"), files: enabled("files"), shell: enabled("shell"), sessions: enabled("sessions"), workflows: enabled("workflows"), automation: enabled("automation"), planning: enabled("planning"), git: enabled("git"), mcp: false, skills: enabled("skills"), hooks: enabled("hooks"), subagents: enabled("subagents"), office: enabled("office"), browser: enabled("browser"), network: enabled("network"), remote: enabled("remote"), native_ops: enabled("native_ops"), context_lens: enabled("context_lens"), desktop: enabled("desktop"), os_cua: desktopCuaEnabled() && !session.remote_connection }, config: configs });
+      }), sessionsPlugin, contextLens, workflowTools, createAutomationTools({ stateDir: options.stateDir }), createPlanning({ session: () => current.session, enabled, planMode: () => current.planMode, questionsSchema: QUESTION_SCHEMA, normalizeQuestions(value) { if (!enabled("sessions")) throw new PyValueError("structured questions require the planning and sessions plugins"); return normalizeQuestions(value); } }), createGitCheckpoints({ store: options.store, stateDir: options.stateDir, enabled, session: () => current.session }), createMcp({ run: () => current.mcp, binding: mcpRuntime }), createSkills({ stateDir: options.stateDir, root: () => current.session ? String(current.session.root) : null, bundled: BUNDLED_SKILLS_DIR }), createHooks(hookBinding), createSubagents(subagentBinding), createNativeOps(nativeOpsBinding), createOffice({ session: () => current.session }), createBrowser({ stateDir: options.stateDir }), createNetwork({ stateDir: options.stateDir, net: options.networkNet }), createRemote({ stateDir: options.stateDir }), createMemory({ stateDir: options.stateDir })], { enabled: { memory: enabled("memory") && memoryAllowed(), providers: enabled("providers"), files: enabled("files"), shell: enabled("shell"), sessions: enabled("sessions"), workflows: enabled("workflows"), automation: enabled("automation"), planning: enabled("planning"), git: enabled("git"), mcp: false, skills: enabled("skills"), hooks: enabled("hooks"), subagents: enabled("subagents"), office: enabled("office"), browser: enabled("browser"), network: enabled("network"), remote: enabled("remote"), native_ops: enabled("native_ops"), context_lens: enabled("context_lens"), desktop: enabled("desktop"), os_cua: desktopCuaEnabled() && !session.remote_connection }, config: configs });
       try {
         await host.start();
         return { kernel, host, env: createToolEnv({ cwd: String(session.root), artifactsDir: artifacts, owner: sid }), artifacts, root: String(session.root), configs: pyJsonDumps(configs, { sortKeys: true }), reconcile: Promise.resolve(), current, hooks: hookBinding, subagents: subagentBinding, shell: shellBinding, shellConfig: pyJsonDumps(configs.shell ?? {}, { sortKeys: true }), runtimeConfig, runtimeFingerprint: pyJsonDumps(runtimeConfig, { sortKeys: true }), mcpRuntime, nativeOps: nativeOpsBinding };
@@ -174,7 +176,7 @@ export function createAgentService(options: AgentServiceOptions) {
     approvals,
     liveApprovals,
     resolveProvider,
-    knownTools(): string[] { return [files, shell, providers, planning, skills, subagents, office, browser, network, remote, workflows, automation, nativeOps, osCua].flatMap((entry) => isDict(entry.manifest) && Array.isArray(entry.manifest.tools) ? entry.manifest.tools.filter(isDict).map((tool) => String(tool.name)) : []); },
+    knownTools(): string[] { return [files, shell, providers, planning, skills, subagents, office, browser, network, remote, workflows, automation, nativeOps, osCua, memory].flatMap((entry) => isDict(entry.manifest) && Array.isArray(entry.manifest.tools) ? entry.manifest.tools.filter(isDict).map((tool) => String(tool.name)) : []); },
     async mcpSnapshot(sid: string) { const pending = environments.get(sid); if (!pending) return null; const environment = await pending; return environment.mcpRuntime.current ? { active: true, ...environment.mcpRuntime.current.snapshot() } : null; },
     activeProvider(sid: string): SwitchableAgentProvider | null { return switchers.get(sid) ?? null; },
     permissionControl(sid: string): PermissionControl | null { return permissionControls.get(sid) ?? null; },
@@ -286,7 +288,7 @@ export function createAgentService(options: AgentServiceOptions) {
             queueRunExtension({ request: policy.request, stateDir: options.stateDir, pendingApprovals: (s) => pendingDenials(s), appendQueued: options.appendQueued, preparedRemote: options.preparedRemote }),
             workspaceInstructionsExtension((_context, path) => permissions.preview({ tool: "read", kind: "read", subject: path, subjectKind: "path" }).behavior === "allow"),
             // Python's injected order (guidance, memory, skills); both must precede the lightweight view, which consumes `injected`.
-            memoryExtension({ memoryRoot: () => memoryRootFromEnv(options.configEnv ?? process.env), allowed: () => { const general = settings().general; return !isDict(general) || general.memoryEnabled !== false; } }),
+            memoryExtension({ stateDir: options.stateDir, memoryRoot: () => memoryRootFromEnv(options.configEnv ?? process.env), allowed: memoryAllowed }),
             skillsExtension({ stateDir: options.stateDir, bundled: BUNDLED_SKILLS_DIR, visualizations: () => visualizations }),
             ...remoteBound ? [] : [hooksExtension({ stateDir: options.stateDir, binding: environment.hooks, legacy: !!(policy.request.allow_hooks || policy.request.allowHooks) })],
             lightweightRuntimeExtension({ discoveredCatalog: () => environment.kernel.tools.list().map((tool) => tool.name), toolPolicy: () => {
