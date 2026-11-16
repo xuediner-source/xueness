@@ -26,7 +26,7 @@ export const listTool: ToolDefinition<ListInput, ListData> = {
   mutating: false,
   concurrencySafe: true,
   requires: READS_WORKSPACE,
-  description: "List one directory. Directories end with `/`. Use glob to search recursively.",
+  description: "List entries of one directory, not a recursive search. Directories end with `/`. Use glob to find files by pattern.",
   inputSchema: {
     type: "object",
     additionalProperties: false,

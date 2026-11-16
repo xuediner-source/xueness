@@ -58,6 +58,7 @@ export const globTool: ToolDefinition<GlobInput, GlobData> = {
     "Find files by name pattern, newest first. `*` and `?` match within a name, `**` spans directories, `{a,b}` lists alternatives.",
     "A pattern without `/` (like `*.ts`) matches at any depth; `src/**/*.test.ts` matches from the search path.",
     "Respects .gitignore and skips .git and node_modules unless include_ignored is true.",
+    "Use list to show a single directory.",
   ].join(" "),
   inputSchema: {
     type: "object",

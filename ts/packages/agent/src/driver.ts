@@ -98,7 +98,13 @@ export async function driveRun(context: AgentContext, runner: AgentRunnerOptions
       if (latestHuman !== human) { human = latestHuman; repeated.signature = undefined; repeated.streak = 0; }
       const rebuild = async (journal: Row[]): Promise<ModelRequest> => {
         let messages = withContinuationPrompts(journal, continued);
-        if (guidance.length || repair) messages = [{ ...messages[0], content: String(messages[0]?.content ?? "") + "\n" + [...guidance, ...(repair ? [repair] : [])].join("\n") }, ...messages.slice(1)];
+        // Guidance and repair travel on the request and are attached as window
+        // material by the prompt views. Only a journal with no system message
+        // (nothing for those views to rebuild) carries them here, still as a
+        // user turn, so the system prompt is not grown by this step.
+        if ((guidance.length || repair) && messages[0]?.role !== "system") {
+          messages = [...messages, { role: "user", content: [...guidance, ...(repair ? [repair] : [])].join("\n"), _input_kind: "host_guidance" }];
+        }
         const tools = (await runner.hooks.tools(context)).filter((schema) => {
           const name = isDict(schema.function) ? schema.function.name : null;
           if (typeof name !== "string") return false;
@@ -273,7 +279,10 @@ export async function driveRun(context: AgentContext, runner: AgentRunnerOptions
     if (stopped()) { await settle("stopped"); return; }
     if (outcomes.stopTurn) {
       // ZCode turn-control: a denied plan-mode exit ends the turn instead of feeding the model.
-      await settle("paused", "计划未获批准，本轮已结束；可以继续讨论或修改计划。", "plan_exit_denied"); return;
+      // Other tools may end a turn on purpose too (a swarm member waiting for the board); they keep their own reason.
+      const control = isDict(outcomes.stopTurn.turn_control) && typeof outcomes.stopTurn.turn_control.reason === "string" ? outcomes.stopTurn.turn_control.reason : "plan_exit_denied";
+      if (control === "plan_exit_denied") { await settle("paused", "计划未获批准，本轮已结束；可以继续讨论或修改计划。", "plan_exit_denied"); return; }
+      await settle("paused", `工具结束了本轮（${control.slice(0, 40)}）。 / A tool ended this turn (${control.slice(0, 40)}).`, control.slice(0, 40)); return;
     }
     if (outcomes.halt) {
       // Fallback only: approvals wait in process. This is an approval nobody could answer

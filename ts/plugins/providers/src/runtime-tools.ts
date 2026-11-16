@@ -1,4 +1,5 @@
 import { isDict } from "@xueness/contracts";
+import { LIGHTWEIGHT_CONTEXT_WINDOW } from "@xueness/providers";
 import { runtimeOptions, type RuntimeProvider } from "./runtime-budget.ts";
 import { runtimeToolName } from "./runtime-protocol.ts";
 type Row = Record<string, unknown>;
@@ -15,22 +16,29 @@ export function selectRuntimeTools(schemas: Row[], session: Row, provider: Runti
   const disallowed = new Set(policy.disallow ?? []); const allowed = policy.allowed ? new Set(policy.allowed) : null;
   const denied = new Set(policy.denied ?? []);
   if (session.read_only) for (const name of policy.readonlyDenied ?? []) denied.add(name);
+  const seen = new Set<string>();
   const catalog = schemas.filter((schema) => {
     const name = runtimeToolName(schema);
+    // One row per name: a second registration would advertise two calling interfaces for one tool.
+    if (!name || seen.has(name)) return false;
+    seen.add(name);
     return !disallowed.has(name) && !denied.has(name) && !(disallowed.has("mcp") && name.startsWith("mcp__")) && (!allowed || allowed.has(name));
   });
   const discovered = Array.isArray(session.discovered_tools) ? session.discovered_tools : [];
   // `deferred_tool_call` rides with `tool_search`: no discovery surface, no deferred envelope.
-  let base = new Set(session.read_only ? ["read", "list", "glob", "grep", "tool_search", "tool_result_read", "deferred_tool_call"] : ["read", "write", "edit", "exec", "ask_user", "tool_search", "tool_result_read", "deferred_tool_call"]);
+  // `glob` starts in the writable view too: without a file-search tool, models list files through `exec`
+  // (half of spark-x2.6's commands in the 2026-11-14 benchmark), costing a round trip and inviting shell mistakes.
+  let base = new Set(session.read_only ? ["read", "list", "glob", "grep", "tool_search", "tool_result_read", "deferred_tool_call"] : ["read", "write", "edit", "glob", "exec", "ask_user", "tool_search", "tool_result_read", "deferred_tool_call"]);
   if (session.remote_connection) base.add("remote_exec");
-  if (options.initialTools === "minimal" || options.initialTools === "auto" && (provider.contextWindow || 8192) < 4096) {
+  // Below 4096 only for profiles saved before the 16K floor.
+  if (options.initialTools === "minimal" || options.initialTools === "auto" && (provider.contextWindow || LIGHTWEIGHT_CONTEXT_WINDOW) < 4096) {
     base = new Set(session.read_only ? ["read", "list", "glob", "grep", "tool_search", "deferred_tool_call"] : ["read", "exec", "remote_exec", "ask_user", "tool_search", "deferred_tool_call"]);
     if (!session.remote_connection) base.delete("remote_exec");
   }
   const maximum = options.maxDiscoveredTools as number;
   if (!maximum) { base.delete("tool_search"); base.delete("deferred_tool_call"); }
   const requested: string[] = [];
-  if (maximum && (provider.contextWindow || 8192) >= 4096) {
+  if (maximum && (provider.contextWindow || LIGHTWEIGHT_CONTEXT_WINDOW) >= 4096) {
     let task = (Array.isArray(session.messages) ? session.messages : []).filter(isDict).findLast((row) => row.role === "user")?.content ?? "";
     if (Array.isArray(task)) task = task.filter(isDict).filter((row) => row.type === "text" && typeof row.text === "string").map((row) => row.text).join("\n");
     if (typeof task === "string") {

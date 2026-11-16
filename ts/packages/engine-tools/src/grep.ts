@@ -15,6 +15,7 @@ import { resolveWorkspacePath } from "./paths.ts";
 import { compileSearchRegex } from "./search-regex.ts";
 import { decodeText, detectEncoding, looksBinary } from "./text-codec.ts";
 import { failure, READS_WORKSPACE, statOrNull, type ToolDefinition } from "./tool.ts";
+import type { JsonSchema } from "@xueness/contracts";
 import { walkFiles } from "./walk.ts";
 
 export type GrepMode = "content" | "files_with_matches" | "count";
@@ -108,6 +109,13 @@ function contentEntries(hit: FileHit, context: number): string[] {
   return out;
 }
 
+/** `include` is the old alias of `glob`. The model sees one file filter. */
+function grepModelSchema(schema: JsonSchema): JsonSchema {
+  const properties = { ...(schema.properties ?? {}) };
+  delete properties.include;
+  return { ...schema, properties };
+}
+
 export const grepTool: ToolDefinition<GrepInput, GrepData> = {
   name: "grep",
   gate: "grep",
@@ -138,6 +146,7 @@ export const grepTool: ToolDefinition<GrepInput, GrepData> = {
       include_ignored: { type: "boolean" },
     },
   },
+  get modelSchema() { return grepModelSchema(this.inputSchema); },
   async run(input, env) {
     const multiline = input.multiline ?? false;
     const regex = compileSearchRegex(input.pattern, { ignoreCase: input.case_insensitive ?? false, multiline });

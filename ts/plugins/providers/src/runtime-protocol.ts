@@ -79,7 +79,8 @@ export function textMessages(messages: Row[]): Row[] {
     }
     if (item.role === "tool") item = { role: "user", content: "UNTRUSTED tool result (" + String(item.tool_call_id ?? "") + "):\n" + String(item.content ?? "") };
     const last = rows.at(-1);
-    if (last && !last._media_refs && last.role === item.role && typeof item.content === "string" && typeof last.content === "string") last.content += "\n\n" + item.content;
+    const mergeable = (row: Row): boolean => row._input_kind !== "tool_catalog" && !row._media_refs;
+    if (last && mergeable(last) && mergeable(item) && last.role === item.role && typeof item.content === "string" && typeof last.content === "string") last.content += "\n\n" + item.content;
     else rows.push(item);
   }
   return rows;

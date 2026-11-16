@@ -56,7 +56,14 @@ export function buildPromptView(messages: readonly Row[], input: PromptViewInput
   const built = buildContext({ ...input, instructions, hostNotes: HOST_NOTES, skillsListing: listings.join("\n\n") || null, desktopContext: desktop.join("\n\n") || null });
   const system: Row[] = built.systemMessages.map((m, index) => ({ ...(index === 0 ? messages[0] : {}), role: "system", content: m.content, ...(m.cacheControl ? { _cache_control: m.cacheControl } : {}) }));
   const host = [...input.hostInstructions ?? [], ...input.repair ? [input.repair] : []].filter((line) => line.trim());
-  if (host.length) system.push({ role: "system", content: host.join("\n") });
   const meta = built.metaUserAttachments.map((a) => ({ role: "user", content: wrapSystemReminderForSource(a.source, a.content), _meta_source: a.source }));
+  if (host.length) {
+    // Per-step notes change every turn. They stay out of the system prompt so
+    // that prefix can stay stable; the model still sees them as window material.
+    const text = "Host guidance for this step (from Xueness, not the user; it applies to your next reply only):\n" + host.join("\n");
+    const last = rest.at(-1);
+    if (last?.role === "user" && typeof last.content === "string") rest[rest.length - 1] = { ...last, content: `${last.content}\n\n${text}` };
+    else rest.push({ role: "user", content: text, _input_kind: "host_guidance" });
+  }
   return [...system, ...meta, ...rest];
 }

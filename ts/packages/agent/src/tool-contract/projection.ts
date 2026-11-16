@@ -29,6 +29,46 @@ function parseObject(text: unknown): Row | null {
 }
 const nameOf = (tool: Row): string => isDict(tool.function) && typeof tool.function.name === "string" ? tool.function.name : "";
 
+/**
+ * Parameters the model must not be offered. `dangerouslyDisableSandbox` is on
+ * the upstream Bash schema but the host drops it, so advertising it invites a
+ * call that does not do what it says.
+ */
+const OMITTED_PARAMETERS: Readonly<Record<string, readonly string[]>> = { Bash: ["dangerouslyDisableSandbox"] };
+
+function withoutOmittedParameters(tool: Row, name: string): Row {
+  const omit = OMITTED_PARAMETERS[name];
+  const fn = isDict(tool.function) ? tool.function : null;
+  const parameters = fn && isDict(fn.parameters) ? fn.parameters : null;
+  const current = parameters && isDict(parameters.properties) ? parameters.properties : null;
+  if (!omit || !fn || !parameters || !current || !omit.some((key) => Object.hasOwn(current, key))) return tool;
+  const properties = { ...current };
+  for (const key of omit) delete properties[key];
+  return { ...tool, function: { ...fn, parameters: { ...parameters, properties } } };
+}
+
+/**
+ * The model-facing catalog: one row per name, in the order given, with a
+ * usable description. Empty names and later duplicates are dropped. This does
+ * not change what a call is allowed to do.
+ */
+export function prepareModelToolCatalog(tools: readonly Row[]): Row[] {
+  const seen = new Set<string>();
+  const out: Row[] = [];
+  for (const tool of tools) {
+    const name = nameOf(tool).trim();
+    if (!name || seen.has(name)) continue;
+    seen.add(name);
+    const fn = isDict(tool.function) ? tool.function : null;
+    if (!fn) continue;
+    const description = typeof fn.description === "string" ? fn.description.trim() : "";
+    const named = name === nameOf(tool) ? tool : { ...tool, function: { ...fn, name } };
+    const described = description ? named : { ...named, function: { ...(isDict(named.function) ? named.function : fn), name, description: `Registered tool ${name}. Use it only when the task matches the name; otherwise discover a better tool with tool_search.` } };
+    out.push(withoutOmittedParameters(described, name));
+  }
+  return out;
+}
+
 /** The tool table the model sees; `pdf` when the model takes PDF documents (ZCode `resolveReadInputSchema`). */
 export function modelTools(tools: readonly Row[], options: { pdf?: boolean } = {}): Row[] {
   const shown = tools.map((tool) => {
@@ -38,7 +78,7 @@ export function modelTools(tools: readonly Row[], options: { pdf?: boolean } = {
     if (options.pdf === true && contract.internal === "read") return { type: "function", function: { name: contract.model, description: readPdfDescription(contract.description), parameters: READ_PDF_SCHEMA, ...strict } };
     return { type: "function", function: { name: contract.model, description: contract.description, parameters: contract.schema, ...strict } };
   });
-  return orderProviderVisibleTools(shown, nameOf);
+  return prepareModelToolCatalog(orderProviderVisibleTools(shown, nameOf));
 }
 
 function resultContent(contract: ToolContract, content: unknown, input: Row | null): unknown {

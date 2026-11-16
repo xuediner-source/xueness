@@ -214,7 +214,7 @@ export function workflowTools(options: WorkflowToolsOptions): ToolDefinition[] {
     },
     {
       name: "background_exec",
-      description: "Start a literal argv command as a durable background job; requires operator approval",
+      description: "Start a literal argv command as a durable workflow job that outlives this turn; requires operator approval. For a command that should stay attached to this session, use exec with background instead.",
       inputSchema: schema({
         argv: { type: "array", minItems: 1, maxItems: 128, items: { type: "string", maxLength: 16000 } },
         timeout: { type: "number", minimum: 0.1, maximum: 3600 }, name: text("Optional job label", 120),

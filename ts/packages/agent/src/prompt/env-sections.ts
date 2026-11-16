@@ -48,7 +48,9 @@ export function buildGitSystemContextSection(info: EnvInfo): ContextSection | nu
   const status = info.gitStatusLines?.length ? info.gitStatusLines.join("\n") : info.gitStatus === "dirty" ? "(dirty)" : info.gitStatus === "clean" ? "(clean)" : "(unknown)";
   lines.push("", `Status:\n${status}`);
   lines.push("", `Recent commits:\n${info.recentCommits?.length ? info.recentCommits.join("\n") : ""}`);
-  return createSection("System Context", "system_context", "system", "dynamic", lines.join("\n"));
+  // Git status is a snapshot that goes stale inside the turn. It rides with the
+  // other request context reminders, not in the system prompt.
+  return createSection("System Context", "system_context", "meta_user", "dynamic", lines.join("\n"));
 }
 export function buildCurrentDateSection(currentDate?: string): ContextSection | null {
   return currentDate ? createSection("Current Date", "current_date", "meta_user", "dynamic", `# currentDate\nToday's date is ${currentDate}.`) : null;

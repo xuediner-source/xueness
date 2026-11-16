@@ -151,7 +151,7 @@ export const GREP_SCHEMA = {
   },
   "type": {
    "type": "string",
-   "description": "File type to search (rg --type). Common types: js, py, rust, go, java, etc. More efficient than include for standard file types."
+   "description": "File type to search (rg --type). Common types: js, py, rust, go, java, etc. More efficient than a glob for standard file types."
   },
   "head_limit": {
    "type": "number",

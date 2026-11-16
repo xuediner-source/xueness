@@ -53,25 +53,40 @@ const inputSchema: JsonSchema = {
 };
 
 const SEARCH_TOOL = "tool_search";
+/** Search hits and the one-time discovery reminder stay scannable; the live schema keeps the full description. */
+export const TOOL_SEARCH_DESCRIPTION_CHARS = 280;
+const EMPTY_SEARCH_DESCRIPTION = "Registered tool. Match the name to the task, then read its parameters before calling.";
+
+/** One line, bounded, so a long contract description cannot fill the discovery reminder. */
+export function clipToolSearchDescription(description: string): string {
+  const flat = description.replace(/\s+/g, " ").trim();
+  if (!flat) return EMPTY_SEARCH_DESCRIPTION;
+  const chars = Array.from(flat);
+  if (chars.length <= TOOL_SEARCH_DESCRIPTION_CHARS) return flat;
+  return chars.slice(0, TOOL_SEARCH_DESCRIPTION_CHARS - 1).join("") + "…";
+}
 
 /** Deterministic term match over names and descriptions; higher score wins, registration order breaks ties. */
 export function searchToolCatalog(query: string, catalog: readonly ToolSearchCatalogEntry[]): ToolSearchCatalogEntry[] {
   const terms = [...new Set(query.toLowerCase().split(/[^a-z0-9_\u4e00-\u9fff]+/).filter((term) => term.length > 0))];
   if (!terms.length) return [];
   const scored: Array<{ entry: ToolSearchCatalogEntry; score: number }> = [];
+  const seen = new Set<string>();
   for (const entry of catalog) {
-    if (entry.name === SEARCH_TOOL) continue; // always available to the caller; a self-hit only wastes a slot
-    const name = entry.name.toLowerCase();
+    const name = entry.name.trim();
+    if (!name || name === SEARCH_TOOL || seen.has(name)) continue; // a self-hit or a second registration only wastes a slot
+    seen.add(name);
     const description = String(entry.description ?? "").toLowerCase();
     let score = 0;
+    const folded = name.toLowerCase();
     for (const term of terms) {
-      if (name === term) score += 8;
-      else if (name.includes(term)) score += 4;
+      if (folded === term) score += 8;
+      else if (folded.includes(term)) score += 4;
       else if (term.length > 1 && description.includes(term)) score += 1;
     }
-    if (score > 0) scored.push({ entry, score });
+    if (score > 0) scored.push({ entry: { ...entry, name }, score });
   }
-  return scored.sort((a, b) => b.score - a.score).map(({ entry }) => entry);
+  return scored.sort((a, b) => b.score - a.score).map(({ entry }) => ({ ...entry, description: clipToolSearchDescription(String(entry.description ?? "")) }));
 }
 
 /** The bounded numbers the search honors, from the session's validated runtime options. */

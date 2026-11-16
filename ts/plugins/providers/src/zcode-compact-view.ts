@@ -4,6 +4,8 @@
  *   post-compact system-reminders (ZCode `compact-active.ts` buildPostCompactRuntimeEntries);
  *   `tool_discovery` reminders (C-TOOL-05/F02.04) pass through as their own source.
  * - Optional microcompact (ZCode `microcompact.ts`; off by default as in ZCode).
+ *   Age and supersession of tool results is the result-budget pass, which runs
+ *   on the prepared request and does not wait for this flag.
  * - Read file_unchanged: ZCode's Read tool answers a repeated, unchanged read with a stub
  *   (ZCode `core/src/tool/handlers/read.ts` FILE_UNCHANGED_STUB). Xueness reads always return the
  *   content, so the view stubs a later Read whose input and result equal an earlier Read
