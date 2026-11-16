@@ -112,7 +112,7 @@ export function WorkbenchConversation({ session, activeId, isPluginEffective, ef
   modelRecovery, onSend }: WorkbenchConversationProps) {
   const { busy, runError, runRequestSessions, stoppingSessions, queueError, queueCancelling, queueSubmittingSessions, queueContinuingSessions } = activity;
   const { rows, olderTranscript, loadOlderTranscript, displayTimelineRows, compactionMarker, conversationFindRequest, loadActive, sessionCommands, primaryQuestionTransport } = data;
-  const { handleApprove, handleApproveAll, handleReject, handleAllowProject, handleQuestionSubmitted, handleRetryTool, handleMessageEdit, handleMessageFeedback, handleRetryRun, handleStop } = runActions;
+  const { handleApprove, handleApproveAll, handleReject, handleAllowProject, handleAllowSession, handleQuestionSubmitted, handleRetryTool, handleMessageEdit, handleMessageFeedback, handleRetryRun, handleStop } = runActions;
   const { queueWithdrawals, handleWithdrawGuidance, handleCancelQueuedTurn, handleWithdrawQueuedTurn, handleSendNowQueuedTurn, handleEditQueuedMessage, handleReorderQueuedMessages, handleContinueQueuedMessages } = queue;
   return <>
           <div className="xn-conversation">
@@ -140,7 +140,7 @@ export function WorkbenchConversation({ session, activeId, isPluginEffective, ef
             <Suspense fallback={<p role="status">{tr("正在加载界面…")}</p>}><LocalRuntimeMonitor lightweight session={runtimeMonitorSession} /></Suspense>}
           {session.pending && session.pending.length > 0 && (
             <div className="xn-conversation__approvals">
-              <Approvals pending={session.pending} onApprove={handleApprove} onApproveAll={handleApproveAll} onReject={handleReject} onAllowProject={handleAllowProject} onFullAccess={async p => { if (!await livePermissions.change("yolo", true)) return false; return p.waiting ? true : handleApprove(p); }}
+              <Approvals pending={session.pending} onApprove={handleApprove} onApproveAll={handleApproveAll} onReject={handleReject} onAllowProject={handleAllowProject} onAllowSession={handleAllowSession} onFullAccess={async p => { if (!await livePermissions.change("yolo", true)) return false; return p.waiting ? true : handleApprove(p); }}
                 busy={busy || runRequestSessions.has(session.id)} />
             </div>
           )}

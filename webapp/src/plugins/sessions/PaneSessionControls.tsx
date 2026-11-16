@@ -93,7 +93,7 @@ export function PaneSessionControls({ operationGate, sharedCommands, identity, s
       throw new Error(result.error);
     }
   };
-  const approve = (rows: PendingApproval[], scope?: 'project') => perform(async () => {
+  const approve = (rows: PendingApproval[], scope?: 'project' | 'session') => perform(async () => {
     // Calls waiting in the running turn continue in place; only replays need a new run.
     let resumed = rows.length > 0;
     for (const row of rows) {
@@ -165,6 +165,7 @@ export function PaneSessionControls({ operationGate, sharedCommands, identity, s
     {!!session.pending?.length && <><Approvals pending={session.pending} busy={disabled || running}
       onApprove={row => approve([row])} onApproveAll={rows => approve(rows ?? session.pending ?? [])} onReject={reject}
       onAllowProject={!remote ? row => approve([row], 'project') : undefined}
+      onAllowSession={row => approve([row], 'session')}
       onFullAccess={!remote ? row => perform(async () => { await setSessionPermissionMode(session.id, 'yolo', true, session.active_turn_id); if (current()) { onChoicesChange({ ...choices, permission_mode: 'yolo', acknowledge_yolo: false }); if (!row.waiting) { const result = await approvePending(session.id, row, commands); if (!result.ok) throw new Error(result.error); const started = await runSession(session.id, { ...choices, permission_mode: 'yolo', acknowledge_yolo: true }, undefined, commands); if (!started.ok) throw new Error(started.error); } } }) : undefined} />
 </>}
     {(!remote || questionTransport) ? <PendingQuestion key={key} sessionId={session.id} enabled={enabled}

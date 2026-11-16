@@ -188,6 +188,7 @@ export function SessionQueue({ items, queueRevision, cancellingId, currentId, on
       <button type="button" className="xn-session-queue__toggle" aria-expanded={!collapsed} aria-controls={listId} onClick={() => setCollapsed(value => !value)}>
         <ChevronDown size={14} aria-hidden="true" /><span>{tr("排队消息")}</span><span className="xn-session-queue__count">{items.length}</span>
       </button>
+      {canContinue && <p className="xn-session-queue__paused-hint" role="status">{`${tr('队列')} · ${tr('已暂停')}`}</p>}
       {canContinue && <button type="button" className="xn-session-queue__continue" disabled={mutationDisabled || Boolean(editing) || !onContinue}
         title={editing ? tr('请先保存或取消当前编辑。') : undefined}
         onClick={onContinue}>{tr(continuing ? "继续中…" : "继续执行队列")}</button>}

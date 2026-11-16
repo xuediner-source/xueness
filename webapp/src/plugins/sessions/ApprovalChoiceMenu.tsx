@@ -21,22 +21,40 @@ export function ApprovalChoiceMenu({ disabled, canRemember, oneShot, onAllow, on
     ] : []),
   ];
   const active = choices.find(choice => choice.id === selected) ?? choices[0]!;
-  const confirm = () => { if (!disabled && !active.disabled && (active.id !== 'feedback' || note.trim())) active.action(); };
+  const focusChoice = (choiceId: string) => optionsRef.current?.querySelector<HTMLButtonElement>(`[data-choice="${choiceId}"]`)?.focus();
+  const focusNote = () => {
+    if (noteRef.current) noteRef.current.focus();
+    else requestAnimationFrame(() => noteRef.current?.focus());
+  };
+  const confirm = () => {
+    if (disabled || active.disabled) return;
+    if (active.id === 'feedback' && !note.trim()) { focusNote(); return; }
+    active.action();
+  };
   return <div className="xn-permission-dialog" data-testid="approval-choice-menu" onKeyDown={event => {
     event.stopPropagation(); if (isImeComposingEvent(event)) return;
     if (event.key === 'Enter' && !(event.target instanceof HTMLButtonElement && event.target.dataset.confirm)) { event.preventDefault(); confirm(); return; }
-    if (event.target === noteRef.current) return;
     const enabled = choices.filter(choice => !choice.disabled), current = enabled.findIndex(choice => choice.id === selected);
+    if (event.target === noteRef.current) {
+      if (event.key === 'Escape') { event.preventDefault(); focusChoice('feedback'); return; }
+      if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+        event.preventDefault();
+        const choice = enabled[(current + (event.key === 'ArrowDown' ? 1 : -1) + enabled.length) % enabled.length]!;
+        setSelected(choice.id); focusChoice(choice.id);
+      }
+      return;
+    }
     let next = -1;
-    if (event.key === 'ArrowDown' || event.key === 'ArrowUp') next = (current + (event.key === 'ArrowDown' ? 1 : -1) + enabled.length) % enabled.length;
-    else if (/^[1-9]$/.test(event.key)) next = enabled.findIndex(choice => choice.id === choices[Number(event.key) - 1]?.id);
+    if (event.key === 'ArrowDown' || event.key === 'ArrowRight' || event.key === 'ArrowUp' || event.key === 'ArrowLeft') {
+      next = (current + (event.key === 'ArrowDown' || event.key === 'ArrowRight' ? 1 : -1) + enabled.length) % enabled.length;
+    } else if (/^[1-9]$/.test(event.key)) next = enabled.findIndex(choice => choice.id === choices[Number(event.key) - 1]?.id);
     if (next < 0) return;
     event.preventDefault(); const choice = enabled[next]!; setSelected(choice.id);
-    optionsRef.current?.querySelector<HTMLButtonElement>(`[data-choice="${choice.id}"]`)?.focus();
+    focusChoice(choice.id);
   }}>
     <div ref={optionsRef} role="radiogroup" aria-label={tr('审批决定')} className="xn-permission-dialog__choices">
       {choices.map((choice, index) => <button type="button" key={choice.id} role="radio" aria-checked={selected === choice.id}
-        data-choice={choice.id} disabled={disabled || choice.disabled} onFocus={() => setSelected(choice.id)} onClick={() => { setSelected(choice.id); if (choice.id === 'feedback') noteRef.current?.focus(); }}>
+        data-choice={choice.id} disabled={disabled || choice.disabled} onFocus={() => setSelected(choice.id)} onClick={() => { setSelected(choice.id); if (choice.id === 'feedback') focusNote(); }}>
         <span className="xn-permission-dialog__number">{index + 1}.</span><span className="xn-permission-dialog__copy"><strong>{choice.id === 'full' && <ShieldAlert size={16} aria-hidden="true" />}{choice.label}</strong>{choice.detail && <small>{choice.detail}</small>}</span>
       </button>)}
     </div>

@@ -19,6 +19,7 @@ import { createRemoteWorkflowTransport } from '../remote/remoteWorkflowTransport
 import { RequestTiming } from '../providers/LocalRuntimeMonitor';
 import { createPaneCommandCoordinator, createPaneFollowupOperationGate } from './paneCommandCoordinator';
 import { PaneSessionControls } from './PaneSessionControls';
+import { SessionRecoveryNotice, showInterruptedRecovery } from './SessionRecoveryNotice';
 import type { QueueWithdrawal } from './queueApi';
 import type { RemoteSessionAdapter } from '../remote/remoteSessionAdapter';
 
@@ -115,6 +116,7 @@ export function SecondaryConversationPane({ sessionId, subscriberId, enabled, fi
   const editPreviewTransport = useMemo<AttachmentPreviewTransport | undefined>(() => adapter ? (ref, signal, chunkIndex) => adapter.historyMedia.preview(sessionId, ref, signal, chunkIndex) : undefined, [adapter, sessionId]);
   const history = usePaneHistoryActions({ commands: sharedCommands, operationGate, bindingKey, session, enabled, remote, remoteAdapter: adapter, choices, onChoicesChange, onRefresh: transport.refresh });
   const fork = usePaneForkActions({ commands: sharedCommands, operationGate, bindingKey, session, enabled, remote, remoteAdapter: adapter, onForkSession });
+  const pendingToolIds = useMemo(() => new Set((session?.pending ?? []).map(item => item.tool_call_id)), [session?.pending]);
   const running = session?.status === 'running' || session?.streaming?.status === 'streaming';
   return <div className="xn-pane-conversation" data-testid="xn-pane-secondary-conversation" data-subscriber={runtimeSubscriber} data-connected={transport.connected ? 'true' : 'false'}>
     {unsupportedRemote && <p role="status">{tr('远程分屏连接尚未就绪')}</p>}
@@ -122,14 +124,18 @@ export function SecondaryConversationPane({ sessionId, subscriberId, enabled, fi
       enabled={safetyStopEnabled && !!effectivePluginIds?.has('sessions') && !!effectivePluginIds?.has('remote')} />}
     {invalid && <p role="alert">{tr('分屏会话投影无效')}</p>}
     {enabled && runtimeSessionId && !transport.connected && <p role="status" className="xn-pane-secondary-status" data-testid="xn-pane-secondary-connection">{tr('正在连接分屏会话…')}</p>}
-    <ConversationTimelineViewport sessionId={sessionId} autoScroll rowsVersion={rows} streamingText={session?.streaming?.text}>
+    <ConversationTimelineViewport sessionId={sessionId} autoScroll rowsVersion={rows} streamingText={session?.streaming?.text} queuedMessages={session?.queued_messages}>
       {snapshot && <ZCodeConversation sessionId={remote ? undefined : sessionId} rows={rows} compactionMarker={marker} timelineMarkers={session?.timeline_markers} collapseTools showReasoning
         messageEditTransport={editTransport} messageEditSessionId={remote ? sessionId : undefined}
         messageEditPreviewTransport={editPreviewTransport}
+        jsonToolProtocol={session?.model_selection?.tool_calling === 'json' && session?.streaming?.text_format !== 'markdown'}
+        pendingToolIds={pendingToolIds}
         autoScroll streamingPending={running || session?.compacting} onFork={fork.onFork} onEdit={history.onEdit} onRetry={history.onRetry} isSessionsEffective={history.isEffective}
         workActivity={session?.work_segments} toolActivity={session?.tool_activity} currentStreamId={session?.streaming?.id}
         currentTurnId={typeof session?.active_turn_id === 'string' ? session.active_turn_id : undefined}
         activityPhase={session?.compacting ? 'compacting' : session?.runtime_activity?.phase} effectivePluginIds={plugins} />}
+      {session && showInterruptedRecovery(session.status, session.streaming?.status) && <SessionRecoveryNotice kind="interrupted"
+        reason={tr('这次回复已中断，收到的内容已保留。')} actionLabel={tr('接着做')} />}
     </ConversationTimelineViewport>
     {history.controls}
     {fork.dialog}

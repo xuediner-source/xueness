@@ -151,10 +151,11 @@
   border-top-left-radius: 0;
   border-top-right-radius: 0;
 }
+.xn-session-queue__paused-hint { margin: 0; color: var(--warn-fg); font-size: 11px; line-height: 1.3; }
 .xn-queue-dock .xn-session-queue__header { min-height: 34px; }
 .xn-queue-dock .xn-session-queue__toggle { display: none; }
 .xn-queue-dock .xn-session-queue__header:not(:has(.xn-session-queue__continue)) { display: none; }
-.xn-queue-dock .xn-session-queue__header:has(.xn-session-queue__continue) { justify-content: flex-end; border-bottom: 0; }
+.xn-queue-dock .xn-session-queue__header:has(.xn-session-queue__continue) { justify-content: space-between; padding: 4px 10px; border-bottom: 0; }
 .xn-queue-dock .xn-session-queue__continue { margin: 0; }
 
 @media (max-width: 520px) {

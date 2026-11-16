@@ -86,27 +86,41 @@ export function useSessionRunActions({ activeId, activeIdRef, isPluginEffective,
     [activeId, isPluginEffective, runSessionRequest, loadActive, refreshList, sessionCommands],
   );
 
-  const handleReject = useCallback(
-    async (pending: PendingApproval, feedback?: string) => {
+  const applyApprovalDecision = useCallback(
+    async (
+      pending: PendingApproval,
+      decision: 'approve' | 'reject',
+      answer: { message?: string; scope?: 'project' | 'session' } = {},
+    ) => {
       const targetSessionId = activeId;
       if (!targetSessionId || !isPluginEffective("sessions")) return false;
-      // ZCode permission-response: the rejection reason goes to the model with the denial.
-      const res = await approvePending(targetSessionId, pending, sessionCommands, 'reject', feedback ? { message: feedback } : {});
+      const res = await approvePending(targetSessionId, pending, sessionCommands, decision, answer);
       if (!res.ok) { setError(res.error); return false; }
-      if (!res.resumed) await runSessionRequest(targetSessionId, selected => runSession(targetSessionId, selected, undefined, sessionCommands));
-      await loadActive(targetSessionId);
+      if (!res.resumed && !runRequestSessionsRef.current.has(targetSessionId)) {
+        await runSessionRequest(targetSessionId, selected => runSession(targetSessionId, selected, undefined, sessionCommands));
+      }
+      await Promise.all([loadActive(targetSessionId), refreshList()]);
       return true;
     },
-    [activeId, isPluginEffective, loadActive, sessionCommands, runSessionRequest],
+    [activeId, isPluginEffective, sessionCommands, runSessionRequest, loadActive, refreshList],
+  );
+
+  const handleReject = useCallback(
+    // ZCode permission-response: the rejection reason goes to the model with the denial.
+    (pending: PendingApproval, feedback?: string) =>
+      applyApprovalDecision(pending, 'reject', feedback ? { message: feedback } : {}),
+    [applyApprovalDecision],
   );
 
   const handleAllowProject = useCallback(async (pending: PendingApproval) => {
-    if (!activeId || !isPluginEffective("sessions") || !pending.projectRules?.length) return false;
-    const result = await approvePending(activeId, pending, sessionCommands, 'approve', { scope: 'project' });
-    if (!result.ok) { setError(result.error); return false; }
-    if (!result.resumed) await runSessionRequest(activeId, selected => runSession(activeId, selected, undefined, sessionCommands));
-    await loadActive(activeId); return true;
-  }, [activeId, isPluginEffective, sessionCommands, runSessionRequest, loadActive]);
+    if (!pending.projectRules?.length) return false;
+    return applyApprovalDecision(pending, 'approve', { scope: 'project' });
+  }, [applyApprovalDecision]);
+
+  const handleAllowSession = useCallback(async (pending: PendingApproval) => {
+    if (!pending.waiting || pending.oneShot) return false;
+    return applyApprovalDecision(pending, 'approve', { scope: 'session' });
+  }, [applyApprovalDecision]);
 
   const handleApproveAll = useCallback(
     async (items?: PendingApproval[]) => {
@@ -225,7 +239,7 @@ export function useSessionRunActions({ activeId, activeIdRef, isPluginEffective,
   }, [runSessionRequest, loadActive, refreshList, sessionCommands]);
 
   return {
-    runPermission, runSessionRequest, handleApprove, handleReject, handleAllowProject, handleApproveAll,
+    runPermission, runSessionRequest, handleApprove, handleReject, handleAllowProject, handleAllowSession, handleApproveAll,
     handleStop, handleRetryRun, handleRetryTool, handleQuestionSubmitted, handleMessageFeedback, handleMessageEdit,
   };
 }
