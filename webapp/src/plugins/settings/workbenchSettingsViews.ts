@@ -18,4 +18,5 @@ export const XuenessMarketplace = lazy(() => import("../extensions").then(module
 export const XuenessAutomationsPanel = lazy(() => import("../automation").then(module => ({ default: module.XuenessAutomationsPanel })));
 export const XuenessMcpTools = lazy(() => import("../mcp").then(module => ({ default: module.XuenessMcpTools })));
 export const XuenessDiagnosticsPanel = lazy(() => import("../diagnostics").then(module => ({ default: module.XuenessDiagnosticsPanel })));
+export const SwarmPanel = lazy(() => import("../swarm/SwarmPanel").then(module => ({ default: module.SwarmPanel })));
 export const XuenessUsageSettings = lazy(() => import("../usage/XuenessUsageSettings").then(module => ({ default: module.XuenessUsageSettings })));

@@ -1,6 +1,6 @@
 {
   "id": "memory",
-  "name": "记忆",
+  "name": "记忆之海",
   "description": "Memory Ocean: cross-session memories the agent saves and recalls on its own, shown as a living star map; plus optional curated memory tracks and explicit, reviewable project-memory consolidation.",
   "version": "1.1.0",
   "apiVersion": 1,
@@ -35,6 +35,7 @@
     {"id": "memory.ocean", "name": "记忆之海：智能体保存、合并与取代跨会话记忆", "nameEn": "Memory Ocean: cross-session memories the agent saves, merges and supersedes"},
     {"id": "memory.ocean_recall", "name": "按任务召回记忆（本地词法排序，每轮固定）", "nameEn": "Task-matched memory recall (local lexical ranking, fixed per run)"},
     {"id": "memory.ocean_view", "name": "记忆星图：关联、星座、召回脉冲与编辑", "nameEn": "Memory star map: links, constellations, recall pulses and editing"},
+    {"id": "memory.ocean_dream", "name": "记忆整理：重读最近对话，提出合并、更正、归档与补充，经确认后应用", "nameEn": "Memory dream: reread recent conversations and propose merges, corrections, archives and additions, applied on confirmation"},
     {"id": "memory.injection", "name": "只读记忆轨道与上下文注入", "nameEn": "Read-only memory tracks and context injection"},
     {"id": "memory.recall_reset", "name": "压缩后重新召回记忆", "nameEn": "Memory recall reset after compaction"},
     {"id": "memory.dream", "name": "显式项目记忆整理、候选审阅与确认应用", "nameEn": "Explicit project memory curation, candidate review and confirmed application"},
@@ -48,6 +49,7 @@
     "plugins/memory/MemoryOcean.tsx",
     "plugins/memory/MemoryOceanDetail.tsx",
     "plugins/memory/MemoryOceanEditor.tsx",
+    "plugins/memory/MemoryOceanListDrawer.tsx", "plugins/memory/MemoryOceanDreamDrawer.tsx",
     "plugins/memory/oceanAmbient.ts",
     "plugins/memory/oceanApi.ts",
     "plugins/memory/oceanBloom.ts",

@@ -14,12 +14,14 @@
 import { bm25, termIndex, terms } from "./memory-ocean-terms.ts";
 import type { OceanMemory } from "./memory-ocean-store.ts";
 
-export interface RecallLimits { maxEntries: number; maxChars: number }
-export const STANDARD_RECALL: RecallLimits = Object.freeze({ maxEntries: 8, maxChars: 2400 });
-export const LIGHTWEIGHT_RECALL: RecallLimits = Object.freeze({ maxEntries: 5, maxChars: 1200 });
-export const OCEAN_HEADER = "## Memory Ocean (saved by earlier conversations)\n"
-  + "Use a memory only if it applies to the current task; the current instructions win. "
-  + "To correct one, call memory_remember with `supersedes` set to its id.";
+export interface RecallLimits { maxEntries: number; maxChars: number; header: string }
+const OCEAN_TITLE = "## Memory Ocean (saved by earlier conversations)\n"
+  + "Use a memory only if it applies to the current task; the current instructions win. ";
+export const STANDARD_RECALL: RecallLimits = Object.freeze({ maxEntries: 8, maxChars: 2400,
+  header: OCEAN_TITLE + "To correct one, call memory_remember with `supersedes` set to its id." });
+// Lightweight runs start without memory_remember, so the block says how to reach it.
+export const LIGHTWEIGHT_RECALL: RecallLimits = Object.freeze({ maxEntries: 5, maxChars: 1200,
+  header: OCEAN_TITLE + "To correct one, find memory_remember with tool_search, then set `supersedes` to its id." });
 
 export interface RankedMemory { memory: OceanMemory; score: number; reason: "match" | "core" }
 
@@ -61,7 +63,7 @@ function line(memory: OceanMemory, withText: boolean): string {
 /** The recall block for one run, with the ids it contains; empty when nothing qualifies. */
 export function renderOceanRecall(ranked: readonly RankedMemory[], limits: RecallLimits): { text: string; ids: string[] } {
   const lines: string[] = [], ids: string[] = [];
-  let used = chars(OCEAN_HEADER);
+  let used = chars(limits.header);
   for (const { memory } of ranked) {
     if (ids.length >= limits.maxEntries) break;
     const full = line(memory, true), short = line(memory, false);
@@ -69,7 +71,7 @@ export function renderOceanRecall(ranked: readonly RankedMemory[], limits: Recal
     if (!chosen) continue;
     lines.push(chosen); ids.push(memory.id); used += chars(chosen) + 1;
   }
-  return lines.length ? { text: `${OCEAN_HEADER}\n${lines.join("\n")}`, ids } : { text: "", ids: [] };
+  return lines.length ? { text: `${limits.header}\n${lines.join("\n")}`, ids } : { text: "", ids: [] };
 }
 
 /** The text of a message: plain content, or the text parts of a multi-part one. */

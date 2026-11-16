@@ -361,12 +361,16 @@ export function completionPresentation(completion: CompletionPresentationInput, 
   };
 
   const verified = completion.status !== undefined ? completion.status === 'verified' && !hasToolFailure : completion.verified && !hasToolFailure;
+  const toolSucceeded = !verified && !hasToolFailure && !jsonToolProtocol && completion.toolExecutionStatus === 'succeeded';
+  // Tools that ran cleanly are not verified evidence: the title says what happened,
+  // but only a verified run is presented as OK with its details closed.
+  const ok = verified;
   return {
-    title: t(verified ? '运行结束 · 工具成功证据通过' : '运行结束 · 工具证据未通过验证'),
-    status: verified ? 'ok' : 'review',
-    label: t(verified ? '已结束' : '未通过验证'),
+    title: t(verified ? '运行结束 · 工具成功证据通过' : toolSucceeded ? '运行结束 · 工具执行成功' : '运行结束 · 工具证据未通过验证'),
+    status: ok ? 'ok' : 'review',
+    label: t(ok ? '已结束' : '未通过验证'),
     summary: cleanSummary || t('无完成总结'),
-    detailsOpen: !verified,
+    detailsOpen: !ok,
   };
 }
 

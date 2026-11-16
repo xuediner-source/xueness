@@ -3,6 +3,7 @@ import { isDict, pyLen, pyRound, pySlice } from "@xueness/contracts";
 import type { AgentExtension, Row } from "@xueness/agent";
 import { finishReason, incompleteReason, tokenCount } from "@xueness/providers";
 import { modelFailureMessage, recordModelFailure } from "./model-status.ts";
+import { ToolOutcomeRecorder } from "./tool-outcomes.ts";
 export const ACTIVITY_PHASES = new Set(["waiting_model", "queued_model", "retrying", "generating", "thinking", "tools", "repairing", "completed", "needs_review", "paused", "stopped", "stalled", "awaiting_user", "provider_error", "interrupted"]);
 export class RequestActivity {
   readonly session: Row;
@@ -89,7 +90,10 @@ export class RequestActivity {
 export function settleActivity(session: Row): void { if (isDict(session.runtime_activity) && ACTIVITY_PHASES.has(String(session.status))) session.runtime_activity.phase = session.status; }
 export function providerActivityExtension(): AgentExtension {
   const activities = new WeakMap<Row, RequestActivity>();
-  return { id: "providers", capabilities: ["providers.activity"],
+  const outcomes = new WeakMap<Row, ToolOutcomeRecorder>();
+  const recorder = (session: Row): ToolOutcomeRecorder => { let value = outcomes.get(session); if (!value) { value = new ToolOutcomeRecorder(); outcomes.set(session, value); } return value; };
+  const modelOf = (context: Parameters<NonNullable<AgentExtension["close"]>>[0]): string => pySlice(String(context.provider.model ?? "").trim(), 160);
+  return { id: "providers", capabilities: ["providers.activity", "providers.tool_outcomes"],
     async prepareRequest(context, request) { activities.set(context.session, new RequestActivity(context.session)); await context.save(); return request; },
     observeDelta(context, text, reasoning) { activities.get(context.session)?.delta(text, reasoning); },
     async modelRequestStarted(context, info) {
@@ -124,11 +128,17 @@ export function providerActivityExtension(): AgentExtension {
     async modelRetryScheduled(context, info) { const activity = activities.get(context.session); if (activity) { activity.retry(info); await context.save(); } },
     afterModelResponse(context, response) {
       const finish = finishReason(response._finish_reason);
-      activities.get(context.session)?.complete(response, response._usage, response._request_attempts, finish, incompleteReason(finish, response._usage, context.provider));
-      if (response._protocol_error) activities.get(context.session)?.phase("repairing");
+      const activity = activities.get(context.session);
+      activity?.complete(response, response._usage, response._request_attempts, finish, incompleteReason(finish, response._usage, context.provider));
+      if (response._protocol_error) activity?.phase("repairing");
+      if (activity) recorder(context.session).request(context.session, modelOf(context), Number(activity.record.requestSeconds ?? 0), !!response._protocol_error);
       return response;
     },
-    toolFinished(context, call, result, seconds) { activities.get(context.session)?.tool(call.name, call.id, seconds, !!result.ok); },
-    async settleRun(context) { settleActivity(context.session); await context.save(); }, close(context) { activities.delete(context.session); },
+    toolFinished(context, call, result, seconds) {
+      activities.get(context.session)?.tool(call.name, call.id, seconds, !!result.ok);
+      recorder(context.session).tool(context.session, modelOf(context), call.name, result, seconds);
+    },
+    async settleRun(context) { settleActivity(context.session); await context.save(); },
+    close(context) { activities.delete(context.session); outcomes.delete(context.session); },
   };
 }

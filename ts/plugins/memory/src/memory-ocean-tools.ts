@@ -3,9 +3,10 @@
  *
  * `memory_remember` saves a memory straight away (the owner chose direct
  * saving: every memory is visible, editable and forgettable in Memory Ocean,
- * and memory can be switched off). It is always loaded, so small local models
- * in the lightweight runtime see it too; its description is kept short for the
- * same reason. `memory_recall` searches on demand and is deferred: the run's
+ * and memory can be switched off). The standard runtime offers it directly. The
+ * lightweight runtime starts without it and finds it through `tool_search`: its
+ * schema was a sixth of the tool schemas a lightweight request carries, and an 8K
+ * window has no room for it. `memory_recall` searches on demand and is deferred: the run's
  * recalled memories are already in context, so it rarely needs a slot.
  * Both touch only the host state directory, never the workspace.
  */
@@ -36,7 +37,7 @@ export function rememberTool(store: () => MemoryOceanStore): ToolDefinition<Row>
       supersedes: { type: "string", description: "Id of a memory this one replaces." },
       related: { type: "array", items: { type: "string" }, maxItems: 5, description: "Ids of related memories." },
     } },
-    gate: "planning", mutating: false, readOnly: false, concurrencySafe: false, alwaysLoad: true, requires: REQUIRES, subjectKind: "text",
+    gate: "planning", mutating: false, readOnly: false, concurrencySafe: false, requires: REQUIRES, subjectKind: "text",
     subject: (input) => typeof input.text === "string" ? input.text.slice(0, 200) : "",
     async run(input, env) {
       const session = sessionOf(env);

@@ -39,7 +39,8 @@ export type PluginPanel =
   | "marketplace"
   | "diagnostics"
   | "remote"
-  | "subagents";
+  | "subagents"
+  | "swarm";
 
 export const XUENESS_PLUGIN_REGISTRY = {
   sessions: { name: "会话", description: "会话列表、工作区、用途与时间线视图、活性摘要、归档恢复与永久删除、侧栏、四会话分屏与持久会话组、独立输入、Agent 对话、有界子代理摘要、投影订阅与续传、命令回执与历史分叉、事实工作分段与活跃时长", panels: ["chat"] },
@@ -55,7 +56,7 @@ export const XUENESS_PLUGIN_REGISTRY = {
   model_monitor: { name: "返回模型监测", description: "随会话记录请求型号与上游返回型号，标记一致、不同及未报告。不会自动发起额外模型请求。", panels: ["model-monitor"] },
   context_lens: { name: "上下文透镜", description: "基于 dsh-context 的上下文组成、逐请求趋势、内容浏览、文件命令活动与代理关系", panels: ["context-lens"] },
   usage: { name: "用量", description: "会话和步骤用量统计", panels: ["usage"] },
-  memory: { name: "记忆", description: "记忆之海：跨会话记忆星图与记忆轨道", panels: ["memory"] },
+  memory: { name: "记忆之海", description: "记忆之海：跨会话记忆星图、自动召回与记忆轨道", panels: ["memory"] },
   settings: { name: "设置", description: "工作台和运行设置", panels: ["settings"] },
   workflows: { name: "工作流", description: "工作流和后台任务", panels: ["workflows"] },
   terminal: { name: "终端", description: "工作区本地与连接作用域远程交互式终端", panels: ["terminal"] },
@@ -78,6 +79,8 @@ export const XUENESS_PLUGIN_REGISTRY = {
   shell: { name: "Shell 工具", description: "执行命令工具", panels: [] },
   planning: { name: "规划工具", description: "待办、提问和交付完整性检查", panels: [] },
   tools: { name: "工具执行策略", description: "对其他插件工具调用的实验性执行策略（干跑预览、每轮工具调用预算）", panels: [] },
+  tool_judge: { name: "工具调用判定", description: "可选判定模型在高风险工具调用执行前给出建议，可选修正或拦下一次，失败放行", panels: [] },
+  swarm: { name: "蜂群", description: "协调者、工作者与验证者在共享看板上协作：一次批准计划、强制路径与命令归属、被提及才唤醒、无模型监视与关系图回放", panels: ["swarm"] },
   deepseek_harness: { name: "DeepSeek Harness", description: "为通用扩展包导入提供 DSH 包类型：导入声明式 DSH 扩展包，并识别公开发布的 DSH 代码插件。", panels: [] },
 } as const satisfies Record<string, { name: string; description: string; panels: readonly PluginPanel[] }>;
 
@@ -95,7 +98,7 @@ export const PLUGIN_PANEL_LABELS: Record<PluginPanel, string> = {
   "model-monitor": "返回模型监测",
   "context-lens": "上下文透镜",
   usage: "用量",
-  memory: "记忆",
+  memory: "记忆之海",
   capabilities: "能力",
   settings: "设置",
   workflows: "工作流与后台任务",
@@ -106,6 +109,7 @@ export const PLUGIN_PANEL_LABELS: Record<PluginPanel, string> = {
   diagnostics: "诊断与维护",
   remote: "SSH 工作区",
   subagents: "子代理",
+  swarm: "蜂群",
 };
 
 export const CAPABILITY_PLUGIN_BY_KIND: Partial<Record<CapabilityKind, XuenessPluginId>> = {

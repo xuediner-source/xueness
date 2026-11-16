@@ -70,6 +70,8 @@ export interface DeliveryCheckOptions {
   canRead(path: string): boolean | Promise<boolean>;
   /** Supplied only by the enabled Office plugin; no parser may bypass its state. */
   officeText?: (raw: Buffer, suffix: string) => string | Promise<string>;
+  /** Additional host-authorized output directories (such as session visualizations). */
+  hostRoots?: readonly string[];
 }
 export async function checkDelivery(root: string, session: Row, summary: string, options: DeliveryCheckOptions): Promise<Row> {
   const raw = session.delivery_requirements;
@@ -83,10 +85,15 @@ export async function checkDelivery(root: string, session: Row, summary: string,
       try {
         const suffix = extname(item.path).toLowerCase(), office = OFFICE_SUFFIXES.has(suffix);
         if (!options.enabled("files") || office && (!options.enabled("office") || !options.officeText)) throw new Error("plugin disabled or unavailable");
-        if (!await options.canRead(item.path) || !options.enabled("planning") || !options.enabled("files") || office && !options.enabled("office")) throw new Error("read refused");
-        const path = relative(resolve(root), resolve(root, item.path));
-        if (!path || isAbsolute(path) || path === ".." || path.startsWith("../") || path.startsWith("..\\")) throw new Error("path outside workspace");
-        const read = readRegularBeneath(root, process.platform === "win32" ? path.replace(/\\/g, "/") : path, MAX_DELIVERY_BYTES + 1);
+        if (!options.enabled("planning") || !options.enabled("files") || office && !options.enabled("office")) throw new Error("read refused");
+        let read: ReturnType<typeof readRegularBeneath> = null;
+        for (const base of [root, ...(options.hostRoots ?? [])]) {
+          const candidate = resolve(base, item.path), path = relative(resolve(base), candidate);
+          if (!path || isAbsolute(path) || path === ".." || path.startsWith("../") || path.startsWith("..\\")) continue;
+          if (!await options.canRead(base === root ? item.path : candidate)) continue;
+          read = readRegularBeneath(base, process.platform === "win32" ? path.replace(/\\/g, "/") : path, MAX_DELIVERY_BYTES + 1);
+          if (read) break;
+        }
         if (!read || read.size > MAX_DELIVERY_BYTES || read.raw.length > MAX_DELIVERY_BYTES) throw new Error("unreadable delivery file");
         text = office ? await options.officeText!(read.raw, suffix) : new TextDecoder("utf-8", { fatal: true, ignoreBOM: true }).decode(read.raw);
       } catch { missing.push("文件不存在、不可读取、插件已禁用、内容被截断或不支持文本检查"); text = ""; }

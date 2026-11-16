@@ -13,8 +13,15 @@ export function providerKey(provider: RuntimeProvider): string {
   fields.push(provider.constructor.name === "Object" ? "SimpleNamespace" : provider.constructor.name);
   return createHash("sha256").update(pyJsonDumps(fields, { ensureAscii: true })).digest("hex");
 }
+/**
+ * What earlier conversations in this process learned about a model's real token counts. A new
+ * conversation starts from it, so its first requests do not budget at twice the real size while it
+ * collects its own three samples.
+ */
+const LEARNED = new Map<string, number>();
 export function calibrationFactor(calibration: unknown, provider: RuntimeProvider): number {
-  if (!isDict(calibration) || calibration.providerKey !== providerKey(provider)) return 1;
+  const key = providerKey(provider);
+  if (!isDict(calibration) || calibration.providerKey !== key) return LEARNED.get(key) ?? 1;
   const factor = calibration.factor;
   return typeof factor === "number" && Number.isFinite(factor) && factor >= 0.5 && factor <= 8 ? factor : 1;
 }
@@ -31,9 +38,22 @@ export function observeUsage(session: Row, provider: RuntimeProvider, usage: unk
   // Downward calibration needs several real observations; keep 20% headroom and
   // use the highest recent ratio so a short ASCII response cannot set the budget.
   const minimum = samples.length >= 3 ? 0.5 : 1;
-  session.runtime_budget_calibration = { providerKey: key, factor: Math.min(8, Math.max(minimum, maximum * 1.2)), ratios: samples, lastReportedInputTokens: actual, lastBaseEstimatedTokens: baseline };
+  const factor = Math.min(8, Math.max(minimum, maximum * 1.2));
+  // Only a settled factor is shared, and it is the session's own cautious one (highest recent ratio plus 20%).
+  if (samples.length >= 3) LEARNED.set(key, factor);
+  session.runtime_budget_calibration = { providerKey: key, factor, ratios: samples, lastReportedInputTokens: actual, lastBaseEstimatedTokens: baseline };
 }
-export function estimateTokens(value: unknown): number { return Math.ceil(pyEncodeUtf8(pyJsonDumps(value, { separators: [",", ":"] })).length / 2); }
+/**
+ * A deliberately high estimate (UTF-8 bytes / 2) of what is sent. Host bookkeeping on messages
+ * (`_message_id`, `_read_state`, `_reasoning_blocks`, …) is stripped before the request leaves, so
+ * it is not counted: counting it pruned history that would have fitted.
+ */
+export function estimateTokens(value: unknown): number { return Math.ceil(pyEncodeUtf8(pyJsonDumps(wireShape(value), { separators: [",", ":"] })).length / 2); }
+function wireShape(value: unknown): unknown {
+  if (!isDict(value) || !Array.isArray(value.messages)) return value;
+  return { ...value, messages: value.messages.map((message) => isDict(message) && Object.keys(message).some((key) => key.startsWith("_"))
+    ? Object.fromEntries(Object.entries(message).filter(([key]) => !key.startsWith("_"))) : message) };
+}
 
 export function historyDigest(units: Row[][], omitted: number[], limit = 2400): string {
   const rows: Row[] = [];

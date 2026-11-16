@@ -33,6 +33,9 @@ import { backgroundChildRunner, childRunner } from "./agent-subagents.ts";
 import { automation, createAutomationTools } from "@xueness/plugin-automation";
 import { createWorkflows, workflows, WorkflowStore, type WorkerLauncher, type DynamicWorkflowService } from "@xueness/plugin-workflows";
 import { answerWorkflowActor } from "./workflow-actors.ts";
+import { createSwarm, swarm, swarmParentExtension, type SwarmService } from "@xueness/plugin-swarm";
+import { toolJudgeFor } from "./tool-judge-host.ts";
+import { commandRuleIssue } from "./swarm-members.ts";
 import { loadMcpServers, pluginGrants } from "./mcp-servers.ts";
 import { auxiliaryModelAdmission, handoffModelJson, lightweightRuntimeExtension, loadSettings, ProfileStore, providerActivityExtension, providerModelExecutionExtension, providerRequestShapingExtension, requestConversationTitle, resolveSavedProvider, titleProviderSupported, zcodeCompactionExtension } from "@xueness/plugin-providers";
 import { bindMediaPrompt, sessions as sessionsPlugin, createAutoTitleWorker, recordApproval, normalizeQuestions, QUESTION_SCHEMA, sessionsCompletionExtension, sessionsToolActivityExtension, switchableProvider, loadProjectPermissionRules, type ApprovalBuckets, type MediaArtifactStore, type RunPolicy, type RuntimeSelection, type SwitchableAgentProvider } from "@xueness/plugin-sessions";
@@ -79,6 +82,8 @@ export interface AgentServiceOptions {
   /** Starts the detached owner of a run the workflow tools launch. */
   workflowLauncher?: WorkerLauncher;
   dynamicWorkflows?: DynamicWorkflowService;
+  /** The process's swarm runtime; absent, swarm tools answer that it is unavailable. */
+  swarms?: SwarmService | null;
 }
 interface Environment { kernel: Context; host: PluginHost; env: ToolEnv; artifacts: string; root: string; configs: string; reconcile: Promise<void>; current: { session: Session | null; planMode: PlanModePort | null; mcp: McpRun | null; provider: ToolSearchProviderView | null }; hooks: HooksBinding; subagents: SubagentsBinding; shell: ShellRuntimeBinding; shellConfig: string; runtimeConfig: RuntimeConfigPatch; runtimeFingerprint: string; mcpRuntime: McpRuntimeBinding; nativeOps: NativeOpsBinding }
 
@@ -114,7 +119,7 @@ export function createAgentService(options: AgentServiceOptions) {
       const runtimeFingerprint = pyJsonDumps(runtimeConfig, { sortKeys: true });
       if (runtimeFingerprint !== environment.runtimeFingerprint && environment.current.session) active.get(String(environment.current.session.id))?.cancel(String(environment.current.session.id));
       if (environment.current.session?.permission_mode === 'guarded' && !enabled('planning')) active.get(String(environment.current.session.id))?.cancel(String(environment.current.session.id));
-      for (const id of ["providers", "files", "shell", "planning", "git", "skills", "hooks", "subagents", "office", "browser", "network", "remote", "native_ops", "desktop", "os_cua", "memory"]) {
+      for (const id of ["providers", "files", "shell", "planning", "git", "skills", "hooks", "subagents", "office", "browser", "network", "remote", "native_ops", "desktop", "os_cua", "memory", "swarm"]) {
         const current = environment.host.status(id);
         const effective = id === "os_cua" ? desktopCuaEnabled() && !environment.current.session?.remote_connection : id === "memory" ? enabled(id) && memoryAllowed() : enabled(id);
         if (effective && !current.enabled) await environment.host.enable(id);
@@ -145,7 +150,8 @@ export function createAgentService(options: AgentServiceOptions) {
         // resolves the local/native ToolSearch mode.
         catalog: () => kernel.tools.list<ToolDefinition>().map(({ name, description, alwaysLoad, shouldDefer }) => ({ name, description, alwaysLoad, shouldDefer })),
         provider: () => current.provider,
-      }), sessionsPlugin, contextLens, workflowTools, createAutomationTools({ stateDir: options.stateDir }), createPlanning({ session: () => current.session, enabled, planMode: () => current.planMode, questionsSchema: QUESTION_SCHEMA, normalizeQuestions(value) { if (!enabled("sessions")) throw new PyValueError("structured questions require the planning and sessions plugins"); return normalizeQuestions(value); } }), createGitCheckpoints({ store: options.store, stateDir: options.stateDir, enabled, session: () => current.session }), createMcp({ run: () => current.mcp, binding: mcpRuntime }), createSkills({ stateDir: options.stateDir, root: () => current.session ? String(current.session.root) : null, bundled: BUNDLED_SKILLS_DIR }), createHooks(hookBinding), createSubagents(subagentBinding), createNativeOps(nativeOpsBinding), createOffice({ session: () => current.session }), createBrowser({ stateDir: options.stateDir }), createNetwork({ stateDir: options.stateDir, net: options.networkNet }), createRemote({ stateDir: options.stateDir }), createMemory({ stateDir: options.stateDir })], { enabled: { memory: enabled("memory") && memoryAllowed(), providers: enabled("providers"), files: enabled("files"), shell: enabled("shell"), sessions: enabled("sessions"), workflows: enabled("workflows"), automation: enabled("automation"), planning: enabled("planning"), git: enabled("git"), mcp: false, skills: enabled("skills"), hooks: enabled("hooks"), subagents: enabled("subagents"), office: enabled("office"), browser: enabled("browser"), network: enabled("network"), remote: enabled("remote"), native_ops: enabled("native_ops"), context_lens: enabled("context_lens"), desktop: enabled("desktop"), os_cua: desktopCuaEnabled() && !session.remote_connection }, config: configs });
+      }), sessionsPlugin, contextLens, workflowTools, createAutomationTools({ stateDir: options.stateDir }), createPlanning({ session: () => current.session, enabled, planMode: () => current.planMode, questionsSchema: QUESTION_SCHEMA, normalizeQuestions(value) { if (!enabled("sessions")) throw new PyValueError("structured questions require the planning and sessions plugins"); return normalizeQuestions(value); } }), createGitCheckpoints({ store: options.store, stateDir: options.stateDir, enabled, session: () => current.session }), createMcp({ run: () => current.mcp, binding: mcpRuntime }), createSkills({ stateDir: options.stateDir, root: () => current.session ? String(current.session.root) : null, bundled: BUNDLED_SKILLS_DIR }), createHooks(hookBinding), createSubagents(subagentBinding), createNativeOps(nativeOpsBinding), createOffice({ session: () => current.session }), createBrowser({ stateDir: options.stateDir }), createNetwork({ stateDir: options.stateDir, net: options.networkNet }), createRemote({ stateDir: options.stateDir }), createMemory({ stateDir: options.stateDir }),
+        createSwarm({ service: () => options.swarms ?? null, commandIssue: commandRuleIssue, foldCase: process.platform === "win32", local: () => { const base = (current.provider as { base?: unknown } | null)?.base; return typeof base === "string" && /^https?:\/\/(127\.\d+\.\d+\.\d+|localhost|\[::1\])(:|\/|$)/i.test(base); } })], { enabled: { swarm: enabled("swarm"), memory: enabled("memory") && memoryAllowed(), providers: enabled("providers"), files: enabled("files"), shell: enabled("shell"), sessions: enabled("sessions"), workflows: enabled("workflows"), automation: enabled("automation"), planning: enabled("planning"), git: enabled("git"), mcp: false, skills: enabled("skills"), hooks: enabled("hooks"), subagents: enabled("subagents"), office: enabled("office"), browser: enabled("browser"), network: enabled("network"), remote: enabled("remote"), native_ops: enabled("native_ops"), context_lens: enabled("context_lens"), desktop: enabled("desktop"), os_cua: desktopCuaEnabled() && !session.remote_connection }, config: configs });
       try {
         await host.start();
         return { kernel, host, env: createToolEnv({ cwd: String(session.root), artifactsDir: artifacts, owner: sid }), artifacts, root: String(session.root), configs: pyJsonDumps(configs, { sortKeys: true }), reconcile: Promise.resolve(), current, hooks: hookBinding, subagents: subagentBinding, shell: shellBinding, shellConfig: pyJsonDumps(configs.shell ?? {}, { sortKeys: true }), runtimeConfig, runtimeFingerprint: pyJsonDumps(runtimeConfig, { sortKeys: true }), mcpRuntime, nativeOps: nativeOpsBinding };
@@ -176,7 +182,7 @@ export function createAgentService(options: AgentServiceOptions) {
     approvals,
     liveApprovals,
     resolveProvider,
-    knownTools(): string[] { return [files, shell, providers, planning, skills, subagents, office, browser, network, remote, workflows, automation, nativeOps, osCua, memory].flatMap((entry) => isDict(entry.manifest) && Array.isArray(entry.manifest.tools) ? entry.manifest.tools.filter(isDict).map((tool) => String(tool.name)) : []); },
+    knownTools(): string[] { return [files, shell, providers, planning, skills, subagents, office, browser, network, remote, workflows, automation, nativeOps, osCua, memory, swarm].flatMap((entry) => isDict(entry.manifest) && Array.isArray(entry.manifest.tools) ? entry.manifest.tools.filter(isDict).map((tool) => String(tool.name)) : []); },
     async mcpSnapshot(sid: string) { const pending = environments.get(sid); if (!pending) return null; const environment = await pending; return environment.mcpRuntime.current ? { active: true, ...environment.mcpRuntime.current.snapshot() } : null; },
     activeProvider(sid: string): SwitchableAgentProvider | null { return switchers.get(sid) ?? null; },
     permissionControl(sid: string): PermissionControl | null { return permissionControls.get(sid) ?? null; },
@@ -225,7 +231,8 @@ export function createAgentService(options: AgentServiceOptions) {
           const permissions = new PermissionSession({ mode: policy.permissionMode === "yolo" ? "yolo" : policy.mode === "plan" ? "plan" : policy.permissionMode,
             guarded: request => { if (!enabled('planning')) throw new UnsupportedAgentConfiguration(['planning.guarded']); return guardedPermission(request, environment.shell.dialect === 'posix' ? 'posix' : 'powershell'); },
             allow: enabled("sessions") ? loadProjectPermissionRules(options.stateDir, String(value.root)) : [],
-            alwaysAsk: options.desktopComputerUse ? OS_CUA_TOOL_NAMES : [],
+            // A swarm plan is approved once and explicitly; it can never become a remembered rule.
+            alwaysAsk: [...options.desktopComputerUse ? OS_CUA_TOOL_NAMES : [], "swarm_start"],
             disallow: [...policy.disallowed, ...remoteBound ? remoteLocalTools(environment.kernel.tools.list().map((tool) => tool.name)) : []], readOnlyCommands: environment.shell.dialect === "posix" && !appliedShellConfig.captureInit && !appliedShellConfig.startupScript,
             shell: environment.shell.dialect === "posix" ? "posix" : "powershell", planDraft: policy.mode !== "plan" ? {
               path: draft, matches: (subject) => isAbsolute(subject) && foldHostPath(normalize(subject)) === foldHostPath(normalize(draft)),
@@ -279,7 +286,7 @@ export function createAgentService(options: AgentServiceOptions) {
             filesReadStateExtension(environment.env.tracker), filesHistoryExtension(), shellBackgroundExtension(environment.shell), networkActivityExtension(environment.env), sessionsSteeringExtension(),
             sessionsCompletionExtension(),
             remoteSessionExtension(),
-            planningDeliveryExtension((context) => ({ enabled: context.enabled, canRead: (path) => permissions.preview({ tool: "read", kind: "read", subject: path, subjectKind: "path" }).behavior === "allow", officeText: deliveryContentText })),
+            planningDeliveryExtension((context) => ({ enabled: context.enabled, canRead: (path) => permissions.preview({ tool: "read", kind: "read", subject: path, subjectKind: "path" }).behavior === "allow", officeText: deliveryContentText, hostRoots: visualizations ? [visualizations] : [] })),
             planningGoalExtension((provider, messages, config) => handoffModelJson(provider, messages, { ...config, admission: auxAdmission() })),
             { id: 'planning', capabilities: ['planning.guarded'] },
             // The Office plugin's extractor backs Office delivery checks above; declaring it keeps them on TS.
@@ -312,6 +319,9 @@ export function createAgentService(options: AgentServiceOptions) {
             providerActivityExtension(),
             { id: "mcp", capabilities: ["mcp.connections"] },
             approvalReplayExtension(bridge, approvals, enabled, (name) => environment.kernel.tools.ownerOf(name)),
+            // After lightweight decoding and planning's own calls, so the judge sees the step's final calls.
+            toolJudgeFor({ stateDir: options.stateDir, gateOf: (name) => environment.kernel.tools.get(name)?.gate ?? null, scope: { foreground: true }, shell: environment.shell.dialect === "posix" ? "posix" : "powershell" }),
+            swarmParentExtension(() => options.swarms ?? null),
 
             ...productExtensions,
             providerToolResultBudgetExtension(), contextLensExtension(() => (JSON.parse(environment.configs).context_lens ?? {})),

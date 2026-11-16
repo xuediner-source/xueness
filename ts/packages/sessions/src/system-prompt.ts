@@ -12,7 +12,7 @@ export const SYSTEM_PROMPT = [
   " A question to the operator pauses the run until they answer. Long or expired tool output in the window names where the full text lives;",
   " read that page instead of guessing at what was cut. For work you cannot finish in one pass, keep durable notes in a workspace file:",
   " older turns may leave the window, and the file is how the next run picks up.",
-  " When tool evidence is needed, finish with natural Markdown and one final standalone Evidence line citing host-issued identifiers",
+  " When tool evidence is needed, finish with natural Markdown and one final standalone Evidence: E1, E2 line citing host-issued identifiers",
   " from successful tool results. The host checks and hides this metadata. Never invent an identifier.",
   " Ordinary conversation needs no evidence line. Otherwise explain what remains.",
 ].join("");

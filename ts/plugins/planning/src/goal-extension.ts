@@ -17,13 +17,11 @@ function prepareGoalState(context: Parameters<NonNullable<AgentExtension["prepar
   const reminder = goalStateReminder(context.session, elapsedSeconds);
   if (!reminder) return request;
   if (lightweight(context)) {
-    const injected = request.injected ?? [];
+    // The reminder carries elapsed time and token counts, so it changes every step. It rides only with the
+    // per-step guidance at the end of the request: in the injected block it sat right after the system prompt,
+    // where it made a local server reprocess the whole history on every step of a goal, and it was sent twice.
     const hostInstructions = request.hostInstructions ?? [];
-    return {
-      ...request,
-      injected: injected.includes(reminder) ? injected : [...injected, reminder],
-      hostInstructions: hostInstructions.includes(reminder) ? hostInstructions : [...hostInstructions, reminder],
-    };
+    return { ...request, hostInstructions: hostInstructions.includes(reminder) ? hostInstructions : [...hostInstructions, reminder] };
   }
   const prior = request.messages.filter((message) => message._meta_source !== "goal_state_change");
   const message = { role: "user", content: reminder, _meta_source: "goal_state_change" };

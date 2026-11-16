@@ -41,13 +41,13 @@ export function drawClouds(frame: Frame, groups: readonly Group[], scale: number
       const reach = spread * (0.25 + 0.15 * index);
       const breath = frame.reduced ? 0 : 0.02 * Math.sin(time * 0.35 + group.id + index);
       drawNebula(context, middle.x + Math.cos(angle) * reach, middle.y + Math.sin(angle) * reach * 0.7, base * (0.65 + 0.15 * index),
-        group.colors[index % group.colors.length]!, (0.05 + breath) * frame.intro);
+        group.colors[index % group.colors.length]!, (0.022 + breath * 0.4) * frame.intro);
     }
   }
 }
 
 export function drawCharts(frame: Frame, groups: readonly Group[], zoom: number, font: string): void {
-  const { context, palette, time } = frame;
+  const { context, palette } = frame;
   const visibility = Math.max(0, Math.min(1, (zoom - 0.3) * 3)) * Math.max(0, Math.min(1, (2.4 - zoom) * 1.5)) * frame.intro;
   if (visibility < 0.02) return;
   context.save();
@@ -67,14 +67,14 @@ export function drawCharts(frame: Frame, groups: readonly Group[], zoom: number,
       context.moveTo(start.x, start.y);
       outline.forEach((point, index) => { const next = mid(index); context.quadraticCurveTo(point.x, point.y, next.x, next.y); });
       context.closePath();
-      context.strokeStyle = rgba(palette.line, 0.22 * visibility); context.lineWidth = 1;
-      context.setLineDash([1, 5]); context.lineDashOffset = frame.reduced ? 0 : -time * 2;
+      context.strokeStyle = rgba(palette.line, 0.2 * visibility); context.lineWidth = 0.7;
+      context.setLineDash([1, 6]); context.lineDashOffset = 0;
       context.stroke();
       context.setLineDash([]);
     }
     const label = group.name.toUpperCase().split("").join(" ");
-    const y = top - 14 - (frame.reduced ? 0 : Math.sin(time * 0.3 + group.id) * 2);
-    context.font = `600 11px ${font}`; context.textAlign = "center"; context.textBaseline = "middle";
+    const y = top - 14;
+    context.font = `500 10.5px ${font}`; context.textAlign = "center"; context.textBaseline = "middle";
     context.fillStyle = palette.ink; context.globalAlpha = visibility * 0.9;
     context.fillText(label, middle.x, y);
     const width = context.measureText(label).width;
@@ -110,10 +110,10 @@ export function drawTags(frame: Frame, items: readonly Tag[], font: string): voi
     if (taken.some((other) => box.left < other.right && box.right > other.left && box.top < other.bottom && box.bottom > other.top)) continue;
     taken.push(box);
     context.globalAlpha = (item.quiet ? 0.7 : 0.9) * frame.intro;
-    context.fillStyle = item.quiet ? "rgba(4, 10, 24, 0.45)" : "rgba(4, 10, 24, 0.62)";
-    context.beginPath(); context.roundRect(item.x - width / 2, y - height / 2, width, height, height / 2); context.fill();
-    context.strokeStyle = rgba(item.color, item.quiet ? 0.25 : 0.45); context.lineWidth = 0.8; context.stroke();
-    context.fillStyle = item.quiet ? "rgba(226, 238, 252, 0.85)" : "rgba(240, 248, 255, 0.95)";
+    context.fillStyle = item.quiet ? "rgba(12, 13, 16, 0.5)" : "rgba(12, 13, 16, 0.74)";
+    context.beginPath(); context.roundRect(item.x - width / 2, y - height / 2, width, height, 5); context.fill();
+    context.strokeStyle = item.quiet ? "rgba(255, 255, 255, 0.07)" : rgba(item.color, 0.3); context.lineWidth = 0.6; context.stroke();
+    context.fillStyle = item.quiet ? "rgba(232, 236, 242, 0.72)" : "rgba(240, 242, 245, 0.94)";
     context.fillText(text, item.x, y + 0.5);
   }
   context.restore();

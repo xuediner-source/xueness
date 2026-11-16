@@ -1,0 +1,28 @@
+{
+  "id": "tool_judge",
+  "name": "工具调用判定",
+  "description": "An optional decision model (any saved local or API profile) reviews risky tool calls before they run: one batched request per step, advise-only by default, optional repair and reject-once, fail-open, with counters that show whether it helps.",
+  "version": "1.0.0",
+  "apiVersion": 1,
+  "defaultEnabled": true,
+  "dependencies": ["providers", "sessions"],
+  "tools": [],
+  "commands": [],
+  "panels": [],
+  "resources": [],
+  "capabilities": [],
+  "httpFamilies": ["tool_judge"],
+  "modules": ["judge_extension", "judge_api"],
+  "features": [
+    { "id": "tool_judge.verdicts", "name": "执行前判定高风险工具调用（每步一次批量请求，失败放行）", "nameEn": "Pre-execution verdicts on risky tool calls (one batched request per step, fail-open)" },
+    { "id": "tool_judge.repair", "name": "可选：修正参数后再执行", "nameEn": "Optional: run the call with repaired arguments" },
+    { "id": "tool_judge.reject_once", "name": "可选：拦下调用一次，原样重试时放行", "nameEn": "Optional: stop a call once; an unchanged retry runs" },
+    { "id": "tool_judge.stats", "name": "判定统计：耗时、修正成功与误拦", "nameEn": "Verdict statistics: judge time, successful repairs and wrong blocks" },
+    { "id": "tool_judge.settings", "name": "选择判定模型（本地或 API）与判定方式", "nameEn": "Judge model choice (local or API) and verdict settings" }
+  ],
+  "frontendModules": [
+    "plugins/tool_judge/ToolJudgeSettings.tsx",
+    "plugins/tool_judge/ToolJudgeBadge.tsx",
+    "plugins/tool_judge/toolJudgeApi.ts"
+  ]
+}

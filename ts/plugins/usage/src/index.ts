@@ -5,5 +5,6 @@ import manifest from "../manifest.json" with { type: "json" };
 export { aggregate, coerceMtime, coerceNow, coerceSteps, localDay, normalizeRange } from "./aggregate.ts";
 export { buildUsage, collectSessions, type UsageStore } from "./build.ts";
 export { createUsageHttp, USAGE_ROUTES, type UsageHttpOptions } from "./http.ts";
+export { aggregateToolOutcomes, type ToolOutcomeReport } from "./tool-outcomes.ts";
 
 export const usage: BundledPlugin = { manifest, plugin: definePlugin({ name: "usage", apply() {} }) };

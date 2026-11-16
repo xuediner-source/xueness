@@ -2,7 +2,7 @@
   "id": "usage",
   "name": "用量统计",
   "description": "从本地会话记录统计步骤和运行。",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "apiVersion": 1,
   "defaultEnabled": true,
   "dependencies": [],
@@ -42,10 +42,16 @@
       "id": "usage.quick_card",
       "name": "工作台用量速览卡片",
       "nameEn": "Workbench usage quick card"
+    },
+    {
+      "id": "usage.tool_outcomes",
+      "name": "工具调用失败统计与可避免失败耗时",
+      "nameEn": "Tool-call failure statistics and avoidable failure time"
     }
   ],
   "frontendModules": [
     "plugins/usage/XuenessUsageSettings.tsx",
-    "plugins/usage/XuenessUsageQuickCard.tsx"
+    "plugins/usage/XuenessUsageQuickCard.tsx",
+    "plugins/usage/UsageToolOutcomes.tsx"
   ]
 }

@@ -206,7 +206,10 @@ async function runCommand(cli: Cli): Promise<number> {
       s = await store.load(String(s.id));
       await applyTarget(cli, store, s);
       if (prepared === null) prepared = prepareAgent(cli, host, s);
-      else if (preparedSession?.model_selection) s.model_selection = preparedSession.model_selection;
+      else {
+        if (preparedSession?.model_selection) s.model_selection = preparedSession.model_selection;
+        if (preparedSession?.runtime_profile) s.runtime_profile = preparedSession.runtime_profile;
+      }
       if (a.permission_mode !== null) persistPermissionMode(s, a.permission_mode);
       s.skill_catalog = a.skill_catalog;
       await store.save(s);

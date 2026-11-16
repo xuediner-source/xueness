@@ -1,0 +1,38 @@
+{
+  "id": "swarm",
+  "name": "蜂群",
+  "description": "A coordinator, workers and a verifier work in parallel on one goal, coordinated on a durable shared board: one plan approval, enforced ownership of paths and commands, members that sleep until mentioned, a monitor without a model, and a Swarm pane with board, members and a replayable mention graph.",
+  "version": "1.0.0",
+  "apiVersion": 1,
+  "defaultEnabled": true,
+  "dependencies": ["sessions", "files", "shell", "providers"],
+  "tools": ["swarm_start", "swarm_status", "swarm_post", "swarm_stop", "board_post", "board_read", "swarm_wait", "swarm_done", "swarm_kill", "swarm_model", "swarm_reassign", "swarm_finish", "verify_report"],
+  "commands": [],
+  "panels": ["swarm"],
+  "resources": [],
+  "capabilities": [],
+  "httpFamilies": ["sessions/*/swarms", "swarm"],
+  "modules": ["swarm_service", "swarm_board", "swarm_api"],
+  "features": [
+    { "id": "swarm.plan_approval", "name": "一次批准整个蜂群计划（成员、可写路径、可运行命令）", "nameEn": "One approval of the whole swarm plan (members, owned paths, allowed commands)" },
+    { "id": "swarm.owned_paths", "name": "成员只能写自己的路径、只能运行列出的命令（完全访问模式下也一样）", "nameEn": "Members write only their own paths and run only listed commands (also under full access)" },
+    { "id": "swarm.board", "name": "持久共享看板：@成员、@分组、@all，发送者由宿主标注", "nameEn": "Durable shared board: @member, @group, @all, sender set by the host" },
+    { "id": "swarm.channels_mentions", "name": "频道、分片前缀、行内 @ 提及与 #seq 引用", "nameEn": "Channels, shard prefixes, inline @mentions, and #seq citations" },
+    { "id": "swarm.wake_on_mention", "name": "成员空闲时不消耗模型，被提及才唤醒", "nameEn": "Idle members cost nothing and wake when mentioned" },
+    { "id": "swarm.monitor", "name": "无模型监视：全员停滞时提醒协调者，超限标记停滞", "nameEn": "Model-free monitor: nudges the coordinator when all go quiet, marks stalls" },
+    { "id": "swarm.dynamic_recovery", "name": "限流/失败分级、不失上下文热切模型与任务安全接管", "nameEn": "Quota/error classification, session-preserving model switching, and scoped task reassignment" },
+    { "id": "swarm.verifier", "name": "验证者检查改动并给出结论，可用不同模型", "nameEn": "Verifier checks changes and reports a verdict, on any model" },
+    { "id": "swarm.pane", "name": "蜂群面板：看板与成员", "nameEn": "Swarm pane: board and members" },
+    { "id": "swarm.graph_replay", "name": "提及关系图与回放", "nameEn": "Mention graph with replay" },
+    { "id": "swarm.judge_per_swarm", "name": "每个蜂群可选工具调用判定模型", "nameEn": "Tool-call judge selectable per swarm" }
+  ],
+  "frontendModules": [
+    "plugins/swarm/SwarmPanel.tsx",
+    "plugins/swarm/SwarmBoard.tsx",
+    "plugins/swarm/SwarmMembers.tsx",
+    "plugins/swarm/SwarmGraph.tsx",
+    "plugins/swarm/swarmGraphScene.ts",
+    "plugins/swarm/swarmApi.ts",
+    "plugins/swarm/SwarmSettings.tsx"
+  ]
+}

@@ -10,8 +10,17 @@ type Dict = Record<string, unknown>;
 export const RUNTIME_PROFILES = new Set(["standard", "lightweight"]);
 export const TOOL_CALLING_MODES = new Set(["native", "json"]);
 const MAX_TOKENS_FIELDS = new Set(["max_tokens", "max_completion_tokens"]);
-const COMPATIBILITY_KEYS = new Set(["streamUsage", "parallelToolCalls", "maxTokensField", "toolChoice", "think"]);
-export const LIGHTWEIGHT_CONTEXT_WINDOW = 8192;
+const COMPATIBILITY_KEYS = new Set(["streamUsage", "parallelToolCalls", "maxTokensField", "toolChoice", "think", "jsonResponseFormat"]);
+/**
+ * Context windows a saved profile may declare. The owner set the range on 2026-11-14: 8K
+ * no longer runs productive work, and the real window comes from the model the user
+ * deploys. A lightweight profile that states none assumes the minimum.
+ */
+export const MIN_CONTEXT_WINDOW = 16384;
+export const MAX_CONTEXT_WINDOW = 262144;
+/** Profiles saved before the 16K floor keep loading and running with their window; saving one again needs 16K. */
+export const LEGACY_MIN_CONTEXT_WINDOW = 2048;
+export const LIGHTWEIGHT_CONTEXT_WINDOW = MIN_CONTEXT_WINDOW;
 export const LIGHTWEIGHT_MAX_OUTPUT_TOKENS = 1024;
 
 export const LIGHTWEIGHT_DEFAULTS: Readonly<Dict> = Object.freeze({
@@ -82,7 +91,7 @@ export interface EffectiveOptionsInput {
 /** `lightweight_config.effective_options` (the provider fields are passed explicitly). */
 export function effectiveOptions(input: EffectiveOptionsInput = {}): Dict {
   const options: Dict = { ...LIGHTWEIGHT_DEFAULTS, ...validateOptions(input.value ?? {}) };
-  const context = input.context || 8192;
+  const context = input.context || LIGHTWEIGHT_CONTEXT_WINDOW;
   const output = input.output || Math.min(1024, Math.floor(context / 4));
   if (!has(options, "reserveTokens")) options["reserveTokens"] = context < 4096 ? 128 : 512;
   if (context - output - (options["reserveTokens"] as number) < 256) {
@@ -112,7 +121,7 @@ export function validateCompatibility(value: unknown): Dict {
     throw new PyValueError("compatibility contains an unsupported option");
   }
   const clean: Dict = {};
-  for (const key of ["streamUsage", "parallelToolCalls"]) {
+  for (const key of ["streamUsage", "parallelToolCalls", "jsonResponseFormat"]) {
     if (has(value, key)) {
       if (typeof value[key] !== "boolean") throw new PyValueError(`compatibility.${key} must be a boolean`);
       clean[key] = value[key];
@@ -145,15 +154,18 @@ export interface RuntimeOptions {
   lightweight_options: Dict;
 }
 
-/** `resolve_runtime_options`: validated runtime values with profile defaults. */
-export function resolveRuntimeOptions(record: unknown, protocol = "openai"): RuntimeOptions {
+/**
+ * `resolve_runtime_options`: validated runtime values with profile defaults. `saving`
+ * applies the current window floor; reading an existing profile accepts the legacy one.
+ */
+export function resolveRuntimeOptions(record: unknown, protocol = "openai", saving = false): RuntimeOptions {
   if (!isDict(record)) throw new PyValueError("provider profile must be an object");
   const profile = has(record, "runtimeProfile") ? record["runtimeProfile"] : "standard";
   if (typeof profile !== "string" || !RUNTIME_PROFILES.has(profile)) {
     throw new PyValueError("runtimeProfile must be standard or lightweight");
   }
   const contextWindow = has(record, "contextWindow")
-    ? boundedInteger(record["contextWindow"], "contextWindow", 2048, 262144)
+    ? boundedInteger(record["contextWindow"], "contextWindow", saving ? MIN_CONTEXT_WINDOW : LEGACY_MIN_CONTEXT_WINDOW, MAX_CONTEXT_WINDOW)
     : profile === "lightweight" ? LIGHTWEIGHT_CONTEXT_WINDOW : null;
   const maxOutputTokens = has(record, "maxOutputTokens")
     ? boundedInteger(record["maxOutputTokens"], "maxOutputTokens", 128, 32768)
@@ -217,6 +229,8 @@ export interface OpenAiPayloadInput {
   reasoningEffort?: unknown;
   testConnection?: boolean;
   defaultMaxTokensField?: string;
+  /** JSON tool mode only: ask the server to constrain the reply to one JSON object. */
+  jsonObject?: boolean;
   lightweightOptions?: unknown;
   testMaxTokens?: unknown;
 }
@@ -236,7 +250,7 @@ export function buildOpenAiPayload(input: OpenAiPayloadInput): Dict {
     throw new PyValueError("test_max_tokens must be an integer from 1 to 128");
   }
   let contextWindow = input.contextWindow ?? null;
-  if (contextWindow !== null) contextWindow = boundedInteger(contextWindow, "contextWindow", 2048, 262144);
+  if (contextWindow !== null) contextWindow = boundedInteger(contextWindow, "contextWindow", LEGACY_MIN_CONTEXT_WINDOW, MAX_CONTEXT_WINDOW);
   let maxOutputTokens = input.maxOutputTokens ?? null;
   if (maxOutputTokens === null && profile === "lightweight") {
     maxOutputTokens = Math.min(LIGHTWEIGHT_MAX_OUTPUT_TOKENS, Math.floor(((contextWindow as number | null) || LIGHTWEIGHT_CONTEXT_WINDOW) / 4));
@@ -257,6 +271,8 @@ export function buildOpenAiPayload(input: OpenAiPayloadInput): Dict {
     if (has(compatibility, "toolChoice")) body["tool_choice"] = compatibility["toolChoice"];
   }
   if (has(compatibility, "think")) body["think"] = compatibility["think"];
+  // Constrained decoding: a local server that supports it cannot emit prose or tool-call markup in place of the envelope.
+  if (toolCalling === "json" && input.jsonObject === true && !input.testConnection) body["response_format"] = { type: "json_object" };
   const tokenField = has(compatibility, "maxTokensField") ? compatibility["maxTokensField"] as string
     : profile === "lightweight" ? "max_tokens" : input.defaultMaxTokensField ?? "max_tokens";
   let tokenLimit: number | null = null;

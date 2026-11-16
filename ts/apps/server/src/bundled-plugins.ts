@@ -41,6 +41,8 @@ import { batchCalls } from "@xueness/plugin-batch_calls";
 import { osCua } from "@xueness/plugin-os_cua";
 import { contextLens } from "@xueness/plugin-context_lens";
 import { deepseekHarness } from "@xueness/plugin-deepseek_harness";
+import { toolJudge } from "@xueness/plugin-tool_judge";
+import { swarm } from "@xueness/plugin-swarm";
 
 // Metadata reserves each reviewed plugin's UI and route ownership. Executable
 // sources and assets are absent from the desktop until a verified download.
@@ -49,4 +51,4 @@ const subscriptions: BundledPlugin = { manifest: subscriptionsManifest, plugin: 
 const workbuddy: BundledPlugin = { manifest: workbuddyManifest, plugin: definePlugin({ name: "workbuddy", apply() {} }) };
 const tavern: BundledPlugin = { manifest: tavernManifest, plugin: definePlugin({ name: "tavern", apply() {} }) };
 
-export const BUNDLED_TS_PLUGINS: readonly BundledPlugin[] = Object.freeze([files, shell, providers, sessions, commands, settings, planning, git, mcp, skills, hooks, subagents, memory, network, remote, workflows, office, browser, extensions, diagnostics, tools, terminal, updates, desktop, usage, modelMonitor, onboarding, bots, subscriptions, automation, workbuddy, nativeOps, batchCalls, osCua, deepseekHarness, contextLens, tavern]);
+export const BUNDLED_TS_PLUGINS: readonly BundledPlugin[] = Object.freeze([files, shell, providers, sessions, commands, settings, planning, git, mcp, skills, hooks, subagents, memory, network, remote, workflows, office, browser, extensions, diagnostics, tools, terminal, updates, desktop, usage, modelMonitor, onboarding, bots, subscriptions, automation, workbuddy, nativeOps, batchCalls, osCua, deepseekHarness, contextLens, tavern, toolJudge, swarm]);

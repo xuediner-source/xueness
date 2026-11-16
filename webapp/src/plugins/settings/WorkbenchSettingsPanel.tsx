@@ -32,6 +32,8 @@ const BrowserSettings = lazy(() => import("../browser/BrowserSettings").then(mod
 const XuenessSubagentSettings = lazy(() => import("../subagents/SubagentSettings").then(module => ({ default: module.XuenessSubagentSettings })));
 const XuenessWorkspaceSettings = lazy(() => import('./XuenessWorkspaceSettings').then(module => ({ default: module.XuenessWorkspaceSettings })));
 const PackageImports = lazy(() => import('../extensions/PackageImports').then(module => ({ default: module.PackageImports })));
+const ToolJudgeSettings = lazy(() => import('../tool_judge/ToolJudgeSettings').then(module => ({ default: module.ToolJudgeSettings })));
+const SwarmSettings = lazy(() => import('../swarm/SwarmSettings').then(module => ({ default: module.SwarmSettings })));
 
 type WorkbenchSettingsPanelProps = {
   settings: WorkbenchSettings;
@@ -92,6 +94,8 @@ function settingsContent({ settings, isPluginEffective, capabilityKinds, capSect
   const inlineSettings = ["general", "appearance", "shortcuts", "agent"].includes(settingsSection);
   if (settingsSection === "about") return <DesktopAbout enabled={isPluginEffective("desktop")} onboardingEnabled={isPluginEffective("onboarding")} />;
   if (settingsSection === "network") return <NetworkSettings enabled={isPluginEffective('network')} disabled={busy || settingsSaving || pluginCatalogLoading} />;
+  if (settingsSection === "tool-judge") return <ToolJudgeSettings enabled={isPluginEffective('tool_judge')} disabled={busy || settingsSaving || pluginCatalogLoading} />;
+  if (settingsSection === "swarm") return <SwarmSettings enabled={isPluginEffective('swarm')} disabled={busy || settingsSaving || pluginCatalogLoading} />;
   if (settingsSection === 'updates') return <DesktopUpdates embedded enabled={isPluginEffective('updates') && isPluginEffective('desktop')} />;
   if (settingsSection === "browser") return <BrowserSettings enabled={isPluginEffective("browser")} disabled={busy || settingsSaving || pluginCatalogLoading}
     onEnabledChange={async enabled => {

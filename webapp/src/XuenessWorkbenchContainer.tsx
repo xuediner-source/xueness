@@ -68,7 +68,7 @@ import { useWorkbenchSettings } from "./plugins/settings/useWorkbenchSettings";
 import { useWorkbenchGlobalShortcuts } from './plugins/settings/workbenchShortcutActions';
 import { WorkbenchSettingsPanel } from "./plugins/settings/WorkbenchSettingsPanel";
 import { CapabilitiesPanel, DesktopUpdates, ModelManager, ModelMonitorPanel, RemoteConnections, SubscriptionsPanel, WorkbuddySettingsPanel,
-  XuenessAutomationsPanel, XuenessDiagnosticsPanel, XuenessMarketplace, XuenessMcpTools, XuenessUsageSettings } from "./plugins/settings/workbenchSettingsViews";
+  SwarmPanel, XuenessAutomationsPanel, XuenessDiagnosticsPanel, XuenessMarketplace, XuenessMcpTools, XuenessUsageSettings } from "./plugins/settings/workbenchSettingsViews";
 import { useGitPanel } from './plugins/git/useGitPanel';
 import { useWorkbenchFiles } from "./plugins/files/useWorkbenchFiles";
 import { useDefaultModelSelection } from "./plugins/providers/useDefaultModelSelection";
@@ -392,6 +392,7 @@ export function XuenessWorkbenchContainer() {
     "context-lens": <ContextLensPanel enabled={isPluginEffective("context_lens")} settingsEnabled={isPluginEffective("settings")} sessionId={activeId} onOpenSession={selectSession} onSelectSession={id => { selectSession(id); setPanel("context-lens"); }} />,
     usage: <XuenessUsageSettings />,
     memory: <MemoryOcean workspaceRoot={typeof session?.root === "string" ? session.root : undefined} tracks={memoryTracks} />,
+    swarm: <SwarmPanel enabled={isPluginEffective("swarm")} sessionId={activeId} />,
     capabilities: <><CapabilitiesPanel sections={capSections} />{isPluginEffective("mcp") && <XuenessMcpTools />}</>,
     settings: <WorkbenchSettingsPanel settings={settings} isPluginEffective={isPluginEffective} capabilityKinds={pluginAvailability.capabilityKinds} capSections={capSections}
       loadCapSlot={loadCapSlot} pluginCatalog={pluginCatalog} pluginCatalogLoading={pluginCatalogLoading} pluginCatalogError={pluginCatalogError}

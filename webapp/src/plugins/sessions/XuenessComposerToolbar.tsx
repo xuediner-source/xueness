@@ -537,7 +537,7 @@ export function ComposerModelMenu({
         )}
         {runtimeBudget?.profile !== activeRuntimeProfile && selectedModel && (
           <>
-            {Number.isFinite(selectedModel.contextWindow ?? (activeRuntimeProfile === "lightweight" ? 8192 : undefined)) && <span>{tf("上下文窗口 {0} tokens", [(selectedModel.contextWindow ?? 8192).toLocaleString()])}</span>}
+            {Number.isFinite(selectedModel.contextWindow ?? (activeRuntimeProfile === "lightweight" ? 16384 : undefined)) && <span>{tf("上下文窗口 {0} tokens", [(selectedModel.contextWindow ?? 16384).toLocaleString()])}</span>}
             {Number.isFinite(selectedModel.maxOutputTokens ?? (activeRuntimeProfile === "lightweight" ? 1024 : undefined)) && <span>{tf("输出上限 {0} tokens", [(selectedModel.maxOutputTokens ?? 1024).toLocaleString()])}</span>}
             {activeRuntimeProfile === "lightweight" && <small>{tr("运行后会显示输入预算估算；这不是服务商实际用量。")}</small>}
           </>

@@ -165,3 +165,4 @@ export * from './memory-dream-service.ts';
 export * from './memory-dream-http.ts';
 export * from './memory-dream-diff.ts';
 export * from './memory-dream-tools.ts';
+export * from './memory-ocean-dream.ts';

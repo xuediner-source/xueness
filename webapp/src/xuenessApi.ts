@@ -111,6 +111,22 @@ export type UsageSummary = {
     currentStreakDays: number;
     longestStreakDays: number;
   };
+  /** Tool-call outcomes of the sessions active in the range (usage plugin). */
+  toolOutcomes?: UsageToolOutcomes;
+};
+
+export type UsageToolOutcomeTotals = {
+  calls: number; failed: number; avoidable: number;
+  toolMs: number; failedToolMs: number; recoveryMs: number;
+  protocolRepairs: number; protocolMs: number;
+};
+export type UsageToolOutcomes = {
+  sessions: number;
+  total: UsageToolOutcomeTotals;
+  groups: { group: string; avoidable: boolean; failed: number; failedToolMs: number; recoveryMs: number }[];
+  tools: { name: string; calls: number; failed: number }[];
+  codes: { code: string; count: number }[];
+  models: (UsageToolOutcomeTotals & { model: string })[];
 };
 
 export type UsageModelSummary = {

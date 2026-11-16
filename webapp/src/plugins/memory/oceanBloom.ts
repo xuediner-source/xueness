@@ -4,7 +4,7 @@
  *
  * Cores, spike beams, auras and comets are drawn into a quarter-resolution
  * light buffer during the frame. `composite` then lays that buffer over the
- * scene three times, blurred at a tight, a medium and a wide radius, with the
+ * scene twice, blurred at a tight and a medium radius, with the
  * screen blend: light from nearby stars merges into one glow, the falloff is
  * smooth and free of banding, and bright areas saturate gently instead of
  * clipping to white. Where canvas filters are unavailable the upscaled
@@ -34,7 +34,7 @@ export class OceanBloom {
     target.save();
     target.globalCompositeOperation = "screen";
     target.imageSmoothingEnabled = true; target.imageSmoothingQuality = "high";
-    const passes: [number, number][] = low || !this.#filters ? [[0, 0.95]] : [[3, 0.9], [11, 0.55], [30, 0.3]];
+    const passes: [number, number][] = low || !this.#filters ? [[0, 0.95]] : [[3, 0.8], [14, 0.34]];
     for (const [blur, alpha] of passes) {
       if (this.#filters) target.filter = blur ? `blur(${blur}px)` : "none";
       target.globalAlpha = Math.min(1, alpha * strength);

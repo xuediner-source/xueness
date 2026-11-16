@@ -41,6 +41,7 @@ import { isReferenceTimelineRow } from './referenceRows';
 import { SubagentRowView } from './SubagentRowView';
 import { resolveToolRenderer, ToolStatusShell, type ToolRendererId } from './toolRenderers';
 import { NativeToolCallCard } from './NativeToolCallCard';
+import { ToolJudgeBadge } from '../tool_judge/ToolJudgeBadge';
 import { nativeToolPayload } from './nativeToolPayload';
 import { toolActivityRows } from './toolActivity';
 import { TOOL_DISPLAY_STATUS_LABELS } from './toolDisplayStatus';
@@ -290,6 +291,7 @@ function ToolRow({ row, pending, defaultOpen, findActive = false, effectivePlugi
         </span>
       )}
       {status && <ToolStatusShell status={row.status} pendingApproval={pending}>{status}</ToolStatusShell>}
+      {row.judge !== undefined && effectivePluginIds?.has('tool_judge') && <ToolJudgeBadge judge={row.judge} />}
       {failed && onRetry && (
         <button
           type="button"

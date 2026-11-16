@@ -18,12 +18,13 @@ import * as catalog from "./catalog.ts";
 import * as plugins from "./plugins.ts";
 import * as workflows from "./workflows.ts";
 import * as workflowScripts from './workflow-scripts.ts';
+import * as swarmCli from './swarm.ts';
 import * as automation from "./automation.ts";
 import * as remote from "./remote.ts";
 import * as memoryDream from "./memory-dream.ts";
 
 interface Module { register(sub: ReturnType<Parser["subparsers"]>): void; execute(cli: Cli): Promise<number | null> }
-const MODULES: Module[] = [sessions, runs, headless, ops, catalog, workflows, workflowScripts, automation, remote, memoryDream, plugins];
+const MODULES: Module[] = [sessions, runs, headless, ops, catalog, workflows, workflowScripts, swarmCli, automation, remote, memoryDream, plugins];
 
 /** `plugin_runtime.cli_owner`: resources by kind, every other command by its manifest's `commands`. */
 /** Python's subcommand order (`xueness.cli` registers the plugins' parsers in catalog order). */

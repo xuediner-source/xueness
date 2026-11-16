@@ -1,7 +1,12 @@
 /** One-attempt bounded diagnostic transport; fixture calls never invoke tools. */
 import { performance } from "node:perf_hooks";
 import { isDict, pyJsonDumps, pyJsonLoads, pyJsonLoadsBytes, PyValueError, pyLen, uuid4Hex } from "@xueness/contracts";
-import { AnthropicMessages, anthropicMessage, buildOpenAiPayload, envelopeText, finiteJsonText, isLoopbackLiteral, OpenAICompatible, openChecked, pyUrlSplit, readBody, readOpenAiStream, validateCompatibility } from "@xueness/providers";
+import {
+  AnthropicMessages, OpenAICompatible, anthropicMessagesUrl, anthropicMessage, buildOpenAiPayload, buildResponsesPayload,
+  chatCompletionsUrl, envelopeText, finiteJsonText, isLoopbackLiteral, isResponsesEndpoint, LIGHTWEIGHT_CONTEXT_WINDOW,
+  modelsDiscoveryUrl, openChecked, parseResponsesBody, pyUrlSplit, readBody, readOpenAiStream, readResponsesStream,
+  responsesUrl, validateCompatibility,
+} from "@xueness/providers";
 import type { Dict } from "./profile-store.ts";
 
 export type DiagnosticProvider = OpenAICompatible | AnthropicMessages;
@@ -14,25 +19,29 @@ export function nativePrompt(): Dict[] {
 export function jsonPrompt(): Dict[] {
   return [{ role: "system", content: "This is a provider compatibility diagnostic. Return exactly one JSON object with keys tool and arguments, no markdown or extra keys. tool must be xueness_fixture_add and arguments must have integer values a=3 and b=4. Do not answer in prose." }, { role: "user", content: 'Return {"tool":"xueness_fixture_add","arguments":{"a":3,"b":4}} exactly.' }];
 }
-async function exchange(provider: DiagnosticProvider, path: string, body: Dict | null, timeout: number, deadline: number) {
-  const url = pyUrlSplit(provider.base.replace(/\/+$/, "") + path);
+async function exchange(provider: DiagnosticProvider, target: string, body: Dict | null, timeout: number, deadline: number) {
+  const url = pyUrlSplit(/^https?:\/\//iu.test(target) ? target : provider.base.replace(/\/+$/, "") + target);
   const headers: Record<string, string> = body ? { "Content-Type": "application/json" } : { Accept: "application/json" };
   if (provider instanceof AnthropicMessages) { headers["x-api-key"] = provider.key; headers["anthropic-version"] = "2023-06-01"; }
   else if (provider.key) headers.Authorization = "Bearer " + provider.key;
   return openChecked({ url, method: body ? "POST" : "GET", headers, body: body ? Buffer.from(pyJsonDumps(body, { ensureAscii: true })) : null, timeoutMs: timeout * 1000, deadlineMs: deadline, ...(isLoopbackLiteral(url.hostname) ? { proxy: null } : {}) });
 }
 export async function testConnection(provider: DiagnosticProvider, timeout = 8): Promise<Dict> {
-  const body = provider instanceof OpenAICompatible ? buildOpenAiPayload({ model: provider.model, messages: [{ role: "user", content: "Reply with exactly OK." }], tools: [], runtimeProfile: provider.runtimeProfile, contextWindow: provider.contextWindow, maxOutputTokens: provider.maxOutputTokens, toolCalling: provider.toolCalling, compatibility: provider.compatibility, reasoningEffort: provider.reasoningEffort, testConnection: true, defaultMaxTokensField: provider.defaultMaxTokensField(), lightweightOptions: provider.lightweightOptions }) : { model: provider.model, max_tokens: 8, messages: [{ role: "user", content: "Reply with exactly OK." }] };
-  const response = await exchange(provider, provider instanceof OpenAICompatible ? "/chat/completions" : "/messages", body, timeout, performance.now() + timeout * 1000);
+  const responses = provider instanceof OpenAICompatible && isResponsesEndpoint(provider.base);
+  const rawBody = provider instanceof OpenAICompatible ? buildOpenAiPayload({ model: provider.model, messages: [{ role: "user", content: "Reply with exactly OK." }], tools: [], runtimeProfile: provider.runtimeProfile, contextWindow: provider.contextWindow, maxOutputTokens: provider.maxOutputTokens, toolCalling: provider.toolCalling, compatibility: provider.compatibility, reasoningEffort: provider.reasoningEffort, testConnection: true, defaultMaxTokensField: provider.defaultMaxTokensField(), lightweightOptions: provider.lightweightOptions }) : { model: provider.model, max_tokens: 8, messages: [{ role: "user", content: "Reply with exactly OK." }] };
+  const body = responses ? buildResponsesPayload(rawBody) : rawBody;
+  const target = provider instanceof OpenAICompatible ? (responses ? responsesUrl(provider.base) : chatCompletionsUrl(provider.base)) : anthropicMessagesUrl(provider.base);
+  const response = await exchange(provider, target, body, timeout, performance.now() + timeout * 1000);
   try {
     const parsed = pyJsonLoadsBytes(await readBody(response));
     if (provider instanceof AnthropicMessages) return anthropicMessage(parsed);
+    if (responses) return parseResponsesBody(parsed);
     if (!isDict(parsed) || !Array.isArray(parsed.choices) || !isDict(parsed.choices[0]) || !isDict(parsed.choices[0].message)) throw new PyValueError("invalid provider response");
     return parsed.choices[0].message;
   } finally { response.close(); }
 }
 export async function discoverModels(provider: OpenAICompatible, timeout = 8): Promise<Dict[]> {
-  const response = await exchange(provider, "/models", null, timeout, performance.now() + timeout * 1000);
+  const response = await exchange(provider, modelsDiscoveryUrl(provider.base), null, timeout, performance.now() + timeout * 1000);
   try { return validatedModelList(pyJsonLoadsBytes(await readBody(response, 512000)), provider.key); }
   finally { response.close(); }
 }
@@ -82,19 +91,22 @@ export async function compatibilityTest(provider: OpenAICompatible, mode: string
   const requests: Dict[] = [];
   const fail = (error: string, status: unknown = null): Dict => ({ ok: false, error, details: { mode, requestCount: requests.length, failedStep: requests.at(-1)?.step ?? null, httpStatus: status, requests, fixture: "in-process arithmetic only; no file or command execution" } });
   const request = async (messages: Dict[], tools: Dict[], step: string, stream: boolean, toolCalling: string, candidate = options): Promise<[Dict, Dict]> => {
-    const body = buildOpenAiPayload({ model: provider.model, messages, tools, runtimeProfile: provider.runtimeProfile, contextWindow: provider.contextWindow, maxOutputTokens: Math.min(provider.maxOutputTokens || 1024, 1024, Math.floor((provider.contextWindow || 8192) / 2)), toolCalling, compatibility: candidate, stream, reasoningEffort: provider.reasoningEffort, defaultMaxTokensField: provider.defaultMaxTokensField(), lightweightOptions: provider.lightweightOptions });
-    requests.push({ step, fields: Object.keys(body).sort() });
+    const responses = isResponsesEndpoint(provider.base);
+    const rawBody = buildOpenAiPayload({ model: provider.model, messages, tools, runtimeProfile: provider.runtimeProfile, contextWindow: provider.contextWindow, maxOutputTokens: Math.min(provider.maxOutputTokens || 1024, 1024, Math.floor((provider.contextWindow || LIGHTWEIGHT_CONTEXT_WINDOW) / 2)), toolCalling, compatibility: candidate, stream, reasoningEffort: provider.reasoningEffort, defaultMaxTokensField: provider.defaultMaxTokensField(), lightweightOptions: provider.lightweightOptions });
+    requests.push({ step, fields: Object.keys(rawBody).sort() });
+    const body = responses ? buildResponsesPayload(rawBody) : rawBody;
     const left = (deadline - performance.now()) / 1000;
     if (left <= 0) throw new Error("deadline");
-    const response = await exchange(provider, "/chat/completions", body, left, deadline);
+    const response = await exchange(provider, responses ? responsesUrl(provider.base) : chatCompletionsUrl(provider.base), body, left, deadline);
     try {
       if (stream) {
         if (!(response.header("content-type") ?? "").toLowerCase().includes("text/event-stream")) throw new PyValueError("The endpoint did not return an SSE event stream.");
         const deltas: unknown[] = [];
-        const parsed = await readOpenAiStream(response, { onDelta: (v) => deltas.push(v), markDelivered() {}, requireDone: true });
+        const parsed = await (responses ? readResponsesStream : readOpenAiStream)(response, { onDelta: (v) => deltas.push(v), markDelivered() {}, requireDone: true });
         return [{ content: parsed.text, tool_calls: parsed.calls }, { sseContentType: true, doneReceived: true, deltaCount: deltas.length, deltaCharacters: pyLen(parsed.text) }];
       }
       const parsed = pyJsonLoadsBytes(await readBody(response)) as Dict;
+      if (responses) return [parseResponsesBody(parsed), {}];
       const choices = parsed.choices as Dict[];
       if (!choices || !isDict(choices[0]?.message)) throw new Error("invalid response");
       return [choices[0].message as Dict, {}];

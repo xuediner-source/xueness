@@ -29,7 +29,9 @@ const ENVIRONMENT_KEY = '__environment__';
 const NEW_PROVIDER_KEY = '__new_provider__';
 const UNSAVED_ACTIONS_HELP_ID = 'provider-unsaved-actions-help';
 const REASONING_LEVELS = ['none', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max'];
-const LIGHTWEIGHT_DEFAULT_CONTEXT = 8192;
+// Same range as the server (`MIN_CONTEXT_WINDOW`/`MAX_CONTEXT_WINDOW`): profiles saved earlier below 16K still
+// load and run, but saving one again needs 16K.
+const MIN_CONTEXT_WINDOW = 16384, MAX_CONTEXT_WINDOW = 262144, LIGHTWEIGHT_DEFAULT_CONTEXT = MIN_CONTEXT_WINDOW;
 const LIGHTWEIGHT_DEFAULT_OUTPUT = 1024;
 const LOCAL_ENDPOINTS = [
   { label: 'Ollama', url: 'http://127.0.0.1:11434/v1' },
@@ -130,8 +132,8 @@ export function validateProviderDraft(draft: ProviderDraft): string | null {
   }
   const profile = draft.runtimeProfile ?? 'standard';
   if (draft.runtimeProfile !== undefined && !['standard', 'lightweight'].includes(draft.runtimeProfile)) return '运行配置无效。';
-  if (draft.contextWindow !== undefined && (!Number.isInteger(draft.contextWindow) || draft.contextWindow < 2048 || draft.contextWindow > 262144)) {
-    return '上下文窗口必须是 2048–262144 之间的整数。';
+  if (draft.contextWindow !== undefined && (!Number.isInteger(draft.contextWindow) || draft.contextWindow < MIN_CONTEXT_WINDOW || draft.contextWindow > MAX_CONTEXT_WINDOW)) {
+    return '上下文窗口必须是 16384–262144 之间的整数；按实际部署的模型填写。';
   }
   if (draft.maxOutputTokens !== undefined && (!Number.isInteger(draft.maxOutputTokens) || draft.maxOutputTokens < 128 || draft.maxOutputTokens > 32768)) {
     return '最大输出必须是 128–32768 之间的整数。';
@@ -978,9 +980,9 @@ export function ProviderEditor({
       <div className="xn-provider-fields xn-provider-runtime-fields">
         <label className="xn-provider-field">
           <span>{tr('上下文窗口（tokens）')}</span>
-          <input type="number" inputMode="numeric" min={2048} max={262144} step={1} disabled={locked} value={draft.contextWindow ?? ''} placeholder={runtimeProfile === 'lightweight' ? String(LIGHTWEIGHT_DEFAULT_CONTEXT) : tr('留空使用服务默认')}
+          <input type="number" inputMode="numeric" min={MIN_CONTEXT_WINDOW} max={MAX_CONTEXT_WINDOW} step={1} disabled={locked} value={draft.contextWindow ?? ''} placeholder={runtimeProfile === 'lightweight' ? String(LIGHTWEIGHT_DEFAULT_CONTEXT) : tr('留空使用服务默认')}
             onChange={event => changeContextWindow(event.currentTarget.value === '' ? undefined : event.currentTarget.valueAsNumber)} aria-label={tr('上下文窗口（tokens）')} />
-          <small>{tr('有效范围 2048–262144；轻量默认 8192。')}</small>
+          <small>{tr('按实际部署的模型填写，范围 16384–262144；轻量留空时按 16384。')}</small>
         </label>
         <label className="xn-provider-field">
           <span>{tr('最大输出（tokens）')}</span>

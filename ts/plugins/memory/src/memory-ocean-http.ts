@@ -4,6 +4,7 @@
  *   GET  /api/memory/ocean[?root=<workspace>]          graph view; `root` marks this project's memories
  *   POST /api/memory/ocean/memories                     add a memory by hand
  *   POST /api/memory/ocean/memories/<id>                edit (with the version last read)
+ *   POST /api/memory/ocean/memories/forget              delete multiple memories for good (`ids`, `confirmed: true`)
  *   POST /api/memory/ocean/memories/<id>/forget         delete for good (`confirmed: true`)
  *
  * When `XUENESS_MEMORY_ROOT` is set, the curated track entries for the
@@ -12,11 +13,17 @@
 import { buildMemoryIndex } from "./memory-index.ts";
 import { pyResolve } from "./memory.ts";
 import { oceanGraph } from "./memory-ocean-graph.ts";
-import { MemoryOceanStore, OceanError, projectOf, type OceanMemory } from "./memory-ocean-store.ts";
+import { MAX_MEMORIES, MemoryOceanStore, OceanError, projectOf, type OceanMemory } from "./memory-ocean-store.ts";
 
 type Reply = [number, unknown];
 type Row = Record<string, unknown>;
-export const OCEAN_HTTP_ROUTES = ["GET /api/memory/ocean", "POST /api/memory/ocean/memories", "POST /api/memory/ocean/memories/:id", "POST /api/memory/ocean/memories/:id/forget"] as const;
+export const OCEAN_HTTP_ROUTES = [
+  "GET /api/memory/ocean",
+  "POST /api/memory/ocean/memories",
+  "POST /api/memory/ocean/memories/forget",
+  "POST /api/memory/ocean/memories/:id",
+  "POST /api/memory/ocean/memories/:id/forget",
+] as const;
 const ID = /^m_[0-9a-f]{12}$/;
 
 export interface OceanHttpOptions { stateDir: string; projectDir: string; memoryRoot: () => string | null }
@@ -63,6 +70,14 @@ export function oceanDispatch(options: OceanHttpOptions, method: string, parts: 
       const root = typeof body.root === "string" ? rootOf({ root: body.root }, options.projectDir) : options.projectDir;
       const saved = store.remember(body, { root, source: { by: "user" } });
       return [200, { memory: saved.memory, merged: saved.merged }];
+    }
+    if (parts.length === 5 && parts[4] === "forget") {
+      if (body.confirmed !== true) return [400, { error: "forgetting memories needs confirmed: true" }];
+      const rawIds = body.ids;
+      if (!Array.isArray(rawIds) || rawIds.length === 0 || rawIds.length > MAX_MEMORIES || rawIds.some((item) => typeof item !== "string" || !ID.test(item))) {
+        return [400, { error: "ids must be a non-empty array of memory ids" }];
+      }
+      return [200, { forgotten: store.forgetMany(rawIds) }];
     }
     const id = parts[4]!;
     if (!ID.test(id)) return [404, { error: "memory not found" }];

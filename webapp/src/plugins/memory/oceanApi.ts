@@ -36,6 +36,27 @@ export const updateMemory = (id: string, patch: Partial<MemoryDraft> & { version
   post(`/api/memory/ocean/memories/${encodeURIComponent(id)}`, patch);
 export const forgetMemory = (id: string): Promise<{ forgotten: string }> =>
   post(`/api/memory/ocean/memories/${encodeURIComponent(id)}/forget`, { confirmed: true });
+export const forgetMemories = (ids: readonly string[]): Promise<{ forgotten: string[] }> =>
+  post("/api/memory/ocean/memories/forget", { ids, confirmed: true });
+
+/** A dream: a reviewable proposal to tidy the memories from recent conversations. Nothing changes until it is applied. */
+export interface OceanDreamOp {
+  op: "merge" | "update" | "archive" | "add"; ids: string[]; reason: string;
+  before: { id: string; summary: string; text: string }[];
+  draft?: { text: string; summary: string; kind: OceanKind; tags: string[]; importance: number; scope: "global" | "project" };
+  outcome?: "applied" | "skipped"; note?: string;
+}
+export interface OceanDream {
+  id: string; root: string; status: "running" | "ready" | "applied" | "discarded" | "failed";
+  sourceSessionIds: string[]; memoriesRead: number; operations: OceanDreamOp[]; error?: string; createdAt: string;
+}
+export const listDreams = (root: string, signal?: AbortSignal): Promise<{ dreams: OceanDream[] }> =>
+  get(`/api/memory/ocean/dreams?root=${encodeURIComponent(root)}`, signal);
+export const loadDream = (id: string, signal?: AbortSignal): Promise<{ dream: OceanDream }> => get(`/api/memory/ocean/dreams/${id}`, signal);
+export const startDream = (root: string): Promise<{ dream: OceanDream }> => post("/api/memory/ocean/dreams", { root, allowReal: true });
+export const applyDream = (id: string, accept: readonly number[]): Promise<{ dream: OceanDream }> =>
+  post(`/api/memory/ocean/dreams/${id}/apply`, { accept, confirmed: true });
+export const discardDream = (id: string): Promise<{ dream: OceanDream }> => post(`/api/memory/ocean/dreams/${id}/discard`, {});
 
 export function kindLabel(kind: OceanKind | null | undefined): string {
   switch (kind) {

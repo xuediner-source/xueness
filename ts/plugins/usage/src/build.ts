@@ -3,6 +3,7 @@ import { statSync } from "node:fs";
 import { join } from "node:path";
 import { isPyIntValue, isPyNumeric, numericValue, pySlice, pyStrip } from "@xueness/contracts";
 import { aggregate, coerceMtime, coerceNow, isoUtc, localDay, normalizeRange } from "./aggregate.ts";
+import { aggregateToolOutcomes } from "./tool-outcomes.ts";
 
 const SID = /^[A-Za-z0-9._-]{1,128}$/;
 const RANGE_SECONDS: Record<string, number> = { "7d": 7 * 86400, "30d": 30 * 86400 };
@@ -74,7 +75,7 @@ export async function collectSessions(store: UsageStore | null | undefined): Pro
     if (session === null || typeof session !== "object" || Array.isArray(session)) continue;
     const row = session as Record<string, unknown>;
     const mtime = fileMtime(store.directory, sid) ?? sessionMtime(row) ?? entryMtime(entry) ?? Date.now() / 1000;
-    sessions.push({ id: sid, status: row.status, steps: row.steps ?? 0, mtime, provider_usage: row.provider_usage ?? [] });
+    sessions.push({ id: sid, status: row.status, steps: row.steps ?? 0, mtime, provider_usage: row.provider_usage ?? [], tool_outcomes: row.tool_outcomes ?? null });
   }
   return sessions;
 }
@@ -178,6 +179,9 @@ export async function buildUsage(ctx: { store?: UsageStore | null }, rangeKey?: 
       addCost(costs, row.cost);
     }
   }
+  // Tool-call outcomes do not depend on reported tokens: local servers often report none.
+  const toolOutcomes = aggregateToolOutcomes(sessions, cutoff);
+  if (toolOutcomes) result.toolOutcomes = toolOutcomes;
   if (saw) {
     const active = [...daily.keys()].filter((date) => (daily.get(date)?.totalTokens ?? 0) > 0).sort();
     const activeSet = new Set(active);

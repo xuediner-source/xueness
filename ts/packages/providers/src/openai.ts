@@ -14,6 +14,7 @@ import { buildOpenAiPayload, effectiveOptions, knownReasoningLevels, resolveRunt
 import { MAX_PROVIDER_RESPONSE_BYTES, loadsBody, readBody } from "./sse.ts";
 import { resolveModelStreamIdleTimeoutMs } from "./stream-idle-timeout.ts";
 import { readOpenAiStream, type StreamObservers } from "./streams.ts";
+import { buildResponsesPayload, chatCompletionsUrl, isResponsesEndpoint, parseResponsesBody, readResponsesStream, responsesUrl } from "./openai-responses.ts";
 import { normalizeNative } from "./tool-protocol.ts";
 import { normalizeOpenAiCompatibleSystemMessages } from "./system-message-compat.ts";
 import type { ModelRequestAdmission } from "./request-admission.ts";
@@ -23,6 +24,10 @@ type Dict = Record<string, unknown>;
 
 /** Whether an endpoint accepts `stream_options.include_usage`, learned from its answers; keyed by base and model. */
 const STREAM_USAGE = new Map<string, "accepted" | "rejected">();
+/** Whether an endpoint accepts `response_format: {type: "json_object"}`, learned the same way. */
+const JSON_FORMAT = new Map<string, "accepted" | "rejected">();
+/** Forget what was learned about endpoints (tests; a server restarted with other settings is a new process anyway). */
+export function resetEndpointProbes(): void { STREAM_USAGE.clear(); JSON_FORMAT.clear(); }
 export const REASONING_EFFORTS = new Set(["none", "minimal", "low", "medium", "high", "xhigh", "max"]);
 
 export interface ProviderCallOptions {
@@ -130,6 +135,7 @@ export class OpenAICompatible implements ChatProvider {
   onStreamUsage: ((state: "accepted" | "rejected") => void) | null = null;
   readonly clock: ProviderClock;
   readonly #url: SplitUrl;
+  readonly #responses: boolean;
 
   constructor(init: OpenAiInit = {}) {
     const env = init.env ?? process.env;
@@ -177,7 +183,8 @@ export class OpenAICompatible implements ChatProvider {
     if (effort !== null && !REASONING_EFFORTS.has(effort)) throw new ProviderConfigError("unsupported reasoning effort");
     this.reasoningEffort = effort;
     this.capabilities = providerCapabilities(this.model, init.capabilities);
-    this.#url = pyUrlSplit(`${this.base.replace(/\/+$/u, "")}/chat/completions`);
+    this.#responses = isResponsesEndpoint(this.base);
+    this.#url = pyUrlSplit(this.#responses ? responsesUrl(this.base) : chatCompletionsUrl(this.base));
     if (init.streamUsageRejected) STREAM_USAGE.set(`${this.base}\n${this.model}`, "rejected");
   }
 
@@ -186,14 +193,27 @@ export class OpenAICompatible implements ChatProvider {
     return knownReasoningLevels(this.model).length ? "max_completion_tokens" : "max_tokens";
   }
 
-  #body(messages: Dict[], tools: Dict[], stream: boolean, media: MediaBinding | null, streamUsage?: boolean): Uint8Array {
-    const body = buildOpenAiPayload({
+  /**
+   * A request asks for constrained JSON only when the prompt view marked it as a JSON tool-protocol
+   * request (`_response_format` on its system message); other calls through a JSON-mode profile, such
+   * as titles or summaries, answer in prose. The profile's `jsonResponseFormat` forces it on or off.
+   */
+  #wantsJsonObject(messages: Dict[]): boolean {
+    return !this.#responses && this.runtimeProfile === "lightweight" && this.toolCalling === "json" && messages[0]?._response_format === "json_object"
+      && this.compatibility.jsonResponseFormat !== false;
+  }
+
+  #body(messages: Dict[], tools: Dict[], stream: boolean, media: MediaBinding | null, streamUsage?: boolean, jsonObject?: boolean): Uint8Array {
+    const constrained = this.#wantsJsonObject(messages)
+      && (this.compatibility.jsonResponseFormat === true || (jsonObject ?? JSON_FORMAT.get(`${this.base}\n${this.model}`) === "accepted"));
+    const payload = buildOpenAiPayload({
+      jsonObject: constrained,
       model: this.model, messages: normalizeOpenAiCompatibleSystemMessages(openAiMessages(messages, this, media)), tools, runtimeProfile: this.runtimeProfile,
       contextWindow: this.contextWindow, maxOutputTokens: this.maxOutputTokens, toolCalling: this.toolCalling,
       compatibility: streamUsage === undefined ? this.compatibility : { ...this.compatibility, streamUsage }, stream, reasoningEffort: this.reasoningEffort,
       defaultMaxTokensField: this.defaultMaxTokensField(), lightweightOptions: this.lightweightOptions,
     });
-    return Buffer.from(pyJsonDumps(body, { ensureAscii: true }), "utf8");
+    return Buffer.from(pyJsonDumps(this.#responses ? buildResponsesPayload(payload) : payload, { ensureAscii: true }), "utf8");
   }
 
   #spec(body: Uint8Array, timeout: number, deadline: number | null, signal: AbortSignal | null | undefined) {
@@ -237,9 +257,14 @@ export class OpenAICompatible implements ChatProvider {
           response.close();
         }
         const parsed = loadsBody(raw);
-        return normalizeNative(withRequestAttempts(withReportedUsage(pyGetItem(pyGetItem(pyGetItem(parsed, "choices"), 0), "message"), parsed), attempt + 1)) as Dict;
+        return this.#parseJson(parsed, attempt + 1);
       },
     });
+  }
+
+  #parseJson(payload: unknown, attempts: number): Dict {
+    const message = this.#responses ? parseResponsesBody(payload) : withReportedUsage(pyGetItem(pyGetItem(pyGetItem(payload, "choices"), 0), "message"), payload);
+    return normalizeNative(withRequestAttempts(message, attempts)) as Dict;
   }
 
   async stream(messages: Dict[], tools: Dict[], observers: StreamObservers = {}, options: ProviderCallOptions = {}): Promise<Dict> {
@@ -254,19 +279,30 @@ export class OpenAICompatible implements ChatProvider {
     // The lightweight budget is calibrated from reported usage, so streams ask for it unless the profile says otherwise.
     // A local server that rejects the field is asked once more without it and remembered for this process.
     const endpoint = `${this.base}\n${this.model}`;
-    const probing = this.runtimeProfile === "lightweight" && !Object.hasOwn(this.compatibility, "streamUsage") && STREAM_USAGE.get(endpoint) !== "rejected";
-    if (!probing) return run(this.#body(messages, tools, true, options.media ?? null, this.runtimeProfile === "lightweight" && STREAM_USAGE.get(endpoint) === "rejected" ? false : undefined));
-    try {
-      const result = await run(this.#body(messages, tools, true, options.media ?? null, true));
-      STREAM_USAGE.set(endpoint, "accepted");
-      return result;
-    } catch (error) {
-      const rejected = error instanceof ProviderRequestError && (error.status === 400 || error.status === 422) && !error.contextOverflow && !error.reasoningSignatureRejected;
-      if (!rejected || STREAM_USAGE.get(endpoint) === "accepted") throw error;
-      const result = await run(this.#body(messages, tools, true, options.media ?? null, false));
-      STREAM_USAGE.set(endpoint, "rejected");
-      this.onStreamUsage?.("rejected");
-      return result;
+    const usageProbe = !this.#responses && this.runtimeProfile === "lightweight" && !Object.hasOwn(this.compatibility, "streamUsage") && STREAM_USAGE.get(endpoint) !== "rejected";
+    // JSON tool mode also asks for constrained output, under the same rule: a server that rejects the
+    // field is asked again without it and remembered. The profile setting skips the probe either way.
+    const formatProbe = this.#wantsJsonObject(messages) && !Object.hasOwn(this.compatibility, "jsonResponseFormat") && JSON_FORMAT.get(endpoint) !== "rejected";
+    let usage: boolean | undefined = usageProbe ? true : this.runtimeProfile === "lightweight" && STREAM_USAGE.get(endpoint) === "rejected" ? false : undefined;
+    let format: boolean | undefined = formatProbe ? true : undefined;
+    if (!usageProbe && !formatProbe) return run(this.#body(messages, tools, true, options.media ?? null, usage));
+    let droppedFormat = false, droppedUsage = false;
+    for (;;) {
+      try {
+        const result = await run(this.#body(messages, tools, true, options.media ?? null, usage, format));
+        if (droppedUsage) { STREAM_USAGE.set(endpoint, "rejected"); this.onStreamUsage?.("rejected"); }
+        else if (usageProbe) STREAM_USAGE.set(endpoint, "accepted");
+        // Dropping both fields does not say which one the server refused: the format is asked again next time, alone.
+        if (format === true) JSON_FORMAT.set(endpoint, "accepted");
+        else if (droppedFormat && !droppedUsage) JSON_FORMAT.set(endpoint, "rejected");
+        return result;
+      } catch (error) {
+        const rejected = error instanceof ProviderRequestError && (error.status === 400 || error.status === 422) && !error.contextOverflow && !error.reasoningSignatureRejected;
+        if (!rejected) throw error;
+        if (format === true && JSON_FORMAT.get(endpoint) !== "accepted") { format = false; droppedFormat = true; continue; }
+        if (usage === true && usageProbe && STREAM_USAGE.get(endpoint) !== "accepted") { usage = false; droppedUsage = true; continue; }
+        throw error;
+      }
     }
   }
 
@@ -281,11 +317,11 @@ export class OpenAICompatible implements ChatProvider {
       if (effectiveStreamTimeoutMs > 0) response.setIdleTimeout(Math.max(40_000, effectiveStreamTimeoutMs));
       const contentType = response.header("content-type") ?? "";
       if (!pyCasefold(contentType).includes("text/event-stream")) {
-        const payload = loadsBody(await readBody(response));
-        return normalizeNative(withRequestAttempts(withReportedUsage(pyGetItem(pyGetItem(pyGetItem(payload, "choices"), 0), "message"), payload), context.attempt + 1)) as Dict;
+        return this.#parseJson(loadsBody(await readBody(response)), context.attempt + 1);
       }
       const metadata: Dict = {};
-      const { text, calls, usage } = await readOpenAiStream(response, {
+      const parser = this.#responses ? readResponsesStream : readOpenAiStream;
+      const { text, calls, usage } = await parser(response, {
         ...observers, markDelivered: context.markDelivered, finishMetadata: metadata,
         idleTimeoutMs: effectiveStreamTimeoutMs, signal,
       });

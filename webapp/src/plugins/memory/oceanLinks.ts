@@ -5,9 +5,9 @@
  * style from its relation: an explicit link is a firmer line, a shared tag a
  * thin one, similar content a dotted one, a superseded memory a dashed one.
  * Links are batched into one path per colour pair, style and strength, so a
- * thousand links cost a few dozen strokes. Links of the hovered or selected
- * memory are lit with a gradient and comets of light running along them, and
- * the strongest links of the whole ocean carry a slow mote each.
+ * thousand links cost a few dozen strokes. All are hairlines. Links of the
+ * hovered or selected memory are lit with a gradient and one spark running
+ * along each, and a dozen of the strongest links carry a slow mote.
  */
 import type { OceanEdge } from "./oceanApi";
 import { along, bend, type Frame } from "./oceanDraw";
@@ -17,14 +17,14 @@ import { mix, rgba, starSprite, type Rgb } from "./oceanPalette";
 export interface Placed { x: number; y: number; r: number }
 
 const STYLE: Readonly<Record<OceanEdge["kind"], { width: number; dash: number[]; lift: number }>> = {
-  related: { width: 1.35, dash: [], lift: 0.05 },
-  tags: { width: 1, dash: [], lift: 0 },
-  similar: { width: 0.9, dash: [1.5, 4.5], lift: 0.02 },
-  supersedes: { width: 1, dash: [5, 6], lift: 0.03 },
+  related: { width: 0.9, dash: [], lift: 0.05 },
+  tags: { width: 0.6, dash: [], lift: 0 },
+  similar: { width: 0.6, dash: [1, 4], lift: 0.02 },
+  supersedes: { width: 0.6, dash: [4, 5], lift: 0.03 },
 };
 
 /** The links worth an ambient mote: the strongest ones, a bounded number. */
-export function strongestLinks(links: readonly Link[], count = 40): Link[] {
+export function strongestLinks(links: readonly Link[], count = 12): Link[] {
   return [...links].sort((a, b) => b.edge.weight - a.edge.weight).slice(0, count);
 }
 
@@ -47,7 +47,7 @@ export function drawLinks(frame: Frame, links: readonly Link[], placed: Readonly
   context.lineCap = "round";
   for (const batch of batches.values()) {
     const style = STYLE[batch.kind];
-    context.strokeStyle = rgba(batch.color, (0.06 + batch.level * 0.06 + style.lift) * fade * frame.intro);
+    context.strokeStyle = rgba(batch.color, (0.09 + batch.level * 0.06 + style.lift) * fade * frame.intro);
     context.lineWidth = style.width;
     context.setLineDash(style.dash);
     context.stroke(batch.path);
@@ -55,13 +55,13 @@ export function drawLinks(frame: Frame, links: readonly Link[], placed: Readonly
   context.setLineDash([]);
   for (const line of lit) {
     const gradient = context.createLinearGradient(line.a.x, line.a.y, line.b.x, line.b.y);
-    gradient.addColorStop(0, rgba(line.from, 0.9)); gradient.addColorStop(1, rgba(line.to, 0.9));
-    context.strokeStyle = gradient; context.lineWidth = STYLE[line.kind].width + 0.6;
+    gradient.addColorStop(0, rgba(line.from, 0.78)); gradient.addColorStop(1, rgba(line.to, 0.78));
+    context.strokeStyle = gradient; context.lineWidth = STYLE[line.kind].width + 0.3;
     context.setLineDash(STYLE[line.kind].dash);
     context.beginPath(); context.moveTo(line.a.x, line.a.y); context.quadraticCurveTo(line.c.x, line.c.y, line.b.x, line.b.y); context.stroke();
     context.setLineDash([]);
     if (frame.reduced) continue;
-    for (const offset of [0, 1 / 3, 2 / 3]) comet(context, bloom, line, (time * 0.3 + line.seed + offset) % 1, mix(line.from, line.to, 0.5), 1);
+    comet(context, bloom, line, (time * 0.22 + line.seed) % 1, mix(line.from, line.to, 0.5), 0.9);
   }
   if (frame.reduced || frame.low) return;
   for (const { a, b, edge } of ambient) {
@@ -71,7 +71,7 @@ export function drawLinks(frame: Frame, links: readonly Link[], placed: Readonly
     const seed = hash01(edge.a + edge.b), control = bend(from.x, from.y, to.x, to.y, seed > 0.5 ? 1 : -1);
     let t = (time * 0.08 * (0.5 + edge.weight) + seed) % 1;
     if (seed > 0.5) t = 1 - t;
-    comet(context, bloom, { a: from, b: to, c: control }, t, mix(colorOf(a), colorOf(b)), 0.6 * edge.weight * fade * frame.intro);
+    comet(context, bloom, { a: from, b: to, c: control }, t, mix(colorOf(a), colorOf(b)), 0.42 * edge.weight * fade * frame.intro);
   }
 }
 
@@ -82,7 +82,7 @@ function comet(context: CanvasRenderingContext2D, bloom: CanvasRenderingContext2
     const at = t - step * 0.014;
     if (at < 0) break;
     const point = along(line.a.x, line.a.y, line.c.x, line.c.y, line.b.x, line.b.y, at);
-    const size = 8 - step * 1.3, fade = alpha * (1 - step * 0.2);
+    const size = 6 - step * 1, fade = alpha * (1 - step * 0.2);
     context.globalAlpha = fade;
     context.drawImage(sprite, point.x - size / 2, point.y - size / 2, size, size);
     if (step === 0) { bloom.fillStyle = rgba(color, fade * 0.8); bloom.beginPath(); bloom.arc(point.x, point.y, 2.6, 0, Math.PI * 2); bloom.fill(); }

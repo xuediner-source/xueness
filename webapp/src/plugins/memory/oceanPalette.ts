@@ -1,12 +1,12 @@
 /**
  * Memory Ocean colours and pre-rendered sprites. The sea is always night (the
  * owner's choice: glowing memories need darkness); the two appearances only
- * change its mood. Classic is a cold deep-sea teal, paper a warmer ink-indigo
- * with sepia light. Each kind of memory has its own bioluminescent hue.
+ * change its temperature, following the app's own neutrals. Each kind of
+ * memory has its own muted hue.
  *
- * Every soft shape that is drawn many times a frame (stars, bokeh discs,
- * bubbles) is rendered once per colour into a small canvas and reused as an
- * image, which is far cheaper than a gradient per draw.
+ * A star is drawn many times a frame, so it is rendered once per colour into
+ * a small canvas and reused as an image, which is far cheaper than a gradient
+ * per draw.
  */
 import type { OceanKind } from "./oceanApi";
 
@@ -31,36 +31,46 @@ export interface OceanPalette {
   ink: string;
 }
 
-/** Starlight hues: soft enough that a white-hot core and its tinted bloom read as light, not paint. */
+/**
+ * Starlight hues, kept muted: a white-hot core and a tinted bloom read as
+ * light, and five quiet pigments sit with the app's neutral surfaces where
+ * saturated neon would not.
+ */
 const KINDS: Readonly<Record<OceanKind | "curated", Rgb>> = {
-  preference: [248, 170, 196],
-  fact: [130, 222, 230],
-  decision: [246, 212, 140],
-  experience: [184, 168, 252],
-  pitfall: [246, 166, 112],
-  curated: [210, 220, 232],
+  preference: [226, 170, 186],
+  fact: [150, 204, 214],
+  decision: [228, 202, 146],
+  experience: [180, 172, 228],
+  pitfall: [226, 164, 124],
+  curated: [206, 210, 216],
 };
 
+/**
+ * The water takes its colour from the app, not from a postcard: the default
+ * appearance (`paper` mood) is a graphite night next to the neutral greys, the
+ * Claudex appearance (`classic` mood) a warm ink-charcoal next to its paper
+ * tones. Light in the water is near white with only a trace of temperature.
+ */
 export const PALETTES: Readonly<Record<OceanMood, OceanPalette>> = {
   classic: {
-    depths: ["#0d4158", "#082d42", "#051b2d", "#020a15"],
-    shaft: "rgba(140, 220, 255, 0.05)",
-    caustic: [150, 230, 255],
-    abyss: [40, 160, 190],
-    plankton: [150, 220, 255],
-    line: [120, 200, 230],
-    kinds: KINDS,
-    ink: "rgba(214, 240, 255, 0.78)",
+    depths: ["#2f2a24", "#24201b", "#1a1714", "#100e0c"],
+    shaft: "rgba(255, 232, 200, 0.028)",
+    caustic: [240, 222, 196],
+    abyss: [176, 124, 92],
+    plankton: [238, 224, 204],
+    line: [206, 190, 168],
+    kinds: { ...KINDS, curated: [222, 212, 196] },
+    ink: "rgba(238, 232, 220, 0.76)",
   },
   paper: {
-    depths: ["#283357", "#1b2444", "#111830", "#090c1b"],
-    shaft: "rgba(255, 226, 180, 0.045)",
-    caustic: [255, 226, 186],
-    abyss: [120, 110, 210],
-    plankton: [255, 228, 196],
-    line: [214, 196, 168],
-    kinds: { ...KINDS, fact: [150, 204, 250], curated: [232, 222, 204] },
-    ink: "rgba(250, 236, 214, 0.8)",
+    depths: ["#262a31", "#1c1f25", "#14161a", "#0c0d10"],
+    shaft: "rgba(220, 232, 255, 0.026)",
+    caustic: [214, 224, 238],
+    abyss: [110, 128, 168],
+    plankton: [214, 222, 234],
+    line: [176, 188, 206],
+    kinds: KINDS,
+    ink: "rgba(232, 236, 242, 0.76)",
   },
 };
 
@@ -112,32 +122,6 @@ export function starSprite(color: Rgb, soft = 0): HTMLCanvasElement {
       data[index + 3] = intensity * 255;
     }
     context.putImageData(image, 0, 0);
-  });
-}
-
-/** An out-of-focus disc with a slightly brighter rim, like lens bokeh. */
-export function bokehSprite(color: Rgb): HTMLCanvasElement {
-  return sprite(`bokeh:${color.join()}`, 128, (context, size) => {
-    const gradient = context.createRadialGradient(size / 2, size / 2, 0, size / 2, size / 2, size / 2);
-    gradient.addColorStop(0, rgba(color, 0.55));
-    gradient.addColorStop(0.72, rgba(color, 0.7));
-    gradient.addColorStop(0.86, rgba(core(color, 0.3), 0.9));
-    gradient.addColorStop(1, rgba(color, 0));
-    context.fillStyle = gradient;
-    context.fillRect(0, 0, size, size);
-  });
-}
-
-/** A small rising bubble: a thin rim, a faint body and a highlight. */
-export function bubbleSprite(color: Rgb): HTMLCanvasElement {
-  return sprite(`bubble:${color.join()}`, 32, (context, size) => {
-    const half = size / 2;
-    const body = context.createRadialGradient(half, half, half * 0.5, half, half, half * 0.95);
-    body.addColorStop(0, rgba(color, 0.04)); body.addColorStop(0.85, rgba(color, 0.22)); body.addColorStop(1, rgba(core(color, 0.6), 0.75));
-    context.fillStyle = body;
-    context.beginPath(); context.arc(half, half, half * 0.95, 0, Math.PI * 2); context.fill();
-    context.fillStyle = "rgba(255, 255, 255, 0.85)";
-    context.beginPath(); context.ellipse(half - half * 0.35, half - half * 0.4, half * 0.22, half * 0.13, -0.6, 0, Math.PI * 2); context.fill();
   });
 }
 

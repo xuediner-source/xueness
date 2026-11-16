@@ -3,6 +3,7 @@ import { RefreshCw } from "lucide-react";
 import type { UsageDailySummary, UsageModelSummary, UsageSummary } from "../../xuenessApi";
 import { loadUsage } from "../../xuenessWorkspace";
 import { t as tr, tf, useLocale } from "../../i18n";
+import { UsageToolOutcomes } from "./UsageToolOutcomes";
 import "../../styles/usage-settings.css";
 
 export type UsageRange = "7d" | "30d";
@@ -407,6 +408,7 @@ export function XuenessUsageSettingsView({
           </div>
         </>
       )}
+      {usage?.toolOutcomes && <UsageToolOutcomes report={usage.toolOutcomes} locale={locale} />}
     </section>
   );
 }

@@ -285,6 +285,8 @@ export type TimelineRow =
       archivedForCompaction?: boolean;
       input?: Record<string, unknown>;
       output?: unknown;
+      /** The tool_judge plugin's verdict for this call, from the session journal (shown only while it is effective). */
+      judge?: unknown;
     }
   | { kind: "completion"; seq: number; verified: boolean; summary: string; status?: "verified" | "unverified" | "not_applicable" | "incomplete"; toolExecutionStatus?: "succeeded" | "failed" | "incomplete" | "not_applicable"; deliveryStatus?: "passed" | "failed" | "not_assessed"; turnId?: string }
   | { kind: "pending_question"; seq: number; question: string }
@@ -1456,11 +1458,13 @@ export function hydrateTimelineTools(rows: TimelineRow[], journal: unknown): Tim
     }
   }
   let textIndex = 0;
+  const judged = source.tool_judge && typeof source.tool_judge === "object" ? (source.tool_judge as { calls?: unknown }).calls : null;
+  const verdicts = judged && typeof judged === "object" && !Array.isArray(judged) ? judged as Record<string, unknown> : {};
   return rows.map(row => {
     if (row.kind === "assistant") return { ...row, text: texts[textIndex++]?.slice(0, 40_000) ?? row.text };
     if (row.kind !== "tool") return row;
     return { ...row, ...(inputs.has(row.toolCallId) ? { input: inputs.get(row.toolCallId) } : {}),
-      ...(outputs.has(row.toolCallId) ? { output: outputs.get(row.toolCallId) } : {}) };
+      ...(outputs.has(row.toolCallId) ? { output: outputs.get(row.toolCallId) } : {}), ...(Object.hasOwn(verdicts, row.toolCallId) ? { judge: verdicts[row.toolCallId] } : {}) };
   });
 }
 

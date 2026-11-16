@@ -38,6 +38,8 @@ async function paged(options: SessionsApiOptions, s: Session, rows: DisplayRow[]
   const window = { start, end, total: rows.length, hasOlder: start > 0, olderCursor: start > 0 ? start : null, messageRevision: revision, historyRevision: s.history_revision ?? 0 }, turns = new Set(display.flatMap((m) => isDict(m) && typeof m._turn_id === "string" ? [m._turn_id] : []));
   const ids = callIds(rows.slice(start, end)), journal: Row = { id: s.id, status: s.status ?? null, task: s.task ?? null, messages: display, message_revision: revision, history_revision: s.history_revision ?? 0, message_window: { ...window, messageIndices: indexes }, message_annotations: annotations, reasoning_history: reasoning, reasoning_timing: timing, completion_history: (Array.isArray(s.completion_history) ? s.completion_history : []).filter((r) => isDict(r) && turns.has(String(r.turn_id))).map(pyDeepCopy), results: Object.fromEntries(Object.entries(isDict(s.results) ? s.results : {}).filter(([id]) => ids.has(id))) };
   if (isDict(s.completion) && turns.has(String(s.completion.turn_id))) journal.completion = pyDeepCopy(s.completion);
+  // Display-only verdicts the tool_judge plugin recorded for this window's calls (shown on tool cards while it is effective).
+  if (isDict(s.tool_judge) && isDict(s.tool_judge.calls)) journal.tool_judge = { calls: Object.fromEntries(Object.entries(s.tool_judge.calls).filter(([id]) => ids.has(id)).map(([id, value]) => [id, pyDeepCopy(value)])) };
   attachSidecars(options, s, journal);
   return { session: await project(s), journal, timeline: windowEvents(s, rows.slice(start, end), start), window };
 }

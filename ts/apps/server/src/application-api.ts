@@ -1,13 +1,14 @@
 /** Assemble feature-owned APIs; the front door owns all transport guards. */
 import { randomBytes } from "node:crypto";
-import { mkdirSync, readdirSync } from "node:fs";
+import { mkdirSync, readdirSync, statSync } from "node:fs";
+import { join } from "node:path";
 import { createSettingsApi, createRuntimeConfigApi, declaredWorkspaceRoots, loadSettings as loadUserSettings, nativePickerCapability, PickerFailed } from "@xueness/plugin-settings";
 import { configurationError, createProvidersApi, declaredReasoningLevels, loadSettings } from "@xueness/plugin-providers";
 import { appendAcceptedQueuedTurn, createAttachmentsApi, createSessionRuntimeApi, createSessionsApi, createSessionsStore, createSessionRuntimeEventLog, createSessionStorageApi, validateSessionWorkspace, messageRevision, MediaArtifactStore, type ApprovalBuckets, type LifecycleOptions } from "@xueness/plugin-sessions";
 import { createFilesHttp, createFileRewindApi, createFileBytesApi, listLevel, statWorkspaceReference } from "@xueness/plugin-files";
 import { previewBytes } from "@xueness/plugin-office";
-import { createMemoryHttp, createMemoryDreamApi, type MemoryDreamService } from "@xueness/plugin-memory";
-import { createMemoryDreamDriver } from './memory-dream-driver.ts';
+import { createMemoryHttp, createMemoryDreamApi, createOceanDreamApi, type MemoryDreamService } from "@xueness/plugin-memory";
+import { createMemoryDreamDriver, createOceanDreamDriver } from './memory-dream-driver.ts';
 import { isLink, isPyOSError, isPyValueError, NativeFileLocks, SessionStore, type Session } from "@xueness/sessions";
 import type { ApiDispatcher } from "./api-body.ts";
 import { effectivePlugins } from "./plugin-state.ts";
@@ -25,6 +26,9 @@ import { createShellSettingsApi } from "@xueness/plugin-shell";
 import { createMcpRuntimeApi } from "@xueness/plugin-mcp";
 import { legacyRuntimeConfig, validateAgentRuntimeConfig } from "./runtime-configuration.ts";
 import { createNetworkHttp, fetchPage, nodeNet } from "@xueness/plugin-network";
+import { createToolJudgeHttp } from "@xueness/plugin-tool_judge";
+import { createSwarmSessionApi, createSwarmSettingsHttp, memberSessionsDirectory, readSwarmSettings, SwarmService } from "@xueness/plugin-swarm";
+import { commandRuleIssue, createSwarmMemberRunner } from "./swarm-members.ts";
 import { createExtensionsHttp, textPackageStore } from "@xueness/plugin-extensions";
 import { harnessImporter } from "@xueness/plugin-deepseek_harness";
 import { createBrowserHandoff } from "./browser-handoff.ts";
@@ -62,7 +66,7 @@ export interface DesktopBridgeLike {
   chooseDirectory(initialRoot: string | null): Promise<string | null>;
 }
 export type AgentService = ReturnType<typeof createAgentService>;
-export type ApplicationApi = ApiDispatcher & { close(): Promise<void>; agent: AgentService; store: SessionStore; enabled(id: string): boolean; dynamicWorkflows: DynamicWorkflowService; memoryDreams: MemoryDreamService };
+export type ApplicationApi = ApiDispatcher & { close(): Promise<void>; agent: AgentService; store: SessionStore; enabled(id: string): boolean; dynamicWorkflows: DynamicWorkflowService; memoryDreams: MemoryDreamService; swarms: SwarmService };
 /** web.py desktop mode: the picker is offered while the desktop plugin is on, and opens Electron's dialog. */
 function desktopPicker(bridge: DesktopBridgeLike, enabled: (id: string) => boolean): { chooser(initialRoot: string | null): Promise<string | null>; capability(): { available: boolean; platform: string } } {
   return {
@@ -110,8 +114,18 @@ export async function createApplicationApi(options: ApplicationApiOptions): Prom
       return session;
     }, answerActor: dynamicDriver.answer });
   const dynamicWorkflowApi = createDynamicWorkflowApi(dynamicWorkflows);
+  const swarmActivityCache = new Map<string, { stamp: string; at: number; activity: string }>();
+  // Swarm members run only where real model calls are allowed; a member without its own model uses its conversation's.
+  const swarms: SwarmService = new SwarmService({ stateDir: options.stateDir, enabled, settings: () => readSwarmSettings(options.stateDir),
+    foldCase: process.platform === "win32", commandIssue: commandRuleIssue,
+    runner: options.allowReal === true ? createSwarmMemberRunner({ stateDir: options.stateDir, enabled, service: () => swarms, resolveProvider: async (choice, parentId) => {
+      const saved = ((await store.load(parentId)).model_selection ?? {}) as Record<string, unknown>;
+      const text = (value: unknown): string | null => typeof value === "string" && value ? value : null;
+      return agent.resolveProvider(choice ? { providerId: choice.providerId, model: choice.model, reasoningEffort: null } : { providerId: text(saved.provider_id), model: text(saved.model), reasoningEffort: text(saved.reasoning_effort) }, parentId) as never;
+    } }) : null });
+  swarms.recoverInterrupted();
   const workflowsAutomation = createWorkflowsAutomation({ projectRoot: options.projectRoot, projectDir, stateDir: options.stateDir, webRuns: options.webRuns, enabled, store, allowedRoots, allowReal: options.allowReal === true, env, ...(options.scheduler === false ? { scheduler: false } : {}) });
-  const agent = createAgentService({ ...options.agent, store, stateDir: options.stateDir, configEnv: env, enabled, approvals, mediaStore: media, desktopComputerUse: !!options.desktopToken && !!options.desktopBridge, allowModelRequests: options.allowReal, taskRegistry, workflowLauncher: workflowsAutomation.launcher, dynamicWorkflows,
+  const agent = createAgentService({ ...options.agent, store, stateDir: options.stateDir, configEnv: env, enabled, approvals, mediaStore: media, desktopComputerUse: !!options.desktopToken && !!options.desktopBridge, allowModelRequests: options.allowReal, taskRegistry, workflowLauncher: workflowsAutomation.launcher, dynamicWorkflows, swarms,
     preparedRemote: integrations.preparedRemote,
     appendQueued: (session, item) => appendAcceptedQueuedTurn({ store, stateDir: options.stateDir, webRuns: options.webRuns, enabled, applyGoal, expandCommands }, session, item),
     resolveProvider(selection, sid) {
@@ -134,6 +148,29 @@ export async function createApplicationApi(options: ApplicationApiOptions): Prom
     rememberWorkspace: (root) => workspaces.remember(root), expandCommands,
     applyGoal,
     featureApis: [attachments, runtime, dynamicWorkflowApi,
+      createSwarmSessionApi({ service: swarms, enabled, owner: async sid => { const session = await store.load(sid); await validateSessionWorkspace(attachmentOptions, session); return session; },
+        journal: async (record, member) => member.sessionId ? (((await createSessionsStore(memberSessionsDirectory(options.stateDir, record.id), { enabled }).load(member.sessionId)).messages ?? []) as Record<string, unknown>[]).slice(-60).map(row => ({ role: row.role, content: typeof row.content === "string" ? row.content.slice(0, 2000) : "", tools: Array.isArray(row.tool_calls) ? row.tool_calls.map(call => String((call as { function?: { name?: unknown } }).function?.name ?? "")) : [] })) : [],
+        activities: async (record) => {
+          const mStore = createSessionsStore(memberSessionsDirectory(options.stateDir, record.id), { enabled });
+          const out: Record<string, { activity: string }> = {};
+          const now = Date.now();
+          for (const m of record.members) {
+            if (!m.sessionId) continue;
+            // The panel polls this. A member's transcript is read again only after it ran a turn, or every 2 s while it is running.
+            const stamp = `${m.turns}:${m.lastActiveAt ?? ""}`, cached = swarmActivityCache.get(m.sessionId);
+            if (cached && cached.stamp === stamp && (m.state !== "active" || now - cached.at < 2000)) { if (cached.activity) out[m.name] = { activity: cached.activity }; continue; }
+            swarmActivityCache.set(m.sessionId, { stamp, at: now, activity: "" });
+            try {
+              const rows = ((await mStore.load(m.sessionId)).messages ?? []) as Record<string, unknown>[];
+              const last = [...rows].reverse().find((r) => r.role === "assistant");
+              if (!last) continue;
+              const calls = Array.isArray(last.tool_calls) ? last.tool_calls.map((c) => String((c as { function?: { name?: unknown } }).function?.name ?? "")).filter(Boolean) : [];
+              const snippet = calls.length ? `Using ${calls.slice(-2).join(", ")}` : typeof last.content === "string" ? last.content.trim().slice(0, 140) : "";
+              if (snippet) { out[m.name] = { activity: snippet }; swarmActivityCache.set(m.sessionId, { stamp, at: now, activity: snippet }); }
+            } catch { /* ignore unreadable member session */ }
+          }
+          return out;
+        } }),
       createContextLensHttp({ store, enabled, live: sid => activeContext.get(sid)?.active_session as Session ?? null, owners: ownersFromManifests(BUNDLED_TS_PLUGINS) }),
       createMcpRuntimeApi({ store, enabled, validateSession: session => validateSessionWorkspace(attachmentOptions, session), snapshot: sid => agent.mcpSnapshot(sid) }),
       createFileBytesApi({ store, stateDir: options.stateDir, enabled, validateSession: session => validateSessionWorkspace(attachmentOptions, session) }),
@@ -165,9 +202,12 @@ export async function createApplicationApi(options: ApplicationApiOptions): Prom
     return roots;
   };
   const memoryHttp = createMemoryHttp({ stateDir: options.stateDir, enabled, projectDir, env, workspaceRoots: workspaces.options.declaredRoots, selectedRoots: () => workspaces.selectedRoots(), sessionRoots: sessionWorkspaceRoots });
-  const memoryDreams = createMemoryDreamDriver({ stateDir: options.stateDir, enabled: id => enabled(id) && (id !== 'memory' || (loadUserSettings(options.stateDir).general as { memoryEnabled?: boolean } | undefined)?.memoryEnabled !== false), allowRealHost: options.allowReal === true, store, memoryHttp,
-    validateSession: session => validateSessionWorkspace(attachmentOptions, session), resolveProvider: agent.resolveProvider });
+  const dreamPorts = { stateDir: options.stateDir, enabled: (id: string) => enabled(id) && (id !== 'memory' || (loadUserSettings(options.stateDir).general as { memoryEnabled?: boolean } | undefined)?.memoryEnabled !== false), allowRealHost: options.allowReal === true, store,
+    validateSession: (session: Parameters<typeof validateSessionWorkspace>[1]) => validateSessionWorkspace(attachmentOptions, session), resolveProvider: agent.resolveProvider };
+  const memoryDreams = createMemoryDreamDriver({ ...dreamPorts, memoryHttp });
   const memoryDreamApi = createMemoryDreamApi(memoryDreams);
+  const oceanDreams = createOceanDreamDriver(dreamPorts);
+  const oceanDreamApi = createOceanDreamApi(oceanDreams);
   const filesHttp = createFilesHttp({ enabled, allowedRoots, listRoots: browseRoots, createRoots: browseRoots, maxEntries: workspaces.options.maxEntries, officePreview: (data, suffix) => previewBytes(data, suffix),
     loadSession: async (sid) => { const session = await store.load(sid); return typeof session.id === "string" && typeof session.root === "string" ? { id: session.id, root: session.root } : null; } });
   const hooksHttp = createHooksHttp({ stateDir: options.stateDir, webRuns: options.webRuns, projectDir, enabled, allowedRoots });
@@ -185,6 +225,13 @@ export async function createApplicationApi(options: ApplicationApiOptions): Prom
   const runtimeConfigApi = runtimeConfigApiForRequest(false);
   const shellHttp = createShellSettingsApi({ stateDir: options.stateDir, enabled });
   const networkHttp = createNetworkHttp({ stateDir: options.stateDir, enabled, env });
+  const swarmSettingsHttp = createSwarmSettingsHttp({ stateDir: options.stateDir, enabled });
+  const toolJudgeHttp = createToolJudgeHttp({ stateDir: options.stateDir, enabled, sessions: function* () {
+    if (isLink(store.directory)) return;
+    let names: string[] = [];
+    try { names = readdirSync(store.directory).filter((name) => /^[0-9a-f]{32}\.json$/.test(name)); } catch { return; }
+    for (const name of names) { try { yield { mtime: statSync(join(store.directory, name)).mtimeMs / 1000, stats: store.readJournal(name.slice(0, -5)).tool_judge_stats }; } catch { continue; } }
+  } });
   const catalogNet = nodeNet();
   const extensionsHttp = createExtensionsHttp({ stateDir: options.stateDir, projectRoot: options.projectRoot, enabled, env, importers: [skillPackageImporter({ stateDir: options.stateDir }), rulePackImporter({ store: textPackageStore(options.stateDir, "cursor-rules") }), mcpPackageImporter({ stateDir: options.stateDir }), harnessImporter({ stateDir: options.stateDir })], writeResource: (kind, data) => (kind === "skills" ? skillsHttp : kind === "hooks" ? hooksHttp : commands).dispatch("POST", ["api", "resources", kind], {}, data), optionalChanged: () => integrations.syncOptional(), fetchUrl: async (url) => {
     const page = await fetchPage(catalogNet, url);
@@ -192,16 +239,17 @@ export async function createApplicationApi(options: ApplicationApiOptions): Prom
   } });
   const hostServices = createHostServices({ stateDir: options.stateDir, enabled, store, allowedRoots, resolveAllowed: (value) => workspaces.resolveAllowed(value), taskRegistry, sessionsRunning: () => running.size > 0, ...(options.desktopBridge ? { desktopBridge: options.desktopBridge } : {}), ...(options.desktopToken ? { desktopToken: options.desktopToken } : {}), ...(options.webappDir ? { webappDir: options.webappDir } : {}) });
   const pluginManager = createPluginManager({ projectRoot: options.projectRoot, stateDir: options.stateDir, locks, enabled });
-  const migratedOwns = (method: string, parts: readonly string[]): boolean => pluginManager.owns(method, parts) || hooksHttp.owns(method, parts) || skillsHttp.owns(method, parts) || mcpResources.owns(method, parts) || mcpOps.owns(method, parts) || elicitationHttp.owns(method, parts) || appsHttp.owns(method, parts) || subagentResources.owns(method, parts) || subagentTasks.owns(method, parts) || runtimeConfigApi.owns(method, parts) || shellHttp.owns(method, parts) || networkHttp.owns(method, parts) || memoryHttp.owns(method, parts) || filesHttp.owns(method, parts) || extensionsHttp.owns(method, parts) || hostServices.owns(method, parts) || integrations.owns(method, parts) || workflowsAutomation.owns(method, parts);
+  const migratedOwns = (method: string, parts: readonly string[]): boolean => pluginManager.owns(method, parts) || hooksHttp.owns(method, parts) || skillsHttp.owns(method, parts) || mcpResources.owns(method, parts) || mcpOps.owns(method, parts) || elicitationHttp.owns(method, parts) || appsHttp.owns(method, parts) || subagentResources.owns(method, parts) || subagentTasks.owns(method, parts) || runtimeConfigApi.owns(method, parts) || shellHttp.owns(method, parts) || networkHttp.owns(method, parts) || swarmSettingsHttp.owns(method, parts) || toolJudgeHttp.owns(method, parts) || memoryHttp.owns(method, parts) || filesHttp.owns(method, parts) || extensionsHttp.owns(method, parts) || hostServices.owns(method, parts) || integrations.owns(method, parts) || workflowsAutomation.owns(method, parts);
   return {
-    agent, store, enabled, dynamicWorkflows, memoryDreams,
+    agent, store, enabled, dynamicWorkflows, memoryDreams, swarms,
     asset: extensionsHttp.asset,
-    csrfToken: bridge.csrfToken, routes: [...memoryDreamApi.routes, ...settingsApi.routes, ...providers.routes, ...sessions.routes, ...commands.routes, ...composer.routes, ...hooksHttp.routes, ...skillsHttp.routes, ...mcpResources.routes, ...mcpOps.routes, ...elicitationHttp.routes, ...appsHttp.routes, ...subagentResources.routes, ...subagentTasks.routes, ...runtimeConfigApi.routes, ...shellHttp.routes, ...networkHttp.routes, ...memoryHttp.routes, ...filesHttp.routes, ...extensionsHttp.routes, ...hostServices.routes, ...integrations.routes, ...workflowsAutomation.routes, ...pluginManager.routes],
-    owns: (method, parts) => memoryDreamApi.owns(method, parts) || settingsApi.owns(method, parts) || providers.owns(method, parts) || sessions.owns(method, parts) || browserHandoff.owns(method, parts) || commands.owns(method, parts) || composer.owns(method, parts) || migratedOwns(method, parts),
+    csrfToken: bridge.csrfToken, routes: [...memoryDreamApi.routes, ...oceanDreamApi.routes,...settingsApi.routes, ...providers.routes, ...sessions.routes, ...commands.routes, ...composer.routes, ...hooksHttp.routes, ...skillsHttp.routes, ...mcpResources.routes, ...mcpOps.routes, ...elicitationHttp.routes, ...appsHttp.routes, ...subagentResources.routes, ...subagentTasks.routes, ...runtimeConfigApi.routes, ...shellHttp.routes, ...networkHttp.routes, ...swarmSettingsHttp.routes, ...toolJudgeHttp.routes, ...memoryHttp.routes, ...filesHttp.routes, ...extensionsHttp.routes, ...hostServices.routes, ...integrations.routes, ...workflowsAutomation.routes, ...pluginManager.routes],
+    owns: (method, parts) => memoryDreamApi.owns(method, parts) || oceanDreamApi.owns(method, parts) ||settingsApi.owns(method, parts) || providers.owns(method, parts) || sessions.owns(method, parts) || browserHandoff.owns(method, parts) || commands.owns(method, parts) || composer.owns(method, parts) || migratedOwns(method, parts),
     lossless: (method, parts) => settingsApi.lossless(method, parts) || commands.lossless(method, parts) || hooksHttp.lossless(method, parts) || skillsHttp.lossless(method, parts) || mcpResources.lossless(method, parts) || subagentResources.lossless(method, parts) || extensionsHttp.lossless(method, parts) || workflowsAutomation.lossless(method, parts),
     async dispatch(method, parts, query, data, request) {
       if (settingsApi.owns(method, parts)) return settingsApi.dispatch(method, parts, query, data, { loopback: isLoopbackAddress((request?.remoteAddress ?? "").split("%")[0]!) });
       if (memoryDreamApi.owns(method, parts)) return memoryDreamApi.dispatch(method, parts, query, data);
+      if (oceanDreamApi.owns(method, parts)) return oceanDreamApi.dispatch(method, parts, query, data);
       if (pluginManager.owns(method, parts)) return pluginManager.dispatch(method, parts, query, data);
       if (browserHandoff.owns(method, parts)) return browserHandoff.dispatch(method, parts, data);
       if (commands.owns(method, parts)) return commands.dispatch(method, parts, query, data);
@@ -217,6 +265,8 @@ export async function createApplicationApi(options: ApplicationApiOptions): Prom
       if (runtimeConfigApi.owns(method, parts)) return (enabled("settings") ? runtimeConfigApiForRequest() : runtimeConfigApi).dispatch(method, parts, query, data);
       if (shellHttp.owns(method, parts)) return shellHttp.dispatch(method, parts, query, data);
       if (networkHttp.owns(method, parts)) return networkHttp.dispatch(method, parts, query, data);
+      if (swarmSettingsHttp.owns(method, parts)) return swarmSettingsHttp.dispatch(method, parts, query, data);
+      if (toolJudgeHttp.owns(method, parts)) return toolJudgeHttp.dispatch(method, parts, query, data);
       if (memoryHttp.owns(method, parts)) return memoryHttp.dispatch(method, parts, query, data);
       if (filesHttp.owns(method, parts)) return filesHttp.dispatch(method, parts, query, data);
       if (extensionsHttp.owns(method, parts)) return extensionsHttp.dispatch(method, parts, query, data);
@@ -227,6 +277,6 @@ export async function createApplicationApi(options: ApplicationApiOptions): Prom
       if (providerResult !== null) return providerResult;
       return sessions.dispatch(method, parts, query, data, request);
     },
-    async close() { hostServices.close(); await integrations.close(); await memoryDreams.close(); await dynamicWorkflows.close(); await agent.dispose(); await workflowsAutomation.close(); await locks.close(); },
+    async close() { await swarms.close(); hostServices.close(); await integrations.close(); await memoryDreams.close(); oceanDreams.close(); await dynamicWorkflows.close(); await agent.dispose(); await workflowsAutomation.close(); await locks.close(); },
   };
 }

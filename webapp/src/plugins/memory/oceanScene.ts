@@ -5,12 +5,17 @@
  * constellation clouds and charts (`oceanCharts`), links (`oceanLinks`) and
  * the memories themselves (`oceanDraw`).
  *
- * Motion: on opening the camera dives in while the sea fades up and the
- * memories light by depth; memories sway and twinkle, important ones carry
- * diffraction spikes, essential ones breathe, often-recalled ones have motes
- * in orbit; lit links carry comets; a recall rings out and sends sparks along
- * a memory's links; a new memory rises and blooms; search hits and the
- * selection ping like sonar; a click ripples; a pan glides on. With reduced
+ * Light: the memories are the only lights. Each is a small optical point
+ * with one soft falloff; importance adds a hairline ring, then a reticle of
+ * two hairline spikes; often-recalled ones have a mote or two in orbit. The
+ * selection is marked like an instrument (ring, ticked ring, axis marks),
+ * not with more glow.
+ *
+ * Motion: on opening the camera dives in while the scene fades up and the
+ * memories light by depth; memories sway and twinkle; lit links carry one
+ * spark each; a recall rings out and sends sparks along a memory's links; a
+ * new memory rises and blooms; search hits ping; a click leaves one
+ * expanding hairline; a pan glides on. With reduced
  * motion the layout settles at once and frames are drawn only when something
  * changes. The loop stops while the page is hidden, and a quality guard drops
  * the heavier ambient layers when frames get expensive.
@@ -32,7 +37,11 @@ export interface SceneEvents {
 }
 interface Effect { kind: "pulse" | "birth" | "ripple"; id?: string; x?: number; y?: number; start: number }
 
-const PULSE = 1.6, BIRTH = 1.8, RIPPLE = 1.4, INTRO = 1.8;
+const PULSE = 1.6, BIRTH = 1.8, RIPPLE = 0.7, INTRO = 1.8;
+/** Clear margin kept around the framed ocean inside the stage. */
+const EDGE = 16;
+/** With nothing to react to, the ambient drift is drawn at about 30 frames a second. */
+const IDLE_FRAME_MS = 30;
 const clamp = (value: number, low: number, high: number): number => Math.max(low, Math.min(high, value));
 const ease = (value: number): number => { const t = clamp(value, 0, 1); return t * t * (3 - 2 * t); };
 
@@ -47,6 +56,11 @@ export class OceanScene {
   #view: OceanView | null = null;
   #filter: SceneFilter = { scope: "all", kinds: new Set(), query: "" };
   #visible = new Set<string>();
+  /** Visible bodies in layout order, and the same back to front; rebuilt only when the data or the filter changes. */
+  #bodies: Body[] = [];
+  #ordered: Body[] = [];
+  /** False while the stage is scrolled out of view or its panel is hidden: nothing is drawn. */
+  #shown = true;
   #matches: Set<string> | null = null;
   #camera = { x: 0, y: 0, zoom: 1 };
   #target: { x: number; y: number; zoom: number } | null = null;
@@ -69,7 +83,7 @@ export class OceanScene {
   #ratio = 1;
   #font = "sans-serif";
   #inset = 0;
-  #top = 80;
+  #top = EDGE;
   #drag = { x: 0, y: 0, moved: 0, at: 0, pointers: new Map<number, { x: number; y: number }>(), pinch: 0 };
   #fitted = false;
   /** Frame the view again when the layout first comes to rest, unless the viewer has moved it. */
@@ -119,6 +133,8 @@ export class OceanScene {
 
   setFilter(filter: SceneFilter): void { this.#filter = filter; this.#applyFilter(); this.#wake(); }
   setMood(mood: OceanMood): void { this.#mood = mood; this.#wake(); }
+  /** Stop drawing while the stage is off screen; resume where it left off. */
+  setShown(shown: boolean): void { if (shown === this.#shown) return; this.#shown = shown; if (shown) { this.#last = 0; this.#wake(); } }
   setReducedMotion(reduced: boolean): void {
     this.#reduced = reduced;
     if (reduced) { this.#layout.settle(); this.#effects = []; this.#velocity = { x: 0, y: 0 }; if (this.#target) { this.#camera = { ...this.#target }; this.#target = null; } }
@@ -134,26 +150,26 @@ export class OceanScene {
       const zoom = fly ? Math.max(this.#camera.zoom, 1.25) : this.#camera.zoom;
       const screenX = (body.x - this.#camera.x) * this.#camera.zoom + this.#width / 2;
       const screenY = (body.y - this.#camera.y) * this.#camera.zoom + this.#height / 2;
-      if (fly || screenX > this.#width - this.#inset - 40 || screenY < this.#top) this.#flyTo({ x: body.x + this.#inset / 2 / zoom, y: body.y - (this.#top - 70) / 2 / zoom, zoom });
+      if (fly || screenX > this.#width - this.#inset - 40 || screenY < this.#top) this.#flyTo({ x: body.x + this.#inset / 2 / zoom, y: body.y - (this.#top - EDGE) / 2 / zoom, zoom });
     }
     this.#wake();
   }
 
   /** Width covered on the right by the detail card, so selection keeps clear of it. */
   setInset(right: number): void { this.#inset = right; }
-  /** Height covered at the top by the page header, so the ocean is framed below it. */
+  /** Height covered at the top of the stage, so the ocean is framed below it. */
   setTopInset(top: number): void { this.#top = top; }
   pulse(ids: readonly string[]): void { this.#addEffects("pulse", ids); }
   birth(ids: readonly string[]): void { this.#addEffects("birth", ids); }
   zoomBy(factor: number): void { this.#zoomAt(this.#width / 2, this.#height / 2, factor); }
 
   fit(instant = false): void {
-    const bodies = this.#layout.bodies.filter((body) => this.#visible.has(body.id));
+    const bodies = this.#bodies;
     const box = this.#layout.bounds(bodies.length ? bodies : this.#layout.bodies);
-    // Frame the ocean between the header and the legend row (about 70px tall), with room above for constellation names.
-    const room = Math.max(160, this.#height - this.#top - 70), headroom = 70;
+    // Frame the ocean inside the stage, with room above for constellation names.
+    const room = Math.max(160, this.#height - this.#top - EDGE), headroom = 70;
     const zoom = clamp(Math.min((this.#width - 120) / (box.width + 140), room / (box.height + 120 + headroom)), 0.25, 1.6);
-    this.#flyTo({ x: box.x + box.width / 2, y: box.y + box.height / 2 - headroom / 2 - (this.#top - 70) / 2 / zoom, zoom }, instant);
+    this.#flyTo({ x: box.x + box.width / 2, y: box.y + box.height / 2 - headroom / 2 - (this.#top - EDGE) / 2 / zoom, zoom }, instant);
   }
 
   destroy(): void { cancelAnimationFrame(this.#frame); this.#frame = 0; for (const undo of this.#cleanup) undo(); }
@@ -167,6 +183,8 @@ export class OceanScene {
   #applyFilter(): void {
     const nodes = this.#view?.nodes ?? [];
     this.#visible = new Set(nodes.filter((node) => (this.#filter.scope === "all" || node.here) && (!this.#filter.kinds.size || this.#filter.kinds.has(node.kind))).map((node) => node.id));
+    this.#bodies = this.#layout.bodies.filter((body) => this.#visible.has(body.id));
+    this.#ordered = [...this.#bodies].sort((a, b) => b.depth - a.depth);
     const words = this.#filter.query.toLowerCase().split(/\s+/u).filter(Boolean);
     this.#matches = words.length ? new Set(nodes.filter((node) => this.#visible.has(node.id)
       && words.every((word) => `${node.summary}\n${node.text}\n${node.tags.join(" ")}`.toLowerCase().includes(word))).map((node) => node.id)) : null;
@@ -178,6 +196,8 @@ export class OceanScene {
     this.#ratio = Math.min(2, window.devicePixelRatio || 1);
     this.#font = getComputedStyle(this.#canvas).fontFamily || "sans-serif";
     this.#canvas.width = Math.round(this.#width * this.#ratio); this.#canvas.height = Math.round(this.#height * this.#ratio);
+    // Sizing a canvas clears it: paint at once so a resize never shows an empty stage while it waits for a frame.
+    if (this.#shown) this.#draw();
     this.#wake();
   }
 
@@ -187,10 +207,17 @@ export class OceanScene {
     this.#wake();
   }
 
-  #wake(): void { if (!this.#frame && !document.hidden) this.#frame = requestAnimationFrame((now) => this.#tick(now)); }
+  #wake(): void { if (!this.#frame && this.#shown && !document.hidden) this.#frame = requestAnimationFrame((now) => this.#tick(now)); }
+
+  /** Nothing is moving because of the viewer or the data: only the ambient drift is left to draw. */
+  #idle(): boolean {
+    return !this.#target && !this.#effects.length && !this.#pointer && !this.#drag.pointers.size && this.#layout.settled
+      && this.#clock > INTRO + 1.5 && Math.hypot(this.#velocity.x, this.#velocity.y) <= 6;
+  }
 
   #tick(now: number): void {
     this.#frame = 0;
+    if (!this.#reduced && this.#last && now - this.#last < IDLE_FRAME_MS && this.#idle()) { this.#wake(); return; }
     // Real time, so throttled frames do not slow the animations; capped so a return from a hidden page does not jump.
     const delta = this.#last ? Math.min(0.25, (now - this.#last) / 1000) : 0.016;
     this.#last = now;
@@ -227,15 +254,16 @@ export class OceanScene {
     const context = this.#context, palette = PALETTES[this.#mood], time = this.#clock, view = this.#view;
     const frame: Frame = { context, width: this.#width, height: this.#height, ratio: this.#ratio, time, delta: this.#delta, palette, reduced: this.#reduced,
       low: this.#low, camera: this.#camera, pointer: this.#pointer, intro: this.#reduced ? 1 : ease(time / INTRO) };
-    const kinds = [palette.kinds.fact, palette.kinds.experience, palette.kinds.preference, palette.kinds.decision, palette.kinds.pitfall];
     context.setTransform(this.#ratio, 0, 0, this.#ratio, 0, 0);
-    this.#ambient.back(frame, kinds);
-    if (!view) { this.#ambient.front(frame, kinds); return; }
+    this.#ambient.back(frame);
+    if (!view) { this.#ambient.front(frame); return; }
     const zoom = this.#camera.zoom, scale = Math.max(0.9, Math.pow(zoom, 0.6));
     const focus = this.#selected ?? this.#hovered;
     const near = new Set<string>();
     if (focus) for (const link of this.#layout.links) { if (link.a.id === focus) near.add(link.b.id); else if (link.b.id === focus) near.add(link.a.id); }
-    const bodies = this.#layout.bodies.filter((body) => this.#visible.has(body.id));
+    const bodies = this.#bodies;
+    const births = new Map<string, Effect>();
+    for (const effect of this.#effects) if (effect.kind === "birth" && effect.id && !births.has(effect.id)) births.set(effect.id, effect);
     const placed = new Map<string, Placed>();
     for (const body of bodies) placed.set(body.id, { ...this.#screen(body, time), r: (4 + body.node.importance * 1.5) * (1 - 0.3 * body.depth) * scale });
     const groups = this.#groups(bodies, placed);
@@ -247,7 +275,7 @@ export class OceanScene {
     drawLinks(frame, this.#layout.links, placed, this.#colorOf, focus, focus || this.#matches ? 0.45 : 1, this.#strong, bloom);
     const dim = (id: string): number => this.#matches ? (this.#matches.has(id) ? 1 : 0.16) : focus && id !== focus && !near.has(id) ? 0.5 : 1;
     const stars: { star: Star; body: Body }[] = [];
-    for (const body of [...bodies].sort((a, b) => b.depth - a.depth)) {
+    for (const body of this.#ordered) {
       const spot = placed.get(body.id)!, node = body.node, color = this.#colorOf(body);
       if (spot.x < -80 || spot.y < -80 || spot.x > this.#width + 80 || spot.y > this.#height + 80) continue;
       // Scintillation, not blinking: a small, slow change in brightness.
@@ -255,7 +283,7 @@ export class OceanScene {
       const appear = this.#reduced ? 1 : ease((time - 0.35 - body.depth * 0.9 - (body.phase / Math.PI) * 0.15) / 0.9);
       let alpha = (1 - 0.5 * body.depth) * twinkle * dim(body.id) * appear * (this.#filter.scope === "all" && !node.here ? 0.5 : 1);
       let radius = spot.r, y = spot.y + (1 - appear) * 30;
-      const birth = this.#effects.find((effect) => effect.kind === "birth" && effect.id === body.id);
+      const birth = births.get(body.id);
       if (birth) {
         const progress = clamp((time - birth.start) / BIRTH, 0, 1), rise = 1 - Math.pow(1 - progress, 3);
         y += (1 - rise) * 60; radius *= 0.2 + rise * (1 + 0.35 * Math.sin(progress * Math.PI)); alpha *= clamp(progress * 2, 0, 1);
@@ -263,8 +291,8 @@ export class OceanScene {
       }
       const focused = body.id === this.#selected || body.id === this.#hovered;
       const star: Star = { x: spot.x, y, r: radius, color, alpha, style: node.origin === "curated" ? "curated" : node.status === "archived" ? "archived" : "active",
-        depth: body.depth, spikes: node.importance >= 5 ? 1 : focused ? 0.7 : 0, corona: node.importance >= 5 ? 1 : 0,
-        motes: this.#reduced || this.#low ? 0 : Math.min(3, Math.ceil(node.recalls / 2)), glow: (node.importance - 1) / 4 + (focused ? 0.25 : 0), phase: body.phase, time };
+        depth: body.depth, spikes: node.importance >= 5 ? 1 : 0, corona: node.importance >= 4 ? (node.importance >= 5 ? 1 : 0.55) : 0,
+        motes: this.#reduced || this.#low ? 0 : Math.min(2, Math.ceil(node.recalls / 3)), glow: (node.importance - 1) / 4 + (focused ? 0.2 : 0), phase: body.phase, time };
       bloomStar(bloom, star);
       stars.push({ star, body });
       placed.set(body.id, { x: spot.x, y, r: radius });
@@ -277,14 +305,14 @@ export class OceanScene {
     for (const { star, body } of stars) {
       drawStar(context, star);
       if (this.#matches?.has(body.id)) this.#sonar(context, star.x, star.y, star.r, star.color, time, body.phase, 0.4);
-      if (body.id === this.#hovered && body.id !== this.#selected) drawRing(context, star.x, star.y, star.r * 2.1, star.color, 0.6, 1);
+      if (body.id === this.#hovered && body.id !== this.#selected) drawRing(context, star.x, star.y, star.r * 2.4, star.color, 0.5, 0.75);
       if (body.id === this.#selected) this.#halo(context, star.x, star.y, star.r, star.color, time);
     }
     for (const effect of this.#effects) this.#effect(context, effect, placed, time);
     context.restore();
     drawCharts(frame, groups, zoom, this.#font);
     this.#labels(frame, placed, bodies, focus, near);
-    this.#ambient.front(frame, kinds);
+    this.#ambient.front(frame);
     this.#placed = placed;
   }
 
@@ -319,18 +347,24 @@ export class OceanScene {
     if (this.#reduced) { drawRing(context, x, y, radius * 2.2, color, 0.6); return; }
     for (const lag of [0, 0.5]) {
       const progress = (time * speed + phase / (Math.PI * 2) + lag) % 1;
-      drawRing(context, x, y, radius * (1.6 + progress * 6), color, (1 - progress) * (1 - progress) * 0.5, 0.9);
+      drawRing(context, x, y, radius * (1.6 + progress * 4.5), color, (1 - progress) * (1 - progress) * 0.42, 0.7);
     }
   }
 
   #halo(context: CanvasRenderingContext2D, x: number, y: number, radius: number, color: Rgb, time: number): void {
-    drawRing(context, x, y, radius * 2.6, color, 0.55, 0.9);
+    // A reticle, not a beacon: one firm hairline ring, a slowly turning ticked ring, and four short marks on the axes.
+    const inner = radius * 2.6 + 3, outer = inner + 9;
+    drawRing(context, x, y, inner, color, 0.7, 0.8);
     context.save();
-    context.strokeStyle = rgba(color, 0.35); context.lineWidth = 0.7;
-    context.setLineDash([2, 6]); context.lineDashOffset = -time * 12;
-    context.beginPath(); context.arc(x, y, radius * 3.6, 0, Math.PI * 2); context.stroke();
+    context.strokeStyle = rgba(color, 0.3); context.lineWidth = 0.6;
+    context.setLineDash([1, 5]); context.lineDashOffset = -time * 4;
+    context.beginPath(); context.arc(x, y, outer, 0, Math.PI * 2); context.stroke();
+    context.setLineDash([]);
+    context.strokeStyle = rgba(color, 0.55);
+    context.beginPath();
+    for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]] as const) { context.moveTo(x + dx * (outer + 3), y + dy * (outer + 3)); context.lineTo(x + dx * (outer + 9), y + dy * (outer + 9)); }
+    context.stroke();
     context.restore();
-    this.#sonar(context, x, y, radius * 1.6, color, time, 0, 0.45);
   }
 
   #effect(context: CanvasRenderingContext2D, effect: Effect, placed: ReadonlyMap<string, Placed>, time: number): void {
@@ -338,7 +372,9 @@ export class OceanScene {
     if (progress < 0) return;
     const palette = PALETTES[this.#mood];
     if (effect.kind === "ripple") {
-      for (const lag of [0, 0.18, 0.36]) if (progress > lag) drawRing(context, effect.x!, effect.y!, 6 + (progress - lag) * 110, palette.caustic, (1 - progress) * 0.45, 1.1, 0.45);
+      // A single expanding hairline, easing out.
+      const out = 1 - (1 - progress) ** 3;
+      drawRing(context, effect.x!, effect.y!, 4 + out * 46, palette.caustic, (1 - progress) ** 2 * 0.4, 0.7);
       return;
     }
     if (effect.kind !== "pulse" || !effect.id) return;

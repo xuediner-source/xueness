@@ -24,6 +24,7 @@ export * from "./web-search.ts";
 export * from "./deferred-call.ts";
 export * from "./media.ts";
 export * from "./streams.ts";
+export * from "./openai-responses.ts";
 export * from "./attempts.ts";
 export * from "./openai.ts";
 export * from "./anthropic.ts";

@@ -29,8 +29,27 @@ export interface Frame {
 }
 
 let backdrop: { key: string; canvas: HTMLCanvasElement } | null = null;
+let grain: HTMLCanvasElement | null = null;
 
-/** The sea: lit surface fading to the abyss, a glow rising from the deep, and a vignette. Cached as one image. */
+/** A small tile of very faint black and white specks, generated once from a fixed seed. */
+function grainTile(): HTMLCanvasElement {
+  if (grain) return grain;
+  const size = 160, canvas = document.createElement("canvas");
+  canvas.width = canvas.height = size;
+  const paint = canvas.getContext("2d")!, image = paint.createImageData(size, size);
+  let state = 20261115;
+  for (let index = 0; index < image.data.length; index += 4) {
+    state ^= state << 13; state ^= state >>> 17; state ^= state << 5;
+    const value = (state >>> 0) / 4294967296, light = value > 0.5;
+    image.data[index] = image.data[index + 1] = image.data[index + 2] = light ? 255 : 0;
+    image.data[index + 3] = Math.abs(value - 0.5) * (light ? 9 : 16);
+  }
+  paint.putImageData(image, 0, 0);
+  grain = canvas;
+  return canvas;
+}
+
+/** The backdrop: the depth gradient under one off-axis key light, a vignette and film grain. Cached as one image. */
 export function drawSea(frame: Frame): void {
   const { context, width, height, ratio, palette } = frame;
   const key = `${width}x${height}@${ratio}:${palette.depths.join()}`;
@@ -42,18 +61,22 @@ export function drawSea(frame: Frame): void {
     const fall = paint.createLinearGradient(0, 0, 0, height);
     palette.depths.forEach((color, index) => fall.addColorStop(index / (palette.depths.length - 1), color));
     paint.fillStyle = fall; paint.fillRect(0, 0, width, height);
-    const glow = paint.createRadialGradient(width * 0.5, -height * 0.15, 0, width * 0.5, -height * 0.15, height * 0.95);
-    glow.addColorStop(0, "rgba(255, 255, 255, 0.10)"); glow.addColorStop(1, "rgba(255, 255, 255, 0)");
-    paint.fillStyle = glow; paint.fillRect(0, 0, width, height);
-    paint.save();
-    paint.translate(width / 2, height * 1.05); paint.scale(1.6, 0.55);
-    const deep = paint.createRadialGradient(0, 0, 0, 0, 0, height * 0.75);
-    deep.addColorStop(0, rgba(palette.abyss, 0.16)); deep.addColorStop(0.5, rgba(palette.abyss, 0.05)); deep.addColorStop(1, rgba(palette.abyss, 0));
-    paint.fillStyle = deep; paint.fillRect(-width, -height, width * 2, height * 2);
-    paint.restore();
-    const vignette = paint.createRadialGradient(width / 2, height / 2, Math.min(width, height) * 0.35, width / 2, height / 2, Math.max(width, height) * 0.78);
-    vignette.addColorStop(0, "rgba(0, 0, 0, 0)"); vignette.addColorStop(1, "rgba(0, 0, 0, 0.55)");
+    // One key light, off-axis from the upper left, with a long falloff: the only light that is not a memory.
+    const reach = Math.hypot(width, height) * 0.85;
+    const key_ = paint.createRadialGradient(width * 0.24, -height * 0.18, 0, width * 0.24, -height * 0.18, reach);
+    key_.addColorStop(0, rgba(palette.caustic, 0.085)); key_.addColorStop(0.35, rgba(palette.caustic, 0.03)); key_.addColorStop(1, rgba(palette.caustic, 0));
+    paint.fillStyle = key_; paint.fillRect(0, 0, width, height);
+    // Its faint answer from the opposite corner keeps the far side from going flat.
+    const fill = paint.createRadialGradient(width * 0.9, height * 1.15, 0, width * 0.9, height * 1.15, reach * 0.7);
+    fill.addColorStop(0, rgba(palette.abyss, 0.05)); fill.addColorStop(1, rgba(palette.abyss, 0));
+    paint.fillStyle = fill; paint.fillRect(0, 0, width, height);
+    const vignette = paint.createRadialGradient(width / 2, height / 2, Math.min(width, height) * 0.4, width / 2, height / 2, Math.max(width, height) * 0.8);
+    vignette.addColorStop(0, "rgba(0, 0, 0, 0)"); vignette.addColorStop(1, "rgba(0, 0, 0, 0.28)");
     paint.fillStyle = vignette; paint.fillRect(0, 0, width, height);
+    // Film grain breaks up the banding that long dark gradients show on 8-bit displays.
+    paint.setTransform(1, 0, 0, 1, 0, 0);
+    paint.fillStyle = paint.createPattern(grainTile(), "repeat")!;
+    paint.fillRect(0, 0, canvas.width, canvas.height);
     backdrop = { key, canvas };
   }
   context.drawImage(backdrop.canvas, 0, 0, width, height);
@@ -110,9 +133,8 @@ function mote(star: Star, index: number): { x: number; y: number; front: boolean
   return { x: star.x + ox * Math.cos(tilt) - oy * Math.sin(tilt), y: star.y + ox * Math.sin(tilt) + oy * Math.cos(tilt), front: Math.sin(angle) > 0 };
 }
 
-/** The spike length now: a slow scintillation. */
-const spikeLength = (star: Star): number => star.r * (8.5 + 1.1 * Math.sin(star.time * 1.1 + star.phase * 2)) * star.spikes * (1 - star.depth * 0.5);
-const spikeAngle = (star: Star): number => star.phase * 0.35 + star.time * 0.015;
+/** The spike length now: a slow, slight scintillation. Spikes are axis-aligned, like a reticle, and do not turn. */
+const spikeLength = (star: Star): number => star.r * (5.6 + 0.35 * Math.sin(star.time * 0.8 + star.phase * 2)) * star.spikes * (1 - star.depth * 0.5);
 
 /** A star's light in the bloom buffer: it becomes the soft glow around it after blurring. */
 export function bloomStar(bloom: CanvasRenderingContext2D, star: Star): void {
@@ -124,26 +146,9 @@ export function bloomStar(bloom: CanvasRenderingContext2D, star: Star): void {
     return;
   }
   const strength = star.alpha * (1 - star.depth * 0.45);
-  bloom.fillStyle = rgba(core(color, 0.15), strength * (0.26 + 0.56 * star.glow));
-  bloom.beginPath(); bloom.arc(x, y, r * (0.4 + 0.68 * star.glow * star.glow + 0.12 * star.glow), 0, Math.PI * 2); bloom.fill();
-  if (star.corona > 0) {
-    const breath = Math.sin(star.time * 1.1 + star.phase);
-    bloom.strokeStyle = rgba(color, strength * star.corona * (0.32 + 0.08 * breath)); bloom.lineWidth = r * 0.7;
-    bloom.beginPath(); bloom.arc(x, y, r * (2.5 + 0.25 * breath), 0, Math.PI * 2); bloom.stroke();
-  }
-  if (star.spikes > 0) {
-    const length = spikeLength(star), angle = spikeAngle(star);
-    bloom.strokeStyle = rgba(core(color, 0.4), strength * 0.55 * star.spikes); bloom.lineWidth = 1.6;
-    for (const turn of [0, Math.PI / 2]) {
-      const dx = Math.cos(angle + turn) * length, dy = Math.sin(angle + turn) * length;
-      bloom.beginPath(); bloom.moveTo(x - dx * 0.7, y - dy * 0.7); bloom.lineTo(x + dx * 0.7, y + dy * 0.7); bloom.stroke();
-    }
-  }
-  for (let index = 0; index < star.motes; index += 1) {
-    const at = mote(star, index);
-    bloom.fillStyle = rgba(color, strength * (at.front ? 0.7 : 0.3));
-    bloom.beginPath(); bloom.arc(at.x, at.y, 2.2, 0, Math.PI * 2); bloom.fill();
-  }
+  // Only the core sheds light: rings, spikes and motes stay crisp, so the glow reads as one soft falloff per memory.
+  bloom.fillStyle = rgba(core(color, 0.2), strength * (0.2 + 0.5 * star.glow));
+  bloom.beginPath(); bloom.arc(x, y, r * (0.38 + 0.6 * star.glow * star.glow + 0.1 * star.glow), 0, Math.PI * 2); bloom.fill();
 }
 
 /** The crisp star on top of its bloom: optical core, hairline spikes, motes. Expects the "lighter" blend. */
@@ -159,7 +164,7 @@ export function drawStar(context: CanvasRenderingContext2D, star: Star): void {
     context.globalAlpha = 1;
     return;
   }
-  const size = r * (star.style === "curated" ? 5.5 : 7);
+  const size = r * (star.style === "curated" ? 4.6 : 5.6);
   context.globalAlpha = Math.min(1, alpha);
   context.drawImage(starSprite(color, softness(star.depth)), x - size / 2, y - size / 2, size, size);
   if (star.style === "curated") {
@@ -168,23 +173,21 @@ export function drawStar(context: CanvasRenderingContext2D, star: Star): void {
     context.beginPath(); context.moveTo(x, y - edge); context.lineTo(x + edge, y); context.lineTo(x, y + edge); context.lineTo(x - edge, y); context.closePath(); context.stroke();
   }
   if (star.spikes > 0) {
-    const length = spikeLength(star), angle = spikeAngle(star);
-    // Hairline beams, brightest at the core; a fainter, shorter diagonal pair for the secondary diffraction.
-    for (const [turn, reach, width, strength] of [[0, 1, 0.75, 0.9], [Math.PI / 2, 1, 0.75, 0.9], [Math.PI / 4, 0.42, 0.5, 0.35], [-Math.PI / 4, 0.42, 0.5, 0.35]] as const) {
-      const dx = Math.cos(angle + turn) * length * reach, dy = Math.sin(angle + turn) * length * reach;
+    const length = spikeLength(star);
+    // Two hairlines, horizontal a little longer than vertical, fading out from the core.
+    for (const [dx, dy] of [[length, 0], [0, length * 0.72]] as const) {
       const beam = context.createLinearGradient(x - dx, y - dy, x + dx, y + dy);
-      const hot = rgba(core(color, 0.8), alpha * star.spikes * strength);
-      beam.addColorStop(0, rgba(color, 0)); beam.addColorStop(0.42, rgba(color, alpha * star.spikes * strength * 0.25));
-      beam.addColorStop(0.5, hot); beam.addColorStop(0.58, rgba(color, alpha * star.spikes * strength * 0.25)); beam.addColorStop(1, rgba(color, 0));
-      context.strokeStyle = beam; context.lineWidth = width;
+      beam.addColorStop(0, rgba(color, 0)); beam.addColorStop(0.4, rgba(color, alpha * star.spikes * 0.16));
+      beam.addColorStop(0.5, rgba(core(color, 0.85), alpha * star.spikes * 0.7)); beam.addColorStop(0.6, rgba(color, alpha * star.spikes * 0.16)); beam.addColorStop(1, rgba(color, 0));
+      context.strokeStyle = beam; context.lineWidth = 0.6;
       context.beginPath(); context.moveTo(x - dx, y - dy); context.lineTo(x + dx, y + dy); context.stroke();
     }
   }
-  if (star.corona > 0) drawRing(context, x, y, r * (2.5 + 0.25 * Math.sin(star.time * 1.1 + star.phase)), color, alpha * star.corona * 0.12, 0.6);
+  if (star.corona > 0) drawRing(context, x, y, r * (2.3 + 0.12 * Math.sin(star.time * 0.7 + star.phase)), core(color, 0.3), alpha * star.corona * 0.2, 0.5);
   for (let index = 0; index < star.motes; index += 1) {
     const at = mote(star, index);
     context.globalAlpha = alpha * (at.front ? 1 : 0.4);
-    context.drawImage(starSprite(color, 0), at.x - 4, at.y - 4, 8, 8);
+    context.drawImage(starSprite(color, 0), at.x - 3, at.y - 3, 6, 6);
   }
   context.globalAlpha = 1;
 }

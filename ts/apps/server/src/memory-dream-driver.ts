@@ -1,9 +1,10 @@
 /** Host ports for the memory plugin's explicit, tool-free project-memory dream. */
-import { readdirSync } from "node:fs";
+import { readdirSync, statSync } from "node:fs";
+import { join } from "node:path";
 import { isDict } from "@xueness/contracts";
 import type { AgentProvider } from "@xueness/agent";
 import { auxiliaryModelAdmission, handoffModelJson } from "@xueness/plugin-providers";
-import { createMemoryHttp, MemoryDreamService, MemoryDreamServiceError, type MemoryDreamOptions, type MemoryDreamRow, type MemoryDreamTool } from "@xueness/plugin-memory";
+import { createMemoryHttp, MemoryDreamService, MemoryDreamServiceError, OceanDreamService, type MemoryDreamOptions, type MemoryDreamRow, type MemoryDreamTool } from "@xueness/plugin-memory";
 import type { RuntimeSelection } from "@xueness/plugin-sessions";
 import { isPyOSError, isPyValueError, type Session, type SessionStore } from "@xueness/sessions";
 
@@ -62,7 +63,38 @@ export function createMemoryDreamDriver(options: MemoryDreamDriverOptions): Memo
     options.memoryHttp.dispatch("GET", ["api", "memory", "tracks", "key"], { root: [root] }, {}), "read");
   const writeKey: MemoryDreamOptions["writeKey"] = async (root, input) => responseTrack(
     options.memoryHttp.dispatch("POST", ["api", "memory", "tracks", "key"], { root: [root] }, input), "write");
-  const synthesize: MemoryDreamOptions["synthesize"] = async (ownerSessionId, prompt, signal) => {
+  const synthesize = dreamSynthesizer(options);
+  const dreamTools: MemoryDreamTool[] = [{
+    name: "read_project_key",
+    description: "Re-read the current project KEY.md content and digest for this dream's workspace (read-only).",
+    async invoke(context) { return await readKey(context.root); },
+  }];
+  return new MemoryDreamService({ stateDir: options.stateDir, enabled: options.enabled, allowRealHost: options.allowRealHost,
+    owner, listSessions, readKey, writeKey, synthesize, tools: dreamTools });
+}
+
+/** The Memory Ocean dream's ports: every readable conversation with its journal time, and the same tool-free model call. */
+export function createOceanDreamDriver(options: Omit<MemoryDreamDriverOptions, "memoryHttp">): OceanDreamService {
+  return new OceanDreamService({ stateDir: options.stateDir, enabled: options.enabled, allowRealHost: options.allowRealHost, synthesize: dreamSynthesizer(options),
+    async sessions() {
+      const rows: { id: string; modifiedMs: number; session: MemoryDreamRow }[] = [];
+      for (const name of readdirSync(options.store.directory).filter((item) => /^[a-f0-9]{32}\.json$/.test(item))) {
+        const id = name.slice(0, -5);
+        try {
+          const session = await options.store.load(id);
+          if (session.id === id) rows.push({ id, modifiedMs: statSync(join(options.store.directory, name)).mtimeMs, session: session as MemoryDreamRow });
+        } catch (error) {
+          if (isPyOSError(error) || isPyValueError(error) || (error as NodeJS.ErrnoException).code === "ENOENT") continue;
+          throw error;
+        }
+      }
+      return rows;
+    } });
+}
+
+/** One tool-free JSON call on the owner conversation's own model, gated by both plugins and the shared admission. */
+function dreamSynthesizer(options: Omit<MemoryDreamDriverOptions, "memoryHttp">): MemoryDreamOptions["synthesize"] {
+  return async (ownerSessionId, prompt, signal) => {
     if (!options.enabled("memory") || !options.enabled("providers")) throw new MemoryDreamServiceError(403, "memory and providers must be enabled");
     const session = await options.store.load(ownerSessionId);
     await options.validateSession(session);
@@ -79,11 +111,4 @@ export function createMemoryDreamDriver(options: MemoryDreamDriverOptions): Memo
       admission: auxiliaryModelAdmission(options.stateDir) });
     return { value, usage: Object.keys(usage).length ? usage : "unknown" };
   };
-  const dreamTools: MemoryDreamTool[] = [{
-    name: "read_project_key",
-    description: "Re-read the current project KEY.md content and digest for this dream's workspace (read-only).",
-    async invoke(context) { return await readKey(context.root); },
-  }];
-  return new MemoryDreamService({ stateDir: options.stateDir, enabled: options.enabled, allowRealHost: options.allowRealHost,
-    owner, listSessions, readKey, writeKey, synthesize, tools: dreamTools });
 }

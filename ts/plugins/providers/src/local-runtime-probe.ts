@@ -16,13 +16,13 @@
  */
 import { performance } from "node:perf_hooks";
 import { isDict, pyJsonDumps, pyJsonLoadsBytes } from "@xueness/contracts";
-import { isLoopbackLiteral, openChecked, pyUrlSplit, readBody, type OpenAICompatible } from "@xueness/providers";
+import { isLoopbackLiteral, MAX_CONTEXT_WINDOW, MIN_CONTEXT_WINDOW, openChecked, pyUrlSplit, readBody, type OpenAICompatible } from "@xueness/providers";
 import type { Dict } from "./profile-store.ts";
 
 export type LocalRuntime = "ollama" | "llama.cpp" | "lmstudio";
 interface Facts { runtime: LocalRuntime; loaded: boolean | null; contextWindow: number | null; maxContextWindow: number | null; nativeTools: boolean | null }
 
-const MIN_PROFILE_CONTEXT = 2048, MAX_PROFILE_CONTEXT = 262144;
+const MIN_PROFILE_CONTEXT = MIN_CONTEXT_WINDOW, MAX_PROFILE_CONTEXT = MAX_CONTEXT_WINDOW;
 const tokens = (value: unknown): number | null => typeof value === "number" && Number.isInteger(value) && value > 0 && value <= 16_777_216 ? value : null;
 
 async function fetchJson(provider: OpenAICompatible, url: string, body: Dict | null, timeout: number): Promise<unknown> {

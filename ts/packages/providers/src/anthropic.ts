@@ -14,6 +14,7 @@ import { explicitRequestDeadline, lightweightRequestSettings, transportAttempts 
 import { loadsBody, readBody } from "./sse.ts";
 import { resolveModelStreamIdleTimeoutMs } from "./stream-idle-timeout.ts";
 import { readAnthropicStream, type StreamObservers } from "./streams.ts";
+import { anthropicMessagesUrl } from "./openai-responses.ts";
 import { isAnthropicFirstPartyModelId, toStrictToolSchema } from "./strict-tool-schema.ts";
 import { projectAnthropicHistory, withReasoningMetadata } from "./reasoning-metadata.ts";
 import { hasRequestMedia } from "./media.ts";
@@ -93,7 +94,7 @@ export class AnthropicMessages implements ChatProvider {
     this.toolCalling = init.toolCalling ?? "native";
     this.compatibility = init.compatibility ?? {};
     this.lightweightOptions = init.lightweightOptions ?? {};
-    this.#url = pyUrlSplit(`${this.base.replace(/\/+$/u, "")}/messages`);
+    this.#url = pyUrlSplit(anthropicMessagesUrl(this.base));
   }
 
   /** `_request`: the Messages body (built per call; may raise for media). */

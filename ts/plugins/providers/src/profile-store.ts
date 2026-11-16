@@ -133,7 +133,7 @@ export class ProfileStore {
         runtime.compatibility = Object.keys(submitted).length && isDict(existing?.compatibility) ? { ...validateCompatibility(existing.compatibility), ...submitted } : submitted;
       }
       if (Object.hasOwn(data, "lightweightOptions")) runtime.lightweightOptions = validateOptions(data.lightweightOptions, protocol);
-      resolveRuntimeOptions(runtime, protocol);
+      resolveRuntimeOptions(runtime, protocol, true);
     } catch (error) { return [400, { error: (error as Error).message }]; }
     const capabilities = merged("capabilities", null);
     if (capabilities !== null && (!Array.isArray(capabilities) || capabilities.length > 3 || capabilities.some((v) => !["image", "pdf", "video"].includes(v)) || new Set(capabilities).size !== capabilities.length)) return [400, { error: "capabilities must be unique image/pdf/video values" }];

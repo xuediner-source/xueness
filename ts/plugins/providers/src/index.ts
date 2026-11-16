@@ -14,6 +14,7 @@ export * from "./zcode-compact.ts";
 export * from "./zcode-compact-extension.ts";
 export * from "./zcode-compact-view.ts";
 export * from "./activity.ts";
+export * from "./tool-outcomes.ts";
 export * from "./model-status.ts";
 export * from "./request-shaping.ts";
 export * from "./admission-policy.ts";

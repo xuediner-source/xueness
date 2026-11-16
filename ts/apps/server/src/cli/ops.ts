@@ -55,7 +55,7 @@ export function register(sub: Sub): void {
   save.add("--capabilities", { default: null, metavar: "LIST", help: "optional comma-separated model input capabilities: image,pdf,video" });
   save.add("--reasoning-levels", { default: null, metavar: "LIST", help: "optional comma-separated OpenAI reasoning levels: none,minimal,low,medium,high,xhigh" });
   save.add("--runtime-profile", { choices: ["standard", "lightweight"], default: null, help: "runtime resource profile; lightweight is intended for local/small models" });
-  save.add("--context-window", { type: "int", default: null, help: "model context window in tokens (2048..262144)" });
+  save.add("--context-window", { type: "int", default: null, help: "model context window in tokens (16384..262144; lightweight default 16384)" });
   save.add("--max-output-tokens", { type: "int", default: null, help: "maximum generated tokens (128..32768, at most half the context window)" });
   save.add("--tool-calling", { choices: ["native", "json"], default: null, help: "native API tools or lightweight JSON tool protocol" });
   save.add("--lightweight-options", { type: jsonObject, default: null, metavar: "JSON", help: "complete lightweight settings object; replaces prior values, use '{}' to clear" });

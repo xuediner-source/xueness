@@ -164,13 +164,29 @@ export class MemoryOceanStore {
 
   /** Remove one memory for good, with every link that points at it. */
   forget(id: string): void {
+    this.forgetMany([id]);
+  }
+
+  /** Atomically remove one or more memories for good, with every link that points at them. */
+  forgetMany(rawIds: readonly string[]): string[] {
+    const ids = [...new Set(rawIds)];
+    if (ids.length === 0) throw new OceanError(400, "ids must be a non-empty array");
+    let forgotten: string[] = [];
     this.#mutate((data) => {
-      const before = data.memories.length;
-      data.memories = data.memories.filter((memory) => memory.id !== id);
-      if (data.memories.length === before) throw new OceanError(404, "memory not found");
-      for (const memory of data.memories) memory.links = memory.links.filter((link) => link.to !== id);
-      record(data, { at: now(), kind: "forget", ids: [id] });
+      const target = new Set(ids);
+      const removed: string[] = [];
+      data.memories = data.memories.filter((memory) => {
+        if (!target.has(memory.id)) return true;
+        removed.push(memory.id);
+        return false;
+      });
+      if (removed.length === 0) throw new OceanError(404, "memory not found");
+      const removedSet = new Set(removed);
+      for (const memory of data.memories) memory.links = memory.links.filter((link) => !removedSet.has(link.to));
+      forgotten = removed;
+      record(data, { at: now(), kind: "forget", ids: removed });
     });
+    return forgotten;
   }
 
   /** Count a recall: these memories were put into a run's context. */
