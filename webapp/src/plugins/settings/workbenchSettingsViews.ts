@@ -5,14 +5,16 @@
  * when a permitted section or panel mounts them.
  */
 import { lazy } from "react";
+import { optionalComponent } from "../extensions/optionalFrontend";
 
 export const CapabilitiesPanel = lazy(() => import('../../XuenessCapabilitiesPanel').then(module => ({ default: module.CapabilitiesPanel })));
 export const DesktopUpdates = lazy(() => import("../updates/DesktopUpdates").then(module => ({ default: module.DesktopUpdates })));
 export const ModelManager = lazy(() => import("../providers").then(module => ({ default: module.ModelManager })));
-export const SubscriptionsPanel = lazy(() => import('../subscriptions').then(module => ({ default: module.SubscriptionsPanel })));
-export const WorkbuddySettingsPanel = lazy(() => import('../workbuddy/WorkbuddySettings').then(module => ({ default: module.WorkbuddySettingsPanel })));
-export const ModelMonitorPanel = lazy(() => import('../model_monitor').then(module => ({ default: module.ModelMonitorPanel })));
-export const TavernPanel = lazy(() => import('../tavern').then(module => ({ default: module.TavernPanel })));
+// Marketplace plugins: their interface comes from the package the user downloaded (see optionalFrontend.ts).
+export const SubscriptionsPanel = optionalComponent<{ onChanged?: () => void; onSelectModel?: (id: string) => void; embedded?: boolean }>('subscriptions', 'SubscriptionsPanel');
+export const WorkbuddySettingsPanel = optionalComponent<Record<string, never>>('workbuddy', 'WorkbuddySettingsPanel');
+export const ModelMonitorPanel = optionalComponent<{ embedded?: boolean }>('model_monitor', 'ModelMonitorPanel');
+export const TavernPanel = optionalComponent<{ onStart(text: string): void }>('tavern', 'TavernPanel');
 export const RemoteConnections = lazy(() => import("../remote").then(module => ({ default: module.RemoteConnections })));
 export const XuenessMarketplace = lazy(() => import("../extensions").then(module => ({ default: module.XuenessMarketplace })));
 export const XuenessAutomationsPanel = lazy(() => import("../automation").then(module => ({ default: module.XuenessAutomationsPanel })));

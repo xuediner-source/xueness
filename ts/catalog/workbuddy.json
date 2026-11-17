@@ -31,10 +31,7 @@
   "backendAssets": [
     "assets/workbuddy2api-panel.exe"
   ],
-  "frontendModules": [
-    "plugins/workbuddy/api.ts",
-    "plugins/workbuddy/WorkbuddySettings.tsx"
-  ],
+  "frontendModules": [],
   "features": [
     {
       "id": "workbuddy.pool",

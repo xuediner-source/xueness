@@ -1,23 +1,18 @@
 /** Official executable artifacts are pinned in the host, independently of market data. */
 import { randomUUID } from "node:crypto";
-import { chmodSync, closeSync, existsSync, lstatSync, mkdirSync, openSync, readFileSync, realpathSync, renameSync, rmSync, symlinkSync } from "node:fs";
-import { basename, dirname, join, resolve } from "node:path";
+import { chmodSync, closeSync, existsSync, lstatSync, mkdirSync, openSync, realpathSync, renameSync, rmSync, symlinkSync } from "node:fs";
+import { dirname, join, resolve } from "node:path";
 import { gunzipSync } from "node:zlib";
 import { artifactHash, coreNodeModules, optionalArtifactByPackage, optionalInstalled, optionalPath, optionalRoot, type OptionalArtifact } from "@xueness/kernel";
 import { protectPrivateDirectory, protectPrivateFile, writeAll } from "@xueness/sessions";
 
 export type ArtifactDownload = (artifact: OptionalArtifact) => Promise<Buffer>;
 
-export async function downloadArtifact(artifact: OptionalArtifact, projectRoot?: string): Promise<Buffer> {
-  if (!artifact.url.startsWith("https://raw.githubusercontent.com/xuediner-source/xueness/main/marketplace/packages/")) throw new Error("untrusted artifact origin");
-  if (projectRoot) {
-    const path = optionalPath(projectRoot, join("marketplace", "packages", basename(new URL(artifact.url).pathname)));
-    if (existsSync(path)) {
-      const file = lstatSync(path);
-      if (!file.isFile() || file.size > 32 * 1024 * 1024) throw new Error("bundled plugin artifact is not a file of an acceptable size");
-      return readFileSync(path);
-    }
-  }
+/** The official plugin repository. Packages are fetched from here only, and only when the user installs one. */
+export const OFFICIAL_ARTIFACT_ORIGIN = "https://raw.githubusercontent.com/xuediner-source/xueness-marketplace/main/packages/";
+
+export async function downloadArtifact(artifact: OptionalArtifact): Promise<Buffer> {
+  if (!artifact.url.startsWith(OFFICIAL_ARTIFACT_ORIGIN)) throw new Error("untrusted artifact origin");
   const response = await fetch(artifact.url, { redirect: "error", signal: AbortSignal.timeout(120_000), headers: { Accept: "application/octet-stream" } });
   if (!response.ok || !response.body) throw new Error(`GitHub download failed (${response.status})`);
   const chunks: Uint8Array[] = []; let bytes = 0;

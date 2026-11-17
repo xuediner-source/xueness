@@ -1,11 +1,22 @@
 /** Wiring for the host's reviewed optional ports. No implementation is shipped here. */
 import { loadOptionalModule, optionalInstalled } from "@xueness/kernel";
-import type * as SubscriptionModule from "@xueness/plugin-subscriptions";
-import type * as WorkbuddyModule from "@xueness/plugin-workbuddy";
-import type * as MonitorModule from "@xueness/plugin-model_monitor";
-import type * as TavernModule from "@xueness/plugin-tavern";
 import type { ChatProvider } from "@xueness/providers";
 import type { ExternalProfiles } from "@xueness/plugin-providers";
+
+// The plugins' code lives in the xueness-marketplace repository and arrives as a downloaded, pinned package.
+// These are the entry points the host calls, written out here because the source is not in this repository.
+type OptionalContext = { stateDir: string; enabled(id: string): boolean; env: NodeJS.ProcessEnv };
+type AccountPlugin = { http: HttpPort; profiles: ExternalProfiles; close?(): void | Promise<void> };
+type SubscriptionModule = {
+  createSubscriptions(options: { stateDir: string; enabled(): boolean; installed(): boolean; env: NodeJS.ProcessEnv }): AccountPlugin;
+  NativeProvider: abstract new (...args: never[]) => ChatProvider & { sessionId?: string };
+};
+type WorkbuddyModule = { createWorkbuddy(options: OptionalContext): AccountPlugin };
+type MonitorModule = {
+  createModelMonitorHttp(options: OptionalContext): HttpPort;
+  observeProvider(provider: ChatProvider, options: { stateDir: string; sessionId: string; providerId: unknown; enabled(): boolean }): ChatProvider;
+};
+type TavernModule = { createTavernHttp(options: OptionalContext): HttpPort };
 
 type Context = { stateDir: string; enabled(id: string): boolean; env: NodeJS.ProcessEnv };
 type Reply = [number, unknown] | null;
@@ -37,12 +48,12 @@ function httpPort(o: Context, id: string, routes: readonly string[], get: () => 
 }
 
 export function createOptionalAccounts(o: Context) {
-  let subscriptionModule: typeof SubscriptionModule | null = null;
+  let subscriptionModule: SubscriptionModule | null = null;
   const subscriptions = slot(o, "subscriptions", () => {
-    subscriptionModule = loadOptionalModule(o.stateDir, "subscriptions") as typeof SubscriptionModule;
+    subscriptionModule = loadOptionalModule(o.stateDir, "subscriptions") as SubscriptionModule;
     return subscriptionModule.createSubscriptions({ stateDir: o.stateDir, enabled: () => o.enabled("subscriptions"), installed: () => optionalInstalled(o.stateDir, "subscriptions"), env: o.env });
   });
-  const workbuddy = slot(o, "workbuddy", () => (loadOptionalModule(o.stateDir, "workbuddy") as typeof WorkbuddyModule).createWorkbuddy(o));
+  const workbuddy = slot(o, "workbuddy", () => (loadOptionalModule(o.stateDir, "workbuddy") as WorkbuddyModule).createWorkbuddy(o));
   const handlers = [
     httpPort(o, "subscriptions", ["GET /api/subscriptions", "GET /api/subscriptions/:id/status", "POST /api/subscriptions/:id/:action"], subscriptions.get),
     httpPort(o, "workbuddy", ["GET /api/workbuddy/status", "GET /api/workbuddy/accounts", "POST /api/workbuddy/accounts", "DELETE /api/workbuddy/accounts/:id"], workbuddy.get),
@@ -67,25 +78,25 @@ export function createOptionalAccounts(o: Context) {
 }
 
 export function createOptionalMonitor(o: Context): HttpPort {
-  let implementation: ReturnType<typeof MonitorModule.createModelMonitorHttp> | null = null;
+  let implementation: HttpPort | null = null;
   return httpPort(o, "model_monitor", ["GET /api/model_monitor", "POST /api/model_monitor/clear"], () => {
     if (!o.enabled("model_monitor") || !optionalInstalled(o.stateDir, "model_monitor")) { implementation = null; return null; }
-    implementation ??= (loadOptionalModule(o.stateDir, "model_monitor") as typeof MonitorModule).createModelMonitorHttp(o);
+    implementation ??= (loadOptionalModule(o.stateDir, "model_monitor") as MonitorModule).createModelMonitorHttp(o);
     return { http: implementation };
   });
 }
 
 export function createOptionalTavern(o: Context): HttpPort {
-  let implementation: ReturnType<typeof TavernModule.createTavernHttp> | null = null;
+  let implementation: HttpPort | null = null;
   return httpPort(o, "tavern", ["GET /api/tavern", "POST /api/tavern/characters", "DELETE /api/tavern/characters/:id", "POST /api/tavern/worldbooks", "DELETE /api/tavern/worldbooks/:id", "POST /api/tavern/brief"], () => {
     if (!o.enabled("tavern") || !optionalInstalled(o.stateDir, "tavern")) { implementation = null; return null; }
-    implementation ??= (loadOptionalModule(o.stateDir, "tavern") as typeof TavernModule).createTavernHttp(o);
+    implementation ??= (loadOptionalModule(o.stateDir, "tavern") as TavernModule).createTavernHttp(o);
     return { http: implementation };
   });
 }
 
 export function observeOptionalProvider(o: Context, provider: ChatProvider, sessionId: string, providerId: unknown): ChatProvider {
   if (!o.enabled("model_monitor") || !optionalInstalled(o.stateDir, "model_monitor")) return provider;
-  const monitor = loadOptionalModule(o.stateDir, "model_monitor") as typeof MonitorModule;
+  const monitor = loadOptionalModule(o.stateDir, "model_monitor") as MonitorModule;
   return monitor.observeProvider(provider, { stateDir: o.stateDir, sessionId, providerId, enabled: () => o.enabled("model_monitor") });
 }

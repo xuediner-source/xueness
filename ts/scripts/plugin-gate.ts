@@ -23,7 +23,7 @@
  * It is a lint, not a sandbox: it checks that a power is declared, not how
  * finely the code uses it. Type-only imports are ignored.
  */
-import { readdirSync, readFileSync, statSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { builtinModules } from "node:module";
 import { dirname, isAbsolute, join, relative, resolve } from "node:path";
 import ts from "typescript";
@@ -223,6 +223,14 @@ export function checkPlugins(root: string): { problems: string[]; plugins: numbe
     if (pkg.name !== `@xueness/plugin-${id}`) problems.push(`plugins/${id}/package.json: name must be @xueness/plugin-${id}`);
     const deps = Object.keys((pkg.dependencies as Record<string, string> | undefined) ?? {});
     for (const dep of deps) if (!dep.startsWith("@xueness/")) problems.push(`plugins/${id}/package.json: ${dep} is not a workspace package`);
+    // Marketplace plugins are descriptors here: their code and interface live in the xueness-marketplace
+    // repository and reach users only as downloaded, pinned packages (owner decision, 2026-11-17).
+    if ((OPTIONAL_IDS as readonly string[]).includes(id)) {
+      for (const part of ["src", "assets", "test"]) if (existsSync(join(dir, part))) problems.push(`plugins/${id}/${part}: marketplace plugin code belongs in the xueness-marketplace repository`);
+      if (manifest.frontendModules?.length) problems.push(`plugins/${id}/manifest.json /frontendModules: a marketplace plugin's interface is built in the xueness-marketplace repository`);
+      if (existsSync(join(root, "..", "webapp", "src", "plugins", id))) problems.push(`webapp/src/plugins/${id}: marketplace plugin interfaces belong in the xueness-marketplace repository`);
+      continue;
+    }
     for (const file of sourceFiles(join(dir, "src"))) {
       files += 1;
       const shown = relative(root, file).split("\\").join("/");

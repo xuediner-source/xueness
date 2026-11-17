@@ -21,9 +21,7 @@
     "library",
     "brief"
   ],
-  "frontendModules": [
-    "plugins/tavern/index.tsx"
-  ],
+  "frontendModules": [],
   "features": [
     {
       "id": "tavern.characters",

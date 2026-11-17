@@ -72,8 +72,5 @@
       "nameEn": "Optional installation, private credentials and disable cleanup"
     }
   ],
-  "frontendModules": [
-    "plugins/workbuddy/api.ts",
-    "plugins/workbuddy/WorkbuddySettings.tsx"
-  ]
+  "frontendModules": []
 }

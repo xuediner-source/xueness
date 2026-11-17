@@ -4,7 +4,9 @@
 
 技能、钩子、MCP 连接器与协作代理是内置功能，不再作为重复安装条目出现在扩展市场。
 
-订阅中心、返回模型监测、WorkBuddy 号池和酒馆在新安装中均未安装。打开扩展市场，选择插件并点击“下载并安装”；下载完成后，到插件管理中启用。下载失败或完整性校验失败时，插件不会变为可用。
+订阅中心、返回模型监测、WorkBuddy 号池和酒馆不随 Xueness 安装，也不在安装包或源码仓库里预置。打开扩展市场，选择插件并点击“下载并安装”，Xueness 才从官方插件仓库 [xuediner-source/xueness-marketplace](https://github.com/xuediner-source/xueness-marketplace) 下载它；下载完成后，到插件管理中启用。下载失败或完整性校验失败时，插件不会变为可用。
+
+未下载的插件只出现在扩展市场里：插件管理的功能插件目录、设置导航和模型列表都不显示它们，下载并启用后才出现。
 
 WorkBuddy 需要用户提供自己的账号认证。下载包包含网关程序，不包含账号、令牌或认证种子。订阅中心同样只使用用户自己提供或授权的账号。返回模型监测读取正在使用的模型响应，不主动发送额外探测请求；上游没有报告型号时，显示未报告。
 
@@ -48,15 +50,17 @@ Read references/review.md, then follow the project-specific checks.
 
 ## 分发与实现
 
-官方插件包位于 [`marketplace/packages`](../marketplace/packages)，文件名带有内容摘要。`ts/packages/kernel/src/optional-packages.json` 固定本次核心构建允许的四个插件、下载地址、包摘要与每个文件的摘要。下载器验证整个压缩包和所有文件后，再原子发布到用户状态目录。
+2026-11-17 起，四个插件的源码、界面和下载包都在独立仓库 [xueness-marketplace](https://github.com/xuediner-source/xueness-marketplace) 中维护：`plugins/<id>/backend` 是后端，`plugins/<id>/frontend` 是界面，`packages/` 是按内容摘要命名的下载包。本仓库只保留每个插件的描述（`ts/plugins/<id>/manifest.json`、`package.json` 与 `ts/catalog/<id>.json`：名称、路由、功能与能力声明），用于在扩展市场显示下载入口；插件门禁拒绝这些目录里再出现 `src/`、`assets/` 或界面代码。
 
-桌面安装包带有与本次构建匹配的四个压缩包。扩展市场优先使用本机副本，安装和启用仍按原有开关流程。安装时校验整个包和逐个文件的摘要。
+`ts/packages/kernel/src/optional-packages.json` 固定本次核心构建允许的四个插件、下载地址、包摘要与每个文件的摘要，下载地址只能是官方插件仓库（`https://raw.githubusercontent.com/xuediner-source/xueness-marketplace/main/packages/`）。下载器只在用户选择安装时联网获取，验证整个压缩包和所有文件后，再原子发布到用户状态目录；桌面安装包和命令行压缩包不再携带任何插件包，也不读取本机副本。
+
+插件界面是包内的 `frontend/optional-<id>.js` 与 `.css`。工作台在需要时以脚本方式加载它（`webapp/src/plugins/extensions/optionalFrontend.ts`），并把自己的 React 和宿主接口（`@xueness/host` 第 1 版：`t`、`tf`、`useLocale`、`get`、`post`、`del`、`EmptyState`）借给插件，插件包不自带 React。服务端从已校验的安装目录提供这些文件。
+
+发布插件：在 xueness-marketplace 仓库运行 `npm run release`（需要本仓库检出在旁边的 `../xueness`），它构建界面、打包、写出 `pins.json`，并把新的固定摘要写入本仓库的 `optional-packages.json`；先推送插件仓库，再提交和推送核心，否则新摘要对应的包还下载不到。
 
 只有这四个内置许可的官方插件可以加载代码。普通市场清单和用户导入的数据清单继续禁止 `entrypoint`、`command` 等可执行字段（钩子组件里的 `command` 是例外：它只登记为关闭的钩子，由用户检查后打开）；远程目录不能扩展代码加载许可。
 
-`npm --prefix webapp run build` 会生成独立的插件界面分包、构建四个可复现下载包，并从核心 Web 产物中移除插件界面代码与样式。桌面打包规则同时排除四个插件的后端源码、执行代码与资源。核心保留名称、路由与能力声明，以便在未安装时显示下载入口。
-
-服务端只加载已安装且通过校验的包，不回退读取开发目录。安装后可以按需启用，无需重启桌面端；禁用与卸载会关闭对应的代理或网关。升级核心时，插件包需要与核心固定的接口和摘要匹配。
+服务端只加载已安装且通过校验的包，不回退读取开发目录。安装后可以按需启用，无需重启桌面端；禁用与卸载会关闭对应的代理或网关。核心更新固定摘要后，已安装的旧版本需要在扩展市场重新下载。
 
 文件夹导入 API 属于 `skills` 插件，下载与包管理属于 `extensions` 插件；共享内核仅提供固定摘要的模块加载与资源读取，工作台容器仅负责挂载界面。
 

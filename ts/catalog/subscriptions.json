@@ -8,7 +8,7 @@
   "panels": ["subscriptions"], "resources": [], "capabilities": [],
   "httpFamilies": ["subscriptions"], "provides": ["subscriptions.worker"],
   "modules": ["state", "accounts", "broker", "provider"],
-  "frontendModules": ["plugins/subscriptions/api.ts", "plugins/subscriptions/index.tsx"],
+  "frontendModules": [],
   "backendAssets": ["worker.mjs", "protocols.mjs", "compat.mjs", "vendor/hub.mjs", "vendor/commandcode.mjs", "vendor/qoder.mjs", "vendor/auth/oauth-flow.mjs", "vendor/auth/qwen-device-flow.mjs", "vendor/auth/safety.mjs"],
   "dataFiles": ["catalog.json", "vendor/LICENSE-MIT.txt"],
   "features": [

@@ -12,7 +12,7 @@
   "panels": ["subscriptions"],
   "provides": ["subscriptions.worker"],
   "modules": ["state", "accounts", "broker", "provider", "entitlements", "entitlement-config"],
-  "frontendModules": ["plugins/subscriptions/api.ts", "plugins/subscriptions/index.tsx"],
+  "frontendModules": [],
   "backendAssets": ["assets/worker.mjs", "assets/protocols.mjs", "assets/compat.mjs", "assets/vendor/hub.mjs", "assets/vendor/commandcode.mjs", "assets/vendor/qoder.mjs", "assets/vendor/auth/oauth-flow.mjs", "assets/vendor/auth/qwen-device-flow.mjs", "assets/vendor/auth/safety.mjs"],
   "dataFiles": ["assets/catalog.json", "assets/vendor/LICENSE-MIT.txt"],
   "features": [

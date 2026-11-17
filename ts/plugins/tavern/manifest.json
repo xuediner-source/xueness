@@ -40,7 +40,5 @@
       "nameEn": "Build an opening message from the character, scenario, world information and greeting, and start a chat"
     }
   ],
-  "frontendModules": [
-    "plugins/tavern/index.tsx"
-  ]
+  "frontendModules": []
 }
