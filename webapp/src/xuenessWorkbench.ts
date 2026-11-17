@@ -1253,7 +1253,8 @@ async function runSessionWith(id: string, choices?: RunChoices, options?: { cont
 export async function createSession(
   task: string,
   choices?: RunChoices,
-  context?: { root?: string; prepared_token?: string },
+  /** `plugin_ref`: the plugin that starts this session tags it with its own reference (validated by the server). */
+  context?: { root?: string; prepared_token?: string; plugin_ref?: { plugin: string; id: string } },
   onCreated?: (id: string) => void,
   commands?: SessionCommandClient,
 ): Promise<SubmissionResult<string>> {

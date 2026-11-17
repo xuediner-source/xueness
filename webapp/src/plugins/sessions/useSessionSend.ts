@@ -173,7 +173,7 @@ export function useSessionSend({ activeId, activeIdRef, setActiveId, setPanel, i
 
   /** Hero composer: create the task and run it in one round trip pair. */
   const handleCreate = useCallback(
-    async (text: string, input?: ComposerInput, onAccepted?: () => void) => {
+    async (text: string, input?: ComposerInput, onAccepted?: () => void, pluginRef?: { plugin: string; id: string }) => {
       const value = text.trim() || tr("附件与上下文");
       if (!isPluginEffective("sessions")) return false;
       if (sessionCommands.recoveryStorageError() || sessionCommands.pendingCommands().some(row => row.sessionId === null)) {
@@ -201,7 +201,7 @@ export function useSessionSend({ activeId, activeIdRef, setActiveId, setPanel, i
         setChoices(confirmed);
         const prepared = await prepareComposer(text, input && { ...input, remote: selected.remote }, { root: draftRoot ?? catalogRoot ?? undefined, provider_id: selected.provider_id, model: selected.model, reasoning_effort: selected.reasoning_effort });
         if (!sessionCommands.isEffective()) throw new Error('Session commands are no longer enabled');
-        const result = await createSession(value, { ...selected, goal: prepared.goal }, { ...(isolatedWorkspace ? {} : { root: prepared.root }), prepared_token: prepared.token }, id => {
+        const result = await createSession(value, { ...selected, goal: prepared.goal }, { ...(isolatedWorkspace ? {} : { root: prepared.root }), prepared_token: prepared.token, ...(pluginRef ? { plugin_ref: pluginRef } : {}) }, id => {
           createdId = id;
           promoteCreatedPane?.(id);
           onAccepted?.();

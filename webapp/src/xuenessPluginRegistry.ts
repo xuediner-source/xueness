@@ -40,7 +40,8 @@ export type PluginPanel =
   | "diagnostics"
   | "remote"
   | "subagents"
-  | "swarm";
+  | "swarm"
+  | "tavern";
 
 export const XUENESS_PLUGIN_REGISTRY = {
   sessions: { name: "会话", description: "会话列表、工作区、用途与时间线视图、活性摘要、归档恢复与永久删除、侧栏、四会话分屏与持久会话组、独立输入、Agent 对话、有界子代理摘要、投影订阅与续传、命令回执与历史分叉、事实工作分段与活跃时长", panels: ["chat"] },
@@ -48,7 +49,7 @@ export const XUENESS_PLUGIN_REGISTRY = {
   git: { name: "Git", description: "工作区状态、差异和提交记录", panels: ["git"] },
   providers: { name: "供应商", description: "模型配置、模型发现、本地轻量模式与接口兼容诊断", panels: ["providers"] },
   subscriptions: { name: "订阅中心", description: "选择安装后通过账号授权、CLI 登录或订阅凭证接入，在会话中使用模型并查询上游真实额度。", panels: ["subscriptions"] },
-  tavern: { name: "酒馆", description: "角色扮演：导入 SillyTavern 兼容的角色卡与世界书，从角色设定开始一段对话。", panels: [] },
+  tavern: { name: "酒馆", description: "角色扮演：角色卡、世界书、预设与人设，并以角色扮演模式进行对话。", panels: ["tavern"] },
   workbuddy: { name: "WorkBuddy 号池", description: "查看本机 WorkBuddy 账号状态并管理认证文件。", panels: ["workbuddy"] },
   native_ops: { name: "原生操作工具", description: "批量读取、文件修订与文档文本工具，按需发现并通过现有权限审批执行。", panels: [] },
   batch_calls: { name: "批量调用", description: "鼓励同一步发起独立工具调用，并在上下文压缩后恢复批量调用约定。", panels: [] },
@@ -110,6 +111,7 @@ export const PLUGIN_PANEL_LABELS: Record<PluginPanel, string> = {
   remote: "SSH 工作区",
   subagents: "子代理",
   swarm: "蜂群",
+  tavern: "酒馆",
 };
 
 export const CAPABILITY_PLUGIN_BY_KIND: Partial<Record<CapabilityKind, XuenessPluginId>> = {

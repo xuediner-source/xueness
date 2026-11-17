@@ -1,5 +1,6 @@
 /** Wiring for the host's reviewed optional ports. No implementation is shipped here. */
 import { loadOptionalModule, optionalInstalled } from "@xueness/kernel";
+import type { AgentExtension, ModelRequest } from "@xueness/agent";
 import type { ChatProvider } from "@xueness/providers";
 import type { ExternalProfiles } from "@xueness/plugin-providers";
 
@@ -16,7 +17,11 @@ type MonitorModule = {
   createModelMonitorHttp(options: OptionalContext): HttpPort;
   observeProvider(provider: ChatProvider, options: { stateDir: string; sessionId: string; providerId: unknown; enabled(): boolean }): ChatProvider;
 };
-type TavernModule = { createTavernHttp(options: OptionalContext): HttpPort };
+type TavernModule = {
+  createTavernHttp(options: OptionalContext): HttpPort;
+  /** Tavern 2+: rebuild a request for a session the Tavern started (roleplay mode). Absent in older packages. */
+  prepareRoleplayRequest?(options: { stateDir: string }, session: Record<string, unknown>, request: ModelRequest, view: { lightweight: boolean }): ModelRequest;
+};
 
 type Context = { stateDir: string; enabled(id: string): boolean; env: NodeJS.ProcessEnv };
 type Reply = [number, unknown] | null;
@@ -88,11 +93,38 @@ export function createOptionalMonitor(o: Context): HttpPort {
 
 export function createOptionalTavern(o: Context): HttpPort {
   let implementation: HttpPort | null = null;
-  return httpPort(o, "tavern", ["GET /api/tavern", "POST /api/tavern/characters", "DELETE /api/tavern/characters/:id", "POST /api/tavern/worldbooks", "DELETE /api/tavern/worldbooks/:id", "POST /api/tavern/brief"], () => {
+  // The Tavern package owns everything under /api/tavern; the list documents its families for the route catalog.
+  return httpPort(o, "tavern", ["GET /api/tavern", "POST /api/tavern/:kind", "POST /api/tavern/:kind/:id", "POST /api/tavern/:kind/:id/:action", "DELETE /api/tavern/:kind/:id"], () => {
     if (!o.enabled("tavern") || !optionalInstalled(o.stateDir, "tavern")) { implementation = null; return null; }
     implementation ??= (loadOptionalModule(o.stateDir, "tavern") as TavernModule).createTavernHttp(o);
     return { http: implementation };
   });
+}
+
+/**
+ * Roleplay mode: a session the Tavern started carries `plugin_refs.tavern` (its playthrough id). For those
+ * sessions only, the downloaded Tavern package rebuilds each model request (character, persona, world
+ * information, author's note). Every other session, and every session while Tavern is off or not
+ * downloaded, is left untouched; the extension's id makes the driver skip it while the plugin is not effective.
+ *
+ * Two hooks, one per prompt path: in lightweight mode the request is rebuilt before the lightweight view is
+ * built from it (the view then uses the roleplay system prompt and keeps its own history budget); otherwise
+ * it is rebuilt after the standard prompt view, which would replace the system prompt.
+ */
+export function createOptionalTavernRoleplay(o: Context): { beforeViews: AgentExtension; afterViews: AgentExtension } {
+  const hook = (lightweightPath: boolean): AgentExtension => ({
+    id: "tavern",
+    prepareRequest(context, request) {
+      const refs = context.session.plugin_refs;
+      if (!refs || typeof refs !== "object" || typeof (refs as Record<string, unknown>).tavern !== "string") return request;
+      const lightweight = (context.session.runtime_profile ?? context.provider.runtimeProfile) === "lightweight";
+      if (lightweight !== lightweightPath || !o.enabled("tavern") || !optionalInstalled(o.stateDir, "tavern")) return request;
+      const module = loadOptionalModule(o.stateDir, "tavern") as TavernModule;
+      if (typeof module.prepareRoleplayRequest !== "function") return request;
+      return module.prepareRoleplayRequest({ stateDir: o.stateDir }, context.session as Record<string, unknown>, request, { lightweight });
+    },
+  });
+  return { beforeViews: hook(true), afterViews: hook(false) };
 }
 
 export function observeOptionalProvider(o: Context, provider: ChatProvider, sessionId: string, providerId: unknown): ChatProvider {

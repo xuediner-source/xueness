@@ -14,7 +14,8 @@ export const ModelManager = lazy(() => import("../providers").then(module => ({ 
 export const SubscriptionsPanel = optionalComponent<{ onChanged?: () => void; onSelectModel?: (id: string) => void; embedded?: boolean }>('subscriptions', 'SubscriptionsPanel');
 export const WorkbuddySettingsPanel = optionalComponent<Record<string, never>>('workbuddy', 'WorkbuddySettingsPanel');
 export const ModelMonitorPanel = optionalComponent<{ embedded?: boolean }>('model_monitor', 'ModelMonitorPanel');
-export const TavernPanel = optionalComponent<{ onStart(text: string): void }>('tavern', 'TavernPanel');
+export type TavernSessionRef = { plugin: 'tavern'; id: string };
+export const TavernPanel = optionalComponent<{ onStart(text: string): void; onStartSession?(text: string, ref: TavernSessionRef): Promise<boolean>; onOpenSession?(id: string): void; onOpenPanel?(): void }>('tavern', 'TavernPanel');
 export const RemoteConnections = lazy(() => import("../remote").then(module => ({ default: module.RemoteConnections })));
 export const XuenessMarketplace = lazy(() => import("../extensions").then(module => ({ default: module.XuenessMarketplace })));
 export const XuenessAutomationsPanel = lazy(() => import("../automation").then(module => ({ default: module.XuenessAutomationsPanel })));

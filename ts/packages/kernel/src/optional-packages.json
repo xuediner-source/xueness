@@ -290,15 +290,15 @@
   "tavern": {
     "id": "tavern",
     "packageId": "xueness-tavern",
-    "version": "1.0.0",
-    "sha256": "dbc52719c5ae780f0b1d7314c53e0ef65cee2a68b9847c8fe38cc6e151ccc337",
-    "bytes": 45348,
-    "url": "https://raw.githubusercontent.com/xuediner-source/xueness-marketplace/main/packages/xueness-tavern-1.0.0-dbc52719c5ae780f.json.gz",
+    "version": "2.0.0",
+    "sha256": "3747fb1546cbb034edaa7e9ef081280e9c915a0a2cb927c761bdc35f8cbd5448",
+    "bytes": 167460,
+    "url": "https://raw.githubusercontent.com/xuediner-source/xueness-marketplace/main/packages/xueness-tavern-2.0.0-3747fb1546cbb034.json.gz",
     "files": [
       {
         "path": "backend/manifest.json",
-        "bytes": 1253,
-        "sha256": "53244420b84946e921eafe2babfc8b0c17fdb40ceeae68bee53a9d0fbd381555",
+        "bytes": 2638,
+        "sha256": "d2ffce9328f1fa38940ffcdccbbc949cb561c6b33d011fc4710841f89596313a",
         "executable": false
       },
       {
@@ -308,21 +308,33 @@
         "executable": false
       },
       {
+        "path": "backend/src/assemble.ts",
+        "bytes": 6311,
+        "sha256": "874db5c831e2e2aa93f38b948706103ea88b7f91e5df0a1ccf0c1fb6ca47bcb8",
+        "executable": false
+      },
+      {
         "path": "backend/src/cards.ts",
-        "bytes": 6482,
-        "sha256": "51ec9a053c314235179c7a5b3a9ee90a728a0ce73f393ad98e1834cebe6730d2",
+        "bytes": 9190,
+        "sha256": "1233e98dd96974bea2a38c09dd0aa535a5648a9bcf33f9aa709ed0a31cfbff8b",
         "executable": false
       },
       {
         "path": "backend/src/http.ts",
-        "bytes": 5512,
-        "sha256": "0f5444573e8ba7e0a6fe1321918d7e08b65bf3f83b43c47b0b77d86db54f9a83",
+        "bytes": 13447,
+        "sha256": "50ae8175282e17eca2e3543848d0c9f66f90aaec14b7186434c88be113430542",
         "executable": false
       },
       {
         "path": "backend/src/index.ts",
-        "bytes": 983,
-        "sha256": "4a1453a8cb1d8f711e69a194e3573e3762f12d2ae864c4e0efeb3c910a8839c5",
+        "bytes": 1754,
+        "sha256": "4bf0b29af088e4cef9e2fee4092c5ae625961d53fb6e3be244597fcc5f7b9d5c",
+        "executable": false
+      },
+      {
+        "path": "backend/src/presets.ts",
+        "bytes": 11007,
+        "sha256": "7269490c3e71c89f22b54399fe081739f762c13df513596840cfca086dea0df7",
         "executable": false
       },
       {
@@ -332,21 +344,33 @@
         "executable": false
       },
       {
+        "path": "backend/src/roleplay.ts",
+        "bytes": 8697,
+        "sha256": "f944fcfe18c186c05a8bdbc02b58f2c8dad2c729838fd3b51852431cd8e34334",
+        "executable": false
+      },
+      {
         "path": "backend/src/store.ts",
-        "bytes": 2715,
-        "sha256": "e0382da06f383312ca3c5771c3a7829da7e36697dbca87fab7286303ded0aac3",
+        "bytes": 4144,
+        "sha256": "d31352fb746076a8855cf2a813b407f3189e9a7cbbd32e200c327a65f9b0313c",
+        "executable": false
+      },
+      {
+        "path": "backend/src/worldinfo.ts",
+        "bytes": 5612,
+        "sha256": "d0010c08a7010f54b7898bcf258fbb580e410068ab78e35db7312650719f6ba1",
         "executable": false
       },
       {
         "path": "frontend/optional-tavern.css",
-        "bytes": 3279,
-        "sha256": "64e267c1a59082d2e0481d8ec58f4e60ded66e5065c1aa1485b705f57ea26f8b",
+        "bytes": 12970,
+        "sha256": "65adbd886239a0dd4d57c05fb9e7195bbb632044b8a9f1e7990373999694ba2f",
         "executable": false
       },
       {
         "path": "frontend/optional-tavern.js",
-        "bytes": 9135,
-        "sha256": "eaccd17e6f6defa838f41d626ffe1f94571f4508dd5c77d640f422b04b4c314a",
+        "bytes": 45019,
+        "sha256": "5da9b696190fa0248a64fd2d31fac01c2a5eab5073ee18f382daae6760831271",
         "executable": false
       }
     ]

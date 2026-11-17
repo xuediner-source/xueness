@@ -72,6 +72,8 @@ export interface AgentServiceOptions {
   /** Shared with session task HTTP so list/cancel see this process's foreground children. */
   taskRegistry?: TaskRegistry;
   extensions?: (session: Session, policy: RunPolicy) => readonly AgentExtension[];
+  /** Product hooks that shape a request before the lightweight view is built from it (they may set its system prompt). */
+  viewExtensions?: (session: Session, policy: RunPolicy) => readonly AgentExtension[];
   requiredCapabilities?: (session: Session, request: Row) => readonly string[];
   onEvent?: (sessionId: string, event: AgentEvent) => unknown;
   /** Replaces the in-process approval wait (the CLI answers on the terminal). */
@@ -298,6 +300,7 @@ export function createAgentService(options: AgentServiceOptions) {
             memoryExtension({ stateDir: options.stateDir, memoryRoot: () => memoryRootFromEnv(options.configEnv ?? process.env), allowed: memoryAllowed }),
             skillsExtension({ stateDir: options.stateDir, bundled: BUNDLED_SKILLS_DIR, visualizations: () => visualizations }),
             ...remoteBound ? [] : [hooksExtension({ stateDir: options.stateDir, binding: environment.hooks, legacy: !!(policy.request.allow_hooks || policy.request.allowHooks) })],
+            ...options.viewExtensions?.(value, policy) ?? [],
             lightweightRuntimeExtension({ discoveredCatalog: () => environment.kernel.tools.list().map((tool) => tool.name), toolPolicy: () => {
               // F02.01 exposure policy: the registry's declared alwaysLoad/shouldDefer tools
               // shape the lightweight selected view; a disabled plugin's tools never reach

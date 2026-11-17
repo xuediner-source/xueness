@@ -140,7 +140,7 @@ function settingsContent({ settings, isPluginEffective, capabilityKinds, capSect
   if (settingsSection === 'subscriptions') return <SubscriptionsPanel embedded onChanged={() => void refreshComposerCatalog()} onSelectModel={id => { updateChoices({ provider: 'real', provider_id: id, model: undefined, reasoning_effort: undefined }); void refreshComposerCatalog(); setPanel('chat'); }} />;
   if (settingsSection === 'workbuddy') return <WorkbuddySettingsPanel />;
   if (settingsSection === 'model-monitor') return <ModelMonitorPanel embedded />;
-  if (settingsSection === 'tavern') return <TavernPanel onStart={text => { startNewTask(); appendTextToComposer(null, text); }} />;
+  if (settingsSection === 'tavern') return <TavernPanel onStart={text => { startNewTask(); appendTextToComposer(null, text); }} onOpenPanel={() => setPanel('tavern')} />;
   if (settingsSection === 'package-imports') return <PackageImports onManagePlugins={() => setSettingsSection('modules')} />;
   if (settingsSection === "marketplace") return <XuenessMarketplace embedded onInstalled={() => void refreshPluginCatalog()} onManagePlugins={() => setSettingsSection('plugins')} />;
   if (settingsSection === "memory") return <XuenessMemorySettings enabled={settingsValues.memoryEnabled !== false} onEnabledChange={value => void handleUpdateSetting("memoryEnabled", value)} />;

@@ -113,7 +113,7 @@ Skills, hooks, MCP connectors and collaborating agents are built in. The **subsc
 | Subscription centre · optional | Import accounts or sign-in credentials you are authorised to use, and use their models and quota |
 | Returned-model monitor · optional | Passively compare the requested model with the one a response reports; sends no probe requests |
 | WorkBuddy pool · optional | Add your own account credentials, see the pool's state and use its models |
-| Tavern · optional | Import SillyTavern-compatible character cards and world books, and start a chat from a character |
+| Tavern · optional | SillyTavern-compatible character cards, world books, presets and personas; start and resume roleplay chats from the Tavern panel |
 
 <p align="center"><img src="docs/images/skills-folder.png" alt="The skills list with its add-from-folder entry and per-skill switches" width="100%" /></p>
 

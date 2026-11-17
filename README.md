@@ -107,7 +107,7 @@ node ts/apps/server/src/main.ts --port 8138
 | 订阅中心 · 可选 | 导入自己授权的账号或登录凭证，使用其模型与可用额度 |
 | 返回模型监测 · 可选 | 被动比较请求型号与响应中报告的型号，不额外发送探测请求 |
 | WorkBuddy 号池 · 可选 | 添加自备账号认证、查看号池状态并使用可用模型 |
-| 酒馆 · 可选 | 导入 SillyTavern 兼容的角色卡与世界书，从角色设定开始一段对话 |
+| 酒馆 · 可选 | SillyTavern 兼容的角色卡、世界书、预设与人设，在酒馆面板里开始并继续角色扮演对话 |
 
 <p align="center"><img src="docs/images/skills-folder.png" alt="技能列表与文件夹添加入口，初始技能提供独立开关" width="100%" /></p>
 
