@@ -2,7 +2,11 @@
   <img src="docs/images/xueness-hero.svg" alt="Xueness — Space to think. Tools to deliver." width="100%" />
 </p>
 
-<h1 align="center">Xueness</h1>
+<div align="center">
+
+# Xueness 0.2.3
+
+</div>
 
 <p align="center"><b>Keep complex work moving.</b><br/>An agent workbench of your own: conversations, files, tools and workflows in one workspace.</p>
 
