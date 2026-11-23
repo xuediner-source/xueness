@@ -63,9 +63,6 @@ desktop/update-smoke-evidence/
 # Local runtime state written relative to the CLI working directory.
 .xueness/
 
-# Local WorkBuddy account login seeds; never publish credentials
-ts/plugins/workbuddy/assets/auths/
-
 # ===== ↑ 以上同步自 .gitignore（「从 .gitignore 同步」只重写以上部分）=====
 .git/
 .hg/

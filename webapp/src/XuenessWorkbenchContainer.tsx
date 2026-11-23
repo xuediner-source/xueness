@@ -66,8 +66,7 @@ import { usePanelResource } from "./plugins/shared";
 import { normalizeColorPalette } from "./plugins/settings/themeBoot";
 import { useWorkbenchSettings } from "./plugins/settings/useWorkbenchSettings";
 import { useWorkbenchGlobalShortcuts } from './plugins/settings/workbenchShortcutActions';
-import { WorkbenchSettingsPanel } from "./plugins/settings/WorkbenchSettingsPanel";
-import { CapabilitiesPanel, DesktopUpdates, ModelManager, ModelMonitorPanel, RemoteConnections, SubscriptionsPanel, WorkbuddySettingsPanel,
+import { CapabilitiesPanel, DesktopUpdates, MagpiePanel, ModelManager, ModelMonitorPanel, RemoteConnections,
   SwarmPanel, TavernPanel, XuenessAutomationsPanel, XuenessDiagnosticsPanel, XuenessMarketplace, XuenessMcpTools, XuenessUsageSettings } from "./plugins/settings/workbenchSettingsViews";
 import { useGitPanel } from './plugins/git/useGitPanel';
 import { useWorkbenchFiles } from "./plugins/files/useWorkbenchFiles";
@@ -128,6 +127,7 @@ const XuenessRenameDialog = lazy(() => import('./plugins/sessions/XuenessRenameD
 const XuenessCloneDialog = lazy(() => import('./plugins/git/XuenessCloneDialog').then(module => ({ default: module.XuenessCloneDialog })));
 const XuenessWorkspacePickerDialog = lazy(() => import('./plugins/settings/XuenessWorkspacePickerDialog').then(module => ({ default: module.XuenessWorkspacePickerDialog })));
 const XuenessCapabilityDialog = lazy(() => import('./XuenessCapabilityDialog').then(module => ({ default: module.XuenessCapabilityDialog })));
+const WorkbenchSettingsPanel = lazy(() => import('./plugins/settings/WorkbenchSettingsPanel').then(module => ({ default: module.WorkbenchSettingsPanel })));
 
 export function XuenessWorkbenchContainer() {
   const locale = useLocale();
@@ -334,8 +334,7 @@ export function XuenessWorkbenchContainer() {
     browser: <BrowserPanel {...scopedSidePanel} />,
     automations: <XuenessAutomationsPanel offPeakEnabled={isPluginEffective("automation")} />,
     marketplace: <XuenessMarketplace onInstalled={() => void refreshPluginCatalog()} onManagePlugins={() => setPanel('plugins')} />,
-    subscriptions: <SubscriptionsPanel onChanged={() => void refreshComposerCatalog()} onSelectModel={id => { updateChoices({ provider: 'real', provider_id: id, model: undefined, reasoning_effort: undefined }); void refreshComposerCatalog(); setPanel('chat'); }} />,
-    workbuddy: <WorkbuddySettingsPanel />,
+    magpie: <MagpiePanel onModelsChanged={() => void refreshComposerCatalog()} onSelectModel={id => { updateChoices({ provider: 'real', provider_id: id, model: undefined, reasoning_effort: undefined }); void refreshComposerCatalog(); setPanel('chat'); }} />,
     'model-monitor': <ModelMonitorPanel />,
     diagnostics: <XuenessDiagnosticsPanel />,
     files: (

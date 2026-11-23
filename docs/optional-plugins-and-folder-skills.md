@@ -4,11 +4,23 @@
 
 技能、钩子、MCP 连接器与协作代理是内置功能，不再作为重复安装条目出现在扩展市场。
 
-订阅中心、返回模型监测、WorkBuddy 号池和酒馆不随 Xueness 安装，也不在安装包或源码仓库里预置。打开扩展市场，选择插件并点击“下载并安装”，Xueness 才从官方插件仓库 [xuediner-source/xueness-marketplace](https://github.com/xuediner-source/xueness-marketplace) 下载它；下载完成后，到插件管理中启用。下载失败或完整性校验失败时，插件不会变为可用。
+Magpie 模型网关、返回模型监测和酒馆不随 Xueness 安装，也不在安装包或源码仓库里预置。打开扩展市场，选择插件并点击“下载并安装”，Xueness 才从官方插件仓库 [xuediner-source/xueness-marketplace](https://github.com/xuediner-source/xueness-marketplace) 下载它；下载完成后，到插件管理中启用。下载失败或完整性校验失败时，插件不会变为可用。
 
 未下载的插件只出现在扩展市场里：插件管理的功能插件目录、设置导航和模型列表都不显示它们，下载并启用后才出现。
 
-WorkBuddy 需要用户提供自己的账号认证。下载包包含网关程序，不包含账号、令牌或认证种子。订阅中心同样只使用用户自己提供或授权的账号。返回模型监测读取正在使用的模型响应，不主动发送额外探测请求；上游没有报告型号时，显示未报告。
+Magpie 模型网关只使用用户自己添加的 API 密钥和自己登录的账号；下载包只有 magpie 原版程序与适配层，不含任何账号或令牌。返回模型监测读取正在使用的模型响应，不主动发送额外探测请求；上游没有报告型号时，显示未报告。
+
+订阅中心与 WorkBuddy 号池已于 2026-11-22 删除，由 Magpie 模型网关取代。它们以前保存在状态目录里的账号文件（`subscriptions/`、`workbuddy/`）不会被删除，也不会被自动导入；需要时在 magpie 面板中重新添加。
+
+## Magpie 模型网关
+
+插件包里是 [yetone/magpie](https://github.com/yetone/magpie)（MIT，Copyright (c) 2026 yetone）从 [magpie-releases](https://github.com/yetone/magpie-releases) 发布的原版命令行程序 `magpie-cli-<系统>-<架构>`，一字节不改，按平台各一个包（Windows、Linux、macOS 的 x64 与 ARM64，每个约 50 MB）。程序版本与各平台的 SHA-256 记在插件仓库的 `plugins/magpie/backend/upstream.json`，打包时逐个核对，包内另附 `upstream.json` 与 magpie 的许可证文本。内核按 `<插件>@<系统>-<架构>` 固定每个平台的包，扩展市场只下载本机平台的那一个；没有对应平台包时，市场不提供安装。
+
+启用插件后不会立即启动 magpie。第一次打开面板中需要它的页面、或在会话中选用它的模型时，适配层才运行 `magpie serve --web=127.0.0.1:<网页端口>`：数据放在状态目录的 `magpie/` 下（通过 `XDG_CONFIG_HOME`、`XDG_CACHE_HOME` 指定，不碰用户自己的 `~/.config/magpie`），网关端口与网页密钥由插件固定（默认 43425 与 43430，可用 `XUENESS_MAGPIE_PORT`、`XUENESS_MAGPIE_WEB_PORT` 修改），关闭遥测（`DO_NOT_TRACK=1`、`MAGPIE_NO_STATS=1`）与自动更新。禁用或卸载插件时，适配层通过 magpie 的退出接口让它正常退出，超时再结束进程。
+
+magpie 默认会读取用户自己已登录的命令行工具（如 `~/.claude`、`~/.codex`）并把它们作为账号；面板的「发现本机登录」开关可以关闭它（设置 `MAGPIE_NO_ACCOUNTS=1` 并重启 magpie），关闭后订阅账号登录也一并停用，API 密钥不受影响。
+
+面板分为概览、供应商与密钥、登录账号、路由组、模型和用量；需要 magpie 自身才有的功能时，可从面板打开 magpie 的完整控制台。magpie 的模型与路由组以 `magpie.<模型 ID>` 进入会话模型选择（标准运行档），请求经 magpie 的 OpenAI 兼容网关（`http://127.0.0.1:<网关端口>/v1`）转发，由 magpie 负责账号轮换、额度与失败切换。
 
 移除可选插件会先停用其服务，再删除插件代码和界面资源。账号、会话与配置留在用户数据目录中。旧版只有安装清单、没有实际插件文件的记录，需要重新下载后才能启用。
 
@@ -50,15 +62,15 @@ Read references/review.md, then follow the project-specific checks.
 
 ## 分发与实现
 
-2026-11-17 起，四个插件的源码、界面和下载包都在独立仓库 [xueness-marketplace](https://github.com/xuediner-source/xueness-marketplace) 中维护：`plugins/<id>/backend` 是后端，`plugins/<id>/frontend` 是界面，`packages/` 是按内容摘要命名的下载包。本仓库只保留每个插件的描述（`ts/plugins/<id>/manifest.json`、`package.json` 与 `ts/catalog/<id>.json`：名称、路由、功能与能力声明），用于在扩展市场显示下载入口；插件门禁拒绝这些目录里再出现 `src/`、`assets/` 或界面代码。
+2026-11-17 起，这些插件的源码、界面和下载包都在独立仓库 [xueness-marketplace](https://github.com/xuediner-source/xueness-marketplace) 中维护：`plugins/<id>/backend` 是后端，`plugins/<id>/frontend` 是界面，`packages/` 是按内容摘要命名的下载包。本仓库只保留每个插件的描述（`ts/plugins/<id>/manifest.json`、`package.json` 与 `ts/catalog/<id>.json`：名称、路由、功能与能力声明），用于在扩展市场显示下载入口；插件门禁拒绝这些目录里再出现 `src/`、`assets/` 或界面代码。
 
-`ts/packages/kernel/src/optional-packages.json` 固定本次核心构建允许的四个插件、下载地址、包摘要与每个文件的摘要，下载地址只能是官方插件仓库（`https://raw.githubusercontent.com/xuediner-source/xueness-marketplace/main/packages/`）。下载器只在用户选择安装时联网获取，验证整个压缩包和所有文件后，再原子发布到用户状态目录；桌面安装包和命令行压缩包不再携带任何插件包，也不读取本机副本。
+`ts/packages/kernel/src/optional-packages.json` 固定本次核心构建允许的插件（`OPTIONAL_IDS`）、下载地址、包摘要与每个文件的摘要，下载地址只能是官方插件仓库（`https://raw.githubusercontent.com/xuediner-source/xueness-marketplace/main/packages/`）。带本机程序的插件按平台各固定一个包，键为 `<插件>@<系统>-<架构>`，内核只认本机平台的那一个。下载器只在用户选择安装时联网获取（压缩包不超过 96 MiB，解压后不超过 192 MiB），验证整个压缩包和所有文件后，再原子发布到用户状态目录；桌面安装包和命令行压缩包不再携带任何插件包，也不读取本机副本。
 
 插件界面是包内的 `frontend/optional-<id>.js` 与 `.css`。工作台在需要时以脚本方式加载它（`webapp/src/plugins/extensions/optionalFrontend.ts`），并把自己的 React 和宿主接口（`@xueness/host` 第 1 版：`t`、`tf`、`useLocale`、`get`、`post`、`del`、`EmptyState`）借给插件，插件包不自带 React。服务端从已校验的安装目录提供这些文件。
 
-发布插件：在 xueness-marketplace 仓库运行 `npm run release`（需要本仓库检出在旁边的 `../xueness`），它构建界面、打包、写出 `pins.json`，并把新的固定摘要写入本仓库的 `optional-packages.json`；先推送插件仓库，再提交和推送核心，否则新摘要对应的包还下载不到。
+发布插件：在 xueness-marketplace 仓库运行 `npm run release`（需要本仓库检出在旁边的 `../xueness`），它构建界面、打包、写出 `pins.json`，并把新的固定摘要写入本仓库的 `optional-packages.json`；先推送插件仓库，再提交和推送核心，否则新摘要对应的包还下载不到。magpie 的原版程序不放在插件仓库的源码里：打包时从 `--bin-dir`（默认 `../vendor-src/magpie-release-v<版本>`）读取并按 `upstream.json` 核对摘要，打包脚本自己不联网下载。
 
-只有这四个内置许可的官方插件可以加载代码。普通市场清单和用户导入的数据清单继续禁止 `entrypoint`、`command` 等可执行字段（钩子组件里的 `command` 是例外：它只登记为关闭的钩子，由用户检查后打开）；远程目录不能扩展代码加载许可。
+只有这些内置许可的官方插件可以加载代码。普通市场清单和用户导入的数据清单继续禁止 `entrypoint`、`command` 等可执行字段（钩子组件里的 `command` 是例外：它只登记为关闭的钩子，由用户检查后打开）；远程目录不能扩展代码加载许可。
 
 服务端只加载已安装且通过校验的包，不回退读取开发目录。安装后可以按需启用，无需重启桌面端；禁用与卸载会关闭对应的代理或网关。核心更新固定摘要后，已安装的旧版本需要在扩展市场重新下载。
 

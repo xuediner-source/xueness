@@ -25,9 +25,9 @@ export function marketplaceDisplayCopy(item: MarketplaceItem): { name: string; d
     hooks: ['钩子', '在任务关键阶段执行你配置的自动化操作。'],
     mcp: ['MCP 连接器', '连接外部工具和服务，拓展任务能力。'],
     subagents: ['协作代理', '让多个代理分工处理任务，并汇总进度和结果。'],
-    subscriptions: ['订阅中心', '通过账号授权或登录凭证接入 Claude、Codex 等订阅账号，查询真实额度并用于会话。'],
+    magpie: ['Magpie 模型网关', '原版 magpie 本机网关：统一管理 API 密钥、订阅登录账号与路由组，查看额度与用量，并在会话中使用它的模型。'],
     model_monitor: ['返回模型监测', '随会话显示请求型号与上游返回型号，判断一致或不同；不自动发送额外请求。'],
-    workbuddy: ['WorkBuddy 号池', '按需下载 WorkBuddy 号池网关，启用后在设置中添加自备账号认证，并查看号池状态。'], tavern: ['酒馆', '导入 SillyTavern 兼容的角色卡与世界书，从角色设定开始一段角色扮演对话。'],
+    tavern: ['酒馆', '导入 SillyTavern 兼容的角色卡与世界书，从角色设定开始一段角色扮演对话。'],
   };
   const kind = typeof item.manifest.builtin === 'string' ? item.manifest.builtin : '';
   const copy = (item.source === 'bundled' || item.delivery === 'official') && item.id === (kind === 'model_monitor' ? 'xueness-model-monitor' : `xueness-${kind}`) ? bundled[kind] : undefined;

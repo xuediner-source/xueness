@@ -53,7 +53,7 @@ export interface ExecutionAnnouncement {
 }
 
 export interface CapabilityFlags {
-  /** The subscriptions plugin is installed, enabled and its marketplace marker present. */
+  /** An account-backed provider plugin with an entitlement interface is installed and enabled. */
   subscriptionsAvailable?: boolean;
   /** A user-authorized entitlement service is configured for this account. */
   entitlementsConfigured?: boolean;
@@ -68,9 +68,9 @@ function standardAnnouncement(): ModeAnnouncement {
 }
 
 /**
- * Account-backed records (`source: "subscription"`) resolve only on the
- * standard runtime — `resolveSubscription` and the WorkBuddy view both
- * reject anything else — so lightweight is announced unavailable with the
+ * Account-backed records (`source: "subscription"`, today the magpie
+ * gateway's models) resolve only on the standard runtime — the account view
+ * rejects anything else — so lightweight is announced unavailable with the
  * exact reason instead of failing a run later.
  */
 function lightweightAnnouncement(record: Dict): ModeAnnouncement {
@@ -83,21 +83,21 @@ function lightweightAnnouncement(record: Dict): ModeAnnouncement {
 
 /**
  * The ticket path is real only when every condition holds: an account-backed
- * subscription record, the subscriptions plugin available, and a configured
+ * record, a plugin with an entitlement interface available, and a configured
  * user-authorized entitlement service. Anything else states its reason.
  */
 function ticketPath(record: Dict, flags: CapabilityFlags): { ticketPath: boolean; reasons: CapabilityReason[] } {
   const subscription = record.source === "subscription";
-  const workbuddy = subscription && record.subscriptionId === "workbuddy";
+  const magpie = subscription && record.subscriptionId === "magpie";
   const pending = (flags.pendingEntitlements ?? []).includes(String(record.subscriptionId ?? ""));
   if (!subscription) {
     return { ticketPath: false, reasons: [{ code: "entitlements.not_account_backed", detail: "saved provider profiles authenticate with their own API key; no entitlement ticket is involved" }] };
   }
-  if (workbuddy) {
-    return { ticketPath: false, reasons: [{ code: "workbuddy.pool_gateway", detail: "WorkBuddy pool models go through the local pool gateway, which has no ticket interface" }] };
+  if (magpie) {
+    return { ticketPath: false, reasons: [{ code: "magpie.gateway", detail: "magpie models go through the local magpie gateway, which manages its own accounts and has no ticket interface" }] };
   }
   if (!flags.subscriptionsAvailable) {
-    return { ticketPath: false, reasons: [{ code: "subscriptions.unavailable", detail: "the subscriptions plugin is disabled or not installed from the marketplace" }] };
+    return { ticketPath: false, reasons: [{ code: "entitlements.unavailable", detail: "no account-backed provider plugin with an entitlement interface is installed and enabled" }] };
   }
   if (!flags.entitlementsConfigured) {
     return { ticketPath: false, reasons: pending

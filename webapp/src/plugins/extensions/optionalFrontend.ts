@@ -19,7 +19,7 @@ import { del, get, post } from "../../xuenessApi";
 import { EmptyState } from "../../ui/primitives";
 
 export const OPTIONAL_FRONTEND_HOST_VERSION = 1;
-export type OptionalFrontendId = "subscriptions" | "model_monitor" | "workbuddy" | "tavern";
+export type OptionalFrontendId = "magpie" | "model_monitor" | "tavern";
 type HostGlobals = { __xnHostReact?: unknown; __xnHostJsx?: unknown; __xnHost?: unknown } & Record<string, unknown>;
 
 function installHost(): HostGlobals {

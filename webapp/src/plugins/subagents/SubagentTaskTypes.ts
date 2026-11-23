@@ -1,0 +1,21 @@
+export type SubagentTaskItem = {
+  id: string;
+  parent?: string;
+  name?: string;
+  title?: string;
+  agent?: string | null;
+  status: "running" | "completed" | "failed" | "cancelled" | string;
+  steps: number;
+  startedAt?: number | null;
+  endedAt?: number | null;
+  summary?: string;
+  error?: string;
+  promptChars?: number;
+  workerActive?: boolean;
+  root?: string | null;
+  childSessionId?: string;
+  canResume?: boolean;
+  canResumeNow?: boolean;
+  canGuide?: boolean;
+  recoveryReason?: string;
+};

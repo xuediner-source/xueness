@@ -62,6 +62,10 @@
     "plugins/automation/automationModel.ts",
     "plugins/automation/offPeakModel.ts",
     "plugins/automation/OffPeakTasks.tsx",
-    "plugins/automation/index.tsx"
+    "plugins/automation/index.tsx",
+    "plugins/automation/automationFormat.ts",
+    "plugins/automation/AutomationCard.tsx",
+    "plugins/automation/AutomationDetail.tsx",
+    "plugins/automation/AutomationForm.tsx"
   ]
 }

@@ -1,5 +1,74 @@
 # Xueness 工作台设计与验收
 
+## 2026-11-22 第三轮：Magpie 模型网关取代订阅中心与 WorkBuddy 号池，继续拆分大文件
+
+- **插件替换（项目所有者 2026-11-22 决定）。** 订阅中心（`subscriptions`）与 WorkBuddy 号池（`workbuddy`）从核心与插件仓库中删除，由可下载的官方插件「Magpie 模型网关」（`magpie`）取代。插件包里是 [yetone/magpie](https://github.com/yetone/magpie)（MIT）发布的原版命令行程序，按平台各一个包；Xueness 侧只做进程管理、模型接入与界面。详见 [插件按需下载](optional-plugins-and-folder-skills.md#magpie-模型网关)。
+  - 核心：`OPTIONAL_IDS` 改为 `model_monitor`、`tavern`、`magpie`；内核支持按平台固定包（`<id>@<系统>-<架构>`），安装器的下载与解压上限提高到 96 MiB / 192 MiB；服务端的可选账号槽位只剩 magpie，禁用即关闭 magpie 进程；`execution-capabilities` 的 WorkBuddy 分支改为 magpie 网关；工作台注册表、设置导航、面板挂载与扩展市场条目随之更换，英文词条同步。
+  - 界面：设置 → 扩展与维护 → Magpie 模型网关（也可作为面板打开）。状态条（启动、停止、重启、网关地址、打开完整 magpie 控制台、发现本机登录开关）与六个页面：概览、供应商与密钥、登录账号、路由组、模型、用量。未运行时各页只显示启动入口，不会自己启动 magpie。
+  - magpie 的模型 ID 含 `/`，而 Xueness 的配置 ID 只允许 `[A-Za-z0-9._-]{1,64}`，所以会话里的 ID 是 `magpie.<可读片段>.<SHA-256 前 8 位>`，请求仍发 magpie 的真实 ID。
+- **大文件拆分。** 做法同第二轮：原路径保留原有的全部导出（转出），导入方无需改动；新文件登记在所属插件的 `manifest.json` 与 `ts/catalog/<id>.json`；拆分后比对原文件与新模块引用的浏览器全局，次数一致、没有新出现的全局名。
+  - `plugins/sessions/ZCodeConversation.tsx` 698 → 195 行：`conversationTypes.ts`、`conversationDisclosure.ts`、`conversationRows.ts`（轮次分组）、`ConversationUserRows.tsx`、`ConversationToolRow.tsx`、`ConversationAnswerRows.tsx`、`ConversationTurnView.tsx`。
+  - `plugins/sessions/XuenessTaskList.tsx` 635 → 393 行：`taskListModel.ts`（分组、工作区、用途、项目分桶与归档计划）、`taskListHelpers.ts`、`XuenessTaskListToolbar.tsx`（视图与排序）、`XuenessTaskListMenus.tsx`（任务右键菜单与延后加载的项目菜单）。
+  - `plugins/subagents/SubagentSidePane.tsx` 647 → 350 行：`SubagentTaskTypes.ts`、`SubagentTaskFormat.ts`、`SubagentTaskCard.tsx`。
+  - `plugins/automation/index.tsx` 646 → 262 行：`automationFormat.ts`、`AutomationCard.tsx`、`AutomationDetail.tsx`、`AutomationForm.tsx`。
+- **行数门禁。** 移除以上四个文件的基线，基线从 12 项减到 8 项；最大的前端文件现为 `xuenessApi.ts`（593 行）。
+
+**测量**（同上，gzip 估算）：启动 JS 279,311 → 279,578 B（+267 B），CSS 53,547 B，合计 332,858 → 333,125 B，启动文件仍为 7 个；`App` 块 655,875 B / 206,295 B gzip → 656,849 B / 206,563 B gzip。增加的部分是拆分后多出的组件边界与 props 传递。Magpie 的界面在插件包里，启动包不含它。相对最初：启动 JS 361,556 → 279,578 B（−22.7%），合计 415,091 → 333,125 B（−19.7%）。
+
+插件包（`xueness-marketplace/packages/`，每个包含原版程序、适配层与界面，gzip 后）：Windows x64 52.1 MB、Windows arm64 48.3 MB、Linux x64 50.9 MB、Linux arm64 47.6 MB、macOS x64 51.5 MB、macOS arm64 48.9 MB。
+
+**验收**：`check:plugins`（38 个插件）、`npm --prefix ts run check`、`webapp typecheck`、`webapp build`、启动包预算通过；私有测试 overlay 的前端测试 15 项通过；新增 `marketplace/plugins/magpie/adapter.test.ts`，用真实的 magpie 程序与本机模拟上游跑 14 项（停止状态不启动、关闭本机登录发现、启动、添加自定义供应商、模型列表与会话配置 ID、核心的会话模型列表里出现 magpie 模型且为已配置、一次会话请求经 magpie 到达上游、路由组增改删、供应商启停/测试/密钥、账号/登录/额度/用量/概览/控制台、第二个适配器接管运行中的进程、重启与关闭、禁用时 403 且不启动），全部通过。
+
+真实构建在隔离状态目录下检查：
+- Magpie：经真实安装流程（与安装接口相同的 `storeOfficialArtifact` + `installAll`）安装 `win32-x64` 包并启用；关闭本机登录发现后启动；添加指向本机模拟模型的自定义供应商，界面只显示打码后的密钥；会话模型菜单出现「Magpie · fake-md」且为已配置；选中后发送消息会自动启动 magpie，Markdown 回答正常渲染，用量页记下这次请求；禁用插件后接口返回 403、模型从列表消失、magpie 进程退出、端口关闭。
+- 拆分后的界面：会话（Markdown、表格、编辑消息与反馈按钮）；任务列表在分组、项目、工作区、用途、时间线视图间切换，任务右键菜单（置顶、重命名、归档），项目右键菜单延后加载后显示六项操作；子代理面板的空状态；自动化面板新建计划（自定义 Cron 与每周两种频率、校验「需要 1 到 64 个执行步骤」、添加命令步骤）、计划卡片、详情、编辑时回填全部字段、删除确认对话框。没有控制台错误。本次状态里没有子代理任务和工具调用，所以 `SubagentTaskCard` 与 `ConversationToolRow` 只经过了类型检查、全局比对与构建，没有在界面上渲染过。桌面应用（此前未运行）由 `Start-Xueness-Desktop.cmd` 启动，V8 代码缓存记下第三轮构建的入口、`App` 与 `markdownRenderer` 块（与 `webapp/dist` 同一哈希），随后是起始页的延后加载块。
+
+## 2026-11-19 前端优化第二轮：Radix 选择器延后加载与大文件拆分
+
+- **选择器延后加载。** `ui/Select.tsx` 是 `@radix-ui/react-select` 的唯一使用者，原先 Radix（`radix-vendor`）与其依赖块（`Combination`）都在启动包里。现在 Radix 在首次挂载选择器时才导入；加载完成前选择器渲染同样结构的触发按钮（`button > span + svg`，同样的类名、`role="combobox"`、`data-state="closed"`，有 `name` 时附隐藏输入），所以界面不移动。这段时间内的点击或回车、空格、方向键会在 Radix 就绪后直接打开菜单；若焦点在占位按钮上，换成 Radix 触发器后焦点保留。未新增共享文件。
+- **大文件拆分。** 原路径都保留原有的全部导出（转出），导入方无需改动；新文件登记在所属插件的 `manifest.json` 与 `ts/catalog/<id>.json`。
+  - `plugins/providers/index.tsx` 1,330 → 370 行：`providerDraft.ts`（常量、草稿与校验）、`ProviderPanels.tsx`、`ProviderEditor.tsx`，以及从编辑器中分出的 `ProviderCompatibilitySettings.tsx`（API 兼容设置与诊断）和 `ProviderLightweightAdvanced.tsx`（轻量高级选项）。这两块原是编辑器内联 JSX，现在是接收显式 props 的组件，`advancedOpen` 状态仍在编辑器里。
+  - `plugins/sessions/XuenessWorkbenchView.tsx` 1,175 → 358 行（`Composer`）：事件处理拆成工厂函数（发送、按键、编辑、附件、草稿操作），副作用拆成自定义 hook（加号菜单、上传同步、窗口 Esc、输入框自适应高度），界面片段拆成无状态组件（建议列表、上下文标签、状态提示、输入面、加号菜单、发送按钮），共 17 个模块，函数体按原样移动。
+  - `plugins/sessions/XuenessComposerToolbar.tsx` 861 → 270 行：`composerModelCatalog.ts`、`ComposerModelDetailCard.tsx`、`ComposerModelMenu.tsx`、`ComposerModeControls.tsx`。
+  - 拆分后用 TypeScript 检查器比对了原文件与新模块引用的浏览器全局（`document`、`window`、`requestAnimationFrame` 等）：次数一致，没有新出现的全局名，即没有被搬走的闭包变量意外落到同名全局上。
+- **行数门禁。** 移除 `providers/index.tsx`、`XuenessWorkbenchView.tsx`、`XuenessComposerToolbar.tsx` 的基线，以及早已过时的 `LightweightWorkbench.tsx`（基线 1,255，实际 252）；`XuenessTaskList` 635、`ZCodeConversation` 698、`SubagentSidePane` 647、`xuenessApi` 593 按实际下调。基线从 16 项减到 12 项，最大的前端文件现为 `ZCodeConversation.tsx`（698 行）。
+
+**测量**（同上，gzip 估算）：
+
+| 启动图 | 第一轮之后 | 第二轮之后 | 相对最初 |
+|---|---|---|---|
+| JS（gzip） | 302,717 B | 279,311 B（−7.7%） | 361,556 → 279,311（−22.7%） |
+| 合计 | 356,264 B | 332,858 B | 415,091 → 332,858（−19.8%） |
+| 启动文件 | 9 个 | 7 个（`radix-vendor` 21,162 B 与 `Combination` 4,899 B 移出） | 11 → 7 |
+| `App` 块 | 646,353 B / 203,604 B gzip | 655,875 B / 206,295 B gzip | |
+
+`App` 块变大约 9.5 KB（gzip 2.7 KB）：`Composer` 拆成组件后多了 props 传递和组件边界，这是拆分的代价，已计入上面的净值。
+
+**验收**：`check:plugins`、`npm --prefix ts run check`、`webapp typecheck`、`webapp build` 通过；私有测试 overlay 新增 `webapp/src/ui/select-deferred.test.ts`（占位触发器与 Radix 触发器结构一致、隐藏表单值、构建后的启动图不含 `markdown-vendor`、`markdownRenderer`、`radix-vendor`、`WorkbenchSettingsPanel`；最后一项在改动前的构建上按预期失败），连同第一轮共 15 项全部通过。真实构建在隔离状态目录、本机模拟模型下检查：Radix 在 `App` 之后约 110–145ms 加载，选择器随后变为 Radix 实现；视图切换选择器打开 12 个选项，选择后切换视图、菜单关闭、焦点回到触发器；输入框 `/` 建议、方向键高亮与 `aria-activedescendant`、Esc 关闭；接受 `/workflow` 打开工作流面板；加号菜单与模型菜单打开后焦点在菜单内、Esc 关闭并回到按钮；发送后 Markdown 回答正常渲染；供应商编辑器的 API 兼容设置与轻量高级选项正常渲染，编辑字段后草稿更新、保存与恢复按钮变为可用。没有控制台错误。轻量高级选项的 `<details>` 展开没能在 1024×768 视口里用鼠标点到（外层面板裁切，与本轮改动无关），只验证了内容和编辑。桌面应用用 `--quit` 正常退出后由 `Start-Xueness-Desktop.cmd` 重新启动，应用缓存中出现第二轮构建的入口与 `App` 块，随后才是 `radix-vendor`。
+
+## 2026-11-19 前端优化：数据层拆分与启动包瘦身
+
+接着 11-06（层叠层）与 11-07（工作台容器拆分）继续：拆开剩下最大的前端模块，并把首屏用不到的代码移出启动包。界面、功能、权限与插件开关不变。
+
+- **会话数据层拆分。** `xuenessWorkbench.ts`（1,585 行有效代码，前端最大的文件）拆成 sessions 插件内的 11 个模块：`workbenchTypes`（类型）、`sessionPayloadParsers`（严格解析）、`timelineRowSharing`（轮询结构共享）、`sessionHttp`（同源请求与 CSRF）、`startupCommandHandle`（命令客户端懒加载替身）、`sessionReadApi`、`sessionWriteApi`、`sessionForkApi`、`conversationShareApi`、`timelineProjection`（事件与日志投影）、`fileChanges`。`xuenessWorkbench.ts` 保留为 29 行的转出口，导出的名称与签名不变（冻结契约），现有 70 多处导入无需改动。分享接口只被懒加载的分享视图使用，现在随这些视图加载。`queueApi.ts` 与 `sessionsIndex.ts` 改为直接导入具体模块，不再绕回转出口形成循环。`cancelQueuedTurn` 对 `queueApi` 的动态导入改为静态导入：该模块本来就在启动包里，动态导入不起作用，构建因此一直提示混合导入。
+- **Markdown 解析器移出启动包。** react-markdown + GFM（`markdown-vendor` 与其依赖块）原先随 `XuenessShell.tsx` 进入启动包。解析与渲染（组件映射、代码块、URL 白名单、内容缓存）移到 `plugins/sessions/markdownRenderer.tsx`；`SimpleMarkdown` 在解析器就绪前用同一容器显示纯文本（`data-md-pending`，保留换行），就绪后渲染 Markdown。外壳在首次绘制之后（首个 passive effect）即开始加载该模块，与首批会话读取并行，所以打开会话时通常已经就绪。最初用 `requestIdleCallback` 预取，实测启动繁忙时空闲回调约 500ms 才触发，直接打开会话链接时对话数据（580ms）先于解析器（612ms）到达，因此改为首次绘制后立即加载。`cachedMarkdownElements` 与 `MARKDOWN_ELEMENT_CACHE_LIMIT` 现在从 `markdownRenderer.tsx` 导出；同步渲染 `SimpleMarkdown` 的测试需先 `await loadMarkdownRenderer()`。
+- **设置面板懒加载。** `WorkbenchSettingsPanel` 与其它面板视图一样在面板的 Suspense 内懒加载；它不导入样式表，层叠顺序不受影响。
+- **行数门禁。** `xuenessWorkbench.ts` 与 `XuenessShell.tsx`（现 368 行）都已低于 400 行，从基线中移除；容器上限按实际降为 532。新模块全部登记在 sessions 插件的 `manifest.json` 与 `ts/catalog/sessions.json`，未扩大 `SHARED_FRONTEND`。
+
+**测量**（`tools/check_frontend_bundle.mjs`，gzip 估算，不是网络或运行时测量；前后两次构建都来自同一份源码树，只差本轮改动）：
+
+| 启动图 | 之前 | 之后 |
+|---|---|---|
+| JS（gzip） | 361,556 B | 302,717 B（−58,839，−16.3%） |
+| CSS（gzip，含较大的外观） | 53,535 B | 53,547 B（+12，挂起态的一条规则） |
+| 合计 | 415,091 B | 356,264 B（−14.2%） |
+| 启动 JS/CSS 文件 | 11 个 | 9 个（`markdown-vendor` 45,804 B 与其依赖块 7,928 B 移到首次绘制之后） |
+| `App` 块 | 663,858 B / 208,676 B gzip | 646,353 B / 203,604 B gzip |
+
+全部 JS 的总量基本不变（代码是挪后加载，不是删除）。构建警告从两条减为一条：混合静态/动态导入的提示消失；超过 500 kB 的提示仍在（PPTX 渲染器、wasm、shiki 的 cpp 语法和 `App` 块）。
+
+**验收**：`npm --prefix ts run check:plugins`、`npm --prefix ts run check`、`webapp typecheck`、`webapp build`（设计门禁与启动包预算）通过；私有测试 overlay 新增 `webapp/src/plugins/sessions/workbench-data-layer.test.ts`（12 项：转出口导出集合与拆分前一致、投影/结构共享/文件变更/命令行格式化、CSRF 变更请求、Markdown 挂起态与就绪后的 GFM 表格、代码块、URL 白名单），全部通过。真实构建在隔离状态目录中用本机模拟模型（只回答 Markdown，不调用工具）检查：起始页无控制台错误；设置面板在打开时才请求自己的块；流式回答渲染出标题、列表、表格、高亮代码块，`javascript:` 链接降为纯文本；直接打开会话链接时解析器块约 160ms 到达、对话数据约 920ms 到达，没有残留的纯文本挂起态；分享对话框通过新的分享接口模块读取预览。之后用工作区的 `Start-Xueness-Desktop.cmd` 启动桌面应用，其后端以 `--assets xueness\webapp\dist` 运行，应用自己的 Chromium 缓存中出现新构建的入口与 `App` 块，没有旧构建的文件名。
+
 ## 2026-11-13 记忆之海
 
 - 记忆面板换成「记忆之海」（`webapp/src/plugins/memory/MemoryOcean.tsx`）：一张全幅 Canvas 星图。说明见 [记忆之海](xueness-memory-ocean.md)。

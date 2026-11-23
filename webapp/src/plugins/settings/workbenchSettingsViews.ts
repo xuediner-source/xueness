@@ -11,8 +11,7 @@ export const CapabilitiesPanel = lazy(() => import('../../XuenessCapabilitiesPan
 export const DesktopUpdates = lazy(() => import("../updates/DesktopUpdates").then(module => ({ default: module.DesktopUpdates })));
 export const ModelManager = lazy(() => import("../providers").then(module => ({ default: module.ModelManager })));
 // Marketplace plugins: their interface comes from the package the user downloaded (see optionalFrontend.ts).
-export const SubscriptionsPanel = optionalComponent<{ onChanged?: () => void; onSelectModel?: (id: string) => void; embedded?: boolean }>('subscriptions', 'SubscriptionsPanel');
-export const WorkbuddySettingsPanel = optionalComponent<Record<string, never>>('workbuddy', 'WorkbuddySettingsPanel');
+export const MagpiePanel = optionalComponent<{ embedded?: boolean; onModelsChanged?: () => void; onSelectModel?: (profileId: string) => void }>('magpie', 'MagpiePanel');
 export const ModelMonitorPanel = optionalComponent<{ embedded?: boolean }>('model_monitor', 'ModelMonitorPanel');
 export type TavernSessionRef = { plugin: 'tavern'; id: string };
 export const TavernPanel = optionalComponent<{ onStart(text: string): void; onStartSession?(text: string, ref: TavernSessionRef): Promise<boolean>; onOpenSession?(id: string): void; onOpenPanel?(): void }>('tavern', 'TavernPanel');

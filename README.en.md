@@ -103,16 +103,15 @@ Open **http://127.0.0.1:8138** and configure a model before sending a task. In a
 
 ## Plugins and extensions
 
-Skills, hooks, MCP connectors and collaborating agents are built in. The **subscription centre, returned-model monitor, WorkBuddy pool and Tavern** are not preinstalled: the marketplace downloads one from the official plugin repository, [xueness-marketplace](https://github.com/xuediner-source/xueness-marketplace), only when you choose it; enable it in plugin management after installing.
+Skills, hooks, MCP connectors and collaborating agents are built in. The **Magpie model gateway, returned-model monitor and Tavern** are not preinstalled: the marketplace downloads one from the official plugin repository, [xueness-marketplace](https://github.com/xuediner-source/xueness-marketplace), only when you choose it; enable it in plugin management after installing.
 
 | Entry | What you can do |
 | :-- | :-- |
 | Skills | Seven starter skills, each with its own switch; create new ones or add a folder with its scripts, references and attachments |
 | MCP | Connect external tools, resources and services, and see connection state and request results |
 | Workflows and collaboration | Split tasks, configure hooks, and follow progress and results |
-| Subscription centre · optional | Import accounts or sign-in credentials you are authorised to use, and use their models and quota |
+| Magpie model gateway · optional | The original [magpie](https://github.com/yetone/magpie) local gateway: API keys, subscription sign-ins and routing groups, quotas and usage, with its models in your conversations |
 | Returned-model monitor · optional | Passively compare the requested model with the one a response reports; sends no probe requests |
-| WorkBuddy pool · optional | Add your own account credentials, see the pool's state and use its models |
 | Tavern · optional | SillyTavern-compatible character cards, world books, presets and personas; start and resume roleplay chats from the Tavern panel |
 
 <p align="center"><img src="docs/images/skills-folder.png" alt="The skills list with its add-from-folder entry and per-skill switches" width="100%" /></p>

@@ -1,5 +1,5 @@
-import { listSessions, listSessionsIndex } from '../../xuenessWorkbench';
-import type { Result, SessionSummary } from '../../xuenessWorkbench';
+import { listSessions, listSessionsIndex } from './sessionReadApi';
+import type { Result, SessionSummary } from './workbenchTypes';
 import { t as tr } from '../../i18n';
 
 export type SessionChangeSummary = { added?: number; removed?: number; files?: number; fileCount?: number } | string;

@@ -1,4 +1,4 @@
-import { requestMutation } from "../../xuenessWorkbench";
+import { requestMutation } from "./sessionHttp";
 import { t as tr } from '../../i18n';
 import type { SessionCommandClient } from './commandClient';
 import { CommandDeliveryUnconfirmedError } from './commandReceipt';

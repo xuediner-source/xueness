@@ -10,15 +10,19 @@ export type ArtifactDownload = (artifact: OptionalArtifact) => Promise<Buffer>;
 
 /** The official plugin repository. Packages are fetched from here only, and only when the user installs one. */
 export const OFFICIAL_ARTIFACT_ORIGIN = "https://raw.githubusercontent.com/xuediner-source/xueness-marketplace/main/packages/";
+/** Packages that carry a native program (magpie, about 55 MB compressed) stay under GitHub's 100 MB file limit. */
+const MAX_DOWNLOAD_BYTES = 96 * 1024 * 1024;
+/** The decompressed JSON holds base64 file contents: a 105 MB program is about 140 MB here. */
+const MAX_PAYLOAD_BYTES = 192 * 1024 * 1024;
 
 export async function downloadArtifact(artifact: OptionalArtifact): Promise<Buffer> {
   if (!artifact.url.startsWith(OFFICIAL_ARTIFACT_ORIGIN)) throw new Error("untrusted artifact origin");
-  const response = await fetch(artifact.url, { redirect: "error", signal: AbortSignal.timeout(120_000), headers: { Accept: "application/octet-stream" } });
+  const response = await fetch(artifact.url, { redirect: "error", signal: AbortSignal.timeout(600_000), headers: { Accept: "application/octet-stream" } });
   if (!response.ok || !response.body) throw new Error(`GitHub download failed (${response.status})`);
   const chunks: Uint8Array[] = []; let bytes = 0;
   for await (const chunk of response.body) {
     bytes += chunk.length;
-    if (bytes > 32 * 1024 * 1024) throw new Error("artifact download exceeds the size limit");
+    if (bytes > MAX_DOWNLOAD_BYTES) throw new Error("artifact download exceeds the size limit");
     chunks.push(chunk);
   }
   return Buffer.concat(chunks, bytes);
@@ -36,7 +40,7 @@ function privateFile(path: string, bytes: Buffer): void {
 /** Checks every byte before publishing the directory. Nothing is evaluated here. */
 export function storeOfficialArtifact(stateDir: string, artifact: OptionalArtifact, compressed: Buffer): void {
   // `sha256` and `bytes` pin the decompressed payload; the output bound keeps a hostile stream from expanding unchecked.
-  const plain = gunzipSync(compressed, { maxOutputLength: Math.min(64 * 1024 * 1024, artifact.bytes + 1) });
+  const plain = gunzipSync(compressed, { maxOutputLength: Math.min(MAX_PAYLOAD_BYTES, artifact.bytes + 1) });
   if (plain.length !== artifact.bytes || artifactHash(plain) !== artifact.sha256) throw new Error("official artifact checksum mismatch");
   const value = JSON.parse(plain.toString("utf8"));
   if (value.id !== artifact.id || value.version !== artifact.version || !Array.isArray(value.files) || value.files.length !== artifact.files.length) throw new Error("invalid official artifact");

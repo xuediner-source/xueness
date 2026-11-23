@@ -8,11 +8,10 @@ import type { ExternalProfiles } from "@xueness/plugin-providers";
 // These are the entry points the host calls, written out here because the source is not in this repository.
 type OptionalContext = { stateDir: string; enabled(id: string): boolean; env: NodeJS.ProcessEnv };
 type AccountPlugin = { http: HttpPort; profiles: ExternalProfiles; close?(): void | Promise<void> };
-type SubscriptionModule = {
-  createSubscriptions(options: { stateDir: string; enabled(): boolean; installed(): boolean; env: NodeJS.ProcessEnv }): AccountPlugin;
-  NativeProvider: abstract new (...args: never[]) => ChatProvider & { sessionId?: string };
+/** The magpie package wraps the unmodified magpie program; its adapter owns the process and the account view. */
+type MagpieModule = {
+  createMagpie(options: { stateDir: string; enabled(): boolean; installed(): boolean; env: NodeJS.ProcessEnv }): AccountPlugin;
 };
-type WorkbuddyModule = { createWorkbuddy(options: OptionalContext): AccountPlugin };
 type MonitorModule = {
   createModelMonitorHttp(options: OptionalContext): HttpPort;
   observeProvider(provider: ChatProvider, options: { stateDir: string; sessionId: string; providerId: unknown; enabled(): boolean }): ChatProvider;
@@ -52,33 +51,43 @@ function httpPort(o: Context, id: string, routes: readonly string[], get: () => 
   };
 }
 
+/** Routes the magpie package answers; documented here for the route catalog. */
+const MAGPIE_ROUTES = [
+  "GET /api/magpie/status", "POST /api/magpie/start", "POST /api/magpie/stop", "POST /api/magpie/restart", "POST /api/magpie/settings",
+  "GET /api/magpie/console", "GET /api/magpie/overview", "GET /api/magpie/providers", "GET /api/magpie/presets", "POST /api/magpie/providers",
+  "POST /api/magpie/providers/:id/:action", "POST /api/magpie/providers/:id/keys", "DELETE /api/magpie/providers/:id/keys/:keyId",
+  "GET /api/magpie/accounts", "POST /api/magpie/accounts/:id/:action", "GET /api/magpie/signin/agents", "POST /api/magpie/signin",
+  "GET /api/magpie/signin/:id", "POST /api/magpie/signin/:id/cancel", "POST /api/magpie/signin/:id/callback", "GET /api/magpie/quotas",
+  "GET /api/magpie/groups", "POST /api/magpie/groups", "POST /api/magpie/groups/:id", "DELETE /api/magpie/groups/:id",
+  "GET /api/magpie/models", "GET /api/magpie/usage",
+] as const;
+
+/**
+ * Account-backed models come from the downloadable magpie gateway (it replaced the Subscription Center and the
+ * WorkBuddy pool, owner decision 2026-11-22). The slot drops the adapter, which stops the magpie process, as
+ * soon as the plugin is disabled or removed.
+ */
 export function createOptionalAccounts(o: Context) {
-  let subscriptionModule: SubscriptionModule | null = null;
-  const subscriptions = slot(o, "subscriptions", () => {
-    subscriptionModule = loadOptionalModule(o.stateDir, "subscriptions") as SubscriptionModule;
-    return subscriptionModule.createSubscriptions({ stateDir: o.stateDir, enabled: () => o.enabled("subscriptions"), installed: () => optionalInstalled(o.stateDir, "subscriptions"), env: o.env });
-  });
-  const workbuddy = slot(o, "workbuddy", () => (loadOptionalModule(o.stateDir, "workbuddy") as WorkbuddyModule).createWorkbuddy(o));
-  const handlers = [
-    httpPort(o, "subscriptions", ["GET /api/subscriptions", "GET /api/subscriptions/:id/status", "POST /api/subscriptions/:id/:action"], subscriptions.get),
-    httpPort(o, "workbuddy", ["GET /api/workbuddy/status", "GET /api/workbuddy/accounts", "POST /api/workbuddy/accounts", "DELETE /api/workbuddy/accounts/:id"], workbuddy.get),
-  ];
+  const magpie = slot(o, "magpie", () => (loadOptionalModule(o.stateDir, "magpie") as MagpieModule).createMagpie({
+    stateDir: o.stateDir, enabled: () => o.enabled("magpie"), installed: () => optionalInstalled(o.stateDir, "magpie"), env: o.env,
+  }));
+  const handlers = [httpPort(o, "magpie", MAGPIE_ROUTES, magpie.get)];
   const profiles: ExternalProfiles = {
-    list: () => [...subscriptions.get()?.profiles.list() ?? [], ...workbuddy.get()?.profiles.list() ?? []],
-    record: id => workbuddy.get()?.profiles.record(id) ?? subscriptions.get()?.profiles.record(id) ?? null,
+    list: () => magpie.get()?.profiles.list() ?? [],
+    record: id => magpie.get()?.profiles.record(id) ?? null,
     resolve: (record, selection) => {
-      const owner = String(record.id ?? "").startsWith("workbuddy.") ? workbuddy.get() : subscriptions.get();
+      const owner = magpie.get();
       if (!owner) throw new Error("Optional provider plugin is unavailable");
       return owner.profiles.resolve(record, selection);
     },
-    supplier: record => workbuddy.get()?.profiles.supplier(record) ?? subscriptions.get()?.profiles.supplier(record) ?? null,
+    supplier: record => magpie.get()?.profiles.supplier(record) ?? null,
   };
-  const sync = async (): Promise<void> => { await subscriptions.sync(); await workbuddy.sync(); };
-  const watcher = setInterval(() => { void sync().catch(() => undefined); }, 1000); watcher.unref();
+  const watcher = setInterval(() => { void magpie.sync().catch(() => undefined); }, 1000); watcher.unref();
   return {
-    handlers, profiles, sync,
-    bindSession(provider: ChatProvider, sid: string) { if (subscriptionModule && provider instanceof subscriptionModule.NativeProvider) provider.sessionId = sid; },
-    async close(): Promise<void> { clearInterval(watcher); await subscriptions.drop(); await workbuddy.drop(); },
+    handlers, profiles, sync: magpie.sync,
+    /** magpie identifies sessions itself; nothing to bind. */
+    bindSession(_provider: ChatProvider, _sid: string) {},
+    async close(): Promise<void> { clearInterval(watcher); await magpie.drop(); },
   };
 }
 

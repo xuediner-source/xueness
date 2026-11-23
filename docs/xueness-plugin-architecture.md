@@ -12,7 +12,7 @@
 
 通用扩展包导入归 `extensions.package_import`，入口是 `/api/plugins/imports`。包类型由拥有该格式的插件登记：Xueness 自有的声明式清单（`xueness`）由 extensions 提供，DeepSeek Harness 包（`dsh`）由 deepseek_harness 提供，两者地位相同。类型只在所属插件有效时可用；未指定类型时由唯一识别该清单的导入器处理。导入只读取数据，不执行包内代码，新导入的 Xueness 清单默认关闭。导入器以与格式无关的包视图回答，所以「设置 → 扩展与维护 → 扩展包导入」和命令行 `xueness plugin imports`、`plugin import <路径> [--type] [--replace] [--dry-run]`、`plugin unimport <类型> <ID>` 对所有类型使用同一套界面与流程；文件夹内的清单按各类型登记的文件名查找，包内文件只在导入器要求时读取。
 
-插件分三类。官方内置插件随应用一起发布，在功能模块页面标为「官方内置」。插件中心的可下载插件同样由 Xueness 官方制作，但不预装，由扩展市场按固定摘要下载后再启用，标为「插件中心」；目前是订阅中心、返回模型监测、WorkBuddy 号池和酒馆（`tavern`：导入 SillyTavern 兼容的角色卡与世界书并开始角色扮演对话）。哪些包属于这一类只由内核固定的包清单决定，扩展市场和导入器都从它判断，不各自维护名单。第三类是用户从本机导入的扩展包，在扩展包导入页面标为「导入」，其中包括从 DeepSeek Harness 导入的声明式扩展包。前两类的代码都来自构建时确定的清单；导入的扩展包只有数据，不带可执行代码。
+插件分三类。官方内置插件随应用一起发布，在功能模块页面标为「官方内置」。插件中心的可下载插件同样由 Xueness 官方制作，但不预装，由扩展市场按固定摘要下载后再启用，标为「插件中心」；目前是 Magpie 模型网关（`magpie`：原版 magpie 本机网关，2026-11-22 起取代订阅中心与 WorkBuddy 号池）、返回模型监测和酒馆（`tavern`：导入 SillyTavern 兼容的角色卡与世界书并开始角色扮演对话）。哪些包属于这一类只由内核固定的包清单决定，扩展市场和导入器都从它判断，不各自维护名单。第三类是用户从本机导入的扩展包，在扩展包导入页面标为「导入」，其中包括从 DeepSeek Harness 导入的声明式扩展包。前两类的代码都来自构建时确定的清单；导入的扩展包只有数据，不带可执行代码。
 
 DeepSeek Harness 生态中公开发布的插件（GitHub 主题 `dsh-plugin`）是代码插件：`package.json` 带有 `dsh` 块，由 `cordis.patch.yml` 把包的入口挂载到 DSH 的 Cordis 宿主，并调用 `@deepseek-ai/dsh-*` 运行时服务。Xueness 没有 Cordis 宿主，也不加载清单之外的代码，所以这类插件不能导入或运行。扩展包导入会识别它们，显示名称、版本、许可和所需的 DSH 运行时服务，并说明原因；包内的技能文件夹是纯文本，可以按「技能文件夹」类型单独导入。DSH 类型以前还能导入一种声明式扩展包（`deepseek-harness.json`，或带 `xuenessHarness` 块的 `package.json`）。这是 Xueness 自己定义的格式，DSH 插件并不使用，2026-11-12 起停止导入；以前导入的包仍可启用和移除，新内容请写成 Xueness 扩展包（`xueness-plugin.json`）。
 

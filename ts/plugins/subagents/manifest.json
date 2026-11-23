@@ -33,6 +33,9 @@
   "frontendModules": [
     "plugins/subagents/SubagentSettings.tsx",
     "plugins/subagents/SubagentSidePane.tsx",
+    "plugins/subagents/SubagentTaskTypes.ts",
+    "plugins/subagents/SubagentTaskFormat.ts",
+    "plugins/subagents/SubagentTaskCard.tsx",
     "plugins/subagents/SubagentTranscript.tsx",
     "plugins/subagents/SubagentEmptyState.tsx"
   ]

@@ -24,8 +24,7 @@ export type PluginPanel =
   | "git"
   | "directory"
   | "providers"
-  | "subscriptions"
-  | "workbuddy"
+  | "magpie"
   | "model-monitor"
   | "context-lens"
   | "usage"
@@ -48,9 +47,8 @@ export const XUENESS_PLUGIN_REGISTRY = {
   files: { name: "文件", description: "工作区文件、改动和目录浏览", panels: ["files", "changes", "directory"] },
   git: { name: "Git", description: "工作区状态、差异和提交记录", panels: ["git"] },
   providers: { name: "供应商", description: "模型配置、模型发现、本地轻量模式与接口兼容诊断", panels: ["providers"] },
-  subscriptions: { name: "订阅中心", description: "选择安装后通过账号授权、CLI 登录或订阅凭证接入，在会话中使用模型并查询上游真实额度。", panels: ["subscriptions"] },
+  magpie: { name: "Magpie 模型网关", description: "可选下载的 magpie 原版本机网关：API 密钥、订阅登录账号、路由组、额度与用量，模型进入会话。", panels: ["magpie"] },
   tavern: { name: "酒馆", description: "角色扮演：角色卡、世界书、预设与人设，并以角色扮演模式进行对话。", panels: ["tavern"] },
-  workbuddy: { name: "WorkBuddy 号池", description: "查看本机 WorkBuddy 账号状态并管理认证文件。", panels: ["workbuddy"] },
   native_ops: { name: "原生操作工具", description: "批量读取、文件修订与文档文本工具，按需发现并通过现有权限审批执行。", panels: [] },
   batch_calls: { name: "批量调用", description: "鼓励同一步发起独立工具调用，并在上下文压缩后恢复批量调用约定。", panels: [] },
   os_cua: { name: "OS Computer Use", description: "macOS 与 Windows 桌面窗口、截图、辅助功能树和单步输入，使用会话审批。", panels: [] },
@@ -94,8 +92,7 @@ export const PLUGIN_PANEL_LABELS: Record<PluginPanel, string> = {
   git: "Git",
   directory: "目录",
   providers: "供应商",
-  subscriptions: "订阅中心",
-  workbuddy: "WorkBuddy 号池",
+  magpie: "Magpie 模型网关",
   "model-monitor": "返回模型监测",
   "context-lens": "上下文透镜",
   usage: "用量",
