@@ -249,7 +249,9 @@ class Exchange {
   /**
    * Why a body read cannot continue, or null while it can. Like
    * http.client, a peer that closes a Content-Length body early yields a
-   * short read ("eof"); only broken chunked framing is `IncompleteRead`.
+   * short read ("eof"); broken chunked framing is `IncompleteRead`, typed as
+   * a transport failure: a peer that cuts a stream mid-body is transient, not
+   * a malformed response, so the model retry may replay it.
    */
   bodyFailure(res: http.IncomingMessage): Error | "eof" | null {
     if (this.reason) return this.reason;
@@ -259,7 +261,7 @@ class Exchange {
       return new ProviderTransportError(category, name);
     }
     if (!/chunked/i.test(String(res.headers["transfer-encoding"] ?? ""))) return "eof";
-    return new ProviderProtocolError("IncompleteRead", "incomplete read");
+    return new ProviderTransportError("connection_failed", "IncompleteRead", "incomplete read");
   }
 
   /** Map a request-level error before the response, like urllib's `do_open`. */

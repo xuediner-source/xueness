@@ -110,7 +110,17 @@ export async function performModelRequest(context: AgentContext, runner: AgentRu
             continue;
           }
         }
-        if (!await retry.next(context, error, signal, stopped, active(), { committed: stream?.committed ?? false, beforeWait: release })) throw error;
+        // A transient failure after output committed is replayed too: reasoning models
+        // commit on their first reasoning token, so a mid-stream reset, 5xx envelope or
+        // idle stall would otherwise end the whole run. No tool from the dying stream
+        // ran (tools execute only after a complete response); it is archived as
+        // interrupted before the wait and the next attempt opens a fresh stream.
+        const dying = stream;
+        const beforeWait = async (): Promise<void> => {
+          await release();
+          if (dying?.committed && stream === dying) { await dying.finish(null, true); stream = null; }
+        };
+        if (!await retry.next(context, error, signal, stopped, active(), { beforeWait })) throw error;
         if (stream) { stream.discardPrelude(); await stream.finish(null, true); stream = null; }
       } finally { await release(); }
     }
