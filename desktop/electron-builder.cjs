@@ -1,20 +1,15 @@
-const { basename } = require('node:path');
-const optionalPackages = require('../ts/packages/kernel/src/optional-packages.json');
-// Optional plugins ship as pinned packages; the installer carries their manifests but not their code.
-const optionalIds = Object.keys(optionalPackages).join(',');
-
+// Marketplace plugins are not in the installer: core keeps their descriptors, and each package is downloaded
+// from the xueness-marketplace repository on GitHub when the user installs it.
 module.exports = {
   appId: 'app.xueness.desktop', productName: 'Xueness', asar: true,
   directories: { output: 'release', buildResources: 'build' },
   publish: [{ provider: 'github', owner: 'xuediner-source', repo: 'xueness', releaseType: 'release' }],
   files: ['src/**/*', 'package.json'],
   extraResources: [
-    { from: '../ts/dist', to: 'backend-ts', filter: ['**/*', '!**/*.map', `!plugins/{${optionalIds}}/{src,assets}/**/*`] },
+    { from: '../ts/dist', to: 'backend-ts', filter: ['**/*', '!**/*.map'] },
     // electron-builder excludes a source root's node_modules during extraResources copying.
-    { from: '../ts/dist/node_modules', to: 'backend-ts/node_modules', filter: ['**/*', '!**/*.map', `!@xueness/plugin-{${optionalIds}}/{src,assets}/**/*`] },
+    { from: '../ts/dist/node_modules', to: 'backend-ts/node_modules', filter: ['**/*', '!**/*.map'] },
     { from: '../webapp/dist', to: 'webapp' },
-    { from: '../marketplace/packages', to: 'marketplace/packages',
-      filter: Object.values(optionalPackages).map(artifact => basename(new URL(artifact.url).pathname)) },
     { from: '../webapp/node_modules/playwright', to: 'browser-runtime/node_modules/playwright' },
     { from: '../webapp/node_modules/playwright-core', to: 'browser-runtime/node_modules/playwright-core' },
     { from: '../LICENSE', to: 'LICENSE' },

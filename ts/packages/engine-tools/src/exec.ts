@@ -25,6 +25,8 @@ export const EXEC_MAX_TIMEOUT_MS = 600_000;
 export const EXEC_MAX_CAPTURE_BYTES = 24 * 1024;
 /** Environment variables that look like credentials are not passed to commands. */
 export const SECRET_ENV_PATTERN = /KEY|TOKEN|SECRET|PASSWORD|CREDENTIAL/i;
+/** git reads these as one set and refuses to run when GIT_CONFIG_COUNT names an entry that is missing. */
+const GIT_CONFIG_ENV = /^GIT_CONFIG_(COUNT|KEY_\d+|VALUE_\d+)$/i;
 
 export interface ExecInput {
   command?: string;
@@ -86,11 +88,17 @@ export function defaultShell(): string[] {
 export function commandEnv(base: NodeJS.ProcessEnv, options: ExecOptions = {}): NodeJS.ProcessEnv {
   const pass = new Set(options.passEnv ?? []);
   const env: NodeJS.ProcessEnv = {};
+  let gitConfigScrubbed = false;
   for (const [name, value] of Object.entries(base)) {
     if (value === undefined) continue;
-    if ((options.scrubEnv ?? true) && SECRET_ENV_PATTERN.test(name) && !pass.has(name)) continue;
+    if ((options.scrubEnv ?? true) && SECRET_ENV_PATTERN.test(name) && !pass.has(name)) {
+      if (GIT_CONFIG_ENV.test(name)) gitConfigScrubbed = true;
+      continue;
+    }
     env[name] = value;
   }
+  // GIT_CONFIG_KEY_<n> matches the pattern; dropping it alone breaks every git command, so drop the whole set.
+  if (gitConfigScrubbed) for (const name of Object.keys(env)) if (GIT_CONFIG_ENV.test(name)) delete env[name];
   delete env.FORCE_COLOR;
   return { ...env, GIT_TERMINAL_PROMPT: "0", GIT_PAGER: "cat", PAGER: "cat", GIT_EDITOR: "true", NO_COLOR: "1" };
 }

@@ -90,9 +90,17 @@
 | 可选字段 | 类型 | 说明 |
 |---|---|---|
 | `status` | string | `verified`、`unverified`、`not_applicable`；普通聊天无需工具验证，`verified` 仍为 false |
-| `toolExecutionStatus` | string | `succeeded`、`failed`、`incomplete`、`not_applicable` |
+| `toolExecutionStatus` | string | `succeeded`、`failed`、`incomplete`、`not_applicable`；判定规则见下文 |
 | `deliveryStatus` | string | `passed`、`failed`、`not_assessed`，与工具证据分别判断 |
 | `turnId` | string | 对应 `turn-N`，完成历史在下一条用户消息前按所属轮次输出 |
+
+`toolExecutionStatus` 只看本轮（最后一条用户消息之后）的工具调用：没有调用为 `not_applicable`，有调用缺少结果为 `incomplete`。失败调用在本轮后面被下列成功取代时不算失败，否则整轮为 `failed`（2026-11-24 起；此前只有名称和参数完全相同的重试成功才算恢复）：
+
+- 文件修改（`edit`、`write`、`apply_patch`）：之后成功修改了同一文件；补丁按 `*** Add/Update/Delete File:`、`*** Move to:` 头取文件，所有文件都要改成功。
+- 只读查找（`read`、`list`、`glob`、`grep`）：之后任一调用成功。
+- 命令（`exec`）及其它工具：之后同一目标成功，或之后有任一成功的文件修改。命令目标是第一个简单命令的程序和操作数，忽略选项、开头的 `NAME=value`、`env`、`timeout` 和 `cd DIR &&`，以及第一个管道、`&&`、`;` 或重定向之后的内容；`git diff` 与 `env -u GIT_CONFIG_COUNT git diff` 是同一目标，`pytest a` 与 `pytest b` 不是。其它工具的目标是完全相同的名称和参数。
+
+所以「探查失败后换参数成功」「改前测试失败、改后通过」「编辑失败后重读再改成功」不再判为失败；某目标最后一次调用失败、失败的编辑之后从未改成功同一文件、最后一次修改之后的检查命令失败且未再成功，仍为 `failed`。
 
 新 journal 的 `completion_history` 保存有界的逐轮完成元数据。最新 `completion` 不再覆盖此前轮次的验证结果；缺少历史的旧 journal 仍在末尾派生原完成事件。增量正文是尚未完成的输出，不能作为已成功执行工具的证据。
 

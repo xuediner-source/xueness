@@ -24,21 +24,18 @@ export interface FetchUrlResult {
 }
 
 /** Bundled package snapshots for optional integrations. */
-export const SUBSCRIPTIONS_PACKAGE_ID = "xueness-subscriptions";
+export const MAGPIE_PACKAGE_ID = "xueness-magpie";
 export const MONITOR_PACKAGE_ID = "xueness-model-monitor";
-export const WORKBUDDY_PACKAGE_ID = "xueness-workbuddy";
 export const TAVERN_PACKAGE_ID = "xueness-tavern";
-export const SUBSCRIPTIONS_MARKET_MANIFEST = { id: SUBSCRIPTIONS_PACKAGE_ID, version: "1.0.0", apiVersion: 1, builtin: "subscriptions", capabilities: [] as string[], enabled: false };
+export const MAGPIE_MARKET_MANIFEST = { id: MAGPIE_PACKAGE_ID, version: "1.0.0", apiVersion: 1, builtin: "magpie", capabilities: [] as string[], enabled: false };
 export const MONITOR_MARKET_MANIFEST = { id: MONITOR_PACKAGE_ID, version: "1.0.0", apiVersion: 1, builtin: "model_monitor", capabilities: [] as string[], enabled: false };
-export const WORKBUDDY_MARKET_MANIFEST = { id: WORKBUDDY_PACKAGE_ID, version: "1.0.0", apiVersion: 1, builtin: "workbuddy", capabilities: [] as string[], enabled: false };
 export const TAVERN_MARKET_MANIFEST = { id: TAVERN_PACKAGE_ID, version: "1.0.0", apiVersion: 1, builtin: "tavern", capabilities: [] as string[], enabled: false };
 
 /** The official downloadable plugins, in the order the catalog lists them. */
 const OFFICIAL_ROWS = [
-  { manifest: SUBSCRIPTIONS_MARKET_MANIFEST, name: "订阅中心", description: "可选安装。通过账号授权或登录凭证接入 Claude、Codex 等订阅账号，查询真实额度并用于会话。" },
+  { manifest: MAGPIE_MARKET_MANIFEST, name: "Magpie 模型网关", description: "可选安装。原版 magpie 本机网关：统一管理 API 密钥、订阅登录账号与路由组，查看额度与用量，并在会话中使用它的模型；按平台下载，约 50 MB。安装后还需在插件管理中启用。" },
   { manifest: MONITOR_MARKET_MANIFEST, name: "返回模型监测", description: "可选安装。随会话显示请求型号与上游返回型号，判断一致或不同；不自动发送额外请求。" },
-  { manifest: WORKBUDDY_MARKET_MANIFEST, name: "WorkBuddy 号池", description: "可选安装的本机号池网关。请自备认证文件并放入 state/workbuddy/auths；安装后还需在插件管理中启用。" },
-  { manifest: TAVERN_MARKET_MANIFEST, name: "酒馆", description: "可选安装。导入 SillyTavern 兼容的角色卡与世界书，从角色设定开始一段角色扮演对话；安装后还需在插件管理中启用。" },
+  { manifest: TAVERN_MARKET_MANIFEST, name: "酒馆", description: "可选安装。SillyTavern 兼容的角色卡、世界书、预设与人设，在酒馆面板中进行角色扮演对话；安装后还需在插件管理中启用。" },
 ];
 
 const CORE_PACKAGES = new Set(["xueness-skills", "xueness-hooks", "xueness-mcp", "xueness-subagents"]);
@@ -49,7 +46,8 @@ export interface MarketplaceOptions {
 }
 
 function packageRow(id: string, name: string, description: string, manifest: Record<string, unknown>): Record<string, unknown> {
-  return { id, name, description, manifest: structuredClone(manifest), source: "GitHub" };
+  // The version is the pinned package's, so a newer download is listed (and recorded) as that version.
+  return { id, name, description, manifest: { ...structuredClone(manifest), version: optionalArtifactByPackage(id)?.version ?? manifest.version }, source: "GitHub" };
 }
 
 function remoteItems(url: string, fetchUrl: MarketplaceOptions["fetchUrl"]): unknown {

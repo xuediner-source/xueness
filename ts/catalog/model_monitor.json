@@ -22,10 +22,7 @@
   "modules": [
     "observer"
   ],
-  "frontendModules": [
-    "plugins/model_monitor/index.tsx",
-    "plugins/model_monitor/ModelMonitorHome.tsx"
-  ],
+  "frontendModules": [],
   "features": [
     {
       "id": "model_monitor.observation",

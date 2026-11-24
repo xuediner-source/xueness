@@ -97,16 +97,16 @@ node ts/apps/server/src/main.ts --port 8138
 
 ## 插件与扩展
 
-技能、钩子、MCP 连接器与协作代理是内置能力，无需另外安装。**订阅中心、返回模型监测、WorkBuddy 号池**由扩展市场从本仓库按需下载，安装后到插件管理中启用。
+技能、钩子、MCP 连接器与协作代理是内置能力，无需另外安装。**Magpie 模型网关、返回模型监测和酒馆**不随 Xueness 预装：在扩展市场里选择后，才从官方插件仓库 [xueness-marketplace](https://github.com/xuediner-source/xueness-marketplace) 下载，安装后到插件管理中启用。
 
 | 入口 | 你可以做什么 |
 | :-- | :-- |
 | 技能 | 七项初始技能可逐项启用；支持新建和从文件夹添加，保留脚本、参考资料和附件 |
 | MCP | 连接外部工具、资源与服务，查看连接状态和请求结果 |
 | 工作流与协作 | 拆分任务、配置钩子，查看执行进度与结果 |
-| 订阅中心 · 可选 | 导入自己授权的账号或登录凭证，使用其模型与可用额度 |
+| Magpie 模型网关 · 可选 | 原版 [magpie](https://github.com/yetone/magpie) 本机网关：API 密钥、订阅登录账号与路由组，额度与用量，模型直接进入会话 |
 | 返回模型监测 · 可选 | 被动比较请求型号与响应中报告的型号，不额外发送探测请求 |
-| WorkBuddy 号池 · 可选 | 添加自备账号认证、查看号池状态并使用可用模型 |
+| 酒馆 · 可选 | SillyTavern 兼容的角色卡、世界书、预设与人设，在酒馆面板里开始并继续角色扮演对话 |
 
 <p align="center"><img src="docs/images/skills-folder.png" alt="技能列表与文件夹添加入口，初始技能提供独立开关" width="100%" /></p>
 
@@ -145,7 +145,6 @@ npm --prefix webapp run build
 | [`ts/plugins`](ts/plugins) | 按功能划分的插件实现及声明 |
 | [`webapp`](webapp) | React 工作台与插件界面 |
 | [`desktop`](desktop) | Electron 宿主、原生集成与安装构建 |
-| [`marketplace/packages`](marketplace/packages) | 按内容摘要命名的官方可选插件包 |
 
 单元测试、测试 CI、验收和压测材料由[私有验证库](https://github.com/xuediner-source/xueness-private-tests)独立维护；公开仓库只保留应用运行、构建和使用所需的文件。
 

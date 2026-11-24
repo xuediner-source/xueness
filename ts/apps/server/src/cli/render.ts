@@ -35,6 +35,19 @@ export function renderEvent(ev: Row, options: { file?: Out; language?: string; s
     let text = `${ev.ok ? "✓" : "✗"} ${label}`.trimEnd();
     if (ev.error && !ev.ok) text += ` — ${typeof ev.error === "object" ? ev.error.message ?? ev.error.code : ev.error}`;
     line(text);
+  } else if (type === "model_retry_scheduled") {
+    // A replayed request streams from the start: end the partial line and forget it.
+    if (state && Object.hasOwn(state, "text")) { if (state.text) out.write("\n"); delete state.text; }
+    const seconds = Math.max(0, Math.round(Number(ev.delayMs ?? 0) / 1000)), max = Number(ev.maxAttempts ?? 0);
+    const attempt = `${ev.nextAttempt ?? "?"}${max > 0 ? "/" + max : ""}`;
+    line(en ? `Model request failed (${ev.reason ?? "unknown"}); retrying in ${seconds}s (attempt ${attempt})…`
+      : `模型请求失败（${ev.reason ?? "unknown"}），${seconds} 秒后重试（第 ${attempt} 次）…`);
+  } else if (type === "budget_wrapup") {
+    const steps = typeof ev.remainingSteps === "number" ? ev.remainingSteps : null, seconds = typeof ev.remainingSeconds === "number" ? ev.remainingSeconds : null;
+    const left = en ? [steps === null ? "" : `${steps} steps`, seconds === null ? "" : `about ${seconds}s`].filter(Boolean).join(", ")
+      : [steps === null ? "" : `${steps} 步`, seconds === null ? "" : `约 ${seconds} 秒`].filter(Boolean).join("、");
+    line(en ? `Budget running low (${left} left); asked the model to ${ev.stage === "final" ? "finish now" : "wrap up"}.`
+      : `预算即将用完（剩余 ${left}），已提醒模型${ev.stage === "final" ? "立即收尾" : "开始收尾"}。`);
   } else if (type === "model_request_queued") {
     line(en ? "Waiting for model capacity…" : "等待模型并发名额…");
   } else if (type === "model_request_failed" && ev.terminal === true && ev.reason !== "cancelled") {

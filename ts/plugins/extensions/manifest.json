@@ -12,9 +12,9 @@
   "modules": ["marketplace", "profiles", "validate_update", "composer_capabilities", "creator_tooling", "imports"],
   "dataFiles": ["profiles.json"],
   "pluginsActions": ["validate", "update", "profile", "imports", "import", "unimport", "activate", "deactivate"],
-  "frontendModules": ["plugins/extensions/index.tsx", "plugins/extensions/PluginProfilePicker.tsx", "plugins/extensions/PackageImports.tsx"],
+  "frontendModules": ["plugins/extensions/index.tsx", "plugins/extensions/PluginProfilePicker.tsx", "plugins/extensions/PackageImports.tsx", "plugins/extensions/optionalFrontend.ts"],
   "features": [
-    { "id": "extensions.official_download", "name": "从桌面安装包或 GitHub 安装并校验官方可选插件", "nameEn": "Install and verify official optional plugins from the desktop package or GitHub" },
+    { "id": "extensions.official_download", "name": "从官方插件仓库（GitHub）按需下载、校验并安装官方可选插件", "nameEn": "Download, verify and install official optional plugins on demand from the official plugin repository on GitHub" },
     { "id": "extensions.package_activation", "name": "启用已导入扩展包：把技能和提示模板登记为技能与命令插件的资源，可随时停用", "nameEn": "Activate imported packages: register their skills and prompt templates as resources of the skills and commands plugins, reversible at any time" },
     { "id": "extensions.package_import", "name": "通用扩展包导入：按包类型预览、导入与移除，类型由所属插件提供", "nameEn": "General package import: preview, import and remove by package type, each type provided by its owning plugin" },
     { "id": "extensions.marketplace", "name": "可信资源清单市场浏览", "nameEn": "Trusted resource manifest marketplace" },

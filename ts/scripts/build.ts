@@ -20,8 +20,6 @@ function tree(source: string, destination: string): void {
   for (const entry of readdirSync(source, { withFileTypes: true })) {
     if (["test", "tests", "node_modules", "dist"].includes(entry.name)) continue;
     const from = join(source, entry.name), to = join(destination, entry.name);
-    // Account seeds are local user credentials, never distributable assets.
-    if (relative(root, from).replaceAll("\\", "/") === "plugins/workbuddy/assets/auths") continue;
     if (entry.isDirectory()) { tree(from, to); continue; }
     if (entry.name.endsWith(".ts") && !entry.name.endsWith(".d.ts")) {
       const result = ts.transpileModule(readFileSync(from, "utf8"), { fileName: from, compilerOptions: {

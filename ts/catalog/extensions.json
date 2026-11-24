@@ -43,7 +43,7 @@
     "imports"
   ],
   "features": [
-    { "id": "extensions.official_download", "name": "从桌面安装包或 GitHub 安装并校验官方可选插件", "nameEn": "Install and verify official optional plugins from the desktop package or GitHub" },
+    { "id": "extensions.official_download", "name": "从官方插件仓库（GitHub）按需下载、校验并安装官方可选插件", "nameEn": "Download, verify and install official optional plugins on demand from the official plugin repository on GitHub" },
     {
       "id": "extensions.marketplace",
       "name": "可信资源清单市场浏览",
@@ -75,6 +75,6 @@
   "frontendModules": [
     "plugins/extensions/index.tsx",
     "plugins/extensions/PluginProfilePicker.tsx",
-    "plugins/extensions/PackageImports.tsx"
+    "plugins/extensions/PackageImports.tsx", "plugins/extensions/optionalFrontend.ts"
   ]
 }

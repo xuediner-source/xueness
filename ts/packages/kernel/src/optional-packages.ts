@@ -7,14 +7,20 @@ import pins from "./optional-packages.json" with { type: "json" };
 
 export type OptionalFile = { path: string; bytes: number; sha256: string; executable: boolean };
 export type OptionalArtifact = { id: string; packageId: string; version: string; sha256: string; bytes: number; url: string; files: OptionalFile[] };
-export const OPTIONAL_IDS = ["subscriptions", "model_monitor", "workbuddy", "tavern"] as const;
+export const OPTIONAL_IDS = ["model_monitor", "tavern", "magpie"] as const;
 export type OptionalId = typeof OPTIONAL_IDS[number];
 const registry = pins as Record<string, OptionalArtifact>;
 const requireModule = createRequire(import.meta.url);
 const checked = new Map<string, { stamp: string; digest: string }>();
 export const artifactHash = (bytes: Uint8Array): string => createHash("sha256").update(bytes).digest("hex");
-export const optionalArtifact = (id: string): OptionalArtifact | null => OPTIONAL_IDS.includes(id as OptionalId) ? registry[id] ?? null : null;
-export const optionalArtifactByPackage = (id: string): OptionalArtifact | null => Object.values(registry).find(row => row.packageId === id) ?? null;
+export const isOptionalId = (id: string): id is OptionalId => OPTIONAL_IDS.includes(id as OptionalId);
+/** A plugin that ships a native program is pinned once per platform, as `<id>@<platform>-<arch>`. */
+export const optionalPlatform = (): string => `${process.platform}-${process.arch}`;
+/** The pin for this platform; null when the plugin has no package for it. */
+export const optionalArtifact = (id: string): OptionalArtifact | null =>
+  isOptionalId(id) ? registry[`${id}@${optionalPlatform()}`] ?? registry[id] ?? null : null;
+const platformArtifacts = (): OptionalArtifact[] => OPTIONAL_IDS.map(optionalArtifact).filter((row): row is OptionalArtifact => row !== null);
+export const optionalArtifactByPackage = (id: string): OptionalArtifact | null => platformArtifacts().find(row => row.packageId === id) ?? null;
 
 /** Every ancestor under this private root must be a real directory, never a redirect. */
 export function optionalPath(root: string, relative: string): string {
@@ -67,7 +73,7 @@ export function loadOptionalModule(stateDir: string, id: string): unknown {
 /** Fixed frontend file names share the core React runtime through relative ESM imports. */
 export function optionalAsset(stateDir: string, name: string): Buffer | null {
   if (!/^[A-Za-z0-9._-]+$/.test(name) || name.includes("..")) return null;
-  for (const artifact of Object.values(registry)) {
+  for (const artifact of platformArtifacts()) {
     const file = artifact.files.find(item => item.path === `frontend/${name}`);
     if (file && optionalInstalled(stateDir, artifact.id)) return verifiedFile(optionalRoot(stateDir, artifact), file, true);
   }

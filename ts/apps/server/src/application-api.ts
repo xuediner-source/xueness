@@ -36,7 +36,7 @@ import { createComposerFeatures } from "./composer-features.ts";
 import { isLoopbackAddress } from "./loopback-url.ts";
 import { createHostServices } from "./host-services-http.ts";
 import { createIntegrations } from "./integrations-http.ts";
-import { observeOptionalProvider } from "./optional-integrations.ts";
+import { createOptionalTavernRoleplay, observeOptionalProvider } from "./optional-integrations.ts";
 import { createWorkflowsAutomation } from "./workflows-http.ts";
 import { createPluginManager } from "./plugin-manager-http.ts";
 import { DynamicServiceError, DynamicWorkflowService, createDynamicWorkflowApi } from '@xueness/plugin-workflows';
@@ -125,7 +125,8 @@ export async function createApplicationApi(options: ApplicationApiOptions): Prom
     } }) : null });
   swarms.recoverInterrupted();
   const workflowsAutomation = createWorkflowsAutomation({ projectRoot: options.projectRoot, projectDir, stateDir: options.stateDir, webRuns: options.webRuns, enabled, store, allowedRoots, allowReal: options.allowReal === true, env, ...(options.scheduler === false ? { scheduler: false } : {}) });
-  const agent = createAgentService({ ...options.agent, store, stateDir: options.stateDir, configEnv: env, enabled, approvals, mediaStore: media, desktopComputerUse: !!options.desktopToken && !!options.desktopBridge, allowModelRequests: options.allowReal, taskRegistry, workflowLauncher: workflowsAutomation.launcher, dynamicWorkflows, swarms,
+  const tavernRoleplay = createOptionalTavernRoleplay({ stateDir: options.stateDir, enabled, env: process.env });
+  const agent = createAgentService({ ...options.agent, extensions: () => [tavernRoleplay.afterViews], viewExtensions: () => [tavernRoleplay.beforeViews], store, stateDir: options.stateDir, configEnv: env, enabled, approvals, mediaStore: media, desktopComputerUse: !!options.desktopToken && !!options.desktopBridge, allowModelRequests: options.allowReal, taskRegistry, workflowLauncher: workflowsAutomation.launcher, dynamicWorkflows, swarms,
     preparedRemote: integrations.preparedRemote,
     appendQueued: (session, item) => appendAcceptedQueuedTurn({ store, stateDir: options.stateDir, webRuns: options.webRuns, enabled, applyGoal, expandCommands }, session, item),
     resolveProvider(selection, sid) {

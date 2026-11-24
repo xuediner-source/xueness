@@ -4,23 +4,24 @@ import { checkDelivery, requestsFileOutput, seedDelivery, type DeliveryCheckOpti
 import { workPolicy } from "./work-policy.ts";
 import { goalReminder, mergeGoalCompletion, verifyGoalCompletion } from "./goal-completion.ts";
 import { deliveryWrapup } from "./delivery-wrapup.ts";
+import { budgetWrapup } from "./budget-wrapup.ts";
 import { reportFinish } from "./report-finish.ts";
 import { failureRepair } from "./failure-repair.ts";
 import { deliveryVerification } from "./delivery-verify-extension.ts";
 import { importContract } from "./delivery-verification.ts";
 export const DELIVERY_GUIDANCE = "The host registers explicit saved output paths from the task. Use delivery_plan to add missing requested outputs, content markers (contains), or source-link counts (min_links); do not register input/reference paths or repeat an already registered plan. A report written only in chat does not require a saved file unless requested. Save requested results and a truthful report during the work, including failed tests and unresolved issues; update them after fixes instead of waiting for every check to pass before creating them. Do not remove requirements to pass. Host file/content checks and successful tools do not establish behavioral correctness.";
 export function planningDeliveryExtension(options: (context: AgentContext) => DeliveryCheckOptions): AgentExtension {
-  const repair = failureRepair(options), wrapup = deliveryWrapup(options), report = reportFinish(options, repair.pendingFailure), verification = deliveryVerification();
-  return { id: "planning", capabilities: ["planning.delivery", "planning.lightweight_wrapup", "planning.report_finish", "planning.failure_repair", "planning.delivery_verification"],
-    runStarted(context) { repair.runStarted(context); wrapup.runStarted(context); report.runStarted(context); verification.runStarted(context); },
+  const repair = failureRepair(options), wrapup = deliveryWrapup(options), report = reportFinish(options, repair.pendingFailure), verification = deliveryVerification(), budget = budgetWrapup();
+  return { id: "planning", capabilities: ["planning.delivery", "planning.lightweight_wrapup", "planning.budget_wrapup", "planning.report_finish", "planning.failure_repair", "planning.delivery_verification"],
+    runStarted(context) { repair.runStarted(context); wrapup.runStarted(context); report.runStarted(context); verification.runStarted(context); budget.runStarted(context); },
     async toolResultRecorded(context, call, result) { await verification.toolResultRecorded(context, call, result); repair.toolResultRecorded(context, call, result); },
     beforeTool: verification.beforeTool,
     modelRequestStarted: report.modelRequestStarted,
-    async beforeModelRequest(context) { await repair.beforeModelRequest(context); await wrapup.beforeModelRequest(context); await report.beforeModelRequest(context); },
+    async beforeModelRequest(context) { await repair.beforeModelRequest(context); await wrapup.beforeModelRequest(context); await report.beforeModelRequest(context); await budget.beforeModelRequest(context); },
     prepareRequest(context, request) { return verification.prepareRequest(context, report.prepareRequest(context, repair.prepareRequest(context, request))); },
     async afterModelResponse(context, response) { return verification.afterModelResponse(context, await report.afterModelResponse(context, response)); },
     beforeFinalResponse: repair.beforeFinalResponse,
-    close(context) { repair.close(context); wrapup.close(context); report.close(context); verification.close(context); },
+    close(context) { repair.close(context); wrapup.close(context); report.close(context); verification.close(context); budget.close(context); },
     completionInstructions(context) {
       seedDelivery(context.session);
       const instructions = report.instructions(context);

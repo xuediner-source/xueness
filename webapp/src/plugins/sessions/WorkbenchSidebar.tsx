@@ -5,7 +5,7 @@
  * XuenessWorkbenchContainer.
  */
 import React, { lazy, Suspense } from "react";
-import { Blocks, Bot, Brain, CalendarClock, CircleHelp, Folder, GitBranch, House, Library, MessagesSquare, Network, SquarePen } from "lucide-react";
+import { Blocks, Bot, CalendarClock, CircleHelp, Folder, GitBranch, House, Library, MessagesSquare, SquarePen } from "lucide-react";
 import { t as tr } from "../../i18n";
 import type { ComposerCatalog } from "../../xuenessComposer";
 import type { SessionSummary } from "../../xuenessWorkbench";
@@ -41,9 +41,7 @@ export function buildSidebarActions({ isPluginEffective, claudexAppearance, shor
     ] : []),
     ...(isPluginEffective("context_lens") ? [{ id: "context-lens", icon: <IconSearch size={16} />, label: tr("上下文透镜"), onClick: () => setPanel("context-lens") }] : []),
     ...(isPluginEffective("automation") ? [{ id: "automations", icon: <CalendarClock size={16} />, label: tr("自动化"), onClick: () => setPanel("automations") }] : []),
-    // The Claudex rail has its own memory entry; the paper sidebar needs this one to reach Memory Ocean.
-    ...(isPluginEffective("memory") && !claudexAppearance ? [{ id: "memory", icon: <Brain size={16} />, label: tr("记忆之海"), onClick: () => setPanel("memory") }] : []),
-    ...(isPluginEffective("swarm") && !claudexAppearance ? [{ id: "swarm", icon: <Network size={16} />, label: tr("蜂群"), onClick: () => setPanel("swarm") }] : []),
+    // Memory Ocean and Swarm are tabs in the top bar (WorkbenchViewSwitcher), in both appearances.
     ...(isPluginEffective("extensions") ? [{ id: "marketplace", icon: <Blocks size={16} />, label: tr("插件市场"), onClick: () => setPanel("marketplace") }] : []),
   ];
 
@@ -52,14 +50,13 @@ export function buildSidebarActions({ isPluginEffective, claudexAppearance, shor
     ...(isPluginEffective('sessions') ? [{ id: 'chat', icon: <MessagesSquare size={18} />, label: tr('搜索会话'), onClick: (event: React.MouseEvent<HTMLButtonElement>) => openCommandPalette(event.currentTarget) }] : []),
     ...sidebarActions.filter(action => action.id === 'automations'),
     ...(canShowPanel('capabilities') ? [{ id: 'capabilities', icon: <Library size={18} />, label: tr('能力'), onClick: () => setPanel('capabilities') }] : []),
-    ...(isPluginEffective('memory') ? [{ id: 'memory', icon: <Brain size={18} />, label: tr('记忆之海'), onClick: () => setPanel('memory') }] : []),
   ];
   const railSecondaryActions: SidebarAction[] = [
     ...(isPluginEffective('git') ? [{ id: 'git', icon: <GitBranch size={18} />, label: tr('Git'), onClick: () => setPanel('git') }] : []),
     ...sidebarActions.filter(action => action.id === 'marketplace'),
   ];
-  const railMoreActions: SidebarAction[] = allowedPanels.filter(id => !['chat','capabilities','memory','git','automations','marketplace','settings'].includes(id)).map(id => ({
-    id, icon: id === 'files' || id === 'directory' ? <Folder size={16} /> : id === 'subagents' ? <Bot size={16} /> : id === 'swarm' ? <Network size={16} /> : <CircleHelp size={16} />,
+  const railMoreActions: SidebarAction[] = allowedPanels.filter(id => !['chat','capabilities','memory','swarm','git','automations','marketplace','settings'].includes(id)).map(id => ({
+    id, icon: id === 'files' || id === 'directory' ? <Folder size={16} /> : id === 'subagents' ? <Bot size={16} /> : <CircleHelp size={16} />,
     label: panelLabels[id], onClick: () => setPanel(id),
   }));
   const sidebarMenuActions: SidebarAction[] = [...sidebarActions.filter(action => action.id !== 'search'),

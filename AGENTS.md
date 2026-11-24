@@ -12,6 +12,10 @@
 6. `设置 → 插件 → 已安装功能插件` 默认显示完整后端 catalog，包括禁用、依赖阻塞、只有 CLI/工具而没有独立面板的插件；卡片中显示子功能。不能用扩展资源清单代替功能插件目录，也不能把新增插件藏到其它设置页。
 7. 新功能必须同步更新归属清单、使用说明，以及有实际价值的开关/依赖/权限/生命周期回归；完成结构校验与适当验证后再交付。具体步骤见 [CONTRIBUTING.md](CONTRIBUTING.md)。
 
+2026-11-22 项目所有者明确：删除订阅中心与 WorkBuddy 号池两个插件，由可下载的官方插件「Magpie 模型网关」（`magpie`）取代。它直接使用 [yetone/magpie](https://github.com/yetone/magpie)（MIT）发布的原版命令行程序，不改写其代码，按平台各打一个包放在下文的插件仓库中；Xueness 侧只做进程管理、模型接入与界面适配。见 [插件按需下载](docs/optional-plugins-and-folder-skills.md)。
+
+2026-11-17 项目所有者明确：插件中心（扩展市场）的官方可选插件（当前为 Magpie 模型网关、返回模型监测、酒馆）的源码、界面与下载包都放在独立仓库 [xueness-marketplace](https://github.com/xuediner-source/xueness-marketplace)，本仓库只保留它们的描述（manifest、package.json、catalog）与固定摘要；用户在市场里选择后才从该仓库下载，安装包不预置。未下载的这类插件不出现在功能插件目录与模型列表中（第 6 条的例外）。见 [插件按需下载](docs/optional-plugins-and-folder-skills.md)。
+
 2026-10-27 项目所有者明确更新完全访问语义：用户选择 `yolo` 后跳过应用内的 disallow、deny、ask、alwaysAsk、远程逐项确认及工具工作区路径限制；切回其它模式后恢复原规则。文件工具通过宿主在每次调用签发的内存能力识别此选择，配置/请求数据不能伪造。插件生命周期、HTTP 身份/Origin/CSRF、操作系统权限与工具输入/数据完整性契约继续适用，它们不是额外审批入口。见 [本轮权限与插件说明](docs/xueness-permission-modes.md)。
 
 ## 共享内核边界

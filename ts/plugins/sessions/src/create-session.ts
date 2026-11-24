@@ -29,6 +29,8 @@ export async function createAcceptedSession(o: PreparedInputOptions, data: Row, 
   const session = await o.store.new(pyStrip(data.task), root, sid ? { sessionId: sid } : {});
   if (isolated) { root = join(root, String(session.id)); mkdirSync(root, { recursive: true }); session.root = root; await o.store.save(session); }
   if (Object.keys(selection).length) session.model_selection = selection;
+  // Validated by the HTTP layer: `{plugin, id}` from the plugin that started this session. Only that plugin reads it.
+  if (isDict(data.plugin_ref) && typeof data.plugin_ref.plugin === "string" && typeof data.plugin_ref.id === "string") session.plugin_refs = { [data.plugin_ref.plugin]: data.plugin_ref.id };
   if (prepared) {
     (session.messages as Row[])[1]!.content = prepared.text;
     if (remote !== null) session.remote_connection = remote;

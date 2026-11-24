@@ -161,6 +161,13 @@ export function createSessionsApi(options: SessionsApiOptions) {
         if (Object.hasOwn(data, "prepared_token") && typeof data.prepared_token !== "string") return [400, { error: "prepared input invalid or expired" }];
         if (Object.hasOwn(data, "prepared_token") && !options.consumePrepared && !options.create) return null;
         if (data.root !== undefined && data.root !== null && (typeof data.root !== "string" || !pyStrip(data.root))) return [400, { error: "root must be a path string" }];
+        // A plugin that starts a session may tag it with an opaque reference of its own (e.g. a Tavern playthrough).
+        if (data.plugin_ref !== undefined) {
+          const ref = data.plugin_ref;
+          if (!isDict(ref) || Object.keys(ref).sort().join(",") !== "id,plugin" || typeof ref.plugin !== "string" || !/^[a-z][a-z0-9_]{0,31}$/.test(ref.plugin)
+            || typeof ref.id !== "string" || !/^[A-Za-z0-9_-]{1,64}$/.test(ref.id)) return [400, { error: "plugin_ref must be {plugin, id}" }];
+          if (!options.enabled(ref.plugin)) return [403, { error: `plugin disabled or dependency unavailable: ${ref.plugin}`, plugin: ref.plugin }];
+        }
         let root: string;
         try {
           const workspace = options.lifecycle?.settings?.().workspace;

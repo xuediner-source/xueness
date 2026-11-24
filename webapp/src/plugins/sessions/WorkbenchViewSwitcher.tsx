@@ -5,7 +5,8 @@ import './session-header.css';
 export function WorkbenchViewSwitcher<T extends string>({ value, options, onChange }: {
   value: T; options: { id: T; label: string }[]; onChange(value: T): void;
 }) {
-  const order = ['chat', 'context-lens', 'subagents', 'files', 'git', 'terminal'];
+  // Swarm and Memory Ocean sit with the agent views; each tab appears only while its plugin is effective.
+  const order = ['chat', 'context-lens', 'subagents', 'swarm', 'memory', 'files', 'git', 'terminal'];
   const primary = options.filter(option => order.includes(option.id)).sort((a, b) => order.indexOf(a.id) - order.indexOf(b.id));
   const more = options.filter(option => !primary.includes(option));
   return <nav className="xn-session-tabs" aria-label={tr('会话视图')}>

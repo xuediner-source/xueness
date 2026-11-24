@@ -16,5 +16,5 @@
     { "id": "model_monitor.history", "name": "本机监测记录、筛选与清理", "nameEn": "Local observations, filtering and clearing" },
     { "id": "model_monitor.home", "name": "紧凑模型状态与按需展开的监测详情", "nameEn": "Compact model status with expandable monitoring details" }
   ],
-  "frontendModules": ["plugins/model_monitor/index.tsx", "plugins/model_monitor/ModelMonitorHome.tsx"]
+  "frontendModules": []
 }

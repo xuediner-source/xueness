@@ -1,180 +1,61 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Archive, ArrowDownWideNarrow, BriefcaseBusiness, Check, ChevronsDownUp, ChevronDown, Clock, Folder, Hash, MoreHorizontal, Plus, Pencil, Pin, Sparkles, Trash2 } from 'lucide-react';
+import { ChevronDown, Folder, Pencil, Pin, Plus, Trash2 } from 'lucide-react';
 import { SidebarNav } from './SidebarNav';
-import { Select } from '../../ui/Select';
 import { isImeComposingEvent } from '../../xuenessShortcutDisplay';
-import { t as tr, tf, useLocale } from '../../i18n';
+import { t as tr, useLocale } from '../../i18n';
 import type { SessionSummary } from '../../xuenessWorkbench';
 import { normalizeChangeSummary, normalizePendingInteraction } from './sessionsIndex';
 import { PANE_SESSION_DRAG_MIME, paneDragPayload } from './paneLayout';
-import type { SessionSidebarSidecar } from './sessionsIndex';
 import { timelineBuckets } from './sessionsSidebarTimeline';
 import type { ProjectContextMenuTarget } from './ProjectContextMenu';
 import {
   isSidebarProjectPinned,
-  createSidebarProjectSection,
-  moveSidebarProjectToSection,
   normalizeHiddenProjectRoots,
-  normalizeSidebarProjectLabels,
   normalizeSidebarProjectRoots,
   normalizeSidebarProjectSections,
   sameSidebarProjectPath,
-  setSidebarProjectLabel,
-  sidebarProjectLabel,
   sidebarProjectSectionId,
-  toggleHiddenProjectRoot,
   togglePinnedProjectRoot,
-  type SidebarProjectSection,
 } from './projectSidebar';
+import {
+  TASK_GROUP_DRAG_MIME,
+  mergePurposeBuckets,
+  mergeProjectBuckets,
+  mergeWorkspaceBuckets,
+  projectArchivePlan,
+  sessionSidebarFields,
+  type SidebarBucket,
+  type SidebarPreferences,
+  type SidebarProjectRoot,
+  type SidebarView,
+} from './taskListModel';
+import {
+  dialogFocusWrapIndex,
+  isTaskContextMenuShortcut,
+  moveTaskIntoGroup,
+  nextSidebarMenuIndex,
+  persistTaskGroupDrop,
+  resolveSidebarDragSession,
+  restoreSidebarFocus,
+  shouldDismissGroupEditorOnEscape,
+  taskRelativeTime,
+  toggleSidebarBuckets,
+} from './taskListHelpers';
+import { XuenessTaskListToolbar } from './XuenessTaskListToolbar';
+import { XuenessTaskContextMenu, XuenessProjectMenuHost } from './XuenessTaskListMenus';
 import './task-list.css';
-const LazyProjectContextMenu = React.lazy(async () => {
-  const module = await import('./ProjectContextMenu');
-  return { default: module.ProjectContextMenu };
-});
-export type TaskGroup = { id: string; label: string; taskIds: string[] };
-export type SidebarProjectRoot = { path: string; name: string };
-export type TaskProjectBucket = { id: string; label: string; items: SessionSummary[]; project: true; pinned?: boolean; sectionId?: string; customLabel?: boolean };
-export type SidebarBucket = { id: string; label: string; items: SessionSummary[]; project: boolean; kind?: string };
-export type SidebarView = 'groups'|'projects'|'workspace'|'purpose'|'timeline';
-export type SidebarPreferences = {
-  view?: SidebarView;
-  sort?: 'recent'|'oldest'|'name';
-  groups?: TaskGroup[];
-  collapsed?: string[];
-  hiddenProjectRoots?: string[];
-  pinnedProjectRoots?: string[];
-  projectLabels?: { path: string; label: string }[];
-  projectSections?: SidebarProjectSection[];
-};
-export const TASK_GROUP_DRAG_MIME = 'application/x-xueness-session';
+export type { TaskGroup, SidebarProjectRoot, TaskProjectBucket, SidebarBucket, SidebarView, SidebarPreferences, ProjectArchivePlan } from './taskListModel';
+export { TASK_GROUP_DRAG_MIME, mergeWorkspaceBuckets, mergePurposeBuckets, mergeProjectBuckets, projectArchivePlan } from './taskListModel';
 export { normalizeHiddenProjectRoots, sameSidebarProjectPath, toggleHiddenProjectRoot } from './projectSidebar';
-
-/** Native dragstart targets SidebarNav's draggable li, not its nested button. */
-export function resolveSidebarDragSession(target: Pick<Element, 'closest'> | null, sessions: readonly SessionSummary[]): SessionSummary | null {
-  const item = target?.closest<HTMLElement>('[data-session-id]')
-    ?? target?.closest<HTMLElement>('li.xn-shell-nav__item[draggable="true"]')
-      ?.querySelector<HTMLElement>('[data-sidebar-navigate="true"][data-session-id]');
-  return sessions.find(session => session.id === item?.dataset.sessionId) ?? null;
-}
+export {
+  resolveSidebarDragSession, isTaskContextMenuShortcut, nextSidebarMenuIndex, dialogFocusWrapIndex,
+  shouldDismissGroupEditorOnEscape, restoreSidebarFocus, moveTaskIntoGroup, toggleSidebarBuckets,
+  persistTaskGroupDrop, taskRelativeTime,
+} from './taskListHelpers';
 
 /** Optional sessions-index fields. The REST list remains backwards compatible, so
  * rows may carry these either at the top level or inside `sidecar`. */
 export type { SessionSidebarSidecar } from './sessionsIndex';
-type SessionWithSidebarSidecar = SessionSummary & SessionSidebarSidecar & { sidecar?: SessionSidebarSidecar };
-
-function sessionSidebarFields(session: SessionSummary): SessionWithSidebarSidecar {
-  const row = session as SessionWithSidebarSidecar;
-  const nested = row.sidecar ?? {};
-  return {
-    ...row,
-    workspace: row.workspace ?? nested.workspace ?? row.root,
-    workspaceId: row.workspaceId ?? nested.workspaceId,
-    workspacePath: row.workspacePath ?? nested.workspacePath,
-    workspaceName: row.workspaceName ?? nested.workspaceName,
-    purpose: row.purpose ?? nested.purpose,
-    pendingInteraction: row.pendingInteraction ?? nested.pendingInteraction,
-    unread: row.unread ?? nested.unread ?? (row.unreadAt != null || nested.unreadAt != null),
-    unreadAt: row.unreadAt ?? nested.unreadAt,
-    changeSummary: row.changeSummary ?? nested.changeSummary,
-    remote: row.remote ?? nested.remote,
-  };
-}
-
-function sidebarPathLabel(path: string): string {
-  return path.split(/[\\/]/).filter(Boolean).pop() || tr('任务');
-}
-
-/** Builds workspace buckets from sessions-index metadata while preserving the
- * existing project grouping semantics for rows without metadata. */
-export function mergeWorkspaceBuckets(sessions: SessionSummary[]): SidebarBucket[] {
-  const buckets = new Map<string, SidebarBucket>();
-  for (const session of sessions) {
-    const row = sessionSidebarFields(session);
-    const key = row.workspacePath ?? row.workspace ?? row.root ?? row.workspaceId ?? '';
-    const label = String(row.workspaceName ?? (key ? sidebarPathLabel(key) : tr('未指定工作区')));
-    const bucket: SidebarBucket = buckets.get(key) ?? { id: key, label, items: [], project: true };
-    bucket.items.push(session);
-    buckets.set(key, bucket);
-  }
-  return [...buckets.values()];
-}
-
-/** Purpose sections mirror ZCode's purpose groups; rows with no purpose remain
- * visible under a stable fallback section rather than disappearing. */
-export function mergePurposeBuckets(sessions: SessionSummary[]): SidebarBucket[] {
-  const buckets = new Map<string, SidebarBucket>();
-  for (const session of sessions) {
-    const purpose = String(sessionSidebarFields(session).purpose ?? '').trim();
-    const key = purpose || '__purpose_unspecified__';
-    const label = purpose === 'project' ? tr('项目') : purpose === 'conversation' ? tr('对话') : purpose || tr('未指定用途');
-    const bucket: SidebarBucket = buckets.get(key) ?? { id: key, label, items: [], project: false };
-    bucket.items.push(session);
-    buckets.set(key, bucket);
-  }
-  return [...buckets.values()];
-}
-
-export function mergeProjectBuckets(
-  sessions: SessionSummary[],
-  projectRoots: SidebarProjectRoot[] = [],
-  hiddenProjectRoots: unknown = [],
-  projectLabels: unknown = [],
-  pinnedProjectRoots: unknown = [],
-  projectSections: unknown = [],
-): TaskProjectBucket[] {
-  const buckets: TaskProjectBucket[] = [];
-  const hidden = normalizeHiddenProjectRoots(hiddenProjectRoots);
-  const hiddenPath = (path: string) => hidden.some(item => sameSidebarProjectPath(item, path));
-  const findBucket = (path: string) => buckets.find(bucket => sameSidebarProjectPath(bucket.id, path));
-  const labels = normalizeSidebarProjectLabels(projectLabels);
-  const pinned = normalizeSidebarProjectRoots(pinnedProjectRoots);
-  const sections = normalizeSidebarProjectSections(projectSections);
-  const labelForPath = (path: string) => path.split(/[\\/]/).filter(Boolean).pop() || tr('任务');
-  for (const root of projectRoots) {
-    if (!root || typeof root.path !== 'string' || !root.path) continue;
-    if (hiddenPath(root.path) || findBucket(root.path)) continue;
-    const customLabel = sidebarProjectLabel(labels, root.path);
-    buckets.push({
-        id: root.path,
-        label: customLabel || root.name.trim() || labelForPath(root.path),
-        items: [],
-        project: true,
-        pinned: isSidebarProjectPinned(pinned, root.path),
-        sectionId: sidebarProjectSectionId(sections, root.path),
-        customLabel: customLabel !== undefined,
-      });
-  }
-  for (const session of sessions) {
-    const id = session.root ?? '';
-    if (hiddenPath(id)) continue;
-    let bucket = findBucket(id);
-    if (!bucket) {
-      const customLabel = sidebarProjectLabel(labels, id);
-      bucket = { id, label: customLabel || labelForPath(id), items: [], project: true,
-        pinned: isSidebarProjectPinned(pinned, id), sectionId: sidebarProjectSectionId(sections, id), customLabel: customLabel !== undefined };
-      buckets.push(bucket);
-    }
-    bucket.items.push(session);
-  }
-  return buckets.map((bucket, index) => ({ bucket, index }))
-    .sort((left, right) => Number(Boolean(right.bucket.pinned)) - Number(Boolean(left.bucket.pinned)) || left.index - right.index)
-    .map(entry => entry.bucket);
-}
-
-export type ProjectArchivePlan = { sessionIds: string[]; skippedActiveCount: number };
-const PROJECT_SESSION_ACTIVE_STATUSES = new Set(['running', 'stopping', 'queued', 'pausing', 'starting']);
-
-export function projectArchivePlan(sessions: readonly SessionSummary[], root: string): ProjectArchivePlan {
-  const projectSessions = sessions.filter(session => typeof session.root === 'string' && sameSidebarProjectPath(session.root, root));
-  const sessionIds: string[] = [];
-  let skippedActiveCount = 0;
-  for (const session of projectSessions) {
-    const streaming = (session as SessionSummary & { streaming?: { status?: string } }).streaming?.status === 'streaming';
-    if (PROJECT_SESSION_ACTIVE_STATUSES.has(session.status) || streaming) skippedActiveCount++;
-    else sessionIds.push(session.id);
-  }
-  return { sessionIds, skippedActiveCount };
-}
 
 export interface XuenessTaskListProps {
   sessions: SessionSummary[];
@@ -200,88 +81,6 @@ export interface XuenessTaskListProps {
   onArchiveProjectSessions?: (root: string, sessionIds: string[]) => void;
 }
 
-export function isTaskContextMenuShortcut(key:string,shiftKey=false):boolean {
-  return key==='ContextMenu'||(key==='F10'&&shiftKey);
-}
-
-export function nextSidebarMenuIndex(current:number,length:number,key:string):number|null {
-  if(length<1)return null;
-  if(key==='Home')return 0;
-  if(key==='End')return length-1;
-  if(key!=='ArrowDown'&&key!=='ArrowUp')return null;
-  if(current<0)return key==='ArrowDown'?0:length-1;
-  return (current+(key==='ArrowDown'?1:-1)+length)%length;
-}
-
-export function dialogFocusWrapIndex(current:number,length:number,backward:boolean):number|null {
-  if(length<1)return null;
-  if(current<0)return backward?length-1:0;
-  if(backward&&current===0)return length-1;
-  if(!backward&&current===length-1)return 0;
-  return null;
-}
-
-export function shouldDismissGroupEditorOnEscape(event: {
-  key: string;
-  nativeEvent?: { isComposing?: boolean; keyCode?: number };
-  keyCode?: number;
-  isComposing?: boolean;
-  compositionActive?: boolean;
-}): boolean {
-  return event.key === 'Escape' && !isImeComposingEvent(event);
-}
-
-export function restoreSidebarFocus(
-  trigger:{isConnected:boolean;focus():void}|null,
-  fallback?:{isConnected:boolean;focus():void}|null,
-):void {
-  if(trigger?.isConnected){trigger.focus();return;}
-  if(fallback?.isConnected)fallback.focus();
-}
-
-export function moveTaskIntoGroup(groups: TaskGroup[], taskId: string, targetGroupId: string): TaskGroup[] {
-  return groups.map(group => ({
-    ...group,
-    taskIds: [...group.taskIds.filter(id => id !== taskId), ...(group.id === targetGroupId ? [taskId] : [])],
-  }));
-}
-
-/** Expand/collapse the visible sections without erasing another view's folds. */
-export function toggleSidebarBuckets(collapsed: string[], bucketIds: string[]): string[] {
-  const visible = new Set(bucketIds);
-  return collapsed.some(id => visible.has(id))
-    ? collapsed.filter(id => !visible.has(id))
-    : [...collapsed, ...bucketIds];
-}
-
-export function persistTaskGroupDrop({
-  event,
-  targetGroupId,
-  targetIsProject,
-  taskIds,
-  groups,
-  onPersist,
-}: {
-  event: { preventDefault(): void; dataTransfer: { getData(type: string): string } };
-  targetGroupId: string;
-  targetIsProject: boolean;
-  taskIds: string[];
-  groups: TaskGroup[];
-  onPersist(nextGroups: TaskGroup[]): void;
-}): boolean {
-  if (targetIsProject) return false;
-  event.preventDefault();
-  const taskId = event.dataTransfer.getData(TASK_GROUP_DRAG_MIME);
-  if (!taskIds.includes(taskId)) return false;
-  onPersist(moveTaskIntoGroup(groups, taskId, targetGroupId));
-  return true;
-}
-
-export function taskRelativeTime(value?: string): string {
-  if (!value || !Number.isFinite(Date.parse(value))) return '';
-  const minutes = Math.max(0, Math.floor((Date.now()-Date.parse(value))/60000));
-  return minutes < 1 ? tr('刚刚') : minutes < 60 ? tf('{0} 分钟前',[minutes]) : minutes < 1440 ? tf('{0} 小时前',[Math.floor(minutes/60)]) : tf('{0} 天前',[Math.floor(minutes/1440)]);
-}
 export function XuenessTaskList({
   sessions,
   activeId,
@@ -550,63 +349,10 @@ export function XuenessTaskList({
   };
   return <div ref={rootRef} className="xn-task-list">
     {compact && renderRows(sorted.filter(s=>s.pinned))}
-    {compact ? <div className="xn-task-list__toolbar xn-task-list__toolbar--compact">
-      <span className="xn-task-list__toolbar-label">{tr(view === 'projects' ? '项目' : view === 'workspace' ? '工作区' : view === 'purpose' ? '用途' : view === 'timeline' ? '时间线' : '分组')}</span>
-      {view === 'projects' && onAddProject && <button type="button" className="xn-task-list__toolbar-add-project"
-        data-testid="xn-task-add-project" title={tr('添加项目')} aria-label={tr('添加项目')} disabled={busy}
-        onClick={event => onAddProject(event.currentTarget)}><Plus size={14} /></button>}
-      {view === 'groups' && <button type="button" title={tr('新建分组')} aria-label={tr('新建分组')}
-        onClick={event => beginGroupEditor({ label: '' }, event.currentTarget)}><Plus size={14} /></button>}
-      <div className="xn-task-list__options" ref={optionsRef} onBlur={event => {
-        if (!event.relatedTarget || !event.currentTarget.contains(event.relatedTarget as Node)) closeOptions();
-      }}>
-        <button type="button" ref={optionsTriggerRef} className="xn-task-list__options-trigger"
-          aria-label={tr('任务操作')} title={tr('任务操作')} aria-haspopup="menu" aria-expanded={optionsOpen}
-          aria-controls={optionsOpen ? optionsMenuId : undefined} onClick={() => setOptionsOpen(open => !open)}
-          onKeyDown={event => {
-            if (isImeComposingEvent(event)) return;
-            if (event.key === 'ArrowDown') { event.preventDefault(); setOptionsOpen(true); }
-            else if (event.key === 'Escape' && optionsOpen) { event.preventDefault(); event.stopPropagation(); closeOptions(true); }
-          }}>
-          <MoreHorizontal size={16} />
-        </button>
-        {optionsOpen && <div id={optionsMenuId} className="xn-task-list__options-menu" role="menu" aria-label={tr('任务操作')}
-          onKeyDown={handleOptionsKeyDown}>
-          <div className="xn-task-list__options-menu-label">{tr('列表分组方式')}</div>
-          {(['groups', 'projects', 'workspace', 'purpose', 'timeline'] as const).map(value => <button key={value} type="button" role="menuitemradio"
-            aria-checked={view === value} onClick={() => { save({ view: value }); closeOptions(true); }}>
-            {value === 'groups' ? <Hash size={14} /> : value === 'projects' ? <Folder size={14} /> : value === 'workspace' ? <BriefcaseBusiness size={14} /> : value === 'timeline' ? <Clock size={14} /> : <Sparkles size={14} />}<span>{tr(value === 'groups' ? '分组' : value === 'projects' ? '项目' : value === 'workspace' ? '工作区' : value === 'timeline' ? '时间线' : '用途')}</span>
-            {view === value && <Check size={14} />}
-          </button>)}
-          {view !== 'timeline' && <>
-          <div role="separator" />
-          <div className="xn-task-list__options-menu-label">{tr('排序')}</div>
-          {(['recent', 'oldest', 'name'] as const).map(value => <button key={value} type="button" role="menuitemradio"
-            aria-checked={(preferences.sort ?? 'recent') === value} onClick={() => { save({ sort: value }); closeOptions(true); }}>
-            <span>{tr(value === 'recent' ? '最新' : value === 'oldest' ? '最早' : '名称')}</span>
-            {(preferences.sort ?? 'recent') === value && <Check size={14} />}
-          </button>)}
-          </>}
-          <div role="separator" />
-          <button type="button" role="menuitem" onClick={() => { toggleAll(); closeOptions(true); }}>
-            <ChevronsDownUp size={14} /><span>{tr(viewCollapsed.length ? '展开全部' : '折叠全部')}</span>
-          </button>
-          <button type="button" role="menuitem" onClick={() => { onOpenArchived(); closeOptions(true); }}><Archive size={14} /><span>{tr('已归档')}</span></button>
-        </div>}
-      </div>
-    </div> : <div className="xn-task-list__toolbar" data-section-label={tr('任务')}>
-      <div className="xn-task-list__segments" role="group" aria-label={tr('列表分组方式')}>
-        <button aria-pressed={view==='groups'} onClick={()=>save({view:'groups'})}><Hash size={12}/>{tr('分组')}</button>
-        <button aria-pressed={view==='projects'} onClick={()=>save({view:'projects'})}><Folder size={12}/>{tr('项目')}</button>
-        <button aria-pressed={view==='workspace'} onClick={()=>save({view:'workspace'})}><BriefcaseBusiness size={12}/>{tr('工作区')}</button>
-        <button aria-pressed={view==='purpose'} onClick={()=>save({view:'purpose'})}><Sparkles size={12}/>{tr('用途')}</button>
-        <button aria-pressed={view==='timeline'} onClick={()=>save({view:'timeline'})}><Clock size={12}/>{tr('时间线')}</button>
-      </div>
-      {view==='projects'&&onAddProject&&<button type="button" className="xn-task-list__toolbar-add-project" data-testid="xn-task-add-project" title={tr('添加项目')} aria-label={tr('添加项目')} disabled={busy} onClick={e=>onAddProject(e.currentTarget)}><Plus size={14}/></button>}
-      <button title={tr(viewCollapsed.length?'展开全部':'折叠全部')} aria-label={tr(viewCollapsed.length?'展开全部':'折叠全部')} onClick={toggleAll}><ChevronsDownUp size={14}/></button>
-      {view!=='timeline'&&<details className="xn-task-list__sort"><summary aria-label={tr('排序')}><ArrowDownWideNarrow size={14}/></summary><div>{(['recent','oldest','name'] as const).map(v=><button key={v} aria-pressed={(preferences.sort??'recent')===v} onClick={e=>{save({sort:v});e.currentTarget.closest('details')!.open=false;}}>{tr(v==='recent'?'最新':v==='oldest'?'最早':'名称')}</button>)}</div></details>}
-      <button title={tr('已归档')} aria-label={tr('已归档')} onClick={onOpenArchived}><Archive size={14}/></button>
-    </div>}
+    <XuenessTaskListToolbar compact={compact} view={view} busy={busy} preferences={preferences} viewCollapsedCount={viewCollapsed.length}
+      optionsOpen={optionsOpen} optionsMenuId={optionsMenuId} optionsRef={optionsRef} optionsTriggerRef={optionsTriggerRef}
+      setOptionsOpen={setOptionsOpen} closeOptions={closeOptions} handleOptionsKeyDown={handleOptionsKeyDown} save={save}
+      toggleAll={toggleAll} beginGroupEditor={beginGroupEditor} onAddProject={onAddProject} onOpenArchived={onOpenArchived} />
     {!compact && renderRows(sorted.filter(s=>s.pinned))}
     {projectPartitions.map(partition=><React.Fragment key={partition.id}>
       {partition.label&&<div className="xn-task-list__project-partition-heading" data-testid="xn-project-section-heading" data-section-id={partition.id}>{partition.label}</div>}
@@ -654,21 +400,11 @@ export function XuenessTaskList({
       {renderRows([...unpinned].sort((a,b)=>(Date.parse(b.updatedAt??'')||0)-(Date.parse(a.updatedAt??'')||0)).slice(0,8),true)}
     </section>}
     {view==='groups'&&<button className="xn-task-list__new-group" onClick={e=>beginGroupEditor({label:''},e.currentTarget)}><Plus size={14}/>{tr('新建分组')}</button>}
-    {menu&&current&&<><button className="xn-task-list__menu-backdrop" aria-label={tr('关闭')} onClick={()=>closeTaskMenu()}/><div ref={menuRef} className="xn-task-list__context" role="menu" aria-label={tr('任务操作')} style={{left:menu.x,top:menu.y}} onKeyDown={handleTaskMenuKeyDown} onBlur={e=>{const target=e.relatedTarget as HTMLElement|null;if(target?.closest('.xn-select-menu'))return;if(!e.currentTarget.contains(target))closeTaskMenu();}}>
-      <button type="button" role="menuitem" disabled={busy} onClick={()=>{onPin(current.id,!current.pinned);closeTaskMenu(true);}}><Pin size={14}/>{tr(current.pinned?'取消置顶':'置顶')}</button>
-      <button type="button" role="menuitem" disabled={busy} onClick={()=>{onRename(current.id,menuReturnFocusRef.current);closeTaskMenu();}}><Pencil size={14}/>{tr('重命名')}</button>
-      <button type="button" role="menuitem" disabled={busy} onClick={()=>{onArchive(current.id);closeTaskMenu();}}><Archive size={14}/>{tr('归档')}</button>
-      {groups.length>0&&<Select aria-label={tr('移动到分组')} value="" onChange={e=>{move(current.id,e.target.value);closeTaskMenu(true);}}><option value="">{tr('移动到分组')}</option><option value="__ungrouped__">{tr('未分组')}</option>{groups.map(g=><option key={g.id} value={g.id}>{g.label}</option>)}</Select>}
-    </div></>}
-    {projectMenuOpenedOnce&&<React.Suspense fallback={null}><LazyProjectContextMenu project={projectMenuTarget} sections={projectSections} focusReturnTo={projectMenuReturnFocusRef.current}
-      onPinProject={setProjectPin}
-      onRenameProject={(path,label)=>save({projectLabels:setSidebarProjectLabel(preferences.projectLabels,path,label)})}
-      onMoveProjectToSection={(path,sectionId)=>save({projectSections:moveSidebarProjectToSection(preferences.projectSections,path,sectionId)})}
-      onCreateProjectSection={(path,label)=>save({projectSections:createSidebarProjectSection(preferences.projectSections,path,label,crypto.randomUUID())})}
-      onOpenProjectExplorer={onOpenProjectExplorer}
-      onArchiveProjectSessions={onArchiveProjectSessions}
-      onRemoveProject={path=>save({hiddenProjectRoots:toggleHiddenProjectRoot(preferences.hiddenProjectRoots,path)})}
-      onClose={closeProjectMenu}/></React.Suspense>}
+    <XuenessTaskContextMenu menu={menu} current={current} menuRef={menuRef} menuReturnFocusRef={menuReturnFocusRef} busy={busy} groups={groups}
+      onPin={onPin} onRename={onRename} onArchive={onArchive} closeTaskMenu={closeTaskMenu} handleTaskMenuKeyDown={handleTaskMenuKeyDown} move={move} />
+    <XuenessProjectMenuHost projectMenuOpenedOnce={projectMenuOpenedOnce} projectMenuTarget={projectMenuTarget} projectSections={projectSections}
+      projectMenuReturnFocusRef={projectMenuReturnFocusRef} preferences={preferences} save={save} setProjectPin={setProjectPin}
+      onOpenProjectExplorer={onOpenProjectExplorer} onArchiveProjectSessions={onArchiveProjectSessions} closeProjectMenu={closeProjectMenu} />
     {editor&&<div className="xn-task-list__dialog-backdrop" onClick={closeGroupEditor}><form ref={dialogRef} tabIndex={-1} role="dialog" aria-modal="true" aria-label={tr(editor.id?'重命名分组':'新建分组')} onKeyDown={handleGroupEditorKeyDown} onClick={e=>e.stopPropagation()} onSubmit={e=>{e.preventDefault();const label=editor.label.trim();if(!label)return;save({groups:editor.id?groups.map(g=>g.id===editor.id?{...g,label}:g):[...groups,{id:crypto.randomUUID(),label,taskIds:[]}]});closeGroupEditor();}}><h3>{tr(editor.id?'重命名分组':'新建分组')}</h3><input required maxLength={80} aria-label={tr('分组名称')} value={editor.label} onChange={e=>setEditor({...editor,label:e.target.value})}/><footer>{editor.id&&<button type="button" onClick={()=>{save({groups:groups.filter(g=>g.id!==editor.id)});closeGroupEditor();}}><Trash2 size={14}/>{tr('删除')}</button>}<button type="button" onClick={closeGroupEditor}>{tr('取消')}</button><button type="submit">{tr('保存')}</button></footer></form></div>}
   </div>;
 }

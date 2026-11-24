@@ -124,7 +124,7 @@ export function createExtensionsHttp(options: ExtensionsHttpOptions) {
           if (!item || !data || typeof data !== "object" || (data as Record<string, unknown>).sha256 !== artifact.sha256) return [400, { error: "Catalog changed; review this plugin again" }];
           if (Boolean(item.installedVersion) !== (parts[4] === "update")) return [400, { error: "Refresh the catalog before installing" }];
           if (item.installedVersion === artifact.version) return [400, { error: "No newer plugin version available" }];
-          await fetchOfficialArtifact(options.stateDir, artifact.packageId, options.downloadArtifact ?? (pin => downloadArtifact(pin, options.projectRoot)));
+          await fetchOfficialArtifact(options.stateDir, artifact.packageId, options.downloadArtifact ?? downloadArtifact);
           const state = readState(options.stateDir); state.enabled[artifact.id] = false; writeState(options.stateDir, state.enabled, state.profile);
           const installed = installAll(options.stateDir, [{ ...(item.manifest as Record<string, unknown>), enabled: false }]);
           if (!installed.ok) throw new Error("Plugin manifest could not be saved");

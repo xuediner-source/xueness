@@ -6,6 +6,7 @@
  * Moved unchanged out of XuenessWorkbenchContainer.
  */
 import React, { lazy, Suspense } from "react";
+import { optionalComponent } from "../extensions/optionalFrontend";
 import { CircleHelp, Monitor } from "lucide-react";
 import { t as tr, tf, type useLocale } from "../../i18n";
 import type { RunChoices } from "../../xuenessBridge";
@@ -51,7 +52,8 @@ const McpElicitation = lazy(() => import('../mcp/ElicitationForm').then(module =
 const McpAppsHost = lazy(() => import('../mcp/AppsUiHost').then(module => ({ default: module.McpAppsHost })));
 const PendingQuestion = lazy(() => import('./PendingQuestion').then(module => ({ default: module.PendingQuestion })));
 const QuestionResume = lazy(() => import('./PendingQuestion').then(module => ({ default: module.QuestionResume })));
-const ModelMonitorHome = lazy(() => import('../model_monitor/ModelMonitorHome').then(module => ({ default: module.ModelMonitorHome })));
+// From the downloaded model monitor package; mounted only while that plugin is effective.
+const ModelMonitorHome = optionalComponent<{ sessionId?: string; providerId?: string; requestedModel?: string; providerName?: string; running?: boolean; onOpenHistory: () => void }>('model_monitor', 'ModelMonitorHome');
 /** Also mounted as the workbench's subagents panel, so both share this one lazy wrapper. */
 export const SubagentSidePane = lazy(() => import("../subagents/SubagentSidePane").then(module => ({ default: module.SubagentSidePane })));
 const StartPageRemoteDialog = lazy(() => import('./StartPageRemoteDialog'));

@@ -33,6 +33,8 @@ export interface RunOptions {
   signal?: AbortSignal;
   shouldStop?: () => boolean;
   onStep?: (steps: number) => unknown;
+  /** A person drives this run turn by turn (CLI chat): its step bound is a per-turn pause, not an unattended budget. */
+  attended?: boolean;
   /** ZCode model retry policy; defaults follow ZCode (10 retries, 2 s doubling to 60 s) and `XUENESS_MODEL_RETRY_*`. */
   modelRetry?: ModelRetrySettings;
   modelRequestAdmission?: ModelRequestAdmission;

@@ -107,7 +107,7 @@ export function XuenessPluginSettingsPanel({ resourceContent, onBrowse, ...manag
   return <section className="xn-plugin-settings" data-testid="xn-plugin-settings">
     <nav className="xn-plugin-settings__views" aria-label={tr("插件目录视图")}>
       <button type="button" aria-pressed={view === "installed"} onClick={() => setView("installed")}>
-        {tr("功能插件目录")}<span>{managerProps.plugins.length}</span>
+        {tr("功能插件目录")}<span>{listedPlugins(managerProps.plugins).length}</span>
       </button>
       <button type="button" aria-pressed={view === "resources"} onClick={() => setView("resources")}>
         {tr("资源清单")}
@@ -129,6 +129,14 @@ export function pluginState(plugin: XuenessPlugin): "active" | "disabled" | "blo
   if (!plugin.enabled) return "disabled";
   if (plugin.blockedBy?.length) return "blocked";
   return "unavailable";
+}
+
+/**
+ * The plugins this installation has. A marketplace plugin joins the list once its package is downloaded;
+ * before that it is offered only in the plugin marketplace (owner decision, 2026-11-17).
+ */
+export function listedPlugins(plugins: readonly XuenessPlugin[]): XuenessPlugin[] {
+  return plugins.filter((plugin) => !(plugin.category === "center" && plugin.installed === false));
 }
 
 export function filterPlugins(plugins: XuenessPlugin[], filter: PluginFilter, query: string): XuenessPlugin[] {
@@ -156,7 +164,8 @@ export function FeatureUnavailable({ feature, onManage }: { feature: string; onM
 }
 
 /** `embedded`: inside a settings page that already shows a title; the description and actions stay. */
-export function XuenessPluginManager({ plugins, loading, error, onRefresh, onToggle, embedded = false }: XuenessPluginManagerProps & { embedded?: boolean }) {
+export function XuenessPluginManager({ plugins: catalog, loading, error, onRefresh, onToggle, embedded = false }: XuenessPluginManagerProps & { embedded?: boolean }) {
+  const plugins = useMemo(() => listedPlugins(catalog), [catalog]);
   const locale = useLocale();
   const [busyId, setBusyId] = useState<string | null>(null);
   const [actionError, setActionError] = useState("");

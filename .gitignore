@@ -63,8 +63,6 @@ desktop/update-smoke-evidence/
 # Local runtime state written relative to the CLI working directory.
 .xueness/
 
-# Local WorkBuddy account login seeds; never publish credentials
-ts/plugins/workbuddy/assets/auths/
 ts/node_modules
 
 # Local acceptance sessions and installed user data are never source artifacts

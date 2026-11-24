@@ -234,7 +234,7 @@ async function chatLoop(cli: Cli, host: ApplicationApi, io: RunIo, session: Sess
       const sid = String(s.id);
       terminal.setContext?.({ sessionId: sid, model: prepared.provider.model ?? a.model ?? "", mode: a.tui_mode ?? prepared.flags.permissionMode });
       await lease.drop();
-      try { s = await runAgent(cli, host, io, await store.load(sid), prepared, terminal.event ? null : eventRenderer(cli.language)); }
+      try { s = await runAgent(cli, host, io, await store.load(sid), prepared, terminal.event ? null : eventRenderer(cli.language), { attended: true }); }
       finally { await lease.hold(sid); }
       err(en ? `== ${s.status} (${s.steps} steps) · enter a follow-up, /retry to continue, /exit to leave` : `== ${s.status}（共 ${s.steps} 步） · 继续输入追问，/retry 继续，/exit 退出`);
     }

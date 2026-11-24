@@ -1,8 +1,8 @@
 {
   "id": "tavern",
   "name": "酒馆",
-  "description": "角色扮演：导入 SillyTavern 兼容的角色卡与世界书，从角色设定开始一段对话。",
-  "version": "1.0.0",
+  "description": "角色扮演：SillyTavern 兼容的角色卡、世界书、预设与人设，在专用面板中开始与继续角色扮演对话。",
+  "version": "2.0.0",
   "apiVersion": 1,
   "defaultEnabled": false,
   "installPackage": "xueness-tavern",
@@ -11,7 +11,9 @@
   ],
   "tools": [],
   "commands": [],
-  "panels": [],
+  "panels": [
+    "tavern"
+  ],
   "resources": [],
   "capabilities": [],
   "httpFamilies": [
@@ -19,26 +21,48 @@
   ],
   "modules": [
     "library",
+    "presets",
+    "personas",
+    "roleplay",
+    "preview",
     "brief"
   ],
-  "frontendModules": [
-    "plugins/tavern/index.tsx"
-  ],
+  "frontendModules": [],
   "features": [
     {
+      "id": "tavern.panel",
+      "name": "酒馆专用面板：角色、世界书、预设与人设分页管理",
+      "nameEn": "Dedicated Tavern panel with tabs for characters, world books, presets and personas"
+    },
+    {
       "id": "tavern.characters",
-      "name": "导入、查看与移除 SillyTavern 兼容角色卡（JSON 与 PNG，V1/V2/V3）",
-      "nameEn": "Import, view and remove SillyTavern-compatible character cards (JSON and PNG, V1/V2/V3)"
+      "name": "导入、查看与移除 SillyTavern 兼容角色卡（JSON 与 PNG，V1/V2/V3），含头像、全部开场白与完整设定",
+      "nameEn": "Import, view and remove SillyTavern-compatible character cards (JSON and PNG, V1/V2/V3) with avatar, every greeting and the full definition"
     },
     {
       "id": "tavern.worldbooks",
-      "name": "导入世界书与角色卡内嵌的世界信息",
-      "nameEn": "Import world books and world information embedded in character cards"
+      "name": "世界书与角色卡内嵌世界信息：关键词与次要关键词逻辑、位置、概率、递归与预算，可设为全局并逐条开关",
+      "nameEn": "World books and embedded world information: keys and secondary-key logic, position, chance, recursion and budget; global books and per-entry switches"
+    },
+    {
+      "id": "tavern.presets",
+      "name": "预设：主提示、段落顺序、作者注释与深度、后置指令、世界书扫描设置，可导入 SillyTavern 预设",
+      "nameEn": "Presets: main prompt, section order, author's note and depth, post-history instructions and world-information scanning; SillyTavern preset import"
+    },
+    {
+      "id": "tavern.personas",
+      "name": "人设：你在故事里的名字与描述，可设为默认",
+      "nameEn": "Personas: your name and description in the story, with a default"
     },
     {
       "id": "tavern.roleplay",
-      "name": "按角色设定、场景、世界信息和开场白生成开场消息并开始对话",
-      "nameEn": "Build an opening message from the character, scenario, world information and greeting, and start a chat"
+      "name": "角色扮演模式：每轮请求按预设重新组织角色、人设与世界书，开场白作为第一条消息，按存档继续",
+      "nameEn": "Roleplay mode: every request is rebuilt from the preset, character, persona and world books, the greeting opens the chat, and playthroughs can be resumed"
+    },
+    {
+      "id": "tavern.prompt_preview",
+      "name": "预览提示词与被激活的世界书条目",
+      "nameEn": "Preview the prompt and the activated world entries"
     }
   ]
 }

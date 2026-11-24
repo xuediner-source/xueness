@@ -33,6 +33,11 @@ Completion is ZCode-style: a turn ends when the model stops calling tools.
 The optional `Evidence: E1` footer only labels the completion `verified` or
 `unverified`; a missing or invalid reference never adds a repair round, blocks
 tools or pauses the run. Only a failed host delivery check yields `needs_review`.
+A turn's `tool_execution_status` is `failed` only for failures nothing later in
+the turn supersedes (`tool-status.ts`): a failed file change needs a later
+successful change to the same file, a failed lookup any later success, and a
+failed command or other tool a later success of the same target or any later
+successful file change. Docs: `docs/xueness-event-protocol-v1.md` §3.6.
 
 The turn loop follows ZCode: there is no default step or wall-time cap. Three
 identical calls in a row add a reminder to the next request instead of stalling;
@@ -97,7 +102,11 @@ events contain measured `durationMs` and whitelisted reported `usage` only.
 An abnormal finish with no text, tools or usage receives at most one empty
 completion retry, within the existing attempt budget. Partial tool snapshots are
 buffered until output commits or a complete tool call is accepted. Nonempty
-text or reasoning commits even when reasoning display is disabled.
+text or reasoning commits even when reasoning display is disabled. A transient
+failure after commit (mid-stream reset, cut chunked body, 5xx envelope, idle
+stall) is retried within the same budget: the partial stream is archived as
+interrupted and never enters `messages`; no tool from it has run. Auth and
+request errors (400/401/403/404/413/422) and exhausted quota are not retried.
 `modelRetry.streamIdleTimeoutMs` defaults to 600000; each retry adds 30000.
 Non-positive values disable the event idle timer. Only complete SSE data
 payloads refresh it; comment heartbeats do not. The existing lightweight

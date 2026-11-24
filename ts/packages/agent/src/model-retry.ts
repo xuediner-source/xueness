@@ -2,9 +2,11 @@
  * ZCode's runner retry (`adapters/model` attempt loop with `runner-retry.ts`,
  * `retry-budget.ts` and `runner-status.ts`) at the shared agent driver.
  *
- * A classified transient failure before any committed output waits —
- * Retry-After first, else exponential backoff with jitter — and re-sends the
- * same request. Standard-profile adapters then make one HTTP attempt each,
+ * A classified transient failure waits — Retry-After first, else exponential
+ * backoff with jitter — and re-sends the same request, also after output
+ * committed (the caller archives that stream as interrupted; Xueness departs
+ * from ZCode here because reasoning models commit on their first token).
+ * Standard-profile adapters then make one HTTP attempt each,
  * so this loop owns the schedule. Status events mirror ZCode's
  * `model_request_failed` and `model_retry_scheduled`.
  */

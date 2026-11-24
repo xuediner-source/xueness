@@ -155,7 +155,7 @@ export async function agentHost(cli: Cli, terminal: CliTerminal = new Terminal()
  * One agent run under the CLI's gate; Ctrl+C asks it to stop. The runner takes
  * the session lease itself, so a caller holding it releases it first.
  */
-export async function runAgent(cli: Cli, host: ApplicationApi, io: RunIo, session: Session, prepared: Prepared, onEvent: ((event: Row) => void) | null): Promise<Session> {
+export async function runAgent(cli: Cli, host: ApplicationApi, io: RunIo, session: Session, prepared: Prepared, onEvent: ((event: Row) => void) | null, extra: { attended?: boolean } = {}): Promise<Session> {
   io.flags = prepared.flags;
   io.sink = onEvent ?? (() => {});
   io.terminal.running = true; io.terminal.stopRequested = false;
@@ -163,7 +163,7 @@ export async function runAgent(cli: Cli, host: ApplicationApi, io: RunIo, sessio
   try {
     const runner = host.agent.createRunner(session, prepared.provider, prepared.policy);
     const a = cli.args;
-    return await runner.run(session, { maxSteps: a.steps, ...(a.max_chars !== null ? { maxChars: a.max_chars } : {}), ...(a.max_tokens !== null ? { maxTokens: a.max_tokens } : {}), ...(a.max_wall_seconds !== null ? { maxWallSeconds: a.max_wall_seconds } : {}), shouldStop: () => io.terminal.stopRequested });
+    return await runner.run(session, { maxSteps: a.steps, ...(a.max_chars !== null ? { maxChars: a.max_chars } : {}), ...(a.max_tokens !== null ? { maxTokens: a.max_tokens } : {}), ...(a.max_wall_seconds !== null ? { maxWallSeconds: a.max_wall_seconds } : {}), ...(extra.attended ? { attended: true } : {}), shouldStop: () => io.terminal.stopRequested });
   } finally { io.terminal.running = false; io.sink = () => {}; }
 }
 

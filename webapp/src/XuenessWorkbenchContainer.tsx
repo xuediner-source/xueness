@@ -66,9 +66,8 @@ import { usePanelResource } from "./plugins/shared";
 import { normalizeColorPalette } from "./plugins/settings/themeBoot";
 import { useWorkbenchSettings } from "./plugins/settings/useWorkbenchSettings";
 import { useWorkbenchGlobalShortcuts } from './plugins/settings/workbenchShortcutActions';
-import { WorkbenchSettingsPanel } from "./plugins/settings/WorkbenchSettingsPanel";
-import { CapabilitiesPanel, DesktopUpdates, ModelManager, ModelMonitorPanel, RemoteConnections, SubscriptionsPanel, WorkbuddySettingsPanel,
-  SwarmPanel, XuenessAutomationsPanel, XuenessDiagnosticsPanel, XuenessMarketplace, XuenessMcpTools, XuenessUsageSettings } from "./plugins/settings/workbenchSettingsViews";
+import { CapabilitiesPanel, DesktopUpdates, MagpiePanel, ModelManager, ModelMonitorPanel, RemoteConnections,
+  SwarmPanel, TavernPanel, XuenessAutomationsPanel, XuenessDiagnosticsPanel, XuenessMarketplace, XuenessMcpTools, XuenessUsageSettings } from "./plugins/settings/workbenchSettingsViews";
 import { useGitPanel } from './plugins/git/useGitPanel';
 import { useWorkbenchFiles } from "./plugins/files/useWorkbenchFiles";
 import { useDefaultModelSelection } from "./plugins/providers/useDefaultModelSelection";
@@ -128,6 +127,7 @@ const XuenessRenameDialog = lazy(() => import('./plugins/sessions/XuenessRenameD
 const XuenessCloneDialog = lazy(() => import('./plugins/git/XuenessCloneDialog').then(module => ({ default: module.XuenessCloneDialog })));
 const XuenessWorkspacePickerDialog = lazy(() => import('./plugins/settings/XuenessWorkspacePickerDialog').then(module => ({ default: module.XuenessWorkspacePickerDialog })));
 const XuenessCapabilityDialog = lazy(() => import('./XuenessCapabilityDialog').then(module => ({ default: module.XuenessCapabilityDialog })));
+const WorkbenchSettingsPanel = lazy(() => import('./plugins/settings/WorkbenchSettingsPanel').then(module => ({ default: module.WorkbenchSettingsPanel })));
 
 export function XuenessWorkbenchContainer() {
   const locale = useLocale();
@@ -328,22 +328,13 @@ export function XuenessWorkbenchContainer() {
         />
       </Suspense>
     ),
-    plugins: (
-      <XuenessPluginManager
-        plugins={pluginCatalog}
-        loading={pluginCatalogLoading}
-        error={pluginCatalogError}
-        onRefresh={refreshPluginCatalog}
-        onToggle={togglePlugin}
-      />
-    ),
+    plugins: <XuenessPluginManager plugins={pluginCatalog} loading={pluginCatalogLoading} error={pluginCatalogError} onRefresh={refreshPluginCatalog} onToggle={togglePlugin} />,
     workflows: <WorkflowPanel sessionId={activeId} subagentsEnabled={isPluginEffective("subagents")} />,
     terminal: <TerminalPanel {...scopedSidePanel} fontSize={Number(settingsValues.terminalFontSize ?? 13)} fontFamily={String(settingsValues.terminalFontFamily ?? "system")} />,
     browser: <BrowserPanel {...scopedSidePanel} />,
     automations: <XuenessAutomationsPanel offPeakEnabled={isPluginEffective("automation")} />,
     marketplace: <XuenessMarketplace onInstalled={() => void refreshPluginCatalog()} onManagePlugins={() => setPanel('plugins')} />,
-    subscriptions: <SubscriptionsPanel onChanged={() => void refreshComposerCatalog()} onSelectModel={id => { updateChoices({ provider: 'real', provider_id: id, model: undefined, reasoning_effort: undefined }); void refreshComposerCatalog(); setPanel('chat'); }} />,
-    workbuddy: <WorkbuddySettingsPanel />,
+    magpie: <MagpiePanel onModelsChanged={() => void refreshComposerCatalog()} onSelectModel={id => { updateChoices({ provider: 'real', provider_id: id, model: undefined, reasoning_effort: undefined }); void refreshComposerCatalog(); setPanel('chat'); }} />,
     'model-monitor': <ModelMonitorPanel />,
     diagnostics: <XuenessDiagnosticsPanel />,
     files: (
@@ -393,6 +384,8 @@ export function XuenessWorkbenchContainer() {
     usage: <XuenessUsageSettings />,
     memory: <MemoryOcean workspaceRoot={typeof session?.root === "string" ? session.root : undefined} tracks={memoryTracks} />,
     swarm: <SwarmPanel enabled={isPluginEffective("swarm")} sessionId={activeId} />,
+    // Roleplay chats start from here tagged with their Tavern playthrough; the conversation itself is an ordinary session.
+    tavern: <TavernPanel onStart={text => { startNewTask(); appendTextToComposer(null, text); }} onStartSession={(text, ref) => { setPanel("chat"); return handleCreate(text, undefined, undefined, ref); }} onOpenSession={id => { selectSession(id); setPanel("chat"); }} />,
     capabilities: <><CapabilitiesPanel sections={capSections} />{isPluginEffective("mcp") && <XuenessMcpTools />}</>,
     settings: <WorkbenchSettingsPanel settings={settings} isPluginEffective={isPluginEffective} capabilityKinds={pluginAvailability.capabilityKinds} capSections={capSections}
       loadCapSlot={loadCapSlot} pluginCatalog={pluginCatalog} pluginCatalogLoading={pluginCatalogLoading} pluginCatalogError={pluginCatalogError}
@@ -542,7 +535,7 @@ export function XuenessWorkbenchContainer() {
             handleRefreshAll={handleRefreshAll} composer={composerShared} workspaceKey={!activeId && preserveDefaultDraftScope ? 'default' : commandRoot || 'default'}
             commandRoot={commandRoot} starterWorkspaceKey={preserveDefaultDraftScope ? 'default' : commandRoot || 'default'} composerModelReady={composerModelReady}
             composerCatalogLoading={composerCatalogLoading} composerCatalogError={composerCatalogError} refreshComposerCatalog={refreshComposerCatalog}
-            onSend={handleCreate} appendTextToComposer={appendTextToComposer} />
+            onSend={(text, input, onAccepted) => handleCreate(text, input, onAccepted)} appendTextToComposer={appendTextToComposer} />
         </div>
       )}
       </SessionPaneWorkbench>}

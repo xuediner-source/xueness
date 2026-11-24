@@ -165,6 +165,9 @@
   margin: 0 0 0.85em;
 }
 
+/* Plain-text prose shown for the moment before the markdown parser has loaded. */
+.xn-md__paragraph--pending { white-space: pre-wrap; }
+
 .xn-shell-layout .xn-md__paragraph:last-child,
 .xn-shell-layout .xn-md__list:last-child,
 .xn-shell-layout .xn-md__code-block:last-child {

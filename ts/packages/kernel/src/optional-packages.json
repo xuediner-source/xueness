@@ -1,158 +1,16 @@
 {
-  "subscriptions": {
-    "id": "subscriptions",
-    "packageId": "xueness-subscriptions",
-    "version": "1.0.0",
-    "sha256": "d185e200d093f7378cf7b075a0b2f2d727c1070fb5e734568b00e04e762abb45",
-    "bytes": 499547,
-    "url": "https://raw.githubusercontent.com/xuediner-source/xueness/main/marketplace/packages/xueness-subscriptions-1.0.0-d185e200d093f737.json.gz",
-    "files": [
-      {
-        "path": "backend/assets/catalog.json",
-        "bytes": 3961,
-        "sha256": "443cc04c5cc26e4841eb448e24032a80f060d993658c048da8f4a6226648be4d",
-        "executable": false
-      },
-      {
-        "path": "backend/assets/compat.mjs",
-        "bytes": 1958,
-        "sha256": "f7cab1e71bf246ec94de25b26828021f25d9ee23eca73eab5950e9824b928e5d",
-        "executable": false
-      },
-      {
-        "path": "backend/assets/protocols.mjs",
-        "bytes": 15473,
-        "sha256": "16c1f68ac63f068b9f6e11d7720ee884a1f747e986370ca41cc24e52c78308a1",
-        "executable": false
-      },
-      {
-        "path": "backend/assets/vendor/LICENSE-MIT.txt",
-        "bytes": 1082,
-        "sha256": "c1d6b0f26f91e2415db996973041366ef3ef65a2af7412349e61e3970ed53ef9",
-        "executable": false
-      },
-      {
-        "path": "backend/assets/vendor/auth/oauth-flow.mjs",
-        "bytes": 11123,
-        "sha256": "15ea6303e5191be49460c949fbb7bf70455858bc6f02490962cad62f5d74802c",
-        "executable": false
-      },
-      {
-        "path": "backend/assets/vendor/auth/qwen-device-flow.mjs",
-        "bytes": 7848,
-        "sha256": "3e3eadf374c989f91ff9152cebb4f897fece57027995b731e415e6bf56424322",
-        "executable": false
-      },
-      {
-        "path": "backend/assets/vendor/auth/safety.mjs",
-        "bytes": 4736,
-        "sha256": "d0b33dc12529c46b61abb0f47ada0d352e688766b49a06c17de140f6a8efa7e9",
-        "executable": false
-      },
-      {
-        "path": "backend/assets/vendor/commandcode.mjs",
-        "bytes": 6245,
-        "sha256": "021bc1230b335724c53e69f2dc6855c3056e8897e56422adcc8bd292bbf5593d",
-        "executable": false
-      },
-      {
-        "path": "backend/assets/vendor/hub.mjs",
-        "bytes": 218578,
-        "sha256": "d8bdb64b760ce2127055b2e4f68b417e69b01ed0b50afe7f0798ee2aef0905c1",
-        "executable": false
-      },
-      {
-        "path": "backend/assets/vendor/qoder.mjs",
-        "bytes": 7926,
-        "sha256": "8325cd379dc536ef03514def3324de21383ceeda51387f832877aabd147627ab",
-        "executable": false
-      },
-      {
-        "path": "backend/assets/worker.mjs",
-        "bytes": 23080,
-        "sha256": "27f2fdc57851451afd692a90e84edcf97bf43f06798a62ebf871f9933e6ff789",
-        "executable": false
-      },
-      {
-        "path": "backend/manifest.json",
-        "bytes": 2502,
-        "sha256": "54fbb0e56a28fe2f83410b114d844d31c6f01dacb859ede0a185ebd1c054d9ce",
-        "executable": false
-      },
-      {
-        "path": "backend/package.json",
-        "bytes": 355,
-        "sha256": "4ddc16f9c0caf542bc29b5b754e90a6fefa057c5b3d070420f1e7c6893e8341d",
-        "executable": false
-      },
-      {
-        "path": "backend/src/accounts.ts",
-        "bytes": 6423,
-        "sha256": "e12fbc883372cdd13fbf5283799bf9fce26f4d51e51a112e579e6b50bdb6e117",
-        "executable": false
-      },
-      {
-        "path": "backend/src/broker.ts",
-        "bytes": 9362,
-        "sha256": "36570b34016bb4f32f11f64848922a354cb5aeb02df5b6f1e6c0be9b36a17758",
-        "executable": false
-      },
-      {
-        "path": "backend/src/entitlement-config.ts",
-        "bytes": 4568,
-        "sha256": "9949652b4ecaeba58051955baf340880e9f5f4f180525884bca33a29a6ef4667",
-        "executable": false
-      },
-      {
-        "path": "backend/src/entitlements.ts",
-        "bytes": 10442,
-        "sha256": "b77dbd76827bfc351b3d137ff1b5d02645046b20e29aba2f1e9d9fd12b818154",
-        "executable": false
-      },
-      {
-        "path": "backend/src/index.ts",
-        "bytes": 3944,
-        "sha256": "9dd83aa1143300516a1dff86fd95c5e636d9498e78540ba1fe766cb76761a5d2",
-        "executable": false
-      },
-      {
-        "path": "backend/src/provider.ts",
-        "bytes": 5782,
-        "sha256": "6db894188a76b1e3ef146f3a4e7c252bd0d93b99f8ae4578aa63b7f104236279",
-        "executable": false
-      },
-      {
-        "path": "backend/src/state.ts",
-        "bytes": 8845,
-        "sha256": "60f3e8e34fa7216b910306832db763a52dd14656a3f12e1ab8e58ccf3af8e3cc",
-        "executable": false
-      },
-      {
-        "path": "frontend/optional-subscriptions-CGHWLo1i.css",
-        "bytes": 6143,
-        "sha256": "b8f79df0e7d4f64ae62a7f737205c9ae28d81b332cf2ac0e357b45324131f529",
-        "executable": false
-      },
-      {
-        "path": "frontend/optional-subscriptions-DNj2fmXQ.js",
-        "bytes": 13315,
-        "sha256": "9e2e7beb6abde3871ef8083288b5a81734aed369956754493480a9c77be53e01",
-        "executable": false
-      }
-    ]
-  },
   "model_monitor": {
     "id": "model_monitor",
     "packageId": "xueness-model-monitor",
     "version": "1.0.0",
-    "sha256": "78598942911ebb3374292a017b4c81a664b6717e9aeb8e45b4298d6a2576b83e",
-    "bytes": 42006,
-    "url": "https://raw.githubusercontent.com/xuediner-source/xueness/main/marketplace/packages/xueness-model-monitor-1.0.0-78598942911ebb33.json.gz",
+    "sha256": "53a2aca10c29362816dff97f1b63e5eddbe7e209946824a41017ec960643cdbe",
+    "bytes": 45048,
+    "url": "https://raw.githubusercontent.com/xuediner-source/xueness-marketplace/main/packages/xueness-model-monitor-1.0.0-53a2aca10c293628.json.gz",
     "files": [
       {
         "path": "backend/manifest.json",
-        "bytes": 1261,
-        "sha256": "e29b6cad5684348f5c374edc8d76f0ee863610dc27ffd2a7f486f4794be91a97",
+        "bytes": 1182,
+        "sha256": "b401c7ff2dd0de9fad22f4bc6ac8003d18cea22aae00647c02ae836eb169a677",
         "executable": false
       },
       {
@@ -186,103 +44,15 @@
         "executable": false
       },
       {
-        "path": "frontend/optional-model_monitor-BQ4uLVXj.css",
+        "path": "frontend/optional-model_monitor.css",
         "bytes": 8114,
         "sha256": "39f1707119e9b1f1a1531d7d18adbfde9ade329410a0de41d0450f649e62fc0c",
         "executable": false
       },
       {
-        "path": "frontend/optional-model_monitor-DAnxYt87.js",
-        "bytes": 10711,
-        "sha256": "e575e88cdcd0a618cf5cf421636a41523d656d9c7595125d8e2ed22a93064812",
-        "executable": false
-      }
-    ]
-  },
-  "workbuddy": {
-    "id": "workbuddy",
-    "packageId": "xueness-workbuddy",
-    "version": "1.0.0",
-    "sha256": "484e73616d0fb4a01c78bd978171d4db7daa45b701d5596b0ce5a438b114261f",
-    "bytes": 18134136,
-    "url": "https://raw.githubusercontent.com/xuediner-source/xueness/main/marketplace/packages/xueness-workbuddy-1.0.0-484e73616d0fb4a0.json.gz",
-    "files": [
-      {
-        "path": "backend/assets/workbuddy2api-panel.exe",
-        "bytes": 13553664,
-        "sha256": "6cdbdaedbcc59c6869bea149e0a16a88b8f1f47d7d8af0769f26e9e444ab8cbe",
-        "executable": false
-      },
-      {
-        "path": "backend/manifest.json",
-        "bytes": 1929,
-        "sha256": "25161046d88bb1ca31e619b9e5d13cfc71bafa8d6b4d922ceb1f33fc68e9cc6a",
-        "executable": false
-      },
-      {
-        "path": "backend/package.json",
-        "bytes": 317,
-        "sha256": "68fc3799b1ef34da4c2ab0beb5d3b139587556e6585955cb1d3dda67b6c84a1b",
-        "executable": false
-      },
-      {
-        "path": "backend/src/accounts.ts",
-        "bytes": 6262,
-        "sha256": "007ca506ef5978eb68f3e89a830568bf3237b520212350615b04e682680c02c4",
-        "executable": false
-      },
-      {
-        "path": "backend/src/api.ts",
-        "bytes": 7218,
-        "sha256": "a63d7fcebf64710e8991aced0c2f32bef58bf373361077146ea130c0e7147c49",
-        "executable": false
-      },
-      {
-        "path": "backend/src/gateway.ts",
-        "bytes": 5718,
-        "sha256": "6f4264c3cde405a0c5810c240a3bab4e14bb64939fa941274df2815c7e4437b6",
-        "executable": false
-      },
-      {
-        "path": "backend/src/http.ts",
-        "bytes": 2825,
-        "sha256": "bbb389212b413d470ff2d54f78c29b931120a4a72984e39bc48ea396b57f2055",
-        "executable": false
-      },
-      {
-        "path": "backend/src/index.ts",
-        "bytes": 1090,
-        "sha256": "e8ba570a910d009868505b6143931f0404647341ba055888746da1a26b5e19a2",
-        "executable": false
-      },
-      {
-        "path": "backend/src/layout.ts",
-        "bytes": 5216,
-        "sha256": "cf2ec77e3ab7df9e5081d7afc7c34d14c406ee0f0086b506a88c0148e47b707b",
-        "executable": false
-      },
-      {
-        "path": "backend/src/models.ts",
-        "bytes": 1484,
-        "sha256": "7e69a40a3b9e64356384494576723f7b1cfb99f3a999f32a7d1dfdb68c4e11f0",
-        "executable": false
-      },
-      {
-        "path": "backend/src/provider.ts",
-        "bytes": 3089,
-        "sha256": "4d07d2782832983a13a74890eb1c6226e269e097e73fe4dc5227eb42c3cf7ec1",
-        "executable": false
-      },
-      {
-        "path": "frontend/optional-workbuddy-Cx6SJDwZ.js",
-        "bytes": 7565,
-        "sha256": "19000847886655e2a482ac8c1af4b931647ef049286a265e0db758ed9a883ccd",
-        "executable": false
-      },
-      {
-        "path": "frontend/optional-workbuddy-DsjSw6Bn.css",
-        "bytes": 3693,
-        "sha256": "17f10eb0e4f842d3542865e9ff31302343174c5d476e22991696005a832ab0ad",
+        "path": "frontend/optional-model_monitor.js",
+        "bytes": 13087,
+        "sha256": "09ae1e815d95107d366d168f76f2148f17c8cd5a627145e58d8ea1d14b00cd97",
         "executable": false
       }
     ]
@@ -290,15 +60,15 @@
   "tavern": {
     "id": "tavern",
     "packageId": "xueness-tavern",
-    "version": "1.0.0",
-    "sha256": "88e84b30cb8bc21bf1461946d442694eedbc62ef86543785e26d7f1a93b507c4",
-    "bytes": 42942,
-    "url": "https://raw.githubusercontent.com/xuediner-source/xueness/main/marketplace/packages/xueness-tavern-1.0.0-88e84b30cb8bc21b.json.gz",
+    "version": "2.0.0",
+    "sha256": "3747fb1546cbb034edaa7e9ef081280e9c915a0a2cb927c761bdc35f8cbd5448",
+    "bytes": 167460,
+    "url": "https://raw.githubusercontent.com/xuediner-source/xueness-marketplace/main/packages/xueness-tavern-2.0.0-3747fb1546cbb034.json.gz",
     "files": [
       {
         "path": "backend/manifest.json",
-        "bytes": 1287,
-        "sha256": "caeb83be7e5b10d666adfb0c8054c6d7cd55968d5f7d1b2268c7bc7d64400dca",
+        "bytes": 2638,
+        "sha256": "d2ffce9328f1fa38940ffcdccbbc949cb561c6b33d011fc4710841f89596313a",
         "executable": false
       },
       {
@@ -308,21 +78,33 @@
         "executable": false
       },
       {
+        "path": "backend/src/assemble.ts",
+        "bytes": 6311,
+        "sha256": "874db5c831e2e2aa93f38b948706103ea88b7f91e5df0a1ccf0c1fb6ca47bcb8",
+        "executable": false
+      },
+      {
         "path": "backend/src/cards.ts",
-        "bytes": 6482,
-        "sha256": "51ec9a053c314235179c7a5b3a9ee90a728a0ce73f393ad98e1834cebe6730d2",
+        "bytes": 9190,
+        "sha256": "1233e98dd96974bea2a38c09dd0aa535a5648a9bcf33f9aa709ed0a31cfbff8b",
         "executable": false
       },
       {
         "path": "backend/src/http.ts",
-        "bytes": 5512,
-        "sha256": "0f5444573e8ba7e0a6fe1321918d7e08b65bf3f83b43c47b0b77d86db54f9a83",
+        "bytes": 13447,
+        "sha256": "50ae8175282e17eca2e3543848d0c9f66f90aaec14b7186434c88be113430542",
         "executable": false
       },
       {
         "path": "backend/src/index.ts",
-        "bytes": 983,
-        "sha256": "4a1453a8cb1d8f711e69a194e3573e3762f12d2ae864c4e0efeb3c910a8839c5",
+        "bytes": 1754,
+        "sha256": "4bf0b29af088e4cef9e2fee4092c5ae625961d53fb6e3be244597fcc5f7b9d5c",
+        "executable": false
+      },
+      {
+        "path": "backend/src/presets.ts",
+        "bytes": 11007,
+        "sha256": "7269490c3e71c89f22b54399fe081739f762c13df513596840cfca086dea0df7",
         "executable": false
       },
       {
@@ -332,21 +114,669 @@
         "executable": false
       },
       {
+        "path": "backend/src/roleplay.ts",
+        "bytes": 8697,
+        "sha256": "f944fcfe18c186c05a8bdbc02b58f2c8dad2c729838fd3b51852431cd8e34334",
+        "executable": false
+      },
+      {
         "path": "backend/src/store.ts",
-        "bytes": 2715,
-        "sha256": "e0382da06f383312ca3c5771c3a7829da7e36697dbca87fab7286303ded0aac3",
+        "bytes": 4144,
+        "sha256": "d31352fb746076a8855cf2a813b407f3189e9a7cbbd32e200c327a65f9b0313c",
         "executable": false
       },
       {
-        "path": "frontend/optional-tavern-B0GHgonL.css",
-        "bytes": 3279,
-        "sha256": "64e267c1a59082d2e0481d8ec58f4e60ded66e5065c1aa1485b705f57ea26f8b",
+        "path": "backend/src/worldinfo.ts",
+        "bytes": 5612,
+        "sha256": "d0010c08a7010f54b7898bcf258fbb580e410068ab78e35db7312650719f6ba1",
         "executable": false
       },
       {
-        "path": "frontend/optional-tavern-B3h49soy.js",
-        "bytes": 7282,
-        "sha256": "8ac84f6dec42cc0ac6b9daff5dc8da4601e33ef090aa7c887dbbac43a97d4034",
+        "path": "frontend/optional-tavern.css",
+        "bytes": 12970,
+        "sha256": "65adbd886239a0dd4d57c05fb9e7195bbb632044b8a9f1e7990373999694ba2f",
+        "executable": false
+      },
+      {
+        "path": "frontend/optional-tavern.js",
+        "bytes": 45019,
+        "sha256": "5da9b696190fa0248a64fd2d31fac01c2a5eab5073ee18f382daae6760831271",
+        "executable": false
+      }
+    ]
+  },
+  "magpie@win32-x64": {
+    "id": "magpie",
+    "packageId": "xueness-magpie",
+    "version": "1.0.0",
+    "sha256": "8289e5e1820c701be86d32b4406d2cc3074a9925eb6d2cd8db435d67ab68f69f",
+    "bytes": 140314232,
+    "url": "https://raw.githubusercontent.com/xuediner-source/xueness-marketplace/main/packages/xueness-magpie-1.0.0-win32-x64-8289e5e1820c701b.json.gz",
+    "files": [
+      {
+        "path": "backend/assets/LICENSE-magpie.txt",
+        "bytes": 1063,
+        "sha256": "79d2c8444715d4bc453ec4f8a0aaf2051a4c1ee5ac08f5bd2e5848aef87c7572",
+        "executable": false
+      },
+      {
+        "path": "backend/assets/magpie.exe",
+        "bytes": 105100288,
+        "sha256": "48a432ce17a9ecf941132f73b75b5da05b39cdd62551213a6873624251c6bc6e",
+        "executable": false
+      },
+      {
+        "path": "backend/assets/upstream.json",
+        "bytes": 1059,
+        "sha256": "4fdbdfffe4fdb260841be76512f72c89655bd746702c7812d572b9d0d1a41938",
+        "executable": false
+      },
+      {
+        "path": "backend/manifest.json",
+        "bytes": 1773,
+        "sha256": "7622f7a27387fae4cb40bb1cb73b1722c55f4e71736260c55532b43b259e83e7",
+        "executable": false
+      },
+      {
+        "path": "backend/package.json",
+        "bytes": 314,
+        "sha256": "e578cb3e3958626c7ad3b6b88ffda25850ed4a1a7f2f61ff59d6af57bc0b0ccf",
+        "executable": false
+      },
+      {
+        "path": "backend/src/api.ts",
+        "bytes": 20522,
+        "sha256": "59676c4dfd275cb06a9a1e1e6dd10649b1242b9505c830274cedd3c597be7d54",
+        "executable": false
+      },
+      {
+        "path": "backend/src/client.ts",
+        "bytes": 4783,
+        "sha256": "4a1f41094129a5aa4ec4819b8064f368a6019e719602c444008b37a3d22f78eb",
+        "executable": false
+      },
+      {
+        "path": "backend/src/http.ts",
+        "bytes": 12199,
+        "sha256": "f90722e1299078d04b6d18dd3599a2ca98eda705533d41667121241bfcfe5ac6",
+        "executable": false
+      },
+      {
+        "path": "backend/src/index.ts",
+        "bytes": 1289,
+        "sha256": "0c24282a8655cc410506cd59785ef9ab2f258e3bb0f237285ffe4ee4129fa691",
+        "executable": false
+      },
+      {
+        "path": "backend/src/layout.ts",
+        "bytes": 5290,
+        "sha256": "a9bb7bf26c2b597f57173ee27abea74a02c13d17f8648dc26f3da37639f05c76",
+        "executable": false
+      },
+      {
+        "path": "backend/src/models.ts",
+        "bytes": 2485,
+        "sha256": "9242461732e527ae1bc9de5cf9a63f23d34feac9289749fe5fa7f3d8bd850cd0",
+        "executable": false
+      },
+      {
+        "path": "backend/src/profiles.ts",
+        "bytes": 4002,
+        "sha256": "68d33e6bfb6ab2905e0bd50888855dfb2b67fb0753c95f6cade16353c2186850",
+        "executable": false
+      },
+      {
+        "path": "backend/src/provider.ts",
+        "bytes": 3128,
+        "sha256": "74c7c48e88705ff0257d8560a75e9d1098aef3614d78c12162ebc9d0bd4407de",
+        "executable": false
+      },
+      {
+        "path": "backend/src/supervisor.ts",
+        "bytes": 13062,
+        "sha256": "1f9d0f428ad68b6e46db7eac54d300cadbeec86a456d29fa8fd8300ed25775a7",
+        "executable": false
+      },
+      {
+        "path": "frontend/optional-magpie.css",
+        "bytes": 13653,
+        "sha256": "793353c7cbba44e9245177b6569abb1afbfbab549696a5f129d3039fa6913aac",
+        "executable": false
+      },
+      {
+        "path": "frontend/optional-magpie.js",
+        "bytes": 50136,
+        "sha256": "ad12d685a558c28aa179dd72697bf0cff818c0fd5ada0aead4d986a56a2a9cb3",
+        "executable": false
+      }
+    ]
+  },
+  "magpie@win32-arm64": {
+    "id": "magpie",
+    "packageId": "xueness-magpie",
+    "version": "1.0.0",
+    "sha256": "e0d4bc1fefc70407a6a5a40d8976ad5fca17ea523f29f8ca033ab42e66b5c7a7",
+    "bytes": 128355276,
+    "url": "https://raw.githubusercontent.com/xuediner-source/xueness-marketplace/main/packages/xueness-magpie-1.0.0-win32-arm64-e0d4bc1fefc70407.json.gz",
+    "files": [
+      {
+        "path": "backend/assets/LICENSE-magpie.txt",
+        "bytes": 1063,
+        "sha256": "79d2c8444715d4bc453ec4f8a0aaf2051a4c1ee5ac08f5bd2e5848aef87c7572",
+        "executable": false
+      },
+      {
+        "path": "backend/assets/magpie.exe",
+        "bytes": 96131072,
+        "sha256": "a9dc74118b8717b0234ffebc0b2329d9ddf39eef466b14a28672adf12b537ad9",
+        "executable": false
+      },
+      {
+        "path": "backend/assets/upstream.json",
+        "bytes": 1059,
+        "sha256": "4fdbdfffe4fdb260841be76512f72c89655bd746702c7812d572b9d0d1a41938",
+        "executable": false
+      },
+      {
+        "path": "backend/manifest.json",
+        "bytes": 1773,
+        "sha256": "7622f7a27387fae4cb40bb1cb73b1722c55f4e71736260c55532b43b259e83e7",
+        "executable": false
+      },
+      {
+        "path": "backend/package.json",
+        "bytes": 314,
+        "sha256": "e578cb3e3958626c7ad3b6b88ffda25850ed4a1a7f2f61ff59d6af57bc0b0ccf",
+        "executable": false
+      },
+      {
+        "path": "backend/src/api.ts",
+        "bytes": 20522,
+        "sha256": "59676c4dfd275cb06a9a1e1e6dd10649b1242b9505c830274cedd3c597be7d54",
+        "executable": false
+      },
+      {
+        "path": "backend/src/client.ts",
+        "bytes": 4783,
+        "sha256": "4a1f41094129a5aa4ec4819b8064f368a6019e719602c444008b37a3d22f78eb",
+        "executable": false
+      },
+      {
+        "path": "backend/src/http.ts",
+        "bytes": 12199,
+        "sha256": "f90722e1299078d04b6d18dd3599a2ca98eda705533d41667121241bfcfe5ac6",
+        "executable": false
+      },
+      {
+        "path": "backend/src/index.ts",
+        "bytes": 1289,
+        "sha256": "0c24282a8655cc410506cd59785ef9ab2f258e3bb0f237285ffe4ee4129fa691",
+        "executable": false
+      },
+      {
+        "path": "backend/src/layout.ts",
+        "bytes": 5290,
+        "sha256": "a9bb7bf26c2b597f57173ee27abea74a02c13d17f8648dc26f3da37639f05c76",
+        "executable": false
+      },
+      {
+        "path": "backend/src/models.ts",
+        "bytes": 2485,
+        "sha256": "9242461732e527ae1bc9de5cf9a63f23d34feac9289749fe5fa7f3d8bd850cd0",
+        "executable": false
+      },
+      {
+        "path": "backend/src/profiles.ts",
+        "bytes": 4002,
+        "sha256": "68d33e6bfb6ab2905e0bd50888855dfb2b67fb0753c95f6cade16353c2186850",
+        "executable": false
+      },
+      {
+        "path": "backend/src/provider.ts",
+        "bytes": 3128,
+        "sha256": "74c7c48e88705ff0257d8560a75e9d1098aef3614d78c12162ebc9d0bd4407de",
+        "executable": false
+      },
+      {
+        "path": "backend/src/supervisor.ts",
+        "bytes": 13062,
+        "sha256": "1f9d0f428ad68b6e46db7eac54d300cadbeec86a456d29fa8fd8300ed25775a7",
+        "executable": false
+      },
+      {
+        "path": "frontend/optional-magpie.css",
+        "bytes": 13653,
+        "sha256": "793353c7cbba44e9245177b6569abb1afbfbab549696a5f129d3039fa6913aac",
+        "executable": false
+      },
+      {
+        "path": "frontend/optional-magpie.js",
+        "bytes": 50136,
+        "sha256": "ad12d685a558c28aa179dd72697bf0cff818c0fd5ada0aead4d986a56a2a9cb3",
+        "executable": false
+      }
+    ]
+  },
+  "magpie@linux-x64": {
+    "id": "magpie",
+    "packageId": "xueness-magpie",
+    "version": "1.0.0",
+    "sha256": "e020fc9c67e91ddc8ca863a21dc1ae53f1336e25df843040b3000ddffb36e97f",
+    "bytes": 137129120,
+    "url": "https://raw.githubusercontent.com/xuediner-source/xueness-marketplace/main/packages/xueness-magpie-1.0.0-linux-x64-e020fc9c67e91ddc.json.gz",
+    "files": [
+      {
+        "path": "backend/assets/LICENSE-magpie.txt",
+        "bytes": 1063,
+        "sha256": "79d2c8444715d4bc453ec4f8a0aaf2051a4c1ee5ac08f5bd2e5848aef87c7572",
+        "executable": false
+      },
+      {
+        "path": "backend/assets/magpie",
+        "bytes": 102711458,
+        "sha256": "f20f8c165ff07beb892f9902d5a4280826b8d28811a2c0eda73d6cfec3e371f0",
+        "executable": true
+      },
+      {
+        "path": "backend/assets/upstream.json",
+        "bytes": 1059,
+        "sha256": "4fdbdfffe4fdb260841be76512f72c89655bd746702c7812d572b9d0d1a41938",
+        "executable": false
+      },
+      {
+        "path": "backend/manifest.json",
+        "bytes": 1773,
+        "sha256": "7622f7a27387fae4cb40bb1cb73b1722c55f4e71736260c55532b43b259e83e7",
+        "executable": false
+      },
+      {
+        "path": "backend/package.json",
+        "bytes": 314,
+        "sha256": "e578cb3e3958626c7ad3b6b88ffda25850ed4a1a7f2f61ff59d6af57bc0b0ccf",
+        "executable": false
+      },
+      {
+        "path": "backend/src/api.ts",
+        "bytes": 20522,
+        "sha256": "59676c4dfd275cb06a9a1e1e6dd10649b1242b9505c830274cedd3c597be7d54",
+        "executable": false
+      },
+      {
+        "path": "backend/src/client.ts",
+        "bytes": 4783,
+        "sha256": "4a1f41094129a5aa4ec4819b8064f368a6019e719602c444008b37a3d22f78eb",
+        "executable": false
+      },
+      {
+        "path": "backend/src/http.ts",
+        "bytes": 12199,
+        "sha256": "f90722e1299078d04b6d18dd3599a2ca98eda705533d41667121241bfcfe5ac6",
+        "executable": false
+      },
+      {
+        "path": "backend/src/index.ts",
+        "bytes": 1289,
+        "sha256": "0c24282a8655cc410506cd59785ef9ab2f258e3bb0f237285ffe4ee4129fa691",
+        "executable": false
+      },
+      {
+        "path": "backend/src/layout.ts",
+        "bytes": 5290,
+        "sha256": "a9bb7bf26c2b597f57173ee27abea74a02c13d17f8648dc26f3da37639f05c76",
+        "executable": false
+      },
+      {
+        "path": "backend/src/models.ts",
+        "bytes": 2485,
+        "sha256": "9242461732e527ae1bc9de5cf9a63f23d34feac9289749fe5fa7f3d8bd850cd0",
+        "executable": false
+      },
+      {
+        "path": "backend/src/profiles.ts",
+        "bytes": 4002,
+        "sha256": "68d33e6bfb6ab2905e0bd50888855dfb2b67fb0753c95f6cade16353c2186850",
+        "executable": false
+      },
+      {
+        "path": "backend/src/provider.ts",
+        "bytes": 3128,
+        "sha256": "74c7c48e88705ff0257d8560a75e9d1098aef3614d78c12162ebc9d0bd4407de",
+        "executable": false
+      },
+      {
+        "path": "backend/src/supervisor.ts",
+        "bytes": 13062,
+        "sha256": "1f9d0f428ad68b6e46db7eac54d300cadbeec86a456d29fa8fd8300ed25775a7",
+        "executable": false
+      },
+      {
+        "path": "frontend/optional-magpie.css",
+        "bytes": 13653,
+        "sha256": "793353c7cbba44e9245177b6569abb1afbfbab549696a5f129d3039fa6913aac",
+        "executable": false
+      },
+      {
+        "path": "frontend/optional-magpie.js",
+        "bytes": 50136,
+        "sha256": "ad12d685a558c28aa179dd72697bf0cff818c0fd5ada0aead4d986a56a2a9cb3",
+        "executable": false
+      }
+    ]
+  },
+  "magpie@linux-arm64": {
+    "id": "magpie",
+    "packageId": "xueness-magpie",
+    "version": "1.0.0",
+    "sha256": "53af47283f653d4d2849ad9fee7a49ba1197fd9fbea77d0bc1c24b975f8045b9",
+    "bytes": 126271988,
+    "url": "https://raw.githubusercontent.com/xuediner-source/xueness-marketplace/main/packages/xueness-magpie-1.0.0-linux-arm64-53af47283f653d4d.json.gz",
+    "files": [
+      {
+        "path": "backend/assets/LICENSE-magpie.txt",
+        "bytes": 1063,
+        "sha256": "79d2c8444715d4bc453ec4f8a0aaf2051a4c1ee5ac08f5bd2e5848aef87c7572",
+        "executable": false
+      },
+      {
+        "path": "backend/assets/magpie",
+        "bytes": 94568610,
+        "sha256": "3c22b3545f1227e6a2f617ed12c15e05b0cc54d5775ed2b86a4931e7f3e1e510",
+        "executable": true
+      },
+      {
+        "path": "backend/assets/upstream.json",
+        "bytes": 1059,
+        "sha256": "4fdbdfffe4fdb260841be76512f72c89655bd746702c7812d572b9d0d1a41938",
+        "executable": false
+      },
+      {
+        "path": "backend/manifest.json",
+        "bytes": 1773,
+        "sha256": "7622f7a27387fae4cb40bb1cb73b1722c55f4e71736260c55532b43b259e83e7",
+        "executable": false
+      },
+      {
+        "path": "backend/package.json",
+        "bytes": 314,
+        "sha256": "e578cb3e3958626c7ad3b6b88ffda25850ed4a1a7f2f61ff59d6af57bc0b0ccf",
+        "executable": false
+      },
+      {
+        "path": "backend/src/api.ts",
+        "bytes": 20522,
+        "sha256": "59676c4dfd275cb06a9a1e1e6dd10649b1242b9505c830274cedd3c597be7d54",
+        "executable": false
+      },
+      {
+        "path": "backend/src/client.ts",
+        "bytes": 4783,
+        "sha256": "4a1f41094129a5aa4ec4819b8064f368a6019e719602c444008b37a3d22f78eb",
+        "executable": false
+      },
+      {
+        "path": "backend/src/http.ts",
+        "bytes": 12199,
+        "sha256": "f90722e1299078d04b6d18dd3599a2ca98eda705533d41667121241bfcfe5ac6",
+        "executable": false
+      },
+      {
+        "path": "backend/src/index.ts",
+        "bytes": 1289,
+        "sha256": "0c24282a8655cc410506cd59785ef9ab2f258e3bb0f237285ffe4ee4129fa691",
+        "executable": false
+      },
+      {
+        "path": "backend/src/layout.ts",
+        "bytes": 5290,
+        "sha256": "a9bb7bf26c2b597f57173ee27abea74a02c13d17f8648dc26f3da37639f05c76",
+        "executable": false
+      },
+      {
+        "path": "backend/src/models.ts",
+        "bytes": 2485,
+        "sha256": "9242461732e527ae1bc9de5cf9a63f23d34feac9289749fe5fa7f3d8bd850cd0",
+        "executable": false
+      },
+      {
+        "path": "backend/src/profiles.ts",
+        "bytes": 4002,
+        "sha256": "68d33e6bfb6ab2905e0bd50888855dfb2b67fb0753c95f6cade16353c2186850",
+        "executable": false
+      },
+      {
+        "path": "backend/src/provider.ts",
+        "bytes": 3128,
+        "sha256": "74c7c48e88705ff0257d8560a75e9d1098aef3614d78c12162ebc9d0bd4407de",
+        "executable": false
+      },
+      {
+        "path": "backend/src/supervisor.ts",
+        "bytes": 13062,
+        "sha256": "1f9d0f428ad68b6e46db7eac54d300cadbeec86a456d29fa8fd8300ed25775a7",
+        "executable": false
+      },
+      {
+        "path": "frontend/optional-magpie.css",
+        "bytes": 13653,
+        "sha256": "793353c7cbba44e9245177b6569abb1afbfbab549696a5f129d3039fa6913aac",
+        "executable": false
+      },
+      {
+        "path": "frontend/optional-magpie.js",
+        "bytes": 50136,
+        "sha256": "ad12d685a558c28aa179dd72697bf0cff818c0fd5ada0aead4d986a56a2a9cb3",
+        "executable": false
+      }
+    ]
+  },
+  "magpie@darwin-x64": {
+    "id": "magpie",
+    "packageId": "xueness-magpie",
+    "version": "1.0.0",
+    "sha256": "2e83ca1c540ee429724334b77c79353f1d161a9f2344e5f8339f5fc30e7a3ab6",
+    "bytes": 139353928,
+    "url": "https://raw.githubusercontent.com/xuediner-source/xueness-marketplace/main/packages/xueness-magpie-1.0.0-darwin-x64-2e83ca1c540ee429.json.gz",
+    "files": [
+      {
+        "path": "backend/assets/LICENSE-magpie.txt",
+        "bytes": 1063,
+        "sha256": "79d2c8444715d4bc453ec4f8a0aaf2051a4c1ee5ac08f5bd2e5848aef87c7572",
+        "executable": false
+      },
+      {
+        "path": "backend/assets/magpie",
+        "bytes": 104380064,
+        "sha256": "51d31d346fe2af8c13d53c6ac6cfa3dd117a5191d08ade14e63d01842aa91e1a",
+        "executable": true
+      },
+      {
+        "path": "backend/assets/upstream.json",
+        "bytes": 1059,
+        "sha256": "4fdbdfffe4fdb260841be76512f72c89655bd746702c7812d572b9d0d1a41938",
+        "executable": false
+      },
+      {
+        "path": "backend/manifest.json",
+        "bytes": 1773,
+        "sha256": "7622f7a27387fae4cb40bb1cb73b1722c55f4e71736260c55532b43b259e83e7",
+        "executable": false
+      },
+      {
+        "path": "backend/package.json",
+        "bytes": 314,
+        "sha256": "e578cb3e3958626c7ad3b6b88ffda25850ed4a1a7f2f61ff59d6af57bc0b0ccf",
+        "executable": false
+      },
+      {
+        "path": "backend/src/api.ts",
+        "bytes": 20522,
+        "sha256": "59676c4dfd275cb06a9a1e1e6dd10649b1242b9505c830274cedd3c597be7d54",
+        "executable": false
+      },
+      {
+        "path": "backend/src/client.ts",
+        "bytes": 4783,
+        "sha256": "4a1f41094129a5aa4ec4819b8064f368a6019e719602c444008b37a3d22f78eb",
+        "executable": false
+      },
+      {
+        "path": "backend/src/http.ts",
+        "bytes": 12199,
+        "sha256": "f90722e1299078d04b6d18dd3599a2ca98eda705533d41667121241bfcfe5ac6",
+        "executable": false
+      },
+      {
+        "path": "backend/src/index.ts",
+        "bytes": 1289,
+        "sha256": "0c24282a8655cc410506cd59785ef9ab2f258e3bb0f237285ffe4ee4129fa691",
+        "executable": false
+      },
+      {
+        "path": "backend/src/layout.ts",
+        "bytes": 5290,
+        "sha256": "a9bb7bf26c2b597f57173ee27abea74a02c13d17f8648dc26f3da37639f05c76",
+        "executable": false
+      },
+      {
+        "path": "backend/src/models.ts",
+        "bytes": 2485,
+        "sha256": "9242461732e527ae1bc9de5cf9a63f23d34feac9289749fe5fa7f3d8bd850cd0",
+        "executable": false
+      },
+      {
+        "path": "backend/src/profiles.ts",
+        "bytes": 4002,
+        "sha256": "68d33e6bfb6ab2905e0bd50888855dfb2b67fb0753c95f6cade16353c2186850",
+        "executable": false
+      },
+      {
+        "path": "backend/src/provider.ts",
+        "bytes": 3128,
+        "sha256": "74c7c48e88705ff0257d8560a75e9d1098aef3614d78c12162ebc9d0bd4407de",
+        "executable": false
+      },
+      {
+        "path": "backend/src/supervisor.ts",
+        "bytes": 13062,
+        "sha256": "1f9d0f428ad68b6e46db7eac54d300cadbeec86a456d29fa8fd8300ed25775a7",
+        "executable": false
+      },
+      {
+        "path": "frontend/optional-magpie.css",
+        "bytes": 13653,
+        "sha256": "793353c7cbba44e9245177b6569abb1afbfbab549696a5f129d3039fa6913aac",
+        "executable": false
+      },
+      {
+        "path": "frontend/optional-magpie.js",
+        "bytes": 50136,
+        "sha256": "ad12d685a558c28aa179dd72697bf0cff818c0fd5ada0aead4d986a56a2a9cb3",
+        "executable": false
+      }
+    ]
+  },
+  "magpie@darwin-arm64": {
+    "id": "magpie",
+    "packageId": "xueness-magpie",
+    "version": "1.0.0",
+    "sha256": "a7f5ba6e9ec18b1c9f2135b10b1dd0ab91ebbb6b16ccab052f22a39848a01a8e",
+    "bytes": 129482444,
+    "url": "https://raw.githubusercontent.com/xuediner-source/xueness-marketplace/main/packages/xueness-magpie-1.0.0-darwin-arm64-a7f5ba6e9ec18b1c.json.gz",
+    "files": [
+      {
+        "path": "backend/assets/LICENSE-magpie.txt",
+        "bytes": 1063,
+        "sha256": "79d2c8444715d4bc453ec4f8a0aaf2051a4c1ee5ac08f5bd2e5848aef87c7572",
+        "executable": false
+      },
+      {
+        "path": "backend/assets/magpie",
+        "bytes": 96976450,
+        "sha256": "ce0ab139d98faa2c11659d2393573c6f0c581bad10b940ea015a49fbd8dbbcce",
+        "executable": true
+      },
+      {
+        "path": "backend/assets/upstream.json",
+        "bytes": 1059,
+        "sha256": "4fdbdfffe4fdb260841be76512f72c89655bd746702c7812d572b9d0d1a41938",
+        "executable": false
+      },
+      {
+        "path": "backend/manifest.json",
+        "bytes": 1773,
+        "sha256": "7622f7a27387fae4cb40bb1cb73b1722c55f4e71736260c55532b43b259e83e7",
+        "executable": false
+      },
+      {
+        "path": "backend/package.json",
+        "bytes": 314,
+        "sha256": "e578cb3e3958626c7ad3b6b88ffda25850ed4a1a7f2f61ff59d6af57bc0b0ccf",
+        "executable": false
+      },
+      {
+        "path": "backend/src/api.ts",
+        "bytes": 20522,
+        "sha256": "59676c4dfd275cb06a9a1e1e6dd10649b1242b9505c830274cedd3c597be7d54",
+        "executable": false
+      },
+      {
+        "path": "backend/src/client.ts",
+        "bytes": 4783,
+        "sha256": "4a1f41094129a5aa4ec4819b8064f368a6019e719602c444008b37a3d22f78eb",
+        "executable": false
+      },
+      {
+        "path": "backend/src/http.ts",
+        "bytes": 12199,
+        "sha256": "f90722e1299078d04b6d18dd3599a2ca98eda705533d41667121241bfcfe5ac6",
+        "executable": false
+      },
+      {
+        "path": "backend/src/index.ts",
+        "bytes": 1289,
+        "sha256": "0c24282a8655cc410506cd59785ef9ab2f258e3bb0f237285ffe4ee4129fa691",
+        "executable": false
+      },
+      {
+        "path": "backend/src/layout.ts",
+        "bytes": 5290,
+        "sha256": "a9bb7bf26c2b597f57173ee27abea74a02c13d17f8648dc26f3da37639f05c76",
+        "executable": false
+      },
+      {
+        "path": "backend/src/models.ts",
+        "bytes": 2485,
+        "sha256": "9242461732e527ae1bc9de5cf9a63f23d34feac9289749fe5fa7f3d8bd850cd0",
+        "executable": false
+      },
+      {
+        "path": "backend/src/profiles.ts",
+        "bytes": 4002,
+        "sha256": "68d33e6bfb6ab2905e0bd50888855dfb2b67fb0753c95f6cade16353c2186850",
+        "executable": false
+      },
+      {
+        "path": "backend/src/provider.ts",
+        "bytes": 3128,
+        "sha256": "74c7c48e88705ff0257d8560a75e9d1098aef3614d78c12162ebc9d0bd4407de",
+        "executable": false
+      },
+      {
+        "path": "backend/src/supervisor.ts",
+        "bytes": 13062,
+        "sha256": "1f9d0f428ad68b6e46db7eac54d300cadbeec86a456d29fa8fd8300ed25775a7",
+        "executable": false
+      },
+      {
+        "path": "frontend/optional-magpie.css",
+        "bytes": 13653,
+        "sha256": "793353c7cbba44e9245177b6569abb1afbfbab549696a5f129d3039fa6913aac",
+        "executable": false
+      },
+      {
+        "path": "frontend/optional-magpie.js",
+        "bytes": 50136,
+        "sha256": "ad12d685a558c28aa179dd72697bf0cff818c0fd5ada0aead4d986a56a2a9cb3",
         "executable": false
       }
     ]

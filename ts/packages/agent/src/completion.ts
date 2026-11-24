@@ -87,30 +87,8 @@ export function currentTurnAliases(aliases: Record<string, string>, callIds: str
   return Object.fromEntries(Object.entries(aliases).filter(([, cid]) => allowed.has(cid)));
 }
 
-export function toolExecutionStatus(session: Session, callIds: string[]): "not_applicable" | "incomplete" | "failed" | "succeeded" {
-  if (!callIds.length) return "not_applicable";
-  const results = isDict(session.results) ? session.results : {};
-  const actions = new Map<unknown, string>();
-  for (const message of (Array.isArray(session.messages) ? session.messages : []).filter(isDict)) {
-    for (const call of (Array.isArray(message.tool_calls) ? message.tool_calls : []).filter(isDict)) {
-      const fn = isDict(call.function) ? call.function : {};
-      let args = fn.arguments ?? "";
-      try { args = pyJsonDumps(pyJsonLoads(args as string), { sortKeys: true }); } catch { args = String(args); }
-      actions.set(call.id, pyJsonDumps([fn.name ?? null, args]));
-    }
-  }
-  const successfulLater = new Set<string>();
-  let failed = false;
-  let incomplete = false;
-  for (const cid of [...callIds].reverse()) {
-    const result = results[cid];
-    const action = actions.get(cid);
-    if (isDict(result) && result.ok === true) { if (action !== undefined) successfulLater.add(action); }
-    else if (isDict(result) && result.ok === false) { if (action === undefined || !successfulLater.has(action)) failed = true; }
-    else incomplete = true;
-  }
-  return incomplete ? "incomplete" : failed ? "failed" : "succeeded";
-}
+/** Which failed calls still fail the turn: see tool-status.ts. */
+export { toolExecutionStatus, type ToolExecutionStatus } from "./tool-status.ts";
 
 export function turnId(session: Session): string {
   const users = (Array.isArray(session.messages) ? session.messages : []).filter(isDict).filter((item) => item.role === "user" && item._input_kind !== "guide" && item._input_kind !== "background_notice");
