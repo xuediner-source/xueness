@@ -46,7 +46,9 @@ export function renderEvent(ev: Row, options: { file?: Out; language?: string; s
     const steps = typeof ev.remainingSteps === "number" ? ev.remainingSteps : null, seconds = typeof ev.remainingSeconds === "number" ? ev.remainingSeconds : null;
     const left = en ? [steps === null ? "" : `${steps} steps`, seconds === null ? "" : `about ${seconds}s`].filter(Boolean).join(", ")
       : [steps === null ? "" : `${steps} 步`, seconds === null ? "" : `约 ${seconds} 秒`].filter(Boolean).join("、");
-    line(en ? `Budget running low (${left} left); asked the model to ${ev.stage === "final" ? "finish now" : "wrap up"}.`
+    if (ev.stage === "midpoint") line(en ? `Half the budget used with no file changed yet (${left} left); asked the model to write its likely fix.`
+      : `预算已用一半，还没有改动文件（剩余 ${left}），已提醒模型先写下有把握的修改。`);
+    else line(en ? `Budget running low (${left} left); asked the model to ${ev.stage === "final" ? "finish now" : "wrap up"}.`
       : `预算即将用完（剩余 ${left}），已提醒模型${ev.stage === "final" ? "立即收尾" : "开始收尾"}。`);
   } else if (type === "model_request_queued") {
     line(en ? "Waiting for model capacity…" : "等待模型并发名额…");

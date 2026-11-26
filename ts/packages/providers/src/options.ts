@@ -23,11 +23,16 @@ export const LEGACY_MIN_CONTEXT_WINDOW = 2048;
 export const LIGHTWEIGHT_CONTEXT_WINDOW = MIN_CONTEXT_WINDOW;
 export const LIGHTWEIGHT_MAX_OUTPUT_TOKENS = 1024;
 
+/**
+ * `requestTimeoutSeconds` is one attempt's whole budget (headers, body, transport retries). Many
+ * local servers send nothing until the reply is complete, so the default is the 300 s maximum;
+ * the agent loop retries a failed attempt (`ModelRetryBudget.Lightweight`) with a fresh window.
+ */
 export const LIGHTWEIGHT_DEFAULTS: Readonly<Dict> = Object.freeze({
   optionalContextChars: 1800, toolResultChars: 1400, initialTools: "auto",
   maxDiscoveredTools: 6, toolSearchResults: 3, resultPageChars: 1200,
   fileReadChars: 4000, overflowRetry: true, overflowRetryRatio: 0.6,
-  jsonRepairAttempts: 1, stepLimit: 64, requestTimeoutSeconds: 120, transportRetries: 0,
+  jsonRepairAttempts: 1, stepLimit: 64, requestTimeoutSeconds: 300, transportRetries: 0,
 });
 const INTEGER_RANGES: Record<string, [number, number]> = {
   reserveTokens: [0, 8192], optionalContextChars: [0, 6000],
