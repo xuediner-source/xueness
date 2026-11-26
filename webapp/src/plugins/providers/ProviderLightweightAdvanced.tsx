@@ -88,7 +88,7 @@ export function ProviderLightweightAdvanced({ draft, locked, runtimeProfile, adv
             {lightweightNumberField('jsonRepairAttempts', 'JSON 修复额外重试次数', 0, 2, 1, '1', '允许范围 0–2；默认 1 次额外重试，设为 0 后无效响应立即结束。')}
             {lightweightNumberField('stepLimit', '最大执行步数', 1, 64, 1, '64', '允许范围 1–64；作为调用方步数上限的进一步限制，默认 64。')}
             {lightweightNumberField('wallTimeSeconds', '协作式运行时长（秒）', 1, 3600, 1, '沿用调用方', '允许范围 1–3600；留空沿用调用方限制。运行时长在工具调用边界检查；单次 HTTP 请求另受请求截止时间约束。')}
-            {lightweightNumberField('requestTimeoutSeconds', '单次请求总截止时间（秒）', 1, 300, 1, '120', '允许范围 1–300；默认 120 秒，涵盖响应头、响应体和全部传输重试，本地冷启动也计入。')}
+            {lightweightNumberField('requestTimeoutSeconds', '单次请求总截止时间（秒）', 1, 300, 1, '300', '允许范围 1–300；默认 300 秒，涵盖响应头、响应体和全部传输重试，本地冷启动也计入。超时或连接失败后，本步最多再整体重试 2 次，每次重新计时。')}
             {lightweightNumberField('transportRetries', '无输出时的传输重试次数', 0, 2, 1, '0', '允许范围 0–2；默认 0。仅在没有任何可见输出时重试；一旦有输出，绝不重放请求。')}
           </div>
         </section>

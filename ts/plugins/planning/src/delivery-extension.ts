@@ -14,7 +14,7 @@ export function planningDeliveryExtension(options: (context: AgentContext) => De
   const repair = failureRepair(options), wrapup = deliveryWrapup(options), report = reportFinish(options, repair.pendingFailure), verification = deliveryVerification(), budget = budgetWrapup();
   return { id: "planning", capabilities: ["planning.delivery", "planning.lightweight_wrapup", "planning.budget_wrapup", "planning.report_finish", "planning.failure_repair", "planning.delivery_verification"],
     runStarted(context) { repair.runStarted(context); wrapup.runStarted(context); report.runStarted(context); verification.runStarted(context); budget.runStarted(context); },
-    async toolResultRecorded(context, call, result) { await verification.toolResultRecorded(context, call, result); repair.toolResultRecorded(context, call, result); },
+    async toolResultRecorded(context, call, result) { await verification.toolResultRecorded(context, call, result); repair.toolResultRecorded(context, call, result); budget.toolResultRecorded(context, call, result); },
     beforeTool: verification.beforeTool,
     modelRequestStarted: report.modelRequestStarted,
     async beforeModelRequest(context) { await repair.beforeModelRequest(context); await wrapup.beforeModelRequest(context); await report.beforeModelRequest(context); await budget.beforeModelRequest(context); },

@@ -42,7 +42,7 @@ export const editTool: ToolDefinition<EditInput, EditData> = {
   concurrencySafe: false,
   requires: WRITES_WORKSPACE,
   description: [
-    "Replace `old_string` with `new_string` in a file. Read the file first; the edit is refused if it changed since.",
+    "Replace `old_string` with `new_string` in a file. Read the file first (a line range that shows the text is enough); the edit is refused if the file changed since.",
     "`old_string` must match exactly one place unless `replace_all` is true; include surrounding lines to make it unique.",
     "Line endings and the file's encoding are preserved; the unified diff is in the result data.",
   ].join(" "),
@@ -73,7 +73,8 @@ export const editTool: ToolDefinition<EditInput, EditData> = {
       await env.tracker.assertFresh(target.absolute, target.display);
       return createWithEdit(target, input.new_string, env, env.tracker.get(target.absolute)?.sha256 ?? "");
     }
-    await env.tracker.assertFresh(target.absolute, target.display);
+    // A line-range read is enough here (SWE-bench 2026-11-25: 41 of 47 refused edits followed a range read of the edited lines).
+    await env.tracker.assertFresh(target.absolute, target.display, { allowPartial: true });
     const encoding = detectEncoding(bytes);
     const raw = decodeText(bytes, encoding).text;
     const content = toLf(raw);
@@ -97,9 +98,11 @@ export const editTool: ToolDefinition<EditInput, EditData> = {
     if (nextRaw === raw) return failure("no_change", "No changes to make: old_string and new_string are exactly the same.");
 
     const fs = new NodeWorkspaceFileSystem({ cwd: env.cwd, roots: env.roots });
-    const expectedRevision = env.tracker.get(target.absolute)?.sha256 ?? "";
+    const before = env.tracker.get(target.absolute);
+    const expectedRevision = before?.sha256 ?? "";
     const written = await fs.writeTextFile(target.absolute, nextRaw, { encoding, expectedRevision, signal: env.signal });
-    env.tracker.restore(target.absolute, snapshotFromRevision(written));
+    // An edit after a range read still leaves only part of the file in context: a later whole-file write needs a full read.
+    env.tracker.restore(target.absolute, snapshotFromRevision(written, before?.partial === true));
     const snapshot = env.tracker.get(target.absolute);
     const diff = unifiedDiff(content, nextContent, target.display);
     const count = match.spans.length;

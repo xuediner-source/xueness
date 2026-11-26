@@ -22,7 +22,7 @@ export interface PersistedFileReadState {
   path: string;
   sourceTool: ReadStateSourceTool;
   snapshot: FileSnapshot;
-  /** A requested line range is not sufficient context for a later edit. */
+  /** A requested line range: enough for a later exact-string edit, not for a whole-file write. */
   range: boolean;
 }
 
@@ -78,14 +78,18 @@ export class FileStateTracker {
     this.#snapshots.delete(path);
   }
 
-  /** Throw unless `path` was read whole and is unchanged since (content hash decides). */
-  async assertFresh(path: string, displayPath = path): Promise<void> {
+  /**
+   * Throw unless `path` was read and is unchanged since (content hash decides). A whole-file
+   * write needs a full read; `allowPartial` lets an exact-string edit follow a line-range or
+   * truncated read, since the edit itself proves the text it replaces is in the current file.
+   */
+  async assertFresh(path: string, displayPath = path, options: { allowPartial?: boolean } = {}): Promise<void> {
     const snapshot = this.#snapshots.get(path);
     // Texts from ZCode v3.15.1 (aac4755) handlers/write.ts and edit.ts (WRITE_NOT_READ_MESSAGE, WRITE_STALE_MESSAGE).
     void displayPath;
     if (!snapshot) throw new UnreadFileError(FILE_NOT_READ_MESSAGE);
-    // A later range read clears an earlier full read's authorization, matching the read-state restore in plugins/files.
-    if (snapshot.partial) throw new UnreadFileError(FILE_PARTIAL_READ_MESSAGE);
+    // A later range read clears an earlier full read's authorization for writes, matching the read-state restore in plugins/files.
+    if (snapshot.partial && options.allowPartial !== true) throw new UnreadFileError(FILE_PARTIAL_READ_MESSAGE);
     const info = await stat(path);
     if (info.mtimeMs === snapshot.mtimeMs && info.size === snapshot.size) return;
     if (info.size === snapshot.size && sha256(await readFile(path)) === snapshot.sha256) return;

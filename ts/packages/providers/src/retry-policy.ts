@@ -13,7 +13,7 @@ export interface ModelRetryOptions {
 }
 export type ResolvedModelRetryOptions = Required<ModelRetryOptions>;
 
-export const ModelRetryBudget = { Default: "default", Unbounded: "unbounded", SingleAttempt: "single-attempt" } as const;
+export const ModelRetryBudget = { Default: "default", Unbounded: "unbounded", SingleAttempt: "single-attempt", Lightweight: "lightweight" } as const;
 export type ModelRetryBudget = (typeof ModelRetryBudget)[keyof typeof ModelRetryBudget];
 
 export const DEFAULT_MODEL_RETRY_OPTIONS: Readonly<ResolvedModelRetryOptions> = Object.freeze({
@@ -26,6 +26,12 @@ export const MODEL_RETRY_ENV = {
 /** Status events report an unbounded budget as `maxAttempts: 0` (Infinity does not serialize). */
 export const UNBOUNDED_RETRY_MAX_ATTEMPTS = 0;
 export const SINGLE_ATTEMPT_MAX_ATTEMPTS = 1;
+/**
+ * Lightweight profile: at most two retries. Each attempt gets a fresh `requestTimeoutSeconds`
+ * window, so one local-server stall or dropped connection no longer ends the run (SWE-bench
+ * 2026-11-25: 179 of 180 Qwen timeouts had received no byte at all before the deadline).
+ */
+export const LIGHTWEIGHT_MAX_ATTEMPTS = 3;
 /** Provider Retry-After values up to five minutes override the local backoff curve. */
 export const MAX_REASONABLE_RETRY_AFTER_MS = 5 * 60_000;
 
@@ -69,9 +75,11 @@ export function resolveModelRetryOptions(options: ModelRetryOptions | undefined,
   };
 }
 
-/** `resolveRetryOptionsForBudget`: single-attempt narrows `maxAttempts` to 1. */
+/** `resolveRetryOptionsForBudget`: single-attempt narrows `maxAttempts` to 1, lightweight to at most 3. */
 export function resolveRetryOptionsForBudget(retry: ResolvedModelRetryOptions, budget: ModelRetryBudget | undefined): ResolvedModelRetryOptions {
-  return budget === ModelRetryBudget.SingleAttempt ? { ...retry, maxAttempts: SINGLE_ATTEMPT_MAX_ATTEMPTS } : retry;
+  if (budget === ModelRetryBudget.SingleAttempt) return { ...retry, maxAttempts: SINGLE_ATTEMPT_MAX_ATTEMPTS };
+  if (budget === ModelRetryBudget.Lightweight) return { ...retry, maxAttempts: Math.min(retry.maxAttempts, LIGHTWEIGHT_MAX_ATTEMPTS) };
+  return retry;
 }
 
 /** `retryBudgetAllows`: may another attempt follow `attempt` (1-based) completed ones? */

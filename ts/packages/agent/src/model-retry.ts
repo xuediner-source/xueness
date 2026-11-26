@@ -19,7 +19,7 @@ import type { AgentContext, AgentExtension, Row } from "./types.ts";
 import { selectionIdOf } from "./execution-selection.ts";
 
 export interface ModelRetrySettings extends ModelRetryOptions {
-  /** Defaults to "single-attempt" for the lightweight profile (its own `transportRetries` apply), else "default". */
+  /** Defaults to "lightweight" (at most 3 attempts, each with its own request deadline) for the lightweight profile, else "default". */
   budget?: ModelRetryBudget;
   random?: () => number;
   /** ZCode event-idle timeout, 10 minutes by default; each retry adds 30 seconds. */
@@ -61,7 +61,7 @@ export class ModelRetry {
   constructor(context: AgentContext, now: () => number, budgetOverride?: ModelRetryBudget) {
     const settings = context.options.modelRetry;
     const lightweight = (context.session.runtime_profile ?? context.provider.runtimeProfile) === "lightweight";
-    this.budget = budgetOverride ?? settings?.budget ?? (lightweight ? ModelRetryBudget.SingleAttempt : ModelRetryBudget.Default);
+    this.budget = budgetOverride ?? settings?.budget ?? (lightweight ? ModelRetryBudget.Lightweight : ModelRetryBudget.Default);
     this.retry = resolveRetryOptionsForBudget(resolveModelRetryOptions(settings), this.budget);
     this.#random = settings?.random ?? Math.random;
     this.#now = now;
