@@ -1,6 +1,6 @@
 /** Build-pinned optional artifacts. External manifests cannot add code to this registry. */
 import { createHash } from "node:crypto";
-import { existsSync, lstatSync, readFileSync, realpathSync } from "node:fs";
+import { existsSync, lstatSync, readFileSync, realpathSync, symlinkSync, unlinkSync } from "node:fs";
 import { createRequire } from "node:module";
 import { dirname, join, resolve, sep } from "node:path";
 import pins from "./optional-packages.json" with { type: "json" };
@@ -67,6 +67,8 @@ export function optionalInstalled(stateDir: string, id: string): boolean {
 export function loadOptionalModule(stateDir: string, id: string): unknown {
   const artifact = optionalArtifact(id);
   if (!artifact || !optionalInstalled(stateDir, id)) throw new Error(`Download ${id} from the extension marketplace first`);
+  // The payload resolves @xueness/* through this link; repair it if the core moved since the install.
+  try { linkCoreDependencies(join(resolve(stateDir), "optional-plugins")); } catch { /* the import below reports what is missing */ }
   return requireModule(join(optionalRoot(stateDir, artifact), "backend/src/index.ts"));
 }
 
@@ -86,4 +88,23 @@ export function coreNodeModules(): string {
     if (existsSync(join(path, "node_modules/@xueness/contracts/package.json"))) return realpathSync.native(join(path, "node_modules"));
     if (dirname(path) === path) throw new Error("core dependency directory missing");
   }
+}
+
+/**
+ * `optional-plugins/node_modules` links installed plugins to this host's core
+ * dependencies. A link left by a moved, upgraded or other checkout (or one whose
+ * target is gone) is replaced; anything that is not a link is refused.
+ */
+export function linkCoreDependencies(parent: string): void {
+  const link = join(parent, "node_modules"), core = coreNodeModules();
+  let isLink: boolean | null = null;
+  try { isLink = lstatSync(link).isSymbolicLink(); } catch (error) { if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error; }
+  if (isLink === false) throw new Error("optional dependency link is invalid");
+  if (isLink) {
+    let target: string | null = null;
+    try { target = realpathSync.native(link); } catch { /* dangling */ }
+    if (target === core) return;
+    unlinkSync(link);
+  }
+  symlinkSync(core, link, process.platform === "win32" ? "junction" : "dir");
 }

@@ -81,14 +81,24 @@ export class DynamicWorkflowStore {
   }
 
   create(input: {
-    parentSessionId: string; root: string; name: string; source: string;
-    maxConcurrency?: number; writable?: boolean;
+    parentSessionId: string; root: string; name: string; description?: string; source: string;
+    args?: unknown; maxConcurrency?: number; writable?: boolean;
   }): DynamicWorkflowRun {
     if (!input || typeof input.parentSessionId !== "string" || !ID.test(input.parentSessionId)) {
       throw new PyValueError("parentSessionId must be a 32-character session id");
     }
     if (typeof input.name !== "string" || !input.name.trim() || input.name.length > 120) throw new PyValueError("name must be 1..120 characters");
+    if (input.description !== undefined && (typeof input.description !== "string" || input.description.length > 500)) {
+      throw new PyValueError("description must be at most 500 characters");
+    }
     if (typeof input.source !== "string") throw new PyValueError("source must be a string");
+    let clonedArgs: unknown;
+    if (input.args !== undefined) {
+      let encoded: string | undefined;
+      try { encoded = JSON.stringify(input.args); } catch { throw new PyValueError("args must be JSON serializable"); }
+      if (encoded === undefined) throw new PyValueError("args must be JSON serializable");
+      clonedArgs = JSON.parse(encoded) as unknown;
+    }
     const maxConcurrency = input.maxConcurrency ?? DEFAULT_CONCURRENCY;
     if (!Number.isInteger(maxConcurrency) || maxConcurrency < 1 || maxConcurrency > MAX_CONCURRENCY) {
       throw new PyValueError("maxConcurrency must be 1..8");
@@ -104,10 +114,14 @@ export class DynamicWorkflowStore {
     }
     const id = uuid4Hex();
     const timestamp = now();
+    const trimmedDesc = input.description?.trim();
     const run: DynamicWorkflowRun = {
-      id, parentSessionId: input.parentSessionId, root, name: input.name.trim(), source: input.source,
+      id, parentSessionId: input.parentSessionId, root, name: input.name.trim(),
+      ...(trimmedDesc ? { description: trimmedDesc } : {}),
+      source: input.source,
+      ...(clonedArgs === undefined ? {} : { args: clonedArgs }),
       sourceHash: hash(input.source), status: "draft", maxConcurrency, writable, createdAt: timestamp, updatedAt: timestamp,
-      actors: {}, nodes: {}, events: [], reports: [], allowReal: false, workspaceFingerprint: null,
+      actors: {}, nodes: {}, events: [], reports: [], allowReal: false, workspaceFingerprint: null, noticed: {},
     };
     this.#event(run, "created");
     writeJsonAtomic(this.directory, ".dynamic-workflow-", this.path(id), run);
@@ -126,7 +140,10 @@ export class DynamicWorkflowStore {
         throw new PyValueError("only a settled dynamic workflow can be amended");
       }
       const next = this.create({
-        parentSessionId: previous.parentSessionId, root: previous.root, name: previous.name, source,
+        parentSessionId: previous.parentSessionId, root: previous.root, name: previous.name,
+        ...(previous.description === undefined ? {} : { description: previous.description }),
+        source,
+        ...(previous.args === undefined ? {} : { args: previous.args }),
         maxConcurrency: previous.maxConcurrency, writable: previous.writable,
       });
       const current = workspaceFingerprint(previous.root, this.stateDir);
@@ -153,9 +170,25 @@ export class DynamicWorkflowStore {
 
   /** Approval digest bound to exactly the execution-relevant run settings. */
   digest(run: DynamicWorkflowRun): string {
-    const body = pyJsonDumps({ root: run.root, sourceHash: run.sourceHash, writable: run.writable, maxConcurrency: run.maxConcurrency },
-      { sortKeys: true, ensureAscii: false, separators: [",", ":"] });
+    const body = pyJsonDumps({
+      root: run.root, sourceHash: run.sourceHash, writable: run.writable, maxConcurrency: run.maxConcurrency,
+      ...(run.args === undefined ? {} : { args: run.args }),
+    }, { sortKeys: true, ensureAscii: false, separators: [",", ":"] });
     return createHash("sha256").update(pyEncodeUtf8(body)).digest("hex");
+  }
+
+  /** Stamp a host completion/hold notice key once so parent turns never repeat it. */
+  markNoticed(id: unknown, key: string): boolean {
+    if (!key) return false;
+    let marked = false;
+    this.update(id, (run) => {
+      run.noticed ??= {};
+      if (!run.noticed[key]) {
+        run.noticed[key] = true;
+        marked = true;
+      }
+    });
+    return marked;
   }
 
   /** Internal metadata event helper shared with the engine. */

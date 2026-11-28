@@ -4,7 +4,7 @@ import { synthesizeDynamicSchemas } from "./dynamic-schema.ts";
 
 const FORBIDDEN_GLOBALS = new Set(["process", "require", "fetch", "Date", "global", "globalThis", "console", "Function", "eval"]);
 const FORBIDDEN_PROPERTIES = new Set(["constructor", "prototype", "__proto__"]);
-const ARRAY_METHODS = new Set(["map", "filter", "join", "includes", "slice", "concat"]);
+const ARRAY_METHODS = new Set(["map", "filter", "some", "every", "find", "push", "flat", "join", "includes", "slice", "concat"]);
 const STRING_METHODS = new Set(["trim", "slice", "includes", "toLowerCase", "toUpperCase", "split"]);
 const MATH_METHODS = new Set(["min", "max", "round", "floor", "ceil", "abs"]);
 
@@ -60,8 +60,15 @@ export function compileDynamicWorkflow(source: string): CompiledDynamicWorkflow 
     return { source, sourceFile, diagnostics, sites, schemas };
   }
 
-  const ordinal: Record<SiteKind, number> = { actor: 0, ask: 0, read: 0, report: 0, hole: 0, phase: 0 };
+  const ordinal: Record<SiteKind, number> = { actor: 0, ask: 0, read: 0, report: 0, hole: 0, phase: 0, trajectory: 0 };
   const actorNames = new Set<string>();
+  const actorBindings = new Set<string>();
+  const arrowBindings = new Set<string>();
+  const unwrapExpression = (expr: ts.Expression): ts.Expression => {
+    let cur = expr;
+    while (ts.isParenthesizedExpression(cur) || ts.isAsExpression(cur) || ts.isSatisfiesExpression(cur) || ts.isNonNullExpression(cur)) cur = cur.expression;
+    return cur;
+  };
   const recordSite = (call: ts.CallExpression, kind: SiteKind, name?: string): void => {
     ordinal[kind] += 1;
     const pos = at(call);
@@ -81,7 +88,18 @@ export function compileDynamicWorkflow(source: string): CompiledDynamicWorkflow 
       for (const declaration of node.declarationList.declarations) {
         checkBindingPattern(declaration.name);
         if (declaration.type) checkTypeSyntax(declaration.type);
-        if (declaration.initializer) checkExpression(declaration.initializer);
+        if (declaration.initializer) {
+          const unwrapped = unwrapExpression(declaration.initializer);
+          if (ts.isIdentifier(declaration.name) && ts.isCallExpression(unwrapped) && callPath(unwrapped.expression) === "agent") {
+            actorBindings.add(declaration.name.text);
+          }
+          if (ts.isIdentifier(declaration.name) && ts.isArrowFunction(unwrapped)) {
+            arrowBindings.add(declaration.name.text);
+            checkExpression(declaration.initializer, true);
+          } else {
+            checkExpression(declaration.initializer);
+          }
+        }
         else if ((node.declarationList.flags & ts.NodeFlags.Const) !== 0) report(declaration, "DYN_UNSUPPORTED_SYNTAX", "const declarations need an initializer.");
       }
       return;
@@ -180,19 +198,40 @@ export function compileDynamicWorkflow(source: string): CompiledDynamicWorkflow 
 
   const checkCall = (node: ts.CallExpression): boolean => {
     const path = callPath(node.expression);
+    const callee = unwrapExpression(node.expression);
     if (path === "agent") {
       if (node.arguments.length > 2) report(node, "DYN_UNSUPPORTED_CALL", "agent accepts at most name and persona arguments.");
       recordSite(node, "actor", textLiteral(node.arguments[0]));
       return false;
     }
+    if (ts.isCallExpression(callee) && callPath(callee.expression) === "agent") {
+      if (node.arguments.length !== 1) report(node, "DYN_UNSUPPORTED_CALL", "direct agent call accepts one instructions argument.");
+      recordSite(node, "ask");
+      return false;
+    }
+    if (ts.isIdentifier(callee) && actorBindings.has(callee.text)) {
+      if (node.arguments.length !== 1) report(node, "DYN_UNSUPPORTED_CALL", "actor call accepts one instructions argument.");
+      recordSite(node, "ask");
+      return false;
+    }
+    if (ts.isIdentifier(callee) && arrowBindings.has(callee.text)) return false;
     if (path === "ask") {
-      if (node.arguments.length !== 2) report(node, "DYN_UNSUPPORTED_CALL", "ask accepts an actor and one instructions argument.");
+      if (node.arguments.length < 1 || node.arguments.length > 2) report(node, "DYN_UNSUPPORTED_CALL", "ask accepts (actor, instructions) or (instructions, persona?).");
       recordSite(node, "ask");
       return false;
     }
     if (path?.endsWith(".ask") || (ts.isPropertyAccessExpression(node.expression) && node.expression.name.text === "ask")) {
       if (node.arguments.length !== 1) report(node, "DYN_UNSUPPORTED_CALL", "ask accepts one instructions argument.");
       recordSite(node, "ask");
+      return false;
+    }
+    if (path === "parallel" || path === "pipeline") {
+      if (node.arguments.length < 1 || node.arguments.length > 2) report(node, "DYN_UNSUPPORTED_CALL", `${path} accepts (items, fn) or (tasks).`);
+      return true;
+    }
+    if (path === "trajectory") {
+      if (node.arguments.length > 1) report(node, "DYN_UNSUPPORTED_CALL", "trajectory accepts at most one filter argument.");
+      recordSite(node, "trajectory");
       return false;
     }
     if (path === "files.read" || path === "files.glob") { recordSite(node, "read"); return false; }
@@ -203,7 +242,7 @@ export function compileDynamicWorkflow(source: string): CompiledDynamicWorkflow 
 
     const member = propertyName(node.expression);
     const approvedMethod = member !== undefined && (ARRAY_METHODS.has(member) || STRING_METHODS.has(member));
-    if (approvedMethod) return member === "map" || member === "filter";
+    if (approvedMethod) return member === "map" || member === "filter" || member === "some" || member === "every" || member === "find";
     if (path === "JSON.parse" || path === "JSON.stringify" || path === "Promise.all") return false;
     if (path && path.startsWith("Math.") && MATH_METHODS.has(path.slice("Math.".length))) return false;
     if (path === "String" || path === "Number" || path === "Boolean") return false;
@@ -217,13 +256,20 @@ export function compileDynamicWorkflow(source: string): CompiledDynamicWorkflow 
       return;
     }
     if (ts.isCallExpression(node)) {
-      const arrowAllowed = checkCall(node);
+      const callArrowAllowed = checkCall(node);
       checkExpression(node.expression);
-      for (const argument of node.arguments) checkExpression(argument, arrowAllowed);
+      const path = callPath(node.expression);
+      for (const argument of node.arguments) {
+        if (callArrowAllowed && (path === "parallel" || path === "pipeline") && ts.isArrayLiteralExpression(argument)) {
+          for (const element of argument.elements) checkExpression(element, true);
+        } else {
+          checkExpression(argument, callArrowAllowed);
+        }
+      }
       return;
     }
     if (ts.isArrowFunction(node)) {
-      if (!arrowAllowed) report(node, "DYN_UNSUPPORTED_SYNTAX", "Arrow functions are supported only as map/filter callbacks.");
+      if (!arrowAllowed) report(node, "DYN_UNSUPPORTED_SYNTAX", "Arrow functions are supported only as map/filter/parallel/pipeline callbacks or const/let helpers.");
       for (const parameter of node.parameters) {
         checkBindingPattern(parameter.name);
         if (parameter.type) checkTypeSyntax(parameter.type);
@@ -297,7 +343,8 @@ export function compileDynamicWorkflow(source: string): CompiledDynamicWorkflow 
   };
 
   for (const statement of sourceFile.statements) checkStatement(statement, true);
-  const schemasResult = synthesizeDynamicSchemas(sourceFile, diagnostics);
+  const askStarts = new Set(sites.filter((site) => site.kind === "ask").map((site) => site.start));
+  const schemasResult = synthesizeDynamicSchemas(sourceFile, diagnostics, askStarts);
   for (const [start, schema] of schemasResult) schemas.set(start, schema);
   return { source, sourceFile, diagnostics, sites, schemas };
 }

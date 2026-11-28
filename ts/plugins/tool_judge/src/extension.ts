@@ -19,6 +19,7 @@ import { internalToolName } from "@xueness/agent";
 import { decide, judgeMessages, MAX_JUDGED_CALLS, parseVerdicts, riskyCall, signature, verdictNote, type JudgedCall, type RecentResult } from "./verdicts.ts";
 import { JudgeStatsRecorder, markRejected, recordVerdict, rejectState, verdictFor, type VerdictRecord } from "./stats.ts";
 import type { JudgeSelection, JudgeSettings } from "./settings.ts";
+import { checkInputSchema, RepeatedFailureTracker, runPreflight, type PreflightPorts } from "./preflight.ts";
 
 type Row = Record<string, unknown>;
 const DEFERRED = "deferred_tool_call";
@@ -37,6 +38,8 @@ export interface JudgePorts {
   classify(name: string, result: Row): { failed: boolean; avoidable: boolean };
   /** Platform and shell the calls run on, for the judge's eyes. */
   platform(): string;
+  /** Optional filesystem/shell environment for zero-model preflight checks. */
+  preflight?: PreflightPorts;
 }
 
 interface Pending { callIndex: number; modelName: string; name: string; input: Row; schema: Row | null; deferred: boolean }
@@ -77,14 +80,21 @@ export function toolJudgeExtension(ports: JudgePorts): AgentExtension {
   const schemas = new WeakMap<object, Map<string, Row>>();
   const vetoes = new WeakMap<object, Map<string, string>>();
   const stats = new JudgeStatsRecorder();
+  const repeated = new RepeatedFailureTracker();
   const now = (): string => new Date().toISOString();
 
   return {
     id: "tool_judge",
-    capabilities: ["tool_judge.verdicts", "tool_judge.stats"],
+    capabilities: ["tool_judge.preflight", "tool_judge.verdicts", "tool_judge.stats"],
     prepareRequest(context: AgentContext, request: ModelRequest): ModelRequest {
       const map = new Map<string, Row>();
-      for (const tool of request.tools) if (isDict(tool) && isDict(tool.function) && typeof tool.function.name === "string") map.set(tool.function.name, isDict(tool.function.parameters) ? tool.function.parameters : {});
+      for (const tool of request.tools) {
+        if (isDict(tool) && isDict(tool.function) && typeof tool.function.name === "string") {
+          const params = isDict(tool.function.parameters) ? tool.function.parameters : {};
+          map.set(tool.function.name, params);
+          map.set(internalToolName(tool.function.name), params);
+        }
+      }
       schemas.set(context.session, map);
       return request;
     },
@@ -95,6 +105,7 @@ export function toolJudgeExtension(ports: JudgePorts): AgentExtension {
       if (!selection) return response;
       const session = context.session as Row;
       const seen = schemas.get(session) ?? new Map<string, Row>();
+      const preflightOn = settings.preflightEnabled !== false;
       const pending: Pending[] = [];
       response.tool_calls.forEach((call, callIndex) => {
         if (!isDict(call) || !isDict(call.function) || typeof call.function.name !== "string" || pending.length >= MAX_JUDGED_CALLS) return;
@@ -104,8 +115,11 @@ export function toolJudgeExtension(ports: JudgePorts): AgentExtension {
         const deferred = modelName === DEFERRED && typeof args.tool === "string";
         const name = internalToolName(deferred ? String(args.tool).trim() : modelName);
         const input = deferred ? (isDict(args.input) ? args.input : {}) : args;
+        const schema = ports.preflight?.schemaOf?.(name) ?? (deferred ? seen.get(name) ?? null : seen.get(modelName) ?? seen.get(name) ?? null);
+        // Never spend a judge-model request on a call whose arguments already fail static schema validation.
+        if (preflightOn && checkInputSchema(name, input, schema)) return;
         if (!riskyCall(name, ports.gateOf(name))) return;
-        pending.push({ callIndex, modelName: deferred ? String(args.tool) : modelName, name, input, schema: deferred ? null : seen.get(modelName) ?? null, deferred });
+        pending.push({ callIndex, modelName: deferred ? String(args.tool) : modelName, name, input, schema, deferred });
       });
       if (!pending.length) return response;
       const model = `${selection.providerId}${selection.model ? `:${selection.model}` : ""}`;
@@ -158,11 +172,24 @@ export function toolJudgeExtension(ports: JudgePorts): AgentExtension {
       });
       return { ...response, tool_calls: toolCalls };
     },
-    beforeTool(context: AgentContext, call: { id: string }): Row | null {
+    async beforeTool(context: AgentContext, call: { id: string; name: string; input?: unknown }): Promise<Row | null> {
       const note = vetoes.get(context.session)?.get(call.id);
-      if (note === undefined) return null;
-      vetoes.get(context.session)!.delete(call.id);
-      return { ok: false, error: note, error_code: "judge_rejected", retryable: true, user_reason: "工具调用判定模型在执行前拦下了这个调用；模型原样重试时会放行。" };
+      if (note !== undefined) {
+        vetoes.get(context.session)!.delete(call.id);
+        return { ok: false, error: note, error_code: "judge_rejected", retryable: true, user_reason: "工具调用判定模型在执行前拦下了这个调用；模型原样重试时会放行。" };
+      }
+      let preflightEnabled = true;
+      try { preflightEnabled = ports.settings().preflightEnabled !== false; } catch { preflightEnabled = false; }
+      if (!preflightEnabled) return null;
+      const name = internalToolName(call.name);
+      const normalizedCall = name === call.name ? call : { ...call, name };
+      const session = context.session as Row;
+      const issue = await runPreflight(context.session, normalizedCall, { schemas: schemas.get(context.session), preflight: ports.preflight, repeated });
+      if (!issue) return null;
+      const sig = signature(name, isDict(call.input) ? call.input : {});
+      recordVerdict(session, call.id, { v: 1, at: now(), tool: name, verdict: "reject", applied: "rejected", reason: issue.message, judgeMs: 0, model: "preflight", sig, preflightRule: issue.rule });
+      stats.add(session, "preflightBlocked");
+      return { ok: false, error: issue.message, error_code: issue.code, retryable: true, preflight: true, preflight_rule: issue.rule, user_reason: issue.userReason };
     },
     afterTool(context: AgentContext, call: { id: string }, result: Row): Row {
       const record = verdictFor(context.session as Row, call.id);
@@ -170,11 +197,14 @@ export function toolJudgeExtension(ports: JudgePorts): AgentExtension {
       const decision = { verdict: record.verdict === "unavailable" ? "pass" as const : record.verdict, applied: record.applied, reason: record.reason, input: null, retryOfReject: record.retryOfReject === true };
       return { ...result, judge_note: verdictNote(decision, record.original ?? null) };
     },
-    toolFinished(context: AgentContext, call: { id: string; name: string }, result: Row): void {
+    toolFinished(context: AgentContext, call: { id: string; name: string; input?: unknown }, result: Row): void {
+      const name = internalToolName(call.name);
+      const normalizedCall = name === call.name ? call : { ...call, name };
       const session = context.session as Row;
+      repeated.recordFinished(context.session, normalizedCall, result, ports.gateOf);
       const record = verdictFor(session, call.id);
-      if (!record || record.outcome || record.verdict === "unavailable" || result.awaiting_approval) return;
-      const { failed, avoidable } = ports.classify(call.name, result);
+      if (!record || record.outcome || record.verdict === "unavailable" || record.model === "preflight" || result.awaiting_approval) return;
+      const { failed, avoidable } = ports.classify(name, result);
       record.outcome = failed ? "failed" : "ok";
       stats.outcome(session, record, failed, avoidable);
     },

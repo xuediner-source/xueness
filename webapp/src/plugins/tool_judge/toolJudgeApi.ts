@@ -2,14 +2,14 @@ import { get, post } from "../../xuenessApi";
 
 export type JudgeProfile = { providerId: string; model: string } | null;
 export type JudgeSettings = {
-  v: 1; profile: JudgeProfile; applyRepairs: boolean; applyRejects: boolean; timeoutMs: number; maxOutputTokens: number;
+  v: 1; profile: JudgeProfile; preflightEnabled: boolean; applyRepairs: boolean; applyRejects: boolean; timeoutMs: number; maxOutputTokens: number;
 };
 export type JudgeRange = "7d" | "30d" | "all";
 export type JudgeTotals = {
   judged: number; requests: number; failures: number; judgeMs: number;
   pass: number; advise: number; repair: number; reject: number; unavailable: number;
   repairsApplied: number; repairsSucceeded: number; rejectsApplied: number; wrongBlocks: number;
-  passFailures: number; passAvoidableFailures: number;
+  passFailures: number; passAvoidableFailures: number; preflightBlocked: number;
 };
 export type JudgeModelRow = { model: string; requests: number; judged: number; judgeMs: number; failures: number };
 export type JudgeStats = { sessions: number; total: JudgeTotals; models: JudgeModelRow[] };

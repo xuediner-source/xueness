@@ -7,7 +7,9 @@
   "defaultEnabled": true,
   "dependencies": [],
   "tools": [
-    "exec"
+    "exec",
+    "exec_output",
+    "exec_kill"
   ],
   "commands": [],
   "panels": [],

@@ -1,11 +1,17 @@
 import React from 'react';
-import { ChevronRight, Cpu, LoaderCircle, Plus, Server, ShieldCheck } from 'lucide-react';
+import { ChevronRight, Cpu, LoaderCircle, Plus, Route, Server, ShieldCheck } from 'lucide-react';
 import type { ProviderSummary } from '../../xuenessApi';
-import { t as tr } from '../../i18n';
+import { t as tr, tf } from '../../i18n';
 import { ENVIRONMENT_KEY } from './providerDraft';
+
+/** Display name of a plugin that supplies model profiles (`source: "subscription"`); its id when unknown. */
+export function externalSourceName(subscriptionId: string | undefined): string {
+  return subscriptionId === 'magpie' ? tr('Magpie 模型网关') : subscriptionId ?? tr('插件提供');
+}
 
 export function ModelProviderNavigation({
   providers,
+  external = [],
   selectedKey,
   loading,
   busy,
@@ -13,12 +19,15 @@ export function ModelProviderNavigation({
   onAdd,
 }: {
   providers: ProviderSummary[];
+  /** Profiles a plugin supplies (Magpie): listed read-only, one group per source. */
+  external?: ProviderSummary[];
   selectedKey: string;
   loading: boolean;
   busy: boolean;
   onSelect: (key: string) => void;
   onAdd: () => void;
 }) {
+  const sources = [...new Set(external.map(provider => provider.subscriptionId ?? ''))];
   return <nav className="xn-provider-nav" aria-label={tr('模型服务商 (Providers)')} data-testid="model-provider-navigation">
     <div className="xn-provider-nav__group">
       <div className="xn-provider-nav__heading">{tr('内置')}</div>
@@ -66,7 +75,60 @@ export function ModelProviderNavigation({
         <Plus size={15} aria-hidden="true" /><span>{tr('添加配置')}</span>
       </button>
     </div>
+    {sources.map(source => {
+      const models = external.filter(provider => (provider.subscriptionId ?? '') === source);
+      return <div key={source} className="xn-provider-nav__group" data-testid={`model-provider-external-${source}`}>
+        <div className="xn-provider-nav__heading">
+          <span>{externalSourceName(source || undefined)}</span>
+          <span className="xn-provider-nav__count">{models.length}</span>
+        </div>
+        {models.map(provider => <button
+          type="button"
+          key={provider.id}
+          className="xn-provider-nav__item"
+          data-state={selectedKey === provider.id ? 'selected' : 'idle'}
+          aria-current={selectedKey === provider.id ? 'page' : undefined}
+          aria-label={provider.name}
+          title={`${provider.name} · ${provider.model}`}
+          disabled={busy}
+          onClick={() => onSelect(provider.id)}
+        >
+          <Route size={16} aria-hidden="true" />
+          <span className="xn-provider-nav__provider-copy">
+            <span className="xn-provider-nav__label">{provider.name.replace(/^Magpie · /, '')}</span>
+            <span className="xn-provider-nav__model">{provider.model}</span>
+          </span>
+        </button>)}
+      </div>;
+    })}
   </nav>;
+}
+
+/** A model a plugin supplies: read-only here; it is changed where it comes from. */
+export function ExternalProviderDetail({ provider, isDefault, onSelect, onSetDefault, onManage }: {
+  provider: ProviderSummary;
+  isDefault?: boolean;
+  onSelect: () => void;
+  onSetDefault?: () => void;
+  onManage?: () => void;
+}) {
+  const source = externalSourceName(provider.subscriptionId);
+  return <div className="xn-provider-environment" data-testid="model-provider-external-detail">
+    <div className="xn-provider-detail__eyebrow"><Route size={15} aria-hidden="true" />{tf('由 {0} 提供', [source])}</div>
+    <h3>{provider.name.replace(/^Magpie · /, '')}</h3>
+    <p><code>{provider.model}</code>{provider.contextWindow ? ` · ${tf('上下文 {0}K', [Math.round(provider.contextWindow / 1000)])}` : ''}</p>
+    <div className="xn-provider-environment__note">
+      <ShieldCheck size={18} aria-hidden="true" />
+      <span>{provider.subscriptionId === 'magpie'
+        ? tr('这个模型经 Magpie 本机网关接入：供应商、密钥、登录账号和路由组都在 Magpie 里管理；第一次使用时会自动启动 Magpie。')
+        : tf('这个模型由 {0} 提供，在那里修改。', [source])}</span>
+    </div>
+    <div className="xn-provider-external__actions">
+      <button type="button" className="xn-provider-button xn-provider-button--primary" onClick={onSelect}>{tr('用于当前运行')}</button>
+      {onSetDefault && <button type="button" className="xn-provider-button" disabled={isDefault} onClick={onSetDefault}>{tr(isDefault ? '已设为默认' : '设为默认')}</button>}
+      {onManage && <button type="button" className="xn-provider-button" onClick={onManage}>{tf('在 {0} 中管理', [source])}</button>}
+    </div>
+  </div>;
 }
 
 /** In-repo model guide. The workbench origin does not serve `docs/`, so this is the public copy of that file. */

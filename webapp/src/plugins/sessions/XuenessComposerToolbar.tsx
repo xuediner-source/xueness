@@ -1,18 +1,23 @@
 import { permissionChoices } from './permissionChoices';
 import './ApprovalChoiceMenu.css';
 import { ContextUsageRing, type ContextUsageReading } from './ContextUsageRing';
-import React, { useEffect, useRef, useState } from "react";
+import React, { lazy, Suspense, useEffect, useRef, useState } from "react";
 import { t as tr } from "../../i18n";
 import { IconChevronDown } from "../../ui/icons";
-import { normalizeReasoningLevels, ReasoningEffortControl } from "./ReasoningEffortSlider";
+import { normalizeReasoningLevels } from "./reasoningLevels";
 import { canUseRuntimeProfile, effectiveRuntimeProfile, runtimeProfileSelection, type ComposerModel, type RuntimeProfile } from "../../xuenessComposer";
 import type { RunChoices } from "../../xuenessBridge";
 import type { WorkbenchSession } from "../../xuenessWorkbench";
-import type { PermissionMode } from "./permissionModes";
-import { FullAccessConfirmationDialog, requiresYoloConfirmation } from "./FullAccessConfirmationDialog";
+import { requiresYoloConfirmation, type PermissionMode } from "./permissionModes";
 import { handlePopoverEscape, isReasoningEffortSupported, nextIndex } from "./composerModelCatalog";
-import { ComposerModelMenu } from "./ComposerModelMenu";
 import { ComposerModeControls } from "./ComposerModeControls";
+
+const ComposerModelMenu = lazy(() =>
+  import("./ComposerModelMenu").then(module => ({ default: module.ComposerModelMenu })));
+const ReasoningEffortControl = lazy(() =>
+  import("./ReasoningEffortSlider").then(module => ({ default: module.ReasoningEffortControl })));
+const FullAccessConfirmationDialog = lazy(() =>
+  import("./FullAccessConfirmationDialog").then(module => ({ default: module.FullAccessConfirmationDialog })));
 
 export type ComposerToolbarProps = {
   choices: RunChoices;
@@ -75,6 +80,7 @@ export function XuenessComposerToolbar({
 }: ComposerToolbarProps) {
   const [modeMenuOpen, setModeMenuOpen] = useState(false);
   const [modelMenuOpen, setModelMenuOpen] = useState(false);
+  const [modelOpenFocusKey, setModelOpenFocusKey] = useState<"ArrowDown" | "ArrowUp" | null>(null);
   const [confirmYoloOpen, setConfirmYoloOpen] = useState(false);
   const modeWrapRef = useRef<HTMLDivElement | null>(null);
   const modelWrapRef = useRef<HTMLDivElement | null>(null);
@@ -123,6 +129,7 @@ export function XuenessComposerToolbar({
   };
   const closeModelMenu = (restoreInput = false) => {
     setModelMenuOpen(false);
+    setModelOpenFocusKey(null);
     if (restoreInput) focusComposerInput();
   };
   const chooseModel = (model: ComposerModel) => {
@@ -196,6 +203,7 @@ export function XuenessComposerToolbar({
   };
   const openModelMenu = (key?: string) => {
     setModeMenuOpen(false);
+    setModelOpenFocusKey(key === "ArrowUp" ? "ArrowUp" : key === "ArrowDown" ? "ArrowDown" : null);
     setModelMenuOpen(true);
     if (key) requestAnimationFrame(() => {
       const items = Array.from(modelMenuRef.current?.querySelectorAll<HTMLButtonElement>("[role='menuitemradio']:not(:disabled), [role='menuitem']:not(:disabled)") ?? []);
@@ -213,7 +221,7 @@ export function XuenessComposerToolbar({
         changePermission={changePermission} onToggleBrowser={onToggleBrowser} browserIsEnabled={browserIsEnabled}
         onBackground={onBackground} backgroundCount={backgroundCount} />}
 
-      <FullAccessConfirmationDialog
+      {confirmYoloOpen && <Suspense fallback={null}><FullAccessConfirmationDialog
         open={confirmYoloOpen}
         returnFocusTo={modeTriggerRef.current}
         onCancel={() => {
@@ -226,7 +234,7 @@ export function XuenessComposerToolbar({
           else onChange({ permission_mode: "yolo", acknowledge_yolo: true });
           closeModeMenu(true);
         }}
-      />
+      /></Suspense>}
 
       <div className="xn-composer-toolbar__right" role="group" aria-label={tr(minimalPermissionControl ? "模型、权限与上下文" : "模型与上下文")}>
         {minimal && minimalPermissionControl}
@@ -253,39 +261,44 @@ export function XuenessComposerToolbar({
             <IconChevronDown />
           </button>
           {modelMenuOpen && (
-            <ComposerModelMenu
-              menuRef={modelMenuRef}
-              triggerRef={modelTriggerRef}
-              loading={loading}
-              error={error}
-              models={models}
-              disabled={disabled}
-              isSelected={isModelSelected}
-              activeRuntimeProfile={activeRuntimeProfile}
-              canSelectStandard={canSelectStandard}
-              selectedModel={selectedModel}
-              runtimeBudget={runtimeBudget}
-              pauseReason={pauseReason}
-              onChooseModel={chooseModel}
-              onChooseProfile={chooseRuntimeProfile}
-              onReload={onReload}
-              onManageModels={onManageModels}
-              onSaveDefault={onSaveDefault}
-              defaultSaved={defaultSaved}
-              onRequestClose={closeModelMenu}
-            />
+            <Suspense fallback={null}>
+              <ComposerModelMenu
+                menuRef={modelMenuRef}
+                triggerRef={modelTriggerRef}
+                initialFocusKey={modelOpenFocusKey}
+                loading={loading}
+                error={error}
+                models={models}
+                disabled={disabled}
+                isSelected={isModelSelected}
+                activeRuntimeProfile={activeRuntimeProfile}
+                canSelectStandard={canSelectStandard}
+                selectedModel={selectedModel}
+                runtimeBudget={runtimeBudget}
+                pauseReason={pauseReason}
+                onChooseModel={chooseModel}
+                onChooseProfile={chooseRuntimeProfile}
+                onReload={onReload}
+                onManageModels={onManageModels}
+                onSaveDefault={onSaveDefault}
+                defaultSaved={defaultSaved}
+                onRequestClose={closeModelMenu}
+              />
+            </Suspense>
           )}
         </div>
         {selectedModel && (
-          <ReasoningEffortControl
-            levels={reasoningLevels}
-            value={choices.reasoning_effort}
-            modelName={selectedModel.model || selectedModel.name}
-            scopeKey={JSON.stringify([selectedModel.id, selectedModel.model, choices.model ?? ""])}
-            disabled={disabled}
-            onConfigure={() => { closeModelMenu(); onManageModels(selectedModel); }}
-            onChange={(reasoning_effort) => onChange({ reasoning_effort })}
-          />
+          <Suspense fallback={null}>
+            <ReasoningEffortControl
+              levels={reasoningLevels}
+              value={choices.reasoning_effort}
+              modelName={selectedModel.model || selectedModel.name}
+              scopeKey={JSON.stringify([selectedModel.id, selectedModel.model, choices.model ?? ""])}
+              disabled={disabled}
+              onConfigure={() => { closeModelMenu(); onManageModels(selectedModel); }}
+              onChange={(reasoning_effort) => onChange({ reasoning_effort })}
+            />
+          </Suspense>
         )}
 
       </div>
@@ -294,7 +307,3 @@ export function XuenessComposerToolbar({
 }
 
 export * from './composerModelCatalog';
-
-export * from './ComposerModelDetailCard';
-
-export * from './ComposerModelMenu';

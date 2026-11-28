@@ -5,7 +5,7 @@ import { DynamicServiceError, type DynamicWorkflowService } from './dynamic-serv
 
 const BASE = '/api/sessions/:id/workflow-scripts';
 export const DYNAMIC_WORKFLOW_ROUTES = [
-  `GET ${BASE}`, `POST ${BASE}`, `POST ${BASE}/compile`, `GET ${BASE}/:runId`, `GET ${BASE}/:runId/events`,
+  `GET ${BASE}`, `POST ${BASE}`, `POST ${BASE}/compile`, `POST ${BASE}/run`, `GET ${BASE}/:runId`, `GET ${BASE}/:runId/events`,
   ...['start', 'resume', 'cancel', 'concurrency', 'resolve', 'amend', 'recover'].map(op => `POST ${BASE}/:runId/${op}`),
 ];
 const text = (value: unknown, field: string): string => {
@@ -25,6 +25,8 @@ export function createDynamicWorkflowApi(service: DynamicWorkflowService) {
             if (body.writable !== undefined && typeof body.writable !== 'boolean') throw new TypeError('writable must be a boolean');
             return [200, await service.create(sid, text(body.source, 'source'), {
               ...body.name === undefined ? {} : { name: text(body.name, 'name') },
+              ...body.description === undefined ? {} : { description: text(body.description, 'description') },
+              ...body.args === undefined ? {} : { args: body.args },
               ...body.maxConcurrency === undefined ? {} : { maxConcurrency: body.maxConcurrency as number },
               ...body.writable === undefined ? {} : { writable: body.writable as boolean },
             })];
@@ -36,6 +38,22 @@ export function createDynamicWorkflowApi(service: DynamicWorkflowService) {
           await service.list(sid);
           const compiled = compileDynamicWorkflow(text(body.source, 'source'));
           return [200, { ok: !compiled.diagnostics.length, diagnostics: compiled.diagnostics, sites: compiled.sites, schemas: Object.fromEntries(compiled.schemas) }];
+        }
+        if (parts.length === 5 && id === 'run' && method === 'POST') {
+          if (body.writable !== undefined && typeof body.writable !== 'boolean') throw new TypeError('writable must be a boolean');
+          if (body.allowReal !== undefined && typeof body.allowReal !== 'boolean') throw new TypeError('allowReal must be a boolean');
+          const created = await service.create(sid, text(body.source, 'source'), {
+            ...body.name === undefined ? {} : { name: text(body.name, 'name') },
+            ...body.description === undefined ? {} : { description: text(body.description, 'description') },
+            ...body.args === undefined ? {} : { args: body.args },
+            ...body.maxConcurrency === undefined ? {} : { maxConcurrency: body.maxConcurrency as number },
+            ...body.writable === undefined ? {} : { writable: body.writable as boolean },
+          });
+          await service.start(sid, created.id, { digest: created.digest, confirmed: body.confirmed === true, allowReal: body.allowReal !== false });
+          if (typeof body.waitMsBeforeAsync === 'number' && body.waitMsBeforeAsync > 0) {
+            await service.wait(created.id, body.waitMsBeforeAsync);
+          }
+          return [200, await service.get(sid, created.id)];
         }
         if (!/^[a-f0-9]{32}$/.test(id)) return [404, { error: 'workflow not found' }];
         if (parts.length === 5 && method === 'GET') return [200, await service.get(sid, id)];

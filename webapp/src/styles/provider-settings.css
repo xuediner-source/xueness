@@ -514,6 +514,17 @@
   line-height: 1.6;
 }
 
+.xn-provider-external__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.xn-provider-environment > p > code {
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+
 .xn-provider-environment__note > svg {
   flex: 0 0 18px;
   margin-top: 1px;

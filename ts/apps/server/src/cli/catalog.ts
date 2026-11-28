@@ -5,7 +5,7 @@
  */
 import { readFileSync } from "node:fs";
 import { BODY_PREVIEW_CHARS, BUILTIN_SOURCE, EXPAND_MAX_CHARS, inspectCommand, listAll as listCommands, MAX_COMMAND_FILE_BYTES, MAX_COMMANDS_PER_ROOT } from "@xueness/plugin-commands";
-import { inspectSkill, listAll as listSkills, READ_TOTAL_BUDGET } from "@xueness/plugin-skills";
+import { BUNDLED_SKILLS_DIR, inspectSkill, listAll as listSkills, READ_TOTAL_BUDGET } from "@xueness/plugin-skills";
 import { RESOURCE_KINDS, resourceDispatch } from "@xueness/sessions";
 import type { Parser } from "./argparse.ts";
 import { type Cli, dumps, err, out, pyPath, workspacePath } from "./host.ts";
@@ -47,7 +47,7 @@ const diagnosticLines = (diagnostics: Row[] | undefined): string[] => !diagnosti
 const join = (lines: string[], diagnostics?: Row[]): string => [...lines, ...diagnosticLines(diagnostics)].join("\n");
 
 function skillListing(cli: Cli, root: string): Row {
-  const document = listSkills(cli.state, root);
+  const document = listSkills(cli.state, root, true, BUNDLED_SKILLS_DIR);
   return { root, stateDir: cli.stateText, skills: document.skills, diagnostics: document.diagnostics };
 }
 function formatSkills(document: Row): string {
@@ -58,7 +58,7 @@ function formatSkills(document: Row): string {
 function formatSkill(result: Row): string {
   if (!result.ok) return join([`ERROR: ${result.error ?? "skill not readable"}`, `Available: ${(result.available ?? []).join(", ") || "(none)"}`], result.diagnostics);
   const row = result.skill;
-  const lines = [`Skill: ${row.name}`, `source: ${row.source} (scope ${row.scope})`, `id: ${row.id}`, `path: ${row.path}`, `directory: ${row.directory}`, `description: ${row.description || "(none)"}`,
+  const lines = [`Skill: ${row.name}`, `source: ${row.source} (scope ${row.scope})`, `id: ${row.id}`, `enabled: ${row.enabled === false ? "no" : "yes"}`, `path: ${row.path}`, `directory: ${row.directory}`, `description: ${row.description || "(none)"}`,
     `tags: ${row.tags?.length ? row.tags.join(", ") : "(none)"}`, `shadowed: ${row.shadowedBy || "no"}`, `size: ${Math.trunc(Number(result.sizeBytes || row.bytes || 0))} bytes`];
   const files: Row[] = row.attachments || [];
   if (files.length) {
@@ -104,7 +104,7 @@ function catalogCommand(cli: Cli, kind: "skills" | "commands"): number {
       out(a.json ? dumps(document, 2) : kind === "skills" ? formatSkills(document) : formatCommands(document));
       return 0;
     }
-    const result = kind === "skills" ? inspectSkill(cli.state, a.name, root) : inspectCommand({ stateDir: cli.state, root, language: cli.language, manifestCommands: new Set(manifestCommands(cli).keys()) }, a.name);
+    const result = kind === "skills" ? inspectSkill(cli.state, a.name, root, true, BUNDLED_SKILLS_DIR) : inspectCommand({ stateDir: cli.state, root, language: cli.language, manifestCommands: new Set(manifestCommands(cli).keys()) }, a.name);
     out(a.json ? dumps({ ...result, root, stateDir: cli.stateText }, 2) : kind === "skills" ? formatSkill(result) : formatCommand(result));
     return result.ok ? 0 : 1;
   } catch (error) { err("ERROR: " + (error instanceof Error ? error.message : String(error))); return 1; }
@@ -171,7 +171,7 @@ export async function catalogSlash(cli: Cli, name: string, argument: string, ctx
   }
   if (verb === "inspect") {
     if (!rest) return `${name} inspect needs a name.\n${usage}`;
-    return name === "skills" ? formatSkill(inspectSkill(cli.state, rest, root)) : formatCommand(inspectCommand({ stateDir: cli.state, root, language: cli.language, manifestCommands: new Set(manifestCommands(cli).keys()) }, rest));
+    return name === "skills" ? formatSkill(inspectSkill(cli.state, rest, root, true, BUNDLED_SKILLS_DIR)) : formatCommand(inspectCommand({ stateDir: cli.state, root, language: cli.language, manifestCommands: new Set(manifestCommands(cli).keys()) }, rest));
   }
   return `Unknown ${name} command: ${verb}\n${usage}`;
 }

@@ -107,12 +107,14 @@
     "plugins/providers/LocalRuntimeProbe.tsx",
     "plugins/providers/runtimeSampling.ts",
     "plugins/providers/index.tsx",
+    "plugins/providers/providerApi.ts",
     "plugins/providers/providerDraft.ts",
     "plugins/providers/ProviderPanels.tsx",
     "plugins/providers/ProviderCompatibilitySettings.tsx",
     "plugins/providers/ProviderLightweightAdvanced.tsx",
     "plugins/providers/ProviderEditor.tsx",
     "plugins/providers/LightweightWorkbench.tsx",
+    "plugins/providers/lightweightGlobalKeys.ts",
     "plugins/providers/useDefaultModelSelection.ts",
     "plugins/providers/useLightweightWorkbench.ts"
   ]

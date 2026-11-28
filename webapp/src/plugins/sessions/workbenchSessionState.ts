@@ -6,6 +6,7 @@
 import type React from "react";
 import { useCallback, useRef, useState } from "react";
 import { tf } from "../../i18n";
+import { friendlyModelSetupError } from "./sessionRequestErrors";
 import type { FileChangeSet, FilePreview, Result } from "../../xuenessWorkbench";
 import type { GitCheckpoint, GitCommit, GitDiff, GitStatus } from "../../xuenessGit";
 
@@ -69,7 +70,9 @@ export type SessionQueueError = { sessionId: string; message: string; compact?: 
 /** Request bookkeeping shared by the session list, actions and views. */
 export function useSessionActivity() {
   const [error, setError] = useState("");
-  const [runError, setRunError] = useState("");
+  const [runError, setRunErrorState] = useState("");
+  // Run errors reach this state from many paths (create, command receipts, run); translate the no-model guidance once here.
+  const setRunError = useCallback((value: React.SetStateAction<string>) => setRunErrorState(previous => friendlyModelSetupError(typeof value === "function" ? value(previous) : value)), []);
   const [busy, setBusy] = useState(false);
   const [executingSessions, setExecutingSessions] = useState<Set<string>>(() => new Set());
   const executingSessionsRef = useRef(new Set<string>());

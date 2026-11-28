@@ -1,5 +1,13 @@
 import { t as tr, tf } from '../../i18n';
 
+/**
+ * The server's no-model guidance is written for the command line (`xueness providers save …`); in the app,
+ * point to the Providers page instead. Any other message is returned unchanged.
+ */
+export function friendlyModelSetupError(message: string): string {
+  return message.includes('xueness providers save') ? tr('还没有可用的模型。请先在「供应商」里添加一个模型并设为默认，再开始对话。') : message;
+}
+
 export interface SessionRequestErrorOptions {
   status?: number;
   errorCode?: string;

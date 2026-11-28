@@ -2,15 +2,15 @@
   "model_monitor": {
     "id": "model_monitor",
     "packageId": "xueness-model-monitor",
-    "version": "1.0.0",
-    "sha256": "53a2aca10c29362816dff97f1b63e5eddbe7e209946824a41017ec960643cdbe",
-    "bytes": 45048,
-    "url": "https://raw.githubusercontent.com/xuediner-source/xueness-marketplace/main/packages/xueness-model-monitor-1.0.0-53a2aca10c293628.json.gz",
+    "version": "1.0.1",
+    "sha256": "2ab98adee2c6c9d3dc3080eccf0054a7ee72059787c2197394db8168a4efe134",
+    "bytes": 45068,
+    "url": "https://raw.githubusercontent.com/xuediner-source/xueness-marketplace/main/packages/xueness-model-monitor-1.0.1-2ab98adee2c6c9d3.json.gz",
     "files": [
       {
         "path": "backend/manifest.json",
         "bytes": 1182,
-        "sha256": "b401c7ff2dd0de9fad22f4bc6ac8003d18cea22aae00647c02ae836eb169a677",
+        "sha256": "22c320537e15e2e51ad089b49d8e5681e509345bb486554850f3923f959eae09",
         "executable": false
       },
       {
@@ -51,8 +51,8 @@
       },
       {
         "path": "frontend/optional-model_monitor.js",
-        "bytes": 13087,
-        "sha256": "09ae1e815d95107d366d168f76f2148f17c8cd5a627145e58d8ea1d14b00cd97",
+        "bytes": 13103,
+        "sha256": "c906dd2456d7c629f70465f564255f7eda73ee5d6335b16eabe660f4d04fd9a7",
         "executable": false
       }
     ]
@@ -60,15 +60,15 @@
   "tavern": {
     "id": "tavern",
     "packageId": "xueness-tavern",
-    "version": "2.0.0",
-    "sha256": "3747fb1546cbb034edaa7e9ef081280e9c915a0a2cb927c761bdc35f8cbd5448",
-    "bytes": 167460,
-    "url": "https://raw.githubusercontent.com/xuediner-source/xueness-marketplace/main/packages/xueness-tavern-2.0.0-3747fb1546cbb034.json.gz",
+    "version": "2.1.0",
+    "sha256": "c38a039d93ae910a7ad659e14897106511618acaa98943c97f2b3e74dcfc3eb9",
+    "bytes": 265680,
+    "url": "https://raw.githubusercontent.com/xuediner-source/xueness-marketplace/main/packages/xueness-tavern-2.1.0-c38a039d93ae910a.json.gz",
     "files": [
       {
         "path": "backend/manifest.json",
-        "bytes": 2638,
-        "sha256": "d2ffce9328f1fa38940ffcdccbbc949cb561c6b33d011fc4710841f89596313a",
+        "bytes": 3089,
+        "sha256": "f467f66a576d6c249e38cfc70c175a56efab5d5a21156c416c8bdbb6761d8e28",
         "executable": false
       },
       {
@@ -79,32 +79,32 @@
       },
       {
         "path": "backend/src/assemble.ts",
-        "bytes": 6311,
-        "sha256": "874db5c831e2e2aa93f38b948706103ea88b7f91e5df0a1ccf0c1fb6ca47bcb8",
+        "bytes": 6378,
+        "sha256": "a49f7566e4d4e4a8b08dab08e259e2c641b3a11d00c88c8fa15185c5dcd3b10b",
         "executable": false
       },
       {
         "path": "backend/src/cards.ts",
-        "bytes": 9190,
-        "sha256": "1233e98dd96974bea2a38c09dd0aa535a5648a9bcf33f9aa709ed0a31cfbff8b",
+        "bytes": 13928,
+        "sha256": "eca6ec9a32f6179347cb2bb0b5a4b8bbf96fc963e37fed10d1e90be67d1ea8e1",
         "executable": false
       },
       {
         "path": "backend/src/http.ts",
-        "bytes": 13447,
-        "sha256": "50ae8175282e17eca2e3543848d0c9f66f90aaec14b7186434c88be113430542",
+        "bytes": 16481,
+        "sha256": "b518af032eb128ba1a3ff1f29ea33341f734d0fb7ca2f280202ce1f7730c73ad",
         "executable": false
       },
       {
         "path": "backend/src/index.ts",
-        "bytes": 1754,
-        "sha256": "4bf0b29af088e4cef9e2fee4092c5ae625961d53fb6e3be244597fcc5f7b9d5c",
+        "bytes": 1776,
+        "sha256": "07f0bcbcaf2dcf58c2e20774073618d8b9f64538f415d20c137b80aec9ec890b",
         "executable": false
       },
       {
         "path": "backend/src/presets.ts",
-        "bytes": 11007,
-        "sha256": "7269490c3e71c89f22b54399fe081739f762c13df513596840cfca086dea0df7",
+        "bytes": 11651,
+        "sha256": "e625fa6594e5bc04a727ab56783d8025c099d1ee4e14b6bf4d12c8c083c1f5e9",
         "executable": false
       },
       {
@@ -115,8 +115,8 @@
       },
       {
         "path": "backend/src/roleplay.ts",
-        "bytes": 8697,
-        "sha256": "f944fcfe18c186c05a8bdbc02b58f2c8dad2c729838fd3b51852431cd8e34334",
+        "bytes": 10594,
+        "sha256": "10be3cd75906cebb243cb66e25b2dbd4f13df66425b08530a16df3a28997a23b",
         "executable": false
       },
       {
@@ -133,14 +133,14 @@
       },
       {
         "path": "frontend/optional-tavern.css",
-        "bytes": 12970,
-        "sha256": "65adbd886239a0dd4d57c05fb9e7195bbb632044b8a9f1e7990373999694ba2f",
+        "bytes": 25148,
+        "sha256": "381b6e9e537b4fa6762175994bf79fffb20e5d4e7e726ecb8599559047e252d3",
         "executable": false
       },
       {
         "path": "frontend/optional-tavern.js",
-        "bytes": 45019,
-        "sha256": "5da9b696190fa0248a64fd2d31fac01c2a5eab5073ee18f382daae6760831271",
+        "bytes": 95657,
+        "sha256": "e8161015687276bc10c6fd378d69a6a0177f90259a6087b30d9f252add839818",
         "executable": false
       }
     ]
@@ -148,10 +148,10 @@
   "magpie@win32-x64": {
     "id": "magpie",
     "packageId": "xueness-magpie",
-    "version": "1.0.0",
-    "sha256": "8289e5e1820c701be86d32b4406d2cc3074a9925eb6d2cd8db435d67ab68f69f",
-    "bytes": 140314232,
-    "url": "https://raw.githubusercontent.com/xuediner-source/xueness-marketplace/main/packages/xueness-magpie-1.0.0-win32-x64-8289e5e1820c701b.json.gz",
+    "version": "1.1.0",
+    "sha256": "244ee2a809ce03812b0e25f6d7f2a33d1df28180a93ca8c5c284a967d3732ac3",
+    "bytes": 140267196,
+    "url": "https://raw.githubusercontent.com/xuediner-source/xueness-marketplace/main/packages/xueness-magpie-1.1.0-win32-x64-244ee2a809ce0381.json.gz",
     "files": [
       {
         "path": "backend/assets/LICENSE-magpie.txt",
@@ -173,8 +173,8 @@
       },
       {
         "path": "backend/manifest.json",
-        "bytes": 1773,
-        "sha256": "7622f7a27387fae4cb40bb1cb73b1722c55f4e71736260c55532b43b259e83e7",
+        "bytes": 2254,
+        "sha256": "78182a28a7568c6fd91f26cd46d027c3065e473835b38e3a4963e7446ac676f4",
         "executable": false
       },
       {
@@ -185,8 +185,8 @@
       },
       {
         "path": "backend/src/api.ts",
-        "bytes": 20522,
-        "sha256": "59676c4dfd275cb06a9a1e1e6dd10649b1242b9505c830274cedd3c597be7d54",
+        "bytes": 20896,
+        "sha256": "57ab251f7ac916ea8ab03cd5f0b393256623f233ee5c47d8fe92249b240a230e",
         "executable": false
       },
       {
@@ -197,8 +197,8 @@
       },
       {
         "path": "backend/src/http.ts",
-        "bytes": 12199,
-        "sha256": "f90722e1299078d04b6d18dd3599a2ca98eda705533d41667121241bfcfe5ac6",
+        "bytes": 12335,
+        "sha256": "361e1746150035b278a885206ae8bf25e23385bf40cbebf34dfb459a4e542e59",
         "executable": false
       },
       {
@@ -209,20 +209,20 @@
       },
       {
         "path": "backend/src/layout.ts",
-        "bytes": 5290,
-        "sha256": "a9bb7bf26c2b597f57173ee27abea74a02c13d17f8648dc26f3da37639f05c76",
+        "bytes": 5416,
+        "sha256": "12668c64878d05f4bcf11e25c6764e3c0d8f299c829dca73faa728b37a33e0db",
         "executable": false
       },
       {
         "path": "backend/src/models.ts",
-        "bytes": 2485,
-        "sha256": "9242461732e527ae1bc9de5cf9a63f23d34feac9289749fe5fa7f3d8bd850cd0",
+        "bytes": 3189,
+        "sha256": "ef830529e30de2ad6606ece6de8d9e187c075b0bead7cffbd9af71988928d426",
         "executable": false
       },
       {
         "path": "backend/src/profiles.ts",
-        "bytes": 4002,
-        "sha256": "68d33e6bfb6ab2905e0bd50888855dfb2b67fb0753c95f6cade16353c2186850",
+        "bytes": 4098,
+        "sha256": "41dbb45fc3eb3bc4b9114b627dddd1e443df11eea2b92e445012c716c393595e",
         "executable": false
       },
       {
@@ -233,20 +233,20 @@
       },
       {
         "path": "backend/src/supervisor.ts",
-        "bytes": 13062,
-        "sha256": "1f9d0f428ad68b6e46db7eac54d300cadbeec86a456d29fa8fd8300ed25775a7",
+        "bytes": 13101,
+        "sha256": "d245f1879b99613267eda522890e6332d9dcfa6ff2b4c943cfb5298a2b2a4e22",
         "executable": false
       },
       {
         "path": "frontend/optional-magpie.css",
-        "bytes": 13653,
-        "sha256": "793353c7cbba44e9245177b6569abb1afbfbab549696a5f129d3039fa6913aac",
+        "bytes": 7976,
+        "sha256": "26c2d6687ba21e33049556777bb17ab2b356907f03f9429d63fec5d352af473f",
         "executable": false
       },
       {
         "path": "frontend/optional-magpie.js",
-        "bytes": 50136,
-        "sha256": "ad12d685a558c28aa179dd72697bf0cff818c0fd5ada0aead4d986a56a2a9cb3",
+        "bytes": 18577,
+        "sha256": "7e5a22095f023067f6860f11ba93b1f2e8c8260810636ea820412232a00aacd8",
         "executable": false
       }
     ]
@@ -254,10 +254,10 @@
   "magpie@win32-arm64": {
     "id": "magpie",
     "packageId": "xueness-magpie",
-    "version": "1.0.0",
-    "sha256": "e0d4bc1fefc70407a6a5a40d8976ad5fca17ea523f29f8ca033ab42e66b5c7a7",
-    "bytes": 128355276,
-    "url": "https://raw.githubusercontent.com/xuediner-source/xueness-marketplace/main/packages/xueness-magpie-1.0.0-win32-arm64-e0d4bc1fefc70407.json.gz",
+    "version": "1.1.0",
+    "sha256": "7ff8c8bd193cc6362f99427fcd680dab5b0a63f03540ec2abbda5ea994513470",
+    "bytes": 128308240,
+    "url": "https://raw.githubusercontent.com/xuediner-source/xueness-marketplace/main/packages/xueness-magpie-1.1.0-win32-arm64-7ff8c8bd193cc636.json.gz",
     "files": [
       {
         "path": "backend/assets/LICENSE-magpie.txt",
@@ -279,8 +279,8 @@
       },
       {
         "path": "backend/manifest.json",
-        "bytes": 1773,
-        "sha256": "7622f7a27387fae4cb40bb1cb73b1722c55f4e71736260c55532b43b259e83e7",
+        "bytes": 2254,
+        "sha256": "78182a28a7568c6fd91f26cd46d027c3065e473835b38e3a4963e7446ac676f4",
         "executable": false
       },
       {
@@ -291,8 +291,8 @@
       },
       {
         "path": "backend/src/api.ts",
-        "bytes": 20522,
-        "sha256": "59676c4dfd275cb06a9a1e1e6dd10649b1242b9505c830274cedd3c597be7d54",
+        "bytes": 20896,
+        "sha256": "57ab251f7ac916ea8ab03cd5f0b393256623f233ee5c47d8fe92249b240a230e",
         "executable": false
       },
       {
@@ -303,8 +303,8 @@
       },
       {
         "path": "backend/src/http.ts",
-        "bytes": 12199,
-        "sha256": "f90722e1299078d04b6d18dd3599a2ca98eda705533d41667121241bfcfe5ac6",
+        "bytes": 12335,
+        "sha256": "361e1746150035b278a885206ae8bf25e23385bf40cbebf34dfb459a4e542e59",
         "executable": false
       },
       {
@@ -315,20 +315,20 @@
       },
       {
         "path": "backend/src/layout.ts",
-        "bytes": 5290,
-        "sha256": "a9bb7bf26c2b597f57173ee27abea74a02c13d17f8648dc26f3da37639f05c76",
+        "bytes": 5416,
+        "sha256": "12668c64878d05f4bcf11e25c6764e3c0d8f299c829dca73faa728b37a33e0db",
         "executable": false
       },
       {
         "path": "backend/src/models.ts",
-        "bytes": 2485,
-        "sha256": "9242461732e527ae1bc9de5cf9a63f23d34feac9289749fe5fa7f3d8bd850cd0",
+        "bytes": 3189,
+        "sha256": "ef830529e30de2ad6606ece6de8d9e187c075b0bead7cffbd9af71988928d426",
         "executable": false
       },
       {
         "path": "backend/src/profiles.ts",
-        "bytes": 4002,
-        "sha256": "68d33e6bfb6ab2905e0bd50888855dfb2b67fb0753c95f6cade16353c2186850",
+        "bytes": 4098,
+        "sha256": "41dbb45fc3eb3bc4b9114b627dddd1e443df11eea2b92e445012c716c393595e",
         "executable": false
       },
       {
@@ -339,20 +339,20 @@
       },
       {
         "path": "backend/src/supervisor.ts",
-        "bytes": 13062,
-        "sha256": "1f9d0f428ad68b6e46db7eac54d300cadbeec86a456d29fa8fd8300ed25775a7",
+        "bytes": 13101,
+        "sha256": "d245f1879b99613267eda522890e6332d9dcfa6ff2b4c943cfb5298a2b2a4e22",
         "executable": false
       },
       {
         "path": "frontend/optional-magpie.css",
-        "bytes": 13653,
-        "sha256": "793353c7cbba44e9245177b6569abb1afbfbab549696a5f129d3039fa6913aac",
+        "bytes": 7976,
+        "sha256": "26c2d6687ba21e33049556777bb17ab2b356907f03f9429d63fec5d352af473f",
         "executable": false
       },
       {
         "path": "frontend/optional-magpie.js",
-        "bytes": 50136,
-        "sha256": "ad12d685a558c28aa179dd72697bf0cff818c0fd5ada0aead4d986a56a2a9cb3",
+        "bytes": 18577,
+        "sha256": "7e5a22095f023067f6860f11ba93b1f2e8c8260810636ea820412232a00aacd8",
         "executable": false
       }
     ]
@@ -360,10 +360,10 @@
   "magpie@linux-x64": {
     "id": "magpie",
     "packageId": "xueness-magpie",
-    "version": "1.0.0",
-    "sha256": "e020fc9c67e91ddc8ca863a21dc1ae53f1336e25df843040b3000ddffb36e97f",
-    "bytes": 137129120,
-    "url": "https://raw.githubusercontent.com/xuediner-source/xueness-marketplace/main/packages/xueness-magpie-1.0.0-linux-x64-e020fc9c67e91ddc.json.gz",
+    "version": "1.1.0",
+    "sha256": "89a898090a83cb341d8cf92181bfa7a2f208d918d7ce732a187ddcdc6c381081",
+    "bytes": 137082084,
+    "url": "https://raw.githubusercontent.com/xuediner-source/xueness-marketplace/main/packages/xueness-magpie-1.1.0-linux-x64-89a898090a83cb34.json.gz",
     "files": [
       {
         "path": "backend/assets/LICENSE-magpie.txt",
@@ -385,8 +385,8 @@
       },
       {
         "path": "backend/manifest.json",
-        "bytes": 1773,
-        "sha256": "7622f7a27387fae4cb40bb1cb73b1722c55f4e71736260c55532b43b259e83e7",
+        "bytes": 2254,
+        "sha256": "78182a28a7568c6fd91f26cd46d027c3065e473835b38e3a4963e7446ac676f4",
         "executable": false
       },
       {
@@ -397,8 +397,8 @@
       },
       {
         "path": "backend/src/api.ts",
-        "bytes": 20522,
-        "sha256": "59676c4dfd275cb06a9a1e1e6dd10649b1242b9505c830274cedd3c597be7d54",
+        "bytes": 20896,
+        "sha256": "57ab251f7ac916ea8ab03cd5f0b393256623f233ee5c47d8fe92249b240a230e",
         "executable": false
       },
       {
@@ -409,8 +409,8 @@
       },
       {
         "path": "backend/src/http.ts",
-        "bytes": 12199,
-        "sha256": "f90722e1299078d04b6d18dd3599a2ca98eda705533d41667121241bfcfe5ac6",
+        "bytes": 12335,
+        "sha256": "361e1746150035b278a885206ae8bf25e23385bf40cbebf34dfb459a4e542e59",
         "executable": false
       },
       {
@@ -421,20 +421,20 @@
       },
       {
         "path": "backend/src/layout.ts",
-        "bytes": 5290,
-        "sha256": "a9bb7bf26c2b597f57173ee27abea74a02c13d17f8648dc26f3da37639f05c76",
+        "bytes": 5416,
+        "sha256": "12668c64878d05f4bcf11e25c6764e3c0d8f299c829dca73faa728b37a33e0db",
         "executable": false
       },
       {
         "path": "backend/src/models.ts",
-        "bytes": 2485,
-        "sha256": "9242461732e527ae1bc9de5cf9a63f23d34feac9289749fe5fa7f3d8bd850cd0",
+        "bytes": 3189,
+        "sha256": "ef830529e30de2ad6606ece6de8d9e187c075b0bead7cffbd9af71988928d426",
         "executable": false
       },
       {
         "path": "backend/src/profiles.ts",
-        "bytes": 4002,
-        "sha256": "68d33e6bfb6ab2905e0bd50888855dfb2b67fb0753c95f6cade16353c2186850",
+        "bytes": 4098,
+        "sha256": "41dbb45fc3eb3bc4b9114b627dddd1e443df11eea2b92e445012c716c393595e",
         "executable": false
       },
       {
@@ -445,20 +445,20 @@
       },
       {
         "path": "backend/src/supervisor.ts",
-        "bytes": 13062,
-        "sha256": "1f9d0f428ad68b6e46db7eac54d300cadbeec86a456d29fa8fd8300ed25775a7",
+        "bytes": 13101,
+        "sha256": "d245f1879b99613267eda522890e6332d9dcfa6ff2b4c943cfb5298a2b2a4e22",
         "executable": false
       },
       {
         "path": "frontend/optional-magpie.css",
-        "bytes": 13653,
-        "sha256": "793353c7cbba44e9245177b6569abb1afbfbab549696a5f129d3039fa6913aac",
+        "bytes": 7976,
+        "sha256": "26c2d6687ba21e33049556777bb17ab2b356907f03f9429d63fec5d352af473f",
         "executable": false
       },
       {
         "path": "frontend/optional-magpie.js",
-        "bytes": 50136,
-        "sha256": "ad12d685a558c28aa179dd72697bf0cff818c0fd5ada0aead4d986a56a2a9cb3",
+        "bytes": 18577,
+        "sha256": "7e5a22095f023067f6860f11ba93b1f2e8c8260810636ea820412232a00aacd8",
         "executable": false
       }
     ]
@@ -466,10 +466,10 @@
   "magpie@linux-arm64": {
     "id": "magpie",
     "packageId": "xueness-magpie",
-    "version": "1.0.0",
-    "sha256": "53af47283f653d4d2849ad9fee7a49ba1197fd9fbea77d0bc1c24b975f8045b9",
-    "bytes": 126271988,
-    "url": "https://raw.githubusercontent.com/xuediner-source/xueness-marketplace/main/packages/xueness-magpie-1.0.0-linux-arm64-53af47283f653d4d.json.gz",
+    "version": "1.1.0",
+    "sha256": "33b730e158a127706e76de7c4e5419b261fd96e0d7f61bae2cba083817921e6e",
+    "bytes": 126224952,
+    "url": "https://raw.githubusercontent.com/xuediner-source/xueness-marketplace/main/packages/xueness-magpie-1.1.0-linux-arm64-33b730e158a12770.json.gz",
     "files": [
       {
         "path": "backend/assets/LICENSE-magpie.txt",
@@ -491,8 +491,8 @@
       },
       {
         "path": "backend/manifest.json",
-        "bytes": 1773,
-        "sha256": "7622f7a27387fae4cb40bb1cb73b1722c55f4e71736260c55532b43b259e83e7",
+        "bytes": 2254,
+        "sha256": "78182a28a7568c6fd91f26cd46d027c3065e473835b38e3a4963e7446ac676f4",
         "executable": false
       },
       {
@@ -503,8 +503,8 @@
       },
       {
         "path": "backend/src/api.ts",
-        "bytes": 20522,
-        "sha256": "59676c4dfd275cb06a9a1e1e6dd10649b1242b9505c830274cedd3c597be7d54",
+        "bytes": 20896,
+        "sha256": "57ab251f7ac916ea8ab03cd5f0b393256623f233ee5c47d8fe92249b240a230e",
         "executable": false
       },
       {
@@ -515,8 +515,8 @@
       },
       {
         "path": "backend/src/http.ts",
-        "bytes": 12199,
-        "sha256": "f90722e1299078d04b6d18dd3599a2ca98eda705533d41667121241bfcfe5ac6",
+        "bytes": 12335,
+        "sha256": "361e1746150035b278a885206ae8bf25e23385bf40cbebf34dfb459a4e542e59",
         "executable": false
       },
       {
@@ -527,20 +527,20 @@
       },
       {
         "path": "backend/src/layout.ts",
-        "bytes": 5290,
-        "sha256": "a9bb7bf26c2b597f57173ee27abea74a02c13d17f8648dc26f3da37639f05c76",
+        "bytes": 5416,
+        "sha256": "12668c64878d05f4bcf11e25c6764e3c0d8f299c829dca73faa728b37a33e0db",
         "executable": false
       },
       {
         "path": "backend/src/models.ts",
-        "bytes": 2485,
-        "sha256": "9242461732e527ae1bc9de5cf9a63f23d34feac9289749fe5fa7f3d8bd850cd0",
+        "bytes": 3189,
+        "sha256": "ef830529e30de2ad6606ece6de8d9e187c075b0bead7cffbd9af71988928d426",
         "executable": false
       },
       {
         "path": "backend/src/profiles.ts",
-        "bytes": 4002,
-        "sha256": "68d33e6bfb6ab2905e0bd50888855dfb2b67fb0753c95f6cade16353c2186850",
+        "bytes": 4098,
+        "sha256": "41dbb45fc3eb3bc4b9114b627dddd1e443df11eea2b92e445012c716c393595e",
         "executable": false
       },
       {
@@ -551,20 +551,20 @@
       },
       {
         "path": "backend/src/supervisor.ts",
-        "bytes": 13062,
-        "sha256": "1f9d0f428ad68b6e46db7eac54d300cadbeec86a456d29fa8fd8300ed25775a7",
+        "bytes": 13101,
+        "sha256": "d245f1879b99613267eda522890e6332d9dcfa6ff2b4c943cfb5298a2b2a4e22",
         "executable": false
       },
       {
         "path": "frontend/optional-magpie.css",
-        "bytes": 13653,
-        "sha256": "793353c7cbba44e9245177b6569abb1afbfbab549696a5f129d3039fa6913aac",
+        "bytes": 7976,
+        "sha256": "26c2d6687ba21e33049556777bb17ab2b356907f03f9429d63fec5d352af473f",
         "executable": false
       },
       {
         "path": "frontend/optional-magpie.js",
-        "bytes": 50136,
-        "sha256": "ad12d685a558c28aa179dd72697bf0cff818c0fd5ada0aead4d986a56a2a9cb3",
+        "bytes": 18577,
+        "sha256": "7e5a22095f023067f6860f11ba93b1f2e8c8260810636ea820412232a00aacd8",
         "executable": false
       }
     ]
@@ -572,10 +572,10 @@
   "magpie@darwin-x64": {
     "id": "magpie",
     "packageId": "xueness-magpie",
-    "version": "1.0.0",
-    "sha256": "2e83ca1c540ee429724334b77c79353f1d161a9f2344e5f8339f5fc30e7a3ab6",
-    "bytes": 139353928,
-    "url": "https://raw.githubusercontent.com/xuediner-source/xueness-marketplace/main/packages/xueness-magpie-1.0.0-darwin-x64-2e83ca1c540ee429.json.gz",
+    "version": "1.1.0",
+    "sha256": "c28fea5e0b3ac1badf57859b725e285185ff65aab70e5fea317c8ed7d83a0e1b",
+    "bytes": 139306892,
+    "url": "https://raw.githubusercontent.com/xuediner-source/xueness-marketplace/main/packages/xueness-magpie-1.1.0-darwin-x64-c28fea5e0b3ac1ba.json.gz",
     "files": [
       {
         "path": "backend/assets/LICENSE-magpie.txt",
@@ -597,8 +597,8 @@
       },
       {
         "path": "backend/manifest.json",
-        "bytes": 1773,
-        "sha256": "7622f7a27387fae4cb40bb1cb73b1722c55f4e71736260c55532b43b259e83e7",
+        "bytes": 2254,
+        "sha256": "78182a28a7568c6fd91f26cd46d027c3065e473835b38e3a4963e7446ac676f4",
         "executable": false
       },
       {
@@ -609,8 +609,8 @@
       },
       {
         "path": "backend/src/api.ts",
-        "bytes": 20522,
-        "sha256": "59676c4dfd275cb06a9a1e1e6dd10649b1242b9505c830274cedd3c597be7d54",
+        "bytes": 20896,
+        "sha256": "57ab251f7ac916ea8ab03cd5f0b393256623f233ee5c47d8fe92249b240a230e",
         "executable": false
       },
       {
@@ -621,8 +621,8 @@
       },
       {
         "path": "backend/src/http.ts",
-        "bytes": 12199,
-        "sha256": "f90722e1299078d04b6d18dd3599a2ca98eda705533d41667121241bfcfe5ac6",
+        "bytes": 12335,
+        "sha256": "361e1746150035b278a885206ae8bf25e23385bf40cbebf34dfb459a4e542e59",
         "executable": false
       },
       {
@@ -633,20 +633,20 @@
       },
       {
         "path": "backend/src/layout.ts",
-        "bytes": 5290,
-        "sha256": "a9bb7bf26c2b597f57173ee27abea74a02c13d17f8648dc26f3da37639f05c76",
+        "bytes": 5416,
+        "sha256": "12668c64878d05f4bcf11e25c6764e3c0d8f299c829dca73faa728b37a33e0db",
         "executable": false
       },
       {
         "path": "backend/src/models.ts",
-        "bytes": 2485,
-        "sha256": "9242461732e527ae1bc9de5cf9a63f23d34feac9289749fe5fa7f3d8bd850cd0",
+        "bytes": 3189,
+        "sha256": "ef830529e30de2ad6606ece6de8d9e187c075b0bead7cffbd9af71988928d426",
         "executable": false
       },
       {
         "path": "backend/src/profiles.ts",
-        "bytes": 4002,
-        "sha256": "68d33e6bfb6ab2905e0bd50888855dfb2b67fb0753c95f6cade16353c2186850",
+        "bytes": 4098,
+        "sha256": "41dbb45fc3eb3bc4b9114b627dddd1e443df11eea2b92e445012c716c393595e",
         "executable": false
       },
       {
@@ -657,20 +657,20 @@
       },
       {
         "path": "backend/src/supervisor.ts",
-        "bytes": 13062,
-        "sha256": "1f9d0f428ad68b6e46db7eac54d300cadbeec86a456d29fa8fd8300ed25775a7",
+        "bytes": 13101,
+        "sha256": "d245f1879b99613267eda522890e6332d9dcfa6ff2b4c943cfb5298a2b2a4e22",
         "executable": false
       },
       {
         "path": "frontend/optional-magpie.css",
-        "bytes": 13653,
-        "sha256": "793353c7cbba44e9245177b6569abb1afbfbab549696a5f129d3039fa6913aac",
+        "bytes": 7976,
+        "sha256": "26c2d6687ba21e33049556777bb17ab2b356907f03f9429d63fec5d352af473f",
         "executable": false
       },
       {
         "path": "frontend/optional-magpie.js",
-        "bytes": 50136,
-        "sha256": "ad12d685a558c28aa179dd72697bf0cff818c0fd5ada0aead4d986a56a2a9cb3",
+        "bytes": 18577,
+        "sha256": "7e5a22095f023067f6860f11ba93b1f2e8c8260810636ea820412232a00aacd8",
         "executable": false
       }
     ]
@@ -678,10 +678,10 @@
   "magpie@darwin-arm64": {
     "id": "magpie",
     "packageId": "xueness-magpie",
-    "version": "1.0.0",
-    "sha256": "a7f5ba6e9ec18b1c9f2135b10b1dd0ab91ebbb6b16ccab052f22a39848a01a8e",
-    "bytes": 129482444,
-    "url": "https://raw.githubusercontent.com/xuediner-source/xueness-marketplace/main/packages/xueness-magpie-1.0.0-darwin-arm64-a7f5ba6e9ec18b1c.json.gz",
+    "version": "1.1.0",
+    "sha256": "2487eb78b4a2a5f143121efd1bd765c7dbcab4b66ad2a4b64d32a1146d802d0c",
+    "bytes": 129435408,
+    "url": "https://raw.githubusercontent.com/xuediner-source/xueness-marketplace/main/packages/xueness-magpie-1.1.0-darwin-arm64-2487eb78b4a2a5f1.json.gz",
     "files": [
       {
         "path": "backend/assets/LICENSE-magpie.txt",
@@ -703,8 +703,8 @@
       },
       {
         "path": "backend/manifest.json",
-        "bytes": 1773,
-        "sha256": "7622f7a27387fae4cb40bb1cb73b1722c55f4e71736260c55532b43b259e83e7",
+        "bytes": 2254,
+        "sha256": "78182a28a7568c6fd91f26cd46d027c3065e473835b38e3a4963e7446ac676f4",
         "executable": false
       },
       {
@@ -715,8 +715,8 @@
       },
       {
         "path": "backend/src/api.ts",
-        "bytes": 20522,
-        "sha256": "59676c4dfd275cb06a9a1e1e6dd10649b1242b9505c830274cedd3c597be7d54",
+        "bytes": 20896,
+        "sha256": "57ab251f7ac916ea8ab03cd5f0b393256623f233ee5c47d8fe92249b240a230e",
         "executable": false
       },
       {
@@ -727,8 +727,8 @@
       },
       {
         "path": "backend/src/http.ts",
-        "bytes": 12199,
-        "sha256": "f90722e1299078d04b6d18dd3599a2ca98eda705533d41667121241bfcfe5ac6",
+        "bytes": 12335,
+        "sha256": "361e1746150035b278a885206ae8bf25e23385bf40cbebf34dfb459a4e542e59",
         "executable": false
       },
       {
@@ -739,20 +739,20 @@
       },
       {
         "path": "backend/src/layout.ts",
-        "bytes": 5290,
-        "sha256": "a9bb7bf26c2b597f57173ee27abea74a02c13d17f8648dc26f3da37639f05c76",
+        "bytes": 5416,
+        "sha256": "12668c64878d05f4bcf11e25c6764e3c0d8f299c829dca73faa728b37a33e0db",
         "executable": false
       },
       {
         "path": "backend/src/models.ts",
-        "bytes": 2485,
-        "sha256": "9242461732e527ae1bc9de5cf9a63f23d34feac9289749fe5fa7f3d8bd850cd0",
+        "bytes": 3189,
+        "sha256": "ef830529e30de2ad6606ece6de8d9e187c075b0bead7cffbd9af71988928d426",
         "executable": false
       },
       {
         "path": "backend/src/profiles.ts",
-        "bytes": 4002,
-        "sha256": "68d33e6bfb6ab2905e0bd50888855dfb2b67fb0753c95f6cade16353c2186850",
+        "bytes": 4098,
+        "sha256": "41dbb45fc3eb3bc4b9114b627dddd1e443df11eea2b92e445012c716c393595e",
         "executable": false
       },
       {
@@ -763,20 +763,20 @@
       },
       {
         "path": "backend/src/supervisor.ts",
-        "bytes": 13062,
-        "sha256": "1f9d0f428ad68b6e46db7eac54d300cadbeec86a456d29fa8fd8300ed25775a7",
+        "bytes": 13101,
+        "sha256": "d245f1879b99613267eda522890e6332d9dcfa6ff2b4c943cfb5298a2b2a4e22",
         "executable": false
       },
       {
         "path": "frontend/optional-magpie.css",
-        "bytes": 13653,
-        "sha256": "793353c7cbba44e9245177b6569abb1afbfbab549696a5f129d3039fa6913aac",
+        "bytes": 7976,
+        "sha256": "26c2d6687ba21e33049556777bb17ab2b356907f03f9429d63fec5d352af473f",
         "executable": false
       },
       {
         "path": "frontend/optional-magpie.js",
-        "bytes": 50136,
-        "sha256": "ad12d685a558c28aa179dd72697bf0cff818c0fd5ada0aead4d986a56a2a9cb3",
+        "bytes": 18577,
+        "sha256": "7e5a22095f023067f6860f11ba93b1f2e8c8260810636ea820412232a00aacd8",
         "executable": false
       }
     ]

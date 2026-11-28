@@ -11,11 +11,14 @@ export type SwarmChannel = { name: string; topic: string; createdBy: string; arc
 export type SystemAttention = { id: string; kind: "quota" | "error" | "unanswered" | "idle"; member: string; seq?: number; text: string; detail?: string };
 export type DetailedEdge = { from: string; to: string; count: number; direct: number; viaAll: number };
 
+export type SwarmModelOption = { providerId: string; model: string | null; name?: string; source?: string };
+
 export type SwarmListMember = {
   name: string; role: SwarmRole; state: MemberState; turns: number; steps: number;
   summary?: string; error?: string; failureKind?: FailureKind | null;
   channels?: string[]; wakeMode?: WakeMode; posts?: number; unread?: number;
   lastPostSeq?: number; lastPostAt?: string | null; activity?: string;
+  addedBy?: string;
 };
 export type SwarmSummary = {
   id: string; title?: string; status: SwarmStatus; pauseReason: string; goal: string;
@@ -58,6 +61,24 @@ export const postToBoard = async (sid: string, id: string, text: string, to?: st
 
 export const stopSwarm = (sid: string, id: string, reason?: string) => post<unknown>(`${base(sid, id)}/stop`, reason ? { reason } : {});
 export const resumeSwarm = (sid: string, id: string) => post<{ swarm: SwarmDetail }>(`${base(sid, id)}/resume`, {});
+export const updateSwarmTitle = (sid: string, id: string, title: string) =>
+  post<{ swarm: SwarmDetail }>(`${base(sid, id)}/title`, { title });
+export const addSwarmMember = (
+  sid: string,
+  id: string,
+  body: {
+    name: string;
+    role?: "worker" | "verifier";
+    task?: string;
+    count?: number;
+    owns?: string[];
+    commands?: string[];
+    fork?: string;
+    model?: "inherit" | { provider_id: string; model?: string };
+  },
+) => post<{ swarm: SwarmDetail }>(`${base(sid, id)}/members`, body);
+export const listSwarmModels = async (sid: string, signal?: AbortSignal): Promise<SwarmModelOption[]> =>
+  (await get<{ models: SwarmModelOption[] }>(`${base(sid)}/models`, signal)).models ?? [];
 export const killMember = (sid: string, id: string, name: string, reason?: string) =>
   post<unknown>(`${base(sid, id)}/members/${encodeURIComponent(name)}/kill`, reason ? { reason } : {});
 export const switchMemberModel = (sid: string, id: string, name: string, model: "inherit" | { provider_id: string; model?: string }) =>

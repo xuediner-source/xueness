@@ -9,6 +9,7 @@ export * from "./diagnostic-wire.ts";
 export * from "./verification.ts";
 export * from "./default-selection.ts";
 export * from "./runtime.ts";
+export * from "./tool-markup.ts";
 export * from "./semantic.ts";
 export * from "./zcode-compact.ts";
 export * from "./zcode-compact-extension.ts";

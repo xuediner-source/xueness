@@ -1,9 +1,9 @@
 /** Official executable artifacts are pinned in the host, independently of market data. */
 import { randomUUID } from "node:crypto";
-import { chmodSync, closeSync, existsSync, lstatSync, mkdirSync, openSync, realpathSync, renameSync, rmSync, symlinkSync } from "node:fs";
+import { chmodSync, closeSync, existsSync, mkdirSync, openSync, renameSync, rmSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { gunzipSync } from "node:zlib";
-import { artifactHash, coreNodeModules, optionalArtifactByPackage, optionalInstalled, optionalPath, optionalRoot, type OptionalArtifact } from "@xueness/kernel";
+import { artifactHash, linkCoreDependencies, optionalArtifactByPackage, optionalInstalled, optionalPath, optionalRoot, type OptionalArtifact } from "@xueness/kernel";
 import { protectPrivateDirectory, protectPrivateFile, writeAll } from "@xueness/sessions";
 
 export type ArtifactDownload = (artifact: OptionalArtifact) => Promise<Buffer>;
@@ -53,10 +53,7 @@ export function storeOfficialArtifact(stateDir: string, artifact: OptionalArtifa
     return { entry, bytes };
   });
   const parent = privateDirectory(stateDir, "optional-plugins");
-  const dependencies = join(parent, "node_modules"), core = coreNodeModules();
-  if (existsSync(dependencies)) {
-    if (!lstatSync(dependencies).isSymbolicLink() || realpathSync.native(dependencies) !== core) throw new Error("optional dependency link is invalid");
-  } else symlinkSync(core, dependencies, process.platform === "win32" ? "junction" : "dir");
+  linkCoreDependencies(parent);
   const stageName = `.staging-${randomUUID()}`, stage = privateDirectory(parent, stageName);
   try {
     for (const { entry, bytes } of files) {

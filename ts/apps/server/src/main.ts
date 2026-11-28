@@ -5,7 +5,7 @@
  *   node apps/server/src/main.ts [--port 8137] [--host 127.0.0.1] [--state DIR] [--web-runs DIR]
  *        [--workspace-root DIR]... [--allow-real-provider] [--project-root DIR]
  */
-import { realpathSync, statSync } from "node:fs";
+import { existsSync, realpathSync, statSync } from "node:fs";
 import { flushCompileCache } from "node:module";
 import { homedir } from "node:os";
 import { dirname, join, resolve } from "node:path";
@@ -46,7 +46,8 @@ function workspaceRoot(parser: Parser, value: string): string {
 }
 
 export async function main(argv: readonly string[]): Promise<number> {
-  const projectDefault = resolve(join(here, "..", "..", "..", ".."));
+  // The checkout holding webapp/: four levels up from ts/apps/server/src, five from the build's ts/dist/apps/server/src.
+  const projectDefault = [4, 5].map((up) => resolve(here, ...Array<string>(up).fill(".."))).find((dir) => existsSync(join(dir, "webapp"))) ?? resolve(here, "..", "..", "..", "..");
   const parser = new Parser("xueness-web", "Xueness loopback-only Web UI");
   parser.add("--port", { type: "int", default: DEFAULT_PORT });
   parser.add("--host", { default: null, help: "bind interface (default 127.0.0.1; non-loopback needs XUENESS_ALLOW_REMOTE=1)" });
@@ -87,7 +88,9 @@ export async function main(argv: readonly string[]): Promise<number> {
       server.close();
       server.closeAllConnections();
       // Like `release_owned_processes`: terminals, browsers, MCP servers and workers stop with the server.
-      await api.close().catch(() => {});
+      // Plugin cleanup may wait on unref'd timers; keep the loop alive until it is done.
+      const hold = setInterval(() => {}, 1000);
+      try { await api.close().catch(() => {}); } finally { clearInterval(hold); }
       done(0);
     };
     process.on("SIGINT", () => void shutdown());

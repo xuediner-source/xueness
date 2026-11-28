@@ -3,7 +3,7 @@ const { join, resolve } = require('node:path');
 const { existsSync, mkdirSync, writeFileSync } = require('node:fs');
 const { Backend } = require('./backend.cjs');
 const { frontDoorCommand } = require('./front-door.cjs');
-const { isOwnedUrl, isExternalUrl, installPermissionPolicy } = require('./security.cjs');
+const { isOwnedUrl, isLoopbackSubframeUrl, isExternalUrl, installPermissionPolicy } = require('./security.cjs');
 const { getWindowChromeOptions, installWindowThemeSync } = require('./window-chrome.cjs');
 const { createDesktopBackground, handleSecondInstance } = require('./desktop-background.cjs');
 const { UpdateCoordinator } = require('./update-coordinator.cjs');
@@ -140,7 +140,9 @@ function attachWindowSecurity(target, origin) {
   target.webContents.on('will-navigate', (event, url) => {
     if (!isOwnedUrl(url, origin)) { event.preventDefault(); external(url); }
   });
-  target.webContents.on('will-redirect', (event, url) => { if (!isOwnedUrl(url, origin)) event.preventDefault(); });
+  target.webContents.on('will-redirect', (event, url) => {
+    if (!(event.isMainFrame === false ? isLoopbackSubframeUrl(url) : isOwnedUrl(url, origin))) event.preventDefault();
+  });
   target.webContents.setWindowOpenHandler(({ url }) => { external(url); return { action: 'deny' }; });
   target.webContents.on('will-attach-webview', event => event.preventDefault());
   target.webContents.on('will-prevent-unload', event => event.preventDefault());

@@ -32,6 +32,7 @@ import { commandRuleIssue, createSwarmMemberRunner } from "./swarm-members.ts";
 import { createExtensionsHttp, textPackageStore } from "@xueness/plugin-extensions";
 import { harnessImporter } from "@xueness/plugin-deepseek_harness";
 import { createBrowserHandoff } from "./browser-handoff.ts";
+import { currentWorker, shutdownBrowser } from "@xueness/plugin-browser";
 import { createComposerFeatures } from "./composer-features.ts";
 import { isLoopbackAddress } from "./loopback-url.ts";
 import { createHostServices } from "./host-services-http.ts";
@@ -105,7 +106,10 @@ export async function createApplicationApi(options: ApplicationApiOptions): Prom
   const media = new MediaArtifactStore(options.stateDir, locks);
   const applyGoal = (session: Session, text: string): void => { stageGoal(session, text, { enabled, replace: true, source: "composer" }); };
   const taskRegistry = new TaskRegistry();
-  const dynamicDriver = createDynamicWorkflowDriver({ stateDir: options.stateDir, store, enabled });
+  const dynamicDriver = createDynamicWorkflowDriver({
+    stateDir: options.stateDir, store, enabled,
+    resolveProvider: (providerId, model) => providers.resolve({ providerId, model, reasoningEffort: null }),
+  });
   const dynamicWorkflows = new DynamicWorkflowService({ stateDir: options.stateDir, enabled, driver: dynamicDriver, allowRealHost: () => options.allowReal === true,
     owner: async sid => {
       const session = await store.load(sid);
@@ -115,10 +119,23 @@ export async function createApplicationApi(options: ApplicationApiOptions): Prom
     }, answerActor: dynamicDriver.answer });
   const dynamicWorkflowApi = createDynamicWorkflowApi(dynamicWorkflows);
   const swarmActivityCache = new Map<string, { stamp: string; at: number; activity: string }>();
+  const listSwarmModels = () => providers.store.list().flatMap((p) => {
+    const pid = String(p.id);
+    const labelBase = typeof p.name === "string" && p.name ? p.name : pid;
+    const source = typeof p.provider === "string" ? p.provider : "saved";
+    const models = Array.isArray((p as Record<string, unknown>).models)
+      ? ((p as Record<string, unknown>).models as unknown[]).filter((m): m is string => typeof m === "string" && m.trim().length > 0)
+      : [];
+    if (models.length > 0) {
+      return models.map((m) => ({ providerId: pid, model: m, name: `${labelBase} · ${m}`, source }));
+    }
+    const single = typeof p.model === "string" && p.model ? p.model : null;
+    return [{ providerId: pid, model: single, name: single ? `${labelBase} · ${single}` : labelBase, source }];
+  });
   // Swarm members run only where real model calls are allowed; a member without its own model uses its conversation's.
   const swarms: SwarmService = new SwarmService({ stateDir: options.stateDir, enabled, settings: () => readSwarmSettings(options.stateDir),
     foldCase: process.platform === "win32", commandIssue: commandRuleIssue,
-    runner: options.allowReal === true ? createSwarmMemberRunner({ stateDir: options.stateDir, enabled, service: () => swarms, resolveProvider: async (choice, parentId) => {
+    runner: options.allowReal === true ? createSwarmMemberRunner({ stateDir: options.stateDir, enabled, service: () => swarms, listModels: listSwarmModels, resolveProvider: async (choice, parentId) => {
       const saved = ((await store.load(parentId)).model_selection ?? {}) as Record<string, unknown>;
       const text = (value: unknown): string | null => typeof value === "string" && value ? value : null;
       return agent.resolveProvider(choice ? { providerId: choice.providerId, model: choice.model, reasoningEffort: null } : { providerId: text(saved.provider_id), model: text(saved.model), reasoningEffort: text(saved.reasoning_effort) }, parentId) as never;
@@ -126,7 +143,7 @@ export async function createApplicationApi(options: ApplicationApiOptions): Prom
   swarms.recoverInterrupted();
   const workflowsAutomation = createWorkflowsAutomation({ projectRoot: options.projectRoot, projectDir, stateDir: options.stateDir, webRuns: options.webRuns, enabled, store, allowedRoots, allowReal: options.allowReal === true, env, ...(options.scheduler === false ? { scheduler: false } : {}) });
   const tavernRoleplay = createOptionalTavernRoleplay({ stateDir: options.stateDir, enabled, env: process.env });
-  const agent = createAgentService({ ...options.agent, extensions: () => [tavernRoleplay.afterViews], viewExtensions: () => [tavernRoleplay.beforeViews], store, stateDir: options.stateDir, configEnv: env, enabled, approvals, mediaStore: media, desktopComputerUse: !!options.desktopToken && !!options.desktopBridge, allowModelRequests: options.allowReal, taskRegistry, workflowLauncher: workflowsAutomation.launcher, dynamicWorkflows, swarms,
+  const agent = createAgentService({ ...options.agent, extensions: () => [tavernRoleplay.afterViews], viewExtensions: () => [tavernRoleplay.beforeViews], store, stateDir: options.stateDir, configEnv: env, enabled, approvals, mediaStore: media, desktopComputerUse: !!options.desktopToken && !!options.desktopBridge, allowModelRequests: options.allowReal, taskRegistry, workflowLauncher: workflowsAutomation.launcher, dynamicWorkflows, swarms, swarmModels: listSwarmModels,
     preparedRemote: integrations.preparedRemote,
     appendQueued: (session, item) => appendAcceptedQueuedTurn({ store, stateDir: options.stateDir, webRuns: options.webRuns, enabled, applyGoal, expandCommands }, session, item),
     resolveProvider(selection, sid) {
@@ -137,7 +154,7 @@ export async function createApplicationApi(options: ApplicationApiOptions): Prom
     } });
   const lifecycle: LifecycleOptions = { store, stateDir: options.stateDir, enabled, allowReal: options.allowReal === true,
     approvals, liveApprovals: agent.liveApprovals, running, activeContext, resolveProvider: agent.resolveProvider, createRunner: agent.createRunner, knownTools: agent.knownTools, tasks: (sid) => taskRegistry.list(sid),
-    supports: (session, request) => agent.supports(session, request), goalView: publicGoal, settings: () => loadSettings(options.stateDir), runQueue: (session, _policy, run) => run(session), checkRemote: integrations.checkRemote };
+    supports: (session, request) => agent.supports(session, request), goalView: publicGoal, presentation: (session) => tavernRoleplay.presentation(session as Record<string, unknown>), settings: () => loadSettings(options.stateDir), runQueue: (session, _policy, run) => run(session), checkRemote: integrations.checkRemote };
   const attachmentOptions = { store, stateDir: options.stateDir, webRuns: options.webRuns, projectDir, enabled,
     allowedRoots };
   const attachments = createAttachmentsApi(attachmentOptions);
@@ -149,7 +166,7 @@ export async function createApplicationApi(options: ApplicationApiOptions): Prom
     rememberWorkspace: (root) => workspaces.remember(root), expandCommands,
     applyGoal,
     featureApis: [attachments, runtime, dynamicWorkflowApi,
-      createSwarmSessionApi({ service: swarms, enabled, owner: async sid => { const session = await store.load(sid); await validateSessionWorkspace(attachmentOptions, session); return session; },
+      createSwarmSessionApi({ service: swarms, enabled, listModels: listSwarmModels, owner: async sid => { const session = await store.load(sid); await validateSessionWorkspace(attachmentOptions, session); return session; },
         journal: async (record, member) => member.sessionId ? (((await createSessionsStore(memberSessionsDirectory(options.stateDir, record.id), { enabled }).load(member.sessionId)).messages ?? []) as Record<string, unknown>[]).slice(-60).map(row => ({ role: row.role, content: typeof row.content === "string" ? row.content.slice(0, 2000) : "", tools: Array.isArray(row.tool_calls) ? row.tool_calls.map(call => String((call as { function?: { name?: unknown } }).function?.name ?? "")) : [] })) : [],
         activities: async (record) => {
           const mStore = createSessionsStore(memberSessionsDirectory(options.stateDir, record.id), { enabled });
@@ -240,6 +257,14 @@ export async function createApplicationApi(options: ApplicationApiOptions): Prom
   } });
   const hostServices = createHostServices({ stateDir: options.stateDir, enabled, store, allowedRoots, resolveAllowed: (value) => workspaces.resolveAllowed(value), taskRegistry, sessionsRunning: () => running.size > 0, ...(options.desktopBridge ? { desktopBridge: options.desktopBridge } : {}), ...(options.desktopToken ? { desktopToken: options.desktopToken } : {}), ...(options.webappDir ? { webappDir: options.webappDir } : {}) });
   const pluginManager = createPluginManager({ projectRoot: options.projectRoot, stateDir: options.stateDir, locks, enabled });
+  // A plugin switch has no hook: the side-panel browser worker and the terminals stop once their plugin is off.
+  const sweeper = setInterval(() => {
+    try {
+      if (!enabled("browser") && currentWorker(options.stateDir)) void shutdownBrowser(options.stateDir).catch(() => {});
+      hostServices.sweep();
+    } catch { /* plugin state unreadable: the next tick retries */ }
+  }, 1000);
+  sweeper.unref();
   const migratedOwns = (method: string, parts: readonly string[]): boolean => pluginManager.owns(method, parts) || hooksHttp.owns(method, parts) || skillsHttp.owns(method, parts) || mcpResources.owns(method, parts) || mcpOps.owns(method, parts) || elicitationHttp.owns(method, parts) || appsHttp.owns(method, parts) || subagentResources.owns(method, parts) || subagentTasks.owns(method, parts) || runtimeConfigApi.owns(method, parts) || shellHttp.owns(method, parts) || networkHttp.owns(method, parts) || swarmSettingsHttp.owns(method, parts) || toolJudgeHttp.owns(method, parts) || memoryHttp.owns(method, parts) || filesHttp.owns(method, parts) || extensionsHttp.owns(method, parts) || hostServices.owns(method, parts) || integrations.owns(method, parts) || workflowsAutomation.owns(method, parts);
   return {
     agent, store, enabled, dynamicWorkflows, memoryDreams, swarms,
@@ -278,6 +303,6 @@ export async function createApplicationApi(options: ApplicationApiOptions): Prom
       if (providerResult !== null) return providerResult;
       return sessions.dispatch(method, parts, query, data, request);
     },
-    async close() { await swarms.close(); hostServices.close(); await integrations.close(); await memoryDreams.close(); oceanDreams.close(); await dynamicWorkflows.close(); await agent.dispose(); await workflowsAutomation.close(); await locks.close(); },
+    async close() { clearInterval(sweeper); await swarms.close(); hostServices.close(); await shutdownBrowser(options.stateDir).catch(() => {}); await integrations.close(); await memoryDreams.close(); oceanDreams.close(); await dynamicWorkflows.close(); await agent.dispose(); await workflowsAutomation.close(); await locks.close(); },
   };
 }

@@ -43,7 +43,9 @@ export function createGitApi(options: GitApiOptions) {
         let session: Row;
         try { session = await options.store.load(sid); } catch (e) { if (turn && (isPyOSError(e) || isPyValueError(e))) throw new GitError(404, "session not found"); throw e; }
         const root = String(session.root);
-        if (method === "GET") return [200, turn ? { session: sid, repository: await repository(root), turns: checkpointRecords(session).map((r) => Object.fromEntries(["turn", "checkpointId", "hash", "message", "tool", "createdAt"].map((k) => [k, r[k] ?? null]))) } : { checkpoints: await listCheckpoints(root) }];
+        // Like status/diff/log: a workspace that is not a repository is 404 with the same text.
+        if (method === "GET" && !turn && !await repository(root)) throw new GitError(404, "该工作区不是 git 仓库");
+        if (method === "GET") return [200, turn ?{ session: sid, repository: await repository(root), turns: checkpointRecords(session).map((r) => Object.fromEntries(["turn", "checkpointId", "hash", "message", "tool", "createdAt"].map((k) => [k, r[k] ?? null]))) } : { checkpoints: await listCheckpoints(root) }];
         if (turn) {
           if (body.confirmed !== true) throw new GitError(400, "review and confirm this rewind");
           if (!await repository(root)) throw new GitError(404, "该工作区不是 git 仓库");

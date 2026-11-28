@@ -47,6 +47,15 @@ function readSettings(stateDir: string): { autoDownload: boolean } {
   } catch (error) { return { autoDownload: (error as NodeJS.ErrnoException).code !== "ENOENT" ? false : true }; }
 }
 
+/**
+ * What the desktop host reports to Electron as `update-policy`: updates run only
+ * while the updates and desktop plugins are effective.
+ */
+export function updatePolicy(stateDir: string, enabled: (id: string) => boolean): { enabled: boolean; autoDownload: boolean } {
+  const on = enabled("updates") && enabled("desktop");
+  return { enabled: on, autoDownload: on && readSettings(stateDir).autoDownload };
+}
+
 function writeSettings(stateDir: string, autoDownload: boolean): void {
   const path = join(stateDir, "updates-settings.json");
   if (isLink(stateDir) || isLink(path)) throw Object.assign(new Error("link"), { name: "ValueError" });

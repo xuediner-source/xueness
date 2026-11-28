@@ -19,7 +19,24 @@ export type ZCodeConversationSelection = {
   overLimit: boolean;
 };
 
+/** A speaker in a chat a plugin presents; the picture is read from the plugin's own API. */
+export type ConversationSpeaker = { name: string; avatarUrl: string | null };
+/** How a plugin-owned chat presents itself (sessions `presentation`, e.g. Tavern roleplay). */
+export type ConversationPresentation = {
+  plugin: string; assistant: ConversationSpeaker; user: ConversationSpeaker | null;
+  opening: { text: string; index: number; total: number } | null; panel: string | null;
+  /** A chat-style session: the latest reply has versions, replies can be edited, history cut. */
+  chat: boolean;
+};
+/** Versions of the latest reply (sessions `reply_versions`). */
+export type ReplyVersionsInfo = { messageIndex: number; count: number; position: number };
+export type ReplyAction = { kind: 'regenerate' } | { kind: 'select'; version: number } | { kind: 'edit'; text: string };
+
 export type ZCodeConversationProps = {
+  presentation?: ConversationPresentation | null;
+  replyVersions?: ReplyVersionsInfo | null;
+  onReplyAction?(action: ReplyAction, row: Extract<TimelineRow, { kind: 'assistant' }>): Promise<boolean>;
+  onRewind?(row: Extract<TimelineRow, { kind: 'user' }>): Promise<boolean>;
   toolActivity?: unknown;
   currentStreamId?: string;
   currentTurnId?: string;

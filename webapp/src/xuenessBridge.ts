@@ -1,4 +1,3 @@
-import { readJsonResponse } from "./xuenessApi";
 import { isPermissionMode, type PermissionMode } from "./plugins/sessions/permissionModes";
 
 /** 后端 session_events() 派生的只读事件尾；payload 都是截断摘要，不含文件正文。 */
@@ -61,9 +60,61 @@ export function setRunChoices(choices: RunChoices): void {
 }
 export function getRunChoices(): RunChoices { return { ...runChoices }; }
 
-async function get<T>(path: string, signal?: AbortSignal): Promise<T> {
+/**
+ * 统一解析 JSON 响应。反向代理/网关在后端不可用时常返回 HTML 或空体（502/504），
+ * 直接 response.json() 会抛出难懂的 SyntaxError；这里改为给出 HTTP 状态码。
+ * 读取被中止（AbortError）时照常向上抛出。
+ */
+export async function readJsonResponse<T>(response: Response): Promise<T> {
+  let payload: unknown;
+  let parsed = true;
+  try {
+    payload = await response.json();
+  } catch (error) {
+    if (error instanceof Error && error.name === "AbortError") throw error;
+    parsed = false;
+  }
+  if (!response.ok) {
+    const detail = (payload as { error?: unknown } | null | undefined)?.error;
+    throw new Error(typeof detail === "string" && detail ? detail : `HTTP ${response.status}`);
+  }
+  if (!parsed) throw new Error("invalid JSON response");
+  return payload as T;
+}
+
+export async function get<T>(path: string, signal?: AbortSignal): Promise<T> {
   const response = await fetch(path, { credentials: "same-origin", cache: "no-store", ...(signal ? { signal } : {}) });
   return readJsonResponse<T>(response);
+}
+
+/** 写操作统一取 CSRF token 后再发送（GET 因契约不同分开处理）。 */
+async function send<T>(method: "POST" | "PUT" | "PATCH" | "DELETE", path: string, body?: object, signal?: AbortSignal): Promise<T> {
+  const token = await get<{ csrfToken: string }>("/api/csrf", signal);
+  signal?.throwIfAborted();
+  const response = await fetch(path, {
+    method,
+    credentials: "same-origin",
+    headers: { "Content-Type": "application/json", "X-CSRF-Token": token.csrfToken },
+    body: body === undefined ? undefined : JSON.stringify(body),
+    ...(signal ? { signal } : {}),
+  });
+  return readJsonResponse<T>(response);
+}
+
+export async function post<T>(path: string, body: object, signal?: AbortSignal): Promise<T> {
+  return send<T>("POST", path, body, signal);
+}
+
+export async function put<T>(path: string, body: object, signal?: AbortSignal): Promise<T> {
+  return send<T>("PUT", path, body, signal);
+}
+
+export async function patch<T>(path: string, body: object, signal?: AbortSignal): Promise<T> {
+  return send<T>("PATCH", path, body, signal);
+}
+
+export async function del<T>(path: string, signal?: AbortSignal): Promise<T> {
+  return send<T>("DELETE", path, undefined, signal);
 }
 
 /**

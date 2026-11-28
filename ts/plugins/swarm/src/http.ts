@@ -12,7 +12,8 @@
  * Settings (`createSwarmSettingsHttp`): GET|POST /api/swarm/settings.
  */
 import { isDict } from "@xueness/contracts";
-import { normalizeChannelName, normalizeModel, PlanError } from "./plan.ts";
+import { normalizeChannelName, normalizeModel, PlanError, type Role } from "./plan.ts";
+import type { SwarmModelOption } from "./roster.ts";
 import { SwarmServiceError, type SwarmService } from "./service.ts";
 import { readSwarmSettings, SwarmSettingsError, writeSwarmSettings } from "./settings.ts";
 import { SWARM_ID, type MemberRecord, type SwarmRecord } from "./store.ts";
@@ -22,8 +23,8 @@ type Row = Record<string, unknown>;
 type Reply = [number, unknown];
 const BASE = "/api/sessions/:id/swarms";
 export const SWARM_SESSION_ROUTES = [
-  `GET ${BASE}`, `GET ${BASE}/:swarm`, `GET ${BASE}/:swarm/board`,
-  ...["post", "stop", "resume"].map((op) => `POST ${BASE}/:swarm/${op}`),
+  `GET ${BASE}`, `GET ${BASE}/models`, `GET ${BASE}/:swarm`, `GET ${BASE}/:swarm/board`,
+  ...["post", "stop", "resume", "title", "members"].map((op) => `POST ${BASE}/:swarm/${op}`),
   ...["kill", "model", "reassign"].map((op) => `POST ${BASE}/:swarm/members/:name/${op}`),
   `GET ${BASE}/:swarm/members/:name/journal`,
 ] as const;
@@ -38,6 +39,8 @@ export interface SwarmSessionApiOptions {
   journal(record: SwarmRecord, member: MemberRecord): Promise<Row[]>;
   /** Live transcript activity summary per member name. */
   activities?(record: SwarmRecord): Promise<Record<string, { activity: string }>>;
+  /** Configured host models (saved profiles + Magpie gateway models) for the Swarm pane selector. */
+  listModels?(): readonly SwarmModelOption[];
 }
 
 const disabled = (): Reply => [403, { error: "plugin disabled or dependency unavailable: swarm", plugin: "swarm" }];
@@ -55,6 +58,9 @@ export function createSwarmSessionApi(options: SwarmSessionApiOptions) {
         try { await options.owner(sid); } catch { return [404, { error: "conversation not found" }]; }
         const service = options.service;
         if (parts.length === 4) return method === "GET" ? [200, { swarms: service.list(sid).map((record) => swarmSummary(record, service.running(record.id), service.posts(record.id))) }] : [405, { error: "method not allowed" }];
+        if (parts.length === 5 && id === "models") {
+          return method === "GET" ? [200, { models: options.listModels?.() ?? [] }] : [405, { error: "method not allowed" }];
+        }
         if (!id || !SWARM_ID.test(id)) return [404, { error: "swarm not found" }];
         const record = service.get(id);
         if (record.parentSessionId !== sid) return [404, { error: "swarm not found" }];
@@ -81,7 +87,9 @@ export function createSwarmSessionApi(options: SwarmSessionApiOptions) {
         if (parts.length === 6 && op === "board" && method === "GET") {
           const after = query.after === undefined ? 0 : Number(query.after);
           if (!Number.isSafeInteger(after) || after < 0) return [400, { error: "after must be a non-negative integer" }];
-          const chanFilter = typeof query.channel === "string" && query.channel.trim() ? normalizeChannelName(query.channel, "channel") : null;
+          // Query values arrive as string arrays (`?channel=x` is `["x"]`).
+          const channel: unknown = Array.isArray(query.channel) ? query.channel[0] : query.channel;
+          const chanFilter = typeof channel === "string" && channel.trim() ? normalizeChannelName(channel, "channel") : null;
           let posts = service.posts(id, after);
           if (chanFilter) posts = posts.filter((p) => (p.channel ?? "main") === chanFilter);
           return [200, { posts, status: record.status, running: service.running(id) }];
@@ -90,6 +98,24 @@ export function createSwarmSessionApi(options: SwarmSessionApiOptions) {
           if (op === "post") return [200, { post: service.post(id, "user", strings(body.to), typeof body.text === "string" ? body.text : "", "user", typeof body.channel === "string" && body.channel.trim() ? body.channel : "main") }];
           if (op === "stop") return [200, { swarm: service.stop(id, typeof body.reason === "string" && body.reason.trim() ? body.reason.trim().slice(0, 300) : "stopped by the user") }];
           if (op === "resume") return [200, { swarm: service.resume(id) }];
+          if (op === "title") return [200, { swarm: service.setTitle(id, typeof body.title === "string" ? body.title : "", "user") }];
+          if (op === "members") {
+            const added = service.addMember(id, {
+              name: typeof body.name === "string" ? body.name : "",
+              role: body.role === "verifier" ? ("verifier" as Role) : ("worker" as Role),
+              task: typeof body.task === "string" ? body.task : undefined,
+              tasks: Array.isArray(body.tasks) ? strings(body.tasks) : undefined,
+              count: typeof body.count === "number" ? body.count : undefined,
+              n: typeof body.n === "number" ? body.n : undefined,
+              owns: Array.isArray(body.owns) ? body.owns : undefined,
+              commands: Array.isArray(body.commands) ? strings(body.commands) : undefined,
+              groups: Array.isArray(body.groups) ? strings(body.groups) : undefined,
+              channels: Array.isArray(body.channels) ? strings(body.channels) : undefined,
+              fork: typeof body.fork === "string" ? body.fork : undefined,
+              model: body.model,
+            }, "user");
+            return [200, { swarm: added }];
+          }
         }
         if (parts.length === 8 && op === "members") {
           const member = record.members.find((item) => item.name === parts[6]);

@@ -10,7 +10,7 @@
   "httpFamilies": ["tools"],
   "capabilities": { "fs": { "read": ["state"], "write": ["state"] } },
   "toolEvents": {
-    "events": ["before_tool_execution", "before_tool_effect", "after_tool_execution"],
+    "events": ["before_tool_effect", "after_tool_execution"],
     "priority": 100
   },
   "features": [

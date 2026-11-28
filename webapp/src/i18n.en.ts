@@ -3615,6 +3615,35 @@ Object.assign(messages, {
   "满足": "Met",
   "未满足": "Not met",
   "待评定": "Not graded",
+  "检测到模型自带工具调用标记（如 <tool_call>）": "Native model tool-call markup detected (e.g. <tool_call>)",
+  "当前模型按原生格式输出工具调用而不是 JSON 信封；建议将此配置的「工具调用」切换为「原生工具调用」后保存并重测。": "This model outputs native tool-call markup instead of a JSON envelope. Switch Tool calling to Native tool calling for this profile, then save and retest.",
+  "改用原生工具调用": "Switch to native tool calling",
+  "统计已保存会话里的前置检查拦截与判定计数；前置检查不依赖判定模型。": "Counts preflight blocks and judge verdicts across saved sessions; preflight does not require a judge model.",
+  "次前置检查拦截": "preflight blocks",
+  "零模型前置检查默认开启，会在审批与执行前拦下无效参数、缺失路径、过期读取、PowerShell 不兼容语法、缺席命令及连续重复失败。可选的判定模型还可继续审阅高风险工具调用，默认只给出建议；它不是权限闸门，判定慢或不可用时调用照常执行。": "Model-free preflight checks are on by default and catch invalid arguments, missing paths, stale reads, incompatible PowerShell syntax, missing commands, and repeated identical failures before approval or execution. An optional judge model can also review high-risk tool calls and advises by default; it is not a permission gate, so calls still run when slow or unavailable.",
+  "启用零模型前置检查（无需选择判定模型，执行前快速拦截明显错误）": "Enable model-free preflight checks (no judge model required; catch obvious errors before execution)",
+  "设置已保存。判定模型已关闭，零模型前置检查保持开启。": "Settings saved. Judge model disabled; model-free preflight checks remain on.",
+  "设置已保存。判定与前置检查均已关闭。": "Settings saved. Both judge model and preflight checks are disabled.",
+  "前置检查已拦下": "Blocked by preflight",
+  "检查来源：零模型前置检查": "Source: model-free preflight",
+  "正在加载对话…": "Loading conversation…",
+});
+// Chat-style sessions a plugin presents (Tavern roleplay): opening line, reply versions, editing, rewind.
+Object.assign(messages, {
+  "开场白": "Greeting",
+  "开场白 {0}/{1}，可在酒馆的存档设置里更换": "Greeting {0}/{1}; change it in the Tavern's playthrough settings",
+  "操作没有完成，请刷新后重试。": "That didn't go through; refresh and try again.",
+  "回复版本": "Reply versions", "上一个版本": "Previous version", "下一个版本": "Next version",
+  "重新生成（保留当前版本）": "Regenerate (keeps this version)", "编辑回复": "Edit reply", "编辑回复（存为新版本）": "Edit reply (saved as a new version)",
+  "保存后原回复会作为另一个版本保留": "The original reply stays as another version", "保存为新版本": "Save as new version",
+  "从这里删除": "Delete from here", "删除这条消息及之后的对话": "Delete this message and everything after it", "删除这条及之后的消息？": "Delete this and later messages?",
+  "还没有可用的模型。请先在「供应商」里添加一个模型并设为默认，再开始对话。": "No model is available yet. Add a model under Providers and make it the default, then start the chat.",
+  // Model settings: models a plugin supplies (Magpie), read-only.
+  "插件提供": "From a plugin", "由 {0} 提供": "From {0}", "上下文 {0}K": "{0}K context", "在 {0} 中管理": "Manage in {0}",
+  "这个模型经 Magpie 本机网关接入：供应商、密钥、登录账号和路由组都在 Magpie 里管理；第一次使用时会自动启动 Magpie。": "This model comes through the Magpie local gateway: providers, keys, sign-in accounts and routing groups are managed in Magpie, which starts on first use.",
+  "这个模型由 {0} 提供，在那里修改。": "This model comes from {0}; change it there.",
+  "此模型经网关固定使用标准档位。": "This model uses the standard runtime profile through its gateway.",
+  "已将 {0} 设为默认模型": "Set {0} as the default model",
 });
 
 }

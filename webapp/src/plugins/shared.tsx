@@ -1,5 +1,6 @@
-import React from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { t as tr } from "../i18n";
+import { listPlugins, setPluginEnabled, type XuenessPlugin } from "../xuenessApi";
 import { isImeComposingEvent, isModKeyPressed } from "../xuenessShortcutDisplay";
 
 export function evaluatePendingQuestionKey(
@@ -130,3 +131,73 @@ export function shouldDismissModalOnEscape(event: {
 const STATUS_LABELS: Record<string, string> = { created: '待执行', pending: '等待中', queued: '已排队', running: '运行中', pausing: '正在暂停', paused: '已暂停', stopping: '正在取消', cancelled: '已取消', completed: '已完成', failed: '失败', interrupted: '已中断', blocked: '受阻', closed: '已关闭' };
 export function OperationStatus({ status }: { status: string }) { return <span className="xn-operation-status" data-status={status}><span aria-hidden="true" />{tr(STATUS_LABELS[status] || status)}</span>; }
 export function OperationHeader({ icon, title, description }: { icon: React.ReactNode; title: string; description: string }) { return <header className="xn-operation-heading"><span className="xn-operation-heading__icon" aria-hidden="true">{icon}</span><div><h2>{title}</h2><p>{description}</p></div></header>; }
+
+export function FeatureUnavailable({ feature, onManage }: { feature: string; onManage: () => void }) {
+  return (
+    <div className="xn-feature-unavailable" role="status">
+      <h2>{tr("模块不可用：")}{feature}</h2>
+      <p>{tr("此模块已停用或依赖未启用。可在插件管理中调整。")}</p>
+      <button type="button" onClick={onManage}>{tr("打开插件管理")}</button>
+    </div>
+  );
+}
+
+/** The server's plugin catalog: every feature asks `isPluginEffective` before it mounts or requests. */
+export function usePluginCatalog() {
+  const [pluginCatalog, setPluginCatalog] = useState<XuenessPlugin[]>([]);
+  const [pluginCatalogLoading, setPluginCatalogLoading] = useState(true);
+  const [pluginCatalogReady, setPluginCatalogReady] = useState(false);
+  const [pluginCatalogError, setPluginCatalogError] = useState("");
+  const isPluginEffective = useCallback(
+    (id: string) => pluginCatalogReady && pluginCatalog.some((plugin) => plugin.id === id && plugin.effective),
+    [pluginCatalog, pluginCatalogReady],
+  );
+  // In-flight and queued reads must consult the current catalog, not an old closure.
+  const pluginEffectiveRef = useRef(isPluginEffective);
+  pluginEffectiveRef.current = isPluginEffective;
+  const isSessionsEffective = useCallback(() => pluginEffectiveRef.current("sessions"), []);
+  const mountedRef = useRef(true);
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => { mountedRef.current = false; };
+  }, []);
+
+  const refreshPluginCatalog = useCallback(async () => {
+    setPluginCatalogLoading(true);
+    try {
+      const result = await listPlugins();
+      if (!mountedRef.current) return;
+      setPluginCatalog(result.plugins);
+      setPluginCatalogError("");
+    } catch (reason) {
+      if (!mountedRef.current) return;
+      setPluginCatalog([]);
+      setPluginCatalogError(reason instanceof Error ? reason.message : String(reason));
+    } finally {
+      if (mountedRef.current) {
+        setPluginCatalogReady(true);
+        setPluginCatalogLoading(false);
+      }
+    }
+  }, []);
+  const togglePlugin = useCallback(async (id: string, enabled: boolean) => {
+    try {
+      const result = await setPluginEnabled(id, enabled);
+      if (!mountedRef.current) return;
+      setPluginCatalog(result.plugins);
+      setPluginCatalogError("");
+      setPluginCatalogReady(true);
+    } catch (reason) {
+      if (mountedRef.current) {
+        await refreshPluginCatalog();
+      }
+      throw reason;
+    }
+  }, [refreshPluginCatalog]);
+
+  useEffect(() => {
+    void refreshPluginCatalog();
+  }, [refreshPluginCatalog]);
+
+  return { pluginCatalog, pluginCatalogLoading, pluginCatalogReady, pluginCatalogError, isPluginEffective, pluginEffectiveRef, isSessionsEffective, refreshPluginCatalog, togglePlugin };
+}

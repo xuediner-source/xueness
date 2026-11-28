@@ -1,7 +1,9 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react";
 import type { RunChoices } from "../../xuenessBridge";
 import type { PermissionMode } from "./permissionModes";
-import { FullAccessConfirmationDialog } from "./FullAccessConfirmationDialog";
+
+const FullAccessConfirmationDialog = lazy(() =>
+  import("./FullAccessConfirmationDialog").then(module => ({ default: module.FullAccessConfirmationDialog })));
 
 /** A saved session's permission is not a confirmation for a different session. */
 export function submissionNeedsFullAccessConfirmation(choices: RunChoices, savedMode?: PermissionMode): boolean {
@@ -54,7 +56,7 @@ export function useRunPermissionConfirmation(scope: string, enabled: boolean) {
 
   return {
     ensure,
-    dialog: <FullAccessConfirmationDialog open={open} returnFocusTo={opener.current}
-      onCancel={() => settle(false)} onConfirm={() => settle(true)} />,
+    dialog: open ? <Suspense fallback={null}><FullAccessConfirmationDialog open={open} returnFocusTo={opener.current}
+      onCancel={() => settle(false)} onConfirm={() => settle(true)} /></Suspense> : null,
   };
 }

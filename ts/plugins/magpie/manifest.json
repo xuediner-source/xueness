@@ -3,7 +3,7 @@
   "id": "magpie",
   "name": "Magpie 模型网关",
   "description": "可选下载的 magpie 本机模型网关（yetone/magpie 原版程序，MIT）。统一管理 API 密钥、订阅登录账号与路由组，查看额度与用量，并在会话中使用它的模型。取代订阅中心与 WorkBuddy 号池。",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "defaultEnabled": false,
   "installPackage": "xueness-magpie",
   "dependencies": ["providers"],
@@ -16,10 +16,11 @@
   "dataFiles": ["assets/LICENSE-magpie.txt"],
   "features": [
     {"id": "magpie.gateway", "name": "magpie 原版网关：按需启动、私有数据目录、禁用即停", "nameEn": "Original magpie gateway: on-demand start, private data folder, stops when disabled"},
-    {"id": "magpie.providers", "name": "API 密钥供应商与密钥池", "nameEn": "API-key providers and key pools"},
-    {"id": "magpie.accounts", "name": "订阅账号登录、本机登录发现与额度窗口", "nameEn": "Subscription sign-ins, local sign-in discovery and quota windows"},
-    {"id": "magpie.routing", "name": "路由组：顺序、轮换与额度感知切换", "nameEn": "Routing groups: order, rotation and quota-aware failover"},
-    {"id": "magpie.models", "name": "magpie 模型与路由组进入会话模型选择", "nameEn": "magpie models and routing groups in conversation model selection"},
-    {"id": "magpie.usage", "name": "用量与费用统计", "nameEn": "Usage and cost statistics"}
+    {"id": "magpie.providers", "name": "API 密钥供应商与密钥池（在 magpie 控制台中管理）", "nameEn": "API-key providers and key pools (managed in the magpie console)"},
+    {"id": "magpie.accounts", "name": "订阅账号登录、本机登录发现与额度窗口（在 magpie 控制台中）", "nameEn": "Subscription sign-ins, local sign-in discovery and quota windows (in the magpie console)"},
+    {"id": "magpie.routing", "name": "路由组：顺序、轮换与额度感知切换（在 magpie 控制台中）", "nameEn": "Routing groups: order, rotation and quota-aware failover (in the magpie console)"},
+    {"id": "magpie.models", "name": "magpie 模型与路由组进入会话模型选择和模型设置", "nameEn": "magpie models and routing groups in conversation model selection and Model settings"},
+    {"id": "magpie.usage", "name": "用量与费用统计（在 magpie 控制台中）", "nameEn": "Usage and cost statistics (in the magpie console)"},
+    {"id": "magpie.console", "name": "magpie 原版控制台内嵌在 Xueness 面板中，不另做一套管理界面", "nameEn": "magpie's own console embedded in the Xueness panel instead of a separate management UI"}
   ]
 }

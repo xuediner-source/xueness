@@ -1,7 +1,7 @@
 /** Allowlisted compatibility evidence; arbitrary provider text is never persisted. */
 import { createHash } from "node:crypto";
 import { isDict, pyJsonDumps, pySlice } from "@xueness/contracts";
-import { validateCompatibility } from "@xueness/providers";
+import { MARKUP_DIALECTS, validateCompatibility } from "@xueness/providers";
 import type { Dict } from "./profile-store.ts";
 
 export const TEST_MODES = new Set(["conversation", "native_tool_call", "json_tool_call", "stream", "tool_roundtrip", "json_tool_roundtrip"]);
@@ -12,6 +12,7 @@ const SAFE_ERRORS = new Set([
   "The provider returned an unexpected function name or shape.", "The provider returned invalid function arguments.",
   "The provider returned arguments outside the required {a: 3, b: 4} schema.",
   "The provider returned no bounded JSON tool-call response.", "The provider did not return strict JSON.",
+  "The model emitted native tool-call markup instead of JSON. Switch this profile's tool calling to Native.",
   "The provider returned JSON outside the required function name and argument schema.",
   "The endpoint did not return an SSE event stream.", "The SSE stream contained no assistant text delta.",
   "The provider did not echo the deterministic tool-result receipt.",
@@ -58,6 +59,8 @@ export function publicCheck(mode: unknown, value: unknown): Dict | null {
     for (const f of ["requestCount", "deltaCount", "deltaCharacters"]) if (int(d[f], 0, 100000)) clean[f] = d[f];
     if (int(d.httpStatus, 100, 599)) clean.httpStatus = d.httpStatus;
     if (typeof d.failedStep === "string" && STEPS.has(d.failedStep)) clean.failedStep = d.failedStep;
+    if (typeof d.detectedMarkupDialect === "string" && MARKUP_DIALECTS.has(d.detectedMarkupDialect as never)) clean.detectedMarkupDialect = d.detectedMarkupDialect;
+    if (d.recommendedToolCalling === "native") clean.recommendedToolCalling = "native";
     if (Array.isArray(d.requests)) clean.requests = d.requests.slice(0, 3).filter((r) => isDict(r) && typeof r.step === "string" && STEPS.has(r.step) && Array.isArray(r.fields)).map((r) => ({ step: r.step.slice(0, 80), fields: r.fields.slice(0, 32).filter((f: unknown) => typeof f === "string" && /^[a-z][a-z0-9_]{0,79}$/.test(f)) }));
     if (Object.keys(clean).length) safe.details = clean;
   }

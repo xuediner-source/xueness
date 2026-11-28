@@ -76,9 +76,10 @@ export function runtimeProfileFromSession(value: unknown): RuntimeProfile | unde
 }
 
 export function canUseRuntimeProfile(
-  model: Pick<ComposerModel, "toolCalling"> | undefined,
+  model: Pick<ComposerModel, "toolCalling" | "supplierId"> | undefined,
   requested: RuntimeProfile,
 ): boolean {
+  if (requested === "lightweight" && model?.supplierId?.startsWith("subscription:")) return false;
   return requested !== "standard" || model?.toolCalling !== "json";
 }
 export type ComposerCatalog = {

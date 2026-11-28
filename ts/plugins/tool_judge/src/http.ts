@@ -57,7 +57,9 @@ export function createToolJudgeHttp(options: ToolJudgeHttpOptions): ToolJudgeHtt
       const verb = (method || "").toUpperCase();
       if (parts[2] === "stats") {
         if (verb !== "GET") return [405, { error: "仅支持 GET。" }];
-        const range = typeof query.range === "string" && Object.hasOwn(RANGES, query.range) ? query.range : "30d";
+        // Query values arrive as string arrays (`?range=7d` is `["7d"]`).
+        const requested: unknown = Array.isArray(query.range) ? query.range[0] : query.range;
+        const range = typeof requested === "string" && Object.hasOwn(RANGES, requested) ? requested : "30d";
         const days = RANGES[range] ?? null;
         const now = options.now?.() ?? Date.now() / 1000;
         return [200, { range, stats: aggregateJudgeStats(options.sessions(), days === null ? null : now - days * 86_400) }];

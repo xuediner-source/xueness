@@ -5,6 +5,7 @@ import { publicSegments, type Session } from "@xueness/sessions";
 import { timelineMarkers } from "./timeline-markers.ts";
 import { publicToolActivity } from "./tool-activity.ts";
 import { publicTurnState, publicBackgroundTasks } from "./public-turn.ts";
+import { publicReplyVersions } from "./reply-versions.ts";
 
 const ONE_SHOT = new Set(["always_ask", "ask_rule", "remote_exec", "plan_exit", "guarded"]);
 type Dict = Record<string, unknown>;
@@ -18,6 +19,8 @@ export interface PublicSessionOptions {
   queueSnapshot?: (sid: string) => Promise<Dict>;
   guidanceSnapshot?: (session: Session) => Promise<Dict>;
   goalView?: (session: Session) => unknown;
+  /** How a plugin-owned chat presents itself (names, pictures, opening line); see `publicPresentation`. */
+  presentation?: (session: Session) => unknown;
   running?: ReadonlySet<string>;
   activeContext?: ReadonlyMap<string, Dict>;
 }
@@ -135,6 +138,22 @@ export function publicForkParent(session: Session): Dict | null {
   if (typeof p.checkpointId === "string" && /^[0-9a-f]{32}$/.test(p.checkpointId) && isPyIntValue(p.checkpointTurn) && Number(p.checkpointTurn) >= 1) { result.checkpointId = p.checkpointId; result.checkpointTurn = p.checkpointTurn; }
   return result;
 }
+/**
+ * A plugin's presentation of its chat, bounded field by field: who speaks (name, and a picture URL the page
+ * reads from the plugin's own API), the opening line it shows before the first message, and the panel that
+ * manages it. Anything else is dropped.
+ */
+export function publicPresentation(raw: unknown): Dict | null {
+  if (!isDict(raw) || typeof raw.plugin !== "string" || !/^[a-z][a-z0-9_]{0,40}$/.test(raw.plugin)) return null;
+  const text = (value: unknown, max: number): string => typeof value === "string" ? pySlice(value.replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/g, ""), max) : "";
+  const picture = (value: unknown): string | null => typeof value === "string" && value.startsWith(`/api/${raw.plugin}/`) && pyLen(value) <= 300 && /^[A-Za-z0-9/_.:%-]+$/.test(value) ? value : null;
+  const speaker = (value: unknown): Dict | null => isDict(value) && text(value.name, 120).trim() ? { name: text(value.name, 120).trim(), avatarUrl: picture(value.avatarUrl) } : null;
+  const opening = isDict(raw.opening) && text(raw.opening.text, 32000).trim() && isPyIntValue(raw.opening.index) && isPyIntValue(raw.opening.total) && Number(raw.opening.total) >= 1 && Number(raw.opening.index) >= 0 && Number(raw.opening.index) < Number(raw.opening.total) && Number(raw.opening.total) <= 64
+    ? { text: text(raw.opening.text, 32000), index: Number(raw.opening.index), total: Number(raw.opening.total) } : null;
+  const assistant = speaker(raw.assistant);
+  if (!assistant) return null;
+  return { plugin: raw.plugin, assistant, user: speaker(raw.user), opening, panel: typeof raw.panel === "string" && /^[a-z][a-z0-9_]{0,40}$/.test(raw.panel) ? raw.panel : null, chat: raw.chat === true };
+}
 export async function publicSessionPayload(s: Session, options: PublicSessionOptions): Promise<Dict> {
   const buckets = options.approvals.get(String(s.id)), approved: Dict = {};
   for (const kind of ["write", "edit", "exec", "mcp"]) approved[kind] = [...(buckets?.get(kind)?.values() ?? [])].sort();
@@ -159,6 +178,10 @@ export async function publicSessionPayload(s: Session, options: PublicSessionOpt
   result.reasoning_history = Array.isArray(s.reasoning_history) ? s.reasoning_history.slice(-20).filter((r) => isDict(r) && validIndex(r.message_index) && typeof r.text === "string" && r.text).map((r) => ({ message_index: r.message_index, text: pySlice(r.text, 32000) })) : [];
   result.reasoning_timing = Array.isArray(s.reasoning_timing) ? s.reasoning_timing.slice(-20).filter((r) => isDict(r) && validIndex(r.message_index) && [r.started_at, r.ended_at].every((v) => typeof v === "string" && v && pyLen(v) <= 40)).map((r) => ({ message_index: r.message_index, started_at: r.started_at, ended_at: r.ended_at })) : [];
   result.timeline_markers = timelineMarkers(s, result.forkParent as Dict | null);
+  result.reply_versions = options.enabled("sessions") ? publicReplyVersions(s) : null;
+  let presented: unknown = null;
+  try { presented = options.enabled("sessions") ? options.presentation?.(s) ?? null : null; } catch { presented = null; }
+  result.presentation = publicPresentation(presented);
   const paths: string[] = [], results = isDict(s.results) ? s.results : {};
   for (const m of messages.filter(isDict)) for (const c of (Array.isArray(m.tool_calls) ? m.tool_calls : []).filter(isDict)) { const f = isDict(c.function) ? c.function : {}, r = results[String(c.id)]; if (!isDict(r) || !r.ok) continue; try { const args = pyJsonLoads(String(f.arguments ?? "{}")); const info = isDict(args) ? (options.toolInfo ?? defaultToolInfo)(String(f.name), args) : null; if (info && ["write", "edit"].includes(info.kind ?? "") && info.subject && !paths.includes(info.subject)) paths.push(info.subject); } catch { /* Invalid historical calls have no path. */ } }
   result.changed_files = paths.slice(0, 200);

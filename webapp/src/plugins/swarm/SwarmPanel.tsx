@@ -9,11 +9,12 @@ import { t as tr, tf, useLocale } from "../../i18n";
 import { SwarmBoard } from "./SwarmBoard";
 import { SwarmGraph } from "./SwarmGraph";
 import { SwarmMembers } from "./SwarmMembers";
+import { SwarmOverview } from "./SwarmOverview";
 import { canResume, canStop, listSwarms, readBoard, readSwarm, resumeSwarm, stopSwarm, STATUS_LABELS, type BoardPost, type SwarmDetail, type SwarmSummary } from "./swarmApi";
 import "./swarm.css";
 
-type Tab = "board" | "members" | "graph";
-const TABS: [Tab, string][] = [["board", "看板"], ["members", "成员"], ["graph", "关系图"]];
+type Tab = "overview" | "board" | "members" | "graph";
+const TABS: [Tab, string][] = [["overview", "概览"], ["board", "看板"], ["members", "成员"], ["graph", "关系图"]];
 const POLL_MS = 2000;
 const message = (cause: unknown): string => cause instanceof Error ? cause.message : String(cause);
 
@@ -133,9 +134,10 @@ export function SwarmPanel({ enabled, sessionId }: { enabled: boolean; sessionId
     </div>
     <div className="xn-swarm__body" role="tabpanel">
       {!detail ? <p role="status">{tr("正在读取蜂群…")}</p>
-        : tab === "board" ? <SwarmBoard sessionId={sessionId} swarmId={detail.id} posts={posts} channels={detail.channels} focusSeq={focusSeq} canPost={!["completed", "failed", "cancelled"].includes(detail.status)} onPosted={() => void refresh()} />
-          : tab === "members" ? <SwarmMembers sessionId={sessionId} swarmId={detail.id} members={detail.members} running={running} active={!["completed", "failed", "cancelled"].includes(detail.status)} onChanged={() => void refresh()} />
-            : <SwarmGraph members={detail.members} posts={posts} running={running} />}
+        : tab === "overview" ? <SwarmOverview sessionId={sessionId} detail={detail} running={running} posts={posts} active={!["completed", "failed", "cancelled"].includes(detail.status)} onChanged={() => void refresh()} onJumpToPost={(seq) => { setFocusSeq({ seq, n: Date.now() }); setTab("board"); }} />
+          : tab === "board" ? <SwarmBoard sessionId={sessionId} swarmId={detail.id} posts={posts} channels={detail.channels} focusSeq={focusSeq} canPost={!["completed", "failed", "cancelled"].includes(detail.status)} onPosted={() => void refresh()} />
+            : tab === "members" ? <SwarmMembers sessionId={sessionId} swarmId={detail.id} members={detail.members} running={running} active={!["completed", "failed", "cancelled"].includes(detail.status)} onChanged={() => void refresh()} />
+              : <SwarmGraph members={detail.members} posts={posts} running={running} />}
     </div>
   </section>;
 }

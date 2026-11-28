@@ -3,15 +3,9 @@ import "./FullAccessConfirmationDialog.css";
 import React, { useRef } from "react";
 import { t as tr } from "../../i18n";
 import { shouldDismissModalOnEscape, useModalFocusScope } from "../shared";
-import type { PermissionMode } from "./permissionModes";
+import { requiresYoloConfirmation } from "./permissionModes";
 
-export function requiresYoloConfirmation(
-  current: PermissionMode | undefined,
-  next: PermissionMode,
-  acknowledged: boolean,
-): boolean {
-  return next === "yolo" && (current !== "yolo" || !acknowledged);
-}
+export { requiresYoloConfirmation };
 
 export type FullAccessConfirmationDialogProps = {
   open: boolean;

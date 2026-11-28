@@ -38,21 +38,28 @@ function errorText(error: unknown): string {
   return String(error).slice(0, 1000);
 }
 
-function personaOf(value: string | { system?: string; model?: string } | undefined): DynamicActor["persona"] {
+function personaOf(value: string | DynamicActor["persona"] | undefined): DynamicActor["persona"] {
   if (value === undefined) return {};
   if (typeof value === "string") return { system: value };
   if (typeof value !== "object" || value === null || Array.isArray(value) ||
       (value.system !== undefined && typeof value.system !== "string") ||
+      (value.role !== undefined && typeof value.role !== "string") ||
       (value.model !== undefined && typeof value.model !== "string")) {
-    throw new PyValueError("actor persona must contain only string system/model fields");
+    throw new PyValueError("actor persona must contain valid string system/role/model fields");
   }
   const keys = Object.keys(value);
-  if (keys.some((key) => key !== "system" && key !== "model")) throw new PyValueError("actor persona must contain only system/model fields");
-  return { ...(value.system === undefined ? {} : { system: value.system }), ...(value.model === undefined ? {} : { model: value.model }) };
+  if (keys.some((key) => !["system", "role", "model"].includes(key))) {
+    throw new PyValueError("actor persona must contain only system/role/model fields");
+  }
+  return {
+    ...(value.system === undefined ? {} : { system: value.system }),
+    ...(value.role === undefined ? {} : { role: value.role }),
+    ...(value.model === undefined ? {} : { model: value.model }),
+  };
 }
 
 function samePersona(left: DynamicActor["persona"], right: DynamicActor["persona"]): boolean {
-  return left.system === right.system && left.model === right.model;
+  return left.system === right.system && left.role === right.role && left.model === right.model;
 }
 
 export class DynamicEngineOperations implements DynamicScriptHost {
@@ -73,12 +80,13 @@ export class DynamicEngineOperations implements DynamicScriptHost {
     return ordinal;
   }
 
-  createActor(siteId: string, givenName?: string, givenPersona?: string | { system?: string; model?: string }): DynamicActor {
+  createActor(siteId: string, givenName?: string, givenPersona?: string | DynamicActor["persona"]): DynamicActor {
     const ordinal = this.#nextOrdinal(siteId);
     const actorId = `${siteId}@${ordinal}`;
-    const name = givenName ?? actorId;
-    if (typeof name !== "string" || !name.trim() || name.length > 120) throw new PyValueError("actor name must be 1..120 characters");
     const persona = personaOf(givenPersona);
+    const roleHint = persona.role?.trim().slice(0, 80);
+    const name = givenName ?? (roleHint ? `${roleHint} (${actorId})` : actorId);
+    if (typeof name !== "string" || !name.trim() || name.length > 120) throw new PyValueError("actor name must be 1..120 characters");
     const next = this.store.update(this.id, (run) => {
       const duplicate = Object.values(run.actors).find((actor) => actor.name === name && actor.id !== actorId);
       if (duplicate) throw new PyValueError(`actor name '${name}' is already used`);
@@ -148,6 +156,16 @@ export class DynamicEngineOperations implements DynamicScriptHost {
     if (ticket.hold) return Promise.reject(ticket.hold);
     if (ticket.cached) return Promise.resolve(ticket.value);
     return this.#dispatch(ticket, undefined, async (signal) => this.driver.read(this.store.load(this.id), operation, cleanArgs, signal));
+  }
+
+  trajectory(siteId: string, filter?: import("./dynamic-types.ts").DynamicTrajectoryFilter): Promise<unknown> {
+    const ordinal = this.#nextOrdinal(siteId);
+    const cleanFilter = filter === undefined ? undefined : cloneJson(filter) as import("./dynamic-types.ts").DynamicTrajectoryFilter;
+    const ticket = this.#ticket(siteId, ordinal, "trajectory", { filter: cleanFilter ?? null });
+    if (ticket.hold) return Promise.reject(ticket.hold);
+    if (ticket.cached) return Promise.resolve(ticket.value);
+    return this.#dispatch(ticket, undefined, async (signal) =>
+      this.driver.trajectory ? this.driver.trajectory(this.store.load(this.id), cleanFilter, signal) : []);
   }
 
   report(siteId: string, item: unknown): void {

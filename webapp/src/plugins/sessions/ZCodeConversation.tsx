@@ -26,6 +26,7 @@ import { zcodeConversationDisclosures, DisclosureContext, SessionIdContext } fro
 import { buildConversationTurns } from './conversationRows';
 import type { ZCodeConversationProps, ZCodeConversationSelection } from './conversationTypes';
 import { Turn } from './ConversationTurnView';
+import { OpeningRow } from './ConversationRoleplay';
 
 export { evaluateUserMessageEditKey } from './ConversationUserRows';
 export { zcodeConversationDisclosures } from './conversationDisclosure';
@@ -191,6 +192,7 @@ export function ZCodeConversation(props: ZCodeConversationProps) {
             {props.renderSelectionAction && selection && <div className="xn-zc-selection-action" data-zcode-selection-action="true"
               onMouseDown={event => event.preventDefault()}>{props.renderSelectionAction(selection)}</div>}
             {snapshot.topPad > 0 && <div data-testid="timeline-window-top-spacer" aria-hidden="true" style={{ height: snapshot.topPad }} />}
+            {snapshot.start === 0 && props.presentation?.chat && props.presentation.opening && props.effectivePluginIds?.has('sessions') && <OpeningRow presentation={props.presentation} />}
             {turns.slice(snapshot.start, snapshot.end).map((turn, offset) => <div data-window-index={snapshot.start + offset} key={turn.key}>
               <Turn turn={turn} latest={snapshot.start + offset === turns.length - 1} props={props}
                 activeFindRowKey={activeFindMatch?.rowKey ?? null}

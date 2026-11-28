@@ -14,17 +14,18 @@ export interface JudgeSettings {
   v: 1;
   /** The saved provider profile that judges; null keeps the judge off. */
   profile: JudgeSelection | null;
+  preflightEnabled: boolean;
   applyRepairs: boolean;
   applyRejects: boolean;
   timeoutMs: number;
   maxOutputTokens: number;
 }
-export const DEFAULT_JUDGE_SETTINGS: Readonly<JudgeSettings> = Object.freeze({ v: 1, profile: null, applyRepairs: false, applyRejects: false, timeoutMs: 10_000, maxOutputTokens: 512 });
+export const DEFAULT_JUDGE_SETTINGS: Readonly<JudgeSettings> = Object.freeze({ v: 1, profile: null, preflightEnabled: true, applyRepairs: false, applyRejects: false, timeoutMs: 10_000, maxOutputTokens: 512 });
 export const TIMEOUT_RANGE = [1_000, 60_000] as const;
 export const OUTPUT_RANGE = [128, 2_048] as const;
 const MAX_BYTES = 16 * 1024;
 const PROFILE_ID = /^[A-Za-z0-9._-]{1,64}$/;
-const KEYS = new Set(["v", "profile", "applyRepairs", "applyRejects", "timeoutMs", "maxOutputTokens"]);
+const KEYS = new Set(["v", "profile", "preflightEnabled", "applyRepairs", "applyRejects", "timeoutMs", "maxOutputTokens"]);
 
 export class JudgeSettingsError extends Error { override name = "JudgeSettingsError"; }
 
@@ -51,10 +52,11 @@ export function normalizeSettings(value: unknown, base: Readonly<JudgeSettings> 
   if (!isDict(value)) throw new JudgeSettingsError("settings must be an object");
   for (const key of Object.keys(value)) if (!KEYS.has(key)) throw new JudgeSettingsError(`unknown setting ${key}`);
   const pick = <T>(key: keyof JudgeSettings): T => (Object.hasOwn(value, key) ? value[key] : base[key]) as T;
-  for (const key of ["applyRepairs", "applyRejects"] as const) if (typeof pick(key) !== "boolean") throw new JudgeSettingsError(`${key} must be true or false`);
+  for (const key of ["preflightEnabled", "applyRepairs", "applyRejects"] as const) if (typeof pick(key) !== "boolean") throw new JudgeSettingsError(`${key} must be true or false`);
   return {
     v: 1,
     profile: normalizeSelection(pick("profile")),
+    preflightEnabled: pick<boolean>("preflightEnabled"),
     applyRepairs: pick<boolean>("applyRepairs"),
     applyRejects: pick<boolean>("applyRejects"),
     timeoutMs: integer(pick("timeoutMs"), "timeoutMs", TIMEOUT_RANGE),

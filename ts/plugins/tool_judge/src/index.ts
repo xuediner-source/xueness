@@ -13,6 +13,8 @@ import manifest from "../manifest.json" with { type: "json" };
 
 export * from "./settings.ts";
 export * from "./verdicts.ts";
+export * from "./preflight-shell.ts";
+export * from "./preflight.ts";
 export * from "./stats.ts";
 export * from "./extension.ts";
 export * from "./http.ts";

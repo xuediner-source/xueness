@@ -20,8 +20,12 @@
     { "name": "swarm_model", "gate": "planning", "mutating": false, "concurrencySafe": false },
     { "name": "swarm_reassign", "gate": "planning", "mutating": false, "concurrencySafe": false },
     { "name": "swarm_finish", "gate": "planning", "mutating": false, "concurrencySafe": false },
-    { "name": "verify_report", "gate": "planning", "mutating": false, "concurrencySafe": false }
+    { "name": "verify_report", "gate": "planning", "mutating": false, "concurrencySafe": false },
+    { "name": "swarm_models", "gate": "planning", "mutating": false, "concurrencySafe": true },
+    { "name": "swarm_title", "gate": "planning", "mutating": false, "concurrencySafe": false },
+    { "name": "swarm_add", "gate": "planning", "mutating": false, "concurrencySafe": false }
   ],
+  "commands": ["swarm"],
   "features": [
     { "id": "swarm.plan_approval", "name": "一次批准整个蜂群计划（成员、可写路径、可运行命令）", "nameEn": "One approval of the whole swarm plan (members, owned paths, allowed commands)" },
     { "id": "swarm.owned_paths", "name": "成员只能写自己的路径、只能运行列出的命令（完全访问模式下也一样）", "nameEn": "Members write only their own paths and run only listed commands (also under full access)" },
@@ -33,12 +37,14 @@
     { "id": "swarm.verifier", "name": "验证者检查改动并给出结论，可用不同模型", "nameEn": "Verifier checks changes and reports a verdict, on any model" },
     { "id": "swarm.pane", "name": "蜂群面板：看板与成员", "nameEn": "Swarm pane: board and members" },
     { "id": "swarm.graph_replay", "name": "提及关系图与回放", "nameEn": "Mention graph with replay" },
-    { "id": "swarm.judge_per_swarm", "name": "每个蜂群可选工具调用判定模型", "nameEn": "Tool-call judge selectable per swarm" }
+    { "id": "swarm.judge_per_swarm", "name": "每个蜂群可选工具调用判定模型", "nameEn": "Tool-call judge selectable per swarm" },
+    { "id": "swarm.dynamic_roster", "name": "运行中动态增员、分片扩容、助手归属与温上下文分叉", "nameEn": "Mid-flight worker/shard addition, worker-owned helpers, and warm context forking" }
   ],
   "panels": ["swarm"],
   "httpFamilies": ["sessions/*/swarms", "swarm"],
   "frontendModules": [
     "plugins/swarm/SwarmPanel.tsx",
+    "plugins/swarm/SwarmOverview.tsx",
     "plugins/swarm/SwarmBoard.tsx",
     "plugins/swarm/SwarmMembers.tsx",
     "plugins/swarm/SwarmGraph.tsx",

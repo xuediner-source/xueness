@@ -11,16 +11,24 @@ import { pendingDenials } from "./public-session.ts";
 import { MediaArtifactStore } from "./media-store.ts";
 import { messageOwner, messageRefs } from "./media-history.ts";
 import { bindMediaMessage, consumeInput, finalizePreparedMedia, reservePreparedMedia, safeInputContext, type PreparedInputOptions } from "./prepared-input.ts";
+import { applyReplyVersionAction, MAX_REPLY_VERSIONS, type ReplyVersionAction } from "./reply-versions.ts";
 import type { SessionReply, SessionRequest, SessionsApiOptions } from "./http-api.ts";
 type Row = Record<string, any>;
 export const MESSAGE_ACTION_ROUTES = ["PATCH /api/sessions/:id/message-actions"];
 export class MessageActionError extends PyValueError { override name = "MessageActionError"; readonly status: number; readonly stale: boolean; constructor(message: string, status = 400, stale = false) { super(message); this.status = status; this.stale = stale; } }
 function fail(message: string, status = 400): never { throw new MessageActionError(message, status); }
+/** Actions on the latest reply that keep the replaced reply as a version (see reply-versions.ts). */
+const VERSION_ACTIONS = ["regenerate", "select_version", "edit_reply"];
 export function validateMessageAction(data: unknown): asserts data is Row {
-  if (!isDict(data) || !["revision", "messageIndex", "action"].every((k) => Object.hasOwn(data, k)) || Object.keys(data).some((k) => !["revision", "messageIndex", "action", "text", "feedback", "prepared_token"].includes(k))) fail("invalid message action");
+  if (!isDict(data) || !["revision", "messageIndex", "action"].every((k) => Object.hasOwn(data, k)) || Object.keys(data).some((k) => !["revision", "messageIndex", "action", "text", "feedback", "prepared_token", "version"].includes(k))) fail("invalid message action");
   if (typeof data.revision !== "string" || !/^sha256:[0-9a-f]{64}$/.test(data.revision)) fail("invalid message revision");
-  if (!isPyIntValue(data.messageIndex) || Number(data.messageIndex) < 0 || !["edit", "feedback"].includes(String(data.action))) fail("invalid message target");
-  if (data.action === "edit") {
+  if (!isPyIntValue(data.messageIndex) || Number(data.messageIndex) < 0 || !["edit", "feedback", ...VERSION_ACTIONS].includes(String(data.action))) fail("invalid message target");
+  if (Object.hasOwn(data, "version") && data.action !== "select_version") fail("invalid message action");
+  if (VERSION_ACTIONS.includes(String(data.action))) {
+    if (Object.hasOwn(data, "feedback") || Object.hasOwn(data, "prepared_token")) fail("invalid message action");
+    if (data.action === "edit_reply" ? typeof data.text !== "string" || !pyStrip(data.text) || pyLen(data.text) > 50000 || data.text.includes("\0") : Object.hasOwn(data, "text")) fail("invalid edited message");
+    if (data.action === "select_version" && (!isPyIntValue(data.version) || Number(data.version) < 0 || Number(data.version) >= MAX_REPLY_VERSIONS)) fail("invalid reply version");
+  } else if (data.action === "edit") {
     if (Object.hasOwn(data, "feedback") || typeof data.text !== "string" || !pyStrip(data.text) || pyLen(data.text) > 50000 || data.text.includes("\0")) fail("invalid edited message");
     if (Object.hasOwn(data, "prepared_token") && (typeof data.prepared_token !== "string" || !/^[0-9a-f]{32}$/.test(data.prepared_token))) fail("invalid prepared attachment replacement");
   } else if (Object.hasOwn(data, "prepared_token") || Object.hasOwn(data, "text") || !Object.hasOwn(data, "feedback") || ![null, "like", "dislike"].includes(data.feedback as string | null)) fail("invalid message feedback");
@@ -69,7 +77,12 @@ async function update(options: SessionsApiOptions, preparedOptions: PreparedInpu
         if (!message || !isDict(message)) fail("message not found", 404);
         if (message.role !== (data.action === "edit" ? "user" : "assistant")) fail("message role does not support this action");
         let prepared: Row | null = null, target: ReturnType<typeof bindMediaMessage> | null = null, editLineage: Omit<LineageRow, "parentId" | "time"> | null = null;
-      if (data.action === "feedback") {
+      if (VERSION_ACTIONS.includes(String(data.action))) {
+        if ((queue.snapshotLocked(sid).queued_messages as unknown[]).length) fail("cancel queued messages before changing a reply", 409);
+        const problem = applyReplyVersionAction(s, index, data.action as ReplyVersionAction, { version: Number(data.version ?? 0), text: data.text as string | undefined, newId: uuid4Hex });
+        if (problem) fail(problem.message, problem.status);
+        if (data.action === "regenerate") { options.lifecycle?.approvals.delete(sid); options.lifecycle?.liveApprovals?.close(sid); }
+      } else if (data.action === "feedback") {
         if (!message.content) fail("message has no answer to rate"); s.message_annotations ??= {}; if (!isDict(s.message_annotations)) fail("invalid saved feedback", 409);
         const annotations = s.message_annotations as Row; annotations[String(index)] ??= {}; if (!isDict(annotations[String(index)])) fail("invalid saved message annotation", 409);
         if (data.feedback === null) delete annotations[String(index)].feedback; else annotations[String(index)].feedback = data.feedback;
@@ -90,7 +103,7 @@ async function update(options: SessionsApiOptions, preparedOptions: PreparedInpu
           if (typeof id === "string" && id) s.history_hidden_message_ids = [...new Set([...(s.history_hidden_message_ids as string[]), id])].sort(); edited._message_id = uuid4Hex(); delete edited._media_refs; delete edited._media_admission;
         } else if (Array.isArray(message.content)) edited.content = [{ type: "text", text }, ...(edited.content as unknown[]).filter((p: unknown) => !isDict(p) || p.type !== "text")];
         else edited.content = await preserve(options, s, index, text);
-        s.messages = [...prefix, edited];
+        s.messages = [...prefix, edited]; delete s.reply_versions;
         if (prepared) { for (const key of ["input_context", "input_attachments"]) s[key] = (Array.isArray(s[key]) ? s[key] : []).filter((r) => isDict(r) && isPyIntValue(r.user_turn) && Number(r.user_turn) < turn); target = bindMediaMessage(s, prepared); await reservePreparedMedia(preparedOptions, prepared, target, command); safeInputContext(s, prepared); }
         if (typeof edited._message_id === "string" && /^[A-Za-z0-9_.:-]{1,160}$/.test(edited._message_id)) s.message_edit_history = [...Array.isArray(s.message_edit_history) ? s.message_edit_history : [], { message_id: edited._message_id, revision: data.revision }].slice(-100);
         if (turn === 1) s.task = text; const calls = new Set(prefix.flatMap((m) => (m.tool_calls ?? []).filter(isDict).map((c: Row) => c.id)));

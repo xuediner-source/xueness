@@ -31,6 +31,8 @@ export * from './dynamic-blocked-reminder.ts';
 export * from './dynamic-lifecycle.ts';
 export * from './dynamic-http.ts';
 export * from './dynamic-tools.ts';
+export * from './run-workflow-tool.ts';
+export * from './dynamic-parent-extension.ts';
 import type { DynamicWorkflowService } from './dynamic-service.ts';
 
 export { ID, NODE, ACTIVE, nowSeconds, stamp, resolvePath, isDirectory, isInside, validatePlan, workflowPlanDigest, workspaceFingerprint, type Row } from "./plan.ts";

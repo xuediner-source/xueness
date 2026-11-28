@@ -5,7 +5,7 @@ import { loadComposerCatalog, canUseRuntimeProfile, type ComposerCatalog, type C
 import type { RunChoices } from '../../xuenessBridge';
 import { updatePaneRunOptions } from './paneRunOptions';
 import type { PermissionMode } from './permissionModes';
-import { normalizeReasoningLevels } from './ReasoningEffortSlider';
+import { normalizeReasoningLevels } from './reasoningLevels';
 import { isImeComposingEvent } from '../../xuenessShortcutDisplay';
 
 const permissionLabels: Record<PermissionMode, string> = { plan: '计划', build: '变更前确认', edit: '自动编辑', yolo: '完全访问', guarded: '守护执行' };

@@ -17,6 +17,7 @@
     { "id": "usage.tool_outcomes", "name": "工具调用失败统计与可避免失败耗时", "nameEn": "Tool-call failure statistics and avoidable failure time" }
   ],
   "frontendModules": [
+    "plugins/usage/usageApi.ts",
     "plugins/usage/XuenessUsageSettings.tsx",
     "plugins/usage/XuenessUsageQuickCard.tsx",
     "plugins/usage/UsageToolOutcomes.tsx"

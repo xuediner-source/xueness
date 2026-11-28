@@ -43,9 +43,12 @@ export type GitViewProps = {
   onRestore?: (id: string) => void;
 };
 
+/** The backend's 404 body, which is always the Chinese text whatever the interface language. */
+const NOT_A_REPO_SERVER = "该工作区不是 git 仓库";
+
 /** True when the backend's 404 body says this workspace is not a repository. */
 export function isNotRepoError(error?: string): boolean {
-  return typeof error === "string" && error.includes(NOT_A_REPO());
+  return typeof error === "string" && (error.includes(NOT_A_REPO_SERVER) || error.includes(NOT_A_REPO()));
 }
 
 /**

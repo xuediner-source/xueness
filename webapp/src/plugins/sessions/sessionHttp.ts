@@ -4,7 +4,7 @@
  * `{ok:false, error}`; it never escapes as an exception to the UI.
  */
 import { t as tr, tf as trf } from '../../i18n';
-import { createSessionHttpError, createSessionNetworkError, createUnreadableSessionResponseError } from './sessionRequestErrors';
+import { createSessionHttpError, createSessionNetworkError, createUnreadableSessionResponseError, friendlyModelSetupError } from './sessionRequestErrors';
 
 export function toErrorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
@@ -43,6 +43,9 @@ async function requestJson<T>(path: string, init: RequestInit): Promise<T> {
       if (message.includes('conversation changed')) throw createSessionHttpError(response.status, errorCode, backendDetail, appendDetail(tr('会话已发生变化。请刷新后重新编辑；当前输入已保留。')));
       if (message.includes('queued messages')) throw createSessionHttpError(response.status, errorCode, backendDetail, appendDetail(tr('请先处理或取消排队消息，再编辑历史。')));
       if (message.includes('run already in progress')) throw createSessionHttpError(response.status, errorCode, backendDetail, appendDetail(tr('会话正在运行，结束后可修改历史。')));
+    }
+    if (backendDetail && friendlyModelSetupError(backendDetail) !== backendDetail) {
+      throw createSessionHttpError(response.status, errorCode, backendDetail, friendlyModelSetupError(backendDetail));
     }
     throw createSessionHttpError(response.status, errorCode, backendDetail);
   }

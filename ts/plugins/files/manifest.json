@@ -77,6 +77,7 @@
     "directory"
   ],
   "frontendModules": [
+    "plugins/files/directoryApi.ts",
     "plugins/files/DirectoryBrowser.tsx",
     "plugins/files/FileBrowser.tsx",
     "plugins/files/DiffView.tsx",

@@ -1,9 +1,12 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { t as tr, tf, useLocale } from "./i18n";
-import { listPlugins, setPluginEnabled, type XuenessPlugin, type XuenessPluginFeature } from "./xuenessApi";
+import type { XuenessPlugin, XuenessPluginFeature } from "./xuenessApi";
+import { FeatureUnavailable, usePluginCatalog } from "./plugins/shared";
 import { XUENESS_PLUGIN_REGISTRY } from "./xuenessPluginRegistry";
 import { isImeComposingEvent } from "./xuenessShortcutDisplay";
 import "./styles/plugins.css";
+
+export { FeatureUnavailable, usePluginCatalog };
 export type XuenessPluginManagerProps = {
   plugins: XuenessPlugin[];
   loading: boolean;
@@ -11,66 +14,6 @@ export type XuenessPluginManagerProps = {
   onRefresh: () => Promise<void>;
   onToggle: (id: string, enabled: boolean) => Promise<void>;
 };
-
-/** The server's plugin catalog: every feature asks `isPluginEffective` before it mounts or requests. */
-export function usePluginCatalog() {
-  const [pluginCatalog, setPluginCatalog] = useState<XuenessPlugin[]>([]);
-  const [pluginCatalogLoading, setPluginCatalogLoading] = useState(true);
-  const [pluginCatalogReady, setPluginCatalogReady] = useState(false);
-  const [pluginCatalogError, setPluginCatalogError] = useState("");
-  const isPluginEffective = useCallback(
-    (id: string) => pluginCatalogReady && pluginCatalog.some((plugin) => plugin.id === id && plugin.effective),
-    [pluginCatalog, pluginCatalogReady],
-  );
-  // In-flight and queued reads must consult the current catalog, not an old closure.
-  const pluginEffectiveRef = useRef(isPluginEffective);
-  pluginEffectiveRef.current = isPluginEffective;
-  const isSessionsEffective = useCallback(() => pluginEffectiveRef.current("sessions"), []);
-  const mountedRef = useRef(true);
-  useEffect(() => {
-    mountedRef.current = true;
-    return () => { mountedRef.current = false; };
-  }, []);
-
-  const refreshPluginCatalog = useCallback(async () => {
-    setPluginCatalogLoading(true);
-    try {
-      const result = await listPlugins();
-      if (!mountedRef.current) return;
-      setPluginCatalog(result.plugins);
-      setPluginCatalogError("");
-    } catch (reason) {
-      if (!mountedRef.current) return;
-      setPluginCatalog([]);
-      setPluginCatalogError(reason instanceof Error ? reason.message : String(reason));
-    } finally {
-      if (mountedRef.current) {
-        setPluginCatalogReady(true);
-        setPluginCatalogLoading(false);
-      }
-    }
-  }, []);
-  const togglePlugin = useCallback(async (id: string, enabled: boolean) => {
-    try {
-      const result = await setPluginEnabled(id, enabled);
-      if (!mountedRef.current) return;
-      setPluginCatalog(result.plugins);
-      setPluginCatalogError("");
-      setPluginCatalogReady(true);
-    } catch (reason) {
-      if (mountedRef.current) {
-        await refreshPluginCatalog();
-      }
-      throw reason;
-    }
-  }, [refreshPluginCatalog]);
-
-  useEffect(() => {
-    void refreshPluginCatalog();
-  }, [refreshPluginCatalog]);
-
-  return { pluginCatalog, pluginCatalogLoading, pluginCatalogReady, pluginCatalogError, isPluginEffective, pluginEffectiveRef, isSessionsEffective, refreshPluginCatalog, togglePlugin };
-}
 
 export type PluginFilter = "all" | "active" | "disabled" | "blocked";
 
@@ -151,16 +94,6 @@ export function filterPlugins(plugins: XuenessPlugin[], filter: PluginFilter, qu
       ...(local ? [tr(local.name), tr(local.description)] : [])]
       .filter(Boolean).join(" ").toLocaleLowerCase().includes(needle);
   });
-}
-
-export function FeatureUnavailable({ feature, onManage }: { feature: string; onManage: () => void }) {
-  return (
-    <div className="xn-feature-unavailable" role="status">
-      <h2>{tr("模块不可用：")}{feature}</h2>
-      <p>{tr("此模块已停用或依赖未启用。可在插件管理中调整。")}</p>
-      <button type="button" onClick={onManage}>{tr("打开插件管理")}</button>
-    </div>
-  );
 }
 
 /** `embedded`: inside a settings page that already shows a title; the description and actions stay. */

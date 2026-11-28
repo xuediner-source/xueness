@@ -16,6 +16,7 @@ function namedType(type: ts.TypeNode): string | undefined {
 export function synthesizeDynamicSchemas(
   sourceFile: ts.SourceFile,
   diagnostics: DynamicDiagnostic[],
+  askSiteStarts?: ReadonlySet<number>,
 ): Map<number, JsonSchema> {
   const declarations = new Map<string, TypeDeclaration>();
   const resolving = new Set<string>();
@@ -202,7 +203,7 @@ export function synthesizeDynamicSchemas(
   };
 
   const findAskTypes = (node: ts.Node): void => {
-    if (ts.isCallExpression(node) && isAskCall(node)) {
+    if (ts.isCallExpression(node) && (isAskCall(node) || askSiteStarts?.has(node.getStart(sourceFile)) === true)) {
       if (node.typeArguments?.length === 1) {
         const diagnosticCount = diagnostics.length;
         const schema = visitType(node.typeArguments[0]!);

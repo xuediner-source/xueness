@@ -36,3 +36,17 @@
 - 用户对话和蜂群成员（按蜂群的设置）会被判定；只读子代理和工作流角色目前不判定。
 - 答复必须是 JSON 对象；看不懂的条目一律按通过处理。
 - 判定看到的是简短摘要，不是完整对话，可能判断错误；所以默认只建议。
+
+## 2026-11-26：零模型前置检查（J3）
+
+更新为 `tool_judge` 1.1.0（新增功能 `tool_judge.preflight`，清单读取权限包含 `workspace`）。前置检查默认开启（`preflightEnabled: true`），**不依赖是否选择了判定模型**：即使 `profile` 为空，也在工具权限提示和执行前以零模型耗时拦下 7 类确定性错误；设置页「工具调用判定」提供开关与拦截统计。
+
+- **七项确定性检查**：
+  1. **参数 Schema 与互斥校验**：调用前按注册 schema 校验类型与必填项，以及 `exec` 的 `command`/`argv` 互斥；静态 Schema 失败时在 `afterModelResponse` 阶段也会跳过后续判定模型请求。
+  2. **工作区路径检查**：核对 `read`/`grep`/`list`/`glob`/`write`/`edit` 及 `exec.cwd` 在工作区内是否存在以及文件/目录类型匹配；工作区外路径在预检阶段放行，继续由核心权限与路径策略裁决。
+  3. **已读与新鲜度检查**：对工作区内已有文件执行 `edit` 或覆写 `write` 时先经 `FileStateTracker.assertFresh` 校验未跳过读取且未被外部/先前的 `exec` 修改（`stale_file` 会提示先前命令可能改写了文件）。
+  4. **`edit` 原文匹配检查**：验证 `old_string !== new_string`，并在文件未超过 2 MB 时定位替换内容，提前拒绝 `not_found` 与需补充上下文或 `replace_all` 的 `ambiguous_match`。
+  5. **Windows PowerShell 5.1 方言检查**：仅在宿主使用 PowerShell 时做引号与 here-string 感知扫描，提前拦下 `&&`、`||`、`>/dev/null`、`export VAR=`、行内环境前缀以及 `ls -la` / `rm -rf` / `cp -rf` / `cat -n` 等 Unix 别名用法（引号与 here-string 字面量不误报）。
+  6. **`exec` 可执行文件检查**：纯 `node:fs` 检查直接 `argv[0]` 或首条简单命令在工作区与 `PATH` 上是否存在；配置了自定义 `shellInitConfigured` 或命令含 `||` 回退及 PowerShell cmdlet/内建命令时自动跳过，从不派生子进程、不探测工作区之外的任意宿主路径。
+  7. **连续相同失败防重入**：除权限拒绝、取消、网络与预检自身外，同一调用失败且期间未有任何写入/命令成功时，下一次完全相同调用拦截一次并给出 `repeated_failed_call`；再原样重试则放行。
+- **统计与分类**：前置检查拦截记录在 `session.tool_judge`（`model: "preflight"`、`preflightRule`）与 `session.tool_judge_stats.total.preflightBlocked`，工具卡片显示「前置检查已拦下 / 检查来源：零模型前置检查」，且不会计入 `judged`/`requests` 或误伤判定模型统计。`providers/src/tool-outcomes.ts` 已将 `stale_file`、`read_required`、`shell_dialect_mismatch`、`repeated_failed_call` 归入可避免失败组。

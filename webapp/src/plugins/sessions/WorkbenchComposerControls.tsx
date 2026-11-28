@@ -17,7 +17,7 @@ import { XuenessComposerToolbar } from "./XuenessComposerToolbar";
 import { readPersistedDraft, restoredDraft } from "./composerDraftStore";
 import type { ComposerDraftState } from "./composerTypes";
 import { composerModelRecoveryFor, shouldHydrateEmptyPrimaryDraftScope } from "./workbenchDrafts";
-import type { WorkbenchComposerShared } from "./WorkbenchConversation";
+import type { WorkbenchComposerShared } from "./WorkbenchStartView";
 import type { useLivePermissionMode } from "./useLivePermissionMode";
 import type { ComposerCatalogState } from "./useComposerCatalog";
 import type { WorkspaceSelection } from "./useWorkspaceSelection";

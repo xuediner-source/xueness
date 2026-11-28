@@ -14,13 +14,13 @@ const CALLS_MAX = 300, REJECTED_MAX = 100, MODELS_MAX = 20;
 
 export interface VerdictRecord {
   v: 1; at: string; tool: string; verdict: Verdict | "unavailable"; applied: Applied; reason: string;
-  original?: Row; judgeMs: number; model: string; sig: string; retryOfReject?: boolean;
+  original?: Row; judgeMs: number; model: string; sig: string; retryOfReject?: boolean; preflightRule?: string;
   /** Filled in when the call finished. */
   outcome?: "ok" | "failed";
 }
 
 export const COUNTERS = ["judged", "requests", "failures", "judgeMs", "pass", "advise", "repair", "reject", "unavailable",
-  "repairsApplied", "repairsSucceeded", "rejectsApplied", "wrongBlocks", "passFailures", "passAvoidableFailures"] as const;
+  "repairsApplied", "repairsSucceeded", "rejectsApplied", "wrongBlocks", "passFailures", "passAvoidableFailures", "preflightBlocked"] as const;
 export type Counter = (typeof COUNTERS)[number];
 export type Totals = Record<Counter, number>;
 const zero = (): Totals => Object.fromEntries(COUNTERS.map((key) => [key, 0])) as Totals;

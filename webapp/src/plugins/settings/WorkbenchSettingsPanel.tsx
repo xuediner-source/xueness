@@ -6,18 +6,19 @@
  */
 import React, { lazy, Suspense } from "react";
 import { t as tr, type useLocale } from "../../i18n";
-import type { XuenessPlugin } from "../../xuenessApi";
+import { get, type XuenessPlugin } from "../../xuenessApi";
 import { createCapabilityItem, type CapabilityKind } from "../../xuenessCapabilities";
 import type { WorkbenchSession } from "../../xuenessWorkbench";
 import type { WorkbenchPanel } from "../../xuenessPluginRegistry";
 import type { CapabilitySectionProps } from "../../XuenessCapabilitiesPanel";
-import { FeatureUnavailable, XuenessPluginManager, XuenessPluginSettingsPanel } from "../../XuenessPluginManager";
+import { FeatureUnavailable } from "../shared";
 import { RegionBoundary } from "../../ui/primitives";
 import { ToolExecutionSettings } from "../tools/ToolExecutionSettings";
 import type { ComposerCatalogState } from "../sessions/useComposerCatalog";
 import type { WorkbenchSettings } from "./useWorkbenchSettings";
 import { CapabilitiesPanel, DesktopUpdates, MagpiePanel, ModelManager, ModelMonitorPanel, RemoteConnections, TavernPanel,
-  XuenessAutomationsPanel, XuenessDiagnosticsPanel, XuenessMarketplace, XuenessMcpTools, XuenessUsageSettings } from "./workbenchSettingsViews";
+  XuenessAutomationsPanel, XuenessDiagnosticsPanel, XuenessMarketplace, XuenessMcpTools, XuenessPluginManager,
+  XuenessPluginSettingsPanel, XuenessUsageSettings } from "./workbenchSettingsViews";
 
 const DesktopNotificationSettings = lazy(() => import('../desktop/DesktopNotificationSettings').then(module => ({ default: module.DesktopNotificationSettings })));
 const SessionExperimentSettings = lazy(() => import('../sessions/SessionExperimentSettings').then(module => ({ default: module.SessionExperimentSettings })));
@@ -119,7 +120,9 @@ function settingsContent({ settings, isPluginEffective, capabilityKinds, capSect
     onDefaultChanged={() => { if (!activeId) { setDraftRoot(undefined); setIsolatedWorkspace(false); updateChoices({remote:undefined}); } void refreshComposerCatalog(); }} /></Suspense><SettingsSections embedded sections={[]} activeSection="workspace-display" values={settingsValues} capabilities={capabilities} onUpdateSetting={handleUpdateSetting} saving={settingsSaving} /></>;
   if (settingsSection === "providers") return <>
     <PluginProfilePicker enabled={isPluginEffective("extensions")} onCatalogChanged={() => void refreshPluginCatalog()} />
-    <ModelManager focusProviderId={providerFocusId} runtimeMonitorEnabled={isPluginEffective("providers") && isPluginEffective("diagnostics")} onSelect={selectProviderForCurrentRun} />
+    <ModelManager focusProviderId={providerFocusId} runtimeMonitorEnabled={isPluginEffective("providers") && isPluginEffective("diagnostics")} onSelect={selectProviderForCurrentRun}
+      onRefreshExternal={isPluginEffective("magpie") ? async () => { const s = await get<{ state?: string }>("/api/magpie/status").catch(() => null); if (s?.state === "running") await get("/api/magpie/models").catch(() => null); } : undefined}
+      onManageSource={isPluginEffective("magpie") ? source => { if (source === "magpie") setSettingsSection("magpie"); } : undefined} />
   </>;
   if (settingsSection === "mcp") return <><CapabilitiesPanel sections={capSections.filter(section => section.kind === "mcp")} /><XuenessMcpTools /></>;
   if (settingsSection === "plugins") return <XuenessPluginSettingsPanel
@@ -137,7 +140,7 @@ function settingsContent({ settings, isPluginEffective, capabilityKinds, capSect
   />;
   if (capabilityKinds.includes(settingsSection as CapabilityKind)) return <CapabilitiesPanel scopeLabel={settingsSection === 'skills' ? tr('内置与用户技能') : undefined} sections={capSections.filter(section => section.kind === settingsSection)} />;
   if (settingsSection === "modules") return <XuenessPluginManager embedded plugins={pluginCatalog} loading={pluginCatalogLoading} error={pluginCatalogError} onRefresh={refreshPluginCatalog} onToggle={togglePlugin} />;
-  if (settingsSection === 'magpie') return <MagpiePanel embedded onModelsChanged={() => void refreshComposerCatalog()} onSelectModel={id => { updateChoices({ provider: 'real', provider_id: id, model: undefined, reasoning_effort: undefined }); void refreshComposerCatalog(); setPanel('chat'); }} />;
+  if (settingsSection === 'magpie') return <MagpiePanel embedded onModelsChanged={() => void refreshComposerCatalog()} onSelectModel={id => { selectProviderForCurrentRun(id); setPanel('chat'); }} />;
   if (settingsSection === 'model-monitor') return <ModelMonitorPanel embedded />;
   if (settingsSection === 'tavern') return <TavernPanel onStart={text => { startNewTask(); appendTextToComposer(null, text); }} onOpenPanel={() => setPanel('tavern')} />;
   if (settingsSection === 'package-imports') return <PackageImports onManagePlugins={() => setSettingsSection('modules')} />;

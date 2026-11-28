@@ -1,30 +1,57 @@
 import * as ts from "typescript";
 import type { JsonSchema } from "@xueness/contracts";
+import type { DynamicActorPersona, DynamicTrajectoryFilter } from "./dynamic-types.ts";
 import { actorValue, awaitValue, box, fail, isMarker, siteFor, step, toSafeNumber, toSafeString, trackTask, type Box, type EvaluationContext, type Marker } from "./dynamic-evaluate-internal.ts";
 import { invokeArrow } from "./dynamic-evaluate-statement.ts";
 import { ordinary, sameValueZero, snapshotArray } from "./dynamic-evaluate-values.ts";
 
 export async function invokeCallable(ctx: EvaluationContext, node: ts.CallExpression, callee: unknown, args: unknown[], env: import("./dynamic-evaluate-internal.ts").Environment): Promise<Box> {
   await step(ctx, node);
+  const rawCallee = ordinary(callee);
+  if (rawCallee !== null && typeof rawCallee === "object" && ctx.actors.has(rawCallee)) {
+    if (args.length !== 1) return fail(node, ctx, "actor() accepts one instruction string");
+    return ask(ctx, node, rawCallee, args[0]);
+  }
   if (!isMarker(callee)) return fail(node, ctx, "only approved workflow and value methods can be called");
   if (callee.kind === "arrow") return invokeArrow(ctx, callee, args, node);
   if (callee.kind !== "intrinsic" && callee.kind !== "bound") return fail(node, ctx, "this value is not callable");
-  if (callee.kind === "intrinsic") return callIntrinsic(ctx, node, callee.name, args);
+  if (callee.kind === "intrinsic") return callIntrinsic(ctx, node, callee.name, args, env);
   return callBound(ctx, node, callee, args, env);
 }
 
-function callIntrinsic(ctx: EvaluationContext, node: ts.CallExpression, name: string, args: unknown[]): Box {
+function callIntrinsic(ctx: EvaluationContext, node: ts.CallExpression, name: string, args: unknown[], env: import("./dynamic-evaluate-internal.ts").Environment): Box {
   switch (name) {
     case "agent": {
       if (args.length > 2) return fail(node, ctx, "agent() accepts a name and optional persona");
-      const persona = agentPersona(args[1], node, ctx);
-      const actor = ctx.host.createActor(siteFor(ctx, node, "actor"), args[0] === undefined ? undefined : expectString(args[0], node, ctx, "agent name"), persona);
+      const objectFirst = args.length === 1 && args[0] !== undefined && typeof args[0] === "object";
+      const givenName = objectFirst || args[0] === undefined ? undefined : expectString(args[0], node, ctx, "agent name");
+      const persona = agentPersona(objectFirst ? args[0] : args[1], node, ctx);
+      const actor = ctx.host.createActor(siteFor(ctx, node, "actor"), givenName, persona);
       ctx.actors.add(actor);
       return box(actor);
     }
     case "ask": {
+      if (args.length < 1 || args.length > 2) return fail(node, ctx, "ask() accepts (actor, instructions) or (instructions, persona?)");
+      const first = ordinary(args[0]);
+      if (typeof first === "string") {
+        const askSite = siteFor(ctx, node, "ask");
+        const persona = agentPersona(args[1], node, ctx);
+        const actor = ctx.host.createActor(`${askSite}:oneshot`, undefined, persona);
+        ctx.actors.add(actor);
+        return ask(ctx, node, actor, first);
+      }
       if (args.length !== 2) return fail(node, ctx, "ask() accepts an actor and instructions");
       return ask(ctx, node, args[0], args[1]);
+    }
+    case "parallel": return runParallel(ctx, node, args, env);
+    case "pipeline": return runPipeline(ctx, node, args, env);
+    case "trajectory": {
+      if (args.length > 1) return fail(node, ctx, "trajectory() accepts at most one filter object");
+      const filter = trajectoryFilter(args[0], node, ctx);
+      const siteId = siteFor(ctx, node, "trajectory");
+      const promise = trackTask(ctx, ctx.host.trajectory ? ctx.host.trajectory(siteId, filter) : Promise.resolve([]));
+      suppressUnobservedRejection(promise);
+      return box(promise);
     }
     case "report": {
       if (args.length !== 1) return fail(node, ctx, "report() accepts one item");
@@ -32,8 +59,8 @@ function callIntrinsic(ctx: EvaluationContext, node: ts.CallExpression, name: st
       return box(undefined);
     }
     case "log": {
-      if (args.length !== 1) return fail(node, ctx, "log() accepts one message");
-      ctx.host.log(toSafeString(args[0]));
+      if (args.length < 1) return fail(node, ctx, "log() accepts at least one message");
+      ctx.host.log(args.map((item) => toSafeString(item)).join(" "));
       return box(undefined);
     }
     case "phase": {
@@ -122,7 +149,30 @@ async function arrayCall(name: string, receiver: unknown, args: unknown[], node:
     }
     return box(output);
   }
+  if (name === "some" || name === "every" || name === "find") {
+    if (args.length !== 1 || !isSafeCallback(args[0])) return fail(node, ctx, `${name}() accepts one workflow callback`);
+    const callback = args[0];
+    for (let index = 0; index < values.length; index += 1) {
+      const result = await invokeCallable(ctx, node, callback, callbackValues(callback, values[index], index, values), env);
+      const truth = Boolean(await awaitValue(result.value, ctx, node));
+      if (name === "some" && truth) return box(true);
+      if (name === "every" && !truth) return box(false);
+      if (name === "find" && truth) return box(values[index]);
+    }
+    return box(name === "some" ? false : name === "every" ? true : undefined);
+  }
   switch (name) {
+    case "push": {
+      const proto = Object.getPrototypeOf(receiver);
+      if (proto !== null && proto !== Array.prototype) return fail(node, ctx, "only plain arrays can be mutated with push()");
+      for (const item of args) receiver.push(ordinary(item));
+      return box(receiver.length);
+    }
+    case "flat": {
+      const output: unknown[] = [];
+      for (const value of values) Array.isArray(value) ? output.push(...snapshotArray(value, ctx, node)) : output.push(value);
+      return box(output);
+    }
     case "join": return box(values.map((value) => value === null || value === undefined ? "" : toSafeString(value)).join(args[0] === undefined ? "," : toSafeString(args[0])));
     case "includes": return box(values.some((value) => sameValueZero(value, args[0])));
     case "slice": return box(values.slice(toInteger(args[0]), args[1] === undefined ? undefined : toInteger(args[1])));
@@ -214,11 +264,117 @@ function jsonSafeValue(value: unknown, ctx: EvaluationContext, node: ts.Node, ac
   } finally { active.delete(value); }
 }
 
-function agentPersona(value: unknown, node: ts.Node, ctx: EvaluationContext): string | { system?: string; model?: string } | undefined {
+function runParallel(ctx: EvaluationContext, node: ts.CallExpression, args: unknown[], env: import("./dynamic-evaluate-internal.ts").Environment): Box {
+  if (args.length === 1) {
+    if (!Array.isArray(args[0])) return fail(node, ctx, "parallel() with one argument requires an array");
+    const entries = snapshotArray(args[0], ctx, node);
+    const promise = trackTask(ctx, (async () => {
+      if (entries.length > 0 && entries.every(isSafeCallback)) {
+        const tasks = entries.map((cb, idx) => invokeCallable(ctx, node, cb, [idx], env).then((res) => awaitValue(res.value, ctx, node)));
+        for (const task of tasks) suppressUnobservedRejection(task);
+        return (await Promise.all(tasks)).map(ordinary);
+      }
+      return (await Promise.all(entries.map((entry) => awaitValue(entry, ctx, node)))).map(ordinary);
+    })());
+    suppressUnobservedRejection(promise);
+    return box(promise);
+  }
+  if (args.length !== 2 || !Array.isArray(args[0]) || !isSafeCallback(args[1])) {
+    return fail(node, ctx, "parallel() accepts (items, callback) or (tasks)");
+  }
+  const items = snapshotArray(args[0], ctx, node);
+  const callback = args[1];
+  const promise = trackTask(ctx, (async () => {
+    const tasks = items.map((item, idx) => invokeCallable(ctx, node, callback, callbackValues(callback, item, idx, items), env).then((res) => awaitValue(res.value, ctx, node)));
+    for (const task of tasks) suppressUnobservedRejection(task);
+    return (await Promise.all(tasks)).map(ordinary);
+  })());
+  suppressUnobservedRejection(promise);
+  return box(promise);
+}
+
+function runPipeline(ctx: EvaluationContext, node: ts.CallExpression, args: unknown[], env: import("./dynamic-evaluate-internal.ts").Environment): Box {
+  if (args.length === 1) {
+    if (!Array.isArray(args[0])) return fail(node, ctx, "pipeline() with one argument requires an array");
+    const stages = snapshotArray(args[0], ctx, node);
+    const promise = trackTask(ctx, (async () => {
+      const results: unknown[] = [];
+      let prev: unknown;
+      for (let idx = 0; idx < stages.length; idx += 1) {
+        const stage = stages[idx];
+        const value = isSafeCallback(stage) ? (await invokeCallable(ctx, node, stage, [prev, idx], env)).value : stage;
+        prev = ordinary(await awaitValue(value, ctx, node));
+        results.push(prev);
+      }
+      return results;
+    })());
+    suppressUnobservedRejection(promise);
+    return box(promise);
+  }
+  if (args.length === 2 && Array.isArray(args[1]) && !isSafeCallback(args[1])) {
+    const stages = snapshotArray(args[1], ctx, node);
+    if (!stages.every(isSafeCallback)) return fail(node, ctx, "pipeline(initial, stages) requires callback functions");
+    const promise = trackTask(ctx, (async () => {
+      let acc = ordinary(await awaitValue(args[0], ctx, node));
+      for (let idx = 0; idx < stages.length; idx += 1) {
+        const res = await invokeCallable(ctx, node, stages[idx]!, [acc, idx], env);
+        acc = ordinary(await awaitValue(res.value, ctx, node));
+      }
+      return acc;
+    })());
+    suppressUnobservedRejection(promise);
+    return box(promise);
+  }
+  if (args.length !== 2 || !Array.isArray(args[0]) || !isSafeCallback(args[1])) {
+    return fail(node, ctx, "pipeline() accepts (items, callback), (initial, stages), or (stages)");
+  }
+  const items = snapshotArray(args[0], ctx, node);
+  const callback = args[1];
+  const promise = trackTask(ctx, (async () => {
+    const out: unknown[] = [];
+    for (let idx = 0; idx < items.length; idx += 1) {
+      const res = await invokeCallable(ctx, node, callback, callbackValues(callback, items[idx], idx, items), env);
+      out.push(ordinary(await awaitValue(res.value, ctx, node)));
+    }
+    return out;
+  })());
+  suppressUnobservedRejection(promise);
+  return box(promise);
+}
+
+function trajectoryFilter(value: unknown, node: ts.Node, ctx: EvaluationContext): DynamicTrajectoryFilter | undefined {
+  if (value === undefined) return undefined;
+  if (!value || typeof value !== "object" || Array.isArray(value) || isMarker(value)) return fail(node, ctx, "trajectory filter must be an object");
+  const filter: DynamicTrajectoryFilter = {};
+  const raw = value as Record<string, unknown>;
+  if (raw.last !== undefined) {
+    if (typeof raw.last !== "number" || !Number.isInteger(raw.last) || raw.last < 1) return fail(node, ctx, "trajectory last must be a positive integer");
+    filter.last = raw.last;
+  }
+  if (raw.tools !== undefined) {
+    const tools = snapshotArray(raw.tools, ctx, node);
+    if (tools.some((item) => typeof item !== "string")) return fail(node, ctx, "trajectory tools must be strings");
+    filter.tools = tools as string[];
+  }
+  if (raw.types !== undefined) {
+    const types = snapshotArray(raw.types, ctx, node);
+    if (types.some((item) => typeof item !== "string" || !["user", "assistant", "tool_call", "tool_result"].includes(item))) {
+      return fail(node, ctx, "trajectory types must be user, assistant, tool_call, or tool_result");
+    }
+    filter.types = types as DynamicTrajectoryFilter["types"];
+  }
+  if (raw.status !== undefined) {
+    if (raw.status !== "ok" && raw.status !== "error") return fail(node, ctx, "trajectory status must be 'ok' or 'error'");
+    filter.status = raw.status;
+  }
+  return filter;
+}
+
+function agentPersona(value: unknown, node: ts.Node, ctx: EvaluationContext): string | DynamicActorPersona | undefined {
   if (value === undefined || typeof value === "string") return value;
   if (!value || typeof value !== "object" || Array.isArray(value) || isMarker(value)) return fail(node, ctx, "agent persona must be a string or object");
-  const persona: { system?: string; model?: string } = {};
-  for (const key of ["system", "model"] as const) {
+  const persona: DynamicActorPersona = {};
+  for (const key of ["system", "role", "model"] as const) {
     const descriptor = Object.getOwnPropertyDescriptor(value, key);
     if (descriptor && !("value" in descriptor)) return fail(node, ctx, `agent persona ${key} must be a data value`);
     const field = descriptor?.value;

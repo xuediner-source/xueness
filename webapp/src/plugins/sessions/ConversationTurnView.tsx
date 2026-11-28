@@ -20,13 +20,17 @@ import type { Assistant, Completion, ConversationTurn, User, ZCodeConversationPr
 import { ToolRow } from './ConversationToolRow';
 import { Reasoning, AssistantText, CompletionCheck } from './ConversationAnswerRows';
 import { CopyAction, UserMessage, FeedbackActions } from './ConversationUserRows';
+import { ReplyEditor, ReplyVersionActions, RewindAction, SpeakerLabel } from './ConversationRoleplay';
 
 /** 上下文压缩边界：归档历史与仍在模型上下文中的消息之间的浅色分隔行。
  * 纯展示、无动画；文案与计数由 sessions 插件的 compaction 记录推导。 */
 function TurnView({ turn, latest, props, activeFindRowKey, compactionMarker }: { turn: ConversationTurn; latest: boolean; props: ZCodeConversationProps; activeFindRowKey: string | null; compactionMarker?: ConversationCompactionMarker | null }) {
   useLocale();
-  const { showReasoning = true, jsonToolProtocol = false, pendingToolIds, effectivePluginIds, onFork, onFeedback, onEdit, onRetry } = props;
+  const { showReasoning = true, jsonToolProtocol = false, pendingToolIds, effectivePluginIds, onFork, onFeedback, onEdit, onRetry, presentation, onReplyAction, onRewind } = props;
   const canShowReasoning = showReasoning && (!effectivePluginIds || effectivePluginIds.has('sessions'));
+  // A chat a plugin presents (Tavern roleplay): speakers are named, and the latest reply has versions.
+  const chat = presentation?.chat === true && effectivePluginIds?.has('sessions') === true;
+  const [editingReply, setEditingReply] = React.useState(false);
   const assistantRows: Assistant[] = [];
   let completion: Completion | undefined;
   let lastToolIndex = -1;
@@ -73,6 +77,7 @@ function TurnView({ turn, latest, props, activeFindRowKey, compactionMarker }: {
   const factualLabel = conversationWorkLabel(facts, getLocale(), activeMs === undefined ? null : formatConversationWorkDuration(activeMs, getLocale()));
   const workLabel = factualLabel ?? (workPending ? tr('等待批准') : interrupted ? tr('已停止') : running || subagentRunning ? tr('工作中') : workFailed ? tr('运行失败') : duration ? (getLocale() === 'en' ? `Elapsed ${duration}` : `经过 ${duration}`) : tr('已完成'));
   const answer = final ? assistantTextForDisplay(visibleAssistantText(final), final.streaming, completion?.summary, jsonToolProtocol) : '';
+  const latestReply = chat && latest && final !== undefined && !final.streaming && props.replyVersions != null && final.messageIndex === props.replyVersions.messageIndex;
   const streamingRow = props.activityPhase !== 'compacting' && assistantRows.some(row => row.streaming);
   const liveLabel = props.activityPhase === 'compacting' ? <ContextCompactionStatus /> : tr(conversationActivityLabel(props.activityPhase));
   const copyText = () => assistantRows.map(row => assistantTextForDisplay(visibleAssistantText(row), row.streaming, completion?.summary, jsonToolProtocol)).filter(text => text.trim()).join('\n\n');
@@ -93,15 +98,19 @@ function TurnView({ turn, latest, props, activeFindRowKey, compactionMarker }: {
   return <section className="xn-zc-turn" data-turn-key={turn.key} data-zcode-turn-id={stableTurnId}>
     {compactionMarker && <CompactionBoundary marker={compactionMarker} />}
     <ConversationMarkers facts={props.timelineMarkers} rows={turn.rows} placement="before_user" enabled={effectivePluginIds?.has('sessions') === true} />
-    {turn.rows.filter((row): row is User => row.kind === 'user').map(row => <div key={`user:${row.messageId ?? row.messageIndex ?? row.seq}`} {...rowData(row)}><UserMessage editSessionId={props.messageEditSessionId} previewTransport={props.messageEditPreviewTransport} attachmentTransport={props.messageEditTransport} row={row} onEdit={onEdit} enabled={effectivePluginIds?.has('sessions') === true} isSessionsEffective={props.isSessionsEffective} /></div>)}
+    {turn.rows.filter((row): row is User => row.kind === 'user').map(row => <div key={`user:${row.messageId ?? row.messageIndex ?? row.seq}`} {...rowData(row)}><UserMessage editSessionId={props.messageEditSessionId} previewTransport={props.messageEditPreviewTransport} attachmentTransport={props.messageEditTransport} row={row} onEdit={onEdit} enabled={effectivePluginIds?.has('sessions') === true} isSessionsEffective={props.isSessionsEffective}
+      label={chat && presentation?.user ? <SpeakerLabel speaker={presentation.user} side="user" /> : undefined}
+      extraActions={chat && onRewind && row.messageId && row.messageRevision ? <RewindAction onConfirm={() => onRewind(row)} /> : undefined} /></div>)}
     {userReferences.map(row => <ReferenceRowView key={`${row.kind}:${row.seq}`} row={row} sessionId={props.sessionId} effectivePluginIds={effectivePluginIds} />)}
     {(work.length > 0 || facts.length > 0) && (running || !final ? <div className="xn-zc-work"><div className="xn-zc-work-status" role="status" data-running={running && !workPending || undefined}>{workLabel}{facts.length > 1 && <span> · {facts.length} {getLocale() === 'en' ? 'segments' : '段工作'}</span>}{running && !workPending && <LiveElapsed since={firstTime} />}</div><div className="xn-zc-work-content">{workRows}</div></div>
       : <details className="xn-zc-work" open={workOpen} onToggle={workDisclosure.onToggle}><summary className="xn-zc-work-status"><span>{workLabel}{facts.length > 1 && ` · ${facts.length} ${getLocale() === 'en' ? 'segments' : '段工作'}`}</span><ChevronRight size={16} className="xn-zc-chevron" /></summary>
         {workOpen && <div className="xn-zc-work-content">{workRows}</div>}</details>)}
     <ConversationMarkers facts={props.timelineMarkers} rows={turn.rows} placement="work_tail" enabled={effectivePluginIds?.has('sessions') === true} />
     {final && <div className="xn-zc-final">
+      {chat && presentation && <SpeakerLabel speaker={presentation.assistant} side="assistant" />}
       {canShowReasoning && final.reasoning && <Reasoning row={final} activityPhase={props.activityPhase} findActive={activeFindRowKey === conversationFindRowKey(final)} />}
-      <AssistantText row={final} summary={completion?.summary} protocol={jsonToolProtocol} />
+      {editingReply && latestReply && onReplyAction ? <ReplyEditor row={final} text={answer} onAction={onReplyAction} onClose={() => setEditingReply(false)} />
+        : <AssistantText row={final} summary={completion?.summary} protocol={jsonToolProtocol} />}
       {/* While the turn runs, the action row is reserved (it is invisible until
           hover anyway); a settling turn shows its status there, so finishing
           does not add or remove a line below the answer. Distinct keys keep the
@@ -112,6 +121,7 @@ function TurnView({ turn, latest, props, activeFindRowKey, compactionMarker }: {
       : <div key="actions" className="xn-zc-actions"><CopyAction text={copyText} />
         {onFeedback && final.messageRevision && final.messageIndex !== undefined && <FeedbackActions row={final} onFeedback={onFeedback} />}
         {onFork && <button type="button" className="xn-zc-action" aria-label={tr('分叉会话')} title={tr('分叉会话')} onClick={() => onFork(final)}><TrendingUpDown size={14} /></button>}
+        {latestReply && onReplyAction && !editingReply && <ReplyVersionActions row={final} versions={props.replyVersions} onAction={onReplyAction} onEdit={() => setEditingReply(true)} />}
       </div>}
     </div>}
     {assistantReferences.map(row => <ReferenceRowView key={`${row.kind}:${row.seq}`} row={row} sessionId={props.sessionId} effectivePluginIds={effectivePluginIds} />)}

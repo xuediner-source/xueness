@@ -6,6 +6,7 @@ const turnPropKeys = [
   'onFork', 'onFeedback', 'onEdit', 'onRetry', 'streamingPending', 'workActivity',
   'timelineMarkers', 'activityPhase', 'sessionId', 'collapseTools',
   'messageEditSessionId', 'messageEditPreviewTransport', 'messageEditTransport', 'isSessionsEffective',
+  'presentation', 'replyVersions', 'onReplyAction', 'onRewind',
 ] as const satisfies readonly (keyof ZCodeConversationProps)[];
 
 function sameStringSet(a?: ReadonlySet<string>, b?: ReadonlySet<string>): boolean {

@@ -17,6 +17,8 @@ import type { ToolDefinition, ToolEnv, ToolResult } from "@xueness/engine-tools"
 import { describeAddress, detailedEdges, POST_CHARS, type Post } from "./board.ts";
 import { diagnoseStall, memberStats } from "./engine.ts";
 import { normalizeChannelName, normalizeModel, normalizePlan, PlanError, renderPlanSubject, type SwarmPlan } from "./plan.ts";
+import type { SwarmModelOption } from "./roster.ts";
+import { memberRosterTools, parentRosterTools } from "./roster-tools.ts";
 import { SwarmServiceError, type SwarmService } from "./service.ts";
 import { TERMINAL, type SwarmRecord } from "./store.ts";
 
@@ -33,6 +35,8 @@ export interface SwarmBinding {
   /** Whether the user's conversation runs on a local server (one member at a time by default). */
   local?(env: ToolEnv): boolean;
   maxMembers?(): number;
+  /** Configured host models (saved profiles + Magpie gateway models) for swarm_models discovery. */
+  listModels?(): readonly SwarmModelOption[];
   /** Set only inside a member's session. */
   member?: { swarmId: string; name: string };
 }
@@ -70,6 +74,7 @@ export function swarmSummary(record: SwarmRecord, running: readonly string[] = [
         turns: member.turns,
         steps: member.steps,
         ...(member.model ? { model: member.model } : {}),
+        ...(member.addedBy ? { addedBy: member.addedBy } : {}),
         ...(member.groups.length ? { groups: member.groups } : {}),
         ...(member.channels?.length ? { channels: member.channels } : {}),
         ...(member.wakeMode ? { wakeMode: member.wakeMode } : {}),
@@ -157,7 +162,7 @@ function parentTools(binding: SwarmBinding): ToolDefinition[] {
       run: (input, env) => guarded(() => { const record = owned(env, input.swarm_id); const stopped = binding.service()!.stop(record.id, text(input.reason) || "stopped from the conversation"); return ok(`Swarm ${stopped.id} is ${stopped.status}.`); }),
     },
   ];
-  return tools as unknown as ToolDefinition[];
+  return [...(tools as unknown as ToolDefinition[]), ...parentRosterTools(binding, owned)];
 }
 
 function memberTools(binding: SwarmBinding): ToolDefinition[] {
@@ -198,13 +203,12 @@ function memberTools(binding: SwarmBinding): ToolDefinition[] {
     { ...base, name: "swarm_done", description: "Report your task complete with a summary of what you did and how you checked it. You wake again only if the coordinator, a verifier or the user writes to you.",
       inputSchema: { type: "object", additionalProperties: false, required: ["summary"], properties: { summary: { type: "string", maxLength: 2000 } } },
       run: (input: Row) => guarded(() => { service().memberDone(me.swarmId, me.name, text(input.summary) || "done"); return ok("Reported done.", undefined, { turn_control: STOP_TURN("swarm_done") }); }) },
-    { ...base, name: "swarm_kill", description: "Coordinator only: stop a member that is stuck or no longer needed.",
+    { ...base, name: "swarm_kill", description: "Coordinator (any worker/verifier) or worker (only helpers it added): stop a member permanently.",
       inputSchema: { type: "object", additionalProperties: false, required: ["name", "reason"], properties: { name: { type: "string" }, reason: { type: "string" } } },
-      run: (input: Row) => guarded(() => { if (role() !== "coordinator") return fail("forbidden", "only the coordinator stops members"); service().kill(me.swarmId, text(input.name).replace(/^@/, "").toLowerCase(), me.name, text(input.reason)); return ok(`Stopped @${text(input.name)}.`); }) },
-    { ...base, name: "swarm_model", description: "Coordinator only: switch a member's model while keeping its conversation session so it continues on the new model. Only \"inherit\" or a model the approved plan names; ask the user for any other.",
+      run: (input: Row) => guarded(() => { if (role() !== "coordinator" && role() !== "worker") return fail("forbidden", "only the coordinator or owning worker stops members"); service().kill(me.swarmId, text(input.name).replace(/^@/, "").toLowerCase(), me.name, text(input.reason)); return ok(`Stopped @${text(input.name)}.`); }) },
+    { ...base, name: "swarm_model", description: "Switch a member's model while keeping its conversation session (coordinator: any member; worker: itself or helpers it added). Only \"inherit\" or a model the approved plan names; ask the user for any other.",
       inputSchema: { type: "object", additionalProperties: false, required: ["name"], properties: { name: { type: "string" }, model: { description: "\"inherit\" or {provider_id, model}." } } },
       run: (input: Row) => guarded(() => {
-        if (role() !== "coordinator") return fail("forbidden", "only the coordinator switches member models");
         const target = text(input.name).replace(/^@/, "").toLowerCase();
         const model = normalizeModel(input.model, "model");
         service().switchModel(me.swarmId, target, model, me.name);
@@ -249,6 +253,7 @@ function memberTools(binding: SwarmBinding): ToolDefinition[] {
         service().verify(me.swarmId, me.name, input.verdict === "pass" ? "pass" : "fail", text(input.findings), criteria);
         return ok("Verdict reported to the coordinator.");
       }) },
+    ...memberRosterTools(binding),
   ] as unknown as ToolDefinition[];
 }
 

@@ -1,25 +1,19 @@
 import React, { useEffect, useState } from 'react';
 import { t as tr, tf } from '../../i18n';
-import { isImeComposingEvent, isModKeyPressed } from '../../xuenessShortcutDisplay';
 import { sessionStatusPresentation, type SessionStatusPresentation } from '../sessions/statusPresentation';
+import { lightweightLayoutActive } from './useLightweightWorkbench';
+import {
+  evaluateLightweightGlobalKey, hasOpenLightweightOverlay, isEditableKeyTarget,
+  lightweightGlobalKeyContextFromEvent, OVERLAY_SELECTOR, scrollToTimelineBottom,
+  type LightweightGlobalKeyAction, type LightweightGlobalKeyContext,
+} from './lightweightGlobalKeys';
 import './LightweightWorkbench.css';
 
-/**
- * 轻量档极简工作台（providers 插件功能）。
- *
- * 对标 Pi coding agent 的极简形态：选中本地轻量档时只保留与本地小模型运行
- * 直接相关的界面。输入区单行起步自动增高、时间线紧凑折叠（连续只读工具自动
- * 合并分组、思考过程折叠）、极简状态行显示工作区/已报告 Token 用量；模型名由
- * 输入区的单一选择器展示。
- */
-
-/** 轻量极简布局只在 providers 插件生效且当前运行档位为轻量时启用。 */
-export function lightweightLayoutActive(
-  runtimeProfile: string | null | undefined,
-  providersEffective: boolean,
-): boolean {
-  return providersEffective && runtimeProfile === 'lightweight';
-}
+export {
+  evaluateLightweightGlobalKey, hasOpenLightweightOverlay, isEditableKeyTarget,
+  lightweightGlobalKeyContextFromEvent, lightweightLayoutActive, OVERLAY_SELECTOR, scrollToTimelineBottom,
+  type LightweightGlobalKeyAction, type LightweightGlobalKeyContext,
+};
 
 // ---------------------------------------------------------------------------
 // 极简状态行 (Pi-style Footer)
@@ -239,115 +233,5 @@ export function LightweightStatusBar({
 // 紧凑时间线 (Compact Timeline & Merged Tool Calls)
 // ---------------------------------------------------------------------------
 
-// ---------------------------------------------------------------------------
-// 极简输入框与键盘优先操作 (Lightweight Composer & Keyboard First)
-// ---------------------------------------------------------------------------
-
-/**
- * 滚动时间线视口到底部（清屏式滚到底）。
- */
-export function scrollToTimelineBottom(): void {
-  const scroller = typeof document === 'undefined' ? null : document.querySelector<HTMLElement>(
-    '.xn-session-timeline-viewport__scroll, [data-testid="session-timeline-scroller"], .xn-conversation__stream'
-  );
-  if (scroller) {
-    scroller.scrollTop = scroller.scrollHeight;
-  }
-}
-
-/** 模态层选择器：与标准档 Composer 的 Esc 守卫使用同一套判据，保持两档一致。 */
-/**
- * 前景浮层判定用的选择器。只列「打开时才挂载」的节点：工具条菜单是
- * `role="menu"` 的 popover，命令面板是 `.xn-command-overlay` ＋ `role="listbox"`，
- * 对话框一律 `role="dialog"`。`.xn-composer-toolbar__*` 上的 `[open]` 是死选择器
- * （这些菜单不是 `<details>`），用它会让 Esc 永远让位、停不掉回合。
- */
-export const OVERLAY_SELECTOR = '[role="dialog"], [aria-modal="true"], [role="menu"], [role="listbox"], .xn-command-overlay, .xn-select-menu';
-
-/** 是否有对话框/命令面板一类的模态层在前景，轻量档的全局按键必须让位。 */
-export function hasOpenLightweightOverlay(): boolean {
-  if (typeof document === 'undefined' || typeof document.querySelector !== 'function') return false;
-  return Boolean(document.querySelector(OVERLAY_SELECTOR));
-}
-
-/** 焦点是否落在可编辑控件里（含其它插件的输入框、终端、下拉与富文本）。 */
-export function isEditableKeyTarget(target: unknown): boolean {
-  const element = target as { closest?: (selector: string) => unknown } | null;
-  if (!element || typeof element.closest !== 'function') return false;
-  return Boolean(element.closest("textarea, input, select, [contenteditable='true']"));
-}
-
-/** 轻量档全局按键的 DOM 侧写：把事件转成纯判定函数的输入。 */
-export function lightweightGlobalKeyContextFromEvent(
-  event: { target: unknown },
-  state: { panelOpen: boolean; running: boolean; stopping: boolean; platform?: string },
-): LightweightGlobalKeyContext {
-  const inEditableField = isEditableKeyTarget(event.target);
-  const inComposer = Boolean((event.target as HTMLElement | null)?.closest?.('[data-testid="lightweight-composer-input"]'));
-  return {
-    inComposer,
-    inEditableField,
-    overlayOpen: hasOpenLightweightOverlay(),
-    panelOpen: state.panelOpen,
-    running: state.running,
-    stopping: state.stopping,
-    platform: state.platform,
-  };
-}
-
-export type LightweightGlobalKeyAction = 'clear-screen' | 'close-panel' | 'stop' | null;
-
-export type LightweightGlobalKeyContext = {
-  /** 焦点在轻量输入框：由 composer 自己的按键处理，容器不重复执行。 */
-  inComposer: boolean;
-  /** 焦点落在任意可编辑控件（其它插件的编辑器、搜索框、下拉、富文本）。 */
-  inEditableField: boolean;
-  /** 对话框、命令面板或工具条浮层展开中。 */
-  overlayOpen: boolean;
-  /** 当前显示的是二级面板而不是对话页。 */
-  panelOpen: boolean;
-  running: boolean;
-  stopping: boolean;
-  platform?: string;
-};
-
-/**
- * 轻量档挂在 window 上的补充快捷键判定（纯函数，便于回归）。
- *
- * Mod+L 在本应用里是浏览器保留键（快捷键录制器明确拒绝它），所以只在轻量档
- * 作为「滚到底」使用，且不越过输入控件与浮层：焦点在其它插件的输入框、
- * 终端或对话框里时一律不接管。输入框内的 Mod+L 由 composer 自己处理。
- */
-export function evaluateLightweightGlobalKey(
-  e: {
-    key: string;
-    ctrlKey?: boolean;
-    metaKey?: boolean;
-    altKey?: boolean;
-    shiftKey?: boolean;
-    repeat?: boolean;
-    defaultPrevented?: boolean;
-    isComposing?: boolean;
-    keyCode?: number;
-    nativeEvent?: { isComposing?: boolean; keyCode?: number };
-    compositionActive?: boolean;
-  },
-  context: LightweightGlobalKeyContext,
-): LightweightGlobalKeyAction {
-  if (e.defaultPrevented || e.repeat || isImeComposingEvent(e)) return null;
-  if (context.overlayOpen) return null;
-  const isMod = context.platform
-    ? isModKeyPressed(e, context.platform)
-    : Boolean((e.ctrlKey && !e.metaKey) || (e.metaKey && !e.ctrlKey));
-  if (isMod && !e.altKey && !e.shiftKey && (e.key === 'l' || e.key === 'L')) {
-    if (context.inComposer) return null;
-    return context.inEditableField ? null : 'clear-screen';
-  }
-  if (e.key === 'Escape') {
-    if (context.panelOpen) return 'close-panel';
-    if (context.inEditableField) return null;
-    return context.running && !context.stopping ? 'stop' : null;
-  }
-  return null;
-}
+// Lightweight global key helpers live in ./lightweightGlobalKeys and are re-exported above.
 

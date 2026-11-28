@@ -8,7 +8,14 @@ import type React from "react";
 import { useEffect } from "react";
 import { resolveHostPlatform } from "../../xuenessShortcutDisplay";
 import type { WorkbenchPanel } from "../../xuenessPluginRegistry";
-import { evaluateLightweightGlobalKey, lightweightGlobalKeyContextFromEvent, scrollToTimelineBottom } from "./LightweightWorkbench";
+import { evaluateLightweightGlobalKey, lightweightGlobalKeyContextFromEvent, scrollToTimelineBottom } from "./lightweightGlobalKeys";
+
+export function lightweightLayoutActive(
+  runtimeProfile: string | null | undefined,
+  providersEffective: boolean,
+): boolean {
+  return providersEffective && runtimeProfile === "lightweight";
+}
 
 type LightweightWorkbenchInput = {
   lightweightLayout: boolean;

@@ -5,7 +5,7 @@ import { t as tr } from '../../i18n';
 import './ClaudexSidebar.css';
 import { Bell, ChevronDown, MoreHorizontal } from 'lucide-react';
 import type { SessionSummary } from '../../xuenessWorkbench';
-import { commandPaletteStatusLabel } from './CommandPalette';
+import { commandPaletteStatusLabel } from './commandPaletteState';
 
 function useSidebarMenuDismiss(ref: React.RefObject<HTMLElement | null>): void {
   useEffect(() => {

@@ -12,7 +12,9 @@
     "ask_user",
     "delivery_plan",
     "delivery_verify",
-    "goal_read"
+    "goal_read",
+    "enter_plan_mode",
+    "exit_plan_mode"
   ],
   "commands": [
     "goal"

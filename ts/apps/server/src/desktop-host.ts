@@ -20,6 +20,7 @@ import { createInterface } from "node:readline";
 import type { Readable, Writable } from "node:stream";
 import { fileURLToPath } from "node:url";
 import { isDict } from "@xueness/contracts";
+import { updatePolicy } from "@xueness/plugin-updates";
 import { createFrontDoor, type FrontDoor } from "./front-door.ts";
 import { routeFamilies } from "./manifests.ts";
 import { createApplicationApi, type DesktopBridgeLike } from "./application-api.ts";
@@ -108,7 +109,8 @@ export async function runDesktopHost(options: DesktopHostOptions): Promise<numbe
   const projectRoot = resolve(args.project_root != null ? String(args.project_root) : options.projectRoot ?? DEFAULT_ROOT);
   const assets = args.assets != null ? resolve(String(args.assets)) : join(projectRoot, "webapp", "dist");
   const bridge = new DesktopBridge(options.output ?? process.stdout);
-  const api = await createApplicationApi({ projectRoot, projectDir: project, stateDir: join(data, "state"), webRuns: join(data, "runs"),
+  const stateDir = join(data, "state");
+  const api = await createApplicationApi({ projectRoot, projectDir: project, stateDir, webRuns: join(data, "runs"),
     desktopToken: token, desktopBridge: bridge, webappDir: assets, allowReal: (env.XUENESS_ALLOW_REAL ?? "1") === "1", env });
   const door = createFrontDoor({ webappDir: assets, desktopToken: token, families: routeFamilies(projectRoot), api,
     describeBackend: () => ({ managed: true, mode: "desktop" }) });
@@ -123,6 +125,18 @@ export async function runDesktopHost(options: DesktopHostOptions): Promise<numbe
   }
   options.onListening?.(door);
   bridge.send({ type: "ready", url: `http://127.0.0.1:${(door.address() as AddressInfo).port}`, instance: randomBytes(16).toString("hex") });
+  // Electron keeps updates off until told otherwise; plugin switches and the
+  // auto-download setting change without a hook, so the policy is re-read.
+  let sentPolicy = "";
+  const syncPolicy = (): void => {
+    try {
+      const policy = JSON.stringify({ type: "update-policy", ...updatePolicy(stateDir, api.enabled) });
+      if (policy !== sentPolicy) { bridge.send(JSON.parse(policy) as Row); sentPolicy = policy; }
+    } catch { /* settings unreadable or the pipe closing: the next tick retries */ }
+  };
+  syncPolicy();
+  const policyTimer = setInterval(syncPolicy, 1000);
+  policyTimer.unref();
   await new Promise<void>((stopped) => {
     const lines = createInterface({ input: options.input ?? process.stdin, crlfDelay: Infinity });
     let done = false;
@@ -138,10 +152,13 @@ export async function runDesktopHost(options: DesktopHostOptions): Promise<numbe
     lines.once("close", stop);
     if (options.forwardSignals) for (const signal of ["SIGTERM", "SIGINT", "SIGHUP"] as const) process.once(signal, stop);
   });
+  clearInterval(policyTimer);
   bridge.close();
   door.close();
   door.closeAllConnections();
-  await api.close().catch(() => {});
+  // Plugin cleanup may wait on unref'd timers; keep the loop alive until it is done.
+  const hold = setInterval(() => {}, 1000);
+  try { await api.close().catch(() => {}); } finally { clearInterval(hold); }
   return 0;
 }
 

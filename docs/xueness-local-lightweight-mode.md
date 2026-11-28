@@ -56,4 +56,10 @@ planning 从“交付”“保存”“deliverables”等明确指令登记输�
 
 - **JSON 工具模式的约束解码**：JSON 工具协议的请求会带 `response_format: {"type": "json_object"}`，支持它的本地服务（如 llama.cpp、Ollama 的 OpenAI 兼容接口）就无法用散文或 `<tool_call>` 标记代替 JSON 信封。规则与 `stream_options` 相同：服务以 400/422 拒绝该字段时去掉它重发一次，并在本进程内记住；两个字段都被拒绝时先各去掉一次，下一步再单独确认。只有提示视图标记过的工具协议请求才带这个字段，同一配置下的标题、摘要等请求不受影响。模型连接的兼容性选项 `jsonResponseFormat` 设为 `false` 可关闭，设为 `true` 则不探测、始终发送。这一项只用本机假服务验证过回退路径，没有在真实本地模型上测量过效果。
 
+## 2026-11-26：JSON 模式与模型原生工具调用标记（J6）
+
+- **整段 `<tool_call>` 严格解码**：在 JSON 协议模式下，如果模型整条答复（或单一 XML 代码块内）只由完整闭合的 `<tool_call>...</tool_call>` 块组成（键值形式 `<tool_call>NAME<arg_key>...</arg_key><arg_value>...</arg_value></tool_call>` 或块内 JSON 对象），`runtime-protocol.ts` 通过 `tool-markup.ts` 按当前工具 schema 强制转换并解码参数（例如声明为 `string` 的参数保持原字符串 `"123"`），支持多块顺序解码并拒绝重复 JSON 键。任何散文夹杂 `<tool_call>`/`<invoke>` 或截断未闭合标签都**不**会从正文猜测调用意图，直接以 `native_markup_in_json_mode` 拒绝并附带 `detectedDialect`（`xml_tool_call_kv` / `xml_tool_call_json` / `function_calls_xml`），提示改用 JSON 信封或切换到原生工具调用。
+- **有界诊断摘要**：`protocol_diagnostics`（经 `publicDiagnostics` 白名单过滤）在保留 `responseChars`、`responseSha256` 与 JSON 错误坐标外，额外记录经过凭据脱敏（Bearer、`sk-*`、`api_key=`、PEM、JWT 等）并截取至最多 160 字符的单行 `responseHead` 以及可选 `detectedDialect`。
+- **兼容诊断主动推荐原生工具调用**：运行 `json_tool_call` 或 `json_tool_roundtrip` 兼容测试时，若端点返回 `<tool_call>` 或 `<invoke>` 标记，诊断明确报错并返回白名单字段 `detectedMarkupDialect` 与 `recommendedToolCalling: "native"`；模型设置页的兼容诊断区随后提示切换为「原生工具调用」并提供一键切换按钮。
+
 尚未做、需要真实本地服务验证：探测槽位与 KV 缓存设置、工具结果的双重转义。
