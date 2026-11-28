@@ -142,7 +142,8 @@ export { clip };
 /** Python `inspect_skill` (operator CLI): one skill with its bounded rendered body, or what is available. */
 export function inspectSkill(stateDir: string, key: unknown, root: string | null, includeCompat = true, bundled: string | null = null): Record<string, unknown> {
   const listing = listAll(stateDir, root, includeCompat, bundled);
-  const row = find(listing.skills, key);
+  // Inspecting is read-only: a switched-off skill can still be looked at (the model's reads use `find`).
+  const row = typeof key === "string" && key ? listing.skills.find((item) => !item.shadowed && (key === item.id || key === item.name)) ?? null : null;
   if (!row) return { ok: false, error: `skill not found: ${String(key)}`, available: listing.skills.filter((item) => !item.shadowed).map((item) => item.name), diagnostics: listing.diagnostics };
   let rendered: string, size: number;
   if (row.source === "resource") {

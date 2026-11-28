@@ -63,6 +63,7 @@
   "frontendModules": [
     "plugins/mcp/index.tsx",
     "plugins/mcp/ElicitationForm.tsx",
+    "plugins/mcp/elicitationSchema.ts",
     "plugins/mcp/elicitationSubscription.ts",
     "plugins/mcp/AppsUiHost.tsx"
   ]

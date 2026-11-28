@@ -146,10 +146,13 @@ export function createProvidersApi(options: ProvidersApiOptions) {
         const action = parts[2]!;
         if (method === "GET" && action === "execution") return [200, providerExecutionSnapshot(options.stateDir)];
         if (method === "GET" && action === "capabilities") {
-          const wanted = typeof query.id === "string" && query.id ? query.id : (loadDefault(store).providerId as string | null);
+          // Query values arrive as string arrays (`?id=x` is `["x"]`).
+          const one = (value: unknown): unknown => Array.isArray(value) ? value[0] : value;
+          const id = one(query.id), mode = one(query.mode);
+          const wanted = typeof id === "string" && id ? id : (loadDefault(store).providerId as string | null);
           const record = wanted ? allProfiles().find((row) => row.id === wanted) : null;
           if (!record) return [404, { error: "provider profile not found" }];
-          const requested = query.mode === "standard" || query.mode === "lightweight" ? query.mode : null;
+          const requested = mode === "standard" || mode === "lightweight" ? mode : null;
           const announcement = announceExecutionCapabilities(record, options.capabilityFlags?.(record) ?? {}, requested);
           return [200, { announcement, capabilities: capabilityRows(announcement) }];
         }

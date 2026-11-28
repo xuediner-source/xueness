@@ -175,6 +175,11 @@ def _setup_libreoffice_macro() -> bool:
         macro_dir = os.path.expanduser(
             "~/Library/Application Support/LibreOffice/4/user/basic/Standard"
         )
+    elif platform.system() == "Windows":
+        macro_dir = os.path.join(
+            os.environ.get("APPDATA") or os.path.expanduser("~/AppData/Roaming"),
+            "LibreOffice", "4", "user", "basic", "Standard",
+        )
     else:
         macro_dir = os.path.expanduser(
             "~/.config/libreoffice/4/user/basic/Standard"
@@ -226,11 +231,10 @@ def _libreoffice_recalc(filename: str, timeout: int = 30) -> Dict[str, Any]:
 
     abs_path = str(Path(filename).absolute())
 
-    if not _setup_libreoffice_macro():
-        return {"error": "Failed to setup LibreOffice macro"}
-
-    # Locate soffice binary (cross-platform)
+    # Locate soffice binary (cross-platform) before touching its profile directory
     soffice_bin = _find_soffice()
+    if soffice_bin and not _setup_libreoffice_macro():
+        return {"error": "Failed to setup LibreOffice macro"}
     if not soffice_bin:
         return {"error": (
             "LibreOffice not found — you MUST install it, not substitute it. "

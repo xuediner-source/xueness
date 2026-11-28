@@ -82,7 +82,7 @@ export function pathsOverlap(a: string, b: string, foldCase: boolean): boolean {
   return x === y || x.startsWith(`${y}/`) || y.startsWith(`${x}/`);
 }
 
-function pathWithinApproved(path: string, approved: ReadonlySet<string>, foldCase: boolean): boolean {
+export function pathWithinApproved(path: string, approved: ReadonlySet<string>, foldCase: boolean): boolean {
   const norm = foldCase ? path.toLowerCase() : path;
   for (const item of approved) {
     const base = foldCase ? item.toLowerCase() : item;

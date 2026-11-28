@@ -67,6 +67,10 @@ export type WorkbenchSession = {
   tool_activity?: unknown;
   work_segments?: import('./conversationWorkSegments').ConversationWorkSegment[];
   timeline_markers?: import('./conversationMarkers').ConversationFactMarker[];
+  /** A plugin-owned chat's speakers and opening line (Tavern roleplay); null for other sessions. */
+  presentation?: import('./conversationTypes').ConversationPresentation | null;
+  /** Versions of the latest plain reply. */
+  reply_versions?: import('./conversationTypes').ReplyVersionsInfo | null;
   pending: PendingApproval[];
   approved: { write: string[]; edit: string[]; exec: string[]; mcp: string[] };
   changed_files: string[];

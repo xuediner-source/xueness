@@ -3,7 +3,7 @@
   "id": "model_monitor",
   "name": "返回模型监测",
   "description": "随会话记录请求型号与上游返回型号，标记一致、不同及未报告。不会自动发起额外模型请求。",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "defaultEnabled": false,
   "installPackage": "xueness-model-monitor",
   "dependencies": ["providers"],

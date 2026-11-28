@@ -22,7 +22,8 @@ import { files, filesReadStateExtension, filesHistoryExtension } from "@xueness/
 import { createProviderResultTools, lightweightRuntimeExtension, providerModelExecutionExtension, providerRequestShapingExtension, providerToolResultBudgetExtension } from "@xueness/plugin-providers";
 import { createShell, shellBackgroundExtension, loadShellConfig, type ShellRuntimeBinding } from "@xueness/plugin-shell";
 import { createSessionsStore, sessions as sessionsPlugin, sessionsTurnRuntimeExtension, sessionsRuntimeEventsExtension, sessionsStableBoundariesExtension, sessionsCompactPersistenceExtension } from "@xueness/plugin-sessions";
-import { createSwarm, memberRules, SWARM_MEMBER_SYSTEM, type MemberRunner, type ModelChoice, type SwarmService } from "@xueness/plugin-swarm";
+import { createSwarm, memberRules, SWARM_MEMBER_SYSTEM, type MemberRunner, type ModelChoice, type SwarmModelOption, type SwarmService } from "@xueness/plugin-swarm";
+import { createTools } from "@xueness/plugin-tools";
 import type { Session } from "@xueness/sessions";
 import { ToolBridge } from "@xueness/tool-bridge";
 import { loadAgentRuntimeConfig } from "./runtime-configuration.ts";
@@ -39,6 +40,7 @@ export interface SwarmMemberHostOptions {
   service(): SwarmService | null;
   /** The member's model, or the user's conversation's model when the plan names none. */
   resolveProvider(choice: ModelChoice | null, parentSessionId: string): Promise<AgentProvider>;
+  listModels?(): readonly SwarmModelOption[];
   hostSignal?: AbortSignal;
 }
 
@@ -99,11 +101,15 @@ export function createSwarmMemberRunner(options: SwarmMemberHostOptions): Member
       const shellBinding: ShellRuntimeBinding = {};
       const runtimeConfig = loadAgentRuntimeConfig({ stateDir: options.stateDir, root, enabled: options.enabled }).config;
       const shellConfig = runtimeConfig.plugins?.shell as unknown as ReturnType<typeof loadShellConfig>;
-      const memberPlugin = createSwarm({ service: options.service, commandIssue: commandRuleIssue, foldCase: process.platform === "win32", member: { swarmId: swarm.id, name: member.name } });
+      const memberPlugin = createSwarm({
+        service: options.service, commandIssue: commandRuleIssue, foldCase: process.platform === "win32",
+        ...(options.listModels ? { listModels: options.listModels } : {}),
+        member: { swarmId: swarm.id, name: member.name },
+      });
       const host = new PluginHost(kernel, [files, sessionsPlugin, createShell(shellBinding, { stateDir: options.stateDir }), createProviderResultTools(() => current.session, {
         catalog: () => kernel.tools.list<ToolDefinition>().map(({ name, description, alwaysLoad, shouldDefer }) => ({ name, description, alwaysLoad, shouldDefer })),
         provider: () => provider,
-      }), memberPlugin], { enabled: { files: options.enabled("files"), sessions: options.enabled("sessions"), shell: options.enabled("shell"), providers: options.enabled("providers"), swarm: options.enabled("swarm") }, config: runtimeConfig.plugins });
+      }), memberPlugin, createTools({ stateDir: options.stateDir, session: () => current.session })], { enabled: { files: options.enabled("files"), sessions: options.enabled("sessions"), shell: options.enabled("shell"), providers: options.enabled("providers"), swarm: options.enabled("swarm"), tools: options.enabled("tools") }, config: runtimeConfig.plugins });
       try {
         await host.start();
         const posix = shellBinding.dialect === "posix";
@@ -120,7 +126,9 @@ export function createSwarmMemberRunner(options: SwarmMemberHostOptions): Member
           lightweightRuntimeExtension({ discoveredCatalog: () => kernel.tools.list().map((tool) => tool.name), toolPolicy: () => ({ disallow: MEMBER_DISALLOWED,
             alwaysLoad: tools().filter((tool) => tool.alwaysLoad === true).map((tool) => String(tool.name)), deferred: tools().filter((tool) => tool.shouldDefer === true).map((tool) => String(tool.name)) }) }),
           toolMediaExtension(), providerRequestShapingExtension(), providerModelExecutionExtension({ admissionScope: { run: swarm.id } }),
-          toolJudgeFor({ stateDir: options.stateDir, gateOf: (name) => kernel.tools.get(name)?.gate ?? null, scope: { run: swarm.id }, override: swarm.judge, shell: posix ? "posix" : "powershell" }),
+          toolJudgeFor({ stateDir: options.stateDir, gateOf: (name) => kernel.tools.get(name)?.gate ?? null, scope: { run: swarm.id }, override: swarm.judge, shell: posix ? "posix" : "powershell",
+            root, tracker: env.tracker, schemaOf: (name) => ((kernel.tools.get(name) as { inputSchema?: Record<string, unknown> } | undefined)?.inputSchema) ?? null,
+            shellInitConfigured: !!(shellConfig?.captureInit || shellConfig?.startupScript) }),
           providerToolResultBudgetExtension()] });
         const signal = options.hostSignal ? AbortSignal.any([request.signal, options.hostSignal]) : request.signal;
         const runner = new AgentRunner({ root, store, stateDir: options.stateDir, provider, toolBridge: bridge, hooks, hostSignal: signal });

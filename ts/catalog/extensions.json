@@ -6,9 +6,7 @@
   "version": "1.0.0",
   "defaultEnabled": true,
   "dependencies": [],
-  "tools": [
-    "plugin_manifest_validate"
-  ],
+  "tools": [],
   "commands": [],
   "panels": [
     "marketplace"
@@ -74,6 +72,8 @@
   ],
   "frontendModules": [
     "plugins/extensions/index.tsx",
+    "plugins/extensions/MarketplaceCard.tsx",
+    "plugins/extensions/extensionsApi.ts",
     "plugins/extensions/PluginProfilePicker.tsx",
     "plugins/extensions/PackageImports.tsx", "plugins/extensions/optionalFrontend.ts"
   ]

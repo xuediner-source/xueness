@@ -55,15 +55,18 @@ export function CopyAction({ text }: { text: string | (() => string) }) {
 
 const UserMessageEditor = React.lazy(() => import('./UserMessageEditor'));
 
-export function UserMessage({ row, onEdit, enabled, isSessionsEffective, attachmentTransport, editSessionId, previewTransport }: { row: User; editSessionId?: string; previewTransport?: AttachmentPreviewTransport; attachmentTransport?: MessageEditAttachmentTransport; onEdit?: ZCodeConversationProps['onEdit']; enabled: boolean; isSessionsEffective?: () => boolean }) {
+export function UserMessage({ row, onEdit, enabled, isSessionsEffective, attachmentTransport, editSessionId, previewTransport, label, extraActions }: { row: User; editSessionId?: string; previewTransport?: AttachmentPreviewTransport; attachmentTransport?: MessageEditAttachmentTransport; onEdit?: ZCodeConversationProps['onEdit']; enabled: boolean; isSessionsEffective?: () => boolean;
+  /** A chat a plugin presents shows who is speaking above the bubble. */
+  label?: React.ReactNode; extraActions?: React.ReactNode }) {
   const [editing, setEditing] = React.useState(false);
   const sessionId = React.useContext(SessionIdContext);
   return <div className="xn-zc-user" data-history-user-seq={row.seq} data-role="user" data-testid={`timeline-item-user-${row.seq}`}>
     {editing && enabled ? <React.Suspense fallback={null}><UserMessageEditor previewTransport={previewTransport} attachmentTransport={attachmentTransport} row={row} sessionId={editSessionId ?? sessionId} enabled={enabled} isSessionsEffective={isSessionsEffective}
       onEdit={onEdit} onClose={() => setEditing(false)} evaluateKey={evaluateUserMessageEditKey} /></React.Suspense>
-      : <>{(row.displayText ?? row.text).trim() ? <div className="xn-zc-user-bubble">{row.displayText ?? row.text}</div> : null}<div className="xn-zc-actions"><CopyAction text={(row.displayText ?? row.text).trim() ? (row.displayText ?? row.text) : row.text} />
+      : <>{label}{(row.displayText ?? row.text).trim() ? <div className="xn-zc-user-bubble">{row.displayText ?? row.text}</div> : null}<div className="xn-zc-actions"><CopyAction text={(row.displayText ?? row.text).trim() ? (row.displayText ?? row.text) : row.text} />
       {enabled && onEdit && row.messageRevision && row.messageIndex !== undefined && <button type="button" className="xn-zc-action"
         aria-label={tr('编辑消息')} title={tr('编辑消息')} onClick={() => { if (isSessionsEffective?.() !== false) setEditing(true); }}><Pencil size={14} /></button>}
+      {enabled && extraActions}
     </div></>}
   </div>;
 }

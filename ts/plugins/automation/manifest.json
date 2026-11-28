@@ -28,6 +28,7 @@
     { "id": "automation.off_peak_tickets", "name": "闲时票据与用户接管：票据续期、无输出重签、已输出不重播与请求边界接管", "nameEn": "Off-peak tickets and user takeover: renewal, no-output re-sign, no replay after output and boundary takeover" }
   ],
   "frontendModules": [
+    "plugins/automation/automationApi.ts",
     "plugins/automation/automationModel.ts",
     "plugins/automation/offPeakModel.ts",
     "plugins/automation/OffPeakTasks.tsx",

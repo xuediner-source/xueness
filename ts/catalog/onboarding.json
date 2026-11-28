@@ -36,7 +36,8 @@
     }
   ],
   "frontendModules": [
-    "plugins/onboarding/DesktopPermissionOnboarding.tsx"
+    "plugins/onboarding/DesktopPermissionOnboarding.tsx",
+    "plugins/onboarding/permissionOnboardingModel.ts"
   ],
   "httpFamilies": [
     "onboarding"

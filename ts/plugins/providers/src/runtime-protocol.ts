@@ -1,6 +1,7 @@
 /** Explicit lightweight JSON protocol; no executable intent is mined from prose. */
 import { isDict, pyJsonDumps, pyJsonLoads, uuid4Hex } from "@xueness/contracts";
 import { envelopeText, failure, finiteJsonText, strictJson } from "@xueness/providers";
+import { detectNativeToolMarkup, parseWholeReplyToolMarkup } from "./tool-markup.ts";
 type Row = Record<string, unknown>;
 export const runtimeToolName = (schema: Row): string => isDict(schema.function) && typeof schema.function.name === "string" ? schema.function.name : "";
 
@@ -9,7 +10,31 @@ export function decodeTextResponse(response: Row, tools: Row[], id = (): string 
   if (typeof response.content !== "string") return failure(response, "missing_text", "Reply with one JSON tool or answer object.");
   let object: unknown;
   try { object = strictJson(envelopeText(response.content)); }
-  catch (error) { return failure(response, error instanceof Error && error.name === "DuplicateKey" ? "duplicate_json_key" : "invalid_json", "Reply with one valid JSON tool or answer object; escape newlines and quotes inside strings.", error); }
+  catch (error) {
+    const markup = parseWholeReplyToolMarkup(response.content, tools);
+    if (markup) {
+      if (!markup.ok) return failure(response, markup.code, markup.instruction, null, { detectedDialect: markup.dialect });
+      if (markup.calls.some((call) => !tools.some((schema) => runtimeToolName(schema) === call.name))) {
+        return failure(response, "tool_unavailable", "That tool is not part of the current tool view.", null, { detectedDialect: markup.dialect });
+      }
+      return {
+        ...response,
+        content: "",
+        tool_calls: markup.calls.map((call) => ({ id: id(), type: "function", function: { name: call.name, arguments: pyJsonDumps(call.arguments) } })),
+      };
+    }
+    const dialect = detectNativeToolMarkup(response.content);
+    if (dialect) {
+      return failure(
+        response,
+        "native_markup_in_json_mode",
+        'Do not emit <tool_call> markup or prose in JSON mode. Reply with only {"tool":"NAME","arguments":{...}} or {"answer":"...","evidence":[]}, or switch this provider profile to Native tool calling.',
+        null,
+        { detectedDialect: dialect },
+      );
+    }
+    return failure(response, error instanceof Error && error.name === "DuplicateKey" ? "duplicate_json_key" : "invalid_json", "Reply with one valid JSON tool or answer object; escape newlines and quotes inside strings.", error);
+  }
   if (!isDict(object)) return failure(response, "invalid_envelope", "Reply with one JSON tool or answer object.");
   try { finiteJsonText(object); }
   catch { return failure(response, "invalid_json_value", "Use finite JSON numbers and valid Unicode text without unpaired UTF-16 surrogates."); }

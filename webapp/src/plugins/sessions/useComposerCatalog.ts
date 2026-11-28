@@ -7,7 +7,7 @@
 import type React from "react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { t as tr, type useLocale } from "../../i18n";
-import { listCommandCatalog, type XuenessPlugin } from "../../xuenessApi";
+import { getDefaultModelSelection, listCommandCatalog, type XuenessPlugin } from "../../xuenessApi";
 import { getRunChoices, mergeRunChoices, setRunChoices, type RunChoices } from "../../xuenessBridge";
 import { emptyComposerCatalog, runtimeProfileFromSession, type ComposerCatalog } from "../../xuenessComposer";
 import type { WorkbenchSession } from "../../xuenessWorkbench";
@@ -106,12 +106,20 @@ export function useComposerCatalog({ activeId, activeIdRef, session, executingSe
       onLoading: setComposerCatalogLoading,
       onCatalog: next => {
         setComposerCatalog(next);
-        const current = getRunChoices();
-        if (!defaultModelChosen.current && !current.provider_id && !next.models.some(model => model.id === "" && model.configured)) {
+        if (defaultModelChosen.current) return;
+        defaultModelChosen.current = true;
+        if (getRunChoices().provider_id) return;
+        // The saved default (providers.default_selection) comes first, as the server
+        // resolves a run without a choice; then the environment model, then the first profile.
+        const saved = isPluginEffective("providers") ? getDefaultModelSelection().catch(() => null) : Promise.resolve(null);
+        void saved.then(selection => {
+          if (getRunChoices().provider_id) return;
+          const preferred = selection?.providerId ? next.models.find(model => model.configured && model.id === selection.providerId) : undefined;
+          if (preferred) { updateChoices({ provider_id: preferred.id, model: selection?.model || undefined, reasoning_effort: selection?.reasoningEffort || undefined }); return; }
+          if (next.models.some(model => model.id === "" && model.configured)) return;
           const first = next.models.find(model => model.configured);
           if (first) updateChoices({ provider_id: first.id || undefined, model: undefined, reasoning_effort: undefined });
-        }
-        defaultModelChosen.current = true;
+        });
       },
       onError: reason => {
         setComposerCatalog(clearWorkspaceComposerCatalog);

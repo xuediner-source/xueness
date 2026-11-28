@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useRef, useState } from "react";
 import { ArrowLeft, ChevronRight, Search } from "lucide-react";
 import { t as tr, tf, useLocale } from "../../i18n";
 import { IconCheck, IconRefresh } from "../../ui/icons";
-import type { ComposerModel, RuntimeProfile } from "../../xuenessComposer";
+import { canUseRuntimeProfile, type ComposerModel, type RuntimeProfile } from "../../xuenessComposer";
 import type { WorkbenchSession } from "../../xuenessWorkbench";
 import { isImeComposingEvent } from "../../xuenessShortcutDisplay";
 import {
@@ -36,6 +36,8 @@ export type ComposerModelMenuProps = {
   /** Renders the detail card for this row key without a pointer event (tests). */
   detailKey?: string;
   initialSupplierId?: string;
+  /** Focus direction hint when opened via keyboard (`ArrowDown` / `ArrowUp`). */
+  initialFocusKey?: "ArrowDown" | "ArrowUp" | null;
 };
 
 /**
@@ -65,6 +67,7 @@ export function ComposerModelMenu({
   onRequestClose,
   detailKey,
   initialSupplierId,
+  initialFocusKey,
 }: ComposerModelMenuProps): React.JSX.Element {
   const locale = useLocale();
   const [supplierId, setSupplierId] = useState(initialSupplierId ?? '');
@@ -116,6 +119,18 @@ export function ComposerModelMenu({
   };
   useEffect(() => () => cancelDetailClose(), []);
   useEffect(() => {
+    const menu = popoverElementRef.current;
+    if (!menu) return;
+    if (initialFocusKey === "ArrowUp") {
+      const items = Array.from(menu.querySelectorAll<HTMLButtonElement>("[role='menuitemradio']:not(:disabled), [role='menuitem']:not(:disabled)"));
+      items[items.length - 1]?.focus();
+      return;
+    }
+    const target = menu.querySelector<HTMLButtonElement>("[data-supplier-row]:not(:disabled), [role='menuitemradio'][data-model-row]:not(:disabled)")
+      ?? menu.querySelector<HTMLButtonElement>("[role='menuitemradio']:not(:disabled), [role='menuitem']:not(:disabled)");
+    target?.focus();
+  }, [initialFocusKey]);
+  useEffect(() => {
     if (!supplierId) return;
     popoverElementRef.current?.querySelector<HTMLButtonElement>('[data-model-row]:not(:disabled)')?.focus();
   }, [supplierId]);
@@ -145,6 +160,7 @@ export function ComposerModelMenu({
     items[nextIndex(current, items.length, event.key as "ArrowDown" | "ArrowUp" | "Home" | "End")]?.focus();
   };
   const shownDetailKey = modelDetail?.key ?? detailKey;
+  const canSelectLightweight = canUseRuntimeProfile(selectedModel, "lightweight");
   const shownAnchor = modelDetail?.anchor ?? (detailKey ? { top: 96, left: 520, right: 760 } : null);
   const detailModel = shownDetailKey
     ? models.find((model) => model.id + ":" + model.model === shownDetailKey)
@@ -168,9 +184,11 @@ export function ComposerModelMenu({
         data-testid="composer-runtime-profile"
       >
         {(["standard", "lightweight"] as const).map(profile => {
-          const allowed = profile !== "standard" || canSelectStandard;
+          const allowed = profile === "standard" ? canSelectStandard : canSelectLightweight;
           const title = !selectedModel ? tr("请先选择模型")
-            : !allowed ? tr("JSON 工具模式要求本地轻量配置；先在服务商设置中改为原生工具调用。") : undefined;
+            : !allowed ? tr(profile === "standard"
+              ? "JSON 工具模式要求本地轻量配置；先在服务商设置中改为原生工具调用。"
+              : "此模型经网关固定使用标准档位。") : undefined;
           return <button
             type="button"
             role="menuitemradio"

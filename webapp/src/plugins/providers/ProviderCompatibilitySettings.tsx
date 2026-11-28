@@ -10,6 +10,8 @@ export function ProviderCompatibilitySettings({
   compatibilityMode, compatibilityResult, compatibilityError, compatibilityTesting, compatibilityTestReady,
   compatibilityHistory, compatibilityGroups, compatibilityAdoptionReady, adoptingCompatibility,
   onCompatibilityModeChange, onCompatibilityTest, onAdoptCompatibility, onLoadCompatibilityCandidate,
+  toolCalling = draft.toolCalling ?? 'native',
+  onSwitchToNative,
 }: {
   draft: ProviderDraft;
   original: ProviderSummary | null;
@@ -30,7 +32,14 @@ export function ProviderCompatibilitySettings({
   onCompatibilityTest: () => void;
   onAdoptCompatibility: () => void;
   onLoadCompatibilityCandidate: (compatibility: NonNullable<ProviderSummary['compatibility']>) => void;
+  toolCalling?: 'native' | 'json';
+  onSwitchToNative?: () => void;
 }) {
+  const switchToNative = onSwitchToNative ?? (() => onDraftChange({ ...draft, toolCalling: 'native' }));
+  const recommendNative = toolCalling === 'json' && (
+    compatibilityResult?.details?.recommendedToolCalling === 'native'
+    || compatibilityHistory.some(check => check.details?.recommendedToolCalling === 'native')
+  );
   const resetCompatibility = () => onDraftChange({ ...draft, compatibility: {} });
   const updateCompatibility = <K extends keyof NonNullable<ProviderDraft['compatibility']>>(
     field: K,
@@ -162,6 +171,13 @@ export function ProviderCompatibilitySettings({
             {tr(isNew ? '先保存此配置，再用已保存的服务地址和密钥测试兼容参数。' : '只有端点、模型和其它运行字段与已保存配置一致时才能测试；请先保存这些更改。')}
           </p>}
           {compatibilityError && <p className="xn-provider-test-feedback xn-provider-test-feedback--error" role="alert">{tr('兼容诊断失败：')}{compatibilityError}</p>}
+          {recommendNative && <div className="xn-provider-test-feedback" role="status" data-testid="provider-recommend-native">
+            <strong>{tr('检测到模型自带工具调用标记（如 <tool_call>）')}</strong>
+            <span>{tr('当前模型按原生格式输出工具调用而不是 JSON 信封；建议将此配置的「工具调用」切换为「原生工具调用」后保存并重测。')}</span>
+            <button type="button" className="xn-provider-button xn-provider-button--primary" disabled={locked} onClick={switchToNative}>
+              {tr('改用原生工具调用')}
+            </button>
+          </div>}
           {compatibilityResult && <div className={`xn-provider-test-feedback${compatibilityResult.ok ? '' : ' xn-provider-test-feedback--error'}`}
             role={compatibilityResult.ok ? 'status' : 'alert'} data-testid={`provider-check-${compatibilityResult.details.mode}`}>
             <strong>{tf('{0}：{1}', [compatibilityResult.details.mode, compatibilityResult.ok ? tr('通过') : tr('失败')])}</strong>

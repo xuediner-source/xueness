@@ -6,3 +6,11 @@ export type PermissionMode = (typeof PERMISSION_MODES)[number];
 export function isPermissionMode(value: unknown): value is PermissionMode {
   return typeof value === "string" && (PERMISSION_MODES as readonly string[]).includes(value);
 }
+
+export function requiresYoloConfirmation(
+  current: PermissionMode | undefined,
+  next: PermissionMode,
+  acknowledged: boolean,
+): boolean {
+  return next === "yolo" && (current !== "yolo" || !acknowledged);
+}

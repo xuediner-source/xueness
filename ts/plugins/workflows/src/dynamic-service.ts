@@ -54,9 +54,12 @@ export class DynamicWorkflowService {
     const { run } = await this.#owned(sessionId, id);
     return { ...run, digest: this.store.digest(run), active: this.#active.has(id) };
   }
-  async create(sessionId: string, source: string, options: { name?: string; maxConcurrency?: number; writable?: boolean } = {}): Promise<DynamicWorkflowRun & { digest: string }> {
+  async create(sessionId: string, source: string, options: { name?: string; description?: string; args?: unknown; maxConcurrency?: number; writable?: boolean } = {}): Promise<DynamicWorkflowRun & { digest: string }> {
     const owner = await this.#owner(sessionId);
-    const run = this.store.create({ parentSessionId: sessionId, root: String(owner.root), name: options.name ?? 'Dynamic workflow', source,
+    const defaultName = options.name?.trim() || options.description?.trim().slice(0, 120) || 'Dynamic workflow';
+    const run = this.store.create({ parentSessionId: sessionId, root: String(owner.root), name: defaultName, source,
+      ...(options.description === undefined ? {} : { description: options.description }),
+      ...(options.args === undefined ? {} : { args: options.args }),
       ...(options.maxConcurrency === undefined ? {} : { maxConcurrency: options.maxConcurrency }), ...(options.writable === undefined ? {} : { writable: options.writable }) });
     return { ...run, digest: this.store.digest(run) };
   }
@@ -140,7 +143,25 @@ export class DynamicWorkflowService {
     await this.#options.answerActor(run, node, answer as string);
     return this.store.update(id, value => { const target = value.nodes[nodeId]!; target.status = 'pending'; delete target.question; value.status = 'paused'; });
   }
-  async wait(id: string): Promise<void> { await this.#active.get(id)?.done; }
+  async wait(id: string, timeoutMs?: number): Promise<boolean> {
+    const active = this.#active.get(id);
+    if (!active) return true;
+    if (timeoutMs === undefined) { await active.done; return true; }
+    const bounded = Math.min(10_000, Math.max(0, Math.trunc(timeoutMs)));
+    if (bounded === 0) return !this.#active.has(id);
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    try {
+      return await Promise.race([
+        active.done.then(() => true),
+        new Promise<boolean>((resolve) => { timer = setTimeout(() => resolve(false), bounded); }),
+      ]);
+    } finally {
+      if (timer !== undefined) clearTimeout(timer);
+    }
+  }
+  markNoticed(id: string, key: string): boolean {
+    try { return this.store.markNoticed(id, key); } catch { return false; }
+  }
   /**
    * C-WFL-04: the session's live runs blocked on a pending question, as
    * deduped reminder descriptors for the host's background-notice queue.

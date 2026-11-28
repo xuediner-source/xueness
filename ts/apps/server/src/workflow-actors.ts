@@ -26,6 +26,7 @@ import { ProfileStore, providerModelExecutionExtension, providerRequestShapingEx
 import { createShell, shellBackgroundExtension, loadShellConfig, type ShellRuntimeBinding } from "@xueness/plugin-shell";
 import { createSessionsStore, sessionsTurnRuntimeExtension, sessionsRuntimeEventsExtension, sessionsStableBoundariesExtension, sessionsCompactPersistenceExtension } from "@xueness/plugin-sessions";
 import { createProviderResultTools, providerToolResultBudgetExtension } from "@xueness/plugin-providers";
+import { createTools } from "@xueness/plugin-tools";
 import type { AgentNodeHost, WorkflowStore } from "@xueness/plugin-workflows";
 import { type Session } from "@xueness/sessions";
 import { loadAgentRuntimeConfig } from "./runtime-configuration.ts";
@@ -86,8 +87,8 @@ export function createActorHost(options: ActorHostOptions): AgentNodeHost {
         // actor's resolved provider resolves the local/native ToolSearch mode.
         catalog: () => kernel.tools.list<ToolDefinition>().map(({ name, description, alwaysLoad, shouldDefer }) => ({ name, description, alwaysLoad, shouldDefer })),
         provider: () => provider,
-      }), createPlanning({ session: () => current.session, enabled: options.enabled }), createOffice({ session: () => current.session }), createNetwork({ stateDir: options.stateDir })],
-        { enabled: { providers: options.enabled("providers"), files: options.enabled("files"), shell: options.enabled("shell"), planning: options.enabled("planning"), office: options.enabled("office"), network: options.enabled("network") }, config: runtimeConfig.plugins });
+      }), createPlanning({ session: () => current.session, enabled: options.enabled }), createOffice({ session: () => current.session }), createNetwork({ stateDir: options.stateDir }), createTools({ stateDir: options.stateDir, session: () => current.session })],
+        { enabled: { providers: options.enabled("providers"), files: options.enabled("files"), shell: options.enabled("shell"), planning: options.enabled("planning"), office: options.enabled("office"), network: options.enabled("network"), tools: options.enabled("tools") }, config: runtimeConfig.plugins });
       try {
         await host.start();
         // `Gate(cwd, allow_write=writable, allow_edit=writable, mode='build' if writable else 'plan')`.

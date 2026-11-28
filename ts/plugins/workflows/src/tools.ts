@@ -341,5 +341,5 @@ export function workflowTools(options: WorkflowToolsOptions): ToolDefinition[] {
       },
     },
   ];
-  return [...tools, ...dynamicWorkflowTools({ service: () => options.dynamic, session: options.session })];
+  return [...tools, ...dynamicWorkflowTools({ service: () => options.dynamic, session: options.session, allowRealHost: options.allowRealHost })];
 }

@@ -20,6 +20,8 @@ type TavernModule = {
   createTavernHttp(options: OptionalContext): HttpPort;
   /** Tavern 2+: rebuild a request for a session the Tavern started (roleplay mode). Absent in older packages. */
   prepareRoleplayRequest?(options: { stateDir: string }, session: Record<string, unknown>, request: ModelRequest, view: { lightweight: boolean }): ModelRequest;
+  /** Tavern 2.1+: who speaks in a roleplay chat and its opening line, for the conversation view. Absent in older packages. */
+  roleplayPresentation?(options: { stateDir: string }, session: Record<string, unknown>): unknown;
 };
 
 type Context = { stateDir: string; enabled(id: string): boolean; env: NodeJS.ProcessEnv };
@@ -120,7 +122,15 @@ export function createOptionalTavern(o: Context): HttpPort {
  * built from it (the view then uses the roleplay system prompt and keeps its own history budget); otherwise
  * it is rebuilt after the standard prompt view, which would replace the system prompt.
  */
-export function createOptionalTavernRoleplay(o: Context): { beforeViews: AgentExtension; afterViews: AgentExtension } {
+export function createOptionalTavernRoleplay(o: Context): { beforeViews: AgentExtension; afterViews: AgentExtension; presentation(session: Record<string, unknown>): unknown } {
+  /** The conversation view's names, pictures and opening line for a Tavern session; null for every other session. */
+  const presentation = (session: Record<string, unknown>): unknown => {
+    const refs = session.plugin_refs;
+    if (!refs || typeof refs !== "object" || typeof (refs as Record<string, unknown>).tavern !== "string") return null;
+    if (!o.enabled("tavern") || !optionalInstalled(o.stateDir, "tavern")) return null;
+    const module = loadOptionalModule(o.stateDir, "tavern") as TavernModule;
+    return typeof module.roleplayPresentation === "function" ? module.roleplayPresentation({ stateDir: o.stateDir }, session) : null;
+  };
   const hook = (lightweightPath: boolean): AgentExtension => ({
     id: "tavern",
     prepareRequest(context, request) {
@@ -133,7 +143,7 @@ export function createOptionalTavernRoleplay(o: Context): { beforeViews: AgentEx
       return module.prepareRoleplayRequest({ stateDir: o.stateDir }, context.session as Record<string, unknown>, request, { lightweight });
     },
   });
-  return { beforeViews: hook(true), afterViews: hook(false) };
+  return { beforeViews: hook(true), afterViews: hook(false), presentation };
 }
 
 export function observeOptionalProvider(o: Context, provider: ChatProvider, sessionId: string, providerId: unknown): ChatProvider {

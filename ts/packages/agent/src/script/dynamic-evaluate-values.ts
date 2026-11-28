@@ -2,7 +2,7 @@ import * as ts from "typescript";
 import { DynamicEvaluationError, type EvaluationContext, fail, forbiddenKey, isMarker, marker, safeKey, sameValueZero } from "./dynamic-evaluate-internal.ts";
 
 export const SHORT_CIRCUIT = marker({ kind: "short" });
-const ARRAY_METHODS = new Set(["map", "filter", "join", "includes", "slice", "concat"]);
+const ARRAY_METHODS = new Set(["map", "filter", "some", "every", "find", "push", "flat", "join", "includes", "slice", "concat"]);
 const STRING_METHODS = new Set(["trim", "slice", "includes", "toLowerCase", "toUpperCase", "split"]);
 const MATH_METHODS = new Set(["min", "max", "round", "floor", "ceil", "abs"]);
 
@@ -58,8 +58,12 @@ export function getProperty(receiverValue: unknown, keyValue: unknown, optional:
   }
 
   if (typeof receiver === "object" && ctx.actors.has(receiver)) {
+    const actor = receiver as import("./dynamic-types.ts").DynamicActor;
     if (key === "ask") return marker({ kind: "bound", name: "actor.ask", receiver });
-    throw new DynamicEvaluationError("DYNAMIC_PROPERTY", "agent handles expose only ask()");
+    if (key === "name") return actor.name;
+    if (key === "role") return actor.persona.role;
+    if (key === "model") return actor.persona.model;
+    throw new DynamicEvaluationError("DYNAMIC_PROPERTY", "agent handles expose only ask() and actor metadata");
   }
 
   if (Array.isArray(receiver)) {

@@ -10,6 +10,8 @@ import { t as tr } from "../../i18n";
 import { getRunChoices, setRunChoices, type RunChoices } from "../../xuenessBridge";
 import { approvePending, runSession, stopSession, updateConversationMessage, type PendingApproval, type Result, type TimelineRow } from "../../xuenessWorkbench";
 import { useRunPermissionConfirmation } from "./useRunPermissionConfirmation";
+import { rewindConversation, updateReplyVersion } from "./sessionWriteApi";
+import type { ReplyAction } from "./conversationTypes";
 import { trackSessionId, type SessionActivity } from "./workbenchSessionState";
 import type { WorkbenchSessionData } from "./useWorkbenchSessionData";
 
@@ -238,9 +240,44 @@ export function useSessionRunActions({ activeId, activeIdRef, isPluginEffective,
     return result.ok || accepted;
   }, [runSessionRequest, loadActive, refreshList, sessionCommands]);
 
+  /** Versions of the latest reply: regenerating keeps the current one and runs the session again. */
+  const handleReplyAction = useCallback(async (action: ReplyAction, row: Extract<TimelineRow, {kind: 'assistant'}>) => {
+    const id = activeIdRef.current;
+    if (!id || !pluginEffectiveRef.current('sessions')) return false;
+    if (action.kind !== 'regenerate') {
+      const result = await updateReplyVersion(id, row, action.kind === 'select' ? {action: 'select_version', version: action.version} : {action: 'edit_reply', text: action.text});
+      await loadActive(id, false);
+      if (!result.ok) throw new Error(result.error);
+      return true;
+    }
+    let accepted = false;
+    const result = await runSessionRequest(id, async selected => {
+      const updated = await updateReplyVersion(id, row, {action: 'regenerate'});
+      if (!updated.ok) return updated;
+      accepted = true;
+      await loadActive(id, false);
+      if (!sessionCommands.isEffective()) return { ok: false, error: 'Session commands are no longer enabled', accepted: true };
+      const started = await runSession(id, selected, undefined, sessionCommands);
+      return started.ok ? started : {...started, accepted: true};
+    });
+    await loadActive(id, false); await refreshList();
+    if (!result.ok && result.error) throw new Error(result.error);
+    return result.ok || accepted;
+  }, [runSessionRequest, loadActive, refreshList, sessionCommands]);
+
+  /** Delete a user message and everything after it; the conversation then waits for the next message. */
+  const handleRewind = useCallback(async (row: Extract<TimelineRow, {kind: 'user'}>) => {
+    const id = activeIdRef.current;
+    if (!id || !pluginEffectiveRef.current('sessions')) return false;
+    const result = await rewindConversation(id, row);
+    await loadActive(id, false); await refreshList();
+    if (!result.ok) throw new Error(result.error);
+    return true;
+  }, [loadActive, refreshList]);
+
   return {
     runPermission, runSessionRequest, handleApprove, handleReject, handleAllowProject, handleAllowSession, handleApproveAll,
-    handleStop, handleRetryRun, handleRetryTool, handleQuestionSubmitted, handleMessageFeedback, handleMessageEdit,
+    handleStop, handleRetryRun, handleRetryTool, handleQuestionSubmitted, handleMessageFeedback, handleMessageEdit, handleReplyAction, handleRewind,
   };
 }
 

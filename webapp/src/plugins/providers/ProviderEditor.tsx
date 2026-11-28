@@ -129,6 +129,7 @@ export function ProviderEditor({
         compatibilityGroups={compatibilityGroups} compatibilityAdoptionReady={compatibilityAdoptionReady} adoptingCompatibility={adoptingCompatibility}
         onCompatibilityModeChange={onCompatibilityModeChange} onCompatibilityTest={onCompatibilityTest}
         onAdoptCompatibility={onAdoptCompatibility} onLoadCompatibilityCandidate={onLoadCompatibilityCandidate}
+        toolCalling={draft.toolCalling} onSwitchToNative={() => update('toolCalling', 'native')}
       />}
       {draft.protocol === 'anthropic' && <p className="xn-provider-hint">{tr('stream_usage 与 JSON 工具模式仅适用于 OpenAI-compatible API。')}</p>}
 

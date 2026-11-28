@@ -56,6 +56,17 @@ interface FrontedHead {
   deadline: NodeJS.Timeout | null;
   /** True while the socket waits for the first byte of its next head. */
   awaitingHead: boolean;
+  /**
+   * The idle-limit handler, one per socket. `setTimeout(ms, callback)` adds a
+   * `timeout` listener each call and `setTimeout(0)` does not remove it, so a
+   * keep-alive connection re-arms with this same function and removes it first.
+   */
+  idle: () => void;
+}
+
+function armIdle(socket: Duplex, state: FrontedHead): void {
+  socket.removeListener("timeout", state.idle);
+  (socket as TimedSocket).setTimeout(state.limits().idleMs, state.idle);
 }
 const fronted = new WeakMap<Duplex, FrontedHead>();
 
@@ -76,7 +87,7 @@ function armDeadline(socket: Duplex, state: FrontedHead): void {
 
 /** Count head bytes and time the wait for each head on the fronted socket. */
 export function frontSocketHead(socket: Duplex, limits: () => HeadLimits, outcomes: HeadOutcomes): void {
-  const state: FrontedHead = { limits, outcomes, deadline: null, awaitingHead: true };
+  const state: FrontedHead = { limits, outcomes, deadline: null, awaitingHead: true, idle: () => expireWith(socket, state) };
   fronted.set(socket, state);
   received.set(socket, 0);
   socket.on("data", (chunk: Buffer | string) => {
@@ -92,7 +103,7 @@ export function frontSocketHead(socket: Duplex, limits: () => HeadLimits, outcom
     state.deadline = null;
   });
   // Python's idle limit between bytes; the socket timeout re-arms on activity.
-  (socket as TimedSocket).setTimeout(limits().idleMs, () => expireWith(socket, state));
+  armIdle(socket, state);
   // Like Node's `headersTimeout`, the first head's deadline starts at accept.
   armDeadline(socket, state);
 }
@@ -135,7 +146,7 @@ export function headReceived(req: IncomingMessage, res: ServerResponse): void {
     if (!state) return;
     // Python waits for the next head with the idle limit armed again.
     state.awaitingHead = true;
-    (socket as TimedSocket).setTimeout(state.limits().idleMs, () => expireWith(socket, state));
+    armIdle(socket, state);
   });
 }
 

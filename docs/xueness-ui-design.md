@@ -1,5 +1,38 @@
 # Xueness 工作台设计与验收
 
+## 2026-11-26 第四轮：关键组件延后加载与清零超行基线
+
+继续收紧首屏启动图与剩余大文件行数；行为、键盘焦点与全部既有导出契约保持不变，未扩大 `SHARED_FRONTEND`。
+
+- **组件延后加载**（随需求触发挂载，独立打包）：
+  - `CommandPalette`（`CommandPalette-Cq6e57G-.js`，10.19 kB / 4.30 kB gzip）：状态与格式函数迁入 `plugins/sessions/commandPaletteState.ts`，`useModalFocusScope` 随组件迁入实现内部激活与关闭回焦，容器挂载点收进 `WorkbenchDialogs.tsx`（`WorkbenchCommandPalette`）。
+  - `ComposerModelMenu`（`ComposerModelMenu-BzPkK6hH.js`，11.76 kB / 4.09 kB gzip）：工具栏动态加载，菜单内部通过 `initialFocusKey` 保持挂载后首项或搜索框聚焦，并去除 `XuenessComposerToolbar.tsx` 对菜单的静态全量再导出。
+  - `ReasoningEffortSlider`（`ReasoningEffortSlider-b_XkR4Kq.js`，9.16 kB / 3.78 kB gzip）：推理档位纯逻辑迁至 `plugins/sessions/reasoningLevels.ts`，工具栏按模型能力懒加载滑块。
+  - `XuenessPluginManager`（`XuenessPluginManager-B_SRDKJD.js`，8.70 kB / 3.36 kB gzip）：共用的 `FeatureUnavailable` 与 `usePluginCatalog` 迁入既有的 `plugins/shared.tsx` 并由原文件转出；插件管理页经 `workbenchSettingsViews` 懒加载。
+  - `FullAccessConfirmationDialog`（`FullAccessConfirmationDialog-VSKUrfTJ.js`，3.11 kB / 1.46 kB gzip）：`requiresYoloConfirmation` 保留在 `permissionModes.ts`，确认框按需加载；`LightweightWorkbench` 的全局快捷键纯判断迁至 `lightweightGlobalKeys.ts`、`useLightweightWorkbench.ts` 持有布局判定，均由原入口保留转出。
+  - `WorkbenchConversation`（`WorkbenchConversation-BvAu2o8B.js`，19.74 kB / 7.20 kB gzip）：起始页拆为 `WorkbenchStartView.tsx`，仅有活动会话或切换过去时才加载对话视图，并在有 `activeId` 时被动预取。
+- **全部 8 个基线文件拆到 400 有效行以内**（`ts/scripts/frontend-lines-baseline.json` 清零为 `{}`；新插件模块全部同步登记在 `ts/plugins/<id>/manifest.json` 与 `ts/catalog/<id>.json`）：
+  - `xuenessApi.ts` 593 → 127 行：核心传输留作 `xuenessBridge.ts`，6 个插件领域接口拆回 `providers/providerApi.ts`、`automation/automationApi.ts`、`extensions/extensionsApi.ts`、`usage/usageApi.ts`、`subagents/subagentsApi.ts`、`files/directoryApi.ts`，原入口全量转出兼容既有导入。
+  - `plugins/mcp/ElicitationForm.tsx` 537 → 208 行（逻辑与校验迁至 `elicitationSchema.ts`）。
+  - `plugins/onboarding/DesktopPermissionOnboarding.tsx` 535 → 342 行（状态机与观察器迁至 `permissionOnboardingModel.ts`）。
+  - `XuenessWorkbenchContainer.tsx` 532 → 377 行（次级面板 `WorkbenchSecondaryPanels.tsx` 与 `usePanelHistory`、弹窗与命令面板 `WorkbenchDialogs.tsx`、`WorkbenchComposerControls.tsx`）。
+  - `plugins/sessions/secondaryPaneComposer.tsx` 489 → 299 行（提交与草案恢复状态机迁至 `secondaryPaneComposerModel.ts`）。
+  - `plugins/sessions/SidebarNav.tsx` 477 → 237 行（列表项组件与比较逻辑迁至 `SidebarNavItem.tsx`）。
+  - `plugins/extensions/index.tsx` 450 → 224 行（卡片、详情与焦点辅助迁至 `MarketplaceCard.tsx`）。
+  - `plugins/sessions/commandClient.ts` 443 → 368 行（协议类型、回执解析与共用 `raceAbortTimeout` 迁至 `commandClientProtocol.ts`）。
+
+**测量**（`tools/check_frontend_bundle.mjs`，gzip 估算）：
+
+| 启动图 | 第三轮之后 | 第四轮之后 | 相对第一轮前 |
+|---|---|---|---|
+| JS（gzip） | 279,578 B | 229,191 B（−18.0%） | 361,556 → 229,191（−36.6%） |
+| CSS（gzip） | 53,547 B | 53,023 B（xueness 53,023 / claudex 52,485） | 53,535 → 53,023 |
+| 合计 | 333,125 B | 282,214 B（−15.3%） | 415,091 → 282,214（−32.0%） |
+| 启动文件 | 7 个 | 7 个 | 11 → 7 |
+| `App` 块 | 656,849 B / 206,563 B gzip | 498,986 B / 156,234 B gzip（低于 500 kB 警告线） | |
+
+**验收**：`ts run check`（1,262 个产品文件全员 ≤ 400 有效行、`check:plugins` 38 个插件 / 554 个源码文件、`check:version`、`ts typecheck`）、`ts run build`（864 个后端 JS 模块）、`webapp typecheck`、`webapp build`（含 `check:design` 与 `check:bundle`）全部通过，构建无混合动静导入警告；私有测试 overlay `f6-lazy-split.test.ts` 校验基线清零、启动图排除上述 6 个延后加载块、全部 12 处公开导出契约与提取的纯函数行为。
+
 ## 2026-11-22 第三轮：Magpie 模型网关取代订阅中心与 WorkBuddy 号池，继续拆分大文件
 
 - **插件替换（项目所有者 2026-11-22 决定）。** 订阅中心（`subscriptions`）与 WorkBuddy 号池（`workbuddy`）从核心与插件仓库中删除，由可下载的官方插件「Magpie 模型网关」（`magpie`）取代。插件包里是 [yetone/magpie](https://github.com/yetone/magpie)（MIT）发布的原版命令行程序，按平台各一个包；Xueness 侧只做进程管理、模型接入与界面。详见 [插件按需下载](optional-plugins-and-folder-skills.md#magpie-模型网关)。

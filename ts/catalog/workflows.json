@@ -23,6 +23,7 @@
     "background_cancel",
     "background_logs",
     "workflow_answer_actor",
+    "run_workflow",
     "workflow_script_create",
     "workflow_script_run",
     "workflow_script_status",
@@ -37,7 +38,8 @@
     "workflows",
     "jobs",
     "expert",
-    "workflow-script"
+    "workflow-script",
+    "run-workflow"
   ],
   "panels": [
     "workflows"
@@ -71,7 +73,9 @@
     "dynamic_service",
     "dynamic_store",
     "dynamic_tools",
-    "dynamic_types"
+    "dynamic_types",
+    "run_workflow_tool",
+    "dynamic_parent_extension"
   ],
   "features": [
     {
@@ -128,10 +132,16 @@
       "id": "workflows.script_questions",
       "name": "脚本留白与 actor 问答恢复",
       "nameEn": "Script holes and actor question recovery"
+    },
+    {
+      "id": "workflows.antigravity_orchestrator",
+      "name": "Antigravity 风格并行编排器（run_workflow、parallel、pipeline、trajectory）",
+      "nameEn": "Antigravity-style orchestrator (run_workflow, parallel, pipeline, trajectory)"
     }
   ],
   "frontendModules": [
     "plugins/workflows/index.tsx",
-    "plugins/workflows/ExpertPanel.tsx"
+    "plugins/workflows/ExpertPanel.tsx",
+    "plugins/workflows/DynamicScriptsPanel.tsx"
   ]
 }

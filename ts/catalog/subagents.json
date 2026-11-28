@@ -13,7 +13,9 @@
     "task",
     "task_collect",
     "task_resume",
-    "task_send_message"
+    "task_send_message",
+    "task_cancel",
+    "respond_to_coordinator"
   ],
   "commands": [],
   "panels": [
@@ -55,6 +57,7 @@
     {"id": "subagents.sidepane", "name": "Web 端子代理运行态侧栏", "nameEn": "Web subagent runtime sidepane"}
   ],
   "frontendModules": [
+    "plugins/subagents/subagentsApi.ts",
     "plugins/subagents/SubagentSettings.tsx",
     "plugins/subagents/SubagentSidePane.tsx",
     "plugins/subagents/SubagentTaskTypes.ts",

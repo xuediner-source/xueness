@@ -36,7 +36,7 @@ function JudgeStatsCard({ enabled }: { enabled: boolean }): React.JSX.Element {
     <div className="xn-judge-stats__heading">
       <div>
         <h2 id="xn-judge-stats-title">{tr("判定统计")}</h2>
-        <p>{tr("只统计已保存会话里的判定计数；没有判定模型时不会有数据。")}</p>
+        <p>{tr("统计已保存会话里的前置检查拦截与判定计数；前置检查不依赖判定模型。")}</p>
       </div>
       <div className="xn-judge-stats__ranges" role="group" aria-label={tr("统计范围")}>
         {RANGES.map(([id, label]) => <button key={id} type="button" aria-pressed={range === id} onClick={() => setRange(id)}>{tr(label)}</button>)}
@@ -45,6 +45,7 @@ function JudgeStatsCard({ enabled }: { enabled: boolean }): React.JSX.Element {
     {error && <p className="xn-judge-settings__feedback is-error" role="alert">{error}</p>}
     {loading && !stats ? <p role="status">{tr("正在读取统计…")}</p> : !total ? <p>{tr("此周期没有判定记录")}</p> : <>
       <div className="xn-judge-stats__grid">
+        <Stat value={(total.preflightBlocked ?? 0).toLocaleString()} label={tr("次前置检查拦截")} />
         <Stat value={total.judged.toLocaleString()} label={tr("次已判定的调用")} />
         <Stat value={total.requests.toLocaleString()} label={tr("次判定请求")} />
         <Stat value={seconds(total.judgeMs)} label={tr("判定总耗时")} />
@@ -80,6 +81,7 @@ export function ToolJudgeSettings({ enabled, disabled = false }: Props): React.J
   const [saving, setSaving] = useState(false);
   const [providerId, setProviderId] = useState("");
   const [model, setModel] = useState("");
+  const [preflightEnabled, setPreflightEnabled] = useState(true);
   const [applyRepairs, setApplyRepairs] = useState(false);
   const [applyRejects, setApplyRejects] = useState(false);
   const [timeoutSeconds, setTimeoutSeconds] = useState("8");
@@ -89,6 +91,7 @@ export function ToolJudgeSettings({ enabled, disabled = false }: Props): React.J
   const apply = (settings: JudgeSettings) => {
     setProviderId(settings.profile?.providerId ?? "");
     setModel(settings.profile?.model ?? "");
+    setPreflightEnabled(settings.preflightEnabled !== false);
     setApplyRepairs(settings.applyRepairs);
     setApplyRejects(settings.applyRejects);
     setTimeoutSeconds(String(settings.timeoutMs / 1000));
@@ -117,8 +120,13 @@ export function ToolJudgeSettings({ enabled, disabled = false }: Props): React.J
     try {
       const chosen = providers.find(item => item.id === providerId);
       const profile = providerId ? { providerId, model: model.trim() || chosen?.model || "" } : null;
-      apply(await saveJudgeSettings({ profile, applyRepairs, applyRejects, timeoutMs: Math.round(seconds * 1000) }));
-      setNotice(profile ? tr("设置已保存。新的运行会使用该判定模型。") : tr("设置已保存。判定已关闭。"));
+      const saved = await saveJudgeSettings({ profile, preflightEnabled, applyRepairs, applyRejects, timeoutMs: Math.round(seconds * 1000) });
+      apply(saved);
+      setNotice(profile
+        ? tr("设置已保存。新的运行会使用该判定模型。")
+        : preflightEnabled
+          ? tr("设置已保存。判定模型已关闭，零模型前置检查保持开启。")
+          : tr("设置已保存。判定与前置检查均已关闭。"));
     } catch (cause) {
       setError(message(cause));
     } finally {
@@ -129,10 +137,12 @@ export function ToolJudgeSettings({ enabled, disabled = false }: Props): React.J
   const known = providers.some(item => item.id === providerId);
   return <section className="xn-judge-settings" data-testid="tool-judge-settings">
     {!enabled ? <p>{tr("工具调用判定已关闭；保存的设置仍会保留。")}</p> : <>
-      <p>{tr("可选的判定模型会在高风险工具调用（命令、文件写入与修改、网络、MCP、委派）执行前先审阅一遍，每一步只发一次请求。默认只给出建议；它不是权限闸门，判定慢或不可用时调用照常执行。可选择小型本地模型或 API 模型。本地判定模型与本地主模型共用同一块显卡时，服务端可能需要来回切换模型。")}</p>
+      <p>{tr("零模型前置检查默认开启，会在审批与执行前拦下无效参数、缺失路径、过期读取、PowerShell 不兼容语法、缺席命令及连续重复失败。可选的判定模型还可继续审阅高风险工具调用，默认只给出建议；它不是权限闸门，判定慢或不可用时调用照常执行。")}</p>
       {error && <p className="xn-judge-settings__feedback is-error" role="alert">{error}</p>}
       {notice && <p className="xn-judge-settings__feedback is-success" role="status">{notice}</p>}
       {loading ? <p role="status">{tr("正在读取判定设置…")}</p> : <form className="xn-judge-settings__form" onSubmit={event => void save(event)}>
+        <label className="is-check"><input type="checkbox" checked={preflightEnabled} disabled={disabled || saving}
+          onChange={event => setPreflightEnabled(event.currentTarget.checked)} /><span>{tr("启用零模型前置检查（无需选择判定模型，执行前快速拦截明显错误）")}</span></label>
         <label><span>{tr("判定模型")}</span>
           <Select value={providerId} disabled={disabled || saving} onChange={event => setProviderId(event.currentTarget.value)}>
             <option value="">{tr("关闭")}</option>

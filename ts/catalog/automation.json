@@ -59,6 +59,7 @@
     }
   ],
   "frontendModules": [
+    "plugins/automation/automationApi.ts",
     "plugins/automation/automationModel.ts",
     "plugins/automation/offPeakModel.ts",
     "plugins/automation/OffPeakTasks.tsx",

@@ -8,6 +8,7 @@ import {
   responsesUrl, validateCompatibility,
 } from "@xueness/providers";
 import type { Dict } from "./profile-store.ts";
+import { detectNativeToolMarkup } from "./tool-markup.ts";
 
 export type DiagnosticProvider = OpenAICompatible | AnthropicMessages;
 export const FIXTURE_NAME = "xueness_fixture_add";
@@ -76,11 +77,17 @@ function fixtureCall(reply: Dict): [Dict | null, string | null] {
   if (!isDict(args) || Object.keys(args).sort().join(",") !== "a,b" || args.a !== 3 || args.b !== 4) return [null, "The provider returned arguments outside the required {a: 3, b: 4} schema."];
   return [call, null];
 }
-function jsonCall(reply: Dict): [Dict | null, string | null] {
+function jsonCall(reply: Dict): [Dict | null, string | null, Dict?] {
   if (typeof reply.content !== "string" || pyLen(reply.content) > 2048) return [null, "The provider returned no bounded JSON tool-call response."];
   let value: unknown;
   try { value = pyJsonLoads(envelopeText(reply.content), { rejectDuplicates: true, rejectNonFinite: true, lossless: true }); finiteJsonText(value); if (Array.isArray(reply.tool_calls) && reply.tool_calls.length) throw new Error(); }
-  catch { return [null, "The provider did not return strict JSON."]; }
+  catch {
+    const dialect = !(Array.isArray(reply.tool_calls) && reply.tool_calls.length) ? detectNativeToolMarkup(reply.content) : null;
+    if (dialect) {
+      return [null, "The model emitted native tool-call markup instead of JSON. Switch this profile's tool calling to Native.", { detectedMarkupDialect: dialect, recommendedToolCalling: "native" }];
+    }
+    return [null, "The provider did not return strict JSON."];
+  }
   if (!isDict(value) || Object.keys(value).sort().join(",") !== "arguments,tool" || value.tool !== FIXTURE_NAME) return [null, "The provider returned JSON outside the required function name and argument schema."];
   const [call, error] = fixtureCall({ tool_calls: [{ id: "local-" + uuid4Hex(), type: "function", function: { name: value.tool, arguments: pyJsonDumps(value.arguments) } }] });
   return [call, error ? "The provider returned JSON outside the required function name and argument schema." : null];
@@ -89,7 +96,7 @@ export async function compatibilityTest(provider: OpenAICompatible, mode: string
   const options = validateCompatibility(compatibility);
   const deadline = performance.now() + Math.min(timeout, 120) * 1000;
   const requests: Dict[] = [];
-  const fail = (error: string, status: unknown = null): Dict => ({ ok: false, error, details: { mode, requestCount: requests.length, failedStep: requests.at(-1)?.step ?? null, httpStatus: status, requests, fixture: "in-process arithmetic only; no file or command execution" } });
+  const fail = (error: string, status: unknown = null, extraDetails?: Dict): Dict => ({ ok: false, error, details: { mode, requestCount: requests.length, failedStep: requests.at(-1)?.step ?? null, httpStatus: status, requests, fixture: "in-process arithmetic only; no file or command execution", ...(extraDetails ?? {}) } });
   const request = async (messages: Dict[], tools: Dict[], step: string, stream: boolean, toolCalling: string, candidate = options): Promise<[Dict, Dict]> => {
     const responses = isResponsesEndpoint(provider.base);
     const rawBody = buildOpenAiPayload({ model: provider.model, messages, tools, runtimeProfile: provider.runtimeProfile, contextWindow: provider.contextWindow, maxOutputTokens: Math.min(provider.maxOutputTokens || 1024, 1024, Math.floor((provider.contextWindow || LIGHTWEIGHT_CONTEXT_WINDOW) / 2)), toolCalling, compatibility: candidate, stream, reasoningEffort: provider.reasoningEffort, defaultMaxTokensField: provider.defaultMaxTokensField(), lightweightOptions: provider.lightweightOptions });
@@ -124,8 +131,8 @@ export async function compatibilityTest(provider: OpenAICompatible, mode: string
       if (typeof first.content !== "string" || !first.content.trim() || (stream && !firstStream.deltaCount)) return fail(stream ? "The SSE stream contained no assistant text delta." : "The provider returned no assistant text.");
       return { ok: true, details: { mode, requestCount: 1, ...(stream ? firstStream : { assistantTextReceived: true }), requests } };
     }
-    const [call, error] = json ? jsonCall(first) : fixtureCall(first);
-    if (error || !call) return fail(error!);
+    const [call, error, extraDetails] = json ? jsonCall(first) : fixtureCall(first);
+    if (error || !call) return fail(error!, null, extraDetails);
     if (!roundtrip) return { ok: true, details: { mode, requestCount: 1, [json ? "jsonToolCallValidated" : "toolCallValidated"]: true, toolName: FIXTURE_NAME, arguments: { a: 3, b: 4 }, fixtureExecuted: false, requests } };
     const followupOptions = { ...options }; delete followupOptions.toolChoice;
     let followup: Dict[] = [{ role: "system", content: "This is a local compatibility diagnostic. Read the prior tool result and reply with exactly its receipt string, with no other text." }, nativePrompt()[1]!, { role: "assistant", content: null, tool_calls: [call] }, { role: "tool", tool_call_id: call.id, name: FIXTURE_NAME, content: JSON.stringify({ sum: 7, receipt: RECEIPT }) }, { role: "user", content: "Reply with exactly the receipt from the tool result above." }];

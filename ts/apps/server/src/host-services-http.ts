@@ -89,6 +89,8 @@ export function createHostServices(options: HostServicesOptions) {
       }
       return null;
     },
+    /** Terminals stop once the terminal plugin is switched off. */
+    sweep(): void { if (!enabled("terminal") && terminalHttp.broker.openCount() > 0) terminalHttp.broker.close(); },
     close(): void { terminalHttp.broker.close(); },
   };
 }

@@ -49,30 +49,27 @@ import "./styles/settings.css";
 import "./styles/plugins.css";
 import React, { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { ChevronDown, UserRound } from "lucide-react";
-import { t as tr, tf, useLocale, setLocale } from './i18n';
+import { t as tr, useLocale, setLocale } from './i18n';
 import { effectiveRuntimeProfile, runtimeProfileFromSession } from "./xuenessComposer";
 import { loadMemoryTracks, loadProviders, loadUsage, type MemoryTrack, type ProviderSummary, type UsageSummary } from "./xuenessWorkspace";
-import { initGitRepository, stageGitPaths, unstageGitPaths, commitGitChanges, switchGitBranch, stashGitChanges, createGitCheckpoint, restoreGitCheckpoint } from "./xuenessGit";
 import { resolveHostPlatform } from './xuenessShortcutDisplay';
 import { derivePluginAvailability, useCapabilitySections, workbenchPanelLabels, type WorkbenchPanel } from "./xuenessPluginRegistry";
-import { FeatureUnavailable, XuenessPluginManager, usePluginCatalog } from "./XuenessPluginManager";
 import type { CapabilitySectionProps } from "./XuenessCapabilitiesPanel";
 import { Shell } from "./XuenessShell";
 import { IconBack, IconGear } from "./ui/icons";
 import { Select } from "./ui/Select";
 import { RegionBoundary } from "./ui/primitives";
 import { CodeDisplayProvider } from "./ui/CodeContent";
-import { usePanelResource } from "./plugins/shared";
+import { FeatureUnavailable, usePanelResource, usePluginCatalog } from "./plugins/shared";
 import { normalizeColorPalette } from "./plugins/settings/themeBoot";
 import { useWorkbenchSettings } from "./plugins/settings/useWorkbenchSettings";
 import { useWorkbenchGlobalShortcuts } from './plugins/settings/workbenchShortcutActions';
-import { CapabilitiesPanel, DesktopUpdates, MagpiePanel, ModelManager, ModelMonitorPanel, RemoteConnections,
-  SwarmPanel, TavernPanel, XuenessAutomationsPanel, XuenessDiagnosticsPanel, XuenessMarketplace, XuenessMcpTools, XuenessUsageSettings } from "./plugins/settings/workbenchSettingsViews";
+import { DesktopPermissionOnboarding, DesktopUpdates, SessionPaneWorkbench, SkillsSection } from "./plugins/settings/workbenchSettingsViews";
+import { buildSecondaryPanels, usePanelHistory } from "./plugins/settings/WorkbenchSecondaryPanels";
 import { useGitPanel } from './plugins/git/useGitPanel';
 import { useWorkbenchFiles } from "./plugins/files/useWorkbenchFiles";
 import { useDefaultModelSelection } from "./plugins/providers/useDefaultModelSelection";
-import { useLightweightWorkbench } from "./plugins/providers/useLightweightWorkbench";
-import { lightweightLayoutActive } from "./plugins/providers/LightweightWorkbench";
+import { lightweightLayoutActive, useLightweightWorkbench } from "./plugins/providers/useLightweightWorkbench";
 import type { LocalRuntimeSession } from "./plugins/providers/LocalRuntimeMonitor";
 import { DesktopTitlebar } from "./plugins/desktop/DesktopTitlebar";
 import { DesktopTrayBridge } from './plugins/desktop/DesktopTrayBridge';
@@ -83,7 +80,7 @@ import { useComposerAttachmentLifecycle } from './plugins/sessions/composerAttac
 import { clearWorkspaceComposerCatalog } from './plugins/sessions/composerCatalogLifecycle';
 import { readPersistedDraft } from "./plugins/sessions/composerDraftStore";
 import type { ComposerDraftState } from "./plugins/sessions/composerTypes";
-import { CommandPalette, useCommandPaletteState } from "./plugins/sessions/CommandPalette";
+import { useCommandPaletteState } from "./plugins/sessions/commandPaletteState";
 import { ClaudexSidebarHeader, ClaudexSidebarRail } from "./plugins/sessions/ClaudexSidebar";
 import { SidebarResizeHandle, useSessionSidebarWidth } from './plugins/sessions/SidebarResizeHandle';
 import { WorkbenchViewSwitcher } from "./plugins/sessions/WorkbenchViewSwitcher";
@@ -102,32 +99,16 @@ import { useSessionQueueActions } from "./plugins/sessions/useSessionQueueAction
 import { useSessionListActions } from "./plugins/sessions/useSessionListActions";
 import { useWorkspaceSelection } from "./plugins/sessions/useWorkspaceSelection";
 import { WorkbenchComposerControls, WorkbenchWorkspaceContext, useWorkbenchComposerProps } from "./plugins/sessions/WorkbenchComposerControls";
-import { SubagentSidePane, WorkbenchConversation, WorkbenchStartView } from "./plugins/sessions/WorkbenchConversation";
+import { WorkbenchStartView } from "./plugins/sessions/WorkbenchStartView";
+import { WorkbenchCommandPalette, WorkbenchDialogs } from "./plugins/sessions/WorkbenchDialogs";
 import { WorkbenchSessionHeader } from "./plugins/sessions/WorkbenchSessionHeader";
 import { WorkbenchSidebar, buildSidebarActions } from "./plugins/sessions/WorkbenchSidebar";
 export { evaluateWorkbenchGlobalKey, type WorkbenchGlobalKeyAction } from './plugins/settings/workbenchShortcutActions';
 export { shouldIgnoreSessionResponse, createCleanSessionTransientState } from './plugins/sessions/workbenchSessionState';
 export { composerModelRecoveryFor, shouldPreservePersistedDefaultDraftScope, shouldHydrateEmptyPrimaryDraftScope } from './plugins/sessions/workbenchDrafts';
 
-// Static plugin imports load only when their permitted view mounts.
-const FileBrowser = lazy(() => import("./plugins/files/FileBrowser").then(module => ({ default: module.FileBrowser })));
-const DiffView = lazy(() => import("./plugins/files/DiffView").then(module => ({ default: module.DiffView })));
-const DirectoryBrowser = lazy(() => import("./plugins/files/DirectoryBrowser").then(module => ({ default: module.DirectoryBrowser })));
-const MemoryOcean = lazy(() => import("./plugins/memory/MemoryOcean").then(module => ({ default: module.MemoryOcean })));
-const DesktopPermissionOnboarding = lazy(() => import("./plugins/onboarding/DesktopPermissionOnboarding").then(module => ({ default: module.DesktopPermissionOnboarding })));
-const WorkflowPanel = lazy(() => import("./plugins/workflows").then(module => ({ default: module.WorkflowPanel })));
-const TerminalPanel = lazy(() => import("./plugins/terminal").then(module => ({ default: module.TerminalPanel })));
-const XuenessGitView = lazy(() => import("./plugins/git/XuenessGitView").then(module => ({ default: module.XuenessGitView })));
-const ContextLensPanel = lazy(() => import("./plugins/context_lens/ContextLensPanel").then(module => ({ default: module.ContextLensPanel })));
-const BrowserPanel = lazy(() => import("./plugins/browser/BrowserPanel").then(module => ({ default: module.BrowserPanel })));
-const SkillsSection = lazy(() => import('./plugins/skills/SkillsSection').then(module => ({ default: module.SkillsSection })));
-const SessionPaneWorkbench = lazy(() => import('./plugins/sessions/SessionPaneWorkbench').then(module => ({ default: module.SessionPaneWorkbench })));
-const ForkSessionDialog = lazy(() => import('./plugins/sessions/ForkSessionDialog').then(module => ({ default: module.ForkSessionDialog })));
-const XuenessRenameDialog = lazy(() => import('./plugins/sessions/XuenessRenameDialog').then(module => ({ default: module.XuenessRenameDialog })));
-const XuenessCloneDialog = lazy(() => import('./plugins/git/XuenessCloneDialog').then(module => ({ default: module.XuenessCloneDialog })));
-const XuenessWorkspacePickerDialog = lazy(() => import('./plugins/settings/XuenessWorkspacePickerDialog').then(module => ({ default: module.XuenessWorkspacePickerDialog })));
-const XuenessCapabilityDialog = lazy(() => import('./XuenessCapabilityDialog').then(module => ({ default: module.XuenessCapabilityDialog })));
-const WorkbenchSettingsPanel = lazy(() => import('./plugins/settings/WorkbenchSettingsPanel').then(module => ({ default: module.WorkbenchSettingsPanel })));
+const WorkbenchConversation = lazy(() => import("./plugins/sessions/WorkbenchConversation").then(module => ({ default: module.WorkbenchConversation })));
+const preloadWorkbenchConversation = () => { void import("./plugins/sessions/WorkbenchConversation"); };
 
 export function XuenessWorkbenchContainer() {
   const locale = useLocale();
@@ -148,29 +129,7 @@ export function XuenessWorkbenchContainer() {
   const activeIdRef = useRef<string | null>(activeId);
   activeIdRef.current = activeId;
   const composerDraftStore = useRef(new Map<string, ComposerDraftState>());
-  const [panel, setPanel] = useState<WorkbenchPanel>("chat");
-  const history = useRef<{ panel: WorkbenchPanel; activeId: string | null }[]>([{ panel: "chat", activeId: null }]);
-  const historyCursor = useRef(0);
-  const historyTarget = useRef<string | null>(null);
-  const [historyPosition, setHistoryPosition] = useState({ cursor: 0, length: 1 });
-  useEffect(() => {
-    const key = `${panel}:${activeId ?? ""}`;
-    if (historyTarget.current === key) { historyTarget.current = null; return; }
-    const current = history.current[historyCursor.current];
-    if (current.panel === panel && current.activeId === activeId) return;
-    history.current = [...history.current.slice(0, historyCursor.current + 1), { panel, activeId }];
-    historyCursor.current = history.current.length - 1;
-    setHistoryPosition({ cursor: historyCursor.current, length: history.current.length });
-  }, [panel, activeId]);
-  const navigateHistory = (direction: number) => {
-    const cursor = historyCursor.current + direction;
-    const target = history.current[cursor];
-    if (!target || busy) return;
-    historyCursor.current = cursor;
-    historyTarget.current = `${target.panel}:${target.activeId ?? ""}`;
-    setPanel(target.panel); setActiveId(target.activeId);
-    setHistoryPosition({ cursor, length: history.current.length });
-  };
+  const { panel, setPanel, historyPosition, navigateHistory } = usePanelHistory(activeId, setActiveId, busy);
   useEffect(() => {
     if (!pluginCatalogReady || canShowPanel(panel)) return;
     setPanel(isPluginEffective("sessions") ? "chat" : "plugins");
@@ -188,7 +147,7 @@ export function XuenessWorkbenchContainer() {
 
   // -- plugin state, each in its owner's hook -------------------------------
   // Git panel status, history, checkpoints, and explicitly confirmed local actions.
-  const { gitStatus, gitStatusError, gitDiff, gitDiffError, gitLog, gitLogError, gitCheckpoints, gitCheckpointError, gitLoading, gitActionBusy, loadGitPanel, runGitAction } = useGitPanel(activeId, panel === 'git', isPluginEffective('git'));
+  const gitPanel = useGitPanel(activeId, panel === 'git', isPluginEffective('git'));
   const settings = useWorkbenchSettings({ isPluginEffective, pluginEffectiveRef, pluginCatalog, effectiveIds: pluginAvailability.effectiveIds });
   const { settingsValues, settingsSection, settingsLoading, shortcutBindings, handleUpdateSetting } = settings;
   const heroInputRef = useRef<HTMLElement | null>(null);
@@ -305,107 +264,24 @@ export function XuenessWorkbenchContainer() {
     beginFork={fork.beginFork} contextSidepaneOpen={contextSidepaneOpen} setContextSidepaneOpen={setContextSidepaneOpen}
     setDeliveryEditorRequest={setDeliveryEditorRequest} setShareDialogOpen={setShareDialogOpen} listActions={listActions} />;
 
-  // -- plugin views, mounted only while their plugin is effective ------------
-  const secondaryPanels: Record<Exclude<WorkbenchPanel, "chat">, React.ReactNode> = {
-    remote: <RemoteConnections onUse={() => { startNewTask(); setRemoteDialogOpen(true); }} />,
-    subagents: (
-      <Suspense fallback={<div className="p-4 text-xs text-[var(--fg-muted)]">{tr("正在加载…")}</div>}>
-        <SubagentSidePane
-          sessionId={activeId}
-          isOpen={true}
-          onClose={() => setPanel("chat")}
-          activeRuntimeProfile={activeRuntimeProfile}
-          subagentsEnabled={isPluginEffective("subagents")}
-          cancelOneEnabled={settingsValues.subagentCancelOneEnabled === true}
-          lightweight={lightweightLayout}
-          mode="panel"
-          onStopSession={handleStop}
-          onRequestResumeChild={taskId => {
-            if (!activeId || !isPluginEffective('sessions') || !isPluginEffective('subagents')) return;
-            appendTextToComposer(activeId, tf('请恢复已保留的子任务 {0}，沿用它的历史与只读权限，继续处理并收集结果。', [taskId]));
-            setPanel('chat');
-          }}
-        />
-      </Suspense>
-    ),
-    plugins: <XuenessPluginManager plugins={pluginCatalog} loading={pluginCatalogLoading} error={pluginCatalogError} onRefresh={refreshPluginCatalog} onToggle={togglePlugin} />,
-    workflows: <WorkflowPanel sessionId={activeId} subagentsEnabled={isPluginEffective("subagents")} />,
-    terminal: <TerminalPanel {...scopedSidePanel} fontSize={Number(settingsValues.terminalFontSize ?? 13)} fontFamily={String(settingsValues.terminalFontFamily ?? "system")} />,
-    browser: <BrowserPanel {...scopedSidePanel} />,
-    automations: <XuenessAutomationsPanel offPeakEnabled={isPluginEffective("automation")} />,
-    marketplace: <XuenessMarketplace onInstalled={() => void refreshPluginCatalog()} onManagePlugins={() => setPanel('plugins')} />,
-    magpie: <MagpiePanel onModelsChanged={() => void refreshComposerCatalog()} onSelectModel={id => { updateChoices({ provider: 'real', provider_id: id, model: undefined, reasoning_effort: undefined }); void refreshComposerCatalog(); setPanel('chat'); }} />,
-    'model-monitor': <ModelMonitorPanel />,
-    diagnostics: <XuenessDiagnosticsPanel />,
-    files: (
-      <FileBrowser
-        files={filesPanel.files}
-        truncated={filesPanel.filesTruncated}
-        selectedPath={filesPanel.selectedPath}
-        preview={filesPanel.preview}
-        previewError={filesPanel.previewError}
-        officePreviewEnabled={isPluginEffective("office")}
-        onSelect={filesPanel.handleSelectFile}
-      />
-    ),
-    changes: <DiffView changeSet={filesPanel.changeSet} error={filesPanel.changesError} />,
-    git: (
-      <XuenessGitView
-        status={gitStatus}
-        statusError={gitStatusError || undefined}
-        statusLoading={gitLoading}
-        diff={gitDiff}
-        diffError={gitDiffError || undefined}
-        diffLoading={gitLoading}
-        log={gitLog}
-        logError={gitLogError || undefined}
-        logLoading={gitLoading}
-        checkpoints={gitCheckpoints}
-        actionError={gitCheckpointError}
-        actionBusy={gitActionBusy}
-        onRefresh={() => void loadGitPanel()}
-        onInit={() => void runGitAction(() => initGitRepository(activeId!))}
-        onStage={paths => void runGitAction(() => stageGitPaths(activeId!, paths))}
-        onUnstage={paths => void runGitAction(() => unstageGitPaths(activeId!, paths))}
-        onCommit={message => void runGitAction(() => commitGitChanges(activeId!, message))}
-        onBranch={(name, create) => void runGitAction(() => switchGitBranch(activeId!, name, create))}
-        onStash={() => void runGitAction(() => stashGitChanges(activeId!))}
-        onCheckpoint={message => void runGitAction(() => createGitCheckpoint(activeId!, message))}
-        onRestore={checkpointId => void runGitAction(() => restoreGitCheckpoint(activeId!, checkpointId))}
-      />
-    ),
-    directory: <DirectoryBrowser currentPath={filesPanel.dirListing?.path ?? null} entries={filesPanel.dirListing?.entries ?? []}
-        error={filesPanel.dirError} truncated={filesPanel.dirListing?.truncated ?? false} loading={filesPanel.dirLoading}
-        onNavigate={filesPanel.browseDirectory} onOpenFile={filesPanel.handleSelectFile} onCreateDir={filesPanel.handleCreateDir} />,
-    providers: (
-      <ModelManager focusProviderId={defaultModel.providerFocusId} runtimeMonitorEnabled={isPluginEffective("providers") && isPluginEffective("diagnostics")} onSelect={id => { composer.selectProviderForCurrentRun(id); setPanel("chat"); }} />
-    ),
-    "context-lens": <ContextLensPanel enabled={isPluginEffective("context_lens")} settingsEnabled={isPluginEffective("settings")} sessionId={activeId} onOpenSession={selectSession} onSelectSession={id => { selectSession(id); setPanel("context-lens"); }} />,
-    usage: <XuenessUsageSettings />,
-    memory: <MemoryOcean workspaceRoot={typeof session?.root === "string" ? session.root : undefined} tracks={memoryTracks} />,
-    swarm: <SwarmPanel enabled={isPluginEffective("swarm")} sessionId={activeId} />,
-    // Roleplay chats start from here tagged with their Tavern playthrough; the conversation itself is an ordinary session.
-    tavern: <TavernPanel onStart={text => { startNewTask(); appendTextToComposer(null, text); }} onStartSession={(text, ref) => { setPanel("chat"); return handleCreate(text, undefined, undefined, ref); }} onOpenSession={id => { selectSession(id); setPanel("chat"); }} />,
-    capabilities: <><CapabilitiesPanel sections={capSections} />{isPluginEffective("mcp") && <XuenessMcpTools />}</>,
-    settings: <WorkbenchSettingsPanel settings={settings} isPluginEffective={isPluginEffective} capabilityKinds={pluginAvailability.capabilityKinds} capSections={capSections}
-      loadCapSlot={loadCapSlot} pluginCatalog={pluginCatalog} pluginCatalogLoading={pluginCatalogLoading} pluginCatalogError={pluginCatalogError}
-      refreshPluginCatalog={refreshPluginCatalog} togglePlugin={togglePlugin} locale={locale} busy={busy} session={session} activeId={activeId} activeIdRef={activeIdRef}
-      composer={composer} providerFocusId={defaultModel.providerFocusId} setPanel={setPanel} startNewTask={startNewTask} appendTextToComposer={appendTextToComposer} setRemoteDialogOpen={setRemoteDialogOpen} />,
-  };
+  const secondaryPanels = buildSecondaryPanels({
+    panel, setPanel, activeId, activeIdRef, session, busy, locale, isPluginEffective, settings,
+    capabilityKinds: pluginAvailability.capabilityKinds, capSections, loadCapSlot, pluginCatalog, pluginCatalogLoading,
+    pluginCatalogError, refreshPluginCatalog, togglePlugin, composer, defaultModel, filesPanel, gitPanel, memoryTracks,
+    scopedSidePanel, activeRuntimeProfile, lightweightLayout, startNewTask, appendTextToComposer, setRemoteDialogOpen,
+    selectSession, handleCreate, handleStop,
+  });
 
   const secondaryContent = panel !== 'chat' && panel !== 'settings' ? canShowPanel(panel) && (!lightweightLayout || panel !== 'subagents')
     ? secondaryPanels[panel] : <FeatureUnavailable feature={panelLabels[panel]} onManage={() => setPanel('plugins')} /> : null;
-  const runPaletteCommand = useCallback((id: string) => {
-    setCommandOpen(false);
-    if (id === "new-task") startNewTask();
-    else if (id === "open-settings" && isPluginEffective("settings")) setPanel("settings");
-    else if (id === "refresh") void handleRefreshAll();
-  }, [startNewTask, handleRefreshAll, isPluginEffective]);
 
   const claudexAppearance = normalizeColorPalette(settingsLoading && typeof document !== 'undefined'
     ? document.documentElement.dataset.xnPalette : settingsValues.colorPalette) === 'claudex';
   const sidebarAppearance = claudexAppearance ? 'claudex' : 'xueness';
   const sidebarSizing = useSessionSidebarWidth(sidebarAppearance, isPluginEffective('sessions'));
+  useEffect(() => {
+    if (activeId) preloadWorkbenchConversation();
+  }, [activeId]);
   const { sidebarActions, railActions, railSecondaryActions, railMoreActions, sidebarMenuActions } = buildSidebarActions({ isPluginEffective, claudexAppearance,
     shortcutBindings, allowedPanels, canShowPanel, panelLabels, setPanel, startNewTask, openCommandPalette });
 
@@ -469,20 +345,9 @@ export function XuenessWorkbenchContainer() {
         </>
       }
     >
-      {palette.commandPaletteEnabled && <CommandPalette
-        dialogRef={palette.commandDialogRef}
-        inputRef={palette.commandRef}
-        sessions={sessions}
-        busy={busy}
-        sessionsEnabled={isPluginEffective("sessions")}
-        settingsEnabled={isPluginEffective("settings")}
-        onClose={() => setCommandOpen(false)}
-        onRunCommand={runPaletteCommand}
-        onSelectSession={(id, query) => {
-          selectSession(id);
-          data.setConversationFindRequest(query ? {sessionId: id, id: crypto.randomUUID(), query} : null);
-        }}
-      />}
+      <WorkbenchCommandPalette palette={palette} sessions={sessions} busy={busy} isPluginEffective={isPluginEffective}
+        startNewTask={startNewTask} setPanel={setPanel} handleRefreshAll={handleRefreshAll} selectSession={selectSession}
+        setConversationFindRequest={data.setConversationFindRequest} />
 
       {(error || dataErrors.active || dataErrors.list) && (
         <div role="alert" className="xn-error-banner">
@@ -513,6 +378,7 @@ export function XuenessWorkbenchContainer() {
         <div role="status" className="xn-hero"><p>{tr("正在加载任务…")}</p></div>
       ) : session ? (
         <div className="xn-conversation-container">
+          <Suspense fallback={<p role="status" className="xn-view-loading">{tr("正在加载对话…")}</p>}>
           <WorkbenchConversation session={session} activeId={activeId} isPluginEffective={isPluginEffective} effectivePluginIds={pluginAvailability.effectiveIds}
             isSessionsEffective={isSessionsEffective} settingsValues={settingsValues} lightweightLayout={lightweightLayout} activeRuntimeProfile={activeRuntimeProfile}
             runtimeMonitorSession={runtimeMonitorSession} choices={choices} selectedComposerModel={selectedComposerModel} activeSessionRunning={activeSessionRunning}
@@ -523,6 +389,7 @@ export function XuenessWorkbenchContainer() {
             deliveryEditorRequest={deliveryEditorRequest} contextSidepaneOpen={contextSidepaneOpen} setContextSidepaneOpen={setContextSidepaneOpen}
             commandRoot={commandRoot} workspaceRoot={draftRoot ?? composerCatalog.root} composer={composerShared} composerDisabled={composerDisabled}
             sendDisabled={!composerModelReady || composerCatalogLoading} modelRecovery={composerModelRecovery} onSend={handleSend} />
+          </Suspense>
         </div>
       ) : (
         <div className="xn-empty-state-shell" data-testid="xn-hero">
@@ -542,48 +409,21 @@ export function XuenessWorkbenchContainer() {
 
       </Suspense></RegionBoundary>
 
-      {workspace.workspacePicking && <Suspense fallback={null}><XuenessWorkspacePickerDialog open currentRoot={draftRoot ?? composerCatalog.root} returnFocusTo={workspace.workspacePickerOpener.current}
-        mode={workspace.workspacePickerMode}
-        onChoose={chooseWorkspace} onCancel={() => workspace.setWorkspacePicking(false)} /></Suspense>}
-
-      {workspace.cloneOpen && isPluginEffective("git") && <Suspense fallback={null}><XuenessCloneDialog open
-        defaultParent={(draftRoot ?? composerCatalog.root) ?? null}
-        returnFocusTo={workspace.cloneOpener.current}
-        onCancel={() => workspace.setCloneOpen(false)}
-        onCloned={(root) => { workspace.setCloneOpen(false); void workspace.refreshRecentProjects(); chooseWorkspace(root); }} /></Suspense>}
-
-      {listActions.renameRequest !== null && <Suspense fallback={null}><XuenessRenameDialog
-        open
-        initialValue={listActions.renameRequest.initialValue}
-        returnFocusTo={listActions.renameOpenerRef.current}
-        onCancel={() => listActions.setRenameRequest(null)}
-        onConfirm={(value) => {
-          const request = listActions.renameRequest;
-          listActions.setRenameRequest(null);
-          if (request) void listActions.renameById(request.id, value);
-        }}
-      /></Suspense>}
-
-      {capDialog !== null && <Suspense fallback={null}><XuenessCapabilityDialog
-        open
-        mode={capDialog.mode}
-        kind={capDialog.kind}
-        initial={capDialog.initial ?? null}
-        busy={capDialogBusy}
-        error={capDialogError || undefined}
-        onCancel={() => setCapDialog(null)}
-        onSubmit={(payload) => void handleCapSubmit(payload)}
-      /></Suspense>}
-      {runPermission.dialog}
-      {fork.forkSource !== null && <Suspense fallback={null}><ForkSessionDialog
-        open
-        sourceId={fork.forkSource.id}
-        sourceTitle={fork.forkSource.title}
-        initialTurn={fork.forkSource.turn}
-        createFork={fork.createPrimaryFork}
-        onCancel={() => fork.setForkSource(null)}
-        onFork={fork.completeFork}
-      /></Suspense>}
+      <WorkbenchDialogs
+        workspace={workspace}
+        chooseWorkspace={chooseWorkspace}
+        draftRoot={draftRoot}
+        catalogRoot={composerCatalog.root}
+        isPluginEffective={isPluginEffective}
+        listActions={listActions}
+        capDialog={capDialog}
+        setCapDialog={setCapDialog}
+        capDialogBusy={capDialogBusy}
+        capDialogError={capDialogError}
+        handleCapSubmit={handleCapSubmit}
+        permissionDialog={runPermission.dialog}
+        fork={fork}
+      />
     </Shell>
     </CodeDisplayProvider>
   );

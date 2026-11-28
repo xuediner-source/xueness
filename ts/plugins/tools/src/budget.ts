@@ -65,7 +65,9 @@ export function reserve(stateDir: unknown, session: unknown, toolCallId: unknown
   const used = readUsed(stateDir, sid, turn);
   const status = { enabled: true, scope: "session", turn_id: turn, used, limit: config.limit, remaining: Math.max(0, config.limit - used) };
   if (used >= config.limit) {
-    return { ok: false, error: "tool call budget exhausted", error_code: "tool_call_budget_exhausted", retryable: false, call_budget: status, user_reason: `本轮工具调用预算已耗尽（${used}/${config.limit}）。请开始新一轮或调整工具调用预算。` };
+    // The bridge's tool result shape: `before_tool_effect` refuses anything else.
+    return { ok: false, output: `本轮工具调用预算已耗尽（${used}/${config.limit}）。请开始新一轮或调整工具调用预算。 / This turn's tool call budget is used up (${used}/${config.limit}).`,
+      error: { code: "tool_call_budget_exhausted", message: "tool call budget exhausted" }, data: { retryable: false, call_budget: status } };
   }
   writeUsed(stateDir, sid, turn, used + 1);
   if (typeof toolCallId === "string" && toolCallId) calls.add(toolCallId);
@@ -73,17 +75,19 @@ export function reserve(stateDir: unknown, session: unknown, toolCallId: unknown
   return null;
 }
 
-export function beforeToolEffect(payload: Readonly<Record<string, unknown>>): unknown {
+/** Counts one call against the current turn's budget, or the refusal once it is used up. */
+export function budgetDenial(payload: Readonly<Record<string, unknown>>, stateDir: string | null, session: unknown): Record<string, unknown> | null {
   if (!isDict(payload)) return null;
-  const denial = reserve(payload.state_dir, payload.session, payload.tool_call_id);
-  return denial ? { decision: "deny", result: denial } : null;
+  return reserve(stateDir, session, payload.callId);
 }
 
-export function afterToolExecution(payload: Readonly<Record<string, unknown>>): unknown {
-  if (!isDict(payload) || !isDict(payload.result) || typeof payload.state_dir !== "string") return null;
+/** Every result carries the budget status while the budget is on. */
+export function budgetRewrite(payload: Readonly<Record<string, unknown>>, stateDir: string | null, session: unknown): unknown {
+  if (!isDict(payload) || !isDict(payload.result) || stateDir === null) return null;
   try {
-    const status = projectSession(payload.state_dir, payload.session);
+    const status = projectSession(stateDir, session);
     if (status.enabled !== true) return null;
-    return { decision: "rewrite", result: { ...payload.result, call_budget: status } };
+    const data = isDict(payload.result.data) ? payload.result.data : {};
+    return { decision: "rewrite", result: { ...payload.result, data: { ...data, call_budget: status } } };
   } catch { return null; }
 }

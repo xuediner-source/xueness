@@ -50,6 +50,7 @@
     }
   ],
   "frontendModules": [
+    "plugins/usage/usageApi.ts",
     "plugins/usage/XuenessUsageSettings.tsx",
     "plugins/usage/XuenessUsageQuickCard.tsx",
     "plugins/usage/UsageToolOutcomes.tsx"

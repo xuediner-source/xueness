@@ -1,10 +1,1 @@
-{
-  "../webapp/src/plugins/extensions/index.tsx": 450,
-  "../webapp/src/plugins/mcp/ElicitationForm.tsx": 537,
-  "../webapp/src/plugins/onboarding/DesktopPermissionOnboarding.tsx": 535,
-  "../webapp/src/plugins/sessions/commandClient.ts": 443,
-  "../webapp/src/plugins/sessions/secondaryPaneComposer.tsx": 489,
-  "../webapp/src/plugins/sessions/SidebarNav.tsx": 477,
-  "../webapp/src/xuenessApi.ts": 593,
-  "../webapp/src/XuenessWorkbenchContainer.tsx": 532
-}
+{}

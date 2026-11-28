@@ -23,8 +23,10 @@ export * from "./store.ts";
 export * from "./engine.ts";
 export * from "./prompts.ts";
 export * from "./settings.ts";
+export * from "./roster.ts";
 export * from "./service.ts";
 export * from "./tools.ts";
+export * from "./roster-tools.ts";
 export * from "./extension.ts";
 export * from "./http.ts";
 

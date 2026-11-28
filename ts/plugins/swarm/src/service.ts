@@ -16,8 +16,9 @@
 import { randomBytes } from "node:crypto";
 import { BOARD_MAX, deliveryText, extractCitations, POST_CHARS, resolveAddress, type Post, type PostKind } from "./board.ts";
 import { chooseToRun, monitorCheck, pendingFor } from "./engine.ts";
-import { normalizeChannelName, PLAN_LIMITS, planDigest, PlanError, validateReassignment, type ModelChoice, type SwarmPlan } from "./plan.ts";
+import { normalizeChannelName, planDigest, type ModelChoice, type SwarmPlan } from "./plan.ts";
 import { roleCard } from "./prompts.ts";
+import { applyMemberReassignment, applySwarmTitle, checkKillPermission, checkModelSwitchPermission, prepareAddedMembers, type AddMemberInput } from "./roster.ts";
 import type { SwarmSettings } from "./settings.ts";
 import { appendPost, classifyFailure, listSwarms, loadSwarm, memberSessionsDirectory, readPosts, saveSwarm, TERMINAL, type CriterionResult, type MemberRecord, type SwarmChannel, type SwarmRecord, type SwarmStatus } from "./store.ts";
 
@@ -165,11 +166,35 @@ export class SwarmService {
   kill(id: string, name: string, by: string, reason: string): SwarmRecord {
     const record = this.#load(id);
     const member = this.#member(record, name);
-    if (member.role === "coordinator") throw new SwarmServiceError(400, "the coordinator cannot be killed; stop the swarm instead");
+    checkKillPermission(record, member, by);
     member.state = "killed"; member.error = clip(reason || "stopped", 300); member.failureKind = classifyFailure(member.error);
     saveSwarm(this.stateDir, record);
     this.#runs.get(id)?.get(name)?.abort();
     if (!TERMINAL.has(record.status)) this.post(id, "system", ["coordinator"], `@${name} was stopped by ${by === "user" ? "the user" : `@${by}`}: ${member.error}`, "system");
+    return this.#load(id);
+  }
+
+  setTitle(id: string, title: string, by = "user"): SwarmRecord {
+    const record = this.#load(id);
+    applySwarmTitle(record, title, by);
+    saveSwarm(this.stateDir, record);
+    return this.#load(id);
+  }
+
+  addMember(id: string, input: AddMemberInput, by = "user"): SwarmRecord {
+    if (!this.#on()) throw new SwarmServiceError(403, "plugin disabled or dependency unavailable: swarm");
+    const record = this.#load(id);
+    const latestSeq = readPosts(this.stateDir, id).at(-1)?.seq ?? 0;
+    const { added, briefText, postFrom } = prepareAddedMembers(record, input, by, {
+      maxMembers: this.#options.settings().maxMembers,
+      foldCase: this.#options.foldCase ?? process.platform === "win32",
+      commandIssue: this.#options.commandIssue,
+      requireApprovedModel: (model, caller) => this.#requireApprovedModel(record, model, caller),
+    });
+    for (const member of added) member.delivered = latestSeq;
+    record.members.push(...added);
+    saveSwarm(this.stateDir, record);
+    this.post(id, postFrom, added.map((m) => m.name), briefText, postFrom === "user" ? "user" : "post");
     return this.#load(id);
   }
 
@@ -204,7 +229,14 @@ export class SwarmService {
     if (TERMINAL.has(record.status)) throw new SwarmServiceError(409, `the swarm is ${record.status}`);
     const member = this.#member(record, name);
     if (member.state === "killed") throw new SwarmServiceError(409, `@${name} is killed`);
+    checkModelSwitchPermission(record, member, by);
     this.#requireApprovedModel(record, model, by);
+    if (by === "user" && model) {
+      const models = record.approvedModels ?? [];
+      if (!models.some((item) => item.providerId === model.providerId && (item.model ?? null) === (model.model ?? null))) {
+        record.approvedModels = [...models, { providerId: model.providerId, model: model.model ?? null }];
+      }
+    }
     const hadError = Boolean(member.error);
     member.model = model; member.error = null; member.failureKind = null;
     if (hadError && member.state === "done") member.state = "waiting";
@@ -227,49 +259,15 @@ export class SwarmService {
     const record = this.#load(id);
     if (TERMINAL.has(record.status)) throw new SwarmServiceError(409, `the swarm is ${record.status}`);
     if (input.from === input.to) throw new SwarmServiceError(400, "cannot reassign a member to itself");
-    const source = this.#member(record, input.from);
-    const target = this.#member(record, input.to);
-    if (source.role === "coordinator" || target.role === "coordinator") throw new SwarmServiceError(400, "the coordinator cannot participate in task reassignment");
-    if (target.state === "killed") throw new SwarmServiceError(409, `target member @${target.name} is killed`);
-    // A member acting on its own stays inside what the user approved for these two members and
-    // cannot remove the check on its work; the user can do either from the panel or the CLI.
-    const byUser = by === "user";
-    if (!byUser && source.role !== "worker") throw new SwarmServiceError(403, `only the user can reassign a ${source.role}; ask on the board`);
-    if (input.model !== undefined) this.#requireApprovedModel(record, input.model, by);
-    const rawOwns = input.owns ?? [...new Set([...target.owns, ...source.owns])];
-    const rawCommands = input.commands ?? [...new Set([...target.commands, ...source.commands])];
-    if (target.role !== "worker" && rawOwns.length) throw new SwarmServiceError(400, `only workers own paths; @${target.name} is a ${target.role}`);
-    const approvedOwns = new Set(byUser ? record.approvedOwns ?? record.members.flatMap((m) => m.owns) : [...source.owns, ...target.owns]);
-    const approvedCommands = new Set(byUser ? record.approvedCommands ?? record.members.flatMap((m) => m.commands) : [...source.commands, ...target.commands]);
-    const foldCase = this.#options.foldCase ?? process.platform === "win32";
-    let validated: { owns: string[]; commands: string[] };
-    try {
-      // The source's paths are free for the overlap check; it is stopped only once everything is accepted.
-      validated = validateReassignment(record.members.map((m) => m === source ? { ...m, state: "killed" } : m), target.name, rawOwns, rawCommands, approvedOwns, approvedCommands, foldCase);
-    } catch (error) {
-      throw new SwarmServiceError(error instanceof PlanError ? 400 : 500, (error as Error).message);
-    }
-    for (const cmd of validated.commands) {
-      const issue = this.#options.commandIssue?.(`exec(${cmd})`);
-      if (issue) throw new SwarmServiceError(400, `reassigned command ${cmd}: ${issue}`);
-    }
-    source.state = "killed"; source.error = clip(`reassigned to @${target.name}`, 300); source.failureKind = null;
+    const source = this.#member(record, input.from), target = this.#member(record, input.to);
+    const note = applyMemberReassignment(record, source, target, input, by, {
+      foldCase: this.#options.foldCase ?? process.platform === "win32",
+      commandIssue: this.#options.commandIssue,
+      requireApprovedModel: (model, caller) => this.#requireApprovedModel(record, model, caller),
+    });
     this.#runs.get(id)?.get(source.name)?.abort();
-    target.owns = validated.owns; target.commands = validated.commands;
-    target.error = null; target.failureKind = null;
-    if (target.state === "done") target.state = "waiting";
-    const brief = input.task?.trim() ? clip(input.task.trim(), PLAN_LIMITS.task) : "";
-    if (brief) target.task = brief;
-    if (input.model !== undefined) target.model = input.model;
-    if (input.fork && source.sessionId && !target.sessionId && !target.forkFromSessionId) target.forkFromSessionId = source.sessionId;
     saveSwarm(this.stateDir, record);
-    this.post(
-      id,
-      "system",
-      [target.name],
-      `Task reassigned from @${source.name} to @${target.name} by ${by === "user" ? "the user" : `@${by}`}.${target.owns.length ? ` Owned paths: ${target.owns.join(", ")}.` : ""}${brief ? ` Task: ${clip(brief, 800)}` : ""}`,
-      "system",
-    );
+    this.post(id, "system", [target.name], note, "system");
     return this.#load(id);
   }
 

@@ -4,7 +4,7 @@ Fix footer PAGE field instructions in a DOCX file for WPS/Word compatibility.
 
 docx-js generates bare `PAGE` instrText in footers, but WPS ignores `pgNumType fmt`
 from section properties, causing page numbers to display as raw field codes like
-"PAGE \* arabic \* MERGEFORMAT" instead of actual numbers.
+"PAGE \\* arabic \\* MERGEFORMAT" instead of actual numbers.
 
 This script:
   1. Reads document.xml to determine each section's page number format

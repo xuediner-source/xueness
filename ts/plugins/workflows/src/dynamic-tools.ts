@@ -3,6 +3,7 @@ import type { JsonSchema } from '@xueness/contracts';
 import type { ToolDefinition } from '@xueness/engine-tools';
 import type { DynamicWorkflowService } from './dynamic-service.ts';
 import { blockedReminderFor } from './dynamic-blocked-reminder.ts';
+import { createRunWorkflowTool } from './run-workflow-tool.ts';
 import type { Row } from './plan.ts';
 
 const string: JsonSchema = { type: 'string', minLength: 1 };
@@ -10,7 +11,7 @@ const id: JsonSchema = { type: 'string', pattern: '^[a-f0-9]{32}$' };
 const source: JsonSchema = { type: 'string', minLength: 1, maxLength: 32000 };
 const limit: JsonSchema = { type: 'integer', minimum: 1, maximum: 8 };
 const schema = (properties: Record<string, JsonSchema>, required: string[]): JsonSchema => ({ type: 'object', properties, required, additionalProperties: false });
-interface Options { service(): DynamicWorkflowService | undefined; session(): Row | null }
+interface Options { service(): DynamicWorkflowService | undefined; session(): Row | null; allowRealHost?(): boolean }
 export function dynamicWorkflowTools(options: Options): ToolDefinition[] {
   const bound = (): { service: DynamicWorkflowService; sid: string } => {
     const service = options.service(), session = options.session();
@@ -24,8 +25,9 @@ export function dynamicWorkflowTools(options: Options): ToolDefinition[] {
     async run(input) { const { service, sid } = bound(); const data = await run(service, sid, input); return { ok: true, output: JSON.stringify(data), data }; },
   });
   return [
-    tool('workflow_script_create', 'Compile a native TypeScript workflow subset and save a draft without execution. Supports agent.ask<T>, loops, Promise.all, files reads, report and hole. Inspect the returned digest before running.',
-      schema({ source, name: string, maxConcurrency: limit, writable: { type: 'boolean' } }, ['source']), false,
+    createRunWorkflowTool({ service: options.service, session: options.session, allowRealHost: options.allowRealHost ?? (() => false) }),
+    tool('workflow_script_create', 'Compile a native TypeScript workflow subset and save a draft without execution. Supports agent, ask<T>, parallel, pipeline, trajectory, loops, Promise.all, files reads, report and hole. Inspect the returned digest before running.',
+      schema({ source, name: string, description: { type: 'string', maxLength: 500 }, args: {}, maxConcurrency: limit, writable: { type: 'boolean' } }, ['source']), false,
       (service, sid, input) => service.create(sid, input.source as string, input)),
     tool('workflow_script_run', 'Start or explicitly resume the exact reviewed script digest in the background. Requires approval and explicit allowReal for actors; existing host/model permissions still apply.',
       schema({ runId: id, digest: string, allowReal: { type: 'boolean' } }, ['runId', 'digest']), true,

@@ -9,7 +9,7 @@ function globalValue(name: string, ctx: EvaluationContext, node: ts.Node): unkno
   switch (name) {
     case "args": return ctx.args;
     case "undefined": return undefined;
-    case "agent": case "ask": case "report": case "log": case "phase": case "hole": case "String": case "Number": case "Boolean":
+    case "agent": case "ask": case "parallel": case "pipeline": case "trajectory": case "report": case "log": case "phase": case "hole": case "String": case "Number": case "Boolean":
       return intrinsic(name);
     case "files": return marker({ kind: "files" });
     case "JSON": case "Math": case "Promise": return namespace(name);

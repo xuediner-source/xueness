@@ -12,7 +12,7 @@
   "modules": ["marketplace", "profiles", "validate_update", "composer_capabilities", "creator_tooling", "imports"],
   "dataFiles": ["profiles.json"],
   "pluginsActions": ["validate", "update", "profile", "imports", "import", "unimport", "activate", "deactivate"],
-  "frontendModules": ["plugins/extensions/index.tsx", "plugins/extensions/PluginProfilePicker.tsx", "plugins/extensions/PackageImports.tsx", "plugins/extensions/optionalFrontend.ts"],
+  "frontendModules": ["plugins/extensions/index.tsx", "plugins/extensions/MarketplaceCard.tsx", "plugins/extensions/extensionsApi.ts", "plugins/extensions/PluginProfilePicker.tsx", "plugins/extensions/PackageImports.tsx", "plugins/extensions/optionalFrontend.ts"],
   "features": [
     { "id": "extensions.official_download", "name": "从官方插件仓库（GitHub）按需下载、校验并安装官方可选插件", "nameEn": "Download, verify and install official optional plugins on demand from the official plugin repository on GitHub" },
     { "id": "extensions.package_activation", "name": "启用已导入扩展包：把技能和提示模板登记为技能与命令插件的资源，可随时停用", "nameEn": "Activate imported packages: register their skills and prompt templates as resources of the skills and commands plugins, reversible at any time" },

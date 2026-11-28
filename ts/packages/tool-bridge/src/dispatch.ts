@@ -33,6 +33,8 @@ export interface ToolEventPayload {
   readonly tool: string;
   /** Gate kind. */
   readonly kind: string;
+  /** The tool declares side effects. */
+  readonly mutating: boolean;
   /** What the permission decision is about; null when the call could not be understood. */
   readonly subject: string | null;
   readonly callId: string;

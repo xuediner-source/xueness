@@ -29,10 +29,10 @@ export const AVOIDABLE_GROUPS: ReadonlySet<OutcomeGroup> = new Set(["arguments",
 const EDIT_TOOLS = new Set(["edit", "apply_patch"]);
 const POLICY = new Set(["approval_required", "denied", "user_denied", "permission_denied", "plan_mode_denied", "plugin_denied", "plugin_disabled", "tool_policy_unavailable"]);
 const INTERRUPTED = new Set(["run_paused", "cancelled", "command_cancelled", "network_cancelled", "tool_timeout_cancelled"]);
-const ARGUMENTS = new Set(["invalid_tool_arguments", "invalid_argument", "invalid_arguments", "schema_error"]);
+const ARGUMENTS = new Set(["invalid_tool_arguments", "invalid_argument", "invalid_arguments", "schema_error", "repeated_failed_call"]);
 const UNKNOWN = new Set(["unknown_tool", "not_deferred_tool", "tool_not_active"]);
-const PATH = new Set(["not_found", "is_directory", "not_a_directory", "file_exists", "binary_file", "file_too_large", "outside_workspace"]);
-const COMMAND = new Set(["command_failed", "command_not_found", "command_timeout", "command_prepare_failed", "shell_not_found", "shell_init_failed", "tool_timeout", "too_many_tasks"]);
+const PATH = new Set(["not_found", "is_directory", "not_a_directory", "file_exists", "binary_file", "file_too_large", "outside_workspace", "stale_file", "read_required"]);
+const COMMAND = new Set(["command_failed", "command_not_found", "command_timeout", "command_prepare_failed", "shell_not_found", "shell_init_failed", "shell_dialect_mismatch", "tool_timeout", "too_many_tasks"]);
 const NETWORK = /^(network_|dns_|doh_|http_|redirect_|tls_|ssrf_|fakeip_)|^response_too_large$/u;
 /**
  * A command that did not run as written: the shell could not parse it (PowerShell 5.1 has no

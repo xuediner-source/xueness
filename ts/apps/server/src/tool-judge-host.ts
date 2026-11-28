@@ -9,6 +9,7 @@
  */
 import { platform } from "node:os";
 import type { AgentExtension, AgentProvider } from "@xueness/agent";
+import type { FileStateTracker } from "@xueness/engine-tools";
 import { admissionWithScope, AVOIDABLE_GROUPS, handoffModelJson, outcomeCode, outcomeGroup, ProfileStore, providerAdmissionForState, resolveSavedProvider } from "@xueness/plugin-providers";
 import { readJudgeSettings, toolJudgeExtension, type JudgeSelection } from "@xueness/plugin-tool_judge";
 
@@ -21,6 +22,12 @@ export interface ToolJudgeHostOptions {
   override?: "inherit" | "off" | JudgeSelection;
   resolveProvider?(selection: JudgeSelection): AgentProvider;
   shell?: "posix" | "powershell";
+  /** Workspace & environment bindings for deterministic model-free preflight checks. */
+  root?: string;
+  tracker?: FileStateTracker;
+  schemaOf?(name: string): Record<string, unknown> | null;
+  env?: NodeJS.ProcessEnv;
+  shellInitConfigured?: boolean;
 }
 
 export function toolJudgeFor(options: ToolJudgeHostOptions): AgentExtension {
@@ -39,5 +46,15 @@ export function toolJudgeFor(options: ToolJudgeHostOptions): AgentExtension {
       return { failed: true, avoidable: AVOIDABLE_GROUPS.has(outcomeGroup(name, code, result)) };
     },
     platform: () => `${platform()} (${shell === "powershell" ? "PowerShell 5.1: no && or ||; Unix flags like ls -la do not work" : "POSIX shell"})`,
+    ...(options.root ? {
+      preflight: {
+        root: () => options.root!,
+        tracker: options.tracker,
+        schemaOf: options.schemaOf,
+        shell,
+        env: options.env,
+        shellInitConfigured: options.shellInitConfigured,
+      },
+    } : {}),
   });
 }

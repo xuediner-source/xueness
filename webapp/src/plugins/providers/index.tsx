@@ -1,10 +1,10 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Check, Cpu, Plus, RefreshCw } from 'lucide-react';
-import { adoptProviderCompatibility, deleteProvider, discoverProviderModels, listProviders, saveProvider, testProviderCompatibility, testProviderConnection } from '../../xuenessApi';
+import { adoptProviderCompatibility, deleteProvider, discoverProviderModels, getDefaultModelSelection, listProviders, saveDefaultModelSelection, saveProvider, testProviderCompatibility, testProviderConnection } from '../../xuenessApi';
 import type { ProviderCompatibilityTest, ProviderCompatibilityTestMode, ProviderConnectionTest, ProviderDiscoveredModel, ProviderSummary } from '../../xuenessApi';
 import { t as tr, tf } from '../../i18n';
 import { OperationHeader } from '../shared';
-import { EnvironmentProviderDetail, ProviderEmptyState, ModelProviderNavigation } from './ProviderPanels';
+import { EnvironmentProviderDetail, ExternalProviderDetail, ProviderEmptyState, ModelProviderNavigation } from './ProviderPanels';
 import { ProviderEditor } from './ProviderEditor';
 import {
   canAdoptProviderCompatibility, canTestProviderCompatibility, compatibilityOptionsKey, createProviderDraft, draftsEqual, emptyProviderDraft,
@@ -26,13 +26,19 @@ export {
 export { CUSTOM_MODEL_DOCS_HREF, ModelProviderNavigation, ProviderEmptyState, ProviderSetupGuide } from './ProviderPanels';
 export { ProviderEditor } from './ProviderEditor';
 
-export function ModelManager({ onSelect, runtimeMonitorEnabled = false, focusProviderId }: {
+export function ModelManager({ onSelect, runtimeMonitorEnabled = false, focusProviderId, onManageSource, onRefreshExternal }: {
   onSelect: (id: string) => void;
   runtimeMonitorEnabled?: boolean;
   /** When set, select this saved profile once the catalog includes it. */
   focusProviderId?: string;
+  /** Open the plugin that supplies a read-only profile (`subscriptionId`, e.g. "magpie"). */
+  onManageSource?: (subscriptionId: string) => void;
+  onRefreshExternal?: () => Promise<void>;
 }) {
   const [items, setItems] = useState<ProviderSummary[]>([]);
+  // Profiles a plugin supplies (Magpie) are listed read-only beside the editable ones.
+  const [external, setExternal] = useState<ProviderSummary[]>([]);
+  const [defaultId, setDefaultId] = useState<string | null>(null);
   const [selectedKey, setSelectedKey] = useState(ENVIRONMENT_KEY);
   const [draft, setDraft] = useState<ProviderDraft>(emptyProviderDraft);
   const [loading, setLoading] = useState(true);
@@ -57,6 +63,7 @@ export function ModelManager({ onSelect, runtimeMonitorEnabled = false, focusPro
   const issuedProviderIds = React.useRef(new Set<string>());
 
   const currentProvider = useMemo(() => items.find(provider => provider.id === selectedKey) ?? null, [items, selectedKey]);
+  const currentExternal = useMemo(() => external.find(provider => provider.id === selectedKey) ?? null, [external, selectedKey]);
   const isNew = selectedKey === NEW_PROVIDER_KEY;
   const currentConnectionTest = connectionTest?.id === currentProvider?.id ? connectionTest : null;
   const compatibilityKey = compatibilityOptionsKey(draft.compatibility);
@@ -92,14 +99,17 @@ export function ModelManager({ onSelect, runtimeMonitorEnabled = false, focusPro
     if (!quiet) setLoading(true);
     setError('');
     try {
-      const result = await listProviders();
+      await onRefreshExternal?.().catch(() => undefined);
+      const [result, savedDefault] = await Promise.all([listProviders(), getDefaultModelSelection().catch(() => null)]);
       if (!mountedRef.current) return;
       setItems(result.providers.filter(provider => provider.source !== 'subscription'));
+      setExternal(result.providers.filter(provider => provider.source === 'subscription'));
+      setDefaultId(savedDefault?.providerId ?? null);
       if (selectedKey !== ENVIRONMENT_KEY && selectedKey !== NEW_PROVIDER_KEY && !result.providers.some(provider => provider.id === selectedKey)) {
         setSelectedKey(ENVIRONMENT_KEY);
         setDraft(emptyProviderDraft());
       } else if (selectedKey !== ENVIRONMENT_KEY && selectedKey !== NEW_PROVIDER_KEY && !currentDraftChanged) {
-        const provider = result.providers.find(item => item.id === selectedKey);
+        const provider = result.providers.find(item => item.id === selectedKey && item.source !== 'subscription');
         if (provider) setDraft(providerDraftFromSummary(provider));
       }
     } catch (reason) {
@@ -113,20 +123,21 @@ export function ModelManager({ onSelect, runtimeMonitorEnabled = false, focusPro
 
   useEffect(() => {
     if (!focusProviderId || selectedKey === focusProviderId || pendingSelection === focusProviderId) return;
-    const provider = items.find(item => item.id === focusProviderId);
-    if (!provider) return;
+    const saved = items.find(item => item.id === focusProviderId);
+    const target = saved ?? external.find(item => item.id === focusProviderId);
+    if (!target) return;
     if (currentDraftChanged) {
       setPendingSelection(focusProviderId);
       return;
     }
-    setSelectedKey(provider.id);
-    setDraft(providerDraftFromSummary(provider));
+    setSelectedKey(target.id);
+    setDraft(saved ? providerDraftFromSummary(saved) : emptyProviderDraft());
     setError('');
     setNotice('');
     setConfirmDelete(false);
     setConnectionTest(null);
     setDiscovery(null);
-  }, [focusProviderId, items, selectedKey, pendingSelection, currentDraftChanged]);
+  }, [focusProviderId, items, external, selectedKey, pendingSelection, currentDraftChanged]);
 
   const commitNavigationItem = (key: string) => {
     setPendingSelection(null);
@@ -339,7 +350,7 @@ export function ModelManager({ onSelect, runtimeMonitorEnabled = false, focusPro
     {error && <p className="xn-provider-feedback xn-provider-feedback--error" role="alert">{error}</p>}
     {notice && <p className="xn-provider-feedback" role="status"><Check size={15} aria-hidden="true" />{notice}</p>}
     <div className="xn-provider-split" data-model-provider-split-panel="true" data-testid="model-provider-split-panel">
-          <ModelProviderNavigation providers={items} selectedKey={selectedKey} loading={loading} busy={busy || Boolean(testingProviderId) || Boolean(compatibilityTestingMode) || adoptingCompatibility} onSelect={requestNavigationItem} onAdd={addProvider} />
+          <ModelProviderNavigation providers={items} external={external} selectedKey={selectedKey} loading={loading} busy={busy || Boolean(testingProviderId) || Boolean(compatibilityTestingMode) || adoptingCompatibility} onSelect={requestNavigationItem} onAdd={addProvider} />
       <main className="xn-provider-detail" data-model-provider-detail-scroll="true">
         {pendingSelection !== null && <div className="xn-provider-unsaved" role="alertdialog" aria-modal="false" aria-label={tr('未保存的更改')}>
           <div><strong>{tr('有未保存的更改')}</strong><p>{tr('切换配置会放弃当前表单中的更改。')}</p></div>
@@ -348,7 +359,12 @@ export function ModelManager({ onSelect, runtimeMonitorEnabled = false, focusPro
         {selectedKey === ENVIRONMENT_KEY ? <>
           {!loading && items.length === 0 && <ProviderEmptyState onAdd={addProvider} busy={busy} />}
           <EnvironmentProviderDetail onSelect={() => chooseForRun('', tr('环境模型'))} />
-        </> : <ProviderEditor
+        </> : currentExternal ? <ExternalProviderDetail provider={currentExternal}
+          isDefault={defaultId === currentExternal.id}
+          onSelect={() => chooseForRun(currentExternal.id, currentExternal.name)}
+          onSetDefault={() => void saveDefaultModelSelection({ providerId: currentExternal.id, model: currentExternal.model, reasoningEffort: null }).then(saved => { if (saved) { setDefaultId(saved.providerId ?? null); setNotice(tf('已将 {0} 设为默认模型', [currentExternal.name.replace(/^Magpie · /, '')])); } }).catch(r => setError(errorText(r)))}
+          onManage={onManageSource && currentExternal.subscriptionId ? () => onManageSource(currentExternal.subscriptionId!) : undefined} />
+        : <ProviderEditor
           key={selectedKey}
           draft={draft}
           original={currentProvider}

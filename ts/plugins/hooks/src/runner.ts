@@ -13,6 +13,7 @@
 import { constants as osConstants } from "node:os";
 import { statSync } from "node:fs";
 import { isDict, pyJsonDumps, pyStrRepr } from "@xueness/contracts";
+import { resolveExecutionCommand } from "@xueness/engine-tools";
 import type { Context } from "@xueness/kernel";
 import { clip, POST_PIPELINE_EVENTS, select, strip, TOOL_EVENTS, type Row } from "./load.ts";
 import { WORKSPACE_HOOK_ORIGIN, type WorkspaceHookOrigin } from "./origin.ts";
@@ -51,7 +52,10 @@ export function scopedExecute(ctx: () => Context | null): Execute {
     if (options.signal?.aborted) throw Object.assign(new Error("hook execution cancelled"), { code: "ECANCELED" });
     const scope = parent.fork("hook");
     try {
-      const child = scope.spawn(argv[0]!, argv.slice(1), { cwd: options.cwd, env: hookEnvironment(), stdio: ["pipe", "pipe", "pipe"], killGraceMs: 0 });
+      // Windows finds `npm`, `npx` and other .cmd/.bat shims only through PATHEXT and cmd.exe, as MCP servers do.
+      const resolved = resolveExecutionCommand(argv, { cwd: options.cwd, env: hookEnvironment() });
+      const child = scope.spawn(resolved.argv[0]!, resolved.argv.slice(1), { cwd: resolved.cwd, env: resolved.env, stdio: ["pipe", "pipe", "pipe"], killGraceMs: 0,
+        ...(resolved.windowsVerbatimArguments ? { windowsVerbatimArguments: true } : {}) });
       const chunks: Buffer[] = [];
       child.stdout?.on("data", (chunk: Buffer) => chunks.push(chunk));
       child.stderr?.on("data", (chunk: Buffer) => chunks.push(chunk));

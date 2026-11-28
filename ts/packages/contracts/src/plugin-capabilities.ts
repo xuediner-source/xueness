@@ -197,7 +197,8 @@ export function programName(file: string): string {
 
 export function programAllowed(caps: Capabilities, file: string): boolean {
   const name = programName(file);
-  return caps.exec.some((pattern) => pattern === "*" || pattern.toLowerCase() === name);
+  // A declared "powershell.exe" names the same program as "powershell".
+  return caps.exec.some((pattern) => pattern === "*" || programName(pattern) === name);
 }
 
 export function secretAllowed(caps: Capabilities, name: string): boolean {

@@ -236,6 +236,25 @@ export async function runSession(id: string, choices?: RunChoices, options?: { c
   }
 }
 
+/** Regenerate the latest reply (keeping it as a version), put back a kept version, or save an edited reply as a new version. */
+export async function updateReplyVersion(id: string, row: Extract<TimelineRow, {kind: 'assistant'}>,
+  action: {action: 'regenerate'} | {action: 'select_version'; version: number} | {action: 'edit_reply'; text: string}): Promise<SubmissionResult<void>> {
+  if (row.messageIndex === undefined || !row.messageRevision) return {ok: false, error: 'Refresh this conversation before changing this reply'};
+  try {
+    await requestMutation('PATCH', sessionPath(id, '/message-actions'), { revision: row.messageRevision, messageIndex: row.messageIndex, ...action }, AbortSignal.timeout(20000));
+    return {ok: true, value: undefined};
+  } catch (error) { return {ok: false, error: toErrorMessage(error)}; }
+}
+
+/** Delete a user message and everything after it (conversation rewind; files are untouched). */
+export async function rewindConversation(id: string, row: Extract<TimelineRow, {kind: 'user'}>): Promise<SubmissionResult<void>> {
+  if (!row.messageId || !row.messageRevision) return {ok: false, error: 'Refresh this conversation before changing its history'};
+  try {
+    await requestMutation('POST', sessionPath(id, '/rewind'), { messageId: row.messageId, revision: row.messageRevision, confirmed: true }, AbortSignal.timeout(20000));
+    return {ok: true, value: undefined};
+  } catch (error) { return {ok: false, error: toErrorMessage(error)}; }
+}
+
 /** The journal-issued revision and message index identify one persisted row. */
 export async function updateConversationMessage(id: string,
   row: Extract<TimelineRow, {kind: 'user' | 'assistant'}>,

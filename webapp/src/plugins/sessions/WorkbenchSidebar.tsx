@@ -5,7 +5,7 @@
  * XuenessWorkbenchContainer.
  */
 import React, { lazy, Suspense } from "react";
-import { Blocks, Bot, CalendarClock, CircleHelp, Folder, GitBranch, House, Library, MessagesSquare, SquarePen } from "lucide-react";
+import { Beer, Blocks, Bot, CalendarClock, CircleHelp, Folder, GitBranch, House, Library, MessagesSquare, SquarePen } from "lucide-react";
 import { t as tr } from "../../i18n";
 import type { ComposerCatalog } from "../../xuenessComposer";
 import type { SessionSummary } from "../../xuenessWorkbench";
@@ -39,7 +39,9 @@ export function buildSidebarActions({ isPluginEffective, claudexAppearance, shor
       { id: "new-task", icon: claudexAppearance ? <SquarePen size={16} /> : <IconNewTask size={16} />, label: tr(claudexAppearance ? "新聊天" : "新建任务"), shortcut: resolveShortcutBinding("new-session", shortcutBindings), onClick: startNewTask },
       { id: "search", icon: <IconSearch size={15} />, label: tr("搜索"), shortcut: resolveShortcutBinding("command-palette", shortcutBindings), onClick: (event: React.MouseEvent<HTMLButtonElement>) => openCommandPalette(event.currentTarget) },
     ] : []),
-    ...(isPluginEffective("context_lens") ? [{ id: "context-lens", icon: <IconSearch size={16} />, label: tr("上下文透镜"), onClick: () => setPanel("context-lens") }] : []),
+    // The downloaded Tavern takes this place on the home page; without it the home page keeps its basic entries.
+    // Context Lens stays in the top bar's views.
+    ...(isPluginEffective("tavern") && canShowPanel("tavern") ? [{ id: "tavern", icon: <Beer size={16} />, label: tr("酒馆"), onClick: () => setPanel("tavern") }] : []),
     ...(isPluginEffective("automation") ? [{ id: "automations", icon: <CalendarClock size={16} />, label: tr("自动化"), onClick: () => setPanel("automations") }] : []),
     // Memory Ocean and Swarm are tabs in the top bar (WorkbenchViewSwitcher), in both appearances.
     ...(isPluginEffective("extensions") ? [{ id: "marketplace", icon: <Blocks size={16} />, label: tr("插件市场"), onClick: () => setPanel("marketplace") }] : []),

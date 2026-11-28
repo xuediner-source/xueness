@@ -10,7 +10,7 @@ import { t as tr } from "../../i18n";
 import {
   commandPaletteStatusLabel,
   formatPaletteUpdatedAt,
-} from "./CommandPalette";
+} from "./commandPaletteState";
 import type { SessionSummary } from "../../xuenessWorkbench";
 import "../../styles/start-page.css";
 

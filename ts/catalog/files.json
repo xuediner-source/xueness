@@ -12,7 +12,8 @@
     "glob",
     "grep",
     "write",
-    "edit"
+    "edit",
+    "apply_patch"
   ],
   "commands": [],
   "panels": [
@@ -62,6 +63,7 @@
     {"id": "files.changes", "name": "会话文件改动、逐行差异与上下文折叠", "nameEn": "Session file changes, line diffs and folded context"}
   ],
   "frontendModules": [
+    "plugins/files/directoryApi.ts",
     "plugins/files/DirectoryBrowser.tsx",
     "plugins/files/FileBrowser.tsx",
     "plugins/files/DiffView.tsx",

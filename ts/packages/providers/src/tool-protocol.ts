@@ -15,7 +15,10 @@ type Dict = Record<string, unknown>;
 
 export const DIAGNOSTIC_CODES = new Set(["wrong_protocol", "missing_text", "invalid_json", "duplicate_json_key",
   "invalid_envelope", "invalid_json_value", "tool_unavailable", "invalid_native_envelope",
-  "duplicate_call_id", "invalid_native_arguments"]);
+  "duplicate_call_id", "invalid_native_arguments", "native_markup_in_json_mode"]);
+
+export const MARKUP_DIALECTS = new Set(["xml_tool_call_kv", "xml_tool_call_json", "function_calls_xml"] as const);
+export type MarkupDialect = "xml_tool_call_kv" | "xml_tool_call_json" | "function_calls_xml";
 
 /** `json.loads` refusing duplicate keys and NaN/Infinity constants. */
 export function strictJson(text: unknown): unknown {
@@ -57,13 +60,45 @@ function codePointLength(text: string): number {
   return count;
 }
 
-/** A failed reply with a content-free diagnostic (length, digest, coordinates). */
-export function failure(response: Dict, code: string, instruction: string, error: unknown = null): Dict {
+/** Bounded, single-line, credential-redacted prefix of a failed reply for diagnostics. */
+export function sanitizedResponseHead(content: string, maxChars = 160): string {
+  if (typeof content !== "string" || !content) return "";
+  let clean = "";
+  for (const ch of content) {
+    const cp = ch.codePointAt(0)!;
+    clean += cp >= 0xd800 && cp <= 0xdfff ? "\ufffd" : ch;
+  }
+  clean = clean
+    .replace(/-----BEGIN [A-Z0-9 ]*PRIVATE KEY-----[\s\S]*/gu, "[REDACTED]")
+    .replace(/\bBearer\s+\S+/giu, "Bearer [REDACTED]")
+    .replace(/\b(?:sk|rk|pk)-(?:proj-|live-|test-)?[A-Za-z0-9_-]{12,}\b/gu, "[REDACTED]")
+    .replace(/\b(?:gh[pousr]|github_pat)_[A-Za-z0-9_]{12,}\b/gu, "[REDACTED]")
+    .replace(/\bAKIA[0-9A-Z]{12,}\b/gu, "[REDACTED]")
+    .replace(/\bAIza[0-9A-Za-z_-]{20,}\b/gu, "[REDACTED]")
+    .replace(/\bxox[baprs]-[0-9A-Za-z-]{10,}\b/gu, "[REDACTED]")
+    .replace(/\beyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}(?:\.[A-Za-z0-9_-]+)?\b/gu, "[REDACTED]")
+    .replace(/((?:api[_-]?key|access[_-]?token|auth[_-]?token|secret|password|token)\s*[:=]\s*["']?)[^\s"',}<>\]]{6,}/giu, "$1[REDACTED]")
+    .replace(/[\x00-\x1f\x7f]+/gu, " ")
+    .replace(/\s+/gu, " ")
+    .trim();
+  if (!clean) return "";
+  const cps = Array.from(clean);
+  if (cps.length <= maxChars) return clean;
+  return cps.slice(0, Math.max(1, maxChars - 1)).join("") + "…";
+}
+
+/** A failed reply with a bounded diagnostic (length, digest, redacted head, coordinates). */
+export function failure(response: Dict, code: string, instruction: string, error: unknown = null, extra?: { detectedDialect?: MarkupDialect }): Dict {
   const content = response["content"];
   const diagnostic: Dict = { code };
   if (typeof content === "string") {
     diagnostic["responseChars"] = codePointLength(content);
     diagnostic["responseSha256"] = createHash("sha256").update(pyEncodeUtf8SurrogatePass(content)).digest("hex");
+    const head = sanitizedResponseHead(content);
+    if (head) diagnostic["responseHead"] = head;
+  }
+  if (extra?.detectedDialect && MARKUP_DIALECTS.has(extra.detectedDialect)) {
+    diagnostic["detectedDialect"] = extra.detectedDialect;
   }
   if (error instanceof PyJsonDecodeError) {
     // Error messages/keys/values can contain credentials. Coordinates cannot.
@@ -150,6 +185,13 @@ export function publicDiagnostics(raw: unknown): Dict[] {
     }
     if (typeof row["finishReason"] === "string" && FINISH_REASONS.has(row["finishReason"])) {
       safe["finishReason"] = row["finishReason"];
+    }
+    if (typeof row["responseHead"] === "string") {
+      const head = sanitizedResponseHead(row["responseHead"], 180);
+      if (head) safe["responseHead"] = head;
+    }
+    if (typeof row["detectedDialect"] === "string" && MARKUP_DIALECTS.has(row["detectedDialect"] as MarkupDialect)) {
+      safe["detectedDialect"] = row["detectedDialect"];
     }
     rows.push(safe);
   }

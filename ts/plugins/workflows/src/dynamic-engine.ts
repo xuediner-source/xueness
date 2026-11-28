@@ -78,7 +78,10 @@ export class DynamicWorkflowEngine {
           error.diagnostics = compiled.diagnostics;
           throw error;
         }
-        result = await evaluateDynamicWorkflow(compiled, operations, { signal: controller.signal });
+        result = await evaluateDynamicWorkflow(compiled, operations, {
+          signal: controller.signal,
+          ...(running.args === undefined ? {} : { args: running.args }),
+        });
         await scheduler.drain();
         if (scheduler.failures.length) throw scheduler.failures[0];
         if (result !== undefined) result = jsonResult(result);

@@ -14,5 +14,8 @@
     { "id": "onboarding.credentials", "name": "隐藏密钥输入与配置保存", "nameEn": "Hidden key input and configuration saving" },
     { "id": "onboarding.desktop_permissions", "name": "首次启动三步系统权限引导与可跳过的进度保存", "nameEn": "First-launch three-step system permission guide with optional progress saving" }
   ],
-  "frontendModules": ["plugins/onboarding/DesktopPermissionOnboarding.tsx"]
+  "frontendModules": [
+    "plugins/onboarding/DesktopPermissionOnboarding.tsx",
+    "plugins/onboarding/permissionOnboardingModel.ts"
+  ]
 }

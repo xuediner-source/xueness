@@ -233,7 +233,7 @@ export class ToolBridge {
     else prepared = (tool.precheck?.(input as never) as ToolResult | null | undefined) ?? await callSubject(tool, input as Record<string, unknown>, base, this.#permissions).catch(failureOf);
     const understood = "subjectKind" in prepared ? prepared : null;
     const payload: ToolEventPayload = {
-      event: "before_tool_execution", tool: tool.name, kind: tool.gate, subject: understood?.subject ?? null, callId: call.id, owner: base.owner ?? null,
+      event: "before_tool_execution", tool: tool.name, kind: tool.gate, mutating: tool.mutating === true, subject: understood?.subject ?? null, callId: call.id, owner: base.owner ?? null,
     };
     const passage = (result: ToolResult): Passage => ({ result, payload });
     const denial = await this.#events.before(payload, signal);

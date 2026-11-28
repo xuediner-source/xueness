@@ -1,9 +1,27 @@
-/** The Members tab: one card per member with its brief, state, live activity, recovery actions, and transcript. */
-import React, { useState } from "react";
+/** The Members tab: add-worker bar plus one card per member with configured model selector, recovery actions, and transcript. */
+import React, { useEffect, useState } from "react";
 import { t as tr, tf } from "../../i18n";
-import { killMember, MEMBER_STATE_LABELS, readMemberJournal, reassignMember, ROLE_LABELS, switchMemberModel, type JournalMessage, type SwarmMember } from "./swarmApi";
+import {
+  addSwarmMember, killMember, listSwarmModels, MEMBER_STATE_LABELS, readMemberJournal,
+  reassignMember, ROLE_LABELS, switchMemberModel,
+  type JournalMessage, type SwarmMember, type SwarmModelOption,
+} from "./swarmApi";
 
 type Props = { sessionId: string; swarmId: string; members: SwarmMember[]; running: string[]; active: boolean; onChanged: () => void };
+
+function encodeModelKey(providerId: string, model: string | null): string {
+  return `${providerId}::${model ?? ""}`;
+}
+
+function decodeModelKey(key: string): "inherit" | { provider_id: string; model?: string } | null {
+  if (!key || key === "inherit") return "inherit";
+  if (key === "__custom__") return null;
+  const idx = key.indexOf("::");
+  if (idx < 0) return { provider_id: key };
+  const providerId = key.slice(0, idx);
+  const model = key.slice(idx + 2);
+  return { provider_id: providerId, ...(model ? { model } : {}) };
+}
 
 function Journal({ messages }: { messages: JournalMessage[] }): React.JSX.Element {
   if (!messages.length) return <p className="xn-swarm-muted">{tr("还没有记录。")}</p>;
@@ -16,9 +34,84 @@ function Journal({ messages }: { messages: JournalMessage[] }): React.JSX.Elemen
   </ol>;
 }
 
-function MemberCard({ member, working, peers, sessionId, swarmId, active, onChanged }: { member: SwarmMember; working: boolean; peers: SwarmMember[] } & Omit<Props, "members" | "running">): React.JSX.Element {
+function AddWorkerBar({ sessionId, swarmId, members, models, onChanged }: { sessionId: string; swarmId: string; members: SwarmMember[]; models: SwarmModelOption[]; onChanged: () => void }): React.JSX.Element {
+  const [open, setOpen] = useState(false);
+  const [name, setName] = useState("");
+  const [task, setTask] = useState("");
+  const [count, setCount] = useState(1);
+  const [fork, setFork] = useState("");
+  const [modelKey, setModelKey] = useState("inherit");
+  const [ownsText, setOwnsText] = useState("");
+  const [cmdsText, setCmdsText] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+
+  const submit = async () => {
+    setBusy(true); setError("");
+    try {
+      const owns = ownsText.split(/[,\n]/).map((s) => s.trim()).filter(Boolean);
+      const commands = cmdsText.split(/[;\n]/).map((s) => s.trim()).filter(Boolean);
+      const model = decodeModelKey(modelKey) ?? "inherit";
+      await addSwarmMember(sessionId, swarmId, {
+        name: name.trim(),
+        task: task.trim(),
+        ...(count > 1 ? { count } : {}),
+        ...(owns.length ? { owns } : {}),
+        ...(commands.length ? { commands } : {}),
+        ...(fork ? { fork } : {}),
+        model,
+      });
+      setName(""); setTask(""); setCount(1); setOwnsText(""); setCmdsText(""); setFork(""); setOpen(false);
+      onChanged();
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : String(cause));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  if (!open) {
+    return <div><button type="button" onClick={() => setOpen(true)}>{tr("＋ 新增工作者 / 分片组")}</button></div>;
+  }
+
+  return (
+    <div className="xn-swarm-member__subform" aria-label={tr("新增蜂群成员")}>
+      {error && <p className="xn-swarm-error" role="alert">{error}</p>}
+      <div className="xn-swarm-composer__row">
+        <input type="text" aria-label={tr("新成员名称")} value={name} placeholder={tr("名称（如 helper 或 shard）")} onChange={(e) => setName(e.currentTarget.value)} />
+        <select aria-label={tr("温上下文分叉来源")} value={fork} onChange={(e) => setFork(e.currentTarget.value)}>
+          <option value="">{tr("全新对话（不分叉）")}</option>
+          <option value="coordinator">{tr("分叉自协调者 (@coordinator)")}</option>
+          {members.map((m) => <option key={m.name} value={m.name}>{tf("分叉自 @{0}", [m.name])}</option>)}
+        </select>
+      </div>
+      <input type="text" aria-label={tr("新成员任务说明")} value={task} placeholder={tr("任务简报：说明负责内容与完成标准")} onChange={(e) => setTask(e.currentTarget.value)} />
+      <div className="xn-swarm-composer__row">
+        <select aria-label={tr("新成员模型")} value={modelKey} onChange={(e) => setModelKey(e.currentTarget.value)}>
+          <option value="inherit">{tr("沿用当前对话模型 (inherit)")}</option>
+          {models.map((m) => {
+            const key = encodeModelKey(m.providerId, m.model);
+            return <option key={key} value={key}>{m.name ?? `${m.providerId}${m.model ? ` / ${m.model}` : ""}`}</option>;
+          })}
+        </select>
+        <input type="text" aria-label={tr("分片数量")} value={String(count)} placeholder={tr("分片数 1-6")} onChange={(e) => setCount(Math.max(1, Math.min(6, Number(e.currentTarget.value) || 1)))} style={{ maxWidth: 96 }} />
+      </div>
+      <input type="text" aria-label={tr("可写路径列表")} value={ownsText} placeholder={tr("可选可写相对路径（逗号分隔，如 src/ui, src/lib）")} onChange={(e) => setOwnsText(e.currentTarget.value)} />
+      <input type="text" aria-label={tr("可运行命令列表")} value={cmdsText} placeholder={tr("可选允许运行的命令（分号分隔，如 npm test; npm run build）")} onChange={(e) => setCmdsText(e.currentTarget.value)} />
+      <div className="xn-swarm-member__actions">
+        <button type="button" disabled={busy || !name.trim() || !task.trim()} onClick={() => void submit()}>{tr("加入看板并唤醒")}</button>
+        <button type="button" disabled={busy} onClick={() => setOpen(false)}>{tr("取消")}</button>
+      </div>
+    </div>
+  );
+}
+
+function MemberCard({ member, working, peers, models, sessionId, swarmId, active, onChanged }: { member: SwarmMember; working: boolean; peers: SwarmMember[]; models: SwarmModelOption[] } & Omit<Props, "members" | "running">): React.JSX.Element {
   const [journal, setJournal] = useState<JournalMessage[] | null>(null);
   const [mode, setMode] = useState<"none" | "model" | "reassign">("none");
+  const initialKey = member.model ? encodeModelKey(member.model.providerId, member.model.model) : "inherit";
+  const hasPreset = initialKey === "inherit" || models.some((m) => encodeModelKey(m.providerId, m.model) === initialKey);
+  const [selectedModelKey, setSelectedModelKey] = useState(hasPreset ? initialKey : "__custom__");
   const [providerId, setProviderId] = useState(member.model?.providerId ?? "");
   const [modelId, setModelId] = useState(member.model?.model ?? "");
   const reassignTargets = peers.filter(p => p.name !== member.name && p.role !== "coordinator" && p.state !== "killed");
@@ -45,6 +138,12 @@ function MemberCard({ member, working, peers, sessionId, swarmId, active, onChan
     finally { setBusy(false); }
   };
 
+  const applySelectedModel = () => {
+    const decoded = decodeModelKey(selectedModelKey);
+    if (decoded !== null) return switchMemberModel(sessionId, swarmId, member.name, decoded);
+    return switchMemberModel(sessionId, swarmId, member.name, { provider_id: providerId.trim(), ...(modelId.trim() ? { model: modelId.trim() } : {}) });
+  };
+
   const meta = `${tf("{0} 轮 · {1} 步", [member.turns, member.steps])}${member.posts !== undefined ? tf(" · {0} 贴", [member.posts]) : ""}${member.unread ? tf(" · {0} 未读", [member.unread]) : ""}`;
 
   return <li className="xn-swarm-member" data-role={member.role} data-state={state}>
@@ -52,6 +151,7 @@ function MemberCard({ member, working, peers, sessionId, swarmId, active, onChan
       <strong>@{member.name}</strong>
       <span className="xn-swarm-chip" data-tone={member.role}>{tr(ROLE_LABELS[member.role])}</span>
       <span className="xn-swarm-chip" data-tone={state}>{tr(MEMBER_STATE_LABELS[state])}</span>
+      {member.addedBy && <span className="xn-swarm-chip">{tf("由 @{0} 添加", [member.addedBy])}</span>}
       {member.failureKind && <span className="xn-swarm-chip" data-tone="failed">{member.failureKind === "quota" ? tr("限额/限流") : tr("错误")}</span>}
       <span className="xn-swarm-member__meta">{meta}</span>
     </div>
@@ -73,11 +173,20 @@ function MemberCard({ member, working, peers, sessionId, swarmId, active, onChan
       {active && member.role !== "coordinator" && member.state !== "killed" && <button type="button" disabled={busy} onClick={() => { if (window.confirm(tf("停止 @{0}？它不会再被唤醒。", [member.name]))) void runAction(() => killMember(sessionId, swarmId, member.name, tr("用户在蜂群面板中停止"))); }}>{tr("停止")}</button>}
     </div>
     {mode === "model" && <div className="xn-swarm-member__subform">
-      <input type="text" value={providerId} placeholder={tr("模型配置 ID（如 openai）")} onChange={e => setProviderId(e.currentTarget.value)} />
-      <input type="text" value={modelId} placeholder={tr("可选模型名（留空用默认）")} onChange={e => setModelId(e.currentTarget.value)} />
+      <select aria-label={tr("选择已配置模型")} value={selectedModelKey} onChange={e => setSelectedModelKey(e.currentTarget.value)}>
+        <option value="inherit">{tr("沿用对话默认模型 (inherit)")}</option>
+        {models.map(m => {
+          const key = encodeModelKey(m.providerId, m.model);
+          return <option key={key} value={key}>{m.name ?? `${m.providerId}${m.model ? ` / ${m.model}` : ""}`}</option>;
+        })}
+        <option value="__custom__">{tr("手动输入配置 ID…")}</option>
+      </select>
+      {selectedModelKey === "__custom__" && <>
+        <input type="text" value={providerId} placeholder={tr("模型配置 ID（如 magpie 或 openai）")} onChange={e => setProviderId(e.currentTarget.value)} />
+        <input type="text" value={modelId} placeholder={tr("可选模型名（如 agy-cli/gemini-3.8-flash）")} onChange={e => setModelId(e.currentTarget.value)} />
+      </>}
       <div className="xn-swarm-member__actions">
-        <button type="button" disabled={busy || !providerId.trim()} onClick={() => void runAction(() => switchMemberModel(sessionId, swarmId, member.name, { provider_id: providerId.trim(), ...(modelId.trim() ? { model: modelId.trim() } : {}) }))}>{tr("应用模型")}</button>
-        <button type="button" disabled={busy} onClick={() => void runAction(() => switchMemberModel(sessionId, swarmId, member.name, "inherit"))}>{tr("沿用对话模型")}</button>
+        <button type="button" disabled={busy || (selectedModelKey === "__custom__" && !providerId.trim())} onClick={() => void runAction(applySelectedModel)}>{tr("应用模型")}</button>
       </div>
     </div>}
     {mode === "reassign" && <div className="xn-swarm-member__subform">
@@ -95,10 +204,22 @@ function MemberCard({ member, working, peers, sessionId, swarmId, active, onChan
 }
 
 export function SwarmMembers(props: Props): React.JSX.Element {
-  return <ul className="xn-swarm-members" data-testid="swarm-members">
-    {props.members.map(member => <MemberCard key={member.name} member={member} working={props.running.includes(member.name)}
-      peers={props.members} sessionId={props.sessionId} swarmId={props.swarmId} active={props.active} onChanged={props.onChanged} />)}
-  </ul>;
+  const [models, setModels] = useState<SwarmModelOption[]>([]);
+  useEffect(() => {
+    const controller = new AbortController();
+    listSwarmModels(props.sessionId, controller.signal)
+      .then((items) => { if (!controller.signal.aborted) setModels(items); })
+      .catch(() => { /* fallback to custom input if unavailable */ });
+    return () => controller.abort();
+  }, [props.sessionId]);
+
+  return <div className="xn-swarm-members-wrap">
+    {props.active && <AddWorkerBar sessionId={props.sessionId} swarmId={props.swarmId} members={props.members} models={models} onChanged={props.onChanged} />}
+    <ul className="xn-swarm-members" data-testid="swarm-members">
+      {props.members.map(member => <MemberCard key={member.name} member={member} working={props.running.includes(member.name)}
+        peers={props.members} models={models} sessionId={props.sessionId} swarmId={props.swarmId} active={props.active} onChanged={props.onChanged} />)}
+    </ul>
+  </div>;
 }
 
 export default SwarmMembers;

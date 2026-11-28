@@ -11,6 +11,7 @@ import { dispatchDirectory, type DirectoryHttpOptions, type DirectoryReply } fro
 import { BINARY_PREVIEW_SUFFIXES, previewSuffix, workspaceBinaryPreview, workspaceFiles, workspacePreview, type OfficePreview } from "./preview.ts";
 
 const SID = /^[0-9a-f]{32}$/u;
+const OFFICE_PREVIEW_SUFFIXES = new Set([".docx", ".xlsx", ".pptx"]);
 export const FILES_HTTP_ROUTES = Object.freeze([
   "GET /api/system",
   "GET /api/directory",
@@ -86,6 +87,8 @@ export function createFilesHttp(options: FilesHttpOptions = {}) {
     }
     const relative = queryFirst(query, "path");
     const path = typeof relative === "string" ? relative : "";
+    // Office documents are rendered by the office plugin and stay closed while it is off.
+    if (OFFICE_PREVIEW_SUFFIXES.has(previewSuffix(path)) && !enabled("office")) return [403, { error: "plugin disabled or dependency unavailable: office", plugin: "office" }];
     try {
       const preview = previewSuffix(path) in BINARY_PREVIEW_SUFFIXES
         ? workspaceBinaryPreview(session.root, path, options.officePreview)

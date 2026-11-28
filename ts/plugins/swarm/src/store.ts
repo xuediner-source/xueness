@@ -28,6 +28,7 @@ export interface MemberRecord extends MemberPlan {
   waitSince?: number;
   failureKind?: FailureKind | null;
   forkFromSessionId?: string | null;
+  addedBy?: string;
 }
 /** The verifier's grade for one acceptance criterion: what it checked itself, not what a member claimed. */
 export interface CriterionResult { criterion: number; met: boolean; evidence: string }
